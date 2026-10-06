@@ -2,6 +2,10 @@ import { expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
+import {
+  BROWSER_STARTUP_TIMEOUT_MS,
+  waitForBrowserFixture,
+} from "../browserChrome";
 import { InputDriver, denseSnapshot } from "./browserAcceptanceFixture";
 import { startIndependentInput } from "./independentInputSchedule";
 
@@ -48,11 +52,13 @@ test.skipIf(!chrome).each([1440, 390])(
         trusted: boolean;
       }[];
     }>();
+    const pageRequested = Promise.withResolvers<void>();
     const server = Bun.serve({
       hostname: "127.0.0.1",
       port: 0,
       async fetch(request) {
         const path = new URL(request.url).pathname;
+        if (path === "/") pageRequested.resolve();
         if (path === "/dense-snapshot" && server.upgrade(request)) return;
         if (path === "/input-ready") {
           const phase = new URL(request.url).searchParams.get("phase")!;
@@ -136,7 +142,6 @@ test.skipIf(!chrome).each([1440, 390])(
       },
     });
     let browser: ReturnType<typeof Bun.spawn> | undefined;
-    let timeout: ReturnType<typeof setTimeout> | undefined;
     try {
       const build = await Bun.build({
         entrypoints: [join(import.meta.dir, "ConcurrentContexts.browser.tsx")],
@@ -182,21 +187,15 @@ test.skipIf(!chrome).each([1440, 390])(
         ],
         { stdout: "ignore", stderr: Bun.file(join(dir, "browser.log")) },
       );
-      const observed = await Promise.race([
+      const observed = await waitForBrowserFixture(
+        pageRequested.promise,
         result.promise,
         browser.exited.then((code) => {
           throw new Error(`Browser exited ${code}`);
         }),
-        new Promise<never>((_, reject) => {
-          timeout = setTimeout(
-            () =>
-              reject(
-                new Error("Concurrent context browser acceptance timed out"),
-              ),
-            45_000,
-          );
-        }),
-      ]);
+        "Concurrent context browser acceptance",
+        45_000,
+      );
       expect(observed.failures).toEqual([]);
       expect(observed.measurements.outputFrames).toBe(1536);
       expect(observed.measurements.snapshotBytes).toBeGreaterThan(20_000_000);
@@ -235,7 +234,6 @@ test.skipIf(!chrome).each([1440, 390])(
       );
     } finally {
       for (const run of inputRuns.values()) run.stop();
-      clearTimeout(timeout);
       driver?.close();
       browser?.kill();
       if (browser) await browser.exited;
@@ -243,5 +241,5 @@ test.skipIf(!chrome).each([1440, 390])(
       await rm(dir, { recursive: true, force: true });
     }
   },
-  60_000,
+  60_000 + BROWSER_STARTUP_TIMEOUT_MS,
 );

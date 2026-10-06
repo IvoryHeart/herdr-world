@@ -2,6 +2,10 @@ import { expect, test } from "bun:test";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
+import {
+  BROWSER_STARTUP_TIMEOUT_MS,
+  waitForBrowserFixture,
+} from "../browserChrome";
 import { InputDriver } from "./browserAcceptanceFixture";
 
 const chrome =
@@ -13,12 +17,13 @@ test.skipIf(!chrome).each([1440, 390])(
     const assets = new Map<string, Blob>();
     const result = Promise.withResolvers<string[]>();
     let socket: WebSocket | undefined;
-    let timeout: ReturnType<typeof setTimeout> | undefined;
+    const pageRequested = Promise.withResolvers<void>();
     const server = Bun.serve({
       hostname: "127.0.0.1",
       port: 0,
       async fetch(request) {
         const path = new URL(request.url).pathname;
+        if (path === "/") pageRequested.resolve();
         if (path === "/viewport-ready") {
           const [port] = (
             await readFile(join(dir, "profile", "DevToolsActivePort"), "utf8")
@@ -113,22 +118,18 @@ test.skipIf(!chrome).each([1440, 390])(
         ],
         { stdout: "ignore", stderr: Bun.file(join(dir, "browser.log")) },
       );
-      const observed = await Promise.race([
+      const observed = await waitForBrowserFixture(
+        pageRequested.promise,
         result.promise,
         browser.exited.then((code) => {
           throw new Error(`Browser exited ${code}`);
         }),
-        new Promise<never>((_, reject) => {
-          timeout = setTimeout(
-            () => reject(new Error("Shared creation browser timed out")),
-            120_000,
-          );
-        }),
-      ]);
+        "Shared creation browser",
+        120_000,
+      );
       if (observed.length) console.info("Shared creation failures", observed);
       expect(observed).toEqual([]);
     } finally {
-      if (timeout) clearTimeout(timeout);
       socket?.close();
       browser?.kill();
       if (browser) await browser.exited;
@@ -136,5 +137,5 @@ test.skipIf(!chrome).each([1440, 390])(
       await rm(dir, { recursive: true, force: true });
     }
   },
-  150_000,
+  150_000 + BROWSER_STARTUP_TIMEOUT_MS,
 );

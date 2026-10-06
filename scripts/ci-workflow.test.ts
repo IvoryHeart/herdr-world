@@ -6,15 +6,19 @@ type WorkflowStep = {
   run?: string;
   uses?: string;
   if?: string;
+  "continue-on-error"?: boolean;
   env?: Record<string, string>;
   with?: { "fetch-depth"?: number; ref?: string };
+  "working-directory"?: string;
 };
 
 type WorkflowJob = {
   name?: string;
+  uses?: string;
   "runs-on"?: string;
   needs?: string | string[];
   if?: string;
+  "continue-on-error"?: boolean;
   strategy?: {
     "fail-fast"?: boolean;
     "max-parallel"?: number;
@@ -22,6 +26,8 @@ type WorkflowJob = {
       include?: Array<{ arch?: string; runner?: string }>;
       platform?: string[];
       shard?: number[];
+      suite?: string[];
+      order?: string[];
     };
   };
   steps: WorkflowStep[];
@@ -32,11 +38,60 @@ const workflow = Bun.YAML.parse(
     new URL("../.github/workflows/ci.yml", import.meta.url),
   ).text(),
 ) as {
-  on: { pull_request: { types: string[] } };
+  on: {
+    pull_request: { types: string[] };
+    workflow_dispatch: {
+      inputs: Record<string, { type: string; default: unknown }>;
+    };
+  };
   permissions: { actions: string };
   concurrency: { "cancel-in-progress": string };
   jobs: Record<string, WorkflowJob>;
 };
+
+const worldWorkflow = Bun.YAML.parse(
+  await Bun.file(
+    new URL("../.github/workflows/world-browser.yml", import.meta.url),
+  ).text(),
+) as {
+  on: Record<string, unknown>;
+  permissions: { contents: string };
+  jobs: Record<string, WorkflowJob>;
+};
+
+test("browser lifecycle comparisons are opt-in and retain both revisions' evidence", () => {
+  expect(
+    workflow.on.workflow_dispatch.inputs.browser_diagnostics,
+  ).toMatchObject({ type: "boolean", default: false });
+  const job = workflow.jobs["browser-diagnostics"];
+  expect(job.if).toBe(
+    "github.event_name == 'workflow_dispatch' && inputs.browser_diagnostics",
+  );
+  expect(job.strategy?.["fail-fast"]).toBe(false);
+  expect(job.strategy?.matrix?.order).toEqual([
+    "baseline-first",
+    "candidate-first",
+  ]);
+  expect(job.strategy?.matrix?.suite).toEqual([
+    "HostsFilter.creation",
+    "SpatialGraphView.browser",
+    "useSpacesTabWindowArrangement.browser",
+  ]);
+  const comparison = job.steps.find(
+    (step) => step.name === "Compare revisions on the same runner",
+  )!;
+  expect(comparison.run).toContain('revisions="baseline candidate"');
+  expect(comparison.run).toContain('revisions="candidate baseline"');
+  expect(comparison.run).toContain("--parallel=1 --max-concurrency=1");
+  expect(comparison.run).toContain("revision_result=$?");
+  expect(comparison.run).toContain('exit "$result"');
+  expect(comparison["continue-on-error"]).toBeUndefined();
+  expect(
+    job.steps.find((step) => step.name === "Retain browser lifecycle evidence")
+      ?.if,
+  ).toBe("always()");
+  expect(workflow.jobs.delivery.needs).not.toContain("browser-diagnostics");
+});
 
 test("CI exposes the protected delivery gate and runs the complete repository check", () => {
   expect(workflow.on.pull_request.types).toEqual([
@@ -110,9 +165,19 @@ test("CI exposes the protected delivery gate and runs the complete repository ch
 });
 
 test("all eight World browser shards run independently and retain failure evidence", () => {
-  const world = workflow.jobs["world-browser"];
-  expect(world?.needs).toBe("validation-scope");
-  expect(world?.if).toBe("needs.validation-scope.outputs.mode == 'full'");
+  expect(workflow.jobs["world-browser"]).toMatchObject({
+    needs: "validation-scope",
+    if: "needs.validation-scope.outputs.mode == 'full'",
+    uses: "./.github/workflows/world-browser.yml",
+  });
+  expect(Object.keys(worldWorkflow.on)).toEqual(["workflow_call"]);
+  expect(worldWorkflow.permissions.contents).toBe("read");
+  const world = worldWorkflow.jobs["world-browser"];
+  expect(world?.needs).toBeUndefined();
+  expect(world?.if).toBeUndefined();
+  expect(world?.["continue-on-error"] ?? false).toBe(false);
+  for (const step of world?.steps ?? [])
+    expect(step["continue-on-error"] ?? false).toBe(false);
   expect(world?.["runs-on"]).toBe("ubuntu-latest");
   expect(world?.strategy?.matrix?.shard).toEqual(
     worldBrowserShards.map((_, index) => index + 1),
@@ -121,7 +186,9 @@ test("all eight World browser shards run independently and retain failure eviden
   expect(world?.strategy?.["max-parallel"]).toBe(8);
   expect(
     world?.steps.find(
-      (step) => step.run === "bun run test:world --shard=${{ matrix.shard }}/8",
+      (step) =>
+        step.run ===
+        "bun run test:world --shard=${{ matrix.shard }}/8 --parallel=1 --max-concurrency=1",
     ),
   ).toMatchObject({
     env: {

@@ -61,13 +61,17 @@ cache lifetime issue. Higher file parallelism also isolates modules. The World
 runner and its CI shards prepare bundles before testing and own their cleanup;
 those paths are unaffected, including shards with one file worker.
 
-GitHub Actions runs the remaining repository checks with one file worker and up to
-two concurrent cases, preserving the upstream test configuration. World browser
-tests run on eight separate runners, each with one file worker and one active case.
+PR CI and Release run the remaining repository checks with one file worker and up
+to two concurrent cases, preserving the upstream test configuration. Both call the
+[shared World browser workflow](../.github/workflows/world-browser.yml), which runs
+eight separate runners, each with one file worker and one active case.
 The [shard inventory](../scripts/world-browser-suites.ts) includes all World browser
 suites; inventory checks reject missing or duplicate assignments. The required
 Delivery checks status succeeds only when repository validation and every World
 shard pass. Markdown-only and exact-head reuse keep their existing shorter paths.
+Release packaging requires repository validation and all eight shards to pass.
+Prepare Release validates its generated working tree in one checkout with one file
+worker; it retains the complete World suite, with one active World case at a time.
 
 Each World run writes JUnit results and per-file timings under `.agents/delivery/`.
 CI uploads them as `world-browser-N-attempt-M` artifacts, including on test failure. Compare
@@ -81,6 +85,59 @@ those CI artifacts. These lightweight timings correlate independently scheduled
 inputs with browser dispatch, service replies, browser acknowledgements and
 snapshot admission. Inspect them when a latency limit fails; CI keeps full Chrome
 timeline tracing disabled to avoid adding its recording cost to the benchmark.
+
+World browser harnesses use two bounded phases through
+[`waitForBrowserFixture`](../web/src/browserChrome.ts): Chrome has 35 seconds
+from launch to request the fixture's main HTML document, then the existing
+per-fixture deadline begins. The fixture budget still includes serving HTML and
+assets, application initialization, interaction and every assertion. Browser exit
+fails either phase immediately, and deadline timers are cleared on completion.
+The outer Bun timeout includes setup, the startup allowance, fixture execution
+and cleanup. Input latency, rendering and operation-specific limits are unchanged.
+
+This boundary addresses a confirmed first-case CI failure: Chrome reached its
+debugging endpoint after 18.4 seconds, connected after 25.5 seconds and requested
+the Spaces page around 27.4 seconds. The original 30-second timer expired while
+the fixture was still completing checks without reported failures. A controlled
+31-second browser launch delay reproduced the old timeout before Chrome started;
+the repaired harness completed all Spaces assertions in 33.3 seconds, with the
+same 30-second fixture limit. This proves startup consumed the acceptance budget;
+it does not identify why Chrome initialization was slow on that runner. Diagnose
+any failure after the page request separately, using fixture progress or input
+artifacts, rather than extending an acceptance or latency limit.
+
+A separate compact Inspector failure occurred after page loading: the terminal
+handoff fixture checked `data-view="files"`, optionally clicked the Files back
+action and slept for 80 ms before checking explorer geometry. React can commit
+that view attribute before its retained-file effect renders the back action, so
+the optional click could be skipped. The fixture now waits for the back action,
+clicks it and waits for the explorer layout within its original deadline. A
+controlled one-second back-action lookup delay reproduced the exact old geometry
+failure and passed with the repaired synchronization. Keep readiness checks tied
+to the next required action; a view attribute alone does not prove it is ready.
+
+For browser startup or rendering timeouts, dispatch CI with
+`browser_diagnostics=true` and an immutable `diagnostics_baseline` commit. The
+optional lifecycle jobs compare HostsFilter creation, Spatial Graph and Spaces
+arrangement on the baseline and dispatched revision, alternating which runs
+first on each runner. Both checkouts install their own pinned dependencies, and
+both revisions run even if the first fails. Each browser records Chrome stderr,
+document readiness, load events, JavaScript exceptions, failed requests and exit
+signals in `browser-lifecycle-*` artifacts. These diagnostic runs use one file
+worker and one case at a time with each revision's assertions and deadline boundaries.
+
+```bash
+gh workflow run ci.yml --ref agent/example-change \
+  -f browser_diagnostics=true -f diagnostics_baseline='<baseline-commit>'
+```
+
+Diagnostics add an observer and can affect timing. Use the lifecycle evidence to
+locate a failure, then verify any repair with ordinary CI. A passing retry alone
+does not establish a cause. First-case timeouts have occurred with one worker in
+several suites; distinguish browser startup, page loading and fixture execution
+before changing concurrency or an acceptance limit.
+Use `diagnostics_mode=stderr` for a control run that captures Chrome logs without
+adding a debugging port or attaching the lifecycle observer.
 
 `HERDR_TEST_EXCLUDE_WORLD_BROWSER=1` is for the CI repository-validation job, which
 is gated together with the separate World shards. Do not use it as a complete local

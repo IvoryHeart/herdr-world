@@ -4,9 +4,97 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   stopChrome,
+  waitForBrowserFixture,
   waitForChromePort,
   withBrowserDeadline,
 } from "./browserChrome";
+
+test("cold Chrome startup does not consume the fixture deadline", async () => {
+  jest.useFakeTimers();
+  try {
+    const page = Promise.withResolvers<void>();
+    const result = Promise.withResolvers<number>();
+    const observed = waitForBrowserFixture(
+      page.promise,
+      result.promise,
+      new Promise<never>(() => {}),
+      "Fixture",
+      10_000,
+    );
+    jest.advanceTimersByTime(31_000);
+    page.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    jest.advanceTimersByTime(9_999);
+    result.resolve(42);
+    expect(await observed).toBe(42);
+    expect(jest.getTimerCount()).toBe(0);
+  } finally {
+    jest.useRealTimers();
+  }
+});
+
+test.each(["startup", "fixture"])(
+  "browser %s remains bounded",
+  async (phase) => {
+    jest.useFakeTimers();
+    try {
+      const page = Promise.withResolvers<void>();
+      const observed = waitForBrowserFixture(
+        page.promise,
+        new Promise(() => {}),
+        new Promise<never>(() => {}),
+        "Fixture",
+        30_000,
+      );
+      if (phase === "fixture") page.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+      jest.advanceTimersByTime(phase === "startup" ? 35_000 : 30_000);
+      await expect(observed).rejects.toThrow(
+        phase === "startup"
+          ? "Fixture browser startup timed out after 35000ms"
+          : "Fixture timed out after 30000ms",
+      );
+      expect(jest.getTimerCount()).toBe(0);
+    } finally {
+      jest.useRealTimers();
+    }
+  },
+);
+
+test.each(["startup", "fixture"])(
+  "Chrome exit during %s preserves errors and clears timers",
+  async (phase) => {
+    jest.useFakeTimers();
+    try {
+      const page = Promise.withResolvers<void>();
+      const exited = Promise.withResolvers<never>();
+      const observed = waitForBrowserFixture(
+        page.promise,
+        new Promise(() => {}),
+        exited.promise,
+        "Fixture",
+        30_000,
+      );
+      if (phase === "fixture") page.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+      const error = new Error("Browser exited before the result");
+      exited.reject(error);
+      await expect(observed).rejects.toBe(error);
+      expect(jest.getTimerCount()).toBe(0);
+    } finally {
+      jest.useRealTimers();
+    }
+  },
+);
 
 test("browser deadlines preserve results and errors and clear their timers", async () => {
   jest.useFakeTimers();

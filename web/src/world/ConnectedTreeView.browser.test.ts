@@ -3,6 +3,10 @@ import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
+import {
+  BROWSER_STARTUP_TIMEOUT_MS,
+  waitForBrowserFixture,
+} from "../browserChrome";
 
 const chrome =
   Bun.env.CHROME_BIN ||
@@ -17,11 +21,13 @@ test.skipIf(!chrome).each([1280, 390])(
     const dir = await mkdtemp(join(tmpdir(), "connected-tree-test-"));
     const assets = new Map<string, Blob>();
     const result = Promise.withResolvers<unknown>();
+    const pageRequested = Promise.withResolvers<void>();
     const server = Bun.serve({
       hostname: "127.0.0.1",
       port: 0,
       async fetch(request) {
         const path = new URL(request.url).pathname;
+        if (path === "/") pageRequested.resolve();
         if (path === "/result" && request.method === "POST") {
           result.resolve(await request.json());
           return new Response("ok");
@@ -38,7 +44,6 @@ test.skipIf(!chrome).each([1280, 390])(
       },
     });
     let browser: ReturnType<typeof Bun.spawn> | undefined;
-    let timer: ReturnType<typeof setTimeout> | undefined;
     try {
       const build = await Bun.build({
         entrypoints: [join(import.meta.dir, "ConnectedTreeView.browser.tsx")],
@@ -81,23 +86,19 @@ test.skipIf(!chrome).each([1280, 390])(
         ],
         { stdout: "ignore", stderr: Bun.file(browserLog) },
       );
-      const failures = await Promise.race([
+      const failures = await waitForBrowserFixture(
+        pageRequested.promise,
         result.promise,
         browser.exited.then(async (code) => {
           throw new Error(
             `Browser exited (${code}): ${await readFile(browserLog, "utf8")}`,
           );
         }),
-        new Promise<never>((_, reject) => {
-          timer = setTimeout(
-            () => reject(new Error("Connected Tree browser check timed out")),
-            30_000,
-          );
-        }),
-      ]);
+        "Connected Tree browser check",
+        30_000,
+      );
       expect(failures).toEqual([]);
     } finally {
-      clearTimeout(timer);
       if (browser) {
         browser.kill();
         await browser.exited;
@@ -106,5 +107,5 @@ test.skipIf(!chrome).each([1280, 390])(
       await rm(dir, { recursive: true, force: true });
     }
   },
-  45_000,
+  45_000 + BROWSER_STARTUP_TIMEOUT_MS,
 );

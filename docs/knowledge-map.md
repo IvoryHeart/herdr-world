@@ -32,6 +32,27 @@ decisions and are not current operational guidance.
 | Herdr setup, service management and updates | [Access boundary](../openspec/specs/bridge-access/spec.md), [distribution](../openspec/specs/distribution-boundaries/spec.md) | [Herdr CLI](../server/src/herdr/cli.ts), [setup](../server/src/http/herdr-setup.ts), [service manager](../server/src/config/service-manager.ts), [update handler](../server/src/http/update.ts) | [Setup tests](../server/src/http/herdr-setup.test.ts), [update tests](../server/src/http/update.test.ts), [deployment](DEPLOYMENT.md) |
 | Installer, plugin, upstream sync and releases | [Distribution boundaries](../openspec/specs/distribution-boundaries/spec.md) | [Release tooling](../scripts/prepare-release.ts), [plugin tooling](../scripts/world-plugin.ts), [plugin manifest](../herdr-plugin.toml) | [Release tests](../scripts/prepare-release.test.ts), [upstream record](../UPSTREAM.md), [packaging](packaging.md), [release](release.md), [screenshot capture](SCREENSHOTS.md) |
 
+## CI and release validation
+
+[Development verification](development.md#verification) describes local and CI
+runner settings. [PR CI](../.github/workflows/ci.yml) and
+[Release](../.github/workflows/release.yml) call the same
+[World browser workflow](../.github/workflows/world-browser.yml).
+[Prepare Release](../.github/workflows/prepare-release.yml) validates generated
+files in its own checkout. Start with [CI workflow tests](../scripts/ci-workflow.test.ts)
+and [release validation tests](../scripts/release-validation.test.ts) when changing
+concurrency, shard coverage or publication dependencies.
+For first-case browser timeouts, use the opt-in lifecycle comparison described in
+[development verification](development.md#verification), the
+[diagnostic adapter](../scripts/browser-diagnostics.ts) and its
+[regression tests](../scripts/browser-diagnostics.test.ts). Keep baseline and
+candidate evidence together before diagnosing a runner or fixture defect.
+World harnesses separate bounded Chrome startup from fixture execution using
+[the browser deadline helper](../web/src/browserChrome.ts) and its
+[regression tests](../web/src/browserChrome.test.ts). The fixture clock starts at
+the main HTML request, before loading assets or initializing the application;
+responsiveness and operation limits remain unchanged.
+
 ## RPC paths
 
 `web/src/api.ts` owns one WebSocket to the World service. Bridge-global methods such as

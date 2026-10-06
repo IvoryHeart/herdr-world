@@ -59,11 +59,21 @@ jobs:
               exit 1
             }
           done
-      - run: bun run precommit
+      - name: Validate repository except World browser shards
+        env:
+          HERDR_TEST_PARALLEL: "1"
+          HERDR_TEST_MAX_CONCURRENCY: "2"
+          HERDR_TEST_EXCLUDE_WORLD_BROWSER: "1"
+        run: bun run precommit
+
+  world-browser:
+    name: World browser tests
+    needs: validate
+    uses: ./.github/workflows/world-browser.yml
 
   package:
     name: Package ${{ matrix.platform }}
-    needs: validate
+    needs: [validate, world-browser]
     strategy:
       fail-fast: false
       matrix:

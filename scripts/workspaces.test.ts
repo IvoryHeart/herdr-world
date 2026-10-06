@@ -55,21 +55,44 @@ test("development bridge and Vite proxies stay off the production port", async (
 });
 
 test("CI and release jobs install once from the workspace root", () => {
-  for (const file of ["ci.yml", "prepare-release.yml", "release.yml"]) {
+  for (const file of [
+    "ci.yml",
+    "prepare-release.yml",
+    "release.yml",
+    "world-browser.yml",
+  ]) {
     const workflow = Bun.YAML.parse(
       readFileSync(new URL(`.github/workflows/${file}`, root), "utf8"),
     ) as {
       jobs: Record<
         string,
         {
-          steps: { run?: string; "working-directory"?: string }[];
+          uses?: string;
+          steps?: { run?: string; "working-directory"?: string }[];
         }
       >;
     };
     for (const [name, job] of Object.entries(workflow.jobs)) {
-      const installs = job.steps.filter((step) =>
+      if (job.uses) {
+        expect(job.uses).toBe("./.github/workflows/world-browser.yml");
+        expect(job.steps).toBeUndefined();
+        continue;
+      }
+      const installs = job.steps!.filter((step) =>
         step.run?.includes("bun install"),
       );
+      if (file === "ci.yml" && name === "browser-diagnostics") {
+        expect(installs).toHaveLength(2);
+        expect(installs.map((step) => step.run)).toEqual([
+          "bun install --frozen-lockfile",
+          "bun install --frozen-lockfile",
+        ]);
+        expect(installs.map((step) => step["working-directory"])).toEqual([
+          undefined,
+          ".agents/worktrees/browser-baseline",
+        ]);
+        continue;
+      }
       const noBunInstall =
         (file === "ci.yml" &&
           ["homebrew-preview", "validation-scope", "delivery"].includes(

@@ -3,6 +3,10 @@ import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
+import {
+  BROWSER_STARTUP_TIMEOUT_MS,
+  waitForBrowserFixture,
+} from "../browserChrome";
 
 const chrome =
   Bun.env.CHROME_BIN ||
@@ -19,11 +23,13 @@ test.skipIf(!chrome)(
     const captureDir = Bun.env.WORLD_WINDOW_CAPTURE_DIR;
     const result = Promise.withResolvers<unknown>();
     const publicDir = join(import.meta.dir, "..", "..", "public");
+    const pageRequested = Promise.withResolvers<void>();
     const server = Bun.serve({
       hostname: "127.0.0.1",
       port: 0,
       async fetch(request) {
         const path = new URL(request.url).pathname;
+        if (path === "/office") pageRequested.resolve();
         if (path === "/result" && request.method === "POST") {
           result.resolve(await request.json());
           return new Response("ok");
@@ -179,20 +185,17 @@ test.skipIf(!chrome)(
         ],
         { stdout: "ignore", stderr: Bun.file(browserLog) },
       );
-      const observed = await Promise.race([
+      const observed = await waitForBrowserFixture(
+        pageRequested.promise,
         result.promise,
         browser.exited.then(async (code) => {
           throw new Error(
             `Browser exited (${code}): ${await readFile(browserLog, "utf8")}`,
           );
         }),
-        new Promise<never>((_, reject) =>
-          setTimeout(
-            () => reject(new Error("World terminal handoff timed out")),
-            120_000,
-          ),
-        ),
-      ]);
+        "World terminal handoff",
+        120_000,
+      );
       if (Array.isArray(observed) && observed.length)
         console.info("World handoff failure detail", JSON.stringify(observed));
       expect(observed).toEqual([]);
@@ -203,5 +206,5 @@ test.skipIf(!chrome)(
       await rm(dir, { recursive: true, force: true });
     }
   },
-  150_000,
+  150_000 + BROWSER_STARTUP_TIMEOUT_MS,
 );

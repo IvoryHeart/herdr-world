@@ -3,7 +3,11 @@ import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
-import { stopChrome } from "../browserChrome";
+import {
+  BROWSER_STARTUP_TIMEOUT_MS,
+  stopChrome,
+  waitForBrowserFixture,
+} from "../browserChrome";
 
 const chrome =
   Bun.env.CHROME_BIN ||
@@ -18,11 +22,13 @@ test.skipIf(!chrome)(
     const dir = await mkdtemp(join(tmpdir(), "desk-view-test-"));
     const { promise, resolve } = Promise.withResolvers<unknown>();
     const assets = new Map<string, Blob>();
+    const pageRequested = Promise.withResolvers<void>();
     const server = Bun.serve({
       hostname: "127.0.0.1",
       port: 0,
       async fetch(request) {
         const path = new URL(request.url).pathname;
+        if (path === "/") pageRequested.resolve();
         if (path === "/result" && request.method === "POST") {
           resolve(await request.json());
           return new Response("ok");
@@ -39,7 +45,6 @@ test.skipIf(!chrome)(
       },
     });
     let child: ReturnType<typeof Bun.spawn> | undefined;
-    let timer: ReturnType<typeof setTimeout> | undefined;
     try {
       const build = await Bun.build({
         entrypoints: [join(import.meta.dir, "DeskView.browser.tsx")],
@@ -63,27 +68,23 @@ test.skipIf(!chrome)(
         ],
         { stdout: "ignore", stderr: Bun.file(errorOutput) },
       );
-      const failures = await Promise.race([
+      const failures = await waitForBrowserFixture(
+        pageRequested.promise,
         promise,
         child.exited.then(async (code) => {
           throw new Error(
             `Browser exited (${code}): ${await readFile(errorOutput, "utf8")}`,
           );
         }),
-        new Promise<never>((_, reject) => {
-          timer = setTimeout(
-            () => reject(new Error("Browser regression checks timed out")),
-            30_000,
-          );
-        }),
-      ]);
+        "Browser regression checks",
+        30_000,
+      );
       expect(failures).toEqual([]);
     } finally {
-      clearTimeout(timer);
       server.stop(true);
       await stopChrome(child);
       await rm(dir, { recursive: true, force: true });
     }
   },
-  45_000,
+  45_000 + BROWSER_STARTUP_TIMEOUT_MS,
 );

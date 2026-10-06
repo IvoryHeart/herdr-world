@@ -7,10 +7,22 @@ are optional because the merged PR history records their source.
 
 ## [Unreleased]
 
+### Fixed
+
+- World browser tests give cold Chrome startup a separate bounded allowance,
+  preserving fixture deadlines and responsiveness assertions.
+- The compact Inspector browser test waits for its Files back action and explorer
+  layout before checking visibility.
+
 ### Changed
 
 - Test files run in bounded parallel workers. Isolated browser acceptance cases also run concurrently, with lower concurrency in CI.
 - World browser acceptance suites reuse immutable bundles and run across eight isolated CI shards, preserving scenario coverage and responsiveness budgets. CI artifacts retain input timings for responsiveness investigations.
+- Release validation uses the same isolated World browser shards as PR CI and waits
+  for every shard before packaging. Release and Prepare Release cap test files to
+  one worker to prevent browser contention.
+- Opt-in browser lifecycle comparisons retain baseline and candidate evidence for
+  CI timeout investigations.
 
 ## [0.2.2] - 2026-10-05
 
