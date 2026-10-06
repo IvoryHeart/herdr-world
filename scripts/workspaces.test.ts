@@ -81,6 +81,18 @@ test("CI and release jobs install once from the workspace root", () => {
       const installs = job.steps!.filter((step) =>
         step.run?.includes("bun install"),
       );
+      if (file === "ci.yml" && name === "browser-diagnostics") {
+        expect(installs).toHaveLength(2);
+        expect(installs.map((step) => step.run)).toEqual([
+          "bun install --frozen-lockfile",
+          "bun install --frozen-lockfile",
+        ]);
+        expect(installs.map((step) => step["working-directory"])).toEqual([
+          undefined,
+          ".agents/worktrees/browser-baseline",
+        ]);
+        continue;
+      }
       const noBunInstall =
         (file === "ci.yml" &&
           ["homebrew-preview", "validation-scope", "delivery"].includes(

@@ -86,6 +86,29 @@ inputs with browser dispatch, service replies, browser acknowledgements and
 snapshot admission. Inspect them when a latency limit fails; CI keeps full Chrome
 timeline tracing disabled to avoid adding its recording cost to the benchmark.
 
+For browser startup or rendering timeouts, dispatch CI with
+`browser_diagnostics=true` and an immutable `diagnostics_baseline` commit. The
+optional lifecycle jobs compare HostsFilter creation, Spatial Graph and Spaces
+arrangement on the baseline and dispatched revision, alternating which runs
+first on each runner. Both checkouts install their own pinned dependencies, and
+both revisions run even if the first fails. Each browser records Chrome stderr,
+document readiness, load events, JavaScript exceptions, failed requests and exit
+signals in `browser-lifecycle-*` artifacts. These diagnostic runs use one file
+worker and one case at a time with the existing assertions and deadlines.
+
+```bash
+gh workflow run ci.yml --ref agent/example-change \
+  -f browser_diagnostics=true -f diagnostics_baseline='<baseline-commit>'
+```
+
+Diagnostics add an observer and can affect timing. Use the lifecycle evidence to
+locate a failure, then verify any repair with ordinary CI. A passing retry alone
+does not establish a cause. First-case timeouts have occurred with one worker in
+several suites; distinguish browser startup, page loading and fixture execution
+before changing concurrency or an acceptance limit.
+Use `diagnostics_mode=stderr` for a control run that captures Chrome logs without
+adding a debugging port or attaching the lifecycle observer.
+
 `HERDR_TEST_EXCLUDE_WORLD_BROWSER=1` is for the CI repository-validation job, which
 is gated together with the separate World shards. Do not use it as a complete local
 check. The existing `test:browser` selection covers upstream and selected World

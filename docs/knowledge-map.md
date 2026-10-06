@@ -42,6 +42,11 @@ runner settings. [PR CI](../.github/workflows/ci.yml) and
 files in its own checkout. Start with [CI workflow tests](../scripts/ci-workflow.test.ts)
 and [release validation tests](../scripts/release-validation.test.ts) when changing
 concurrency, shard coverage or publication dependencies.
+For first-case browser timeouts, use the opt-in lifecycle comparison described in
+[development verification](development.md#verification), the
+[diagnostic adapter](../scripts/browser-diagnostics.ts) and its
+[regression tests](../scripts/browser-diagnostics.test.ts). Keep baseline and
+candidate evidence together before diagnosing a runner or fixture defect.
 
 ## RPC paths
 

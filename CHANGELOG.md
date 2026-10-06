@@ -14,6 +14,8 @@ are optional because the merged PR history records their source.
 - Release validation uses the same isolated World browser shards as PR CI and waits
   for every shard before packaging. Release and Prepare Release cap test files to
   one worker to prevent browser contention.
+- Opt-in browser lifecycle comparisons retain baseline and candidate evidence for
+  CI timeout investigations.
 
 ## [0.2.2] - 2026-10-05
 

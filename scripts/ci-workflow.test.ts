@@ -9,6 +9,7 @@ type WorkflowStep = {
   "continue-on-error"?: boolean;
   env?: Record<string, string>;
   with?: { "fetch-depth"?: number; ref?: string };
+  "working-directory"?: string;
 };
 
 type WorkflowJob = {
@@ -25,6 +26,8 @@ type WorkflowJob = {
       include?: Array<{ arch?: string; runner?: string }>;
       platform?: string[];
       shard?: number[];
+      suite?: string[];
+      order?: string[];
     };
   };
   steps: WorkflowStep[];
@@ -35,7 +38,12 @@ const workflow = Bun.YAML.parse(
     new URL("../.github/workflows/ci.yml", import.meta.url),
   ).text(),
 ) as {
-  on: { pull_request: { types: string[] } };
+  on: {
+    pull_request: { types: string[] };
+    workflow_dispatch: {
+      inputs: Record<string, { type: string; default: unknown }>;
+    };
+  };
   permissions: { actions: string };
   concurrency: { "cancel-in-progress": string };
   jobs: Record<string, WorkflowJob>;
@@ -50,6 +58,40 @@ const worldWorkflow = Bun.YAML.parse(
   permissions: { contents: string };
   jobs: Record<string, WorkflowJob>;
 };
+
+test("browser lifecycle comparisons are opt-in and retain both revisions' evidence", () => {
+  expect(
+    workflow.on.workflow_dispatch.inputs.browser_diagnostics,
+  ).toMatchObject({ type: "boolean", default: false });
+  const job = workflow.jobs["browser-diagnostics"];
+  expect(job.if).toBe(
+    "github.event_name == 'workflow_dispatch' && inputs.browser_diagnostics",
+  );
+  expect(job.strategy?.["fail-fast"]).toBe(false);
+  expect(job.strategy?.matrix?.order).toEqual([
+    "baseline-first",
+    "candidate-first",
+  ]);
+  expect(job.strategy?.matrix?.suite).toEqual([
+    "HostsFilter.creation",
+    "SpatialGraphView.browser",
+    "useSpacesTabWindowArrangement.browser",
+  ]);
+  const comparison = job.steps.find(
+    (step) => step.name === "Compare revisions on the same runner",
+  )!;
+  expect(comparison.run).toContain('revisions="baseline candidate"');
+  expect(comparison.run).toContain('revisions="candidate baseline"');
+  expect(comparison.run).toContain("--parallel=1 --max-concurrency=1");
+  expect(comparison.run).toContain("revision_result=$?");
+  expect(comparison.run).toContain('exit "$result"');
+  expect(comparison["continue-on-error"]).toBeUndefined();
+  expect(
+    job.steps.find((step) => step.name === "Retain browser lifecycle evidence")
+      ?.if,
+  ).toBe("always()");
+  expect(workflow.jobs.delivery.needs).not.toContain("browser-diagnostics");
+});
 
 test("CI exposes the protected delivery gate and runs the complete repository check", () => {
   expect(workflow.on.pull_request.types).toEqual([
