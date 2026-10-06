@@ -46,6 +46,7 @@ test.skipIf(!chrome)(
     });
     let child: ReturnType<typeof Bun.spawn> | undefined;
     let timer: ReturnType<typeof setTimeout> | undefined;
+    let deadlineError: Error | undefined;
     try {
       const build = await Bun.build({
         entrypoints: [
@@ -103,19 +104,22 @@ test.skipIf(!chrome)(
         }),
         new Promise<never>((_, reject) => {
           timer = setTimeout(() => {
-            void readFile(errorOutput, "utf8").then(
-              (stderr) =>
-                reject(
-                  new Error(
-                    `Spaces arrangement browser check timed out; latest progress: ${JSON.stringify(progress)}\n${stderr}`,
-                  ),
-                ),
-              reject,
+            deadlineError = new Error(
+              `Spaces arrangement browser check timed out; latest progress: ${JSON.stringify(progress)}`,
             );
+            reject(deadlineError);
           }, 30_000);
         }),
       ]);
       expect(failures).toEqual([]);
+    } catch (error) {
+      if (error === deadlineError && deadlineError) {
+        const stderr = await readFile(join(dir, "browser.log"), "utf8").catch(
+          (readError) => `Could not read Chrome stderr: ${String(readError)}`,
+        );
+        deadlineError.message += `\n${stderr}`;
+      }
+      throw error;
     } finally {
       clearTimeout(timer);
       server.stop(true);
