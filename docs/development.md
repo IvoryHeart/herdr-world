@@ -40,6 +40,27 @@ per run; each case retains its own server, fixture and fresh browser profile.
 Focused test files build a bundle once per file. Production responsiveness cases
 are serial within each file so their global diagnostic instrumentation cannot overlap.
 
+**Known limitation: native sequential World browser runs.** Direct `bun test` runs
+across multiple `HostsFilter*.test.ts` or `ProductionContexts*.test.ts` files,
+without `--parallel` or runner-prepared assets, can serve missing browser assets
+and time out. Bun shares the bundle-cache module between sequential files; the
+first file's cleanup deletes the bundle directory while later files reuse its
+cached path. Check the execution mode and bundle files when investigating these
+timeouts. The native sequential cleanup fix is deferred.
+
+Use the World runner, or isolate files even when running one at a time:
+
+```bash
+bun run test:world
+bun test ./web/src/world/ProductionContexts*.test.ts --parallel=1
+bun test ./web/src/world/HostsFilter*.test.ts --parallel=1
+```
+
+`--parallel=1` runs one file at a time with isolated modules, avoiding the shared
+cache lifetime issue. Higher file parallelism also isolates modules. The World
+runner and its CI shards prepare bundles before testing and own their cleanup;
+those paths are unaffected, including shards with one file worker.
+
 GitHub Actions runs the remaining repository checks with one file worker and up to
 two concurrent cases, preserving the upstream test configuration. World browser
 tests run on eight separate runners, each with one file worker and one active case.
