@@ -97,7 +97,14 @@ are checked again during the RC release workflow.
    cannot create pull requests, and the release tag ruleset permits only the
    maintainer account to create `v*` tags. If those settings change, the automated
    path can be used after confirming its token has the required access.
-4. The Release workflow revalidates metadata/tests, builds all six platform archives,
+4. The Release workflow revalidates metadata and repository tests with one file
+   worker and at most two concurrent cases. Its World browser tests use the same
+   [eight-shard workflow](../.github/workflows/world-browser.yml) as PR CI, with one
+   file worker and one case per runner. Every shard and repository validation must
+   pass before any platform package builds. Prepare Release validates its generated
+   working tree in one checkout with one file worker and retains the complete World
+   suite; its World cases run one at a time.
+   Release then builds all six platform archives,
    checks their contents and formats, then publishes archives, checksums, update
    manifests and `install-herdr-world.sh` as a GitHub release. It downloads the
    complete published asset set and verifies the installer, archive bytes, checksums
@@ -128,13 +135,22 @@ publisher with direct publish permission for all six names and the existing
 OIDC without an npm token. The platform names are
 `@ivoryheart/herdr-world-{linux,darwin,windows}-{x64,arm64}`.
 The existing `HOMEBREW_TAP_TOKEN` must have permission to push a branch and open a PR
-in `IvoryHeart/homebrew-tap`. A failed downstream publish can be rerun for the same
+in `IvoryHeart/homebrew-tap`. A fine-grained token needs repository access with
+Contents and Pull requests permissions set to Read and write. A successful branch
+push does not prove PR creation access: if `createPullRequest` reports
+`Resource not accessible by personal access token`, correct that token's repository
+access and PR permissions in GitHub settings. Workflow changes cannot grant token
+permissions. A failed downstream publish can be rerun for the same
 tag: npm skips byte-identical versions and rejects changed content.
 
 Do not retag a release or build final artifacts from an unreviewed worktree. If a
 published RC artifact is wrong, prepare `X.Y.Z-rc.(N+1)` on a new reviewed release
 commit. Prepare the stable `X.Y.Z` only after testing the candidate across the
 supported platforms.
+
+Rerunning a failed tag workflow uses the code and workflow from that tag. A fix
+merged to `main` therefore needs a new reviewed release commit and tag before
+Release can use it; retrying the old tag does not pick up the new validation policy.
 
 Pages deployment runs from `main` and requires a working installer on the
 published stable Latest release. Candidates do not deploy the replacement site.

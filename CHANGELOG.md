@@ -11,6 +11,9 @@ are optional because the merged PR history records their source.
 
 - Test files run in bounded parallel workers. Isolated browser acceptance cases also run concurrently, with lower concurrency in CI.
 - World browser acceptance suites reuse immutable bundles and run across eight isolated CI shards, preserving scenario coverage and responsiveness budgets. CI artifacts retain input timings for responsiveness investigations.
+- Release validation uses the same isolated World browser shards as PR CI and waits
+  for every shard before packaging. Release and Prepare Release cap test files to
+  one worker to prevent browser contention.
 
 ## [0.2.2] - 2026-10-05
 

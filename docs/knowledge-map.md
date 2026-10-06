@@ -32,6 +32,17 @@ decisions and are not current operational guidance.
 | Herdr setup, service management and updates | [Access boundary](../openspec/specs/bridge-access/spec.md), [distribution](../openspec/specs/distribution-boundaries/spec.md) | [Herdr CLI](../server/src/herdr/cli.ts), [setup](../server/src/http/herdr-setup.ts), [service manager](../server/src/config/service-manager.ts), [update handler](../server/src/http/update.ts) | [Setup tests](../server/src/http/herdr-setup.test.ts), [update tests](../server/src/http/update.test.ts), [deployment](DEPLOYMENT.md) |
 | Installer, plugin, upstream sync and releases | [Distribution boundaries](../openspec/specs/distribution-boundaries/spec.md) | [Release tooling](../scripts/prepare-release.ts), [plugin tooling](../scripts/world-plugin.ts), [plugin manifest](../herdr-plugin.toml) | [Release tests](../scripts/prepare-release.test.ts), [upstream record](../UPSTREAM.md), [packaging](packaging.md), [release](release.md), [screenshot capture](SCREENSHOTS.md) |
 
+## CI and release validation
+
+[Development verification](development.md#verification) describes local and CI
+runner settings. [PR CI](../.github/workflows/ci.yml) and
+[Release](../.github/workflows/release.yml) call the same
+[World browser workflow](../.github/workflows/world-browser.yml).
+[Prepare Release](../.github/workflows/prepare-release.yml) validates generated
+files in its own checkout. Start with [CI workflow tests](../scripts/ci-workflow.test.ts)
+and [release validation tests](../scripts/release-validation.test.ts) when changing
+concurrency, shard coverage or publication dependencies.
+
 ## RPC paths
 
 `web/src/api.ts` owns one WebSocket to the World service. Bridge-global methods such as

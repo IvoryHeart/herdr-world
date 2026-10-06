@@ -61,13 +61,17 @@ cache lifetime issue. Higher file parallelism also isolates modules. The World
 runner and its CI shards prepare bundles before testing and own their cleanup;
 those paths are unaffected, including shards with one file worker.
 
-GitHub Actions runs the remaining repository checks with one file worker and up to
-two concurrent cases, preserving the upstream test configuration. World browser
-tests run on eight separate runners, each with one file worker and one active case.
+PR CI and Release run the remaining repository checks with one file worker and up
+to two concurrent cases, preserving the upstream test configuration. Both call the
+[shared World browser workflow](../.github/workflows/world-browser.yml), which runs
+eight separate runners, each with one file worker and one active case.
 The [shard inventory](../scripts/world-browser-suites.ts) includes all World browser
 suites; inventory checks reject missing or duplicate assignments. The required
 Delivery checks status succeeds only when repository validation and every World
 shard pass. Markdown-only and exact-head reuse keep their existing shorter paths.
+Release packaging requires repository validation and all eight shards to pass.
+Prepare Release validates its generated working tree in one checkout with one file
+worker; it retains the complete World suite, with one active World case at a time.
 
 Each World run writes JUnit results and per-file timings under `.agents/delivery/`.
 CI uploads them as `world-browser-N-attempt-M` artifacts, including on test failure. Compare
