@@ -1,4 +1,4 @@
 // @world-browser-suite
 import { registerProductionContextTests } from "./testing/productionContextAcceptance";
 
-registerProductionContextTests("uncertain");
+registerProductionContextTests("office");

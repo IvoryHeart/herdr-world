@@ -71,7 +71,10 @@ test("CI and release jobs install once from the workspace root", () => {
         step.run?.includes("bun install"),
       );
       const noBunInstall =
-        (file === "ci.yml" && name === "homebrew-preview") ||
+        (file === "ci.yml" &&
+          ["homebrew-preview", "validation-scope", "delivery"].includes(
+            name,
+          )) ||
         (file === "release.yml" &&
           [
             "publish",
