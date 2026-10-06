@@ -49,7 +49,7 @@ Delivery checks status succeeds only when repository validation and every World
 shard pass. Markdown-only and exact-head reuse keep their existing shorter paths.
 
 Each World run writes JUnit results and per-file timings under `.agents/delivery/`.
-CI uploads them as `world-browser-N` artifacts, including on test failure. Compare
+CI uploads them as `world-browser-N-attempt-M` artifacts, including on test failure. Compare
 the slowest shard and total delivery time before changing the shard assignment or
 concurrency. The first eight-shard grouping is provisional, rather than a claim of
 a measured two-to-three-minute delivery time. Keep all scenario combinations, dense
