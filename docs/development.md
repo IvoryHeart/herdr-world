@@ -86,6 +86,26 @@ inputs with browser dispatch, service replies, browser acknowledgements and
 snapshot admission. Inspect them when a latency limit fails; CI keeps full Chrome
 timeline tracing disabled to avoid adding its recording cost to the benchmark.
 
+World browser harnesses use two bounded phases through
+[`waitForBrowserFixture`](../web/src/browserChrome.ts): Chrome has 35 seconds
+from launch to request the fixture's main HTML document, then the existing
+per-fixture deadline begins. The fixture budget still includes serving HTML and
+assets, application initialization, interaction and every assertion. Browser exit
+fails either phase immediately, and deadline timers are cleared on completion.
+The outer Bun timeout includes setup, the startup allowance, fixture execution
+and cleanup. Input latency, rendering and operation-specific limits are unchanged.
+
+This boundary addresses a confirmed first-case CI failure: Chrome reached its
+debugging endpoint after 18.4 seconds, connected after 25.5 seconds and requested
+the Spaces page around 27.4 seconds. The original 30-second timer expired while
+the fixture was still completing checks without reported failures. A controlled
+31-second browser launch delay reproduced the old timeout before Chrome started;
+the repaired harness completed all Spaces assertions in 33.3 seconds, with the
+same 30-second fixture limit. This proves startup consumed the acceptance budget;
+it does not identify why Chrome initialization was slow on that runner. Diagnose
+any failure after the page request separately, using fixture progress or input
+artifacts, rather than extending an acceptance or latency limit.
+
 For browser startup or rendering timeouts, dispatch CI with
 `browser_diagnostics=true` and an immutable `diagnostics_baseline` commit. The
 optional lifecycle jobs compare HostsFilter creation, Spatial Graph and Spaces
@@ -94,7 +114,7 @@ first on each runner. Both checkouts install their own pinned dependencies, and
 both revisions run even if the first fails. Each browser records Chrome stderr,
 document readiness, load events, JavaScript exceptions, failed requests and exit
 signals in `browser-lifecycle-*` artifacts. These diagnostic runs use one file
-worker and one case at a time with the existing assertions and deadlines.
+worker and one case at a time with each revision's assertions and deadline boundaries.
 
 ```bash
 gh workflow run ci.yml --ref agent/example-change \

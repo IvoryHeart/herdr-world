@@ -3,7 +3,11 @@ import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
-import { stopChrome } from "../browserChrome";
+import {
+  BROWSER_STARTUP_TIMEOUT_MS,
+  stopChrome,
+  waitForBrowserFixture,
+} from "../browserChrome";
 
 const chrome =
   Bun.env.CHROME_BIN ||
@@ -18,6 +22,7 @@ test.skipIf(!chrome)(
     const dir = await mkdtemp(join(tmpdir(), "spaces-arrangement-test-"));
     const assets = new Map<string, Blob>();
     const result = Promise.withResolvers<unknown>();
+    const pageRequested = Promise.withResolvers<void>();
     const progress: unknown[] = [];
     const server = Bun.serve({
       hostname: "127.0.0.1",
@@ -36,6 +41,7 @@ test.skipIf(!chrome)(
         const asset = assets.get(path);
         if (asset) return new Response(asset);
         if (path === "/") {
+          pageRequested.resolve();
           return new Response(
             '<head><link rel="stylesheet" href="/useSpacesTabWindowArrangement.browser.css"></head><body><div id="root"></div><script src="/useSpacesTabWindowArrangement.browser.js"></script></body>',
             { headers: { "Content-Type": "text/html" } },
@@ -45,8 +51,6 @@ test.skipIf(!chrome)(
       },
     });
     let child: ReturnType<typeof Bun.spawn> | undefined;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    let deadlineError: Error | undefined;
     try {
       const build = await Bun.build({
         entrypoints: [
@@ -95,37 +99,35 @@ test.skipIf(!chrome)(
         ],
         { stdout: "ignore", stderr: Bun.file(errorOutput) },
       );
-      const failures = await Promise.race([
+      const failures = await waitForBrowserFixture(
+        pageRequested.promise,
         result.promise,
         child.exited.then(async (code) => {
           throw new Error(
             `Browser exited (${code}): ${await readFile(errorOutput, "utf8")}`,
           );
         }),
-        new Promise<never>((_, reject) => {
-          timer = setTimeout(() => {
-            deadlineError = new Error(
-              `Spaces arrangement browser check timed out; latest progress: ${JSON.stringify(progress)}`,
-            );
-            reject(deadlineError);
-          }, 30_000);
-        }),
-      ]);
+        "Spaces arrangement browser check",
+        30_000,
+      );
       expect(failures).toEqual([]);
     } catch (error) {
-      if (error === deadlineError && deadlineError) {
+      if (
+        error instanceof Error &&
+        error.message.startsWith("Spaces arrangement browser check")
+      ) {
+        error.message += `; latest progress: ${JSON.stringify(progress)}`;
         const stderr = await readFile(join(dir, "browser.log"), "utf8").catch(
           (readError) => `Could not read Chrome stderr: ${String(readError)}`,
         );
-        deadlineError.message += `\n${stderr}`;
+        error.message += `\n${stderr}`;
       }
       throw error;
     } finally {
-      clearTimeout(timer);
       server.stop(true);
       await stopChrome(child);
       await rm(dir, { recursive: true, force: true });
     }
   },
-  45_000,
+  45_000 + BROWSER_STARTUP_TIMEOUT_MS,
 );

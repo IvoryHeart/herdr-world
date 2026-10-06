@@ -2,6 +2,10 @@ import { expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import {
+  BROWSER_STARTUP_TIMEOUT_MS,
+  waitForBrowserFixture,
+} from "../../browserChrome";
 
 const chrome =
   Bun.env.CHROME_BIN || Bun.which("google-chrome") || Bun.which("chromium");
@@ -23,11 +27,13 @@ export function registerHostsFilterTests(group: HostFilterGroup) {
       const dir = await mkdtemp(join(tmpdir(), "world-hosts-filter-"));
       const { assets } = await worldBrowserBundle("HostsFilter");
       const result = Promise.withResolvers<unknown>();
+      const pageRequested = Promise.withResolvers<void>();
       const server = Bun.serve({
         hostname: "127.0.0.1",
         port: 0,
         async fetch(request) {
           const path = new URL(request.url).pathname;
+          if (path === "/") pageRequested.resolve();
           if (path === "/result") {
             result.resolve(await request.json());
             return new Response("ok");
@@ -41,7 +47,6 @@ export function registerHostsFilterTests(group: HostFilterGroup) {
         },
       });
       let browser: ReturnType<typeof Bun.spawn> | undefined;
-      let timeout: ReturnType<typeof setTimeout> | undefined;
       try {
         browser = Bun.spawn(
           [
@@ -57,19 +62,15 @@ export function registerHostsFilterTests(group: HostFilterGroup) {
           ],
           { stdout: "ignore", stderr: Bun.file(join(dir, "browser.log")) },
         );
-        const observed = await Promise.race([
+        const observed = await waitForBrowserFixture(
+          pageRequested.promise,
           result.promise,
           browser.exited.then((code) => {
             throw new Error(`Browser exited ${code}`);
           }),
-          new Promise<never>((_, reject) => {
-            timeout = setTimeout(
-              () =>
-                reject(new Error("Hosts filter browser acceptance timed out")),
-              45_000,
-            );
-          }),
-        ]);
+          "Hosts filter browser acceptance",
+          45_000,
+        );
         if (Array.isArray(observed) && observed.length)
           console.info(
             "Hosts filter failures",
@@ -77,13 +78,12 @@ export function registerHostsFilterTests(group: HostFilterGroup) {
           );
         expect(observed).toEqual([]);
       } finally {
-        clearTimeout(timeout);
         browser?.kill();
         if (browser) await browser.exited;
         server.stop(true);
         await rm(dir, { recursive: true, force: true });
       }
     },
-    60_000,
+    60_000 + BROWSER_STARTUP_TIMEOUT_MS,
   );
 }

@@ -3,6 +3,10 @@ import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
+import {
+  BROWSER_STARTUP_TIMEOUT_MS,
+  waitForBrowserFixture,
+} from "../browserChrome";
 
 const chrome =
   Bun.env.CHROME_BIN ||
@@ -22,6 +26,7 @@ test
     const dir = await mkdtemp(join(tmpdir(), "spatial-graph-test-"));
     const assets = new Map<string, Blob>();
     const result = Promise.withResolvers<unknown>();
+    const pageRequested = Promise.withResolvers<void>();
     const server = Bun.serve({
       hostname: "127.0.0.1",
       port: 0,
@@ -34,6 +39,7 @@ test
         const asset = assets.get(path);
         if (asset) return new Response(asset);
         if (path === "/") {
+          pageRequested.resolve();
           return new Response(
             '<head><link rel="stylesheet" href="/SpatialGraphView.browser.css"></head><body><script type="module" src="/SpatialGraphView.browser.js"></script></body>',
             { headers: { "Content-Type": "text/html" } },
@@ -43,7 +49,6 @@ test
       },
     });
     let browser: ReturnType<typeof Bun.spawn> | undefined;
-    let timer: ReturnType<typeof setTimeout> | undefined;
     try {
       const build = await Bun.build({
         entrypoints: [join(import.meta.dir, "SpatialGraphView.browser.tsx")],
@@ -87,23 +92,19 @@ test
         ],
         { stdout: "ignore", stderr: Bun.file(browserLog) },
       );
-      const failures = await Promise.race([
+      const failures = await waitForBrowserFixture(
+        pageRequested.promise,
         result.promise,
         browser.exited.then(async (code) => {
           throw new Error(
             `Browser exited (${code}): ${await readFile(browserLog, "utf8")}`,
           );
         }),
-        new Promise<never>((_, reject) => {
-          timer = setTimeout(
-            () => reject(new Error("Spatial Graph browser check timed out")),
-            40_000,
-          );
-        }),
-      ]);
+        "Spatial Graph browser check",
+        40_000,
+      );
       expect(failures).toEqual([]);
     } finally {
-      clearTimeout(timer);
       if (browser) {
         browser.kill();
         await browser.exited;
@@ -112,5 +113,5 @@ test
       await rm(dir, { recursive: true, force: true });
     }
   },
-  50_000,
+  50_000 + BROWSER_STARTUP_TIMEOUT_MS,
 );

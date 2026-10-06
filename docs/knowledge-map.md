@@ -47,6 +47,11 @@ For first-case browser timeouts, use the opt-in lifecycle comparison described i
 [diagnostic adapter](../scripts/browser-diagnostics.ts) and its
 [regression tests](../scripts/browser-diagnostics.test.ts). Keep baseline and
 candidate evidence together before diagnosing a runner or fixture defect.
+World harnesses separate bounded Chrome startup from fixture execution using
+[the browser deadline helper](../web/src/browserChrome.ts) and its
+[regression tests](../web/src/browserChrome.test.ts). The fixture clock starts at
+the main HTML request, before loading assets or initializing the application;
+responsiveness and operation limits remain unchanged.
 
 ## RPC paths
 

@@ -3,6 +3,10 @@ import { existsSync } from "node:fs";
 import { mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
+import {
+  BROWSER_STARTUP_TIMEOUT_MS,
+  waitForBrowserFixture,
+} from "../browserChrome";
 
 const chrome =
   Bun.env.CHROME_BIN ||
@@ -17,11 +21,13 @@ test.skipIf(!chrome)(
     const dir = await mkdtemp(join(tmpdir(), "world-view-boundary-"));
     const assets = new Map<string, Blob>();
     const result = Promise.withResolvers<Record<string, unknown>>();
+    const pageRequested = Promise.withResolvers<void>();
     const server = Bun.serve({
       hostname: "127.0.0.1",
       port: 0,
       async fetch(request) {
         const path = new URL(request.url).pathname;
+        if (path === "/") pageRequested.resolve();
         if (path === "/result" && request.method === "POST") {
           result.resolve(await request.json());
           return new Response("ok");
@@ -62,20 +68,17 @@ test.skipIf(!chrome)(
         ],
         { stdout: "ignore", stderr: Bun.file(browserLog) },
       );
-      const observed = await Promise.race([
+      const observed = await waitForBrowserFixture(
+        pageRequested.promise,
         result.promise,
         browser.exited.then(async (code) => {
           throw new Error(
             `Browser exited (${code}): ${await readFile(browserLog, "utf8")}`,
           );
         }),
-        new Promise<never>((_, reject) =>
-          setTimeout(
-            () => reject(new Error("View boundary timed out")),
-            15_000,
-          ),
-        ),
-      ]);
+        "View boundary",
+        15_000,
+      );
       expect(observed).toEqual({
         fallback: true,
         spaces: "Spaces remains mounted",
@@ -86,4 +89,5 @@ test.skipIf(!chrome)(
       server.stop(true);
     }
   },
+  25_000 + BROWSER_STARTUP_TIMEOUT_MS,
 );

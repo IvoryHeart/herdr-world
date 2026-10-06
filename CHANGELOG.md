@@ -7,6 +7,11 @@ are optional because the merged PR history records their source.
 
 ## [Unreleased]
 
+### Fixed
+
+- World browser tests give cold Chrome startup a separate bounded allowance,
+  preserving fixture deadlines and responsiveness assertions.
+
 ### Changed
 
 - Test files run in bounded parallel workers. Isolated browser acceptance cases also run concurrently, with lower concurrency in CI.

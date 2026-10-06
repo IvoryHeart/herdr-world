@@ -1,6 +1,28 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
+export const BROWSER_STARTUP_TIMEOUT_MS = 35_000;
+
+export async function waitForBrowserFixture<T>(
+  pageRequested: Promise<void>,
+  result: Promise<T>,
+  browserExited: Promise<never>,
+  label: string,
+  fixtureTimeoutMs: number,
+): Promise<T> {
+  await withBrowserDeadline(
+    Promise.race([pageRequested, browserExited]),
+    `${label} browser startup`,
+    BROWSER_STARTUP_TIMEOUT_MS,
+  );
+  // Include HTML/assets and application initialization in the existing case budget.
+  return withBrowserDeadline(
+    Promise.race([result, browserExited]),
+    label,
+    fixtureTimeoutMs,
+  );
+}
+
 export async function withBrowserDeadline<T>(
   operation: Promise<T>,
   label: string,

@@ -17,6 +17,10 @@ import {
   productionContextGroup,
   type ProductionContextGroup,
 } from "./browserCases";
+import {
+  BROWSER_STARTUP_TIMEOUT_MS,
+  waitForBrowserFixture,
+} from "../../browserChrome";
 import { worldBrowserBundle } from "./worldBrowserBundle";
 
 const chrome =
@@ -255,11 +259,13 @@ export function registerProductionContextTests(group: ProductionContextGroup) {
           host + ":" + terminalId,
           "terminal-frame",
         );
+      const pageRequested = Promise.withResolvers<void>();
       const server = Bun.serve({
         hostname: "127.0.0.1",
         port: 0,
         async fetch(req, server) {
           const url = new URL(req.url);
+          if (url.pathname === "/") pageRequested.resolve();
           if (url.pathname === "/ws" && server.upgrade(req)) return;
           if (url.pathname === "/drop-next") {
             dropNext = true;
@@ -491,7 +497,6 @@ export function registerProductionContextTests(group: ProductionContextGroup) {
         },
       });
       let browser: ReturnType<typeof Bun.spawn> | undefined;
-      let deadline: ReturnType<typeof setTimeout> | undefined;
       try {
         browser = Bun.spawn(
           [
@@ -516,17 +521,17 @@ export function registerProductionContextTests(group: ProductionContextGroup) {
           ],
           { stdout: "ignore", stderr: "ignore" },
         );
-        const observed = await Promise.race([
+        // Keep both observation/render phases and the deliberate 20-second stall
+        // in the original fixture budget. Input latency has separate budgets.
+        const observed = await waitForBrowserFixture(
+          pageRequested.promise,
           result.promise,
-          new Promise<never>((_, reject) => {
-            // Bound browser startup and both observation/render phases, including
-            // the deliberate 20-second stall. Input latency has separate budgets.
-            deadline = setTimeout(
-              () => reject(Error("Production context acceptance deadline")),
-              90000,
-            );
+          browser.exited.then((code) => {
+            throw new Error(`Browser exited ${code}`);
           }),
-        ]);
+          "Production context acceptance deadline",
+          90_000,
+        );
         if (view === "uncertain")
           expect(
             calls.some(
@@ -672,7 +677,6 @@ export function registerProductionContextTests(group: ProductionContextGroup) {
         fixture?.release();
         producer.terminate();
         clearInterval(noise);
-        clearTimeout(deadline);
         browser?.kill();
         if (browser) await browser.exited;
         server.stop(true);
@@ -680,6 +684,6 @@ export function registerProductionContextTests(group: ProductionContextGroup) {
       }
     },
     // Also allow fixture/build setup and cleanup outside the browser watchdog.
-    100000,
+    100_000 + BROWSER_STARTUP_TIMEOUT_MS,
   );
 }
