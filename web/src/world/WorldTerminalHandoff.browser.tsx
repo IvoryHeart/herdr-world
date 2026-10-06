@@ -3128,13 +3128,26 @@ async function run() {
     () => persistentReviewerInspector?.getAttribute("data-view") === "files",
     "compact World Inspector Files view",
   );
-  // A terminal link leaves a selected file; compact Files starts at that file.
-  persistentReviewerInspector
-    ?.querySelector<HTMLButtonElement>('button[aria-label="Files"]')
-    ?.click();
-  await settle();
+  // Selecting Files commits data-view before the effect drills into the
+  // retained file. Wait for its back action so a missing button cannot silently
+  // skip returning to the explorer on a slow renderer.
+  const compactFilesBack = () =>
+    persistentReviewerInspector?.querySelector<HTMLButtonElement>(
+      'button[aria-label="Files"]',
+    );
+  await until(compactFilesBack, "compact Files retained-file back action");
+  compactFilesBack()!.click();
   const compactFilesResource = persistentReviewerInspector?.querySelector(
     ".inspector-files-resource:not(.is-hidden)",
+  );
+  await until(
+    () =>
+      !persistentReviewerInspector?.classList.contains("has-detail") &&
+      (compactFilesResource?.getBoundingClientRect().height ?? 0) > 0 &&
+      (compactFilesResource
+        ?.querySelector(".file-explorer-side")
+        ?.getBoundingClientRect().height ?? 0) > 0,
+    "compact Files explorer layout after the back action",
   );
   check(
     (compactFilesResource?.getBoundingClientRect().height ?? 0) > 0 &&

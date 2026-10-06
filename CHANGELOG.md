@@ -11,6 +11,8 @@ are optional because the merged PR history records their source.
 
 - World browser tests give cold Chrome startup a separate bounded allowance,
   preserving fixture deadlines and responsiveness assertions.
+- The compact Inspector browser test waits for its Files back action and explorer
+  layout before checking visibility.
 
 ### Changed
 
