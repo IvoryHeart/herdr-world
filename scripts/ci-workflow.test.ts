@@ -1,20 +1,27 @@
 import { expect, test } from "bun:test";
+import { worldBrowserShards } from "./world-browser-suites";
 
 type WorkflowStep = {
   name?: string;
   run?: string;
   uses?: string;
   if?: string;
+  env?: Record<string, string>;
   with?: { "fetch-depth"?: number; ref?: string };
 };
 
 type WorkflowJob = {
   name?: string;
-  runs_on?: string;
+  "runs-on"?: string;
+  needs?: string | string[];
+  if?: string;
   strategy?: {
+    "fail-fast"?: boolean;
+    "max-parallel"?: number;
     matrix?: {
       include?: Array<{ arch?: string; runner?: string }>;
       platform?: string[];
+      shard?: number[];
     };
   };
   steps: WorkflowStep[];
@@ -46,33 +53,94 @@ test("CI exposes the protected delivery gate and runs the complete repository ch
   const delivery = workflow.jobs.delivery;
 
   expect(delivery?.name).toBe("Delivery checks");
-  expect(delivery?.steps.some((step) => step.run === "bun run check")).toBe(
-    true,
-  );
+  expect(delivery?.needs).toEqual([
+    "validation-scope",
+    "validation",
+    "world-browser",
+  ]);
+  expect(delivery?.if).toBe("always()");
   expect(
-    delivery?.steps.find((step) => step.run === "bun run check"),
+    delivery?.steps.find((step) => step.name === "Run full repository check"),
   ).toMatchObject({
-    name: "Run full repository check",
-    if: "steps.scope.outputs.mode != 'docs' && steps.scope.outputs.mode != 'reuse'",
+    if: "needs.validation-scope.outputs.mode == 'full'",
+    run: "bun scripts/ci-delivery-result.ts",
+    env: {
+      VALIDATION_MODE: "full",
+      SCOPE_RESULT: "${{ needs.validation-scope.result }}",
+      VALIDATION_RESULT: "${{ needs.validation.result }}",
+      WORLD_RESULT: "${{ needs.world-browser.result }}",
+    },
+  });
+  const validation = workflow.jobs.validation;
+  expect(validation?.needs).toBe("validation-scope");
+  expect(
+    validation?.steps.find((step) => step.run === "bun run check"),
+  ).toMatchObject({
+    if: "needs.validation-scope.outputs.mode == 'full'",
+    env: {
+      HERDR_TEST_EXCLUDE_WORLD_BROWSER: "1",
+      HERDR_TEST_PARALLEL: "1",
+      HERDR_TEST_MAX_CONCURRENCY: "2",
+    },
   });
   expect(
-    delivery?.steps.find((step) => step.run === "bun run check:docs")?.if,
-  ).toBe("steps.scope.outputs.mode == 'docs'");
+    validation?.steps.find((step) => step.run === "bun run check:docs")?.if,
+  ).toBe("needs.validation-scope.outputs.mode == 'docs'");
+  const scope = workflow.jobs["validation-scope"];
   expect(
-    delivery?.steps.find((step) => step.name === "Determine validation scope")
-      ?.run,
-  ).toBe("bun scripts/ci-reuse-full-check.ts");
+    scope?.steps.find((step) => step.name === "Determine validation scope"),
+  ).toMatchObject({
+    run: "bun scripts/ci-reuse-full-check.ts",
+    env: {
+      REQUIRED_JOB_NAME: "Delivery checks",
+      REQUIRED_FULL_STEP: "Run full repository check",
+    },
+  });
   expect(
-    delivery?.steps.find((step) => step.name === "Check knowledge-map impact"),
+    scope?.steps.find((step) => step.name === "Check knowledge-map impact"),
   ).toMatchObject({
     if: "github.event_name == 'pull_request'",
     run: 'bun scripts/check-knowledge-map.ts "$GITHUB_EVENT_PATH"',
   });
   expect(
-    delivery?.steps.find((step) => step.uses?.startsWith("actions/checkout@"))
+    scope?.steps.find((step) => step.uses?.startsWith("actions/checkout@"))
       ?.with?.["fetch-depth"],
   ).toBe(0);
   expect(workflow.jobs.validate).toBeUndefined();
+});
+
+test("all eight World browser shards run independently and retain failure evidence", () => {
+  const world = workflow.jobs["world-browser"];
+  expect(world?.needs).toBe("validation-scope");
+  expect(world?.if).toBe("needs.validation-scope.outputs.mode == 'full'");
+  expect(world?.["runs-on"]).toBe("ubuntu-latest");
+  expect(world?.strategy?.matrix?.shard).toEqual(
+    worldBrowserShards.map((_, index) => index + 1),
+  );
+  expect(world?.strategy?.["fail-fast"]).toBe(false);
+  expect(world?.strategy?.["max-parallel"]).toBe(8);
+  expect(
+    world?.steps.find(
+      (step) => step.run === "bun run test:world --shard=${{ matrix.shard }}/8",
+    ),
+  ).toMatchObject({
+    env: {
+      WORLD_TRACE_PREFIX: ".agents/delivery/world-production",
+      WORLD_TIMINGS_ONLY: "1",
+    },
+  });
+  expect(
+    world?.steps.find((step) =>
+      step.uses?.startsWith("actions/upload-artifact@"),
+    ),
+  ).toMatchObject({
+    if: "always()",
+    with: {
+      path: expect.stringContaining(
+        ".agents/delivery/world-production-*-inputs.json",
+      ),
+    },
+  });
 });
 
 test("labeled release PRs offer six downloadable previews without publishing", () => {

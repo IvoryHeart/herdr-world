@@ -24,14 +24,68 @@ bun run typecheck:quick       # source types without regenerating embedded asset
 bun test <path>               # focused Bun test
 bun run test:quick            # non-Chromium suite
 CHROME_BIN=/path/to/chromium bun run test:browser
+bun run test:world            # all World browser acceptance suites
+bun run test:world --shard=1/8 # reproduce one CI shard, one browser at a time
 bun run build:site            # landing page/tutorial
 bun run check                 # complete PR candidate
 ```
 
-The test wrapper runs files in parallel using up to eight available CPUs.
-Three isolated browser suites also run up to two cases concurrently. Set
-`HERDR_TEST_PARALLEL` to choose a default worker count, or pass Bun's
-`--parallel=N` flag to override it for one run.
+The test wrapper runs ordinary files in parallel using up to eight available CPUs.
+Set `HERDR_TEST_PARALLEL`
+to choose a default worker count and `HERDR_TEST_MAX_CONCURRENCY` to cap concurrent
+cases, or pass Bun's `--parallel=N` flag to override the worker count for one run.
+An unfiltered `bun run test` runs the remaining suite first, then all World browser
+tests with up to four file workers and one case per worker. World bundles are built once
+per run; each case retains its own server, fixture and fresh browser profile.
+Focused test files build a bundle once per file. Production responsiveness cases
+are serial within each file so their global diagnostic instrumentation cannot overlap.
+
+**Known limitation: native sequential World browser runs.** Direct `bun test` runs
+across multiple `HostsFilter*.test.ts` or `ProductionContexts*.test.ts` files,
+without `--parallel` or runner-prepared assets, can serve missing browser assets
+and time out. Bun shares the bundle-cache module between sequential files; the
+first file's cleanup deletes the bundle directory while later files reuse its
+cached path. Check the execution mode and bundle files when investigating these
+timeouts. The native sequential cleanup fix is deferred.
+
+Use the World runner, or isolate files even when running one at a time:
+
+```bash
+bun run test:world
+bun test ./web/src/world/ProductionContexts*.test.ts --parallel=1
+bun test ./web/src/world/HostsFilter*.test.ts --parallel=1
+```
+
+`--parallel=1` runs one file at a time with isolated modules, avoiding the shared
+cache lifetime issue. Higher file parallelism also isolates modules. The World
+runner and its CI shards prepare bundles before testing and own their cleanup;
+those paths are unaffected, including shards with one file worker.
+
+GitHub Actions runs the remaining repository checks with one file worker and up to
+two concurrent cases, preserving the upstream test configuration. World browser
+tests run on eight separate runners, each with one file worker and one active case.
+The [shard inventory](../scripts/world-browser-suites.ts) includes all World browser
+suites; inventory checks reject missing or duplicate assignments. The required
+Delivery checks status succeeds only when repository validation and every World
+shard pass. Markdown-only and exact-head reuse keep their existing shorter paths.
+
+Each World run writes JUnit results and per-file timings under `.agents/delivery/`.
+CI uploads them as `world-browser-N-attempt-M` artifacts, including on test failure. Compare
+the slowest shard and total delivery time before changing the shard assignment or
+concurrency. The first eight-shard grouping is provisional, rather than a claim of
+a measured two-to-three-minute delivery time. Keep all scenario combinations, dense
+fixtures, real deadline checks and input-latency budgets when rebalancing.
+
+Production responsiveness cases also save `world-production-*-inputs.json` in
+those CI artifacts. These lightweight timings correlate independently scheduled
+inputs with browser dispatch, service replies, browser acknowledgements and
+snapshot admission. Inspect them when a latency limit fails; CI keeps full Chrome
+timeline tracing disabled to avoid adding its recording cost to the benchmark.
+
+`HERDR_TEST_EXCLUDE_WORLD_BROWSER=1` is for the CI repository-validation job, which
+is gated together with the separate World shards. Do not use it as a complete local
+check. The existing `test:browser` selection covers upstream and selected World
+files; use `test:world` for the complete World browser matrix.
 
 `bun run check` validates dependency notices, formatting, lint, all types/tests,
 production frontend/server builds and OpenSpec contracts. Generated output belongs in

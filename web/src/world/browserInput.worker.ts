@@ -81,7 +81,7 @@ self.onmessage = async ({ data }) => {
               windowsVirtualKeyCode: 90,
             }),
           ]).then(() => {
-            if (data.tracePath)
+            if (data.timings || data.tracePath)
               self.postMessage({
                 dispatch: {
                   phase,

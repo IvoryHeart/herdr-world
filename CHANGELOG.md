@@ -9,7 +9,8 @@ are optional because the merged PR history records their source.
 
 ### Changed
 
-- Test files run in bounded parallel workers. Isolated browser acceptance cases also run concurrently.
+- Test files run in bounded parallel workers. Isolated browser acceptance cases also run concurrently, with lower concurrency in CI.
+- World browser acceptance suites reuse immutable bundles and run across eight isolated CI shards, preserving scenario coverage and responsiveness budgets. CI artifacts retain input timings for responsiveness investigations.
 
 ## [0.2.2] - 2026-10-05
 

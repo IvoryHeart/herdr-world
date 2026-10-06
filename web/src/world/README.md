@@ -101,7 +101,7 @@ guards also reject programmatic activation before the scene is ready. Office sub
 the endpoint-creation inputs it consumes; room actions resolve through the
 qualified World index and still validate host, generation and native identity.
 
-Use `bun run test ./web/src/world/ProductionContexts.test.ts --test-name-pattern
+Use `bun run test ./web/src/world/ProductionContexts.office.test.ts ./web/src/world/ProductionContexts.animated.test.ts --parallel=1 --test-name-pattern
 'office'` for the synthetic desktop/mobile transport workload. Keep native key
 scheduling, cold initialization, aggregate refresh and the strict Office/Graph p95
 <150 ms / maximum <450 ms acknowledgement budgets (tightened from 200/500 ms).

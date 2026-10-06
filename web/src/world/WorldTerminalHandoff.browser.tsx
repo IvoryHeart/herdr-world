@@ -36,6 +36,12 @@ const check = (condition: boolean, message: string) => {
   if (!condition) failures.push(message);
 };
 const settle = () => new Promise((resolve) => setTimeout(resolve, 80));
+// ResizeObserver runs after layout. Give its React update a painted frame
+// before dispatching another arrangement or saving a geometry baseline.
+const settleWindowLayout = () =>
+  new Promise<void>((resolve) =>
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+  );
 function enterSearch(input: HTMLInputElement, value: string) {
   Object.getOwnPropertyDescriptor(
     HTMLInputElement.prototype,
@@ -1468,6 +1474,7 @@ async function run() {
     "full World projection recovered",
   );
   const arrangeWindows = async (label: string) => {
+    await settleWindowLayout();
     const trigger = document.querySelector<HTMLButtonElement>(
       'button[aria-label="Arrange windows"]',
     )!;
@@ -1518,6 +1525,7 @@ async function run() {
       `${label} arrangement menu was outside the viewport or obscured: ${JSON.stringify(bounds?.toJSON())}`,
     );
     choice?.click();
+    await settleWindowLayout();
   };
   const arrangementTrigger = document.querySelector<HTMLButtonElement>(
     'button[aria-label="Arrange windows"]',
@@ -1600,6 +1608,7 @@ async function run() {
   document.documentElement.style.zoom = "";
   window.dispatchEvent(new Event("resize"));
   await settle();
+  await settleWindowLayout();
   await fetch("/capture/desktop", { method: "POST" });
   const desktopInspectorBounds = () =>
     [
@@ -1709,6 +1718,7 @@ async function run() {
   await until(compactArrangeTrigger, "compact arrangement menu trigger");
   await settle();
   await settle();
+  await settleWindowLayout();
   compactArrangeTrigger()!.click();
   await until(
     () =>
@@ -2914,6 +2924,7 @@ async function run() {
   );
   const compactRail =
     document.querySelector<HTMLElement>(".world-view-layout")!;
+  const beforeCompactFitCalls = calls.length;
   compactRail.style.width = "390px";
   updateLayoutPreferences({ mode: "mobile" });
   await until(
@@ -2924,18 +2935,31 @@ async function run() {
   await settle();
   await settle();
   await fetch("/capture/mobile", { method: "POST" });
+  const visibleTerminalRows = () =>
+    document.querySelector(".world-managed-window .xterm-rows")
+      ?.childElementCount;
+  // A historical resize request can precede the compact layout's final fit.
+  // Confirm that the service has the visible terminal's current row count
+  // before comparing it with the keyboard-induced fit.
+  await settleWindowLayout();
+  await until(() => {
+    const rows = visibleTerminalRows();
+    const latest = calls
+      .slice(beforeCompactFitCalls)
+      .filter(
+        ({ method, params }) =>
+          method === "terminal.resize" &&
+          params.terminal_id === "reviewer-terminal",
+      )
+      .slice(-1)[0];
+    return rows && latest?.params.rows === rows;
+  }, "compact terminal fit reached the service before keyboard input");
   const viewport = window.visualViewport!;
   const viewportHeight = Object.getOwnPropertyDescriptor(viewport, "height");
   const heightBeforeKeyboard = document
     .querySelector(".world-managed-window")!
     .getBoundingClientRect().height;
-  const rowsBeforeKeyboard = calls
-    .filter(
-      ({ method, params }) =>
-        method === "terminal.resize" &&
-        params.terminal_id === "reviewer-terminal",
-    )
-    .slice(-1)[0]?.params.rows;
+  const rowsBeforeKeyboard = visibleTerminalRows()!;
   const beforeKeyboardCalls = calls.length;
   Object.defineProperty(viewport, "height", {
     configurable: true,
@@ -2949,19 +2973,18 @@ async function run() {
       heightBeforeKeyboard - 270,
     "World applies keyboard inset once to the work area",
   );
-  if (typeof rowsBeforeKeyboard === "number")
-    await until(
-      () =>
-        calls
-          .slice(beforeKeyboardCalls)
-          .some(
-            ({ method, params }) =>
-              method === "terminal.resize" &&
-              params.terminal_id === "reviewer-terminal" &&
-              Number(params.rows) < rowsBeforeKeyboard,
-          ),
-      "visible terminal refits its rows above the keyboard",
-    );
+  await until(
+    () =>
+      calls
+        .slice(beforeKeyboardCalls)
+        .some(
+          ({ method, params }) =>
+            method === "terminal.resize" &&
+            params.terminal_id === "reviewer-terminal" &&
+            Number(params.rows) < rowsBeforeKeyboard,
+        ),
+    "visible terminal refits its rows above the keyboard",
+  );
   if (viewportHeight) Object.defineProperty(viewport, "height", viewportHeight);
   else Reflect.deleteProperty(viewport, "height");
   viewport.dispatchEvent(new Event("resize"));
