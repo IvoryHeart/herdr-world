@@ -272,6 +272,7 @@ export function registerProductionContextTests(group: ProductionContextGroup) {
             ).json()) as { type: string; webSocketDebuggerUrl: string }[];
             await command({
               action: "start",
+              timings: diagnostic,
               profile: Bun.env.WORLD_PROFILE === "1",
               slowdown: Number(Bun.env.WORLD_CPU_RATE ?? 1),
               tracePath: traceTimeline

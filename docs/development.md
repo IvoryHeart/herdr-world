@@ -76,6 +76,12 @@ concurrency. The first eight-shard grouping is provisional, rather than a claim 
 a measured two-to-three-minute delivery time. Keep all scenario combinations, dense
 fixtures, real deadline checks and input-latency budgets when rebalancing.
 
+Production responsiveness cases also save `world-production-*-inputs.json` in
+those CI artifacts. These lightweight timings correlate independently scheduled
+inputs with browser dispatch, service replies, browser acknowledgements and
+snapshot admission. Inspect them when a latency limit fails; CI keeps full Chrome
+timeline tracing disabled to avoid adding its recording cost to the benchmark.
+
 `HERDR_TEST_EXCLUDE_WORLD_BROWSER=1` is for the CI repository-validation job, which
 is gated together with the separate World shards. Do not use it as a complete local
 check. The existing `test:browser` selection covers upstream and selected World

@@ -120,15 +120,27 @@ test("all eight World browser shards run independently and retain failure eviden
   expect(world?.strategy?.["fail-fast"]).toBe(false);
   expect(world?.strategy?.["max-parallel"]).toBe(8);
   expect(
-    world?.steps.some(
+    world?.steps.find(
       (step) => step.run === "bun run test:world --shard=${{ matrix.shard }}/8",
     ),
-  ).toBe(true);
+  ).toMatchObject({
+    env: {
+      WORLD_TRACE_PREFIX: ".agents/delivery/world-production",
+      WORLD_TIMINGS_ONLY: "1",
+    },
+  });
   expect(
     world?.steps.find((step) =>
       step.uses?.startsWith("actions/upload-artifact@"),
-    )?.if,
-  ).toBe("always()");
+    ),
+  ).toMatchObject({
+    if: "always()",
+    with: {
+      path: expect.stringContaining(
+        ".agents/delivery/world-production-*-inputs.json",
+      ),
+    },
+  });
 });
 
 test("labeled release PRs offer six downloadable previews without publishing", () => {

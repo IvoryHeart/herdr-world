@@ -93,6 +93,9 @@ jobs:
                   no-cache: true
             - run: bun install --frozen-lockfile
             - name: Run World browser shard
+              env:
+                  WORLD_TRACE_PREFIX: .agents/delivery/world-production
+                  WORLD_TIMINGS_ONLY: "1"
               run: bun run test:world --shard=${{ matrix.shard }}/8
             - name: Upload World test results and timings
               if: always()
@@ -102,6 +105,7 @@ jobs:
                   path: |
                       .agents/delivery/world-shard-*.xml
                       .agents/delivery/world-shard-*.timings.json
+                      .agents/delivery/world-production-*-inputs.json
                   include-hidden-files: true
                   if-no-files-found: warn
                   retention-days: 7
