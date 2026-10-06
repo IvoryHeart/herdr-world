@@ -30,9 +30,24 @@ declare global {
 }
 
 const failures: string[] = [];
-window.addEventListener("error", (event) => failures.push(event.message));
+const progress = (message: string) => {
+  void fetch("/progress", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message,
+      failures,
+      visibility: document.visibilityState,
+    }),
+  }).catch(() => {});
+};
+window.addEventListener("error", (event) => {
+  failures.push(event.message);
+  progress("Browser error");
+});
 const check = (condition: boolean, message: string) => {
   if (!condition) failures.push(message);
+  progress(message);
 };
 const settle = () => new Promise((resolve) => setTimeout(resolve, 40));
 
@@ -78,6 +93,7 @@ function Fixture() {
 }
 
 async function run() {
+  progress("Fixture started");
   const root = createRoot(document.getElementById("root")!);
   flushSync(() => root.render(<Fixture />));
   const mock = window.__SPACES_TEST_STORE__!;

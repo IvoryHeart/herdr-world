@@ -18,11 +18,17 @@ test.skipIf(!chrome)(
     const dir = await mkdtemp(join(tmpdir(), "spaces-arrangement-test-"));
     const assets = new Map<string, Blob>();
     const result = Promise.withResolvers<unknown>();
+    const progress: unknown[] = [];
     const server = Bun.serve({
       hostname: "127.0.0.1",
       port: 0,
       async fetch(request) {
         const path = new URL(request.url).pathname;
+        if (path === "/progress" && request.method === "POST") {
+          progress.push(await request.json());
+          if (progress.length > 5) progress.shift();
+          return new Response("ok");
+        }
         if (path === "/result" && request.method === "POST") {
           result.resolve(await request.json());
           return new Response("ok");
@@ -96,11 +102,17 @@ test.skipIf(!chrome)(
           );
         }),
         new Promise<never>((_, reject) => {
-          timer = setTimeout(
-            () =>
-              reject(new Error("Spaces arrangement browser check timed out")),
-            30_000,
-          );
+          timer = setTimeout(() => {
+            void readFile(errorOutput, "utf8").then(
+              (stderr) =>
+                reject(
+                  new Error(
+                    `Spaces arrangement browser check timed out; latest progress: ${JSON.stringify(progress)}\n${stderr}`,
+                  ),
+                ),
+              reject,
+            );
+          }, 30_000);
         }),
       ]);
       expect(failures).toEqual([]);
