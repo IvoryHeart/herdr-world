@@ -36,6 +36,12 @@ const check = (condition: boolean, message: string) => {
   if (!condition) failures.push(message);
 };
 const settle = () => new Promise((resolve) => setTimeout(resolve, 80));
+// ResizeObserver runs after layout. Give its React update a painted frame
+// before dispatching another arrangement or saving a geometry baseline.
+const settleWindowLayout = () =>
+  new Promise<void>((resolve) =>
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+  );
 function enterSearch(input: HTMLInputElement, value: string) {
   Object.getOwnPropertyDescriptor(
     HTMLInputElement.prototype,
@@ -1468,6 +1474,7 @@ async function run() {
     "full World projection recovered",
   );
   const arrangeWindows = async (label: string) => {
+    await settleWindowLayout();
     const trigger = document.querySelector<HTMLButtonElement>(
       'button[aria-label="Arrange windows"]',
     )!;
@@ -1518,6 +1525,7 @@ async function run() {
       `${label} arrangement menu was outside the viewport or obscured: ${JSON.stringify(bounds?.toJSON())}`,
     );
     choice?.click();
+    await settleWindowLayout();
   };
   const arrangementTrigger = document.querySelector<HTMLButtonElement>(
     'button[aria-label="Arrange windows"]',
@@ -1600,6 +1608,7 @@ async function run() {
   document.documentElement.style.zoom = "";
   window.dispatchEvent(new Event("resize"));
   await settle();
+  await settleWindowLayout();
   await fetch("/capture/desktop", { method: "POST" });
   const desktopInspectorBounds = () =>
     [
@@ -1709,6 +1718,7 @@ async function run() {
   await until(compactArrangeTrigger, "compact arrangement menu trigger");
   await settle();
   await settle();
+  await settleWindowLayout();
   compactArrangeTrigger()!.click();
   await until(
     () =>

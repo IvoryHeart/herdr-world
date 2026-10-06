@@ -96,6 +96,8 @@ export const hostFilterGroups = [
   "arrangement",
   "pending",
   "timeouts",
+  "cold",
+  "inspector-timeout",
 ] as const;
 export type HostFilterGroup = (typeof hostFilterGroups)[number];
 export type HostFilterCase = (typeof hostFilterCases)[number];
@@ -103,14 +105,9 @@ export type HostFilterCase = (typeof hostFilterCases)[number];
 export function hostFilterGroup({
   operation,
 }: HostFilterCase): HostFilterGroup {
-  if (
-    [
-      "worktree-resource-cold",
-      "worktree-resource-timeout",
-      "pending-inspector-timeout",
-    ].includes(operation)
-  )
-    return "timeouts";
+  if (operation === "worktree-resource-cold") return "cold";
+  if (operation === "pending-inspector-timeout") return "inspector-timeout";
+  if (operation === "worktree-resource-timeout") return "timeouts";
   if (operation.startsWith("pending-inspector")) return "pending";
   if (
     [

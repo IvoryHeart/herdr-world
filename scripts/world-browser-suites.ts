@@ -4,12 +4,22 @@ import { join } from "node:path";
 // eight machines. Each machine runs one case at a time, including latency
 // workloads. Per-file timings in CI artifacts guide subsequent rebalancing.
 export const worldBrowserShards = [
-  ["HostsFilter", "ProductionContexts", "windows/WindowFrame"],
+  [
+    "HostsFilter",
+    "ProductionContexts",
+    "windows/WindowFrame",
+    "HostsFilter.cold",
+  ],
   ["HostsFilter.actions", "ProductionContexts.tree"],
   ["HostsFilter.navigation", "ProductionContexts.graph"],
   ["HostsFilter.creation", "ProductionContexts.office", "PixelOfficeCanvas"],
   ["HostsFilter.resources", "ProductionContexts.animated"],
-  ["HostsFilter.pending", "SharedViewCreation", "SpatialGraphView.browser"],
+  [
+    "HostsFilter.pending",
+    "SharedViewCreation",
+    "SpatialGraphView.browser",
+    "HostsFilter.inspector-timeout",
+  ],
   [
     "HostsFilter.arrangement",
     "WorldTerminalHandoff",
