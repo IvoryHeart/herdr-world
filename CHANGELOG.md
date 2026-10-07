@@ -16,6 +16,12 @@ are optional because the merged PR history records their source.
 
 ### Fixed
 
+- Restore the floating mobile workspace navigator and hide it on desktop.
+  Office redraws after returning from Ranger or another hidden workspace surface.
+- Integrations and repository settings stop loading when their selected host is
+  unavailable, and repository refreshes wait for pending requests to settle.
+- Recognize authenticated older GitHub CLIs that do not support `--active`.
+  Keep repository status and source controls in an Inspector header popover.
 - Confirmed Ranger task actions recheck workspace permission and cancellation at
   dispatch, preventing writes after permission revocation, task stop or disposal.
 - World browser tests give cold Chrome startup a separate bounded allowance,

@@ -270,6 +270,31 @@ async function run() {
     const officeCanvas = host.querySelector<HTMLCanvasElement>(
       "canvas[data-office-canvas='true']",
     )!;
+    const visibleSize = {
+      width: officeCanvas.width,
+      height: officeCanvas.height,
+    };
+    const mountsBeforeNavigation = diagnostics.mounts;
+    layoutShell.style.display = "none";
+    world = { ...world };
+    root.render(
+      <StrictMode>
+        <OfficeHarness />
+      </StrictMode>,
+    );
+    await settle();
+    await settle();
+    layoutShell.style.removeProperty("display");
+    await waitFor(
+      () =>
+        officeCanvas.width === visibleSize.width &&
+        officeCanvas.height === visibleSize.height,
+      "Office did not restore its canvas after returning from a hidden workspace surface",
+    );
+    check(
+      diagnostics.mounts === mountsBeforeNavigation,
+      "Returning to Office unnecessarily remounts its renderer",
+    );
     check(
       officeCanvas.width <=
         officeScroll.clientWidth * Math.min(2, window.devicePixelRatio || 1),

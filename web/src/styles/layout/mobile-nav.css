@@ -1,17 +1,79 @@
 /* ===== mobile nav (hidden on desktop) ===== */
 .mobile-nav,
-.mobile-controls-stack {
+.mobile-controls-stack,
+.mobile-workspace-shortcut {
   display: none;
 }
 
 :where(html[data-layout="mobile"])
   .app.assistant-view
-  :is(.mobile-nav, .mobile-terminal-controls, .mobile-composer-shortcut) {
+  :is(
+    .mobile-nav,
+    .mobile-terminal-controls,
+    .mobile-composer-shortcut,
+    .mobile-workspace-shortcut
+  ) {
   display: none;
 }
 
 /* Keep mobile styling in sync with the saved layout and URL override. */
 :where(html[data-layout="mobile"]) {
+  .mobile-workspace-shortcut {
+    position: fixed;
+    right: calc(10px + env(safe-area-inset-right, 0px));
+    bottom: calc(
+      156px +
+      var(--mobile-floating-controls-lift, 0px) +
+      var(--mobile-controls-offset-y, 0px) +
+      env(safe-area-inset-bottom, 0px)
+    );
+    z-index: 73;
+    width: 42px;
+    height: 42px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px;
+    border: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--panel) 76%, transparent);
+    color: var(--muted);
+    box-shadow: var(--shadow-lg);
+    transform: translate3d(0, 0, 0) scale(1);
+    transform-origin: right bottom;
+    translate: var(--mobile-controls-drag-x, 0px)
+      var(--mobile-controls-drag-y, 0px);
+    transition:
+      opacity 160ms ease,
+      background 120ms ease,
+      border-color 120ms ease,
+      transform 180ms ease;
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
+  }
+
+  .mobile-workspace-shortcut svg {
+    width: 32px;
+    height: 32px;
+    padding: 7px;
+    border-radius: 999px;
+  }
+
+  .mobile-workspace-shortcut.is-active,
+  .mobile-workspace-shortcut:active {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+    color: var(--text-strong);
+  }
+
+  .mobile-controls-collapsed .mobile-workspace-shortcut,
+  .keyboard-open .mobile-workspace-shortcut,
+  .app:has(.terminal-composer-input:focus) .mobile-workspace-shortcut {
+    opacity: 0;
+    pointer-events: none;
+    transform: translate3d(0, 12px, 0) scale(0.85);
+  }
+
   .mobile-controls-stack {
     display: contents;
   }
@@ -247,6 +309,7 @@
 
   /* Keep the toggle at the dock edge as the tools expand inward. */
   .mobile-controls-left .mobile-nav:not(.mobile-terminal-tools),
+  .mobile-controls-left .mobile-workspace-shortcut,
   .mobile-controls-left .mobile-terminal-controls {
     right: auto;
     left: calc(10px + env(safe-area-inset-left, 0px));
@@ -256,7 +319,8 @@
     --mobile-controls-origin-x: 21px;
   }
 
-  .mobile-controls-left .mobile-terminal-controls {
+  .mobile-controls-left .mobile-terminal-controls,
+  .mobile-controls-left .mobile-workspace-shortcut {
     transform-origin: left bottom;
   }
 
@@ -310,6 +374,7 @@
   }
 
   .mobile-controls-stack > .mobile-nav,
+  .mobile-controls-stack > .mobile-workspace-shortcut,
   .mobile-terminal-controls {
     position: static;
     flex: 0 0 auto;
@@ -333,7 +398,9 @@
     direction: ltr;
   }
 
-  &.mobile-controls-collapsed .mobile-controls-stack > .mobile-nav {
+  &.mobile-controls-collapsed
+    .mobile-controls-stack
+    > :is(.mobile-nav, .mobile-workspace-shortcut) {
     display: none;
   }
 

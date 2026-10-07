@@ -120,28 +120,27 @@ export function AgentIntegrationsSettings({
         if (outcome?.error) setError(outcome.error);
       }
     } catch (e) {
-      if (
-        mounted.current &&
-        client.isCurrent() &&
-        request === sequence.current
-      ) {
+      if (mounted.current && request === sequence.current) {
         setItems(null);
         setError(
-          [
-            outcome?.error,
-            `Could not load integrations: ${(e as Error).message}`,
-          ]
-            .filter(Boolean)
-            .join(" "),
+          !client.isCurrent()
+            ? "The selected host is no longer available. Reconnect it or choose another host."
+            : [
+                outcome?.error,
+                `Could not load integrations: ${(e as Error).message}`,
+              ]
+                .filter(Boolean)
+                .join(" "),
         );
       }
     } finally {
-      if (
-        mounted.current &&
-        client.isCurrent() &&
-        request === sequence.current
-      ) {
-        if (outcome) {
+      if (mounted.current && request === sequence.current) {
+        if (!client.isCurrent()) {
+          setItems(null);
+          setError(
+            "The selected host is no longer available. Reconnect it or choose another host.",
+          );
+        } else if (outcome) {
           setMessages(outcome.messages);
           if (pendingChanges.get(scope) === operation)
             pendingChanges.delete(scope);

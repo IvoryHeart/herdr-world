@@ -2545,6 +2545,39 @@ async function run() {
       "Tree did not mount",
     );
     await frame();
+    if (operation === "filters") {
+      const launcher = document.querySelector<HTMLElement>(
+        ".mobile-workspace-shortcut",
+      )!;
+      const mobile = document.documentElement.dataset.layout === "mobile";
+      const launcherDisplay = getComputedStyle(launcher).display;
+      check(
+        mobile ? launcherDisplay !== "none" : launcherDisplay === "none",
+        `Workspace navigator visibility does not match the selected layout (${launcherDisplay})`,
+      );
+      if (mobile) {
+        check(
+          getComputedStyle(launcher).position === "fixed",
+          "Mobile workspace navigator consumes a row instead of floating",
+        );
+        const app = launcher.closest<HTMLElement>(".app")!;
+        app.classList.add("mobile-controls-left");
+        check(
+          launcher.getBoundingClientRect().left < innerWidth / 2,
+          "Workspace navigator ignores left-side control placement",
+        );
+        app.classList.remove("mobile-controls-left");
+        app.setAttribute("data-mobile-controls-compact", "");
+        check(
+          getComputedStyle(launcher).position === "static" &&
+            launcher.parentElement?.classList.contains(
+              "mobile-controls-stack",
+            ) === true,
+          "Workspace navigator stays outside the compact controls dock",
+        );
+        app.removeAttribute("data-mobile-controls-compact");
+      }
+    }
     if (requestedView !== "tree") {
       const view = document.querySelector<HTMLSelectElement>(
         'select[aria-label="World view"]',

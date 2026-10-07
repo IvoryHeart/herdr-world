@@ -40,11 +40,13 @@ export function AutoSyncRepositoriesDialog({
   const [savingKeys, setSavingKeys] = useState<Set<string>>(() => new Set());
   const [error, setError] = useState("");
   const requestSequence = useRef(0);
+  const pendingLoads = useRef(new Set<number>());
   const dialogRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(
     async (showLoading: boolean) => {
       const requestId = ++requestSequence.current;
+      pendingLoads.current.add(requestId);
       if (showLoading) setLoading(true);
       try {
         const result = await connectionClient.call(
@@ -58,18 +60,22 @@ export function AutoSyncRepositoriesDialog({
           setError("");
         }
       } catch (loadError) {
-        if (
-          connectionClient.isCurrent() &&
-          requestId === requestSequence.current
-        ) {
-          setError((loadError as Error).message);
+        if (requestId === requestSequence.current) {
+          setError(
+            connectionClient.isCurrent()
+              ? (loadError as Error).message
+              : "The selected host is no longer available. Reconnect it or choose another host.",
+          );
         }
       } finally {
-        if (
-          showLoading &&
-          connectionClient.isCurrent() &&
-          requestId === requestSequence.current
-        ) {
+        pendingLoads.current.delete(requestId);
+        if (requestId === requestSequence.current) {
+          if (!connectionClient.isCurrent()) {
+            setData(null);
+            setError(
+              "The selected host is no longer available. Reconnect it or choose another host.",
+            );
+          }
           setLoading(false);
         }
       }
@@ -83,10 +89,13 @@ export function AutoSyncRepositoriesDialog({
     setSavingKeys(new Set());
     setError("");
     void load(true);
-    const timer = window.setInterval(() => void load(false), 5_000);
+    const timer = window.setInterval(() => {
+      if (pendingLoads.current.size === 0) void load(false);
+    }, 5_000);
     return () => {
       window.clearInterval(timer);
       requestSequence.current += 1;
+      pendingLoads.current.clear();
     };
   }, [load, open]);
 

@@ -11,6 +11,7 @@ import {
   FolderTree,
   GitFork,
   GitGraph,
+  GitPullRequest,
   History,
   Maximize2,
   Minimize2,
@@ -78,6 +79,7 @@ import {
 import { FilePreviewTabs } from "./FilePreviewTabs";
 import { workspaceInspectorLayout } from "./workspaceInspectorLayout";
 import { PullRequestCard } from "./PullRequestCard";
+import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import "./WorkspaceInspectorHost.css";
 
 const DiffContentView = lazyWithReload("diff-content-view", () =>
@@ -735,6 +737,39 @@ export function WorkspaceInspectorHost({
             </button>
           ) : null}
         </div>
+        {visible && state.open && workspace ? (
+          <Popover
+            key={connectionClientScopeKey(
+              connectionClient,
+              contentResourceKey,
+              workspace.workspace_id,
+              workspace.worktree?.checkout_path,
+              workspace.cwd,
+              workspace.worktree?.git_status?.branch,
+            )}
+          >
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                className="workspace-inspector-repository-action"
+                aria-label="Repository status and source"
+                title="Repository status and source"
+              >
+                <GitPullRequest size={15} />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent
+              className="workspace-inspector-repository-popover"
+              align="end"
+            >
+              <PullRequestCard
+                client={connectionClient}
+                workspaceId={workspace.workspace_id}
+                branch={workspace.worktree?.git_status?.branch}
+              />
+            </PopoverContent>
+          </Popover>
+        ) : null}
         {windowControls ? (
           <WindowControls controls={windowControls} label="Inspector window" />
         ) : (
@@ -865,23 +900,6 @@ export function WorkspaceInspectorHost({
           </div>
         )}
       </header>
-
-      {visible && state.open && workspace ? (
-        <PullRequestCard
-          key={connectionClientScopeKey(
-            connectionClient,
-            connectionClient.serverRuntimeGeneration,
-            contentResourceKey,
-            workspace.workspace_id,
-            workspace.worktree?.checkout_path,
-            workspace.cwd,
-            workspace.worktree?.git_status?.branch,
-          )}
-          client={connectionClient}
-          workspaceId={workspace.workspace_id}
-          branch={workspace.worktree?.git_status?.branch}
-        />
-      ) : null}
 
       {!workspace ? (
         <div className="workspace-inspector-unavailable">

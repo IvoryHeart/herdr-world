@@ -258,6 +258,7 @@ export async function createOfficeRenderer(
   let lastWidth = 0;
   let resizeTimer: number | null = null;
   let lastRendererSize = { width: 0, height: 0 };
+  let lastViewportSize = { width: 0, height: 0 };
   let lastSceneSignature: string | null = null;
   let sceneRequest = 0;
   let sceneComplete = false;
@@ -848,6 +849,11 @@ export async function createOfficeRenderer(
       Math.max(1, scrollElement?.clientWidth ?? layout.officeWidth),
     );
     currentLayout = layout;
+    const viewport = scrollElement ?? element;
+    lastViewportSize = {
+      width: viewport.clientWidth,
+      height: viewport.clientHeight,
+    };
     diagnostics.publishedLayout = layout;
     onLayoutChange(layout);
     lastWidth = layout.officeWidth;
@@ -948,7 +954,12 @@ export async function createOfficeRenderer(
       OFFICE_GEOMETRY.minOfficeWidth,
       Math.floor(entries[0]?.contentRect.width || 0),
     );
-    if (Math.abs(nextWidth - lastWidth) <= 10) {
+    const viewport = scrollElement ?? element;
+    if (
+      Math.abs(nextWidth - lastWidth) <= 10 &&
+      viewport.clientWidth === lastViewportSize.width &&
+      viewport.clientHeight === lastViewportSize.height
+    ) {
       return;
     }
     if (resizeTimer !== null) {

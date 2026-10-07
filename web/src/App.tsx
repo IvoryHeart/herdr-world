@@ -4199,234 +4199,237 @@ export default function App({
         </button>
       ) : null}
 
-      <nav
-        className="mobile-nav"
-        aria-label="Workspace view switcher"
-        aria-hidden={mobileControlsCollapsed}
-      >
-        <button
-          type="button"
-          className={
-            mobileNavigationView === "session" &&
-            (workspaceSurfaceInspector !== null || !agentHistoryOpen)
-              ? "active"
-              : ""
-          }
-          title="Session"
-          aria-label="Show terminal session"
-          tabIndex={mobileControlsCollapsed ? -1 : 0}
-          disabled={
-            workspaceSurfaceInspector !== null &&
-            !workspaceSurfaceInspectorSupports("terminal")
-          }
-          onClick={() => {
-            if (!selectWorkspaceSurfaceInspectorView("terminal")) {
-              activateTerminalSurface();
-            }
-          }}
-        >
-          <SquareTerminal size={16} />
-          <span className="mobile-nav-label">Session</span>
-        </button>
-        <button
-          type="button"
-          className={mobileNavigationView === "files" ? "active" : ""}
-          title={shortcutTitle("Files", "files.toggle")}
-          aria-label="Show workspace files"
-          tabIndex={mobileControlsCollapsed ? -1 : 0}
-          disabled={
-            workspaceSurfaceInspector !== null &&
-            !workspaceSurfaceInspectorSupports("files")
-          }
-          onClick={() => {
-            if (!selectWorkspaceSurfaceInspectorView("files")) {
-              openFileExplorer();
-            }
-          }}
-        >
-          <FolderTree size={16} />
-          <span className="mobile-nav-label">Files</span>
-        </button>
-        <button
-          type="button"
-          className={mobileNavigationView === "changes" ? "active" : ""}
-          title={shortcutTitle("Changes", "diff.toggle")}
-          aria-label="Show workspace changes"
-          tabIndex={mobileControlsCollapsed ? -1 : 0}
-          disabled={
-            workspaceSurfaceInspector !== null &&
-            !workspaceSurfaceInspectorSupports("changes")
-          }
-          onClick={() => {
-            if (!selectWorkspaceSurfaceInspectorView("changes")) {
-              openDiffViewer();
-            }
-          }}
-        >
-          <FileDiff size={16} />
-          <span className="mobile-nav-label">Changes</span>
-        </button>
-        <button
-          type="button"
-          className={mobileNavigationView === "annotations" ? "active" : ""}
-          title={shortcutTitle("Annotations", "annotations.toggle")}
-          aria-label="Show review annotations"
-          aria-pressed={annotationsOpen}
-          tabIndex={mobileControlsCollapsed ? -1 : 0}
-          onClick={toggleAnnotations}
-        >
-          <MessageSquareText size={16} />
-          <span className="mobile-nav-label">
-            {annotations.length > 0
-              ? `Annotations ${annotations.length}`
-              : "Annotations"}
-          </span>
-        </button>
-        <button
-          type="button"
-          className={mobileNavigationView === "commits" ? "active" : ""}
-          title="Commits"
-          aria-label="Show workspace commits"
-          tabIndex={mobileControlsCollapsed ? -1 : 0}
-          disabled={
-            workspaceSurfaceInspector !== null &&
-            !workspaceSurfaceInspectorSupports("commits")
-          }
-          onClick={() => {
-            if (!selectWorkspaceSurfaceInspectorView("commits"))
-              openInspector("commits");
-          }}
-        >
-          <GitBranch size={16} />
-          <span className="mobile-nav-label">Commits</span>
-        </button>
-        <button
-          type="button"
-          className={mobileNavigationView === "history" ? "active" : ""}
-          title={
-            workspaceSurfaceInspector
-              ? workspaceSurfaceInspectorSupports("history")
-                ? "History"
-                : "History is unavailable for this selection"
-              : activePaneHasAgent || historyInspectorOpen
-                ? "History"
-                : "Select an agent pane to view History"
-          }
-          aria-label="Show agent message history"
-          aria-pressed={
-            workspaceSurfaceInspector
-              ? mobileNavigationView === "history"
-              : historyInspectorOpen
-          }
-          tabIndex={mobileControlsCollapsed ? -1 : 0}
-          disabled={
-            workspaceSurfaceInspector
-              ? !workspaceSurfaceInspectorSupports("history")
-              : !activePaneHasAgent && !historyInspectorOpen
-          }
-          onClick={() => {
-            if (selectWorkspaceSurfaceInspectorView("history")) return;
-            if (historyInspectorOpen && mobileView !== "history") {
-              setMobileView("history");
-            } else {
-              setAgentHistoryInspectorOpen(!historyInspectorOpen);
-            }
-          }}
-        >
-          <History size={16} />
-          <span className="mobile-nav-label">History</span>
-        </button>
-      </nav>
-      <OperationalContext.Provider
-        value={hasWorkspaceSurface ? workspaceSurfaceContext : null}
-      >
-        <MobileTabSheet
-          key={`${hasWorkspaceSurface && workspaceSurfaceContext ? JSON.stringify(workspaceSurfaceContext) : resourceUiKey}:mobile-tabs`}
-          open={mobile && mobileTabSheetOpen}
-          windows={arrangementControl?.windows}
-          onClose={() => setMobileTabSheetOpen(false)}
-          onShowSession={activateTerminalSurface}
-          onSelectTab={focusExplicitTab}
-        />
-      </OperationalContext.Provider>
-      <button
-        type="button"
-        className={`mobile-workspace-shortcut ${
-          mobileView === "workspaces" ? "is-active" : ""
-        }`}
-        title={shortcutTitle("Workspaces", "workspaces.open")}
-        aria-label={
-          mobileView === "workspaces" ? "Hide workspaces" : "Show workspaces"
-        }
-        aria-pressed={mobileView === "workspaces"}
-        aria-hidden={mobileControlsCollapsed}
-        tabIndex={mobileControlsCollapsed ? -1 : 0}
-        onPointerDown={blurActiveInput}
-        onClick={
-          mobileView === "workspaces" ? activateTerminalSurface : openWorkspaces
-        }
-      >
-        <PanelTop size={17} />
-      </button>
-      <div className="mobile-terminal-controls">
+      <div className="mobile-controls-stack">
         <nav
-          className="mobile-nav mobile-terminal-tools mobile-workspace-tools"
-          aria-label="Workspace tabs and arrangements"
+          className="mobile-nav"
+          aria-label="Workspace view switcher"
           aria-hidden={mobileControlsCollapsed}
         >
-          {mobile ? assistantEntry : null}
           <button
             type="button"
-            className={mobileTabSheetOpen ? "active" : ""}
-            title="Tabs"
-            aria-label="Show tabs"
-            aria-pressed={mobileTabSheetOpen}
+            className={
+              mobileNavigationView === "session" &&
+              (workspaceSurfaceInspector !== null || !agentHistoryOpen)
+                ? "active"
+                : ""
+            }
+            title="Session"
+            aria-label="Show terminal session"
             tabIndex={mobileControlsCollapsed ? -1 : 0}
-            disabled={!tabWorkspace && !arrangementControl?.windows?.length}
-            onPointerDown={blurActiveInput}
-            onClick={() => setMobileTabSheetOpen((open) => !open)}
+            disabled={
+              workspaceSurfaceInspector !== null &&
+              !workspaceSurfaceInspectorSupports("terminal")
+            }
+            onClick={() => {
+              if (!selectWorkspaceSurfaceInspectorView("terminal")) {
+                activateTerminalSurface();
+              }
+            }}
           >
-            <SquareStack size={16} />
-            {focusedWorkspaceTabCount > 0 ? (
-              <span className="mobile-nav-badge" aria-hidden="true">
-                {focusedWorkspaceTabCount}
-              </span>
-            ) : null}
-            <span className="mobile-nav-label">Tabs</span>
+            <SquareTerminal size={16} />
+            <span className="mobile-nav-label">Session</span>
           </button>
-          {mobile && !mobileControlsCollapsed && arrangementControl ? (
-            <WindowArrangementMenu
-              control={arrangementControl}
-              showWindowSwitcher={false}
-            />
-          ) : null}
+          <button
+            type="button"
+            className={mobileNavigationView === "files" ? "active" : ""}
+            title={shortcutTitle("Files", "files.toggle")}
+            aria-label="Show workspace files"
+            tabIndex={mobileControlsCollapsed ? -1 : 0}
+            disabled={
+              workspaceSurfaceInspector !== null &&
+              !workspaceSurfaceInspectorSupports("files")
+            }
+            onClick={() => {
+              if (!selectWorkspaceSurfaceInspectorView("files")) {
+                openFileExplorer();
+              }
+            }}
+          >
+            <FolderTree size={16} />
+            <span className="mobile-nav-label">Files</span>
+          </button>
+          <button
+            type="button"
+            className={mobileNavigationView === "changes" ? "active" : ""}
+            title={shortcutTitle("Changes", "diff.toggle")}
+            aria-label="Show workspace changes"
+            tabIndex={mobileControlsCollapsed ? -1 : 0}
+            disabled={
+              workspaceSurfaceInspector !== null &&
+              !workspaceSurfaceInspectorSupports("changes")
+            }
+            onClick={() => {
+              if (!selectWorkspaceSurfaceInspectorView("changes")) {
+                openDiffViewer();
+              }
+            }}
+          >
+            <FileDiff size={16} />
+            <span className="mobile-nav-label">Changes</span>
+          </button>
+          <button
+            type="button"
+            className={mobileNavigationView === "annotations" ? "active" : ""}
+            title={shortcutTitle("Annotations", "annotations.toggle")}
+            aria-label="Show review annotations"
+            aria-pressed={annotationsOpen}
+            tabIndex={mobileControlsCollapsed ? -1 : 0}
+            onClick={toggleAnnotations}
+          >
+            <MessageSquareText size={16} />
+            <span className="mobile-nav-label">
+              {annotations.length > 0
+                ? `Annotations ${annotations.length}`
+                : "Annotations"}
+            </span>
+          </button>
+          <button
+            type="button"
+            className={mobileNavigationView === "commits" ? "active" : ""}
+            title="Commits"
+            aria-label="Show workspace commits"
+            tabIndex={mobileControlsCollapsed ? -1 : 0}
+            disabled={
+              workspaceSurfaceInspector !== null &&
+              !workspaceSurfaceInspectorSupports("commits")
+            }
+            onClick={() => {
+              if (!selectWorkspaceSurfaceInspectorView("commits"))
+                openInspector("commits");
+            }}
+          >
+            <GitBranch size={16} />
+            <span className="mobile-nav-label">Commits</span>
+          </button>
+          <button
+            type="button"
+            className={mobileNavigationView === "history" ? "active" : ""}
+            title={
+              workspaceSurfaceInspector
+                ? workspaceSurfaceInspectorSupports("history")
+                  ? "History"
+                  : "History is unavailable for this selection"
+                : activePaneHasAgent || historyInspectorOpen
+                  ? "History"
+                  : "Select an agent pane to view History"
+            }
+            aria-label="Show agent message history"
+            aria-pressed={
+              workspaceSurfaceInspector
+                ? mobileNavigationView === "history"
+                : historyInspectorOpen
+            }
+            tabIndex={mobileControlsCollapsed ? -1 : 0}
+            disabled={
+              workspaceSurfaceInspector
+                ? !workspaceSurfaceInspectorSupports("history")
+                : !activePaneHasAgent && !historyInspectorOpen
+            }
+            onClick={() => {
+              if (selectWorkspaceSurfaceInspectorView("history")) return;
+              if (historyInspectorOpen && mobileView !== "history") {
+                setMobileView("history");
+              } else {
+                setAgentHistoryInspectorOpen(!historyInspectorOpen);
+              }
+            }}
+          >
+            <History size={16} />
+            <span className="mobile-nav-label">History</span>
+          </button>
         </nav>
-        <button
-          ref={mobileControlsToggleRef}
-          type="button"
-          className="mobile-controls-toggle"
-          aria-description="Drag to move the controls"
-          aria-label={
-            mobileControlsCollapsed
-              ? "Show mobile controls"
-              : "Hide mobile controls"
-          }
-          title={
-            mobileControlsCollapsed
-              ? "Show mobile controls"
-              : "Hide mobile controls"
-          }
-          aria-pressed={mobileControlsCollapsed}
-          onClick={() => setMobileControlsCollapsed((value) => !value)}
+        <OperationalContext.Provider
+          value={hasWorkspaceSurface ? workspaceSurfaceContext : null}
         >
-          {mobileControlsCollapsed ? (
-            <MoreHorizontal size={17} />
-          ) : (
-            <X size={17} />
-          )}
+          <MobileTabSheet
+            key={`${hasWorkspaceSurface && workspaceSurfaceContext ? JSON.stringify(workspaceSurfaceContext) : resourceUiKey}:mobile-tabs`}
+            open={mobile && mobileTabSheetOpen}
+            windows={arrangementControl?.windows}
+            onClose={() => setMobileTabSheetOpen(false)}
+            onShowSession={activateTerminalSurface}
+            onSelectTab={focusExplicitTab}
+          />
+        </OperationalContext.Provider>
+        <button
+          type="button"
+          className={`mobile-workspace-shortcut ${
+            mobileView === "workspaces" ? "is-active" : ""
+          }`}
+          title={shortcutTitle("Workspaces", "workspaces.open")}
+          aria-label={
+            mobileView === "workspaces" ? "Hide workspaces" : "Show workspaces"
+          }
+          aria-pressed={mobileView === "workspaces"}
+          aria-hidden={mobileControlsCollapsed}
+          tabIndex={mobileControlsCollapsed ? -1 : 0}
+          onPointerDown={blurActiveInput}
+          onClick={
+            mobileView === "workspaces"
+              ? activateTerminalSurface
+              : openWorkspaces
+          }
+        >
+          <PanelTop size={17} />
         </button>
+        <div className="mobile-terminal-controls">
+          <nav
+            className="mobile-nav mobile-terminal-tools mobile-workspace-tools"
+            aria-label="Workspace tabs and arrangements"
+            aria-hidden={mobileControlsCollapsed}
+          >
+            {mobile ? assistantEntry : null}
+            <button
+              type="button"
+              className={mobileTabSheetOpen ? "active" : ""}
+              title="Tabs"
+              aria-label="Show tabs"
+              aria-pressed={mobileTabSheetOpen}
+              tabIndex={mobileControlsCollapsed ? -1 : 0}
+              disabled={!tabWorkspace && !arrangementControl?.windows?.length}
+              onPointerDown={blurActiveInput}
+              onClick={() => setMobileTabSheetOpen((open) => !open)}
+            >
+              <SquareStack size={16} />
+              {focusedWorkspaceTabCount > 0 ? (
+                <span className="mobile-nav-badge" aria-hidden="true">
+                  {focusedWorkspaceTabCount}
+                </span>
+              ) : null}
+              <span className="mobile-nav-label">Tabs</span>
+            </button>
+            {mobile && !mobileControlsCollapsed && arrangementControl ? (
+              <WindowArrangementMenu
+                control={arrangementControl}
+                showWindowSwitcher={false}
+              />
+            ) : null}
+          </nav>
+          <button
+            ref={mobileControlsToggleRef}
+            type="button"
+            className="mobile-controls-toggle"
+            aria-description="Drag to move the controls"
+            aria-label={
+              mobileControlsCollapsed
+                ? "Show mobile controls"
+                : "Hide mobile controls"
+            }
+            title={
+              mobileControlsCollapsed
+                ? "Show mobile controls"
+                : "Hide mobile controls"
+            }
+            aria-pressed={mobileControlsCollapsed}
+            onClick={() => setMobileControlsCollapsed((value) => !value)}
+          >
+            {mobileControlsCollapsed ? (
+              <MoreHorizontal size={17} />
+            ) : (
+              <X size={17} />
+            )}
+          </button>
+        </div>
       </div>
-
       {activeTerminalComposerDraftKey && !terminalComposerOpen ? (
         <button
           type="button"

@@ -493,6 +493,9 @@ another port with `--port`; do not run two shells for one installation.
 
 Open **Ranger** in the desktop toolbar or mobile controls. Connect a model provider
 using Ranger credentials, explicit Pi credentials, or a custom model endpoint.
+Use the gear button in the Ranger panel for model credentials and workspace
+permissions. **Menu → Configuration → Integrations** manages agent integration
+scripts on the selected Herdr host; it is separate from Ranger model setup.
 Allow specific workspaces in Ranger settings before asking it to read status,
 terminal output, agent history or Git changes. New installations allow no
 workspaces. Manual approval is the default for proposed workspace actions; high

@@ -253,7 +253,7 @@ export async function readPullRequestStatus(
     if (version.code === 127)
       return finish("missing_cli", `Install ${cli} on the checkout host.`);
     if (version.code !== 0) throw new Error("Cannot run CLI");
-    const auth = await run([
+    let auth = await run([
       cli,
       "auth",
       "status",
@@ -261,6 +261,14 @@ export async function readPullRequestStatus(
       selected.host,
       ...(provider === "github" ? ["--active"] : []),
     ]);
+    if (
+      provider === "github" &&
+      auth.code !== 0 &&
+      /unknown flag: --active(?:\s|$)/.test(auth.stderr)
+    ) {
+      // Older gh versions have only one account per host and no --active flag.
+      auth = await run([cli, "auth", "status", "--hostname", selected.host]);
+    }
     if (auth.code !== 0)
       return finish(
         "unauthenticated",

@@ -142,6 +142,37 @@ function fixture(
 }
 
 describe("PR/MR status", () => {
+  test.each([false, true])(
+    "older authenticated GitHub CLIs keep PR status available (SSH: %s)",
+    async (ssh) => {
+      const status = fixture("github", {
+        ssh,
+        override: (command) =>
+          command.includes("'auth' 'status'") && command.includes("'--active'")
+            ? { code: 1, stdout: "", stderr: "unknown flag: --active\n" }
+            : undefined,
+      });
+      expect((await status.read()).state).toBe("ready");
+      const auth = status.commands.filter((argv) =>
+        argv.join(" ").includes("auth"),
+      );
+      expect(auth).toHaveLength(2);
+      expect(auth[1]!.join(" ")).toContain("--hostname");
+      expect(auth[1]!.join(" ")).not.toContain("--active");
+    },
+  );
+
+  test("expired active GitHub credentials do not fall back to another account", async () => {
+    const status = fixture("github", {
+      override: (command) =>
+        command.includes("'auth' 'status'") ? fail : undefined,
+    });
+    expect((await status.read()).state).toBe("unauthenticated");
+    expect(
+      status.commands.filter((argv) => argv.join(" ").includes("auth")),
+    ).toHaveLength(1);
+  });
+
   test("authentication checks the active GitHub account without passing GitHub-only flags to GitLab", async () => {
     for (const provider of ["github", "gitlab"] as const) {
       const result = await fixture(provider, {
