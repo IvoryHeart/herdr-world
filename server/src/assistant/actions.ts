@@ -878,7 +878,7 @@ export async function prepareAssistantAction(args: {
               detail: dispatched
                 ? "The operation started, but its final state could not be verified. Inspect the target before retrying."
                 : authorized && !authorized()
-                  ? "Automatic approval was disabled before dispatch. Nothing was sent."
+                  ? "Action authorization expired before dispatch. Nothing was sent."
                   : "The target changed or the operation is unavailable. Nothing was sent; prepare a new preview.",
             } satisfies AssistantActionResult;
           }

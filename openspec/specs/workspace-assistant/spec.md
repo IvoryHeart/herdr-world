@@ -36,6 +36,11 @@ conversations and expose stop, disable and notification controls.
 - **WHEN** workspace or automatic-action permission is removed during a turn
 - **THEN** Ranger refuses subsequent reads or writes requiring that permission
 
+#### Scenario: Confirmed task action awaiting dispatch
+- **WHEN** a confirmed task action awaits target checks or RPC dispatch and its
+  workspace permission is revoked, its task is stopped, or its service is disposed
+- **THEN** Ranger sends no workspace mutation
+
 ### Requirement: Durable task identity
 Scheduled recovery SHALL verify endpoint fingerprint, Herdr server identity and
 workspace identity before capturing a fresh runtime. Replaced identities SHALL

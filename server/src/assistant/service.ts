@@ -262,8 +262,24 @@ export function createAssistantService(options: {
               return {
                 preview: prepared.preview,
                 execute: async (authorized?: () => boolean) => {
+                  const admittedStopRevision = stopRevision;
+                  const signal = turnController?.signal;
                   await checkTaskScope();
-                  const result = await prepared.execute(authorized);
+                  const result = await prepared.execute(() => {
+                    if (
+                      disposed ||
+                      stopRevision !== admittedStopRevision ||
+                      signal?.aborted ||
+                      authorized?.() === false
+                    )
+                      return false;
+                    try {
+                      assertTaskAllowed();
+                      return true;
+                    } catch {
+                      return false;
+                    }
+                  });
                   await checkTaskScope();
                   return result;
                 },
@@ -280,6 +296,8 @@ export function createAssistantService(options: {
   let invalidSavedState = false;
   let migrateSavedState = false;
   let disposed = false;
+  // Manual task actions can outlive the turn and its AbortController.
+  let stopRevision = 0;
   let changing = false;
   let modelChanging = false;
   let run: Promise<void> | undefined;
@@ -1893,6 +1911,7 @@ export function createAssistantService(options: {
           await send(params);
           break;
         case "stop": {
+          stopRevision++;
           const waiting = awaitingRecovery;
           if (activeRun) {
             // Persist cancellation intent before touching the running harness.

@@ -28,7 +28,11 @@ import {
 } from "./context";
 import { type AssistantDriver, createPiDriver } from "./pi-driver";
 import { createAssistantService } from "./service";
-import type { PreparedAssistantAction } from "./actions";
+import {
+  prepareAssistantAction,
+  type PreparedAssistantAction,
+} from "./actions";
+import type { LegacyConnectionRuntime } from "../connections/runtime";
 
 const workspace: AssistantWorkspace = {
   connection_id: "local",
@@ -816,6 +820,170 @@ describe("Ranger approval policy", () => {
 });
 
 describe("Ranger scheduled task service", () => {
+  test.each(
+    ["target checks", "RPC dispatch"].flatMap((stage) =>
+      ["allowed", "revoked", "stopped", "disposed"].map((permission) => ({
+        stage,
+        permission,
+      })),
+    ),
+  )(
+    "confirmed task actions retain live permission at %j",
+    async ({ stage, permission }) => {
+      jest.useFakeTimers({ now: Date.parse("2026-10-05T00:00:00Z") });
+      const checking = Promise.withResolvers<void>();
+      const release = Promise.withResolvers<void>();
+      const stopping = Promise.withResolvers<void>();
+      const releaseStop = Promise.withResolvers<void>();
+      const disposing = Promise.withResolvers<void>();
+      const executed = Promise.withResolvers<void>();
+      let confirming = false;
+      let paused = false;
+      let writes = 0;
+      const workspaces = [
+        { workspace_id: "ws", label: "Workspace", cwd: "/synthetic" },
+      ];
+      const runtime = {
+        herdr: {
+          async call(
+            method: string,
+            params: Record<string, unknown> = {},
+            _timeout?: number,
+            beforeSend?: () => void,
+          ) {
+            if (
+              confirming &&
+              !paused &&
+              method ===
+                (stage === "target checks"
+                  ? "workspace.list"
+                  : "workspace.create")
+            ) {
+              paused = true;
+              checking.resolve();
+              await release.promise;
+            }
+            beforeSend?.();
+            if (method === "workspace.get")
+              return {
+                workspace: workspaces.find(
+                  (item) => item.workspace_id === params.workspace_id,
+                ),
+              };
+            if (method === "workspace.list") return { workspaces };
+            if (method === "workspace.create") {
+              writes++;
+              const created = {
+                workspace_id: "created",
+                label: String(params.label),
+                cwd: String(params.cwd),
+              };
+              workspaces.push(created);
+              return { workspace: created };
+            }
+            if (method === "pane.list")
+              return {
+                panes: [
+                  {
+                    workspace_id: "created",
+                    pane_id: "created:p1",
+                    cwd: "/synthetic",
+                  },
+                ],
+              };
+            throw new Error(`Unexpected fixture method: ${method}`);
+          },
+        },
+      } as unknown as LegacyConnectionRuntime;
+      const f = setup({}, () => ({
+        catalog: async () => catalog,
+        login: async () => {},
+        stop: async () => {
+          stopping.resolve();
+          if (permission === "revoked" || permission === "stopped")
+            await releaseStop.promise;
+        },
+        dispose: async () => {
+          disposing.resolve();
+        },
+        run: async (input) => {
+          await input.propose!("create_workspace", {
+            ...configured.allowed_workspaces[0]!,
+            label: "Created",
+            cwd: "/synthetic",
+          });
+          return [];
+        },
+      }));
+      stableTaskIdentity(f.context);
+      f.context.prepareAction = async (kind, captured, params, signal) => {
+        const prepared = await prepareAssistantAction({
+          kind,
+          target: captured[0]!,
+          params,
+          signal,
+          lease: { runtime, generation: 7, isCurrent: () => true },
+        });
+        return {
+          preview: prepared.preview,
+          execute: (authorized) =>
+            prepared.execute(authorized).finally(() => executed.resolve()),
+        };
+      };
+      await f.service.handle("configure", { config: configured });
+      const created = await f.service.handle("task.create", {
+        request_id: randomUUID(),
+        title: "Create a workspace",
+        prompt: "Propose a workspace",
+        scope: configured.allowed_workspaces,
+        schedule: { type: "interval", minutes: 60 },
+      });
+      const taskId = created.tasks![0]!.id;
+      await f.service.resume();
+      await f.service.handle("task.run_now", { task_id: taskId });
+      jest.advanceTimersByTime(0);
+      await flushTasks();
+      const detail = await f.service.taskDetail({ task_id: taskId });
+      const runId = detail.runs[0]!.id;
+      const pending = await f.service.taskDetail({
+        task_id: taskId,
+        run_id: runId,
+      });
+      const actionId = pending.run!.messages.at(-1)!.actions![0]!.id;
+      expect(pending.run!.messages.at(-1)!.actions![0]!.status).toBe("pending");
+      confirming = true;
+      await f.service.handle("task.action.confirm", {
+        task_id: taskId,
+        run_id: runId,
+        action_id: actionId,
+      });
+      await checking.promise;
+      let revoked: Promise<unknown> | undefined;
+      try {
+        if (permission === "revoked") {
+          revoked = f.service.handle("configure", {
+            config: { ...configured, allowed_workspaces: [] },
+          });
+          await stopping.promise;
+          expect(f.service.peek().config.allowed_workspaces).toEqual([]);
+        } else if (permission === "stopped") {
+          revoked = f.service.handle("task.stop", { task_id: taskId });
+          await stopping.promise;
+        } else if (permission === "disposed") {
+          revoked = f.service.dispose();
+          await disposing.promise;
+        }
+        release.resolve();
+        await executed.promise;
+        expect(writes).toBe(permission === "allowed" ? 1 : 0);
+      } finally {
+        release.resolve();
+        releaseStop.resolve();
+        await revoked;
+      }
+    },
+  );
+
   test("editing a completed one-time task cannot repeat its auto-approved workspace write", async () => {
     jest.useFakeTimers({ now: Date.parse("2026-10-04T00:00:00Z") });
     let writes = 0;

@@ -319,7 +319,7 @@ describe("confirmed Ranger action targets", () => {
       expect(await pending).toEqual({
         status: "failed",
         detail:
-          "Automatic approval was disabled before dispatch. Nothing was sent.",
+          "Action authorization expired before dispatch. Nothing was sent.",
       });
       expect(f.mutations).toEqual([]);
     },
@@ -345,8 +345,7 @@ describe("confirmed Ranger action targets", () => {
     release.resolve();
     expect(await pending).toEqual({
       status: "failed",
-      detail:
-        "Automatic approval was disabled before dispatch. Nothing was sent.",
+      detail: "Action authorization expired before dispatch. Nothing was sent.",
     });
     expect(f.mutations).toEqual([]);
   });
