@@ -96,6 +96,20 @@
   flex: 0 0 auto;
 }
 
+.assistant-entry {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  position: relative;
+}
+
+.assistant-entry-running {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
 .topbar-button:hover,
 .topbar-button.is-active {
   background: var(--topbar-control-hover-bg);
@@ -276,6 +290,21 @@
   }
 
   .topbar-time {
+    display: none;
+  }
+
+  /* Give the terminal the header's rows while the phone keyboard is up for
+     terminal input; only the safe-area inset stays. See the pane switcher. */
+  &.keyboard-open .app:has(.xterm-helper-textarea:focus) .topbar,
+  .app:has(.terminal-composer-input:focus) .topbar {
+    min-height: 0;
+    padding-block: env(safe-area-inset-top, 0px) 0;
+    border-bottom: none;
+    box-shadow: none;
+  }
+
+  &.keyboard-open .app:has(.xterm-helper-textarea:focus) .topbar > *,
+  .app:has(.terminal-composer-input:focus) .topbar > * {
     display: none;
   }
 }

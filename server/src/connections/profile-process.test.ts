@@ -6,6 +6,29 @@ import { join } from "node:path";
 import { BinReader, BinWriter, encodeFrame } from "../bridge/bincode";
 import type { LocalConnectionProfile } from "./profiles";
 
+const password = "profile-test-password";
+const BrowserSocket = WebSocket as unknown as new (
+  url: string,
+  options: Bun.WebSocketOptions,
+) => WebSocket;
+const cookies = new Map<number, string>();
+async function login(port: number): Promise<string> {
+  const response = await fetch(`http://127.0.0.1:${port}/api/login`, {
+    method: "POST",
+    body: JSON.stringify({ password }),
+  });
+  expect(response.status).toBe(200);
+  const cookie = response.headers.get("set-cookie")!.split(";", 1)[0];
+  cookies.set(port, cookie);
+  return cookie;
+}
+function fixtureFetch(input: string, init?: RequestInit) {
+  const headers = new Headers(init?.headers);
+  const cookie = cookies.get(Number(new URL(input).port));
+  if (cookie) headers.set("cookie", cookie);
+  return fetch(input, { ...init, headers });
+}
+
 const roots: string[] = [];
 const servers: net.Server[] = [];
 const sockets = new Set<net.Socket>();
@@ -185,7 +208,7 @@ function bridgeListeningPort(stream: ReadableStream<Uint8Array>) {
 async function waitForHealth(port: number): Promise<void> {
   for (let attempt = 0; attempt < 120; attempt += 1) {
     try {
-      if ((await fetch(`http://127.0.0.1:${port}/health`)).ok) return;
+      if ((await fixtureFetch(`http://127.0.0.1:${port}/health`)).ok) return;
     } catch {
       // Process may still be binding.
     }
@@ -202,6 +225,7 @@ test("production HTTP admission preserves an exact loopback proxy origin", async
   const env: Record<string, string | undefined> = {
     ...process.env,
     HOST: "127.0.0.1",
+    HERDR_WORLD_PASSWORD: password,
     PORT: "0",
     HERDR_WORLD_PUBLIC_ORIGIN: "https://world.example",
     HERDR_WORLD_CONNECTIONS_PATH: join(root, "connections.json"),
@@ -218,10 +242,11 @@ test("production HTTP admission preserves an exact loopback proxy origin", async
   });
   try {
     const port = await bridgeListeningPort(child.stdout);
+    await login(port);
     await waitForHealth(port);
     const privileged = `http://127.0.0.1:${port}/api/health`;
     const request = (host: string, origin: string) =>
-      fetch(privileged, { headers: { host, origin } });
+      fixtureFetch(privileged, { headers: { host, origin } });
 
     expect(
       (await request(`127.0.0.1:${port}`, `http://127.0.0.1:${port}`)).status,
@@ -280,6 +305,7 @@ test("production dispatcher isolates two local profiles and profile CRUD", async
   const env: Record<string, string | undefined> = {
     ...process.env,
     HOST: "127.0.0.1",
+    HERDR_WORLD_PASSWORD: password,
     PORT: "0",
     HERDR_WORLD_CONNECTIONS_PATH: registryPath,
   };
@@ -298,9 +324,12 @@ test("production dispatcher isolates two local profiles and profile CRUD", async
   let wsB: WebSocket | null = null;
   try {
     const port = await bridgeListeningPort(child.stdout);
+    const cookie = await login(port);
     await waitForHealth(port);
     const openBrowser = async () => {
-      const socket = new WebSocket(`ws://127.0.0.1:${port}/ws`);
+      const socket = new BrowserSocket(`ws://127.0.0.1:${port}/ws`, {
+        headers: { cookie },
+      });
       await new Promise<void>((resolve, reject) => {
         socket.onopen = () => resolve();
         socket.onerror = () => reject(new Error("websocket open failed"));
@@ -407,7 +436,7 @@ test("production dispatcher isolates two local profiles and profile CRUD", async
       join(root, "page.html"),
       "<h1>HTML marker</h1><script>throw 1</script>",
     );
-    const htmlPreview = await fetch(
+    const htmlPreview = await fixtureFetch(
       `http://127.0.0.1:${port}/api/connections/alpha/file/download?connection_generation=${oldAlphaGeneration}&workspace_id=shared-workspace&path=page.html&inline=1`,
     );
     expect(htmlPreview.status).toBe(200);
@@ -576,7 +605,7 @@ test("production dispatcher isolates two local profiles and profile CRUD", async
       (controlCalls.get("beta") ?? []).filter((method) => method === "ping")
         .length;
     const beforeStaleHttp = betaPingCalls();
-    const staleHttp = await fetch(
+    const staleHttp = await fixtureFetch(
       `http://127.0.0.1:${port}/api/connections/alpha/herdr-info?connection_generation=${oldAlphaGeneration}`,
     );
     expect(staleHttp.status).toBe(409);
@@ -593,7 +622,7 @@ test("production dispatcher isolates two local profiles and profile CRUD", async
     expect(legacySnapshot.navigation_mode).toBe("shared");
     // The first snapshot also resolves the replacement terminal backend.
     const beforeLegacyHttp = betaPingCalls();
-    const legacyHttp = await fetch(
+    const legacyHttp = await fixtureFetch(
       `http://127.0.0.1:${port}/api/connections/alpha/herdr-info`,
     );
     expect(legacyHttp.status).toBe(200);
@@ -669,6 +698,7 @@ for (const { protocol, welcomeProtocol, accepted } of [
     const env: Record<string, string | undefined> = {
       ...process.env,
       HOST: "127.0.0.1",
+      HERDR_WORLD_PASSWORD: password,
       PORT: "0",
       HERDR_WORLD_CONNECTIONS_PATH: join(root, "connections.json"),
       HERDR_SOCKET_PATH: profile.control_socket_path,
@@ -685,7 +715,10 @@ for (const { protocol, welcomeProtocol, accepted } of [
     let socket: WebSocket | undefined;
     try {
       const port = await bridgeListeningPort(child.stdout);
-      const browser = new WebSocket(`ws://127.0.0.1:${port}/ws`);
+      const cookie = await login(port);
+      const browser = new BrowserSocket(`ws://127.0.0.1:${port}/ws`, {
+        headers: { cookie },
+      });
       socket = browser;
       await new Promise<void>((resolve, reject) => {
         browser.onopen = () => resolve();
@@ -771,6 +804,7 @@ test("production routing bootstraps only a verified empty session and serializes
   const env: Record<string, string | undefined> = {
     ...process.env,
     HOST: "127.0.0.1",
+    HERDR_WORLD_PASSWORD: password,
     PORT: "0",
     HERDR_WORLD_CONNECTIONS_PATH: registryPath,
     // The fake render socket models only the legacy hello, not endpoint shells.
@@ -792,9 +826,12 @@ test("production routing bootstraps only a verified empty session and serializes
   const browsers: WebSocket[] = [];
   try {
     const port = await bridgeListeningPort(child.stdout);
+    const cookie = await login(port);
     await waitForHealth(port);
     for (let i = 0; i < 2; i++) {
-      const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`);
+      const ws = new BrowserSocket(`ws://127.0.0.1:${port}/ws`, {
+        headers: { cookie },
+      });
       browsers.push(ws);
       await new Promise<void>((resolve, reject) => {
         ws.onopen = () => resolve();

@@ -4,24 +4,26 @@
  * overlay owns focus dismisses it: Radix's DismissableLayer treats focusin
  * outside its content as an outside interaction and closes the popover. The
  * Workspace Inspector likewise owns keyboard focus while browsing resources,
- * as does the pane switcher while its search field is open. Surfaces that keep
- * their own keyboard focus beside a live terminal, such as the Desk queue next
- * to its reading pane, opt in with `data-terminal-focus-guard`. Streaming
- * output must not steal focus from any of those surfaces.
+ * as does Ranger while reviewing actions, the pane switcher while its search
+ * field is open and the pane drag handle during keyboard moves. Streaming
+ * output must not steal their focus.
  */
 const TERMINAL_FOCUS_OVERLAY_SELECTOR =
-  '[data-radix-popper-content-wrapper], .modal-backdrop, .workspace-tree-panel, .workspace-inspector, .annotation-panel, .tabbar-utilities, .mobile-nav, .pane-jump-backdrop, .popup-overlay-backdrop, [role="dialog"], [role="menu"], [data-terminal-focus-guard]';
+  '[data-radix-popper-content-wrapper], .modal-backdrop, .workspace-tree-panel, .workspace-inspector, .annotation-panel, .assistant-panel, .tabbar-utilities, .mobile-nav, .pane-jump-backdrop, .popup-overlay-backdrop, .pane-drag-handle, [role="dialog"], [role="menu"], [data-terminal-focus-guard]';
 const RADIX_POPPER_CONTENT_WRAPPER = "[data-radix-popper-content-wrapper]";
 
 type FocusableLike = Pick<Element, "closest">;
 type DocumentLike = Pick<Document, "querySelector">;
 
-export function terminalTouchShouldDismissInput(
+export function terminalTouchInputAction(
   started: boolean,
   moved: boolean,
+  directMode: boolean,
   inputActive: boolean,
-): boolean {
-  return started && !moved && inputActive;
+  selecting: boolean,
+): "focus" | "dismiss" | null {
+  if (!started || moved || selecting) return null;
+  return directMode ? "focus" : inputActive ? "dismiss" : null;
 }
 
 export function terminalPointerShouldBlurInput(
@@ -43,4 +45,12 @@ export function terminalFocusBlockedByOverlay(
   if (doc.querySelector(RADIX_POPPER_CONTENT_WRAPPER)) return true;
   if (!activeElement) return false;
   return Boolean(activeElement.closest(TERMINAL_FOCUS_OVERLAY_SELECTOR));
+}
+
+export function terminalTouchShouldDismissInput(
+  started: boolean,
+  moved: boolean,
+  inputActive: boolean,
+): boolean {
+  return started && !moved && inputActive;
 }

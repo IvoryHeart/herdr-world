@@ -1,3 +1,15 @@
+import {
+  readTerminalInputMode,
+  rememberTerminalInputMode,
+} from "../terminalInputMode";
+import { type TerminalInputMode } from "./TerminalComposer";
+import {
+  filesFromTerminalDrop,
+  isNativeFileDrag,
+  terminalUploadedPathsText,
+} from "../terminalFileDrop";
+import { uploadTerminalFile } from "../terminalImageUpload";
+import { PaneDragHandle, PaneMoveMenu } from "./PaneMoveMenu";
 import { runTerminalInput, sendTerminalInput } from "../terminalInput";
 import {
   ClipboardAddon,
@@ -75,7 +87,6 @@ import {
   decodeTerminalClipboard,
 } from "../terminalClipboard";
 import {
-  clearTerminalComposerDrafts,
   terminalComposerCloseWarning,
   terminalComposerDraftKey,
   terminalComposerDraftPaneIds,
@@ -98,7 +109,7 @@ import {
 import {
   terminalFocusBlockedByOverlay,
   terminalPointerShouldBlurInput,
-  terminalTouchShouldDismissInput,
+  terminalTouchInputAction,
 } from "../terminalFocus";
 import { TerminalHistorySelection } from "../terminalHistorySelection";
 import { uploadTerminalImage } from "../terminalImageUpload";
@@ -294,6 +305,7 @@ export type TerminalWorkspaceFileRequest = {
 export function TerminalView({
   paneId,
   terminalTheme,
+  terminalFontFamily = TERMINAL_FONT_FAMILY,
   terminalFontScale,
   showMobileKeys = true,
   mobileShortcuts = defaultMobileTerminalShortcutRows(),
@@ -306,6 +318,7 @@ export function TerminalView({
 }: {
   paneId?: string;
   terminalTheme: ITheme;
+  terminalFontFamily?: string;
   terminalFontScale: number;
   showMobileKeys?: boolean;
   mobileShortcuts?: MobileTerminalShortcutRows;
@@ -445,6 +458,16 @@ export function TerminalView({
     (el: HTMLDivElement | null) => setContainer(el),
     [],
   );
+  useEffect(() => {
+    const guardFileDrop = (event: DragEvent) => {
+      if (event.dataTransfer && isNativeFileDrag(event.dataTransfer)) {
+        event.preventDefault();
+      }
+    };
+    window.addEventListener("drop", guardFileDrop, { capture: true });
+    return () =>
+      window.removeEventListener("drop", guardFileDrop, { capture: true });
+  }, []);
   const termRef = useRef<Terminal | null>(null);
   const endpointPresentationRef = useRef<TerminalEndpointPresentation | null>(
     null,
@@ -456,6 +479,7 @@ export function TerminalView({
   const [termInstance, setTermInstance] = useState<Terminal | null>(null);
   // Theme changes update xterm in place without recreating the terminal.
   const terminalThemeRef = useRef(terminalTheme);
+  const terminalFontFamilyRef = useRef(terminalFontFamily);
   const terminalFontScaleRef = useRef(terminalFontScale);
   const fitRef = useRef<FitAddon | null>(null);
   const attachedRef = useRef<string | null>(null);
@@ -527,17 +551,23 @@ export function TerminalView({
   const paneZoomed =
     s.layout?.zoomed === true && s.layout.focused_pane_id === pane?.pane_id;
   const composerOpen = controlledComposerOpen ?? localComposerOpen;
-  const composerOpenRef = useRef(composerOpen);
-  composerOpenRef.current = composerOpen;
+  const directDisabled =
+    s.status !== "connected" || s.connectionPaused || !!terminalAttachError;
+  const [composerMode, setComposerMode] =
+    useState<TerminalInputMode>("composer");
+  const composerModeRef = useRef(composerMode);
+  composerModeRef.current = composerMode;
+  const composerEditingRef = useRef(false);
+  composerEditingRef.current = composerOpen && composerMode === "composer";
   const closeTerminalInput = useCallback((blurInput = true) => {
     inputActiveRef.current = false;
-    inputSessionRef.current++;
     setInputActive(false);
+    inputSessionRef.current++;
     const term = termRef.current;
     if (!term) return;
     term.options.disableStdin =
       shouldAvoidVirtualKeyboard() ||
-      composerOpenRef.current ||
+      composerEditingRef.current ||
       touchSelectionRef.current?.active === true;
     if (term.textarea)
       term.textarea.readOnly = term.options.disableStdin === true;
@@ -551,6 +581,9 @@ export function TerminalView({
     if (desiredTerminalRef.current !== (pane?.terminal_id ?? null))
       endpointPresentationRef.current?.reset(true);
     touchSelectionRef.current?.reset();
+    setComposerMode("composer");
+    composerModeRef.current = "composer";
+    composerEditingRef.current = composerOpen;
     closeTerminalInput();
   }, [
     closeTerminalInput,
@@ -561,7 +594,6 @@ export function TerminalView({
     pane?.workspace_id,
     pane?.tab_id,
     s.layout?.tab_id,
-    terminalFontScale,
     s.status,
     s.connectionPaused,
     s.terminalAttachEpoch,
@@ -574,8 +606,28 @@ export function TerminalView({
     setFileLinkMenu(null);
     setWorkspaceDirectory(null);
     touchSelectionRef.current?.reset();
+    setComposerMode("composer");
+    composerModeRef.current = "composer";
+    composerEditingRef.current = composerOpen;
     closeTerminalInput();
-  }, [closeTerminalInput, isActivePane]);
+  }, [closeTerminalInput, isActivePane, composerOpen]);
+  const previousComposerOpenRef = useRef(false);
+  useLayoutEffect(() => {
+    const opening = composerOpen && !previousComposerOpenRef.current;
+    // Keep an initial opening pending until xterm exists: its first instance
+    // also runs the safety reset above. Once opened, replacing that instance
+    // is a safety reset, not another request to restore the preference.
+    previousComposerOpenRef.current =
+      composerOpen && (previousComposerOpenRef.current || !!termInstance);
+    if (!opening || directDisabled) return;
+    // Restore only on opening, after the safety effects retire the old input
+    // session. Reconnects and pane changes must not activate Direct input or
+    // overwrite the saved choice. Only a fresh input gesture may enable stdin.
+    const mode = readTerminalInputMode();
+    setComposerMode(mode);
+    composerModeRef.current = mode;
+    composerEditingRef.current = mode === "composer";
+  }, [composerOpen, directDisabled, termInstance]);
   const setComposerOpen = useCallback(
     (open: boolean) => {
       if (controlledComposerOpen === undefined) setLocalComposerOpen(open);
@@ -626,7 +678,7 @@ export function TerminalView({
     (preserveOtherTerminal = false) => {
       if (
         !isActivePaneRef.current ||
-        composerOpenRef.current ||
+        composerEditingRef.current ||
         touchSelectionRef.current?.active === true
       )
         return;
@@ -636,7 +688,7 @@ export function TerminalView({
           if (
             !connectionClient.isCurrent() ||
             !isActivePaneRef.current ||
-            composerOpenRef.current ||
+            composerEditingRef.current ||
             touchSelectionRef.current?.active === true ||
             shouldAvoidVirtualKeyboard()
           )
@@ -785,8 +837,32 @@ export function TerminalView({
     termRef.current?.textarea?.blur();
   };
 
+  const focusTerminalInput = () => {
+    const term = termRef.current;
+    if (
+      !term ||
+      composerEditingRef.current ||
+      !connectionClient.isCurrent() ||
+      !isActivePaneRef.current ||
+      s.status !== "connected" ||
+      s.connectionPaused ||
+      terminalAttachError ||
+      desiredTerminalRef.current !== paneTerminalIdRef.current
+    )
+      return;
+    touchSelectionRef.current?.reset();
+    inputActiveRef.current = true;
+    setInputActive(true);
+    term.options.disableStdin = false;
+    if (term.textarea) term.textarea.readOnly = false;
+    term.focus();
+  };
+  const focusTerminalInputRef = useRef(focusTerminalInput);
+  focusTerminalInputRef.current = focusTerminalInput;
+
   const sendControl = (bytes: number[]) => {
-    if (shouldAvoidVirtualKeyboard()) blurTerminalInput();
+    if (shouldAvoidVirtualKeyboard() && composerModeRef.current !== "direct")
+      blurTerminalInput();
     const terminalId = desiredTerminalRef.current ?? pane?.terminal_id;
     if (!terminalId) return;
     sendBytes(connectionClient, new Uint8Array(bytes), terminalId).catch(
@@ -798,7 +874,8 @@ export function TerminalView({
     (direction: "up" | "down", amount: "full" | "half" = "full") => {
       const term = termRef.current;
       if (!term) return;
-      if (shouldAvoidVirtualKeyboard()) blurTerminalInput();
+      if (shouldAvoidVirtualKeyboard() && composerModeRef.current !== "direct")
+        blurTerminalInput();
       const targetTerminalId =
         desiredTerminalRef.current ?? paneTerminalIdRef.current;
       if (
@@ -820,7 +897,8 @@ export function TerminalView({
   );
   const preventShortcutFocus = (e: React.PointerEvent<HTMLButtonElement>) => {
     e.preventDefault();
-    if (shouldAvoidVirtualKeyboard()) blurTerminalInput();
+    if (shouldAvoidVirtualKeyboard() && composerModeRef.current !== "direct")
+      blurTerminalInput();
     e.currentTarget.blur();
   };
   const preventPaneActionFocus = (e: React.PointerEvent<HTMLButtonElement>) => {
@@ -916,8 +994,11 @@ export function TerminalView({
     };
     const term = new Terminal({
       cursorBlink: true,
-      disableStdin: composerOpenRef.current || shouldAvoidVirtualKeyboard(),
-      fontFamily: TERMINAL_FONT_FAMILY,
+      // Composer and shortcut keys edit the prompt without ever focusing
+      // xterm, which otherwise hides the cursor until its first focus.
+      showCursorImmediately: true,
+      disableStdin: composerEditingRef.current || shouldAvoidVirtualKeyboard(),
+      fontFamily: terminalFontFamilyRef.current,
       ...terminalDensity(terminalFontScaleRef.current),
       theme: terminalThemeRef.current,
       allowProposedApi: true,
@@ -1089,7 +1170,7 @@ export function TerminalView({
     const acceptsEndpointInput = () =>
       !terminalEffectDisposed &&
       connectionClient.isCurrent() &&
-      !composerOpenRef.current &&
+      !composerEditingRef.current &&
       !touchSelectionRef.current?.active &&
       desiredTerminalRef.current === paneTerminalIdRef.current &&
       store.get().status === "connected" &&
@@ -1413,10 +1494,11 @@ export function TerminalView({
       text: string,
       destinationPaneId: string | null = paneIdRef.current ?? null,
       inputSession = inputSessionRef.current,
+      fromDrop = false,
     ) => {
       if (
         !text ||
-        !acceptsInput() ||
+        !(fromDrop ? acceptsEndpointInput() : acceptsInput()) ||
         inputSession !== inputSessionRef.current ||
         destinationPaneId !== (paneIdRef.current ?? null)
       )
@@ -2024,30 +2106,74 @@ export function TerminalView({
     container.addEventListener("paste", onPaste);
     document.addEventListener("paste", onPaste, { capture: true });
 
-    // A path dragged from the file explorer is typed like a paste, so agents
-    // and shells receive it at the cursor of the active pane.
-    const onPathDragOver = (e: DragEvent) => {
-      if (!e.dataTransfer || !isWorkspacePathDrag(e.dataTransfer)) return;
-      if (!acceptsInput()) return;
+    const onTerminalDragOver = (e: DragEvent) => {
+      if (
+        !e.dataTransfer ||
+        (!isWorkspacePathDrag(e.dataTransfer) &&
+          !isNativeFileDrag(e.dataTransfer))
+      )
+        return;
+      if (!acceptsEndpointInput()) return;
       e.preventDefault();
       e.dataTransfer.dropEffect = "copy";
     };
-    const onPathDrop = (e: DragEvent) => {
-      if (!e.dataTransfer || !isWorkspacePathDrag(e.dataTransfer)) return;
+    const onTerminalDrop = (e: DragEvent) => {
+      if (
+        !e.dataTransfer ||
+        (!isWorkspacePathDrag(e.dataTransfer) &&
+          !isNativeFileDrag(e.dataTransfer))
+      )
+        return;
       e.preventDefault();
       e.stopPropagation();
-      const path = workspacePathFromDrag(e.dataTransfer);
-      if (!path || !acceptsInput()) return;
+      if (!acceptsEndpointInput()) return;
       const destinationPaneId = paneIdRef.current ?? null;
-      term.focus();
-      void runPasteOperation(() => pasteText(path, destinationPaneId)).catch(
-        (err) => {
+      const inputSession = inputSessionRef.current;
+      const activePaneAtDrop = activePaneIdForSnapshot(store.get());
+      if (isWorkspacePathDrag(e.dataTransfer)) {
+        const path = workspacePathFromDrag(e.dataTransfer);
+        if (!path) return;
+        void runPasteOperation(() =>
+          pasteText(path, destinationPaneId, inputSession, true),
+        ).catch((err) => {
           setUploadError(`Path paste failed: ${(err as Error).message}`);
-        },
-      );
+        });
+        return;
+      }
+      const files = filesFromTerminalDrop(e.dataTransfer);
+      if (files === "directory") {
+        setUploadError("Drop files only; directories are not supported.");
+        return;
+      }
+      if (!files?.length) return;
+      let paneSwitched = false;
+      const stopWatchingPane = store.subscribe(() => {
+        if (activePaneIdForSnapshot(store.get()) !== activePaneAtDrop)
+          paneSwitched = true;
+      });
+      void runPasteOperation(async () => {
+        const paths: string[] = [];
+        for (const file of files) {
+          if (paneSwitched) return;
+          paths.push(await uploadTerminalFile(connectionClient, file));
+        }
+        if (paneSwitched) return;
+        await pasteText(
+          terminalUploadedPathsText(paths),
+          destinationPaneId,
+          inputSession,
+          true,
+        );
+      })
+        .catch((err) => {
+          setUploadError(`File upload failed: ${(err as Error).message}`);
+        })
+        .finally(stopWatchingPane);
     };
-    container.addEventListener("dragover", onPathDragOver, { capture: true });
-    container.addEventListener("drop", onPathDrop, { capture: true });
+    container.addEventListener("dragover", onTerminalDragOver, {
+      capture: true,
+    });
+    container.addEventListener("drop", onTerminalDrop, { capture: true });
 
     const onCopy = (e: ClipboardEvent) => {
       if (
@@ -2155,7 +2281,8 @@ export function TerminalView({
       inputActiveRef.current = true;
       setInputActive(true);
       term.options.disableStdin =
-        composerOpenRef.current || touchSelectionRef.current?.active === true;
+        composerEditingRef.current ||
+        touchSelectionRef.current?.active === true;
       if (term.textarea)
         term.textarea.readOnly = term.options.disableStdin === true;
       if (
@@ -2247,8 +2374,11 @@ export function TerminalView({
         });
       } else setReviewSelection(null);
     };
+    let touchMoved = false;
     const touchSelection = new TerminalTouchSelection(term, {
       begin: (activate) => {
+        // Even a long press on blank output must not open the keyboard.
+        touchMoved = true;
         if (!acceptsEndpointInput() || !isActivePaneRef.current) return;
         closeTerminalInput();
         historySelection.reset();
@@ -2438,7 +2568,7 @@ export function TerminalView({
         if (
           term.hasSelection() ||
           endpointPresentation.selectionDrag ||
-          composerOpenRef.current
+          composerEditingRef.current
         ) {
           e.preventDefault();
           e.stopPropagation();
@@ -2496,7 +2626,6 @@ export function TerminalView({
     let touchStartX: number | null = null;
     let touchStartY: number | null = null;
     let touchLastY: number | null = null;
-    let touchMoved = false;
     let touchRemainder = 0;
     const onTouchStart = (e: TouchEvent) => {
       lastPointerType = "touch";
@@ -2531,11 +2660,11 @@ export function TerminalView({
         touchMoved = true;
         if (!touchSelection.active) endpointPresentation.cancelSelection();
       }
+      // Swiping output uses terminal.scroll independently of keyboard input.
+      // Keep Composer's stdin/focus lock, but only selection blocks this gesture.
       if (
         endpointPresentation.mouseReporting !== undefined &&
-        (term.hasSelection() ||
-          endpointPresentation.selectionDrag ||
-          composerOpenRef.current)
+        (term.hasSelection() || endpointPresentation.selectionDrag)
       ) {
         e.preventDefault();
         e.stopPropagation();
@@ -2574,10 +2703,12 @@ export function TerminalView({
     const onTouchEnd = (e: TouchEvent) => {
       touchSelection.cancelPending();
       if (!touchSelection.active) endpointPresentation.cancelSelection();
-      const dismissInput = terminalTouchShouldDismissInput(
+      const inputAction = terminalTouchInputAction(
         touchStartX !== null && touchStartY !== null,
         touchMoved,
+        composerModeRef.current === "direct",
         inputActiveRef.current,
+        touchSelection.active,
       );
       touchStartX = null;
       touchStartY = null;
@@ -2587,7 +2718,8 @@ export function TerminalView({
       // Cancel compatibility mouse events before xterm can focus or report them.
       e.preventDefault();
       e.stopImmediatePropagation();
-      if (dismissInput) closeTerminalInput();
+      if (inputAction === "focus") focusTerminalInputRef.current();
+      else if (inputAction === "dismiss") closeTerminalInput();
     };
     const onTouchCancel = () => {
       retireTouchLink();
@@ -2620,6 +2752,21 @@ export function TerminalView({
           );
         }
       }
+      // Folding/dragging controls or panning their compact row must not
+      // dismiss Direct input. A compact navigation click blurs in the row.
+      if (
+        e.target instanceof Element &&
+        e.target.closest(
+          ".mobile-controls-toggle, .app[data-mobile-controls-compact] .mobile-controls-stack",
+        )
+      )
+        return;
+      if (
+        composerModeRef.current === "direct" &&
+        e.target instanceof Element &&
+        e.target.closest(".terminal-composer")
+      )
+        return;
       if (
         !terminalPointerShouldBlurInput(
           shouldAvoidVirtualKeyboard(),
@@ -2645,7 +2792,8 @@ export function TerminalView({
         inputActiveRef.current = true;
         setInputActive(true);
         term.options.disableStdin =
-          composerOpenRef.current || touchSelectionRef.current?.active === true;
+          composerEditingRef.current ||
+          touchSelectionRef.current?.active === true;
         if (term.textarea)
           term.textarea.readOnly = term.options.disableStdin === true;
       } else {
@@ -2745,10 +2893,10 @@ export function TerminalView({
       });
       container.removeEventListener("paste", onPaste);
       document.removeEventListener("paste", onPaste, { capture: true });
-      container.removeEventListener("dragover", onPathDragOver, {
+      container.removeEventListener("dragover", onTerminalDragOver, {
         capture: true,
       });
-      container.removeEventListener("drop", onPathDrop, { capture: true });
+      container.removeEventListener("drop", onTerminalDrop, { capture: true });
       container.removeEventListener("copy", onCopy, { capture: true });
       container.removeEventListener("click", onClick);
       container.removeEventListener("mousedown", onTerminalMouseDown, {
@@ -3025,10 +3173,24 @@ export function TerminalView({
   useEffect(() => {
     terminalFontScaleRef.current = terminalFontScale;
     if (!termInstance) return;
+    // Font geometry invalidates hit targets, not the current input session.
+    linkRevisionRef.current++;
+    termInstance.refresh(0, termInstance.rows - 1);
+    setFileLinkMenu(null);
+    setWorkspaceDirectory(null);
+    touchSelectionRef.current?.reset();
     termInstance.options = terminalDensity(terminalFontScale);
     const size = fitVisibleTerminal();
     if (size) resizeSyncRef.current?.sendNow(size);
   }, [terminalFontScale, termInstance, fitVisibleTerminal]);
+
+  useEffect(() => {
+    terminalFontFamilyRef.current = terminalFontFamily;
+    if (!termInstance) return;
+    termInstance.options.fontFamily = terminalFontFamily;
+    const size = fitVisibleTerminal();
+    if (size) resizeSyncRef.current?.sendNow(size);
+  }, [terminalFontFamily, termInstance, fitVisibleTerminal]);
 
   useEffect(() => {
     terminalThemeRef.current = terminalTheme;
@@ -3098,6 +3260,8 @@ export function TerminalView({
   };
   const uploadComposerImage = (file: File) =>
     uploadTerminalImage(connectionClient, file);
+  const uploadComposerFile = (file: File) =>
+    uploadTerminalFile(connectionClient, file);
   const notifyComposerError = (message: string) => {
     store.notify({
       kind: "error",
@@ -3454,6 +3618,11 @@ export function TerminalView({
         }}
       />
       <div className="terminal-shell">
+        <PaneDragHandle
+          paneId={pane.pane_id}
+          layout={s.layout}
+          onPointerDown={preventPaneActionFocus}
+        />
         <div className="terminal-main">
           <div
             ref={containerRef}
@@ -3475,21 +3644,8 @@ export function TerminalView({
                   s.connectionPaused ||
                   !!terminalAttachError
                 }
-                onPointerDown={(event) => event.preventDefault()}
-                onClick={() => {
-                  const term = termRef.current;
-                  if (
-                    !term ||
-                    !connectionClient.isCurrent() ||
-                    desiredTerminalRef.current !== pane.terminal_id
-                  )
-                    return;
-                  inputActiveRef.current = true;
-                  setInputActive(true);
-                  term.options.disableStdin = false;
-                  if (term.textarea) term.textarea.readOnly = false;
-                  term.focus();
-                }}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={focusTerminalInput}
               >
                 <Keyboard size={20} />
               </button>
@@ -3534,7 +3690,10 @@ export function TerminalView({
             </div>
           ) : null}
         </div>
-        {touchHandles.length === 0 && showMobileKeys && hasMobileShortcuts ? (
+        {touchHandles.length === 0 &&
+        !composerOpen &&
+        showMobileKeys &&
+        hasMobileShortcuts ? (
           <div
             className={`terminal-mobile-keys ${
               mobileKeysOpen ? "is-open" : ""
@@ -3608,13 +3767,26 @@ export function TerminalView({
         ) : null}
         {composerOpen ? (
           <TerminalComposer
+            key={composerDraftKey}
             draftKey={composerDraftKey}
+            agent={pane.agent}
+            mode={composerMode}
+            onModeChange={(mode, remember) => {
+              if (!connectionClient.isCurrent() || !isActivePaneRef.current)
+                return;
+              closeTerminalInput();
+              setComposerMode(mode);
+              if (remember) rememberTerminalInputMode(mode);
+            }}
+            onFocusDirect={focusTerminalInput}
+            directDisabled={directDisabled}
             shortcutRows={mobileShortcuts}
             onRunShortcut={runMobileShortcut}
             shortcutDisabledReason={mobileShortcutReason}
             onClose={() => setComposerOpen(false)}
             onSubmit={submitTerminalComposer}
             onUploadImage={uploadComposerImage}
+            onUploadFile={uploadComposerFile}
             onError={notifyComposerError}
           />
         ) : null}
@@ -3651,6 +3823,11 @@ export function TerminalView({
               >
                 <Rows2 size={14} />
               </button>
+              <PaneMoveMenu
+                paneId={pane.pane_id}
+                layout={s.layout}
+                onPointerDown={preventPaneActionFocus}
+              />
             </>
           ) : null}
           {canClosePane || paneZoomed ? (
@@ -3706,11 +3883,6 @@ export function TerminalView({
         danger
         onClose={() => setClosePaneRequested(false)}
         onConfirm={() => {
-          clearTerminalComposerDrafts(
-            s.activeConnectionId,
-            s.connectionGeneration,
-            [pane.pane_id],
-          );
           store.closePane(pane.pane_id);
         }}
       />

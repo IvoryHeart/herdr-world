@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { bridge, type ConnectionClient } from "./api";
-import { roamgateLocalStorage } from "./browserStorage";
+import { worldLocalStorage } from "./browserStorage";
 import { __storeTesting, store } from "./store";
 import { detectShortcutPlatform } from "./shortcutBindings";
 import type { GitDiffEntry, GitDiffFile, Workspace } from "./types";
@@ -158,9 +158,9 @@ async function run() {
       },
     ],
   });
-  roamgateLocalStorage.setItem("diffViewMode", "unified");
-  roamgateLocalStorage.setItem("desktopDiffWrap", "true");
-  roamgateLocalStorage.setItem("mobileDiffWrap", "true");
+  worldLocalStorage.setItem("diffViewMode", "unified");
+  worldLocalStorage.setItem("desktopDiffWrap", "true");
+  worldLocalStorage.setItem("mobileDiffWrap", "true");
   const container = document.createElement("div");
   container.style.cssText =
     "display:flex;flex-direction:column;width:100%;height:780px";
@@ -170,7 +170,11 @@ async function run() {
     container.querySelector<HTMLElement>(
       '[data-diff-entry-key="unstaged:src/one.ts"]',
     )!;
-  const collapsed = () => !firstSection()?.querySelector(".diff-content-state");
+  const collapsed = () =>
+    firstSection()
+      ?.querySelector(".diff-file-section-title")
+      ?.getAttribute("aria-expanded") === "false" &&
+    !firstSection()?.querySelector(".diff-file-section-body");
   const treeFile = () =>
     container.querySelector<HTMLButtonElement>(".diff-tree-file")!;
   const folder = () =>
@@ -225,8 +229,8 @@ async function run() {
           ".diff-file-section-title",
         )!;
         check(
-          (title.getAttribute("role") === "button") === mobile,
-          `${theme}: whole-row toggle did not follow compact mode`,
+          title.tagName === "BUTTON",
+          `${theme}: whole-row toggle is not a native button`,
         );
         if (mobile) {
           check(!searchKey(title), "Compact section consumed browser search");
@@ -235,13 +239,9 @@ async function run() {
             "Compact window handler consumed browser search",
           );
           title.focus();
-          title.dispatchEvent(
-            new KeyboardEvent("keydown", {
-              key: "Enter",
-              bubbles: true,
-              cancelable: true,
-            }),
-          );
+          // Native buttons activate on Enter; synthetic KeyboardEvents do not
+          // execute that browser default action in this fixture.
+          title.click();
         } else {
           check(searchKey(title), "Desktop search shortcut was not handled");
           await until(

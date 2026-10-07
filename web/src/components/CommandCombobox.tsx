@@ -14,6 +14,10 @@ import {
   Keyboard,
   LayoutGrid,
   Maximize2,
+  MoveDown,
+  MoveLeft,
+  MoveRight,
+  MoveUp,
   PanelTop,
   SplitSquareHorizontal,
   SplitSquareVertical,
@@ -379,9 +383,9 @@ function OwnedCommandCombobox({
   );
   const focusedWorkspaceTabs = useMemo(
     () =>
-      s.tabs
-        .filter((tab) => tab.workspace_id === focusedWorkspace?.workspace_id)
-        .sort((a, b) => a.number - b.number),
+      s.tabs.filter(
+        (tab) => tab.workspace_id === focusedWorkspace?.workspace_id,
+      ),
     [focusedWorkspace?.workspace_id, s.tabs],
   );
   const activeAgent =
@@ -829,7 +833,10 @@ function OwnedCommandCombobox({
         detail: tabName(activeTab),
         keywords: ["delete tab", "remove tab"],
         danger: true,
-        run: () => setPendingCloseTab(activeTab),
+        run: () => {
+          if (store.guardTabClose(activeTab.tab_id))
+            setPendingCloseTab(activeTab);
+        },
       },
     );
   }
@@ -856,7 +863,9 @@ function OwnedCommandCombobox({
       detail: tab.tab_id,
       keywords: ["delete tab", "remove tab", tabName(tab)],
       danger: true,
-      run: () => setPendingCloseTab(tab),
+      run: () => {
+        if (store.guardTabClose(tab.tab_id)) setPendingCloseTab(tab);
+      },
     });
   }
 
@@ -867,7 +876,7 @@ function OwnedCommandCombobox({
           icon: <ArrowLeft size={15} />,
           title: "Focus pane left",
           detail: shortId(activePane.pane_id),
-          keywords: ["switch pane left", "select pane left", "move pane left"],
+          keywords: ["switch pane left", "select pane left"],
           run: () => store.focusPaneDirection(activePane.pane_id, "left"),
         },
         {
@@ -875,11 +884,7 @@ function OwnedCommandCombobox({
           icon: <ArrowRight size={15} />,
           title: "Focus pane right",
           detail: shortId(activePane.pane_id),
-          keywords: [
-            "switch pane right",
-            "select pane right",
-            "move pane right",
-          ],
+          keywords: ["switch pane right", "select pane right"],
           run: () => store.focusPaneDirection(activePane.pane_id, "right"),
         },
         {
@@ -887,7 +892,7 @@ function OwnedCommandCombobox({
           icon: <ArrowUp size={15} />,
           title: "Focus pane up",
           detail: shortId(activePane.pane_id),
-          keywords: ["switch pane up", "select pane up", "move pane up"],
+          keywords: ["switch pane up", "select pane up"],
           run: () => store.focusPaneDirection(activePane.pane_id, "up"),
         },
         {
@@ -895,7 +900,7 @@ function OwnedCommandCombobox({
           icon: <ArrowDown size={15} />,
           title: "Focus pane down",
           detail: shortId(activePane.pane_id),
-          keywords: ["switch pane down", "select pane down", "move pane down"],
+          keywords: ["switch pane down", "select pane down"],
           run: () => store.focusPaneDirection(activePane.pane_id, "down"),
         },
         {
@@ -913,6 +918,38 @@ function OwnedCommandCombobox({
           detail: shortId(activePane.pane_id),
           keywords: ["new pane down", "create pane down", "horizontal split"],
           run: () => store.splitPane(activePane.pane_id, "down"),
+        },
+        {
+          key: "move-pane-left",
+          icon: <MoveLeft size={15} />,
+          title: "Move pane left",
+          detail: shortId(activePane.pane_id),
+          keywords: ["swap pane left", "rearrange pane"],
+          run: () => store.movePane(activePane.pane_id, "left"),
+        },
+        {
+          key: "move-pane-right",
+          icon: <MoveRight size={15} />,
+          title: "Move pane right",
+          detail: shortId(activePane.pane_id),
+          keywords: ["swap pane right", "rearrange pane"],
+          run: () => store.movePane(activePane.pane_id, "right"),
+        },
+        {
+          key: "move-pane-up",
+          icon: <MoveUp size={15} />,
+          title: "Move pane up",
+          detail: shortId(activePane.pane_id),
+          keywords: ["swap pane up", "rearrange pane"],
+          run: () => store.movePane(activePane.pane_id, "up"),
+        },
+        {
+          key: "move-pane-down",
+          icon: <MoveDown size={15} />,
+          title: "Move pane down",
+          detail: shortId(activePane.pane_id),
+          keywords: ["swap pane down", "rearrange pane"],
+          run: () => store.movePane(activePane.pane_id, "down"),
         },
         {
           key: "toggle-pane-zoom",
@@ -934,7 +971,11 @@ function OwnedCommandCombobox({
           detail: shortId(activePane.pane_id),
           keywords: ["delete pane", "remove pane"],
           danger: true,
-          run: () => setPendingClosePane(activePane),
+          run: () => {
+            if (store.guardPaneClose(activePane.pane_id)) {
+              setPendingClosePane(activePane);
+            }
+          },
         },
       ]
     : [];
@@ -948,7 +989,11 @@ function OwnedCommandCombobox({
       detail: agentName(activeAgent),
       keywords: ["close agent", "delete agent", "remove agent", "close pane"],
       danger: true,
-      run: () => setPendingClosePane(activeAgent),
+      run: () => {
+        if (store.guardPaneClose(activeAgent.pane_id)) {
+          setPendingClosePane(activeAgent);
+        }
+      },
     });
   }
   for (const pane of agents) {

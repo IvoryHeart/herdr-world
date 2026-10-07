@@ -6,8 +6,13 @@ import { parseArgs } from "node:util";
 import { createHash } from "node:crypto";
 import { validateSshDestination } from "../bridge/ssh-command";
 import { assertSshTunnelPlatformSupported } from "../bridge/ssh-tunnel";
-import { defaultAuthTokenPath, loadOrCreateAuthToken } from "./auth-token";
+import {
+  assertValidAuthPassword,
+  defaultAuthTokenPath,
+  loadOrCreateAuthToken,
+} from "./auth-token";
 import { worldEnv } from "./environment";
+import { dataRoot } from "./data-paths";
 import { type LogLevel, parseLogLevel, serverLogger } from "../utils/logger";
 import { normalizePublicOrigin } from "../http/browser-admission";
 import {
@@ -29,6 +34,9 @@ type CliArgs = Partial<{
   "public-origin": string;
   "log-level": string;
   "notification-source": string;
+  profile: boolean;
+  "profile-duration": string;
+  "profile-dir": string;
   open: boolean;
   help: boolean;
   version: boolean;
@@ -52,6 +60,7 @@ export type ServerConfig = {
   openBrowserRequested: boolean;
   logLevel: LogLevel;
   taskNotificationSource: TaskNotificationSource;
+  profile?: { directory: string; durationMs: number };
   hasExplicitSocketPath: boolean;
   hasExplicitClientSocketPath: boolean;
 };
@@ -70,6 +79,9 @@ const cliOptions = {
   "public-origin": { type: "string" },
   "log-level": { type: "string" },
   "notification-source": { type: "string" },
+  profile: { type: "boolean" },
+  "profile-duration": { type: "string" },
+  "profile-dir": { type: "string" },
   open: { type: "boolean" },
   help: { type: "boolean" },
   version: { type: "boolean", short: "V" },
@@ -80,6 +92,25 @@ export function resolveServerLogLevel(
   envValue: string | undefined,
 ): LogLevel {
   return parseLogLevel(cliValue ?? envValue ?? "info");
+}
+
+export function resolveServerProfile(
+  enabled: boolean,
+  duration: string | undefined,
+  directory: string | undefined,
+): ServerConfig["profile"] {
+  if (!enabled) return undefined;
+  const seconds = Number(duration ?? "30");
+  if (!Number.isInteger(seconds) || seconds < 1 || seconds > 300)
+    throw new Error(
+      "--profile-duration must be an integer from 1 to 300 seconds.",
+    );
+  if (directory !== undefined && !directory.trim())
+    throw new Error("--profile-dir must not be empty.");
+  return {
+    durationMs: seconds * 1_000,
+    directory: resolve(directory ?? join(dataRoot(), "profiles")),
+  };
 }
 
 export function loadServerTls(
@@ -135,7 +166,7 @@ Service actions:
 Options (flags override HERDR_WORLD_* environment variables):
   --host <addr>              listen address        (env HOST,            default 127.0.0.1)
   --port <n>                 listen port           (env PORT,            default 8787)
-  --password <pw>            fixed login password  (env HERDR_WORLD_PASSWORD; otherwise a token is generated)
+  --password <pw>            fixed login password (env HERDR_WORLD_PASSWORD; otherwise a token is generated)
   --tls-cert <path>          PEM certificate chain (env HERDR_WORLD_TLS_CERT; requires --tls-key)
   --tls-key <path>           PEM private key       (env HERDR_WORLD_TLS_KEY; requires --tls-cert)
   --socket-path <path>       control socket        (env HERDR_SOCKET_PATH)
@@ -147,6 +178,9 @@ Options (flags override HERDR_WORLD_* environment variables):
   --log-level <level>        error|warn|info|debug  (env HERDR_WORLD_LOG_LEVEL, default: info)
   --notification-source <s>  herdr|status: task alerts follow Herdr notifications or
                              World's own status tracker (env HERDR_WORLD_NOTIFICATION_SOURCE, default: herdr)
+  --profile                  capture server CPU samples (env HERDR_WORLD_PROFILE=1)
+  --profile-duration <secs>   capture for 1..300 seconds (env HERDR_WORLD_PROFILE_DURATION, default: 30)
+  --profile-dir <path>        output parent directory (env HERDR_WORLD_PROFILE_DIR, default: World data dir/profiles)
   --open                     open browser on start (env OPEN_BROWSER=1)
   -V, --version              show version
   --help                     show this help
@@ -181,13 +215,28 @@ Options (flags override HERDR_WORLD_* environment variables):
     process.exit(2);
   }
 
+  let profile: ServerConfig["profile"];
+  try {
+    profile = resolveServerProfile(
+      args.profile === true || worldEnv("PROFILE") === "1",
+      args["profile-duration"] ?? worldEnv("PROFILE_DURATION"),
+      args["profile-dir"] ?? worldEnv("PROFILE_DIR"),
+    );
+  } catch (error) {
+    console.error(`[bridge] ${(error as Error).message}`);
+    process.exit(2);
+  }
+
   const host = String(args.host ?? process.env.HOST ?? "127.0.0.1");
   const port = Number(args.port ?? process.env.PORT ?? 8787);
+  const authRequired = true;
   let tls: ServerConfig["tls"];
   try {
     tls = loadServerTls(
-      args["tls-cert"] ?? worldEnv("TLS_CERT") ?? process.env.ROAMGATE_TLS_CERT,
-      args["tls-key"] ?? worldEnv("TLS_KEY") ?? process.env.ROAMGATE_TLS_KEY,
+      args["tls-cert"] ??
+        worldEnv("TLS_CERT") ??
+        process.env.HERDR_WORLD_TLS_CERT,
+      args["tls-key"] ?? worldEnv("TLS_KEY") ?? process.env.HERDR_WORLD_TLS_KEY,
     );
   } catch (error) {
     console.error(`[bridge] ${(error as Error).message}`);
@@ -196,7 +245,12 @@ Options (flags override HERDR_WORLD_* environment variables):
   const configuredPassword = String(
     args.password ?? worldEnv("PASSWORD") ?? "",
   );
-  const authRequired = !isLocalHost(host);
+  try {
+    if (configuredPassword) assertValidAuthPassword(configuredPassword);
+  } catch (error) {
+    console.error(`[bridge] ${(error as Error).message}`);
+    process.exit(2);
+  }
   const generatedAuthTokenPath =
     authRequired && !configuredPassword ? defaultAuthTokenPath() : undefined;
   let generatedAuthToken: string | undefined;
@@ -256,13 +310,10 @@ Options (flags override HERDR_WORLD_* environment variables):
       args.open === true || process.env.OPEN_BROWSER === "1",
     logLevel,
     taskNotificationSource,
+    profile,
     hasExplicitSocketPath,
     hasExplicitClientSocketPath,
   };
-}
-
-function isLocalHost(host: string) {
-  return host === "127.0.0.1" || host === "localhost" || host === "::1";
 }
 
 function remoteTunnelLocalPath(
@@ -272,7 +323,9 @@ function remoteTunnelLocalPath(
 ): string {
   const hostKey = host ?? "remote";
   const sessionKey = session ?? "default";
-  const key = createHash("sha1")
+  // A short deterministic filename identifier, not an authentication secret.
+  // Keep it bounded for Unix socket path limits regardless of input length.
+  const key = createHash("sha256")
     .update(`${hostKey}\0${sessionKey}\0${kind}`)
     .digest("hex")
     .slice(0, 12);

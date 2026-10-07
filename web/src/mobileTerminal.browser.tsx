@@ -720,7 +720,7 @@ const api = {
     render(true);
     await settle();
     check(
-      !!document.querySelector(".terminal-mobile-keys-toggle .lucide-grid2x2"),
+      !!document.querySelector(".terminal-mobile-keys-toggle .lucide-grid-2x2"),
       "shortcut pad uses distinct icon",
     );
     click(keyboard);

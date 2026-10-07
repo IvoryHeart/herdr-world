@@ -25,6 +25,7 @@ import {
 export default function WorldTerminalPortalList({
   presentations,
   terminalTheme,
+  terminalFontFamily,
   terminalFontScale,
   mobileShortcuts,
   mobileSideShortcuts,
@@ -36,6 +37,7 @@ export default function WorldTerminalPortalList({
   connectionGeneration: number;
   runtimeGeneration: number | null;
   terminalTheme: ITheme;
+  terminalFontFamily?: string;
   terminalFontScale: number;
   mobileShortcuts: MobileTerminalShortcutRows;
   mobileSideShortcuts: MobileTerminalSideShortcuts;
@@ -94,6 +96,7 @@ export default function WorldTerminalPortalList({
                 panes={session.panes}
                 connectionGeneration={presentation.runtimeGeneration}
                 terminalTheme={terminalTheme}
+                terminalFontFamily={terminalFontFamily}
                 terminalFontScale={terminalFontScale}
                 mobileShortcuts={mobileShortcuts}
                 mobileSideShortcuts={mobileSideShortcuts}
@@ -112,6 +115,7 @@ function WorldInspectorTabTerminal({
   panes,
   connectionGeneration,
   terminalTheme,
+  terminalFontFamily,
   terminalFontScale,
   mobileShortcuts,
   mobileSideShortcuts,
@@ -121,6 +125,7 @@ function WorldInspectorTabTerminal({
   panes: readonly Pane[];
   connectionGeneration: number;
   terminalTheme: ITheme;
+  terminalFontFamily?: string;
   terminalFontScale: number;
   mobileShortcuts: MobileTerminalShortcutRows;
   mobileSideShortcuts: MobileTerminalSideShortcuts;
@@ -163,6 +168,7 @@ function WorldInspectorTabTerminal({
       connectionGeneration={connectionGeneration}
       onFocusPane={presentation.onFocusPane}
       terminalTheme={terminalTheme}
+      terminalFontFamily={terminalFontFamily}
       terminalFontScale={terminalFontScale}
       mobileShortcuts={mobileShortcuts}
       mobileSideShortcuts={mobileSideShortcuts}

@@ -459,6 +459,7 @@ describe("connection protocol routing", () => {
       "control",
       "terminal",
       "terminal_clipboard",
+      "assistant",
     ]) {
       expect(() =>
         serializeHerdrEventEnvelope("a", {

@@ -51,6 +51,148 @@
   color: var(--muted);
 }
 
+.terminal-font-group {
+  display: grid;
+  border: 1px solid var(--border-soft);
+  border-radius: 12px;
+  background: var(--panel-2);
+}
+
+.terminal-font-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  padding: 8px 12px;
+}
+
+.terminal-font-row + .terminal-font-row {
+  border-top: 1px solid var(--border-soft);
+}
+
+.terminal-font-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 220px;
+  max-width: 100%;
+  height: 32px;
+  padding: 0 8px 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--input-bg);
+  color: var(--text-strong);
+  font-size: 12px;
+  text-align: left;
+}
+
+.terminal-font-trigger > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.terminal-font-trigger > svg {
+  flex: 0 0 auto;
+  color: var(--muted);
+}
+
+.terminal-font-trigger:hover:not(:disabled),
+.terminal-font-trigger.is-open,
+.terminal-font-trigger:focus-visible {
+  border-color: var(--accent);
+}
+
+.terminal-font-trigger.is-open {
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+.terminal-font-popover {
+  /* Opens above the terminal appearance modal (z-index 5000). */
+  z-index: 5010;
+  width: min(300px, calc(100vw - 24px));
+  overflow: hidden;
+  padding: 0;
+  border-radius: 10px;
+}
+
+.terminal-font-command .command-input {
+  height: 38px;
+  padding: 0 11px;
+  font-size: 12px;
+}
+
+.terminal-font-command .command-list {
+  max-height: min(
+    340px,
+    calc(
+      var(--radix-popover-content-available-height) /
+      var(--ui-scale, 1) -
+      50px
+    )
+  );
+  padding: 5px;
+}
+
+.terminal-font-option {
+  grid-template-columns: minmax(0, 1fr) 14px;
+  gap: 8px;
+  min-height: 34px;
+  padding: 5px 8px;
+  font-size: 12px;
+}
+
+.terminal-font-option > svg {
+  color: var(--accent);
+  visibility: hidden;
+}
+
+.terminal-font-option[data-current="true"] > svg {
+  visibility: visible;
+}
+
+.terminal-font-option[data-disabled="true"] {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.terminal-font-message {
+  margin: 0;
+  padding: 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+:where(html[data-layout="mobile"]) {
+  .terminal-font-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .terminal-font-trigger {
+    width: 100%;
+    min-height: 36px;
+    font-size: 16px;
+  }
+
+  .terminal-font-command .command-input {
+    font-size: 16px;
+  }
+}
+
+.terminal-theme-new-button {
+  min-height: 34px;
+}
+
+.terminal-font-message {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .terminal-theme-new-button {
   display: inline-flex;
   align-items: center;

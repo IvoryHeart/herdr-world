@@ -551,3 +551,18 @@ Esc dismisses dialogs, menus, notifications, and update banners. Tab/arrows
 navigate controls. The pane switcher accepts Up/Down, Enter, or release of its
 opening modifier. Diff search uses Enter/Shift+Enter for next/previous. Select in
 mouse-aware apps with Option-drag (macOS) or Shift-drag (elsewhere).
+
+## Ranger and workspace tools
+
+- Ranger reads explicitly permitted workspaces across local and SSH connections,
+  chats with a configured model, and proposes actions for manual confirmation.
+  An explicit high-permission mode can execute supported operations automatically.
+- Background tasks run once, at intervals or daily, with separate conversations
+  and optional monitoring alerts. Saved schedules retain endpoint and workspace
+  identity; interactive requests capture their runtime generation.
+- Inspect Git commit history, keep file-preview tabs, pin and reorder native tabs,
+  and move or swap panes within their owning connection.
+- Configure terminal fonts and direct/composer input, upload files to the captured
+  host, and set a distinct browser instance title.
+- Login is required on localhost and other listeners, using a generated token or
+  a configured 15–1024-character password, with throttling for failed attempts.

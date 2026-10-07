@@ -9,13 +9,15 @@
   text-align: center;
 }
 
-.app.zen .tabbar {
+.app.zen .tabbar,
+:where(html[data-layout="mobile"]) .app.assistant-view .tabbar {
   display: none;
 }
 
 /* ===== tab bar (top of main) ===== */
 .tabbar {
   flex: 0 0 auto;
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 4px;
@@ -23,10 +25,20 @@
   background: var(--shell-panel);
   border: 1px solid var(--shell-border);
   border-radius: 10px;
+  overflow: hidden;
+}
+
+.tabbar-tabs {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
   overflow-x: auto;
 }
 
 .tabbar-tab {
+  flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -41,6 +53,44 @@
 
 .tabbar-tab:hover {
   background: var(--panel-2);
+}
+
+/* Drag to reorder: neighbors slide aside while the lifted tab tracks 1:1. */
+.tabbar-tab {
+  position: relative;
+  transition: transform 180ms cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+
+.tabbar-tabs.is-reordering {
+  cursor: grabbing;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.tabbar-tabs.is-reordering .tabbar-tab {
+  cursor: grabbing;
+}
+
+.tabbar-tab.is-dragging,
+.tabbar-tab.is-settling {
+  z-index: 1;
+  background: var(--panel-2);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.28);
+}
+
+.tabbar-tab.is-dragging {
+  transition: none;
+}
+
+.tabbar-tab.is-active.is-dragging,
+.tabbar-tab.is-active.is-settling {
+  background: var(--accent-soft);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tabbar-tab {
+    transition: none;
+  }
 }
 
 .tabbar-tab.is-active {
@@ -99,7 +149,14 @@
   color: var(--danger-text);
 }
 
+.tabbar-pin {
+  flex: 0 0 auto;
+  margin: 0 3px;
+  color: var(--muted);
+}
+
 .tabbar-add {
+  flex: 0 0 auto;
   width: 26px;
   height: 26px;
   padding: 0;
@@ -119,14 +176,7 @@
   color: var(--text);
 }
 
-.tabbar-spacer {
-  min-width: 12px;
-  flex: 1 1 auto;
-}
-
 .tabbar-utilities {
-  position: sticky;
-  right: 0;
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
@@ -192,6 +242,13 @@
   }
 
   .tabbar-utilities {
+    display: none;
+  }
+
+  /* Give the terminal these rows while the phone keyboard is up for terminal
+     input. See the pane switcher in the app shell layout. */
+  &.keyboard-open .app:has(.xterm-helper-textarea:focus) .tabbar,
+  .app:has(.terminal-composer-input:focus) .tabbar {
     display: none;
   }
 }

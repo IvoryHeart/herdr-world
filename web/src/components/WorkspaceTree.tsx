@@ -1,10 +1,10 @@
+import { subscribeLocalStorage } from "../browserStorage";
 import { worldLocalStorage } from "../browserStorage";
 import { shallowEqual, useOperationalStore, useStoreSelector } from "../store";
 import type { GitStatusSummary, Pane, Tab, Workspace } from "../types";
 import { projectBrowserNavigation } from "../browserNavigation";
 import { shortId } from "../utils";
 import {
-  clearTerminalComposerDrafts,
   terminalComposerCloseWarning,
   terminalComposerDraftPaneIds,
 } from "../terminalComposer";
@@ -20,6 +20,7 @@ import {
   GitBranch,
   Layers,
   Pin,
+  Plus,
 } from "lucide-react";
 import { WorktreeLifecycleDialog } from "./WorktreeLifecycleDialog";
 import {
@@ -66,6 +67,7 @@ import {
   AgentContextMenu,
   type AgentMenuState,
   AgentRow,
+  nestedAgentPaneIds,
 } from "./WorkspaceAgentRows";
 import {
   exportSessionForConnection,
@@ -438,23 +440,39 @@ export function WorkspaceTree({
     });
   }, [s.lastRefresh, s.status, session.workspaces]);
   useEffect(() => {
-    const onStorage = (event: StorageEvent) => {
-      if (event.key === pinsStorageKey) {
-        setPinnedWorkspaceKeys(parseWorkspacePins(event.newValue));
-      } else if (event.key === collapsedGroupsStorageKey) {
-        setCollapsedWorktreeGroupKeys(
-          parseCollapsedWorktreeGroups(event.newValue),
+    return subscribeLocalStorage((key) => {
+      if (key === pinsStorageKey || key === null) {
+        setPinnedWorkspaceKeys(
+          parseWorkspacePins(worldLocalStorage.getItem(pinsStorageKey)),
         );
-      } else if (event.key === WORKSPACE_AGENT_LAYOUT_STORAGE_KEY) {
-        setAgentLayout(parseWorkspaceAgentLayout(event.newValue));
-      } else if (event.key === AGENT_LIST_PREFERENCES_STORAGE_KEY) {
-        setAgentListPreferences(parseAgentListPreferences(event.newValue));
-      } else if (event.key === agentOrderStorageKey) {
-        setAgentPaneOrder(parseAgentOrder(event.newValue));
       }
-    };
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
+      if (key === collapsedGroupsStorageKey || key === null) {
+        setCollapsedWorktreeGroupKeys(
+          parseCollapsedWorktreeGroups(
+            worldLocalStorage.getItem(collapsedGroupsStorageKey),
+          ),
+        );
+      }
+      if (key === WORKSPACE_AGENT_LAYOUT_STORAGE_KEY || key === null) {
+        setAgentLayout(
+          parseWorkspaceAgentLayout(
+            worldLocalStorage.getItem(WORKSPACE_AGENT_LAYOUT_STORAGE_KEY),
+          ),
+        );
+      }
+      if (key === AGENT_LIST_PREFERENCES_STORAGE_KEY || key === null) {
+        setAgentListPreferences(
+          parseAgentListPreferences(
+            worldLocalStorage.getItem(AGENT_LIST_PREFERENCES_STORAGE_KEY),
+          ),
+        );
+      }
+      if (key === agentOrderStorageKey || key === null) {
+        setAgentPaneOrder(
+          parseAgentOrder(worldLocalStorage.getItem(agentOrderStorageKey)),
+        );
+      }
+    });
   }, [agentOrderStorageKey, collapsedGroupsStorageKey, pinsStorageKey]);
 
   const updatePinnedWorkspace = (workspace: Workspace, pinned: boolean) => {
@@ -585,11 +603,11 @@ export function WorkspaceTree({
           <div className="panel-head">
             <h2>Workspaces</h2>
             <button
-              className="panel-add"
+              className="panel-add panel-action-icon"
               title="New workspace"
               onClick={() => setCreateOpen(true)}
             >
-              +
+              <Plus size={14} />
             </button>
           </div>
           <div className="workspace-tree-content">
@@ -640,11 +658,11 @@ export function WorkspaceTree({
             </button>
           ) : null}
           <button
-            className="panel-add"
+            className="panel-add panel-action-icon"
             title="New workspace"
             onClick={() => setCreateOpen(true)}
           >
-            +
+            <Plus size={14} />
           </button>
         </div>
       </div>
@@ -851,7 +869,9 @@ export function WorkspaceTree({
         onExportSession={(pane) =>
           exportSessionForConnection(pane, connectionClient)
         }
-        onClosePane={setPendingClosePane}
+        onClosePane={(pane) => {
+          if (store.guardPaneClose(pane.pane_id)) setPendingClosePane(pane);
+        }}
       />
       <ConfirmDialog
         open={!!pendingClosePane}
@@ -872,11 +892,6 @@ export function WorkspaceTree({
         onClose={() => setPendingClosePane(null)}
         onConfirm={() => {
           if (pendingClosePane) {
-            clearTerminalComposerDrafts(
-              s.activeConnectionId,
-              s.connectionGeneration,
-              [pendingClosePane.pane_id],
-            );
             store.closePane(pendingClosePane.pane_id);
           }
         }}
@@ -972,9 +987,11 @@ function WorkspaceRow({
   const s = useStoreSelector(
     (state) => ({
       pendingFocusWorkspaceId: state.pendingFocusWorkspaceId,
+      tabs: state.tabs,
     }),
     shallowEqual,
   );
+  const paneIdsToShow = nestedAgentPaneIds(agents, s.tabs);
   const isChild = depth > 0;
   const hasChildren = children.length > 0;
   const hasNestedItems = hasChildren || agents.length > 0;
@@ -1211,7 +1228,7 @@ function WorkspaceRow({
               key={pane.pane_id}
               pane={pane}
               depth={depth + 1}
-              showPaneId={agents.length > 1}
+              showPaneId={paneIdsToShow.has(pane.pane_id)}
               selected={
                 pane.pane_id === activePaneId || (!activePaneId && pane.focused)
               }

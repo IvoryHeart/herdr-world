@@ -7,6 +7,13 @@ are optional because the merged PR history records their source.
 
 ## [Unreleased]
 
+### Added
+
+- Ranger workspace chat, proposed actions, background and scheduled tasks, and
+  monitoring alerts, scoped to permitted local and SSH workspaces.
+- Git commit history, file-preview tabs, tab pinning and reordering, pane movement,
+  terminal font and input controls, file uploads, and instance title settings.
+
 ### Fixed
 
 - World browser tests give cold Chrome startup a separate bounded allowance,
@@ -15,6 +22,12 @@ are optional because the merged PR history records their source.
   layout before checking visibility.
 
 ### Changed
+
+- Synchronize Roamgate through `d703e6f6` (6 October 2026), retaining World's visual
+  views, connection ownership, service packaging and browser responsiveness.
+- Require login on every listener, including localhost. Configured passwords must
+  contain 15–1024 characters; otherwise World creates a persistent login token.
+  Login attempts are throttled.
 
 - Test files run in bounded parallel workers. Isolated browser acceptance cases also run concurrently, with lower concurrency in CI.
 - World browser acceptance suites reuse immutable bundles and run across eight isolated CI shards, preserving scenario coverage and responsiveness budgets. CI artifacts retain input timings for responsiveness investigations.

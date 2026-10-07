@@ -23,13 +23,15 @@ import {
   type ServicePaths,
 } from "./service-definitions";
 import { publishDataFile } from "./data-paths";
+import { resolveLaunchdEnvironment } from "./launchd-environment";
 import { worldEnv } from "./environment";
-import { loadOrCreateAuthToken } from "./auth-token";
+import { assertValidAuthPassword, loadOrCreateAuthToken } from "./auth-token";
 import { describeListenerStartError } from "../connections/startup";
 import {
   browserUrlFor,
   getLanIPs,
   isAnyHost,
+  loadServerTls,
   withLoginToken,
 } from "./server-config";
 
@@ -359,42 +361,31 @@ interface ServiceAccess {
   tls: boolean;
 }
 
-function prepareServiceAccess(configPath: string): ServiceAccess {
-  const contents = readFileSync(configPath, "utf8");
-  const host = readEnvironmentValue(contents, "HOST") || "127.0.0.1";
-  const configuredPort = readEnvironmentValue(contents, "PORT");
-  const port = Number(configuredPort || 8787);
-  if (!Number.isInteger(port) || port < 1 || port > 65_535) {
-    throw new Error(`invalid PORT in ${configPath}: ${configuredPort}`);
-  }
-
-  const password = readEnvironmentValue(contents, "HERDR_WORLD_PASSWORD") ?? "";
-  const tlsCert =
-    readEnvironmentValue(contents, "HERDR_WORLD_TLS_CERT") ??
-    readEnvironmentValue(contents, "ROAMGATE_TLS_CERT");
-  const tlsKey =
-    readEnvironmentValue(contents, "HERDR_WORLD_TLS_KEY") ??
-    readEnvironmentValue(contents, "ROAMGATE_TLS_KEY");
-  const tls = Boolean(tlsCert && tlsKey);
-  const usesFixedPassword = password.length > 0;
-  if (
-    usesFixedPassword ||
-    host === "127.0.0.1" ||
-    host === "localhost" ||
-    host === "::1"
-  ) {
-    return { host, port, usesFixedPassword, tls };
-  }
-
-  const tokenPath = join(dirname(configPath), "auth-token");
-  return {
-    host,
-    port,
-    token: loadOrCreateAuthToken(tokenPath),
-    tokenPath,
-    usesFixedPassword,
-    tls,
-  };
+function prepareServiceAccess(
+  configPath: string,
+  contents: string,
+  platform: ServicePlatform,
+  homeDir: string,
+): ServiceAccess {
+  const environment =
+    platform === "launchd"
+      ? resolveLaunchdEnvironment(contents, configPath, homeDir)
+      : undefined;
+  const readValue = (name: string) =>
+    environment ? environment[name] : readEnvironmentValue(contents, name);
+  const host = readValue("HOST") ?? "127.0.0.1";
+  const port = Number(readValue("PORT") ?? 8787);
+  if (!Number.isInteger(port) || port < 1 || port > 65_535)
+    throw new Error(`invalid PORT in ${configPath}`);
+  const password = readValue("HERDR_WORLD_PASSWORD") ?? "";
+  if (password) assertValidAuthPassword(password);
+  const tls = Boolean(
+    loadServerTls(
+      readValue("HERDR_WORLD_TLS_CERT"),
+      readValue("HERDR_WORLD_TLS_KEY"),
+    ),
+  );
+  return { host, port, tls, usesFixedPassword: password.length > 0 };
 }
 
 function printServiceAccess(
@@ -407,13 +398,6 @@ function printServiceAccess(
     log(`Open: ${browserUrlFor(access.host, access.port, access.tls)}`);
     return;
   }
-  if (!access.token) {
-    log(
-      `Open: ${browserUrlFor(access.host, access.port, access.tls)} (local access)`,
-    );
-    return;
-  }
-
   log(`Login token: ${access.token}`);
   log(`Token file: ${access.tokenPath}`);
   log(
@@ -493,8 +477,20 @@ function installService(
     }
   }
   assertServiceDefinitionWritable(paths.definition, force);
+  // Validate effective configuration before changing files or stopping a job.
+  const access = prepareServiceAccess(
+    paths.config,
+    existsSync(paths.config)
+      ? readFileSync(paths.config, "utf8")
+      : DEFAULT_SERVICE_ENV_FILE,
+    platform,
+    runtime.homeDir,
+  );
   const environmentCreated = ensureEnvironmentFile(paths.config);
-  const access = prepareServiceAccess(paths.config);
+  if (!access.usesFixedPassword) {
+    access.tokenPath = join(dirname(paths.config), "auth-token");
+    access.token = loadOrCreateAuthToken(access.tokenPath);
+  }
   if (paths.stdoutLog) mkdirSync(dirname(paths.stdoutLog), { recursive: true });
   const customSystemdExecStart =
     platform === "systemd"

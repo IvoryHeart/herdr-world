@@ -181,6 +181,13 @@ export interface FilePreview {
   resource_revision?: number;
 }
 
+export interface FileSearchResponse {
+  workspace_id: string;
+  root: string;
+  results: { path: string; line?: number; snippet?: string }[];
+  truncated: boolean;
+}
+
 export type GitDiffKind =
   | "staged"
   | "unstaged"
@@ -196,7 +203,9 @@ export interface GitDiffEntry {
   status: string;
   additions?: number;
   deletions?: number;
+  binary?: boolean;
   generated?: boolean;
+  file_size?: number;
   mtime_ms?: number;
   size?: number;
 }
@@ -219,6 +228,8 @@ export interface GitDiffFile {
   path: string;
   kind: GitDiffKind;
   diff: string;
+  patch_size?: number;
+  deferred?: boolean;
   truncated: boolean;
 }
 

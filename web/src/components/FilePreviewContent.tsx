@@ -1,5 +1,7 @@
 import { shortcutMatches } from "../shortcutPreferences";
 import {
+  audioMimeForPath,
+  AUDIO_INLINE_PREVIEW_MAX_BYTES,
   HTML_PREVIEW_MAX_BYTES,
   isHtmlPath,
 } from "../../../shared/filePreview";
@@ -14,7 +16,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import type { EditorView as CodeMirrorEditorView } from "@codemirror/view";
-import { ChevronLeft, FolderPlus, RefreshCw } from "lucide-react";
+import { ChevronLeft, FolderPlus, RefreshCw, X } from "lucide-react";
 import { fileReviewLineLabel, MAX_QUOTE_LENGTH } from "../annotations";
 import {
   FileAnnotationDrag,
@@ -64,10 +66,13 @@ export type ActiveFilePreviewSelection = {
   loading: boolean;
   error: string | null;
   fragment?: string;
+  line?: number;
+  snippet?: string;
 };
 
 export type FilePreviewSelectionMeta = {
   userInitiated?: boolean;
+  deletedEntry?: Pick<FileExplorerEntry, "path" | "type">;
 };
 
 type AppTheme = "dark" | "light";
@@ -186,6 +191,8 @@ export function FilePreviewContent({
   loading,
   error,
   fragment,
+  line,
+  snippet,
   changesContent,
   changesKey,
   annotations = [],
@@ -193,6 +200,7 @@ export function FilePreviewContent({
   onOpenChanges,
   onOpenFile,
   onRefresh,
+  onClosePreview,
   onCreateAnnotation,
   onReanchorAnnotations,
 }: {
@@ -201,6 +209,8 @@ export function FilePreviewContent({
   loading: boolean;
   error: string | null;
   fragment?: string;
+  line?: number;
+  snippet?: string;
   changesContent?: ReactNode;
   changesKey?: string;
   backAction?: { label: string; onClick: () => void };
@@ -208,6 +218,7 @@ export function FilePreviewContent({
   onOpenChanges?: () => void;
   onOpenFile?: (path: string, fragment?: string) => void;
   onRefresh?: () => void;
+  onClosePreview?: () => void;
   onCreateAnnotation?: (annotation: NewReviewAnnotation) => void;
   onReanchorAnnotations?: (path: string, text: string) => void;
 }) {
@@ -223,12 +234,36 @@ export function FilePreviewContent({
   );
   const [detailTab, setDetailTab] = useState<"file" | "changes">("file");
   const [workspaceDialogOpen, setWorkspaceDialogOpen] = useState(false);
-  const [pendingAnnotation, setPendingAnnotation] =
-    useState<PendingFileAnnotation | null>(null);
+  // Keep unfinished comments attached to their file while switching tabs.
+  // The Inspector is keyed by connection/checkout, so this map cannot cross scopes.
+  const draftPath = entry?.path ?? "";
+  const [fileDrafts, setFileDrafts] = useState<
+    Record<string, { pending: PendingFileAnnotation | null; comment: string }>
+  >({});
+  const pendingAnnotation = fileDrafts[draftPath]?.pending ?? null;
+  const setPendingAnnotation = useCallback(
+    (pending: PendingFileAnnotation | null) => {
+      setFileDrafts((current) => ({
+        ...current,
+        [draftPath]: { pending, comment: "" },
+      }));
+    },
+    [draftPath],
+  );
+  const setDraftComment = (comment: string) => {
+    setFileDrafts((current) => ({
+      ...current,
+      [draftPath]: { pending: current[draftPath]?.pending ?? null, comment },
+    }));
+  };
   const [markdownSelection, setMarkdownSelection] =
     useState<MarkdownSelectionTarget | null>(null);
   const theme = useDocumentTheme();
   const previewText = preview?.text ?? null;
+  const lineBeyondPreview =
+    line !== undefined &&
+    previewText !== null &&
+    line > previewText.split(/\r?\n/).length;
   const previewPath = preview?.path ?? "";
   const markdownDocumentPath = preview
     ? workspaceMarkdownDocumentPath(previewPath, preview.root)
@@ -239,6 +274,12 @@ export function FilePreviewContent({
   const hasPdfPreview = Boolean(preview && isPdfPath(previewPath));
   const pdfTooLarge =
     hasPdfPreview && (preview?.size ?? 0) > PDF_INLINE_PREVIEW_MAX_BYTES;
+  const hasAudioPreview = Boolean(
+    preview && preview.type !== "directory" && audioMimeForPath(previewPath),
+  );
+  const audioTooLarge =
+    hasAudioPreview && (preview?.size ?? 0) > AUDIO_INLINE_PREVIEW_MAX_BYTES;
+  const hasMediaPreview = hasPdfPreview || hasAudioPreview;
   const hasHtmlPreview =
     hasPreviewText &&
     !preview?.binary &&
@@ -334,7 +375,10 @@ export function FilePreviewContent({
   }, [entry?.path]);
 
   useEffect(() => {
-    setPendingAnnotation(null);
+    if (line) setPreviewMode("raw");
+  }, [entry?.path, line]);
+
+  useEffect(() => {
     setMarkdownSelection(null);
   }, [previewPath]);
 
@@ -397,7 +441,7 @@ export function FilePreviewContent({
 
   const closeAnnotationComposer = useCallback(() => {
     setPendingAnnotation(null);
-  }, []);
+  }, [setPendingAnnotation]);
 
   const saveAnnotation = useCallback(
     (comment: string) => {
@@ -429,7 +473,7 @@ export function FilePreviewContent({
       setMarkdownSelection(null);
       window.getSelection()?.removeAllRanges();
     },
-    [onCreateAnnotation, pendingAnnotation],
+    [onCreateAnnotation, pendingAnnotation, setPendingAnnotation],
   );
 
   const copyPreviewText = async () => {
@@ -560,6 +604,17 @@ export function FilePreviewContent({
                 Changes
               </button>
             ) : null}
+            {entry && onClosePreview ? (
+              <button
+                type="button"
+                className="file-preview-refresh"
+                title="Close preview"
+                aria-label="Close file preview"
+                onClick={onClosePreview}
+              >
+                <X size={13} aria-hidden="true" />
+              </button>
+            ) : null}
           </div>
         </div>
         {entry ? <span>{entry.path}</span> : null}
@@ -622,11 +677,32 @@ export function FilePreviewContent({
               PDF is too large to preview. Use Download from the file menu.
             </div>
           ) : null}
+          {!loading && !error && audioTooLarge ? (
+            <div className="file-preview-state">
+              Audio is too large to preview (25 MiB maximum). Use Download from
+              the file menu.
+            </div>
+          ) : null}
+          {!loading &&
+          !error &&
+          hasAudioPreview &&
+          !audioTooLarge &&
+          inlinePreviewUrl ? (
+            <div className="file-preview-audio">
+              <audio
+                key={inlinePreviewUrl}
+                controls
+                preload="metadata"
+                src={inlinePreviewUrl}
+                aria-label={`Audio preview: ${entry?.name ?? previewPath}`}
+              />
+            </div>
+          ) : null}
           {!loading &&
           !error &&
           preview?.binary &&
           !preview.image_data_url &&
-          !hasPdfPreview ? (
+          !hasMediaPreview ? (
             <div className="file-preview-state">
               Binary file cannot be previewed.
             </div>
@@ -657,10 +733,19 @@ export function FilePreviewContent({
           {!loading &&
           !error &&
           preview?.truncated &&
-          !hasPdfPreview &&
+          !hasMediaPreview &&
           !(hasHtmlPreview && renderRichPreview) ? (
             <div className="file-preview-banner">
               Preview truncated at 512 KB.
+            </div>
+          ) : null}
+          {!loading && !error && lineBeyondPreview ? (
+            <div className="file-preview-banner" role="status">
+              Match at line {line} is outside this preview. The beginning of the
+              file is shown below.
+              {snippet ? (
+                <code className="file-preview-search-snippet">{snippet}</code>
+              ) : null}
             </div>
           ) : null}
           {!loading && !error && hasMarkdownPreview && renderRichPreview ? (
@@ -687,10 +772,11 @@ export function FilePreviewContent({
           !error &&
           hasPreviewText &&
           !renderRichPreview &&
-          !hasPdfPreview ? (
+          !hasMediaPreview ? (
             <CodeMirrorPreview
               text={previewText}
               path={previewPath}
+              line={line}
               theme={theme}
               annotations={lineAnnotations}
               editorViewRef={editorViewRef}
@@ -751,6 +837,9 @@ export function FilePreviewContent({
         : null}
       <AnnotationComposerPopover
         draft={annotationComposerDraft}
+        commentValue={fileDrafts[draftPath]?.comment ?? ""}
+        onCommentChange={setDraftComment}
+        suspendOnFileTabNavigation
         onSave={saveAnnotation}
         onClose={closeAnnotationComposer}
       />
@@ -894,6 +983,7 @@ function codeMirrorAnnotationExtensions(
 function CodeMirrorPreview({
   text,
   path,
+  line,
   theme,
   annotations,
   editorViewRef,
@@ -901,6 +991,7 @@ function CodeMirrorPreview({
 }: {
   text: string;
   path: string;
+  line?: number;
   theme: AppTheme;
   annotations: readonly FileLineReviewAnnotation[];
   editorViewRef: MutableRefObject<CodeMirrorEditorView | null>;
@@ -910,8 +1001,25 @@ function CodeMirrorPreview({
   const annotationRuntimeRef = useRef<CodeMirrorAnnotationRuntime | null>(null);
   const annotationsRef = useRef(annotations);
   const requestAnnotationRef = useRef(onRequestAnnotation);
+  const lineRef = useRef(line);
   annotationsRef.current = annotations;
   requestAnnotationRef.current = onRequestAnnotation;
+  lineRef.current = line;
+
+  const scrollToLine = (
+    deps: CodeMirrorPreviewDeps,
+    view: CodeMirrorEditorView,
+    target: number,
+  ) => {
+    if (target > view.state.doc.lines) return;
+    const position = view.state.doc.line(
+      Math.min(view.state.doc.lines, Math.max(1, target)),
+    ).from;
+    view.dispatch({
+      selection: { anchor: position },
+      effects: deps.EditorView.scrollIntoView(position, { y: "center" }),
+    });
+  };
 
   useEffect(() => {
     const parent = containerRef.current;
@@ -1099,6 +1207,7 @@ function CodeMirrorPreview({
         compartment: annotationCompartment,
         view,
       };
+      if (lineRef.current) scrollToLine(deps, view, lineRef.current);
       const activeView = view;
 
       void highlightCodeTokens(text, path)
@@ -1130,6 +1239,11 @@ function CodeMirrorPreview({
       view?.destroy();
     };
   }, [editorViewRef, path, text, theme]);
+
+  useEffect(() => {
+    const runtime = annotationRuntimeRef.current;
+    if (runtime && line) scrollToLine(runtime.deps, runtime.view, line);
+  }, [line]);
 
   useEffect(() => {
     const runtime = annotationRuntimeRef.current;

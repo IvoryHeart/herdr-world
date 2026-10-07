@@ -1,5 +1,5 @@
 import { checkAnnotationUX } from "./annotations.browser";
-import { worldLocalStorage, roamgateLocalStorage } from "./browserStorage";
+import { worldLocalStorage } from "./browserStorage";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import App from "./App";
@@ -382,9 +382,9 @@ async function run() {
   // Only this disposable loopback page's storage and transport are used.
   store.init = () => {};
   bridge.connection = () => client;
-  roamgateLocalStorage.setItem("diffViewMode", "split");
-  roamgateLocalStorage.setItem("desktopDiffWrap", "false");
-  roamgateLocalStorage.setItem("mobileDiffWrap", "true");
+  worldLocalStorage.setItem("diffViewMode", "split");
+  worldLocalStorage.setItem("desktopDiffWrap", "false");
+  worldLocalStorage.setItem("mobileDiffWrap", "true");
   __storeTesting.replaceState({
     ...store.get(),
     status: "connected",

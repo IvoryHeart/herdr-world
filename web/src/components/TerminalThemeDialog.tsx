@@ -1,8 +1,29 @@
 import { useEffect, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import type { ITheme } from "@xterm/xterm";
-import { Check, Copy, Moon, Pencil, Plus, Sun, Trash2 } from "lucide-react";
-import type { ResolvedTheme } from "../appearance";
+import {
+  Check,
+  ChevronsUpDown,
+  Copy,
+  Minus,
+  Moon,
+  Pencil,
+  Plus,
+  Sun,
+  Trash2,
+  Type,
+} from "lucide-react";
+import {
+  clampTerminalFontScale,
+  MAX_TERMINAL_FONT_NAME_LENGTH,
+  normalizeTerminalFontFamily,
+  type ResolvedTheme,
+  TERMINAL_FONT_SCALE_DEFAULT,
+  TERMINAL_FONT_SCALE_MAX,
+  TERMINAL_FONT_SCALE_MIN,
+  TERMINAL_FONT_SCALE_STEP,
+  terminalFontFamilyStack,
+} from "../appearance";
 import {
   type CustomTerminalTheme,
   customTerminalThemeToITheme,
@@ -21,6 +42,14 @@ import {
 import { CloseButton } from "./CloseButton";
 import { focusDialogElement } from "./dialogFocus";
 import { ConfirmDialog } from "./ModalDialogs";
+import {
+  Command,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "./ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import "./TerminalThemeDialog.css";
 
 // Editor fallback palette for colors a source theme leaves unset (xterm
@@ -128,15 +157,29 @@ function draftFromCustom(custom: CustomTerminalTheme): TerminalThemeDraft {
   return { id: custom.id, name: custom.name, variant: custom.variant, colors };
 }
 
+// Chromium's Local Font Access API; other browsers only offer typed names.
+type LocalFontData = { family: string };
+type LocalFontWindow = Window & {
+  queryLocalFonts?: () => Promise<LocalFontData[]>;
+};
+
+function localFontQuery() {
+  if (typeof window === "undefined") return null;
+  const query = (window as LocalFontWindow).queryLocalFonts;
+  return typeof query === "function" ? query.bind(window) : null;
+}
+
 function TerminalThemePreview({
   colors,
+  fontFamily,
 }: {
   colors: Record<TerminalThemeColorKey, string>;
+  fontFamily: string;
 }) {
   return (
     <div
       className="terminal-theme-preview"
-      style={{ background: colors.background }}
+      style={{ background: colors.background, fontFamily }}
       aria-hidden="true"
     >
       <div className="terminal-theme-preview-lines">
@@ -165,23 +208,282 @@ type ThemeCardData = {
   custom: CustomTerminalTheme | null;
 };
 
+function TerminalFontPicker({
+  fontName,
+  onFontNameChange,
+}: {
+  fontName: string;
+  onFontNameChange: (name: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const [installedFonts, setInstalledFonts] = useState<string[] | null>(null);
+  const [fontListError, setFontListError] = useState<string | null>(null);
+  const [loadingFonts, setLoadingFonts] = useState(false);
+  const queryFonts = localFontQuery();
+  const typedName = normalizeTerminalFontFamily(search);
+  const typedNameListed = installedFonts?.some(
+    (family) => family.toLowerCase() === typedName.toLowerCase(),
+  );
+
+  const setPickerOpen = (next: boolean) => {
+    setOpen(next);
+    if (next) setSearch("");
+  };
+
+  const choose = (name: string) => {
+    if (name !== fontName) onFontNameChange(name);
+    setPickerOpen(false);
+  };
+
+  // Chromium asks for font access on the first call, so only list installed
+  // fonts once the user asks for them.
+  const loadInstalledFonts = async () => {
+    if (!queryFonts || loadingFonts) return;
+    setLoadingFonts(true);
+    setFontListError(null);
+    try {
+      const fonts = await queryFonts();
+      const families = [...new Set(fonts.map((font) => font.family))].sort(
+        (a, b) => a.localeCompare(b),
+      );
+      setInstalledFonts(families);
+      if (families.length === 0)
+        setFontListError("The browser did not share any installed fonts.");
+    } catch {
+      setFontListError("Font access was denied. Type a font name instead.");
+    } finally {
+      setLoadingFonts(false);
+    }
+  };
+
+  return (
+    <Popover open={open} onOpenChange={setPickerOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className={`terminal-font-trigger ${open ? "is-open" : ""}`}
+          role="combobox"
+          aria-expanded={open}
+          aria-label="Terminal font"
+        >
+          <span style={{ fontFamily: terminalFontFamilyStack(fontName) }}>
+            {fontName || "Default"}
+          </span>
+          <ChevronsUpDown size={13} aria-hidden="true" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        className="terminal-font-popover"
+        align="end"
+        sideOffset={4}
+        collisionPadding={12}
+      >
+        <Command className="terminal-font-command" loop>
+          <CommandInput
+            value={search}
+            onValueChange={setSearch}
+            placeholder="Search or enter a font name..."
+            aria-label="Search terminal fonts"
+            maxLength={MAX_TERMINAL_FONT_NAME_LENGTH}
+          />
+          <CommandList>
+            {typedName && !typedNameListed ? (
+              <CommandItem
+                forceMount
+                className="terminal-font-option"
+                value={`custom:${typedName}`}
+                onSelect={() => choose(typedName)}
+              >
+                <span className="command-item-text">
+                  <span
+                    className="command-item-title"
+                    style={{ fontFamily: terminalFontFamilyStack(typedName) }}
+                  >
+                    Use "{typedName}"
+                  </span>
+                  <span className="command-item-detail">
+                    Must be installed on this device
+                  </span>
+                </span>
+              </CommandItem>
+            ) : null}
+            <CommandItem
+              className="terminal-font-option"
+              value="default"
+              keywords={["default", "built-in"]}
+              data-current={fontName ? "false" : "true"}
+              onSelect={() => choose("")}
+            >
+              <span className="command-item-text">
+                <span className="command-item-title">Default</span>
+                <span className="command-item-detail">
+                  Built-in terminal fonts
+                </span>
+              </span>
+              <Check size={13} aria-hidden="true" />
+            </CommandItem>
+            {queryFonts && !installedFonts ? (
+              <CommandItem
+                className="terminal-font-option"
+                value="list-installed-fonts"
+                keywords={["installed", "browse", "list"]}
+                disabled={loadingFonts}
+                onSelect={() => void loadInstalledFonts()}
+              >
+                <span className="command-item-text">
+                  <span className="command-item-title">
+                    {loadingFonts
+                      ? "Loading installed fonts..."
+                      : "Show installed fonts"}
+                  </span>
+                  <span className="command-item-detail">
+                    {fontListError ?? "The browser asks for access once"}
+                  </span>
+                </span>
+              </CommandItem>
+            ) : null}
+            {installedFonts && installedFonts.length > 0 ? (
+              <CommandGroup heading="Installed">
+                {installedFonts.map((family) => (
+                  <CommandItem
+                    key={family}
+                    className="terminal-font-option"
+                    value={`font:${family}`}
+                    keywords={[family]}
+                    data-current={family === fontName ? "true" : "false"}
+                    onSelect={() => choose(family)}
+                  >
+                    <span
+                      className="command-item-title"
+                      style={{ fontFamily: `"${family}"` }}
+                    >
+                      {family}
+                    </span>
+                    <Check size={13} aria-hidden="true" />
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            ) : null}
+            {installedFonts && fontListError ? (
+              <p className="terminal-font-message">{fontListError}</p>
+            ) : null}
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function TerminalFontSection({
+  fontName,
+  fontScale,
+  onFontNameChange,
+  onFontScaleChange,
+}: {
+  fontName: string;
+  fontScale: number;
+  onFontNameChange: (name: string) => void;
+  onFontScaleChange: (scale: number) => void;
+}) {
+  return (
+    <section className="terminal-theme-section">
+      <div className="terminal-theme-section-head">
+        <div>
+          <strong>
+            <Type size={14} aria-hidden="true" />
+            Font
+          </strong>
+          <span>Uses fonts installed on this device</span>
+        </div>
+      </div>
+      <div className="terminal-font-group">
+        <div className="terminal-font-row">
+          <div className="config-item-copy">
+            <strong>Family</strong>
+            <span>Missing characters fall back to the default fonts</span>
+          </div>
+          <TerminalFontPicker
+            fontName={fontName}
+            onFontNameChange={onFontNameChange}
+          />
+        </div>
+        <div className="terminal-font-row">
+          <div className="config-item-copy">
+            <strong>Size</strong>
+            <span>Scales terminal text only</span>
+          </div>
+          <div
+            className="config-scale-control"
+            role="group"
+            aria-label="Terminal font size"
+          >
+            <button
+              type="button"
+              aria-label="Decrease terminal font size"
+              disabled={fontScale <= TERMINAL_FONT_SCALE_MIN}
+              onClick={() =>
+                onFontScaleChange(
+                  clampTerminalFontScale(fontScale - TERMINAL_FONT_SCALE_STEP),
+                )
+              }
+            >
+              <Minus size={14} />
+            </button>
+            <button
+              type="button"
+              className="config-scale-value"
+              aria-label={`Reset terminal font size, currently ${fontScale}%`}
+              disabled={fontScale === TERMINAL_FONT_SCALE_DEFAULT}
+              onClick={() => onFontScaleChange(TERMINAL_FONT_SCALE_DEFAULT)}
+            >
+              {fontScale}%
+            </button>
+            <button
+              type="button"
+              aria-label="Increase terminal font size"
+              disabled={fontScale >= TERMINAL_FONT_SCALE_MAX}
+              onClick={() =>
+                onFontScaleChange(
+                  clampTerminalFontScale(fontScale + TERMINAL_FONT_SCALE_STEP),
+                )
+              }
+            >
+              <Plus size={14} />
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export function TerminalThemeDialog({
   open,
   selection,
   customThemes,
+  fontName,
+  fontScale,
   onSelectionChange,
   onCustomThemesChange,
+  onFontNameChange,
+  onFontScaleChange,
   onClose,
 }: {
   open: boolean;
   selection: TerminalThemeSelection;
   customThemes: CustomTerminalTheme[];
+  fontName: string;
+  fontScale: number;
   onSelectionChange: (selection: TerminalThemeSelection) => void;
   onCustomThemesChange: (themes: CustomTerminalTheme[]) => void;
+  onFontNameChange: (name: string) => void;
+  onFontScaleChange: (scale: number) => void;
   onClose: () => void;
 }) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const [draft, setDraft] = useState<TerminalThemeDraft | null>(null);
+  const previewFontFamily = terminalFontFamilyStack(fontName);
   const [pendingDelete, setPendingDelete] =
     useState<CustomTerminalTheme | null>(null);
 
@@ -201,8 +503,8 @@ export function TerminalThemeDialog({
     if (!open) return;
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
-      // The delete confirmation handles its own Escape while open.
-      if (pendingDelete) return;
+      // The delete confirmation and the font picker handle their own Escape.
+      if (pendingDelete || document.querySelector(".popover-content")) return;
       event.preventDefault();
       event.stopPropagation();
       if (draft) setDraft(null);
@@ -381,6 +683,7 @@ export function TerminalThemeDialog({
                 >
                   <TerminalThemePreview
                     colors={draftColorsFromITheme(card.definition.theme)}
+                    fontFamily={previewFontFamily}
                   />
                   <span className="terminal-theme-card-name">
                     {active ? <Check size={13} aria-hidden="true" /> : null}
@@ -498,7 +801,10 @@ export function TerminalThemeDialog({
             </div>
           </div>
 
-          <TerminalThemePreview colors={current.colors} />
+          <TerminalThemePreview
+            colors={current.colors}
+            fontFamily={previewFontFamily}
+          />
 
           <div className="terminal-theme-color-group">
             <strong>Base colors</strong>
@@ -561,7 +867,7 @@ export function TerminalThemeDialog({
           className="modal terminal-themes-modal"
           role="dialog"
           aria-modal="true"
-          aria-label="Terminal themes"
+          aria-label="Terminal appearance"
           tabIndex={-1}
           onMouseDown={(event) => event.stopPropagation()}
         >
@@ -571,14 +877,17 @@ export function TerminalThemeDialog({
             <>
               <div className="modal-head">
                 <div>
-                  <h2>Terminal Themes</h2>
-                  <p>
-                    Choose a theme per appearance mode, or create your own from
-                    any preset.
-                  </p>
+                  <h2>Terminal Appearance</h2>
+                  <p>Font, size, and themes for terminals in this browser.</p>
                 </div>
                 <CloseButton onClick={onClose} />
               </div>
+              <TerminalFontSection
+                fontName={fontName}
+                fontScale={fontScale}
+                onFontNameChange={onFontNameChange}
+                onFontScaleChange={onFontScaleChange}
+              />
               {THEME_VARIANTS.map((variant) =>
                 renderSection(variant.value, variant.label),
               )}

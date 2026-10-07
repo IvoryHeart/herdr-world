@@ -1,6 +1,7 @@
 export const TASK_NOTIFICATION_ACTIVATE_EVENT =
   "herdr-world:task-notification-activate";
-const NOTIFICATION_WORKER = "/task-notifications-sw.js";
+// Bump when the notification payload contract changes.
+const NOTIFICATION_WORKER = "/task-notifications-sw.js?v=2";
 const NOTIFICATION_HASH = "#herdr-world-task=";
 
 export interface TaskNotificationTarget {
@@ -11,12 +12,46 @@ export interface TaskNotificationTarget {
   agentSessionId?: string;
 }
 
+export interface RangerTaskNotificationTarget {
+  type: "ranger_task";
+  taskId: string;
+  runId: string;
+}
+
+export type NotificationTarget =
+  | TaskNotificationTarget
+  | RangerTaskNotificationTarget;
+
+export function isRangerTaskNotificationTarget(
+  value: unknown,
+): value is RangerTaskNotificationTarget {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const target = value as Partial<RangerTaskNotificationTarget>;
+  const uuid = /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/;
+  return (
+    target.type === "ranger_task" &&
+    typeof target.taskId === "string" &&
+    uuid.test(target.taskId) &&
+    typeof target.runId === "string" &&
+    uuid.test(target.runId)
+  );
+}
+
+export function isNotificationTarget(
+  value: unknown,
+): value is NotificationTarget {
+  return (
+    isRangerTaskNotificationTarget(value) || isTaskNotificationTarget(value)
+  );
+}
+
 export function isTaskNotificationTarget(
   value: unknown,
 ): value is TaskNotificationTarget {
-  if (!value || typeof value !== "object") return false;
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const target = value as Partial<TaskNotificationTarget>;
   return (
+    !("type" in target) &&
     typeof target.connectionId === "string" &&
     target.connectionId.length > 0 &&
     typeof target.runtimeGeneration === "number" &&
@@ -32,18 +67,15 @@ export function isTaskNotificationTarget(
   );
 }
 
-/** Connect a system notification click to the in-app pane navigation path. */
-export function bindTaskNotificationActivation(
+/** Connect a system notification click to its in-app navigation path. */
+export function bindTaskNotificationActivation<T extends NotificationTarget>(
   notification: Pick<Notification, "close" | "onclick">,
-  target: TaskNotificationTarget,
-  activate: (target: TaskNotificationTarget) => void = (nextTarget) => {
+  target: T,
+  activate: (target: T) => void = (nextTarget) => {
     window.dispatchEvent(
-      new CustomEvent<TaskNotificationTarget>(
-        TASK_NOTIFICATION_ACTIVATE_EVENT,
-        {
-          detail: nextTarget,
-        },
-      ),
+      new CustomEvent<NotificationTarget>(TASK_NOTIFICATION_ACTIVATE_EVENT, {
+        detail: nextTarget,
+      }),
     );
   },
   focusWindow: () => void = () => window.focus(),
@@ -67,20 +99,41 @@ export async function prepareTaskNotifications(): Promise<ServiceWorkerRegistrat
   if (typeof navigator === "undefined" || !navigator.serviceWorker) return null;
   const serviceWorker = navigator.serviceWorker;
   let timer: ReturnType<typeof setTimeout> | undefined;
+  const lifecycle = new AbortController();
   try {
     return await Promise.race([
       (async () => {
         let registration = await serviceWorker.getRegistration("/");
-        if (
-          registration?.active?.scriptURL !==
-          new URL(NOTIFICATION_WORKER, window.location.origin).href
-        ) {
+        const workerURL = new URL(NOTIFICATION_WORKER, window.location.origin)
+          .href;
+        if (registration?.active?.scriptURL !== workerURL) {
           registration = await serviceWorker.register(NOTIFICATION_WORKER, {
             updateViaCache: "none",
           });
         }
+        const worker =
+          registration.installing ??
+          registration.waiting ??
+          registration.active;
+        if (worker && worker.state !== "activated") {
+          await new Promise<void>((resolve, reject) => {
+            const stateChanged = () => {
+              if (worker.state === "activated") resolve();
+              else if (worker.state === "redundant")
+                reject(
+                  new Error(
+                    "The notification service worker could not activate.",
+                  ),
+                );
+            };
+            worker.addEventListener("statechange", stateChanged, {
+              signal: lifecycle.signal,
+            });
+            stateChanged();
+          });
+        }
         if (!registration.active) await serviceWorker.ready;
-        if (!registration.active) {
+        if (registration.active?.scriptURL !== workerURL) {
           throw new Error(
             "The notification service worker could not activate.",
           );
@@ -103,14 +156,15 @@ export async function prepareTaskNotifications(): Promise<ServiceWorkerRegistrat
     ]);
   } finally {
     clearTimeout(timer);
+    lifecycle.abort();
   }
 }
 
-/** A null target (a notification not tied to a pane) only focuses the app. */
+/** A notification without a target only focuses the app. */
 export async function showTaskNotification(
   title: string,
   options: NotificationOptions,
-  target: TaskNotificationTarget | null,
+  target: NotificationTarget | null,
   isCurrent: () => boolean,
 ): Promise<void> {
   const registration = await prepareTaskNotifications();
@@ -133,13 +187,13 @@ export async function showTaskNotification(
 
 /** Route worker clicks and newly opened notification windows through the same UI. */
 export function listenForTaskNotificationActivation(
-  activate: (target: TaskNotificationTarget) => void,
+  activate: (target: NotificationTarget) => void,
 ): () => void {
   const receive = (event: MessageEvent) => {
     if (
       event.origin !== window.location.origin ||
       event.data?.type !== TASK_NOTIFICATION_ACTIVATE_EVENT ||
-      !isTaskNotificationTarget(event.data.target)
+      !isNotificationTarget(event.data.target)
     )
       return;
     activate(event.data.target);
@@ -154,7 +208,7 @@ export function listenForTaskNotificationActivation(
     );
     try {
       const target: unknown = JSON.parse(decodeURIComponent(encoded));
-      if (isTaskNotificationTarget(target)) activate(target);
+      if (isNotificationTarget(target)) activate(target);
     } catch {
       // A malformed or stale deep link must not interrupt app startup.
     }

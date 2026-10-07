@@ -16,10 +16,10 @@ GitHub-profile contact address.
 session data, and workspace uploads/deletions. This is privileged administration,
 not a sandbox or multi-user permission system.
 
-The default bind is `127.0.0.1`. Listeners configured as `127.0.0.1`, `localhost`,
-or `::1` **bypass login even with `HERDR_WORLD_PASSWORD` set**. A VPN, SSH tunnel, or
-reverse proxy forwarding to loopback becomes the entire remote access boundary.
-Use an independently authenticated proxy if that boundary is insufficient.
+The default bind is `127.0.0.1`. Every listener requires login, including
+`127.0.0.1`, `localhost` and `::1`. Configure `HERDR_WORLD_PASSWORD` with
+15–1024 characters or use the generated persistent token. Successful login
+creates a bounded session; repeated login failures receive a cooldown.
 
 **Do not expose Herdr World directly to the public internet.** For non-loopback:
 
@@ -36,8 +36,8 @@ An independently authenticated HTTPS reverse proxy to loopback must preserve its
 Host and configure that one exact external origin with `HERDR_WORLD_PUBLIC_ORIGIN` (or
 `--public-origin`). Originless native clients remain admissible, so listener access and
 authentication are still security boundaries. Configure
-[native HTTPS](docs/DEPLOYMENT.md#native-https) or terminate TLS at a trusted proxy. The service supplies no rate limiting, multi-user authorization,
-or sandboxing.
+[native HTTPS](docs/DEPLOYMENT.md#native-https) or terminate TLS at a trusted proxy. Login throttling applies to authentication attempts. The service supplies no
+multi-user authorization or sandboxing.
 
 Updates trust the configured HTTPS release origin (or explicit loopback test
 mirror) and its manifest/checksums. Checksums detect corruption and bind the

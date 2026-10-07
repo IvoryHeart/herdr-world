@@ -285,6 +285,8 @@ function Harness() {
       theme={theme}
       accentColor="blue"
       uiScale={scale}
+      terminalFontName=""
+      onTerminalFontNameChange={() => {}}
       terminalFontScale={100}
       onTerminalFontScaleChange={() => {}}
       zenMode={false}
@@ -715,12 +717,13 @@ async function run() {
   const firstControl = button(
     mobile ? "Dismiss Configuration" : "Close Configuration",
   );
-  button("Done").focus();
-  await key(button("Done"), "Tab");
+  const lastControl = button(mobile ? "Layout" : "Done");
+  lastControl.focus();
+  await key(lastControl, "Tab");
   check(document.activeElement === firstControl, "Tab escaped Configuration");
   await key(firstControl, "Tab", true);
   check(
-    document.activeElement === button("Done"),
+    document.activeElement === lastControl,
     "Shift+Tab escaped Configuration",
   );
   click("Layout");
@@ -835,7 +838,11 @@ async function run() {
     dialog.contains(document.activeElement),
     "saving moved focus out of Configuration",
   );
-  click("Done");
+  click(
+    document.documentElement.dataset.layout === "mobile"
+      ? "Close Configuration"
+      : "Done",
+  );
   await settle();
   check(
     document.activeElement === button("Menu"),
@@ -1202,7 +1209,11 @@ async function run() {
   const beforeDialogRemount = mutationCount();
   click("Uninstall Antigravity CLI integration");
   const listsBeforeDialogRemount = integrationLists();
-  click("Done");
+  click(
+    document.documentElement.dataset.layout === "mobile"
+      ? "Close Configuration"
+      : "Done",
+  );
   await waitFor(() => !document.querySelector(".configuration-modal"));
   click("Menu");
   click("Configuration");
@@ -1296,7 +1307,13 @@ async function run() {
     integrationChange = hiddenFailure.promise;
     click("Install Antigravity CLI integration");
     const writes = mutationCount();
-    click(closeDialog ? "Done" : "Appearance");
+    click(
+      closeDialog
+        ? document.documentElement.dataset.layout === "mobile"
+          ? "Close Configuration"
+          : "Done"
+        : "Appearance",
+    );
     integrationChange = null;
     hiddenFailure.reject(new Error("Mutation failed while unmounted"));
     await settle();
@@ -1425,7 +1442,11 @@ async function run() {
         button(tab).getAttribute("aria-selected") === "true",
         `quick setting did not open ${tab}`,
       );
-      click("Done");
+      click(
+        document.documentElement.dataset.layout === "mobile"
+          ? "Close Configuration"
+          : "Done",
+      );
     }
     for (const reducedMotion of [false, true]) {
       await input("Emulation.setEmulatedMedia", {

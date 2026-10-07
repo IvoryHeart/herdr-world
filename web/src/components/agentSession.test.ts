@@ -1,4 +1,5 @@
-import { describe, expect, test } from "bun:test";
+import * as layoutPreferences from "../layoutPreferences";
+import { describe, expect, spyOn, test } from "bun:test";
 import {
   downloadSession,
   downloadSessionAtif,
@@ -25,12 +26,15 @@ test.each(["raw", "atif", "export"])(
       (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const,
     );
     const previousFetch = globalThis.fetch;
+    const mobile = spyOn(layoutPreferences, "isMobileLayout").mockReturnValue(
+      true,
+    );
     const previousState = store.get();
     let opened = 0;
     Object.defineProperty(globalThis, "window", {
       configurable: true,
       value: {
-        location: { origin: "https://world.example.test" },
+        location: { origin: "https://world.example.test", search: "" },
         matchMedia: () => ({ matches: false }),
         open: () => {
           opened++;
@@ -94,6 +98,7 @@ test.each(["raw", "atif", "export"])(
       expect(store.get().notice?.detail).toContain("409");
       expect(opened).toBe(0);
     } finally {
+      mobile.mockRestore();
       globalThis.fetch = previousFetch;
       __storeTesting.replaceState(previousState);
       for (const [key, descriptor] of descriptors) {
@@ -105,7 +110,7 @@ test.each(["raw", "atif", "export"])(
 );
 
 test("raw export URL retains the displayed original session", () => {
-  const originals = ["window", "navigator", "document"].map(
+  const originals = ["window", "navigator"].map(
     (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const,
   );
   let url = "";

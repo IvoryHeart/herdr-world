@@ -1,6 +1,10 @@
+import { createWorkspaceWorktree } from "./worktree/create";
+import { canRevealFiles } from "./workspace/file-manager";
 import { sendWorldSnapshotReply } from "./bridge/world-snapshot-reply";
 import { WorldSnapshotAdmission } from "./bridge/world-snapshot-admission";
 import type { ServerWebSocket } from "bun";
+import { createHash } from "node:crypto";
+import { createAssistantContext } from "./assistant/context";
 import { isHtmlPath } from "../../shared/filePreview";
 import { rmSync } from "node:fs";
 import packageJson from "../../package.json";
@@ -88,6 +92,12 @@ import { STARTUP_DEFAULT_CONNECTION_ID } from "./connections/types";
 import { createAuthHandlers, unauthenticatedLoginRedirect } from "./http/auth";
 import { browserRequestAdmissionError } from "./http/browser-admission";
 import { serveStatic } from "./http/static-files";
+import { handleInstanceSettings } from "./http/instance-settings";
+
+import {
+  TERMINAL_UPLOAD_TIMEOUT_MS,
+  terminalUploadRequestBodyLimit,
+} from "./http/terminal-upload";
 import {
   createUpdateHandlers,
   UPDATE_HTTP_IDLE_TIMEOUT_SECONDS,
@@ -100,7 +110,6 @@ import {
 } from "./utils/logger";
 import { runProcessWithCodeTimeout, shQuote } from "./utils/process-utils";
 import { rpcLogLevel } from "./utils/rpc-logging";
-import { syncWorktreeBase } from "./worktree/create";
 import { DOWNLOAD_TIMEOUT_MS } from "./workspace/file-constants";
 import { WorldSnapshotService } from "./world/snapshot";
 import { WorldWatchlistRegistry } from "./world/watchlist";
@@ -149,6 +158,13 @@ if (herdrCommandResult !== null) {
 const config = loadServerConfig(APP_VERSION);
 configureServerLogger(config.logLevel);
 const logger = serverLogger;
+const cpuProfile = config.profile
+  ? (await import("./utils/cpu-profile")).startCpuProfile(
+      config.profile,
+      APP_VERSION,
+      logger,
+    )
+  : undefined;
 const webPush = createWebPushService({
   warn: (message) => logger.warn(message),
 });
@@ -219,6 +235,8 @@ const IMPORTANT_RPC_METHODS = new Set([
   "agent_checkout.get",
   "file.read",
   "git.diff_file",
+  "git.commit_file",
+  "git.commit_preview",
   "git.file_action",
   "git.pull",
   "git.repo_action",
@@ -464,6 +482,7 @@ const connectionManager = new ConnectionManager<LegacyConnectionRuntime>(
       return;
     }
     if (status.state !== "ready") return;
+    resumeAssistantIfLoaded();
     if (reporter.recovered(fields)) {
       readyConnectionGenerations.set(status.id, status.generation);
     } else if (
@@ -483,6 +502,79 @@ worldSnapshots = new WorldSnapshotService(
   undefined,
   () => worldWatchlist.list(),
 );
+
+const assistantContext = createAssistantContext({
+  catalog: () => connectionProfiles.list(),
+  lease: (id) => connectionManager.readyRuntimeLease(id),
+  recoveryFingerprint: (id) => {
+    const profile = connectionProfiles
+      .list()
+      .find((profile) => profile.id === id);
+    if (!profile) throw new Error("Ranger connection is no longer configured");
+    const target =
+      profile.type === "local"
+        ? [
+            profile.type,
+            profile.control_socket_path,
+            profile.client_socket_path,
+          ]
+        : [
+            profile.type,
+            profile.ssh_destination,
+            profile.remote_control_socket_path,
+            profile.remote_client_socket_path,
+          ];
+    return createHash("sha256").update(JSON.stringify(target)).digest("hex");
+  },
+  createWorktree: (runtime, params, isCurrent, beforeDispatch) =>
+    createWorkspaceWorktree(
+      runtime,
+      params,
+      isCurrent,
+      undefined,
+      undefined,
+      beforeDispatch,
+    ),
+});
+let assistantServiceTask: Promise<
+  Awaited<
+    ReturnType<typeof import("./assistant/service").createAssistantService>
+  >
+> | null = null;
+function getAssistantService() {
+  assistantServiceTask ??= import("./assistant/service")
+    .then(({ createAssistantService }) =>
+      createAssistantService({
+        context: assistantContext,
+        publish: (snapshot) => {
+          const payload = JSON.stringify({ assistant: snapshot });
+          for (const ws of clients)
+            safeSend(ws, payload, "assistant", "assistant");
+        },
+        notify: (notification) => {
+          const payload = JSON.stringify({
+            assistant_notification: notification,
+          });
+          for (const ws of clients)
+            safeSend(ws, payload, "assistant_notification");
+          webPush.notify(notification, () => true);
+        },
+      }),
+    )
+    .catch((error) => {
+      assistantServiceTask = null;
+      throw error;
+    });
+  return assistantServiceTask;
+}
+
+function resumeAssistantIfLoaded() {
+  void assistantServiceTask
+    ?.then((service) => service.resume())
+    .catch(() => {
+      logger.warn("Ranger recovery could not be started");
+    });
+}
 
 const { handleHerdrStatus, handleHerdrSetup } = createHerdrSetupHandlers({
   ping: () => {
@@ -807,6 +899,20 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
     );
     return;
   }
+  if (method.startsWith("bridge.assistant.")) {
+    try {
+      const result =
+        method === "bridge.assistant.context"
+          ? await assistantContext.catalog()
+          : method === "bridge.assistant.task.get"
+            ? await (await getAssistantService()).taskDetail(params ?? {})
+            : await (await getAssistantService()).handle(method, params ?? {});
+      sendReply({ id, result }, "assistant-rpc");
+    } catch (error) {
+      sendError("assistant-rpc-error", error);
+    }
+    return;
+  }
   if (method === "connections.list") {
     sendReply(
       {
@@ -1007,22 +1113,27 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
     listWorkspaceFiles,
     resolveWorkspaceFiles,
     readWorkspaceFile,
+    searchWorkspaceFiles,
+    revealWorkspaceFile,
     readGitDiffSummary,
+    readWorkspacePullRequest,
     readGitDiffFile,
+    readGitCommits,
+    readGitCommit,
+    readGitCommitFile,
+    readGitCommitPreview,
     runGitPull,
     runWorkspaceGitFileAction,
     runWorkspaceGitRepoAction,
-    resolveWorkspaceGitRoot,
   } = connection.files;
   const { enrichWorkspacesWithGitStatus, invalidateGitStatus } =
     connection.status;
   const {
-    runPaseoWorktreeHook,
+    runWorktreeHook,
     worktreeRemoveHookContext,
     runWorktreeRemovedHook,
     runWorktreeOpenedHook,
     sourceWorkspaceForWorktreeCreate,
-    runWorktreeSetupHook,
   } = connection.worktreeHooks;
   const {
     readHistory: readAgentMessageHistory,
@@ -1133,6 +1244,24 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
     }
     return;
   }
+  if (method === "file.search") {
+    try {
+      const result = await searchWorkspaceFiles(params ?? {});
+      sendReply({ id, result }, "file-search");
+    } catch (e) {
+      sendError("file-search-error", e);
+    }
+    return;
+  }
+  if (method === "file.reveal") {
+    try {
+      const result = await revealWorkspaceFile(params ?? {}, ws.remoteAddress);
+      sendReply({ id, result }, "file-reveal");
+    } catch (e) {
+      sendError("file-reveal-error", e);
+    }
+    return;
+  }
   if (method === "git.diff_summary") {
     try {
       const result = await readGitDiffSummary(params ?? {});
@@ -1142,12 +1271,46 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
     }
     return;
   }
+  if (method === "git.pull_request") {
+    try {
+      const result = await readWorkspacePullRequest(params ?? {});
+      sendReply({ id, result }, "git-pull-request");
+    } catch {
+      // Root resolution errors may include remote URLs or CLI diagnostics.
+      sendError(
+        "git-pull-request-error",
+        new Error("Cannot resolve this workspace's Git checkout."),
+      );
+    }
+    return;
+  }
   if (method === "git.diff_file") {
     try {
       const result = await readGitDiffFile(params ?? {});
       sendReply({ id, result }, "git-diff-file");
     } catch (e) {
       sendError("git-diff-file-error", e);
+    }
+    return;
+  }
+  if (
+    method === "git.commits" ||
+    method === "git.commit" ||
+    method === "git.commit_file" ||
+    method === "git.commit_preview"
+  ) {
+    try {
+      const result =
+        method === "git.commits"
+          ? await readGitCommits(params ?? {})
+          : method === "git.commit"
+            ? await readGitCommit(params ?? {})
+            : method === "git.commit_file"
+              ? await readGitCommitFile(params ?? {})
+              : await readGitCommitPreview(params ?? {});
+      sendReply({ id, result }, method);
+    } catch (e) {
+      sendError(`${method}-error`, e);
     }
     return;
   }
@@ -1195,51 +1358,22 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
   }
   if (method === "worktree.create") {
     try {
-      const sourceWorkspace = await sourceWorkspaceForWorktreeCreate(
+      const result = await createWorkspaceWorktree(
+        connection,
         params ?? {},
-      );
-      const workspaceId = String(params?.workspace_id ?? "");
-      const baseSync = await syncWorktreeBase({
-        workspaceId,
-        resolveGitRoot: async (id) =>
-          resolveWorkspaceGitRoot({ workspace_id: id }),
-        host: sshHost(),
-        shQuote,
-        runProcessWithCodeTimeout,
-      });
-      const result = await herdr.call(method, {
-        ...(params ?? {}),
-        base: baseSync.commit,
-      });
-      // Herdr identifies the repository but not which of several workspaces
-      // for that repository initiated creation. Keep that GUI relationship.
-      await worktreeParents
-        .rememberWorktreeParent(result, workspaceId, requestIsCurrent)
-        .catch((error) => {
+        requestIsCurrent,
+        (error) => {
           if (!requestIsCurrent()) return;
           logger.warn("unable to persist worktree parent", {
             connection: connectionId,
             error: sanitizeConnectionError(error),
           });
-        });
-      const hookSourceWorkspace = sourceWorkspace
-        ? {
-            ...sourceWorkspace,
-            cwd:
-              sourceWorkspace?.worktree?.checkout_path ||
-              sourceWorkspace?.cwd ||
-              baseSync.root,
-          }
-        : { cwd: baseSync.root };
-      const setupHook = await runWorktreeSetupHook(result, hookSourceWorkspace);
+        },
+      );
       sendReply(
         {
           id,
-          result: {
-            ...result,
-            base_sync: baseSync,
-            setup_hook: setupHook,
-          },
+          result,
         },
         "worktree-create",
       );
@@ -1293,7 +1427,7 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
             : "unknown";
           const beforeRemoveHook =
             removeHookContext && checkoutState !== "missing"
-              ? await runPaseoWorktreeHook({
+              ? await runWorktreeHook({
                   hook: "teardown",
                   checkoutPath: removeHookContext.checkoutPath,
                   sourceCheckoutPath: removeHookContext.sourceCheckoutPath,
@@ -1370,6 +1504,7 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
       result = {
         ...result,
         navigation_mode: await terminalBridge.navigationMode(),
+        tab_move_supported: await terminalBridge.tabMoveSupported(),
         endpoint_availability: terminalBridge.endpointAvailability(),
       };
     }
@@ -1422,6 +1557,12 @@ async function handleConnectionHttpRequest(
       response = await connection.handleHerdrInfo();
     } else if (endpoint === "upload-image") {
       response = await connection.handleImageUpload(req);
+    } else if (endpoint === "terminal-upload") {
+      response = await connection.handleTerminalUpload(
+        req,
+        url.searchParams.get("filename"),
+        resolved.isCurrent,
+      );
     } else if (endpoint === "agent-session-download") {
       response = await connection.agentSessions.downloadFile({
         pane_id: url.searchParams.get("pane_id"),
@@ -1441,6 +1582,8 @@ async function handleConnectionHttpRequest(
           path: url.searchParams.get("path"),
           scope: url.searchParams.get("scope"),
           inline: url.searchParams.get("inline") === "1",
+          range: req.headers.get("range") ?? undefined,
+          if_range: req.headers.get("if-range") ?? undefined,
         });
       } catch (error) {
         response = new Response((error as Error).message, { status: 400 });
@@ -1492,6 +1635,7 @@ function main() {
         port: config.port,
         hostname: config.host,
         tls: config.tls,
+        maxRequestBodySize: terminalUploadRequestBodyLimit(),
         async fetch(req, server) {
           const requestPathname = rawRequestPathname(req.url);
           let url: URL;
@@ -1501,7 +1645,9 @@ function main() {
             return new Response("invalid request URL", { status: 400 });
           }
 
-          const tokenLoginResponse = handleTokenLogin(req);
+          // Forwarded headers are untrusted; use the actual TCP peer address.
+          const clientIp = server.requestIP(req)?.address ?? "unknown";
+          const tokenLoginResponse = handleTokenLogin(req, clientIp);
           if (tokenLoginResponse) return tokenLoginResponse;
 
           if (url.pathname === "/health" || url.pathname === "/healthz") {
@@ -1513,7 +1659,7 @@ function main() {
 
           // Auth endpoints are always reachable.
           if (url.pathname === "/api/login" && req.method === "POST") {
-            return handleLogin(req);
+            return handleLogin(req, clientIp);
           }
           if (url.pathname === "/login") {
             return loginPage();
@@ -1546,7 +1692,7 @@ function main() {
             return response;
           }
 
-          // Everything else requires auth when bound to a non-localhost address.
+          // Loopback listeners retain World's trusted local access policy.
           if (!isAuthed(req)) {
             const accept = req.headers.get("accept") ?? "";
             if (req.method === "GET" && accept.includes("text/html")) {
@@ -1573,6 +1719,8 @@ function main() {
               return undefined;
             return new Response("websocket upgrade failed", { status: 400 });
           }
+          if (url.pathname === "/api/instance-settings")
+            return handleInstanceSettings(req);
           if (url.pathname === "/api/health") {
             return Response.json({
               ok: true,
@@ -1611,6 +1759,12 @@ function main() {
           if (connectionRoute) {
             if (
               connectionRoute.kind === "connection" &&
+              connectionRoute.endpoint === "terminal-upload"
+            ) {
+              server.timeout(req, TERMINAL_UPLOAD_TIMEOUT_MS / 1000);
+            }
+            if (
+              connectionRoute.kind === "connection" &&
               connectionRoute.endpoint === "file-download" &&
               url.searchParams.get("inline") === "1" &&
               isHtmlPath(url.searchParams.get("path") ?? "")
@@ -1621,7 +1775,11 @@ function main() {
             return handleConnectionHttpRequest(connectionRoute, url, req);
           }
           // Everything else: serve the built frontend (embedded or on-disk).
-          return serveStatic(req, config.publicDir);
+          return serveStatic(
+            req,
+            config.publicDir,
+            (await readGuiSettings()).title_suffix,
+          );
         },
         websocket: {
           perMessageDeflate: WS_PER_MESSAGE_DEFLATE,
@@ -1644,10 +1802,12 @@ function main() {
                 capabilities: {
                   connection_id: true,
                   connection_scoped_http: true,
+                  file_reveal: canRevealFiles(ws.remoteAddress),
                   connection_runtime_generation: true,
                   world_snapshot_chunks: true,
                   world_snapshot_chunk_admission: true,
                   world_snapshot: true,
+                  embedded_assistant: true,
                   herdr_task_notifications:
                     config.taskNotificationSource === "herdr",
                 },
@@ -1744,6 +1904,9 @@ function main() {
       }),
     startConnection: async () => {
       await connectionProfiles.startConfigured();
+      // Resume saved work even when no browser has opened Ranger yet.
+      await getAssistantService();
+      resumeAssistantIfLoaded();
       notifyBrowserClientCount();
       const runtime = connectionManager.defaultReadyRuntime();
       void runtime?.herdr
@@ -1818,7 +1981,12 @@ let managerStopTask: Promise<void> | null = null;
 function stopManagerOnce(): Promise<void> {
   connectionProfiles.stopSupervision();
   webPush.stop();
-  managerStopTask ??= connectionManager.stopAll();
+  managerStopTask ??= (async () => {
+    await assistantServiceTask
+      ?.then((service) => service.dispose())
+      .catch(() => {});
+    await Promise.all([connectionManager.stopAll(), cpuProfile?.stop()]);
+  })();
   return managerStopTask;
 }
 

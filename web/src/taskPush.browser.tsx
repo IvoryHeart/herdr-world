@@ -53,7 +53,10 @@ Object.defineProperty(navigator, "serviceWorker", {
   configurable: true,
   value: {
     getRegistration: async () => ({
-      active: { scriptURL: location.origin + "/task-notifications-sw.js" },
+      active: {
+        state: "activated",
+        scriptURL: location.origin + "/task-notifications-sw.js?v=2",
+      },
       showNotification() {
         failures.push("push mode invoked local delivery");
       },
@@ -87,6 +90,8 @@ async function run() {
           theme={theme}
           accentColor="blue"
           uiScale={100}
+          terminalFontName=""
+          onTerminalFontNameChange={() => {}}
           terminalFontScale={100}
           onTerminalFontScaleChange={() => {}}
           zenMode={false}
@@ -147,7 +152,7 @@ async function run() {
       "button[aria-label='Task completed']",
     )!;
     const blocked = menu.querySelector<HTMLButtonElement>(
-      "button[aria-label='Agent needs input']",
+      "button[aria-label='Task needs attention']",
     )!;
     completion.scrollIntoView({ block: "nearest" });
     completion.focus();
@@ -208,7 +213,7 @@ async function run() {
     "master switch remained enabled",
   );
   check(
-    !document.querySelector("button[aria-label='Agent needs input']"),
+    !document.querySelector("button[aria-label='Task needs attention']"),
     "disabled preferences remained visible",
   );
   root.unmount();

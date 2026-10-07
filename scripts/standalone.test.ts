@@ -106,7 +106,7 @@ try {
     expect(
       result.results.map((item: { status: number }) => item.status),
     ).toEqual([200, 200, 200, 200, 404, 200, 405, 400, 404]);
-    expect(result.results[0].cache).toBe("no-cache, must-revalidate");
+    expect(result.results[0].cache).toBe("private, no-cache, must-revalidate");
     expect(Buffer.from(result.results[1].body, "base64").toString()).toBe(
       "embedded entry",
     );

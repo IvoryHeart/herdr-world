@@ -4,6 +4,12 @@ Release archives contain one compiled `herdr-world` executable with embedded web
 assets plus version, lineage and licence material. They do not contain Herdr, a second
 Roamgate application or the retired Rust bridge.
 
+The web build is limited to 190 files and 14.5 MiB total embedded assets,
+including lazy features. The source sync adds Ranger, commit history and a diff
+worker; its total budget increases by 0.5 MiB. Startup limits remain 660 KiB
+JavaScript (202 KiB gzip) and 196 KiB CSS. Small highlighting themes share a
+lazy chunk to control file count. `bun run build` enforces these limits.
+
 From an installed, clean checkout:
 
 ```bash

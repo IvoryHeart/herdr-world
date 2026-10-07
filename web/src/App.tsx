@@ -1,3 +1,21 @@
+import {
+  isNotificationTarget,
+  type NotificationTarget,
+} from "./taskNotifications";
+import { preferencesStorageKey } from "./workspaceResource";
+import { useMobileControlsDrag } from "./components/useMobileControlsDrag";
+import {
+  MOBILE_CONTROLS_PLACEMENT_STORAGE_KEY,
+  readMobileControlsPlacement,
+  writeMobileControlsPlacement,
+  type MobileControlsPlacement,
+} from "./mobileControlsPlacement";
+import { subscribeLocalStorage } from "./browserStorage";
+import {
+  isRangerTaskNotificationTarget,
+  type RangerTaskNotificationTarget,
+} from "./taskNotifications";
+import { flushSync } from "react-dom";
 import { useCreationSources } from "./creationRequests";
 import { useReviewAnnotationDraft } from "./useReviewAnnotationDraft";
 import { bridge } from "./api";
@@ -27,8 +45,10 @@ import {
   ChevronLeft,
   ChevronRight,
   CircleAlert,
+  Compass,
   FileDiff,
   FolderTree,
+  GitBranch,
   History,
   Info,
   LoaderCircle,
@@ -42,6 +62,7 @@ import {
   X,
 } from "lucide-react";
 import {
+  type CSSProperties,
   Suspense,
   useCallback,
   useEffect,
@@ -58,7 +79,9 @@ import { WorkspaceInspectorPortal } from "./components/WorkspaceInspectorPortal"
 import {
   type AccentColor,
   normalizeAccentColor,
+  normalizeTerminalFontFamily,
   normalizeTerminalFontScale,
+  terminalFontFamilyStack,
   normalizeThemePreference,
   normalizeUiScale,
   normalizeZenMode,
@@ -91,6 +114,8 @@ import {
 } from "./components/fileExplorerResources";
 import { type ActiveFilePreviewSelection } from "./components/FilePreviewContent";
 import { AnnotationPanel } from "./components/AnnotationPanel";
+import { assistantActionExecuting, useAssistantState } from "./assistant";
+import type { AssistantSource } from "../../shared/assistant";
 import { GlobalTooltip } from "./components/GlobalTooltip";
 import { MobileTabSheet } from "./components/MobileTabSheet";
 import { requestClosePane, requestCloseTab, TabBar } from "./components/TabBar";
@@ -132,7 +157,6 @@ import {
 import {
   connectionSnapshot,
   useOperationalStore,
-  isTaskNotificationTarget,
   OperationalContext,
   operationalStore,
   type Notice,
@@ -140,7 +164,6 @@ import {
   shallowEqual,
   store,
   TASK_NOTIFICATION_ACTIVATE_EVENT,
-  type TaskNotificationTarget,
   taskNotificationTargetFromNotice,
   useStoreSelector,
   WORKTREE_REMOVED_EVENT,
@@ -153,6 +176,7 @@ import {
   closeShortcutTarget,
   tabShortcutAction,
 } from "./tabShortcuts";
+import { orderTabsForDisplay, tabPinsFor } from "./tabPins";
 import { copyTextFromUserGesture } from "./terminalClipboard";
 import { terminalPasteRequest } from "./terminalPaste";
 import {
@@ -211,6 +235,14 @@ const WorkspaceInspectorHost = lazyWithReload("workspace-inspector", () =>
   })),
 );
 
+import "./components/AssistantPanel.css";
+import "./components/markdown.css";
+const AssistantPanel = lazyWithReload("assistant", () =>
+  import("./components/AssistantPanel").then((module) => ({
+    default: module.AssistantPanel,
+  })),
+);
+
 const WorldTerminalPortalList = lazyWithReload(
   "world-terminal-portals",
   () => import("./world/WorldTerminalPortalList"),
@@ -227,6 +259,7 @@ const THEME_KEY = "theme";
 const ACCENT_COLOR_KEY = "accentColor";
 const UI_SCALE_KEY = "uiScale";
 const TERMINAL_FONT_SCALE_KEY = "terminalFontScale";
+const TERMINAL_FONT_FAMILY_KEY = "terminalFontFamily";
 const ZEN_MODE_KEY = "zenMode";
 const LazyTerminalView = lazyWithReload("terminal-view", () =>
   import("./components/TerminalView").then((module) => ({
@@ -244,9 +277,11 @@ const LazyPopupOverlay = lazyWithReload("popup-overlay", () =>
 
 function PopupOverlay({
   terminalTheme,
+  terminalFontFamily,
   terminalFontScale,
 }: {
   terminalTheme: ITheme;
+  terminalFontFamily: string;
   terminalFontScale: number;
 }) {
   // Gate the dynamic import on popup presence, not just its content, so a
@@ -257,6 +292,7 @@ function PopupOverlay({
     <Suspense fallback={null}>
       <LazyPopupOverlay
         terminalTheme={terminalTheme}
+        terminalFontFamily={terminalFontFamily}
         terminalFontScale={terminalFontScale}
       />
     </Suspense>
@@ -266,6 +302,7 @@ function PopupOverlay({
 type TerminalViewProps = {
   paneId?: string;
   terminalTheme: ITheme;
+  terminalFontFamily: string;
   terminalFontScale: number;
   showMobileKeys?: boolean;
   mobileShortcuts?: MobileTerminalShortcutRows;
@@ -336,7 +373,12 @@ function ToastMark({
 }
 
 export type Theme = ThemePreference;
-type MobileView = "workspaces" | "session" | "annotations" | InspectorView;
+type MobileView =
+  | "workspaces"
+  | "session"
+  | "annotations"
+  | "assistant"
+  | InspectorView;
 type OpenInspectorOptions = {
   entry?: FileExplorerEntry;
   path?: string;
@@ -379,6 +421,12 @@ function loadTerminalFontScale(): number {
   return normalizeTerminalFontScale(
     worldLocalStorage.getItem(TERMINAL_FONT_SCALE_KEY),
     worldLocalStorage.getItem(UI_SCALE_KEY),
+  );
+}
+
+function loadTerminalFontFamily(): string {
+  return normalizeTerminalFontFamily(
+    worldLocalStorage.getItem(TERMINAL_FONT_FAMILY_KEY),
   );
 }
 
@@ -432,6 +480,18 @@ function emptyActiveDiffSelection(): ActiveDiffSelection {
     files: {},
     fileErrors: {},
     summaryLoading: false,
+  };
+}
+
+function inspectorFileEntry(path: string): FileExplorerEntry {
+  const name = path.split("/").filter(Boolean).pop() ?? path;
+  return {
+    name,
+    path,
+    type: "file",
+    size: 0,
+    mtime_ms: 0,
+    hidden: name.startsWith("."),
   };
 }
 
@@ -597,6 +657,14 @@ function isEditableElement(target: EventTarget | null) {
 }
 
 function blurActiveInput(event: React.PointerEvent<HTMLButtonElement>) {
+  // A compact-row gesture may be a horizontal pan. Dismiss input only once
+  // its native click handler confirms navigation, not at the start of a swipe.
+  if (
+    event.currentTarget.closest(
+      ".app[data-mobile-controls-compact] .mobile-controls-stack",
+    )
+  )
+    return;
   if (document.activeElement instanceof HTMLElement) {
     document.activeElement.blur();
   }
@@ -927,6 +995,7 @@ export default function App({
     ],
   );
   useShortcutPreferences();
+  const { snapshot: assistantSnapshot } = useAssistantState();
   const s = useStoreSelector(
     (state) => ({
       activeConnectionId: state.activeConnectionId,
@@ -960,6 +1029,20 @@ export default function App({
   }, [operations, s.activeConnectionId, s.connectionGeneration]);
   const [sidebarWidth, setSidebarWidth] = useState(loadSidebarWidth);
   const [mobileView, setMobileView] = useState<MobileView>("session");
+  const [assistantOpen, setAssistantOpen] = useState(false);
+  const [assistantMounted, setAssistantMounted] = useState(false);
+  const [assistantTaskTarget, setAssistantTaskTarget] =
+    useState<RangerTaskNotificationTarget | null>(null);
+  const consumeAssistantTaskTarget = useCallback(
+    () => setAssistantTaskTarget(null),
+    [],
+  );
+  const [assistantFloating, setAssistantFloating] = useState(
+    () => worldLocalStorage.getItem("assistantPanelMode") !== "fixed",
+  );
+  const assistantVisible =
+    assistantOpen && (!mobile || mobileView === "assistant");
+  const assistantDocked = assistantVisible && (mobile || !assistantFloating);
   const [theme, setTheme] = useState<Theme>(() => loadTheme());
   const [systemTheme, setSystemTheme] = useState<ResolvedTheme>(() =>
     loadSystemTheme(),
@@ -973,6 +1056,10 @@ export default function App({
   const [terminalFontScale, setTerminalFontScale] = useState<number>(() =>
     loadTerminalFontScale(),
   );
+  const [terminalFontName, setTerminalFontName] = useState<string>(() =>
+    loadTerminalFontFamily(),
+  );
+  const terminalFontFamily = terminalFontFamilyStack(terminalFontName);
   const [mobileTerminalShortcuts, setMobileTerminalShortcuts] =
     useState<MobileTerminalShortcutRows>(loadMobileTerminalShortcuts);
   const [mobileTerminalSideShortcuts, setMobileTerminalSideShortcuts] =
@@ -996,6 +1083,21 @@ export default function App({
   // What the sidebar was doing before Zen hid it, restored when Zen ends.
   const sidebarBeforeZenRef = useRef(false);
   const [mobileControlsCollapsed, setMobileControlsCollapsed] = useState(false);
+  const [mobileControlsPlacement, setMobileControlsPlacement] = useState(
+    readMobileControlsPlacement,
+  );
+  const appRef = useRef<HTMLDivElement>(null);
+  const mobileControlsToggleRef = useRef<HTMLButtonElement>(null);
+  const mobileControlsOffset = useMobileControlsDrag({
+    enabled: mobile,
+    appRef,
+    toggleRef: mobileControlsToggleRef,
+    placement: mobileControlsPlacement,
+    onPlacementChange: (next: MobileControlsPlacement) => {
+      setMobileControlsPlacement(next);
+      writeMobileControlsPlacement(next);
+    },
+  });
   const [mobileTabSheetOpen, setMobileTabSheetOpen] = useState(false);
   const terminalComposerScopeKey = JSON.stringify([
     s.activeConnectionId,
@@ -1032,6 +1134,9 @@ export default function App({
   const [annotationRuntimeGeneration, setAnnotationRuntimeGeneration] =
     useState<number | null>(null);
   const [annotationsOpen, setAnnotationsOpen] = useState(false);
+  useEffect(() => {
+    if (annotationsOpen) setAssistantOpen(false);
+  }, [annotationsOpen]);
   const [annotationsFloating, setAnnotationsFloating] = useState(
     () => worldLocalStorage.getItem("annotationPanelMode") !== "fixed",
   );
@@ -1090,8 +1195,22 @@ export default function App({
   const [activeDiff, setActiveDiff] = useState<ActiveDiffSelection>(
     emptyActiveDiffSelection,
   );
-  const [activeFilePreview, setActiveFilePreview] =
+  const [activeFilePreview, setActiveFilePreviewState] =
     useState<ActiveFilePreviewSelection>(emptyActiveFilePreviewSelection);
+  const setActiveFilePreview = useCallback(
+    (selection: ActiveFilePreviewSelection) => {
+      const scope = inspectorStateRef.current?.scope;
+      if (scope && selection.entry) {
+        writeResourceFileSelection(
+          worldLocalStorage,
+          scope,
+          selection.entry.path,
+        );
+      }
+      setActiveFilePreviewState(selection);
+    },
+    [],
+  );
   const fileQuickOpenRequestRef = useRef(0);
   const resourceRuntimeKeyRef = useRef(resourceUiKey);
   const focusedWorkspace = s.workspaces.find((w) => w.focused);
@@ -1659,7 +1778,7 @@ export default function App({
           });
         });
     },
-    [connectionClient],
+    [connectionClient, setActiveFilePreview],
   );
   const openInspector = useCallback(
     (
@@ -1685,7 +1804,9 @@ export default function App({
               ? "Files"
               : view === "changes"
                 ? "Changes"
-                : "History"
+                : view === "commits"
+                  ? "Commits"
+                  : "History"
           }`,
           detail: "The target workspace is no longer open.",
         });
@@ -1796,6 +1917,7 @@ export default function App({
       connectionClient.connectionId,
       finishInspectorFocus,
       loadInspectorFilePreview,
+      setActiveFilePreview,
       mobile,
       annotationsOpen,
       annotationScopeRef,
@@ -1841,6 +1963,99 @@ export default function App({
     }
     openAnnotations();
   }, [annotationsOpen, mobile, mobileView, openAnnotations]);
+  const toggleAssistant = useCallback(() => {
+    if (assistantVisible) {
+      setAssistantOpen(false);
+      if (mobile) setMobileView("session");
+    } else {
+      setAnnotationsOpen(false);
+      setAssistantOpen(true);
+      setAssistantMounted(true);
+      if (mobile) {
+        setMobileTabSheetOpen(false);
+        setMobileView("assistant");
+      }
+    }
+  }, [assistantVisible, mobile]);
+  const closeAssistant = () => {
+    const source = document.activeElement;
+    setAssistantOpen(false);
+    if (mobile && mobileView === "assistant") setMobileView("session");
+    requestAnimationFrame(() => {
+      const terminal = mobile
+        ? null
+        : document.querySelector<HTMLElement>(
+            ".pane-layout-cell.is-active .xterm-helper-textarea, .pane-switcher-layout .xterm-helper-textarea, .workspace-terminal-surface > .terminal-shell .xterm-helper-textarea",
+          );
+      focusIfUnchanged(
+        mobile && mobileControlsCollapsed
+          ? mobileControlsToggleRef.current
+          : (terminal ??
+              document.querySelector<HTMLElement>(".assistant-entry")),
+        source,
+      );
+    });
+  };
+  const toggleAssistantFloating = () => {
+    const next = !assistantFloating;
+    setAssistantFloating(next);
+    try {
+      worldLocalStorage.setItem(
+        "assistantPanelMode",
+        next ? "floating" : "fixed",
+      );
+    } catch {
+      store.notify({
+        kind: "error",
+        message: "Ranger layout could not be saved",
+      });
+    }
+  };
+  const openAssistantSource = async (source: AssistantSource) => {
+    const isCurrent = () =>
+      store
+        .get()
+        .connections.some(
+          (connection) =>
+            connection.id === source.connection_id &&
+            connection.generation === source.runtime_generation &&
+            connection.state === "ready",
+        );
+    try {
+      if (!isCurrent())
+        throw new Error(
+          "This source connection is no longer available. Ask Ranger to read it again.",
+        );
+      const opened =
+        !operationalShortcutsEnabled && onWorkspaceSurfaceSelect
+          ? await Promise.resolve(
+              onWorkspaceSurfaceSelect({
+                connectionId: source.connection_id,
+                runtimeGeneration: source.runtime_generation,
+                workspaceId: source.workspace_id,
+                paneId: source.pane_id,
+              }),
+            ).then(() => isCurrent())
+          : await store.focusWorkspaceSource({
+              connectionId: source.connection_id,
+              runtimeGeneration: source.runtime_generation,
+              workspaceId: source.workspace_id,
+              paneId: source.pane_id,
+            });
+      if (!opened || !isCurrent())
+        throw new Error("This source connection changed while opening it.");
+      if (mobile) {
+        setAssistantOpen(false);
+        setMobileView("session");
+      }
+    } catch (error) {
+      store.notify({
+        kind: "error",
+        message: "Could not open Ranger source",
+        detail: (error as Error).message,
+      });
+    }
+  };
   const reanchorFileAnnotations = useCallback(
     (path: string, text: string) => {
       if (!inspectorState || !connectionClient.isCurrent()) return;
@@ -2258,7 +2473,7 @@ export default function App({
       if (!current || resourceStateKey(current.scope) !== stateKey) return;
       setActiveFilePreview(selection);
     },
-    [],
+    [setActiveFilePreview],
   );
   const openDiffFileInExplorer = useCallback(
     (entry: ActiveDiffSelection["entry"]) => {
@@ -2269,15 +2484,10 @@ export default function App({
         operations.get().workspaces,
       );
       if (!workspace) return;
-      const name = entry.path.split("/").filter(Boolean).pop() ?? entry.path;
-      openFileExplorerFile(workspace.workspace_id, {
-        name,
-        path: entry.path,
-        type: "file",
-        size: 0,
-        mtime_ms: 0,
-        hidden: name.startsWith("."),
-      });
+      openFileExplorerFile(
+        workspace.workspace_id,
+        inspectorFileEntry(entry.path),
+      );
     },
     [operations, openFileExplorerFile],
   );
@@ -2316,25 +2526,22 @@ export default function App({
       ) {
         return;
       }
-      const name =
-        request.path.split("/").filter(Boolean).pop() ?? request.path;
       openFileExplorerFile(
         request.workspaceId,
-        {
-          name,
-          path: request.path,
-          type: "file",
-          size: 0,
-          mtime_ms: 0,
-          hidden: name.startsWith("."),
-        },
+        inspectorFileEntry(request.path),
         request.paneId,
       );
     },
     [connectionClient, openFileExplorerFile],
   );
   const openNotificationTarget = useCallback(
-    (target: TaskNotificationTarget) => {
+    (target: NotificationTarget) => {
+      if (isRangerTaskNotificationTarget(target)) {
+        setAssistantTaskTarget({ ...target });
+        setAssistantOpen(true);
+        if (mobile) setMobileView("assistant");
+        return;
+      }
       if (!operationalShortcutsEnabled) {
         window.dispatchEvent(
           new CustomEvent("herdr-world:visual-notification", {
@@ -2347,7 +2554,7 @@ export default function App({
       setSidebarHidden(false);
       void store.focusTaskNotificationTarget(target);
     },
-    [activateTerminalSurface, operationalShortcutsEnabled],
+    [activateTerminalSurface, operationalShortcutsEnabled, mobile],
   );
   const handleNoticeAction = useCallback(
     (notice: Notice) => {
@@ -2370,7 +2577,14 @@ export default function App({
         );
         return;
       }
-      const target = taskNotificationTargetFromNotice(notice);
+      const rangerTarget = {
+        type: "ranger_task",
+        taskId: notice.actionRangerTaskId,
+        runId: notice.actionRangerRunId,
+      };
+      const target = isRangerTaskNotificationTarget(rangerTarget)
+        ? rangerTarget
+        : taskNotificationTargetFromNotice(notice);
       store.clearNotice();
       if (target) openNotificationTarget(target);
     },
@@ -2379,13 +2593,17 @@ export default function App({
   useEffect(() => {
     const handleSystemNotification = (event: Event) => {
       const target = (event as CustomEvent<unknown>).detail;
-      if (!isTaskNotificationTarget(target)) return;
+      if (!isNotificationTarget(target)) return;
       openNotificationTarget(target);
       const notice = operations.get().notice;
       if (
-        notice?.actionConnectionId === target.connectionId &&
-        notice.actionRuntimeGeneration === target.runtimeGeneration &&
-        notice.actionPaneId === target.paneId
+        notice &&
+        (isRangerTaskNotificationTarget(target)
+          ? notice.actionRangerTaskId === target.taskId &&
+            notice.actionRangerRunId === target.runId
+          : notice.actionConnectionId === target.connectionId &&
+            notice.actionRuntimeGeneration === target.runtimeGeneration &&
+            notice.actionPaneId === target.paneId)
       ) {
         store.clearNotice();
       }
@@ -2641,7 +2859,7 @@ export default function App({
     window.addEventListener(WORKTREE_REMOVED_EVENT, handleWorktreeRemoved);
     return () =>
       window.removeEventListener(WORKTREE_REMOVED_EVENT, handleWorktreeRemoved);
-  }, [commitInspectorState, connectionClient]);
+  }, [commitInspectorState, connectionClient, setActiveFilePreview]);
   const closePaneJump = useCallback((restoreFocus = false) => {
     const target = paneJumpReturnFocusRef.current;
     const source = document.activeElement;
@@ -2720,8 +2938,8 @@ export default function App({
     setPaneJumpOpen(false);
     setPaneJumpIndex(0);
     setPaneJumpSearch(null);
-    setMobileView("session");
-  }, [commitInspectorState, resourceUiKey]);
+    setMobileView((current) => (current === "assistant" ? current : "session"));
+  }, [commitInspectorState, resourceUiKey, setActiveFilePreview]);
 
   useEffect(() => {
     store.init();
@@ -2733,9 +2951,16 @@ export default function App({
   useEffect(() => {
     if (!mobile) return;
     const current = inspectorStateRef.current;
-    if (!annotationsOpen)
-      setMobileView(current?.open ? current.view : "session");
-  }, [annotationsOpen, mobile]);
+    setMobileView(
+      annotationsOpen
+        ? "annotations"
+        : assistantOpen
+          ? "assistant"
+          : current?.open
+            ? current.view
+            : "session",
+    );
+  }, [annotationsOpen, assistantOpen, mobile]);
   useLayoutEffect(() => {
     if (!annotationScope || annotationWorkspace) return;
     selectAnnotationDraft(null);
@@ -2895,6 +3120,7 @@ export default function App({
     commitInspectorState,
     connectionClient,
     loadInspectorFilePreview,
+    setActiveFilePreview,
     s.lastRefresh,
     s.status,
     s.workspaces,
@@ -3079,9 +3305,9 @@ export default function App({
           return;
         }
 
-        const tabs = current.tabs
-          .filter((tab) => tab.workspace_id === focusedWorkspace.workspace_id)
-          .sort((a, b) => a.number - b.number);
+        const tabs = current.tabs.filter(
+          (tab) => tab.workspace_id === focusedWorkspace.workspace_id,
+        );
         const tabIds = new Set(tabs.map((tab) => tab.tab_id));
         const activeTabId = [
           focusedWorkspace.active_tab_id,
@@ -3107,7 +3333,12 @@ export default function App({
           return;
         }
 
-        const targetTabId = adjacentTabId(tabs, activeTabId, tabAction);
+        const targetTabId = adjacentTabId(
+          tabs,
+          activeTabId,
+          tabAction,
+          tabPinsFor(current.activeConnectionId),
+        );
         if (!targetTabId || targetTabId === activeTabId) return;
         void focusExplicitTab(targetTabId);
         return;
@@ -3187,9 +3418,13 @@ export default function App({
         if (isEditableElement(e.target)) return;
         const current = operations.get();
         const focusedWorkspace = current.workspaces.find((w) => w.focused);
-        const tabs = current.tabs
-          .filter((tab) => tab.workspace_id === focusedWorkspace?.workspace_id)
-          .sort((a, b) => a.number - b.number);
+        // Number shortcuts address tab-strip positions, pinned tabs first.
+        const tabs = orderTabsForDisplay(
+          current.tabs.filter(
+            (tab) => tab.workspace_id === focusedWorkspace?.workspace_id,
+          ),
+          tabPinsFor(current.activeConnectionId),
+        );
         const targetTab = tabs[tabIndex];
         if (!targetTab) return;
         e.preventDefault();
@@ -3219,6 +3454,13 @@ export default function App({
         e.preventDefault();
         e.stopPropagation();
         if (!e.repeat) toggleAnnotations();
+        return;
+      }
+      if (shortcutMatches(e, "assistant.toggle")) {
+        if (isEditableElement(e.target)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        if (!e.repeat) toggleAssistant();
         return;
       }
       const fileExplorerShortcut = shortcutMatches(e, "files.toggle");
@@ -3294,6 +3536,7 @@ export default function App({
     selectPaneJumpIndex,
     setInspectorExpanded,
     toggleAnnotations,
+    toggleAssistant,
     toggleDiffViewer,
     toggleFileExplorer,
     toggleSidebar,
@@ -3384,25 +3627,99 @@ export default function App({
       serializeCustomTerminalThemes(customTerminalThemes),
     );
   }, [customTerminalThemes]);
-  useEffect(() => {
-    const onStorage = (event: StorageEvent) => {
-      if (event.key === MOBILE_TERMINAL_SHORTCUTS_STORAGE_KEY) {
-        setMobileTerminalShortcuts(
-          parseMobileTerminalShortcutRows(event.newValue),
+  useEffect(
+    () =>
+      subscribeLocalStorage((key) => {
+        if (key === null || key === THEME_KEY) setTheme(loadTheme());
+        if (key === null || key === ACCENT_COLOR_KEY)
+          setAccentColor(loadAccentColor());
+        if (key === null || key === UI_SCALE_KEY) setUiScale(loadUiScale());
+        if (
+          key === null ||
+          key === TERMINAL_FONT_SCALE_KEY ||
+          key === UI_SCALE_KEY
+        )
+          setTerminalFontScale(loadTerminalFontScale());
+        if (key === null || key === TERMINAL_FONT_FAMILY_KEY)
+          setTerminalFontName(loadTerminalFontFamily());
+        if (key === null || key === ZEN_MODE_KEY) applyZenMode(loadZenMode());
+        if (key === null || key === "sidebarWidth")
+          setSidebarWidth(loadSidebarWidth());
+        if (key === null || key === "annotationPanelMode")
+          setAnnotationsFloating(
+            worldLocalStorage.getItem("annotationPanelMode") !== "fixed",
+          );
+        if (key === null || key === "assistantPanelMode")
+          setAssistantFloating(
+            worldLocalStorage.getItem("assistantPanelMode") !== "fixed",
+          );
+        if (key === null || key === MOBILE_CONTROLS_PLACEMENT_STORAGE_KEY)
+          setMobileControlsPlacement(readMobileControlsPlacement());
+        if (
+          key === null ||
+          key === MOBILE_TERMINAL_SHORTCUTS_STORAGE_KEY ||
+          key === LEGACY_MOBILE_TERMINAL_SHORTCUTS_STORAGE_KEY
+        )
+          setMobileTerminalShortcuts(loadMobileTerminalShortcuts());
+        if (key === null || key === MOBILE_TERMINAL_SIDE_SHORTCUTS_STORAGE_KEY)
+          setMobileTerminalSideShortcuts(loadMobileTerminalSideShortcuts());
+        if (key === null || key === TERMINAL_THEME_SELECTION_STORAGE_KEY)
+          setTerminalThemeSelection(loadTerminalThemeSelection());
+        if (key === null || key === CUSTOM_TERMINAL_THEMES_STORAGE_KEY)
+          setCustomTerminalThemes(loadCustomTerminalThemes());
+      }),
+    [applyZenMode],
+  );
+  useEffect(
+    () =>
+      subscribeLocalStorage((key) => {
+        const current = inspectorStateRef.current;
+        if (
+          !current ||
+          (key !== null && key !== preferencesStorageKey(current.scope))
+        )
+          return;
+        const preferences = readInspectorPreferences(
+          worldLocalStorage,
+          current.scope,
         );
-      } else if (event.key === MOBILE_TERMINAL_SIDE_SHORTCUTS_STORAGE_KEY) {
-        setMobileTerminalSideShortcuts(
-          parseMobileTerminalSideShortcuts(event.newValue),
-        );
-      } else if (event.key === TERMINAL_THEME_SELECTION_STORAGE_KEY) {
-        setTerminalThemeSelection(parseTerminalThemeSelection(event.newValue));
-      } else if (event.key === CUSTOM_TERMINAL_THEMES_STORAGE_KEY) {
-        setCustomTerminalThemes(parseCustomTerminalThemes(event.newValue));
-      }
-    };
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
-  }, []);
+        const dock = preferences.dock;
+        const preferredSize =
+          dock === "right" ? preferences.rightSize : preferences.bottomSize;
+        const stage = inspectorStageRef.current;
+        const size =
+          stage &&
+          ((dock === "right" && stage.clientWidth >= 1000) ||
+            (dock === "bottom" && stage.clientHeight > 0))
+            ? Math.min(
+                preferredSize,
+                inspectorMaximumSize(
+                  dock,
+                  stage.clientWidth,
+                  stage.clientHeight,
+                  annotationsDocked,
+                ),
+              )
+            : preferredSize;
+        if (
+          current.dock === dock &&
+          current.size === size &&
+          current.expanded === preferences.expanded
+        )
+          return;
+        // Layout is shared; opening, view, file and focus stay in this tab.
+        const next = {
+          ...current,
+          dock,
+          size,
+          expanded: preferences.expanded,
+        };
+        if (inspectorFocusRequestRef.current?.state === current)
+          inspectorFocusRequestRef.current.state = next;
+        commitInspectorState(next);
+      }),
+    [annotationsDocked, commitInspectorState],
+  );
   const notice = s.notice;
   useEffect(() => {
     if (!notice) return;
@@ -3467,10 +3784,7 @@ export default function App({
   };
   const clearInspectorDetail = () => {
     const current = inspectorStateRef.current;
-    if (current?.view === "files") {
-      fileQuickOpenRequestRef.current += 1;
-      setActiveFilePreview(emptyActiveFilePreviewSelection());
-    } else {
+    if (current?.view !== "files") {
       setActiveDiff(emptyActiveDiffSelection());
     }
   };
@@ -3620,6 +3934,13 @@ export default function App({
           }
           workspace={inspectorWorkspace}
           historyPane={inspectorHistoryPane}
+          onSelectFileTab={(path) => {
+            if (inspectorWorkspace)
+              openFileExplorerFile(
+                inspectorWorkspace.workspace_id,
+                inspectorFileEntry(path),
+              );
+          }}
           fileSelection={activeFilePreview}
           previewRequestRef={fileQuickOpenRequestRef}
           diffSelection={activeDiff}
@@ -3731,6 +4052,36 @@ export default function App({
     workspaceSurfaceInspector!.onViewChange(view);
     return true;
   };
+  const assistantEntry = (
+    <button
+      type="button"
+      className={
+        mobile
+          ? `assistant-entry ${assistantVisible ? "active" : ""}`
+          : `topbar-button assistant-entry ${assistantVisible ? "is-active" : ""}`
+      }
+      title={shortcutTitle("Ranger", "assistant.toggle")}
+      aria-label={
+        assistantSnapshot?.running ||
+        assistantActionExecuting(assistantSnapshot)
+          ? "Ranger is working"
+          : "Open Ranger"
+      }
+      aria-pressed={assistantVisible}
+      tabIndex={mobile && mobileControlsCollapsed ? -1 : 0}
+      onPointerDown={mobile ? blurActiveInput : undefined}
+      onClick={toggleAssistant}
+    >
+      <Compass size={mobile ? 16 : 15} aria-hidden="true" />
+      <span className={mobile ? "mobile-nav-label" : "assistant-entry-label"}>
+        Ranger
+      </span>
+      {assistantSnapshot?.running ||
+      assistantActionExecuting(assistantSnapshot) ? (
+        <span className="assistant-entry-running" aria-hidden="true" />
+      ) : null}
+    </button>
+  );
   const topbar = (
     <header className={`topbar ${zenMode && !mobile ? "is-zen" : ""}`}>
       <div className="topbar-start">
@@ -3759,6 +4110,7 @@ export default function App({
           <WindowArrangementMenu control={arrangementControl} />
         ) : null}
         <div className="topbar-command-group">
+          {!mobile ? assistantEntry : null}
           <CommandCombobox
             key={`${resourceUiKey}:commands`}
             operationalShortcutsEnabled={shellActionsEnabled}
@@ -3798,6 +4150,10 @@ export default function App({
               onUiScaleChange={setUiScale}
               terminalFontScale={terminalFontScale}
               onTerminalFontScaleChange={setTerminalFontScale}
+              terminalFontName={terminalFontName}
+              onTerminalFontNameChange={(name) =>
+                setTerminalFontName(normalizeTerminalFontFamily(name))
+              }
               zenMode={zenMode}
               onZenModeChange={applyZenMode}
               onMobileTerminalShortcutsChange={setMobileTerminalShortcuts}
@@ -3819,7 +4175,13 @@ export default function App({
   );
   return (
     <div
-      className={`app ${desktopSidebarHidden ? "sidebar-hidden" : ""} ${
+      ref={appRef}
+      style={
+        {
+          "--mobile-controls-offset-y": `${mobileControlsOffset}px`,
+        } as CSSProperties
+      }
+      className={`app ${mobile && assistantVisible ? "assistant-view" : ""} ${mobileControlsPlacement.side === "left" ? "mobile-controls-left" : ""} ${desktopSidebarHidden ? "sidebar-hidden" : ""} ${
         zenMode && !mobile ? "zen" : ""
       } ${mobileControlsCollapsed ? "mobile-controls-collapsed" : ""}`}
     >
@@ -3922,6 +4284,24 @@ export default function App({
         </button>
         <button
           type="button"
+          className={mobileNavigationView === "commits" ? "active" : ""}
+          title="Commits"
+          aria-label="Show workspace commits"
+          tabIndex={mobileControlsCollapsed ? -1 : 0}
+          disabled={
+            workspaceSurfaceInspector !== null &&
+            !workspaceSurfaceInspectorSupports("commits")
+          }
+          onClick={() => {
+            if (!selectWorkspaceSurfaceInspectorView("commits"))
+              openInspector("commits");
+          }}
+        >
+          <GitBranch size={16} />
+          <span className="mobile-nav-label">Commits</span>
+        </button>
+        <button
+          type="button"
           className={mobileNavigationView === "history" ? "active" : ""}
           title={
             workspaceSurfaceInspector
@@ -3990,14 +4370,11 @@ export default function App({
       </button>
       <div className="mobile-terminal-controls">
         <nav
-          className="mobile-nav mobile-terminal-tools"
-          aria-label={
-            activeTerminalComposerDraftKey
-              ? "Tabs and terminal composer"
-              : "Tabs"
-          }
+          className="mobile-nav mobile-terminal-tools mobile-workspace-tools"
+          aria-label="Workspace tabs and arrangements"
           aria-hidden={mobileControlsCollapsed}
         >
+          {mobile ? assistantEntry : null}
           <button
             type="button"
             className={mobileTabSheetOpen ? "active" : ""}
@@ -4023,46 +4400,12 @@ export default function App({
               showWindowSwitcher={false}
             />
           ) : null}
-          {activeTerminalComposerDraftKey ? (
-            <button
-              type="button"
-              className={terminalComposerOpen ? "active" : ""}
-              title={
-                terminalComposerOpen
-                  ? "Close terminal composer"
-                  : "Open terminal composer"
-              }
-              aria-label={`${
-                terminalComposerOpen
-                  ? "Close terminal composer"
-                  : "Open terminal composer"
-              }${terminalComposerHasDraft ? ", unsent draft" : ""}`}
-              aria-pressed={terminalComposerOpen}
-              tabIndex={mobileControlsCollapsed ? -1 : 0}
-              onPointerDown={blurActiveInput}
-              onClick={() => {
-                const open = !terminalComposerOpen;
-                if (open) {
-                  setMobileTabSheetOpen(false);
-                  activateTerminalSurface();
-                }
-                setTerminalComposerOpen(open);
-              }}
-            >
-              <SquarePen size={16} />
-              {terminalComposerHasDraft && !terminalComposerOpen ? (
-                <span
-                  className="mobile-composer-draft-dot"
-                  aria-hidden="true"
-                />
-              ) : null}
-              <span className="mobile-nav-label">Composer</span>
-            </button>
-          ) : null}
         </nav>
         <button
+          ref={mobileControlsToggleRef}
           type="button"
           className="mobile-controls-toggle"
+          aria-description="Drag to move the controls"
           aria-label={
             mobileControlsCollapsed
               ? "Show mobile controls"
@@ -4074,7 +4417,6 @@ export default function App({
               : "Hide mobile controls"
           }
           aria-pressed={mobileControlsCollapsed}
-          onPointerDown={blurActiveInput}
           onClick={() => setMobileControlsCollapsed((value) => !value)}
         >
           {mobileControlsCollapsed ? (
@@ -4084,6 +4426,34 @@ export default function App({
           )}
         </button>
       </div>
+
+      {activeTerminalComposerDraftKey && !terminalComposerOpen ? (
+        <button
+          type="button"
+          className="mobile-composer-shortcut"
+          title="Open terminal input"
+          aria-label={`Open terminal input${terminalComposerHasDraft ? ", unsent draft" : ""}`}
+          aria-haspopup="dialog"
+          onPointerDown={blurActiveInput}
+          onClick={() => {
+            flushSync(() => {
+              setMobileTabSheetOpen(false);
+              activateTerminalSurface();
+              setTerminalComposerOpen(true);
+            });
+            // Give the dock focus; Composer's editor opens the keyboard on tap.
+            document
+              .querySelector<HTMLElement>(".terminal-composer")
+              ?.focus({ preventScroll: true });
+          }}
+        >
+          <SquarePen size={20} />
+          {terminalComposerHasDraft ? (
+            <span className="mobile-composer-draft-dot" aria-hidden="true" />
+          ) : null}
+          <span className="mobile-nav-label">Type</span>
+        </button>
+      ) : null}
 
       {s.updateInfo?.update_available || s.notice
         ? createPortal(
@@ -4295,7 +4665,7 @@ export default function App({
             />
           </OperationalContext.Provider>
           <div
-            className={`workspace-surfaces ${annotationsDocked ? "has-annotations" : ""}`}
+            className={`workspace-surfaces ${annotationsDocked ? "has-annotations" : ""} ${assistantDocked ? "has-assistant" : ""}`}
           >
             <div
               ref={inspectorPortal ? undefined : inspectorStageRef}
@@ -4334,6 +4704,7 @@ export default function App({
                 (!focusedWorkspace || !activeSpacesTabId) ? (
                   <TerminalView
                     terminalTheme={terminalTheme}
+                    terminalFontFamily={terminalFontFamily}
                     terminalFontScale={terminalFontScale}
                     mobileShortcuts={mobileTerminalShortcuts}
                     mobileSideShortcuts={mobileTerminalSideShortcuts}
@@ -4417,6 +4788,33 @@ export default function App({
               onCopy={() => void copyFeedback()}
               onSend={(paneId) => void sendFeedback(paneId)}
             />
+            {assistantMounted ? (
+              <Suspense
+                fallback={
+                  assistantVisible ? (
+                    <aside
+                      className={`assistant-panel ${assistantFloating && !mobile ? "is-floating" : ""} ${mobile ? "is-mobile" : ""}`}
+                      aria-label="Ranger"
+                    >
+                      <div className="assistant-panel-empty">
+                        Loading Ranger...
+                      </div>
+                    </aside>
+                  ) : null
+                }
+              >
+                <AssistantPanel
+                  open={assistantVisible}
+                  floating={assistantFloating && !mobile}
+                  mobile={mobile}
+                  requestedTask={assistantTaskTarget}
+                  onRequestedTaskHandled={consumeAssistantTaskTarget}
+                  onClose={closeAssistant}
+                  onToggleFloating={toggleAssistantFloating}
+                  onOpenSource={(source) => void openAssistantSource(source)}
+                />
+              </Suspense>
+            ) : null}
           </div>
         </main>
       </div>
@@ -4439,6 +4837,7 @@ export default function App({
           >
             <PopupOverlay
               terminalTheme={terminalTheme}
+              terminalFontFamily={terminalFontFamily}
               terminalFontScale={terminalFontScale}
             />
           </OperationalContext.Provider>
@@ -4471,6 +4870,7 @@ export default function App({
             connectionGeneration={s.connectionGeneration}
             runtimeGeneration={s.serverRuntimeGeneration}
             terminalTheme={terminalTheme}
+            terminalFontFamily={terminalFontFamily}
             terminalFontScale={terminalFontScale}
             mobileShortcuts={mobileTerminalShortcuts}
             mobileSideShortcuts={mobileTerminalSideShortcuts}

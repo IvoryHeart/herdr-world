@@ -34,6 +34,8 @@ export type FilePreviewResult = FilePreviewDecoded & {
 };
 
 export type FileDownloadResult = {
+  acceptRanges?: boolean;
+  contentRange?: string;
   filename: string;
   path: string;
   size: number;
@@ -74,12 +76,12 @@ export type GitDiffEntry = {
   status: string;
   additions?: number;
   deletions?: number;
+  binary?: boolean;
   generated?: boolean;
+  file_size?: number;
   mtime_ms?: number;
   size?: number;
 };
 
-export type RunProcessWithCodeTimeout = (
-  argv: string[],
-  timeoutMs: number,
-) => Promise<{ code: number; stdout: string; stderr: string }>;
+export type RunProcessWithCodeTimeout =
+  typeof import("../utils/process-utils").runProcessWithCodeTimeout;

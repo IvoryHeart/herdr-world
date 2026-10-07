@@ -12,6 +12,77 @@ import { join } from "node:path";
 import { BinReader, BinWriter, encodeFrame } from "../bridge/bincode";
 import type { SshConnectionProfile } from "./profiles";
 
+const password = "profile-test-password";
+// Bun supports authentication headers on WebSocket handshakes.
+const BrowserSocket = WebSocket as unknown as new (
+  url: string,
+  options: Bun.WebSocketOptions,
+) => WebSocket;
+
+async function login(port: number): Promise<string> {
+  const response = await fetch(`http://127.0.0.1:${port}/api/login`, {
+    method: "POST",
+    body: JSON.stringify({ password }),
+  });
+  expect(response.status).toBe(200);
+  const cookie = response.headers.get("set-cookie")?.split(";", 1)[0];
+  expect(cookie).toBeTruthy();
+  return cookie!;
+}
+
+function dispatchRpcReply(
+  pending: Map<string, (message: unknown) => void>,
+  message: unknown,
+): void {
+  if (
+    !message ||
+    typeof message !== "object" ||
+    Array.isArray(message) ||
+    !("id" in message) ||
+    typeof message.id !== "string" ||
+    !pending.has(message.id)
+  )
+    return;
+  const callback = pending.get(message.id);
+  if (typeof callback === "function") callback(message);
+}
+
+test("RPC fixture dispatches only registered string reply IDs", () => {
+  const replies: unknown[] = [];
+  const pending = new Map<string, (message: unknown) => void>([
+    ["request-1", (message) => replies.push(message)],
+  ]);
+  for (const message of [
+    null,
+    false,
+    1,
+    "request-1",
+    [],
+    {},
+    { id: 1 },
+    { id: ["request-1"] },
+    { id: {} },
+    { id: "missing" },
+    { id: "__proto__" },
+    { id: "constructor" },
+    { id: "toString" },
+  ]) {
+    dispatchRpcReply(pending, message);
+  }
+  expect(replies).toEqual([]);
+  for (const id of ["request-1", "__proto__", "constructor", "toString"]) {
+    pending.set(id, (message) => replies.push(message));
+    const message = { id, result: { ok: true } };
+    dispatchRpcReply(pending, message);
+    expect(replies.at(-1)).toBe(message);
+    pending.delete(id);
+    const count = replies.length;
+    dispatchRpcReply(pending, message);
+    expect(replies).toHaveLength(count);
+  }
+  expect(replies).toHaveLength(4);
+});
+
 const roots: string[] = [];
 const servers: net.Server[] = [];
 const sockets = new Set<net.Socket>();
@@ -237,6 +308,10 @@ if (!args.includes("-L") && (args.at(-1) || "").includes("printf %s")) {
   console.log(process.env.HERDR_WORLD_FAKE_SSH_HOME || "");
   process.exit(0);
 }
+// Background upload cleanup is a one-shot SSH command, not a tunnel.
+if (!args.includes("-L") && (args.at(-1) || "").includes("herdr-world-uploads-")) {
+  process.exit(0);
+}
 appendFileSync(join(stateDir, destination + ".attempts"), String(process.pid) + "\\n");
 if (destination === "auth-fail") {
   console.error("Permission denied (publickey).");
@@ -312,6 +387,7 @@ process.on("SIGINT", () => void stop());
       ...process.env,
       PATH: `${bin}:${process.env.PATH ?? ""}`,
       HOST: "127.0.0.1",
+      HERDR_WORLD_PASSWORD: password,
       PORT: "0",
       HERDR_WORLD_CONNECTIONS_PATH: registryPath,
       HERDR_WORLD_FAKE_SSH_STATE_DIR: state,
@@ -329,7 +405,10 @@ process.on("SIGINT", () => void stop());
   try {
     const port = await bridgeListeningPort(child.stdout);
     await waitForHealth(port);
-    ws = new WebSocket(`ws://127.0.0.1:${port}/ws`);
+    const cookie = await login(port);
+    ws = new BrowserSocket(`ws://127.0.0.1:${port}/ws`, {
+      headers: { cookie },
+    });
     await new Promise<void>((resolve, reject) => {
       ws!.onopen = () => resolve();
       ws!.onerror = () => reject(new Error("websocket open failed"));
@@ -338,7 +417,7 @@ process.on("SIGINT", () => void stop());
     const pending = new Map<string, (message: any) => void>();
     ws.onmessage = (event) => {
       const message = JSON.parse(String(event.data));
-      if (typeof message.id === "string") pending.get(message.id)?.(message);
+      dispatchRpcReply(pending, message);
     };
     const rawRpc = async (
       method: string,

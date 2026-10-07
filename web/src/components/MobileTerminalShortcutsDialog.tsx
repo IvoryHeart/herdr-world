@@ -1,6 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, ChevronsUpDown, Plus, RotateCcw, Trash2 } from "lucide-react";
 import {
+  MOBILE_TERMINAL_CUSTOM_SPECIAL_KEYS,
+  mobileTerminalKeyCombinationBytes,
+  type MobileTerminalKeyCombination,
+} from "../mobileTerminalKeyCombination";
+import {
   MAX_MOBILE_TERMINAL_SHORTCUTS_PER_ROW,
   MAX_MOBILE_TERMINAL_SIDE_SHORTCUTS,
   MOBILE_TERMINAL_SHORTCUT_OPTIONS,
@@ -28,6 +33,23 @@ import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import "./MobileTerminalShortcutsDialog.css";
 
 const OPTION_GROUPS = ["Control", "Basic", "Navigation", "Modified"] as const;
+const US_KEY_ROWS = [
+  "1234567890",
+  "qwertyuiop",
+  "asdfghjkl",
+  "zxcvbnm",
+  "`-=[]\\",
+  ";',./",
+];
+const BASIC_KEYS = ["Escape", "Tab", "Backspace", "Enter", "Space"];
+const EXTRA_KEY_GROUPS = {
+  "Navigation keys": MOBILE_TERMINAL_CUSTOM_SPECIAL_KEYS.filter(
+    (key) => !BASIC_KEYS.includes(key) && !/^F\d+$/.test(key),
+  ),
+  "Function keys": MOBILE_TERMINAL_CUSTOM_SPECIAL_KEYS.filter((key) =>
+    /^F\d+$/.test(key),
+  ),
+};
 let nextShortcutId = 1;
 
 type SelectedSlot =
@@ -78,34 +100,23 @@ function newShortcut(): MobileTerminalShortcut {
 function ShortcutKeySelect({
   value,
   ariaLabel,
-  openRequest,
   onChange,
 }: {
-  value: MobileTerminalShortcutAction;
+  value: Extract<MobileTerminalShortcutAction, string>;
   ariaLabel: string;
-  openRequest: number;
   onChange: (action: MobileTerminalShortcutAction) => void;
 }) {
   const currentItemRef = useRef<HTMLDivElement>(null);
-  const valueRef = useRef(value);
-  valueRef.current = value;
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
-  const [activeValue, setActiveValue] = useState(() => String(value));
+  const [activeValue, setActiveValue] = useState<string>(value);
   const currentOption = mobileTerminalShortcutOption(value);
 
   const setSelectorOpen = (next: boolean) => {
     setOpen(next);
     setSearch("");
-    if (next) setActiveValue(valueRef.current);
+    if (next) setActiveValue(value);
   };
-
-  useEffect(() => {
-    if (openRequest === 0) return;
-    setOpen(true);
-    setSearch("");
-    setActiveValue(valueRef.current);
-  }, [openRequest]);
 
   return (
     <Popover open={open} onOpenChange={setSelectorOpen}>
@@ -117,7 +128,7 @@ function ShortcutKeySelect({
           aria-expanded={open}
           aria-label={ariaLabel}
         >
-          <span>{currentOption?.label ?? value}</span>
+          <span>{currentOption?.label}</span>
           <ChevronsUpDown size={13} aria-hidden="true" />
         </button>
       </PopoverTrigger>
@@ -186,6 +197,109 @@ function ShortcutKeySelect({
   );
 }
 
+function CustomKeyPicker({
+  value,
+  onChange,
+}: {
+  value: MobileTerminalKeyCombination;
+  onChange: (action: MobileTerminalKeyCombination) => void;
+}) {
+  const keyButton = (key: string) => {
+    const shiftedKey =
+      key.length === 1
+        ? String.fromCharCode(
+            ...mobileTerminalKeyCombinationBytes({
+              key,
+              ctrl: false,
+              alt: false,
+              shift: true,
+            }),
+          )
+        : key;
+    return (
+      <button
+        type="button"
+        className="mobile-shortcut-keycap"
+        key={key}
+        aria-label={`Key ${key.length === 1 ? key.toUpperCase() : key}`}
+        aria-pressed={value.key === key || value.key === shiftedKey}
+        onClick={() => onChange({ ...value, key })}
+      >
+        {key.length === 1
+          ? value.shift
+            ? shiftedKey
+            : key.toUpperCase()
+          : key
+              .replace("Arrow", "")
+              .replace("Escape", "Esc")
+              .replace("Backspace", "Bksp")
+              .replace("Page", "Pg")}
+      </button>
+    );
+  };
+
+  return (
+    <div className="mobile-shortcut-custom-fields">
+      <div className="mobile-shortcut-keyboard-head">
+        <span>US keyboard</span>
+        <output aria-label="Selected combination" aria-live="polite">
+          {mobileTerminalShortcutOption(value)?.label}
+        </output>
+      </div>
+      <div
+        className="mobile-shortcut-modifiers"
+        role="group"
+        aria-label="Custom key modifiers"
+      >
+        {(["ctrl", "alt", "shift"] as const).map((modifier) => (
+          <button
+            type="button"
+            className="mobile-shortcut-keycap"
+            key={modifier}
+            aria-pressed={value[modifier]}
+            onClick={() => onChange({ ...value, [modifier]: !value[modifier] })}
+          >
+            {modifier === "ctrl"
+              ? "Ctrl"
+              : modifier === "alt"
+                ? "Alt"
+                : "Shift"}
+          </button>
+        ))}
+      </div>
+      <div
+        className="mobile-shortcut-keyboard"
+        role="group"
+        aria-label="US keyboard keys"
+      >
+        {US_KEY_ROWS.map((row) => (
+          <div className="mobile-shortcut-keyboard-row" key={row}>
+            {Array.from(row, keyButton)}
+          </div>
+        ))}
+        <div className="mobile-shortcut-keyboard-row mobile-shortcut-basic-keys">
+          {BASIC_KEYS.map(keyButton)}
+        </div>
+      </div>
+      <details className="mobile-shortcut-more-keys">
+        <summary>More keys</summary>
+        {Object.entries(EXTRA_KEY_GROUPS).map(([group, keys]) => (
+          <div className="mobile-shortcut-key-group" key={group}>
+            <div className="mobile-shortcut-keyboard-head">{group}</div>
+            <div
+              className="mobile-shortcut-extra-keys"
+              role="group"
+              aria-label={group}
+            >
+              {keys.map(keyButton)}
+            </div>
+          </div>
+        ))}
+      </details>
+    </div>
+  );
+}
+
 export function MobileTerminalShortcutsDialog({
   open,
   rows,
@@ -215,14 +329,12 @@ export function MobileTerminalShortcutsDialog({
     cloneSideShortcuts(sideShortcuts),
   );
   const [selectedSlot, setSelectedSlot] = useState<SelectedSlot | null>(null);
-  const [keySelectorOpenRequest, setKeySelectorOpenRequest] = useState(0);
 
   useEffect(() => {
     if (!open) return;
     setDraft(cloneRows(rowsRef.current));
     setSideDraft(cloneSideShortcuts(sideShortcutsRef.current));
     setSelectedSlot(null);
-    setKeySelectorOpenRequest(0);
     const cancelFocus = focusDialogElement(dialogRef.current);
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
@@ -254,7 +366,6 @@ export function MobileTerminalShortcutsDialog({
       return next;
     });
     setSelectedSlot({ area: "panel", rowIndex, slotIndex });
-    setKeySelectorOpenRequest((request) => request + 1);
   };
 
   const selectSideSlot = (slotIndex: number) => {
@@ -265,7 +376,6 @@ export function MobileTerminalShortcutsDialog({
       return next;
     });
     setSelectedSlot({ area: "side", slotIndex });
-    setKeySelectorOpenRequest((request) => request + 1);
   };
 
   const updateSelectedShortcut = (
@@ -309,14 +419,47 @@ export function MobileTerminalShortcutsDialog({
     setSelectedSlot(null);
   };
 
+  const updateSelectedAction = (action: MobileTerminalShortcutAction) => {
+    const nextOption = mobileTerminalShortcutOption(action);
+    updateSelectedShortcut((current) => ({
+      ...current,
+      action,
+      label:
+        !current.label.trim() ||
+        current.label ===
+          mobileTerminalShortcutOption(current.action)?.defaultButtonLabel
+          ? (nextOption?.defaultButtonLabel ?? current.label)
+          : current.label,
+    }));
+  };
+
   const selectedShortcut = selectedSlot
     ? selectedSlot.area === "side"
       ? sideDraft[selectedSlot.slotIndex]
       : draft[selectedSlot.rowIndex][selectedSlot.slotIndex]
     : null;
-  const selectedOption = selectedShortcut
-    ? mobileTerminalShortcutOption(selectedShortcut.action)
-    : null;
+  const customAction =
+    selectedShortcut && typeof selectedShortcut.action === "object"
+      ? selectedShortcut.action
+      : null;
+  const invalidCombinations = [
+    ...draft.flatMap((row, rowIndex) =>
+      row.map(
+        (shortcut, slotIndex) =>
+          [shortcut, `Row ${rowIndex + 1}, slot ${slotIndex + 1}`] as const,
+      ),
+    ),
+    ...sideDraft.map(
+      (shortcut, slotIndex) =>
+        [shortcut, `Right-side slot ${slotIndex + 1}`] as const,
+    ),
+  ].flatMap(([shortcut, location]) =>
+    shortcut &&
+    typeof shortcut.action === "object" &&
+    !mobileTerminalKeyCombinationBytes(shortcut.action).length
+      ? [`${location}: ${mobileTerminalShortcutOption(shortcut.action)?.label}`]
+      : [],
+  );
 
   return (
     <div className="modal-backdrop" onMouseDown={onClose}>
@@ -332,10 +475,7 @@ export function MobileTerminalShortcutsDialog({
         <div className="modal-head">
           <div>
             <h2>Mobile Terminal Shortcuts</h2>
-            <p>
-              Select any slot to add or edit a button. Configure the 2-by-8
-              panel and up to four right-side buttons.
-            </p>
+            <p>Choose a slot, then a preset or custom key.</p>
           </div>
           <CloseButton onClick={onClose} />
         </div>
@@ -370,13 +510,13 @@ export function MobileTerminalShortcutsDialog({
                       } ${selected ? "is-selected" : ""}`}
                       aria-label={
                         shortcut
-                          ? `Edit row ${rowIndex + 1} slot ${slotIndex + 1}, ${shortcut.label}, ${option?.label ?? shortcut.action}`
+                          ? `Edit row ${rowIndex + 1} slot ${slotIndex + 1}, ${shortcut.label}, ${option?.label ?? "Unknown key"}`
                           : `Add button to row ${rowIndex + 1} slot ${slotIndex + 1}`
                       }
                       aria-pressed={selected}
                       title={
                         shortcut
-                          ? `${shortcut.label} · ${option?.label ?? shortcut.action}`
+                          ? `${shortcut.label} · ${option?.label ?? "Unknown key"}`
                           : `Add button to slot ${slotIndex + 1}`
                       }
                       onClick={() => selectPanelSlot(rowIndex, slotIndex)}
@@ -385,7 +525,7 @@ export function MobileTerminalShortcutsDialog({
                       {shortcut ? (
                         <>
                           <strong>{shortcut.label}</strong>
-                          <span>{option?.label ?? shortcut.action}</span>
+                          <span>{option?.label ?? "Unknown key"}</span>
                         </>
                       ) : (
                         <>
@@ -428,13 +568,13 @@ export function MobileTerminalShortcutsDialog({
                   } ${selected ? "is-selected" : ""}`}
                   aria-label={
                     shortcut
-                      ? `Edit side slot ${slotIndex + 1}, ${shortcut.label}, ${option?.label ?? shortcut.action}`
+                      ? `Edit side slot ${slotIndex + 1}, ${shortcut.label}, ${option?.label ?? "Unknown key"}`
                       : `Add button to side slot ${slotIndex + 1}`
                   }
                   aria-pressed={selected}
                   title={
                     shortcut
-                      ? `${shortcut.label} · ${option?.label ?? shortcut.action}`
+                      ? `${shortcut.label} · ${option?.label ?? "Unknown key"}`
                       : `Add side button ${slotIndex + 1}`
                   }
                   onClick={() => selectSideSlot(slotIndex)}
@@ -443,7 +583,7 @@ export function MobileTerminalShortcutsDialog({
                   {shortcut ? (
                     <>
                       <strong>{shortcut.label}</strong>
-                      <span>{option?.label ?? shortcut.action}</span>
+                      <span>{option?.label ?? "Unknown key"}</span>
                     </>
                   ) : (
                     <>
@@ -461,7 +601,6 @@ export function MobileTerminalShortcutsDialog({
           className={`mobile-shortcut-slot-editor ${
             selectedShortcut ? "is-active" : ""
           }`}
-          aria-live="polite"
         >
           {selectedShortcut && selectedSlot ? (
             <>
@@ -483,6 +622,36 @@ export function MobileTerminalShortcutsDialog({
                   Clear slot
                 </button>
               </div>
+              <div
+                className="mobile-shortcut-mode"
+                role="group"
+                aria-label="Shortcut type"
+              >
+                <button
+                  type="button"
+                  aria-pressed={!customAction}
+                  onClick={() => {
+                    if (customAction) updateSelectedAction("escape");
+                  }}
+                >
+                  Preset
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={!!customAction}
+                  onClick={() => {
+                    if (!customAction)
+                      updateSelectedAction({
+                        key: "x",
+                        ctrl: true,
+                        alt: false,
+                        shift: false,
+                      });
+                  }}
+                >
+                  Custom keyboard
+                </button>
+              </div>
               <div className="mobile-shortcut-slot-editor-fields">
                 <label>
                   <span>Label</span>
@@ -502,30 +671,26 @@ export function MobileTerminalShortcutsDialog({
                     }
                   />
                 </label>
-                <div className="mobile-shortcut-field">
-                  <span>Key</span>
-                  <ShortcutKeySelect
-                    value={selectedShortcut.action}
-                    openRequest={keySelectorOpenRequest}
-                    ariaLabel={
-                      selectedSlot.area === "side"
-                        ? `Side slot ${selectedSlot.slotIndex + 1} key`
-                        : `Row ${selectedSlot.rowIndex + 1} slot ${selectedSlot.slotIndex + 1} key`
-                    }
-                    onChange={(action) => {
-                      const nextOption = mobileTerminalShortcutOption(action);
-                      updateSelectedShortcut((current) => ({
-                        ...current,
-                        action,
-                        label:
-                          !current.label.trim() ||
-                          current.label === selectedOption?.defaultButtonLabel
-                            ? (nextOption?.defaultButtonLabel ?? current.label)
-                            : current.label,
-                      }));
-                    }}
+                {typeof selectedShortcut.action === "string" ? (
+                  <div className="mobile-shortcut-field">
+                    <span>Key</span>
+                    <ShortcutKeySelect
+                      value={selectedShortcut.action}
+                      ariaLabel={
+                        selectedSlot.area === "side"
+                          ? `Side slot ${selectedSlot.slotIndex + 1} key`
+                          : `Row ${selectedSlot.rowIndex + 1} slot ${selectedSlot.slotIndex + 1} key`
+                      }
+                      onChange={updateSelectedAction}
+                    />
+                  </div>
+                ) : null}
+                {customAction ? (
+                  <CustomKeyPicker
+                    value={customAction}
+                    onChange={updateSelectedAction}
                   />
-                </div>
+                ) : null}
               </div>
             </>
           ) : (
@@ -535,6 +700,32 @@ export function MobileTerminalShortcutsDialog({
             </div>
           )}
         </section>
+
+        {invalidCombinations.length > 0 ? (
+          <div className="mobile-shortcut-error" role="alert">
+            {invalidCombinations.map((combination) => (
+              <p key={combination}>
+                {combination} cannot be sent with the current terminal encoding.
+              </p>
+            ))}
+            <p>Change the key or modifiers before saving.</p>
+          </div>
+        ) : null}
+        <details className="mobile-shortcut-help">
+          <summary>How shortcuts work</summary>
+          <p>
+            Each button sends one key combination, with no extra Enter. Shift
+            uses US key symbols. Ctrl+letter ignores case; some combinations
+            share the same bytes (Ctrl+I/Tab, Ctrl+M/Enter). Alt sends an Escape
+            prefix. Modified Enter needs application support. Custom
+            PageUp/PageDown sends keys to the application; the presets scroll
+            history. Buttons bypass browser keyboard shortcuts, but the terminal
+            application decides how to handle them. Some Ctrl+number/symbol
+            combinations, Ctrl/Alt+Tab, Ctrl/Shift+Escape, and Shift+Backspace
+            cannot be encoded. Cmd/Meta, text macros, and multi-step sequences
+            are not supported.
+          </p>
+        </details>
 
         <div className="modal-actions mobile-shortcuts-actions">
           <button
@@ -555,6 +746,7 @@ export function MobileTerminalShortcutsDialog({
           </button>
           <button
             type="button"
+            disabled={invalidCombinations.length > 0}
             onClick={() => {
               onChange(normalizeMobileTerminalShortcutRows(draft));
               onSideChange(normalizeMobileTerminalSideShortcuts(sideDraft));

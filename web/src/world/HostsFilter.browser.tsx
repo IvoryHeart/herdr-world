@@ -5,7 +5,10 @@ import { worldLocalStorage } from "../browserStorage";
 import { WorktreeLifecycleDialog } from "../components/WorktreeLifecycleDialog";
 import { ContextMenu } from "../components/ContextMenu";
 import { WorktreeOpenDialog } from "../components/WorktreeOpenDialog";
-import { initializeLayoutPreferences } from "../layoutPreferences";
+import {
+  initializeLayoutPreferences,
+  updateLayoutPreferences,
+} from "../layoutPreferences";
 import {
   defaultShortcutBindings,
   detectShortcutPlatform,
@@ -2155,6 +2158,8 @@ async function run() {
     );
   }
   if (operation === "file-download-error") {
+    // Native iOS sharing follows the explicit mobile layout policy.
+    updateLayoutPreferences({ mode: "mobile" });
     Object.defineProperty(navigator, "userAgent", {
       configurable: true,
       value: "iPhone",

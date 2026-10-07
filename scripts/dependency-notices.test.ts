@@ -20,7 +20,7 @@ test("includes exact bundled dependency licence and copyright texts", async () =
   const generated = await generateDependencyArtifacts();
 
   expect(generated.notices).toContain("| codemirror | 6.0.2 | MIT |");
-  expect(generated.notices).toContain("| lucide-react | 1.21.0 | ISC |");
+  expect(generated.notices).toContain("| lucide-react | 1.52.0 | ISC |");
   expect(generated.notices).not.toContain("@biomejs/cli-linux-x64");
   expect(generated.licenses).toContain(
     "Copyright (C) 2018-2021 by Marijn Haverbeke",

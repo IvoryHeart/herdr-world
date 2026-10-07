@@ -61,6 +61,7 @@ export class EndpointTerminalSession extends EventEmitter {
   private deferredFrame: {
     timer: ReturnType<typeof setTimeout>;
     emit: () => void;
+    size: { cols: number; rows: number };
   } | null = null;
   private paneSize = { cols: 0, rows: 0 };
   private fitAttempts = 0;
@@ -187,6 +188,13 @@ export class EndpointTerminalSession extends EventEmitter {
       if (!isCurrent()) return;
       if (!this.paneId) throw new Error("Endpoint terminal is not ready");
       await this.client.callEndpoint("pane.focus", { pane_id: this.paneId });
+      if (!isCurrent()) return;
+      // Reclaim the viewport only when this viewer focuses the tab again.
+      // Passive surfaces from other viewers must not restart fitting.
+      this.fitAttempts = SURFACE_FIT_MAX_ATTEMPTS;
+      const surface = this.latestSurface();
+      const pane = surface?.panes.find((p) => p.paneId === this.paneId);
+      if (surface && pane) this.fitSurface(surface, pane);
     });
   }
 
@@ -368,15 +376,30 @@ export class EndpointTerminalSession extends EventEmitter {
     if (this.fitResizeInFlight) {
       if (this.deferredFrame) {
         this.deferredFrame.emit = emitFrame;
+        this.deferredFrame.size = {
+          cols: surface.frame.width,
+          rows: surface.frame.height,
+        };
       } else {
         const timer = setTimeout(() => {
           const pending = this.deferredFrame;
           if (pending?.timer !== timer) return;
           this.deferredFrame = null;
           this.fitResizeInFlight = false;
+          // The request did not settle. Treat the fallback as observed
+          // geometry, but retain the remaining fit budget for a retry.
+          this.lastRequest = pending.size;
           pending.emit();
+          // An idle pane may not send another surface after a foreign resize.
+          const surface = this.latestSurface();
+          const pane = surface?.panes.find((p) => p.paneId === this.paneId);
+          if (!this.closed && surface && pane) this.fitSurface(surface, pane);
         }, FIT_DEFER_MS);
-        this.deferredFrame = { timer, emit: emitFrame };
+        this.deferredFrame = {
+          timer,
+          emit: emitFrame,
+          size: { cols: surface.frame.width, rows: surface.frame.height },
+        };
       }
       return;
     }
@@ -462,12 +485,18 @@ export class EndpointTerminalSession extends EventEmitter {
     surface: EndpointSurface,
     pane: NonNullable<EndpointSurface["panes"][number]>,
   ) {
-    // Only the response to the latest request can settle or correct it.
+    // Ignore stale replies while our resize is in flight. Once settled, a
+    // different surface size belongs to another client viewing this tab.
     if (
       surface.frame.width !== this.lastRequest.cols ||
       surface.frame.height !== this.lastRequest.rows
-    )
-      return;
+    ) {
+      if (this.fitResizeInFlight) return;
+      this.lastRequest = {
+        cols: surface.frame.width,
+        rows: surface.frame.height,
+      };
+    }
     this.fitResizeInFlight = false;
     if (this.fitAttempts === 0) return;
     if (

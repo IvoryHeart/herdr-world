@@ -290,7 +290,7 @@ test.skipIf(!chrome)(
         ).finally(() => pending.delete(requestId));
       };
       const screenshot = async (name: string) => {
-        const directory = Bun.env.ROAMGATE_TEST_SCREENSHOTS;
+        const directory = Bun.env.HERDR_WORLD_TEST_SCREENSHOTS;
         if (!directory) return;
         await mkdir(directory, { recursive: true });
         const image = await cdp("Page.captureScreenshot", { format: "png" });

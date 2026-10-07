@@ -1,8 +1,25 @@
+import { assertValidAuthPassword } from "../config/auth-token";
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+
+import { readJsonBody } from "./json-body";
 import { LOGIN_HTML } from "./login-page";
 
 const AUTH_COOKIE = "herdr_world_auth";
 const AUTH_TOKEN_TTL_SECONDS = 30 * 24 * 60 * 60;
+const LOGIN_WINDOW_MS = 60_000;
+const LOGIN_MAX_ATTEMPTS = 20;
+const LOGIN_MAX_FAILURES = 5;
+const LOGIN_COOLDOWN_MS = 5 * 60_000;
+const LOGIN_MAX_IPS = 4096;
+const LOGIN_MAX_BODY_BYTES = 16 * 1024;
+
+interface LoginAttempts {
+  count: number;
+  failures: number;
+  windowEndsAt: number;
+  blockedUntil: number;
+  expiresAt: number;
+}
 
 function base64UrlEncode(value: string) {
   return Buffer.from(value, "utf8")
@@ -21,13 +38,84 @@ function base64UrlDecode(value: string) {
 }
 
 export function createAuthHandlers(args: {
-  authRequired: boolean;
+  authRequired?: boolean;
   password: string;
   urlLoginToken?: string;
   secureCookies?: boolean;
 }) {
-  if (args.authRequired && !args.password) {
-    throw new Error("authentication requires a non-empty signing secret");
+  const authRequired = args.authRequired ?? true;
+  if (authRequired) assertValidAuthPassword(args.password);
+  // ponytail: process-local IP limits; use shared storage for multiple replicas.
+  const loginAttempts = new Map<string, LoginAttempts>();
+
+  function tooManyAttempts(waitMs: number): Response {
+    return Response.json(
+      { error: "too many login attempts" },
+      {
+        status: 429,
+        headers: {
+          "retry-after": String(Math.max(1, Math.ceil(waitMs / 1000))),
+          "cache-control": "no-store",
+          "referrer-policy": "no-referrer",
+        },
+      },
+    );
+  }
+
+  function checkCooldown(
+    attempts: LoginAttempts,
+    now: number,
+  ): Response | null {
+    if (attempts.blockedUntil > now) {
+      return tooManyAttempts(attempts.blockedUntil - now);
+    }
+    if (attempts.blockedUntil) {
+      attempts.failures = 0;
+      attempts.blockedUntil = 0;
+    }
+    return null;
+  }
+
+  function beginLogin(ip = "unknown"): LoginAttempts | Response {
+    const now = Date.now();
+    for (const [address, attempts] of loginAttempts) {
+      if (attempts.expiresAt <= now) loginAttempts.delete(address);
+    }
+    let attempts = loginAttempts.get(ip);
+    if (!attempts) {
+      // Fail closed rather than evicting an IP's active cooldown.
+      if (loginAttempts.size >= LOGIN_MAX_IPS) {
+        return tooManyAttempts(LOGIN_WINDOW_MS);
+      }
+      attempts = {
+        count: 0,
+        failures: 0,
+        windowEndsAt: now + LOGIN_WINDOW_MS,
+        blockedUntil: 0,
+        expiresAt: now + LOGIN_COOLDOWN_MS,
+      };
+      loginAttempts.set(ip, attempts);
+    }
+    attempts.expiresAt = now + LOGIN_COOLDOWN_MS;
+    const cooldown = checkCooldown(attempts, now);
+    if (cooldown) return cooldown;
+    if (attempts.windowEndsAt <= now) {
+      attempts.count = 0;
+      attempts.windowEndsAt = now + LOGIN_WINDOW_MS;
+    }
+    if (attempts.count >= LOGIN_MAX_ATTEMPTS) {
+      return tooManyAttempts(attempts.windowEndsAt - now);
+    }
+    attempts.count++;
+    return attempts;
+  }
+
+  function failLogin(attempts: LoginAttempts) {
+    attempts.failures++;
+    if (attempts.failures >= LOGIN_MAX_FAILURES) {
+      attempts.blockedUntil = Date.now() + LOGIN_COOLDOWN_MS;
+      attempts.expiresAt = attempts.blockedUntil;
+    }
   }
 
   function parseCookie(header: string | null, name: string): string | null {
@@ -131,16 +219,20 @@ export function createAuthHandlers(args: {
     });
   }
 
-  function handleTokenLogin(req: Request): Response | null {
-    if (!args.authRequired || !args.urlLoginToken || req.method !== "GET") {
+  function handleTokenLogin(req: Request, ip = "unknown"): Response | null {
+    if (!authRequired || !args.urlLoginToken || req.method !== "GET") {
       return null;
     }
     const url = new URL(req.url);
     const suppliedToken = url.searchParams.get("token");
     if (suppliedToken === null) return null;
+    const attempts = beginLogin(ip);
+    if (attempts instanceof Response) return attempts;
     url.searchParams.delete("token");
 
     const valid = secretsEqual(suppliedToken, args.urlLoginToken);
+    if (valid) attempts.failures = 0;
+    else failLogin(attempts);
     const location = valid ? `${url.pathname}${url.search}` : "/login";
     return new Response(null, {
       status: 303,
@@ -153,22 +245,46 @@ export function createAuthHandlers(args: {
     });
   }
 
-  async function handleLogin(req: Request): Promise<Response> {
-    if (!args.authRequired) {
-      return Response.json({ ok: true, note: "auth not required" });
-    }
+  async function handleLogin(req: Request, ip = "unknown"): Promise<Response> {
+    if (!authRequired) return Response.json({ ok: true });
+    const attempts = beginLogin(ip);
+    if (attempts instanceof Response) return attempts;
     let body: any;
+    let invalidBodyStatus = 0;
     try {
-      body = await req.json();
-    } catch {
-      return Response.json({ error: "bad request" }, { status: 400 });
+      body = await readJsonBody(req, LOGIN_MAX_BODY_BYTES);
+    } catch (error) {
+      invalidBodyStatus = error instanceof RangeError ? 413 : 400;
+    }
+    // A slow body must not authorize using an expired or replaced IP record.
+    if (
+      loginAttempts.get(ip) !== attempts ||
+      attempts.expiresAt <= Date.now()
+    ) {
+      return tooManyAttempts(LOGIN_WINDOW_MS);
+    }
+    const cooldown = checkCooldown(attempts, Date.now());
+    if (cooldown) return cooldown;
+    if (invalidBodyStatus) {
+      failLogin(attempts);
+      return Response.json(
+        {
+          error:
+            invalidBodyStatus === 413
+              ? "request body too large"
+              : "bad request",
+        },
+        { status: invalidBodyStatus },
+      );
     }
     if (
       typeof body?.password !== "string" ||
       !secretsEqual(body.password, args.password)
     ) {
+      failLogin(attempts);
       return Response.json({ error: "wrong password" }, { status: 401 });
     }
+    attempts.failures = 0;
     return new Response(JSON.stringify({ ok: true }), {
       status: 200,
       headers: {
@@ -180,6 +296,12 @@ export function createAuthHandlers(args: {
   }
 
   function loginPage(): Response {
+    if (!authRequired) {
+      return new Response(null, {
+        status: 302,
+        headers: { location: "/", "cache-control": "no-store" },
+      });
+    }
     return new Response(LOGIN_HTML, {
       headers: {
         "content-type": "text/html; charset=utf-8",

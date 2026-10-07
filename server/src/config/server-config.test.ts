@@ -69,8 +69,8 @@ describe("native TLS", () => {
       const cert = join(dir, "cert.pem"),
         key = join(dir, "key.pem");
       const originalArgs = process.argv;
-      const originalCert = process.env.ROAMGATE_TLS_CERT;
-      const originalKey = process.env.ROAMGATE_TLS_KEY;
+      const originalCert = process.env.HERDR_WORLD_TLS_CERT;
+      const originalKey = process.env.HERDR_WORLD_TLS_KEY;
       try {
         writeFileSync(
           join(dir, "openssl.cnf"),
@@ -100,8 +100,8 @@ describe("native TLS", () => {
         );
         expect(generated.exitCode).toBe(0);
         const tls = loadServerTls(cert, key)!;
-        process.env.ROAMGATE_TLS_CERT = "missing-cert.pem";
-        process.env.ROAMGATE_TLS_KEY = "missing-key.pem";
+        process.env.HERDR_WORLD_TLS_CERT = "missing-cert.pem";
+        process.env.HERDR_WORLD_TLS_KEY = "missing-key.pem";
         process.argv = [
           process.execPath,
           "roamgate",
@@ -114,8 +114,8 @@ describe("native TLS", () => {
         ];
         expect(loadServerConfig("0.0.0").tls).toEqual(tls);
         process.argv = [process.execPath, "roamgate", "--host", "127.0.0.1"];
-        process.env.ROAMGATE_TLS_CERT = cert;
-        process.env.ROAMGATE_TLS_KEY = key;
+        process.env.HERDR_WORLD_TLS_CERT = cert;
+        process.env.HERDR_WORLD_TLS_KEY = key;
         expect(loadServerConfig("0.0.0").tls).toEqual(tls);
         if (process.platform !== "win32") {
           const configDir = join(dir, ".config", "herdr-world");
@@ -212,10 +212,10 @@ describe("native TLS", () => {
         );
       } finally {
         process.argv = originalArgs;
-        if (originalCert === undefined) delete process.env.ROAMGATE_TLS_CERT;
-        else process.env.ROAMGATE_TLS_CERT = originalCert;
-        if (originalKey === undefined) delete process.env.ROAMGATE_TLS_KEY;
-        else process.env.ROAMGATE_TLS_KEY = originalKey;
+        if (originalCert === undefined) delete process.env.HERDR_WORLD_TLS_CERT;
+        else process.env.HERDR_WORLD_TLS_CERT = originalCert;
+        if (originalKey === undefined) delete process.env.HERDR_WORLD_TLS_KEY;
+        else process.env.HERDR_WORLD_TLS_KEY = originalKey;
         rmSync(dir, { recursive: true, force: true });
       }
     },
@@ -234,3 +234,25 @@ describe("nativeSocketPath", () => {
     expect(nativeSocketPath(logical, "linux")).toBe(logical);
   });
 });
+
+test.each(["127.0.0.1", "localhost", "::1"])(
+  "requires login on loopback %s",
+  (host) => {
+    const previousArgv = process.argv;
+    try {
+      process.argv = [
+        process.execPath,
+        "herdr-world",
+        "--host",
+        host,
+        "--password",
+        "synthetic-login-password",
+      ];
+      const config = loadServerConfig("0.0.0");
+      expect(config.authRequired).toBe(true);
+      expect(config.password).toBe("synthetic-login-password");
+    } finally {
+      process.argv = previousArgv;
+    }
+  },
+);

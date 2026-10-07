@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { shQuote } from "../utils/process-utils";
+import { runProcessWithCode, shQuote } from "../utils/process-utils";
 import { createWorktreeHookRunner } from "./worktree-hooks";
 
 async function withTempDir<T>(fn: (dir: string) => Promise<T>) {
@@ -39,7 +39,7 @@ describe("worktree hook runner", () => {
       });
 
       await expect(
-        runner.readPaseoWorktreeHooks(checkout, source),
+        runner.readWorktreeHooks(checkout, source),
       ).resolves.toMatchObject({
         path: join(checkout, "paseo.json"),
         config: { setup: "echo checkout" },
@@ -80,7 +80,7 @@ describe("worktree hook runner", () => {
         shQuote,
       });
 
-      const result = await runner.runPaseoWorktreeHook({
+      const result = await runner.runWorktreeHook({
         hook: "setup",
         checkoutPath: root,
         sourceCheckoutPath: source,
@@ -95,10 +95,7 @@ describe("worktree hook runner", () => {
 
   test("skips hooks when repo settings disable them", async () => {
     await withTempDir(async (root) => {
-      await writeFile(
-        join(root, "paseo.json"),
-        JSON.stringify({ worktree: { setup: "exit 1" } }),
-      );
+      await writeFile(join(root, "roamgate.json"), "invalid JSON");
       const runner = createWorktreeHookRunner({
         herdr: { call: async () => ({}) },
         sshHost: () => undefined,
@@ -111,7 +108,7 @@ describe("worktree hook runner", () => {
       });
 
       await expect(
-        runner.runPaseoWorktreeHook({
+        runner.runWorktreeHook({
           hook: "setup",
           checkoutPath: root,
           repoSettingsKey: "local:repo",
@@ -120,3 +117,482 @@ describe("worktree hook runner", () => {
     });
   });
 });
+
+describe("confirmed worktree setup hooks", () => {
+  test.each([
+    {
+      name: "new checkout replaces the previewed command",
+      expected: "printf source",
+      actual: "printf checkout",
+    },
+    {
+      name: "new checkout adds an unpreviewed command",
+      expected: null,
+      actual: "printf checkout",
+    },
+    {
+      name: "empty configuration gains a command",
+      expected: "",
+      actual: "printf checkout",
+    },
+    {
+      name: "missing and empty setup are distinct",
+      expected: null,
+      actual: "",
+    },
+    {
+      name: "new checkout removes the command",
+      expected: "printf source",
+      actual: undefined,
+    },
+  ])("does not execute when $name", async ({ expected, actual }) => {
+    await withTempDir(async (root) => {
+      const source = join(root, "source");
+      const checkout = join(root, "checkout");
+      await mkdir(source);
+      await mkdir(checkout);
+      await writeFile(
+        join(source, "roamgate.json"),
+        JSON.stringify({
+          worktree: expected === null ? {} : { setup: expected },
+        }),
+      );
+      await writeFile(
+        join(checkout, "roamgate.json"),
+        JSON.stringify({ worktree: { setup: actual } }),
+      );
+      let executions = 0;
+      const runner = createWorktreeHookRunner({
+        herdr: { call: async () => ({}) },
+        sshHost: () => undefined,
+        runProcess: async () => ({ stdout: "", stderr: "" }),
+        runProcessWithCode: async () => {
+          executions++;
+          return { code: 0, stdout: "", stderr: "" };
+        },
+        hooksEnabled: async () => true,
+        shQuote,
+      });
+      const result = await runner.runWorktreeSetupHook(
+        {
+          workspace: {
+            worktree: {
+              is_linked_worktree: true,
+              checkout_path: checkout,
+              repo_root: source,
+            },
+          },
+        },
+        { cwd: source },
+        { command: expected, enabled: true },
+      );
+      expect(result).toEqual({
+        event: "worktree.created",
+        status: "skipped",
+        reason: "setup_hook_changed",
+      });
+      expect(executions).toBe(0);
+    });
+  });
+
+  test.each([
+    { expected: false, enabled: true },
+    { expected: true, enabled: false },
+  ])(
+    "does not execute when enabled changes from $expected to $enabled",
+    async ({ expected, enabled }) => {
+      await withTempDir(async (root) => {
+        await writeFile(
+          join(root, "roamgate.json"),
+          '{"worktree":{"setup":"printf approved"}}',
+        );
+        let executions = 0;
+        const runner = createWorktreeHookRunner({
+          herdr: { call: async () => ({}) },
+          sshHost: () => undefined,
+          runProcess: async () => ({ stdout: "", stderr: "" }),
+          runProcessWithCode: async () => {
+            executions++;
+            return { code: 0, stdout: "", stderr: "" };
+          },
+          hooksEnabled: async () => enabled,
+          shQuote,
+        });
+        expect(
+          await runner.runWorktreeHook({
+            hook: "setup",
+            checkoutPath: root,
+            expected: { command: "printf approved", enabled: expected },
+          }),
+        ).toEqual({
+          event: "worktree.created",
+          status: "skipped",
+          reason: "hooks_enabled_changed",
+        });
+        expect(executions).toBe(0);
+      });
+    },
+  );
+
+  test("matching confirmed setup executes exactly once, with enabled rechecked before launch", async () => {
+    await withTempDir(async (root) => {
+      await writeFile(
+        join(root, "roamgate.json"),
+        '{"worktree":{"setup":"printf approved"}}',
+      );
+      const commands: string[][] = [];
+      let enabledReads = 0;
+      const runner = createWorktreeHookRunner({
+        herdr: { call: async () => ({}) },
+        sshHost: () => undefined,
+        runProcess: async () => ({ stdout: "", stderr: "" }),
+        runProcessWithCode: async (argv) => {
+          commands.push(argv);
+          return { code: 0, stdout: "approved", stderr: "" };
+        },
+        hooksEnabled: async () => {
+          enabledReads++;
+          return true;
+        },
+        shQuote,
+      });
+      const result = await runner.runWorktreeSetupHook(
+        {
+          workspace: {
+            worktree: { is_linked_worktree: true, checkout_path: root },
+          },
+        },
+        null,
+        { command: "printf approved", enabled: true },
+        () => true,
+      );
+      expect(result.status).toBe("succeeded");
+      expect(enabledReads).toBe(2);
+      expect(commands).toHaveLength(1);
+      expect(commands[0]?.at(-1)).toContain("sh -c 'printf approved'");
+    });
+  });
+
+  test("a late enabled change or retired target cannot start the confirmed command", async () => {
+    await withTempDir(async (root) => {
+      await writeFile(
+        join(root, "roamgate.json"),
+        '{"worktree":{"setup":"printf approved"}}',
+      );
+      for (const retire of [false, true]) {
+        let reads = 0;
+        let current = true;
+        let executions = 0;
+        const runner = createWorktreeHookRunner({
+          herdr: { call: async () => ({}) },
+          sshHost: () => undefined,
+          runProcess: async () => ({ stdout: "", stderr: "" }),
+          runProcessWithCode: async () => {
+            executions++;
+            return { code: 0, stdout: "", stderr: "" };
+          },
+          hooksEnabled: async () => {
+            reads++;
+            if (reads === 2 && retire) current = false;
+            return reads === 1 || retire;
+          },
+          shQuote,
+        });
+        const result = runner.runWorktreeHook({
+          hook: "setup",
+          checkoutPath: root,
+          expected: { command: "printf approved", enabled: true },
+          isCurrent: () => current,
+        });
+        if (retire)
+          await expect(result).rejects.toThrow("The worktree target changed.");
+        else
+          expect(await result).toEqual({
+            event: "worktree.created",
+            status: "skipped",
+            reason: "hooks_enabled_changed",
+          });
+        expect(executions).toBe(0);
+      }
+    });
+  });
+
+  test("unverifiable checkout configuration fails closed without raw errors", async () => {
+    await withTempDir(async (root) => {
+      await writeFile(
+        join(root, "roamgate.json"),
+        "invalid synthetic-private-config",
+      );
+      const runner = createWorktreeHookRunner({
+        herdr: { call: async () => ({}) },
+        sshHost: () => undefined,
+        runProcess: async () => ({ stdout: "", stderr: "" }),
+        runProcessWithCode: async () => {
+          throw new Error("must not execute");
+        },
+        hooksEnabled: async () => true,
+        shQuote,
+      });
+      expect(
+        await runner.runWorktreeHook({
+          hook: "setup",
+          checkoutPath: root,
+          expected: { command: "printf approved", enabled: true },
+        }),
+      ).toEqual({
+        event: "worktree.created",
+        status: "skipped",
+        reason: "setup_hook_changed",
+      });
+    });
+  });
+});
+
+// Execute SSH command bodies through a real shell while checking transport routing.
+function testRunner(ssh = false) {
+  const commands: string[][] = [];
+  const execute = async (argv: string[]) => {
+    commands.push(argv);
+    if (ssh) {
+      expect(argv[0]).toBe("ssh");
+      expect(argv.at(-2)).toBe("hook-test-host");
+      return runProcessWithCode(["sh", "-c", argv.at(-1)!]);
+    }
+    expect(argv.slice(0, 2)).toEqual(["sh", "-c"]);
+    return runProcessWithCode(argv);
+  };
+  const runner = createWorktreeHookRunner({
+    herdr: { call: async () => ({}) },
+    sshHost: () => (ssh ? "hook-test-host" : undefined),
+    runProcess: async (argv) => {
+      const result = await execute(argv);
+      if (result.code) throw new Error(result.stderr);
+      return result;
+    },
+    runProcessWithCode: execute,
+    shQuote,
+    hooksEnabled: async () => true,
+  });
+  return { runner, commands };
+}
+
+for (const ssh of [false, true]) {
+  describe(ssh ? "SSH hook shell" : "local hook shell", () => {
+    test("selects one file in native/legacy target/source order for every combination", async () => {
+      await withTempDir(async (root) => {
+        const checkout = join(root, "target ' quoted");
+        const source = join(root, "source");
+        await mkdir(checkout);
+        await mkdir(source);
+        const paths = [
+          join(checkout, "roamgate.json"),
+          join(source, "roamgate.json"),
+          join(checkout, "paseo.json"),
+          join(source, "paseo.json"),
+        ];
+        const { runner } = testRunner(ssh);
+        for (let mask = 0; mask < 16; mask++) {
+          for (const [index, path] of paths.entries()) {
+            await rm(path, { force: true });
+            if (mask & (1 << index)) {
+              await writeFile(
+                path,
+                JSON.stringify({
+                  worktree: { setup: `printf selected-${index}` },
+                }),
+              );
+            }
+          }
+          const selected = paths.findIndex((_, index) => mask & (1 << index));
+          const loaded = await runner.readWorktreeHooks(checkout, source);
+          const result = await runner.runWorktreeHook({
+            hook: "setup",
+            checkoutPath: checkout,
+            sourceCheckoutPath: source,
+          });
+          if (selected < 0) {
+            expect(loaded).toBeNull();
+            expect(result.status).toBe("skipped");
+          } else {
+            expect(loaded).toMatchObject({
+              path: paths[selected],
+              source: selected < 2 ? "roamgate" : "paseo",
+            });
+            expect(result.status).toBe("succeeded");
+            expect(result.stdout?.match(/selected-\d/g)).toEqual([
+              `selected-${selected}`,
+            ]);
+          }
+        }
+      });
+    });
+
+    test("empty and partial configurations suppress fallback and ignore unknown fields", async () => {
+      await withTempDir(async (root) => {
+        const { runner } = testRunner(ssh);
+        await writeFile(
+          join(root, "paseo.json"),
+          JSON.stringify({ worktree: { setup: "exit 42" } }),
+        );
+        for (const config of [
+          {},
+          { worktree: {} },
+          { worktree: { setup: " " } },
+          { worktree: { opened: "true", future: 3 }, future: [] },
+        ]) {
+          await writeFile(join(root, "roamgate.json"), JSON.stringify(config));
+          expect(
+            (
+              await runner.runWorktreeHook({
+                hook: "setup",
+                checkoutPath: root,
+                sourceCheckoutPath: root,
+              })
+            ).status,
+          ).toBe("skipped");
+        }
+      });
+    });
+
+    test("invalid JSON, types, and unreadable files fail with their path without fallback", async () => {
+      await withTempDir(async (root) => {
+        const { runner } = testRunner(ssh);
+        const path = join(root, "roamgate.json");
+        await writeFile(
+          join(root, "paseo.json"),
+          '{"worktree":{"setup":"true"}}',
+        );
+        for (const text of [
+          "",
+          " ",
+          "{",
+          "null",
+          "[]",
+          "1",
+          '{"worktree":null}',
+          '{"worktree":[]}',
+          ...["setup", "opened", "teardown", "removed"].flatMap((hook) =>
+            [null, 1, false, [], {}].map((value) =>
+              JSON.stringify({ worktree: { [hook]: value } }),
+            ),
+          ),
+        ]) {
+          await writeFile(path, text);
+          await expect(runner.readWorktreeHooks(root)).rejects.toThrow(path);
+          const result = await runner.runWorktreeHook({
+            hook: "setup",
+            checkoutPath: root,
+          });
+          expect(result.status).toBe("failed");
+          expect(result.error).toContain(path);
+        }
+        if (process.platform !== "win32" && process.getuid?.() !== 0) {
+          await chmod(path, 0);
+          try {
+            await expect(runner.readWorktreeHooks(root)).rejects.toThrow(path);
+          } finally {
+            await chmod(path, 0o600);
+          }
+        }
+        await rm(path);
+        await mkdir(path);
+        await expect(runner.readWorktreeHooks(root)).rejects.toThrow(path);
+      });
+    });
+
+    for (const filename of ["roamgate.json", "paseo.json"]) {
+      test(`reads a UTF-8 BOM in ${filename} and runs teardown`, async () => {
+        await withTempDir(async (root) => {
+          const path = join(root, filename);
+          const config = { teardown: "printf 'bom-\uFEFF-kept'" };
+          await writeFile(
+            path,
+            "\uFEFF" + JSON.stringify({ worktree: config }),
+          );
+          const { runner } = testRunner(ssh);
+
+          await expect(runner.readWorktreeHooks(root)).resolves.toMatchObject({
+            path,
+            config,
+          });
+          const result = await runner.runWorktreeHook({
+            hook: "teardown",
+            checkoutPath: root,
+          });
+          expect(result.status).toBe("succeeded");
+          expect(result.stdout).toContain("bom-\uFEFF-kept");
+        });
+      });
+
+      test(`runs all lifecycle hooks from ${filename} with cwd, aliases, and source after removal`, async () => {
+        await withTempDir(async (root) => {
+          const checkout = join(root, "target ' quoted");
+          const source = join(root, "source");
+          await mkdir(checkout);
+          await mkdir(source);
+          const hooks = Object.fromEntries(
+            ["setup", "opened", "teardown", "removed"].map((hook) => [
+              hook,
+              'test "$HERDR_WORLD_HOOK_CHECKOUT_PATH" = "$PASEO_CHECKOUT_PATH" && ' +
+                'test "$HERDR_WORLD_HOOK_SOURCE_CHECKOUT_PATH" = "$PASEO_SOURCE_CHECKOUT_PATH" && ' +
+                `test "$PASEO_HOOK" = ${hook} && ` +
+                'printf "%s|%s|%s|%s" "$PWD" "$HERDR_WORLD_HOOK_EVENT" "$HERDR_WORLD_HOOK_CHECKOUT_PATH" "$HERDR_WORLD_HOOK_SOURCE_CHECKOUT_PATH"',
+            ]),
+          );
+          await writeFile(
+            join(checkout, filename),
+            JSON.stringify({ worktree: hooks }),
+          );
+          await writeFile(
+            join(source, filename),
+            JSON.stringify({
+              worktree: { removed: hooks.removed + " && printf source-only" },
+            }),
+          );
+          const { runner } = testRunner(ssh);
+          const workspace = {
+            worktree: {
+              is_linked_worktree: true,
+              checkout_path: checkout,
+              repo_root: source,
+            },
+          };
+          const setup = await runner.runWorktreeSetupHook(
+            { workspace },
+            { cwd: source },
+          );
+          const opened = await runner.runWorktreeOpenedHook(
+            { workspace },
+            { cwd: source },
+          );
+          const teardown = await runner.runWorktreeHook({
+            hook: "teardown",
+            checkoutPath: checkout,
+            sourceCheckoutPath: source,
+          });
+          for (const [result, event] of [
+            [setup, "worktree.created"],
+            [opened, "worktree.opened"],
+            [teardown, "worktree.before_remove"],
+          ] as const) {
+            expect(result.status).toBe("succeeded");
+            expect(result.stdout).toContain(
+              `${checkout}|${event}|${checkout}|${source}`,
+            );
+          }
+          await rm(checkout, { recursive: true });
+          const removed = await runner.runWorktreeRemovedHook({
+            checkoutPath: checkout,
+            sourceCheckoutPath: source,
+            repoSettingsKey: null,
+          });
+          expect(removed.status).toBe("succeeded");
+          expect(removed.stdout).toContain(`config: ${join(source, filename)}`);
+          expect(removed.stdout).toContain(
+            `${source}|worktree.removed|${checkout}|${source}source-only`,
+          );
+        });
+      });
+    }
+  });
+}

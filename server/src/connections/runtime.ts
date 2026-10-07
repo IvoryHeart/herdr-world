@@ -17,6 +17,10 @@ import { createAgentSessionFileAccess } from "../agent/session-file-access";
 import { createAgentCheckoutContext } from "../agent/checkout-context";
 import { HerdrClient } from "../bridge/herdr-client";
 import {
+  EndpointClient,
+  type EndpointSnapshot,
+} from "../bridge/endpoint-client";
+import {
   assertSupportedHerdrProtocol,
   isTerminalHelloProtocol,
 } from "../bridge/protocol-compat";
@@ -35,6 +39,7 @@ import { dropCoalescedMessage } from "../bridge/websocket-send";
 import { createTerminalBridge } from "../bridge/terminal-bridge";
 import { createHerdrInfoHandler } from "../http/herdr-info";
 import { createImageUploadHandler } from "../http/image-upload";
+import { createTerminalUploadHandler } from "../http/terminal-upload";
 import {
   createRecoveryReporter,
   type Logger,
@@ -200,6 +205,15 @@ export function createLegacyConnectionRuntime(args: {
     shQuote,
   });
   const handleImageUpload = createImageUploadHandler({ sshHost });
+  const onUploadCleanupError = (error: unknown) =>
+    logger.warn("terminal upload cleanup failed", {
+      connection: identity.id,
+      error: sanitizeConnectionError(error),
+    });
+  const handleTerminalUpload = createTerminalUploadHandler({
+    sshHost,
+    onCleanupError: onUploadCleanupError,
+  });
   const sshTunnel = createSshTunnelManager({
     connectionId: identity.id,
     logger: logger.child("ssh"),
@@ -213,7 +227,7 @@ export function createLegacyConnectionRuntime(args: {
     connectionGeneration: args.connectionGeneration,
     herdr,
     sshHost,
-    readPaseoWorktreeHooks: worktreeHooks.readPaseoWorktreeHooks,
+    readWorktreeHooks: worktreeHooks.readWorktreeHooks,
     resolveWorkspaceGitRoot: async (workspaceId) =>
       files.resolveWorkspaceGitRoot({ workspace_id: workspaceId }),
     workspaceAutoSyncIsRunning: workspaceAutoSync.isRunning,
@@ -566,6 +580,38 @@ export function createLegacyConnectionRuntime(args: {
   let disposed = false;
   let stopTask: Promise<void> | null = null;
 
+  async function recoveryIdentity(
+    signal?: AbortSignal,
+  ): Promise<string | null> {
+    signal?.throwIfAborted();
+    if (disposed) throw new Error("connection runtime is disposed");
+    if (worldEnv("DISABLE_ENDPOINT") === "1") return null;
+    const ping = await herdr.call("ping", {}, 5_000);
+    signal?.throwIfAborted();
+    if (disposed) throw new Error("connection runtime is disposed");
+    if (!isTerminalHelloProtocol(ping.protocol)) return null;
+    // A passive handshake reads the existing server boot identity without a
+    // terminal attachment or another long-lived background connection.
+    const client = new EndpointClient(clientSocketPath, false, "notifications");
+    let bootId: string | null = null;
+    client.on("snapshot", (snapshot: EndpointSnapshot) => {
+      bootId = snapshot.bootId || null;
+    });
+    client.on("error", () => {});
+    const abort = () => client.close();
+    signal?.addEventListener("abort", abort, { once: true });
+    try {
+      signal?.throwIfAborted();
+      await client.connect(80, 24);
+      signal?.throwIfAborted();
+      if (disposed) throw new Error("connection runtime is disposed");
+      return bootId;
+    } finally {
+      signal?.removeEventListener("abort", abort);
+      client.close();
+    }
+  }
+
   async function startTransport() {
     if (disposed) throw new Error("connection runtime is disposed");
     if (transportStarted) return;
@@ -585,6 +631,7 @@ export function createLegacyConnectionRuntime(args: {
     if (disposed) throw new Error("connection runtime is disposed");
     if (backgroundStarted) return;
     backgroundStarted = true;
+    void handleTerminalUpload.startCleanup().catch(onUploadCleanupError);
     workspaceAutoSync.start();
     subscriptionLoop.start();
     agentStatusSubscriptions.start();
@@ -596,6 +643,7 @@ export function createLegacyConnectionRuntime(args: {
     if (disposed) return Promise.resolve();
     disposed = true;
     backgroundStarted = false;
+    handleTerminalUpload.stopCleanup();
     herdr.off("event", onHerdrEvent);
     herdr.off("error", onHerdrError);
     taskEvents.stop();
@@ -631,6 +679,7 @@ export function createLegacyConnectionRuntime(args: {
     worktreeParents,
     handleHerdrInfo,
     handleImageUpload,
+    handleTerminalUpload,
     handleSettingsRpc,
     files,
     status,
@@ -641,6 +690,7 @@ export function createLegacyConnectionRuntime(args: {
     terminalBridge,
     agentSessions,
     agentCheckout,
+    recoveryIdentity,
     taskNotificationSource,
     startTransport,
     startBackground,

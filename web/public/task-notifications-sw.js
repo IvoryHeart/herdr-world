@@ -2,6 +2,31 @@ self.addEventListener("install", (event) => {
   event.waitUntil(self.skipWaiting());
 });
 
+function validNotificationTarget(target) {
+  if (!target || typeof target !== "object" || Array.isArray(target))
+    return false;
+  if (target.type === "ranger_task") {
+    const uuid = /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/;
+    return (
+      typeof target.taskId === "string" &&
+      uuid.test(target.taskId) &&
+      typeof target.runId === "string" &&
+      uuid.test(target.runId)
+    );
+  }
+  return (
+    !("type" in target) &&
+    typeof target.connectionId === "string" &&
+    target.connectionId &&
+    Number.isSafeInteger(target.runtimeGeneration) &&
+    target.runtimeGeneration >= 0 &&
+    typeof target.workspaceId === "string" &&
+    target.workspaceId &&
+    typeof target.paneId === "string" &&
+    target.paneId
+  );
+}
+
 self.addEventListener("push", (event) => {
   event.waitUntil(
     (async () => {
@@ -12,18 +37,7 @@ self.addEventListener("push", (event) => {
         /* Show a visible fallback for invalid payloads. */
       }
       const target = message?.target;
-      const valid =
-        target &&
-        typeof target.connectionId === "string" &&
-        target.connectionId &&
-        Number.isSafeInteger(target.runtimeGeneration) &&
-        target.runtimeGeneration >= 0 &&
-        typeof target.workspaceId === "string" &&
-        target.workspaceId &&
-        typeof target.paneId === "string" &&
-        target.paneId &&
-        (target.agentSessionId === undefined ||
-          (typeof target.agentSessionId === "string" && target.agentSessionId));
+      const valid = validNotificationTarget(target);
       await self.registration.showNotification(
         typeof message?.title === "string"
           ? message.title

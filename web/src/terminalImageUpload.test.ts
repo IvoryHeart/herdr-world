@@ -136,7 +136,7 @@ describe("terminal image upload responses", () => {
       )) as unknown as typeof fetch;
 
     await expect(uploadTerminalImage(client, image)).rejects.toThrow(
-      "image upload response did not include a path",
+      "upload response did not include a path",
     );
   });
 });

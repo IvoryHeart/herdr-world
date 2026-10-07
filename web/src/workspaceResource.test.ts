@@ -9,6 +9,11 @@ import { describe, expect, test } from "bun:test";
 import type { Workspace } from "./types";
 import {
   checkoutKeyForWorkspace,
+  readResourceFileTabs,
+  writeResourceFileTabs,
+  openResourceFileTab,
+  closeResourceFileTab,
+  type ResourceFileTabs,
   inspectorMaximumSize,
   inspectorNavigationRatioAtPosition,
   isWorkspaceInspectorShortcut as resolveShortcut,
@@ -108,11 +113,13 @@ describe("workspace inspector view admission", () => {
     expect(normalizeInspectorViews(["unsupported", null])).toEqual([
       "files",
       "changes",
+      "commits",
       "history",
     ]);
     expect(normalizeInspectorViews(undefined)).toEqual([
       "files",
       "changes",
+      "commits",
       "history",
     ]);
   });
@@ -545,5 +552,214 @@ describe("workspace resource scope", () => {
       filesNavigationRatio: 0.56,
       changesNavigationRatio: 0.4,
     });
+  });
+
+  test("restores the commits tab only for its checkout", () => {
+    const storage = memoryStorage();
+    const scope = resourceScopeForWorkspace(
+      "local",
+      workspace("w1", "/repo", "repo"),
+    );
+    writeInspectorPreferences(storage, {
+      scope,
+      open: true,
+      view: "commits",
+      dock: "right",
+      size: 520,
+      expanded: false,
+    });
+    expect(readInspectorPreferences(storage, scope).view).toBe("commits");
+    expect(
+      readInspectorPreferences(
+        storage,
+        resourceScopeForWorkspace("remote", workspace("w1", "/repo", "repo")),
+      ).view,
+    ).toBe("files");
+  });
+});
+
+describe("file preview tabs", () => {
+  test("deleting a directory closes its tabs without reopening deleted files", () => {
+    const tabs: ResourceFileTabs = {
+      paths: ["src/a.ts", "src/b.ts", "src-other/c.ts", "README.md"],
+      activePath: "src/b.ts",
+      previewPath: "src/a.ts",
+    };
+    expect(closeResourceFileTab(tabs, "src", true)).toEqual({
+      paths: ["src-other/c.ts", "README.md"],
+      activePath: "src-other/c.ts",
+      previewPath: null,
+    });
+    expect(
+      closeResourceFileTab({ ...tabs, activePath: "README.md" }, "src", true),
+    ).toEqual({
+      paths: ["src-other/c.ts", "README.md"],
+      activePath: "README.md",
+      previewPath: null,
+    });
+  });
+
+  test("migrates a legacy selected path and preserves the existing storage key", () => {
+    const storage = memoryStorage();
+    const scope = resourceScopeForWorkspace(
+      "startup-default",
+      workspace("plain"),
+    );
+    const key = "workspaceInspectorFile:workspace:plain";
+    storage.setItem(key, "src/index.ts");
+    expect(readResourceFileTabs(storage, scope)).toEqual({
+      paths: ["src/index.ts"],
+      activePath: "src/index.ts",
+      previewPath: null,
+    });
+    writeResourceFileSelection(storage, scope, "README.md");
+    expect(JSON.parse(storage.getItem(key)!)).toEqual({
+      version: 2,
+      paths: ["src/index.ts", "README.md"],
+      activePath: "README.md",
+      previewPath: "README.md",
+    });
+  });
+
+  test("reuses one preview, keeps pinned tabs, and closes neighbors", () => {
+    let tabs: ResourceFileTabs = {
+      paths: [],
+      activePath: null,
+      previewPath: null,
+    };
+    tabs = openResourceFileTab(tabs, "a");
+    tabs = openResourceFileTab(tabs, "b");
+    expect(tabs).toEqual({
+      paths: ["b"],
+      activePath: "b",
+      previewPath: "b",
+    });
+    tabs = { ...tabs, previewPath: null };
+    tabs = openResourceFileTab(tabs, "c");
+    tabs = openResourceFileTab(tabs, "b");
+    expect(tabs).toEqual({
+      paths: ["b", "c"],
+      activePath: "b",
+      previewPath: "c",
+    });
+    tabs = openResourceFileTab(tabs, "d");
+    expect(tabs).toEqual({
+      paths: ["b", "d"],
+      activePath: "d",
+      previewPath: "d",
+    });
+    tabs = closeResourceFileTab(tabs, "d");
+    expect(tabs).toEqual({
+      paths: ["b"],
+      activePath: "b",
+      previewPath: null,
+    });
+    expect(closeResourceFileTab(tabs, "absent")).toBe(tabs);
+    expect(closeResourceFileTab(tabs, "b")).toEqual({
+      paths: [],
+      activePath: null,
+      previewPath: null,
+    });
+    expect(
+      closeResourceFileTab(
+        { paths: ["a", "b", "c"], activePath: "b", previewPath: null },
+        "b",
+      ).activePath,
+    ).toBe("c");
+  });
+
+  test("restores empty, ordered tabs and active selection across reopen", () => {
+    const storage = memoryStorage();
+    const scope = resourceScopeForWorkspace(
+      "remote",
+      workspace("first", "/repo"),
+    );
+    const reopened = resourceScopeForWorkspace(
+      "remote",
+      workspace("reopened", "/repo"),
+    );
+    writeResourceFileTabs(storage, scope, {
+      paths: ["b", "a"],
+      activePath: "a",
+      previewPath: "a",
+    });
+    expect(readResourceFileTabs(storage, reopened)).toEqual({
+      paths: ["b", "a"],
+      activePath: "a",
+      previewPath: "a",
+    });
+    writeResourceFileTabs(storage, reopened, {
+      paths: [],
+      activePath: null,
+      previewPath: null,
+    });
+    expect(readResourceFileTabs(storage, scope)).toEqual({
+      paths: [],
+      activePath: null,
+      previewPath: null,
+    });
+    expect(readResourceFileSelection(storage, scope)).toBeUndefined();
+  });
+
+  test("isolates connections, linked checkouts and plain workspaces", () => {
+    const storage = memoryStorage();
+    const scopes = [
+      resourceScopeForWorkspace("one", workspace("a", "/repo")),
+      resourceScopeForWorkspace("two", workspace("a", "/repo")),
+      resourceScopeForWorkspace("one", workspace("b", "/repo/branch")),
+      resourceScopeForWorkspace("one", workspace("plain-a")),
+      resourceScopeForWorkspace("one", workspace("plain-b")),
+    ];
+    scopes.forEach((scope, index) =>
+      writeResourceFileTabs(storage, scope, {
+        paths: [`file-${index}`, "shared.ts"],
+        activePath: `file-${index}`,
+        previewPath: null,
+      }),
+    );
+    scopes.forEach((scope, index) =>
+      expect(readResourceFileTabs(storage, scope)).toEqual({
+        paths: [`file-${index}`, "shared.ts"],
+        activePath: `file-${index}`,
+        previewPath: null,
+      }),
+    );
+  });
+
+  test("rejects corrupt records and sanitizes duplicate or invalid paths", () => {
+    const storage = memoryStorage();
+    const scope = resourceScopeForWorkspace(
+      "startup-default",
+      workspace("plain"),
+    );
+    const key = "workspaceInspectorFile:workspace:plain";
+    for (const raw of [
+      "{",
+      '{"version":3,"paths":["a"]}',
+      '{"version":1,"paths":null}',
+    ]) {
+      storage.setItem(key, raw);
+      expect(readResourceFileTabs(storage, scope)).toEqual({
+        paths: [],
+        activePath: null,
+        previewPath: null,
+      });
+    }
+    storage.setItem(
+      key,
+      JSON.stringify({
+        version: 2,
+        paths: ["a", "a", 3, null, "", "b"],
+        activePath: "missing",
+        previewPath: "b",
+      }),
+    );
+    expect(readResourceFileTabs(storage, scope)).toEqual({
+      paths: ["a", "b"],
+      activePath: "a",
+      previewPath: "b",
+    });
+    storage.setItem(key, '{"version":1,"paths":["a"],"activePath":"a"}');
+    expect(readResourceFileTabs(storage, scope).previewPath).toBeNull();
   });
 });

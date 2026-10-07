@@ -1,5 +1,5 @@
 import type { WindowSwitcherEntry } from "../world/windows/WindowSwitcher";
-import { Plus, X } from "lucide-react";
+import { Pin, Plus, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
@@ -13,6 +13,7 @@ import { summarizeTabAgents } from "./agentSession";
 import { CloseButton } from "./CloseButton";
 import { focusDialogElement } from "./dialogFocus";
 import { requestCloseTab, tabName } from "./TabBar";
+import { orderTabsForDisplay, setTabPinned, useTabPins } from "../tabPins";
 import "./MobileTabSheet.css";
 
 /**
@@ -35,6 +36,7 @@ export function MobileTabSheet({
   const store = useOperationalStore();
   const s = useStoreSelector(
     (state) => ({
+      activeConnectionId: state.activeConnectionId,
       panes: state.panes,
       connectionId: state.activeConnectionId,
       runtimeGeneration: state.serverRuntimeGeneration,
@@ -67,15 +69,17 @@ export function MobileTabSheet({
     }
   };
 
+  const pinnedTabIds = useTabPins(s.activeConnectionId);
   const focusedWs = s.workspaces.find((w) => w.focused);
   const createReason = useEndpointCreationReason(
     "tab.create",
     focusedWs?.workspace_id,
   );
   const tabs = focusedWs
-    ? s.tabs
-        .filter((t) => t.workspace_id === focusedWs.workspace_id)
-        .sort((a, b) => a.number - b.number)
+    ? orderTabsForDisplay(
+        s.tabs.filter((t) => t.workspace_id === focusedWs.workspace_id),
+        pinnedTabIds,
+      )
     : [];
 
   const windowForTab = (tabId: string) =>
@@ -183,22 +187,37 @@ export function MobileTabSheet({
                   <span className="mobile-tab-sheet-name">{name}</span>
                   {windowEntry?.minimized ? <small>Minimized</small> : null}
                 </button>
-                <button
-                  type="button"
-                  className="mobile-tab-sheet-close"
-                  aria-label={`Close ${name}`}
-                  title={`Close ${name}`}
-                  disabled={transitionPending}
-                  onClick={() =>
-                    requestCloseTab(t.tab_id, {
-                      connectionId: store.get().activeConnectionId,
-                      runtimeGeneration:
-                        store.get().serverRuntimeGeneration ?? -1,
-                    })
-                  }
-                >
-                  <X size={14} />
-                </button>
+                {pinnedTabIds.has(t.tab_id) ? (
+                  <button
+                    type="button"
+                    className="mobile-tab-sheet-close is-pinned"
+                    aria-label={`Unpin ${name}`}
+                    title={`Unpin ${name}`}
+                    disabled={transitionPending}
+                    onClick={() =>
+                      setTabPinned(s.activeConnectionId, t.tab_id, false)
+                    }
+                  >
+                    <Pin size={14} />
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="mobile-tab-sheet-close"
+                    aria-label={`Close ${name}`}
+                    title={`Close ${name}`}
+                    disabled={transitionPending}
+                    onClick={() =>
+                      requestCloseTab(t.tab_id, {
+                        connectionId: store.get().activeConnectionId,
+                        runtimeGeneration:
+                          store.get().serverRuntimeGeneration ?? -1,
+                      })
+                    }
+                  >
+                    <X size={14} />
+                  </button>
+                )}
               </div>
             );
           })}
