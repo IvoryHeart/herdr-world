@@ -37,6 +37,18 @@ shell; [WorldFoundationApp](../web/src/world/WorldFoundationApp.tsx) keeps the
 visible. Build and development commands are in the [root](../package.json),
 [server](../server/package.json) and [web](../web/package.json) manifests.
 
+World's shell coordination is downstream-owned: [WorldControlPlane](../web/src/world/WorldControlPlane.tsx)
+presents views and Inspectors; [observation](../web/src/world/useWorldObservation.ts),
+[Inspector intent](../web/src/world/useWorldInspectorController.ts),
+[window coordination](../web/src/world/useWorldInspectorWindows.ts),
+[creation completion](../web/src/world/useWorldCreatedTerminal.ts) and
+[visual Actions](../web/src/world/useWorldVisualActions.tsx) own separate behaviors.
+They share existing connection/session admission and store interfaces.
+[Office renderer lifetime](../web/src/world/officeRenderer.ts) composes focused
+region drawing modules. The [component routes](../web/src/world/README.md#shell-and-source-ownership)
+identify each owner and its regression evidence. Shared styles load through the
+ordered [World style manifest](../web/src/world/world.css).
+
 ## Service ownership
 
 | Area | Owner and responsibility | Focused evidence |

@@ -46,6 +46,13 @@ time were respectively:
 - `56edfdd364ace64663e4a98c931d15d2ef5bfcb725acee8d8791e88f974fd210`
 - `f4975a6e840506a003f39153dfa6e32830d311624402980a1884ecb5351a1e3f`
 
-PixiJS `8.3.4` is pinned as an npm dependency. Its MIT license is retained at
+The adapted drawing code is organized under `web/src/world/` in
+`officeRoomDrawing.ts`, `officeReceptionDrawing.ts`, `officeCommonAreaDrawing.ts`,
+`officeDrawingPrimitives.ts`, `officeDrawingShared.ts` and `officeInteraction.ts`.
+`officeRenderer.ts` composes those modules and owns renderer lifetime; anchor,
+texture, diagnostics and type modules retain the same modification notice.
+This source reorganization changes neither asset bytes nor their provenance.
+
+PixiJS is pinned as an npm dependency. Its MIT license is retained at
 `web/public/world/LICENSE-PixiJS.txt`. The Claw-Empire Apache-2.0 license is a
 release requirement and is not inferred from PixiJS or any neighboring asset.

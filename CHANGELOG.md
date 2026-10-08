@@ -7,6 +7,12 @@ are optional because the merged PR history records their source.
 
 ## [Unreleased]
 
+### Changed
+
+- Organize the World shell, Inspector coordination, Office drawing and visual-view
+  styles into focused modules while preserving connection ownership, presentation
+  and the existing responsive CSS cascade.
+
 ## [0.2.3] - 2026-10-08
 
 ### Added
