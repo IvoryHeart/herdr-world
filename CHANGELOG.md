@@ -7,6 +7,8 @@ are optional because the merged PR history records their source.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-08
+
 ### Added
 
 - Ranger workspace chat, proposed actions, background and scheduled tasks, and
