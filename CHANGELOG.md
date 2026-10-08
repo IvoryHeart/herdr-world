@@ -16,6 +16,8 @@ are optional because the merged PR history records their source.
 
 ### Fixed
 
+- Verify the selected GitHub credential on older CLIs even when another saved
+  account has an expired token.
 - Use a framed view icon for World view selection, distinct from Ranger settings
   and window arrangement.
 - Restore the floating mobile workspace navigator and hide it on desktop.

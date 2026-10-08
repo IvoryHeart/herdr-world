@@ -266,8 +266,17 @@ export async function readPullRequestStatus(
       auth.code !== 0 &&
       /unknown flag: --active(?:\s|$)/.test(auth.stderr)
     ) {
-      // Older gh versions have only one account per host and no --active flag.
-      auth = await run([cli, "auth", "status", "--hostname", selected.host]);
+      // Older gh can report an expired inactive account as an auth failure.
+      // Check the credential selected for this host with an authenticated API.
+      auth = await run([
+        cli,
+        "api",
+        "--hostname",
+        selected.host,
+        "--method",
+        "GET",
+        "user",
+      ]);
     }
     if (auth.code !== 0)
       return finish(

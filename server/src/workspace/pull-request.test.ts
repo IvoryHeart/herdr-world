@@ -84,6 +84,8 @@ function fixture(
           `origin\tgit@${host}:alice/project.git (fetch)\norigin\tgit@${host}:alice/project.git (push)\n`,
       );
     if (command.includes("'--version'")) return ok("CLI version");
+    if (command.includes("'gh' 'api'") && command.includes("'user'"))
+      return ok({ login: "active-example" });
     if (command.includes("'auth' 'status'")) {
       if (command.includes("'--json'"))
         return ok(provider === "github" ? `${host}\n` : "");
@@ -143,6 +145,68 @@ function fixture(
 
 describe("PR/MR status", () => {
   test.each([false, true])(
+    "older GitHub CLIs accept the valid active account despite an expired inactive account (SSH: %s)",
+    async (ssh) => {
+      for (const host of ["github.com", "github.example.com"]) {
+        const status = fixture("github", {
+          ssh,
+          host,
+          override: (command) => {
+            if (!command.includes("'auth' 'status' '--hostname'")) return;
+            return command.includes("'--active'")
+              ? { code: 1, stdout: "", stderr: "unknown flag: --active\n" }
+              : {
+                  code: 1,
+                  stdout: "",
+                  stderr: "Inactive account token expired",
+                };
+          },
+        });
+        expect((await status.read()).state).toBe("ready");
+        const probe = status.commands
+          .map((argv) => (ssh ? argv.at(-1)! : argv.map(shQuote).join(" ")))
+          .find(
+            (command) =>
+              command.includes("'gh' 'api'") && command.includes("'user'"),
+          );
+        expect(probe).toContain(`'--hostname' '${host}'`);
+      }
+    },
+  );
+
+  test.each([false, true])(
+    "older GitHub CLIs reject the expired active account even when an inactive account is valid (SSH: %s)",
+    async (ssh) => {
+      for (const host of ["github.com", "github.example.com"]) {
+        const status = fixture("github", {
+          ssh,
+          host,
+          override: (command) => {
+            if (command.includes("'auth' 'status' '--hostname'"))
+              return command.includes("'--active'")
+                ? { code: 1, stdout: "", stderr: "unknown flag: --active\n" }
+                : {
+                    code: 1,
+                    stdout: "",
+                    stderr: "Active account token expired",
+                  };
+            if (command.includes("'gh' 'api'") && command.includes("'user'"))
+              return fail;
+          },
+        });
+        const result = await status.read();
+        expect(result.state).toBe("unauthenticated");
+        expect(JSON.stringify(result)).not.toContain("secret-token");
+        expect(
+          status.commands
+            .flat()
+            .some((argument) => argument.includes("repos/")),
+        ).toBe(false);
+      }
+    },
+  );
+
+  test.each([false, true])(
     "older authenticated GitHub CLIs keep PR status available (SSH: %s)",
     async (ssh) => {
       const status = fixture("github", {
@@ -156,9 +220,14 @@ describe("PR/MR status", () => {
       const auth = status.commands.filter((argv) =>
         argv.join(" ").includes("auth"),
       );
-      expect(auth).toHaveLength(2);
-      expect(auth[1]!.join(" ")).toContain("--hostname");
-      expect(auth[1]!.join(" ")).not.toContain("--active");
+      expect(auth).toHaveLength(1);
+      const probe = status.commands
+        .map((argv) => (ssh ? argv.at(-1)! : argv.map(shQuote).join(" ")))
+        .find(
+          (command) =>
+            command.includes("'gh' 'api'") && command.includes("'user'"),
+        );
+      expect(probe).toContain("'--hostname' 'github.com'");
     },
   );
 
