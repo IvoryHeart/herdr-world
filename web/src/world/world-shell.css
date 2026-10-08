@@ -1,0 +1,192 @@
+.world-foundation-shell {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  color: var(--text, #e8edf4);
+  background: var(--bg, #0e1116);
+}
+
+.world-hosts-control {
+  position: relative;
+  flex: 0 0 auto;
+}
+.world-navigator {
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.world-navigator section {
+  min-width: 0;
+}
+.world-navigator p {
+  font-size: 12px;
+  margin: 4px 0;
+}
+.world-navigator-host {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  text-align: left;
+}
+.world-navigator-host .muted {
+  margin-left: auto;
+  font-size: 10px;
+}
+.world-navigator-tree {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-left: 10px;
+}
+.world-navigator-tree > .workspace-tree-panel,
+.world-navigator-tree > .agents-panel {
+  flex: 0 0 auto;
+}
+.world-hosts-menu {
+  width: min(320px, 90vw);
+  max-height: 70vh;
+  overflow: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--shell-panel);
+  border: 1px solid var(--shell-border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px #0008;
+  z-index: 5000;
+}
+.world-hosts-menu label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.world-hosts-control > [role="status"] {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  width: min(320px, 90vw);
+  background: var(--bg, #0e1116);
+  font-size: 12px;
+}
+.world-search-results {
+  max-height: 180px;
+  overflow: auto;
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px;
+  background: var(--bg, #0e1116);
+}
+.world-search-results p {
+  width: 100%;
+  margin: 0;
+}
+.world-outside-filter {
+  position: absolute;
+  bottom: 4px;
+  left: 8px;
+  margin: 0;
+  pointer-events: none;
+  font-size: 12px;
+  background: var(--bg, #0e1116);
+}
+
+.world-topbar-host {
+  z-index: 120;
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+.world-topbar-host > .topbar {
+  width: 100%;
+}
+
+.world-hosts-icon {
+  position: relative;
+  display: inline-flex;
+}
+.world-hosts-count,
+.world-primary-view-icon {
+  display: none;
+}
+:where(html[data-layout="mobile"]) {
+  .world-topbar-control-plane .world-topbar-status {
+    display: none;
+  }
+  .world-hosts-control .connection-switcher-label,
+  .world-hosts-chevron {
+    display: none;
+  }
+  .world-hosts-control .connection-switcher-trigger {
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    justify-content: center;
+  }
+  .world-hosts-count {
+    position: absolute;
+    top: -7px;
+    right: -9px;
+    display: grid;
+    place-items: center;
+    min-width: 14px;
+    height: 14px;
+    padding: 0 2px;
+    border-radius: 7px;
+    background: var(--accent);
+    color: var(--bg);
+    font-size: 9px;
+    font-weight: 700;
+    line-height: 1;
+  }
+  .world-primary-view-select {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    border: 1px solid var(--topbar-control-border);
+    border-radius: 7px;
+    background: var(--topbar-control-bg);
+    color: var(--topbar-control-text);
+  }
+  .world-primary-view-select:focus-within {
+    outline: 2px solid var(--accent);
+  }
+  .world-primary-view-icon {
+    display: block;
+    pointer-events: none;
+  }
+  .world-topbar-control-plane .world-primary-view-select select {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    padding: 0;
+    opacity: 0;
+    cursor: pointer;
+  }
+}
+
+.world-primary-view-select {
+  flex: 0 0 auto;
+}
+
+.world-topbar-control-plane,
+.world-topbar-status {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+}
+
+.world-topbar-control-plane {
+  gap: 10px;
+  overflow: hidden;
+}

@@ -1,0 +1,247 @@
+@media (max-width: 760px) {
+  .world-view-toolbar-host {
+    flex: 0 0 30px;
+  }
+  .world-view-toolbar-actions {
+    display: none;
+  }
+  .world-view-toolbar-results {
+    max-width: 96px;
+  }
+  .world-primary-nav {
+    flex-basis: 48px;
+    gap: 7px;
+    padding: 0 6px;
+  }
+  .world-primary-brand span {
+    display: none;
+  }
+  .world-primary-tabs {
+    flex: 1;
+  }
+  .world-primary-tabs button {
+    flex: 1;
+    min-width: 0;
+    padding: 0 4px;
+    font-size: 11px;
+  }
+  .world-topbar-status > span:not(.world-live-dot):nth-of-type(n + 3) {
+    display: none;
+  }
+  .world-context-rail {
+    top: 8px;
+    right: 8px;
+    left: 8px;
+    width: auto;
+    max-height: calc(100% - 16px);
+  }
+  .world-context-rail.has-inspector {
+    bottom: 8px;
+  }
+  .world-context-rail[data-dock="bottom"],
+  .world-context-rail:has(.world-inspector-stage.is-inspector-expanded) {
+    inset: 8px;
+    width: auto;
+    height: auto;
+    max-height: none;
+  }
+  .world-inspector-portal:not(:empty) {
+    min-height: min(62vh, 560px);
+  }
+  .world-view-stage {
+    padding: 12px;
+  }
+  .world-selection-panel {
+    padding: 10px;
+  }
+  .world-tree [role="group"] {
+    margin-left: 10px;
+    padding-left: 7px;
+  }
+  .world-tree-node {
+    grid-template-columns: 25px minmax(0, 1fr) auto;
+  }
+  .world-tree-node em {
+    display: none;
+  }
+  .world-view-graph {
+    padding: 0;
+  }
+}
+
+@media (min-width: 721px) and (max-width: 760px) {
+  .world-view-toolbar-host:has(
+    .world-view-toolbar[aria-label="Graph controls"]
+  ) {
+    flex: 1 1 250px;
+  }
+  .world-view-toolbar[aria-label="Graph controls"] .world-view-toolbar-actions {
+    display: flex;
+  }
+}
+
+@media (max-width: 720px) {
+  .world-connected-tree-shell {
+    padding: 12px 10px 40px;
+  }
+  .world-connected-tree {
+    display: none;
+  }
+  .world-tree-outline {
+    display: grid;
+    gap: 5px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .world-tree-outline ul {
+    display: grid;
+    gap: 4px;
+    margin: 4px 0 7px 18px;
+    padding: 0 0 0 8px;
+    border-left: 1px solid
+      color-mix(in srgb, var(--accent, #79a6ff) 35%, transparent);
+    list-style: none;
+  }
+  .world-tree-outline-row {
+    min-width: 0;
+    display: grid;
+    grid-template-columns: 32px minmax(0, 1fr) auto;
+    align-items: stretch;
+    gap: 4px;
+  }
+  .world-tree-outline-node-wrap {
+    min-width: 0;
+  }
+  .world-tree-inline-inspector {
+    height: min(640px, 72dvh);
+    min-height: 420px;
+  }
+  .world-tree-outline-toggle,
+  .world-tree-outline-spacer,
+  .world-tree-outline-terminal {
+    width: 32px;
+    min-height: 48px;
+  }
+  .world-tree-outline-toggle,
+  .world-tree-outline-terminal {
+    display: grid;
+    place-items: center;
+    padding: 0;
+  }
+  .world-tree-outline-toggle svg {
+    transition: transform 120ms ease;
+  }
+  .world-tree-outline-toggle[aria-expanded="true"] svg {
+    transform: rotate(90deg);
+  }
+  .world-tree-outline-select {
+    min-width: 0;
+    min-height: 48px;
+    display: grid;
+    grid-template-columns: 24px minmax(0, 1fr);
+    align-items: center;
+    gap: 7px;
+    padding: 6px 8px;
+    border: 1px solid var(--border, #343942);
+    border-radius: 7px;
+    color: inherit;
+    background: color-mix(in srgb, var(--bg, #0e1116) 86%, #24324a);
+    text-align: left;
+  }
+  .world-tree-outline-select[aria-pressed="true"] {
+    border-color: var(--accent, #79a6ff);
+    background: color-mix(
+      in srgb,
+      var(--accent, #79a6ff) 14%,
+      var(--bg, #0e1116)
+    );
+  }
+  .world-tree-outline-select > span {
+    min-width: 0;
+    display: grid;
+    gap: 2px;
+  }
+  .world-tree-outline-select strong,
+  .world-tree-outline-select small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .world-tree-outline-select small {
+    color: var(--muted, #9da7b4);
+    font-size: 9px;
+  }
+  .world-spatial-graph-shell {
+    overflow: auto;
+  }
+  .world-spatial-graph-bar {
+    position: sticky;
+    top: 0;
+    flex-wrap: wrap;
+    padding: 8px;
+  }
+  .world-spatial-graph-heading {
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+  .world-spatial-graph-heading span {
+    display: none;
+  }
+  .world-spatial-graph-search {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    flex-basis: 100%;
+    order: 3;
+  }
+  .world-spatial-graph-zoom {
+    display: none;
+  }
+  .world-spatial-graph-content {
+    min-height: auto;
+    display: block;
+    flex: 0 0 auto;
+  }
+  .world-spatial-graph-outline {
+    width: 100%;
+    min-height: calc(100dvh - 170px);
+    overflow: visible;
+    border-right: 0;
+  }
+  .world-spatial-graph-visual {
+    display: none;
+  }
+  .world-spatial-graph-toggle,
+  .world-spatial-graph-spacer,
+  .world-spatial-graph-action,
+  .world-spatial-graph-select {
+    min-height: 48px;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .world-spatial-graph-select,
+  .world-spatial-graph-toggle,
+  .world-spatial-graph-action {
+    transition:
+      border-color 120ms ease,
+      background 120ms ease;
+  }
+}
+
+.world-spatial-graph-space {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 600px;
+}
+
+.world-creation-reason {
+  position: absolute;
+  width: 180px;
+  padding: 4px 6px;
+  color: var(--text);
+  background: var(--surface);
+  font-size: 11px;
+  line-height: 1.3;
+  text-align: center;
+}

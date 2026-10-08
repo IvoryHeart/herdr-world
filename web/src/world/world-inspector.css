@@ -1,0 +1,195 @@
+.world-inspector-portal {
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+.world-context-rail-resize {
+  position: absolute;
+  z-index: 2;
+  right: 0;
+  bottom: 0;
+  width: 24px;
+  height: 24px;
+  cursor: nwse-resize;
+  border: 0;
+  background: transparent;
+}
+.world-context-rail-resize::after {
+  content: "";
+  position: absolute;
+  right: 5px;
+  bottom: 5px;
+  width: 9px;
+  height: 9px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+}
+.world-inspector-transfer-owner {
+  display: contents;
+}
+.world-inspector-portal:empty {
+  display: none;
+}
+.world-inspector-stage {
+  width: 100%;
+  height: 100%;
+}
+.world-inspector-stage .workspace-inspector-slot {
+  width: 100% !important;
+  height: 100% !important;
+  min-width: 0;
+  min-height: 0;
+  max-width: none;
+  max-height: none;
+  flex: 1 1 auto;
+}
+.world-intent-profile-header {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+.world-intent-header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.world-intent-header-actions button {
+  width: 30px;
+  height: 30px;
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  color: var(--muted, #9da7b4);
+  background: transparent;
+  cursor: pointer;
+}
+.world-intent-header-actions button:hover:not(:disabled) {
+  color: inherit;
+  background: rgb(255 255 255 / 7%);
+}
+.world-intent-header-actions button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.world-intent-avatar {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--accent, #79a6ff) 46%, transparent);
+  border-radius: 10px;
+  color: var(--accent, #79a6ff);
+  background: color-mix(in srgb, var(--accent, #79a6ff) 12%, transparent);
+  font: 800 12px / 1 var(--mono-font, monospace);
+}
+.world-intent-profile[data-kind="agent"] .world-intent-avatar {
+  color: #67d79b;
+  border-color: rgb(103 215 155 / 38%);
+  background: rgb(103 215 155 / 10%);
+}
+.world-intent-identity {
+  min-width: 0;
+}
+.world-intent-identity .world-eyebrow {
+  margin-bottom: 2px;
+}
+.world-intent-identity h2 {
+  margin: 0;
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}
+.world-intent-context {
+  margin: 2px 0 0;
+  overflow: hidden;
+  color: var(--muted, #9da7b4);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.world-panel-close {
+  position: static;
+}
+.world-panel-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 10px;
+}
+.world-panel-actions button {
+  min-height: 34px;
+  padding: 7px 10px;
+  border: 1px solid var(--border, #343942);
+  border-radius: 7px;
+  color: inherit;
+  background: rgb(255 255 255 / 4%);
+  cursor: pointer;
+}
+.world-panel-actions button:first-child {
+  color: #0c1725;
+  border-color: transparent;
+  background: var(--accent, #7daaff);
+  font-weight: 700;
+}
+.world-panel-actions button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.world-panel-warning,
+.world-panel-error,
+.world-intent-loading {
+  margin: 10px 0 0;
+  color: #e6ae6b;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.world-panel-error {
+  color: #ef9b85;
+}
+.world-intent-loading {
+  color: var(--muted, #9da7b4);
+}
+.world-task-summary {
+  margin: 10px 0 0;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--accent, #79a6ff) 24%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--accent, #79a6ff) 7%, transparent);
+}
+.world-task-summary span {
+  color: var(--accent, #79a6ff);
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.world-task-summary p {
+  margin: 5px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.world-intent-connector {
+  position: fixed;
+  z-index: 31;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  overflow: visible;
+  pointer-events: none;
+}
+.world-intent-connector path {
+  fill: none;
+  stroke: color-mix(in srgb, var(--accent, #79a6ff) 68%, transparent);
+  stroke-width: 1.5;
+  stroke-dasharray: 4 4;
+}
+.world-intent-connector circle {
+  fill: var(--accent, #79a6ff);
+  stroke: color-mix(in srgb, var(--bg, #0e1116) 86%, transparent);
+  stroke-width: 2;
+}
