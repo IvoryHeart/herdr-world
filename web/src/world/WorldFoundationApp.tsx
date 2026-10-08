@@ -34,7 +34,6 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import {
-  Compass,
   FolderOpen,
   History,
   LayoutGrid,
@@ -728,7 +727,7 @@ export default function WorldFoundationApp() {
                 className="world-primary-view-select"
                 title={`World view: ${view}`}
               >
-                <Compass
+                <LayoutGrid
                   className="world-primary-view-icon"
                   size={18}
                   aria-hidden="true"

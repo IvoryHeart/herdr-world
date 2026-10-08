@@ -16,6 +16,7 @@ are optional because the merged PR history records their source.
 
 ### Fixed
 
+- Use a grid icon for World view selection to distinguish it from Ranger settings.
 - Restore the floating mobile workspace navigator and hide it on desktop.
   Office redraws after returning from Ranger or another hidden workspace surface.
 - Integrations and repository settings stop loading when their selected host is
