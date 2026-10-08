@@ -1,0 +1,106 @@
+{
+  "width": 390,
+  "height": 844,
+  "visibleHeight": 564,
+  "controls": [
+    {
+      "label": "Search Graph",
+      "rect": {
+        "left": 166.421875,
+        "top": 13,
+        "right": 196.421875,
+        "bottom": 43
+      }
+    },
+    {
+      "label": "Zoom out",
+      "rect": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    {
+      "label": "Zoom in",
+      "rect": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    {
+      "label": "Fit graph",
+      "rect": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    {
+      "label": "Arrange graph",
+      "rect": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    {
+      "label": "Rotate graph left",
+      "rect": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    {
+      "label": "Rotate graph right",
+      "rect": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    {
+      "label": "Hosts",
+      "rect": {
+        "left": 210.421875,
+        "top": 10,
+        "right": 246.421875,
+        "bottom": 46
+      }
+    },
+    {
+      "label": "Open command menu",
+      "rect": {
+        "left": 302,
+        "top": 10,
+        "right": 338,
+        "bottom": 46
+      }
+    },
+    {
+      "label": "Menu",
+      "rect": {
+        "left": 340,
+        "top": 10,
+        "right": 376,
+        "bottom": 46
+      }
+    },
+    {
+      "label": "Open device keyboard",
+      "rect": {
+        "left": 337,
+        "top": 511,
+        "right": 381,
+        "bottom": 555
+      }
+    }
+  ]
+}
