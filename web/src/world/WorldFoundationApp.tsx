@@ -40,6 +40,7 @@ import {
   Pin,
   PinOff,
   Terminal,
+  View,
 } from "lucide-react";
 import App, { type WorkspaceSurfaceSelection } from "../App";
 import { bridge, type ConnectionSummary } from "../api";
@@ -727,7 +728,7 @@ export default function WorldFoundationApp() {
                 className="world-primary-view-select"
                 title={`World view: ${view}`}
               >
-                <LayoutGrid
+                <View
                   className="world-primary-view-icon"
                   size={18}
                   aria-hidden="true"
