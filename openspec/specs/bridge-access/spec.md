@@ -19,8 +19,9 @@ forwarding an operation or publishing its result.
 
 ### Requirement: Explicit access policy
 World SHALL default to a loopback listener and SHALL use the Roamgate-derived trusted-single-user
-boundary. Loopback listeners SHALL not require login. Managed non-loopback service installation
-SHALL require a generated login token or configured password. World SHALL not require users to
+boundary. All listeners, including loopback, SHALL require a generated persistent
+login token or configured password. Configured passwords SHALL contain 15–1024
+characters. Repeated failed login attempts SHALL receive a bounded cooldown. World SHALL not require users to
 configure bridge Host allow-lists, browser Origin allow-lists or cross-origin connection CSP entries.
 Before processing privileged browser HTTP or WebSocket traffic, World SHALL automatically require
 the browser Origin authority to equal the request Host authority. A loopback listener SHALL reject a
@@ -31,7 +32,8 @@ SHALL use a World-owned name that does not replace Roamgate's cookie on the same
 
 #### Scenario: Local application
 - **WHEN** World runs with its default loopback listener
-- **THEN** the browser can open the same-origin application without connection-policy setup
+- **THEN** the browser authenticates with its configured password or generated token and opens
+  the same-origin application without connection-policy setup
 
 #### Scenario: Cross-origin browser request
 - **WHEN** a browser submits a privileged HTTP or WebSocket request whose Origin and Host
@@ -54,7 +56,7 @@ SHALL use a World-owned name that does not replace Roamgate's cookie on the same
   rejected
 
 #### Scenario: Password-protected connection
-- **WHEN** a non-loopback World service requires a configured password
+- **WHEN** a World service requires a configured password
 - **THEN** unauthenticated protected traffic is rejected and an admitted browser receives a bounded
   authenticated session
 

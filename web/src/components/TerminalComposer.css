@@ -7,6 +7,9 @@
   .terminal-composer {
     /* In-flow at the bottom of the column shell. The app shell owns the main
        keyboard lift; only iOS gets a small additional form-accessory-bar gap. */
+    position: relative;
+    /* Above the mobile capsule controls (z-index 72-74). */
+    z-index: 75;
     margin-bottom: var(--keyboard-inset-composer-gap, 0px);
     display: flex;
     flex-direction: column;
@@ -40,8 +43,88 @@
     border-color: color-mix(in srgb, var(--accent) 70%, var(--border));
   }
 
+  .terminal-composer [hidden] {
+    display: none;
+  }
+
+  .terminal-composer-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .terminal-composer-mode {
+    display: flex;
+    flex-shrink: 0;
+    min-width: 0;
+    margin: 0 auto 0 0;
+    padding: 2px;
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    background: var(--panel-2);
+  }
+
+  .terminal-composer-mode label {
+    position: relative;
+    cursor: pointer;
+  }
+
+  .terminal-composer-mode legend {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .terminal-composer-mode input {
+    position: absolute;
+    opacity: 0;
+    width: 1px;
+    height: 1px;
+  }
+
+  .terminal-composer-mode span {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 24px;
+    padding: 0 8px;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 15px;
+    touch-action: manipulation;
+  }
+
+  .terminal-composer-mode input:checked + span {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+    color: var(--text-strong);
+  }
+
+  .terminal-composer-mode input:focus-visible + span {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .terminal-composer-mode input:disabled + span {
+    opacity: 0.45;
+    cursor: default;
+  }
+
+  .terminal-composer-direct {
+    color: var(--muted);
+    font-size: 12px;
+  }
+
   .terminal-composer-actions {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 6px;
   }
@@ -57,7 +140,8 @@
     white-space: nowrap;
   }
 
-  .terminal-composer-actions button {
+  .terminal-composer-actions button,
+  .terminal-composer-toolbar button {
     height: 30px;
     display: inline-flex;
     align-items: center;
@@ -76,14 +160,15 @@
     -webkit-tap-highlight-color: transparent;
   }
 
-  .terminal-composer-actions button:disabled {
+  .terminal-composer-actions button:disabled,
+  .terminal-composer-toolbar button:disabled {
     opacity: 0.45;
   }
 
   .terminal-composer-close,
-  .terminal-composer-shortcuts-toggle,
   .terminal-composer-attach,
-  .terminal-composer-help {
+  .terminal-composer-shortcuts-toggle,
+  .terminal-composer-commands-toggle {
     width: 30px;
     padding: 0;
     flex: 0 0 auto;
@@ -94,15 +179,100 @@
     flex: 0 0 auto;
   }
 
+  .terminal-composer-commands-toggle:not(:disabled) {
+    color: var(--accent);
+  }
+
   .terminal-composer-submit.is-primary,
-  .terminal-composer-shortcuts-toggle.is-open {
+  .terminal-composer-shortcuts-toggle[aria-expanded="true"],
+  .terminal-composer-commands-toggle[aria-expanded="true"] {
     border-color: var(--accent);
     background: var(--accent-soft);
   }
 
-  .terminal-composer-actions button:active:not(:disabled) {
+  .terminal-composer-actions button:active:not(:disabled),
+  .terminal-composer-toolbar button:active:not(:disabled) {
     border-color: var(--accent);
     background: var(--accent-soft);
+  }
+
+  .terminal-composer-commands {
+    /* Float above the dock without resizing the draft or terminal. */
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: calc(8px + env(safe-area-inset-left, 0px));
+    right: calc(8px + env(safe-area-inset-right, 0px));
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+    max-height: min(320px, calc(var(--app-viewport-height, 100dvh) * 0.4));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 8px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--panel-2);
+    box-shadow: var(--shadow-lg);
+  }
+
+  .terminal-composer-commands:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .terminal-composer-command-heading {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+  }
+
+  .terminal-composer-command-heading button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 36px;
+    min-height: 36px;
+  }
+
+  .terminal-composer-command-list {
+    min-height: 44px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .terminal-composer-command-list button {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    width: 100%;
+    min-height: 44px;
+    padding: 6px 8px;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-strong);
+    text-align: left;
+    overflow-wrap: anywhere;
+    touch-action: manipulation;
+  }
+
+  .terminal-composer-command-list button[aria-selected="true"] {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+  }
+
+  .terminal-composer-command-list button span:last-child,
+  .terminal-composer-command-note {
+    color: var(--muted);
+    font-size: 12px;
+  }
+
+  .terminal-composer-command-confirm button {
+    min-height: 36px;
+    margin-right: 6px;
   }
 
   .terminal-composer-shortcuts {
@@ -127,7 +297,8 @@
   }
 
   .terminal-composer-shortcut-spacer {
-    width: 48px;
+    width: 100%;
+    max-width: 48px;
     height: 28px;
     pointer-events: none;
   }

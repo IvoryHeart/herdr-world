@@ -1,3 +1,4 @@
+import { useEffectCallback } from "../useEffectCallback";
 import { useEffect, useRef, useState } from "react";
 import { CloseButton } from "./CloseButton";
 import { focusDialogElement } from "./dialogFocus";
@@ -24,23 +25,21 @@ export function TextInputDialog({
 }) {
   const [value, setValue] = useState(initialValue);
   const inputRef = useRef<HTMLInputElement>(null);
-  const onCloseRef = useRef(onClose);
-
-  onCloseRef.current = onClose;
+  const onCloseEvent = useEffectCallback(onClose);
 
   useEffect(() => {
     if (!open) return;
     setValue(initialValue);
     const cancelFocus = focusDialogElement(inputRef.current, { select: true });
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onCloseRef.current();
+      if (e.key === "Escape") onCloseEvent();
     };
     window.addEventListener("keydown", onKey);
     return () => {
       cancelFocus();
       window.removeEventListener("keydown", onKey);
     };
-  }, [initialValue, open]);
+  }, [initialValue, open, onCloseEvent]);
 
   if (!open) return null;
 
@@ -103,11 +102,8 @@ export function ConfirmDialog({
   onClose: () => void;
 }) {
   const dialogRef = useRef<HTMLDivElement>(null);
-  const onConfirmRef = useRef(onConfirm);
-  const onCloseRef = useRef(onClose);
-
-  onConfirmRef.current = onConfirm;
-  onCloseRef.current = onClose;
+  const onConfirmEvent = useEffectCallback(onConfirm);
+  const onCloseEvent = useEffectCallback(onClose);
 
   useEffect(() => {
     if (!open) return;
@@ -120,14 +116,14 @@ export function ConfirmDialog({
       if (action === "close") {
         e.preventDefault();
         e.stopPropagation();
-        onCloseRef.current();
+        onCloseEvent();
         return;
       }
       if (action === "confirm") {
         e.preventDefault();
         e.stopPropagation();
-        onConfirmRef.current();
-        onCloseRef.current();
+        onConfirmEvent();
+        onCloseEvent();
         return;
       }
       if (action === "contain") {
@@ -140,7 +136,7 @@ export function ConfirmDialog({
       cancelFocus();
       window.removeEventListener("keydown", onKey, { capture: true });
     };
-  }, [open]);
+  }, [open, onCloseEvent, onConfirmEvent]);
 
   if (!open) return null;
 
@@ -170,8 +166,8 @@ export function ConfirmDialog({
             type="button"
             className={danger ? "danger" : ""}
             onClick={() => {
-              onConfirmRef.current();
-              onCloseRef.current();
+              onConfirm();
+              onClose();
             }}
           >
             {confirmLabel}
@@ -194,9 +190,7 @@ export function MessageDialog({
   onClose: () => void;
 }) {
   const dialogRef = useRef<HTMLDivElement>(null);
-  const onCloseRef = useRef(onClose);
-
-  onCloseRef.current = onClose;
+  const onCloseEvent = useEffectCallback(onClose);
 
   useEffect(() => {
     if (!open) return;
@@ -210,7 +204,7 @@ export function MessageDialog({
       if (action === "close" || action === "confirm") {
         e.preventDefault();
         e.stopPropagation();
-        onCloseRef.current();
+        onCloseEvent();
         return;
       }
       if (action === "contain") {
@@ -223,7 +217,7 @@ export function MessageDialog({
       cancelFocus();
       window.removeEventListener("keydown", onKey, { capture: true });
     };
-  }, [open]);
+  }, [open, onCloseEvent]);
 
   if (!open) return null;
 

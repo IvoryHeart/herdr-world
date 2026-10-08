@@ -117,6 +117,7 @@ describe("visual-route Actions", () => {
       "terminal",
       "files",
       "changes",
+      "commits",
       "history",
       "spaces",
     ]);
@@ -138,12 +139,14 @@ describe("visual-route Actions", () => {
     expect(visualRouteActionsForNode(space)).toEqual([
       "files",
       "changes",
+      "commits",
       "spaces",
     ]);
     expect(visualRouteActionsForNode(terminal)).toEqual([
       "terminal",
       "files",
       "changes",
+      "commits",
       "spaces",
     ]);
   });

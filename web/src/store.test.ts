@@ -33,6 +33,127 @@ import {
 import type { Pane } from "./types";
 import { removeTemporaryWorkspaceSafely } from "./worktreeLifecycle";
 import { registerTerminalConnectionDisposer } from "./terminalConnection";
+import { __resetTabPinsForTests, setTabPinned } from "./tabPins";
+
+describe("upstream actions retain their World owner", () => {
+  async function withOwners(
+    run: (calls: Array<{ host: string; method: string }>) => Promise<void>,
+  ) {
+    const previous = store.get();
+    const connection = bridge.connection;
+    const storage = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+    const values = new Map<string, string>();
+    Object.defineProperty(globalThis, "localStorage", {
+      configurable: true,
+      value: {
+        getItem: (key: string) => values.get(key) ?? null,
+        setItem: (key: string, value: string) => values.set(key, value),
+        removeItem: (key: string) => values.delete(key),
+      },
+    });
+    const calls: Array<{ host: string; method: string }> = [];
+    const snapshot = partitionState();
+    snapshot.tabMoveSupported = true;
+    snapshot.sessionsByConnectionId.beta = {
+      ...snapshot.sessionsByConnectionId.beta!,
+      tabMoveSupported: true,
+    };
+    __storeTesting.replaceState(snapshot);
+    bridge.connection = ((host = "alpha", generation = 1) => ({
+      connectionId: host,
+      generation: 10,
+      serverRuntimeGeneration: generation,
+      isCurrent: () =>
+        store
+          .get()
+          .connections.some(
+            (item) =>
+              item.id === host &&
+              item.generation === generation &&
+              item.state === "ready",
+          ),
+      acceptsServerGeneration: (value: unknown) => value === generation,
+      call: async (method: string) => {
+        calls.push({ host, method });
+        const own = snapshot.sessionsByConnectionId[host]!;
+        if (method === "workspace.list")
+          return { workspaces: own.workspaces, tab_move_supported: true };
+        if (method === "tab.list") return { tabs: own.tabs };
+        if (method === "pane.list") return { panes: own.panes };
+        return {};
+      },
+    })) as typeof bridge.connection;
+    try {
+      await run(calls);
+    } finally {
+      bridge.connection = connection;
+      __storeTesting.replaceState(previous);
+      __resetTabPinsForTests();
+      if (storage) Object.defineProperty(globalThis, "localStorage", storage);
+      else Reflect.deleteProperty(globalThis, "localStorage");
+    }
+  }
+
+  test("tab reorder and pane movement on an inactive host never use the focused host", async () => {
+    await withOwners(async (calls) => {
+      const beta = operationalStore({
+        connectionId: "beta",
+        runtimeGeneration: 1,
+      });
+      await beta.moveTab("same-tab", 0);
+      await beta.movePane("same-pane", "right");
+      expect(
+        calls.filter(
+          (item) => item.method === "tab.move" || item.method === "pane.swap",
+        ),
+      ).toEqual([
+        { host: "beta", method: "tab.move" },
+        { host: "beta", method: "pane.swap" },
+      ]);
+      expect(store.get().activeConnectionId).toBe("alpha");
+    });
+  });
+
+  test("a pin protects only its owning host's tab and last pane", async () => {
+    await withOwners(async (calls) => {
+      setTabPinned("beta", "same-tab", true);
+      const beta = operationalStore({
+        connectionId: "beta",
+        runtimeGeneration: 1,
+      });
+      const alpha = operationalStore({
+        connectionId: "alpha",
+        runtimeGeneration: 1,
+      });
+      expect(beta.guardTabClose("same-tab")).toBe(false);
+      expect(beta.guardPaneClose("same-pane")).toBe(false);
+      expect(alpha.guardTabClose("same-tab")).toBe(true);
+      await beta.closeTab("same-tab");
+      await beta.closePane("same-pane");
+      expect(calls).toEqual([]);
+    });
+  });
+
+  test("retiring the captured host prevents a move from falling back", async () => {
+    await withOwners(async (calls) => {
+      const beta = operationalStore({
+        connectionId: "beta",
+        runtimeGeneration: 1,
+      });
+      __storeTesting.replaceState({
+        ...store.get(),
+        connections: store
+          .get()
+          .connections.map((item) =>
+            item.id === "beta" ? { ...item, generation: 2 } : item,
+          ),
+      });
+      await beta.moveTab("same-tab", 0);
+      await beta.movePane("same-pane", "right");
+      expect(calls).toEqual([]);
+    });
+  });
+});
 
 describe("current transport catalogue admission", () => {
   test("a failed or duplicate-ID refresh preserves the admitted catalogue", async () => {

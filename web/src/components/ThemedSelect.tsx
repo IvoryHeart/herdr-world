@@ -1,5 +1,5 @@
 import { Check, ChevronDown } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { cn } from "../utils";
 import { Command, CommandItem, CommandList } from "./ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
@@ -22,6 +22,8 @@ export function ThemedSelect({
   align = "start",
   "aria-label": ariaLabel,
   title,
+  placeholder,
+  disabled = false,
 }: {
   value: string;
   options: ThemedSelectOption[];
@@ -31,16 +33,21 @@ export function ThemedSelect({
   align?: "start" | "center" | "end";
   "aria-label"?: string;
   title?: string;
+  placeholder?: string;
+  disabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [highlighted, setHighlighted] = useState(value);
+  useEffect(() => {
+    if (disabled) setOpen(false);
+  }, [disabled]);
   const current = options.find((option) => option.value === value);
   return (
     <Popover
-      open={open}
+      open={open && !disabled}
       onOpenChange={(next) => {
-        setOpen(next);
-        if (next) setHighlighted(value);
+        setOpen(next && !disabled);
+        if (next && !disabled) setHighlighted(value);
       }}
     >
       <PopoverTrigger asChild>
@@ -49,11 +56,12 @@ export function ThemedSelect({
           className={cn("themed-select-trigger", className)}
           aria-label={ariaLabel}
           title={title}
+          disabled={disabled}
         >
           {icon ?? (
             <>
               <span className="themed-select-value">
-                {current?.label ?? value}
+                {current?.label ?? placeholder ?? value}
               </span>
               <ChevronDown size={13} aria-hidden="true" />
             </>
@@ -74,6 +82,7 @@ export function ThemedSelect({
                 key={option.value}
                 value={option.value}
                 onSelect={() => {
+                  if (disabled) return;
                   setOpen(false);
                   onChange(option.value);
                 }}

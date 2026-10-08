@@ -1,3 +1,4 @@
+import { useEffectCallback } from "../useEffectCallback";
 import { useEffect, useRef, useState } from "react";
 import { useOperationalStore } from "../store";
 import { useConnectionClient } from "../useConnectionClient";
@@ -50,11 +51,9 @@ export function WorktreeOpenDialog({
     workspaceId: string;
     message: string;
   } | null>(null);
-  const onCloseRef = useRef(onClose);
+  const onCloseEvent = useEffectCallback(onClose);
   const searchRef = useRef<HTMLInputElement>(null);
   const manualTargetRef = useRef<HTMLInputElement>(null);
-
-  onCloseRef.current = onClose;
 
   useEffect(() => {
     if (!open || !workspaceId) return;
@@ -86,14 +85,14 @@ export function WorktreeOpenDialog({
     );
 
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onCloseRef.current();
+      if (e.key === "Escape") onCloseEvent();
     };
     window.addEventListener("keydown", onKey);
     return () => {
       cancelled = true;
       window.removeEventListener("keydown", onKey);
     };
-  }, [connectionClient, open, workspaceId]);
+  }, [connectionClient, open, workspaceId, onCloseEvent]);
 
   const currentListState =
     listState?.workspaceId === workspaceId ? listState : null;

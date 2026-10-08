@@ -1,3 +1,9 @@
+import { subscribeLocalStorage } from "./browserStorage";
+import {
+  type NotificationTarget,
+  type RangerTaskNotificationTarget,
+} from "./taskNotifications";
+import { type AssistantTaskNotification } from "../../shared/assistant";
 import {
   createContext,
   useContext,
@@ -6,6 +12,14 @@ import {
   useSyncExternalStore,
 } from "react";
 import { withAgentActivity } from "./agentOrder";
+import { clearTerminalComposerDrafts } from "./terminalComposer";
+import {
+  forgetClosedTabPins,
+  paneCloseBlockReason,
+  tabCloseBlockReason,
+  tabPinsFor,
+} from "./tabPins";
+import { moveTabInList } from "./tabReorder";
 import {
   bridge,
   UncertainRequestError,
@@ -78,6 +92,7 @@ export interface ServerSessionState {
   /** ConnectionManager generation that owns every server resource below. */
   serverRuntimeGeneration: number | null;
   navigationMode: "browser-local" | "shared";
+  tabMoveSupported: boolean;
   endpointAvailability: EndpointAvailability;
   /** Current browser attachment attempts; runtime advertisements are not ownership. */
   terminalAttachments: Record<
@@ -108,6 +123,10 @@ export interface ServerSessionState {
 }
 
 export type PopupInfo = NonNullable<PopupStatePush["popup"]>;
+
+export type WorkspaceSourceTarget = Omit<TaskNotificationTarget, "paneId"> & {
+  paneId?: string;
+};
 
 export interface State extends ServerSessionState {
   status: ConnectionStatus;
@@ -147,6 +166,8 @@ export interface Notice {
   actionWorkspaceId?: string;
   actionPaneId?: string;
   actionAgentSessionId?: string;
+  actionRangerTaskId?: string;
+  actionRangerRunId?: string;
   actionClipboardText?: string;
   id?: number;
 }
@@ -214,6 +235,7 @@ export function emptyServerSessionState(
   return {
     serverRuntimeGeneration,
     navigationMode: "shared",
+    tabMoveSupported: false,
     endpointAvailability: {},
     terminalAttachments: {},
     browserNavigation: emptyBrowserNavigation(),
@@ -439,6 +461,7 @@ const initial: State = {
 const SERVER_SESSION_KEYS: Array<keyof ServerSessionState> = [
   "serverRuntimeGeneration",
   "navigationMode",
+  "tabMoveSupported",
   "endpointAvailability",
   "terminalAttachments",
   "browserNavigation",
@@ -461,6 +484,7 @@ function serverSessionFromState(snapshot: State): ServerSessionState {
   return {
     serverRuntimeGeneration: snapshot.serverRuntimeGeneration,
     navigationMode: snapshot.navigationMode,
+    tabMoveSupported: snapshot.tabMoveSupported,
     endpointAvailability: snapshot.endpointAvailability,
     terminalAttachments: snapshot.terminalAttachments,
     browserNavigation: snapshot.browserNavigation,
@@ -1031,8 +1055,11 @@ function maybeShowBrowserTaskNotification(
   title: string,
   body: string,
   tag: string,
-  scope: Pick<TaskNotificationTarget, "connectionId" | "runtimeGeneration">,
-  target: TaskNotificationTarget | null,
+  scope: Pick<
+    TaskNotificationTarget,
+    "connectionId" | "runtimeGeneration"
+  > | null,
+  target: NotificationTarget | null,
 ) {
   if (
     !state.taskNotificationsEnabled ||
@@ -1049,7 +1076,7 @@ function maybeShowBrowserTaskNotification(
     () =>
       state.taskNotificationsEnabled &&
       version === taskNotificationPreferenceVersion &&
-      taskNotificationTargetIsCurrent(state, scope),
+      (scope === null || taskNotificationTargetIsCurrent(state, scope)),
   ).catch((error) => reportTaskNotificationFailure(error, version));
 }
 
@@ -1290,6 +1317,43 @@ function notifyHerdrTask(
   );
 }
 
+function notifyRangerTask(notification: AssistantTaskNotification) {
+  const kind = notification.status === "succeeded" ? "completed" : "blocked";
+  if (
+    !state.taskNotificationsEnabled ||
+    !state.taskNotificationPreferences[kind]
+  )
+    return;
+  const target: RangerTaskNotificationTarget = {
+    type: "ranger_task",
+    taskId: notification.task_id,
+    runId: notification.run_id,
+  };
+  set({
+    notice: {
+      kind:
+        notification.status === "failed"
+          ? "error"
+          : notification.status === "succeeded"
+            ? "success"
+            : "info",
+      message: notification.title,
+      detail: notification.body,
+      actionLabel: "Open Ranger task",
+      actionRangerTaskId: target.taskId,
+      actionRangerRunId: target.runId,
+      autoDismissMs: TASK_COMPLETED_TOAST_DISMISS_MS,
+    },
+  });
+  maybeShowBrowserTaskNotification(
+    notification.title,
+    notification.body,
+    JSON.stringify(["roamgate-ranger-task", target.taskId, target.runId]),
+    null,
+    target,
+  );
+}
+
 function activePaneIdForTaskNotifications(snapshot: State) {
   const layoutPaneIds = new Set(
     snapshot.layout?.panes.map((pane) => pane.pane_id) ?? [],
@@ -1379,6 +1443,7 @@ const REFRESH_SLICE_KEYS = [
 const REFRESH_SCALAR_KEYS = [
   "serverRuntimeGeneration",
   "navigationMode",
+  "tabMoveSupported",
   "error",
   "pendingFocusWorkspaceId",
   "pendingFocusWorkspaceSettledAt",
@@ -1527,9 +1592,14 @@ async function refreshNow(
 
     const navigationMode =
       wsRes?.navigation_mode === "browser-local" ? "browser-local" : "shared";
+    forgetClosedTabPins(
+      lease.connectionId,
+      new Set(tabs.map((tab) => tab.tab_id)),
+    );
     const next: Partial<State> = {
       serverRuntimeGeneration: lease.generation,
       navigationMode,
+      tabMoveSupported: wsRes?.tab_move_supported === true,
       endpointAvailability: parseEndpointAvailability(
         wsRes?.endpoint_availability,
       ),
@@ -1843,6 +1913,37 @@ function startUpdatePolling(): Promise<void> {
     30 * 60 * 1000,
   );
   return initialCheck;
+}
+
+function applyAutomaticUpdateChecksEnabled(enabled: boolean) {
+  if (!enabled && updateTimer) {
+    clearInterval(updateTimer);
+    updateTimer = null;
+  }
+  set({
+    automaticUpdateChecksEnabled: enabled,
+    updateInfo: enabled ? state.updateInfo : null,
+  });
+  if (enabled && !state.connectionPaused) void startUpdatePolling();
+}
+
+function handlePreferenceStorageChange(key: string | null) {
+  if (
+    key === TASK_NOTIFICATIONS_KEY ||
+    key === TASK_NOTIFICATION_PREFERENCES_KEY ||
+    key === null
+  ) {
+    set({
+      taskNotificationsEnabled: storedTaskNotificationsEnabled(),
+      taskNotificationPreferences: storedTaskNotificationPreferences(),
+    });
+    void store.restoreTaskNotifications();
+  }
+  if (key === AUTOMATIC_UPDATE_CHECKS_KEY || key === null) {
+    const enabled = storedAutomaticUpdateChecksEnabled();
+    if (enabled !== state.automaticUpdateChecksEnabled)
+      applyAutomaticUpdateChecksEnabled(enabled);
+  }
 }
 
 function stopPolling() {
@@ -2437,6 +2538,71 @@ export function worktreeRemovalCompletionNotice(
   };
 }
 
+function handleBridgeStatus(s: ConnectionStatus) {
+  if (s === "disconnected") {
+    set({ tabMoveSupported: false, endpointAvailability: {} });
+    catalogReadyForConnection = false;
+    terminalReattachPending = true;
+    bridge.setConnectionRuntimeGenerations([]);
+    clearTerminalRelayViewports();
+    clearTabLayouts();
+    focusActionChains.clear();
+    queuedConnectionKeys.clear();
+  }
+  const completedRecovery =
+    s === "connected" && !state.connectionPaused && state.notice?.loading
+      ? connectionRecoveryIntent
+      : null;
+  if (s === "connected") connectionRecoveryIntent = null;
+  const completedRecoveryMessage =
+    completedRecovery === "reconnect"
+      ? "Browser reconnected"
+      : "Browser sync resumed";
+  set(
+    completedRecovery
+      ? {
+          status: s,
+          connectionGeneration: state.connectionGeneration,
+          notice: {
+            kind: "success",
+            message: completedRecoveryMessage,
+            autoDismissMs: 5000,
+          },
+        }
+      : {
+          status: s,
+          connectionGeneration:
+            s === "disconnected"
+              ? bridge.clientGeneration
+              : state.connectionGeneration,
+          bridgeStatus: s === "connected" ? state.bridgeStatus : null,
+        },
+  );
+  if (s === "connected" && !state.connectionPaused) {
+    // Polling may have been stopped by the hello-driven initial
+    // connection switch; every settled connection must re-arm it.
+    startPolling();
+    void refreshConnectionCatalog().then((catalogReady) => {
+      if (
+        !catalogReady ||
+        state.status !== "connected" ||
+        state.connectionPaused
+      ) {
+        return;
+      }
+      rearmTerminalAttachmentsAfterCatalog(true);
+      void refreshNow();
+      void refreshBridgeStatus();
+      // Popup state is pushed only on change, so ask once per
+      // settled connection.
+      void store.watchPopup();
+    });
+    if (state.pendingRestartVersion) {
+      void reloadWhenUpdatedServerIsReady(state.pendingRestartVersion);
+    }
+  }
+}
+
 function handlePopupPush(push: PopupStatePush) {
   if (
     !state.connectionPaused &&
@@ -2825,6 +2991,47 @@ function adoptBrowserTarget(lease: StoreConnectionLease, result: unknown) {
 }
 
 let terminalAttachmentAttempt = 0;
+function notifyPinnedTabClose(reason: string) {
+  set({
+    notice: {
+      kind: "info",
+      message: "Tab is pinned",
+      detail: reason,
+      autoDismissMs: 4000,
+    },
+  });
+}
+
+function swapPanePositions(
+  params:
+    | { pane_id: string; direction: "left" | "right" | "up" | "down" }
+    | { source_pane_id: string; target_pane_id: string },
+  client?: ConnectionClient,
+) {
+  return action(
+    async (lease) => {
+      if (!leaseIsCurrent(lease))
+        throw new Error("Pane move owner is no longer available");
+      const result = await lease.client.call("pane.swap", params);
+      const swap = result?.swap ?? result;
+      const layout = swap?.layout as PaneLayout | undefined;
+      // Swapping preserves pane IDs, so keep any newer user selection.
+      rememberTabLayout(lease.connectionId, lease.generation, layout ?? null);
+      const snapshot = leaseSnapshot(lease);
+      if (layout && snapshot.layout?.tab_id === layout.tab_id)
+        setForConnection(lease, {
+          layout:
+            snapshot.navigationMode === "browser-local"
+              ? projectBrowserLayout(layout, snapshot.selectedPaneId)
+              : layout,
+        });
+      await refreshNow(lease);
+      return result;
+    },
+    { client },
+  );
+}
+
 export const store = {
   beginTerminalAttachment(client: ConnectionClient, terminalId: string) {
     const attempt = ++terminalAttachmentAttempt;
@@ -2943,6 +3150,8 @@ export const store = {
   init() {
     if (initialized) return;
     initialized = true;
+    void store.restoreTaskNotifications();
+    subscribeLocalStorage(handlePreferenceStorageChange);
     bridge.onHello((hello) => {
       const defaultConnectionId = hello.default_connection_id;
       set({ defaultConnectionId });
@@ -3039,6 +3248,7 @@ export const store = {
       }
     });
     bridge.onEvent(handleHerdrEvent);
+    bridge.onAssistantNotification(notifyRangerTask);
     bridge.onPopup(handlePopupPush);
     bridge.onControl((control) => {
       if (control.type === "pause_connection") {
@@ -3315,13 +3525,79 @@ export const store = {
     );
   },
 
+  /** Returns false and explains why when a pin protects the tab. */
+  guardTabClose(tabId: string) {
+    const reason = tabCloseBlockReason(
+      tabId,
+      tabPinsFor(state.activeConnectionId),
+    );
+    if (!reason) return true;
+    notifyPinnedTabClose(reason);
+    return false;
+  },
+
+  /** Returns false and explains why when the pane is a pinned tab's last. */
+  guardPaneClose(paneId: string) {
+    const reason = paneCloseBlockReason(
+      paneId,
+      state.panes,
+      tabPinsFor(state.activeConnectionId),
+    );
+    if (!reason) return true;
+    notifyPinnedTabClose(reason);
+    return false;
+  },
+
   closeTab(tabId: string) {
-    return action((lease) => lease.client.call("tab.close", { tab_id: tabId }));
+    if (!store.guardTabClose(tabId)) return Promise.resolve();
+    const paneIds = state.panes
+      .filter((pane) => pane.tab_id === tabId)
+      .map((pane) => pane.pane_id);
+    return action(async (lease) => {
+      const result = await lease.client.call("tab.close", { tab_id: tabId });
+      clearTerminalComposerDrafts(
+        lease.connectionId,
+        lease.generation,
+        paneIds,
+      );
+      return result;
+    });
   },
 
   renameTab(tabId: string, label: string) {
     return action((lease) =>
       lease.client.call("tab.rename", { tab_id: tabId, label }),
+    );
+  },
+
+  /** Move a tab within its workspace (Herdr tab.move insert-before index). */
+  moveTab(tabId: string, insertIndex: number, client?: ConnectionClient) {
+    return action(
+      async (lease) => {
+        if (!leaseIsCurrent(lease))
+          throw new Error("Tab move owner is no longer available");
+        const snapshot = leaseSnapshot(lease);
+        if (!snapshot.tabMoveSupported)
+          throw new Error(
+            "This Herdr connection does not support tab reordering.",
+          );
+        // Settle the strip in its new order before Herdr's list comes back.
+        const previousTabs = snapshot.tabs;
+        setForConnection(lease, {
+          tabs: moveTabInList(previousTabs, tabId, insertIndex),
+        });
+        try {
+          return await lease.client.call("tab.move", {
+            tab_id: tabId,
+            insert_index: insertIndex,
+          });
+        } catch (error) {
+          if (leaseSnapshot(lease).tabs !== previousTabs)
+            void refreshNow(lease);
+          throw error;
+        }
+      },
+      { refresh: "immediate", client },
     );
   },
 
@@ -3348,6 +3624,13 @@ export const store = {
         retryOnReconnect: options.retryOnReconnect ?? true,
       },
     );
+  },
+
+  focusWorkspaceSource(target: WorkspaceSourceTarget) {
+    return store.focusQualifiedTarget({
+      ...target,
+      paneId: target.paneId ?? null,
+    });
   },
 
   async focusQualifiedTarget(target: QualifiedFocusTarget): Promise<boolean> {
@@ -4313,15 +4596,7 @@ export const store = {
     } catch {
       // The in-memory preference still applies when storage is unavailable.
     }
-    if (!enabled && updateTimer) {
-      clearInterval(updateTimer);
-      updateTimer = null;
-    }
-    set({
-      automaticUpdateChecksEnabled: enabled,
-      updateInfo: enabled ? state.updateInfo : null,
-    });
-    if (enabled && !state.connectionPaused) startUpdatePolling();
+    applyAutomaticUpdateChecksEnabled(enabled);
   },
 
   updateOrCheck() {
@@ -4505,6 +4780,29 @@ export const store = {
     });
   },
 
+  /** Swap a pane with its neighbor in the given direction (Herdr pane.swap). */
+  movePane(paneId: string, direction: "left" | "right" | "up" | "down") {
+    return swapPanePositions({ pane_id: paneId, direction });
+  },
+
+  /** Swap two existing panes within the same tab. */
+  swapPanes(sourcePaneId: string, targetPaneId: string) {
+    const source = state.panes.find((pane) => pane.pane_id === sourcePaneId);
+    const target = state.panes.find((pane) => pane.pane_id === targetPaneId);
+    if (
+      !source ||
+      !target ||
+      sourcePaneId === targetPaneId ||
+      source.tab_id !== target.tab_id ||
+      source.workspace_id !== target.workspace_id
+    )
+      return Promise.resolve();
+    return swapPanePositions({
+      source_pane_id: sourcePaneId,
+      target_pane_id: targetPaneId,
+    });
+  },
+
   focusPaneDirection(
     paneId: string,
     direction: "left" | "right" | "up" | "down",
@@ -4600,16 +4898,24 @@ export const store = {
   },
 
   closePane(paneId: string) {
-    return action((lease) =>
-      lease.client.call("pane.close", { pane_id: paneId }),
-    );
+    if (!store.guardPaneClose(paneId)) return Promise.resolve();
+    return action(async (lease) => {
+      const result = await lease.client.call("pane.close", { pane_id: paneId });
+      clearTerminalComposerDrafts(lease.connectionId, lease.generation, [
+        paneId,
+      ]);
+      return result;
+    });
   },
 };
 
 /** Test-only singleton seam for deterministic deferred production-store tests. */
 export const __storeTesting = {
+  notifyRangerTask,
+  handleBridgeStatus,
   handleHerdrEvent,
   startUpdatePolling,
+  handlePreferenceStorageChange,
   updatePollingActive: () => updateTimer !== null,
   refreshBridgeStatus,
   markTerminalReattachPending() {
@@ -4758,6 +5064,49 @@ export function operationalStore(context: OperationalContext) {
   };
   return {
     get: () => connectionSnapshot(state, context.connectionId),
+    subscribe: store.subscribe,
+    moveTab: (tabId: string, insertIndex: number) =>
+      store.moveTab(tabId, insertIndex, client),
+    movePane: (paneId: string, direction: "left" | "right" | "up" | "down") =>
+      swapPanePositions({ pane_id: paneId, direction }, client),
+    swapPanes: (sourcePaneId: string, targetPaneId: string) => {
+      const snapshot = leaseSnapshot(lease);
+      const source = snapshot.panes.find(
+        (pane) => pane.pane_id === sourcePaneId,
+      );
+      const target = snapshot.panes.find(
+        (pane) => pane.pane_id === targetPaneId,
+      );
+      if (
+        !source ||
+        !target ||
+        source.tab_id !== target.tab_id ||
+        source.workspace_id !== target.workspace_id ||
+        sourcePaneId === targetPaneId
+      )
+        return Promise.resolve();
+      return swapPanePositions(
+        { source_pane_id: sourcePaneId, target_pane_id: targetPaneId },
+        client,
+      );
+    },
+    guardTabClose: (tabId: string) => {
+      const reason = tabCloseBlockReason(
+        tabId,
+        tabPinsFor(context.connectionId),
+      );
+      if (reason) notifyPinnedTabClose(reason);
+      return !reason;
+    },
+    guardPaneClose: (paneId: string) => {
+      const reason = paneCloseBlockReason(
+        paneId,
+        leaseSnapshot(lease).panes,
+        tabPinsFor(context.connectionId),
+      );
+      if (reason) notifyPinnedTabClose(reason);
+      return !reason;
+    },
     notify: store.notify,
     clearNotice: store.clearNotice,
     setTerminalEndpoint: store.setTerminalEndpoint,
@@ -4830,7 +5179,18 @@ export function operationalStore(context: OperationalContext) {
       return result;
     },
     zoomPane: (paneId: string) => call("pane.zoom", { pane_id: paneId }),
-    closePane: (paneId: string) => call("pane.close", { pane_id: paneId }),
+    closePane: (paneId: string) => {
+      const reason = paneCloseBlockReason(
+        paneId,
+        leaseSnapshot(lease).panes,
+        tabPinsFor(context.connectionId),
+      );
+      if (reason) {
+        notifyPinnedTabClose(reason);
+        return Promise.resolve();
+      }
+      return call("pane.close", { pane_id: paneId });
+    },
     closePopup: () => call("popup.close", {}),
     togglePluginPopup: (
       pluginId: string,
@@ -4959,7 +5319,17 @@ export function operationalStore(context: OperationalContext) {
       }),
     renameTab: (tabId: string, label: string) =>
       call("tab.rename", { tab_id: tabId, label }),
-    closeTab: (tabId: string) => call("tab.close", { tab_id: tabId }),
+    closeTab: (tabId: string) => {
+      const reason = tabCloseBlockReason(
+        tabId,
+        tabPinsFor(context.connectionId),
+      );
+      if (reason) {
+        notifyPinnedTabClose(reason);
+        return Promise.resolve();
+      }
+      return call("tab.close", { tab_id: tabId });
+    },
     gitPullWorkspace: (workspaceId: string) =>
       store.gitPullWorkspace(workspaceId, client),
     createWorktree: async (workspaceId: string, branch: string) => {

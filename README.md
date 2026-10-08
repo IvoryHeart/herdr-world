@@ -181,7 +181,8 @@ and pull requests.
 ## Security
 
 Herdr World controls terminals and modifies real files. Keep the default loopback
-binding; read [SECURITY.md](./SECURITY.md) before allowing another device access.
+binding. Every listener requires login with a 15–1024-character configured password
+or a generated persistent token; read [SECURITY.md](./SECURITY.md) before allowing another device access.
 
 ## License
 

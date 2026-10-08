@@ -484,6 +484,7 @@ function InspectorResources({
               );
               if (annotation) openAnnotation(annotation);
             }}
+            onSelectFileTab={openFile}
             onOpenDocument={openFile}
             onRefreshFile={() => {
               if (fileSelection.entry) {

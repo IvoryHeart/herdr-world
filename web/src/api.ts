@@ -1,4 +1,12 @@
 import {
+  isAssistantSnapshot,
+  isAssistantTaskNotification,
+} from "../../shared/assistant";
+import {
+  type AssistantSnapshot,
+  type AssistantTaskNotification,
+} from "../../shared/assistant";
+import {
   WORLD_SNAPSHOT_CHUNK_CHARACTERS,
   WORLD_SNAPSHOT_MAX_CHUNKS,
   WORLD_SNAPSHOT_ADMISSION_WINDOW,
@@ -167,8 +175,10 @@ export interface BridgeHello {
     connection_runtime_generation?: boolean;
     world_snapshot_chunks?: boolean;
     world_snapshot_chunk_admission?: boolean;
+    file_reveal?: boolean;
     /** Task notifications follow Herdr's semantic notifications, not pane status. */
     herdr_task_notifications?: boolean;
+    embedded_assistant?: boolean;
     [key: string]: unknown;
   };
 }
@@ -375,6 +385,8 @@ function isBridgeHello(value: unknown): value is BridgeHello {
     "control",
     "terminal",
     "terminal_clipboard",
+    "assistant",
+    "assistant_notification",
   ]) {
     if (Object.prototype.hasOwnProperty.call(message, field)) return false;
   }
@@ -386,6 +398,8 @@ function isBridgeHello(value: unknown): value is BridgeHello {
     "herdr_task_notifications",
     "world_snapshot_chunks",
     "world_snapshot_chunk_admission",
+    "embedded_assistant",
+    "file_reveal",
   ]) {
     const value = capabilities[capability];
     if (value !== undefined && typeof value !== "boolean") return false;
@@ -409,6 +423,10 @@ export class Bridge {
   private seq = 0;
   private pending = new Map<string, Pending>();
   private eventHandlers = new Set<(e: HerdrEventMsg) => void>();
+  private assistantHandlers = new Set<(snapshot: AssistantSnapshot) => void>();
+  private assistantNotificationHandlers = new Set<
+    (notification: AssistantTaskNotification) => void
+  >();
   private terminalHandlers = new Set<(t: TerminalPush) => void>();
   private terminalClipboardHandlers = new Set<
     (clipboard: TerminalClipboardPush) => void
@@ -818,6 +836,8 @@ export class Bridge {
     const hasTerminalClosed = owns("terminal_closed");
     const hasPopup = owns("popup");
     const hasControl = owns("control");
+    const hasAssistant = owns("assistant");
+    const hasAssistantNotification = owns("assistant_notification");
     const kindCount = [
       hasHello,
       hasReply,
@@ -827,6 +847,8 @@ export class Bridge {
       hasTerminalClosed,
       hasPopup,
       hasControl,
+      hasAssistant,
+      hasAssistantNotification,
     ].filter(Boolean).length;
     if (kindCount !== 1) return;
 
@@ -849,6 +871,32 @@ export class Bridge {
     }
 
     if (!this.helloAcceptedForSocket) return;
+
+    if (hasAssistant) {
+      if (
+        this._hello?.capabilities.embedded_assistant !== true ||
+        owns("connection_id") ||
+        owns("connection_generation") ||
+        !isAssistantSnapshot(msg.assistant)
+      )
+        return;
+      this.assistantHandlers.forEach((handler) => handler(msg.assistant));
+      return;
+    }
+
+    if (hasAssistantNotification) {
+      if (
+        this._hello?.capabilities.embedded_assistant !== true ||
+        owns("connection_id") ||
+        owns("connection_generation") ||
+        !isAssistantTaskNotification(msg.assistant_notification)
+      )
+        return;
+      this.assistantNotificationHandlers.forEach((handler) =>
+        handler(msg.assistant_notification),
+      );
+      return;
+    }
 
     if (hasReply && owns("world_snapshot_chunk")) {
       const pending = this.pending.get(msg.id);
@@ -1328,6 +1376,18 @@ export class Bridge {
             cb(message);
         }
       : cb;
+  }
+
+  onAssistant(cb: (snapshot: AssistantSnapshot) => void): () => void {
+    this.assistantHandlers.add(cb);
+    return () => this.assistantHandlers.delete(cb);
+  }
+
+  onAssistantNotification(
+    cb: (notification: AssistantTaskNotification) => void,
+  ): () => void {
+    this.assistantNotificationHandlers.add(cb);
+    return () => this.assistantNotificationHandlers.delete(cb);
   }
 
   onEvent(

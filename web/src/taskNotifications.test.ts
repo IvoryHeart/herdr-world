@@ -54,7 +54,10 @@ async function withBrowser(
 
 function registration() {
   return {
-    active: { scriptURL: origin + "/task-notifications-sw.js" },
+    active: {
+      scriptURL: origin + "/task-notifications-sw.js?v=2",
+      state: "activated",
+    },
     showNotification: mock(async () => {}),
   };
 }
@@ -106,7 +109,7 @@ describe("task notification transport", () => {
       await Promise.resolve();
       await Promise.resolve();
       expect(active.showNotification).not.toHaveBeenCalled();
-      expect(register).toHaveBeenCalledWith("/task-notifications-sw.js", {
+      expect(register).toHaveBeenCalledWith("/task-notifications-sw.js?v=2", {
         updateViaCache: "none",
       });
       pending.active = active.active;

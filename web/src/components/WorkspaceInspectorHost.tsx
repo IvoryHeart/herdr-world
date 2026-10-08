@@ -1,3 +1,7 @@
+import { useEffectCallback } from "../useEffectCallback";
+import { preferencesStorageKey } from "../workspaceResource";
+import { subscribeLocalStorage } from "../browserStorage";
+import { connectionClientScopeKey } from "../useConnectionClient";
 import {
   WindowControls,
   type ManagedWindowControls,
@@ -6,6 +10,8 @@ import {
   FileDiff,
   FolderTree,
   GitFork,
+  GitGraph,
+  GitPullRequest,
   History,
   Maximize2,
   Minimize2,
@@ -46,6 +52,9 @@ import {
   resourceOwnerKey,
   resourceStateKey,
   writeInspectorNavigationRatio,
+  readResourceFileTabs,
+  writeResourceFileTabs,
+  closeResourceFileTab,
   type InspectorDock,
   type InspectorSplitView,
   type InspectorView,
@@ -67,12 +76,20 @@ import {
   type ActiveFilePreviewSelection,
   FilePreviewContent,
 } from "./FilePreviewContent";
+import { FilePreviewTabs } from "./FilePreviewTabs";
 import { workspaceInspectorLayout } from "./workspaceInspectorLayout";
+import { PullRequestCard } from "./PullRequestCard";
+import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import "./WorkspaceInspectorHost.css";
 
 const DiffContentView = lazyWithReload("diff-content-view", () =>
   import("./DiffContentView").then((module) => ({
     default: module.DiffContentView,
+  })),
+);
+const GitCommitHistory = lazyWithReload("git-commit-history", () =>
+  import("./GitCommitHistory").then((module) => ({
+    default: module.GitCommitHistory,
   })),
 );
 
@@ -209,6 +226,7 @@ export function WorkspaceInspectorHost({
   workspace,
   historyPane,
   fileSelection,
+  onSelectFileTab,
   previewRequestRef,
   diffSelection,
   connectionClient,
@@ -248,6 +266,7 @@ export function WorkspaceInspectorHost({
   workspace?: Workspace;
   historyPane?: Pane;
   fileSelection: ActiveFilePreviewSelection;
+  onSelectFileTab: (path: string) => void;
   previewRequestRef: React.MutableRefObject<number>;
   diffSelection: ActiveDiffSelection;
   connectionClient: ConnectionClient;
@@ -292,11 +311,53 @@ export function WorkspaceInspectorHost({
   historySessionFingerprint?: string;
 }) {
   const hostRef = useRef<HTMLElement | null>(null);
+  const [fileTabs, setFileTabs] = useState(() =>
+    readResourceFileTabs(worldLocalStorage, state.scope),
+  );
+  useLayoutEffect(() => {
+    setFileTabs(readResourceFileTabs(worldLocalStorage, state.scope));
+  }, [fileSelection.entry?.path, state.scope]);
+  // A scope can first open on Changes or History. Restore its active file when
+  // entering Files, without requiring another explorer selection.
+  const restoreFileOnViewEntry = useEffectCallback(() => {
+    if (state.view === "files" && !fileSelection.entry && fileTabs.activePath)
+      onSelectFileTab(fileTabs.activePath);
+  });
+  useEffect(restoreFileOnViewEntry, [
+    state.view,
+    state.scope,
+    restoreFileOnViewEntry,
+  ]);
+  const onCloseFileTab = (path: string, directory = false) => {
+    const current = readResourceFileTabs(worldLocalStorage, state.scope);
+    const tabs = closeResourceFileTab(current, path, directory);
+    writeResourceFileTabs(worldLocalStorage, state.scope, tabs);
+    setFileTabs(tabs);
+    if (current.activePath === tabs.activePath) return;
+    previewRequestRef.current += 1;
+    if (tabs.activePath) onSelectFileTab(tabs.activePath);
+    else
+      onFileSelectionChange?.({
+        entry: null,
+        preview: null,
+        loading: false,
+        error: null,
+      });
+  };
+  const onPinFileTab = (path: string) => {
+    const current = readResourceFileTabs(worldLocalStorage, state.scope);
+    if (current.previewPath !== path) return;
+    const tabs = { ...current, previewPath: null };
+    writeResourceFileTabs(worldLocalStorage, state.scope, tabs);
+    setFileTabs(tabs);
+  };
+
   useLayoutEffect(() => {
     onReady?.();
   }, [onReady]);
   const filesTabRef = useRef<HTMLButtonElement | null>(null);
   const changesTabRef = useRef<HTMLButtonElement | null>(null);
+  const commitsTabRef = useRef<HTMLButtonElement | null>(null);
   const historyTabRef = useRef<HTMLButtonElement | null>(null);
   const terminalTabRef = useRef<HTMLButtonElement | null>(null);
   const diffViewerRef = useRef<DiffViewerPanelHandle | null>(null);
@@ -309,13 +370,21 @@ export function WorkspaceInspectorHost({
   const [drillInByView, setDrillInByView] = useState<
     Record<InspectorView, boolean>
   >(() => ({
-    files: state.view === "files" && !!fileSelection.entry,
+    files:
+      state.view === "files" &&
+      state.initialDirectory === undefined &&
+      !!fileSelection.entry,
     changes: false,
+    commits: false,
     history: false,
     terminal: false,
   }));
   const resourceKey = resourceOwnerKey(state.scope);
   const contentResourceKey = resourceStateKey(state.scope);
+  const [commitsVisitedKey, setCommitsVisitedKey] = useState("");
+  useEffect(() => {
+    if (state.view === "commits") setCommitsVisitedKey(contentResourceKey);
+  }, [contentResourceKey, state.view]);
   const fileDiffEntries =
     fileDiffState.resourceKey === contentResourceKey
       ? fileDiffState.entries
@@ -421,9 +490,17 @@ export function WorkspaceInspectorHost({
     .join("|");
 
   useEffect(() => {
-    if (state.view !== "files" || !fileSelection.entry) return;
-    setDrillInByView((current) => ({ ...current, files: true }));
-  }, [fileSelection.entry, state.view]);
+    if (state.view !== "files") return;
+    if (state.initialDirectory !== undefined) {
+      // Explicit directory navigation returns compact layouts to the tree,
+      // while the saved preview and tabs remain available on desktop.
+      if (!fileSelection.entry)
+        setDrillInByView((current) => ({ ...current, files: false }));
+      return;
+    }
+    if (fileSelection.entry)
+      setDrillInByView((current) => ({ ...current, files: true }));
+  }, [fileSelection.entry, state.view, state.initialDirectory]);
 
   const handleTabKeyDown = (event: ReactKeyboardEvent<HTMLButtonElement>) => {
     if (event.key === "ArrowDown" && state.view === "files") {
@@ -457,6 +534,7 @@ export function WorkspaceInspectorHost({
     const refs = {
       files: filesTabRef,
       changes: changesTabRef,
+      commits: commitsTabRef,
       history: historyTabRef,
       terminal: terminalTabRef,
     };
@@ -464,11 +542,14 @@ export function WorkspaceInspectorHost({
   };
 
   useEffect(() => {
-    const preferences = readInspectorPreferences(
-      worldLocalStorage,
-      state.scope,
-    );
-    setNavigationPreferences(preferences);
+    const refresh = () =>
+      setNavigationPreferences(
+        readInspectorPreferences(worldLocalStorage, state.scope),
+      );
+    refresh();
+    return subscribeLocalStorage((key) => {
+      if (key === null || key === preferencesStorageKey(state.scope)) refresh();
+    });
   }, [contentResourceKey, state.scope]);
 
   useLayoutEffect(() => {
@@ -619,6 +700,20 @@ export function WorkspaceInspectorHost({
               ) : null}
             </button>
           ) : null}
+          {availableViews.includes("commits") ? (
+            <button
+              ref={commitsTabRef}
+              type="button"
+              role="tab"
+              aria-selected={state.view === "commits"}
+              tabIndex={state.view === "commits" ? 0 : -1}
+              className={state.view === "commits" ? "is-active" : ""}
+              onClick={() => onViewChange("commits")}
+              onKeyDown={handleTabKeyDown}
+            >
+              <GitGraph size={14} /> Commits
+            </button>
+          ) : null}
           {availableViews.includes("history") ? (
             <button
               ref={historyTabRef}
@@ -642,6 +737,39 @@ export function WorkspaceInspectorHost({
             </button>
           ) : null}
         </div>
+        {visible && state.open && workspace ? (
+          <Popover
+            key={connectionClientScopeKey(
+              connectionClient,
+              contentResourceKey,
+              workspace.workspace_id,
+              workspace.worktree?.checkout_path,
+              workspace.cwd,
+              workspace.worktree?.git_status?.branch,
+            )}
+          >
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                className="workspace-inspector-repository-action"
+                aria-label="Repository status and source"
+                title="Repository status and source"
+              >
+                <GitPullRequest size={15} />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent
+              className="workspace-inspector-repository-popover"
+              align="end"
+            >
+              <PullRequestCard
+                client={connectionClient}
+                workspaceId={workspace.workspace_id}
+                branch={workspace.worktree?.git_status?.branch}
+              />
+            </PopoverContent>
+          </Popover>
+        ) : null}
         {windowControls ? (
           <WindowControls controls={windowControls} label="Inspector window" />
         ) : (
@@ -804,6 +932,13 @@ export function WorkspaceInspectorHost({
                 }
                 onClose={onClose}
                 onPreviewChange={(selection, meta) => {
+                  if (meta?.deletedEntry) {
+                    onCloseFileTab(
+                      meta.deletedEntry.path,
+                      meta.deletedEntry.type === "directory",
+                    );
+                    return;
+                  }
                   if (selection.entry && meta?.userInitiated) {
                     setDrillInByView((current) => ({
                       ...current,
@@ -812,6 +947,7 @@ export function WorkspaceInspectorHost({
                   }
                   onFileSelectionChange?.(selection, meta);
                 }}
+                onPinFileTab={onPinFileTab}
                 onActiveDiffEntriesChange={setFileDiffEntries}
               />
             </div>
@@ -825,13 +961,38 @@ export function WorkspaceInspectorHost({
                 onCommit={(ratio) => commitNavigationRatio("files", ratio)}
               />
             ) : null}
-            <div id={detailIds.files} className="workspace-inspector-detail">
+            <div
+              id={detailIds.files}
+              className="workspace-inspector-detail workspace-inspector-file-detail"
+              role="tabpanel"
+              aria-label={fileTabs.activePath ?? "File preview"}
+              tabIndex={-1}
+            >
+              <FilePreviewTabs
+                tabs={fileTabs}
+                panelId={detailIds.files}
+                onSelect={(path) => {
+                  setDrillInByView((current) => ({ ...current, files: true }));
+                  onSelectFileTab(path);
+                }}
+                onPin={onPinFileTab}
+                onClose={onCloseFileTab}
+                onEmptyFocus={() =>
+                  (
+                    hostRef.current?.querySelector<HTMLElement>(
+                      ".inspector-files-resource .file-row[role='treeitem'][tabindex='0']",
+                    ) ?? filesTabRef.current
+                  )?.focus()
+                }
+              />
               <FilePreviewContent
                 entry={fileSelection.entry}
                 preview={fileSelection.preview}
                 loading={fileSelection.loading}
                 error={fileSelection.error}
                 fragment={fileSelection.fragment}
+                line={fileSelection.line}
+                snippet={fileSelection.snippet}
                 onOpenFile={onOpenDocument}
                 onRefresh={onRefreshFile}
                 backAction={
@@ -984,6 +1145,7 @@ export function WorkspaceInspectorHost({
                     entries={diffSelection.entries}
                     files={diffSelection.files}
                     fileErrors={diffSelection.fileErrors}
+                    loadingKeys={diffSelection.loadingKeys}
                     summaryLoading={diffSelection.summaryLoading}
                     mobile={compact}
                     resourceKey={contentResourceKey}
@@ -994,6 +1156,12 @@ export function WorkspaceInspectorHost({
                     onEditAnnotation={onEditAnnotation}
                     onSelectFile={(target) =>
                       diffViewerRef.current?.selectEntry(target)
+                    }
+                    onNearbyFilesChange={(targets) =>
+                      diffViewerRef.current?.loadNearbyEntries(targets)
+                    }
+                    onVisibleFileChange={(target) =>
+                      diffViewerRef.current?.highlightEntry(target)
                     }
                     onOpenFile={onOpenDiffFile}
                     backAction={
@@ -1014,6 +1182,37 @@ export function WorkspaceInspectorHost({
                 </Suspense>
               ) : null}
             </div>
+          </div>
+          <div
+            className={`workspace-inspector-resource inspector-commits-resource ${state.view === "commits" ? "" : "is-hidden"}`}
+          >
+            {state.view === "commits" ||
+            commitsVisitedKey === contentResourceKey ? (
+              <Suspense
+                fallback={
+                  <div className="workspace-inspector-unavailable">
+                    Loading commits
+                  </div>
+                }
+              >
+                <GitCommitHistory
+                  key={connectionClientScopeKey(
+                    connectionClient,
+                    connectionClient.serverRuntimeGeneration,
+                    contentResourceKey,
+                    workspace.workspace_id,
+                    workspace.worktree?.checkout_path,
+                    workspace.cwd,
+                    workspace.worktree?.git_status?.branch,
+                  )}
+                  client={connectionClient}
+                  workspaceId={workspace.workspace_id}
+                  resourceKey={contentResourceKey}
+                  compact={compact}
+                  active={visible && state.open && state.view === "commits"}
+                />
+              </Suspense>
+            ) : null}
           </div>
           <div
             className={`workspace-inspector-resource inspector-history-resource ${

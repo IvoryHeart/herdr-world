@@ -98,7 +98,7 @@ test.each([
 ])(
   "push subject %s uses the default, override, or disables delivery",
   async (subject, expected) => {
-    const previous = process.env.ROAMGATE_WEB_PUSH_SUBJECT;
+    const previous = process.env.HERDR_WORLD_WEB_PUSH_SUBJECT;
     const legacy = process.env.HERDR_GUI_WEB_PUSH_SUBJECT;
     const dir = mkdtempSync(join(tmpdir(), "herdr-world-push-default-"));
     const path = join(dir, "web-push.json");
@@ -106,8 +106,9 @@ test.each([
     let service: ReturnType<typeof createWebPushService> | undefined;
     try {
       delete process.env.HERDR_GUI_WEB_PUSH_SUBJECT;
-      if (subject === undefined) delete process.env.ROAMGATE_WEB_PUSH_SUBJECT;
-      else process.env.ROAMGATE_WEB_PUSH_SUBJECT = subject;
+      if (subject === undefined)
+        delete process.env.HERDR_WORLD_WEB_PUSH_SUBJECT;
+      else process.env.HERDR_WORLD_WEB_PUSH_SUBJECT = subject;
       service = createWebPushService({ path, send });
       const config = await (await service.handle(request())).json();
       expect(config.available).toBe(expected !== null);
@@ -138,8 +139,9 @@ test.each([
       }
     } finally {
       service?.stop();
-      if (previous === undefined) delete process.env.ROAMGATE_WEB_PUSH_SUBJECT;
-      else process.env.ROAMGATE_WEB_PUSH_SUBJECT = previous;
+      if (previous === undefined)
+        delete process.env.HERDR_WORLD_WEB_PUSH_SUBJECT;
+      else process.env.HERDR_WORLD_WEB_PUSH_SUBJECT = previous;
       if (legacy === undefined) delete process.env.HERDR_GUI_WEB_PUSH_SUBJECT;
       else process.env.HERDR_GUI_WEB_PUSH_SUBJECT = legacy;
       rmSync(dir, { recursive: true, force: true });

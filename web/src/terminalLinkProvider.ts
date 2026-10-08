@@ -369,7 +369,9 @@ export function registerTerminalLinkProvider(
               local.range.end.y === bufferLineNumber &&
               local.range.start.x === col + 1 &&
               local.range.end.x < columnCount - 1 &&
-              link.start > first,
+              (link.start > first ||
+                (!continuation &&
+                  rowText!.text.slice(link.end).trim().length > 0)),
           );
         if (!complete) columns.add(col);
         else completeUrlColumns.add(col);

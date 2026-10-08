@@ -7,14 +7,39 @@ are optional because the merged PR history records their source.
 
 ## [Unreleased]
 
+### Added
+
+- Ranger workspace chat, proposed actions, background and scheduled tasks, and
+  monitoring alerts, scoped to permitted local and SSH workspaces.
+- Git commit history, file-preview tabs, tab pinning and reordering, pane movement,
+  terminal font and input controls, file uploads, and instance title settings.
+
 ### Fixed
 
+- Verify the selected GitHub credential on older CLIs even when another saved
+  account has an expired token.
+- Use a framed view icon for World view selection, distinct from Ranger settings
+  and window arrangement.
+- Restore the floating mobile workspace navigator and hide it on desktop.
+  Office redraws after returning from Ranger or another hidden workspace surface.
+- Integrations and repository settings stop loading when their selected host is
+  unavailable, and repository refreshes wait for pending requests to settle.
+- Recognize authenticated older GitHub CLIs that do not support `--active`.
+  Keep repository status and source controls in an Inspector header popover.
+- Confirmed Ranger task actions recheck workspace permission and cancellation at
+  dispatch, preventing writes after permission revocation, task stop or disposal.
 - World browser tests give cold Chrome startup a separate bounded allowance,
   preserving fixture deadlines and responsiveness assertions.
 - The compact Inspector browser test waits for its Files back action and explorer
   layout before checking visibility.
 
 ### Changed
+
+- Synchronize Roamgate through `d703e6f6` (6 October 2026), retaining World's visual
+  views, connection ownership, service packaging and browser responsiveness.
+- Require login on every listener, including localhost. Configured passwords must
+  contain 15–1024 characters; otherwise World creates a persistent login token.
+  Login attempts are throttled.
 
 - Test files run in bounded parallel workers. Isolated browser acceptance cases also run concurrently, with lower concurrency in CI.
 - World browser acceptance suites reuse immutable bundles and run across eight isolated CI shards, preserving scenario coverage and responsiveness budgets. CI artifacts retain input timings for responsiveness investigations.

@@ -108,13 +108,14 @@ describe("close shortcut target", () => {
 });
 
 describe("adjacent tab selection", () => {
+  // Herdr's list order, not its stable tab numbers, is the strip order.
   const tabs = [
-    { tab_id: "third", number: 3 },
-    { tab_id: "first", number: 1 },
-    { tab_id: "second", number: 2 },
+    { tab_id: "first", number: 3 },
+    { tab_id: "second", number: 1 },
+    { tab_id: "third", number: 2 },
   ];
 
-  test("switches in tab number order and wraps", () => {
+  test("switches in tab-list order and wraps", () => {
     expect(adjacentTabId(tabs, "first", "next")).toBe("second");
     expect(adjacentTabId(tabs, "third", "next")).toBe("first");
     expect(adjacentTabId(tabs, "first", "previous")).toBe("third");
@@ -124,5 +125,12 @@ describe("adjacent tab selection", () => {
     expect(adjacentTabId(tabs, undefined, "next")).toBe("first");
     expect(adjacentTabId(tabs, "missing", "previous")).toBe("third");
     expect(adjacentTabId([], undefined, "next")).toBeNull();
+  });
+
+  test("follows the tab strip when pinned tabs lead it", () => {
+    const pinned = new Set(["third"]);
+    expect(adjacentTabId(tabs, "third", "next", pinned)).toBe("first");
+    expect(adjacentTabId(tabs, "second", "next", pinned)).toBe("third");
+    expect(adjacentTabId(tabs, "first", "previous", pinned)).toBe("third");
   });
 });

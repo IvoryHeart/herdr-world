@@ -60,5 +60,19 @@ function browserStorage(kind: "localStorage" | "sessionStorage"): Storage {
 
 export const worldLocalStorage = browserStorage("localStorage");
 export const worldSessionStorage = browserStorage("sessionStorage");
-export const roamgateLocalStorage = worldLocalStorage;
-export const roamgateSessionStorage = worldSessionStorage;
+export function subscribeLocalStorage(
+  listener: (key: string | null) => void,
+): () => void {
+  if (typeof window === "undefined") return () => {};
+  const onStorage = (event: StorageEvent) => {
+    if (event.storageArea !== globalThis.localStorage) return;
+    let key = event.key;
+    if (key !== null) {
+      if (!key.startsWith(PREFIX)) return;
+      key = key.slice(PREFIX.length);
+    }
+    listener(key);
+  };
+  window.addEventListener("storage", onStorage);
+  return () => window.removeEventListener("storage", onStorage);
+}

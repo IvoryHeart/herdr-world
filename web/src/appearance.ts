@@ -92,6 +92,28 @@ export function normalizeTerminalFontScale(
 export const TERMINAL_FONT_FAMILY =
   'SFMono-Regular, Menlo, Monaco, "0xProto Nerd Font Mono", "JetBrainsMonoNL Nerd Font", "MesloLGS NF", "Hack Nerd Font", "FiraCode Nerd Font", Consolas, "Liberation Mono", "Courier New", "Noto Sans Mono CJK SC", "Source Han Mono SC", "Sarasa Mono SC", "Herdr Nerd Symbols", monospace';
 
+export const MAX_TERMINAL_FONT_NAME_LENGTH = 100;
+
+// A preferred terminal font is one family name installed on the viewing
+// device. Characters that would break out of a quoted CSS family name are
+// dropped rather than escaped, since no real family name needs them.
+export function normalizeTerminalFontFamily(value: string | null): string {
+  if (value === null) return "";
+  return value
+    .replace(/["'\\,;{}\p{Cc}]/gu, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, MAX_TERMINAL_FONT_NAME_LENGTH)
+    .trim();
+}
+
+// The preferred font leads the default stack instead of replacing it, so
+// glyphs it lacks (CJK, powerline, icons) still resolve through the fallbacks.
+export function terminalFontFamilyStack(preferred: string): string {
+  const family = normalizeTerminalFontFamily(preferred);
+  return family ? `"${family}", ${TERMINAL_FONT_FAMILY}` : TERMINAL_FONT_FAMILY;
+}
+
 export function terminalFontOptions(
   compact: boolean,
   terminalFontScale: number,

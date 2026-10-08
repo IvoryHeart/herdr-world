@@ -1,16 +1,93 @@
 /* ===== mobile nav (hidden on desktop) ===== */
-.mobile-nav {
+.mobile-nav,
+.mobile-controls-stack,
+.mobile-workspace-shortcut {
+  display: none;
+}
+
+:where(html[data-layout="mobile"])
+  .app.assistant-view
+  :is(
+    .mobile-nav,
+    .mobile-terminal-controls,
+    .mobile-composer-shortcut,
+    .mobile-workspace-shortcut
+  ) {
   display: none;
 }
 
 /* Keep mobile styling in sync with the saved layout and URL override. */
 :where(html[data-layout="mobile"]) {
+  .mobile-workspace-shortcut {
+    position: fixed;
+    right: calc(10px + env(safe-area-inset-right, 0px));
+    bottom: calc(
+      156px +
+      var(--mobile-floating-controls-lift, 0px) +
+      var(--mobile-controls-offset-y, 0px) +
+      env(safe-area-inset-bottom, 0px)
+    );
+    z-index: 73;
+    width: 42px;
+    height: 42px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px;
+    border: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--panel) 76%, transparent);
+    color: var(--muted);
+    box-shadow: var(--shadow-lg);
+    transform: translate3d(0, 0, 0) scale(1);
+    transform-origin: right bottom;
+    translate: var(--mobile-controls-drag-x, 0px)
+      var(--mobile-controls-drag-y, 0px);
+    transition:
+      opacity 160ms ease,
+      background 120ms ease,
+      border-color 120ms ease,
+      transform 180ms ease;
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
+  }
+
+  .mobile-workspace-shortcut svg {
+    width: 32px;
+    height: 32px;
+    padding: 7px;
+    border-radius: 999px;
+  }
+
+  .mobile-workspace-shortcut.is-active,
+  .mobile-workspace-shortcut:active {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+    color: var(--text-strong);
+  }
+
+  .mobile-controls-collapsed .mobile-workspace-shortcut,
+  .keyboard-open .mobile-workspace-shortcut,
+  .app:has(.terminal-composer-input:focus) .mobile-workspace-shortcut {
+    opacity: 0;
+    pointer-events: none;
+    transform: translate3d(0, 12px, 0) scale(0.85);
+  }
+
+  .mobile-controls-stack {
+    display: contents;
+  }
+
   .mobile-nav {
+    /* Collapse toward the toggle center, 21px inside the dock edge. */
+    --mobile-controls-origin-x: calc(100% - 21px);
+    --mobile-controls-origin-y: calc(50% - 48px);
     position: fixed;
     right: calc(10px + env(safe-area-inset-right, 0px));
     bottom: calc(
       58px +
       var(--mobile-floating-controls-lift, 0px) +
+      var(--mobile-controls-offset-y, 0px) +
       env(safe-area-inset-bottom, 0px)
     );
     z-index: 72;
@@ -22,13 +99,29 @@
     background: color-mix(in srgb, var(--panel) 76%, transparent);
     box-shadow: var(--shadow-lg);
     transform: translate3d(0, 0, 0) scale(1);
-    transform-origin: right bottom;
+    transform-origin: var(--mobile-controls-origin-x)
+      var(--mobile-controls-origin-y);
+    /* Dragging the controls toggle moves the whole stack; see
+       useMobileControlsDrag. `translate` composes with `transform`. */
+    translate: var(--mobile-controls-drag-x, 0px)
+      var(--mobile-controls-drag-y, 0px);
     opacity: 1;
     transition:
       opacity 160ms ease,
       transform 180ms ease;
     -webkit-backdrop-filter: blur(14px);
     backdrop-filter: blur(14px);
+  }
+
+  .mobile-workspace-tools {
+    --mobile-controls-origin-y: calc(50% + 50px);
+    bottom: calc(
+      156px +
+      var(--mobile-floating-controls-lift, 0px) +
+      var(--mobile-controls-offset-y, 0px) +
+      env(safe-area-inset-bottom, 0px)
+    );
+    z-index: 73;
   }
 
   .mobile-nav button {
@@ -62,6 +155,12 @@
     box-shadow: inset 0 0 0 1px var(--accent);
   }
 
+  .mobile-workspace-tools .assistant-entry-running {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+  }
+
   .mobile-nav button:disabled {
     color: var(--muted);
     opacity: 0.38;
@@ -85,37 +184,51 @@
     pointer-events: none;
   }
 
-  /* While the on-screen keyboard is open the floating controls cover too
-     much of the terminal, so fade them out until the keyboard closes. Some
-     mobile browsers do not expose Composer keyboard geometry, so its focused
-     textarea is the direct fallback signal. */
-  .keyboard-open .mobile-nav:not(.mobile-terminal-tools),
-  .app:has(.terminal-composer-input:focus)
-    .mobile-nav:not(.mobile-terminal-tools) {
-    opacity: 0;
-    pointer-events: none;
-    transform: translate3d(0, 12px, 0) scale(0.85);
-  }
-
   .mobile-controls-collapsed .mobile-nav:not(.mobile-terminal-tools) {
     opacity: 0;
     pointer-events: none;
-    transform: translate3d(0, -46px, 0) scale(0.72);
+    transform: translate3d(0, 0, 0) scale(0);
   }
 }
 
-.mobile-terminal-controls {
+.mobile-terminal-controls,
+.mobile-composer-shortcut {
   display: none;
 }
 
 /* Keep mobile styling in sync with the saved layout and URL override. */
 :where(html[data-layout="mobile"]) {
+  .mobile-composer-shortcut {
+    position: fixed;
+    right: calc(10px + env(safe-area-inset-right, 0px));
+    bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+    z-index: 74;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--panel);
+    color: var(--text-strong);
+    box-shadow: var(--shadow-lg);
+    touch-action: manipulation;
+  }
+
+  .mobile-composer-shortcut:active {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+  }
+
   .mobile-terminal-controls {
     position: fixed;
     right: calc(10px + env(safe-area-inset-right, 0px));
     bottom: calc(
       106px +
       var(--mobile-floating-controls-lift, 0px) +
+      var(--mobile-controls-offset-y, 0px) +
       env(safe-area-inset-bottom, 0px)
     );
     z-index: 74;
@@ -129,6 +242,8 @@
     box-shadow: var(--shadow-lg);
     transform: translate3d(0, 0, 0) scale(1);
     transform-origin: right bottom;
+    translate: var(--mobile-controls-drag-x, 0px)
+      var(--mobile-controls-drag-y, 0px);
     opacity: 1;
     transition:
       opacity 160ms ease,
@@ -139,10 +254,12 @@
 
   .mobile-nav.mobile-terminal-tools {
     position: static;
+    /* Moves with its parent pill, not on its own. */
+    translate: none;
     right: auto;
     bottom: auto;
     z-index: auto;
-    max-width: 75px;
+    max-width: 112px;
     padding: 0;
     overflow: visible;
     border: 0;
@@ -171,12 +288,8 @@
     pointer-events: none;
   }
 
-  /* While the on-screen keyboard is open the floating controls cover too
-     much of the terminal, so fade them out until the keyboard closes. Some
-     mobile browsers do not expose Composer keyboard geometry, so its focused
-     textarea is the direct fallback signal. */
-  .keyboard-open .mobile-terminal-controls,
-  .app:has(.terminal-composer-input:focus) .mobile-terminal-controls {
+  /* The Type shortcut has no role while direct typing owns the keyboard. */
+  .keyboard-open .mobile-composer-shortcut {
     opacity: 0;
     pointer-events: none;
     transform: translate3d(0, 12px, 0) scale(0.85);
@@ -194,6 +307,35 @@
     transform: translate3d(10px, 0, 0) scale(0.72);
   }
 
+  /* Keep the toggle at the dock edge as the tools expand inward. */
+  .mobile-controls-left .mobile-nav:not(.mobile-terminal-tools),
+  .mobile-controls-left .mobile-workspace-shortcut,
+  .mobile-controls-left .mobile-terminal-controls {
+    right: auto;
+    left: calc(10px + env(safe-area-inset-left, 0px));
+  }
+
+  .mobile-controls-left .mobile-nav:not(.mobile-terminal-tools) {
+    --mobile-controls-origin-x: 21px;
+  }
+
+  .mobile-controls-left .mobile-terminal-controls,
+  .mobile-controls-left .mobile-workspace-shortcut {
+    transform-origin: left bottom;
+  }
+
+  .mobile-controls-left .mobile-controls-toggle {
+    order: -1;
+  }
+
+  .mobile-controls-left .mobile-nav.mobile-terminal-tools {
+    transform-origin: left center;
+  }
+
+  .mobile-controls-left.mobile-controls-collapsed .mobile-terminal-tools {
+    transform: translate3d(-10px, 0, 0) scale(0.72);
+  }
+
   @media (hover: none) and (pointer: coarse) and (forced-colors: none) {
     .mobile-terminal-controls
       button:hover:not(:disabled):not(.active):not(:active) {
@@ -201,5 +343,81 @@
       background: transparent;
       box-shadow: none;
     }
+  }
+}
+
+/* A short keyboard viewport may not fit three rows. Keep every navigation
+   action in a horizontally scrollable row, with the toggle at the dock edge.
+   This is transient geometry, not the user's collapsed or saved placement. */
+:where(html[data-layout="mobile"]) .app[data-mobile-controls-compact] {
+  .mobile-controls-stack {
+    position: fixed;
+    right: calc(10px + env(safe-area-inset-right, 0px));
+    bottom: var(--mobile-controls-compact-bottom);
+    z-index: 74;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    width: max-content;
+    max-width: calc(
+      100% -
+      20px -
+      env(safe-area-inset-left, 0px) -
+      env(safe-area-inset-right, 0px)
+    );
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    direction: rtl;
+    border-radius: 999px;
+    translate: var(--mobile-controls-drag-x, 0px) 0px;
+  }
+
+  .mobile-controls-stack > .mobile-nav,
+  .mobile-controls-stack > .mobile-workspace-shortcut,
+  .mobile-terminal-controls {
+    position: static;
+    flex: 0 0 auto;
+    direction: ltr;
+    translate: none;
+  }
+
+  .mobile-terminal-controls {
+    position: sticky;
+    right: 0;
+    left: 0;
+    bottom: auto;
+    order: -1;
+    /* Opaque behind the sticky group as other pills scroll under it. */
+    background: var(--panel);
+  }
+
+  &.mobile-controls-left .mobile-controls-stack {
+    right: auto;
+    left: calc(10px + env(safe-area-inset-left, 0px));
+    direction: ltr;
+  }
+
+  &.mobile-controls-collapsed
+    .mobile-controls-stack
+    > :is(.mobile-nav, .mobile-workspace-shortcut) {
+    display: none;
+  }
+
+  /* Keep one control row above a tall draft/shortcut panel. The editor and
+     actions remain reachable by scrolling the dock in tiny viewports. */
+  .terminal-composer {
+    max-height: var(--mobile-controls-composer-max-height);
+    overflow-y: auto;
+    flex-shrink: 0;
+  }
+
+  .terminal-composer-commands {
+    position: static;
+    flex-shrink: 0;
+  }
+
+  &.assistant-view .mobile-controls-stack {
+    display: none;
   }
 }

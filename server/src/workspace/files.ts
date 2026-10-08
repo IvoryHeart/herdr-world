@@ -9,7 +9,12 @@ import {
   sanitizePreviewPath,
   sanitizeUploadFilename,
 } from "./file-paths";
-import type { FileResolution, RunProcessWithCodeTimeout } from "./file-types";
+import type {
+  FileDownloadResult,
+  FileResolution,
+  RunProcessWithCodeTimeout,
+} from "./file-types";
+import { FileDownloadError } from "./file-download";
 import {
   deleteLocalFile,
   downloadLocalFile,
@@ -33,15 +38,24 @@ import {
   type LastStepBaselineStore,
 } from "./git-diff";
 import { runGitFileAction, runGitRepoAction } from "./git-actions";
+import {
+  listCommits,
+  readCommit,
+  readCommitFile,
+  readCommitPreview,
+} from "./git-history";
+import { readPullRequestStatus } from "./pull-request";
 import { collectIgnoredNames } from "./git-ignore";
 import { GIT_DIFF_TIMEOUT_MS } from "./file-constants";
 import { inlinePreviewMimeForPath } from "./preview";
+import { canRevealFiles, revealLocalPath } from "./file-manager";
 import {
   HTML_PREVIEW_MAX_BYTES,
   isHtmlPath,
 } from "../../../shared/filePreview";
 import { HtmlPreviewError, readHtmlPreviewFile } from "./html-preview-files";
 import { HTML_PREVIEW_CSP, renderHtmlPreview } from "./html-preview";
+import { searchWorkspaceFiles } from "./search";
 
 const MAX_FILE_RESOLUTION_CANDIDATES = 32;
 const MAX_FILE_RESOLUTION_PATH_LENGTH = 4096;
@@ -52,12 +66,14 @@ export function createFileHandlers({
   runProcessWithCodeTimeout,
   shQuote,
   lastStepBaselines,
+  revealPath = revealLocalPath,
 }: {
   herdr: HerdrClient;
   sshHost: () => string | undefined;
   runProcessWithCodeTimeout: RunProcessWithCodeTimeout;
   shQuote: (value: string) => string;
   lastStepBaselines?: LastStepBaselineStore;
+  revealPath?: typeof revealLocalPath;
 }) {
   async function explorerRoot(
     workspaceId: string,
@@ -97,14 +113,17 @@ export function createFileHandlers({
     return { workspaceId, workspace, checkoutPath, path };
   }
 
-  async function downloadTarget(params: Record<string, unknown>) {
+  async function downloadTarget(
+    params: Record<string, unknown>,
+    method = "file.download",
+  ) {
     const workspaceId = String(params.workspace_id ?? "");
-    if (!workspaceId) throw new Error("file.download requires workspace_id");
+    if (!workspaceId) throw new Error(`${method} requires workspace_id`);
     const path =
       params.scope === "filesystem"
         ? sanitizeFilesystemPath(params.path)
         : sanitizeExplorerPath(params.path);
-    if (!path) throw new Error("file.download requires path");
+    if (!path) throw new Error(`${method} requires path`);
     const workspace = await getWorkspace(workspaceId);
     const checkoutPath = await explorerRoot(workspaceId, workspace);
     if (!checkoutPath) throw new Error("workspace has no directory path");
@@ -208,6 +227,70 @@ export function createFileHandlers({
     };
   }
 
+  async function searchFiles(params: Record<string, unknown>) {
+    const workspaceId = String(params.workspace_id ?? "");
+    if (!workspaceId) throw new Error("file.search requires workspace_id");
+    if (params.mode !== "files" && params.mode !== "content") {
+      throw new Error("invalid file.search mode");
+    }
+    if (
+      typeof params.query !== "string" ||
+      !params.query.trim() ||
+      params.query.length > 512 ||
+      /[\x00-\x1f\x7f]/.test(params.query)
+    ) {
+      throw new Error("invalid file.search query");
+    }
+    const workspace = await getWorkspace(workspaceId);
+    const root = await explorerRoot(workspaceId, workspace);
+    if (!root) throw new Error("workspace has no directory path");
+    const result = await searchWorkspaceFiles({
+      root,
+      host: sshHost(),
+      query: params.query.trim(),
+      mode: params.mode,
+      showHidden: params.show_hidden === true,
+      shQuote,
+    });
+    return { ...result, workspace_id: workspaceId, root };
+  }
+
+  async function revealFile(
+    params: Record<string, unknown>,
+    clientAddress: string,
+  ) {
+    if (sshHost() || !canRevealFiles(clientAddress)) {
+      throw new Error(
+        "file.reveal requires host opt-in, a local profile and a loopback peer",
+      );
+    }
+    const scope = params.scope ?? "workspace";
+    if (scope !== "workspace" && scope !== "filesystem") {
+      throw new Error("invalid file.reveal scope");
+    }
+    if (params.source !== undefined && params.source !== "changes") {
+      throw new Error("invalid file.reveal source");
+    }
+    const changes = params.source === "changes";
+    if (changes && scope !== "workspace") {
+      throw new Error("Changes reveal requires a Git-root-relative path");
+    }
+    const workspaceId = String(params.workspace_id ?? "");
+    if (!workspaceId) throw new Error("file.reveal requires workspace_id");
+    if (typeof params.path !== "string" || !params.path) {
+      throw new Error("file.reveal requires path");
+    }
+    const workspace = await getWorkspace(workspaceId);
+    const root = changes
+      ? await gitRoot(workspaceId, workspace)
+      : await explorerRoot(workspaceId, workspace);
+    if (!root) throw new Error("workspace has no directory path");
+    return revealPath(root, params.path, {
+      scope,
+      nearestExistingAncestor: changes,
+    });
+  }
+
   async function resolveFiles(params: Record<string, unknown>) {
     const workspaceId = String(params.workspace_id ?? "");
     if (!workspaceId) throw new Error("file.resolve requires workspace_id");
@@ -302,17 +385,41 @@ export function createFileHandlers({
         });
       }
     }
-    const download = host
-      ? await downloadRemoteFile({
-          host,
-          rootPath: checkoutPath,
-          requestedPath: path,
-          runProcessWithCodeTimeout,
-          shQuote,
-        })
-      : await downloadLocalFile(checkoutPath, path);
+    const options = {
+      inline: params.inline === true,
+      range: typeof params.range === "string" ? params.range : undefined,
+      ifRange:
+        typeof params.if_range === "string" ? params.if_range : undefined,
+    };
+    let download: FileDownloadResult;
+    try {
+      download = host
+        ? await downloadRemoteFile({
+            host,
+            rootPath: checkoutPath,
+            requestedPath: path,
+            runProcessWithCodeTimeout,
+            shQuote,
+            options,
+          })
+        : await downloadLocalFile(checkoutPath, path, options);
+    } catch (error) {
+      if (!(error instanceof FileDownloadError)) throw error;
+      return new Response(error.message, {
+        status: error.status,
+        headers: {
+          "cache-control": "private, no-store",
+          "x-content-type-options": "nosniff",
+          ...(error.status === 416
+            ? { "content-range": `bytes */${error.size}` }
+            : {}),
+        },
+      });
+    }
     const inlineMime =
-      params.inline === true ? inlinePreviewMimeForPath(download.path) : null;
+      options.inline && download.contentType !== "application/gzip"
+        ? inlinePreviewMimeForPath(download.path)
+        : null;
     const headers: Record<string, string> = {
       "content-type": inlineMime ?? download.contentType,
       "content-length": String(download.size),
@@ -321,6 +428,8 @@ export function createFileHandlers({
         : downloadContentDisposition(download.filename),
       "x-file-path": encodeURIComponent(download.path),
     };
+    if (download.acceptRanges) headers["accept-ranges"] = "bytes";
+    if (download.contentRange) headers["content-range"] = download.contentRange;
     if (inlineMime) {
       headers["cache-control"] = "private, no-store";
       headers["x-content-type-options"] = "nosniff";
@@ -331,7 +440,10 @@ export function createFileHandlers({
       headers["content-security-policy"] =
         "sandbox; default-src 'none'; style-src 'unsafe-inline'; img-src data:";
     }
-    return new Response(download.body, { headers });
+    return new Response(download.body, {
+      status: download.contentRange ? 206 : 200,
+      headers,
+    });
   }
 
   async function uploadFile(params: Record<string, unknown>, request: Request) {
@@ -451,6 +563,14 @@ export function createFileHandlers({
     });
   }
 
+  async function readWorkspacePullRequest(params: Record<string, unknown>) {
+    const { root } = await workspaceAndGitRoot(params, "git.pull_request");
+    return readPullRequestStatus(
+      { root, host: sshHost(), shQuote, runProcessWithCodeTimeout },
+      params,
+    );
+  }
+
   async function readGitDiffFile(params: Record<string, unknown>) {
     const { workspaceId, root } = await workspaceAndGitRoot(params);
     return readDiffFile({
@@ -462,6 +582,45 @@ export function createFileHandlers({
       runProcessWithCodeTimeout,
       lastStepBaselines,
     });
+  }
+
+  async function gitHistoryContext(params: Record<string, unknown>) {
+    const { workspaceId, root } = await workspaceAndGitRoot(
+      params,
+      "git history",
+    );
+    return {
+      workspaceId,
+      context: { root, host: sshHost(), shQuote, runProcessWithCodeTimeout },
+    };
+  }
+
+  async function readGitCommits(params: Record<string, unknown>) {
+    const { context } = await gitHistoryContext(params);
+    return listCommits(context, params);
+  }
+
+  async function readGitCommit(params: Record<string, unknown>) {
+    const { context } = await gitHistoryContext(params);
+    return readCommit(context, params.sha);
+  }
+
+  async function readGitCommitFile(params: Record<string, unknown>) {
+    const { workspaceId, context } = await gitHistoryContext(params);
+    return {
+      workspace_id: workspaceId,
+      root: context.root,
+      ...(await readCommitFile(context, params)),
+    };
+  }
+
+  async function readGitCommitPreview(params: Record<string, unknown>) {
+    const { workspaceId, context } = await gitHistoryContext(params);
+    return {
+      workspace_id: workspaceId,
+      root: context.root,
+      ...(await readCommitPreview(context, params)),
+    };
   }
 
   async function runGitPull(params: Record<string, unknown>) {
@@ -503,11 +662,18 @@ export function createFileHandlers({
     listWorkspaceFiles: listFiles,
     resolveWorkspaceFiles: resolveFiles,
     readWorkspaceFile: readFile,
+    searchWorkspaceFiles: searchFiles,
+    revealWorkspaceFile: revealFile,
     downloadWorkspaceFile: downloadFile,
     uploadWorkspaceFile: uploadFile,
     deleteWorkspaceFile: deleteFile,
     readGitDiffSummary,
+    readWorkspacePullRequest,
     readGitDiffFile,
+    readGitCommits,
+    readGitCommit,
+    readGitCommitFile,
+    readGitCommitPreview,
     runGitPull,
     runWorkspaceGitFileAction,
     runWorkspaceGitRepoAction,

@@ -40,7 +40,7 @@ export function visualRouteActionsForNode(
   return [
     ...(node.capabilities.openTerminal ? (["terminal"] as const) : []),
     ...(node.capabilities.files ? (["files"] as const) : []),
-    ...(node.capabilities.changes ? (["changes"] as const) : []),
+    ...(node.capabilities.changes ? (["changes", "commits"] as const) : []),
     ...(node.capabilities.agentHistory ? (["history"] as const) : []),
     ...(node.capabilities.openSpaces ? (["spaces"] as const) : []),
   ];

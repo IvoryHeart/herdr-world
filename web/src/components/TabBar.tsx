@@ -7,12 +7,17 @@ import {
 } from "../store";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { MessageSquareText, PanelRight } from "lucide-react";
+import { MessageSquareText, PanelRight, Pin } from "lucide-react";
 import type { Tab } from "../types";
+import {
+  orderTabsForDisplay,
+  PINNED_TAB_CLOSE_REASON,
+  setTabPinned,
+  useTabPins,
+} from "../tabPins";
 import { AgentStatusIcon } from "./AgentStatusIcon";
 import { ConfirmDialog, TextInputDialog } from "./ModalDialogs";
 import {
-  clearTerminalComposerDrafts,
   terminalComposerCloseWarning,
   terminalComposerDraftPaneIds,
 } from "../terminalComposer";
@@ -21,6 +26,8 @@ import {
   WindowArrangementMenu,
   type WindowArrangementControl,
 } from "./WindowArrangementMenu";
+import { tabMoveInsertIndex } from "../tabReorder";
+import { useTabReorderDrag } from "./useTabReorderDrag";
 import "./TabBar.css";
 
 export type { WindowArrangementControl } from "./WindowArrangementMenu";
@@ -106,6 +113,7 @@ export function TabBar({
       activeConnectionId: state.activeConnectionId,
       connectionGeneration: state.connectionGeneration,
       serverRuntimeGeneration: state.serverRuntimeGeneration,
+      tabMoveSupported: state.tabMoveSupported,
       panes: state.panes,
       tabs: state.tabs,
       workspaces: state.workspaces,
@@ -120,14 +128,33 @@ export function TabBar({
   );
   const [pendingRenameTab, setPendingRenameTab] = useState<Tab | null>(null);
   const [menu, setMenu] = useState<TabMenuState | null>(null);
+  const pinnedTabIds = useTabPins(s.activeConnectionId);
   const focusedWs = s.workspaces.find((w) => w.focused);
   const createReason = useEndpointCreationReason(
     "tab.create",
     focusedWs?.workspace_id,
   );
-  const tabs = s.tabs
-    .filter((t) => t.workspace_id === focusedWs?.workspace_id)
-    .sort((a, b) => a.number - b.number);
+  const tabs = orderTabsForDisplay(
+    s.tabs.filter((t) => t.workspace_id === focusedWs?.workspace_id),
+    pinnedTabIds,
+  );
+  const reorder = useTabReorderDrag({
+    groupOf: (tabId) => {
+      if (!s.tabMoveSupported) return [];
+      const pinned = pinnedTabIds.has(tabId);
+      return tabs
+        .filter((tab) => pinnedTabIds.has(tab.tab_id) === pinned)
+        .map((tab) => tab.tab_id);
+    },
+    orderKey: tabs.map((tab) => tab.tab_id).join(" "),
+    onDrop: (tabId, groupOrder) => {
+      const herdrOrder = s.tabs
+        .filter((tab) => tab.workspace_id === focusedWs?.workspace_id)
+        .map((tab) => tab.tab_id);
+      const insertIndex = tabMoveInsertIndex(herdrOrder, tabId, groupOrder);
+      if (insertIndex !== null) void store.moveTab(tabId, insertIndex);
+    },
+  });
   const pendingCloseTab = s.tabs.find((t) => t.tab_id === pendingCloseTabId);
   const pendingCloseTabName = tabName(pendingCloseTab);
   const pendingCloseTabPaneIds = s.panes
@@ -232,11 +259,15 @@ export function TabBar({
     <>
       <TabContextMenu
         state={menu}
+        pinned={!!menu && pinnedTabIds.has(menu.tab.tab_id)}
         onClose={() => setMenu(null)}
         onFocus={(tab) => {
           void focusTab(tab);
         }}
         onRename={(tab) => setPendingRenameTab(tab)}
+        onTogglePin={(tab, pinned) =>
+          setTabPinned(s.activeConnectionId, tab.tab_id, pinned)
+        }
         onCloseTab={(tab) => setPendingCloseTabId(tab.tab_id)}
         createReason={createReason}
         onCreateTab={() => {
@@ -256,11 +287,6 @@ export function TabBar({
         onClose={() => setPendingCloseTabId(null)}
         onConfirm={() => {
           if (pendingCloseTabId) {
-            clearTerminalComposerDrafts(
-              s.activeConnectionId,
-              s.connectionGeneration,
-              pendingCloseTabPaneIds,
-            );
             store.closeTab(pendingCloseTabId);
           }
         }}
@@ -274,11 +300,6 @@ export function TabBar({
         onClose={() => setPendingClosePaneId(null)}
         onConfirm={() => {
           if (!pendingClosePane) return;
-          clearTerminalComposerDrafts(
-            s.activeConnectionId,
-            s.connectionGeneration,
-            [pendingClosePane.pane_id],
-          );
           store.closePane(pendingClosePane.pane_id);
         }}
       />
@@ -304,78 +325,108 @@ export function TabBar({
     <>
       {showTabStrip ? (
         <div className="tabbar">
-          {tabs.map((t) => {
-            const name =
-              t.label && t.label !== String(t.number)
-                ? t.label
-                : `Tab ${t.number}`;
-            const agentSummary = summarizeTabAgents(s.panes, t.tab_id);
-            return (
-              <div
-                key={t.tab_id}
-                className={`tabbar-tab ${t.focused ? "is-active" : ""}`}
-                onClick={() => {
-                  void focusTab(t);
-                }}
-                onContextMenu={(e) => {
-                  e.preventDefault();
-                  setMenu({ tab: t, x: e.clientX, y: e.clientY });
-                }}
-                title={t.tab_id}
-              >
-                {agentSummary ? (
-                  <span
-                    className="tabbar-agent-marker"
-                    title={`${agentSummary.primaryAgent} · ${agentSummary.status}${
-                      agentSummary.additionalAgents > 0
-                        ? ` · ${agentSummary.additionalAgents} more agent${
-                            agentSummary.additionalAgents === 1 ? "" : "s"
-                          }`
-                        : ""
-                    }`}
-                    aria-label={`${agentSummary.primaryAgent}, status ${agentSummary.status}`}
-                  >
-                    <AgentStatusIcon
-                      agent={agentSummary.primaryAgent}
-                      status={agentSummary.status}
-                    />
-                    {agentSummary.additionalAgents > 0 ? (
-                      <span className="tabbar-agent-more">
-                        +{agentSummary.additionalAgents}
-                      </span>
-                    ) : null}
-                  </span>
-                ) : null}
-                <TabLongPressTarget
-                  tab={t}
-                  onOpenMenu={(x, y) => setMenu({ tab: t, x, y })}
-                >
-                  <span className="tabbar-name">{name}</span>
-                </TabLongPressTarget>
-                <button
-                  className="tabbar-close"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setPendingCloseTabId(t.tab_id);
+          <div className="tabbar-tabs">
+            {tabs.map((t) => {
+              const name =
+                t.label && t.label !== String(t.number)
+                  ? t.label
+                  : `Tab ${t.number}`;
+              const agentSummary = summarizeTabAgents(s.panes, t.tab_id);
+              const pinned = pinnedTabIds.has(t.tab_id);
+              const reorderHandlers = reorder.handlers(t.tab_id);
+              return (
+                <div
+                  key={t.tab_id}
+                  ref={reorder.register(t.tab_id)}
+                  {...reorderHandlers}
+                  onPointerDown={
+                    s.tabMoveSupported
+                      ? reorderHandlers.onPointerDown
+                      : undefined
+                  }
+                  className={`tabbar-tab ${t.focused ? "is-active" : ""} ${
+                    pinned ? "is-pinned" : ""
+                  }`}
+                  onClick={() => {
+                    void focusTab(t);
                   }}
-                  title="Close tab"
+                  onDoubleClick={(e) => {
+                    if (
+                      (e.target as Element).closest("button") ||
+                      e.currentTarget.matches(".is-dragging, .is-settling")
+                    )
+                      return;
+                    e.preventDefault();
+                    setPendingRenameTab(t);
+                  }}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    setMenu({ tab: t, x: e.clientX, y: e.clientY });
+                  }}
+                  title={t.tab_id}
                 >
-                  ×
-                </button>
-              </div>
-            );
-          })}
-          <button
-            className="tabbar-add"
-            onClick={() => {
-              store.createTab(focusedWs.workspace_id);
-            }}
-            disabled={!!createReason}
-            title={createReason ?? shortcutTitle("New tab", "tab.create")}
-          >
-            +
-          </button>
-          <span className="tabbar-spacer" />
+                  {agentSummary ? (
+                    <span
+                      className="tabbar-agent-marker"
+                      title={`${agentSummary.primaryAgent} · ${agentSummary.status}${
+                        agentSummary.additionalAgents > 0
+                          ? ` · ${agentSummary.additionalAgents} more agent${
+                              agentSummary.additionalAgents === 1 ? "" : "s"
+                            }`
+                          : ""
+                      }`}
+                      aria-label={`${agentSummary.primaryAgent}, status ${agentSummary.status}`}
+                    >
+                      <AgentStatusIcon
+                        agent={agentSummary.primaryAgent}
+                        status={agentSummary.status}
+                      />
+                      {agentSummary.additionalAgents > 0 ? (
+                        <span className="tabbar-agent-more">
+                          +{agentSummary.additionalAgents}
+                        </span>
+                      ) : null}
+                    </span>
+                  ) : null}
+                  <TabLongPressTarget
+                    tab={t}
+                    onOpenMenu={(x, y) => setMenu({ tab: t, x, y })}
+                  >
+                    <span className="tabbar-name">{name}</span>
+                  </TabLongPressTarget>
+                  {pinned ? (
+                    <Pin
+                      className="tabbar-pin"
+                      size={11}
+                      fill="currentColor"
+                      aria-label="Pinned"
+                    />
+                  ) : (
+                    <button
+                      className="tabbar-close"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setPendingCloseTabId(t.tab_id);
+                      }}
+                      title="Close tab"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+            <button
+              className="tabbar-add"
+              onClick={() => {
+                store.createTab(focusedWs.workspace_id);
+              }}
+              disabled={!!createReason}
+              title={createReason ?? shortcutTitle("New tab", "tab.create")}
+            >
+              +
+            </button>
+          </div>
           <div className="tabbar-utilities">
             {showInspector ? (
               <button
@@ -487,17 +538,21 @@ function TabLongPressTarget({
 
 function TabContextMenu({
   state,
+  pinned,
   onClose,
   onFocus,
   onRename,
+  onTogglePin,
   onCloseTab,
   onCreateTab,
   createReason,
 }: {
   state: TabMenuState | null;
+  pinned: boolean;
   onClose: () => void;
   onFocus: (tab: Tab) => void;
   onRename: (tab: Tab) => void;
+  onTogglePin: (tab: Tab, pinned: boolean) => void;
   onCloseTab: (tab: Tab) => void;
   onCreateTab: () => void;
   createReason: string | null;
@@ -531,11 +586,16 @@ function TabContextMenu({
   const items = [
     { label: "Focus tab", action: () => onFocus(state.tab) },
     { label: "Rename tab...", action: () => onRename(state.tab) },
+    {
+      label: pinned ? "Unpin tab" : "Pin tab",
+      action: () => onTogglePin(state.tab, !pinned),
+    },
     { label: "Create tab", action: onCreateTab, reason: createReason },
     {
       label: "Close tab",
       danger: true,
       action: () => onCloseTab(state.tab),
+      reason: pinned ? PINNED_TAB_CLOSE_REASON : null,
     },
   ];
   const menuMargin = 8;

@@ -1,3 +1,4 @@
+import { useEffectCallback } from "../useEffectCallback";
 import {
   useCreationProgress,
   creationFailureMessage,
@@ -66,9 +67,7 @@ export function CreateWorkspaceDialog({
   const [submitting, setSubmitting] = useState(false);
   const submissionPending = useRef(false);
   const labelRef = useRef<HTMLInputElement>(null);
-  const onCloseRef = useRef(onClose);
-
-  onCloseRef.current = onClose;
+  const onCloseEvent = useEffectCallback(onClose);
 
   useEffect(() => {
     if (!open) return;
@@ -93,14 +92,14 @@ export function CreateWorkspaceDialog({
     setCwd(initialCwd?.trim() ?? "");
     const cancelFocus = focusDialogElement(labelRef.current, { select: true });
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onCloseRef.current();
+      if (e.key === "Escape") onCloseEvent();
     };
     window.addEventListener("keydown", onKey);
     return () => {
       cancelFocus();
       window.removeEventListener("keydown", onKey);
     };
-  }, [open, initialName, initialCwd]);
+  }, [open, initialName, initialCwd, onCloseEvent]);
 
   if (!open) return null;
 

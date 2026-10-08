@@ -620,6 +620,169 @@ describe("EndpointTerminalSession", () => {
     }
   });
 
+  test("only refits a foreign tab size after this viewer focuses it", async () => {
+    const original = splitSurface(19, 5);
+    const foreign = splitSurface(9, 5);
+    let publish!: (frame: FrameData, panes: TestPane[]) => void;
+    const resizes: Array<[number, number]> = [];
+    const socketPath = await startSessionServer({
+      initialSurface: original,
+      onConnection: (send) => {
+        publish = (frame, panes) => send(panes, frame);
+      },
+      onResize: (cols, rows, send) => {
+        resizes.push([cols, rows]);
+        const resized = splitSurface(cols, rows);
+        send(resized.frame, resized.panes);
+      },
+    });
+    const session = new EndpointTerminalSession(
+      socketPath,
+      "terminal",
+      async () => "w1:p1",
+    );
+    const frames: Array<{ width: number; height: number }> = [];
+    session.on("terminal", (frame) => frames.push(frame));
+    try {
+      await session.connect(6, 3, { cols: 19, rows: 5 });
+      expect(frames.at(-1)).toMatchObject({ width: 6, height: 3 });
+      publish(foreign.frame, foreign.panes);
+      await once(session, "terminal");
+      expect(resizes).toEqual([]);
+      publish(original.frame, original.panes);
+      await once(session, "terminal");
+      publish(foreign.frame, foreign.panes);
+      await once(session, "terminal");
+      expect(resizes).toEqual([]);
+      await session.focus(() => true);
+      await settleUntil(
+        () =>
+          resizes.length > 0 &&
+          frames.at(-1)?.width === 6 &&
+          frames.at(-1)?.height === 3,
+      );
+      expect(frames.at(-1)).toMatchObject({ width: 6, height: 3 });
+    } finally {
+      session.close();
+    }
+  });
+
+  test("does not refit after a focus intent is superseded", async () => {
+    const original = splitSurface(19, 5);
+    const foreign = splitSurface(9, 5);
+    const entered = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    const resizes: Array<[number, number]> = [];
+    let publish!: (frame: FrameData, panes: TestPane[]) => void;
+    let blockFocus = false;
+    const socketPath = await startSessionServer({
+      initialSurface: original,
+      onConnection: (send) => {
+        publish = (frame, panes) => send(panes, frame);
+      },
+      onRequest: async (method) => {
+        if (method === "pane.focus" && blockFocus) {
+          entered.resolve();
+          await release.promise;
+        }
+      },
+      onResize: (cols, rows) => resizes.push([cols, rows]),
+    });
+    const session = new EndpointTerminalSession(
+      socketPath,
+      "terminal",
+      async () => "w1:p1",
+    );
+    try {
+      await session.connect(6, 3, { cols: 19, rows: 5 });
+      blockFocus = true;
+      let current = true;
+      const focus = session.focus(() => current);
+      await entered.promise;
+      const foreignFrame = once(session, "terminal");
+      publish(foreign.frame, foreign.panes);
+      await foreignFrame;
+      current = false;
+      release.resolve();
+      await focus;
+      expect(resizes).toEqual([]);
+    } finally {
+      release.resolve();
+      session.close();
+    }
+  });
+
+  test("retries a foreign resize at the deadline without another surface", async () => {
+    const original = splitSurface(134, 69);
+    const foreign = splitSurface(100, 69);
+    let publish!: (frame: FrameData, panes: TestPane[]) => void;
+    const firstResize = Promise.withResolvers<void>();
+    const resizes: Array<[number, number]> = [];
+    const socketPath = await startSessionServer({
+      initialSurface: original,
+      onConnection: (send) => {
+        publish = (frame, panes) => send(panes, frame);
+      },
+      onResize: (cols, rows, send) => {
+        resizes.push([cols, rows]);
+        if (resizes.length === 1) firstResize.resolve();
+        else {
+          const settled = splitSurface(cols, rows);
+          send(settled.frame, settled.panes);
+        }
+      },
+    });
+    const session = new EndpointTerminalSession(
+      socketPath,
+      "terminal",
+      async () => "w1:p1",
+    );
+    const frames: Array<{ width: number; height: number }> = [];
+    session.on("terminal", (frame) => frames.push(frame));
+    jest.useFakeTimers();
+    try {
+      await session.connect(134, 69);
+      await firstResize.promise;
+      publish(foreign.frame, foreign.panes);
+      await session.focus(() => true); // drain the foreign surface
+      jest.advanceTimersByTime(500);
+      expect(frames.at(-1)?.width).toBe(foreign.panes[0]!.innerRect.width);
+      await session.focus(() => true); // drain the retry and its corrected frame
+      expect(resizes).toHaveLength(2);
+      expect(frames.at(-1)).toMatchObject({ width: 134, height: 69 });
+    } finally {
+      session.close();
+      jest.useRealTimers();
+    }
+  });
+
+  test("refits a stale tab surface during attach", async () => {
+    const stale = splitSurface(9, 5);
+    const resizes: Array<[number, number]> = [];
+    const socketPath = await startSessionServer({
+      initialSurface: stale,
+      onResize: (cols, rows, send) => {
+        resizes.push([cols, rows]);
+        const resized = splitSurface(cols, rows);
+        send(resized.frame, resized.panes);
+      },
+    });
+    const session = new EndpointTerminalSession(
+      socketPath,
+      "terminal",
+      async () => "w1:p1",
+    );
+    const firstFrame = once(session, "terminal");
+    try {
+      await session.connect(6, 3, { cols: 19, rows: 5 });
+      const [frame] = await firstFrame;
+      expect(resizes.length).toBeGreaterThan(0);
+      expect(frame).toMatchObject({ width: 6, height: 3 });
+    } finally {
+      session.close();
+    }
+  });
+
   test.each([
     [2, 0],
     [2, 1],
@@ -708,6 +871,7 @@ describe("EndpointTerminalSession", () => {
       );
       send(false);
       await session.focus(() => true);
+      jest.advanceTimersByTime(500); // a bounded refit may defer later frames
       expect(frames.at(-1)?.mouseReporting).toBe(false);
     } finally {
       session.close();
@@ -984,22 +1148,25 @@ describe("EndpointTerminalSession", () => {
         text: t.bytes.toString("utf8"),
       }),
     );
-    await session.connect(80, 24);
+    try {
+      await session.connect(80, 24);
+      await settleUntil(() => frames.length > 0);
 
-    expect(requests).toEqual([
-      { method: "pane.focus", params: { pane_id: "w1:p1" } },
-    ]);
-    expect(frames.length).toBeGreaterThan(0);
-    const first = frames[0];
-    expect(first.width).toBe(8);
-    expect(first.height).toBe(3);
-    expect(first.full).toBe(true);
-    // Cropped content: inner rect starts at (1,1) of the 10x5 grid,
-    // so the first row is cells 11-18 (L..S).
-    expect(first.text).toContain("LMNOPQRS");
-    // Cursor was at (2,2) in tab space -> (1,1) in crop space.
-    expect(first.text).toContain("\x1b[2;2H");
-    session.close();
+      expect(requests).toEqual([
+        { method: "pane.focus", params: { pane_id: "w1:p1" } },
+      ]);
+      const first = frames[0];
+      expect(first.width).toBe(8);
+      expect(first.height).toBe(3);
+      expect(first.full).toBe(true);
+      // Cropped content: inner rect starts at (1,1) of the 10x5 grid,
+      // so the first row is cells 11-18 (L..S).
+      expect(first.text).toContain("LMNOPQRS");
+      // Cursor was at (2,2) in tab space -> (1,1) in crop space.
+      expect(first.text).toContain("\x1b[2;2H");
+    } finally {
+      session.close();
+    }
   });
 
   test("rejects connect when the terminal has no pane", async () => {
@@ -4437,9 +4604,19 @@ test("terminal.link.resolve requires this viewer's attachment and frame token", 
       return resolvedRegions([]);
     },
   });
-  const { bridge, ws, replies, attach } = creationBridge(socketPath);
+  const { bridge, ws, replies } = creationBridge(socketPath);
   try {
-    await attach();
+    await bridge.handleTerminalRpc(ws, "attach", "terminal.attach", {
+      terminal_id: "term1",
+      cols: 8,
+      rows: 3,
+      surface_cols: 10,
+      surface_rows: 5,
+      relay_active: false,
+    });
+    await settleUntil(() =>
+      replies.some((reply) => reply.terminal?.link_frame),
+    );
     const frame = replies.find((reply) => reply.terminal?.link_frame)?.terminal
       .link_frame;
     expect(frame).toBeString();

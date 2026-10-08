@@ -270,7 +270,7 @@ is authoritative.
 | --- | --- | --- |
 | `--host <addr>` | `HOST` | `127.0.0.1` |
 | `--port <n>` | `PORT` | `8787` |
-| `--password <pw>` | `HERDR_WORLD_PASSWORD` | Generated token for managed non-loopback installs |
+| `--password <pw>` | `HERDR_WORLD_PASSWORD` | Generated persistent login token |
 | `--socket-path <path>` | `HERDR_SOCKET_PATH` | Default Herdr control socket |
 | `--client-socket-path <path>` | `HERDR_CLIENT_SOCKET_PATH` | Default Herdr render socket |
 | `--ssh-host <alias>` | `HERDR_SSH_HOST` | Disabled |
@@ -302,8 +302,9 @@ and health check. The service environment file is read by the managed service;
 `--port` or a shell `PORT` variable controls a foreground process. An existing
 service keeps its configured port when a new version is installed.
 
-Loopback listeners intentionally bypass login. A managed non-loopback service creates
-a persistent login token unless `HERDR_WORLD_PASSWORD` is set. A token URL establishes
+Every listener requires login, including localhost. World creates a persistent
+login token unless `HERDR_WORLD_PASSWORD` is set to a password containing
+15–1024 characters. Repeated failed login attempts receive a cooldown. A token URL establishes
 an HttpOnly session and removes the token from the address bar. Privileged browser HTTP
 and WebSocket admission automatically requires the browser Origin authority to equal
 the request Host authority; loopback listeners also reject non-loopback Host
@@ -336,8 +337,7 @@ herdr-world --host 0.0.0.0 --port 8443 \
 Missing, unreadable, malformed, or mismatched TLS files stop startup. World
 uses HTTP when neither TLS setting is supplied. HTTPS adds Secure cookies and
 HTTPS startup links; authentication still follows the listener policy.
-Loopback bypasses login, and non-loopback requires the configured password or
-generated token. Keep access private as described in [Security](../SECURITY.md).
+Every listener requires the configured password or generated token. Keep access private as described in [Security](../SECURITY.md).
 
 Use certificates whose Subject Alternative Names match every client hostname or
 IP address. Each device must trust the issuer; bypassing a certificate warning
@@ -488,3 +488,28 @@ the generated token or configured password. For encryption, configure
 
 Only one process can listen on 8787. Stop the old World/Roamgate process or choose
 another port with `--port`; do not run two shells for one installation.
+
+## Ranger workspace assistant
+
+Open **Ranger** in the desktop toolbar or mobile controls. Connect a model provider
+using Ranger credentials, explicit Pi credentials, or a custom model endpoint.
+Use the gear button in the Ranger panel for model credentials and workspace
+permissions. **Menu → Configuration → Integrations** manages agent integration
+scripts on the selected Herdr host; it is separate from Ranger model setup.
+Allow specific workspaces in Ranger settings before asking it to read status,
+terminal output, agent history or Git changes. New installations allow no
+workspaces. Manual approval is the default for proposed workspace actions; high
+permission is an explicit setting.
+
+Tasks run in separate service-owned conversations, either once, at an interval,
+or daily. Monitoring tasks can notify only when Ranger detects a meaningful
+change. Review and confirm proposed schedules before enabling them. Saved tasks
+retain endpoint, Herdr server and workspace identity; a changed identity prevents
+recovery. Interactive requests capture the current connection generation and
+cannot continue against a replacement runtime.
+
+Ranger state and credentials live in the World data directory's `assistant`
+subdirectory. `HERDR_WORLD_ASSISTANT_DIR` overrides that location. Keep this data
+private. Models receive the selected workspace context; choose providers and
+workspace permissions accordingly. Closing the panel does not stop tasks; use
+its task controls to stop or disable them.

@@ -324,7 +324,10 @@ describe("service commands", () => {
       "herdr-world.env",
     );
     mkdirSync(join(homeDir, ".config", "herdr-world"), { recursive: true });
-    writeFileSync(configPath, "HOST=0.0.0.0\nHERDR_WORLD_PASSWORD=secret\n");
+    writeFileSync(
+      configPath,
+      "HOST=0.0.0.0\nHERDR_WORLD_PASSWORD=service-test-password\n",
+    );
     chmodSync(configPath, 0o644);
 
     const code = runServiceCommand(["service", "install"], {
@@ -340,7 +343,7 @@ describe("service commands", () => {
 
     expect(code).toBe(0);
     expect(readFileSync(configPath, "utf8")).toBe(
-      "HOST=0.0.0.0\nHERDR_WORLD_PASSWORD=secret\n",
+      "HOST=0.0.0.0\nHERDR_WORLD_PASSWORD=service-test-password\n",
     );
     if (process.platform !== "win32") {
       expect(statSync(configPath).mode & 0o777).toBe(0o600);
@@ -1021,4 +1024,32 @@ test("service run honors only the explicit World supervisor override", () => {
       delete process.env.HERDR_WORLD_RESTART_SUPERVISOR;
     else process.env.HERDR_WORLD_RESTART_SUPERVISOR = previousNew;
   }
+});
+
+test("invalid service passwords are rejected before rewriting a job or generating a token", () => {
+  const homeDir = tempHome();
+  const paths = resolveServicePaths("systemd", homeDir);
+  mkdirSync(dirname(paths.config), { recursive: true });
+  const contents = "HOST=127.0.0.1\nHERDR_WORLD_PASSWORD=short\n";
+  writeFileSync(paths.config, contents);
+  const commands: string[][] = [];
+  const code = runServiceCommand(["service", "install"], {
+    runtime: {
+      platform: "linux",
+      homeDir,
+      execPath: "/opt/world-fixture/herdr-world",
+      argv: ["/opt/world-fixture/herdr-world", "service", "install"],
+    },
+    runCommand: (argv) => {
+      commands.push(argv);
+      return 0;
+    },
+    log: () => {},
+    error: () => {},
+  });
+  expect(code).toBe(1);
+  expect(commands).toHaveLength(0);
+  expect(readFileSync(paths.config, "utf8")).toBe(contents);
+  expect(existsSync(paths.definition)).toBe(false);
+  expect(existsSync(join(dirname(paths.config), "auth-token"))).toBe(false);
 });

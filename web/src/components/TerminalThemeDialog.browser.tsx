@@ -57,6 +57,10 @@ function Harness() {
   return (
     <TerminalThemeDialog
       open
+      fontName=""
+      fontScale={100}
+      onFontNameChange={() => {}}
+      onFontScaleChange={() => {}}
       customThemes={themes}
       selection={selected}
       onCustomThemesChange={setThemes}
@@ -284,7 +288,8 @@ async function run() {
     "Escape deleted a theme",
   );
   check(
-    document.activeElement?.getAttribute("aria-label") === "Terminal themes",
+    document.activeElement?.getAttribute("aria-label") ===
+      "Terminal appearance",
     "Closing confirmation did not restore dialog focus",
   );
   click("Delete Custom 0");

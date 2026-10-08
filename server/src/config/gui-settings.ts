@@ -1,4 +1,6 @@
+import { normalizeTitleSuffix } from "../../../shared/instanceName";
 import { defaultDataFile } from "./data-paths";
+import { worldEnv } from "./environment";
 import { dirname } from "node:path";
 import { mkdirSync } from "node:fs";
 import { rename, rm, writeFile } from "node:fs/promises";
@@ -33,6 +35,7 @@ export type GuiWorkspaceAutoSyncSettings = {
 
 export type GuiSettings = {
   version: 1;
+  title_suffix?: string;
   repositories: Record<string, GuiRepoSettings>;
   workspace_auto_sync: Record<string, GuiWorkspaceAutoSyncSettings>;
   terminal_transport?: Record<string, { surface_codecs: boolean }>;
@@ -46,17 +49,26 @@ let settingsMutationQueue: Promise<void> = Promise.resolve();
 let temporaryFileSequence = 0;
 
 export function guiSettingsPath(): string {
-  return defaultDataFile("settings.json");
+  return worldEnv("SETTINGS_PATH") ?? defaultDataFile("settings.json");
 }
 
 function defaultGuiSettings(): GuiSettings {
   return {
     version: 1,
+    title_suffix: "",
     repositories: {},
     workspace_auto_sync: {},
     terminal_transport: {},
     custom: {},
   };
+}
+
+function storedTitleSuffix(value: unknown): string {
+  try {
+    return normalizeTitleSuffix(value ?? "");
+  } catch {
+    return "";
+  }
 }
 
 function normalizeGuiSettings(raw: unknown): GuiSettings {
@@ -120,6 +132,7 @@ function normalizeGuiSettings(raw: unknown): GuiSettings {
   }
   return {
     version: 1,
+    title_suffix: storedTitleSuffix(obj.title_suffix),
     repositories: normalizedRepos,
     workspace_auto_sync: normalizedWorkspaceAutoSync,
     terminal_transport: Object.fromEntries(

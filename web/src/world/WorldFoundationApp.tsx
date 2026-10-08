@@ -34,13 +34,13 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import {
-  Compass,
   FolderOpen,
   History,
   LayoutGrid,
   Pin,
   PinOff,
   Terminal,
+  View,
 } from "lucide-react";
 import App, { type WorkspaceSurfaceSelection } from "../App";
 import { bridge, type ConnectionSummary } from "../api";
@@ -728,7 +728,7 @@ export default function WorldFoundationApp() {
                 className="world-primary-view-select"
                 title={`World view: ${view}`}
               >
-                <Compass
+                <View
                   className="world-primary-view-icon"
                   size={18}
                   aria-hidden="true"
@@ -2537,6 +2537,7 @@ function WorldControlPlane({
       terminal: "Open Terminal",
       files: "Open Files",
       changes: "Open Changes",
+      commits: "Open Git History",
       history: "Open Agent History",
       spaces: "Go to Spaces",
     };
@@ -2544,6 +2545,7 @@ function WorldControlPlane({
       terminal: <Terminal size={15} />,
       files: <FolderOpen size={15} />,
       changes: <LayoutGrid size={15} />,
+      commits: <History size={15} />,
       history: <History size={15} />,
       spaces: <LayoutGrid size={15} />,
     };

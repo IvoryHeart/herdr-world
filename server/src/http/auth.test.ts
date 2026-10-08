@@ -12,7 +12,7 @@ describe("request authentication boundaries", () => {
   test("brands the login page as Herdr World", async () => {
     const handlers = createAuthHandlers({
       authRequired: true,
-      password: "fixed-password",
+      password: "fixed-password-test",
     });
     const html = await handlers.loginPage().text();
 
@@ -24,13 +24,13 @@ describe("request authentication boundaries", () => {
   test("does not derive authorization from reverse-proxy authorities", async () => {
     const handlers = createAuthHandlers({
       authRequired: true,
-      password: "fixed-password",
+      password: "fixed-password-test",
     });
     const login = await handlers.handleLogin(
       new Request("http://upstream.example/api/login", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ password: "fixed-password" }),
+        body: JSON.stringify({ password: "fixed-password-test" }),
       }),
     );
     const proxiedRequest = new Request("http://upstream.example/ws", {
@@ -95,26 +95,26 @@ describe("generated token login", () => {
   test("ignores token parameters when URL login is not enabled", () => {
     const handlers = createAuthHandlers({
       authRequired: true,
-      password: "fixed-password",
+      password: "fixed-password-test",
     });
 
     expect(
       handlers.handleTokenLogin(
-        new Request("http://example.test/?token=fixed-password"),
+        new Request("http://example.test/?token=fixed-password-test"),
       ),
     ).toBeNull();
   });
 
-  test("preserves fixed-password login behavior", async () => {
+  test("preserves fixed-password-test login behavior", async () => {
     const handlers = createAuthHandlers({
       authRequired: true,
-      password: "fixed-password",
+      password: "fixed-password-test",
     });
     const response = await handlers.handleLogin(
       new Request("http://example.test/api/login", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ password: "fixed-password" }),
+        body: JSON.stringify({ password: "fixed-password-test" }),
       }),
     );
 
@@ -143,6 +143,6 @@ describe("generated token login", () => {
         authRequired: true,
         password: "",
       }),
-    ).toThrow("authentication requires a non-empty signing secret");
+    ).toThrow("Login password must contain at least 15 characters");
   });
 });

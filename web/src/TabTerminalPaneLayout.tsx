@@ -201,6 +201,7 @@ export function TabTerminalPaneLayout({
   connectionGeneration,
   onFocusPane: suppliedFocusPane,
   terminalTheme,
+  terminalFontFamily,
   terminalFontScale,
   mobileShortcuts,
   mobileSideShortcuts,
@@ -220,6 +221,7 @@ export function TabTerminalPaneLayout({
   connectionGeneration: number;
   onFocusPane?: (paneId: string) => void;
   terminalTheme: ITheme;
+  terminalFontFamily?: string;
   terminalFontScale: number;
   mobileShortcuts: MobileTerminalShortcutRows;
   mobileSideShortcuts: MobileTerminalSideShortcuts;
@@ -472,6 +474,7 @@ export function TabTerminalPaneLayout({
             <TerminalView
               paneId={pane.pane_id}
               terminalTheme={terminalTheme}
+              terminalFontFamily={terminalFontFamily}
               terminalFontScale={terminalFontScale}
               showMobileKeys={isActive}
               mobileShortcuts={mobileShortcuts}

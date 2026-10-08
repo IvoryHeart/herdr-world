@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from "react";
+import { worldLocalStorage, subscribeLocalStorage } from "./browserStorage";
 import {
   defaultShortcutBindings,
   detectShortcutPlatform,
@@ -38,6 +39,7 @@ const LATE_SHORTCUT_IDS: ShortcutId[] = [
   "pane.zoom",
   "inspector.expand",
   "annotations.toggle",
+  "assistant.toggle",
   "annotations.copy",
   "annotations.prefill",
   "panes.search",
@@ -49,6 +51,10 @@ const LATE_SHORTCUT_IDS: ShortcutId[] = [
   "arrangement.rows",
   "arrangement.grid",
   "arrangement.restore",
+  "pane.moveLeft",
+  "pane.moveRight",
+  "pane.moveUp",
+  "pane.moveDown",
 ];
 export function validateShortcutPreset(value: unknown): ShortcutPreset {
   if (!value || typeof value !== "object")
@@ -175,7 +181,9 @@ function publish(preferences: ShortcutPreferences, storageError = "") {
 }
 function read() {
   try {
-    return parseShortcutPreferences(localStorage.getItem(SHORTCUT_STORAGE_KEY));
+    return parseShortcutPreferences(
+      worldLocalStorage.getItem(SHORTCUT_STORAGE_KEY),
+    );
   } catch {
     return defaults;
   }
@@ -185,15 +193,17 @@ export function initializeShortcutPreferences() {
   initialized = true;
   platform = detectShortcutPlatform();
   publish(read());
-  window.addEventListener("storage", (event) => {
-    if (event.key === SHORTCUT_STORAGE_KEY || event.key === null)
-      publish(read());
+  subscribeLocalStorage((key) => {
+    if (key === SHORTCUT_STORAGE_KEY || key === null) publish(read());
   });
 }
 function save(preferences: ShortcutPreferences) {
   let error = "";
   try {
-    localStorage.setItem(SHORTCUT_STORAGE_KEY, JSON.stringify(preferences));
+    worldLocalStorage.setItem(
+      SHORTCUT_STORAGE_KEY,
+      JSON.stringify(preferences),
+    );
   } catch {
     error =
       "Browser storage is unavailable. Changes apply only until this page reloads; export a preset to keep them.";

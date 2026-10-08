@@ -1,3 +1,9 @@
+import {
+  mobileTerminalKeyCombinationBytes,
+  mobileTerminalKeyCombinationLabel,
+  type MobileTerminalKeyCombination,
+} from "./mobileTerminalKeyCombination";
+
 export const MOBILE_TERMINAL_SHORTCUTS_STORAGE_KEY =
   "mobileTerminalShortcuts.v2";
 export const LEGACY_MOBILE_TERMINAL_SHORTCUTS_STORAGE_KEY =
@@ -112,6 +118,13 @@ export const MOBILE_TERMINAL_SHORTCUT_OPTIONS = [
     defaultButtonLabel: "C-w",
     group: "Control",
     bytes: [0x17],
+  },
+  {
+    id: "ctrl-x",
+    label: "Ctrl+X",
+    defaultButtonLabel: "C-x",
+    group: "Control",
+    bytes: [0x18],
   },
   {
     id: "ctrl-z",
@@ -269,8 +282,11 @@ export const MOBILE_TERMINAL_SHORTCUT_OPTIONS = [
   },
 ] as const satisfies readonly MobileTerminalShortcutOptionDefinition[];
 
-export type MobileTerminalShortcutAction =
+type MobileTerminalPresetAction =
   (typeof MOBILE_TERMINAL_SHORTCUT_OPTIONS)[number]["id"];
+export type MobileTerminalShortcutAction =
+  | MobileTerminalPresetAction
+  | MobileTerminalKeyCombination;
 
 export type MobileTerminalShortcut = {
   id: string;
@@ -288,7 +304,7 @@ export type MobileTerminalShortcutRows = [
 export type MobileTerminalSideShortcuts = MobileTerminalShortcutSlot[];
 
 const optionById = new Map<
-  MobileTerminalShortcutAction,
+  MobileTerminalPresetAction,
   MobileTerminalShortcutOptionDefinition
 >(MOBILE_TERMINAL_SHORTCUT_OPTIONS.map((option) => [option.id, option]));
 
@@ -307,7 +323,7 @@ const defaultRows: MobileTerminalShortcutRows = [
     { id: "default-escape", label: "Esc", action: "escape" },
     { id: "default-tab", label: "Tab", action: "tab" },
     { id: "default-enter", label: "Enter", action: "enter" },
-    null,
+    { id: "default-backspace", label: "Bksp", action: "backspace" },
     { id: "default-arrow-left", label: "◀", action: "arrow-left" },
     { id: "default-arrow-down", label: "▼", action: "arrow-down" },
     { id: "default-arrow-right", label: "▶", action: "arrow-right" },
@@ -321,6 +337,13 @@ export function defaultMobileTerminalShortcutRows(): MobileTerminalShortcutRows 
   ) as MobileTerminalShortcutRows;
 }
 
+/** The defaults before Backspace joined the second row. */
+function previousDefaultRows(): MobileTerminalShortcutRows {
+  const rows = defaultMobileTerminalShortcutRows();
+  rows[1][3] = null;
+  return rows;
+}
+
 export function defaultMobileTerminalSideShortcuts(): MobileTerminalSideShortcuts {
   return Array<MobileTerminalShortcutSlot>(
     MAX_MOBILE_TERMINAL_SIDE_SHORTCUTS,
@@ -329,20 +352,35 @@ export function defaultMobileTerminalSideShortcuts(): MobileTerminalSideShortcut
 
 export function mobileTerminalShortcutOption(
   action: MobileTerminalShortcutAction,
-) {
-  return optionById.get(action) ?? null;
+): MobileTerminalShortcutOptionDefinition | null {
+  if (typeof action === "string") return optionById.get(action) ?? null;
+  const bytes = mobileTerminalKeyCombinationBytes(action);
+  const label = mobileTerminalKeyCombinationLabel(action);
+  return {
+    id: "custom",
+    label,
+    defaultButtonLabel: clipLabel(
+      label
+        .replace(/(trl|lt|hift)\+/g, "-")
+        .replace("Arrow", "")
+        .replace("Page", "Pg")
+        .replace("Down", "Dn"),
+    ),
+    group: "Modified",
+    bytes,
+  };
 }
 
 export function mobileTerminalShortcutBytes(
   action: MobileTerminalShortcutAction,
 ): number[] {
-  return [...(optionById.get(action)?.bytes ?? [])];
+  return [...(mobileTerminalShortcutOption(action)?.bytes ?? [])];
 }
 
 export function mobileTerminalShortcutScroll(
   action: MobileTerminalShortcutAction,
 ): { direction: "up" | "down"; amount: "full" | "half" } | null {
-  const scroll = optionById.get(action)?.scroll;
+  const scroll = mobileTerminalShortcutOption(action)?.scroll;
   return scroll ? { ...scroll } : null;
 }
 
@@ -350,6 +388,17 @@ function clipLabel(value: string): string {
   return Array.from(value.trim())
     .slice(0, MAX_MOBILE_TERMINAL_SHORTCUT_LABEL_LENGTH)
     .join("");
+}
+
+function normalizeAction(value: unknown): MobileTerminalShortcutAction | null {
+  if (typeof value === "string") {
+    return optionById.has(value as MobileTerminalPresetAction)
+      ? (value as MobileTerminalPresetAction)
+      : null;
+  }
+  if (!mobileTerminalKeyCombinationBytes(value).length) return null;
+  const { key, ctrl, alt, shift } = value as MobileTerminalKeyCombination;
+  return { key, ctrl, alt, shift };
 }
 
 function normalizedId(
@@ -406,9 +455,9 @@ export function normalizeMobileTerminalShortcutRows(
       const candidate = sourceRow[sourceIndex];
       if (!candidate || typeof candidate !== "object") continue;
       const raw = candidate as Record<string, unknown>;
-      if (typeof raw.action !== "string") continue;
-      const action = raw.action as MobileTerminalShortcutAction;
-      const option = optionById.get(action);
+      const action = normalizeAction(raw.action);
+      if (!action) continue;
+      const option = mobileTerminalShortcutOption(action);
       if (!option) continue;
       const label =
         typeof raw.label === "string" && clipLabel(raw.label)
@@ -441,9 +490,9 @@ export function normalizeMobileTerminalSideShortcuts(
     const candidate = value[slotIndex];
     if (!candidate || typeof candidate !== "object") continue;
     const raw = candidate as Record<string, unknown>;
-    if (typeof raw.action !== "string") continue;
-    const action = raw.action as MobileTerminalShortcutAction;
-    const option = optionById.get(action);
+    const action = normalizeAction(raw.action);
+    if (!action) continue;
+    const option = mobileTerminalShortcutOption(action);
     if (!option) continue;
     shortcuts[slotIndex] = {
       id: normalizedId(raw.id, 2, slotIndex, usedIds),
@@ -479,7 +528,18 @@ export function parseMobileTerminalShortcutRows(
 ): MobileTerminalShortcutRows {
   if (!raw) return defaultMobileTerminalShortcutRows();
   try {
-    return normalizeMobileTerminalShortcutRows(JSON.parse(raw));
+    const value = JSON.parse(raw);
+    if (Array.isArray(value)) {
+      const rows = normalizeMobileTerminalShortcutRows(value);
+      // Only legacy arrays need the Backspace upgrade. New saves record a
+      // version so removing Backspace cannot trigger this migration again.
+      return JSON.stringify(rows) === JSON.stringify(previousDefaultRows())
+        ? defaultMobileTerminalShortcutRows()
+        : rows;
+    }
+    return value?.version === 1
+      ? normalizeMobileTerminalShortcutRows(value.rows)
+      : defaultMobileTerminalShortcutRows();
   } catch {
     return defaultMobileTerminalShortcutRows();
   }
@@ -488,7 +548,10 @@ export function parseMobileTerminalShortcutRows(
 export function serializeMobileTerminalShortcutRows(
   rows: MobileTerminalShortcutRows,
 ): string {
-  return JSON.stringify(normalizeMobileTerminalShortcutRows(rows));
+  return JSON.stringify({
+    version: 1,
+    rows: normalizeMobileTerminalShortcutRows(rows),
+  });
 }
 
 export function mobileTerminalShortcutCount(

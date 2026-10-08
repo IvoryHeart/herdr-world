@@ -71,8 +71,8 @@ older World or Roamgate installation.
 **You are done when:** terminal input shows your project directory. Get this
 working before configuring remote access.
 
-> **Check the listener:** standalone defaults to loopback and bypasses login
-> even with a password configured. A new `herdr-world service install` uses
+> **Check the listener:** standalone defaults to loopback and requires login
+> using a configured password or the generated persistent token. A new `herdr-world service install` uses
 > `0.0.0.0:8787` with a token; the plugin uses this service too.
 
 ![Spaces showing synthetic workspaces, recognized agent states, and a live terminal](./images/herdr-world-desktop-spaces.png)
@@ -299,16 +299,15 @@ Tailscale/Tailcat solve **hop A** (browser to Herdr World); `--ssh-host` solves
 
 1. Admit only fully trusted devices/people: UI access is terminal/file authority
    as the Herdr World user.
-2. **Loopback (`127.0.0.1`, `localhost`, `::1`) bypasses login even with
-   `HERDR_WORLD_PASSWORD`.** A forwarding tunnel/proxy becomes the entire remote
-   access boundary, with no extra Herdr World password gate.
+2. **Every listener requires login, including loopback.** Set
+   `HERDR_WORLD_PASSWORD` to 15–1024 characters or use the generated token.
 3. Use HTTPS or a trusted encrypted tunnel; restrict listeners and access policy.
-   Passwords provide no TLS, rate limiting, multi-user authorization, or sandbox.
+   Login throttling applies to failed attempts; passwords provide no TLS,
+   multi-user authorization or sandbox.
 4. Never publish passwords, token URLs, or Tailcat addresses in screenshots,
    issues, chats, or configs.
 
-Read [SECURITY.md](../SECURITY.md). These are private-access examples. If you need
-an additional application login, use an independently authenticated proxy instead.
+Read [SECURITY.md](../SECURITY.md). These are private-access examples. Use an independently authenticated proxy if you need additional access policy.
 Do not bind `0.0.0.0` just to force login: that expands network exposure.
 
 <a id="tailscale"></a>

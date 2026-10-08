@@ -1,4 +1,5 @@
-import { describe, expect, test } from "bun:test";
+import * as layoutPreferences from "./layoutPreferences";
+import { describe, expect, spyOn, test } from "bun:test";
 import {
   downloadFileFromUrl,
   chooseFileDownloadStrategy,
@@ -13,6 +14,9 @@ test("retired native-share downloads neither publish a blob nor reopen the reque
     (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const,
   );
   const originalFetch = globalThis.fetch;
+  const mobile = spyOn(layoutPreferences, "isMobileLayout").mockReturnValue(
+    true,
+  );
   const decoding = Promise.withResolvers<void>();
   const body = Promise.withResolvers<Blob>();
   let current = true;
@@ -68,6 +72,7 @@ test("retired native-share downloads neither publish a blob nor reopen the reque
     await expect(pending).rejects.toThrow();
     expect(publications).toBe(0);
   } finally {
+    mobile.mockRestore();
     globalThis.fetch = originalFetch;
     for (const [key, descriptor] of descriptors) {
       if (descriptor) Object.defineProperty(globalThis, key, descriptor);
@@ -83,6 +88,9 @@ test.each(["healthy", "retired", "mismatched", "rejected", "cancelled"])(
       (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const,
     );
     const previousFetch = globalThis.fetch;
+    const mobile = spyOn(layoutPreferences, "isMobileLayout").mockReturnValue(
+      true,
+    );
     let current = true;
     const opened: string[] = [];
     let shares = 0;
@@ -148,6 +156,7 @@ test.each(["healthy", "retired", "mismatched", "rejected", "cancelled"])(
         scenario === "mismatched" || scenario === "rejected" ? 0 : 1,
       );
     } finally {
+      mobile.mockRestore();
       globalThis.fetch = previousFetch;
       for (const [key, descriptor] of descriptors) {
         if (descriptor) Object.defineProperty(globalThis, key, descriptor);
@@ -247,9 +256,9 @@ describe("chooseFileDownloadStrategy", () => {
     }
   });
 
-  test("opens a new context for desktop web apps instead of the share sheet", () => {
-    // macOS "Add to Dock" web apps are standalone and can share files, but
-    // the share sheet is not the expected desktop download path.
+  test("keeps the non-iOS standalone fallback when Mobile layout is forced", () => {
+    // Layout gating is covered by downloadFile.browser.test.ts. This helper
+    // handles device fallbacks only after the app has selected Mobile layout.
     expect(
       chooseFileDownloadStrategy({
         canShareFiles: true,
@@ -259,7 +268,7 @@ describe("chooseFileDownloadStrategy", () => {
     ).toBe("new-context");
   });
 
-  test("keeps the anchor download for regular desktop browsers", () => {
+  test("keeps the anchor fallback for non-iOS mobile browsers", () => {
     expect(
       chooseFileDownloadStrategy({
         canShareFiles: false,
@@ -269,7 +278,7 @@ describe("chooseFileDownloadStrategy", () => {
     ).toBe("anchor");
   });
 
-  test("keeps the anchor download on desktop even when files can be shared", () => {
+  test("does not add sharing to non-iOS browsers in Mobile layout", () => {
     // macOS Safari reports navigator.canShare support for files; the share
     // sheet is still not the expected desktop download path.
     expect(

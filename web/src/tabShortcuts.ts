@@ -1,5 +1,6 @@
 import { getShortcutSnapshot } from "./shortcutPreferences";
 import { matchesShortcut, type ShortcutBindings } from "./shortcutBindings";
+import { orderTabsForDisplay } from "./tabPins";
 import type { Pane, Tab } from "./types";
 
 export type TabShortcutAction = "create" | "close" | "previous" | "next";
@@ -36,15 +37,16 @@ export function closeShortcutTarget(
   return { type: "pane", id: pane.pane_id };
 }
 
-/** Selects the adjacent tab in stable tab-number order, wrapping at each end. */
+/** Selects the adjacent tab in tab-strip order, wrapping at each end. */
 export function adjacentTabId(
   tabs: Pick<Tab, "tab_id" | "number">[],
   currentTabId: string | undefined,
   direction: "previous" | "next",
+  pinnedTabIds: ReadonlySet<string> = new Set(),
 ): string | null {
   if (tabs.length === 0) return null;
 
-  const orderedTabs = [...tabs].sort((a, b) => a.number - b.number);
+  const orderedTabs = orderTabsForDisplay(tabs, pinnedTabIds);
   const currentIndex = orderedTabs.findIndex(
     (tab) => tab.tab_id === currentTabId,
   );

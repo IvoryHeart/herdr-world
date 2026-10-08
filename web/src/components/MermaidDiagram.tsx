@@ -17,9 +17,11 @@ type MermaidDiagramState =
 export function MermaidDiagram({
   code,
   className = "",
+  fitToWidth = false,
 }: {
   code: string;
   className?: string;
+  fitToWidth?: boolean;
 }) {
   const [state, setState] = useState<MermaidDiagramState>({ kind: "loading" });
 
@@ -104,13 +106,14 @@ export function MermaidDiagram({
       key={code}
       dimensions={state}
       label="Mermaid diagram"
+      fitToWidth={fitToWidth}
       className={`mermaid-diagram ${className}`.trim()}
     >
       <div
         className="mermaid-svg"
         role="img"
         aria-label="Mermaid diagram"
-        // Renderer labels are escaped, styles are scoped, and IDs are unique.
+        // Final renderer output is SVG-sanitized after style/ID preparation.
         dangerouslySetInnerHTML={{ __html: state.svg }}
       />
     </ZoomablePreview>
