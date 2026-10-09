@@ -24,6 +24,8 @@ async function withAuthServer(
       PORT: "0",
       OPEN_BROWSER: "0",
       ROAMGATE_PASSWORD: password,
+      ROAMGATE_PIN: "",
+      HERDR_GUI_PIN: "",
       ROAMGATE_CONNECTIONS_PATH: join(root, "connections.json"),
       ROAMGATE_SETTINGS_PATH: join(root, "settings.json"),
       HERDR_SOCKET_PATH: join(root, "missing-control.sock"),
@@ -417,3 +419,134 @@ test("instance name save failures preserve the current name and permit retry", a
     await rm(root, { recursive: true, force: true });
   }
 }, 20_000);
+
+test("PIN login uses a separate endpoint and preserves password recovery during PIN cooldown", async () => {
+  await withAuthServer(
+    async (base) => {
+      const request = (path: string, init?: RequestInit) =>
+        fetch(`${base}${path}`, { ...init, signal: AbortSignal.timeout(5000) });
+      const page = await (await request("/login")).text();
+      expect(page).toContain('inputmode="numeric"');
+      expect(page).toContain("Use password or token instead");
+      const pinLogin = (pin: string) =>
+        request("/api/login/pin", {
+          method: "POST",
+          body: JSON.stringify({ pin }),
+        });
+      const loggedIn = await pinLogin("012345");
+      expect(loggedIn.status).toBe(200);
+      const cookie = loggedIn.headers.get("set-cookie")!.split(";", 1)[0]!;
+      expect(cookie).toContain("herdr_auth=");
+      expect((await request("/", { headers: { cookie } })).status).toBe(200);
+      for (let i = 0; i < 5; i++)
+        expect((await pinLogin("654321")).status).toBe(401);
+      const blocked = await pinLogin("012345");
+      expect(blocked.status).toBe(429);
+      expect(Number(blocked.headers.get("retry-after"))).toBeGreaterThan(0);
+      const recovered = await request("/api/login", {
+        method: "POST",
+        body: JSON.stringify({ password }),
+      });
+      expect(recovered.status).toBe(200);
+      expect(recovered.headers.has("set-cookie")).toBe(true);
+      expect((await pinLogin("012345")).status).toBe(429);
+    },
+    { ROAMGATE_PIN: "012345" },
+  );
+});
+
+test("PIN endpoint is disabled by default", async () => {
+  await withAuthServer(
+    async (base) => {
+      const response = await fetch(`${base}/api/login/pin`, {
+        method: "POST",
+        body: JSON.stringify({ pin: "012345" }),
+        signal: AbortSignal.timeout(5000),
+      });
+      expect(response.status).toBe(404);
+      expect(response.headers.has("set-cookie")).toBe(false);
+      expect(await (await fetch(`${base}/login`)).text()).not.toContain(
+        'inputmode="numeric"',
+      );
+    },
+    { ROAMGATE_PIN: "", HERDR_GUI_PIN: "" },
+  );
+});
+
+test("instances sharing a home preserve independent sessions across restarts and credential rotations", async () => {
+  const root = await mkdtemp(join(tmpdir(), "roamgate-instance-sessions-"));
+  const shared = { HOME: root, APPDATA: root, XDG_CONFIG_HOME: root };
+  const first = {
+    ...shared,
+    ROAMGATE_SETTINGS_PATH: join(root, "first-settings.json"),
+    ROAMGATE_PASSWORD: "first-instance-password",
+    ROAMGATE_PIN: "012345",
+  };
+  const second = {
+    ...shared,
+    ROAMGATE_SETTINGS_PATH: join(root, "second-settings.json"),
+    ROAMGATE_PASSWORD: "second-instance-password",
+    ROAMGATE_PIN: "654321",
+  };
+  const login = async (base: string, loginPassword: string) => {
+    const response = await fetch(`${base}/api/login`, {
+      method: "POST",
+      body: JSON.stringify({ password: loginPassword }),
+      signal: AbortSignal.timeout(5000),
+    });
+    expect(response.status).toBe(200);
+    return response.headers.get("set-cookie")!.split(";", 1)[0]!;
+  };
+  const status = async (base: string, cookie: string) =>
+    (
+      await fetch(`${base}/api/health`, {
+        headers: { cookie },
+        signal: AbortSignal.timeout(5000),
+      })
+    ).status;
+  let firstCookie = "";
+  let secondCookie = "";
+  let rotatedCookie = "";
+  try {
+    await withAuthServer(async (firstBase) => {
+      firstCookie = await login(firstBase, first.ROAMGATE_PASSWORD);
+      await withAuthServer(async (secondBase) => {
+        secondCookie = await login(secondBase, second.ROAMGATE_PASSWORD);
+        expect(await status(firstBase, firstCookie)).toBe(200);
+        expect(await status(secondBase, secondCookie)).toBe(200);
+        expect(await status(firstBase, secondCookie)).toBe(401);
+        expect(await status(secondBase, firstCookie)).toBe(401);
+      }, second);
+    }, first);
+    await withAuthServer(async (firstBase) => {
+      expect(await status(firstBase, firstCookie)).toBe(200);
+      await withAuthServer(async (secondBase) => {
+        expect(await status(secondBase, secondCookie)).toBe(200);
+        expect(await status(firstBase, firstCookie)).toBe(200);
+      }, second);
+    }, first);
+    await withAuthServer(
+      async (firstBase) => {
+        expect(await status(firstBase, firstCookie)).toBe(401);
+        rotatedCookie = await login(firstBase, "changed-instance-password");
+        await withAuthServer(async (secondBase) => {
+          expect(await status(secondBase, secondCookie)).toBe(200);
+          expect(await status(firstBase, rotatedCookie)).toBe(200);
+        }, second);
+      },
+      { ...first, ROAMGATE_PASSWORD: "changed-instance-password" },
+    );
+    await withAuthServer(async (firstBase) => {
+      expect(await status(firstBase, firstCookie)).toBe(401);
+      expect(await status(firstBase, rotatedCookie)).toBe(401);
+      const restoredCookie = await login(firstBase, first.ROAMGATE_PASSWORD);
+      expect(await status(firstBase, restoredCookie)).toBe(200);
+      await withAuthServer(async (secondBase) => {
+        expect(await status(secondBase, secondCookie)).toBe(200);
+        expect(await status(firstBase, restoredCookie)).toBe(200);
+      }, second);
+    }, first);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}, 30_000);

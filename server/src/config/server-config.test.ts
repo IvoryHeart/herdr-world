@@ -664,3 +664,138 @@ describe("nativeSocketPath", () => {
     expect(nativeSocketPath(logical, "linux")).toBe(logical);
   });
 });
+
+test("reading configuration for management commands does not create or rotate session signing state", () => {
+  const dir = mkdtempSync(join(tmpdir(), "roamgate-session-config-"));
+  try {
+    const statePath = join(
+      dir,
+      process.platform === "win32" ? "roamgate" : ".config/roamgate",
+      "session-secret.json",
+    );
+    const load = (password: string) => {
+      const result = Bun.spawnSync(
+        [
+          process.execPath,
+          "-e",
+          `import {loadServerConfig} from ${JSON.stringify(join(import.meta.dir, "server-config.ts"))}; process.argv = [process.execPath, "roamgate"]; loadServerConfig("test");`,
+        ],
+        {
+          env: {
+            ...process.env,
+            HOME: dir,
+            APPDATA: dir,
+            NODE_ENV: "production",
+            ROAMGATE_PASSWORD: password,
+          },
+          stdout: "pipe",
+          stderr: "pipe",
+        },
+      );
+      expect(result.exitCode).toBe(0);
+    };
+    load("first-test-password");
+    expect(existsSync(statePath)).toBe(false);
+    mkdirSync(dirname(statePath), { recursive: true });
+    writeFileSync(statePath, "existing-signing-state");
+    load("other-test-password");
+    load("");
+    expect(readFileSync(statePath, "utf8")).toBe("existing-signing-state");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+describe("optional PIN configuration", () => {
+  test.each([
+    undefined,
+    "",
+    "012345",
+    "123456789012",
+    "12345",
+    "1234567890123",
+    "12345a",
+    " 123456",
+    "１２３４５６",
+  ])(
+    "validates ROAMGATE_PIN=%s without weakening the strong credential",
+    (pin) => {
+      const dir = mkdtempSync(join(tmpdir(), "roamgate-pin-config-"));
+      try {
+        const env: NodeJS.ProcessEnv = {
+          ...process.env,
+          HOME: dir,
+          APPDATA: dir,
+          NODE_ENV: "production",
+          ROAMGATE_PASSWORD: "strong-test-password",
+        };
+        delete env.HERDR_GUI_PIN;
+        if (pin === undefined) delete env.ROAMGATE_PIN;
+        else env.ROAMGATE_PIN = pin;
+        const result = Bun.spawnSync(
+          [
+            process.execPath,
+            "-e",
+            `import {loadServerConfig} from ${JSON.stringify(join(import.meta.dir, "server-config.ts"))}; process.argv = [process.execPath, "roamgate"]; console.log(JSON.stringify(loadServerConfig("test")));`,
+          ],
+          { env, stdout: "pipe", stderr: "pipe" },
+        );
+        const valid = !pin || /^[0-9]{6,12}$/.test(pin);
+        expect(result.exitCode).toBe(valid ? 0 : 2);
+        if (valid) {
+          const config = JSON.parse(result.stdout.toString()) as ServerConfig;
+          expect(config.pin).toBe(pin || undefined);
+          expect(config.password).toBe("strong-test-password");
+          expect(config.generatedAuthToken).toBeUndefined();
+        } else {
+          expect(result.stderr.toString()).toContain("6 to 12 ASCII digits");
+          expect(result.stderr.toString()).not.toContain(pin!);
+        }
+        expect(existsSync(join(dir, ".config", "roamgate"))).toBe(false);
+        expect(existsSync(join(dir, "roamgate"))).toBe(false);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    },
+  );
+
+  test("PIN keeps generated-token recovery and follows environment precedence", () => {
+    const dir = mkdtempSync(join(tmpdir(), "roamgate-pin-config-"));
+    try {
+      let token: string | undefined;
+      for (const [pin, legacyPin, expected] of [
+        [undefined, "012345", "012345"],
+        ["", "012345", undefined],
+        ["654321", "invalid", "654321"],
+      ] as const) {
+        const env: NodeJS.ProcessEnv = {
+          ...process.env,
+          HOME: dir,
+          APPDATA: dir,
+          NODE_ENV: "production",
+          ROAMGATE_PASSWORD: "",
+          HERDR_GUI_PIN: legacyPin,
+        };
+        if (pin === undefined) delete env.ROAMGATE_PIN;
+        else env.ROAMGATE_PIN = pin;
+        const result = Bun.spawnSync(
+          [
+            process.execPath,
+            "-e",
+            `import {loadServerConfig} from ${JSON.stringify(join(import.meta.dir, "server-config.ts"))}; process.argv = [process.execPath, "roamgate"]; console.log(JSON.stringify(loadServerConfig("test")));`,
+          ],
+          { env, stdout: "pipe", stderr: "pipe" },
+        );
+        expect(result.exitCode).toBe(0);
+        const config = JSON.parse(result.stdout.toString()) as ServerConfig;
+        expect(config.pin).toBe(expected);
+        expect(config.generatedAuthToken).toMatch(/^[a-f0-9]{64}$/);
+        expect(config.password).toBe(config.generatedAuthToken!);
+        if (token) expect(config.generatedAuthToken).toBe(token);
+        token = config.generatedAuthToken;
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});

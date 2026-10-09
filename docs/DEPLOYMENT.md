@@ -274,6 +274,7 @@ explicit connection registry paths remain authoritative, including empty values.
 | `--host <addr>` | `HOST` | `127.0.0.1` |
 | `--port <n>` | `PORT` | `8787` |
 | `--password <pw>` | `ROAMGATE_PASSWORD` | Generated token when authentication is enabled |
+| None | `ROAMGATE_PIN` | Disabled; optional 6-12 digit login for private networks only |
 | `--tls-cert <path>` | `ROAMGATE_TLS_CERT` | Disabled; PEM chain, requires key |
 | `--tls-key <path>` | `ROAMGATE_TLS_KEY` | Disabled; PEM key, requires certificate |
 | `--socket-path <path>` | `HERDR_SOCKET_PATH` | Default control socket/pipe |
@@ -313,6 +314,26 @@ For a fixed password, prefer `ROAMGATE_PASSWORD` over process-visible
 range stop startup, including existing short passwords. Normal runtime requires
 login; see [Security](../SECURITY.md#trust-model) for the local development
 exception, login limits, and remote access guidance.
+
+### Optional PIN login
+
+For a server reachable only through a trusted private network or VPN, set
+`ROAMGATE_PIN` to 6-12 ASCII digits in the process environment or protected
+service environment file, then restart. There is deliberately no CLI flag.
+Unset or empty disables it; invalid values stop startup. Keep leading zeros.
+A PIN adds a weaker alternative credential and grants full access, so do not
+use it on a public listener. The server prints a warning when it is enabled.
+
+The form starts in numeric PIN mode and can switch to password/token login.
+`ROAMGATE_PASSWORD` still selects the strong login credential; when it is absent,
+the existing generated token and token URLs remain available. The PIN never
+replaces a signing key. Ten consecutive failures across all sources pause PIN
+login for one hour; per-source limits also apply. Strong-credential login remains
+available during that cooldown. See [PIN security and limits](../SECURITY.md#optional-pin-login).
+
+Adding, changing, or removing the PIN rotates the independent session signing
+secret at the next listener startup, just like changing the strong credential.
+Stop all listeners for the same instance before changing credentials.
 
 ### Host file reveal
 
@@ -677,7 +698,9 @@ resource budget; disconnect unused profiles.
 GUI preferences and worktree source relationships live in
 `~/.config/roamgate/settings.json` (Windows: `%APPDATA%\roamgate\settings.json`).
 Use `ROAMGATE_SETTINGS_PATH` to give another bridge its own settings file;
-`HERDR_GUI_SETTINGS_PATH` remains a supported alias.
+`HERDR_GUI_SETTINGS_PATH` remains a supported alias. Separate settings paths also
+isolate session signing keys. Use stable absolute paths; changing the normalized
+absolute path requires logging in again.
 
 Explicit CLI/environment connection settings create a read-only `legacy-default`
 profile. Change those settings to edit it. Old browser preferences migrate once
@@ -837,6 +860,32 @@ curl -fsS http://127.0.0.1:8787/healthz
 ```
 
 Tokens live in `~/.config/roamgate/auth-token` or `%APPDATA%\roamgate\auth-token`.
+Private random cookie signing state lives in the same data directory. With no or
+an empty settings-path override, its file is `session-secret.json`. A nonempty
+`ROAMGATE_SETTINGS_PATH` (or `HERDR_GUI_SETTINGS_PATH`) selects
+`session-secret-<sha256>.json`, where `<sha256>` is the full SHA-256 digest of the
+normalized absolute settings path. The key stays in the data directory even when
+the settings file is elsewhere. Different settings paths isolate signing keys;
+keep custom paths absolute and stable. Changing the normalized path requires
+logging in again. Preserve the signing state across restarts and protect it like
+the login token.
+
+`ROAMGATE_PASSWORD` and the generated token are login credentials only. The first
+upgrade from credential-signed cookies requires logging in again. Changing an
+effective credential rotates that instance's signing secret at startup, so old
+sessions stay revoked even if that credential is later restored. Stop all
+listeners for the same instance before credential changes. To revoke its sessions
+without changing credentials, stop those listeners, remove only its signing
+state file, then restart. Malformed or unsafe signing state fails startup rather
+than silently resetting authentication.
+
+Concurrent startups use a short-lived `<signing-state-file>.lock` directory,
+such as `session-secret.json.lock` or `session-secret-<sha256>.json.lock`. If
+startup was killed while holding it, stop all listeners for that instance,
+confirm no startup is running, and remove only its matching lock directory before
+restarting. A busy lock fails closed after a bounded wait; it is never stolen
+from a potentially live writer.
+
 A `?token=...` visit sets an HttpOnly cookie and removes the URL token. To rotate,
 stop the service, replace the file with a fresh 64-character lowercase hexadecimal
 secret (mode `0600`), then restart. **Deleting only the new file can restore a

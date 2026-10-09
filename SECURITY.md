@@ -32,6 +32,28 @@ persistent 256-bit random token and reports its protected file path. Read that
 file to log in, or use `--open` to open a token URL automatically. Service
 installation and URL tools can also provide token URLs; keep them private.
 
+Session cookies are signed by a separate, randomly generated 256-bit secret with
+owner-only permissions in the Roamgate data directory. The default file is
+`session-secret.json`. A nonempty `ROAMGATE_SETTINGS_PATH` (or its legacy alias)
+selects `session-secret-<sha256>.json` in that directory, using the full SHA-256
+digest of the normalized absolute settings path. Separate settings paths isolate
+signing keys; changing that path requires logging in again. Keep custom paths
+absolute and stable.
+
+The login password/token is never the cookie signing key. Ordinary restarts keep
+sessions valid for their original 30-day lifetime. Changing the effective login
+password/token or adding, changing, or removing the PIN rotates that instance's
+signing secret at startup and invalidates earlier cookies, even if a previous
+credential is later restored. Stop all listeners for the same instance before
+changing credentials; already-running processes retain their in-memory
+configuration. Keep signing state private and persistent, and never copy it into
+a different installation. Corrupt or unsafe secret files stop startup.
+
+Upgrading from password/token-signed cookies requires one new login; legacy
+cookies are deliberately not accepted. Removing the instance's signing state
+while all its listeners are stopped resets its sessions without changing the
+login credential. See [signing state and lock recovery](docs/DEPLOYMENT.md#run-as-a-user-service).
+
 Password login (`POST /api/login`) and token-URL login share limits by the
 connection's source IP: at most 20 attempts per 60-second window, and five
 consecutive failures trigger a five-minute cooldown. Successful login clears
@@ -41,12 +63,46 @@ limited to 16 KiB of actual streamed bytes; oversized bodies return `413`.
 
 IP records expire after five minutes without an attempt and are removed on the
 next login attempt. Without new attempts, expired records remain within the
-same bounded table. The bridge keeps at
+same bounded table. Each source-IP table holds at
 most 4096 active IP records; when full, it returns `429` for new IPs instead of
 evicting active cooldowns. This state belongs to one process and resets when
 the bridge restarts. Forwarded IP headers are not trusted: clients behind a
 reverse proxy or tunnel share its connection-IP limits. Use the proxy's own
 limits when per-client enforcement is needed.
+
+### Optional PIN login
+
+`ROAMGATE_PIN` enables a separate convenience credential only when explicitly
+set to 6-12 ASCII digits (leading zeros are preserved). Unset or empty disables
+it; other values stop startup. PIN login is intended only for a listener behind
+a trusted VPN/private network and firewall. A short PIN is substantially weaker
+than a unique password or random token; enabling it reduces login security.
+Startup emits a warning. Transport still needs HTTPS or a trusted encrypted VPN.
+
+The PIN-first form offers **Use password or token instead** for recovery. The
+existing password (or generated token when no password is configured) remains
+valid. Token URLs keep working in generated-token mode; a configured password
+continues to disable generated-token URL login. A PIN is never a URL credential
+or a cookie signing key. All login methods grant the same full authority.
+
+PIN login uses `POST /api/login/pin` with a `pin` field; it cannot bypass its
+limits through the password endpoint. It has a separate bounded source-IP table
+with the same 20-attempt/minute and five-failure/five-minute limits. In addition,
+ten consecutive failed PINs across **all source IPs** disable PIN login for one
+hour. Requests blocked by that cooldown do not extend it; it expires automatically.
+Successful PIN login resets its global consecutive-failure count. Password and
+token login retain their own source-IP budget and remain available during PIN
+cooldown, but do not reset it. Invalid or oversized PIN bodies count as failures.
+
+These counters are process-local and reset on restart; multiple independent
+listeners multiply the guessing budget. Do not use PIN login across replicas
+without shared outer rate limiting. Forwarded IP headers remain untrusted.
+Distributed attempts can temporarily deny the PIN convenience path, so retain
+access to the strong credential. If attacked, remove `ROAMGATE_PIN` and restart
+all listeners for that instance; changing/removing the PIN also revokes its
+existing session cookies.
+
+### Access and session safety
 
 **Do not expose Roamgate directly to the public internet.** For remote access:
 
