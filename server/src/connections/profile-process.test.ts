@@ -135,7 +135,9 @@ async function fakeHerdr(
     net.createServer((socket) => {
       trackSocket(socket);
       let input = Buffer.alloc(0);
+      let welcomed = false;
       socket.on("data", (chunk) => {
+        if (welcomed) return;
         input = Buffer.concat([input, Buffer.from(chunk)]);
         if (input.length < 4) return;
         const length = input.readUInt32LE(0);
@@ -143,6 +145,8 @@ async function fakeHerdr(
         const reader = new BinReader(input.subarray(4, length + 4));
         expect(reader.variant()).toBe(0);
         const protocol = reader.varint();
+        welcomed = true;
+        // Only Hello receives Welcome; later client traffic is not a handshake.
         const writer = new BinWriter();
         writer.variant(0);
         writer.varint(welcomeProtocol ?? protocol);

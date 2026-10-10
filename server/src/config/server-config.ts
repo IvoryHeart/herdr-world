@@ -7,7 +7,10 @@ import { createHash } from "node:crypto";
 import { validateSshDestination } from "../bridge/ssh-command";
 import { assertSshTunnelPlatformSupported } from "../bridge/ssh-tunnel";
 import {
+  MIN_PASSWORD_LENGTH,
+  MAX_PASSWORD_LENGTH,
   assertValidAuthPassword,
+  assertValidAuthPin,
   defaultAuthTokenPath,
   loadOrCreateAuthToken,
 } from "./auth-token";
@@ -48,6 +51,7 @@ export type ServerConfig = {
   port: number;
   password: string;
   authRequired: boolean;
+  pin?: string;
   tls?: { cert: Buffer; key: Buffer };
   generatedAuthToken?: string;
   generatedAuthTokenPath?: string;
@@ -166,7 +170,9 @@ Service actions:
 Options (flags override HERDR_WORLD_* environment variables):
   --host <addr>              listen address        (env HOST,            default 127.0.0.1)
   --port <n>                 listen port           (env PORT,            default 8787)
-  --password <pw>            fixed login password (env HERDR_WORLD_PASSWORD; otherwise a token is generated)
+  --password <pw>            fixed login password, ${MIN_PASSWORD_LENGTH}..${MAX_PASSWORD_LENGTH} characters
+                             (env HERDR_WORLD_PASSWORD; otherwise a token is generated)
+  (env HERDR_WORLD_PIN)         optional 6..12 digit convenience login; private networks only
   --tls-cert <path>          PEM certificate chain (env HERDR_WORLD_TLS_CERT; requires --tls-key)
   --tls-key <path>           PEM private key       (env HERDR_WORLD_TLS_KEY; requires --tls-cert)
   --socket-path <path>       control socket        (env HERDR_SOCKET_PATH)
@@ -242,6 +248,13 @@ Options (flags override HERDR_WORLD_* environment variables):
     console.error(`[bridge] ${(error as Error).message}`);
     process.exit(2);
   }
+  const pin = worldEnv("PIN") || undefined;
+  try {
+    if (pin !== undefined) assertValidAuthPin(pin);
+  } catch (error) {
+    console.error(`[bridge] ${(error as Error).message}`);
+    process.exit(2);
+  }
   const configuredPassword = String(
     args.password ?? worldEnv("PASSWORD") ?? "",
   );
@@ -297,6 +310,7 @@ Options (flags override HERDR_WORLD_* environment variables):
     port,
     password,
     authRequired,
+    pin,
     tls,
     generatedAuthToken,
     generatedAuthTokenPath,

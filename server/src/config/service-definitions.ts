@@ -19,11 +19,13 @@ export const DEFAULT_SERVICE_ENV_FILE = `# herdr-world service environment
 HOST=0.0.0.0
 PORT=8787
 
-# Optional fixed password. By default, service install creates a generated token.
+# Optional fixed password (15..1024 characters). Otherwise a token is generated.
 # HERDR_WORLD_PASSWORD=replace-with-a-strong-password
+# Optional convenience PIN: 6..12 digits, private networks/VPN only.
+# Keeps password/token login available for recovery.
+# HERDR_WORLD_PIN=
 
-# When an authenticated HTTPS reverse proxy forwards to this listener, set its
-# one exact public origin (for example https://world.example).
+# Exact public origin for an authenticated HTTPS reverse proxy.
 # HERDR_WORLD_PUBLIC_ORIGIN=https://world.example
 
 # Optional native HTTPS. Set both to absolute PEM file paths.

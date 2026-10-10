@@ -2,7 +2,7 @@
 
 ## Development Setup
 
-1. Install Bun 1.4.1 or newer (CI uses 1.4.1) and start a local Herdr server.
+1. Install Bun 1.4.3 or newer (CI uses 1.4.3) and start a local Herdr server.
 2. From the repository root, run `bun install --frozen-lockfile`.
 3. Run these in separate terminals, then open <http://localhost:5173>:
 

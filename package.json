@@ -14,7 +14,7 @@
     "url": "https://github.com/IvoryHeart/herdr-world/issues"
   },
   "engines": {
-    "bun": ">=1.4.1"
+    "bun": ">=1.4.3"
   },
   "workspaces": [
     "web",
@@ -59,24 +59,25 @@
     "lint": "oxlint .",
     "test": "bun scripts/run-tests.ts",
     "test:world": "bun scripts/run-world-tests.ts",
-    "test:quick": "bun scripts/run-tests.ts --path-ignore-patterns '**/{uiScale,mobileTerminal,filePreviewNavigation,TerminalThemeDialog,VisualPreview,ThemedSelect,HerdrSetupCard}.test.ts'",
-    "test:browser": "bun scripts/run-tests.ts ./web/src/uiScale.test.ts ./web/src/mobileTerminal.test.ts ./web/src/filePreviewNavigation.test.ts ./web/src/components/TerminalThemeDialog.test.ts ./web/src/components/VisualPreview.test.ts ./web/src/components/ThemedSelect.test.ts ./web/src/components/WindowArrangementMenu.test.ts ./web/src/components/HerdrSetupCard.test.ts ./web/src/components/WorkspaceInspectorPortal.test.ts ./web/src/world/windows/WindowFrame.test.ts ./web/src/world/useSpacesTabWindowArrangement.browser.test.ts ./web/src/world/WorldViewErrorBoundary.test.ts ./web/src/world/PixelOfficeCanvas.test.ts ./web/src/world/ConnectedTreeView.browser.test.ts ./web/src/world/SpatialGraphView.browser.test.ts ./web/src/world/HostsFilter.test.ts ./web/src/world/ConcurrentContexts.test.ts ./web/src/world/WorldTerminalHandoff.test.ts ./web/src/world/ProductionContexts.test.ts ./web/src/world/DeskView.browser.test.ts",
+    "test:quick": "bun scripts/run-tests.ts --path-ignore-patterns '**/{uiScale,mobileTerminal,filePreviewNavigation,TerminalThemeDialog,VisualPreview,ThemedSelect,ThemedSelect.browser,HerdrSetupCard}.test.ts'",
+    "test:browser": "bun scripts/run-tests.ts ./web/src/uiScale.test.ts ./web/src/mobileTerminal.test.ts ./web/src/filePreviewNavigation.test.ts ./web/src/components/TerminalThemeDialog.test.ts ./web/src/components/VisualPreview.test.ts ./web/src/components/ThemedSelect.test.ts ./web/src/components/ThemedSelect.browser.test.ts ./web/src/components/WindowArrangementMenu.test.ts ./web/src/components/HerdrSetupCard.test.ts ./web/src/components/WorkspaceInspectorPortal.test.ts ./web/src/world/windows/WindowFrame.test.ts ./web/src/world/useSpacesTabWindowArrangement.browser.test.ts ./web/src/world/WorldViewErrorBoundary.test.ts ./web/src/world/PixelOfficeCanvas.test.ts ./web/src/world/ConnectedTreeView.browser.test.ts ./web/src/world/SpatialGraphView.browser.test.ts ./web/src/world/HostsFilter.test.ts ./web/src/world/ConcurrentContexts.test.ts ./web/src/world/WorldTerminalHandoff.test.ts ./web/src/world/ProductionContexts.test.ts ./web/src/world/DeskView.browser.test.ts",
     "typecheck": "tsc --noEmit && bun run --filter herdr-world-web typecheck && bun run --filter herdr-world-server typecheck",
     "typecheck:quick": "tsc --noEmit && tsc --noEmit -p web/tsconfig.json && tsc --noEmit -p server/tsconfig.json",
     "precommit": "bun run format:check && bun run lint && bun run typecheck && bun run test",
-    "check": "bun run notices:check && bun run format:check && bun run lint && bun run typecheck && bun run test && bun run build && bun run build:site && bun run spec:check",
+    "check": "bun run notices:check && bun run format:check && bun run lint && bun run typecheck && bun run typecheck:bun && bun run test && bun run build && bun run build:site && bun run spec:check",
     "check:docs": "bun run notices:check && bun run format:check && bun run build:site && bun run spec:check",
     "install-hooks": "git config core.hooksPath .githooks",
     "clean:bun-build": "find server -maxdepth 1 -name '*.bun-build' -exec rm -rf {} +",
     "clean": "rm -rf web/dist server/public server/src/public-files.gen.ts server/herdr-world server/herdr-world.exe server/herdr-world.map server/herdr-world-* && bun run clean:bun-build",
     "start:server": "bun run --filter herdr-world-server start",
     "spec": "openspec",
-    "spec:check": "openspec validate --all --strict --no-interactive"
+    "spec:check": "openspec validate --all --strict --no-interactive",
+    "typecheck:bun": "bun scripts/check-bun-types.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.15",
     "@types/web-push": "^3.6.4",
-    "bun-types": "^1.4.2",
+    "bun-types": "1.4.3",
     "typescript": "^7.0.2",
     "@fission-ai/openspec": "1.12.0",
     "oxlint": "1.86.0",
@@ -87,5 +88,6 @@
   },
   "overrides": {
     "highlight.js": "11.12.0"
-  }
+  },
+  "packageManager": "bun@1.4.3"
 }

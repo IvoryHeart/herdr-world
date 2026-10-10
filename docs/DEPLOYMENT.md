@@ -4,6 +4,16 @@ Herdr World is one Bun-compiled service and same-origin Web/PWA application. It
 connects to one or more separately running Herdr servers through local sockets or
 OpenSSH. Users do not install Roamgate or a remote World bridge.
 
+Session cookies use a private random signing key under the World data directory.
+It persists across restarts and rotates when the configured credentials change,
+invalidating existing sessions. An instance-specific settings path isolates its
+signing state. Management commands do not create or rotate signing keys.
+
+Optionally set `HERDR_WORLD_PIN` to 6–12 ASCII digits for convenience login on a
+trusted private network or VPN. Keep password/token recovery available. PIN login
+has separate per-client throttling and a global cooldown after ten failures;
+that cooldown does not block password/token login.
+
 ## Requirements
 
 - A supported Linux, macOS, or Windows release, or Bun 1.4.1+ for a source build.

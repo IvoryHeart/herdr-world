@@ -3,6 +3,7 @@ import { readFileSync, rmSync, statSync } from "node:fs";
 import { join } from "node:path";
 import type {
   AssistantConfig,
+  AssistantMentionTarget,
   AssistantNotificationInput,
   AssistantNotificationReceipt,
   AssistantSnapshot,
@@ -14,9 +15,16 @@ import type {
   AssistantTaskRun,
   AssistantWorkspace,
 } from "../../../shared/assistant";
-import { isAssistantSnapshot } from "../../../shared/assistant";
+import {
+  ASSISTANT_MAX_MENTIONS,
+  ASSISTANT_MAX_WORKSPACES,
+  isAssistantMentionTarget,
+  isAssistantSnapshot,
+  isAssistantThinkingLevel,
+} from "../../../shared/assistant";
 import { assertSafeDataPath } from "../config/data-paths";
 import { AssistantRecoveryNotReadyError, type RecoveryTarget } from "./context";
+import { AssistantUserError } from "./errors";
 import { nextTaskTime, validateTaskSchedule } from "./task-schedule";
 import {
   MAX_TASK_STATE_BYTES,
@@ -31,7 +39,10 @@ const MAX_RUNS = 20;
 const MAX_NOTIFICATIONS = 100;
 const key = (ref: { connection_id: string; workspace_id: string }) =>
   `${ref.connection_id}\0${ref.workspace_id}`;
-const notificationScopeKey = (targets: RecoveryTarget[]) =>
+const notificationScopeKey = (
+  targets: RecoveryTarget[],
+  mentions: AssistantMentionTarget[] = [],
+) =>
   createHash("sha256")
     .update(
       JSON.stringify(
@@ -45,6 +56,28 @@ const notificationScopeKey = (targets: RecoveryTarget[]) =>
             target.workspace_identity,
           ]),
       ),
+    )
+    .update(
+      mentions.length
+        ? JSON.stringify(
+            mentions
+              .map((mention) =>
+                JSON.stringify([
+                  mention.kind,
+                  mention.connection_id,
+                  mention.workspace_id,
+                  ...(mention.kind === "agent"
+                    ? [
+                        mention.pane_id,
+                        mention.terminal_id,
+                        mention.agent_identity,
+                      ]
+                    : []),
+                ]),
+              )
+              .sort(),
+          )
+        : "",
     )
     .digest("hex");
 
@@ -90,7 +123,7 @@ function record(value: unknown): value is Record<string, unknown> {
 }
 function text(value: unknown, limit: number) {
   if (typeof value !== "string" || !value.trim() || value.length > limit)
-    throw new Error("Invalid task input");
+    throw new AssistantUserError("Invalid task input");
   return value;
 }
 export function validateTaskInput(value: unknown): AssistantTaskInput {
@@ -98,18 +131,23 @@ export function validateTaskInput(value: unknown): AssistantTaskInput {
     !record(value) ||
     Object.keys(value).some(
       (field) =>
-        !["title", "prompt", "scope", "schedule", "notification_mode"].includes(
-          field,
-        ),
+        ![
+          "title",
+          "prompt",
+          "scope",
+          "schedule",
+          "notification_mode",
+          "mentions",
+        ].includes(field),
     ) ||
     (value.notification_mode !== undefined &&
       value.notification_mode !== "status" &&
       value.notification_mode !== "agent") ||
     !Array.isArray(value.scope) ||
     !value.scope.length ||
-    value.scope.length > 64
+    value.scope.length > ASSISTANT_MAX_WORKSPACES
   )
-    throw new Error("Invalid task input");
+    throw new AssistantUserError("Invalid task input");
   const scope = value.scope.map((ref) => {
     if (
       !record(ref) ||
@@ -120,14 +158,39 @@ export function validateTaskInput(value: unknown): AssistantTaskInput {
           ),
       )
     )
-      throw new Error("Invalid task scope");
+      throw new AssistantUserError("Invalid task scope");
     return {
       connection_id: text(ref.connection_id, 500),
       workspace_id: text(ref.workspace_id, 500),
     };
   });
   if (new Set(scope.map(key)).size !== scope.length)
-    throw new Error("Duplicate task scope");
+    throw new AssistantUserError("Duplicate task scope");
+  let mentions: AssistantMentionTarget[] | undefined;
+  if (value.mentions !== undefined) {
+    if (
+      !Array.isArray(value.mentions) ||
+      value.mentions.length > ASSISTANT_MAX_MENTIONS ||
+      !value.mentions.every(isAssistantMentionTarget)
+    )
+      throw new AssistantUserError("Invalid task mentions");
+    mentions = value.mentions;
+    const allowed = new Set(scope.map(key));
+    if (mentions.some((mention) => !allowed.has(key(mention))))
+      throw new AssistantUserError("Task mention outside task scope");
+    const identities = mentions.map((mention) =>
+      JSON.stringify([
+        mention.kind,
+        mention.connection_id,
+        mention.workspace_id,
+        ...(mention.kind === "agent"
+          ? [mention.pane_id, mention.terminal_id]
+          : []),
+      ]),
+    );
+    if (new Set(identities).size !== identities.length)
+      throw new AssistantUserError("Duplicate task mention");
+  }
   return {
     title: text(value.title, 100),
     prompt: text(value.prompt, 32_000),
@@ -136,6 +199,7 @@ export function validateTaskInput(value: unknown): AssistantTaskInput {
     ...(value.notification_mode !== undefined
       ? { notification_mode: value.notification_mode }
       : {}),
+    ...(mentions !== undefined ? { mentions } : {}),
   };
 }
 function validNotificationInput(value: unknown) {
@@ -189,6 +253,8 @@ function validPrepared(value: unknown): value is PreparedTask {
       !!value.config.provider &&
       typeof value.config.model === "string" &&
       !!value.config.model &&
+      (value.config.thinking_level === undefined ||
+        isAssistantThinkingLevel(value.config.thinking_level)) &&
       ["assistant", "pi"].includes(String(value.config.credential_source)) &&
       (value.config.approval_mode === undefined ||
         value.config.approval_mode === "manual" ||
@@ -244,6 +310,9 @@ function validSavedProposal(entry: SavedProposal) {
       schedule: proposal.schedule,
       ...(proposal.notification_mode !== undefined
         ? { notification_mode: proposal.notification_mode }
+        : {}),
+      ...(proposal.mentions !== undefined
+        ? { mentions: proposal.mentions }
         : {}),
     });
     const expected = validateTaskInput(entry.prepared.input);
@@ -826,7 +895,7 @@ export function createAssistantTasks(options: {
     const existing = requests.find((request) => request.id === requestId);
     if (existing) return find(existing.task_id);
     if (tasks.length >= MAX_TASKS)
-      throw new Error("Ranger supports up to 50 saved tasks.");
+      throw new AssistantUserError("Ranger supports up to 50 saved tasks.");
     const schedule = prepared.input.schedule;
     const next =
       schedule.type === "once"
@@ -852,6 +921,7 @@ export function createAssistantTasks(options: {
     invalid: () => invalid,
     error: () => fault,
     summaries: () => tasks.map(summary),
+    prepared: (taskId: unknown): PreparedTask => seal(find(taskId)),
     notificationHistory: (
       taskId: unknown,
       runId?: unknown,
@@ -863,7 +933,10 @@ export function createAssistantTasks(options: {
           : entry.runs.find((run) => run.id === runId);
       if (runId !== undefined && (!run || !validPrepared(run)))
         throw new Error("The original task run is no longer available.");
-      const scopeKey = notificationScopeKey(run?.targets ?? entry.targets);
+      const scopeKey = notificationScopeKey(
+        run?.targets ?? entry.targets,
+        run ? run.input?.mentions : entry.input.mentions,
+      );
       return structuredClone(
         entry.notifications?.filter(
           (notification) => notification.scope_key === scopeKey,
@@ -896,7 +969,7 @@ export function createAssistantTasks(options: {
       const original = active();
       await check(original.entry.task.id, seal(original.run), signal);
       const { entry, run } = active();
-      const scopeKey = notificationScopeKey(run.targets);
+      const scopeKey = notificationScopeKey(run.targets, run.input.mentions);
       if (
         entry.notifications?.some(
           (previous) =>
@@ -997,7 +1070,7 @@ export function createAssistantTasks(options: {
         proposals.filter((entry) => entry.proposal.status === "pending")
           .length >= 50
       )
-        throw new Error("Too many pending task proposals.");
+        throw new AssistantUserError("Too many pending task proposals.");
       const proposal: AssistantTaskProposal = {
         ...structuredClone(sealed.input),
         id: randomUUID(),
