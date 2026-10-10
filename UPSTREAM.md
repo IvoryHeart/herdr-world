@@ -6,10 +6,11 @@ separately installed [`herdrdev/herdr`](https://github.com/herdrdev/herdr) runti
 
 Current synchronization points:
 
-- Roamgate source: main at `d703e6f6b94bdd418186a8daaaea77bceb78d26c`
-  (6 October 2026), including v0.7.15 and subsequent fixes. This synchronization
-  records that exact source head as a Git merge parent; the prior source record
-  was v0.7.11, `b60a1843579311d830e026fb89ab917052fbaee8`.
+- Roamgate source: main at `fc7600772b04ac2038a1a35bd1cf44fccb0db872`
+  (10 October 2026), including v0.8.1 and the Bun 1.4.3 update. This source
+  integration records the exact head as a Git merge parent. The prior source
+  record was `d703e6f6b94bdd418186a8daaaea77bceb78d26c`; that sync was
+  squash-merged, so this refresh applies its recorded source delta explicitly.
 - Herdr compatibility: Herdr 0.9.0, terminal protocol 22.
 
 The integration adopts Ranger workspace chat, background and scheduled tasks,
@@ -17,6 +18,12 @@ monitoring alerts, Git commit history and file-preview tabs, tab pinning and
 reordering, pane movement, terminal input/font/upload improvements, instance
 settings, login throttling and mandatory login with 15–1024-character passwords.
 Ranger and uploads are adapted to captured World connection generations.
+The latest refresh adds structured workspace and agent mentions, quick model
+and thinking controls, custom thinking effort, explicit all-workspace consent in
+High mode, and Open worktree actions. It also fixes terminal composition and
+shortcut identity and adds independently stored session signing keys and
+optional `HERDR_WORLD_PIN` login. World uses Bun 1.4.3 with standard and native
+type checks; its full-check script remains separate from Bun's native checker.
 
 World retains its identity, local/SSH connection ownership, same-origin access,
 session-bound push revocation, aggregate visual views, isolated browser storage,

@@ -1,9 +1,17 @@
 import { describe, expect, test } from "bun:test";
 import { homedir, tmpdir } from "node:os";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
-import { runServiceCommand } from "./service-manager";
-import { join } from "node:path";
 import {
+  mkdtempSync,
+  mkdirSync,
+  writeFileSync,
+  rmSync,
+  existsSync,
+  readFileSync,
+} from "node:fs";
+import { runServiceCommand } from "./service-manager";
+import { dirname, join } from "node:path";
+import {
+  type ServerConfig,
   herdrConfigDir,
   nativeSocketPath,
   browserUrlFor,
@@ -104,7 +112,7 @@ describe("native TLS", () => {
         process.env.HERDR_WORLD_TLS_KEY = "missing-key.pem";
         process.argv = [
           process.execPath,
-          "roamgate",
+          "herdr-world",
           "--host",
           "127.0.0.1",
           "--tls-cert",
@@ -113,7 +121,7 @@ describe("native TLS", () => {
           key,
         ];
         expect(loadServerConfig("0.0.0").tls).toEqual(tls);
-        process.argv = [process.execPath, "roamgate", "--host", "127.0.0.1"];
+        process.argv = [process.execPath, "herdr-world", "--host", "127.0.0.1"];
         process.env.HERDR_WORLD_TLS_CERT = cert;
         process.env.HERDR_WORLD_TLS_KEY = key;
         expect(loadServerConfig("0.0.0").tls).toEqual(tls);
@@ -256,3 +264,138 @@ test.each(["127.0.0.1", "localhost", "::1"])(
     }
   },
 );
+
+test("reading configuration for management commands does not create or rotate session signing state", () => {
+  const dir = mkdtempSync(join(tmpdir(), "roamgate-session-config-"));
+  try {
+    const statePath = join(
+      dir,
+      process.platform === "win32" ? "herdr-world" : ".config/herdr-world",
+      "session-secret.json",
+    );
+    const load = (password: string) => {
+      const result = Bun.spawnSync(
+        [
+          process.execPath,
+          "-e",
+          `import {loadServerConfig} from ${JSON.stringify(join(import.meta.dir, "server-config.ts"))}; process.argv = [process.execPath, "herdr-world"]; loadServerConfig("test");`,
+        ],
+        {
+          env: {
+            ...process.env,
+            HOME: dir,
+            APPDATA: dir,
+            NODE_ENV: "production",
+            HERDR_WORLD_PASSWORD: password,
+          },
+          stdout: "pipe",
+          stderr: "pipe",
+        },
+      );
+      expect(result.exitCode).toBe(0);
+    };
+    load("first-test-password");
+    expect(existsSync(statePath)).toBe(false);
+    mkdirSync(dirname(statePath), { recursive: true });
+    writeFileSync(statePath, "existing-signing-state");
+    load("other-test-password");
+    load("");
+    expect(readFileSync(statePath, "utf8")).toBe("existing-signing-state");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+describe("optional PIN configuration", () => {
+  test.each([
+    undefined,
+    "",
+    "012345",
+    "123456789012",
+    "12345",
+    "1234567890123",
+    "12345a",
+    " 123456",
+    "１２３４５６",
+  ])(
+    "validates HERDR_WORLD_PIN=%s without weakening the strong credential",
+    (pin) => {
+      const dir = mkdtempSync(join(tmpdir(), "roamgate-pin-config-"));
+      try {
+        const env: NodeJS.ProcessEnv = {
+          ...process.env,
+          HOME: dir,
+          APPDATA: dir,
+          NODE_ENV: "production",
+          HERDR_WORLD_PASSWORD: "strong-test-password",
+        };
+        delete env.HERDR_GUI_PIN;
+        if (pin === undefined) delete env.HERDR_WORLD_PIN;
+        else env.HERDR_WORLD_PIN = pin;
+        const result = Bun.spawnSync(
+          [
+            process.execPath,
+            "-e",
+            `import {loadServerConfig} from ${JSON.stringify(join(import.meta.dir, "server-config.ts"))}; process.argv = [process.execPath, "herdr-world"]; console.log(JSON.stringify(loadServerConfig("test")));`,
+          ],
+          { env, stdout: "pipe", stderr: "pipe" },
+        );
+        const valid = !pin || /^[0-9]{6,12}$/.test(pin);
+        expect(result.exitCode).toBe(valid ? 0 : 2);
+        if (valid) {
+          const config = JSON.parse(result.stdout.toString()) as ServerConfig;
+          expect(config.pin).toBe(pin || undefined);
+          expect(config.password).toBe("strong-test-password");
+          expect(config.generatedAuthToken).toBeUndefined();
+        } else {
+          expect(result.stderr.toString()).toContain("6 to 12 ASCII digits");
+          expect(result.stderr.toString()).not.toContain(pin!);
+        }
+        expect(existsSync(join(dir, ".config", "herdr-world"))).toBe(false);
+        expect(existsSync(join(dir, "herdr-world"))).toBe(false);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    },
+  );
+
+  test("PIN keeps generated-token recovery and follows environment precedence", () => {
+    const dir = mkdtempSync(join(tmpdir(), "roamgate-pin-config-"));
+    try {
+      let token: string | undefined;
+      for (const [pin, legacyPin, expected] of [
+        [undefined, "012345", undefined],
+        ["", "012345", undefined],
+        ["654321", "invalid", "654321"],
+      ] as const) {
+        const env: NodeJS.ProcessEnv = {
+          ...process.env,
+          HOME: dir,
+          APPDATA: dir,
+          NODE_ENV: "production",
+          HERDR_WORLD_PASSWORD: "",
+          HERDR_GUI_PIN: legacyPin,
+        };
+        if (pin === undefined) delete env.HERDR_WORLD_PIN;
+        else env.HERDR_WORLD_PIN = pin;
+        const result = Bun.spawnSync(
+          [
+            process.execPath,
+            "-e",
+            `import {loadServerConfig} from ${JSON.stringify(join(import.meta.dir, "server-config.ts"))}; process.argv = [process.execPath, "herdr-world"]; console.log(JSON.stringify(loadServerConfig("test")));`,
+          ],
+          { env, stdout: "pipe", stderr: "pipe" },
+        );
+        expect(result.exitCode).toBe(0);
+        const config = JSON.parse(result.stdout.toString()) as ServerConfig;
+        expect(config.pin).toBe(expected);
+        expect(config.generatedAuthToken).toMatch(/^[a-f0-9]{64}$/);
+        expect(config.password).toBe(config.generatedAuthToken!);
+        if (token) expect(config.generatedAuthToken).toBe(token);
+        token = config.generatedAuthToken;
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});

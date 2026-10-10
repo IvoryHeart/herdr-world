@@ -1,9 +1,11 @@
 import { Type } from "typebox";
 import { Value } from "typebox/value";
-import type {
-  AssistantNotificationInput,
-  AssistantSource,
+import {
+  ASSISTANT_MAX_WORKSPACES,
+  type AssistantNotificationInput,
+  type AssistantSource,
 } from "../../../shared/assistant";
+import { AssistantUserError, surfaceAssistantUserError } from "./errors";
 
 export const ASSISTANT_DEFAULT_TERMINAL_LINES = 120;
 export const ASSISTANT_MAX_TERMINAL_LINES = 1000;
@@ -104,7 +106,7 @@ export const taskTools = [
     kind: "create",
     label: "Propose a scheduled task",
     description:
-      "Propose a Ranger task with an exact prompt, authorized workspace scope and schedule. A once schedule uses a future UTC ISO 8601 timestamp ending in Z. A daily schedule uses HH:mm and an IANA timezone; skipped DST times do not run and repeated times run once. An interval starts the given number of minutes after confirmation. Choose notification_mode agent for monitoring and follow-up requests: Ranger can notify only on meaningful requested outcomes or needed input, with its own title and body. The default status mode sends fixed run status notifications. Returns a pending preview: the task is enabled only when the user clicks Confirm. Scheduled tasks may read and propose operations; they never automatically confirm management actions. Ask the user if their schedule or timezone is ambiguous.",
+      "Propose a Ranger task with an exact prompt, authorized workspace scope and schedule. Selected workspace and Agent reference identities within that scope are preserved for monitoring. A once schedule uses a future UTC ISO 8601 timestamp ending in Z. A daily schedule uses HH:mm and an IANA timezone; skipped DST times do not run and repeated times run once. An interval starts the given number of minutes after confirmation. Choose notification_mode agent for monitoring and follow-up requests: Ranger can notify only on meaningful requested outcomes or needed input, with its own title and body. The default status mode sends fixed run status notifications. Returns a pending preview: the task is enabled only when the user clicks Confirm. Scheduled tasks may read and propose operations; they never automatically confirm management actions. Ask the user if their schedule or timezone is ambiguous.",
     parameters: Type.Object(
       {
         title: Type.String({ minLength: 1, maxLength: 100 }),
@@ -114,7 +116,7 @@ export const taskTools = [
         ),
         scope: Type.Array(
           Type.Object(actionTarget, { additionalProperties: false }),
-          { minItems: 1, maxItems: 64 },
+          { minItems: 1, maxItems: ASSISTANT_MAX_WORKSPACES },
         ),
         schedule: Type.Union([
           Type.Object(
@@ -252,7 +254,7 @@ export async function callWorkspaceTool(
   const tool = workspaceTools.find((entry) => entry.name === name);
   if (!tool) throw new Error("Unknown workspace tool.");
   if (!Value.Check(tool.parameters, params))
-    throw new Error("Invalid workspace tool parameters.");
+    throw new AssistantUserError("Invalid workspace tool parameters.");
   try {
     signal?.throwIfAborted();
     const result = await read(
@@ -262,8 +264,9 @@ export async function callWorkspaceTool(
     );
     signal?.throwIfAborted();
     return result;
-  } catch {
-    throw new Error(
+  } catch (error) {
+    surfaceAssistantUserError(
+      error,
       "Context unavailable, stale, or outside the authorized scope.",
     );
   }
@@ -279,7 +282,7 @@ export async function callActionTool(
   const tool = actionTools.find((entry) => entry.name === name);
   if (!tool) throw new Error("Unknown action tool.");
   if (!Value.Check(tool.parameters, params))
-    throw new Error("Invalid action tool parameters.");
+    throw new AssistantUserError("Invalid action tool parameters.");
   try {
     signal?.throwIfAborted();
     const result = await propose(
@@ -289,8 +292,9 @@ export async function callActionTool(
     );
     signal?.throwIfAborted();
     return result;
-  } catch {
-    throw new Error(
+  } catch (error) {
+    surfaceAssistantUserError(
+      error,
       "Action proposal unavailable, stale, or outside the authorized scope.",
     );
   }
@@ -306,7 +310,7 @@ export async function callTaskTool(
   const tool = taskTools.find((entry) => entry.name === name);
   if (!tool) throw new Error("Unknown task tool.");
   if (!Value.Check(tool.parameters, params))
-    throw new Error("Invalid task tool parameters.");
+    throw new AssistantUserError("Invalid task tool parameters.");
   try {
     signal?.throwIfAborted();
     const result = await handle(
@@ -316,8 +320,9 @@ export async function callTaskTool(
     );
     signal?.throwIfAborted();
     return result;
-  } catch {
-    throw new Error(
+  } catch (error) {
+    surfaceAssistantUserError(
+      error,
       "Task unavailable, invalid, or outside the authorized scope.",
     );
   }
@@ -333,16 +338,19 @@ export async function callNotificationTool(
   const tool = notificationTools.find((entry) => entry.name === name);
   if (!tool) throw new Error("Unknown notification tool.");
   if (!Value.Check(tool.parameters, params))
-    throw new Error("Invalid notification tool parameters.");
+    throw new AssistantUserError("Invalid notification tool parameters.");
   const input = params as AssistantNotificationInput;
   if (!input.event_key.trim() || !input.title.trim() || !input.body.trim())
-    throw new Error("Invalid notification tool parameters.");
+    throw new AssistantUserError("Invalid notification tool parameters.");
   try {
     signal?.throwIfAborted();
     const result = await send(input, signal);
     signal?.throwIfAborted();
     return result;
-  } catch {
-    throw new Error("Notification unavailable or outside the authorized task.");
+  } catch (error) {
+    surfaceAssistantUserError(
+      error,
+      "Notification unavailable or outside the authorized task.",
+    );
   }
 }

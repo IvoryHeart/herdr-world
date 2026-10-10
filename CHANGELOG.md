@@ -7,7 +7,27 @@ are optional because the merged PR history records their source.
 
 ## [Unreleased]
 
+### Added
+
+- Ranger workspace and agent mentions, quick model and thinking controls, custom
+  thinking effort, and explicit all-workspace consent for High permission mode.
+- Optional `HERDR_WORLD_PIN` login for private networks, with separate failure
+  limits and password/token recovery. Session cookies use independent private
+  signing state and expire when configured credentials change.
+- Ranger can offer Open worktree for existing workspaces not opened as worktrees.
+
+### Fixed
+
+- Preserve terminal shortcut key identity and modifiers, and prevent duplicate
+  input composition finalization.
+- Surface specific Ranger task errors and retain runtime generations when editing
+  tasks with saved mentions.
+
 ### Changed
+
+- Synchronize Roamgate through `fc760077` (including v0.8.1), preserving World
+  connection ownership, React 18, browser regressions and distribution tooling.
+- Pin Bun 1.4.3 and its types, and include Bun's native type checker in validation.
 
 - Organize the World shell, Inspector coordination, Office drawing and visual-view
   styles into focused modules while preserving connection ownership, presentation
