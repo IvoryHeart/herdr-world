@@ -82,6 +82,86 @@ function sessionIdentity(value: unknown) {
   };
 }
 
+export async function readAssistantPaneOccupant(
+  call: (method: string, params: Record<string, unknown>) => Promise<unknown>,
+  workspaceId: string,
+  paneId: string,
+) {
+  const paneResult = await call("pane.get", { pane_id: paneId });
+  const pane = isRecord(paneResult) ? paneResult.pane : undefined;
+  if (!isRecord(pane)) throw new Error("Action pane changed");
+  // agent.get lists detected agents only; an empty shell uses pane.get.
+  const agentResult = pane.agent
+    ? await call("agent.get", { target: paneId })
+    : { agent: pane };
+  const agent = isRecord(agentResult) ? agentResult.agent : undefined;
+  const processResult = await call("pane.process_info", { pane_id: paneId });
+  const process = isRecord(processResult)
+    ? processResult.process_info
+    : undefined;
+  if (
+    !isRecord(agent) ||
+    !isRecord(process) ||
+    pane.pane_id !== paneId ||
+    agent.pane_id !== paneId ||
+    process.pane_id !== paneId ||
+    pane.workspace_id !== workspaceId ||
+    agent.workspace_id !== workspaceId ||
+    typeof pane.terminal_id !== "string" ||
+    !pane.terminal_id ||
+    agent.terminal_id !== pane.terminal_id ||
+    (pane.agent ?? null) !== (agent.agent ?? null)
+  )
+    throw new Error("Action pane changed");
+  const processes = list(process.foreground_processes ?? [])
+    .map((entry) => {
+      if (!Number.isSafeInteger(entry.pid) || Number(entry.pid) <= 0)
+        throw new Error("Cannot verify the target process");
+      return { pid: entry.pid, name: entry.name };
+    })
+    .sort((left, right) => Number(left.pid) - Number(right.pid));
+  if (
+    (!Number.isSafeInteger(process.shell_pid) ||
+      Number(process.shell_pid) <= 0) &&
+    !processes.length
+  )
+    throw new Error("Cannot verify the target process");
+  const session = sessionIdentity(agent.agent_session);
+  const identity = createHash("sha256")
+    .update(
+      JSON.stringify({
+        terminal_id: pane.terminal_id,
+        tab_id: pane.tab_id,
+        agent: agent.agent ?? null,
+        name: agent.name ?? null,
+        session,
+        shell_pid: process.shell_pid,
+        foreground_process_group_id: process.foreground_process_group_id,
+        processes,
+      }),
+    )
+    .digest("hex");
+  const agentIdentity =
+    session && session.value.trim()
+      ? createHash("sha256")
+          .update(
+            JSON.stringify({
+              terminal_id: pane.terminal_id,
+              agent: agent.agent,
+              session,
+            }),
+          )
+          .digest("hex")
+      : null;
+  return {
+    pane: { ...pane },
+    agent: { ...agent },
+    process: { ...process },
+    identity,
+    agentIdentity,
+  };
+}
+
 /** Only context's approved turn leases may reach this preparation function. */
 export async function prepareAssistantAction(args: {
   kind: AssistantActionKind;
@@ -101,6 +181,9 @@ export async function prepareAssistantAction(args: {
     split_pane: ["connection_id", "workspace_id", "pane_id", "direction"],
     start_agent: ["connection_id", "workspace_id", "pane_id", "agent"],
     send_prompt: ["connection_id", "workspace_id", "pane_id", "prompt"],
+    close_workspace: ["connection_id", "workspace_id"],
+    close_pane: ["connection_id", "workspace_id", "pane_id"],
+    close_agent: ["connection_id", "workspace_id", "pane_id"],
   };
   if (
     !Object.hasOwn(keys, kind) ||
@@ -218,60 +301,8 @@ export async function prepareAssistantAction(args: {
       terminal_id: validateConnectionId(pane.terminal_id),
     };
   }
-  async function occupant(paneId: string) {
-    const pane = (await call("pane.get", { pane_id: paneId }))?.pane;
-    if (!isRecord(pane)) throw new Error("Action pane changed");
-    // agent.get lists detected agents only; an empty shell is inspected through pane.get.
-    const agent = pane.agent
-      ? (await call("agent.get", { target: paneId }))?.agent
-      : pane;
-    const process = (await call("pane.process_info", { pane_id: paneId }))
-      ?.process_info;
-    if (
-      !isRecord(pane) ||
-      !isRecord(agent) ||
-      !isRecord(process) ||
-      pane.pane_id !== paneId ||
-      agent.pane_id !== paneId ||
-      process.pane_id !== paneId ||
-      pane.workspace_id !== target.workspace_id ||
-      agent.workspace_id !== target.workspace_id ||
-      typeof pane.terminal_id !== "string" ||
-      !pane.terminal_id ||
-      agent.terminal_id !== pane.terminal_id ||
-      (pane.agent ?? null) !== (agent.agent ?? null)
-    )
-      throw new Error("Action pane changed");
-    const processes = list(process.foreground_processes ?? [])
-      .map((entry) => {
-        if (!Number.isSafeInteger(entry.pid) || Number(entry.pid) <= 0)
-          throw new Error("Cannot verify the target process");
-        return { pid: entry.pid, name: entry.name };
-      })
-      .sort((left, right) => Number(left.pid) - Number(right.pid));
-    if (
-      (!Number.isSafeInteger(process.shell_pid) ||
-        Number(process.shell_pid) <= 0) &&
-      !processes.length
-    )
-      throw new Error("Cannot verify the target process");
-    const identity = JSON.stringify({
-      terminal_id: pane.terminal_id,
-      tab_id: pane.tab_id,
-      agent: agent.agent ?? null,
-      name: agent.name ?? null,
-      session: sessionIdentity(agent.agent_session),
-      shell_pid: process.shell_pid,
-      foreground_process_group_id: process.foreground_process_group_id,
-      processes,
-    });
-    return {
-      pane: { ...pane },
-      agent: { ...agent },
-      process: { ...process },
-      identity,
-    };
-  }
+  const occupant = (paneId: string) =>
+    readAssistantPaneOccupant(call, target.workspace_id, paneId);
   async function hookState(current: Record<string, unknown>, root: string) {
     const source = { ...current, cwd: checkoutPath(current) || root };
     const hooks = await read(() =>
@@ -305,6 +336,7 @@ export async function prepareAssistantAction(args: {
               repo_key: item.worktree.repo_key,
               repo_root: item.worktree.repo_root,
               checkout_path: item.worktree.checkout_path,
+              is_linked_worktree: item.worktree.is_linked_worktree,
             }
           : null,
       });
@@ -403,6 +435,161 @@ export async function prepareAssistantAction(args: {
           status: "succeeded",
           detail: "The new workspace and its directory were verified.",
         };
+      };
+    } else if (
+      kind === "close_workspace" ||
+      kind === "close_pane" ||
+      kind === "close_agent"
+    ) {
+      // Freeze the entire layout: removing a last pane also removes its tab/workspace.
+      // An added pane must never become part of an already approved workspace close.
+      const workspaceLabel = current.label;
+      const closeLayout = async (beforeDispatch = true) => {
+        const items = await panes();
+        const layout = items
+          .map((item) => ({
+            pane_id: validateConnectionId(item.pane_id),
+            tab_id: validateConnectionId(item.tab_id),
+            terminal_id: validateConnectionId(item.terminal_id),
+          }))
+          .sort((left, right) => left.pane_id.localeCompare(right.pane_id));
+        if (
+          !layout.length ||
+          new Set(layout.map((item) => item.pane_id)).size !== layout.length ||
+          new Set(layout.map((item) => item.terminal_id)).size !== layout.length
+        )
+          throw new Error("Cannot verify the workspace panes");
+        const live = await workspace();
+        if (
+          workspaceIdentity(live) !== frozenWorkspace ||
+          (beforeDispatch && live.label !== workspaceLabel) ||
+          (live.pane_count !== undefined && live.pane_count !== layout.length)
+        )
+          throw new Error("Workspace panes changed");
+        return layout;
+      };
+      const layout = await closeLayout();
+      const paneId =
+        kind === "close_workspace"
+          ? undefined
+          : validateConnectionId(params.pane_id);
+      if (paneId && !layout.some((item) => item.pane_id === paneId))
+        throw new Error("Pane is outside the workspace");
+      const affected = paneId
+        ? layout.filter((item) => item.pane_id === paneId)
+        : layout;
+      const frozenOccupants: (Awaited<ReturnType<typeof occupant>> & {
+        paneId: string;
+      })[] = [];
+      for (const item of affected) {
+        const frozen = await occupant(item.pane_id);
+        if (
+          frozen.pane.tab_id !== item.tab_id ||
+          frozen.pane.terminal_id !== item.terminal_id ||
+          (kind === "close_agent" && !frozen.agent.agent)
+        )
+          throw new Error("Close target changed");
+        frozenOccupants.push({ paneId: item.pane_id, ...frozen });
+      }
+      if (JSON.stringify(await closeLayout()) !== JSON.stringify(layout))
+        throw new Error("Workspace panes changed");
+      const closesWorkspace = kind === "close_workspace" || layout.length === 1;
+      if (
+        !closesWorkspace &&
+        isRecord(current.worktree) &&
+        current.worktree.is_linked_worktree !== true
+      )
+        // Herdr has no atomic no-group option on pane.close. Another pane
+        // disappearing after our reads could make this close the entire group.
+        throw new Error("Safe pane close is unavailable in a worktree root");
+      previewParams = paneId
+        ? {
+            pane_id: paneId,
+            terminal_id: affected[0]!.terminal_id,
+            ...(frozenOccupants[0]!.agent.agent
+              ? { agent: text(frozenOccupants[0]!.agent.agent) }
+              : {}),
+            closes_workspace: String(closesWorkspace),
+          }
+        : {
+            pane_count: String(layout.length),
+            panes: text(
+              frozenOccupants
+                .map(
+                  (item) =>
+                    `${item.paneId} (${item.agent.agent ?? "shell"}; terminal ${item.pane.terminal_id})`,
+                )
+                .join("\n"),
+              20_000,
+            ),
+          };
+      summary =
+        kind === "close_workspace"
+          ? "Close this workspace and terminate the displayed panes and their running processes. Unsaved terminal work may be lost. Worktree files and saved agent history will not be deleted. Linked workspaces will not be closed."
+          : `Close this exact ${kind === "close_agent" ? "agent's " : ""}pane and terminate its running processes. Unsaved terminal work may be lost.${closesWorkspace ? " This is the last pane, so its workspace will also close." : " Its tab will also close if this is the tab's last pane."} Worktree files and saved agent history will not be deleted.`;
+      perform = async (dispatch) => {
+        for (const item of frozenOccupants) {
+          if ((await occupant(item.paneId)).identity !== item.identity)
+            throw new Error("Pane occupant changed");
+        }
+        if (JSON.stringify(await closeLayout()) !== JSON.stringify(layout))
+          throw new Error("Workspace panes changed");
+        // pane.close can implicitly close a worktree group when native close
+        // confirmation is disabled. workspace.close always requires explicit
+        // close_group intent, so use it for last-pane closes without that flag.
+        const method = closesWorkspace ? "workspace.close" : "pane.close";
+        const query = closesWorkspace
+          ? { workspace_id: target.workspace_id }
+          : { pane_id: paneId! };
+        try {
+          await dispatch((beforeSend) =>
+            runtime.herdr.call(method, query, 30_000, beforeSend),
+          );
+        } catch (error) {
+          if (error instanceof DispatchNotSentError) throw error;
+          if (
+            error instanceof Error &&
+            /^(workspace_group_close_required|confirmation_required):/.test(
+              error.message,
+            )
+          )
+            return {
+              status: "failed",
+              detail:
+                "Herdr refused the close because it would require closing a worktree group. No group close was requested. Inspect the workspace before preparing another action.",
+            };
+          // A lost reply can follow a successful close. Read back once, never retry.
+        }
+        const remainingWorkspaces = await workspaces();
+        const remainingIds = remainingWorkspaces.map((item) =>
+          validateConnectionId(item.workspace_id),
+        );
+        if (new Set(remainingIds).size !== remainingIds.length)
+          throw new Error("Cannot verify remaining workspaces");
+        const workspaceRemains = remainingWorkspaces.some(
+          (item) => item.workspace_id === target.workspace_id,
+        );
+        // Herdr can derive the workspace label from its first tab's root pane.
+        // Closing that pane legitimately changes the label, so readback checks
+        // the stable workspace identity and layout rather than its old label.
+        const remainingPanes =
+          !closesWorkspace && workspaceRemains ? await closeLayout(false) : [];
+        const closed = closesWorkspace
+          ? !workspaceRemains
+          : workspaceRemains &&
+            !remainingPanes.some((item) => item.pane_id === paneId);
+        return closed
+          ? {
+              status: "succeeded",
+              detail: closesWorkspace
+                ? "The workspace is no longer open. No worktree removal or agent-history deletion was requested."
+                : "The pane is no longer open in the original workspace. No worktree removal or agent-history deletion was requested.",
+            }
+          : {
+              status: "uncertain",
+              detail:
+                "The close was sent, but the expected final state could not be verified. Inspect the target before retrying; the close will not be sent again automatically.",
+            };
       };
     } else if (kind === "create_worktree") {
       if (!args.createWorktree)

@@ -4,6 +4,16 @@ Herdr World is one Bun-compiled service and same-origin Web/PWA application. It
 connects to one or more separately running Herdr servers through local sockets or
 OpenSSH. Users do not install Roamgate or a remote World bridge.
 
+Session cookies use a private random signing key under the World data directory.
+It persists across restarts and rotates when the configured credentials change,
+invalidating existing sessions. An instance-specific settings path isolates its
+signing state. Management commands do not create or rotate signing keys.
+
+Optionally set `HERDR_WORLD_PIN` to 6–12 ASCII digits for convenience login on a
+trusted private network or VPN. Keep password/token recovery available. PIN login
+has separate per-client throttling and a global cooldown after ten failures;
+that cooldown does not block password/token login.
+
 ## Requirements
 
 - A supported Linux, macOS, or Windows release, or Bun 1.4.1+ for a source build.
@@ -513,3 +523,44 @@ subdirectory. `HERDR_WORLD_ASSISTANT_DIR` overrides that location. Keep this dat
 private. Models receive the selected workspace context; choose providers and
 workspace permissions accordingly. Closing the panel does not stop tasks; use
 its task controls to stop or disable them.
+
+Saved grants for temporarily unavailable workspaces remain visible under
+**Unavailable authorized workspaces**. Remove one permission without clearing
+other grants, then save settings. A complete authoritative listing still removes
+grants for deleted workspaces. High mode must be turned off before restricting
+its all-workspace access with individual manual grants.
+
+On Windows SSH workspaces, Ranger supports native status and terminal reads.
+Agent history and Git diff reads return an unsupported-operation error before
+running Unix-only resource helpers.
+
+## Windows hosts over SSH
+
+From a Linux or macOS World service, select **Windows** as the remote host OS
+when adding an SSH profile. The Windows host needs OpenSSH, Windows PowerShell
+and a running Herdr 0.9.1+ session. Leave the executable and session fields empty
+for discovery, or supply an absolute Windows `.exe` path and a validated session
+name. SSH authentication and host trust still belong in the service user's
+OpenSSH configuration. Windows profiles do not use Unix remote socket paths.
+
+World forwards native Herdr control and terminal streams through service-owned
+SSH processes. Terminal and native workspace actions are supported; file, Git,
+worktree and agent-history tools requiring Unix commands remain unavailable.
+Changing the Windows executable or session changes recovery identity, so saved
+Ranger tasks cannot silently resume against a replacement target.
+
+## Ranger settings and management
+
+Ranger settings group credential source, providers, custom models and workspace
+permissions. The custom-model editor shows model IDs and supported thinking
+levels separately from endpoint credentials; a blank API key preserves its saved
+value. Chat history is a separate navigable panel. On compact screens the
+conversation minimap appears below messages.
+
+Ranger can propose editing, pausing, resuming, cancelling and deleting existing
+tasks. Management previews retain the task revision and scope, follow the current
+manual/High approval policy, and expire after ten minutes or service restart.
+Task edits preserve saved model, scope and agent references; a confirmed manual
+edit downgrades future execution to manual approval. Delete requires prior
+cancellation. Close-agent, close-pane and close-workspace previews recheck captured
+occupants before dispatch and do not delete checkout files or agent history.

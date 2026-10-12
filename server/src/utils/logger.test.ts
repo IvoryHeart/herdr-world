@@ -136,3 +136,22 @@ describe("recovery reporter", () => {
     ]);
   });
 });
+
+test("redacts PINs and session signing material from log fields and messages", () => {
+  const line = formatLogLine({
+    timestamp: NOW,
+    level: "warn",
+    scope: "bridge",
+    message:
+      'HERDR_WORLD_PIN=123456 pin=654321 {"pin":"987654"} sessionSecret=abcdef',
+    fields: {
+      pin: "123456",
+      HERDR_WORLD_PIN: "654321",
+      HERDR_GUI_PIN: "987654",
+      sessionSecret: "abcdef",
+      url: "https://example.test/?pin=123456",
+    },
+  });
+  for (const secret of ["123456", "654321", "987654", "abcdef"])
+    expect(line).not.toContain(secret);
+});

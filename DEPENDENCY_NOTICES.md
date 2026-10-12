@@ -236,7 +236,7 @@ are reproduced in `DEPENDENCY_LICENSES.md`.
 | braces | 3.0.3 | MIT |
 | buffer-equal-constant-time | 1.0.1 | BSD-3-Clause |
 | buffer-image-size | 0.6.4 | MIT |
-| bun-types | 1.4.2 | MIT |
+| bun-types | 1.4.3 | MIT |
 | ccount | 2.0.1 | MIT |
 | chalk | 5.6.2 | MIT |
 | chalk | 6.0.0 | MIT |

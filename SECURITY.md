@@ -19,7 +19,15 @@ not a sandbox or multi-user permission system.
 The default bind is `127.0.0.1`. Every listener requires login, including
 `127.0.0.1`, `localhost` and `::1`. Configure `HERDR_WORLD_PASSWORD` with
 15–1024 characters or use the generated persistent token. Successful login
-creates a bounded session; repeated login failures receive a cooldown.
+creates a bounded session signed with a separate random key in private World
+storage. Changing the password, generated token or configured PIN rotates that
+key and invalidates existing sessions; ordinary restarts preserve sessions.
+Repeated login failures receive a cooldown.
+
+`HERDR_WORLD_PIN` optionally enables a 6–12 digit convenience login for trusted
+private networks or VPNs. It does not replace the password or generated token.
+PIN failures have separate per-client limits and a global one-hour cooldown;
+password/token recovery remains available during a PIN lockout.
 
 **Do not expose Herdr World directly to the public internet.** For non-loopback:
 

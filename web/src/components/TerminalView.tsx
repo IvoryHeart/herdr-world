@@ -19,6 +19,7 @@ import { FitAddon } from "@xterm/addon-fit";
 import { UnicodeGraphemesAddon } from "@xterm/addon-unicode-graphemes";
 import type { IBufferRange, ITheme } from "@xterm/xterm";
 import { Terminal } from "@xterm/xterm";
+import { installTerminalCompositionRepair } from "../terminalComposition";
 import {
   Columns2,
   Grid2X2,
@@ -124,7 +125,10 @@ import {
   terminalImeTextareaDelta,
   terminalMobileTextareaEdit,
 } from "../terminalIme";
-import { terminalShortcutSequence } from "../terminalKeys";
+import {
+  terminalDisambiguatedKeySequence,
+  terminalShortcutSequence,
+} from "../terminalKeys";
 import {
   registerTerminalLinkProvider,
   type TerminalResolvedLink,
@@ -1097,6 +1101,7 @@ export function TerminalView({
     term.loadAddon(new UnicodeGraphemesAddon());
     term.loadAddon(fit);
     term.open(container);
+    const compositionRepair = installTerminalCompositionRepair(term);
     if (isApplePlatform()) {
       term.element?.classList.add("xterm-apple-row-spacing-fix");
     }
@@ -1733,6 +1738,19 @@ export function TerminalView({
         }
       }
 
+      // User-configured terminal actions above take precedence over raw keys.
+      // Legacy/shared attachments forward raw PTY bytes and cannot decode
+      // this private frontend-to-endpoint disambiguation contract.
+      const disambiguatedSequence =
+        endpointPresentation.mouseReporting !== undefined
+          ? terminalDisambiguatedKeySequence(e, applePlatform)
+          : null;
+      if (disambiguatedSequence) {
+        e.preventDefault();
+        e.stopPropagation();
+        sendText(disambiguatedSequence);
+        return false;
+      }
       return true;
     });
 
@@ -2939,6 +2957,7 @@ export function TerminalView({
       ) {
         detachOwnedTerminal(terminalId);
       }
+      compositionRepair.dispose();
       term.dispose();
       termRef.current = null;
       setTermInstance(null);
@@ -3269,13 +3288,23 @@ export function TerminalView({
       detail: message,
     });
   };
-  const mobileShortcutReason = (shortcut: MobileTerminalShortcut) =>
-    mobileTerminalShortcutExecution(shortcut.action)?.type === "scroll" &&
-    pane?.terminal_id
-      ? store.terminalScrollReason(pane.terminal_id)
-      : null;
-  const runMobileShortcut = (shortcut: MobileTerminalShortcut) => {
+  const mobileShortcutReason = (shortcut: MobileTerminalShortcut) => {
     const execution = mobileTerminalShortcutExecution(shortcut.action);
+    if (execution?.type === "scroll" && pane?.terminal_id)
+      return store.terminalScrollReason(pane.terminal_id);
+    if (
+      execution?.type === "input" &&
+      endpointPresentationRef.current?.mouseReporting === undefined &&
+      !mobileTerminalShortcutExecution(shortcut.action, false)
+    )
+      return "This key combination requires an endpoint terminal.";
+    return null;
+  };
+  const runMobileShortcut = (shortcut: MobileTerminalShortcut) => {
+    const execution = mobileTerminalShortcutExecution(
+      shortcut.action,
+      endpointPresentationRef.current?.mouseReporting !== undefined,
+    );
     if (!execution) return;
     if (execution.type === "scroll") {
       scrollPage(execution.direction, execution.amount);

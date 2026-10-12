@@ -26,7 +26,7 @@ Manifest author metadata is retained here when provided.
 - `@earendil-works/pi-tui@1.0.4` — Mario Zechner
 - `@lobehub/icons-static-svg@1.95.1` — LobeHub <i@lobehub.com>
 - `@pixi/colord@2.9.6` — Vlad Shilov <omgovich@ya.ru>
-- `bun-types@1.4.2`
+- `bun-types@1.4.3`
 - `data-uri-to-buffer@4.0.1` — Nathan Rajlich <nathan@tootallnate.net> (http://n8.io/)
 - `http_ece@1.2.0` — Martin Thomson <martin.thomson@gmail.com>
 - `proxy-agent-negotiate@1.1.0` — Nathan Rajlich <nathan@tootallnate.net> (http://n8.io/)

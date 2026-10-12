@@ -5,6 +5,7 @@ import {
   ASSISTANT_MAX_WORKSPACES,
   type AssistantAction,
   type AssistantSnapshot,
+  type AssistantWorkspaceCatalog,
 } from "../../../shared/assistant";
 import * as assistant from "../assistant";
 import { bridge, type ConnectionSummary } from "../api";
@@ -12,6 +13,8 @@ import * as storeModule from "../store";
 import type { RangerTaskNotificationTarget } from "../taskNotifications";
 import { terminalFocusBlockedByOverlay } from "../terminalFocus";
 import { AssistantPanel, assistantAuthUrl } from "./AssistantPanel";
+import { AssistantChatControls } from "./AssistantChatControls";
+import { AssistantMentionComposer } from "./AssistantMentionComposer";
 import * as taskControls from "./AssistantTasks";
 
 test("assistant sign-in links only open explicit http or https destinations", () => {
@@ -123,6 +126,7 @@ if (process.env.HERDR_WORLD_ASSISTANT_ACTION_DOM_TEST !== "1") {
       connectionStatus: "connected",
       supported: true,
       draft: "",
+      draftMentions: [],
     };
     const state = spyOn(assistant, "useAssistantState").mockImplementation(
       () => clientState,
@@ -200,13 +204,19 @@ if (process.env.HERDR_WORLD_ASSISTANT_ACTION_DOM_TEST !== "1") {
       await click("Chat");
       await click("Ranger chat history");
       expect(container.querySelector(".assistant-chat-history")).not.toBeNull();
+      expect(container.querySelector(".assistant-chat-toolbar")).toBeNull();
+      expect(container.querySelector(".assistant-setup-notice")).toBeNull();
+      expect(container.querySelector(".assistant-conversation")).toBeNull();
+      expect(container.querySelector(".assistant-panel-footer")).toBeNull();
+      expect(document.activeElement).toBe(
+        container.querySelector(".assistant-history-heading h3"),
+      );
       await render({ ...target });
       expect(container.querySelector(".assistant-chat-history")).toBeNull();
       expect(button("Tasks").getAttribute("aria-pressed")).toBe("true");
       await click("Chat");
-      expect(button("Ranger chat history").getAttribute("aria-expanded")).toBe(
-        "false",
-      );
+      expect(container.querySelector(".assistant-chat-history")).toBeNull();
+      expect(button("Ranger chat history").disabled).toBe(false);
       await click("Ranger settings");
       await render({ ...target, taskId: "task-two", runId: "new-run" });
       expect(container.querySelector(".assistant-panel-settings")).toBeNull();
@@ -344,9 +354,10 @@ if (process.env.HERDR_WORLD_ASSISTANT_ACTION_DOM_TEST !== "1") {
       connectionStatus: "connected",
       supported: true,
       draft: "",
+      draftMentions: [],
     });
     const unavailable = "Connection sshtx1 is not ready.";
-    let contextResult = {
+    let contextResult: AssistantWorkspaceCatalog = {
       workspaces: [localWorkspace],
       errors: [unavailable],
     };
@@ -445,11 +456,238 @@ if (process.env.HERDR_WORLD_ASSISTANT_ACTION_DOM_TEST !== "1") {
       expect(container.textContent).not.toContain(unavailable);
       expect(checkbox("Latest remote project")?.checked).toBe(false);
       expect(checkbox("Local project")?.checked).toBe(true);
+
+      // A saved permission update preserves the user's unchecked/checked draft.
+      snapshot.config.allowed_workspaces = [remoteWorkspace];
+      await catalog({ ...ssh, state: "ready", generation: 4 });
+      expect(checkbox("Latest remote project")?.checked).toBe(true);
+      expect(checkbox("Local project")?.checked).toBe(true);
+      const retainedPeer = {
+        ...remoteWorkspace,
+        workspace_id: "retained-peer",
+        label: "Peer remote project",
+      };
+      snapshot.config.allowed_workspaces = [remoteWorkspace, retainedPeer];
+      contextResult = {
+        workspaces: [localWorkspace],
+        errors: [unavailable],
+        connection_ids: [local.id, ssh.id],
+        complete_connection_ids: [local.id],
+      };
+      await catalog({ ...ssh, state: "disconnected", generation: 5 });
+      expect(checkbox("Latest remote project")).toBeUndefined();
+      expect(container.textContent).toContain("remote-project");
+      expect(
+        container.querySelector<HTMLButtonElement>(
+          `button[aria-label="Remove unavailable workspace ${remoteWorkspace.workspace_id} on ${remoteWorkspace.connection_id}"]`,
+        )?.disabled,
+      ).toBe(false);
+      await React.act(async () =>
+        container
+          .querySelector<HTMLButtonElement>(
+            `button[aria-label="Remove unavailable workspace ${remoteWorkspace.workspace_id} on ${remoteWorkspace.connection_id}"]`,
+          )!
+          .click(),
+      );
+      expect(
+        container.querySelector(
+          `button[aria-label="Remove unavailable workspace ${remoteWorkspace.workspace_id} on ${remoteWorkspace.connection_id}"]`,
+        ),
+      ).toBeNull();
+      expect(
+        container.querySelector(
+          `button[aria-label="Remove unavailable workspace retained-peer on ${remoteWorkspace.connection_id}"]`,
+        ),
+      ).not.toBeNull();
+      expect(checkbox("Local project")?.checked).toBe(true);
+      contextResult = {
+        workspaces: [localWorkspace, remoteWorkspace, retainedPeer],
+        errors: [],
+        connection_ids: [local.id, ssh.id],
+        complete_connection_ids: [local.id, ssh.id],
+      };
+      await catalog({ ...ssh, state: "ready", generation: 6 });
+      expect(checkbox("Remote project")?.checked).toBe(false);
+      expect(checkbox("Peer remote project")?.checked).toBe(true);
+
+      // Successful complete inventory removes the deleted saved grant, while
+      // an unrelated unsaved local selection survives the pushed snapshot.
+      snapshot.config.allowed_workspaces = [];
+      contextResult = { ...contextResult, workspaces: [localWorkspace] };
+      await catalog({ ...ssh, state: "ready", generation: 7 });
+      expect(checkbox("Remote project")).toBeUndefined();
+      expect(checkbox("Local project")?.checked).toBe(true);
+      contextResult = {
+        ...contextResult,
+        workspaces: [localWorkspace, remoteWorkspace],
+      };
+      await catalog({ ...ssh, state: "ready", generation: 8 });
+      expect(checkbox("Remote project")?.checked).toBe(false);
+      expect(checkbox("Local project")?.checked).toBe(true);
     } finally {
       await React.act(async () => root.unmount());
       context.mockRestore();
       state.mockRestore();
       storeModule.__storeTesting.replaceState(previousStore);
+      await browser.happyDOM.close();
+      for (const [key, descriptor] of originals) {
+        if (descriptor) Object.defineProperty(globalThis, key, descriptor);
+        else Reflect.deleteProperty(globalThis, key);
+      }
+    }
+  });
+
+  test("Ranger ignores stale pruning after local or saved workspace grants change", async () => {
+    const { Window } = await import("happy-dom");
+    const browser = new Window({ url: "http://localhost" });
+    const originals = new Map<string, PropertyDescriptor | undefined>();
+    for (const [key, value] of Object.entries({
+      window: browser,
+      document: browser.document,
+      navigator: browser.navigator,
+      HTMLElement: browser.HTMLElement,
+      Element: browser.Element,
+      Node: browser.Node,
+      Event: browser.Event,
+      IS_REACT_ACT_ENVIRONMENT: true,
+    })) {
+      originals.set(key, Object.getOwnPropertyDescriptor(globalThis, key));
+      Object.defineProperty(globalThis, key, {
+        value,
+        configurable: true,
+        writable: true,
+      });
+    }
+    const { createRoot } = await import("react-dom/client");
+    const workspaceA = {
+      connection_id: "local",
+      workspace_id: "a",
+      connection_label: "Local",
+      label: "Project A",
+      runtime_generation: 1,
+    };
+    const workspaceB = { ...workspaceA, workspace_id: "b", label: "Project B" };
+    const refA = { connection_id: "local", workspace_id: "a" };
+    const refB = { connection_id: "local", workspace_id: "b" };
+    const snapshot: AssistantSnapshot = {
+      instance_id: "bridge",
+      revision: 1,
+      config: {
+        provider: "",
+        model: "",
+        credential_source: "assistant",
+        allowed_workspaces: [refA],
+      },
+      providers: [],
+      models: [],
+      messages: [],
+      running: false,
+      error: null,
+      auth: null,
+    };
+    const clientState: ReturnType<typeof assistant.useAssistantState> = {
+      snapshot,
+      loading: false,
+      error: null,
+      connectionStatus: "connected",
+      supported: true,
+      draft: "",
+      draftMentions: [],
+    };
+    const state = spyOn(assistant, "useAssistantState").mockImplementation(
+      () => clientState,
+    );
+    const readState = spyOn(assistant, "readAssistantState").mockImplementation(
+      () => clientState,
+    );
+    const complete: AssistantWorkspaceCatalog = {
+      workspaces: [workspaceA, workspaceB],
+      errors: [],
+      connection_ids: ["local"],
+      complete_connection_ids: ["local"],
+    };
+    const oldListing = { ...complete, workspaces: [workspaceA] };
+    const context = spyOn(bridge, "call").mockResolvedValue(complete);
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    const render = async () => {
+      await React.act(async () =>
+        root.render(
+          React.createElement(AssistantPanel, {
+            open: true,
+            floating: true,
+            mobile: false,
+            onClose() {},
+            onToggleFloating() {},
+            onOpenSource() {},
+          }),
+        ),
+      );
+    };
+    const checkboxB = () =>
+      Array.from(
+        container.querySelectorAll<HTMLLabelElement>(
+          ".assistant-workspace-choice",
+        ),
+      )
+        .find((label) => label.textContent?.includes("Project B"))
+        ?.querySelector<HTMLInputElement>("input");
+    const refresh = async () => {
+      await React.act(async () =>
+        container
+          .querySelector<HTMLButtonElement>(
+            '[aria-label="Refresh Ranger workspaces"]',
+          )!
+          .click(),
+      );
+    };
+    const startOldRefresh = async () => {
+      const pending = Promise.withResolvers<AssistantWorkspaceCatalog>();
+      context.mockImplementationOnce(() => pending.promise);
+      await refresh();
+      return pending;
+    };
+    try {
+      await render();
+      expect(checkboxB()?.checked).toBe(false);
+      const localRefresh = await startOldRefresh();
+      await React.act(async () => checkboxB()!.click());
+      expect(checkboxB()?.checked).toBe(true);
+      await React.act(async () => localRefresh.resolve(oldListing));
+      expect(checkboxB()).toBeUndefined();
+      await refresh();
+      expect(checkboxB()?.checked).toBe(true);
+      expect(snapshot.config.allowed_workspaces).toEqual([refA]);
+
+      // The draft already includes B, so this independently checks the saved
+      // grants token rather than relying on a local draft change.
+      const savedRefresh = await startOldRefresh();
+      clientState.snapshot = {
+        ...snapshot,
+        revision: 2,
+        config: { ...snapshot.config, allowed_workspaces: [refA, refB] },
+      };
+      await render();
+      await React.act(async () => savedRefresh.resolve(oldListing));
+      expect(checkboxB()).toBeUndefined();
+      await refresh();
+      expect(checkboxB()?.checked).toBe(true);
+      expect(clientState.snapshot.config.allowed_workspaces).toEqual([
+        refA,
+        refB,
+      ]);
+
+      // A later complete listing may still prune an unchanged draft.
+      context.mockResolvedValueOnce(oldListing);
+      await refresh();
+      await refresh();
+      expect(checkboxB()?.checked).toBe(false);
+    } finally {
+      await React.act(async () => root.unmount());
+      context.mockRestore();
+      readState.mockRestore();
+      state.mockRestore();
       await browser.happyDOM.close();
       for (const [key, descriptor] of originals) {
         if (descriptor) Object.defineProperty(globalThis, key, descriptor);
@@ -555,6 +793,7 @@ if (process.env.HERDR_WORLD_ASSISTANT_ACTION_DOM_TEST !== "1") {
       connectionStatus: "connected" as const,
       supported: true,
       draft: "",
+      draftMentions: [],
     };
     const state = spyOn(assistant, "useAssistantState").mockImplementation(
       () => clientState,
@@ -570,32 +809,43 @@ if (process.env.HERDR_WORLD_ASSISTANT_ACTION_DOM_TEST !== "1") {
       ["last", { top: 674, height: 220 }],
     ]);
     let position = 0;
+    let panelMobile = false;
+    let conversationWidth = 380;
     const scrollHeight = () =>
       Math.max(
-        200,
+        listHeight(),
         ...[...bounds.values()].map((rect) => rect.top + rect.height + 12),
       );
     const list = () =>
       container.querySelector<HTMLDivElement>(".assistant-panel-list")!;
     const wave = () =>
       container.querySelector<HTMLDivElement>(".assistant-conversation-wave")!;
+    const listHeight = () =>
+      wave()?.getAttribute("aria-orientation") === "horizontal" ? 168 : 200;
     const layout = () => {
       const scroller = list();
       if (!scroller) return;
+      Object.defineProperty(scroller.parentElement, "clientWidth", {
+        configurable: true,
+        get: () => conversationWidth,
+      });
       Object.defineProperties(scroller, {
-        clientHeight: { configurable: true, value: 200 },
-        offsetHeight: { configurable: true, value: 200 },
+        clientHeight: { configurable: true, get: listHeight },
+        offsetHeight: { configurable: true, get: listHeight },
         scrollHeight: { configurable: true, get: scrollHeight },
         scrollTop: {
           configurable: true,
-          get: () => position,
+          get: () => Math.min(position, scrollHeight() - listHeight()),
           set: (next: number) => {
-            position = Math.max(0, Math.min(next, scrollHeight() - 200));
+            position = Math.max(
+              0,
+              Math.min(next, scrollHeight() - listHeight()),
+            );
           },
         },
       });
       scroller.getBoundingClientRect = () =>
-        new browser.DOMRect(100, 200, 300, 200) as DOMRect;
+        new browser.DOMRect(100, 200, 300, listHeight()) as DOMRect;
       scroller
         .querySelectorAll<HTMLElement>(".assistant-message")
         .forEach((section) => {
@@ -611,7 +861,9 @@ if (process.env.HERDR_WORLD_ASSISTANT_ACTION_DOM_TEST !== "1") {
         });
       if (wave())
         wave().getBoundingClientRect = () =>
-          new browser.DOMRect(410, 250, 26, 160) as DOMRect;
+          (wave().getAttribute("aria-orientation") === "horizontal"
+            ? new browser.DOMRect(100, 410, 300, 32)
+            : new browser.DOMRect(410, 250, 26, 160)) as DOMRect;
     };
     const render = async () => {
       await React.act(async () =>
@@ -619,7 +871,7 @@ if (process.env.HERDR_WORLD_ASSISTANT_ACTION_DOM_TEST !== "1") {
           React.createElement(AssistantPanel, {
             open: true,
             floating: true,
-            mobile: false,
+            mobile: panelMobile,
             onClose() {},
             onToggleFloating() {},
             onOpenSource() {},
@@ -638,6 +890,15 @@ if (process.env.HERDR_WORLD_ASSISTANT_ACTION_DOM_TEST !== "1") {
     };
     const pointAt = (index: number) =>
       250 + ((index + 0.5) / clientState.snapshot.messages.length) * 160;
+    const horizontalPointAt = (index: number) =>
+      100 + ((index + 0.5) / clientState.snapshot.messages.length) * 300;
+    const resize = async (width: number) => {
+      conversationWidth = width;
+      await React.act(async () =>
+        observers.forEach((observer) => observer.callback()),
+      );
+      await flushFrames();
+    };
     const key = async (value: string) => {
       const event = new browser.KeyboardEvent("keydown", {
         key: value,
@@ -683,6 +944,10 @@ if (process.env.HERDR_WORLD_ASSISTANT_ACTION_DOM_TEST !== "1") {
     };
     try {
       await render();
+      expect(wave().getAttribute("aria-orientation")).toBe("horizontal");
+      expect(position).toBe(scrollHeight() - listHeight());
+      await resize(800);
+      expect(wave().getAttribute("aria-orientation")).toBe("vertical");
       await scroll(200);
       expect(visible()).toEqual(["long"]);
       expect(wave().getAttribute("aria-valuenow")).toBe("2");
@@ -721,8 +986,74 @@ if (process.env.HERDR_WORLD_ASSISTANT_ACTION_DOM_TEST !== "1") {
       await scroll(scrollHeight());
       bounds.get("last")!.height += 100;
       await stream();
-      expect(position).toBe(scrollHeight() - 200);
+      expect(position).toBe(scrollHeight() - listHeight());
       expect(visible()).toEqual(["last"]);
+
+      await resize(600);
+      expect(wave().getAttribute("aria-orientation")).toBe("horizontal");
+      expect(
+        container.querySelector(".assistant-conversation-map.is-horizontal"),
+      ).not.toBeNull();
+      expect(position).toBe(scrollHeight() - listHeight());
+      await resize(601);
+      expect(wave().getAttribute("aria-orientation")).toBe("vertical");
+      expect(position).toBe(scrollHeight() - listHeight());
+      await scroll(66);
+      await resize(600);
+      expect(position).toBe(66);
+      await React.act(async () =>
+        wave().dispatchEvent(
+          new browser.PointerEvent("pointermove", {
+            clientX: horizontalPointAt(2),
+            clientY: 425,
+            pointerType: "mouse",
+            bubbles: true,
+          }) as unknown as Event,
+        ),
+      );
+      expect(
+        container.querySelector("[role='tooltip']")?.textContent,
+      ).toContain("third");
+      expect(
+        container
+          .querySelector<HTMLElement>("[role='tooltip']")
+          ?.style.getPropertyValue("--preview-position"),
+      ).toBe("62.5%");
+      await React.act(async () =>
+        wave().dispatchEvent(
+          new browser.MouseEvent("click", {
+            clientX: horizontalPointAt(1),
+            clientY: 420,
+            bubbles: true,
+          }) as unknown as Event,
+        ),
+      );
+      await scroll(position);
+      expect(position).toBe(66);
+      expect(document.activeElement).toBe(wave());
+      await key("Home");
+      expect(position).toBe(0);
+      await key("ArrowRight");
+      expect(position).toBe(66);
+      await key("ArrowRight");
+      expect(position).toBe(564);
+      await key("ArrowLeft");
+      expect(position).toBe(66);
+      await key("End");
+      expect(position).toBe(662);
+      expect(container.scrollTop).toBe(35);
+      expect(document.documentElement.scrollTop).toBe(45);
+
+      await resize(601);
+      expect(wave().getAttribute("aria-orientation")).toBe("vertical");
+      expect(position).toBe(662);
+      panelMobile = true;
+      await render();
+      expect(wave().getAttribute("aria-orientation")).toBe("horizontal");
+      expect(position).toBe(662);
+      panelMobile = false;
+      await render();
+      expect(wave().getAttribute("aria-orientation")).toBe("vertical");
 
       await clickButton("Ranger settings");
       expect(wave()).toBeNull();
@@ -800,6 +1131,13 @@ if (process.env.HERDR_WORLD_ASSISTANT_ACTION_DOM_TEST !== "1") {
       expect(position).toBe(scrollHeight() - 200);
       expect(visible()).toEqual(["new-session"]);
       expect(container.querySelector("[role='tooltip']")).toBeNull();
+      bounds.get("new-session")!.height = 180;
+      await stream();
+      expect(position).toBe(0);
+      await resize(600);
+      expect(position).toBe(24);
+      await resize(601);
+      expect(position).toBe(0);
       clientState.snapshot = { ...clientState.snapshot, messages: [] };
       await render();
       expect(wave()).toBeNull();
@@ -971,6 +1309,7 @@ if (process.env.HERDR_WORLD_ASSISTANT_ACTION_DOM_TEST !== "1") {
       connectionStatus: "connected",
       supported: true,
       draft: "Next question",
+      draftMentions: [],
     };
     let contextWorkspaces = [workspace];
     let acknowledge: (snapshot: AssistantSnapshot) => void = () => {};
@@ -1373,11 +1712,47 @@ if (process.env.HERDR_WORLD_ASSISTANT_ACTION_DOM_TEST !== "1") {
       expect(
         container.querySelectorAll(".assistant-chat-toolbar button"),
       ).toHaveLength(2);
+      const conversation = () =>
+        container.querySelector<HTMLElement>(".assistant-panel-list")!;
+      Object.defineProperties(conversation(), {
+        scrollHeight: { value: 800, configurable: true },
+        clientHeight: { value: 200, configurable: true },
+      });
+      await React.act(async () => {
+        conversation().scrollTop = 120;
+        conversation().dispatchEvent(new Event("scroll"));
+      });
       await React.act(async () => button("History").click());
       expect(
         container.querySelector('[aria-label="Saved Ranger chats"]'),
       ).not.toBeNull();
+      expect(container.querySelector(".assistant-chat-toolbar")).toBeNull();
+      expect(
+        container.querySelector('[aria-label="Message Ranger"]'),
+      ).toBeNull();
       await React.act(async () => button("Close Ranger chat history").click());
+      expect(conversation().scrollTop).toBe(120);
+      expect(
+        container.querySelector('[aria-label="Message Ranger"]')?.textContent,
+      ).toBe("Next question");
+      expect(document.activeElement?.getAttribute("aria-label")).toBe(
+        "Message Ranger",
+      );
+      await React.act(async () => button("History").click());
+      await React.act(async () =>
+        document.activeElement!.dispatchEvent(
+          new window.KeyboardEvent("keydown", {
+            key: "Escape",
+            bubbles: true,
+            cancelable: true,
+          }),
+        ),
+      );
+      expect(container.querySelector(".assistant-chat-history")).toBeNull();
+      expect(close).toHaveBeenCalledTimes(1);
+      await React.act(async () => button("History").click());
+      await React.act(async () => button("Chat").click());
+      expect(container.querySelector(".assistant-chat-history")).toBeNull();
       await React.act(async () => button("Tasks").click());
       expect(
         container.querySelector('[aria-label="Ranger tasks"]'),
@@ -1568,8 +1943,8 @@ if (process.env.HERDR_WORLD_ASSISTANT_ACTION_DOM_TEST !== "1") {
       );
       expect(send).not.toHaveBeenCalled();
       await React.act(async () => button("Ranger settings").click());
-      expect(button("Save connection").disabled).toBe(true);
-      expect(container.querySelectorAll("fieldset:disabled")).toHaveLength(2);
+      expect(button("Save settings").disabled).toBe(true);
+      expect(container.querySelector("fieldset:disabled")).not.toBeNull();
       button("Refresh Ranger workspaces").focus();
       terminalFrame();
       expect(document.activeElement).toBe(button("Refresh Ranger workspaces"));
@@ -1721,6 +2096,7 @@ if (process.env.HERDR_WORLD_ASSISTANT_ACTION_DOM_TEST !== "1") {
       await React.act(async () => button("Ranger settings").click());
       expect(container.querySelector(".assistant-panel-settings")).toBeNull();
       await React.act(async () => button("Ranger settings").click());
+      await React.act(async () => button("Add custom models").click());
       const customForm = () =>
         container.querySelector<HTMLFormElement>(
           '[aria-label="Custom model connection"]',
@@ -1815,13 +2191,18 @@ if (process.env.HERDR_WORLD_ASSISTANT_ACTION_DOM_TEST !== "1") {
         api_key: "synthetic-key",
         credential_source: "assistant",
       });
+      expect(customForm()).toBeNull();
+      expect(button("Save settings").disabled).toBe(false);
+      await React.act(async () => button("Edit custom models").click());
       expect(customInput("Custom API key").value).toBe("");
       expect(customInput("Custom API key").required).toBe(false);
       expect(customInput("Custom API base URL").value).toBe(
         "https://example.com/v1",
       );
       expect(customInput("Custom model IDs").value).toBe("my-model");
-      expect(button("Save connection").disabled).toBe(false);
+      expect(
+        container.querySelector('[aria-label="Save settings"]'),
+      ).toBeNull();
       clientState.snapshot.providers[
         clientState.snapshot.providers.length - 1
       ]!.custom = {
@@ -1853,7 +2234,7 @@ if (process.env.HERDR_WORLD_ASSISTANT_ACTION_DOM_TEST !== "1") {
         base_url: "https://model-override.example.com/v1",
         api: "anthropic-messages",
       });
-      await React.act(async () => button("Save connection").click());
+      await React.act(async () => button("Save settings").click());
       expect(call).toHaveBeenLastCalledWith("configure", {
         config: {
           ...clientState.snapshot.config,
@@ -1862,11 +2243,11 @@ if (process.env.HERDR_WORLD_ASSISTANT_ACTION_DOM_TEST !== "1") {
         },
       });
       await React.act(async () => button("Ranger settings").click());
+      const modelDraft = button("Ranger model").textContent;
       const workspaceDraft = () =>
         container.querySelector<HTMLInputElement>(
           ".assistant-workspaces input",
         )!;
-      const modelDraft = button("Ranger model").textContent;
       expect(workspaceDraft().checked).toBe(true);
       await React.act(async () => workspaceDraft().click());
       expect(workspaceDraft().checked).toBe(false);
@@ -1875,46 +2256,63 @@ if (process.env.HERDR_WORLD_ASSISTANT_ACTION_DOM_TEST !== "1") {
           '[role="dialog"][aria-label="Enable high-permission mode?"]',
         );
       const callsBeforeApproval = call.mock.calls.length;
-      await React.act(async () =>
-        button("Enable high-permission mode").click(),
-      );
+      await React.act(async () => button("High-permission mode").click());
       expect(approvalDialog()).not.toBeNull();
+      expect(approvalDialog()!.textContent).toContain(
+        "all current and future workspaces",
+      );
+      expect(approvalDialog()!.textContent).toContain(
+        "sent to your selected model provider",
+      );
+      expect(approvalDialog()!.textContent).toContain("without approval");
       expect(call).toHaveBeenCalledTimes(callsBeforeApproval);
       await React.act(async () => button("Cancel", approvalDialog()!).click());
       expect(approvalDialog()).toBeNull();
       expect(call).toHaveBeenCalledTimes(callsBeforeApproval);
-      await React.act(async () =>
-        button("Enable high-permission mode").click(),
-      );
+      await React.act(async () => button("High-permission mode").click());
       await React.act(async () =>
         button("Enable high-permission mode", approvalDialog()!).click(),
       );
       expect(approvalDialog()).toBeNull();
       expect(call).toHaveBeenLastCalledWith("configure_approval", {
         approval_mode: "auto",
+        workspace_scope: "all",
       });
       expect(call).toHaveBeenCalledTimes(callsBeforeApproval + 1);
       clientState.snapshot = {
         ...clientState.snapshot,
-        config: { ...clientState.snapshot.config, approval_mode: "auto" },
+        config: {
+          ...clientState.snapshot.config,
+          approval_mode: "auto",
+          workspace_scope: "all",
+        },
       };
       await render();
-      expect(workspaceDraft().checked).toBe(false);
+      expect(workspaceDraft().checked).toBe(true);
+      expect(workspaceDraft().disabled).toBe(true);
+      expect(
+        container.querySelector(
+          '[aria-label="Select all available Ranger workspaces"]',
+        ),
+      ).toBeNull();
+      expect(
+        container.querySelector(
+          '[aria-label="Clear allowed Ranger workspaces"]',
+        ),
+      ).toBeNull();
       expect(button("Ranger model").textContent).toBe(modelDraft);
       expect(
         container.querySelector(
           ".assistant-panel-title .assistant-panel-access",
         )?.textContent,
       ).toBe("Full access");
-      expect(
-        button("Disable high-permission mode").getAttribute("aria-pressed"),
-      ).toBe("true");
+      expect(button("High-permission mode").getAttribute("aria-checked")).toBe(
+        "true",
+      );
       clientState.snapshot.running = true;
       await render();
-      expect(button("Disable high-permission mode").disabled).toBe(false);
-      await React.act(async () =>
-        button("Disable high-permission mode").click(),
-      );
+      expect(button("High-permission mode").disabled).toBe(false);
+      await React.act(async () => button("High-permission mode").click());
       expect(call).toHaveBeenLastCalledWith("configure_approval", {
         approval_mode: "manual",
       });
@@ -1928,10 +2326,8 @@ if (process.env.HERDR_WORLD_ASSISTANT_ACTION_DOM_TEST !== "1") {
         })),
       };
       await render();
-      expect(button("Disable high-permission mode").disabled).toBe(false);
-      await React.act(async () =>
-        button("Disable high-permission mode").click(),
-      );
+      expect(button("High-permission mode").disabled).toBe(false);
+      await React.act(async () => button("High-permission mode").click());
       expect(call).toHaveBeenLastCalledWith("configure_approval", {
         approval_mode: "manual",
       });
@@ -1941,9 +2337,40 @@ if (process.env.HERDR_WORLD_ASSISTANT_ACTION_DOM_TEST !== "1") {
         approval_mode: "manual",
       };
       await render();
-      expect(button("Enable high-permission mode").disabled).toBe(true);
+      expect(button("High-permission mode").disabled).toBe(true);
       expect(workspaceDraft().checked).toBe(false);
       expect(container.querySelector(".assistant-panel-access")).toBeNull();
+
+      // Legacy auto mode must not acquire broader workspace access silently.
+      clientState.snapshot.config = {
+        ...clientState.snapshot.config,
+        approval_mode: "auto",
+        workspace_scope: undefined,
+      };
+      clientState.snapshot.messages = [];
+      await render();
+      expect(
+        container.querySelector(".assistant-panel-access")?.textContent,
+      ).toBe("High permission: selected workspaces");
+      expect(workspaceDraft().checked).toBe(false);
+      expect(workspaceDraft().disabled).toBe(false);
+      expect(button("High-permission mode").disabled).toBe(false);
+      expect(button("Select all available Ranger workspaces")).toBeDefined();
+      await React.act(async () =>
+        button("Enable high permission for all workspaces").click(),
+      );
+      expect(approvalDialog()!.textContent).toContain(
+        "all current and future workspaces",
+      );
+      expect(call).toHaveBeenCalledTimes(callsBeforeApproval + 3);
+      await React.act(async () =>
+        button("Enable high-permission mode", approvalDialog()!).click(),
+      );
+      expect(call).toHaveBeenLastCalledWith("configure_approval", {
+        approval_mode: "auto",
+        workspace_scope: "all",
+      });
+      expect(call).toHaveBeenCalledTimes(callsBeforeApproval + 4);
     } finally {
       await React.act(async () => root.unmount());
       for (const spy of [context, state, readState, send, call])
@@ -2009,6 +2436,7 @@ test("assistant uses saved workspace permissions, guards IME sends, and hides wi
     connectionStatus: "connected" as "connected" | "disconnected",
     supported: true,
     draft: "Explain the changes",
+    draftMentions: [],
   };
   const states: unknown[] = [];
   const refs: React.RefObject<unknown>[] = [];
@@ -2072,11 +2500,22 @@ test("assistant uses saved workspace permissions, guards IME sends, and hides wi
       (current) => refs[refIndex++] ?? (refs[refIndex - 1] = { current }),
     ),
     spyOn(React, "useEffect").mockImplementation(() => {}),
+    spyOn(React, "useLayoutEffect").mockImplementation(() => {}),
+    spyOn(React, "useId").mockReturnValue("mention-picker"),
+    spyOn(React, "useMemo").mockImplementation((create) => create()),
   ];
   function visit(node: React.ReactNode) {
     React.Children.forEach(node, (child) => {
       if (!React.isValidElement<Record<string, unknown>>(child)) return;
       elements.push(child);
+      if (child.type === AssistantMentionComposer) {
+        visit(
+          AssistantMentionComposer(
+            child.props as Parameters<typeof AssistantMentionComposer>[0],
+          ),
+        );
+        return;
+      }
       visit(child.props.children as React.ReactNode);
     });
   }
@@ -2108,7 +2547,17 @@ test("assistant uses saved workspace permissions, guards IME sends, and hides wi
     const callback = find(prop, value).props[handler] as (
       event: unknown,
     ) => void;
-    callback(event);
+    callback(
+      handler === "onCompositionEnd"
+        ? {
+            currentTarget: {
+              value: clientState.draft,
+              selectionStart: clientState.draft.length,
+              selectionEnd: clientState.draft.length,
+            },
+          }
+        : event,
+    );
     render();
   }
   const key = (isComposing = false, shiftKey = false) => ({
@@ -2130,6 +2579,69 @@ test("assistant uses saved workspace permissions, guards IME sends, and hides wi
     ).toBeDefined();
     invoke("aria-label", "Message Ranger", "onKeyDown", key());
     expect(send).not.toHaveBeenCalled();
+    snapshot.config.approval_mode = "auto";
+    snapshot.config.workspace_scope = "all";
+    render();
+    expect(find("aria-label", "Send").props.disabled).toBe(false);
+    const taskChoices = () =>
+      elements.find((item) => item.type === taskControls.AssistantTasks)!.props
+        .workspaces;
+    expect(taskChoices()).toEqual(contextWorkspaces);
+    invoke("aria-label", "Message Ranger", "onKeyDown", key());
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(send).toHaveBeenLastCalledWith(
+      "Explain the changes",
+      contextWorkspaces.map(
+        ({ connection_id, workspace_id, runtime_generation }) => ({
+          connection_id,
+          workspace_id,
+          runtime_generation,
+        }),
+      ),
+    );
+    acknowledge();
+    await Promise.resolve();
+    const newWorkspace = { ...workspace, workspace_id: "new-project" };
+    contextWorkspaces = [...contextWorkspaces, newWorkspace];
+    invoke("aria-label", "Message Ranger", "onKeyDown", key());
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(send).toHaveBeenLastCalledWith(
+      "Explain the changes",
+      contextWorkspaces.map(
+        ({ connection_id, workspace_id, runtime_generation }) => ({
+          connection_id,
+          workspace_id,
+          runtime_generation,
+        }),
+      ),
+    );
+    acknowledge();
+    await Promise.resolve();
+    render();
+    expect(taskChoices()).toEqual(contextWorkspaces);
+    expect(snapshot.config.allowed_workspaces).toEqual([]);
+    context.mockResolvedValueOnce({
+      workspaces: contextWorkspaces,
+      truncated: true,
+    });
+    invoke("aria-label", "Message Ranger", "onKeyDown", key());
+    await Promise.resolve();
+    await Promise.resolve();
+    render();
+    expect(send).toHaveBeenCalledTimes(2);
+    expect(find("aria-label", "Send").props.disabled).toBe(true);
+    expect(states[6]).toContain("require the full list");
+    snapshot.config.approval_mode = "manual";
+    contextWorkspaces = contextWorkspaces.filter(
+      (item) => item !== newWorkspace,
+    );
+    states[2] = contextWorkspaces;
+    render();
+    expect(find("aria-label", "Send").props.disabled).toBe(true);
+    expect(taskChoices()).toEqual([]);
+    send.mockClear();
     snapshot.config.allowed_workspaces = [
       workspace,
       secondWorkspace,
@@ -2233,6 +2745,25 @@ test("assistant uses saved workspace permissions, guards IME sends, and hides wi
       "The active Ranger chat changed. Select it again before sending.",
     );
     clientState.snapshot = snapshot;
+    snapshot.chat_selection = true;
+    render();
+    context.mockImplementationOnce(async () => {
+      clientState.snapshot = {
+        ...snapshot,
+        config: { ...snapshot.config, thinking_level: "high" },
+      };
+      return { workspaces: [workspace] };
+    });
+    invoke("aria-label", "Message Ranger", "onKeyDown", key());
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(states[6]).toBe(
+      "The Ranger model settings changed. Check the selection before sending.",
+    );
+    clientState.snapshot = snapshot;
+    delete snapshot.chat_selection;
+    render();
     snapshot.config.allowed_workspaces = [];
     render();
     expect(find("aria-label", "Send").props.disabled).toBe(true);
@@ -2270,16 +2801,9 @@ test("assistant uses saved workspace permissions, guards IME sends, and hides wi
       credential_method: "api_key",
     });
     states[0] = true;
+    states[15] = null;
     states[1] = { ...snapshot.config, model: "unsaved-model" };
     render();
-    expect(
-      elements.filter(
-        (item) => item.props.className === "assistant-provider-choice",
-      ),
-    ).toHaveLength(3);
-    expect(find("children", "Saved login (OAuth)")).toBeDefined();
-    expect(find("children", "API key saved")).toBeDefined();
-    expect(find("aria-label", "Model provider").props.role).toBe("group");
     expect(find("aria-label", "Credential source").props.role).toBe("group");
     expect(
       find("aria-label", "Credential source").props.options,
@@ -2290,71 +2814,52 @@ test("assistant uses saved workspace permissions, guards IME sends, and hides wi
     expect(
       find("aria-label", "Shared Pi credentials").props["aria-pressed"],
     ).toBe(false);
-    expect(find("aria-label", "Model provider").props.options).toBeUndefined();
     expect(find("aria-label", "Ranger model").props.disabled).toBe(false);
-    expect(find("className", "assistant-other-providers").props.open).toBe(
-      false,
-    );
-    invoke("aria-label", "Search providers", "onChange", {
-      currentTarget: { value: "  NOT-sa  " },
-    });
-    expect(
-      elements.filter(
-        (item) => item.props.className === "assistant-provider-choice",
-      ),
-    ).toHaveLength(1);
-    expect(find("aria-label", "Select provider Not saved")).toBeDefined();
-    expect(find("className", "assistant-other-providers").props.open).toBe(
-      true,
-    );
+    expect(elements.some((item) => item.type === "details")).toBe(false);
+    // One searchable picker lists saved credentials first with their status.
+    const providerPicker = () => find("aria-label", "Model provider");
+    expect(providerPicker().props.searchPlaceholder).toBe("Search providers");
+    expect(providerPicker().props.emptyText).toBe("No providers found");
+    expect(providerPicker().props.options).toEqual([
+      {
+        value: "provider",
+        label: "Provider",
+        detail: "Saved login (OAuth)",
+        keywords: ["provider"],
+      },
+      {
+        value: "other",
+        label: "Other provider",
+        detail: "API key saved",
+        keywords: ["other"],
+      },
+      {
+        value: "not-saved",
+        label: "Not saved",
+        detail: "No saved credentials",
+        keywords: ["not-saved"],
+      },
+    ]);
+    const chooseProvider = (value: string) => {
+      (providerPicker().props.onChange as (value: string) => void)(value);
+      render();
+    };
+    chooseProvider("provider");
     expect(states[1]).toMatchObject({
       provider: "provider",
       model: "unsaved-model",
     });
-    invoke("aria-label", "Search providers", "onChange", {
-      currentTarget: { value: " OTHER PROVIDER " },
-    });
-    expect(find("aria-label", "Select provider Other provider")).toBeDefined();
-    invoke("aria-label", "Search providers", "onChange", {
-      currentTarget: { value: "no such provider" },
-    });
-    expect(find("children", "No providers match your search.").props.role).toBe(
-      "status",
-    );
-    expect(states[1]).toMatchObject({
-      provider: "provider",
-      model: "unsaved-model",
-    });
-    invoke("aria-label", "Search providers", "onChange", {
-      currentTarget: { value: "  " },
-    });
-    expect(
-      elements.filter(
-        (item) => item.props.className === "assistant-provider-choice",
-      ),
-    ).toHaveLength(3);
-    expect(find("className", "assistant-other-providers").props.open).toBe(
-      false,
-    );
-    invoke("aria-label", "Search providers", "onChange", {
-      currentTarget: { value: "" },
-    });
-    invoke("aria-label", "Select provider Provider", "onClick");
-    expect(states[1]).toMatchObject({
-      provider: "provider",
-      model: "unsaved-model",
-    });
-    invoke("aria-label", "Select provider Other provider", "onClick");
+    chooseProvider("other");
     expect(states[1]).toMatchObject({ provider: "other", model: "" });
-    expect(find("aria-label", "Ranger model").props.disabled).toBe(true);
-    expect(find("aria-label", "Ranger model").props.placeholder).toBe(
-      "No models available",
-    );
     expect(snapshot.config.provider).toBe("provider");
     expect(stop).not.toHaveBeenCalled();
     invoke("aria-label", "Refresh Ranger credentials", "onClick");
     expect(refresh).toHaveBeenCalledTimes(1);
     expect(stop).not.toHaveBeenCalled();
+    expect(find("aria-label", "Ranger model").props.disabled).toBe(true);
+    expect(find("aria-label", "Ranger model").props.placeholder).toBe(
+      "No models available",
+    );
     await (
       find("aria-label", "Ranger connection").props
         .onClick as () => Promise<void>
@@ -2383,11 +2888,8 @@ test("assistant uses saved workspace permissions, guards IME sends, and hides wi
     for (const source of ["assistant", "pi"] as const) {
       states[1] = { ...snapshot.config, credential_source: source };
       render();
-      invoke("aria-label", "Select provider Not saved", "onClick");
-      expect(find("aria-label", "Ranger model").props.disabled).toBe(true);
-      expect(find("className", "assistant-other-providers").props.open).toBe(
-        true,
-      );
+      chooseProvider("not-saved");
+      expect(states[1]).toMatchObject({ provider: "not-saved", model: "" });
       invoke("aria-label", "Sign in to Not saved", "onClick");
       await Promise.resolve();
       await Promise.resolve();
@@ -2406,15 +2908,52 @@ test("assistant uses saved workspace permissions, guards IME sends, and hides wi
     stop.mockClear();
     snapshot.running = true;
     render();
+    const containsRefresh = (node: React.ReactNode): boolean =>
+      React.Children.toArray(node).some(
+        (child) =>
+          React.isValidElement<Record<string, unknown>>(child) &&
+          (child.props["aria-label"] === "Refresh Ranger credentials" ||
+            containsRefresh(child.props.children as React.ReactNode)),
+      );
     expect(
-      find("aria-label", "Refresh Ranger credentials").props.disabled,
+      elements.find(
+        (item) =>
+          item.type === "fieldset" &&
+          containsRefresh(item.props.children as React.ReactNode),
+      )?.props.disabled,
     ).toBe(true);
-
     snapshot.running = false;
     const offlineWorkspace = {
       connection_id: "offline",
       workspace_id: "workspace",
     };
+    const offlinePeer = {
+      ...offlineWorkspace,
+      workspace_id: "other-workspace",
+    };
+    states[1] = {
+      ...snapshot.config,
+      allowed_workspaces: [offlineWorkspace, offlinePeer, workspace],
+    };
+    states[2] = [workspace];
+    render();
+    const removeLabel = "Remove unavailable workspace workspace on offline";
+    expect(find("aria-label", removeLabel).props.disabled).toBe(false);
+    invoke("aria-label", removeLabel, "onClick");
+    expect(states[1]).toMatchObject({
+      allowed_workspaces: [offlinePeer, workspace],
+    });
+    expect(snapshot.config.allowed_workspaces).toEqual([workspace]);
+    render();
+    expect(
+      elements.some((item) => item.props["aria-label"] === removeLabel),
+    ).toBe(false);
+    expect(
+      find(
+        "aria-label",
+        "Remove unavailable workspace other-workspace on offline",
+      ).props.disabled,
+    ).toBe(false);
     const otherConnectionWorkspace = { ...workspace, connection_id: "remote" };
     states[1] = { ...snapshot.config, allowed_workspaces: [offlineWorkspace] };
     states[2] = [workspace, otherConnectionWorkspace, workspace];
@@ -2464,7 +3003,10 @@ test("assistant uses saved workspace permissions, guards IME sends, and hides wi
         .every((item) => !item.props.disabled),
     ).toBe(true);
     expect(choices[ASSISTANT_MAX_WORKSPACES - 1].props.disabled).toBe(true);
-    expect(choices[ASSISTANT_MAX_WORKSPACES].props.disabled).toBeUndefined();
+    expect(choices).toHaveLength(ASSISTANT_MAX_WORKSPACES);
+    expect(
+      elements.some((item) => item.props.children === "Unavailable (offline)"),
+    ).toBe(false);
     (choices[0].props.onChange as () => void)();
     render();
     expect(
@@ -2575,9 +3117,6 @@ test("assistant uses saved workspace permissions, guards IME sends, and hides wi
           : null;
       states[5] = blocked === "busy";
       render();
-      expect(find("aria-label", "Ranger chat history").props.disabled).toBe(
-        true,
-      );
       expect(find("title", "Older investigation").props.disabled).toBe(true);
       invoke("title", "Older investigation", "onClick");
       expect(stop).not.toHaveBeenCalled();
@@ -2598,8 +3137,11 @@ test("assistant uses saved workspace permissions, guards IME sends, and hides wi
     await Promise.resolve();
     render();
     expect(
-      find("aria-label", "Ranger chat history").props["aria-expanded"],
+      elements.some(
+        (item) => item.props["aria-label"] === "Saved Ranger chats",
+      ),
     ).toBe(false);
+    expect(find("aria-label", "Ranger chat history")).toBeDefined();
     const newChat = elements.find(
       (item) =>
         item.type === "button" &&
@@ -2616,6 +3158,34 @@ test("assistant uses saved workspace permissions, guards IME sends, and hides wi
       "Unconfirmed action previews will be cancelled",
     );
     expect(stop).toHaveBeenCalledTimes(1);
+
+    // Quick changes share admission with Send and do not touch the draft or IME.
+    const controls = () =>
+      elements.find((item) => item.type === AssistantChatControls)!;
+    const change = () =>
+      (controls().props.onChange as (params: Record<string, unknown>) => void)({
+        model: "next",
+        thinking_level: "high",
+      });
+    invoke("aria-label", "Message Ranger", "onCompositionStart");
+    change();
+    expect(stop).toHaveBeenCalledTimes(1);
+    invoke("aria-label", "Message Ranger", "onCompositionEnd");
+    snapshot.running = true;
+    render();
+    expect(controls().props.disabled).toBe(false);
+    change();
+    change();
+    expect(stop).toHaveBeenCalledTimes(2);
+    expect(stop).toHaveBeenLastCalledWith("configure_chat", {
+      model: "next",
+      thinking_level: "high",
+    });
+    expect(clientState.draft).toBe("Explain the changes");
+    await Promise.resolve();
+    await Promise.resolve();
+    render();
+    expect(controls().props.disabled).toBe(false);
   } finally {
     for (const spy of spies.reverse()) spy.mockRestore();
   }

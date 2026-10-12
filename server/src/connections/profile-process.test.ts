@@ -135,14 +135,47 @@ async function fakeHerdr(
     net.createServer((socket) => {
       trackSocket(socket);
       let input = Buffer.alloc(0);
+      let welcomed = false;
       socket.on("data", (chunk) => {
+        if (welcomed) return;
         input = Buffer.concat([input, Buffer.from(chunk)]);
         if (input.length < 4) return;
         const length = input.readUInt32LE(0);
         if (input.length < length + 4) return;
         const reader = new BinReader(input.subarray(4, length + 4));
-        expect(reader.variant()).toBe(0);
+        const variant = reader.variant();
+        if (variant === 20) {
+          expect(reader.string()).toBe("endpoint.hello.v1");
+          expect(JSON.parse(reader.string()).generation).toBe(1);
+          welcomed = true;
+          for (const [kind, data] of [
+            [
+              "endpoint.welcome.v1",
+              {
+                generation: 1,
+                server_version: "0.9.0",
+                snapshot_codec: "shell.snapshot.v1",
+                surface_codec: "shell.surface.v1",
+                input_codec: "shell.input.semantic.v1",
+                blob_codec: "shell.blob.v1",
+                methods: [],
+                capabilities: [],
+              },
+            ],
+            ["shell.snapshot.v1", { boot_id: `fake-${id}`, revision: 1 }],
+          ] as const) {
+            const writer = new BinWriter();
+            writer.variant(20);
+            writer.string(kind);
+            writer.string(JSON.stringify(data));
+            socket.write(encodeFrame(writer.toBuffer()));
+          }
+          return;
+        }
+        expect(variant).toBe(0);
         const protocol = reader.varint();
+        welcomed = true;
+        // Only Hello receives Welcome; later client traffic is not a handshake.
         const writer = new BinWriter();
         writer.variant(0);
         writer.varint(welcomeProtocol ?? protocol);
@@ -162,6 +195,27 @@ async function fakeHerdr(
     auto_connect: false,
   };
 }
+
+test("fixture supports modern notification endpoint handshakes", async () => {
+  if (process.platform === "win32") return;
+  const root = join(tmpdir(), `world-endpoint-fixture-${crypto.randomUUID()}`);
+  roots.push(root);
+  mkdirSync(root, { recursive: true, mode: 0o700 });
+  const profile = await fakeHerdr(root, "endpoint", 22);
+  const { EndpointClient } = await import("../bridge/endpoint-client");
+  const client = new EndpointClient(
+    profile.client_socket_path,
+    false,
+    "notifications",
+  );
+  client.on("error", () => {});
+  try {
+    await client.connect(80, 24);
+    expect(client.negotiation).toMatchObject({ generation: 1 });
+  } finally {
+    client.close();
+  }
+});
 
 function bridgeListeningPort(stream: ReadableStream<Uint8Array>) {
   let settled = false;

@@ -2,8 +2,8 @@ import { createWorkspaceWorktree } from "./worktree/create";
 import { canRevealFiles } from "./workspace/file-manager";
 import { sendWorldSnapshotReply } from "./bridge/world-snapshot-reply";
 import { WorldSnapshotAdmission } from "./bridge/world-snapshot-admission";
+import { loadOrCreateSessionSecret } from "./config/session-secret";
 import type { ServerWebSocket } from "bun";
-import { createHash } from "node:crypto";
 import { createAssistantContext } from "./assistant/context";
 import { isHtmlPath } from "../../shared/filePreview";
 import { rmSync } from "node:fs";
@@ -62,6 +62,7 @@ import {
 import {
   type ConnectionProfile,
   ConnectionProfileStore,
+  connectionRecoveryFingerprint,
 } from "./connections/profiles";
 import { createSshProfileRuntimeConfig } from "./connections/ssh-profile-runtime";
 import {
@@ -156,8 +157,29 @@ if (herdrCommandResult !== null) {
   process.exit(herdrCommandResult);
 }
 const config = loadServerConfig(APP_VERSION);
+// Only a listener startup may rotate sessions. Management commands also read
+// ServerConfig, sometimes with a different environment from the running service.
+let sessionSecret = "";
+if (config.authRequired) {
+  try {
+    sessionSecret = loadOrCreateSessionSecret([
+      config.password,
+      ...(config.pin ? [config.pin] : []),
+    ]);
+  } catch (cause) {
+    console.error(
+      `[bridge] FATAL: could not load the session signing secret: ${(cause as Error).message}`,
+    );
+    process.exit(1);
+  }
+}
 configureServerLogger(config.logLevel);
 const logger = serverLogger;
+if (config.authRequired && config.pin) {
+  logger.warn(
+    "PIN login is enabled. Use only behind a trusted private network or VPN; keep your password/token available for recovery.",
+  );
+}
 const cpuProfile = config.profile
   ? (await import("./utils/cpu-profile")).startCpuProfile(
       config.profile,
@@ -198,11 +220,14 @@ const {
   sessionToken,
   handleTokenLogin,
   handleLogin,
+  handlePinLogin,
   handleLogout,
   loginPage,
 } = createAuthHandlers({
   authRequired: config.authRequired,
   password: config.password,
+  pin: config.pin,
+  sessionSecret,
   urlLoginToken: config.generatedAuthToken,
   secureCookies: Boolean(config.tls),
 });
@@ -511,20 +536,7 @@ const assistantContext = createAssistantContext({
       .list()
       .find((profile) => profile.id === id);
     if (!profile) throw new Error("Ranger connection is no longer configured");
-    const target =
-      profile.type === "local"
-        ? [
-            profile.type,
-            profile.control_socket_path,
-            profile.client_socket_path,
-          ]
-        : [
-            profile.type,
-            profile.ssh_destination,
-            profile.remote_control_socket_path,
-            profile.remote_client_socket_path,
-          ];
-    return createHash("sha256").update(JSON.stringify(target)).digest("hex");
+    return connectionRecoveryFingerprint(profile);
   },
   createWorktree: (runtime, params, isCurrent, beforeDispatch) =>
     createWorkspaceWorktree(
@@ -901,12 +913,28 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
   }
   if (method.startsWith("bridge.assistant.")) {
     try {
+      // Browser admissions must carry the selected catalogue scope. Internal
+      // scheduled turns may use the service's own verified fixed scope.
+      if (
+        [
+          "bridge.assistant.send",
+          "bridge.assistant.task.create",
+          "bridge.assistant.task.update",
+        ].includes(method) &&
+        !Array.isArray(params?.scope)
+      )
+        throw new Error("Invalid workspace scope");
       const result =
         method === "bridge.assistant.context"
-          ? await assistantContext.catalog()
-          : method === "bridge.assistant.task.get"
-            ? await (await getAssistantService()).taskDetail(params ?? {})
-            : await (await getAssistantService()).handle(method, params ?? {});
+          ? await (await getAssistantService()).workspaceCatalog()
+          : method === "bridge.assistant.mentions"
+            ? await (await getAssistantService()).mentionCatalog(params ?? {})
+            : method === "bridge.assistant.task.get"
+              ? await (await getAssistantService()).taskDetail(params ?? {})
+              : await (await getAssistantService()).handle(
+                  method,
+                  params ?? {},
+                );
       sendReply({ id, result }, "assistant-rpc");
     } catch (error) {
       sendError("assistant-rpc-error", error);
@@ -1100,6 +1128,20 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
     return null;
   }
   const connection = route.runtime;
+  if (
+    connection.remotePlatform === "windows" &&
+    /^(?:file\.|git\.|worktree\.|agent_history\.|agent_session\.|settings\.(?:workspace_auto_sync|worktree_hooks)\.)/.test(
+      method,
+    )
+  ) {
+    sendError(
+      "unsupported-windows-operation",
+      new Error(
+        "This operation requires a Unix SSH host and is unavailable on Windows.",
+      ),
+    );
+    return;
+  }
   const {
     sshHost,
     herdr,
@@ -1163,9 +1205,10 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
 
   if (method === "agent.list") {
     try {
-      const result = await connection.agentSessions.listWithActivity(
-        params ?? {},
-      );
+      const result =
+        connection.remotePlatform === "windows"
+          ? await herdr.call("agent.list", params ?? {})
+          : await connection.agentSessions.listWithActivity(params ?? {});
       sendReply({ id, result }, "agent-list");
     } catch (e) {
       sendError("agent-list-error", e);
@@ -1492,15 +1535,20 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
   try {
     const rawResult = await herdr.call(method, params ?? {});
     let result = rawResult;
-    if (method === "integration.list") {
+    if (
+      method === "integration.list" &&
+      connection.remotePlatform !== "windows"
+    ) {
       result = await enrichIntegrationVersions(result, {
         sshHost: sshHost(),
         ping: () => herdr.ping(),
       });
     }
     if (method === "workspace.list") {
-      result = await worktreeParents.enrichWorkspaceList(result);
-      result = await enrichWorkspacesWithGitStatus(result);
+      if (connection.remotePlatform !== "windows") {
+        result = await worktreeParents.enrichWorkspaceList(result);
+        result = await enrichWorkspacesWithGitStatus(result);
+      }
       result = {
         ...result,
         navigation_mode: await terminalBridge.navigationMode(),
@@ -1551,6 +1599,18 @@ async function handleConnectionHttpRequest(
   }
 
   const { runtime: connection, endpoint } = resolved;
+  if (connection.remotePlatform === "windows" && endpoint !== "herdr-info") {
+    return publishConnectionHttpResponse(
+      resolved,
+      Response.json(
+        {
+          error:
+            "Remote file transfers and agent history require a Unix SSH host.",
+        },
+        { status: 501 },
+      ),
+    );
+  }
   try {
     let response: Response;
     if (endpoint === "herdr-info") {
@@ -1658,6 +1718,9 @@ function main() {
           }
 
           // Auth endpoints are always reachable.
+          if (url.pathname === "/api/login/pin" && req.method === "POST") {
+            return handlePinLogin(req, clientIp);
+          }
           if (url.pathname === "/api/login" && req.method === "POST") {
             return handleLogin(req, clientIp);
           }

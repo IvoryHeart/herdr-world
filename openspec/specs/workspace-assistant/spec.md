@@ -9,7 +9,10 @@ preserving World connection ownership and explicit workspace permissions.
 
 ### Requirement: Explicit workspace and model permission
 World SHALL initially allow no workspaces. Ranger SHALL read only explicitly
-allowed workspaces using a configured provider and model. Provider credentials
+allowed workspaces using a configured provider and model. Explicit High-mode
+all-workspace consent MAY authorize current and future workspaces; existing manual
+grants SHALL be preserved, legacy automatic approval SHALL NOT imply that consent,
+and truncated inventories SHALL prevent broader admission. Provider credentials
 and durable state SHALL remain in private service-owned storage.
 
 #### Scenario: Unconfigured assistant
@@ -50,3 +53,29 @@ and identify their Ranger task without retargeting a terminal.
 #### Scenario: Endpoint or workspace replacement
 - **WHEN** a saved task's endpoint or workspace identity changes
 - **THEN** the task cannot resume against the replacement identity
+
+### Requirement: Structured mention identity
+Workspace and agent mentions SHALL bind canonical connection, workspace and runtime
+identities. Agent mentions SHALL additionally bind the concrete terminal and agent
+session. Reads and saved-task edits SHALL reject replaced identities before using
+or rebinding the referenced data. Mentioning an agent SHALL NOT send it a prompt.
+
+#### Scenario: Agent replacement after selection
+- **WHEN** a mentioned agent's terminal or session changes before evidence is read
+- **THEN** Ranger rejects the stale reference instead of reading its replacement
+
+### Requirement: Guarded close and task management
+Close previews SHALL pin affected pane layouts and occupants, follow the current
+confirmation policy, and reject unsupported implicit group closes. Task-management
+previews SHALL retain task revisions, original scope and recovery targets and expire
+after ten minutes or service restart. Manual task edits SHALL downgrade future runs
+to manual approval, and automatic edits SHALL NOT elevate a previously manual task.
+Task deletion SHALL require prior cancellation and drain its private run resources.
+
+#### Scenario: Task changes while management preview is pending
+- **WHEN** a task revision changes after a management preview was prepared
+- **THEN** Ranger rejects that preview and requires a refreshed proposal
+
+#### Scenario: Pane occupant changes before close
+- **WHEN** a close preview's captured pane layout or occupant changes before dispatch
+- **THEN** Ranger rejects the close instead of acting on the replacement

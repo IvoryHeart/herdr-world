@@ -23,7 +23,6 @@ import type {
   OfficeConversationAnchors,
 } from "./PixelOfficeCanvas";
 import { OfficeCanvasCallout } from "./OfficeCanvasCallout";
-import { OfficeCompactTargetChooser } from "./OfficeCompactTargetChooser";
 import { OfficeCompletionNotices } from "./OfficeCompletionNotices";
 export { OfficeObservabilityDialog } from "./OfficeObservabilityDialog";
 import {
@@ -496,13 +495,6 @@ export default function PixelOfficeView({
       {toolbarPortal ? createPortal(toolbar, toolbarPortal) : toolbar}
       <WorldSearchResults world={world} query={query} onSelect={onSelect} />
       <div className="world-office-shell world-stage-shell">
-        <OfficeCompactTargetChooser
-          projection={office}
-          selectedKey={selectedKey}
-          onSelect={selectOfficeKey}
-          onActivateAgent={openOfficeTerminal}
-          onActivateDesk={openOfficeTerminal}
-        />
         <OfficeCompletionNotices
           agents={unseenCompletions}
           onInspect={(agent) => openOfficeTerminal(agent.key)}

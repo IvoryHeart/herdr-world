@@ -28,11 +28,6 @@ export function WorldTopbarStatus({
       title={summary}
     >
       <span className="world-live-dot" data-status={runtime.status} />
-      <span className="world-selected-host">
-        {world.coverage.agents} observed agents · {world.coverage.spaces} spaces
-        {unknown ? ` · ${unknown} unknown hosts` : ""}
-      </span>
-      {stale ? <span className="world-stale-count">{stale} stale</span> : null}
       {runtime.error ? (
         <span className="world-runtime-error" title={runtime.error}>
           World error

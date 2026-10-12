@@ -25,8 +25,12 @@ import {
 import { publishDataFile } from "./data-paths";
 import { resolveLaunchdEnvironment } from "./launchd-environment";
 import { worldEnv } from "./environment";
-import { assertValidAuthPassword, loadOrCreateAuthToken } from "./auth-token";
 import { describeListenerStartError } from "../connections/startup";
+import {
+  assertValidAuthPassword,
+  assertValidAuthPin,
+  loadOrCreateAuthToken,
+} from "./auth-token";
 import {
   browserUrlFor,
   getLanIPs,
@@ -373,12 +377,15 @@ function prepareServiceAccess(
       : undefined;
   const readValue = (name: string) =>
     environment ? environment[name] : readEnvironmentValue(contents, name);
+  const password = readValue("HERDR_WORLD_PASSWORD") ?? "";
+  if (password) assertValidAuthPassword(password);
+  const pin = readValue("HERDR_WORLD_PIN") ?? "";
+  if (pin) assertValidAuthPin(pin);
+
   const host = readValue("HOST") ?? "127.0.0.1";
   const port = Number(readValue("PORT") ?? 8787);
   if (!Number.isInteger(port) || port < 1 || port > 65_535)
     throw new Error(`invalid PORT in ${configPath}`);
-  const password = readValue("HERDR_WORLD_PASSWORD") ?? "";
-  if (password) assertValidAuthPassword(password);
   const tls = Boolean(
     loadServerTls(
       readValue("HERDR_WORLD_TLS_CERT"),

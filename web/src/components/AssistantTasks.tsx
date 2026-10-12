@@ -52,6 +52,36 @@ export function TaskProposalCard({
   busy: boolean;
   run: (action: string, params?: Record<string, unknown>) => Promise<boolean>;
 }) {
+  const operation = proposal.operation ?? "create";
+  const operationLabel = {
+    create: "Create task",
+    update: "Edit task",
+    pause: "Pause task",
+    resume: "Resume task",
+    cancel: "Cancel task",
+    delete: "Delete task",
+  }[operation];
+  const confirmedLabel = {
+    create: "Enabled",
+    update: "Updated",
+    pause: "Paused",
+    resume: "Resumed",
+    cancel: "Task cancelled",
+    delete: "Deleted",
+  }[operation];
+  const explanation = {
+    create:
+      "Confirm to enable this task. Workspace actions still need your confirmation.",
+    update:
+      "Confirm to update this task. Its scope, model and Agent references stay the same. Existing runs keep their instructions; future workspace actions require confirmation. A paused task stays paused.",
+    pause:
+      "Confirm to pause future scheduled runs. An already-started run will continue.",
+    resume: "Confirm to resume scheduled runs of this task.",
+    cancel:
+      "Confirm to permanently cancel this task and stop its active run. Its history will be kept.",
+    delete:
+      "Confirm to permanently delete this cancelled task and its private run history. This cannot be undone.",
+  }[operation];
   return (
     <div
       className="assistant-task-proposal assistant-action-card"
@@ -65,10 +95,16 @@ export function TaskProposalCard({
           {proposal.status === "pending"
             ? "Needs confirmation"
             : proposal.status === "confirmed"
-              ? "Enabled"
-              : "Cancelled"}
+              ? confirmedLabel
+              : "Preview cancelled"}
         </span>
       </div>
+      {operation !== "create" ? (
+        <>
+          <p>{operationLabel}</p>
+          <span className="assistant-hint">Task ID: {proposal.task_id}</span>
+        </>
+      ) : null}
       <p>{taskScheduleLabel(proposal.schedule)}</p>
       <span className="assistant-hint">
         {proposal.scope.length} authorized workspace
@@ -83,12 +119,12 @@ export function TaskProposalCard({
           ? "Ranger decides when to notify"
           : "Notify when each run finishes"}
       </span>
+      {proposal.detail ? (
+        <p className="assistant-hint">{proposal.detail}</p>
+      ) : null}
       {proposal.status === "pending" ? (
         <>
-          <p className="assistant-hint">
-            Confirm to enable this task. Workspace actions still need your
-            confirmation.
-          </p>
+          <p className="assistant-hint">{explanation}</p>
           <div className="assistant-action-buttons">
             <button
               type="button"
@@ -100,7 +136,7 @@ export function TaskProposalCard({
                 void run("task.confirm_proposal", { proposal_id: proposal.id });
               }}
             >
-              Confirm task
+              {operation === "create" ? "Confirm task" : `Confirm ${operation}`}
             </button>
             <button
               type="button"
@@ -129,6 +165,7 @@ function TaskForm({
   busy,
   ready,
   highPermission = false,
+  allWorkspacesAllowed = false,
   onSave,
   onCancel,
   onOpenSettings,
@@ -139,6 +176,7 @@ function TaskForm({
   busy: boolean;
   ready: boolean;
   highPermission?: boolean;
+  allWorkspacesAllowed?: boolean;
   onSave: (input: AssistantTaskInput) => Promise<void>;
   onCancel: () => void;
   onOpenSettings: () => void;
@@ -177,13 +215,12 @@ function TaskForm({
   useEffect(() => {
     if (active) nameRef.current?.focus({ preventScroll: true });
   }, [active]);
-  const choices = Array.from(
-    new Map(
-      [...workspaces, ...(task?.workspaces ?? [])].map((ref) => [
-        workspaceKey(ref),
-        ref,
-      ]),
-    ).values(),
+  const choices = workspaces;
+  const unavailableScope = scope.filter(
+    (ref) =>
+      !workspaces.some(
+        (workspace) => workspaceKey(ref) === workspaceKey(workspace),
+      ),
   );
   return (
     <form
@@ -191,7 +228,7 @@ function TaskForm({
       aria-label={task ? "Edit task" : "Create task"}
       onSubmit={async (event) => {
         event.preventDefault();
-        if (busy || !ready) return;
+        if (busy || !ready || unavailableScope.length) return;
         const date = new Date(at);
         const schedule: AssistantTaskSchedule =
           kind === "once"
@@ -216,6 +253,15 @@ function TaskForm({
                 current?.runtime_generation ?? ref.runtime_generation,
             };
           }),
+          ...(task?.mentions
+            ? {
+                mentions: task.mentions.filter((mention) =>
+                  scope.some(
+                    (ref) => workspaceKey(ref) === workspaceKey(mention),
+                  ),
+                ),
+              }
+            : {}),
           schedule,
           ...(notificationMode === "agent" ||
           task?.notification_mode !== undefined
@@ -282,6 +328,22 @@ function TaskForm({
             value={prompt}
             onChange={(event) => setPrompt(event.currentTarget.value)}
           />
+          {task?.mentions?.length ? (
+            <small className="assistant-hint">
+              References:{" "}
+              {task.mentions
+                .filter((mention) =>
+                  scope.some(
+                    (ref) => workspaceKey(ref) === workspaceKey(mention),
+                  ),
+                )
+                .map(
+                  (mention) => `${mention.label} (${mention.connection_label})`,
+                )
+                .join(", ") || "None in the selected workspaces"}
+              .
+            </small>
+          ) : null}
         </label>
         <div className="form-field">
           <span>Notifications</span>
@@ -370,12 +432,37 @@ function TaskForm({
         )}
         <fieldset className="assistant-task-scope">
           <legend>Workspaces</legend>
+          {allWorkspacesAllowed ? (
+            <p className="assistant-hint">
+              All available workspaces are allowed. Choose the workspaces this
+              task should use; its scope stays fixed when new workspaces appear.
+            </p>
+          ) : null}
+          {unavailableScope.length ? (
+            <div className="assistant-setup-notice" role="alert">
+              <span>
+                {unavailableScope.length} selected workspace
+                {unavailableScope.length === 1 ? " is" : "s are"} unavailable or
+                no longer allowed. The saved scope is unchanged. Reconnect or
+                refresh workspace settings, or remove these selections before
+                saving.
+              </span>
+              <button
+                type="button"
+                className="ghost"
+                onClick={() =>
+                  setScope(
+                    scope.filter((ref) => !unavailableScope.includes(ref)),
+                  )
+                }
+              >
+                Remove unavailable selections
+              </button>
+            </div>
+          ) : null}
           <div className="assistant-workspaces">
             {choices.map((workspace) => {
               const checked = scope.some(
-                (ref) => workspaceKey(ref) === workspaceKey(workspace),
-              );
-              const available = workspaces.some(
                 (ref) => workspaceKey(ref) === workspaceKey(workspace),
               );
               return (
@@ -387,8 +474,7 @@ function TaskForm({
                     type="checkbox"
                     checked={checked}
                     disabled={
-                      !checked &&
-                      (!available || scope.length >= ASSISTANT_MAX_WORKSPACES)
+                      !checked && scope.length >= ASSISTANT_MAX_WORKSPACES
                     }
                     onChange={() =>
                       setScope(
@@ -411,17 +497,16 @@ function TaskForm({
                   />
                   <span>
                     {workspace.label}
-                    <small>
-                      {workspace.connection_label}
-                      {available ? "" : " / Unavailable or no longer allowed"}
-                    </small>
+                    <small>{workspace.connection_label}</small>
                   </span>
                 </label>
               );
             })}
             {!choices.length ? (
               <span className="assistant-hint">
-                Allow connected workspaces in Ranger settings first.
+                {allWorkspacesAllowed
+                  ? "No connected workspaces available. Reconnect or refresh in Ranger settings."
+                  : "Allow connected workspaces in Ranger settings first."}
               </span>
             ) : null}
           </div>
@@ -449,7 +534,12 @@ function TaskForm({
         <button
           type="submit"
           disabled={
-            busy || !ready || !title.trim() || !prompt.trim() || !scope.length
+            busy ||
+            !ready ||
+            !title.trim() ||
+            !prompt.trim() ||
+            !scope.length ||
+            !!unavailableScope.length
           }
         >
           {task ? "Save changes" : "Save and enable"}
@@ -664,6 +754,10 @@ export function AssistantTasks({
           busy={busy || !connected}
           ready={ready}
           highPermission={snapshot.config.approval_mode === "auto"}
+          allWorkspacesAllowed={
+            snapshot.config.approval_mode === "auto" &&
+            snapshot.config.workspace_scope === "all"
+          }
           onOpenSettings={onOpenSettings}
           onCancel={() => setEditor(null)}
           onSave={async (input) => {

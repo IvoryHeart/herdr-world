@@ -18,12 +18,15 @@ import {
   ASSISTANT_MAX_TOOL_ARGUMENTS,
   ASSISTANT_MAX_TOOL_OUTPUT,
   ASSISTANT_MAX_TOOL_DETAILS,
+  ASSISTANT_THINKING_LEVELS,
   type AssistantMessage,
 } from "../../../shared/assistant";
 import { type AssistantDriver, createPiDriver } from "./pi-driver";
+import { AssistantUserError } from "./errors";
 import {
   actionTools,
   notificationTools,
+  taskTools,
   type WorkspaceToolResult,
   workspaceTools,
 } from "./tools";
@@ -376,7 +379,12 @@ function toolUse(
   ];
 }
 
-async function durableFixture(reply: (index: number) => Response) {
+async function durableFixture(
+  reply: (index: number) => Response,
+  modelChanges: Partial<
+    import("@earendil-works/pi-ai").Model<import("@earendil-works/pi-ai").Api>
+  > = {},
+) {
   const directory = mkdtempSync(join(tmpdir(), "roamgate-durable-"));
   writeFileSync(
     join(directory, "auth.json"),
@@ -386,8 +394,10 @@ async function durableFixture(reply: (index: number) => Response) {
   );
   const requests: {
     messages: unknown[];
-    tools: { name: string }[];
+    tools: { name: string; description: string }[];
     system: unknown;
+    thinking?: { type: string; budget_tokens?: number };
+    output_config?: { effort?: string };
   }[] = [];
   const server = Bun.serve({
     hostname: "127.0.0.1",
@@ -413,7 +423,11 @@ async function durableFixture(reply: (index: number) => Response) {
               const model = runtime
                 .getModels("anthropic")
                 .find((model) => model.api === "anthropic-messages")!;
-              runtime.getModel = () => ({ ...model, baseUrl: server.url.href });
+              runtime.getModel = () => ({
+                ...model,
+                ...modelChanges,
+                baseUrl: server.url.href,
+              });
               return runtime;
             },
           },
@@ -542,8 +556,7 @@ test("task tools use shared credentials with isolated durable storage and never 
     expect(f.requests).toHaveLength(3);
     expect(f.requests[0]!.tools.map((tool) => tool.name)).toEqual([
       ...workspaceTools.map((tool) => tool.name),
-      "list_ranger_tasks",
-      "propose_ranger_task",
+      ...taskTools.map((tool) => tool.name),
     ]);
     expect(existsSync(join(dataDirectory, "auth.json"))).toBe(false);
     expect(
@@ -551,6 +564,308 @@ test("task tools use shared credentials with isolated durable storage and never 
         entry.model?.some((message) => message.role === "toolResult"),
       ),
     ).toBe(true);
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("management tools register only with their handlers, record pending receipts and never replay proposals", async () => {
+  const target = { connection_id: "local", workspace_id: "workspace" };
+  const taskCalls = [
+    {
+      name: "propose_ranger_task_update",
+      kind: "update",
+      params: { task_id: "task", title: "Changed title" },
+    },
+    {
+      name: "propose_ranger_task_pause",
+      kind: "pause",
+      params: { task_id: "task" },
+    },
+    {
+      name: "propose_ranger_task_resume",
+      kind: "resume",
+      params: { task_id: "task" },
+    },
+    {
+      name: "propose_ranger_task_cancel",
+      kind: "cancel",
+      params: { task_id: "task" },
+    },
+    {
+      name: "propose_ranger_task_delete",
+      kind: "delete",
+      params: { task_id: "task" },
+    },
+  ] as const;
+  const closeCalls = [
+    {
+      name: "propose_workspace_close",
+      kind: "close_workspace",
+      params: target,
+    },
+    {
+      name: "propose_pane_close",
+      kind: "close_pane",
+      params: { ...target, pane_id: "pane" },
+    },
+    {
+      name: "propose_agent_close",
+      kind: "close_agent",
+      params: { ...target, pane_id: "pane" },
+    },
+  ] as const;
+  const calls = [...taskCalls, ...closeCalls];
+  const f = await durableFixture((index) =>
+    modelReply(
+      index,
+      index === 1
+        ? [
+            ...calls.flatMap((call, position) =>
+              toolUse(
+                call.name,
+                `management-${position}`,
+                call.params,
+                position,
+              ),
+            ),
+            ...finish("tool_use"),
+          ]
+        : [
+            ...text("Management previews await confirmation."),
+            ...finish("end_turn"),
+          ],
+    ),
+  );
+  const proposed: string[] = [];
+  const activities: { name: string; status: string }[] = [];
+  const record = async (
+    kind: string,
+    params: Record<string, unknown>,
+    signal?: AbortSignal,
+  ) => {
+    const call = calls.find((entry) => entry.kind === kind)!;
+    expect(params).toEqual(call.params);
+    expect(signal).toBeInstanceOf(AbortSignal);
+    proposed.push(kind);
+    return {
+      text: JSON.stringify({ id: `pending-${kind}`, status: "pending" }),
+    };
+  };
+  try {
+    const first = f.createDriver();
+    const input = f.input({
+      task: record,
+      propose: record,
+      read: async () => {
+        throw new Error("Must not read or execute management effects");
+      },
+      tool: (_id, name, status) => activities.push({ name, status }),
+    });
+    const entries = await first.run(input);
+    expect(proposed.slice().sort()).toEqual(
+      calls.map((call) => call.kind).sort(),
+    );
+    expect(f.requests).toHaveLength(2);
+    expect(f.requests[0]!.tools.map((tool) => tool.name)).toEqual(
+      [...workspaceTools, ...actionTools, ...taskTools].map(
+        (tool) => tool.name,
+      ),
+    );
+    expect(
+      activities
+        .filter((event) => event.status === "completed")
+        .map((event) => event.name)
+        .sort(),
+    ).toEqual(calls.map((call) => call.name).sort());
+    const prompt = JSON.stringify(f.requests[0]);
+    expect(prompt).toContain(
+      "Closing the last pane also closes its tab/workspace",
+    );
+    expect(prompt).toContain("cancelled tasks cannot be edited or resumed");
+    expect(prompt).toContain(
+      "never claim a task was created, changed, paused, resumed, cancelled or deleted before the user confirms it",
+    );
+    for (const call of calls)
+      expect(JSON.stringify(f.requests[1]!.messages)).toContain(
+        `pending-${call.kind}`,
+      );
+    await first.dispose();
+    await f.createDriver().run({ ...input, entries, recover: true });
+    expect(proposed).toHaveLength(calls.length);
+    expect(f.requests).toHaveLength(2);
+    const results = durableEntries(f.directory, entries).flatMap(
+      (entry) =>
+        entry.model?.filter((message) => message.role === "toolResult") ?? [],
+    );
+    expect(results).toHaveLength(calls.length);
+    for (const result of results)
+      if (result.role === "toolResult") expect(result.isError).toBe(false);
+    await f.createDriver(join(f.directory, "read-only")).run(f.input());
+    expect(f.requests.at(-1)!.tools.map((tool) => tool.name)).toEqual(
+      workspaceTools.map((tool) => tool.name),
+    );
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("management tool failures expose safe reasons and never persist backend details", async () => {
+  const calls = [
+    { name: "propose_ranger_task_delete", params: { task_id: "task" } },
+    {
+      name: "propose_agent_close",
+      params: {
+        connection_id: "local",
+        workspace_id: "workspace",
+        pane_id: "pane",
+      },
+    },
+  ];
+  const f = await durableFixture((index) =>
+    modelReply(
+      index,
+      index <= calls.length
+        ? [
+            ...toolUse(
+              calls[index - 1]!.name,
+              `failure-${index}`,
+              calls[index - 1]!.params,
+              0,
+            ),
+            ...finish("tool_use"),
+          ]
+        : [
+            ...text("Management attempts could not proceed."),
+            ...finish("end_turn"),
+          ],
+    ),
+  );
+  const activities: { status: string; output?: string }[] = [];
+  try {
+    const entries = await f.createDriver().run(
+      f.input({
+        task: async () => {
+          throw new AssistantUserError("Cancel this task before deleting it.");
+        },
+        propose: async () => {
+          throw new Error("synthetic-private-management-secret");
+        },
+        tool: (_id, _name, status, details) =>
+          activities.push({ status, output: details?.output }),
+      }),
+    );
+    expect(JSON.stringify(f.requests[1]!.messages)).toContain(
+      "Cancel this task before deleting it.",
+    );
+    expect(JSON.stringify(f.requests[2]!.messages)).toContain(
+      "Workspace tool unavailable, stale, or outside the authorized scope.",
+    );
+    expect(
+      activities.filter((event) => event.status === "failed"),
+    ).toHaveLength(2);
+    for (const value of [
+      f.requests,
+      activities,
+      durableEntries(f.directory, entries),
+    ])
+      expect(JSON.stringify(value)).not.toContain(
+        "synthetic-private-management-secret",
+      );
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("automatic task management descriptions explain operation receipts without claiming every task was enabled", async () => {
+  const f = await durableFixture((index) =>
+    modelReply(index, [
+      ...text("Ready to manage the task."),
+      ...finish("end_turn"),
+    ]),
+  );
+  try {
+    await f.createDriver().run(
+      f.input({
+        config: { ...f.input().config, approval_mode: "auto" },
+        task: async () => ({ text: "No management call expected" }),
+        propose: async () => ({ text: "No management call expected" }),
+      }),
+    );
+    const prompt = JSON.stringify(f.requests[0]);
+    expect(prompt).toContain(
+      "A confirmed tool receipt verifies the requested task operation",
+    );
+    expect(prompt).not.toContain(
+      "A confirmed tool receipt means the schedule was enabled",
+    );
+    for (const tool of taskTools.filter((tool) => tool.kind !== "list")) {
+      const description = f.requests[0]!.tools.find(
+        (entry) => entry.name === tool.name,
+      )!.description;
+      expect(description).toContain(
+        "Applies the requested task operation directly",
+      );
+      expect(description).toContain(
+        "A pending receipt requires manual confirmation",
+      );
+      expect(description).not.toContain("Returns a pending preview:");
+      expect(description).not.toContain("only when the user clicks Confirm");
+      expect(description).not.toContain("Returns a preview for confirmation");
+    }
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("task tool failures surface user-facing reasons and mask unexpected errors", async () => {
+  const proposed = {
+    title: "Watch merge requests",
+    prompt: "Check for new merge requests and review them.",
+    scope: [{ connection_id: "local", workspace_id: "workspace" }],
+    schedule: { type: "interval", minutes: 30 },
+  };
+  const f = await durableFixture((index) =>
+    modelReply(
+      index,
+      index === 1
+        ? [
+            ...toolUse("propose_ranger_task", "propose-safe", proposed, 0),
+            ...finish("tool_use"),
+          ]
+        : index === 2
+          ? [
+              ...toolUse("propose_ranger_task", "propose-unsafe", proposed, 0),
+              ...finish("tool_use"),
+            ]
+          : [...text("Both attempts were reported."), ...finish("end_turn")],
+    ),
+  );
+  let attempts = 0;
+  try {
+    const driver = f.createDriver();
+    await driver.run(
+      f.input({
+        task: async () => {
+          attempts++;
+          if (attempts === 1)
+            throw new AssistantUserError(
+              "These workspace connections do not support safe scheduled tasks: the endpoint handshake did not provide a stable Herdr boot identity. Upgrade the Herdr server and try again.",
+            );
+          throw new Error("backend details include synthetic-private-secret");
+        },
+      }),
+    );
+    expect(attempts).toBe(2);
+    expect(JSON.stringify(f.requests[1]?.messages)).toContain(
+      "did not provide a stable Herdr boot identity",
+    );
+    expect(JSON.stringify(f.requests[2]?.messages)).toContain(
+      "Workspace tool unavailable, stale, or outside the authorized scope.",
+    );
+    expect(JSON.stringify(f.requests)).not.toContain(
+      "synthetic-private-secret",
+    );
   } finally {
     await f.cleanup();
   }
@@ -1001,31 +1316,136 @@ test("SQLite pauses a committed partial without aborting the durable submission 
   }
 }, 3000);
 
-test.each(["read", "proposal", "automatic", "notification"] as const)(
+test("explicit custom thinking efforts override imported restrictions and preserve provider translations", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "roamgate-custom-efforts-"));
+  const path = join(directory, "models.json");
+  const saved = {
+    providers: {
+      custom: {
+        api: "openai-responses",
+        baseUrl: "http://127.0.0.1:1234/v1",
+        apiKey: "synthetic-test-key",
+        models: [
+          {
+            id: "reasoner",
+            reasoning: true,
+            thinkingLevelMap: { off: null, minimal: "low", high: "default" },
+            contextWindow: 8192,
+          },
+          { id: "untouched", reasoning: false },
+        ],
+        modelOverrides: {
+          reasoner: {
+            reasoning: false,
+            thinkingLevelMap: { high: "provider-high", max: null },
+            maxTokens: 2048,
+          },
+        },
+      },
+    },
+  };
+  writeFileSync(path, JSON.stringify(saved));
+  const driver = createPiDriver(directory);
+  const save = (path: string, value: unknown) =>
+    writeFileSync(path, JSON.stringify(value));
+  const connection = {
+    credential_source: "assistant" as const,
+    provider: "custom",
+    model: "reasoner",
+    base_url: saved.providers.custom.baseUrl,
+    api: "openai-responses" as const,
+  };
+  try {
+    await driver.configureModel!(
+      {
+        ...connection,
+        models: ["reasoner", "new-reasoner"],
+        thinking_levels: ["minimal", "high", "max"],
+      },
+      save,
+    );
+    const updated = JSON.parse(readFileSync(path, "utf8"));
+    const expectedMap = {
+      off: null,
+      minimal: "low",
+      low: null,
+      medium: null,
+      high: "provider-high",
+      xhigh: null,
+      max: "max",
+    };
+    expect(updated.providers.custom.models[0]).toMatchObject({
+      contextWindow: 8192,
+      reasoning: true,
+      thinkingLevelMap: expectedMap,
+    });
+    expect(updated.providers.custom.modelOverrides.reasoner).toEqual({
+      reasoning: true,
+      thinkingLevelMap: expectedMap,
+      maxTokens: 2048,
+    });
+    expect(updated.providers.custom.models[1]).toEqual(
+      saved.providers.custom.models[1],
+    );
+    const catalog = await driver.catalog("assistant");
+    for (const id of ["reasoner", "new-reasoner"])
+      expect(catalog.models.find((model) => model.id === id)).toMatchObject({
+        thinking_levels: ["minimal", "high", "max"],
+        default_thinking_level: "minimal",
+        custom: { reasoning: true },
+      });
+    const before = readFileSync(path, "utf8");
+    await driver.configureModel!(connection, save);
+    expect(readFileSync(path, "utf8")).toBe(before);
+  } finally {
+    await driver.dispose();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test.each([
+  "read",
+  "proposal",
+  "automatic",
+  "notification",
+  "task management",
+  "automatic task management",
+  "close",
+] as const)(
   "interrupted %s tools follow their declared replay policy",
   async (kind) => {
+    const taskManagement =
+      kind === "task management" || kind === "automatic task management";
+    const automatic =
+      kind === "automatic" || kind === "automatic task management";
     const name =
       kind === "read"
         ? "workspace_status"
-        : kind === "proposal" || kind === "automatic"
-          ? "propose_agent_prompt"
-          : "send_user_notification";
+        : taskManagement
+          ? "propose_ranger_task_delete"
+          : kind === "close"
+            ? "propose_agent_close"
+            : kind === "notification"
+              ? "send_user_notification"
+              : "propose_agent_prompt";
     const params =
       kind === "read"
         ? {}
-        : kind === "proposal" || kind === "automatic"
-          ? {
-              connection_id: "local",
-              workspace_id: "workspace",
-              pane_id: "pane",
-              prompt: "Review",
-            }
-          : {
-              event_key: "agent-session-1:completed",
-              kind: "completed",
-              title: "Agent finished",
-              body: "Workspace history confirms completion.",
-            };
+        : taskManagement
+          ? { task_id: "task" }
+          : kind === "notification"
+            ? {
+                event_key: "agent-session-1:completed",
+                kind: "completed",
+                title: "Agent finished",
+                body: "Workspace history confirms completion.",
+              }
+            : {
+                connection_id: "local",
+                workspace_id: "workspace",
+                pane_id: "pane",
+                ...(kind === "close" ? {} : { prompt: "Review" }),
+              };
     const f = await durableFixture((index) =>
       modelReply(
         index,
@@ -1057,7 +1477,7 @@ test.each(["read", "proposal", "automatic", "notification"] as const)(
       const first = f.createDriver();
       const pending = first.run(
         f.input({
-          ...(kind === "automatic"
+          ...(automatic
             ? {
                 config: { ...f.input().config, approval_mode: "auto" as const },
               }
@@ -1067,6 +1487,7 @@ test.each(["read", "proposal", "automatic", "notification"] as const)(
           },
           read: callback,
           propose: callback,
+          task: callback,
           notify: (input, signal) => callback(undefined, input, signal),
         }),
       );
@@ -1077,7 +1498,7 @@ test.each(["read", "proposal", "automatic", "notification"] as const)(
       const states: string[] = [];
       await second.run(
         f.input({
-          ...(kind === "automatic"
+          ...(automatic
             ? {
                 config: { ...f.input().config, approval_mode: "auto" as const },
               }
@@ -1086,6 +1507,7 @@ test.each(["read", "proposal", "automatic", "notification"] as const)(
           recover: true,
           read: callback,
           propose: callback,
+          task: callback,
           notify: (input, signal) => callback(undefined, input, signal),
           tool: (_id, _name, status) => states.push(status),
         }),
@@ -1923,3 +2345,430 @@ test("the real Pi SDK records pending action proposals and finishes without exec
     rmSync(directory, { recursive: true, force: true });
   }
 }, 3000);
+
+test("catalog thinking capabilities and defaults come from the installed SDK, including custom model declarations", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "roamgate-thinking-catalog-"));
+  writeFileSync(
+    join(directory, "models.json"),
+    JSON.stringify({
+      providers: {
+        custom: {
+          api: "openai-completions",
+          baseUrl: "http://127.0.0.1:1234/v1",
+          apiKey: "synthetic-test-key",
+          models: [
+            { id: "basic", reasoning: false },
+            {
+              id: "reasoner",
+              reasoning: true,
+              thinkingLevelMap: {
+                off: null,
+                minimal: null,
+                xhigh: "xhigh",
+                max: "max",
+              },
+            },
+          ],
+        },
+      },
+    }),
+  );
+  const driver = createPiDriver(directory);
+  try {
+    const catalog = await driver.catalog("assistant");
+    const { ModelRuntime } = await import("@earendil-works/pi-coding-agent");
+    const { getSupportedThinkingLevels, clampThinkingLevel } = await import(
+      "@earendil-works/pi-ai/models"
+    );
+    const runtime = await ModelRuntime.create({
+      authPath: join(directory, "auth.json"),
+      modelsPath: join(directory, "models.json"),
+      allowModelNetwork: false,
+      refreshOnCreate: false,
+    });
+    for (const entry of catalog.models) {
+      const model = runtime.getModel(entry.provider, entry.id)!;
+      expect(entry.thinking_levels).toEqual(getSupportedThinkingLevels(model));
+      expect(entry.default_thinking_level).toBe(
+        clampThinkingLevel(model, "off"),
+      );
+    }
+    expect(catalog.models.find((entry) => entry.id === "basic")).toMatchObject({
+      thinking_levels: ["off"],
+      default_thinking_level: "off",
+    });
+    expect(
+      catalog.models.find((entry) => entry.id === "reasoner"),
+    ).toMatchObject({
+      thinking_levels: ["low", "medium", "high", "xhigh", "max"],
+      default_thinking_level: "low",
+    });
+  } finally {
+    await driver.dispose();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("Pi durable forwards selected effort to the provider and resets a reused root to the effective default", async () => {
+  const f = await durableFixture(
+    (index) => modelReply(index, [...text("Done"), ...finish("end_turn")]),
+    {
+      id: "claude-sonnet-4-5",
+      reasoning: true,
+      maxTokens: 64000,
+      thinkingLevelMap: {},
+      compat: { forceAdaptiveThinking: true },
+    },
+  );
+  const driver = f.createDriver();
+  try {
+    const input = f.input();
+    const entries = await driver.run({
+      ...input,
+      config: { ...input.config, thinking_level: "high" },
+    });
+    expect(f.requests).toHaveLength(1);
+    expect(f.requests[0]!.thinking?.type).toBe("adaptive");
+    expect(f.requests[0]!.output_config?.effort).toBe("high");
+    await driver.run({ ...f.input(), entries, requestId: "default-next-turn" });
+    expect(f.requests).toHaveLength(2);
+    expect(f.requests[1]!.thinking).toEqual({ type: "disabled" });
+    expect(f.requests[1]!.output_config?.effort).toBeUndefined();
+    await expect(
+      driver.run({
+        ...f.input(),
+        requestId: "unsupported",
+        config: { ...input.config, thinking_level: "max" },
+      }),
+    ).rejects.toThrow("not supported");
+    expect(f.requests).toHaveLength(2);
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("Pi durable resolves an unsupported off default using the SDK's model capability map", async () => {
+  const f = await durableFixture(
+    (index) => modelReply(index, [...text("Done"), ...finish("end_turn")]),
+    {
+      id: "claude-sonnet-4-5",
+      reasoning: true,
+      maxTokens: 64000,
+      thinkingLevelMap: { off: null, minimal: null },
+      compat: { forceAdaptiveThinking: true },
+    },
+  );
+  try {
+    await f.createDriver().run(f.input());
+    expect(f.requests).toHaveLength(1);
+    expect(f.requests[0]!.thinking?.type).toBe("adaptive");
+    expect(f.requests[0]!.output_config?.effort).toBe("low");
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("custom model reasoning edits preserve mixed batches, imported maps and overriding declarations", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "roamgate-custom-reasoning-"));
+  const path = join(directory, "models.json");
+  const saved = {
+    providers: {
+      custom: {
+        api: "openai-responses",
+        baseUrl: "http://127.0.0.1:1234/v1",
+        apiKey: "synthetic-test-key",
+        models: [
+          { id: "legacy", name: "Legacy model", contextWindow: 8192 },
+          { id: "disabled", reasoning: false },
+          {
+            id: "reasoner",
+            reasoning: true,
+            thinkingLevelMap: { off: null, minimal: null, xhigh: "xhigh" },
+          },
+          { id: "overridden", reasoning: true },
+        ],
+        modelOverrides: {
+          overridden: { reasoning: false, maxTokens: 2048 },
+          reasoner: { contextWindow: 4096 },
+        },
+      },
+      other: {
+        api: "openai-completions",
+        baseUrl: "http://127.0.0.1:9999/v1",
+        apiKey: "synthetic-other-key",
+        models: [{ id: "other", reasoning: false }],
+      },
+    },
+  };
+  writeFileSync(path, JSON.stringify(saved));
+  const driver = createPiDriver(directory);
+  const save = (path: string, value: unknown) =>
+    writeFileSync(path, JSON.stringify(value));
+  const input = {
+    credential_source: "assistant" as const,
+    provider: "custom",
+    model: "legacy",
+    base_url: saved.providers.custom.baseUrl,
+    api: "openai-responses" as const,
+  };
+  try {
+    const before = await driver.catalog("assistant");
+    expect(
+      before.models.find((model) => model.id === "legacy")?.thinking_levels,
+    ).toEqual(["off"]);
+    expect(
+      before.models.find((model) => model.id === "legacy")?.custom?.reasoning,
+    ).toBeUndefined();
+    expect(
+      before.models.find((model) => model.id === "overridden")?.custom
+        ?.reasoning,
+    ).toBe(false);
+    await driver.configureModel!(
+      {
+        ...input,
+        models: ["legacy", "disabled", "reasoner", "overridden", "new"],
+      },
+      save,
+    );
+    let updated = JSON.parse(readFileSync(path, "utf8"));
+    expect(updated.providers.custom.modelOverrides).toEqual(
+      saved.providers.custom.modelOverrides,
+    );
+    expect(
+      updated.providers.custom.models.map(
+        (model: { reasoning?: boolean }) => model.reasoning,
+      ),
+    ).toEqual([undefined, false, true, true, undefined]);
+    expect(updated.providers.other).toEqual(saved.providers.other);
+    await driver.configureModel!(
+      {
+        ...input,
+        models: ["legacy", "overridden", "new-reasoner"],
+        reasoning: true,
+      },
+      save,
+    );
+    updated = JSON.parse(readFileSync(path, "utf8"));
+    expect(updated.providers.custom.models[0]).toMatchObject({
+      ...saved.providers.custom.models[0],
+      reasoning: true,
+    });
+    expect(updated.providers.custom.models[1].reasoning).toBe(false);
+    expect(updated.providers.custom.models[2].thinkingLevelMap).toEqual(
+      saved.providers.custom.models[2]!.thinkingLevelMap,
+    );
+    expect(updated.providers.custom.modelOverrides).toEqual({
+      ...saved.providers.custom.modelOverrides,
+      overridden: { reasoning: true, maxTokens: 2048 },
+    });
+    const enabled = await driver.catalog("assistant");
+    for (const id of ["legacy", "overridden", "new-reasoner"])
+      expect(enabled.models.find((model) => model.id === id)).toMatchObject({
+        custom: { reasoning: true },
+        thinking_levels: ["off", "minimal", "low", "medium", "high"],
+      });
+    expect(
+      enabled.models.find((model) => model.id === "reasoner")?.thinking_levels,
+    ).toEqual(["low", "medium", "high", "xhigh"]);
+    expect(
+      enabled.models.find((model) => model.id === "disabled")?.thinking_levels,
+    ).toEqual(["off"]);
+    await driver.configureModel!(
+      { ...input, model: "overridden", reasoning: false },
+      save,
+    );
+    expect(
+      (await driver.catalog("assistant")).models.find(
+        (model) => model.id === "overridden",
+      ),
+    ).toMatchObject({ custom: { reasoning: false }, thinking_levels: ["off"] });
+  } finally {
+    await driver.dispose();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test.each([
+  "openai-completions",
+  "openai-responses",
+  "anthropic-messages",
+] as const)(
+  "configured custom thinking efforts reach the %s request",
+  async (api) => {
+    const directory = mkdtempSync(join(tmpdir(), "roamgate-reasoning-wire-"));
+    const requests: {
+      reasoning_effort?: string;
+      reasoning?: { effort?: string };
+      thinking?: { type: string; budget_tokens?: number };
+    }[] = [];
+    const server = Bun.serve({
+      hostname: "127.0.0.1",
+      port: 0,
+      async fetch(request) {
+        requests.push((await request.json()) as (typeof requests)[number]);
+        if (api === "anthropic-messages")
+          return modelReply(requests.length, [
+            ...text("Done"),
+            ...finish("end_turn"),
+          ]);
+        const body =
+          api === "openai-completions"
+            ? `data: ${JSON.stringify({
+                id: `reply-${requests.length}`,
+                object: "chat.completion.chunk",
+                model: "unknown-reasoner",
+                choices: [
+                  {
+                    index: 0,
+                    delta: { role: "assistant", content: "Done" },
+                    finish_reason: "stop",
+                  },
+                ],
+                usage: {
+                  prompt_tokens: 10,
+                  completion_tokens: 1,
+                  total_tokens: 11,
+                },
+              })}\n\ndata: [DONE]\n\n`
+            : events([
+                {
+                  type: "response.output_item.added",
+                  output_index: 0,
+                  item: {
+                    id: "message-1",
+                    type: "message",
+                    role: "assistant",
+                    content: [],
+                  },
+                },
+                {
+                  type: "response.output_text.delta",
+                  output_index: 0,
+                  delta: "Done",
+                },
+                {
+                  type: "response.output_item.done",
+                  output_index: 0,
+                  item: {
+                    id: "message-1",
+                    type: "message",
+                    role: "assistant",
+                    content: [
+                      { type: "output_text", text: "Done", annotations: [] },
+                    ],
+                  },
+                },
+                {
+                  type: "response.completed",
+                  response: {
+                    id: `reply-${requests.length}`,
+                    status: "completed",
+                    output: [],
+                    usage: {
+                      input_tokens: 10,
+                      output_tokens: 1,
+                      total_tokens: 11,
+                    },
+                  },
+                },
+              ]);
+        return new Response(body, {
+          headers: { "content-type": "text/event-stream" },
+        });
+      },
+    });
+    const driver = createPiDriver(directory);
+    const save = (path: string, value: unknown) =>
+      writeFileSync(path, JSON.stringify(value));
+    const connection = {
+      provider: "local-wire",
+      model: "unknown-reasoner",
+      base_url: server.url.href,
+      api,
+      credential_source: "assistant" as const,
+    };
+    const messages: string[] = [];
+    const input: Parameters<AssistantDriver["run"]>[0] = {
+      config: { ...connection, allowed_workspaces: [] },
+      entries: [],
+      requestId: "high-effort",
+      text: "Reply Done.",
+      signal: new AbortController().signal,
+      read: async () => ({ text: "Unused" }),
+      delta: () => {},
+      message: (message) => messages.push(message),
+      tool: () => {},
+      error: () => {},
+    };
+    try {
+      await driver.configureModel!(
+        { ...connection, api_key: "synthetic-local-key" },
+        save,
+      );
+      expect(
+        (await driver.catalog("assistant")).models[0]?.thinking_levels,
+      ).toEqual(["off"]);
+      await driver.configureModel!(
+        { ...connection, thinking_levels: [...ASSISTANT_THINKING_LEVELS] },
+        save,
+      );
+      expect(
+        (await driver.catalog("assistant")).models[0]?.thinking_levels,
+      ).toEqual([...ASSISTANT_THINKING_LEVELS]);
+      const entries = await driver.run({
+        ...input,
+        config: { ...input.config, thinking_level: "high" },
+      });
+      expect(messages).toEqual(["Done"]);
+      expect(requests).toHaveLength(1);
+      if (api === "openai-completions")
+        expect(requests[0]!.reasoning_effort).toBe("high");
+      else if (api === "openai-responses")
+        expect(requests[0]!.reasoning?.effort).toBe("high");
+      else
+        expect(requests[0]!.thinking).toMatchObject({
+          type: "enabled",
+          budget_tokens: 15360,
+        });
+      await driver.run({ ...input, entries, requestId: "default-effort" });
+      expect(messages).toEqual(["Done", "Done"]);
+      expect(requests).toHaveLength(2);
+      if (api === "openai-completions")
+        expect(requests[1]!.reasoning_effort).toBeUndefined();
+      else if (api === "openai-responses")
+        expect(requests[1]!.reasoning?.effort).toBe("none");
+      else expect(requests[1]!.thinking).toEqual({ type: "disabled" });
+      if (api !== "anthropic-messages")
+        for (const thinking_level of ["xhigh", "max"] as const) {
+          await driver.run({
+            ...input,
+            entries,
+            requestId: `${thinking_level}-effort`,
+            config: { ...input.config, thinking_level },
+          });
+          expect(
+            api === "openai-completions"
+              ? requests.at(-1)!.reasoning_effort
+              : requests.at(-1)!.reasoning?.effort,
+          ).toBe(thinking_level);
+        }
+      const requestCount = requests.length;
+      await driver.configureModel!(
+        { ...connection, thinking_levels: ["off"] },
+        save,
+      );
+      await expect(
+        driver.run({
+          ...input,
+          requestId: "disabled-effort",
+          config: { ...input.config, thinking_level: "high" },
+        }),
+      ).rejects.toThrow("not supported");
+      expect(requests).toHaveLength(requestCount);
+    } finally {
+      await driver.dispose();
+      server.stop(true);
+      rmSync(directory, { recursive: true, force: true });
+    }
+  },
+);

@@ -187,6 +187,7 @@
 }
 
 .world-topbar-control-plane {
+  flex: 1 1 auto;
   gap: 10px;
   overflow: hidden;
 }

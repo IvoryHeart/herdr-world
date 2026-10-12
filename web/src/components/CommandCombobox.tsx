@@ -556,6 +556,18 @@ function OwnedCommandCombobox({
       run: () => onOpenDiffViewer?.(focusedWorkspace.workspace_id),
     });
   }
+  if (focusedWorkspace) {
+    // Herdr resolves the repository from the workspace on demand, so this
+    // works for a plain workspace in a Git checkout too (see ContextMenu).
+    currentActions.push({
+      key: "current-open-worktree",
+      icon: <FolderOpen size={15} />,
+      title: "Open worktree",
+      detail: workspaceName(focusedWorkspace),
+      keywords: ["existing worktree", "open existing", "checkout", "branch"],
+      run: () => setOpenWorktreeWorkspaceId(focusedWorkspace.workspace_id),
+    });
+  }
   if (focusedWorkspace?.worktree) {
     currentActions.push({
       key: "current-worktree-lifecycle",
@@ -570,14 +582,6 @@ function OwnedCommandCombobox({
         "hooks auto sync",
       ],
       run: () => setLifecycleWorkspaceId(focusedWorkspace.workspace_id),
-    });
-    currentActions.push({
-      key: "current-open-worktree",
-      icon: <FolderOpen size={15} />,
-      title: "Open worktree",
-      detail: workspaceName(focusedWorkspace),
-      keywords: ["existing worktree", "open existing", "checkout", "branch"],
-      run: () => setOpenWorktreeWorkspaceId(focusedWorkspace.workspace_id),
     });
     currentActions.push({
       key: "current-worktree-hooks",

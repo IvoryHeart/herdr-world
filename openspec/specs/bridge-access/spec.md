@@ -68,3 +68,17 @@ SHALL use a World-owned name that does not replace Roamgate's cookie on the same
 - **WHEN** a loopback World service connects to a remote Herdr using a saved SSH profile
 - **THEN** the browser continues to use the one World origin without learning remote socket paths,
   SSH credentials or another bridge URL
+
+### Requirement: Independent session signing and optional PIN
+Session cookies SHALL use independently stored random signing keys. Credential
+changes SHALL rotate signing keys while ordinary restarts SHALL retain them.
+Optional PIN login SHALL preserve password/token recovery and maintain separate
+per-client throttling plus a bounded global failure cooldown.
+
+#### Scenario: PIN lockout recovery
+- **WHEN** PIN failures reach the global cooldown limit
+- **THEN** password and generated-token login remain available
+
+#### Scenario: Credential replacement
+- **WHEN** a configured login credential changes and the listener starts
+- **THEN** cookies signed before the change no longer authenticate

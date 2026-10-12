@@ -1,6 +1,6 @@
 # Development
 
-Herdr World uses Bun 1.4.1, React/Vite and a Bun server. Herdr is an external runtime.
+Herdr World uses Bun 1.4.3, React/Vite and a Bun server. Herdr is an external runtime.
 
 ```bash
 bun install --frozen-lockfile

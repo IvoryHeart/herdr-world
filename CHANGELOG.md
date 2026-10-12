@@ -7,7 +7,43 @@ are optional because the merged PR history records their source.
 
 ## [Unreleased]
 
+### Added
+
+- SSH profiles can connect to Windows Herdr 0.9.1+ sessions through Windows
+  PowerShell, with optional executable and session selection. Unix-only remote
+  file, Git and history tools explain their limitations.
+- Ranger can propose task updates, pause/resume, cancellation/deletion, and closing
+  agents, panes or workspaces using captured identities and confirmation policy.
+
+- Ranger workspace and agent mentions, quick model and thinking controls, custom
+  thinking effort, and explicit all-workspace consent for High permission mode.
+- Optional `HERDR_WORLD_PIN` login for private networks, with separate failure
+  limits and password/token recovery. Session cookies use independent private
+  signing state and expire when configured credentials change.
+- Ranger can offer Open worktree for existing workspaces not opened as worktrees.
+
+### Fixed
+
+- Keep retained unavailable Ranger workspace permissions visible and individually
+  revocable without clearing unrelated grants.
+- Reject Ranger history and Git diff reads on Windows SSH runtimes before calling
+  Unix-only helpers, while preserving native status and terminal reads.
+
+- Preserve terminal shortcut key identity and modifiers, and prevent duplicate
+  input composition finalization.
+- Surface specific Ranger task errors and retain runtime generations when editing
+  tasks with saved mentions.
+
 ### Changed
+
+- Remove the mobile Office targets row and visible title-bar summary counts to
+  give the Office scene more room. Canvas controls and search remain available.
+- Ranger settings and chat history use clearer sections; compact conversations
+  put the minimap below the messages.
+
+- Synchronize Roamgate through `d1a22cb4` (v0.8.2), preserving World
+  connection ownership, React 18, browser regressions and distribution tooling.
+- Pin Bun 1.4.3 and its types, and include Bun's native type checker in validation.
 
 - Organize the World shell, Inspector coordination, Office drawing and visual-view
   styles into focused modules while preserving connection ownership, presentation

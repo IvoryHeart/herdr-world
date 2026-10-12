@@ -195,3 +195,14 @@ store passwords, private keys, passphrases or arbitrary SSH options.
 - **WHEN** two or more compatible profiles are ready
 - **THEN** the service keeps their isolated runtimes and qualified observations connected
   concurrently while each browser can present and operate independently qualified contexts on several profiles
+
+### Requirement: Windows remote SSH runtime
+Linux and macOS World services MAY connect to running Windows Herdr sessions over
+OpenSSH using validated executable and session fields. Service-owned control and
+terminal bridges SHALL preserve immutable connection and generation ownership.
+Unix-only resource operations SHALL reject Windows runtimes. Recovery fingerprints
+SHALL include the executable and session so changing them prevents silent recovery.
+
+#### Scenario: Windows remote resource request
+- **WHEN** a Windows SSH runtime receives a Unix-only file, Git or history request
+- **THEN** World returns an unsupported-operation error without using another host

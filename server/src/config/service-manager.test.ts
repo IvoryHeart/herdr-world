@@ -1053,3 +1053,36 @@ test("invalid service passwords are rejected before rewriting a job or generatin
   expect(existsSync(paths.definition)).toBe(false);
   expect(existsSync(join(dirname(paths.config), "auth-token"))).toBe(false);
 });
+
+test.each(["12345", "1234567890123", "12345a"])(
+  "rejects an invalid service PIN before installation: %s",
+  (pin) => {
+    const homeDir = tempHome();
+    const paths = resolveServicePaths("systemd", homeDir);
+    mkdirSync(dirname(paths.config), { recursive: true });
+    const contents = `HOST=127.0.0.1\nHERDR_WORLD_PASSWORD=strong-test-password\nHERDR_WORLD_PIN=${pin}\n`;
+    writeFileSync(paths.config, contents);
+    const commands: string[][] = [],
+      errors: string[] = [];
+    expect(
+      runServiceCommand(["service", "install"], {
+        runtime: {
+          platform: "linux",
+          homeDir,
+          execPath: "/opt/roamgate",
+          argv: ["/opt/roamgate", "service", "install"],
+        },
+        runCommand: (argv) => {
+          commands.push(argv);
+          return 0;
+        },
+        error: (message) => errors.push(message),
+      }),
+    ).toBe(1);
+    expect(commands).toEqual([]);
+    expect(errors.join("\n")).toContain("6 to 12 ASCII digits");
+    expect(errors.join("\n")).not.toContain(pin);
+    expect(readFileSync(paths.config, "utf8")).toBe(contents);
+    expect(existsSync(paths.definition)).toBe(false);
+  },
+);

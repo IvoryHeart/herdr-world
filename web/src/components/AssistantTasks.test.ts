@@ -311,6 +311,82 @@ if (process.env.HERDR_WORLD_ASSISTANT_TASK_DOM_TEST !== "1") {
     };
   }
 
+  test("task editors hide removed workspace rows but require an explicit scope change", async () => {
+    const ui = await install();
+    try {
+      const missing = {
+        ...workspace,
+        workspace_id: "gone-project",
+        label: "Removed project",
+      };
+      const entry = task("existing", {
+        scope: [
+          {
+            connection_id: workspace.connection_id,
+            workspace_id: workspace.workspace_id,
+          },
+          {
+            connection_id: missing.connection_id,
+            workspace_id: missing.workspace_id,
+          },
+        ],
+        workspaces: [workspace, missing],
+      });
+      await ui.render({
+        ...snapshot(),
+        tasks: [entry],
+        config: {
+          ...snapshot().config,
+          approval_mode: "auto",
+          workspace_scope: "all",
+          allowed_workspaces: [],
+        },
+      });
+      await React.act(async () =>
+        ui.container
+          .querySelector<HTMLButtonElement>(".assistant-task-row")!
+          .click(),
+      );
+      await ui.click("Edit");
+      expect(
+        ui.container.querySelectorAll(
+          ".assistant-task-scope .assistant-workspace-choice",
+        ),
+      ).toHaveLength(1);
+      expect(
+        ui.container.querySelector(".assistant-task-scope")?.textContent,
+      ).not.toContain("Removed project");
+      expect(ui.container.textContent).toContain(
+        "The saved scope is unchanged",
+      );
+      expect(ui.container.textContent).toContain(
+        "All available workspaces are allowed",
+      );
+      expect(ui.button("Save changes").disabled).toBe(true);
+      await ui.submit();
+      expect(ui.call).not.toHaveBeenCalled();
+      expect(entry.scope).toHaveLength(2);
+      await ui.click("Remove unavailable selections");
+      expect(ui.button("Save changes").disabled).toBe(false);
+      await ui.submit();
+      expect(ui.call).toHaveBeenLastCalledWith(
+        "task.update",
+        expect.objectContaining({
+          task_id: "existing",
+          scope: [
+            {
+              connection_id: workspace.connection_id,
+              workspace_id: workspace.workspace_id,
+              runtime_generation: workspace.runtime_generation,
+            },
+          ],
+        }),
+      );
+    } finally {
+      await ui.close();
+    }
+  });
+
   test("task forms require scope, convert local time, validate schedules and preserve paused edits", async () => {
     const ui = await install();
     try {
@@ -449,6 +525,68 @@ if (process.env.HERDR_WORLD_ASSISTANT_TASK_DOM_TEST !== "1") {
         task_id: "new",
       });
       expect(ui.current.tasks).toEqual([]);
+    } finally {
+      await ui.close();
+    }
+  });
+
+  test("task editing preserves bound targets and removes references outside the selected workspace scope", async () => {
+    const ui = await install();
+    const local = {
+      kind: "workspace" as const,
+      ...workspace,
+      workspace_label: workspace.label,
+    };
+    const remote = {
+      ...local,
+      connection_id: "offline",
+      connection_label: "Offline",
+    };
+    try {
+      await ui.render(
+        snapshot([
+          task("bound", {
+            scope: [local, remote].map(({ connection_id, workspace_id }) => ({
+              connection_id,
+              workspace_id,
+            })),
+            mentions: [local, remote],
+          }),
+        ]),
+      );
+      await React.act(async () =>
+        ui.container
+          .querySelector<HTMLButtonElement>(".assistant-task-row")!
+          .click(),
+      );
+      await ui.click("Edit");
+      expect(ui.container.textContent).toContain(
+        "References: Project (Local), Project (Offline)",
+      );
+      await ui.click("Remove unavailable selections");
+      await ui.submit();
+      expect(ui.call).toHaveBeenLastCalledWith(
+        "task.update",
+        expect.objectContaining({
+          task_id: "bound",
+          scope: [
+            {
+              connection_id: local.connection_id,
+              workspace_id: local.workspace_id,
+              runtime_generation: local.runtime_generation,
+            },
+          ],
+          mentions: [local],
+        }),
+      );
+      await ui.render();
+      await ui.click("Edit");
+      await ui.input("Task prompt", "Inspect again");
+      await ui.submit();
+      expect(ui.call).toHaveBeenLastCalledWith(
+        "task.update",
+        expect.objectContaining({ mentions: [local] }),
+      );
     } finally {
       await ui.close();
     }
@@ -857,4 +995,71 @@ if (process.env.HERDR_WORLD_ASSISTANT_TASK_DOM_TEST !== "1") {
       await ui.close();
     }
   });
+
+  test.each([
+    ["update", "Edit task", "Updated", "Existing runs keep their instructions"],
+    ["pause", "Pause task", "Paused", "already-started run will continue"],
+    ["resume", "Resume task", "Resumed", "resume scheduled runs"],
+    ["cancel", "Cancel task", "Task cancelled", "stop its active run"],
+    [
+      "delete",
+      "Delete task",
+      "Deleted",
+      "private run history. This cannot be undone",
+    ],
+  ] as const)(
+    "%s task proposals identify their target and accurately describe confirmation",
+    async (operation, label, status, warning) => {
+      const ui = await install();
+      try {
+        const proposal: AssistantTaskProposal = {
+          ...task("original-task"),
+          id: "preview",
+          task_id: "original-task",
+          operation,
+          status: "pending",
+        };
+        const confirm = mock(async () => true);
+        await React.act(async () =>
+          ui.root.render(
+            React.createElement(TaskProposalCard, {
+              proposal,
+              busy: false,
+              run: confirm,
+            }),
+          ),
+        );
+        expect(confirm).not.toHaveBeenCalled();
+        expect(ui.container.textContent).toContain(label);
+        expect(ui.container.textContent).toContain("Task ID: original-task");
+        expect(ui.container.textContent).toContain(warning);
+        expect(ui.container.textContent).not.toContain("Enabled");
+        await ui.click(`Confirm ${operation}`);
+        expect(confirm).toHaveBeenCalledWith("task.confirm_proposal", {
+          proposal_id: "preview",
+        });
+        await React.act(async () =>
+          ui.root.render(
+            React.createElement(TaskProposalCard, {
+              proposal: {
+                ...proposal,
+                status: "confirmed",
+                detail: "Operation completed with a cleanup warning",
+              },
+              busy: false,
+              run: confirm,
+            }),
+          ),
+        );
+        expect(ui.container.textContent).toContain(status);
+        expect(ui.container.textContent).toContain(
+          "Operation completed with a cleanup warning",
+        );
+        expect(ui.container.textContent).not.toContain("Enabled");
+        expect(ui.container.querySelectorAll("button")).toHaveLength(0);
+      } finally {
+        await ui.close();
+      }
+    },
+  );
 }
