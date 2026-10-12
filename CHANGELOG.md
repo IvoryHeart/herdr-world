@@ -9,6 +9,12 @@ are optional because the merged PR history records their source.
 
 ### Added
 
+- SSH profiles can connect to Windows Herdr 0.9.1+ sessions through Windows
+  PowerShell, with optional executable and session selection. Unix-only remote
+  file, Git and history tools explain their limitations.
+- Ranger can propose task updates, pause/resume, cancellation/deletion, and closing
+  agents, panes or workspaces using captured identities and confirmation policy.
+
 - Ranger workspace and agent mentions, quick model and thinking controls, custom
   thinking effort, and explicit all-workspace consent for High permission mode.
 - Optional `HERDR_WORLD_PIN` login for private networks, with separate failure
@@ -25,7 +31,12 @@ are optional because the merged PR history records their source.
 
 ### Changed
 
-- Synchronize Roamgate through `fc760077` (including v0.8.1), preserving World
+- Remove the mobile Office targets row and visible title-bar summary counts to
+  give the Office scene more room. Canvas controls and search remain available.
+- Ranger settings and chat history use clearer sections; compact conversations
+  put the minimap below the messages.
+
+- Synchronize Roamgate through `d1a22cb4` (v0.8.2), preserving World
   connection ownership, React 18, browser regressions and distribution tooling.
 - Pin Bun 1.4.3 and its types, and include Bun's native type checker in validation.
 

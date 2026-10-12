@@ -566,3 +566,13 @@ mouse-aware apps with Option-drag (macOS) or Shift-drag (elsewhere).
   host, and set a distinct browser instance title.
 - Login is required on localhost and other listeners, using a generated token or
   a configured 15–1024-character password, with throttling for failed attempts.
+
+## Latest upstream additions
+
+- Ranger workspace/agent mentions, quick model and thinking controls, task-management
+  previews, guarded close actions, and clearer settings/chat history.
+- Windows Herdr 0.9.1+ hosts over SSH from Linux/macOS World, with native terminal
+  and workspace actions. Unix-only remote file and Git tools remain unavailable.
+- Optional private-network PIN login with independent session signing and recovery.
+- Mobile Office gives more space to the scene by removing the target row and
+  visible title-bar summary counts; search and semantic canvas controls stay available.

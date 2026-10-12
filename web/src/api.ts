@@ -14,6 +14,7 @@ import {
 import {
   validateRemoteSocketPath,
   validateSshDestination,
+  validateWindowsSshOptions,
 } from "./sshProfileValidation";
 import { decodeWorldSnapshot } from "./worldSnapshotDecode";
 import { yieldWorldAdmissionTask } from "./world/worldObject";
@@ -45,6 +46,9 @@ export interface ConnectionSummary {
   ssh_destination?: string;
   remote_control_socket_path?: string;
   remote_client_socket_path?: string;
+  remote_platform?: "windows";
+  remote_herdr_path?: string;
+  remote_session?: string;
 }
 
 const CONNECTION_LIFECYCLE_STATES = new Set<ConnectionLifecycleState>([
@@ -89,7 +93,10 @@ export function parseConnectionSummary(
       !item.client_socket_path ||
       item.ssh_destination !== undefined ||
       item.remote_control_socket_path !== undefined ||
-      item.remote_client_socket_path !== undefined
+      item.remote_client_socket_path !== undefined ||
+      item.remote_platform !== undefined ||
+      item.remote_herdr_path !== undefined ||
+      item.remote_session !== undefined
     ) {
       return null;
     }
@@ -104,6 +111,7 @@ export function parseConnectionSummary(
       return null;
     }
     try {
+      validateWindowsSshOptions(item);
       const destination = validateSshDestination(item.ssh_destination);
       const controlPath = validateRemoteSocketPath(
         item.remote_control_socket_path,
@@ -160,6 +168,15 @@ export function parseConnectionSummary(
       : {}),
     ...(typeof item.remote_client_socket_path === "string"
       ? { remote_client_socket_path: item.remote_client_socket_path }
+      : {}),
+    ...(item.remote_platform === "windows"
+      ? { remote_platform: "windows" as const }
+      : {}),
+    ...(typeof item.remote_herdr_path === "string"
+      ? { remote_herdr_path: item.remote_herdr_path }
+      : {}),
+    ...(typeof item.remote_session === "string"
+      ? { remote_session: item.remote_session }
       : {}),
   };
 }

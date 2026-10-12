@@ -6,24 +6,28 @@ separately installed [`herdrdev/herdr`](https://github.com/herdrdev/herdr) runti
 
 Current synchronization points:
 
-- Roamgate source: main at `fc7600772b04ac2038a1a35bd1cf44fccb0db872`
-  (10 October 2026), including v0.8.1 and the Bun 1.4.3 update. This source
-  integration records the exact head as a Git merge parent. The prior source
-  record was `d703e6f6b94bdd418186a8daaaea77bceb78d26c`; that sync was
-  squash-merged, so this refresh applies its recorded source delta explicitly.
-- Herdr compatibility: Herdr 0.9.0, terminal protocol 22.
+- Roamgate source: v0.8.2, `d1a22cb46ce0c07182ec5473454915f1f7ad251c`
+  (11 October 2026). This integration records the exact head as a Git merge
+  parent, following `fc7600772b04ac2038a1a35bd1cf44fccb0db872`.
+- Herdr compatibility: Herdr 0.9.0, terminal protocol 22. Windows SSH hosts
+  additionally require a running Herdr 0.9.1+ session and Windows PowerShell.
 
 The integration adopts Ranger workspace chat, background and scheduled tasks,
 monitoring alerts, Git commit history and file-preview tabs, tab pinning and
 reordering, pane movement, terminal input/font/upload improvements, instance
 settings, login throttling and mandatory login with 15–1024-character passwords.
 Ranger and uploads are adapted to captured World connection generations.
-The latest refresh adds structured workspace and agent mentions, quick model
+The v0.8.1 refresh added structured workspace and agent mentions, quick model
 and thinking controls, custom thinking effort, explicit all-workspace consent in
 High mode, and Open worktree actions. It also fixes terminal composition and
 shortcut identity and adds independently stored session signing keys and
 optional `HERDR_WORLD_PIN` login. World uses Bun 1.4.3 with standard and native
 type checks; its full-check script remains separate from Bun's native checker.
+The v0.8.2 refresh adds Ranger task-management and close previews, reorganized
+settings and chat history, a minimap below compact conversations, and service-owned
+SSH bridges to Windows Herdr sessions. Remote Windows file and Git tools remain
+unavailable; terminal and native Herdr workspace operations retain qualified
+connection ownership.
 
 World retains its identity, local/SSH connection ownership, same-origin access,
 session-bound push revocation, aggregate visual views, isolated browser storage,

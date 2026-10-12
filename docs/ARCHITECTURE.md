@@ -422,3 +422,20 @@ malformed terminal frames are dropped.
 Observable HTTP traversal forms are rejected, but Bun can normalize dot segments
 before routing; legacy aliases prevent distinguishing every such pre-handler
 normalization.
+
+## Windows SSH transport and Ranger management
+
+Windows remote profiles extend the existing service-owned connection runtime with
+validated executable/session fields and a PowerShell-encoded Herdr bridge command.
+Control and terminal bridges forward native stdio through separate SSH processes;
+the browser continues using the one World origin and qualified runtime leases.
+Unix-only HTTP/RPC operations reject Windows runtimes rather than constructing
+Unix shell commands for them. Recovery fingerprints include executable and session.
+
+Ranger close previews retain pane layout and occupant identities before dispatch.
+Multi-pane worktree-root individual closes are refused where Herdr cannot atomically
+prevent an implicit group close. Task-management previews retain a revision and
+original recovery targets. Updates/resumes verify the model and workspace/agent
+identities; local pause/cancel/delete recheck permissions even if the old runtime
+or model is gone. A deletion requires committed cancellation and drains private
+run resources. Confirmation never upgrades a previously manual task implicitly.

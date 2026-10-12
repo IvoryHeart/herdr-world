@@ -89,6 +89,7 @@
 }
 .world-topbar-status {
   display: flex;
+  flex: 0 0 auto;
   max-width: 138px;
   gap: 6px;
   overflow: hidden;
@@ -117,13 +118,8 @@
   background: #e7b55e;
 }
 .world-live-dot[data-status="error"],
-.world-stale-count,
 .world-runtime-error {
   color: #ef9b85;
-}
-.world-selected-host {
-  min-width: 0;
-  font-weight: 500;
 }
 
 .world-connection-required {

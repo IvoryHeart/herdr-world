@@ -523,3 +523,34 @@ subdirectory. `HERDR_WORLD_ASSISTANT_DIR` overrides that location. Keep this dat
 private. Models receive the selected workspace context; choose providers and
 workspace permissions accordingly. Closing the panel does not stop tasks; use
 its task controls to stop or disable them.
+
+## Windows hosts over SSH
+
+From a Linux or macOS World service, select **Windows** as the remote host OS
+when adding an SSH profile. The Windows host needs OpenSSH, Windows PowerShell
+and a running Herdr 0.9.1+ session. Leave the executable and session fields empty
+for discovery, or supply an absolute Windows `.exe` path and a validated session
+name. SSH authentication and host trust still belong in the service user's
+OpenSSH configuration. Windows profiles do not use Unix remote socket paths.
+
+World forwards native Herdr control and terminal streams through service-owned
+SSH processes. Terminal and native workspace actions are supported; file, Git,
+worktree and agent-history tools requiring Unix commands remain unavailable.
+Changing the Windows executable or session changes recovery identity, so saved
+Ranger tasks cannot silently resume against a replacement target.
+
+## Ranger settings and management
+
+Ranger settings group credential source, providers, custom models and workspace
+permissions. The custom-model editor shows model IDs and supported thinking
+levels separately from endpoint credentials; a blank API key preserves its saved
+value. Chat history is a separate navigable panel. On compact screens the
+conversation minimap appears below messages.
+
+Ranger can propose editing, pausing, resuming, cancelling and deleting existing
+tasks. Management previews retain the task revision and scope, follow the current
+manual/High approval policy, and expire after ten minutes or service restart.
+Task edits preserve saved model, scope and agent references; a confirmed manual
+edit downgrades future execution to manual approval. Delete requires prior
+cancellation. Close-agent, close-pane and close-workspace previews recheck captured
+occupants before dispatch and do not delete checkout files or agent history.

@@ -881,9 +881,11 @@ async function run() {
     (document
       .querySelector<HTMLElement>(".world-view-toolbar-search input")
       ?.getBoundingClientRect().width ?? 0) >= 180 &&
-      getComputedStyle(topbarDetails!).opacity !== "1" &&
+      !topbarDetails?.querySelector(
+        ".world-selected-host, .world-stale-count",
+      ) &&
       topbarDetails?.title.includes("spaces") === true,
-    "top-bar extras crowded search or made the host summary prominent",
+    `top-bar summary counts returned or crowded search: ${JSON.stringify({ searchWidth: document.querySelector<HTMLElement>(".world-view-toolbar-search input")?.getBoundingClientRect().width, statusWidth: topbarDetails?.getBoundingClientRect().width, counts: !!topbarDetails?.querySelector(".world-selected-host, .world-stale-count"), title: topbarDetails?.title, viewport: window.innerWidth, controlWidth: topbarDetails?.parentElement?.getBoundingClientRect().width })}`,
   );
   await setShellActionsOpen(false);
   check(
