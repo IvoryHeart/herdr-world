@@ -524,6 +524,16 @@ private. Models receive the selected workspace context; choose providers and
 workspace permissions accordingly. Closing the panel does not stop tasks; use
 its task controls to stop or disable them.
 
+Saved grants for temporarily unavailable workspaces remain visible under
+**Unavailable authorized workspaces**. Remove one permission without clearing
+other grants, then save settings. A complete authoritative listing still removes
+grants for deleted workspaces. High mode must be turned off before restricting
+its all-workspace access with individual manual grants.
+
+On Windows SSH workspaces, Ranger supports native status and terminal reads.
+Agent history and Git diff reads return an unsupported-operation error before
+running Unix-only resource helpers.
+
 ## Windows hosts over SSH
 
 From a Linux or macOS World service, select **Windows** as the remote host OS

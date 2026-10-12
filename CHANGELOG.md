@@ -24,6 +24,11 @@ are optional because the merged PR history records their source.
 
 ### Fixed
 
+- Keep retained unavailable Ranger workspace permissions visible and individually
+  revocable without clearing unrelated grants.
+- Reject Ranger history and Git diff reads on Windows SSH runtimes before calling
+  Unix-only helpers, while preserving native status and terminal reads.
+
 - Preserve terminal shortcut key identity and modifiers, and prevent duplicate
   input composition finalization.
 - Surface specific Ranger task errors and retain runtime generations when editing
