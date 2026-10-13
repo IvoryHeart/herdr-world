@@ -15,7 +15,8 @@ are optional because the merged PR history records their source.
   awaits independent implementation review.
   Startup currency fences now have independent fault controls, and failed
   verification runs retain bounded diagnostic artifacts for reproduction. Checker
-  startup waits for protocol readiness before invoking Quint.
+  startup waits for protocol readiness before invoking Quint. Canonical verification
+  runs independent cases in a bounded parallel pool with complete aggregate evidence.
 - SSH profiles can connect to Windows Herdr 0.9.1+ sessions through Windows
   PowerShell, with optional executable and session selection. Unix-only remote
   file, Git and history tools explain their limitations.

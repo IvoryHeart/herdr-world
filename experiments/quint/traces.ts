@@ -8,18 +8,8 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { decodeItf, type TraceState } from "./replay";
 
-export type Model =
-  | "ranger-recovery"
-  | "ranger-authority"
-  | "creation-flow"
-  | "chunk-assembly"
-  | "chunk-credits"
-  | "runtime-drain"
-  | "browser-preparation"
-  | "runtime-leases"
-  | "runtime-control"
-  | "browser-refresh"
-  | "space-admission";
+import { verificationModels } from "./models";
+export type Model = (typeof verificationModels)[number];
 
 const actions = {
   "ranger-recovery": [

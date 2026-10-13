@@ -145,6 +145,7 @@ export async function runVerificationProcess(
       stdout,
       stderr,
       elapsedMs: Math.round(performance.now() - started),
+      maxRSSBytes: child.resourceUsage()?.maxRSS,
     };
   } finally {
     clearTimeout(timer);

@@ -79,7 +79,9 @@ parser, adapter, timeout and cleanup errors must fail the run.
 For modeled changes, run `bun run verification:setup`, then
 `bun run verification:typecheck` and `bun run verification:check`. Focused
 `bun experiments/quint/run.ts --case <model>` runs help iteration but do not replace
-the complete candidate run. The separate Behavioral verification candidate CI
+the complete candidate run. The canonical command uses two isolated case workers
+by default, as configured in `tools/quint/execution.json`, and requires complete
+source-consistent aggregate evidence. The separate Behavioral verification candidate CI
 workflow runs all models without labels or path-based exclusions. Its evidence
 records source/model/adapter/checker inputs. Independent promotion review remains
 pending in PR #188; this job is not yet a protected Delivery checks dependency.

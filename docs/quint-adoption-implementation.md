@@ -78,7 +78,13 @@ stale, partial or failed runs being reported as success. Generated artifacts and
 local environment data remain ignored.
 
 The unfiltered canonical entry point is `bun run verification:check`; filters are
-rejected. Focused development uses `bun experiments/quint/run.ts --case <model>`.
+rejected. Independent cases now use two isolated workers by default, with
+longer cases scheduled first. The first local parallel run passed in 141.5 seconds
+versus the earlier approximately 243-second complete run. Complete aggregate
+evidence requires all 11 scoped worker results with identical current source/tool
+inputs; partial workers cannot satisfy the gate. Cancellation/failure stops queued
+work and drains peers. Per-case timings/RSS and available cgroup peak data make
+resource assessment explicit without claiming total memory from individual peaks. Focused development uses `bun experiments/quint/run.ts --case <model>`.
 The candidate CI workflow installs locked tools, checks types/notices, runs all
 models/controls/sensitivity and retains manifests even on failure. It has no PR
 label/path shortcut. Local complete execution takes approximately four minutes;

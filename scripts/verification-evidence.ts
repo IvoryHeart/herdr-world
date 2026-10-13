@@ -10,6 +10,21 @@ export type InputFingerprint = {
 };
 export type VerificationManifest = {
   schemaVersion: 1;
+  scope?: {
+    kind: "focused" | "full-sequential" | "full-parallel";
+    models: string[];
+    workers?: number;
+  };
+  execution?: {
+    workers: number;
+    elapsedMs: number;
+    cases: { model: string; elapsedMs: number; maxRSSBytes?: number }[];
+    resources: {
+      availableCPUs: number;
+      totalMemoryBytes: number;
+      cgroupPeakMemoryBytes?: number;
+    };
+  };
   sourceRevision: string;
   sourceInputs: InputFingerprint[];
   tools: {

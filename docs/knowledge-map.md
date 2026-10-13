@@ -96,3 +96,7 @@ and implementation/browser/platform alternatives.
 [Promotion review](../verification/promotion-review.md) tracks each contract's bounds,
 consumer obligations and pending acceptance. [Observation progress](../verification/contracts/observation-progress.md)
 records scheduler/deadline assumptions separately from model reachability.
+
+Canonical Quint execution uses the tracked [bounded worker configuration](../tools/quint/execution.json)
+and produces an aggregate requiring all isolated model-case manifests; see the
+[parallel execution contract](../verification/README.md#bounded-parallel-execution).

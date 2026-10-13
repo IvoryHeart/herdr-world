@@ -137,3 +137,33 @@ startup advertisement alone is insufficient: CI reproduced an early-advertisemen
 race in which Quint tried to launch a second server on the occupied port. Its
 downloaded logs identified that failure; delayed-readiness and failed-readiness
 regressions preserve the corrected startup and cleanup boundary.
+
+## Bounded parallel execution
+
+The canonical gate schedules the 11 independent cases in a bounded process pool,
+starting longer allocation/preparation cases first. `tools/quint/execution.json`
+defaults to two workers, capped by available CPUs. This follows the repository's
+parallel test-file approach while accounting for JVM-backed checker work. Each
+case owns a fresh process, private checker endpoint, generated models, replay
+workers and artifact directory; shared fixture/module state stays within a case.
+Each case's sensitivity/host-order checks and negative controls remain required.
+
+A case failure stops further admission, cancels active peers, waits for their
+owned process cleanup, and leaves an incomplete aggregate with case progress and
+diagnostics. The 15-minute overall deadline and 10-second case termination grace
+remain bounded. Canonical arguments still reject filtering. Changing the tracked
+worker/deadline configuration is an execution-policy change requiring full checks.
+
+Focused worker manifests are explicitly scoped. The complete aggregate requires
+exactly one successful result for every canonical model, identical source/tool
+identities and current input fingerprints. Missing, duplicate, mislabeled, stale
+or incomplete worker evidence cannot become a successful full run. The shared
+model registry must match the runner's cases, preventing silent inventory drift.
+
+The first local two-worker run passed in 141.5 seconds, compared with the earlier
+complete local run at approximately 243 seconds (about 42% less wall time). This
+is a measured comparison of complete executions, not a universal speedup guarantee.
+Manifests record actual workers, wall/case times and reported case-process max RSS.
+The latter is not simultaneous total memory. Where available, the Linux cgroup
+lifetime peak is recorded separately and includes other job/setup processes.
+All configured JVM/Node caps and finite/consumer evidence limits remain unchanged.

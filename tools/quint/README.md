@@ -47,3 +47,11 @@ with the configured bounds; this is execution evidence for this toolchain, not a
 guarantee for other environments or total peak-memory measurement. Expanded
 contracts, mappings and required-check promotion remain separate review
 checkpoints in `verification/`.
+
+The canonical command uses `execution.json`'s bounded case pool (two workers by
+default), with isolated case processes and private checkers. Its aggregate manifest
+requires all 11 focused worker results against one current source/tool identity.
+Failure/cancellation stops queue admission and drains peers; focused results do
+not substitute for this aggregate. Worker count is CPU-capped and recorded with
+case timings/resource observations. Retain conservative concurrency for the
+JVM-backed phases; per-case max RSS is not a combined-memory measurement.

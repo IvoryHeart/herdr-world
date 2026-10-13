@@ -1,3 +1,4 @@
+import { verificationModels } from "./models";
 import {
   retainVerificationDiagnostics,
   sanitizeDiagnostic,
@@ -273,6 +274,13 @@ const cases = [
   },
 ] as const;
 type CommandResult = { code: number; ms: number; log: string; args: string[] };
+function replayTracesPerSeed(name: Model) {
+  return ["browser-preparation", "chunk-credits", "creation-flow"].includes(
+    name,
+  )
+    ? 500
+    : 100;
+}
 const commands: CommandResult[] = [];
 let activeLabel = "setup";
 
@@ -741,6 +749,11 @@ export async function runReviewedQuintModels(
       requestedModels.every((name) => cases.some((item) => item.name === name)),
     "Unknown or duplicate model selection",
   );
+  assert.deepEqual(
+    cases.map((item) => item.name).sort(),
+    [...verificationModels].sort(),
+    "Canonical model inventory differs from runner cases",
+  );
   const runCases = cases.filter((item) => requestedModels.includes(item.name));
   const abort = () => cancellation.abort();
   process.once("SIGINT", abort);
@@ -775,6 +788,13 @@ export async function runReviewedQuintModels(
       JSON.stringify(
         {
           schemaVersion: 1,
+          scope: {
+            kind:
+              runCases.length === verificationModels.length
+                ? "full-sequential"
+                : "focused",
+            models: runCases.map((item) => item.name),
+          },
           complete: false,
           sourceRevision: revision.stdout.trim(),
           sourceInputs: inputs,
@@ -793,13 +813,7 @@ export async function runReviewedQuintModels(
     );
     const results = [];
     for (const item of runCases) {
-      const traceCount = [
-        "browser-preparation",
-        "chunk-credits",
-        "creation-flow",
-      ].includes(item.name)
-        ? 500
-        : 100;
+      const traceCount = replayTracesPerSeed(item.name);
       const model = `experiments/quint/${item.name}.qnt`;
       await command(`${item.name}-types`, ["typecheck", model]);
       const simulation = await command(`${item.name}-simulation`, [
@@ -1234,6 +1248,13 @@ export async function runReviewedQuintModels(
 
     const manifest: VerificationManifest = {
       schemaVersion: 1,
+      scope: {
+        kind:
+          runCases.length === verificationModels.length
+            ? "full-sequential"
+            : "focused",
+        models: runCases.map((item) => item.name),
+      },
       sourceRevision: revision.stdout.trim(),
       sourceInputs: inputs,
       tools: {
@@ -1247,7 +1268,9 @@ export async function runReviewedQuintModels(
         seeds: [42, 73, 103],
         maxSteps: 25,
         samples: 500,
-        replayTraces: 500,
+        replayTraces: Math.max(
+          ...runCases.map((item) => replayTracesPerSeed(item.name)),
+        ),
       },
       commands: commands.map((command) => ({
         ...command,

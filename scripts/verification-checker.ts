@@ -111,6 +111,7 @@ export async function withPrivateChecker<T>(
       const probe = await runVerificationProcess(
         [
           "node",
+          "--max-old-space-size=512",
           resolve(import.meta.dir, "verification-checker-ready.mjs"),
           String(port),
           String(daemonPid),

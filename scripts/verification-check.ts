@@ -1,38 +1,26 @@
 import assert from "node:assert/strict";
 import { resolve } from "node:path";
+import { runParallelVerification } from "./verification-parallel";
+import execution from "../tools/quint/execution.json";
 
 assert.equal(
   process.argv.length,
   2,
   "The canonical gate accepts no filters; use the focused development runner instead",
 );
-
-// Relay cancellation to the runner, which drains its individually owned checker
-// and replay process groups. Individual commands and the complete run are bounded.
-const child = Bun.spawn(
-  [process.execPath, resolve(import.meta.dir, "../experiments/quint/run.ts")],
-  {
-    stdin: "inherit",
-    stdout: "inherit",
-    stderr: "inherit",
-  },
-);
-let cancelled = false;
-let force: ReturnType<typeof setTimeout> | undefined;
-const stop = () => {
-  cancelled = true;
-  child.kill("SIGTERM");
-  force ??= setTimeout(() => child.kill("SIGKILL"), 10_000);
-};
+const cancellation = new AbortController();
+const stop = () =>
+  cancellation.abort(new Error("Complete verification cancelled"));
 process.on("SIGINT", stop);
 process.on("SIGTERM", stop);
-const timer = setTimeout(stop, 15 * 60_000);
+const timer = setTimeout(stop, execution.runTimeoutMs);
 try {
-  const code = await child.exited;
-  process.exitCode = cancelled ? 1 : code;
+  await runParallelVerification(
+    resolve(import.meta.dir, ".."),
+    cancellation.signal,
+  );
 } finally {
   clearTimeout(timer);
-  clearTimeout(force);
   process.off("SIGINT", stop);
   process.off("SIGTERM", stop);
 }
