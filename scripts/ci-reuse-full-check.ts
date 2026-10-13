@@ -52,7 +52,23 @@ export async function canReuseFullCheck(
   return false;
 }
 
-/** Only Markdown changes in the PR require the shorter documentation gate. */
+/** Evidence contracts and execution policy must receive the full candidate gate. */
+export function isDocumentationPath(path: string): boolean {
+  return (
+    path.endsWith(".md") &&
+    ![
+      "verification/",
+      "experiments/quint/",
+      "tools/quint/",
+      "openspec/",
+      ".agents/",
+      ".github/",
+    ].some((prefix) => path.startsWith(prefix)) &&
+    !["AGENTS.md", "CONTRIBUTING.md"].includes(path)
+  );
+}
+
+/** Only ordinary documentation changes may use the shorter gate. */
 export function isDocsOnlyChange(
   baseSha: string,
   headSha: string,
@@ -69,7 +85,7 @@ export function isDocsOnlyChange(
   )
     .split("\0")
     .filter(Boolean);
-  return changed.length > 0 && changed.every((path) => path.endsWith(".md"));
+  return changed.length > 0 && changed.every(isDocumentationPath);
 }
 
 async function githubJson<T>(path: string, token: string): Promise<T> {

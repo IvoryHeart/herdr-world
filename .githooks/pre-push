@@ -25,7 +25,8 @@ if read -r local_ref local_sha remote_ref remote_sha && ! read -r extra_line; th
         if [ -n "$full_sha" ] &&
           git merge-base --is-ancestor "$remote_sha" "$head_sha" 2>/dev/null &&
           git merge-base --is-ancestor "$full_sha" "$head_sha" 2>/dev/null &&
-          git diff --quiet --no-renames "$full_sha" "$head_sha" -- . ':(exclude,glob)**/*.md' ':(exclude,glob)*.md'; then
+          git diff --quiet --no-renames "$full_sha" "$head_sha" -- . ':(exclude,glob)**/*.md' ':(exclude,glob)*.md' &&
+          git diff --quiet --no-renames "$full_sha" "$head_sha" -- verification/ experiments/quint/ tools/quint/ openspec/ .agents/ .github/ AGENTS.md CONTRIBUTING.md; then
           gate=docs
         fi
       fi

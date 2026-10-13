@@ -113,6 +113,23 @@ test("pre-push uses the docs gate only after a successful full gate covers all c
     expect(readFileSync(argsPath, "utf8")).toBe("run check:docs\n");
     expect(run(docs, base).status).toBe(0);
     expect(readFileSync(argsPath, "utf8")).toBe("run check:docs\n");
+    for (const path of [
+      "verification/contracts/runtime-leases.md",
+      "openspec/specs/runtime-federation/spec.md",
+      "AGENTS.md",
+      "CONTRIBUTING.md",
+    ]) {
+      mkdirSync(join(root, path, ".."), { recursive: true });
+      writeFileSync(join(root, path), "changed evidence contract\n");
+      git("add", path);
+      git("commit", "-qm", "contract");
+      writeFileSync(
+        join(root, ".agents/delivery/pre-push.tsv"),
+        `synthetic\t${base}\t0\t0\tfull\n`,
+      );
+      expect(run(git("rev-parse", "HEAD"), docs).status).toBe(0);
+      expect(readFileSync(argsPath, "utf8")).toBe("run check\n");
+    }
     writeFileSync(join(root, "code.ts"), "export const value = 1;\n");
     git("add", "code.ts");
     git("commit", "-qm", "code");

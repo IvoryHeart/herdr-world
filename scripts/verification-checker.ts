@@ -1,11 +1,7 @@
 import { createServer } from "node:net";
 import { mkdir } from "node:fs/promises";
 import { resolve } from "node:path";
-import {
-  checkerDirectory,
-  checkerHome,
-  checkerJar,
-} from "./verification-setup";
+import { checkerHome, checkerJar } from "./verification-setup";
 import {
   runVerificationProcess,
   VerificationProcessError,
@@ -41,7 +37,16 @@ export async function withPrivateChecker<T>(
   const daemonTemp = resolve(temporary, "daemon");
   await mkdir(daemonTemp, { recursive: true });
   const daemon = runVerificationProcess(
-    [resolve(checkerDirectory, "bin/apalache-mc"), "server", `--port=${port}`],
+    [
+      "java",
+      "-Xmx1G",
+      "-Xss16M",
+      `-Djava.io.tmpdir=${daemonTemp}`,
+      "-jar",
+      checkerJar,
+      "server",
+      `--port=${port}`,
+    ],
     {
       cwd: temporary,
       timeoutMs: 240_000,

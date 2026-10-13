@@ -3,7 +3,11 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { canReuseFullCheck, isDocsOnlyChange } from "./ci-reuse-full-check";
+import {
+  canReuseFullCheck,
+  isDocsOnlyChange,
+  isDocumentationPath,
+} from "./ci-reuse-full-check";
 
 const base = "a".repeat(40);
 const head = "b".repeat(40);
@@ -95,4 +99,20 @@ test("documentation scope follows the PR diff and includes nested Markdown", () 
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+test("behavioral contracts and agent policy cannot take the Markdown shortcut", () => {
+  for (const path of [
+    "verification/contracts/runtime-leases.md",
+    "experiments/quint/README.md",
+    "tools/quint/DEPENDENCY_NOTICES.md",
+    "openspec/specs/runtime-federation/spec.md",
+    "openspec/changes/adopt-quint-behavioral-verification/tasks.md",
+    "AGENTS.md",
+    ".agents/skills/candidate-delivery/SKILL.md",
+    "CONTRIBUTING.md",
+  ])
+    expect(isDocumentationPath(path)).toBe(false);
+  for (const path of ["README.md", "docs/guide.md", "CHANGELOG.md"])
+    expect(isDocumentationPath(path)).toBe(true);
 });
