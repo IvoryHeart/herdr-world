@@ -27,7 +27,8 @@ This proposal's PR does not implement the adoption policy.
 The proposed guidance requires authors to identify affected requirements and
 invariants for behavioral changes. Identity, authority, concurrent ownership,
 retry/replay, cancellation, persistence, recovery, scheduling and protocol changes
-default to a maintained Quint model and implementation connection.
+require adequate executable evidence. Quint is the normal choice where exploring
+event orderings adds value, connected to actual implementation.
 
 If a different technique establishes the needed property, the change records
 that evidence and obtains independent review of the justification. Human effort
@@ -35,6 +36,13 @@ or a green example test alone cannot justify excluding a critical transition.
 Mechanical changes that do not alter behavior need no new model. Existing unmodeled
 areas are classified as pending with their limits stated; they are not automatically
 held to an unfinished gate or treated as formally covered.
+
+Populate coverage from existing tests and PR acceptance evidence before adding
+models. Distinguish executed scenarios, uncovered orderings and selected additional
+evidence. Reconcile completed or partially recorded OpenSpec deliveries against
+their actual PR evidence; do not reopen delivered product work merely to relabel
+it formal adoption. No Quint model does not mean untested, and existing tests do
+not establish every relevant ordering. Routine repairs need no new product specs.
 
 This combines broad applicability with the owner's requirement for meticulous,
 selective implementation. Blanket opt-in permits important gaps; blanket per-file
@@ -86,6 +94,18 @@ Use models spanning coherent ownership or protocol boundaries. Runtime admission
 can support several consumers if each consumer's qualified dispatch is checked.
 Scheduling, browser preparation and durable recovery need their own transitions
 and assumptions. Individually passing models do not prove their composition.
+
+Carry runtime generation, browser observation epoch, socket/batch identity and
+user-intent version as distinct tokens. Current observation alone does not grant
+mutation authority, and a current runtime alone does not authorize late focus.
+Make shared-view creation an early composition slice after lifecycle/observation
+models stabilize: prepare/attach, acquire source ownership, dispatch, admit the
+result and conditionally focus. Verify retirement at every relevant boundary,
+colliding IDs, newer user intent and uncertain dispatch without automatic retry.
+Use existing shared-creation and Inspector handoff regressions as input; retain
+browser checks for actual focus, geometry, mobile input and terminal presentation.
+Preserve legacy omitted-ID routing as an explicit compatibility boundary in
+consumer mappings, without treating it as the route for new browser work.
 
 Require generated replay, implementation trace validation or a reviewed equivalent
 connection for implementation-conformance claims. Retain implementation tests for
@@ -142,10 +162,11 @@ planning artifacts; implementation and policy activation need owner authorizatio
 | 0. Review baseline | Spike, intended properties, proposed policy and fidelity limits | Independent review resolves findings; implementation scope authorized |
 | 1. Reproducibility and coverage | Locked tooling, runner hardening, complete 43-area coverage map | Fresh install/run and failure controls; each area has an owner, stage and evidence decision |
 | 2. First maintained contracts | Runtime lifecycle/admission and browser aggregate observation | Replacement/removal/error/reentrancy and mid-preparation transitions; reviewed replay and negative controls; scope of required gates explicit |
-| 3. New failure boundaries | Socket-local chunk credits/assembly; Ranger task permission, cancellation and recovery | Wrong socket/index, retirement, revoked permission, changed identity and interrupted recovery cases checked against real code |
-| 4. Shared authority and observation | Profiles/SSH/subscriptions, RPC/HTTP, terminals/input/reconnect, focused contexts, creation, snapshots/scheduling and watchlists | Consumer mappings and cross-model assumptions reviewed; safety covered; any temporal progress claim includes fairness evidence |
-| 5. State and persistence | Windows/tab layouts/Inspector intent; resources/drafts; receipts/history; notifications/auth; files/Git/worktrees/private state/setup/service lifecycle | Reviewed models or justified alternative implementation evidence; platform, crash and UI limits explicit |
-| 6. Remaining inventory and consolidation | Pure allocation, composition/shortcuts, parsing, metrics/render lifetime, preferences, rendering/site and release/CI orchestration | Every inventory area reconciled; no unexplained or silently waived critical gap; change workflow and gates documented |
+| 3. Protocol and workflow composition | Socket-local chunk credits/assembly and shared-view creation integration | Wrong socket/index, retirement, dispatch ownership, colliding IDs, newer intent, uncertainty and conditional focus checked against real code |
+| 4. Separately scoped Ranger recovery | Task permission, cancellation and durable recovery with explicit storage/crash assumptions | Owner-authorized scope and independent acceptance; revoked permission, changed identity and interrupted recovery cases checked against real code |
+| 5. Shared authority and observation | Profiles/SSH/subscriptions, RPC/HTTP, terminals/input/reconnect, focused contexts, snapshots/scheduling and watchlists | Consumer mappings and cross-model assumptions reviewed; safety covered; any temporal progress claim includes fairness evidence |
+| 6. State and persistence | Windows/tab layouts/Inspector intent; resources/drafts; receipts/history; notifications/auth; files/Git/worktrees/private state/setup/service lifecycle | Reviewed models or justified alternative implementation evidence; platform, crash and UI limits explicit |
+| 7. Remaining inventory and consolidation | Pure allocation, composition/shortcuts, parsing, metrics/render lifetime, preferences, rendering/site and release/CI orchestration | Every inventory area reconciled; no unexplained or silently waived critical gap; change workflow and gates documented |
 
 The coverage map assigns every inventory entry a stable identifier and status:
 `pending`, `modeled`, `shared-model` or `alternative-evidence`. A shared-model entry
@@ -153,6 +174,13 @@ names its consumer observations; an alternative names the property and executed
 evidence. Grouped stages do not count as coverage until those entries are resolved.
 An area can contain multiple contracts and evidence techniques. Ranks guide order,
 not permission to leave a critical property unverified.
+
+After this experimental PR, the concrete first authorization is stages 1–2:
+lock/harden tooling and deliver lifecycle/observation models with replayed witnesses
+and the missing transitions. Each promoted contract has an independent acceptance
+boundary. Later stages receive their own bounded authorization; the roadmap is not
+permission to implement every inventory area at once. Ranger's persistence/permission
+slice is independently scoped rather than bundled into first promotion.
 
 Enable policy and checks only for reviewed contracts as they are promoted; report
 repository-wide assessment separately from completed model coverage. At completion,

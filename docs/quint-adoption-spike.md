@@ -2,8 +2,9 @@
 
 ## Analysis summary and decision status
 
-**Recommendation: adopt Quint as a repository-wide behavioral design and
-verification practice, with modeling depth chosen by the contract being changed.**
+**Recommendation: assess behavioral evidence repository-wide and adopt Quint
+selectively where exploring event orderings adds value, with independently
+reviewed model boundaries and implementation evidence.**
 Promote executable models into required checks as their implementation connections
 and assumptions become reviewable. The spike itself remains experimental; this
 report proposes a policy and does not enact it. The
@@ -162,6 +163,36 @@ separately bundled implementation mutation was killed by the original generated
 traces. Faulty bundles and checker output remain ignored; application files were
 never edited for these controls.
 
+### Review repair and stronger evidence
+
+Independent review found that missing connections could bypass the refresh
+actionability observation, and arbitrary replay errors could satisfy the model
+counterexample control. Those findings concern evidence validity within the spike,
+not a production defect. Regression tests reproduced both before the repair.
+
+Refresh replay now requires zero catalogue entries before any admission and exactly
+the known synthetic owner and generation after admission, including after disconnect.
+It checks actionability whenever an admitted response exists. Tests cover dropped
+catalogues, substituted owner/generation and cleanup failure; generated traces kill
+an additional dropped-catalogue implementation mutation.
+
+Trace decoding and shape/action validation happen before expected-rejection checks.
+Only a dedicated, named observation mismatch from the selected case can establish
+conformance rejection. Results record the observation that killed each mutation or
+counterexample. Invalid JSON, unsupported/malformed ITF, unknown actions, completion
+without pending work, ordinary assertions and adapter/cleanup failures cannot be
+credited as successful negative controls.
+
+The allocation sweep additionally replays **all 5,103 distinct configurations**
+against TypeScript, beyond the 300 sampled traces and 7,222 transitions. Domain and
+uniqueness checks establish complete enumeration of this fixed six-space/three-host
+domain. This adds 5,103 transitions, for **12,325 replayed transitions** in total.
+The model now independently checks capacity filling, host-local prefix preservation
+and round fairness without calling `expected()`. `fairSelection` alone is reference
+agreement with the output function, not an independent fairness property. The
+additional assertions do not establish correctness for other host layouts or
+relevance classifications.
+
 ## Adoption assessment
 
 **Runtime leases are the strongest fit.** The model captures interleavings across
@@ -184,8 +215,8 @@ the fairness rule readable and exhaustively checks the small rank specification.
 Ordinary TypeScript property tests could cover this pure function with less tooling.
 Its maintained role should identify what formal checking contributes beyond direct
 implementation tests; this spike did not compare those alternatives. Full
-finite-model checking did not exhaustively replay all
-5,103 configurations against TypeScript.
+finite-model checking initially did not exhaustively replay all configurations
+against TypeScript; the review repair adds that complete 5,103-configuration sweep.
 
 The initial spike favored runtime/observation models. Promote maintained models
 when they have named maintainers, scenario-to-transition mappings, documented
@@ -195,7 +226,7 @@ recovery would be good subsequent, distinct cases. Liveness needs explicit fairn
 and crash/durability assumptions and was not verified in this spike.
 
 The practical maintenance cost is concentrated in the implementation adapters and
-runner, not the small models: about 156 model lines versus 320 replay-adapter lines,
+runner, not the small models: initially about 156 model lines versus 320 replay-adapter lines,
 plus orchestration and fault injection. This is not a general-purpose framework;
 the spike deliberately handles only the ITF types and three APIs it needs. Quint's
 effect checker helped reject inconsistent transition updates during development.
@@ -280,8 +311,9 @@ contracts in this branch:
    persistence and structural consistency. A mechanical change can state that no
    behavioral invariant changes without producing a new model.
 2. Changes to asynchronous ownership, authorization, retry/replay, recovery,
-   scheduling or multi-stage workflows require an executable behavioral model.
-   Reuse or extend a maintained model where possible. Any exception must explain
+  scheduling or multi-stage workflows require adequate executable evidence.
+  Quint is the normal choice where exploring event orderings adds value. Reuse or
+  extend a maintained model where possible. Alternative evidence must explain
    what evidence establishes the relevant property; an unchecked convenience
    exemption is not sufficient.
 3. Pure algorithms and structural UI state receive Quint models when their
@@ -330,11 +362,22 @@ outcome occurred and preserve the intended contract.
 
 ## Adoption sequence and decision criteria
 
+Populate coverage from existing tests and accepted PR/OpenSpec evidence first:
+record current scenarios, uncovered orderings, selected technique and ownership.
+Do not retrospectively reopen delivered product work merely to rename it formal
+adoption. No model does not mean untested, and existing tests do not demonstrate
+every relevant ordering.
+
 Start by reviewing this spike and deciding the policy independently of whether the
 experimental code is ready for a required gate. Next, strengthen runtime admission
 and browser observation to cover the documented missing transitions, then add a
-third maintained boundary in durable assistant tasks or socket-local chunk credits.
-Those exercise persistence/permissions or protocol ownership beyond the first spike.
+third maintained boundary in socket-local chunk credits and shared-view creation
+composition. Carry runtime generations, observation epochs, socket/batch identities
+and user-intent versions separately through prepare/attach, ownership, dispatch,
+result admission and conditional focus. A current observation does not authorize a
+mutation; a current runtime does not authorize a late result to steal focus. Scope
+Ranger persistence/permissions/recovery separately with explicit storage and crash
+assumptions and its own authorization and acceptance.
 
 Promote a model when its intended properties are independently reviewed, its
 assumptions and omissions are explicit, relevant mutations are detected, its
@@ -394,7 +437,8 @@ spike runner, staged formatting, and `bun run check` (dependency notices, format
 lint, TypeScript and Bun checks, repository tests, application/site builds and strict
 OpenSpec validation). The primary checkout remains clean. The spike and proposal
 are review artifacts; no product behavior or mandatory verification policy was changed.
-Repository test runs reported 4,187 passing tests, four skipped and zero failures.
+Initial repository test runs reported 4,187 passing tests, four skipped and zero
+failures; repair-specific validation is recorded with the PR update.
 
 ## Upstream references
 

@@ -9,6 +9,7 @@ import { WorldRuntimeStore } from "../../web/src/world/runtimeStore";
 import { admitWorldSpaces } from "../../web/src/world/spaceAdmission";
 import type { WorldSpaceObject } from "../../web/src/world/worldObject";
 import type { ConnectionStatus } from "../../web/src/api";
+import { observe } from "./observations";
 
 type Host = {
   gen: number;
@@ -44,11 +45,26 @@ export function decodeItf(value: unknown): unknown {
   if (value === null || typeof value !== "object") return value;
   const entry = value as Record<string, unknown>;
   if ("#bigint" in entry) {
+    assert(
+      Object.keys(entry).every((key) => key === "#bigint" || key === "#meta"),
+      "unsupported ITF tag",
+    );
+    assert(
+      typeof entry["#bigint"] === "string" && /^-?\d+$/.test(entry["#bigint"]),
+      "invalid ITF integer",
+    );
     const result = Number(entry["#bigint"]);
     assert(Number.isSafeInteger(result), "ITF integer exceeds JS domain");
     return result;
   }
-  if ("#set" in entry) return decodeItf(entry["#set"]);
+  if ("#set" in entry) {
+    assert(
+      Object.keys(entry).every((key) => key === "#set" || key === "#meta"),
+      "unsupported ITF tag",
+    );
+    assert(Array.isArray(entry["#set"]), "invalid ITF set");
+    return decodeItf(entry["#set"]);
+  }
   assert(
     !Object.keys(entry).some((key) => key.startsWith("#") && key !== "#meta"),
     "unsupported ITF tag",
@@ -149,26 +165,23 @@ export async function replayRuntime(
           ready: "ready",
           stopping: "stopping",
         };
-        assert.equal(
-          actual.state,
-          phases[expected.phase],
-          `state ${index}, host ${peer}`,
-        );
-        assert.equal(
-          actual.generation,
-          expected.gen,
-          `generation ${index}, host ${peer}`,
-        );
-        assert.equal(
+        const context = `state ${index}, host ${peer}`;
+        observe("runtime.state", actual.state, phases[expected.phase], context);
+        observe("runtime.generation", actual.generation, expected.gen, context);
+        observe(
+          "runtime.readyLease",
           manager.readyRuntimeLease(ids[peer]!) !== null,
           expected.phase === "ready",
+          context,
         );
       }
       for (const lease of leases) {
         const owner = state.hosts[ids.indexOf(lease.connectionId)]!;
-        assert.equal(
+        observe(
+          "runtime.lease.current",
           lease.isCurrent(),
           owner.phase === "ready" && owner.gen === lease.generation,
+          `state ${index}`,
         );
       }
     }
@@ -260,11 +273,17 @@ export async function replayRefresh(
           throw new Error(`unknown refresh action ${state.op}`);
       }
       const actual = store.get();
-      assert.equal(actual.status, state.s.status, `refresh status at ${index}`);
-      assert.equal(
+      observe(
+        "refresh.status",
+        actual.status,
+        state.s.status,
+        `state ${index}`,
+      );
+      observe(
+        "refresh.revision",
         actual.revision,
         state.s.revision,
-        `refresh revision at ${index}`,
+        `state ${index}`,
       );
       assert.equal(issued, state.s.issued, `request count at ${index}`);
       assert.equal(
@@ -273,10 +292,32 @@ export async function replayRefresh(
         `pending count at ${index}`,
       );
       assert.equal(epoch, state.s.epoch);
-      if (actual.connections.length) {
-        assert.equal(
-          actual.connections[0]!.actionable,
+      const admitted = state.s.admitted >= 0;
+      observe(
+        "refresh.connections.count",
+        actual.connections.length,
+        admitted ? 1 : 0,
+        `state ${index}`,
+      );
+      if (admitted) {
+        const connection = actual.connections[0]!;
+        observe(
+          "refresh.connection.id",
+          connection.connectionId,
+          "synthetic-a",
+          `state ${index}`,
+        );
+        observe(
+          "refresh.connection.generation",
+          connection.generation,
+          1,
+          `state ${index}`,
+        );
+        observe(
+          "refresh.connection.actionable",
+          connection.actionable,
           state.s.status === "ready",
+          `state ${index}`,
         );
       }
     }
@@ -306,15 +347,16 @@ export function replaySpaces(
         } as unknown as WorldSpaceObject,
       }));
     const actual = allocate(ordered, state.bound, null).map(({ id }) => id);
-    assert.deepEqual(
+    observe(
+      "spaces.membership",
       [...actual].sort((a, b) => a - b),
       [...state.admitted].sort((a, b) => a - b),
     );
-    assert.equal(new Set(actual).size, actual.length);
+    observe("spaces.unique", new Set(actual).size, actual.length);
     const priority = ordered
       .filter(({ id }) => relevant.has(id))
       .slice(0, state.bound)
       .map(({ id }) => id);
-    assert.deepEqual(actual.slice(0, priority.length), priority);
+    observe("spaces.priority", actual.slice(0, priority.length), priority);
   }
 }

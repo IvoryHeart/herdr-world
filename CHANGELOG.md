@@ -9,9 +9,9 @@ are optional because the merged PR history records their source.
 
 ### Added
 
-- An opt-in Quint verification spike, adoption analysis and proposal for carefully
-  reviewed behavioral modeling across the repository; mandatory adoption gates
-  remain proposed.
+- An opt-in Quint verification spike with guarded replay and exhaustive bounded
+  allocation checks, adoption analysis and a proposal for carefully reviewed
+  behavioral modeling across the repository; mandatory gates remain proposed.
 - SSH profiles can connect to Windows Herdr 0.9.1+ sessions through Windows
   PowerShell, with optional executable and session selection. Unix-only remote
   file, Git and history tools explain their limitations.

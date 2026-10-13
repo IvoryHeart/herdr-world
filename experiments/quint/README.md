@@ -26,6 +26,17 @@ a four-minute deadline. Results, commands, full logs, generated traces and
 counterexamples are under a fresh ignored `.agents/quint-spike/<run-time>/`
 directory. Checker output is confined to the same directory. It does not poll.
 
+Counterexamples are decoded and validated before expected-rejection controls.
+Only a dedicated named observation mismatch from the selected model counts as
+conformance rejection; loading, schema/action, adapter and cleanup failures abort.
+Refresh replay checks the admitted catalogue's cardinality, owner, generation and
+actionability, including retained entries after disconnect. Results name each
+killing observation. The cheap harness regressions run with:
+
+```bash
+bun test experiments/quint/replay.test.ts
+```
+
 Each model is simulated with seed 42, 500 samples and at most 25 transitions.
 One hundred generated traces per case are replayed against production code.
 TLC checks all reachable states of each finite abstraction, with no temporal
@@ -39,7 +50,8 @@ bundle, substitutes that module in the replay adapter, and requires a generated
 trace to trigger an assertion failure. Those controls weaken lease validity,
 bypass observation epochs and replace allocation with an input prefix. Production
 files are never modified. The results identify the trace that kills each mutation.
-Three faults demonstrate detection sensitivity; they are not broad mutation coverage.
+The refresh case also requires a dropped-catalogue fault control. These faults
+demonstrate detection sensitivity; they are not broad mutation coverage.
 
 ## Abstraction boundaries
 
@@ -62,7 +74,11 @@ Three faults demonstrate detection sensitivity; they are not broad mutation cove
   stable relevant-prefix order are checked; ordinary output order is not asserted.
   TLC uses `allConfigurations` as initialization and `hold` as the transition,
   enumerating the complete configuration domain without linking independent calls.
+  The deterministic `enumerate` action generates every one of the 5,103 valid
+  configurations exactly once for production replay. Independent capacity,
+  host-prefix and round-fairness properties supplement reference-function agreement.
 
-Sampling 100 traces does not replay every TLC state or verify production code.
+Sampling 100 traces does not replay every TLC state or verify production code;
+allocation additionally replays its complete fixed configuration domain.
 Generation/epoch limits make these models finite and need justification before
 using their results for broader claims. Existing focused tests remain necessary.

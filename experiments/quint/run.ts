@@ -5,12 +5,16 @@ import type { ConnectionManager } from "../../server/src/connections/manager";
 import type { WorldRuntimeStore } from "../../web/src/world/runtimeStore";
 import type { admitWorldSpaces } from "../../web/src/world/spaceAdmission";
 import {
-  decodeItf,
   replayRefresh,
   replayRuntime,
   replaySpaces,
   type TraceState,
 } from "./replay";
+import {
+  expectObservationMismatch,
+  isObservationMismatch,
+} from "./observations";
+import { loadTrace, type Model } from "./traces";
 
 const root = resolve(import.meta.dir, "../..");
 const output = resolve(
@@ -28,22 +32,37 @@ const cases = [
     name: "runtime-leases",
     witnesses: ["lateStart", "obsoleteCallback", "twoReady"],
     replay: replayRuntime,
+    mismatches: [
+      "runtime.state",
+      "runtime.generation",
+      "runtime.readyLease",
+      "runtime.lease.current",
+    ],
   },
   {
     name: "browser-refresh",
     witnesses: ["lateReply", "coalescedFollowup", "restored"],
     replay: replayRefresh,
+    mismatches: [
+      "refresh.status",
+      "refresh.revision",
+      "refresh.connections.count",
+      "refresh.connection.id",
+      "refresh.connection.generation",
+      "refresh.connection.actionable",
+    ],
   },
   {
     name: "space-admission",
     witnesses: ["mixedPriority", "allHosts"],
     replay: replaySpaces,
+    mismatches: ["spaces.membership", "spaces.priority", "spaces.unique"],
   },
-];
+] as const;
 type CommandResult = { code: number; ms: number; log: string; args: string[] };
 const commands: CommandResult[] = [];
 
-async function implementationMutation(name: string) {
+async function implementationMutation(name: Model, droppedCatalogue = false) {
   const owner =
     name === "runtime-leases"
       ? "server/src/connections/manager.ts"
@@ -62,11 +81,24 @@ async function implementationMutation(name: string) {
     );
     contents = original.replace(guard, 'entry.state === "ready"');
   } else if (name === "browser-refresh") {
-    assert(original.includes("observationEpoch !== this.observationEpoch"));
-    assert(original.includes("observationEpoch === this.observationEpoch"));
-    contents = original
-      .replaceAll("observationEpoch !== this.observationEpoch", "false")
-      .replaceAll("observationEpoch === this.observationEpoch", "true");
+    if (droppedCatalogue) {
+      const getter = "get = () => this.state;";
+      assert.equal(
+        original.split(getter).length,
+        2,
+        "catalogue mutation target changed",
+      );
+      contents = original.replace(
+        getter,
+        "get = () => ({ ...this.state, connections: [] });",
+      );
+    } else {
+      assert(original.includes("observationEpoch !== this.observationEpoch"));
+      assert(original.includes("observationEpoch === this.observationEpoch"));
+      contents = original
+        .replaceAll("observationEpoch !== this.observationEpoch", "false")
+        .replaceAll("observationEpoch === this.observationEpoch", "true");
+    }
   } else {
     const guard = "const admitted = ordered.filter(relevant).slice(0, bound);";
     assert.equal(
@@ -102,7 +134,10 @@ async function implementationMutation(name: string) {
     bundle.success && substituted,
     "implementation mutation bundle failed",
   );
-  const path = resolve(output, `${name}-implementation-mutant.mjs`);
+  const path = resolve(
+    output,
+    `${name}${droppedCatalogue ? "-dropped-catalogue" : ""}-implementation-mutant.mjs`,
+  );
   await writeFile(path, await bundle.outputs[0]!.text());
   const exports = await import(path);
   return (states: TraceState[]) =>
@@ -170,12 +205,6 @@ async function command(
   return log;
 }
 
-async function loadTrace(path: string) {
-  const raw = JSON.parse(await readFile(path, "utf8"));
-  assert(Array.isArray(raw.states) && raw.states.length > 1, "empty trace");
-  return decodeItf(raw.states) as TraceState[];
-}
-
 await mkdir(output, { recursive: true });
 const version = await command("version", ["--version"]);
 assert.equal(version.trim(), "0.33.0", "spike requires pinned Quint 0.33.0");
@@ -238,7 +267,7 @@ for (const item of cases) {
   let steps = 0;
   const replayStarted = performance.now();
   for (const file of files) {
-    const states = await loadTrace(resolve(output, file));
+    const states = await loadTrace(resolve(output, file), item.name);
     try {
       await item.replay(states);
     } catch (error) {
@@ -249,17 +278,59 @@ for (const item of cases) {
     steps += states.length - 1;
   }
   const replayMs = Math.round(performance.now() - replayStarted);
+  let exhaustiveConfigurations: number | null = null;
+  if (item.name === "space-admission") {
+    const path = `${artifacts}/space-admission-exhaustive.itf.json`;
+    await command("space-admission-exhaustive", [
+      "run",
+      model,
+      "--step",
+      "enumerate",
+      "--backend",
+      "typescript",
+      "--seed",
+      "42",
+      "--max-samples",
+      "1",
+      "--max-steps",
+      "5103",
+      "--invariant",
+      "safety",
+      "--verbosity",
+      "1",
+      "--out-itf",
+      path,
+    ]);
+    const states = await loadTrace(resolve(root, path), item.name);
+    assert.equal(states.length, 5104, "exhaustive trace is incomplete");
+    const configurations = states
+      .slice(1)
+      .map((state) =>
+        JSON.stringify([
+          state.bound,
+          [...state.present].sort(),
+          [...state.relevant].sort(),
+        ]),
+      );
+    assert.equal(
+      new Set(configurations).size,
+      5103,
+      "exhaustive configurations repeat",
+    );
+    replaySpaces(states);
+    exhaustiveConfigurations = configurations.length;
+  }
   const faultyReplay = await implementationMutation(item.name);
   let killingTrace: string | null = null;
+  let killingObservation: string | null = null;
   for (const file of files) {
     try {
-      await faultyReplay(await loadTrace(resolve(output, file)));
+      const states = await loadTrace(resolve(output, file), item.name);
+      await faultyReplay(states);
     } catch (error) {
-      assert(
-        error instanceof assert.AssertionError,
-        "mutation failed for an unrelated reason",
-      );
+      if (!isObservationMismatch(error, item.mismatches)) throw error;
       killingTrace = file;
+      killingObservation = error.observation;
       break;
     }
   }
@@ -267,6 +338,28 @@ for (const item of cases) {
     killingTrace,
     "generated traces did not detect implementation mutation",
   );
+  let droppedCatalogueControl = null;
+  if (item.name === "browser-refresh") {
+    const faultyCatalogueReplay = await implementationMutation(item.name, true);
+    for (const file of files) {
+      const states = await loadTrace(resolve(output, file), item.name);
+      try {
+        await faultyCatalogueReplay(states);
+      } catch (error) {
+        if (!isObservationMismatch(error, ["refresh.connections.count"]))
+          throw error;
+        droppedCatalogueControl = {
+          trace: file,
+          observation: error.observation,
+        };
+        break;
+      }
+    }
+    assert(
+      droppedCatalogueControl,
+      "generated traces did not detect dropped catalogue",
+    );
+  }
   const original = await readFile(resolve(root, model), "utf8");
   assert(original.includes("pure val BROKEN = false"));
   const mutant = `${artifacts}/${item.name}-mutant.qnt`;
@@ -302,8 +395,15 @@ for (const item of cases) {
   );
   // The real implementation must also reject the mutant model's expectations.
   // This checks that the adapter compares results, rather than merely executing.
-  await assert.rejects(async () =>
-    item.replay(await loadTrace(resolve(root, counterexample))),
+  // Decode/validate before the expected mismatch check. Codec, malformed-action,
+  // adapter and cleanup failures must abort rather than count as conformance evidence.
+  const counterexampleStates = await loadTrace(
+    resolve(root, counterexample),
+    item.name,
+  );
+  const counterexampleMismatch = await expectObservationMismatch(
+    () => item.replay(counterexampleStates),
+    item.mismatches,
   );
   const result = {
     name: item.name,
@@ -315,6 +415,10 @@ for (const item of cases) {
     divergentTraceRejected: true,
     implementationMutationDetected: true,
     killingTrace,
+    killingObservation,
+    counterexampleObservation: counterexampleMismatch.observation,
+    ...(droppedCatalogueControl ? { droppedCatalogueControl } : {}),
+    ...(exhaustiveConfigurations !== null ? { exhaustiveConfigurations } : {}),
   };
   results.push(result);
   await writeFile(

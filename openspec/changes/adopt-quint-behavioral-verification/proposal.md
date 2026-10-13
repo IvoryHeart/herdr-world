@@ -7,7 +7,9 @@ why incorrect requirements or incomplete models can produce misleading confidenc
 
 ## What Changes
 
-- Establish repository-wide assessment of behavioral invariants and selective,
+- Establish repository-wide assessment of behavioral invariants and adequate
+  executable evidence, with Quint the normal choice where exploring event
+  orderings adds value. Preserve reviewed alternatives and selective,
   meticulous adoption of Quint models by coherent contract. Every area in the
   43-area inventory receives an explicit coverage decision; no subsystem is
   categorically excluded and no per-file model mandate is introduced.
@@ -17,9 +19,12 @@ why incorrect requirements or incomplete models can produce misleading confidenc
 - Harden the experimental toolchain and adapters, then promote reviewed models
   into required local/CI checks in stages. Preserve OpenSpec, TDD, integration,
   browser, security and performance evidence.
-- Expand runtime admission and browser observation first, followed by chunk
-  credits and durable assistant task authority, then the remaining contract
-  families. The [design](design.md) and [tasks](tasks.md) define the rollout.
+- Populate coverage from current tests and accepted delivery evidence first.
+  Promote runtime admission and browser observation in a concrete first slice,
+  then chunk credits and shared-view creation composition. Ranger durability
+  receives separate authorization and explicit storage/crash assumptions.
+  Reconcile the remaining contract families. The [design](design.md) and
+  [tasks](tasks.md) define the rollout.
 - Maintain a coverage map linking requirements, models, real-code observations,
   reviewers, bounds and justified alternative evidence. Unmodeled critical
   transitions remain visible work, not silent exemptions.
