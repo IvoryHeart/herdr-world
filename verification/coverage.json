@@ -454,9 +454,20 @@
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/155",
       "technique": "window-state",
       "assessment": "membership/focus/restore ordering; actual DOM and geometry require browser evidence",
-      "status": "pending",
-      "remaining": "membership/focus/restore ordering; actual DOM and geometry require browser evidence",
-      "requiredChecks": ["bun run check"]
+      "status": "alternative-evidence",
+      "remaining": "Independent review of bounded exhaustive reducer alternative; arbitrary cardinalities, geometry extremes and DOM schedules retain targeted/browser evidence.",
+      "requiredChecks": ["bun run check"],
+      "partialEvidence": {
+        "models": [],
+        "contracts": ["verification/contracts/window-ordering.md"],
+        "tests": [
+          "web/src/world/windows/windowOrdering.test.ts",
+          "web/src/world/windows/windowManager.test.ts",
+          "web/src/world/windows/WindowFrame.test.ts"
+        ],
+        "checks": ["bun run check"],
+        "review": "All reachable two-owner states through five commands explored directly; proposed alternative awaits independent review."
+      }
     },
     {
       "id": "Q22",
