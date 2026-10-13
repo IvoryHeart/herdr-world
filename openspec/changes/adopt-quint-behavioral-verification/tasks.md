@@ -2,7 +2,7 @@
 
 - [x] 1.1 Obtain independent review of the spike's requirements, abstractions, adapters and negative controls; record resolved findings and the owner-authorized adoption scope in review evidence.
 - [x] 1.2 Populate all 43 coverage-map entries from existing tests and accepted PR/OpenSpec evidence first, with stable IDs, owners, properties, executed scenarios, uncovered orderings, intended stage and selected evidence technique; verify every entry has an explicit decision without reopening delivered product work merely to relabel it.
-- [ ] 1.3 Write model contract/review templates covering allowed and forbidden scenarios, assumptions, async boundaries, implementation observations and claim limits; validate them against all three spike cases and a deliberately incorrect requirement.
+- [x] 1.3 Write model contract/review templates covering allowed and forbidden scenarios, assumptions, async boundaries, implementation observations and claim limits; validate them against all three spike cases and a deliberately incorrect requirement.
 
 ## 2. Make development tooling reproducible
 

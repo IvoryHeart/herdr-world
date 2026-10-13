@@ -32,7 +32,11 @@ Required checks are not a substitute for review of intended properties.
 
 ## Contract and review record
 
-Use [the contract template](contract-template.md) for each coherent model. Derive
+Use [the contract template](contract-template.md) for each coherent model. The
+[runtime](contracts/runtime-leases.md), [observation](contracts/browser-refresh.md)
+and [allocation](contracts/space-admission.md) foundation contracts instantiate it;
+[requirement validity](contracts/requirement-review.md) exercises an intentionally
+incorrect requirement. Derive
 properties from intended requirements and allowed/forbidden scenarios before using
 code to establish transition fidelity. Record separate runtime-generation,
 observation-epoch, socket/batch and intent identities where relevant.
