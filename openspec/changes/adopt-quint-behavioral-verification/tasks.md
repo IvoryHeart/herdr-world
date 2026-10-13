@@ -21,7 +21,7 @@
 ## 4. Exercise protocol and workflow composition
 
 - [x] 4.1 Model and replay socket-local chunk credits/assembly, wrong socket/index, capacity, duplicate messages and retirement; verify bounded ownership and fault-control sensitivity against the real protocol implementation.
-- [ ] 4.2 Deliver the shared-view creation integration slice from prepare/attach through source ownership, dispatch, result admission and conditional focus; verify retirement at each boundary, colliding IDs, newer user intent and uncertain dispatch without retry using existing creation/handoff regressions.
+- [x] 4.2 Deliver the shared-view creation integration slice from prepare/attach through source ownership, dispatch, result admission and conditional focus; verify retirement at each boundary, colliding IDs, newer user intent and uncertain dispatch without retry using existing creation/handoff regressions.
 - [ ] 4.3 Review composition between runtime admission, observation, chunk ownership and creation intent; verify generation, observation epoch, socket/batch and intent tokens remain distinct and each consumer assumption has evidence, including legacy omitted-ID compatibility.
 
 ## 5. Separately authorize Ranger authority and recovery

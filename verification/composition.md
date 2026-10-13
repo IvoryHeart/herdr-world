@@ -1,0 +1,33 @@
+# Authority and lifecycle composition
+
+Review each producer guarantee together with the real consumer assumption. A
+passing component model cannot authorize a consumer's operation by itself.
+
+| Identity | Owner and evidence | Consumer obligation |
+| --- | --- | --- |
+| Connection ID and server runtime generation | Manager lease/administration/drain models; real manager tests | Capture both immutably; no explicit-ID failure may fall back to another host. |
+| Browser transport epoch and runtime lease object | Real Bridge in assembly, preparation and creation replay; API regressions | Late sockets/replies and omitted generation under negotiated generation capability cannot restore authority. |
+| Observation epoch | Refresh/preparation models and real World store | Retire publication across disconnect; revalidate each captured runtime after cooperative yields without discarding healthy siblings. |
+| Socket/request/batch index | Credit/assembly models, actual sender/admission/Bridge integration | Unique request IDs within socket lifetime; only the expected batch releases credit. Credit is read-only, not runtime operation authority. |
+| Decoder job/AbortSignal | Assembly model; actual decoder/worker/browser tests | One request owns completion/retirement; large-worker capacity, thread behavior and URL cleanup remain real tests. |
+| Qualified terminal/attachment attempt | Creation flow and existing ownership/handoff regressions | Advertisement alone is insufficient; old acknowledgement or cleanup cannot replace the current attempt. |
+| Creation event/request identity | Actual store/coordinator/Bridge in creation replay | Single-flight key includes owner, runtime, kind and source; uncertain dispatch is not retried automatically. |
+| Navigation revision and Inspector intent | Creation admission plus actual SharedViewCreation/terminal-handoff browser suites | A valid mutation result is insufficient for focus after newer user intent; real openers must obey cancellation. |
+
+The protocol integration tests connect real sender, admission, Bridge and World
+store. They demonstrate no partial publication, generation-1 rejection after
+ready generation 3, and suppression of queued credits after transport retirement.
+Creation replay connects real ownership preparation, qualified dispatch, uncertain
+retirement and generic conditional admission. Browser suites verify the hook and
+opener assumptions that a headless admission model cannot establish.
+
+Legacy omitted-ID compatibility is deliberately separate from explicit admission:
+existing protocol/HTTP/API tests check the negotiated legacy active-host path.
+Generation-capable clients must supply explicit generation, and explicit unknown
+IDs cannot use that compatibility path. The new generation-omission fault control
+checks this real Bridge boundary. No socket, epoch, readiness or UI intent token
+substitutes for another identity. Ranger permission/durable identities are a
+separate pending composition slice.
+
+All new mappings await independent review. This record identifies evidence and
+assumptions; it is not acceptance or permission to activate unreviewed model gates.

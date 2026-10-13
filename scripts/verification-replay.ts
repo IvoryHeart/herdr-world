@@ -3,6 +3,7 @@ import { replayBrowserPreparation } from "../experiments/quint/browser-preparati
 import { replayRuntimeDrain } from "../experiments/quint/runtime-drain";
 import { replayChunkCredits } from "../experiments/quint/chunk-credits";
 import { replayChunkAssembly } from "../experiments/quint/chunk-assembly";
+import { replayCreationFlow } from "../experiments/quint/creation-flow";
 import assert from "node:assert/strict";
 import { readFile, writeFile } from "node:fs/promises";
 import { basename } from "node:path";
@@ -36,6 +37,7 @@ async function replay(request: ReplayRequest, resultPath: string) {
   assert(
     [
       "runtime-leases",
+      "creation-flow",
       "chunk-assembly",
       "chunk-credits",
       "runtime-drain",
@@ -61,6 +63,8 @@ async function replay(request: ReplayRequest, resultPath: string) {
   );
   const exports = request.mutant ? await import(request.mutant) : null;
   const execute = (states: Awaited<ReturnType<typeof loadTrace>>) => {
+    if (request.model === "creation-flow")
+      return replayCreationFlow(states, exports ?? undefined);
     if (request.model === "chunk-assembly")
       return replayChunkAssembly(states, exports?.Bridge);
     if (request.model === "chunk-credits")

@@ -1,6 +1,7 @@
 import type { DrainState } from "./runtime-drain";
 import type { CreditState } from "./chunk-credits";
 import type { AssemblyState } from "./chunk-assembly";
+import type { CreationState } from "./creation-flow";
 import assert from "node:assert/strict";
 import type { PreparationState } from "./browser-preparation";
 import type { ControlState } from "./runtime-control";
@@ -33,6 +34,7 @@ type RefreshState = {
   status: string;
 };
 export type TraceState = CreditState & {
+  creation: CreationState;
   assembly: AssemblyState;
   control: ControlState;
   drain: DrainState;

@@ -124,9 +124,27 @@
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/175",
       "technique": "terminal-ownership",
       "assessment": "attachment reuse, retirement, duplicate native IDs and source ownership composition",
-      "status": "pending",
-      "remaining": "attachment reuse, retirement, duplicate native IDs and source ownership composition",
-      "requiredChecks": ["bun run check"]
+      "status": "shared-model",
+      "remaining": "Independent creation/terminal/intent composition review. Workspace/shared/bootstrap branches, real UI wiring, opener cancellation and deadlines retain existing store/browser evidence.",
+      "requiredChecks": ["bun run check"],
+      "partialEvidence": {
+        "models": ["experiments/quint/creation-flow.qnt"],
+        "contracts": [
+          "verification/contracts/creation-flow.md",
+          "verification/composition.md"
+        ],
+        "tests": [
+          "experiments/quint/creation-flow.test.ts",
+          "web/src/worldCreation.test.ts",
+          "web/src/world/SharedViewCreation.test.ts",
+          "web/src/world/WorldTerminalHandoff.test.ts"
+        ],
+        "checks": [
+          "bun run verification:check",
+          "bun run verification:typecheck"
+        ],
+        "review": "New store/Bridge/attachment/admission mappings and browser consumer obligations await independent promotion review."
+      }
     },
     {
       "id": "Q07",
@@ -349,9 +367,27 @@
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/175",
       "technique": "creation-composition",
       "assessment": "prepare, source acquisition, dispatch, result admission and newer user intent",
-      "status": "pending",
-      "remaining": "prepare, source acquisition, dispatch, result admission and newer user intent",
-      "requiredChecks": ["bun run check"]
+      "status": "modeled",
+      "remaining": "Independent creation/terminal/intent composition review. Workspace/shared/bootstrap branches, real UI wiring, opener cancellation and deadlines retain existing store/browser evidence.",
+      "requiredChecks": ["bun run check"],
+      "partialEvidence": {
+        "models": ["experiments/quint/creation-flow.qnt"],
+        "contracts": [
+          "verification/contracts/creation-flow.md",
+          "verification/composition.md"
+        ],
+        "tests": [
+          "experiments/quint/creation-flow.test.ts",
+          "web/src/worldCreation.test.ts",
+          "web/src/world/SharedViewCreation.test.ts",
+          "web/src/world/WorldTerminalHandoff.test.ts"
+        ],
+        "checks": [
+          "bun run verification:check",
+          "bun run verification:typecheck"
+        ],
+        "review": "New store/Bridge/attachment/admission mappings and browser consumer obligations await independent promotion review."
+      }
     },
     {
       "id": "Q18",
@@ -455,9 +491,27 @@
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/175",
       "technique": "creation-composition",
       "assessment": "captured intent version and conditional focus consumer mapping",
-      "status": "pending",
-      "remaining": "captured intent version and conditional focus consumer mapping",
-      "requiredChecks": ["bun run check"]
+      "status": "shared-model",
+      "remaining": "Independent creation/terminal/intent composition review. Workspace/shared/bootstrap branches, real UI wiring, opener cancellation and deadlines retain existing store/browser evidence.",
+      "requiredChecks": ["bun run check"],
+      "partialEvidence": {
+        "models": ["experiments/quint/creation-flow.qnt"],
+        "contracts": [
+          "verification/contracts/creation-flow.md",
+          "verification/composition.md"
+        ],
+        "tests": [
+          "experiments/quint/creation-flow.test.ts",
+          "web/src/worldCreation.test.ts",
+          "web/src/world/SharedViewCreation.test.ts",
+          "web/src/world/WorldTerminalHandoff.test.ts"
+        ],
+        "checks": [
+          "bun run verification:check",
+          "bun run verification:typecheck"
+        ],
+        "review": "New store/Bridge/attachment/admission mappings and browser consumer obligations await independent promotion review."
+      }
     },
     {
       "id": "Q24",

@@ -5,6 +5,7 @@ import { randomUUID } from "node:crypto";
 import { runSensitivity } from "./sensitivity";
 import { replayChunkCredits } from "./chunk-credits";
 import { replayChunkAssembly } from "./chunk-assembly";
+import { replayCreationFlow } from "./creation-flow";
 import assert from "node:assert/strict";
 import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { relative, resolve } from "node:path";
@@ -35,6 +36,35 @@ const artifacts = relative(root, output);
 const cli = quintCli;
 const cancellation = new AbortController();
 const cases = [
+  {
+    name: "creation-flow",
+    witnesses: [
+      "sourcePrepared",
+      "lateAttachmentIgnored",
+      "duplicateCoalesced",
+      "readinessRetired",
+      "uncertainDispatch",
+      "conditionalFocus",
+      "newerIntent",
+    ],
+    replay: replayCreationFlow,
+    mismatches: [
+      "creation.coalescing.owner",
+      "creation.coalescing.duplicate",
+      "creation.retention",
+      "creation.dispatch.count",
+      "creation.dispatch.generation",
+      "creation.dispatch.source",
+      "creation.dispatch.focus",
+      "creation.outcome",
+      "creation.progress",
+      "creation.admission",
+      "creation.focus",
+      "creation.result.identity",
+      "creation.cleanup.retention",
+      "creation.cleanup.listeners",
+    ],
+  },
   {
     name: "chunk-assembly",
     witnesses: [
@@ -199,12 +229,14 @@ type ImplementationFault =
   | "selected-hint"
   | "credit-index"
   | "qualified-generation"
-  | "chunk-index";
+  | "chunk-index"
+  | "admission-fence";
 async function implementationMutation(
   name: Model,
   fault: ImplementationFault = "primary",
 ) {
   const allowed: Partial<Record<Model, readonly ImplementationFault[]>> = {
+    "creation-flow": ["primary", "admission-fence"],
     "browser-refresh": ["primary", "catalogue"],
     "browser-preparation": [
       "primary",
@@ -220,20 +252,49 @@ async function implementationMutation(
     "Unsupported model/fault combination",
   );
   const owner =
-    name === "chunk-assembly"
-      ? "web/src/api.ts"
-      : name === "chunk-credits"
-        ? "server/src/bridge/world-snapshot-admission.ts"
-        : name === "runtime-leases" ||
-            name === "runtime-control" ||
-            name === "runtime-drain"
-          ? "server/src/connections/manager.ts"
-          : name === "browser-refresh" || name === "browser-preparation"
-            ? "web/src/world/runtimeStore.ts"
-            : "web/src/world/spaceAdmission.ts";
+    name === "creation-flow"
+      ? fault === "admission-fence"
+        ? "web/src/world/createdTerminalAdmission.ts"
+        : "web/src/creationRequests.ts"
+      : name === "chunk-assembly"
+        ? "web/src/api.ts"
+        : name === "chunk-credits"
+          ? "server/src/bridge/world-snapshot-admission.ts"
+          : name === "runtime-leases" ||
+              name === "runtime-control" ||
+              name === "runtime-drain"
+            ? "server/src/connections/manager.ts"
+            : name === "browser-refresh" || name === "browser-preparation"
+              ? "web/src/world/runtimeStore.ts"
+              : "web/src/world/spaceAdmission.ts";
   const original = await readFile(resolve(root, owner), "utf8");
   let contents: string;
-  if (name === "chunk-assembly") {
+  if (name === "creation-flow") {
+    if (fault === "admission-fence") {
+      const guard =
+        "if (state.invalidReason) return finish(new Error(state.invalidReason));";
+      assert.equal(
+        original.split(guard).length,
+        2,
+        "created admission fence changed",
+      );
+      contents = original.replace(
+        guard,
+        "if (false) return finish(new Error(state.invalidReason));",
+      );
+    } else {
+      const guard = "owner.connectionId,\n    owner.runtimeGeneration,";
+      assert.equal(
+        original.split(guard).length,
+        2,
+        "creation owner key changed",
+      );
+      contents = original.replace(
+        guard,
+        '"synthetic-shared-owner",\n    owner.runtimeGeneration,',
+      );
+    }
+  } else if (name === "chunk-assembly") {
     if (fault === "chunk-index") {
       const guard = "chunk.index !== (pending.chunks?.parts.length ?? 0)";
       assert.equal(
@@ -357,7 +418,14 @@ async function implementationMutation(
   // checkout or put faulty code in the application dependency graph.
   let substituted = false;
   const bundle = await Bun.build({
-    entrypoints: [resolve(root, owner)],
+    entrypoints: [
+      resolve(
+        root,
+        name === "creation-flow"
+          ? "experiments/quint/creation-subjects.ts"
+          : owner,
+      ),
+    ],
     target: "bun",
     plugins: [
       {
@@ -617,9 +685,11 @@ export async function runReviewedQuintModels(
     );
     const results = [];
     for (const item of runCases) {
-      const traceCount = ["browser-preparation", "chunk-credits"].includes(
-        item.name,
-      )
+      const traceCount = [
+        "browser-preparation",
+        "chunk-credits",
+        "creation-flow",
+      ].includes(item.name)
         ? 500
         : 100;
       const model = `experiments/quint/${item.name}.qnt`;
@@ -913,6 +983,24 @@ export async function runReviewedQuintModels(
           observation: result.observation,
         };
       }
+      let creationAdmissionControl = null;
+      if (item.name === "creation-flow") {
+        const bundle = await implementationMutation(
+          item.name,
+          "admission-fence",
+        );
+        const result = await replayWorker("creation-flow-admission-control", {
+          model: item.name,
+          files: files.map((file) => resolve(output, file)),
+          mode: "mutation",
+          allowed: ["creation.admission"],
+          mutant: bundle,
+        });
+        creationAdmissionControl = {
+          trace: result.trace,
+          observation: result.observation,
+        };
+      }
       const original = await readFile(resolve(root, model), "utf8");
       assert(original.includes("pure val BROKEN = false"));
       const mutant = `${artifacts}/${item.name}-mutant.qnt`;
@@ -980,6 +1068,7 @@ export async function runReviewedQuintModels(
         ...(creditIndexControl ? { creditIndexControl } : {}),
         ...(qualifiedGenerationControl ? { qualifiedGenerationControl } : {}),
         ...(assemblyIndexControl ? { assemblyIndexControl } : {}),
+        ...(creationAdmissionControl ? { creationAdmissionControl } : {}),
         ...(exhaustiveConfigurations !== null
           ? { exhaustiveConfigurations }
           : {}),

@@ -1,11 +1,13 @@
 import type { PreparationState } from "./browser-preparation";
 import type { DrainState } from "./runtime-drain";
 import type { AssemblyState } from "./chunk-assembly";
+import type { CreationState } from "./creation-flow";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { decodeItf, type TraceState } from "./replay";
 
 export type Model =
+  | "creation-flow"
   | "chunk-assembly"
   | "chunk-credits"
   | "runtime-drain"
@@ -16,6 +18,21 @@ export type Model =
   | "space-admission";
 
 const actions = {
+  "creation-flow": [
+    "init",
+    "start",
+    "duplicate",
+    "beginAttach",
+    "oldAck",
+    "attach",
+    "retireAtReady",
+    "retire",
+    "result",
+    "newIntent",
+    "topology",
+    "finishFocus",
+    "lateResult",
+  ],
   "chunk-assembly": [
     "init",
     "call",
@@ -129,7 +146,83 @@ export function validateTrace(
       index === 0 ? state.op === "init" : state.op !== "init",
       "invalid initialization order",
     );
-    if (model === "chunk-assembly") {
+    if (model === "creation-flow") {
+      record(state.creation);
+      integer(state.creation.intent, 0, 2);
+      integer(state.target, -1, 1);
+      assert(
+        Array.isArray(state.creation.live) &&
+          state.creation.live.length === 2 &&
+          state.creation.live.every(
+            (value: unknown) => typeof value === "boolean",
+          ),
+        "invalid creation owner lifetime",
+      );
+      assert(
+        Array.isArray(state.creation.requests) &&
+          state.creation.requests.length === 2,
+        "invalid creation requests",
+      );
+      for (const request of state.creation.requests) {
+        record(request);
+        integer(request.attempt, 0, 2);
+        integer(request.intent, -1, 2);
+        integer(request.focus, 0, 1);
+        for (const key of ["retained", "mutated", "available", "finished"])
+          assert(typeof request[key] === "boolean", "invalid creation flag");
+        assert(
+          [
+            "idle",
+            "preparing",
+            "dispatching",
+            "created",
+            "failed",
+            "uncertain",
+          ].includes(String(request.phase)),
+          "invalid creation phase",
+        );
+        assert(
+          ["none", "waiting", "opening", "opened", "rejected"].includes(
+            String(request.admission),
+          ),
+          "invalid focus admission",
+        );
+      }
+      if (index > 0) {
+        const before: CreationState = value[index - 1].creation;
+        assert(
+          state.op === "newIntent" ? state.target === -1 : state.target >= 0,
+          "invalid creation target",
+        );
+        const h = state.target as number;
+        const request = before.requests[h];
+        const valid: boolean =
+          state.op === "start"
+            ? request!.phase === "idle" && before.live[h]
+            : state.op === "duplicate"
+              ? ["preparing", "dispatching"].includes(request!.phase)
+              : state.op === "beginAttach"
+                ? request!.phase === "preparing" && request!.attempt < 2
+                : state.op === "oldAck"
+                  ? request!.phase === "preparing" && request!.attempt === 2
+                  : ["attach", "retireAtReady"].includes(state.op)
+                    ? request!.phase === "preparing" && request!.attempt > 0
+                    : state.op === "retire"
+                      ? before.live[h]
+                      : state.op === "result"
+                        ? request!.phase === "dispatching"
+                        : state.op === "newIntent"
+                          ? before.intent < 2
+                          : state.op === "topology"
+                            ? request!.admission === "waiting"
+                            : state.op === "finishFocus"
+                              ? ["opening", "rejected"].includes(
+                                  request!.admission,
+                                ) && !request!.finished
+                              : request!.phase === "uncertain";
+        assert(valid, "invalid creation action precondition");
+      }
+    } else if (model === "chunk-assembly") {
       record(state.assembly);
       integer(state.assembly.epoch, 0, 2);
       integer(state.assembly.calls, 0, 4);
@@ -494,6 +587,12 @@ export function parseTrace(
   const raw = JSON.parse(json);
   record(raw);
   let states = decodeItf(raw.states);
+  if (model === "creation-flow" && Array.isArray(states))
+    states = states.map((state) => {
+      record(state);
+      const { requests, live, intent, ...event } = state;
+      return { ...event, creation: { requests, live, intent } };
+    });
   if (model === "chunk-assembly" && Array.isArray(states))
     states = states.map((state) => {
       record(state);

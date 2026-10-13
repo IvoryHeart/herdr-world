@@ -35,6 +35,7 @@ export function syntheticBridge(
   decode?: (parts: string[], signal: AbortSignal) => Promise<unknown>,
   BridgeClass = Bridge,
   admission = false,
+  existing?: Bridge,
 ) {
   const webSocket = Object.getOwnPropertyDescriptor(globalThis, "WebSocket");
   const location = Object.getOwnPropertyDescriptor(globalThis, "location");
@@ -47,7 +48,7 @@ export function syntheticBridge(
     configurable: true,
     value: { protocol: "https:", host: "synthetic.example" },
   });
-  const bridge = new BridgeClass(2000, 2000, decode);
+  const bridge = existing ?? new BridgeClass(2000, 2000, decode);
   const sockets: SyntheticSocket[] = [];
   const ids = ["synthetic-a", "synthetic-b"];
   const connect = (live = [true, true]) => {
