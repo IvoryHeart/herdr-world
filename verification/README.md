@@ -130,3 +130,10 @@ bundles from the tracked sources and locked tools.
 The [observation progress assessment](contracts/observation-progress.md) separates
 controlled scheduler/deadline evidence from model reachability witnesses and states
 the required event-loop, slot-availability and transport-settlement assumptions.
+
+Checker startup now waits for the actual gRPC reflection endpoint and verifies
+that the listener belongs to the owned daemon PID before running Quint. The
+startup advertisement alone is insufficient: CI reproduced an early-advertisement
+race in which Quint tried to launch a second server on the occupied port. Its
+downloaded logs identified that failure; delayed-readiness and failed-readiness
+regressions preserve the corrected startup and cleanup boundary.

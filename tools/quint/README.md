@@ -13,7 +13,9 @@ checker to one worker, a 1 GB heap and a 16 MB stack. `verification:setup` downl
 and verifies the distribution into the checkout's ignored `.agents/verification/`
 cache. The check verifies the installed JAR and does not download a checker.
 It uses a private allocated endpoint for each invocation instead of borrowing an
-existing local server. Checker and replay workers have owned POSIX process groups,
+existing local server. Readiness requires gRPC reflection and listener ownership,
+not just a startup log line. Linux verifies ownership through `/proc`; macOS
+requires its standard `lsof` tool and separate runner evidence. Checker and replay workers have owned POSIX process groups,
 deadlines and TERM/KILL drain, including grandchildren and inherited pipes.
 
 Use Bun 1.4.3, Node 18+ and Java 17+ on POSIX systems; the measured local

@@ -70,7 +70,9 @@ reduction in production defects.
 
 The isolated locked Quint 0.33.0 development graph and hash-pinned Apalache 0.62.1
 checker do not alter application dependencies. The runner launches the verified
-JAR directly. Owned process groups, deadline/abort handling, bounded output,
+JAR directly and waits for gRPC reflection plus listener ownership before Quint
+connects. The repaired failure artifact exposed an early-advertisement startup
+race in CI; delayed/failed-readiness tests and a real checker rerun verify the fix. Owned process groups, deadline/abort handling, bounded output,
 validated traces and source/input-fingerprinted completion manifests prevent
 stale, partial or failed runs being reported as success. Generated artifacts and
 local environment data remain ignored.

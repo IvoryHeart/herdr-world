@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 import { createServer } from "node:net";
 import { mkdir } from "node:fs/promises";
 import { resolve } from "node:path";
@@ -13,6 +14,14 @@ export async function withPrivateChecker<T>(
   signal: AbortSignal,
   execute: (port: number, signal: AbortSignal) => Promise<T>,
   diagnostic?: (text: string) => void,
+  options: {
+    launch?: (port: number, temporary: string) => string[];
+    readiness?: (
+      port: number,
+      pid: number,
+      signal: AbortSignal,
+    ) => Promise<void>;
+  } = {},
 ) {
   const port = await new Promise<number>((resolve, reject) => {
     const socket = createServer();
@@ -37,8 +46,9 @@ export async function withPrivateChecker<T>(
   });
   const daemonTemp = resolve(temporary, "daemon");
   await mkdir(daemonTemp, { recursive: true });
+  let daemonPid = 0;
   const daemon = runVerificationProcess(
-    [
+    options.launch?.(port, daemonTemp) ?? [
       "java",
       "-Xmx1G",
       "-Xss16M",
@@ -49,6 +59,9 @@ export async function withPrivateChecker<T>(
       `--port=${port}`,
     ],
     {
+      onStart: (pid) => {
+        daemonPid = pid;
+      },
       cwd: temporary,
       timeoutMs: 240_000,
       signal: combined,
@@ -92,6 +105,30 @@ export async function withPrivateChecker<T>(
   let operationFailure: unknown;
   try {
     await ready;
+    assert(daemonPid > 0);
+    if (options.readiness) await options.readiness(port, daemonPid, combined);
+    else {
+      const probe = await runVerificationProcess(
+        [
+          "node",
+          resolve(import.meta.dir, "verification-checker-ready.mjs"),
+          String(port),
+          String(daemonPid),
+        ],
+        {
+          cwd: temporary,
+          timeoutMs: 35_000,
+          signal: combined,
+          onOutput: diagnostic,
+        },
+      );
+      assert.equal(
+        probe.code,
+        0,
+        "Owned checker protocol readiness failed; see checker diagnostics",
+      );
+    }
+    combined.throwIfAborted();
     result = await execute(port, combined);
   } catch (error) {
     operationFailure = error;
