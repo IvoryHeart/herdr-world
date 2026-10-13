@@ -6,10 +6,10 @@
 
 ## 2. Make development tooling reproducible
 
-- [ ] 2.1 Create the dedicated development-only tooling package with locked Quint/transitive dependencies and explicit checker versions; document the root-lockfile exception and verify a fresh isolated install without changing application resolutions.
-- [ ] 2.2 Harden ITF parsing and run isolation; test malformed/unsupported traces, incomplete output and stale artifacts, and record source/model/adapter/tool identifiers in evidence manifests.
-- [ ] 2.3 Add process and adapter cancellation/drain behavior; verify timeout and assertion-failure controls leave no owned checker descendants, pending promises or timers.
-- [ ] 2.4 Add the local entry point and experiment typecheck with bounded output; verify repeatable seeded results and review any separate tooling notices required by the resolved dependency graph.
+- [x] 2.1 Create the dedicated development-only tooling package with locked Quint/transitive dependencies and explicit checker versions; document the root-lockfile exception and verify a fresh isolated install without changing application resolutions.
+- [x] 2.2 Harden ITF parsing and run isolation; test malformed/unsupported traces, incomplete output and stale artifacts, and record source/model/adapter/tool identifiers in evidence manifests.
+- [x] 2.3 Add process and adapter cancellation/drain behavior; verify timeout and assertion-failure controls leave no owned checker descendants, pending promises or timers.
+- [x] 2.4 Add the local entry point and experiment typecheck with bounded output; verify repeatable seeded results and review any separate tooling notices required by the resolved dependency graph.
 
 ## 3. Promote runtime admission and browser observation
 

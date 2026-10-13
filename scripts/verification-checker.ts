@@ -1,0 +1,99 @@
+import { createServer } from "node:net";
+import { mkdir } from "node:fs/promises";
+import { resolve } from "node:path";
+import {
+  checkerDirectory,
+  checkerHome,
+  checkerJar,
+} from "./verification-setup";
+import {
+  runVerificationProcess,
+  VerificationProcessError,
+} from "./verification-process";
+
+/** Start a verified, owned server before giving Quint its endpoint. */
+export async function withPrivateChecker<T>(
+  temporary: string,
+  signal: AbortSignal,
+  execute: (port: number, signal: AbortSignal) => Promise<T>,
+) {
+  const port = await new Promise<number>((resolve, reject) => {
+    const socket = createServer();
+    socket.once("error", reject);
+    socket.listen(0, "127.0.0.1", () => {
+      const address = socket.address();
+      if (!address || typeof address === "string")
+        throw new Error("Missing private checker endpoint");
+      socket.close((error) => (error ? reject(error) : resolve(address.port)));
+    });
+  });
+  const control = new AbortController();
+  const combined = AbortSignal.any([control.signal, signal]);
+  let retiring = false;
+  let failure: unknown;
+  let startup = "";
+  let readyResolve!: () => void;
+  let readyReject!: (error: unknown) => void;
+  const ready = new Promise<void>((resolve, reject) => {
+    readyResolve = resolve;
+    readyReject = reject;
+  });
+  const daemonTemp = resolve(temporary, "daemon");
+  await mkdir(daemonTemp, { recursive: true });
+  const daemon = runVerificationProcess(
+    [resolve(checkerDirectory, "bin/apalache-mc"), "server", `--port=${port}`],
+    {
+      cwd: temporary,
+      timeoutMs: 240_000,
+      signal: combined,
+      env: {
+        ...process.env,
+        QUINT_HOME: checkerHome,
+        APALACHE_JAR: checkerJar,
+        JVM_ARGS: "-Xmx1G -Xss16M",
+        JVM_GC_ARGS: "",
+        TMPDIR: daemonTemp,
+        TMP: daemonTemp,
+        TEMP: daemonTemp,
+      },
+      onOutput: (text) => {
+        startup = (startup + text).slice(-65536);
+        if (startup.includes(`The Apalache server is running on port ${port}.`))
+          readyResolve();
+      },
+    },
+  )
+    .then(() => {
+      if (!retiring) {
+        failure = new Error("Owned checker server exited unexpectedly");
+        readyReject(failure);
+        control.abort();
+      }
+    })
+    .catch((error) => {
+      if (
+        retiring &&
+        error instanceof VerificationProcessError &&
+        error.reason === "aborted"
+      )
+        return;
+      failure = error;
+      readyReject(error);
+      control.abort();
+    });
+  let result!: T;
+  let operationFailure: unknown;
+  try {
+    await ready;
+    result = await execute(port, combined);
+  } catch (error) {
+    operationFailure = error;
+  } finally {
+    retiring = true;
+    control.abort();
+    await daemon;
+  }
+  if (failure !== undefined) throw failure;
+  if (operationFailure !== undefined) throw operationFailure;
+  return result;
+}

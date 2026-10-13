@@ -1,0 +1,8 @@
+{
+  "version": "0.62.1",
+  "url": "https://github.com/apalache-mc/apalache/releases/download/v0.62.1/apalache.tgz",
+  "sha256": "38202a8c4ebeb3ab73e0fe5a7e4bb948442d46ad5de8a7fb45c9e5cac2beb2a6",
+  "jarSha256": "880c0b2b72354816f12e9a9755829f2907071e9a181ffea1937954c23d54739d",
+  "backend": "tlc",
+  "license": "Apache-2.0"
+}

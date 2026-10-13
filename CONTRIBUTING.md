@@ -11,10 +11,15 @@
    bun run dev:web
    ```
 
-Keep `bun.lock` (the only lockfile) and shared tools (TypeScript, Bun types,
+Keep `bun.lock` (the application lockfile) and shared tools (TypeScript, Bun types,
 formatting/linting) at root; browser/Vite dependencies in `web/package.json`;
 server runtime dependencies in `server/package.json`. After dependency changes,
 run root `bun install` and commit manifests/lockfile.
+
+The isolated development-only [Quint tooling](tools/quint/README.md) has its own
+reviewed `package-lock.json`, outside application workspaces. Install it with
+`bun run verification:setup`; do not add checker binaries to the application or
+replace its lock with an unlocked global dependency.
 
 ## Validation
 

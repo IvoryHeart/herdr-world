@@ -94,6 +94,7 @@ export async function replayRuntime(
   states: TraceState[],
   Manager = ConnectionManager,
 ) {
+  const witnesses = new Set<string>();
   const ids = ["synthetic-a", "synthetic-b"];
   const manager = new Manager<Runtime>(ids[0]!);
   const runtimes = new Map<number, Runtime>();
@@ -132,6 +133,8 @@ export async function replayRuntime(
           starts.set(h, manager.start(id));
           break;
         case "finishStart":
+          if (manager.status(id).state === "stopping")
+            witnesses.add("lateStart");
           runtimes.get(h)!.transport.resolve();
           await starts.get(h);
           break;
@@ -150,6 +153,11 @@ export async function replayRuntime(
           await stops.get(h);
           break;
         case "obsoleteError":
+          assert(
+            !captured.get(h)!.context.isCurrent(),
+            "obsolete callback must actually be retired",
+          );
+          witnesses.add("obsoleteCallback");
           captured
             .get(h)!
             .context.reportError(new Error("synthetic obsolete callback"));
@@ -184,6 +192,8 @@ export async function replayRuntime(
           `state ${index}`,
         );
       }
+      if (manager.list().every((status) => status.state === "ready"))
+        witnesses.add("twoReady");
     }
   } finally {
     // Drain actual tasks, including traces ending in mid-start or mid-stop.
@@ -195,17 +205,20 @@ export async function replayRuntime(
     await Promise.all(stops.values());
     await manager.stopAll();
   }
+  return witnesses;
 }
 
 export async function replayRefresh(
   states: TraceState[],
   Store = WorldRuntimeStore,
 ) {
+  const witnesses = new Set<string>();
   let issued = 0;
   let epoch = 0;
   let statusListener: ((status: ConnectionStatus) => void) | undefined;
   const calls = new Map<number, ReturnType<typeof deferred<unknown>>>();
   const owners = new Map<number, Promise<void>>();
+  const requestEpochs = new Map<number, number>();
   class RecordingStore extends Store {
     // Instrument only the public entry point, including automatic follow-ups.
     // Do not read or modify private coordination state.
@@ -222,6 +235,7 @@ export async function replayRefresh(
       assert.equal(calls.size, 0, "more than one request in flight");
       const gate = deferred<unknown>();
       calls.set(++issued, gate);
+      requestEpochs.set(issued, epoch);
       return gate.promise;
     },
     onControl: () => () => {},
@@ -263,10 +277,12 @@ export async function replayRefresh(
           break;
         case "complete": {
           const request = issued;
+          if (requestEpochs.get(request) !== epoch) witnesses.add("lateReply");
           const gate = calls.get(request)!;
           calls.delete(request);
           gate.resolve(response(request));
           await owners.get(request);
+          if (issued > request) witnesses.add("coalescedFollowup");
           break;
         }
         default:
@@ -320,18 +336,22 @@ export async function replayRefresh(
           `state ${index}`,
         );
       }
+      if (witnesses.has("lateReply") && actual.status === "ready")
+        witnesses.add("restored");
     }
   } finally {
     store.stop();
     for (const [request, gate] of calls) gate.resolve(response(request));
     await Promise.all(owners.values());
   }
+  return witnesses;
 }
 
 export function replaySpaces(
   states: TraceState[],
   allocate = admitWorldSpaces,
 ) {
+  const witnesses = new Set<string>();
   const hosts = [0, 0, 0, 1, 1, 2];
   for (const state of states) {
     const relevant = new Set(state.relevant);
@@ -358,5 +378,13 @@ export function replaySpaces(
       .slice(0, state.bound)
       .map(({ id }) => id);
     observe("spaces.priority", actual.slice(0, priority.length), priority);
+    if (
+      actual.some((id) => relevant.has(id)) &&
+      actual.some((id) => !relevant.has(id))
+    )
+      witnesses.add("mixedPriority");
+    if (new Set(actual.map((id) => hosts[id])).size === 3)
+      witnesses.add("allHosts");
   }
+  return witnesses;
 }

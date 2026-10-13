@@ -4,27 +4,33 @@ Read [the inventory and assessment](../../docs/quint-adoption-spike.md) first.
 These models and adapters are experimental development tooling. No application
 code, product contract, shipped dependency or required CI gate is changed.
 
-From this checkout, install the isolated pinned CLI and run:
+The reviewed foundation now runs through maintained, isolated tooling:
 
 ```bash
-npm install --prefix .agents/quint-tool --no-save --ignore-scripts @informalsystems/quint@0.33.0
 bun install --frozen-lockfile
-bun experiments/quint/run.ts
+bun run verification:setup
+bun run verification:typecheck
+bun run verification:check
 ```
 
-Use the repository's pinned Bun 1.4.3, Node 18+ and Java 17+. The runner uses the TypeScript simulator to
-avoid downloading the Rust simulator. Verification uses TLC through Quint's
-Apalache translation/distribution; the CLI downloads its checker distribution
-on first use. Network access is required for installation and first verification.
-The top-level Quint version is pinned; this isolated install does not lock its
-transitive npm graph. Treat that as a reproducibility limitation of the spike.
+See [the tooling contract](../../tools/quint/README.md) for supported runtimes,
+installation, lockfiles and checker integrity. The dedicated npm lock pins the
+entire development-only graph; the checker archive and executable JAR are
+verified against committed digests. Application resolutions are unchanged.
+Network access is needed for setup; execution uses the installed tools.
 
-The runner rejects a different Quint version and fails on a tool error, timeout,
-missing witness, unexpected trace count, implementation divergence or a negative
-control that does not produce an invariant violation. Each external command has
-a four-minute deadline. Results, commands, full logs, generated traces and
-counterexamples are under a fresh ignored `.agents/quint-spike/<run-time>/`
-directory. Checker output is confined to the same directory. It does not poll.
+The runner fails on tool errors, missing witnesses, unexpected trace counts,
+implementation divergence and unsuccessful negative controls. Checker and replay
+workers have deadlines, bounded output and owned process groups. Cancellation
+terminates and drains their descendants before deleting their temporary files.
+Verification starts its own checker server rather than reusing another process.
+
+Each run has a fresh ignored `.agents/verification/runs/<run-time>/` directory
+with logs, traces, counterexamples and a completion manifest. The manifest records
+tracked source/model/adapter fingerprints, tool versions and checker digest,
+settings, commands and results. An interrupted run is incomplete; stale source
+fingerprints invalidate completed evidence. Replay witnesses come from actual
+implementation observations, separately from simulator witness counts.
 
 Counterexamples are decoded and validated before expected-rejection controls.
 Only a dedicated named observation mismatch from the selected model counts as
