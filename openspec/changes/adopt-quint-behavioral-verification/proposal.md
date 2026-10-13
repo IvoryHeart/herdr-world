@@ -22,16 +22,19 @@ why incorrect requirements or incomplete models can produce misleading confidenc
 - Populate coverage from current tests and accepted delivery evidence first.
   Promote runtime admission and browser observation in a concrete first slice,
   then chunk credits and shared-view creation composition. Ranger durability
-  receives separate authorization and explicit storage/crash assumptions.
+  retains separate acceptance and explicit storage/crash assumptions.
   Reconcile the remaining contract families. The [design](design.md) and
   [tasks](tasks.md) define the rollout.
 - Maintain a coverage map linking requirements, models, real-code observations,
   reviewers, bounds and justified alternative evidence. Unmodeled critical
   transitions remain visible work, not silent exemptions.
 
-This PR delivers the proposal, analysis and runnable spike. Merging it does not
-enact the proposed policy, modify `AGENTS.md`, install mandatory CI gates, or mark
-adoption tasks complete. Implementation follows review and owner authorization.
+The owner accepted the spike and authorized expanding the same PR into implementation.
+The branch now delivers maintained tooling, 11 models, implementation-connected
+replay, an assessed 43-area inventory and candidate policy/CI guidance. Expanded
+implementation acceptance and protected-check promotion require their own
+independent review; spike acceptance is not inherited. See the
+[current implementation report](../../../docs/quint-adoption-implementation.md).
 
 ## Capabilities
 
@@ -48,7 +51,7 @@ provide inputs to modeling. Their product requirements are not changed here.
 
 ## Impact
 
-Future implementation affects agent/contributor guidance, opt-in and required
+Implementation affects agent/contributor guidance, opt-in and required
 development commands, tool dependency management, model/adaptor sources and CI
 evidence. Tooling remains outside the shipped application dependency graph and
 uses synthetic data. No service/browser API, external Herdr protocol, production

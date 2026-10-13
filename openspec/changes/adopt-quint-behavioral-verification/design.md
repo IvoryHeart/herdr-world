@@ -4,8 +4,8 @@ See [proposal.md](proposal.md) for motivation and [the analysis](../../../docs/q
 for the 43-area inventory, measured results, limitations and reviewer questions.
 Three bounded models passed TLC and 300 traces replayed 7,222 transitions against
 real code. Three model faults and three implementation mutations were detected.
-No production defect was found within that scope. The spike is not yet a maintained
-verification contract: tooling has unlocked transitive dependencies, refresh
+No production defect was found within that historical scope. At spike time it was
+not a maintained verification contract: tooling has unlocked transitive dependencies, refresh
 completion is coarse, important runtime transitions are omitted, and replay
 coverage is narrower than finite-model coverage.
 
@@ -18,7 +18,10 @@ extend coverage by contract without hiding critical omissions.
 **Non-Goals:** a model per source file, a monolithic whole-system proof, replacing
 existing tests, changing product contracts to fit a model, or claiming to verify
 OpenSSH, browser internals, filesystem durability or external Herdr implementation.
-This proposal's PR does not implement the adoption policy.
+The owner subsequently authorized implementation in the same PR. Candidate guidance
+and checks are implemented; independent promotion and final acceptance remain
+pending. The [implementation report](../../../docs/quint-adoption-implementation.md)
+records current evidence without rewriting the historical spike results.
 
 ## Decisions
 
@@ -155,7 +158,8 @@ repository checks remain in force throughout promotion.
 ## Migration Plan
 
 Keep one coherent OpenSpec change through these stages. PR review accepts the
-planning artifacts; implementation and policy activation need owner authorization.
+planning artifacts. The owner has authorized implementation through all stages;
+model promotion and expanded acceptance retain independent review checkpoints.
 
 | Stage | Contract families and deliverable | Exit evidence |
 | --- | --- | --- |

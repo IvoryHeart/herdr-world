@@ -86,5 +86,9 @@ The optional [Quint adoption spike](quint-adoption-spike.md) inventories formal
 modeling candidates and records bounded model/replay experiments; it is not a CI gate.
 The [Quint adoption proposal](../openspec/changes/adopt-quint-behavioral-verification/proposal.md)
 defines the planned policy, promotion criteria and staged repository-wide coverage.
-The [behavioral evidence baseline](../verification/README.md) maps all 43 areas to
-current requirements, existing tests, accepted delivery and pending evidence work.
+The [maintained behavioral evidence](../verification/README.md) maps all 43 areas to
+current requirements, existing tests, accepted delivery and concrete model/consumer
+or alternative evidence decisions. The [implementation report](quint-adoption-implementation.md)
+records maintained checks, actual-delivery audit, claim limits and pending promotion.
+[Consumer evidence](../verification/consumer-evidence.md) explains shared guarantees
+and implementation/browser/platform alternatives.

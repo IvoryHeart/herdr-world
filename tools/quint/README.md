@@ -16,7 +16,9 @@ It uses a private allocated endpoint for each invocation instead of borrowing an
 existing local server. Checker and replay workers have owned POSIX process groups,
 deadlines and TERM/KILL drain, including grandchildren and inherited pipes.
 
-Use Bun 1.4.3, Node 18+ and Java 17+ on Linux/macOS:
+Use Bun 1.4.3, Node 18+ and Java 17+ on POSIX systems; the measured local
+and candidate CI toolchain uses Node 24.19.0 and Java 21 on Linux. macOS requires
+its own runner evidence before claiming equivalent process/platform coverage:
 
 ```bash
 bun run verification:setup
@@ -35,9 +37,11 @@ observation; malformed traces, adapter errors and cleanup errors abort. Witnesse
 are counted from successfully executed production replay, not only simulation.
 Raw output is kept in bounded local logs and summarized in console output.
 
-The maintained command executes the foundation plus administration, drain and
-staged-observation models, their fault controls and larger-bound/host-order
-sensitivity. These implementations await independent promotion review. A measured
-Linux run took approximately 150 seconds with the configured checker bounds; this
-is execution evidence for this toolchain, not a guarantee for other environments. Expanded contracts, replay mappings and required-check promotion are
-separate implementation/review checkpoints in `verification/`.
+The maintained command executes all 11 runtime, observation, allocation, protocol,
+creation and Ranger models, their controls and larger-bound/host-order sensitivity.
+The verified JAR is launched directly. These implementations await independent
+promotion review. A complete Linux candidate run takes approximately four minutes
+with the configured bounds; this is execution evidence for this toolchain, not a
+guarantee for other environments or total peak-memory measurement. Expanded
+contracts, mappings and required-check promotion remain separate review
+checkpoints in `verification/`.

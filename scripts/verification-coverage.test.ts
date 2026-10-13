@@ -30,6 +30,33 @@ test("all reviewed inventory areas have explicit existing evidence and coverage 
       expect(existsSync(resolve(root, path))).toBe(true);
     }
     expect(area.requiredChecks).toContain("bun run check");
+    if (area.status !== "pending") {
+      expect("partialEvidence" in area).toBe(true);
+      if ("partialEvidence" in area) {
+        const evidence = area.partialEvidence as {
+          models: string[];
+          contracts: string[];
+          tests?: string[];
+          checks: string[];
+          review: string;
+        };
+        expect(evidence.contracts.length).toBeGreaterThan(0);
+        expect(evidence.checks.length).toBeGreaterThan(0);
+        expect(evidence.review.length).toBeGreaterThan(0);
+        if (area.status === "modeled" || area.status === "shared-model")
+          expect(evidence.models.length).toBeGreaterThan(0);
+        for (const path of [
+          ...evidence.models,
+          ...evidence.contracts,
+          ...(evidence.tests ?? []),
+        ]) {
+          expect(path.startsWith("/") || path.split("/").includes("..")).toBe(
+            false,
+          );
+          expect(existsSync(resolve(root, path))).toBe(true);
+        }
+      }
+    }
     if (area.status === "pending")
       expect(area.remaining.length).toBeGreaterThan(0);
   }

@@ -1,6 +1,8 @@
 # Maintained Quint behavioral evidence
 
-Read [the inventory and assessment](../../docs/quint-adoption-spike.md) first.
+Read [current coverage](../../verification/README.md) and the
+[implementation report](../../docs/quint-adoption-implementation.md) first. The
+[spike assessment](../../docs/quint-adoption-spike.md) is historical foundation.
 These models and adapters are maintained development tooling under implementation
 review. Existing cooperative preparation yields accept an injected scheduler for
 deterministic replay; application defaults and shipped dependencies are unchanged.
@@ -47,7 +49,7 @@ bun test experiments/quint/replay.test.ts
 
 Each model is simulated with seeds 42, 73 and 103, 500 samples per seed and
 at most 25 transitions. One hundred generated traces per seed and case are replayed, except staged
-preparation and socket credits, which replay all 500 sampled paths per seed so rare sibling-survival
+preparation, socket credits and creation, which replay all 500 sampled paths per seed so rare conditional-admission
 witnesses cannot be lost during export. Actual required witnesses must appear in
 every seed's production replay. The administration companion adds explicit
 replacement/removal/error/failed-cleanup/reentry/shutdown coverage; its
@@ -69,6 +71,14 @@ files are never modified. The results identify the trace that kills each mutatio
 The refresh case also requires a dropped-catalogue fault control. These faults
 demonstrate detection sensitivity; they are not broad mutation coverage.
 
+The maintained suite also includes [chunk credits](../../verification/contracts/chunk-credits.md),
+[assembly](../../verification/contracts/chunk-assembly.md),
+[creation](../../verification/contracts/creation-flow.md),
+[Ranger authority](../../verification/contracts/ranger-authority.md) and
+[durable recovery](../../verification/contracts/ranger-recovery.md). Read each
+contract for real consumers, faults, finite domains and exclusions. All 11 models
+run in the unfiltered candidate CI workflow; independent promotion remains pending.
+
 ## Abstraction boundaries
 
 - Runtime: two hosts, generations 0–4, delayed successful transport start and
@@ -84,7 +94,7 @@ demonstrate detection sensitivity; they are not broad mutation coverage.
   failure, priority changes and per-host lifecycle are outside this foundation.
   The [preparation companion](../../verification/contracts/browser-preparation.md)
   separately models decode/projection/admission interruptions, per-host retirement
-  and request failure; queued/priority composition remains pending.
+  and request failure, with queued priority follow-ups and real Bridge qualification.
 - Allocation: six ordered spaces on three hosts with every subset of present
   and relevant spaces and capacities 0–6. Relevance is represented by workspace
   focus in replay; selection and leaf-status relevance classification are not

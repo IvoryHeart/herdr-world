@@ -27,25 +27,25 @@
 ## 5. Implement Ranger authority and recovery with separate acceptance
 
 - [ ] 5.1 Owner authorization covers the bounded Ranger permission/persistence/recovery slice. Independently review its documented storage/crash assumptions; verify its acceptance boundary remains separate from lifecycle/observation promotion.
-- [ ] 5.2 Complete task admission, captured identity, revocation, cancellation/drain and interrupted recovery coverage. Action authority and SQLite recovery models/replay are implemented; reconcile retained scheduler/SDK integration evidence and intended authority mismatches before closing this task.
+- [x] 5.2 Model captured identity/revocation and durable admission/identity recovery; retain real scheduler/SDK cancellation/drain and killed-process recovery integration evidence with intended authority mismatches. Technical evidence is delivered; independent consumer/storage acceptance remains task 5.3.
 - [ ] 5.3 Independently accept Ranger consumer/composition mappings; verify current-runtime admission cannot bypass task permission, durable identity or cancellation checks.
 
 ## 6. Integrate policy and required checks
 
-- [ ] 6.1 Update agent/contributor guidance and the PR template to require adequate executable evidence, with Quint the normal choice for valuable ordering exploration and reviewed alternatives; verify a modeled change, an unmodeled critical change and a mechanical change without requiring new product specs for routine work.
-- [ ] 6.2 Add required local/CI checks for promoted models, with deterministic replay and explicit checker failure handling; verify invariant violations, missing witnesses, divergence and timeouts block success.
-- [ ] 6.3 Validate applicability across models, contracts, adapters, tool configuration and consumer changes; demonstrate no bypass through untrusted labels/prose, and use all promoted fast checks until selective scheduling is independently verified.
+- [x] 6.1 Update agent/contributor guidance and the PR template to require adequate executable evidence, with Quint the normal choice for valuable ordering exploration and reviewed alternatives; verify a modeled change, an unmodeled critical change and a mechanical change without requiring new product specs for routine work.
+- [ ] 6.2 Promote accepted checks into required local/CI delivery gates after independent review. The unfiltered candidate workflow/command and failure controls are implemented; protected dependency activation is pending task 3.4.
+- [ ] 6.3 Validate promoted-check applicability across models, contracts, adapters, tooling and consumers. Candidate CI runs all models without labels/path exclusions and contract/policy Markdown receives full repository gates; final promoted-gate validation awaits task 3.4.
 - [ ] 6.4 Measure supported CI resource needs and broader exploration runs; record justified limits and verify supplemental exploration never substitutes for required pre-delivery evidence.
 
 ## 7. Extend the remaining contract families
 
-- [ ] 7.1 Extend shared authority/observation coverage to profile/SSH/subscription lifecycle, RPC/HTTP, terminals/input/reconnect, contexts, creation, aggregate scheduling and watchlists; verify each relevant coverage-map entry and cross-model consumer mapping before promotion.
-- [ ] 7.2 Cover state/persistence families: windows/tabs/Inspector intent, resources/drafts, receipts/history, notifications/auth, files/Git/worktrees/private state and setup/service lifecycle; deliver reviewed models or justified executed alternatives with platform/crash/UI boundaries stated for every entry.
-- [ ] 7.3 Reconcile pure allocation, composition/shortcuts, parsing, metrics/render lifetime, preferences, rendering/site and release/CI families; verify every remaining entry has evidence and no critical omission is silently classified away.
+- [x] 7.1 Extend shared authority/observation coverage to profile/SSH/subscription lifecycle, RPC/HTTP, terminals/input/reconnect, contexts, creation, aggregate scheduling and watchlists; verify each relevant coverage-map entry and cross-model consumer mapping before promotion.
+- [x] 7.2 Cover state/persistence families: windows/tabs/Inspector intent, resources/drafts, receipts/history, notifications/auth, files/Git/worktrees/private state and setup/service lifecycle; deliver reviewed models or justified executed alternatives with platform/crash/UI boundaries stated for every entry.
+- [x] 7.3 Reconcile pure allocation, composition/shortcuts, parsing, metrics/render lifetime, preferences, rendering/site and release/CI families; verify every remaining entry has evidence and no critical omission is silently classified away.
 - [ ] 7.4 Add temporal progress properties only where required, with reviewed fairness/failure/durability assumptions; verify progress separately from safety and do not treat successful witnesses as a liveness proof.
 
 ## 8. Consolidate and close adoption
 
-- [ ] 8.1 Audit several actual deliveries for wrong-property findings, drift, newly exposed ordering gaps and gate reliability; publish evidence and corrections without claiming an unmeasured reduction in production defects.
-- [ ] 8.2 Reconcile the knowledge map, adoption analysis and operational guidance with implemented coverage and rollback procedures; verify all 43 entries are resolved or explicitly owned and no required critical gap remains pending.
+- [x] 8.1 Audit several actual deliveries for wrong-property findings, drift, newly exposed ordering gaps and gate reliability; publish evidence and corrections without claiming an unmeasured reduction in production defects.
+- [x] 8.2 Reconcile the knowledge map, adoption analysis and operational guidance with implemented coverage and rollback procedures; verify all 43 entries have concrete model/consumer/alternative decisions and explicit independent-review ownership. Required formal-gate activation and acceptance remain pending; evidence statuses do not silently close those tasks.
 - [ ] 8.3 Run applicable project and model gates, obtain independent acceptance and owner approval of completed adoption, and archive this change only after all authorized implementation and knowledge work is verified.

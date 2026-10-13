@@ -13,8 +13,9 @@ authorized implementation in the same PR, with functional commits, bounded revie
 checkpoints and a new final review. This does not carry spike acceptance forward
 as approval of expanded models, changed assumptions or activation of the policy.
 
-The baseline references executed CI on the accepted spike. New checks and actual
-execution evidence replace pending coverage as implementation proceeds. Existing
+The baseline references executed CI on the accepted spike. The inventory now has a concrete model, shared-model consumer or justified
+alternative for all 43 areas; their independent acceptance remains pending.
+[Consumer decisions](consumer-evidence.md) record the rationale and limits. Existing
 delivered product changes are not reopened solely to add a formal-model label.
 
 ## Coverage decisions
@@ -71,3 +72,35 @@ check that the intended prohibition is exercised, rather than assumed away.
 Record concrete coverage, pending work, required commands and acceptance boundaries
 with each functional checkpoint. Do not archive the adoption change or describe
 the implementation as accepted until its independent final review is complete.
+
+## Candidate commands and promotion
+
+The separate Behavioral verification candidate CI workflow runs all 11 models,
+actual replay, required per-seed witnesses, model/implementation fault controls
+and larger-bound/host-order sensitivity. It installs locked tooling and the
+hash-validated checker, records exact tool/input identities and retains manifests
+on success or failure. Missing artifacts, missing witnesses, divergence, checker
+errors, timeouts and cleanup failures fail the candidate command. A cancelled run
+cannot report success. Evidence from focused `--case` runs cannot substitute for
+the unfiltered canonical command.
+
+The canonical run has a 15-minute outer deadline; checker commands have a
+240-second deadline, Java has a 1 GiB heap and Node has a 512 MiB old-space cap.
+These per-process limits are not a measurement of total peak memory. Local complete
+execution passed in approximately four minutes after the Ranger additions; CI
+resource/installation measurements are still pending the first candidate run.
+No supplemental exploration substitutes for real consumer/platform/browser checks.
+
+The protected repository delivery check and pre-push gate remain required.
+Behavioral contracts and execution policy cannot use the ordinary Markdown-only
+shortcut. The candidate formal workflow is not yet a protected dependency: task
+3.4 requires independent model/mapping promotion review first. Promotion must
+record the accepted domains, consumer obligations and exact excluded claims, then
+add the unfiltered checks to applicable local/CI delivery gates. Do not infer that
+permission from spike acceptance or from this implementation passing its controls.
+
+Rollback means reverting a reviewed gate/tooling change through normal delivery,
+with the affected evidence decision and limitation recorded. Never make checker
+errors soft-success, disable a consumer regression or weaken an intended property
+to recover a green build. Tool caches and generated traces are ignored and may
+be recreated through `verification:setup`; production code does not depend on Quint.
