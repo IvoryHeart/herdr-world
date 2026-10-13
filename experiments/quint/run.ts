@@ -1,3 +1,4 @@
+import { replayRuntimeControl } from "./runtime-control";
 import assert from "node:assert/strict";
 import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { relative, resolve } from "node:path";
@@ -28,6 +29,36 @@ const artifacts = relative(root, output);
 const cli = quintCli;
 const cancellation = new AbortController();
 const cases = [
+  {
+    name: "runtime-control",
+    witnesses: [
+      "replaced",
+      "removed",
+      "failedCleanup",
+      "stoppedAll",
+      "currentFailure",
+      "duplicate",
+      "reentrantStart",
+      "reentrantStop",
+    ],
+    replay: replayRuntimeControl,
+    mismatches: [
+      "control.state",
+      "control.generation",
+      "control.membership",
+      "control.runtime.factory",
+      "control.runtime.generation",
+      "control.lease.current",
+      "control.reentrant.start",
+      "control.reentrant.stop",
+      "control.reentrant.stop.calls",
+      "control.duplicate.start",
+      "control.duplicate.stop",
+      "control.denied.start",
+      "control.obsolete.context",
+      "control.peer.constructed",
+    ],
+  },
   {
     name: "runtime-leases",
     witnesses: ["lateStart", "obsoleteCallback", "twoReady"],
@@ -64,14 +95,14 @@ const commands: CommandResult[] = [];
 
 async function implementationMutation(name: Model, droppedCatalogue = false) {
   const owner =
-    name === "runtime-leases"
+    name === "runtime-leases" || name === "runtime-control"
       ? "server/src/connections/manager.ts"
       : name === "browser-refresh"
         ? "web/src/world/runtimeStore.ts"
         : "web/src/world/spaceAdmission.ts";
   const original = await readFile(resolve(root, owner), "utf8");
   let contents: string;
-  if (name === "runtime-leases") {
+  if (name === "runtime-leases" || name === "runtime-control") {
     const guard =
       'entry.state === "ready" && this.isCurrent(entry, generation, runtime)';
     assert.equal(
@@ -386,12 +417,52 @@ export async function runReviewedQuintModels() {
         /No violation found/,
         "verification did not report success",
       );
+      const witnessesBySeed: Record<string, Record<string, number>> = {
+        "42": witnessCounts,
+      };
+      for (const seed of [73, 103]) {
+        const sampled = await command(`${item.name}-seed-${seed}`, [
+          "run",
+          model,
+          "--backend",
+          "typescript",
+          "--seed",
+          String(seed),
+          "--max-samples",
+          "500",
+          "--max-steps",
+          "25",
+          "--n-traces",
+          "100",
+          "--invariant",
+          "safety",
+          "--verbosity",
+          "1",
+          "--out-itf",
+          `${artifacts}/${item.name}-seed${seed}_{seq}.itf.json`,
+          "--witnesses",
+          ...item.witnesses,
+        ]);
+        witnessesBySeed[String(seed)] = {};
+        for (const witness of item.witnesses) {
+          const match = sampled.match(
+            new RegExp(`${witness} was witnessed in (\\d+) trace`),
+          );
+          assert(
+            match && Number(match[1]) > 0,
+            `missing seed-${seed} witness ${witness}`,
+          );
+          witnessesBySeed[String(seed)]![witness] = Number(match[1]);
+        }
+      }
       const files = (await readdir(output))
         .filter((file) =>
-          new RegExp(`^${item.name}_\\d+\\.itf\\.json$`).test(file),
+          new RegExp(
+            `^${item.name}(?:-seed(?:73|103))?_\\d+\\.itf\\.json$`,
+          ).test(file),
         )
         .sort();
-      assert.equal(files.length, 100, "trace count changed");
+      assert.equal(files.length, 300, "trace count changed");
       const replayStarted = performance.now();
       const originalReplay = await replayWorker(
         `${item.name}-production-replay`,
@@ -534,6 +605,7 @@ export async function runReviewedQuintModels() {
       const result = {
         name: item.name,
         witnesses: witnessCounts,
+        witnessesBySeed,
         replayWitnesses,
         traces: files.length,
         steps,
@@ -561,7 +633,7 @@ export async function runReviewedQuintModels() {
       console.log(JSON.stringify(result));
     }
     console.log(
-      "All three finite models verified; generated production replays and negative controls passed.",
+      "All maintained finite models verified; generated production replays and negative controls passed.",
     );
     console.log(`Evidence: ${artifacts}`);
 
@@ -577,10 +649,10 @@ export async function runReviewedQuintModels() {
       },
       settings: {
         backend: "tlc",
-        seeds: [42],
+        seeds: [42, 73, 103],
         maxSteps: 25,
         samples: 500,
-        replayTraces: 100,
+        replayTraces: 300,
       },
       commands: commands.map((command) => ({
         ...command,

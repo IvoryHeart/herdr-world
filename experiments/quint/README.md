@@ -43,8 +43,12 @@ killing observation. The cheap harness regressions run with:
 bun test experiments/quint/replay.test.ts
 ```
 
-Each model is simulated with seed 42, 500 samples and at most 25 transitions.
-One hundred generated traces per case are replayed against production code.
+Each model is simulated with seeds 42, 73 and 103, 500 samples per seed and
+at most 25 transitions. One hundred generated traces per seed and case are
+replayed against production code. The administration companion adds explicit
+replacement/removal/error/failed-cleanup/reentry/shutdown coverage; its
+[contract](../../verification/contracts/runtime-control.md) retains pending
+delayed-transport compositions and a separate independent-review boundary.
 TLC checks all reachable states of each finite abstraction, with no temporal
 liveness claim. Model faults are enabled only in generated copies. Their
 counterexamples must violate the model invariant and diverge when replayed
@@ -84,7 +88,7 @@ demonstrate detection sensitivity; they are not broad mutation coverage.
   configurations exactly once for production replay. Independent capacity,
   host-prefix and round-fairness properties supplement reference-function agreement.
 
-Sampling 100 traces does not replay every TLC state or verify production code;
+Sampling 300 traces does not replay every TLC state or verify production code;
 allocation additionally replays its complete fixed configuration domain.
 Generation/epoch limits make these models finite and need justification before
 using their results for broader claims. Existing focused tests remain necessary.

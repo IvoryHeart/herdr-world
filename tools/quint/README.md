@@ -35,7 +35,7 @@ observation; malformed traces, adapter errors and cleanup errors abort. Witnesse
 are counted from successfully executed production replay, not only simulation.
 Raw output is kept in bounded local logs and summarized in console output.
 
-The initial maintained command executes the three reviewed foundation models. It
+The initial maintained command executes the reviewed foundation models and the unpromoted administration companion. It
 does not promote their old domain or atomic refresh transition to full lifecycle
 coverage. Expanded contracts, replay mappings and required-check promotion are
 separate implementation/review checkpoints in `verification/`.

@@ -2,9 +2,29 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { decodeItf, type TraceState } from "./replay";
 
-export type Model = "runtime-leases" | "browser-refresh" | "space-admission";
+export type Model =
+  | "runtime-leases"
+  | "runtime-control"
+  | "browser-refresh"
+  | "space-admission";
 
 const actions = {
+  "runtime-control": [
+    "init",
+    "start",
+    "currentError",
+    "stop",
+    "replace",
+    "remove",
+    "finishCleanup",
+    "failCleanup",
+    "shutdown",
+    "duplicateStart",
+    "duplicateStop",
+    "deniedStart",
+    "obsoleteError",
+    "clearError",
+  ],
   "runtime-leases": [
     "init",
     "start",
@@ -54,7 +74,57 @@ export function validateTrace(
       index === 0 ? state.op === "init" : state.op !== "init",
       "invalid initialization order",
     );
-    if (model === "browser-refresh") {
+    if (model === "runtime-control") {
+      record(state.control);
+      integer(state.control.gen, 0, 6);
+      integer(state.control.factory, 0, 2);
+      integer(state.control.runtimeFactory, -1, 2);
+      integer(state.control.runtimeGen, -1, 6);
+      assert(
+        ["down", "ready", "error", "stopping", "removed"].includes(
+          String(state.control.phase),
+        ),
+        "invalid control phase",
+      );
+      assert(
+        ["none", "stop", "replace", "remove", "shutdown"].includes(
+          String(state.control.mode),
+        ),
+        "invalid cleanup mode",
+      );
+      assert(
+        typeof state.control.blocked === "boolean",
+        "invalid shutdown marker",
+      );
+      if (index > 0) {
+        const previous = value[index - 1].control;
+        const phase = previous.phase;
+        const guards: Record<string, boolean> = {
+          start: phase === "down" && !previous.blocked,
+          currentError: phase === "ready",
+          stop:
+            ["ready", "error"].includes(phase) && previous.runtimeFactory >= 0,
+          replace:
+            ["down", "ready", "error"].includes(phase) && !previous.blocked,
+          remove:
+            ["down", "ready", "error"].includes(phase) && !previous.blocked,
+          finishCleanup: phase === "stopping",
+          failCleanup: phase === "stopping",
+          shutdown:
+            ["down", "ready", "error"].includes(phase) && !previous.blocked,
+          duplicateStart: phase === "ready" && !previous.blocked,
+          duplicateStop: phase === "stopping" && previous.mode !== "remove",
+          deniedStart:
+            previous.blocked ||
+            phase === "removed" ||
+            previous.mode === "remove",
+          obsoleteError:
+            previous.runtimeGen >= 0 && previous.runtimeGen < previous.gen,
+          clearError: phase === "error" && previous.runtimeFactory === -1,
+        };
+        assert(guards[state.op], "invalid runtime control action precondition");
+      }
+    } else if (model === "browser-refresh") {
       record(state.s);
       integer(state.s.epoch, 0, 3);
       for (const key of ["issued", "revision"]) integer(state.s[key], 0, 6);

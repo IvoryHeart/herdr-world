@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import type { ControlState } from "./runtime-control";
 import {
   ConnectionManager,
   type ConnectionRuntime,
@@ -28,6 +29,7 @@ type RefreshState = {
   status: string;
 };
 export type TraceState = {
+  control: ControlState;
   op: string;
   target: number;
   hosts: Host[];

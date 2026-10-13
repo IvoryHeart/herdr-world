@@ -23,7 +23,22 @@
       "assessment": "replacement, removal, failed cleanup, current errors, duplicate tasks, reentrant observers and shutdown",
       "status": "pending",
       "remaining": "replacement, removal, failed cleanup, current errors, duplicate tasks, reentrant observers and shutdown",
-      "requiredChecks": ["bun run check"]
+      "requiredChecks": ["bun run check"],
+      "partialEvidence": {
+        "models": [
+          "experiments/quint/runtime-leases.qnt",
+          "experiments/quint/runtime-control.qnt"
+        ],
+        "contracts": [
+          "verification/contracts/runtime-leases.md",
+          "verification/contracts/runtime-control.md"
+        ],
+        "checks": [
+          "bun run verification:check",
+          "bun run verification:typecheck"
+        ],
+        "review": "Expanded administration mapping awaits independent review; delayed-transport composition remains pending."
+      }
     },
     {
       "id": "Q02",
