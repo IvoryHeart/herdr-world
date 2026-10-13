@@ -85,12 +85,15 @@ export function syntheticBridge(
     throw error;
   }
   function restore() {
-    bridge.disconnect("Synthetic replay complete");
-    if (webSocket) Object.defineProperty(globalThis, "WebSocket", webSocket);
-    else Reflect.deleteProperty(globalThis, "WebSocket");
-    if (location) Object.defineProperty(globalThis, "location", location);
-    else Reflect.deleteProperty(globalThis, "location");
-    SyntheticSocket.instances = [];
+    try {
+      bridge.disconnect("Synthetic replay complete");
+    } finally {
+      if (webSocket) Object.defineProperty(globalThis, "WebSocket", webSocket);
+      else Reflect.deleteProperty(globalThis, "WebSocket");
+      if (location) Object.defineProperty(globalThis, "location", location);
+      else Reflect.deleteProperty(globalThis, "location");
+      SyntheticSocket.instances = [];
+    }
   }
   return { bridge, sockets, connect, restore };
 }

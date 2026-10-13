@@ -1,10 +1,12 @@
 import type { PreparationState } from "./browser-preparation";
 import type { DrainState } from "./runtime-drain";
+import type { AssemblyState } from "./chunk-assembly";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { decodeItf, type TraceState } from "./replay";
 
 export type Model =
+  | "chunk-assembly"
   | "chunk-credits"
   | "runtime-drain"
   | "browser-preparation"
@@ -14,6 +16,19 @@ export type Model =
   | "space-admission";
 
 const actions = {
+  "chunk-assembly": [
+    "init",
+    "call",
+    "fragment",
+    "duplicate",
+    "outOfOrder",
+    "wrongTotal",
+    "qualifiedChunk",
+    "finishDecode",
+    "disconnect",
+    "reconnect",
+    "oldSocket",
+  ],
   "chunk-credits": ["init", "open", "wait", "acknowledge", "close", "retire"],
   "runtime-drain": ["init", "choose", "retire", "finishFirst", "finishSecond"],
   "browser-preparation": [
@@ -114,7 +129,77 @@ export function validateTrace(
       index === 0 ? state.op === "init" : state.op !== "init",
       "invalid initialization order",
     );
-    if (model === "chunk-credits") {
+    if (model === "chunk-assembly") {
+      record(state.assembly);
+      integer(state.assembly.epoch, 0, 2);
+      integer(state.assembly.calls, 0, 4);
+      assert(
+        typeof state.assembly.connected === "boolean" &&
+          typeof state.assembly.acceptedOld === "boolean",
+        "invalid assembly lifetime",
+      );
+      assert(
+        Array.isArray(state.assembly.cells) &&
+          state.assembly.cells.length === 2,
+        "invalid assembly cells",
+      );
+      integer(state.target, -1, 1);
+      for (const cell of state.assembly.cells) {
+        record(cell);
+        integer(cell.next, 0, 3);
+        integer(cell.ordinal, 0, 4);
+        integer(cell.epoch, 0, 2);
+        for (const key of ["decoded", "finished", "aborted"])
+          assert(typeof cell[key] === "boolean", "invalid decoder state");
+        assert(
+          ["empty", "collecting", "decoding", "done", "failed"].includes(
+            String(cell.phase),
+          ),
+          "invalid assembly phase",
+        );
+      }
+      if (index > 0) {
+        const before: AssemblyState = value[index - 1].assembly;
+        assert(
+          ["disconnect", "reconnect"].includes(state.op)
+            ? state.target === -1
+            : state.target >= 0,
+          "invalid assembly target",
+        );
+        const h = state.target as number;
+        const cell = before.cells[h];
+        const invalid = [
+          "duplicate",
+          "outOfOrder",
+          "wrongTotal",
+          "qualifiedChunk",
+        ].includes(state.op);
+        const valid: boolean =
+          state.op === "call"
+            ? before.connected &&
+              before.calls < 4 &&
+              ["empty", "done", "failed"].includes(cell!.phase) &&
+              cell!.finished
+            : state.op === "fragment"
+              ? cell!.phase === "collecting"
+              : invalid
+                ? ["collecting", "decoding"].includes(cell!.phase) &&
+                  (state.op !== "duplicate" || cell!.next > 0) &&
+                  (state.op !== "wrongTotal" ||
+                    (cell!.phase === "collecting" && cell!.next > 0))
+                : state.op === "finishDecode"
+                  ? cell!.decoded && !cell!.finished
+                  : state.op === "disconnect"
+                    ? before.connected && before.epoch < 2
+                    : state.op === "reconnect"
+                      ? !before.connected
+                      : before.connected &&
+                        before.epoch > 0 &&
+                        cell!.phase === "collecting" &&
+                        cell!.next === 2;
+        assert(valid, "invalid assembly action precondition");
+      }
+    } else if (model === "chunk-credits") {
       assert(
         Array.isArray(state.slots) && state.slots.length === 4,
         "invalid credit slots",
@@ -132,6 +217,10 @@ export function validateTrace(
           "invalid credit slot phase",
         );
         integer(slot.index, -1, 2);
+        assert(
+          slot.phase === "waiting" ? slot.index >= 0 : slot.index === -1,
+          "invalid credit phase/index",
+        );
       }
       integer(state.socket, -1, 1);
       integer(state.id, -1, 2);
@@ -151,6 +240,13 @@ export function validateTrace(
           "invalid credit target",
         );
         const previous: TraceState = value[index - 1];
+        if (["open", "wait", "close"].includes(state.op))
+          assert(
+            state.socket === 0 || state.id === 0,
+            "invalid modeled credit handle",
+          );
+        if (state.op === "retire")
+          assert(previous.live[state.socket], "invalid socket retirement");
         const slot = previous.slots[state.socket === 0 ? state.id : 3];
         if (state.op === "open")
           assert(
@@ -397,7 +493,16 @@ export function parseTrace(
 ): TraceState[] {
   const raw = JSON.parse(json);
   record(raw);
-  const states = decodeItf(raw.states);
+  let states = decodeItf(raw.states);
+  if (model === "chunk-assembly" && Array.isArray(states))
+    states = states.map((state) => {
+      record(state);
+      const { cells, epoch, connected, calls, acceptedOld, ...event } = state;
+      return {
+        ...event,
+        assembly: { cells, epoch, connected, calls, acceptedOld },
+      };
+    });
   validateTrace(model, states, domain);
   return states;
 }

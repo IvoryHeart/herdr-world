@@ -224,8 +224,8 @@
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/145",
       "technique": "chunk-ownership",
       "assessment": "wrong socket/index, cancellation, timeout and two-transfer capacity",
-      "status": "pending",
-      "remaining": "wrong socket/index, cancellation, timeout and two-transfer capacity",
+      "status": "modeled",
+      "remaining": "Independent credit/assembly/composition review; real timeout, batch-window and browser responsiveness remain executed protocol/browser tests.",
       "requiredChecks": ["bun run check"],
       "partialEvidence": {
         "models": ["experiments/quint/chunk-credits.qnt"],
@@ -238,7 +238,7 @@
           "bun run verification:check",
           "bun run verification:typecheck"
         ],
-        "review": "Credit model and real sender/Bridge/observation integration await independent review; dedicated assembly modeling remains pending."
+        "review": "Credit/assembly and real sender/Bridge/observation mappings await independent promotion review."
       }
     },
     {
@@ -254,9 +254,22 @@
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/145",
       "technique": "chunk-ownership",
       "assessment": "mixed/duplicate/missing batches with decoder bounds; parser tests retained",
-      "status": "pending",
-      "remaining": "mixed/duplicate/missing batches with decoder bounds; parser tests retained",
-      "requiredChecks": ["bun run check"]
+      "status": "modeled",
+      "remaining": "Independent assembly/consumer review. Large worker threading/capacity/cleanup and real frame limits retain decoder/API/browser evidence.",
+      "requiredChecks": ["bun run check"],
+      "partialEvidence": {
+        "models": ["experiments/quint/chunk-assembly.qnt"],
+        "contracts": ["verification/contracts/chunk-assembly.md"],
+        "tests": [
+          "experiments/quint/chunk-assembly.test.ts",
+          "experiments/quint/protocol-composition.test.ts"
+        ],
+        "checks": [
+          "bun run verification:check",
+          "bun run verification:typecheck"
+        ],
+        "review": "New assembly model, trace projection and decoder mapping await independent promotion review."
+      }
     },
     {
       "id": "Q14",

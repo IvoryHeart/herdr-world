@@ -4,6 +4,7 @@ import { replayRuntimeDrain } from "./runtime-drain";
 import { randomUUID } from "node:crypto";
 import { runSensitivity } from "./sensitivity";
 import { replayChunkCredits } from "./chunk-credits";
+import { replayChunkAssembly } from "./chunk-assembly";
 import assert from "node:assert/strict";
 import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { relative, resolve } from "node:path";
@@ -34,6 +35,27 @@ const artifacts = relative(root, output);
 const cli = quintCli;
 const cancellation = new AbortController();
 const cases = [
+  {
+    name: "chunk-assembly",
+    witnesses: [
+      "completed",
+      "cancelledDecode",
+      "malformedRejected",
+      "parallelCalls",
+      "oldSocketIgnored",
+    ],
+    replay: replayChunkAssembly,
+    mismatches: [
+      "assembly.transport.epoch",
+      "assembly.connected",
+      "assembly.calls",
+      "assembly.decode.starts",
+      "assembly.parts",
+      "assembly.decode.aborted",
+      "assembly.outcome",
+      "assembly.result",
+    ],
+  },
   {
     name: "chunk-credits",
     witnesses: [
@@ -170,28 +192,68 @@ const cases = [
 type CommandResult = { code: number; ms: number; log: string; args: string[] };
 const commands: CommandResult[] = [];
 
+type ImplementationFault =
+  | "primary"
+  | "catalogue"
+  | "retired-owner"
+  | "selected-hint"
+  | "credit-index"
+  | "qualified-generation"
+  | "chunk-index";
 async function implementationMutation(
   name: Model,
-  droppedCatalogue = false,
-  retiredOwner = false,
-  wrongHint = false,
-  wrongCreditIndex = false,
-  wrongGeneration = false,
+  fault: ImplementationFault = "primary",
 ) {
+  const allowed: Partial<Record<Model, readonly ImplementationFault[]>> = {
+    "browser-refresh": ["primary", "catalogue"],
+    "browser-preparation": [
+      "primary",
+      "retired-owner",
+      "selected-hint",
+      "qualified-generation",
+    ],
+    "chunk-credits": ["primary", "credit-index"],
+    "chunk-assembly": ["primary", "chunk-index"],
+  };
+  assert(
+    (allowed[name] ?? ["primary"]).includes(fault),
+    "Unsupported model/fault combination",
+  );
   const owner =
-    name === "chunk-credits"
-      ? "server/src/bridge/world-snapshot-admission.ts"
-      : name === "runtime-leases" ||
-          name === "runtime-control" ||
-          name === "runtime-drain"
-        ? "server/src/connections/manager.ts"
-        : name === "browser-refresh" || name === "browser-preparation"
-          ? "web/src/world/runtimeStore.ts"
-          : "web/src/world/spaceAdmission.ts";
+    name === "chunk-assembly"
+      ? "web/src/api.ts"
+      : name === "chunk-credits"
+        ? "server/src/bridge/world-snapshot-admission.ts"
+        : name === "runtime-leases" ||
+            name === "runtime-control" ||
+            name === "runtime-drain"
+          ? "server/src/connections/manager.ts"
+          : name === "browser-refresh" || name === "browser-preparation"
+            ? "web/src/world/runtimeStore.ts"
+            : "web/src/world/spaceAdmission.ts";
   const original = await readFile(resolve(root, owner), "utf8");
   let contents: string;
-  if (name === "chunk-credits") {
-    if (wrongCreditIndex) {
+  if (name === "chunk-assembly") {
+    if (fault === "chunk-index") {
+      const guard = "chunk.index !== (pending.chunks?.parts.length ?? 0)";
+      assert.equal(
+        original.split(guard).length,
+        2,
+        "assembly index guard changed",
+      );
+      contents = original.replace(guard, "false");
+    } else {
+      const guard =
+        "ws.onmessage = (ev) => {\n      if (this.ws !== ws) return;";
+      assert.equal(
+        original.split(guard).length,
+        2,
+        "old-socket receive guard changed",
+      );
+      contents = original.replace(guard, "ws.onmessage = (ev) => {");
+    }
+  } else if (name === "chunk-credits") {
+    if (fault === "credit-index") {
       const guard = "if (waiting && waiting.index === admitted.index) {";
       assert.equal(
         original.split(guard).length,
@@ -229,7 +291,7 @@ async function implementationMutation(
     );
     contents = original.replace(guard, 'entry.state === "ready"');
   } else if (name === "browser-refresh" || name === "browser-preparation") {
-    if (wrongGeneration) {
+    if (fault === "qualified-generation") {
       const guard =
         ".connection(connection.connectionId, connection.generation)";
       assert.equal(
@@ -241,7 +303,7 @@ async function implementationMutation(
         guard,
         ".connection(connection.connectionId)",
       );
-    } else if (wrongHint) {
+    } else if (fault === "selected-hint") {
       const guard = "selected_connection_id: this.selectedConnectionId";
       assert.equal(
         original.split(guard).length,
@@ -252,7 +314,7 @@ async function implementationMutation(
         guard,
         'selected_connection_id: "synthetic-unowned"',
       );
-    } else if (retiredOwner) {
+    } else if (fault === "retired-owner") {
       const guard =
         "this.client\n              .connection(connection.connectionId, connection.generation)\n              .isCurrent()";
       assert.equal(
@@ -261,7 +323,7 @@ async function implementationMutation(
         "owner revalidation target changed",
       );
       contents = original.replace(guard, "true");
-    } else if (droppedCatalogue) {
+    } else if (fault === "catalogue") {
       const getter = "get = () => this.state;";
       assert.equal(
         original.split(getter).length,
@@ -314,10 +376,7 @@ async function implementationMutation(
     bundle.success && substituted,
     "implementation mutation bundle failed",
   );
-  const path = resolve(
-    output,
-    `${name}${droppedCatalogue ? "-dropped-catalogue" : ""}-implementation-mutant.mjs`,
-  );
+  const path = resolve(output, `${name}-${fault}-implementation-mutant.mjs`);
   await writeFile(path, await bundle.outputs[0]!.text());
   return path;
 }
@@ -742,7 +801,10 @@ export async function runReviewedQuintModels(
       const killingObservation = killed.observation;
       let droppedCatalogueControl = null;
       if (item.name === "browser-refresh") {
-        const droppedBundle = await implementationMutation(item.name, true);
+        const droppedBundle = await implementationMutation(
+          item.name,
+          "catalogue",
+        );
         const result = await replayWorker(
           "browser-refresh-dropped-catalogue-control",
           {
@@ -762,8 +824,7 @@ export async function runReviewedQuintModels(
       if (item.name === "browser-preparation") {
         const retiredBundle = await implementationMutation(
           item.name,
-          false,
-          true,
+          "retired-owner",
         );
         const result = await replayWorker(
           "browser-preparation-retired-owner-control",
@@ -784,9 +845,7 @@ export async function runReviewedQuintModels(
       if (item.name === "browser-preparation") {
         const hintBundle = await implementationMutation(
           item.name,
-          false,
-          false,
-          true,
+          "selected-hint",
         );
         const result = await replayWorker(
           "browser-preparation-selected-hint-control",
@@ -805,13 +864,7 @@ export async function runReviewedQuintModels(
       }
       let creditIndexControl = null;
       if (item.name === "chunk-credits") {
-        const bundle = await implementationMutation(
-          item.name,
-          false,
-          false,
-          false,
-          true,
-        );
+        const bundle = await implementationMutation(item.name, "credit-index");
         const result = await replayWorker("chunk-credits-index-control", {
           model: item.name,
           files: files.map((file) => resolve(output, file)),
@@ -828,11 +881,7 @@ export async function runReviewedQuintModels(
       if (item.name === "browser-preparation") {
         const bundle = await implementationMutation(
           item.name,
-          false,
-          false,
-          false,
-          false,
-          true,
+          "qualified-generation",
         );
         const result = await replayWorker(
           "browser-preparation-qualified-generation-control",
@@ -845,6 +894,21 @@ export async function runReviewedQuintModels(
           },
         );
         qualifiedGenerationControl = {
+          trace: result.trace,
+          observation: result.observation,
+        };
+      }
+      let assemblyIndexControl = null;
+      if (item.name === "chunk-assembly") {
+        const bundle = await implementationMutation(item.name, "chunk-index");
+        const result = await replayWorker("chunk-assembly-index-control", {
+          model: item.name,
+          files: files.map((file) => resolve(output, file)),
+          mode: "mutation",
+          allowed: ["assembly.outcome", "assembly.decode.starts"],
+          mutant: bundle,
+        });
+        assemblyIndexControl = {
           trace: result.trace,
           observation: result.observation,
         };
@@ -915,6 +979,7 @@ export async function runReviewedQuintModels(
         ...(selectedHintControl ? { selectedHintControl } : {}),
         ...(creditIndexControl ? { creditIndexControl } : {}),
         ...(qualifiedGenerationControl ? { qualifiedGenerationControl } : {}),
+        ...(assemblyIndexControl ? { assemblyIndexControl } : {}),
         ...(exhaustiveConfigurations !== null
           ? { exhaustiveConfigurations }
           : {}),
