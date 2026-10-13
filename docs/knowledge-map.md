@@ -82,3 +82,7 @@ pages full-observation matches beyond renderer bounds.
 Repository workflow lives in [AGENTS.md](../AGENTS.md) and
 [agent development](agent-development.md). The optional visible-team recipe is
 under [`.hwf/workflows/`](../.hwf/workflows/). Use synthetic data in tracked evidence.
+The optional [Quint adoption spike](quint-adoption-spike.md) inventories formal
+modeling candidates and records bounded model/replay experiments; it is not a CI gate.
+The [Quint adoption proposal](../openspec/changes/adopt-quint-behavioral-verification/proposal.md)
+defines the planned policy, promotion criteria and staged repository-wide coverage.
