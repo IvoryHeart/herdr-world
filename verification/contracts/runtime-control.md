@@ -56,9 +56,10 @@ One managed non-default connection plus an unstarted default peer, generations
 0–6, three installed factory versions, successful immediate transport, one cleanup
 at a time. TLC enumerates finite safety. Seeds 42/73/103 each sample 500 paths of
 25 transitions and replay 100 paths. No temporal progress, SSH or external Herdr
-claim is made. Delayed transport plus replacement/removal/error/shutdown,
-concurrent replacement while stopping, recreation of the same ID, failed start
-and failed-runtime recovery composition still need explicit evidence. The existing
+claim is made. The [drain composition](runtime-drain.md) now covers delayed transport with
+replacement/removal/error/shutdown, failed start and failed-runtime cleanup in
+22 bounded scenarios. Concurrent replacement while stopping and recreation of
+the same ID retain dedicated integration evidence. The existing
 manager tests remain required; this companion does not close those omissions.
 
 A replay initially exposed an abstraction error: stopping after failed cleanup
@@ -72,6 +73,6 @@ that failure. Green model/code agreement did not justify weakening authority.
 Run `bun run verification:check` and `bun run verification:typecheck`; cheap replay
 regressions run under normal Bun tests. Four models now replay 1,200 generated
 traces, plus exhaustive allocation configurations. Manifests identify exact inputs.
-This model and its mapping await independent review. Inventory Q01 remains pending
-until the omitted lifecycle compositions are resolved; required-CI promotion and
+This model and its composition mappings await independent review. Inventory Q01
+records the three maintained models without implying acceptance; required-CI promotion and
 final implementation acceptance remain pending.

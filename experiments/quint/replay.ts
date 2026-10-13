@@ -1,3 +1,4 @@
+import type { DrainState } from "./runtime-drain";
 import assert from "node:assert/strict";
 import type { PreparationState } from "./browser-preparation";
 import type { ControlState } from "./runtime-control";
@@ -31,6 +32,7 @@ type RefreshState = {
 };
 export type TraceState = {
   control: ControlState;
+  drain: DrainState;
   preparation: PreparationState;
   op: string;
   target: number;

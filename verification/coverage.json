@@ -21,23 +21,25 @@
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/145",
       "technique": "lifecycle",
       "assessment": "replacement, removal, failed cleanup, current errors, duplicate tasks, reentrant observers and shutdown",
-      "status": "pending",
-      "remaining": "replacement, removal, failed cleanup, current errors, duplicate tasks, reentrant observers and shutdown",
+      "status": "modeled",
+      "remaining": "Independent promotion review and broader bounds/host-order checks; external transport, reconnect timing and same-ID reincarnation remain scoped integration/platform evidence.",
       "requiredChecks": ["bun run check"],
       "partialEvidence": {
         "models": [
           "experiments/quint/runtime-leases.qnt",
-          "experiments/quint/runtime-control.qnt"
+          "experiments/quint/runtime-control.qnt",
+          "experiments/quint/runtime-drain.qnt"
         ],
         "contracts": [
           "verification/contracts/runtime-leases.md",
-          "verification/contracts/runtime-control.md"
+          "verification/contracts/runtime-control.md",
+          "verification/contracts/runtime-drain.md"
         ],
         "checks": [
           "bun run verification:check",
           "bun run verification:typecheck"
         ],
-        "review": "Expanded administration mapping awaits independent review; delayed-transport composition remains pending."
+        "review": "Lifecycle lease/administration/drain mapping awaits independent promotion review. Broader bounds and host-order sensitivity remain task 3.3."
       }
     },
     {

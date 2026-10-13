@@ -13,7 +13,7 @@
 
 ## 3. Promote runtime admission and browser observation
 
-- [ ] 3.1 Expand the runtime model for current errors, factory replacement, removal, failed cleanup, duplicate starts/stops, reentrant observers and shutdown; verify real-manager replay and witnesses for each relevant ordering.
+- [x] 3.1 Expand the runtime model for current errors, factory replacement, removal, failed cleanup, duplicate starts/stops, reentrant observers and shutdown; verify real-manager replay and witnesses for each relevant ordering.
 - [ ] 3.2 Split browser refresh completion into preparation/admission stages and cover per-host retirement, request failure and priority changes; verify disconnect/retirement during each authority-sensitive stage and preserve real browser timer evidence.
 - [ ] 3.3 Add larger-bound, host-order and multiple-seed checks plus replayed-witness accounting; verify each named target is reached in real-code replay and all intended fault controls fail for the correct assertion.
 - [ ] 3.4 Independently review both model contracts and implementation mappings; record promotion decisions and exact excluded claims before enabling required checks.

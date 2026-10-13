@@ -1,5 +1,6 @@
 import { replayRuntimeControl } from "./runtime-control";
 import { replayBrowserPreparation } from "./browser-preparation";
+import { replayRuntimeDrain } from "./runtime-drain";
 import assert from "node:assert/strict";
 import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { relative, resolve } from "node:path";
@@ -30,6 +31,29 @@ const artifacts = relative(root, output);
 const cli = quintCli;
 const cancellation = new AbortController();
 const cases = [
+  {
+    name: "runtime-drain",
+    witnesses: [
+      "replacedDuringStart",
+      "removedDuringStart",
+      "shutdownDuringStart",
+      "currentErrorDuringStart",
+      "failedStart",
+      "cleanupBeforeTransport",
+      "transportBeforeCleanup",
+      "failedDrain",
+    ],
+    replay: replayRuntimeDrain,
+    mismatches: [
+      "drain.ready.seen",
+      "drain.state",
+      "drain.generation",
+      "drain.ready.lease",
+      "drain.membership",
+      "drain.background",
+      "drain.constructions",
+    ],
+  },
   {
     name: "browser-preparation",
     witnesses: [
@@ -122,14 +146,24 @@ async function implementationMutation(
   retiredOwner = false,
 ) {
   const owner =
-    name === "runtime-leases" || name === "runtime-control"
+    name === "runtime-leases" ||
+    name === "runtime-control" ||
+    name === "runtime-drain"
       ? "server/src/connections/manager.ts"
       : name === "browser-refresh" || name === "browser-preparation"
         ? "web/src/world/runtimeStore.ts"
         : "web/src/world/spaceAdmission.ts";
   const original = await readFile(resolve(root, owner), "utf8");
   let contents: string;
-  if (name === "runtime-leases" || name === "runtime-control") {
+  if (name === "runtime-drain") {
+    const guard = "if (!this.isCurrent(entry, generation, runtime)) {";
+    assert.equal(
+      original.split(guard).length,
+      3,
+      "retired start guard changed",
+    );
+    contents = original.replaceAll(guard, "if (false) {");
+  } else if (name === "runtime-leases" || name === "runtime-control") {
     const guard =
       'entry.state === "ready" && this.isCurrent(entry, generation, runtime)';
     assert.equal(

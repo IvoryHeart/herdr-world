@@ -48,7 +48,9 @@ at most 25 transitions. One hundred generated traces per seed and case are
 replayed against production code. The administration companion adds explicit
 replacement/removal/error/failed-cleanup/reentry/shutdown coverage; its
 [contract](../../verification/contracts/runtime-control.md) retains pending
-delayed-transport compositions and a separate independent-review boundary.
+a separate independent-review boundary. The [drain companion](../../verification/contracts/runtime-drain.md)
+adds delayed-transport administrative composition and a direct exhaustive replay
+of its 22 bounded scenarios.
 TLC checks all reachable states of each finite abstraction, with no temporal
 liveness claim. Model faults are enabled only in generated copies. Their
 counterexamples must violate the model invariant and diverge when replayed

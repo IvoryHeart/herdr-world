@@ -1,9 +1,11 @@
 import type { PreparationState } from "./browser-preparation";
+import type { DrainState } from "./runtime-drain";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { decodeItf, type TraceState } from "./replay";
 
 export type Model =
+  | "runtime-drain"
   | "browser-preparation"
   | "runtime-leases"
   | "runtime-control"
@@ -11,6 +13,7 @@ export type Model =
   | "space-admission";
 
 const actions = {
+  "runtime-drain": ["init", "choose", "retire", "finishFirst", "finishSecond"],
   "browser-preparation": [
     "init",
     "request",
@@ -87,7 +90,49 @@ export function validateTrace(
       index === 0 ? state.op === "init" : state.op !== "init",
       "invalid initialization order",
     );
-    if (model === "browser-preparation") {
+    if (model === "runtime-drain") {
+      record(state.drain);
+      integer(state.drain.kind, -1, 5);
+      integer(state.drain.gen, 0, 3);
+      for (const key of [
+        "cleanupFirst",
+        "failed",
+        "transportDone",
+        "cleanupDone",
+        "readySeen",
+      ])
+        assert(typeof state.drain[key] === "boolean", "invalid drain flag");
+      assert(
+        ["empty", "starting", "draining", "half", "done"].includes(
+          String(state.drain.stage),
+        ),
+        "invalid drain stage",
+      );
+      assert(
+        [
+          "absent",
+          "connecting",
+          "stopping",
+          "error",
+          "removed",
+          "disconnected",
+        ].includes(String(state.drain.phase)),
+        "invalid drain phase",
+      );
+      if (index > 0) {
+        const before: DrainState = value[index - 1].drain;
+        const valid: boolean =
+          state.op === "choose"
+            ? ["empty", "done"].includes(before.stage)
+            : state.op === "retire"
+              ? before.stage === "starting"
+              : state.op === "finishFirst"
+                ? before.stage === "draining" && before.kind !== 5
+                : before.stage === "half" ||
+                  (before.stage === "draining" && before.kind === 5);
+        assert(valid, "invalid drain action precondition");
+      }
+    } else if (model === "browser-preparation") {
       record(state.preparation);
       for (const key of ["epoch", "issued", "revision"])
         integer(state.preparation[key], 0, 3);
