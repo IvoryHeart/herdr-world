@@ -255,8 +255,8 @@
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/145",
       "technique": "observation",
       "assessment": "decode/preparation/admission boundaries, failure, priorities and per-host retirement",
-      "status": "pending",
-      "remaining": "decode/preparation/admission boundaries, failure, priorities and per-host retirement",
+      "status": "modeled",
+      "remaining": "Independent promotion review and broader sensitivity checks. Per-host generation revival, dense real browser scheduling and resource-priority version waits retain integration/browser evidence.",
       "requiredChecks": ["bun run check"],
       "partialEvidence": {
         "models": [
@@ -271,7 +271,7 @@
           "bun run verification:check",
           "bun run verification:typecheck"
         ],
-        "review": "Staged observation mapping awaits independent review; queued/priority/generation composition remains pending."
+        "review": "Staged/queued/priority observation mapping awaits independent promotion review; broader bounds/host-order sensitivity remains task 3.3."
       }
     },
     {

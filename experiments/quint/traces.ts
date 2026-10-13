@@ -24,6 +24,7 @@ const actions = {
     "failure",
     "disconnect",
     "retire",
+    "priority",
   ],
   "runtime-control": [
     "init",
@@ -151,6 +152,12 @@ export function validateTrace(
         "invalid preparation status",
       );
       assert(
+        typeof state.preparation.queued === "boolean",
+        "invalid preparation queue",
+      );
+      integer(state.preparation.selected, -1, 1);
+      integer(state.preparation.requested, -1, 1);
+      assert(
         typeof state.preparation.catalogue === "boolean",
         "invalid catalogue flag",
       );
@@ -165,7 +172,9 @@ export function validateTrace(
         );
       integer(state.target, -1, 1);
       assert(
-        state.op === "retire" ? state.target >= 0 : state.target === -1,
+        ["retire", "priority"].includes(state.op)
+          ? state.target >= 0
+          : state.target === -1,
         "invalid preparation target",
       );
       if (index > 0) {

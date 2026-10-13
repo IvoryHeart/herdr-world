@@ -62,9 +62,12 @@ const cases = [
       "admissionInterrupted",
       "siblingSurvives",
       "requestFailure",
+      "priorityFollowup",
     ],
     replay: replayBrowserPreparation,
     mismatches: [
+      "preparation.hint",
+      "preparation.stage",
       "preparation.status",
       "preparation.revision",
       "preparation.issued",
@@ -144,6 +147,7 @@ async function implementationMutation(
   name: Model,
   droppedCatalogue = false,
   retiredOwner = false,
+  wrongHint = false,
 ) {
   const owner =
     name === "runtime-leases" ||
@@ -173,7 +177,18 @@ async function implementationMutation(
     );
     contents = original.replace(guard, 'entry.state === "ready"');
   } else if (name === "browser-refresh" || name === "browser-preparation") {
-    if (retiredOwner) {
+    if (wrongHint) {
+      const guard = "selected_connection_id: this.selectedConnectionId";
+      assert.equal(
+        original.split(guard).length,
+        2,
+        "selected hint target changed",
+      );
+      contents = original.replace(
+        guard,
+        'selected_connection_id: "synthetic-unowned"',
+      );
+    } else if (retiredOwner) {
       const guard =
         "this.client\n              .connection(connection.connectionId, connection.generation)\n              .isCurrent()";
       assert.equal(
@@ -648,6 +663,29 @@ export async function runReviewedQuintModels() {
           observation: result.observation,
         };
       }
+      let selectedHintControl = null;
+      if (item.name === "browser-preparation") {
+        const hintBundle = await implementationMutation(
+          item.name,
+          false,
+          false,
+          true,
+        );
+        const result = await replayWorker(
+          "browser-preparation-selected-hint-control",
+          {
+            model: item.name,
+            files: files.map((file) => resolve(output, file)),
+            mode: "mutation",
+            allowed: ["preparation.hint"],
+            mutant: hintBundle,
+          },
+        );
+        selectedHintControl = {
+          trace: result.trace,
+          observation: result.observation,
+        };
+      }
       const original = await readFile(resolve(root, model), "utf8");
       assert(original.includes("pure val BROKEN = false"));
       const mutant = `${artifacts}/${item.name}-mutant.qnt`;
@@ -710,6 +748,7 @@ export async function runReviewedQuintModels() {
         counterexampleObservation: counterexampleMismatch.observation,
         ...(droppedCatalogueControl ? { droppedCatalogueControl } : {}),
         ...(retiredOwnerControl ? { retiredOwnerControl } : {}),
+        ...(selectedHintControl ? { selectedHintControl } : {}),
         ...(exhaustiveConfigurations !== null
           ? { exhaustiveConfigurations }
           : {}),

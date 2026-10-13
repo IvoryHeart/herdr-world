@@ -12,6 +12,9 @@ export type PreparationState = {
   published: number;
   status: string;
   catalogue: boolean;
+  queued: boolean;
+  selected: number;
+  requested: number;
   live: boolean[];
   actionable: boolean[];
 };
@@ -27,6 +30,8 @@ export async function replayBrowserPreparation(
   const ids = ["synthetic-a", "synthetic-b"];
   const live = [true, true];
   let issued = 0;
+  let capturedHint = -1;
+  const owners = new Map<number, Promise<void>>();
   let status!: (status: "connected" | "disconnected") => void;
   let request: ReturnType<typeof deferred<unknown>> | undefined;
   let owner: Promise<void> | undefined;
@@ -34,12 +39,24 @@ export async function replayBrowserPreparation(
   let nextPause = deferred<string>();
   let stages = new Set<string>();
   let retiring = false;
-  const store = new Store(
+  class RecordingStore extends Store {
+    override refresh() {
+      const before = issued;
+      const task = super.refresh();
+      if (issued > before) owners.set(issued, task);
+      return task;
+    }
+  }
+  const store = new RecordingStore(
     {
-      call: async (method) => {
+      call: async (method, params) => {
         assert.equal(method, "world.snapshot");
         assert(!request);
         issued++;
+        const hint = (params as { selected_connection_id?: string })
+          ?.selected_connection_id;
+        capturedHint = hint === undefined ? -1 : ids.indexOf(hint);
+        stages = new Set();
         request = deferred<unknown>();
         return request.promise;
       },
@@ -88,6 +105,14 @@ export async function replayBrowserPreparation(
       },
     })),
   });
+  async function completed() {
+    await Promise.race([
+      owner!,
+      nextPause.promise.then((stage) =>
+        observe("preparation.stage", stage, "idle"),
+      ),
+    ]);
+  }
   async function arrive(expected: string) {
     const actual = await Promise.race([
       nextPause.promise,
@@ -114,10 +139,11 @@ export async function replayBrowserPreparation(
           owner = store.refresh();
           break;
         case "reply": {
+          owner = owners.get(issued)!;
           const reply = request!;
           request = undefined;
           reply.resolve(response());
-          if (expected.stage === "idle") await owner;
+          if (expected.stage !== "decode") await completed();
           else await arrive("decode");
           break;
         }
@@ -127,7 +153,8 @@ export async function replayBrowserPreparation(
           const pause = paused;
           paused = undefined;
           pause.release();
-          if (expected.stage === "idle") await owner;
+          if (!["object", "admission"].includes(expected.stage))
+            await completed();
           else await arrive(state.op === "project" ? "object" : "office");
           break;
         }
@@ -136,7 +163,8 @@ export async function replayBrowserPreparation(
           const pause = paused;
           paused = undefined;
           pause.release();
-          await owner;
+          await completed();
+          if (issued > previous.issued) witnesses.add("priorityFollowup");
           const actual = store.get();
           if (
             actual.status === "ready" &&
@@ -147,10 +175,12 @@ export async function replayBrowserPreparation(
           break;
         }
         case "failure": {
+          owner = owners.get(issued)!;
           const reply = request!;
           request = undefined;
           reply.reject(new Error("Synthetic snapshot failure"));
-          await owner;
+          await completed();
+          if (issued > previous.issued) witnesses.add("priorityFollowup");
           if (store.get().status === "error") witnesses.add("requestFailure");
           break;
         }
@@ -165,6 +195,9 @@ export async function replayBrowserPreparation(
             witnesses.add(`${previous.stage}Interrupted`);
           }
           break;
+        case "priority":
+          store.setSelectedConnectionId(ids[state.target]!);
+          break;
         case "retire":
           live[state.target] = false;
           break;
@@ -175,6 +208,7 @@ export async function replayBrowserPreparation(
       observe("preparation.status", actual.status, expected.status);
       observe("preparation.revision", actual.revision, expected.revision);
       observe("preparation.issued", issued, expected.issued);
+      observe("preparation.hint", capturedHint, expected.requested);
       observe(
         "preparation.catalogue",
         actual.connections.length,
@@ -196,7 +230,7 @@ export async function replayBrowserPreparation(
     store.stop();
     request?.resolve(response());
     paused?.release();
-    await owner;
+    await Promise.all(owners.values());
   }
   return witnesses;
 }

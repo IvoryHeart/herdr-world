@@ -20,7 +20,8 @@ browser observation authority. `stage` separates pending reply, decoding, World
 object construction and final office preparation/admission. `captured` is the
 request epoch; `live` is client-qualified owner currency; `actionable` is published
 action authority. `issued`, `revision`, `published` and `catalogue` identify request
-and publication history. Owner retirement does not itself erase cached topology;
+and publication history. `selected`, `requested` and `queued` distinguish current
+scheduling intent from the hint captured by an outstanding request. Owner retirement does not itself erase cached topology;
 consumers must still validate their own qualified leases.
 
 `browser-preparation.ts` drives the real store using controlled reply promises and
@@ -36,7 +37,10 @@ construction. `prepareOffice` releases construction and pauses at office's final
 yield, immediately before owner revalidation/publication. Repeated yields within
 one stage continue; the first yield is independently driven. `admit` resumes and
 awaits the owning refresh task. Disconnect uses the real status callback; retirement
-changes client connection currency. Failure rejects the real pending request.
+changes client connection currency. Failure rejects the real pending request. `priority` changes the selected-host
+hint during preparation; completion admits current work and dispatches exactly
+one queued follow-up with the latest hint. A recording public refresh entry point
+retains each real task, including automatically dispatched follow-ups.
 All steps check status, revision, call count, catalogue size, IDs, generation,
 actionability and stale state. Cleanup releases pending stages and drains refresh.
 
@@ -44,14 +48,15 @@ actionability and stale state. Cleanup releases pending stages and drains refres
 
 `safety` requires ready publication to have the current observation epoch and
 admitted actionability to match captured-owner currency. Actual replay measures
-decode, object and admission interruption, sibling survival and request failure.
+decode, object and admission interruption, sibling survival, request failure and changed-priority follow-up.
 Deterministic tests additionally retire and disconnect at each of the three stages
 and complete the remaining preparation: six direct boundary regressions.
 
 The model fault allows obsolete admission and must fail `preparation.status` or
 another permitted publication observation. A compiled epoch-guard fault must also
 fail a named preparation observation. A separate compiled owner-revalidation fault
-must fail `preparation.actionable`; it cannot borrow an epoch failure as evidence.
+must fail `preparation.actionable`; a substituted selected-host hint must fail
+`preparation.hint`; it cannot borrow an epoch failure as evidence.
 Parser, invalid-action, scheduler, adapter and drain errors fail the run.
 
 ## Domain, environment and limitations
@@ -63,17 +68,19 @@ finite safety. Retirement is monotonic within this abstraction. The injected
 scheduler gates actual yields; it does not prove real browser scheduling or progress.
 Normal/browser tests retain timer, dense projection and responsiveness evidence.
 
-Queued refresh is separately modeled by the foundation. Priority changes retain
-existing integration evidence and need a consumer mapping across staged replay.
+Queued refresh and selected-host changes are now composed with staged replay.
+Resource-priority normalization, hint bounds and applied-version waits retain real
+integration tests. Priority hints affect scheduling, not captured runtime authority.
 Generation replacement/revival, nonempty resource assembly and composition between
-queued requests and staged authority remain pending. No temporal liveness claim.
+resource-priority version waits and staged authority remain scoped integration
+evidence. Broader generation/host-order sensitivity remains task 3.3. No temporal liveness claim.
 
 ## Evidence and promotion
 
 Run maintained verification and typecheck commands; normal Bun tests execute the
-seven cheap staged replay regressions and real scheduler store tests. All five
+ten cheap staged replay regressions and real scheduler store tests. All five
 models replay 1,500 generated traces across three seeds, plus 5,103 allocation
 configurations. Manifests identify exact staged inputs, tools and results.
 Expanded observation mapping and its scheduler refactor require independent review.
-Q14 and task 3.2 remain pending until priority/consumer composition is reconciled.
+Q14 records maintained staged/queued evidence without inferring review acceptance.
 Required-CI promotion and final adoption acceptance remain separate decisions.

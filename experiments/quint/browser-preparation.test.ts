@@ -13,6 +13,9 @@ const initial: PreparationState = {
   revision: 0,
   published: -1,
   status: "idle",
+  queued: false,
+  selected: -1,
+  requested: -1,
   catalogue: false,
   live: [true, true],
   actionable: [false, false],
@@ -70,3 +73,35 @@ for (const stage of ["decode", "object", "admission"]) {
 test("preparation trace rejects admission before projection", () => {
   expect(() => trace([["admit", {}]])).toThrow("precondition");
 });
+
+for (const stage of ["decode", "object", "admission"]) {
+  const pause = boundaries.findIndex(([, change]) => change.stage === stage);
+  test(`priority change during ${stage} admits current work and dispatches one follow-up with the new hint`, async () => {
+    const states = trace([
+      ...boundaries.slice(0, pause + 1),
+      ["priority", { selected: 0, queued: true }, 0],
+      ...boundaries.slice(pause + 1),
+      [
+        "admit",
+        {
+          stage: "request",
+          issued: 2,
+          queued: false,
+          requested: 0,
+          published: 0,
+          revision: 1,
+          status: "ready",
+          catalogue: true,
+          actionable: [true, true],
+        },
+      ],
+      ["reply", { stage: "decode" }],
+      ["project", { stage: "object" }],
+      ["prepareOffice", { stage: "admission" }],
+      ["admit", { stage: "idle", revision: 2 }],
+    ]);
+    expect(
+      (await replayBrowserPreparation(states)).has("priorityFollowup"),
+    ).toBe(true);
+  });
+}
