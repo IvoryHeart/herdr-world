@@ -96,7 +96,11 @@ function check(
     const previous = before.windows[step.id]!;
     if (step.type === "focus" || step.type === "maximize") {
       assert.equal(after.activeId, step.id, "explicit focus owner");
-      assert.equal(after.stack.at(-1), step.id, "explicit focus stack");
+      assert.equal(
+        after.stack[after.stack.length - 1],
+        step.id,
+        "explicit focus stack",
+      );
       assert(
         !after.windows[step.id]!.dismissed &&
           !after.windows[step.id]!.minimized,
