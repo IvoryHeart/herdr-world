@@ -35,6 +35,7 @@ type ReplayRequest = {
   spaceOrder?: number[];
 };
 
+let activeTrace: string | undefined;
 async function replay(request: ReplayRequest, resultPath: string) {
   assert(
     [
@@ -97,6 +98,7 @@ async function replay(request: ReplayRequest, resultPath: string) {
   const witnessesBySeed: Record<string, Record<string, number>> = {};
   let steps = 0;
   for (const file of request.files) {
+    activeTrace = file;
     // Trace/codec failures occur outside the expected observation rejection.
     const states = await loadTrace(file, request.model, request.domain);
     if (request.mode === "counterexample") {
@@ -158,5 +160,22 @@ if (import.meta.main) {
   const request = JSON.parse(
     await readFile(process.argv[2]!, "utf8"),
   ) as ReplayRequest;
-  await replay(request, process.argv[3]!);
+  try {
+    await replay(request, process.argv[3]!);
+  } catch (error) {
+    await writeFile(
+      process.argv[3]! + ".failure.json",
+      JSON.stringify({
+        model: request.model,
+        trace: activeTrace ? basename(activeTrace) : null,
+        observation:
+          error instanceof Error && "observation" in error
+            ? error.observation
+            : null,
+        reason:
+          error instanceof Error ? error.message : "Unknown replay failure",
+      }),
+    );
+    throw error;
+  }
 }

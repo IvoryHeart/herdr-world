@@ -58,7 +58,7 @@ at a time. TLC enumerates finite safety. Seeds 42/73/103 each sample 500 paths o
 25 transitions and replay 100 paths. No temporal progress, SSH or external Herdr
 claim is made. The [drain composition](runtime-drain.md) now covers delayed transport with
 replacement/removal/error/shutdown, failed start and failed-runtime cleanup in
-22 bounded scenarios. Concurrent replacement while stopping and recreation of
+62 bounded scenarios, including independently controlled background startup. Concurrent replacement while stopping and recreation of
 the same ID retain dedicated integration evidence. The existing
 manager tests remain required; this companion does not close those omissions.
 
@@ -71,8 +71,8 @@ that failure. Green model/code agreement did not justify weakening authority.
 ## Evidence and promotion
 
 Run `bun run verification:check` and `bun run verification:typecheck`; cheap replay
-regressions run under normal Bun tests. Four models now replay 1,200 generated
-traces, plus exhaustive allocation configurations. Manifests identify exact inputs.
+regressions run under normal Bun tests. The maintained suite runs 11 models with 6,900 baseline generated replays,
+3,900 larger-bound replays and exhaustive allocation across six host orders. Manifests identify exact inputs.
 This model and its composition mappings await independent review. Inventory Q01
 records the three maintained models without implying acceptance; required-CI promotion and
 final implementation acceptance remain pending.

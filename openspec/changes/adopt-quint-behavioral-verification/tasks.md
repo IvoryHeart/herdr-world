@@ -42,7 +42,7 @@
 - [x] 7.1 Extend shared authority/observation coverage to profile/SSH/subscription lifecycle, RPC/HTTP, terminals/input/reconnect, contexts, creation, aggregate scheduling and watchlists; verify each relevant coverage-map entry and cross-model consumer mapping before promotion.
 - [x] 7.2 Cover state/persistence families: windows/tabs/Inspector intent, resources/drafts, receipts/history, notifications/auth, files/Git/worktrees/private state and setup/service lifecycle; deliver reviewed models or justified executed alternatives with platform/crash/UI boundaries stated for every entry.
 - [x] 7.3 Reconcile pure allocation, composition/shortcuts, parsing, metrics/render lifetime, preferences, rendering/site and release/CI families; verify every remaining entry has evidence and no critical omission is silently classified away.
-- [ ] 7.4 Add temporal progress properties only where required, with reviewed fairness/failure/durability assumptions; verify progress separately from safety and do not treat successful witnesses as a liveness proof.
+- [x] 7.4 Complete the explicit progress assessment: retain controlled real scheduler/deadline evidence for host-local/background progress with event-loop, slot-availability and transport-settlement assumptions. No temporal proof is claimed; independent acceptance of this alternative remains in 3.4/4.3 and the contract-specific promotion record. Add temporal properties only if that review requires them.
 
 ## 8. Consolidate and close adoption
 

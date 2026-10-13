@@ -56,7 +56,7 @@ replacement/removal/error/failed-cleanup/reentry/shutdown coverage; its
 [contract](../../verification/contracts/runtime-control.md) retains pending
 a separate independent-review boundary. The [drain companion](../../verification/contracts/runtime-drain.md)
 adds delayed-transport administrative composition and a direct exhaustive replay
-of its 22 bounded scenarios.
+of its 62 bounded scenarios, including delayed background startup.
 TLC checks all reachable states of each finite abstraction, with no temporal
 liveness claim. Model faults are enabled only in generated copies. Their
 counterexamples must violate the model invariant and diverge when replayed

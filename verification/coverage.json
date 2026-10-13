@@ -329,7 +329,10 @@
       "evidenceDecision": "Real snapshot tests exercise retirement during construction, expired catalogue scheduling, failed-host stale topology and healthy sibling publication with bounded synthetic transports.",
       "partialEvidence": {
         "models": [],
-        "contracts": ["verification/consumer-evidence.md"],
+        "contracts": [
+          "verification/consumer-evidence.md",
+          "verification/contracts/observation-progress.md"
+        ],
         "tests": ["server/src/world/snapshot.test.ts"],
         "checks": ["bun run check"],
         "review": "Proposed alternative, not exhaustive proof. Snapshot integration is the selected consumer evidence for manager authority; no exhaustive claim over arbitrary host topology or transport schedules."
@@ -351,7 +354,10 @@
       "evidenceDecision": "Real controlled scheduling tests exercise 32 hosts, three stalled priority owners, slot release, repeated invalidation rotation, overlapping priorities and cached hosts without refetch.",
       "partialEvidence": {
         "models": [],
-        "contracts": ["verification/consumer-evidence.md"],
+        "contracts": [
+          "verification/consumer-evidence.md",
+          "verification/contracts/observation-progress.md"
+        ],
         "tests": ["server/src/world/snapshot.test.ts"],
         "checks": ["bun run check"],
         "review": "Proposed alternative, not exhaustive proof. These are explicit adversarial scheduling scenarios, not a liveness proof. Eventual progress assumes completed transport turns; stalled-owner deadlines and capacity remain implementation tests."

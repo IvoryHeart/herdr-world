@@ -1,3 +1,8 @@
+import {
+  retainVerificationDiagnostics,
+  sanitizeDiagnostic,
+} from "../../scripts/verification-diagnostics";
+import { removeRuntimeStartGuard } from "./runtime-start-control";
 import { replayRuntimeControl } from "./runtime-control";
 import { replayBrowserPreparation } from "./browser-preparation";
 import { replayRuntimeDrain } from "./runtime-drain";
@@ -165,6 +170,8 @@ const cases = [
       "cleanupBeforeTransport",
       "transportBeforeCleanup",
       "failedDrain",
+      "retiredDuringBackground",
+      "failedBackground",
     ],
     replay: replayRuntimeDrain,
     mismatches: [
@@ -267,9 +274,11 @@ const cases = [
 ] as const;
 type CommandResult = { code: number; ms: number; log: string; args: string[] };
 const commands: CommandResult[] = [];
+let activeLabel = "setup";
 
 type ImplementationFault =
   | "primary"
+  | "background-guard"
   | "catalogue"
   | "retired-owner"
   | "selected-hint"
@@ -282,6 +291,7 @@ async function implementationMutation(
   fault: ImplementationFault = "primary",
 ) {
   const allowed: Partial<Record<Model, readonly ImplementationFault[]>> = {
+    "runtime-drain": ["primary", "background-guard"],
     "creation-flow": ["primary", "admission-fence"],
     "browser-refresh": ["primary", "catalogue"],
     "browser-preparation": [
@@ -402,13 +412,10 @@ async function implementationMutation(
         );
     }
   } else if (name === "runtime-drain") {
-    const guard = "if (!this.isCurrent(entry, generation, runtime)) {";
-    assert.equal(
-      original.split(guard).length,
-      3,
-      "retired start guard changed",
+    contents = removeRuntimeStartGuard(
+      original,
+      fault === "background-guard" ? "background" : "transport",
     );
-    contents = original.replaceAll(guard, "if (false) {");
   } else if (name === "runtime-leases" || name === "runtime-control") {
     const guard =
       'entry.state === "ready" && this.isCurrent(entry, generation, runtime)';
@@ -521,6 +528,7 @@ async function command(
   args: string[],
   expectedViolation = false,
 ) {
+  activeLabel = label;
   const started = performance.now();
   const executionArgs = args.map((arg) =>
     arg.startsWith("experiments/") || arg.startsWith(".agents/")
@@ -530,6 +538,7 @@ async function command(
   const temporary = resolve(output, `temporary-${label}`);
   await mkdir(temporary, { recursive: true });
   let partialLog = "";
+  let checkerLog = "";
   const invoke = (commandArgs: string[], signal = cancellation.signal) =>
     runVerificationProcess(
       ["node", "--max-old-space-size=512", cli, ...commandArgs],
@@ -553,19 +562,25 @@ async function command(
       },
     );
   const { stdout, stderr, code } = await (args[0] === "verify"
-    ? withPrivateChecker(temporary, cancellation.signal, (port, signal) =>
-        invoke(
-          [
-            ...executionArgs,
-            "--apalache-version",
-            checker.version,
-            "--server-endpoint",
-            `127.0.0.1:${port}`,
-            "--tlc-config",
-            resolve(root, "tools/quint/tlc.json"),
-          ],
-          signal,
-        ),
+    ? withPrivateChecker(
+        temporary,
+        cancellation.signal,
+        (port, signal) =>
+          invoke(
+            [
+              ...executionArgs,
+              "--apalache-version",
+              checker.version,
+              "--server-endpoint",
+              `127.0.0.1:${port}`,
+              "--tlc-config",
+              resolve(root, "tools/quint/tlc.json"),
+            ],
+            signal,
+          ),
+        (text) => {
+          checkerLog += text.replaceAll(root, "<checkout>");
+        },
       )
     : invoke(executionArgs)
   )
@@ -581,7 +596,11 @@ async function command(
       );
       throw error;
     })
-    .finally(() => rm(temporary, { recursive: true, force: true }));
+    .finally(async () => {
+      if (checkerLog)
+        await writeFile(resolve(output, `${label}-checker.log`), checkerLog);
+      await rm(temporary, { recursive: true, force: true });
+    });
   const log = `${stdout}\n${stderr}`.replaceAll(root, "<checkout>");
   await writeFile(resolve(output, `${label}.log`), log);
   const result = {
@@ -621,11 +640,13 @@ async function replayWorker(
     spaceOrder?: number[];
   },
 ) {
+  activeLabel = label;
   const input = resolve(output, `${label}-request.json`);
   const resultPath = resolve(output, `${label}-result.json`);
   await writeFile(input, JSON.stringify(request));
   const temporary = resolve(output, `temporary-${label}`);
   await mkdir(temporary, { recursive: true });
+  let partialLog = "";
   const result = await runVerificationProcess(
     [
       process.execPath,
@@ -636,6 +657,9 @@ async function replayWorker(
     {
       cwd: root,
       timeoutMs: 30_000,
+      onOutput: (text) => {
+        partialLog += text.replaceAll(root, "<checkout>");
+      },
       signal: cancellation.signal,
       env: {
         ...process.env,
@@ -644,7 +668,19 @@ async function replayWorker(
         TEMP: temporary,
       },
     },
-  ).finally(() => rm(temporary, { recursive: true, force: true }));
+  )
+    .catch(async (error) => {
+      await writeFile(resolve(output, `${label}.log`), partialLog);
+      await writeFile(
+        resolve(output, `${label}.failure.json`),
+        JSON.stringify({
+          reason:
+            error instanceof Error ? error.message : "Unknown worker failure",
+        }),
+      );
+      throw error;
+    })
+    .finally(() => rm(temporary, { recursive: true, force: true }));
   await writeFile(
     resolve(output, `${label}.log`),
     `${result.stdout}\n${result.stderr}`.replaceAll(root, "<checkout>"),
@@ -664,6 +700,10 @@ async function replayWorker(
       }),
     ],
   });
+  await writeFile(
+    resolve(output, "commands.json"),
+    JSON.stringify(commands, null, 2),
+  );
   assert.equal(result.code, 0, `Replay worker ${label} failed; see its log`);
   const value = JSON.parse(await readFile(resultPath, "utf8"));
   if (request.mode === "positive") {
@@ -693,6 +733,7 @@ async function replayWorker(
 
 export async function runReviewedQuintModels(
   requestedModels: readonly Model[] = cases.map((item) => item.name),
+  diagnosticControl = false,
 ) {
   assert(
     requestedModels.length > 0 &&
@@ -1035,6 +1076,27 @@ export async function runReviewedQuintModels(
           observation: result.observation,
         };
       }
+      let backgroundGuardControl = null;
+      if (item.name === "runtime-drain") {
+        const bundle = await implementationMutation(
+          item.name,
+          "background-guard",
+        );
+        const result = await replayWorker(
+          "runtime-drain-background-guard-control",
+          {
+            model: item.name,
+            files: files.map((file) => resolve(output, file)),
+            mode: "mutation",
+            allowed: ["drain.ready.seen"],
+            mutant: bundle,
+          },
+        );
+        backgroundGuardControl = {
+          trace: result.trace,
+          observation: result.observation,
+        };
+      }
       let assemblyIndexControl = null;
       if (item.name === "chunk-assembly") {
         const bundle = await implementationMutation(item.name, "chunk-index");
@@ -1110,7 +1172,7 @@ export async function runReviewedQuintModels(
         {
           model: item.name,
           files: [resolve(root, counterexample)],
-          mode: "counterexample",
+          mode: diagnosticControl ? "positive" : "counterexample",
           allowed: item.mismatches,
         },
       );
@@ -1136,6 +1198,7 @@ export async function runReviewedQuintModels(
         ...(qualifiedGenerationControl ? { qualifiedGenerationControl } : {}),
         ...(assemblyIndexControl ? { assemblyIndexControl } : {}),
         ...(creationAdmissionControl ? { creationAdmissionControl } : {}),
+        ...(backgroundGuardControl ? { backgroundGuardControl } : {}),
         ...(exhaustiveConfigurations !== null
           ? { exhaustiveConfigurations }
           : {}),
@@ -1204,6 +1267,51 @@ export async function runReviewedQuintModels(
       resolve(output, "manifest.json"),
       JSON.stringify(manifest, null, 2),
     );
+  } catch (error) {
+    await mkdir(output, { recursive: true });
+    const failure = {
+      label: activeLabel,
+      model:
+        cases.find((item) => activeLabel.startsWith(item.name))?.name ?? null,
+      reason: sanitizeDiagnostic(
+        error instanceof Error ? error.message : "Unknown verification failure",
+        root,
+      ),
+    };
+    await writeFile(
+      resolve(output, "run.failure.json"),
+      JSON.stringify(failure, null, 2),
+    );
+    try {
+      const initial = JSON.parse(
+        await readFile(resolve(output, "manifest.json"), "utf8"),
+      );
+      initial.complete = false;
+      initial.failure = failure;
+      initial.commands = commands;
+      try {
+        initial.results = JSON.parse(
+          await readFile(resolve(output, "results.json"), "utf8"),
+        ).results;
+      } catch (readError) {
+        if ((readError as NodeJS.ErrnoException).code !== "ENOENT")
+          throw readError;
+      }
+      await writeFile(
+        resolve(output, "manifest.json"),
+        JSON.stringify(initial, null, 2),
+      );
+    } catch (readError) {
+      if ((readError as NodeJS.ErrnoException).code !== "ENOENT")
+        throw readError;
+    }
+    const diagnostics = await retainVerificationDiagnostics(
+      output,
+      root,
+      activeLabel,
+    );
+    console.error(`Diagnostics: ${relative(root, diagnostics)}`);
+    throw error;
   } finally {
     process.off("SIGINT", abort);
     process.off("SIGTERM", abort);
@@ -1213,8 +1321,18 @@ export async function runReviewedQuintModels(
 if (import.meta.main) {
   const args = process.argv.slice(2);
   assert(
-    args.length === 0 || (args.length === 2 && args[0] === "--case"),
+    args.length === 0 ||
+      (args.length === 2 && args[0] === "--case") ||
+      (args.length === 1 && args[0] === "--diagnostic-control"),
     "Use --case <model> for focused development checks",
   );
-  await runReviewedQuintModels(args.length ? [args[1] as Model] : undefined);
+  const diagnostic = args[0] === "--diagnostic-control";
+  await runReviewedQuintModels(
+    diagnostic
+      ? ["browser-refresh"]
+      : args.length
+        ? [args[1] as Model]
+        : undefined,
+    diagnostic,
+  );
 }

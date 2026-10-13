@@ -36,10 +36,12 @@ abort evidence collection.
 
 ## Domain, environment and limitations
 
-Two hosts, generations 0–4, 500 samples with seed 42, up to 25 transitions, 100
-production traces. TLC checks the finite state space; replay samples its paths.
+Two hosts, generations 0–4, seeds 42/73/103 with 500 samples each, up to 25
+transitions and 100 production replays per seed. Generation bound 6 and reversed
+registration add finite sensitivity evidence. TLC checks the finite state space; replay samples its paths.
 Successful transport and cleanup only. Removal, factory replacement, current
-errors, failed cleanup, reentrant observers and global shutdown remain pending.
+errors, failed cleanup, reentrant observers and global shutdown are outside this
+foundation and covered by the administration/drain companions.
 No external Herdr transport, SSH, OS or temporal progress claim is made.
 
 ## Evidence and promotion

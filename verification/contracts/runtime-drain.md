@@ -4,11 +4,11 @@
 
 Requirement: [runtime federation](../../openspec/specs/runtime-federation/spec.md).
 Owner: `server/src/connections/manager.ts`; accepted source PR #145. Runtime
-administration and delayed transport share a captured lifecycle that must drain.
+administration and delayed transport/background startup share a captured lifecycle that must drain.
 
 Allowed: cleanup finishes before or after transport; replacement/removal/shutdown
 retire a connecting runtime; a current error retires through failed-runtime cleanup;
-transport failure cleans up without publishing readiness. Forbidden: retired
+transport/background failure cleans up without publishing retired readiness. Forbidden: retired
 transport starting background work, readiness being transiently restored, removal
 finishing before captured work drains, or another runtime being constructed during
 retirement. Best-effort removal/shutdown may finish despite cleanup failure;
@@ -25,7 +25,12 @@ one manager with a default peer and one controlled connecting runtime, generatio
 Failed-start rejection is already transport completion; its cleanup follows.
 For the five administrative cases, `finishFirst` independently completes transport
 or cleanup; `finishSecond` completes the other and awaits both captured tasks.
-Cleanup can fail. No new runtime is constructed during the scenario.
+`backgroundWait` chooses a second asynchronous startup boundary. `enterBackground`
+finishes transport while the current runtime enters a separately controlled
+background promise. Retirement then occurs before background completion/failure;
+`finishFirst`/`finishSecond` independently complete background or cleanup in either
+order. Cleanup and background startup can each fail. No new runtime is constructed
+during the scenario.
 
 `runtime-drain.ts` calls the real manager and retains real task results. The status
 observer records every readiness publication, including transient readiness later
@@ -38,24 +43,27 @@ awaits all owned tasks.
 
 `safety` forbids any retired readiness and removal before both completion gates.
 Real replay witnesses distinguish each operation, both completion orders and
-failed drain. The model fault permits retired readiness; its counterexample must
-fail `drain.ready.seen` against production. The compiled code fault bypasses the
-two post-transport/background currency guards; generated replay must reject
-retired background work/readiness through named observations. Generic exceptions
+failed drain, retirement during background startup and background failure. The model fault permits retired readiness; its counterexample must
+fail `drain.ready.seen` against production. Two independent compiled controls each remove only one currency fence while
+preserving the other. The post-transport control must reject forbidden background
+work; the post-background control must fail `drain.ready.seen`. Their killing
+traces/observations are separately recorded, so one compound kill cannot claim
+coverage of both boundaries. Generic exceptions
 and cleanup failures cannot count as a fault kill.
 
-The direct regression replays all 22 configurations: five administrative operations
+The direct regression replays all 62 configurations: five administrative operations
 by two completion orders by two cleanup outcomes, plus two failed-start cleanup
-outcomes. It also verifies actual witnesses, rather than only executing the calls.
+outcomes, plus 40 delayed-background configurations (five operations, two
+startup outcomes, two cleanup outcomes and two completion orders). It also verifies actual witnesses, rather than only executing the calls.
 
 ## Domain, environment and limitations
 
 One controlled runtime and unstarted default peer per fresh scenario, generation
-0–3, one replacement, bounded transport and cleanup promises. Seeded generated
+0–3, one replacement, bounded transport, background and cleanup promises. Seeded generated
 paths contain multiple fully drained scenarios. TLC verifies finite safety; three
 seeds each replay 100 paths of up to 25 transitions. The direct matrix covers the
-entire 22-configuration domain. No temporal progress proof, transport protocol,
-background-start failure, reconnect timing or same-ID reincarnation claim is made.
+entire 62-configuration domain. No temporal progress proof, transport protocol,
+background protocol internals, reconnect timing or same-ID reincarnation claim is made.
 Those consumer/platform behaviors retain dedicated integration evidence.
 
 ## Evidence and promotion
@@ -63,6 +71,6 @@ Those consumer/platform behaviors retain dedicated integration evidence.
 Run maintained verification/typecheck commands and normal Bun tests. This closes
 the explicitly stated delayed-transport administrative composition gap for the
 bounded scenarios. The administration, lease and drain mappings still require
-independent review together before promotion. Broader host order/bounds and actual
-consumer composition remain pending; owner acceptance of the spike does not approve
+independent review together before promotion. The three-seed larger-bound and host-order checks are implemented; actual
+consumer/platform obligations and independent composition review remain required; owner acceptance of the spike does not approve
 this new model.

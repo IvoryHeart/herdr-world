@@ -39,11 +39,13 @@ regressions. Codec, adapter, unrelated assertions and cleanup errors fail the ru
 
 ## Domain, environment and limitations
 
-Epochs 0–3, at most six requests, successful well-formed replies, seed 42, 500
-samples, 25 transitions and 100 production traces. TLC verifies finite safety;
+Epochs 0–3, at most six requests, successful well-formed replies, seeds 42/73/103,
+500 samples and 100 production replays per seed, up to 25 transitions. Larger
+epoch/request bounds 5/10 provide separate finite sensitivity. TLC verifies finite safety;
 no temporal claim. Fixtures use one connection and a null snapshot. Per-host
 retirement during preparation/admission, failure, priority changes and real
-browser debounce/fallback timers require additional coverage. Real browser tests
+browser debounce/fallback timers are outside this foundation. The preparation
+companion covers per-host stages, failures and priority follow-ups. Real browser tests
 remain necessary; this model does not establish their timing or rendering.
 
 ## Evidence and promotion

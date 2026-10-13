@@ -68,7 +68,7 @@ Parser, invalid-action, scheduler, adapter and drain errors fail the run.
 
 Two hosts with colliding empty native resource domains, generation 1, epochs 0–3,
 at most three requests, successful replies or request rejection, seeds 42/73/103,
-500 samples and 100 replay traces per seed, up to 25 transitions. TLC verifies
+500 samples and 500 replay traces per seed, up to 25 transitions. TLC verifies
 finite safety. Retirement is monotonic within this abstraction. The injected
 scheduler gates actual yields; it does not prove real browser scheduling or progress.
 Normal/browser tests retain timer, dense projection and responsiveness evidence.
@@ -78,7 +78,8 @@ Resource-priority normalization, hint bounds and applied-version waits retain re
 integration tests. Priority hints affect scheduling, not captured runtime authority.
 New-generation snapshot admission, nonempty resource assembly and composition between
 resource-priority version waits and staged authority remain scoped integration
-evidence. Broader generation/host-order sensitivity remains task 3.3. No temporal liveness claim.
+evidence. Larger epoch/request bounds and actual replay witnesses for each seed are implemented
+in task 3.3; they remain finite sensitivity evidence. No temporal liveness claim.
 
 ## Evidence and promotion
 

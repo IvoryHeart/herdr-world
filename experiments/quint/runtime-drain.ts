@@ -13,6 +13,9 @@ export type DrainState = {
   phase: string;
   gen: number;
   transportDone: boolean;
+  backgroundWait: boolean;
+  backgroundFailed: boolean;
+  backgroundDone: boolean;
   cleanupDone: boolean;
   readySeen: boolean;
   stage: string;
@@ -23,6 +26,8 @@ type Runtime = ConnectionRuntime & {
   cleanup: PromiseWithResolvers<void>;
   stopEntered: PromiseWithResolvers<void>;
   backgrounds: number;
+  background: PromiseWithResolvers<void>;
+  backgroundEntered: PromiseWithResolvers<void>;
 };
 export async function replayRuntimeDrain(
   states: TraceState[],
@@ -44,22 +49,37 @@ export async function replayRuntimeDrain(
     if (failed) runtime!.cleanup.reject(new Error("Synthetic cleanup failure"));
     else runtime!.cleanup.resolve();
   }
-  async function completeTransport() {
-    runtime!.transport.resolve();
+  async function completeTransport(state: DrainState) {
+    if (state.backgroundWait) {
+      if (state.backgroundFailed)
+        runtime!.background.reject(new Error("Synthetic background failure"));
+      else runtime!.background.resolve();
+    } else runtime!.transport.resolve();
     await start;
   }
   async function finish(state: DrainState) {
     const started = await start!;
     const retired = await operation!;
-    if (state.kind === 5) {
+    if (state.kind === 5 || state.backgroundFailed) {
       assert(started.error instanceof Error);
-      assert.equal(started.error.message, "Synthetic transport failure");
+      assert.equal(
+        started.error.message,
+        state.kind === 5
+          ? "Synthetic transport failure"
+          : "Synthetic background failure",
+      );
     } else assert.equal(started.error, undefined);
     if (state.failed && state.kind < 2) {
       assert(retired.error instanceof Error);
       assert.equal(retired.error.message, "Synthetic cleanup failure");
     } else assert.equal(retired.error, undefined);
-    observe("drain.background", runtime!.backgrounds, 0);
+    observe(
+      "drain.background",
+      runtime!.backgrounds,
+      state.backgroundWait ? 1 : 0,
+    );
+    if (state.backgroundWait) witnesses.add("retiredDuringBackground");
+    if (state.backgroundFailed) witnesses.add("failedBackground");
     const named = [
       "stoppedDuringStart",
       "replacedDuringStart",
@@ -98,9 +118,13 @@ export async function replayRuntimeDrain(
               cleanup: Promise.withResolvers<void>(),
               stopEntered: Promise.withResolvers<void>(),
               backgrounds: 0,
+              background: Promise.withResolvers<void>(),
+              backgroundEntered: Promise.withResolvers<void>(),
               startTransport: () => next.transport.promise,
               startBackground: () => {
                 next.backgrounds++;
+                next.backgroundEntered.resolve();
+                if (expected.backgroundWait) return next.background.promise;
               },
               stop: () => {
                 next.stopEntered.resolve();
@@ -123,6 +147,10 @@ export async function replayRuntimeDrain(
           tasks.push(start);
           break;
         }
+        case "enterBackground":
+          runtime!.transport.resolve();
+          await runtime!.backgroundEntered.promise;
+          break;
         case "retire": {
           let task: Promise<void>;
           if (expected.kind === 0) task = manager!.stop(id);
@@ -157,12 +185,12 @@ export async function replayRuntimeDrain(
         }
         case "finishFirst":
           if (expected.cleanupFirst) await completeCleanup(expected.failed);
-          else await completeTransport();
+          else await completeTransport(expected);
           break;
         case "finishSecond":
           if (expected.kind === 5 || !expected.cleanupFirst)
             await completeCleanup(expected.failed);
-          else await completeTransport();
+          else await completeTransport(expected);
           await finish(expected);
           break;
         default:
@@ -188,6 +216,7 @@ export async function replayRuntimeDrain(
     }
   } finally {
     runtime?.transport.resolve();
+    runtime?.background.resolve();
     runtime?.cleanup.resolve();
     await Promise.all(tasks);
     await manager?.stopAll();

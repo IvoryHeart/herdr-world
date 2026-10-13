@@ -29,7 +29,7 @@ unrelated parsing, adapter, timeout or cleanup failures abort the run.
 These counts describe bounded executions, not unique production schedules or
 whole-system correctness. Successful witnesses do not prove temporal progress.
 
-The 22-case direct drain matrix, stage-interruption/priority tests, actual
+The 62-case direct drain matrix, stage-interruption/priority tests, actual
 sender/admission/Bridge/store composition and real creation/handoff browser tests
 retain consumer evidence. Window command orderings use a documented direct
 exhaustive two-owner reducer alternative through five commands, with an
@@ -80,7 +80,9 @@ rejected. Focused development uses `bun experiments/quint/run.ts --case <model>`
 The candidate CI workflow installs locked tools, checks types/notices, runs all
 models/controls/sensitivity and retains manifests even on failure. It has no PR
 label/path shortcut. Local complete execution takes approximately four minutes;
-CI installation/runner resource measurements remain pending its first execution.
+Fresh Ubuntu candidate CI passed in 7m11s: locked installation 6 seconds and
+model/replay/sensitivity 6m46s. Broader supported-runner and peak-memory evidence
+remain outside that measurement.
 Java heap is bounded to 1 GiB, Node old space to 512 MiB, each checker command to
 240 seconds and the complete command to 15 minutes. These are configured limits,
 not total peak-memory measurements.
@@ -93,6 +95,13 @@ consumer assumptions visible. The candidate formal workflow is deliberately
 separate from protected Delivery checks until task 3.4's independent promotion
 review accepts requirements, mappings and exclusions. Final activation must wire
 accepted checks into local/CI gates; it must not reuse spike approval.
+
+[Contract-specific promotion records](../verification/promotion-review.md) and the
+[observation progress assessment](../verification/contracts/observation-progress.md)
+now state pending decisions and scheduler assumptions explicitly. Runtime drain
+includes both startup await boundaries with independent guard controls. Failed
+runs retain bounded sanitized diagnostic artifacts, and an intentional failing
+candidate tests that those artifacts reproduce the named mismatch.
 
 Review focus is intended-property validity, abstraction completeness, real replay
 fidelity, distinct authority identities, witness coverage, fault controls,

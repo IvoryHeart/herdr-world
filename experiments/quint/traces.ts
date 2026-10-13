@@ -78,7 +78,14 @@ const actions = {
     "oldSocket",
   ],
   "chunk-credits": ["init", "open", "wait", "acknowledge", "close", "retire"],
-  "runtime-drain": ["init", "choose", "retire", "finishFirst", "finishSecond"],
+  "runtime-drain": [
+    "init",
+    "choose",
+    "enterBackground",
+    "retire",
+    "finishFirst",
+    "finishSecond",
+  ],
   "browser-preparation": [
     "init",
     "request",
@@ -504,6 +511,9 @@ export function validateTrace(
         "cleanupFirst",
         "failed",
         "transportDone",
+        "backgroundWait",
+        "backgroundFailed",
+        "backgroundDone",
         "cleanupDone",
         "readySeen",
       ])
@@ -527,15 +537,28 @@ export function validateTrace(
       );
       if (index > 0) {
         const before: DrainState = value[index - 1].drain;
+        if (state.op === "choose")
+          assert(
+            state.drain.kind >= 0 &&
+              (!state.drain.backgroundFailed || state.drain.backgroundWait) &&
+              (state.drain.kind !== 5 ||
+                (!state.drain.backgroundWait && !state.drain.cleanupFirst)),
+            "invalid drain scenario configuration",
+          );
         const valid: boolean =
           state.op === "choose"
             ? ["empty", "done"].includes(before.stage)
-            : state.op === "retire"
-              ? before.stage === "starting"
-              : state.op === "finishFirst"
-                ? before.stage === "draining" && before.kind !== 5
-                : before.stage === "half" ||
-                  (before.stage === "draining" && before.kind === 5);
+            : state.op === "enterBackground"
+              ? before.stage === "starting" &&
+                before.backgroundWait &&
+                !before.transportDone
+              : state.op === "retire"
+                ? before.stage === "starting" &&
+                  (!before.backgroundWait || before.transportDone)
+                : state.op === "finishFirst"
+                  ? before.stage === "draining" && before.kind !== 5
+                  : before.stage === "half" ||
+                    (before.stage === "draining" && before.kind === 5);
         assert(valid, "invalid drain action precondition");
       }
     } else if (model === "browser-preparation") {

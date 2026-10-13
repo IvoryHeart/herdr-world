@@ -325,5 +325,18 @@ test("behavioral candidate runs complete evidence without labels or path exclusi
     (step) => step.name === "Retain source-bound evidence manifests",
   )!;
   expect(artifact.if).toBe("always()");
+  expect((artifact.with as { path?: string }).path).toContain(
+    ".agents/verification/diagnostics/**",
+  );
+  expect(
+    job.steps.find(
+      (step) => step.run === "bun run verification:diagnostic-control",
+    )?.["continue-on-error"],
+  ).toBeUndefined();
+  expect(
+    job.steps.some(
+      (step) => step.run === "bun run verification:diagnostic-control",
+    ),
+  ).toBe(true);
   expect(workflow.jobs.delivery.needs).not.toContain("candidate");
 });

@@ -13,6 +13,8 @@ are optional because the merged PR history records their source.
   observation, protocol, creation and Ranger models, a reconciled 43-area evidence
   inventory and candidate CI/contributor guidance. Protected formal-gate promotion
   awaits independent implementation review.
+  Startup currency fences now have independent fault controls, and failed
+  verification runs retain bounded diagnostic artifacts for reproduction.
 - SSH profiles can connect to Windows Herdr 0.9.1+ sessions through Windows
   PowerShell, with optional executable and session selection. Unix-only remote
   file, Git and history tools explain their limitations.

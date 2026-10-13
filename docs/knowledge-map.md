@@ -92,3 +92,7 @@ or alternative evidence decisions. The [implementation report](quint-adoption-im
 records maintained checks, actual-delivery audit, claim limits and pending promotion.
 [Consumer evidence](../verification/consumer-evidence.md) explains shared guarantees
 and implementation/browser/platform alternatives.
+
+[Promotion review](../verification/promotion-review.md) tracks each contract's bounds,
+consumer obligations and pending acceptance. [Observation progress](../verification/contracts/observation-progress.md)
+records scheduler/deadline assumptions separately from model reachability.

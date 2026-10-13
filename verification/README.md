@@ -87,8 +87,9 @@ the unfiltered canonical command.
 The canonical run has a 15-minute outer deadline; checker commands have a
 240-second deadline, Java has a 1 GiB heap and Node has a 512 MiB old-space cap.
 These per-process limits are not a measurement of total peak memory. Local complete
-execution passed in approximately four minutes after the Ranger additions; CI
-resource/installation measurements are still pending the first candidate run.
+execution passed in approximately four minutes after the Ranger additions; Fresh Ubuntu candidate CI passed in 7m11s, with installation taking 6 seconds
+and complete model/replay/sensitivity execution 6m46s. These are observed wall
+times, not peak-memory or all-platform measurements.
 No supplemental exploration substitutes for real consumer/platform/browser checks.
 
 The protected repository delivery check and pre-push gate remain required.
@@ -104,3 +105,28 @@ with the affected evidence decision and limitation recorded. Never make checker
 errors soft-success, disable a consumer regression or weaken an intended property
 to recover a green build. Tool caches and generated traces are ignored and may
 be recreated through `verification:setup`; production code does not depend on Quint.
+
+## Failure diagnostics and progress review
+
+Failed runs retain completed command progress and the failing model/phase in the
+incomplete manifest. A curated diagnostic directory contains failure metadata,
+checker/replay log tails, the selected request and relevant counterexample/trace.
+Logs are capped at 64 KiB each, diagnostic payload at 512 KiB per run, absolute
+checkout/home paths and credential-style log values are redacted, and oversized
+structured files are omitted explicitly rather than truncated into invalid JSON.
+Tools, temporary directories, unrelated traces, symlinks and mutant bundles are
+excluded. Source-bound manifests and this diagnostic set are uploaded on failure.
+
+`bun run verification:diagnostic-control` deliberately runs a valid refresh
+counterexample as a positive candidate replay, requires the subprocess to fail,
+then validates its retained metadata and replays the exported trace to reproduce
+`refresh.status`. It runs after the normal unfiltered CI check and cannot replace
+it. Downloaded artifacts can be validated with
+`bun scripts/verification-diagnostic-control.ts --validate <diagnostic-directory>`.
+Rerunning `bun experiments/quint/run.ts --case <model>` rebuilds excluded fault
+bundles from the tracked sources and locked tools.
+
+[Promotion decisions](promotion-review.md) remain contract-specific and pending.
+The [observation progress assessment](contracts/observation-progress.md) separates
+controlled scheduler/deadline evidence from model reachability witnesses and states
+the required event-loop, slot-availability and transport-settlement assumptions.

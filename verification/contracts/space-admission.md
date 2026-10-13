@@ -36,8 +36,9 @@ priority observations. Unrelated failures cannot count as sensitivity evidence.
 Six spaces on three unequal hosts (3/2/1), every absent/ordinary/relevant assignment,
 capacities 0–6: exactly 5,103 configurations. TLC uses configuration initialization
 and a self-loop; deterministic enumeration replays each configuration exactly once.
-Seed-42 simulation adds 100 traces from 500 samples and 25 steps. The fixed-domain
-exhaustive result does not cover arbitrary domain sizes, host-order sensitivity,
+Seeds 42/73/103 add 100 traces each from 500 samples and up to 25 steps. All six
+host block orders separately verify and replay all configurations. This finite
+sensitivity does not cover arbitrary domain sizes,
 leaf relevance classification, rendering or upstream observation authority.
 No fairness over time or temporal progress is claimed.
 

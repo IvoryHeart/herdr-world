@@ -12,6 +12,7 @@ export async function withPrivateChecker<T>(
   temporary: string,
   signal: AbortSignal,
   execute: (port: number, signal: AbortSignal) => Promise<T>,
+  diagnostic?: (text: string) => void,
 ) {
   const port = await new Promise<number>((resolve, reject) => {
     const socket = createServer();
@@ -62,6 +63,7 @@ export async function withPrivateChecker<T>(
         TEMP: daemonTemp,
       },
       onOutput: (text) => {
+        diagnostic?.(text);
         startup = (startup + text).slice(-65536);
         if (startup.includes(`The Apalache server is running on port ${port}.`))
           readyResolve();
