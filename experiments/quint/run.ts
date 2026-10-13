@@ -1,4 +1,5 @@
 import { replayRuntimeControl } from "./runtime-control";
+import { replayBrowserPreparation } from "./browser-preparation";
 import assert from "node:assert/strict";
 import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { relative, resolve } from "node:path";
@@ -29,6 +30,28 @@ const artifacts = relative(root, output);
 const cli = quintCli;
 const cancellation = new AbortController();
 const cases = [
+  {
+    name: "browser-preparation",
+    witnesses: [
+      "decodeInterrupted",
+      "objectInterrupted",
+      "admissionInterrupted",
+      "siblingSurvives",
+      "requestFailure",
+    ],
+    replay: replayBrowserPreparation,
+    mismatches: [
+      "preparation.status",
+      "preparation.revision",
+      "preparation.issued",
+      "preparation.catalogue",
+      "preparation.owner",
+      "preparation.generation",
+      "preparation.actionable",
+      "preparation.stale",
+      "preparation.interruption.status",
+    ],
+  },
   {
     name: "runtime-control",
     witnesses: [
@@ -93,11 +116,15 @@ const cases = [
 type CommandResult = { code: number; ms: number; log: string; args: string[] };
 const commands: CommandResult[] = [];
 
-async function implementationMutation(name: Model, droppedCatalogue = false) {
+async function implementationMutation(
+  name: Model,
+  droppedCatalogue = false,
+  retiredOwner = false,
+) {
   const owner =
     name === "runtime-leases" || name === "runtime-control"
       ? "server/src/connections/manager.ts"
-      : name === "browser-refresh"
+      : name === "browser-refresh" || name === "browser-preparation"
         ? "web/src/world/runtimeStore.ts"
         : "web/src/world/spaceAdmission.ts";
   const original = await readFile(resolve(root, owner), "utf8");
@@ -111,8 +138,17 @@ async function implementationMutation(name: Model, droppedCatalogue = false) {
       "lease mutation target changed",
     );
     contents = original.replace(guard, 'entry.state === "ready"');
-  } else if (name === "browser-refresh") {
-    if (droppedCatalogue) {
+  } else if (name === "browser-refresh" || name === "browser-preparation") {
+    if (retiredOwner) {
+      const guard =
+        "this.client\n              .connection(connection.connectionId, connection.generation)\n              .isCurrent()";
+      assert.equal(
+        original.split(guard).length,
+        2,
+        "owner revalidation target changed",
+      );
+      contents = original.replace(guard, "true");
+    } else if (droppedCatalogue) {
       const getter = "get = () => this.state;";
       assert.equal(
         original.split(getter).length,
@@ -556,6 +592,28 @@ export async function runReviewedQuintModels() {
           observation: result.observation,
         };
       }
+      let retiredOwnerControl = null;
+      if (item.name === "browser-preparation") {
+        const retiredBundle = await implementationMutation(
+          item.name,
+          false,
+          true,
+        );
+        const result = await replayWorker(
+          "browser-preparation-retired-owner-control",
+          {
+            model: item.name,
+            files: files.map((file) => resolve(output, file)),
+            mode: "mutation",
+            allowed: ["preparation.actionable"],
+            mutant: retiredBundle,
+          },
+        );
+        retiredOwnerControl = {
+          trace: result.trace,
+          observation: result.observation,
+        };
+      }
       const original = await readFile(resolve(root, model), "utf8");
       assert(original.includes("pure val BROKEN = false"));
       const mutant = `${artifacts}/${item.name}-mutant.qnt`;
@@ -617,6 +675,7 @@ export async function runReviewedQuintModels() {
         killingObservation,
         counterexampleObservation: counterexampleMismatch.observation,
         ...(droppedCatalogueControl ? { droppedCatalogueControl } : {}),
+        ...(retiredOwnerControl ? { retiredOwnerControl } : {}),
         ...(exhaustiveConfigurations !== null
           ? { exhaustiveConfigurations }
           : {}),

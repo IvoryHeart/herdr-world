@@ -75,7 +75,10 @@ demonstrate detection sensitivity; they are not broad mutation coverage.
   decoding/publication and follow-up dispatch as one model transition. Real
   preparation is asynchronous and awaited through an instrumented public refresh
   entry point. Mid-preparation retirement, debounce/fallback timers, request
-  failure, priority changes and per-host lifecycle are outside this model.
+  failure, priority changes and per-host lifecycle are outside this foundation.
+  The [preparation companion](../../verification/contracts/browser-preparation.md)
+  separately models decode/projection/admission interruptions, per-host retirement
+  and request failure; queued/priority composition remains pending.
 - Allocation: six ordered spaces on three hosts with every subset of present
   and relevant spaces and capacities 0–6. Relevance is represented by workspace
   focus in replay; selection and leaf-status relevance classification are not

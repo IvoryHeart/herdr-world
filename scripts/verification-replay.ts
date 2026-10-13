@@ -1,4 +1,5 @@
 import { replayRuntimeControl } from "../experiments/quint/runtime-control";
+import { replayBrowserPreparation } from "../experiments/quint/browser-preparation";
 import assert from "node:assert/strict";
 import { readFile, writeFile } from "node:fs/promises";
 import { basename } from "node:path";
@@ -26,6 +27,7 @@ async function replay(request: ReplayRequest, resultPath: string) {
     [
       "runtime-leases",
       "runtime-control",
+      "browser-preparation",
       "browser-refresh",
       "space-admission",
     ].includes(request.model),
@@ -33,6 +35,8 @@ async function replay(request: ReplayRequest, resultPath: string) {
   assert(request.files.length > 0 && request.allowed.length > 0);
   const exports = request.mutant ? await import(request.mutant) : null;
   const execute = (states: Awaited<ReturnType<typeof loadTrace>>) => {
+    if (request.model === "browser-preparation")
+      return replayBrowserPreparation(states, exports?.WorldRuntimeStore);
     if (request.model === "runtime-control")
       return replayRuntimeControl(states, exports?.ConnectionManager);
     if (request.model === "runtime-leases")

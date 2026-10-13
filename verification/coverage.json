@@ -255,7 +255,22 @@
       "assessment": "decode/preparation/admission boundaries, failure, priorities and per-host retirement",
       "status": "pending",
       "remaining": "decode/preparation/admission boundaries, failure, priorities and per-host retirement",
-      "requiredChecks": ["bun run check"]
+      "requiredChecks": ["bun run check"],
+      "partialEvidence": {
+        "models": [
+          "experiments/quint/browser-refresh.qnt",
+          "experiments/quint/browser-preparation.qnt"
+        ],
+        "contracts": [
+          "verification/contracts/browser-refresh.md",
+          "verification/contracts/browser-preparation.md"
+        ],
+        "checks": [
+          "bun run verification:check",
+          "bun run verification:typecheck"
+        ],
+        "review": "Staged observation mapping awaits independent review; queued/priority/generation composition remains pending."
+      }
     },
     {
       "id": "Q15",

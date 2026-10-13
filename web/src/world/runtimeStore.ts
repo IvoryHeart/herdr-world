@@ -336,6 +336,7 @@ export function parseWorldSnapshotResult(
 async function prepareWorldSnapshotResult(
   value: unknown,
   current: () => boolean,
+  yieldTask: () => Promise<void> = yieldWorldTask,
 ): Promise<Omit<WorldRuntimeState, "status" | "error"> | null> {
   const item = record(value);
   if (!item || !Array.isArray(item.connections)) return null;
@@ -349,7 +350,7 @@ async function prepareWorldSnapshotResult(
       seen.add(connection.connectionId);
       header.connections.push(connection);
     }
-    await yieldWorldTask();
+    await yieldTask();
   }
   return current() ? header : null;
 }
@@ -380,7 +381,12 @@ export class WorldRuntimeStore {
     else if (this.unlistenControl) this.scheduleRefresh();
   }
 
-  constructor(private readonly client: WorldRuntimeClient) {}
+  constructor(
+    private readonly client: WorldRuntimeClient,
+    private readonly preparationYield: (
+      stage: "decode" | "object" | "office",
+    ) => Promise<void> = yieldWorldTask,
+  ) {}
 
   get = () => this.state;
 
@@ -529,6 +535,7 @@ export class WorldRuntimeStore {
       const parsed = await prepareWorldSnapshotResult(
         response,
         () => observationEpoch === this.observationEpoch,
+        () => this.preparationYield("decode"),
       );
       if (observationEpoch !== this.observationEpoch) return;
       if (!parsed) throw new Error("invalid World snapshot response");
@@ -536,9 +543,13 @@ export class WorldRuntimeStore {
       // Preparation yields to input and lifecycle events. Revalidate each
       // captured owner after those boundaries without retiring healthy siblings.
       for (;;) {
-        const world = await prepareWorldObject(parsed.connections, current);
+        const world = await prepareWorldObject(parsed.connections, current, {
+          yieldTask: () => this.preparationYield("object"),
+        });
         if (!world) return;
-        await prepareWorldOffice(world, current);
+        await prepareWorldOffice(world, current, () =>
+          this.preparationYield("office"),
+        );
         if (!current()) return;
         let changed = false;
         const connections = parsed.connections.map((connection) => {

@@ -1,14 +1,27 @@
+import type { PreparationState } from "./browser-preparation";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { decodeItf, type TraceState } from "./replay";
 
 export type Model =
+  | "browser-preparation"
   | "runtime-leases"
   | "runtime-control"
   | "browser-refresh"
   | "space-admission";
 
 const actions = {
+  "browser-preparation": [
+    "init",
+    "request",
+    "reply",
+    "project",
+    "prepareOffice",
+    "admit",
+    "failure",
+    "disconnect",
+    "retire",
+  ],
   "runtime-control": [
     "init",
     "start",
@@ -74,7 +87,64 @@ export function validateTrace(
       index === 0 ? state.op === "init" : state.op !== "init",
       "invalid initialization order",
     );
-    if (model === "runtime-control") {
+    if (model === "browser-preparation") {
+      record(state.preparation);
+      for (const key of ["epoch", "issued", "revision"])
+        integer(state.preparation[key], 0, 3);
+      for (const key of ["captured", "published"])
+        integer(state.preparation[key], -1, 3);
+      assert(
+        ["idle", "request", "decode", "object", "admission"].includes(
+          String(state.preparation.stage),
+        ),
+        "invalid preparation stage",
+      );
+      assert(
+        ["idle", "loading", "ready", "error"].includes(
+          String(state.preparation.status),
+        ),
+        "invalid preparation status",
+      );
+      assert(
+        typeof state.preparation.catalogue === "boolean",
+        "invalid catalogue flag",
+      );
+      for (const key of ["live", "actionable"])
+        assert(
+          Array.isArray(state.preparation[key]) &&
+            state.preparation[key].length === 2 &&
+            state.preparation[key].every(
+              (v: unknown) => typeof v === "boolean",
+            ),
+          "invalid host authority",
+        );
+      integer(state.target, -1, 1);
+      assert(
+        state.op === "retire" ? state.target >= 0 : state.target === -1,
+        "invalid preparation target",
+      );
+      if (index > 0) {
+        const previous: PreparationState = value[index - 1].preparation;
+        const from: Record<string, string> = {
+          request: "idle",
+          reply: "request",
+          project: "decode",
+          prepareOffice: "object",
+          admit: "admission",
+          failure: "request",
+        };
+        if (from[state.op])
+          assert(
+            previous.stage === from[state.op],
+            "invalid preparation action precondition",
+          );
+        if (state.op === "retire")
+          assert(
+            previous.live[state.target],
+            "retirement without current owner",
+          );
+      }
+    } else if (model === "runtime-control") {
       record(state.control);
       integer(state.control.gen, 0, 6);
       integer(state.control.factory, 0, 2);

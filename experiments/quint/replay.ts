@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import type { PreparationState } from "./browser-preparation";
 import type { ControlState } from "./runtime-control";
 import {
   ConnectionManager,
@@ -30,6 +31,7 @@ type RefreshState = {
 };
 export type TraceState = {
   control: ControlState;
+  preparation: PreparationState;
   op: string;
   target: number;
   hosts: Host[];
