@@ -1,4 +1,11 @@
+import assert from "node:assert/strict";
 import { resolve } from "node:path";
+
+assert.equal(
+  process.argv.length,
+  2,
+  "The canonical gate accepts no filters; use the focused development runner instead",
+);
 
 // Relay cancellation to the runner, which drains its individually owned checker
 // and replay process groups. Individual commands and the complete run are bounded.

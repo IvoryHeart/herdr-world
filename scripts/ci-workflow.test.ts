@@ -290,3 +290,40 @@ test("CI exercises the real plugin-managed launchd lifecycle on both protected a
       ?.run,
   ).toBe("bun scripts/ci-reuse-full-check.ts");
 });
+
+test("behavioral candidate runs complete evidence without labels or path exclusions before promotion", async () => {
+  const candidate = Bun.YAML.parse(
+    await Bun.file(
+      new URL(
+        "../.github/workflows/behavioral-verification.yml",
+        import.meta.url,
+      ),
+    ).text(),
+  ) as {
+    on: Record<string, unknown>;
+    permissions: Record<string, string>;
+    jobs: Record<string, WorkflowJob & { "timeout-minutes": number }>;
+  };
+  expect(candidate.on.pull_request).toEqual({
+    types: ["opened", "synchronize", "reopened"],
+  });
+  expect(candidate.permissions).toEqual({ contents: "read" });
+  const job = candidate.jobs.candidate;
+  expect(job.if).toBeUndefined();
+  expect(job["continue-on-error"]).toBeUndefined();
+  expect(job["timeout-minutes"]).toBe(20);
+  const verify = job.steps.find(
+    (step) => step.run === "bun run verification:check",
+  )!;
+  expect(verify).toBeDefined();
+  expect(verify.if).toBeUndefined();
+  expect(verify["continue-on-error"]).toBeUndefined();
+  expect(
+    job.steps.some((step) => step.run === "bun run verification:setup"),
+  ).toBe(true);
+  const artifact = job.steps.find(
+    (step) => step.name === "Retain source-bound evidence manifests",
+  )!;
+  expect(artifact.if).toBe("always()");
+  expect(workflow.jobs.delivery.needs).not.toContain("candidate");
+});

@@ -41,8 +41,10 @@ writing files, and its `pre-push` hook runs the applicable check. Use focused ch
 only for a specific question while developing. For a branch push, the hook's
 `bun run check` is the final full check for code changes. The hook uses
 `bun run check:docs` only if its local report proves a successful full gate on
-an ancestor and every change since then is Markdown. CI runs documentation
-checks for Markdown-only PR diffs, and reuses an exact-head successful full
+an ancestor and every change since then is ordinary Markdown documentation. Behavioral
+contracts, OpenSpec, tooling and agent/contributor policy receive the full gate
+even when only Markdown changes. CI runs documentation
+checks for ordinary Markdown-only PR diffs, and reuses an exact-head successful full
 result for PR-description edits; missing proof falls back to the full check.
 The three required CI job names remain the same. Run a full check separately
 only when there is no push or the hook is unavailable. After a failed push check,
@@ -58,6 +60,35 @@ Workspace checks: `bun run --filter herdr-world-web typecheck` and
 Frontend changes: `bun run build:web`. Production assets/bundling: `bun run build`.
 Releases: package and inspect every supported archive/checksum; see
 [packaging](docs/packaging.md) and [release](docs/release.md).
+
+## Behavioral evidence
+
+Assess every changed contract against the stable [43-area inventory](verification/coverage.json).
+Use existing requirements, fixtures and regressions to state allowed and forbidden
+behavior before choosing evidence. Ordering, ownership, authority and recovery
+normally warrant maintained Quint models connected to real implementation replay.
+A direct exhaustive implementation check, browser test or platform test can be a
+better alternative; record its reason, executed coverage and limits in the inventory.
+Pure edits with no contract effect need only an explicit no-impact explanation.
+
+Update affected model contracts, adapters, consumer mappings and regressions
+alongside behavior. A passing model is insufficient if its intended requirement
+or its mapping is wrong. Retain positive witnesses and fault controls; generic
+parser, adapter, timeout and cleanup errors must fail the run.
+
+For modeled changes, run `bun run verification:setup`, then
+`bun run verification:typecheck` and `bun run verification:check`. Focused
+`bun experiments/quint/run.ts --case <model>` runs help iteration but do not replace
+the complete candidate run. The separate Behavioral verification candidate CI
+workflow runs all models without labels or path-based exclusions. Its evidence
+records source/model/adapter/checker inputs. Independent promotion review remains
+pending in PR #188; this job is not yet a protected Delivery checks dependency.
+
+For an unmodeled critical change, record and execute the proposed model or justified
+alternative before review. For a mechanical change, explain why contracts and
+existing evidence are unchanged; do not create a product specification or model
+merely to satisfy the template. See [behavioral evidence](verification/README.md)
+for finite, platform and durability boundaries and the promotion checkpoint.
 
 ## Style Organization
 

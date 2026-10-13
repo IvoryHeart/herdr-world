@@ -7,6 +7,7 @@
 ## Verification
 
 - Checks run and results (or why they were not run):
+- Behavioral evidence: affected inventory IDs, model/replay or justified alternative, and executed boundaries; for mechanical changes, explain no contract impact.
 - Remaining risk or review focus:
 
 ## Agent execution and usage

@@ -30,6 +30,19 @@ and review repairs, invoke the repo-local
 For an optional visible two-agent run, use the
 [Herdr Workflows recipe](docs/agent-development.md#run-an-optional-visible-team).
 
+## Behavioral verification
+
+Assess changed contracts against `verification/coverage.json`. Use maintained
+Quint models for ordering, ownership, authority and recovery when exploration
+adds useful evidence; justify direct exhaustive, browser or platform alternatives.
+Derive properties from requirements and allowed/forbidden scenarios before mapping
+implementation. Update relevant contracts, adapters, consumer tests and evidence.
+Mechanical edits require a no-contract-impact explanation, not a new model.
+Run complete candidate verification for model/contract/adapter/tooling/consumer
+changes; focused `--case` checks do not replace it. Independent promotion review
+is pending: the candidate workflow is separate from protected delivery checks.
+See `verification/README.md` and CONTRIBUTING.md for current boundaries.
+
 ## Product shape
 
 Herdr World is one Bun service and same-origin React Web/PWA application. The service
