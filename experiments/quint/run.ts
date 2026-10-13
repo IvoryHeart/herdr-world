@@ -3,6 +3,7 @@ import { replayBrowserPreparation } from "./browser-preparation";
 import { replayRuntimeDrain } from "./runtime-drain";
 import { randomUUID } from "node:crypto";
 import { runSensitivity } from "./sensitivity";
+import { replayChunkCredits } from "./chunk-credits";
 import assert from "node:assert/strict";
 import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { relative, resolve } from "node:path";
@@ -33,6 +34,28 @@ const artifacts = relative(root, output);
 const cli = quintCli;
 const cancellation = new AbortController();
 const cases = [
+  {
+    name: "chunk-credits",
+    witnesses: [
+      "capacityDenied",
+      "wrongSocket",
+      "wrongIndex",
+      "duplicateWait",
+      "retirementCancelled",
+      "capacityReused",
+    ],
+    replay: replayChunkCredits,
+    mismatches: [
+      "credits.recognized",
+      "credits.released",
+      "credits.rejected",
+      "credits.wait.state",
+      "credits.wait.index",
+      "credits.released.socket",
+      "credits.released.request",
+      "credits.released.index",
+    ],
+  },
   {
     name: "runtime-drain",
     witnesses: [
@@ -68,6 +91,8 @@ const cases = [
     ],
     replay: replayBrowserPreparation,
     mismatches: [
+      "preparation.qualification.ids",
+      "preparation.qualification.generation",
       "preparation.hint",
       "preparation.stage",
       "preparation.status",
@@ -150,18 +175,43 @@ async function implementationMutation(
   droppedCatalogue = false,
   retiredOwner = false,
   wrongHint = false,
+  wrongCreditIndex = false,
+  wrongGeneration = false,
 ) {
   const owner =
-    name === "runtime-leases" ||
-    name === "runtime-control" ||
-    name === "runtime-drain"
-      ? "server/src/connections/manager.ts"
-      : name === "browser-refresh" || name === "browser-preparation"
-        ? "web/src/world/runtimeStore.ts"
-        : "web/src/world/spaceAdmission.ts";
+    name === "chunk-credits"
+      ? "server/src/bridge/world-snapshot-admission.ts"
+      : name === "runtime-leases" ||
+          name === "runtime-control" ||
+          name === "runtime-drain"
+        ? "server/src/connections/manager.ts"
+        : name === "browser-refresh" || name === "browser-preparation"
+          ? "web/src/world/runtimeStore.ts"
+          : "web/src/world/spaceAdmission.ts";
   const original = await readFile(resolve(root, owner), "utf8");
   let contents: string;
-  if (name === "runtime-drain") {
+  if (name === "chunk-credits") {
+    if (wrongCreditIndex) {
+      const guard = "if (waiting && waiting.index === admitted.index) {";
+      assert.equal(
+        original.split(guard).length,
+        2,
+        "credit index guard changed",
+      );
+      contents = original.replace(guard, "if (waiting) {");
+    } else {
+      const storage = "new WeakMap<object, Map<string, Transfer>>()";
+      const guard = "this.sockets.get(socket)?.get(admitted.id)";
+      assert.equal(original.split(storage).length, 2);
+      assert.equal(original.split(guard).length, 2);
+      contents = original
+        .replace(storage, "new Map<object, Map<string, Transfer>>()")
+        .replace(
+          guard,
+          "[...this.sockets.values()].map(transfers => transfers.get(admitted.id)).find(transfer => transfer?.waiting?.index === admitted.index)",
+        );
+    }
+  } else if (name === "runtime-drain") {
     const guard = "if (!this.isCurrent(entry, generation, runtime)) {";
     assert.equal(
       original.split(guard).length,
@@ -179,7 +229,19 @@ async function implementationMutation(
     );
     contents = original.replace(guard, 'entry.state === "ready"');
   } else if (name === "browser-refresh" || name === "browser-preparation") {
-    if (wrongHint) {
+    if (wrongGeneration) {
+      const guard =
+        ".connection(connection.connectionId, connection.generation)";
+      assert.equal(
+        original.split(guard).length,
+        2,
+        "qualified generation target changed",
+      );
+      contents = original.replace(
+        guard,
+        ".connection(connection.connectionId)",
+      );
+    } else if (wrongHint) {
       const guard = "selected_connection_id: this.selectedConnectionId";
       assert.equal(
         original.split(guard).length,
@@ -273,22 +335,29 @@ async function command(
   );
   const temporary = resolve(output, `temporary-${label}`);
   await mkdir(temporary, { recursive: true });
+  let partialLog = "";
   const invoke = (commandArgs: string[], signal = cancellation.signal) =>
-    runVerificationProcess(["node", cli, ...commandArgs], {
-      cwd: output,
-      env: {
-        ...process.env,
-        QUINT_HOME: checkerHome,
-        APALACHE_JAR: checkerJar,
-        JVM_ARGS: "-Xmx1G -Xss16M",
-        JVM_GC_ARGS: "",
-        TMPDIR: temporary,
-        TMP: temporary,
-        TEMP: temporary,
+    runVerificationProcess(
+      ["node", "--max-old-space-size=512", cli, ...commandArgs],
+      {
+        cwd: output,
+        env: {
+          ...process.env,
+          QUINT_HOME: checkerHome,
+          APALACHE_JAR: checkerJar,
+          JVM_ARGS: "-Xmx1G -Xss16M",
+          JVM_GC_ARGS: "",
+          TMPDIR: temporary,
+          TMP: temporary,
+          TEMP: temporary,
+        },
+        timeoutMs: 240_000,
+        onOutput: (text) => {
+          partialLog += text.replaceAll(root, "<checkout>");
+        },
+        signal,
       },
-      timeoutMs: 240_000,
-      signal,
-    });
+    );
   const { stdout, stderr, code } = await (args[0] === "verify"
     ? withPrivateChecker(temporary, cancellation.signal, (port, signal) =>
         invoke(
@@ -305,7 +374,20 @@ async function command(
         ),
       )
     : invoke(executionArgs)
-  ).finally(() => rm(temporary, { recursive: true, force: true }));
+  )
+    .catch(async (error) => {
+      await writeFile(resolve(output, `${label}.log`), partialLog);
+      await writeFile(
+        resolve(output, `${label}.failure.json`),
+        JSON.stringify({
+          complete: false,
+          reason:
+            error instanceof Error ? error.message : "unknown tool failure",
+        }),
+      );
+      throw error;
+    })
+    .finally(() => rm(temporary, { recursive: true, force: true }));
   const log = `${stdout}\n${stderr}`.replaceAll(root, "<checkout>");
   await writeFile(resolve(output, `${label}.log`), log);
   const result = {
@@ -415,7 +497,16 @@ async function replayWorker(
   };
 }
 
-export async function runReviewedQuintModels() {
+export async function runReviewedQuintModels(
+  requestedModels: readonly Model[] = cases.map((item) => item.name),
+) {
+  assert(
+    requestedModels.length > 0 &&
+      new Set(requestedModels).size === requestedModels.length &&
+      requestedModels.every((name) => cases.some((item) => item.name === name)),
+    "Unknown or duplicate model selection",
+  );
+  const runCases = cases.filter((item) => requestedModels.includes(item.name));
   const abort = () => cancellation.abort();
   process.once("SIGINT", abort);
   process.once("SIGTERM", abort);
@@ -466,8 +557,12 @@ export async function runReviewedQuintModels() {
       "spike requires pinned Quint 0.33.0",
     );
     const results = [];
-    for (const item of cases) {
-      const traceCount = item.name === "browser-preparation" ? 500 : 100;
+    for (const item of runCases) {
+      const traceCount = ["browser-preparation", "chunk-credits"].includes(
+        item.name,
+      )
+        ? 500
+        : 100;
       const model = `experiments/quint/${item.name}.qnt`;
       await command(`${item.name}-types`, ["typecheck", model]);
       const simulation = await command(`${item.name}-simulation`, [
@@ -708,6 +803,52 @@ export async function runReviewedQuintModels() {
           observation: result.observation,
         };
       }
+      let creditIndexControl = null;
+      if (item.name === "chunk-credits") {
+        const bundle = await implementationMutation(
+          item.name,
+          false,
+          false,
+          false,
+          true,
+        );
+        const result = await replayWorker("chunk-credits-index-control", {
+          model: item.name,
+          files: files.map((file) => resolve(output, file)),
+          mode: "mutation",
+          allowed: ["credits.released"],
+          mutant: bundle,
+        });
+        creditIndexControl = {
+          trace: result.trace,
+          observation: result.observation,
+        };
+      }
+      let qualifiedGenerationControl = null;
+      if (item.name === "browser-preparation") {
+        const bundle = await implementationMutation(
+          item.name,
+          false,
+          false,
+          false,
+          false,
+          true,
+        );
+        const result = await replayWorker(
+          "browser-preparation-qualified-generation-control",
+          {
+            model: item.name,
+            files: files.map((file) => resolve(output, file)),
+            mode: "mutation",
+            allowed: ["preparation.qualification.generation"],
+            mutant: bundle,
+          },
+        );
+        qualifiedGenerationControl = {
+          trace: result.trace,
+          observation: result.observation,
+        };
+      }
       const original = await readFile(resolve(root, model), "utf8");
       assert(original.includes("pure val BROKEN = false"));
       const mutant = `${artifacts}/${item.name}-mutant.qnt`;
@@ -772,6 +913,8 @@ export async function runReviewedQuintModels() {
         ...(droppedCatalogueControl ? { droppedCatalogueControl } : {}),
         ...(retiredOwnerControl ? { retiredOwnerControl } : {}),
         ...(selectedHintControl ? { selectedHintControl } : {}),
+        ...(creditIndexControl ? { creditIndexControl } : {}),
+        ...(qualifiedGenerationControl ? { qualifiedGenerationControl } : {}),
         ...(exhaustiveConfigurations !== null
           ? { exhaustiveConfigurations }
           : {}),
@@ -794,14 +937,14 @@ export async function runReviewedQuintModels() {
       command,
       replayWorker,
       mutation: implementationMutation,
-      cases,
+      cases: runCases,
     });
     await writeFile(
       resolve(output, "sensitivity.json"),
       JSON.stringify(sensitivity, null, 2),
     );
     console.log(
-      "All maintained finite models verified; generated production replays and negative controls passed.",
+      "All selected finite models verified; generated production replays and negative controls passed.",
     );
     console.log(`Evidence: ${artifacts}`);
 
@@ -835,7 +978,7 @@ export async function runReviewedQuintModels() {
       })),
       complete: true,
     };
-    await validateEvidence(root, manifest, cases.length);
+    await validateEvidence(root, manifest, runCases.length);
     await writeFile(
       resolve(output, "manifest.json"),
       JSON.stringify(manifest, null, 2),
@@ -846,4 +989,11 @@ export async function runReviewedQuintModels() {
   }
 }
 
-if (import.meta.main) await runReviewedQuintModels();
+if (import.meta.main) {
+  const args = process.argv.slice(2);
+  assert(
+    args.length === 0 || (args.length === 2 && args[0] === "--case"),
+    "Use --case <model> for focused development checks",
+  );
+  await runReviewedQuintModels(args.length ? [args[1] as Model] : undefined);
+}

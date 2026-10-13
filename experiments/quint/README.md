@@ -1,8 +1,10 @@
-# Optional Quint experiments
+# Maintained Quint behavioral evidence
 
 Read [the inventory and assessment](../../docs/quint-adoption-spike.md) first.
-These models and adapters are experimental development tooling. No application
-code, product contract, shipped dependency or required CI gate is changed.
+These models and adapters are maintained development tooling under implementation
+review. Existing cooperative preparation yields accept an injected scheduler for
+deterministic replay; application defaults and shipped dependencies are unchanged.
+Required-CI promotion remains pending independent review.
 
 The reviewed foundation now runs through maintained, isolated tooling:
 
@@ -45,7 +47,7 @@ bun test experiments/quint/replay.test.ts
 
 Each model is simulated with seeds 42, 73 and 103, 500 samples per seed and
 at most 25 transitions. One hundred generated traces per seed and case are replayed, except staged
-preparation, which replays all 500 sampled paths per seed so rare sibling-survival
+preparation and socket credits, which replay all 500 sampled paths per seed so rare sibling-survival
 witnesses cannot be lost during export. Actual required witnesses must appear in
 every seed's production replay. The administration companion adds explicit
 replacement/removal/error/failed-cleanup/reentry/shutdown coverage; its
@@ -115,3 +117,10 @@ permutation, independent of the implementation's bucket loop. Each reordered run
 must also detect the prefix-allocation fault. These are finite sensitivity checks,
 not arbitrary-size proofs. Generated variant models have recorded content digests
 and explicit replay domains in the evidence manifest.
+
+For a focused development check, run `bun experiments/quint/run.ts --case <model>`.
+Its manifest identifies only the selected model(s). It does not replace the full
+canonical entry point. Tool failures retain bounded partial logs and incomplete
+failure records; they cannot complete a manifest. CLI memory is capped at 512 MB
+in addition to checker JVM bounds. Interrupted top-level checks always fail and
+force retirement after ten seconds if ordinary cancellation cannot finish.

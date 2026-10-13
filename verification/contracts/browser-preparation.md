@@ -37,11 +37,16 @@ construction. `prepareOffice` releases construction and pauses at office's final
 yield, immediately before owner revalidation/publication. Repeated yields within
 one stage continue; the first yield is independently driven. `admit` resumes and
 awaits the owning refresh task. Disconnect uses the real status callback; retirement
-changes client connection currency. Failure rejects the real pending request. `priority` changes the selected-host
+updates the real Bridge runtime catalogue from captured generation 1 to ready
+generation 3. The real qualified client rejects generation 1 while preserving
+the healthy peer; a new ready incarnation cannot restore old authority. Failure rejects the real pending request. `priority` changes the selected-host
 hint during preparation; completion admits current work and dispatches exactly
 one queued follow-up with the latest hint. A recording public refresh entry point
 retains each real task, including automatically dispatched follow-ups.
-All steps check status, revision, call count, catalogue size, IDs, generation,
+Qualification calls record their actual owner IDs and explicit generation; a
+separate generation-omission mutation must fail
+`preparation.qualification.generation`, even when the legacy client would be
+rejected too. All steps check status, revision, call count, catalogue size, IDs, generation,
 actionability and stale state. Cleanup releases pending stages and drains refresh.
 
 ## Properties, witnesses and negative controls
@@ -71,16 +76,15 @@ Normal/browser tests retain timer, dense projection and responsiveness evidence.
 Queued refresh and selected-host changes are now composed with staged replay.
 Resource-priority normalization, hint bounds and applied-version waits retain real
 integration tests. Priority hints affect scheduling, not captured runtime authority.
-Generation replacement/revival, nonempty resource assembly and composition between
+New-generation snapshot admission, nonempty resource assembly and composition between
 resource-priority version waits and staged authority remain scoped integration
 evidence. Broader generation/host-order sensitivity remains task 3.3. No temporal liveness claim.
 
 ## Evidence and promotion
 
 Run maintained verification and typecheck commands; normal Bun tests execute the
-ten cheap staged replay regressions and real scheduler store tests. All five
-models replay 1,500 generated traces across three seeds, plus 5,103 allocation
-configurations. Manifests identify exact staged inputs, tools and results.
+ten cheap staged replay regressions and real scheduler store tests. The runner records exact per-model/per-seed replay counts and sensitivity
+settings; preparation replays every sampled path to retain rare witnesses. Manifests identify exact staged inputs, tools and results.
 Expanded observation mapping and its scheduler refactor require independent review.
 Q14 records maintained staged/queued evidence without inferring review acceptance.
 Required-CI promotion and final adoption acceptance remain separate decisions.

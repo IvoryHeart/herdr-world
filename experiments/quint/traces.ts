@@ -5,6 +5,7 @@ import { readFile } from "node:fs/promises";
 import { decodeItf, type TraceState } from "./replay";
 
 export type Model =
+  | "chunk-credits"
   | "runtime-drain"
   | "browser-preparation"
   | "runtime-leases"
@@ -13,6 +14,7 @@ export type Model =
   | "space-admission";
 
 const actions = {
+  "chunk-credits": ["init", "open", "wait", "acknowledge", "close", "retire"],
   "runtime-drain": ["init", "choose", "retire", "finishFirst", "finishSecond"],
   "browser-preparation": [
     "init",
@@ -112,7 +114,55 @@ export function validateTrace(
       index === 0 ? state.op === "init" : state.op !== "init",
       "invalid initialization order",
     );
-    if (model === "runtime-drain") {
+    if (model === "chunk-credits") {
+      assert(
+        Array.isArray(state.slots) && state.slots.length === 4,
+        "invalid credit slots",
+      );
+      assert(
+        Array.isArray(state.live) &&
+          state.live.length === 2 &&
+          state.live.every((v: unknown) => typeof v === "boolean"),
+        "invalid socket lifetime",
+      );
+      for (const slot of state.slots) {
+        record(slot);
+        assert(
+          ["new", "open", "waiting", "closed"].includes(String(slot.phase)),
+          "invalid credit slot phase",
+        );
+        integer(slot.index, -1, 2);
+      }
+      integer(state.socket, -1, 1);
+      integer(state.id, -1, 2);
+      integer(state.index, -1, 2);
+      integer(state.releasedSocket, -1, 1);
+      integer(state.releasedIndex, -1, 2);
+      integer(state.releasedId, -1, 2);
+      assert(
+        typeof state.released === "boolean" &&
+          typeof state.rejected === "boolean",
+        "invalid credit event",
+      );
+      if (index > 0) {
+        assert(
+          state.socket >= 0 &&
+            (state.op === "retire" ? state.id === -1 : state.id >= 0),
+          "invalid credit target",
+        );
+        const previous: TraceState = value[index - 1];
+        const slot = previous.slots[state.socket === 0 ? state.id : 3];
+        if (state.op === "open")
+          assert(
+            previous.live[state.socket] && slot.phase !== "closed",
+            "invalid open precondition",
+          );
+        if (state.op === "wait" || state.op === "close")
+          assert(slot.phase !== "new", "invalid credit handle precondition");
+        if (["wait", "acknowledge"].includes(state.op))
+          assert(state.index >= 0, "invalid credit index");
+      }
+    } else if (model === "runtime-drain") {
       record(state.drain);
       integer(state.drain.kind, -1, 5);
       integer(state.drain.gen, 0, 3);

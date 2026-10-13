@@ -72,7 +72,9 @@ export async function runSensitivity(h: Harness) {
       domain: { epochBound: 4, requestBound: 4 },
     },
   ];
-  for (const variant of variants) {
+  for (const variant of variants.filter((variant) =>
+    h.cases.some((item) => item.name === variant.name),
+  )) {
     const item = h.cases.find((item) => item.name === variant.name)!;
     const traceCount = variant.name === "browser-preparation" ? 1000 : 100;
     let source = await readFile(
@@ -185,6 +187,7 @@ export async function runSensitivity(h: Harness) {
       console.log(JSON.stringify(result));
     }
   }
+  if (!h.cases.some((item) => item.name === "space-admission")) return results;
   const source = await readFile(
     resolve(h.root, "experiments/quint/space-admission.qnt"),
     "utf8",

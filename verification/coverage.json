@@ -226,7 +226,20 @@
       "assessment": "wrong socket/index, cancellation, timeout and two-transfer capacity",
       "status": "pending",
       "remaining": "wrong socket/index, cancellation, timeout and two-transfer capacity",
-      "requiredChecks": ["bun run check"]
+      "requiredChecks": ["bun run check"],
+      "partialEvidence": {
+        "models": ["experiments/quint/chunk-credits.qnt"],
+        "contracts": ["verification/contracts/chunk-credits.md"],
+        "tests": [
+          "experiments/quint/chunk-credits.test.ts",
+          "experiments/quint/protocol-composition.test.ts"
+        ],
+        "checks": [
+          "bun run verification:check",
+          "bun run verification:typecheck"
+        ],
+        "review": "Credit model and real sender/Bridge/observation integration await independent review; dedicated assembly modeling remains pending."
+      }
     },
     {
       "id": "Q13",
@@ -256,7 +269,7 @@
       "technique": "observation",
       "assessment": "decode/preparation/admission boundaries, failure, priorities and per-host retirement",
       "status": "modeled",
-      "remaining": "Independent promotion review and broader sensitivity checks. Per-host generation revival, dense real browser scheduling and resource-priority version waits retain integration/browser evidence.",
+      "remaining": "Independent promotion review. New-generation snapshot admission, dense real browser scheduling and resource-priority version waits retain integration/browser evidence; captured-generation replacement now uses the real Bridge lease gate.",
       "requiredChecks": ["bun run check"],
       "partialEvidence": {
         "models": [

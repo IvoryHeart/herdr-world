@@ -1,4 +1,5 @@
 import type { DrainState } from "./runtime-drain";
+import type { CreditState } from "./chunk-credits";
 import assert from "node:assert/strict";
 import type { PreparationState } from "./browser-preparation";
 import type { ControlState } from "./runtime-control";
@@ -30,7 +31,7 @@ type RefreshState = {
   revision: number;
   status: string;
 };
-export type TraceState = {
+export type TraceState = CreditState & {
   control: ControlState;
   drain: DrainState;
   preparation: PreparationState;

@@ -1,3 +1,4 @@
+import { syntheticBridge } from "./bridge-fixture";
 import assert from "node:assert/strict";
 import { WorldRuntimeStore } from "../../web/src/world/runtimeStore";
 import { observe } from "./observations";
@@ -29,6 +30,11 @@ export async function replayBrowserPreparation(
   const witnesses = new Set<string>();
   const ids = ["synthetic-a", "synthetic-b"];
   const live = [true, true];
+  const qualifier = syntheticBridge();
+  const qualification = new Map<
+    number,
+    { id: string; generation: number | null | undefined }[]
+  >();
   let issued = 0;
   let capturedHint = -1;
   const owners = new Map<number, Promise<void>>();
@@ -50,6 +56,7 @@ export async function replayBrowserPreparation(
   const store = new RecordingStore(
     {
       call: async (method, params) => {
+        qualifier.connect(live);
         assert.equal(method, "world.snapshot");
         assert(!request);
         issued++;
@@ -60,7 +67,12 @@ export async function replayBrowserPreparation(
         request = deferred<unknown>();
         return request.promise;
       },
-      connection: (id) => ({ isCurrent: () => live[ids.indexOf(id)] === true }),
+      connection: (id, generation) => {
+        const recorded = qualification.get(issued) ?? [];
+        recorded.push({ id, generation });
+        qualification.set(issued, recorded);
+        return qualifier.bridge.connection(id, generation);
+      },
       onControl: () => () => {},
       onStatus: (listener) => {
         status = listener;
@@ -160,10 +172,37 @@ export async function replayBrowserPreparation(
         }
         case "admit": {
           assert(paused?.stage === "office");
+          const requestOrdinal = issued;
+          const expectedQualification =
+            previous.captured === previous.epoch
+              ? [
+                  ...ids,
+                  ...(live.some((owner) => !owner)
+                    ? ids.filter((_, h) => live[h])
+                    : []),
+                ]
+              : [];
           const pause = paused;
           paused = undefined;
           pause.release();
           await completed();
+          const calls = qualification.get(requestOrdinal) ?? [];
+          for (const call of calls)
+            observe("preparation.qualification.generation", call.generation, 1);
+          const expectedAuthority =
+            previous.captured === previous.epoch ? live : [false, false];
+          if (previous.captured === previous.epoch)
+            for (const [h, connection] of store.get().connections.entries())
+              observe(
+                "preparation.actionable",
+                connection.actionable,
+                expectedAuthority[h],
+              );
+          observe(
+            "preparation.qualification.ids",
+            calls.map((call) => call.id),
+            expectedQualification,
+          );
           if (issued > previous.issued) witnesses.add("priorityFollowup");
           const actual = store.get();
           if (
@@ -185,6 +224,7 @@ export async function replayBrowserPreparation(
           break;
         }
         case "disconnect":
+          qualifier.bridge.disconnect("Synthetic observation disconnect");
           status("disconnected");
           if (["decode", "object", "admission"].includes(previous.stage)) {
             observe(
@@ -200,6 +240,7 @@ export async function replayBrowserPreparation(
           break;
         case "retire":
           live[state.target] = false;
+          qualifier.connect(live);
           break;
         default:
           throw new Error("Unknown observation preparation action");
@@ -227,10 +268,17 @@ export async function replayBrowserPreparation(
     }
   } finally {
     retiring = true;
-    store.stop();
-    request?.resolve(response());
-    paused?.release();
-    await Promise.all(owners.values());
+    try {
+      store.stop();
+    } finally {
+      request?.resolve(response());
+      paused?.release();
+      try {
+        await Promise.all(owners.values());
+      } finally {
+        qualifier.restore();
+      }
+    }
   }
   return witnesses;
 }
