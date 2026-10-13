@@ -35,7 +35,9 @@ observation; malformed traces, adapter errors and cleanup errors abort. Witnesse
 are counted from successfully executed production replay, not only simulation.
 Raw output is kept in bounded local logs and summarized in console output.
 
-The initial maintained command executes the reviewed foundation models and the unpromoted administration companion. It
-does not promote their old domain or atomic refresh transition to full lifecycle
-coverage. Expanded contracts, replay mappings and required-check promotion are
+The maintained command executes the foundation plus administration, drain and
+staged-observation models, their fault controls and larger-bound/host-order
+sensitivity. These implementations await independent promotion review. A measured
+Linux run took approximately 150 seconds with the configured checker bounds; this
+is execution evidence for this toolchain, not a guarantee for other environments. Expanded contracts, replay mappings and required-check promotion are
 separate implementation/review checkpoints in `verification/`.

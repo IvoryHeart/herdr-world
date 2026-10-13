@@ -13,7 +13,11 @@ import {
   expectObservationMismatch,
   isObservationMismatch,
 } from "../experiments/quint/observations";
-import { loadTrace, type Model } from "../experiments/quint/traces";
+import {
+  loadTrace,
+  type Model,
+  type ReplayDomain,
+} from "../experiments/quint/traces";
 
 type ReplayRequest = {
   model: Model;
@@ -21,6 +25,9 @@ type ReplayRequest = {
   mode: "positive" | "mutation" | "counterexample";
   allowed: string[];
   mutant?: string;
+  domain?: ReplayDomain;
+  reverseRegistration?: boolean;
+  spaceOrder?: number[];
 };
 
 async function replay(request: ReplayRequest, resultPath: string) {
@@ -35,6 +42,19 @@ async function replay(request: ReplayRequest, resultPath: string) {
     ].includes(request.model),
   );
   assert(request.files.length > 0 && request.allowed.length > 0);
+  if (request.spaceOrder)
+    assert(
+      request.spaceOrder.length === 6 &&
+        new Set(request.spaceOrder).size === 6 &&
+        request.spaceOrder.every(
+          (id) => Number.isInteger(id) && id >= 0 && id <= 5,
+        ),
+      "invalid allocation order",
+    );
+  assert(
+    request.reverseRegistration === undefined ||
+      typeof request.reverseRegistration === "boolean",
+  );
   const exports = request.mutant ? await import(request.mutant) : null;
   const execute = (states: Awaited<ReturnType<typeof loadTrace>>) => {
     if (request.model === "runtime-drain")
@@ -44,16 +64,21 @@ async function replay(request: ReplayRequest, resultPath: string) {
     if (request.model === "runtime-control")
       return replayRuntimeControl(states, exports?.ConnectionManager);
     if (request.model === "runtime-leases")
-      return replayRuntime(states, exports?.ConnectionManager);
+      return replayRuntime(
+        states,
+        exports?.ConnectionManager,
+        request.reverseRegistration,
+      );
     if (request.model === "browser-refresh")
       return replayRefresh(states, exports?.WorldRuntimeStore);
-    return replaySpaces(states, exports?.admitWorldSpaces);
+    return replaySpaces(states, exports?.admitWorldSpaces, request.spaceOrder);
   };
   const witnesses: Record<string, number> = {};
+  const witnessesBySeed: Record<string, Record<string, number>> = {};
   let steps = 0;
   for (const file of request.files) {
     // Trace/codec failures occur outside the expected observation rejection.
-    const states = await loadTrace(file, request.model);
+    const states = await loadTrace(file, request.model, request.domain);
     if (request.mode === "counterexample") {
       const mismatch = await expectObservationMismatch(
         () => execute(states),
@@ -71,7 +96,12 @@ async function replay(request: ReplayRequest, resultPath: string) {
     }
     try {
       const observed = await execute(states);
-      for (const name of observed) witnesses[name] = (witnesses[name] ?? 0) + 1;
+      const seed = basename(file).match(/-seed(\d+)_/)?.[1] ?? "42";
+      const counts = (witnessesBySeed[seed] ??= {});
+      for (const name of observed) {
+        witnesses[name] = (witnesses[name] ?? 0) + 1;
+        counts[name] = (counts[name] ?? 0) + 1;
+      }
       steps += states.length - 1;
     } catch (error) {
       if (
@@ -99,6 +129,7 @@ async function replay(request: ReplayRequest, resultPath: string) {
       traces: request.files.length,
       steps,
       witnesses,
+      witnessesBySeed,
     }),
   );
 }

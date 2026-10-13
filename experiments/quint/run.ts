@@ -1,6 +1,8 @@
 import { replayRuntimeControl } from "./runtime-control";
 import { replayBrowserPreparation } from "./browser-preparation";
 import { replayRuntimeDrain } from "./runtime-drain";
+import { randomUUID } from "node:crypto";
+import { runSensitivity } from "./sensitivity";
 import assert from "node:assert/strict";
 import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { relative, resolve } from "node:path";
@@ -19,13 +21,13 @@ import {
   type VerificationManifest,
 } from "../../scripts/verification-evidence";
 import { replayRefresh, replayRuntime, replaySpaces } from "./replay";
-import { loadTrace, type Model } from "./traces";
+import { loadTrace, type Model, type ReplayDomain } from "./traces";
 
 const root = resolve(import.meta.dir, "../..");
 const output = resolve(
   root,
   ".agents/verification/runs",
-  new Date().toISOString().replaceAll(":", "-"),
+  new Date().toISOString().replaceAll(":", "-") + "-" + randomUUID(),
 );
 const artifacts = relative(root, output);
 const cli = quintCli;
@@ -338,6 +340,9 @@ async function replayWorker(
     mode: "positive" | "mutation" | "counterexample";
     allowed: readonly string[];
     mutant?: string;
+    domain?: ReplayDomain;
+    reverseRegistration?: boolean;
+    spaceOrder?: number[];
   },
 ) {
   const input = resolve(output, `${label}-request.json`);
@@ -372,7 +377,16 @@ async function replayWorker(
     code: result.code,
     ms: result.elapsedMs,
     log: `${label}.log`,
-    args: ["replay", request.model, request.mode],
+    args: [
+      "replay",
+      request.model,
+      request.mode,
+      JSON.stringify({
+        domain: request.domain,
+        reverseRegistration: request.reverseRegistration,
+        spaceOrder: request.spaceOrder,
+      }),
+    ],
   });
   assert.equal(result.code, 0, `Replay worker ${label} failed; see its log`);
   const value = JSON.parse(await readFile(resultPath, "utf8"));
@@ -395,6 +409,7 @@ async function replayWorker(
     traces: number;
     steps: number;
     witnesses: Record<string, number>;
+    witnessesBySeed: Record<string, Record<string, number>>;
     trace: string;
     observation: string;
   };
@@ -452,6 +467,7 @@ export async function runReviewedQuintModels() {
     );
     const results = [];
     for (const item of cases) {
+      const traceCount = item.name === "browser-preparation" ? 500 : 100;
       const model = `experiments/quint/${item.name}.qnt`;
       await command(`${item.name}-types`, ["typecheck", model]);
       const simulation = await command(`${item.name}-simulation`, [
@@ -466,7 +482,7 @@ export async function runReviewedQuintModels() {
         "--max-steps",
         "25",
         "--n-traces",
-        "100",
+        String(traceCount),
         "--invariant",
         "safety",
         "--verbosity",
@@ -518,7 +534,7 @@ export async function runReviewedQuintModels() {
           "--max-steps",
           "25",
           "--n-traces",
-          "100",
+          String(traceCount),
           "--invariant",
           "safety",
           "--verbosity",
@@ -547,7 +563,7 @@ export async function runReviewedQuintModels() {
           ).test(file),
         )
         .sort();
-      assert.equal(files.length, 300, "trace count changed");
+      assert.equal(files.length, 3 * traceCount, "trace count changed");
       const replayStarted = performance.now();
       const originalReplay = await replayWorker(
         `${item.name}-production-replay`,
@@ -560,6 +576,12 @@ export async function runReviewedQuintModels() {
       );
       const replayWitnesses = originalReplay.witnesses;
       const steps = originalReplay.steps;
+      for (const seed of [42, 73, 103])
+        for (const witness of item.witnesses)
+          assert(
+            (originalReplay.witnessesBySeed[String(seed)]?.[witness] ?? 0) > 0,
+            `missing seed-${seed} actual replay witness ${witness}`,
+          );
       for (const name of item.witnesses)
         assert(
           replayWitnesses[name]! > 0,
@@ -737,6 +759,7 @@ export async function runReviewedQuintModels() {
         witnesses: witnessCounts,
         witnessesBySeed,
         replayWitnesses,
+        replayWitnessesBySeed: originalReplay.witnessesBySeed,
         traces: files.length,
         steps,
         replayMs,
@@ -764,6 +787,19 @@ export async function runReviewedQuintModels() {
       );
       console.log(JSON.stringify(result));
     }
+    const sensitivity = await runSensitivity({
+      root,
+      output,
+      artifacts,
+      command,
+      replayWorker,
+      mutation: implementationMutation,
+      cases,
+    });
+    await writeFile(
+      resolve(output, "sensitivity.json"),
+      JSON.stringify(sensitivity, null, 2),
+    );
     console.log(
       "All maintained finite models verified; generated production replays and negative controls passed.",
     );
@@ -784,14 +820,19 @@ export async function runReviewedQuintModels() {
         seeds: [42, 73, 103],
         maxSteps: 25,
         samples: 500,
-        replayTraces: 300,
+        replayTraces: 500,
       },
       commands: commands.map((command) => ({
         ...command,
         label: command.log.replace(/\.log$/, ""),
         elapsedMs: command.ms,
       })),
-      results,
+      results: results.map((result) => ({
+        ...result,
+        sensitivity: sensitivity.filter(
+          (item) => (item as { name: string }).name === result.name,
+        ),
+      })),
       complete: true,
     };
     await validateEvidence(root, manifest, cases.length);

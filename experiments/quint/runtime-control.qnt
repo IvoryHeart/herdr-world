@@ -1,5 +1,6 @@
 module runtime_control {
   pure val BROKEN = false
+  pure val GENERATION_BOUND = 6
   type Control = { gen: int, phase: str, factory: int, runtimeFactory: int, runtimeGen: int, mode: str, blocked: bool }
   var control: Control
   var op: str
@@ -9,29 +10,29 @@ module runtime_control {
   }
   action change(replacement, name) = all { control' = replacement, op' = name }
   action start = all {
-    control.phase == "down", not(control.blocked), control.gen < 6,
+    control.phase == "down", not(control.blocked), control.gen < GENERATION_BOUND,
     change({ ...control, gen: control.gen + 1, runtimeGen: control.gen + 1,
       runtimeFactory: control.factory, phase: "ready" }, "start"),
   }
   action currentError = all {
-    control.phase == "ready", control.gen < 6,
+    control.phase == "ready", control.gen < GENERATION_BOUND,
     change({ ...control, gen: if (BROKEN) control.gen else control.gen + 1,
       phase: if (BROKEN) "ready" else "error" }, "currentError"),
   }
   action stop = all {
-    Set("ready", "error").contains(control.phase), control.runtimeFactory >= 0, control.gen < 6,
+    Set("ready", "error").contains(control.phase), control.runtimeFactory >= 0, control.gen < GENERATION_BOUND,
     change({ ...control, gen: control.gen + 1, phase: "stopping", mode: "stop" }, "stop"),
   }
   action replace = all {
     Set("down", "ready", "error").contains(control.phase), not(control.blocked),
-    control.factory < 2, control.gen < 5,
+    control.factory < 2, control.gen < GENERATION_BOUND - 1,
     change({ ...control, factory: control.factory + 1,
       gen: control.gen + (if (control.runtimeFactory == -1) 1 else 2),
       phase: if (control.runtimeFactory == -1) "down" else "stopping",
       mode: if (control.runtimeFactory == -1) "none" else "replace" }, "replace"),
   }
   action remove = all {
-    Set("down", "ready", "error").contains(control.phase), not(control.blocked), control.gen < 6,
+    Set("down", "ready", "error").contains(control.phase), not(control.blocked), control.gen < GENERATION_BOUND,
     change({ ...control, gen: control.gen + (if (control.runtimeFactory == -1) 0 else 1),
       phase: if (control.runtimeFactory == -1) "removed" else "stopping",
       mode: if (control.runtimeFactory == -1) "none" else "remove" }, "remove"),
@@ -42,7 +43,7 @@ module runtime_control {
       runtimeFactory: -1, runtimeGen: -1, mode: "none" }, if (failed) "failCleanup" else "finishCleanup"),
   }
   action shutdown = all {
-    not(control.blocked), Set("down", "ready", "error").contains(control.phase), control.gen < 6,
+    not(control.blocked), Set("down", "ready", "error").contains(control.phase), control.gen < GENERATION_BOUND,
     change({ ...control, blocked: true,
       gen: control.gen + (if (control.runtimeFactory == -1) 0 else 1),
       phase: if (control.runtimeFactory == -1) "down" else "stopping",

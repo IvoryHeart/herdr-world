@@ -99,6 +99,7 @@ type Runtime = ConnectionRuntime & {
 export async function replayRuntime(
   states: TraceState[],
   Manager = ConnectionManager,
+  reverseRegistration = false,
 ) {
   const witnesses = new Set<string>();
   const ids = ["synthetic-a", "synthetic-b"];
@@ -108,7 +109,9 @@ export async function replayRuntime(
   const stops = new Map<number, Promise<void>>();
   const leases: ReadyRuntimeLease<Runtime>[] = [];
   const captured = new Map<number, Runtime>();
-  for (const [h, id] of ids.entries()) {
+  const registrations = [...ids.entries()];
+  if (reverseRegistration) registrations.reverse();
+  for (const [h, id] of registrations) {
     manager.register({
       identity: { id, label: id, source: "synthetic" },
       createRuntime: (context) => {
@@ -356,13 +359,14 @@ export async function replayRefresh(
 export function replaySpaces(
   states: TraceState[],
   allocate = admitWorldSpaces,
+  order = [0, 1, 2, 3, 4, 5],
 ) {
   const witnesses = new Set<string>();
   const hosts = [0, 0, 0, 1, 1, 2];
   for (const state of states) {
     const relevant = new Set(state.relevant);
     const ordered = [...state.present]
-      .sort((a, b) => a - b)
+      .sort((a, b) => order.indexOf(a) - order.indexOf(b))
       .map((id) => ({
         id,
         hostIndex: hosts[id]!,

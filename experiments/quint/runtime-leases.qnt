@@ -1,5 +1,6 @@
 module runtime_leases {
   pure val BROKEN = false
+  pure val GENERATION_BOUND = 4
   type Host = { gen: int, startGen: int, phase: str, pending: bool, lease: int }
   var hosts: List[Host]
   var op: str
@@ -19,7 +20,7 @@ module runtime_leases {
     lateStartSeen' = lateStartSeen, obsoleteErrorSeen' = obsoleteErrorSeen,
   }
   action start(h) = all {
-    hosts[h].phase == "down", hosts[h].gen < 4,
+    hosts[h].phase == "down", hosts[h].gen < GENERATION_BOUND,
     change(h, { ...hosts[h], gen: hosts[h].gen + 1,
       startGen: hosts[h].gen + 1, phase: "starting", pending: true }, "start"),
   }
@@ -36,7 +37,7 @@ module runtime_leases {
     change(h, { ...hosts[h], lease: hosts[h].gen }, "capture"),
   }
   action stop(h) = all {
-    Set("starting", "ready").contains(hosts[h].phase), hosts[h].gen < 4,
+    Set("starting", "ready").contains(hosts[h].phase), hosts[h].gen < GENERATION_BOUND,
     change(h, { ...hosts[h], gen: hosts[h].gen + 1, phase: "stopping" }, "stop"),
   }
   action finishStop(h) = all {

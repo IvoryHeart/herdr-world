@@ -1,5 +1,7 @@
 module browser_preparation {
   pure val BROKEN = false
+  pure val EPOCH_BOUND = 3
+  pure val REQUEST_BOUND = 3
   type Preparation = { epoch: int, captured: int, stage: str, issued: int, revision: int,
     published: int, status: str, catalogue: bool, queued: bool, selected: int, requested: int, live: List[bool], actionable: List[bool] }
   var preparation: Preparation
@@ -12,7 +14,7 @@ module browser_preparation {
   }
   action change(replacement, name) = all { preparation' = replacement, op' = name, target' = -1 }
   action request = all {
-    preparation.stage == "idle", preparation.issued < 3,
+    preparation.stage == "idle", preparation.issued < REQUEST_BOUND,
     change({ ...preparation, captured: preparation.epoch, requested: preparation.selected, stage: "request", issued: preparation.issued + 1,
       status: if (preparation.status == "idle") "loading" else preparation.status }, "request"),
   }
@@ -20,7 +22,7 @@ module browser_preparation {
     captured: s.epoch, requested: s.selected, queued: false } else { ...s, stage: "idle" }
   action priority(h) = all {
     preparation.stage != "idle", preparation.captured == preparation.epoch,
-    preparation.issued < 3, preparation.selected != h,
+    preparation.issued < REQUEST_BOUND, preparation.selected != h,
     preparation' = { ...preparation, selected: h, queued: true }, op' = "priority", target' = h,
   }
   action advance(from, towards, name) = all {
@@ -41,7 +43,7 @@ module browser_preparation {
       else completed(preparation), "failure"),
   }
   action disconnect = all {
-    preparation.epoch < 3,
+    preparation.epoch < EPOCH_BOUND,
     change({ ...preparation, epoch: preparation.epoch + 1, queued: false, status: "error", actionable: List(false, false) }, "disconnect"),
   }
   action retire(h) = all {

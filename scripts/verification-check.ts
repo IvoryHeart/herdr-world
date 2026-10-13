@@ -10,13 +10,19 @@ const child = Bun.spawn(
     stderr: "inherit",
   },
 );
-const stop = () => child.kill("SIGTERM");
+let cancelled = false;
+let force: ReturnType<typeof setTimeout> | undefined;
+const stop = () => {
+  cancelled = true;
+  child.kill("SIGTERM");
+  force ??= setTimeout(() => child.kill("SIGKILL"), 10_000);
+};
 process.on("SIGINT", stop);
 process.on("SIGTERM", stop);
 const timer = setTimeout(stop, 15 * 60_000);
-const force = setTimeout(() => child.kill("SIGKILL"), 15 * 60_000 + 10_000);
 try {
-  process.exitCode = await child.exited;
+  const code = await child.exited;
+  process.exitCode = cancelled ? 1 : code;
 } finally {
   clearTimeout(timer);
   clearTimeout(force);

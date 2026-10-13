@@ -1,5 +1,7 @@
 module browser_refresh {
   pure val BROKEN = false
+  pure val EPOCH_BOUND = 3
+  pure val REQUEST_BOUND = 6
   var s: { epoch: int, pending: int, queued: bool, admitted: int,
     issued: int, revision: int, status: str }
   var op: str
@@ -11,19 +13,19 @@ module browser_refresh {
     op' = "init", lateSeen' = false, coalescedSeen' = false,
   }
   action refresh = all {
-    s.issued < 6,
+    s.issued < REQUEST_BOUND,
     s' = if (s.pending >= 0) { ...s, queued: true }
       else { ...s, pending: s.epoch, issued: s.issued + 1,
         status: if (s.status == "idle") "loading" else s.status },
     op' = "refresh", lateSeen' = lateSeen, coalescedSeen' = coalescedSeen,
   }
   action disconnect = all {
-    s.epoch < 3,
+    s.epoch < EPOCH_BOUND,
     s' = { ...s, epoch: s.epoch + 1, queued: false, status: "error" },
     op' = "disconnect", lateSeen' = lateSeen, coalescedSeen' = coalescedSeen,
   }
   action complete = all {
-    s.pending >= 0, not(s.queued) or s.issued < 6,
+    s.pending >= 0, not(s.queued) or s.issued < REQUEST_BOUND,
     val admit = s.pending == s.epoch or BROKEN
     s' = { ...s,
       pending: if (s.queued) s.epoch else -1,

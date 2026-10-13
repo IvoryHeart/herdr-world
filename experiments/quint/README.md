@@ -44,8 +44,10 @@ bun test experiments/quint/replay.test.ts
 ```
 
 Each model is simulated with seeds 42, 73 and 103, 500 samples per seed and
-at most 25 transitions. One hundred generated traces per seed and case are
-replayed against production code. The administration companion adds explicit
+at most 25 transitions. One hundred generated traces per seed and case are replayed, except staged
+preparation, which replays all 500 sampled paths per seed so rare sibling-survival
+witnesses cannot be lost during export. Actual required witnesses must appear in
+every seed's production replay. The administration companion adds explicit
 replacement/removal/error/failed-cleanup/reentry/shutdown coverage; its
 [contract](../../verification/contracts/runtime-control.md) retains pending
 a separate independent-review boundary. The [drain companion](../../verification/contracts/runtime-drain.md)
@@ -93,7 +95,23 @@ demonstrate detection sensitivity; they are not broad mutation coverage.
   configurations exactly once for production replay. Independent capacity,
   host-prefix and round-fairness properties supplement reference-function agreement.
 
-Sampling 300 traces does not replay every TLC state or verify production code;
+Sampling traces does not replay every TLC state or verify production code;
 allocation additionally replays its complete fixed configuration domain.
 Generation/epoch limits make these models finite and need justification before
 using their results for broader claims. Existing focused tests remain necessary.
+
+## Required sensitivity evidence before promotion
+
+The maintained runner also verifies and replays larger finite domains: lease
+and administration generations 6/8; refresh epochs 5 with ten requests; staged
+preparation epochs/requests 4/4. Each variant uses seeds 42/73/103, 1,000 samples
+and 40 transitions. Preparation exports all 1,000 paths per seed; other variants
+export 100. Each seed requires real witnesses and an implementation fault kill.
+Lease variants reverse actual manager registration order.
+
+Allocation verifies and exhaustively replays every one of the 5,103 configurations
+for all six host block orders. The ordinal specification uses an explicit input
+permutation, independent of the implementation's bucket loop. Each reordered run
+must also detect the prefix-allocation fault. These are finite sensitivity checks,
+not arbitrary-size proofs. Generated variant models have recorded content digests
+and explicit replay domains in the evidence manifest.

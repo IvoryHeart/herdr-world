@@ -76,10 +76,31 @@ function integer(
   );
 }
 
+export type ReplayDomain = {
+  generationBound?: number;
+  epochBound?: number;
+  requestBound?: number;
+};
+
 export function validateTrace(
   model: Model,
   value: unknown,
+  domain: ReplayDomain = {},
 ): asserts value is TraceState[] {
+  assert(
+    domain.generationBound === undefined ||
+      [4, 6, 8].includes(domain.generationBound),
+    "unsupported generation domain",
+  );
+  assert(
+    domain.epochBound === undefined || [3, 4, 5].includes(domain.epochBound),
+    "unsupported epoch domain",
+  );
+  assert(
+    domain.requestBound === undefined ||
+      [3, 4, 6, 10].includes(domain.requestBound),
+    "unsupported request domain",
+  );
   assert(Array.isArray(value) && value.length > 1, "empty trace");
   for (const [index, state] of value.entries()) {
     record(state);
@@ -135,10 +156,11 @@ export function validateTrace(
       }
     } else if (model === "browser-preparation") {
       record(state.preparation);
-      for (const key of ["epoch", "issued", "revision"])
-        integer(state.preparation[key], 0, 3);
+      integer(state.preparation.epoch, 0, domain.epochBound ?? 3);
+      for (const key of ["issued", "revision"])
+        integer(state.preparation[key], 0, domain.requestBound ?? 3);
       for (const key of ["captured", "published"])
-        integer(state.preparation[key], -1, 3);
+        integer(state.preparation[key], -1, domain.epochBound ?? 3);
       assert(
         ["idle", "request", "decode", "object", "admission"].includes(
           String(state.preparation.stage),
@@ -200,10 +222,10 @@ export function validateTrace(
       }
     } else if (model === "runtime-control") {
       record(state.control);
-      integer(state.control.gen, 0, 6);
+      integer(state.control.gen, 0, domain.generationBound ?? 6);
       integer(state.control.factory, 0, 2);
       integer(state.control.runtimeFactory, -1, 2);
-      integer(state.control.runtimeGen, -1, 6);
+      integer(state.control.runtimeGen, -1, domain.generationBound ?? 6);
       assert(
         ["down", "ready", "error", "stopping", "removed"].includes(
           String(state.control.phase),
@@ -250,9 +272,11 @@ export function validateTrace(
       }
     } else if (model === "browser-refresh") {
       record(state.s);
-      integer(state.s.epoch, 0, 3);
-      for (const key of ["issued", "revision"]) integer(state.s[key], 0, 6);
-      for (const key of ["pending", "admitted"]) integer(state.s[key], -1, 3);
+      integer(state.s.epoch, 0, domain.epochBound ?? 3);
+      for (const key of ["issued", "revision"])
+        integer(state.s[key], 0, domain.requestBound ?? 6);
+      for (const key of ["pending", "admitted"])
+        integer(state.s[key], -1, domain.epochBound ?? 3);
       assert(typeof state.s.queued === "boolean", "invalid refresh queue");
       assert(
         typeof state.s.status === "string" &&
@@ -279,9 +303,9 @@ export function validateTrace(
       );
       for (const host of state.hosts) {
         record(host);
-        integer(host.gen, 0, 4);
-        integer(host.startGen, -1, 4);
-        integer(host.lease, -1, 4);
+        integer(host.gen, 0, domain.generationBound ?? 4);
+        integer(host.startGen, -1, domain.generationBound ?? 4);
+        integer(host.lease, -1, domain.generationBound ?? 4);
         assert(typeof host.pending === "boolean", "invalid start pending flag");
         assert(
           typeof host.phase === "string" &&
@@ -316,14 +340,22 @@ export function validateTrace(
   }
 }
 
-export function parseTrace(model: Model, json: string): TraceState[] {
+export function parseTrace(
+  model: Model,
+  json: string,
+  domain: ReplayDomain = {},
+): TraceState[] {
   const raw = JSON.parse(json);
   record(raw);
   const states = decodeItf(raw.states);
-  validateTrace(model, states);
+  validateTrace(model, states, domain);
   return states;
 }
 
-export async function loadTrace(path: string, model: Model) {
-  return parseTrace(model, await readFile(path, "utf8"));
+export async function loadTrace(
+  path: string,
+  model: Model,
+  domain: ReplayDomain = {},
+) {
+  return parseTrace(model, await readFile(path, "utf8"), domain);
 }

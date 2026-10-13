@@ -244,3 +244,12 @@ test("cleanup failure overrides a conformance mismatch instead of counting as a 
     (error) => error === cleanupError,
   );
 });
+
+test("trace domains stay explicit and reject unsupported sensitivity bounds", () => {
+  expect(() =>
+    validateTrace("browser-refresh", refreshTrace, { epochBound: 99 }),
+  ).toThrow("unsupported epoch domain");
+  expect(() =>
+    validateTrace("browser-refresh", refreshTrace, { requestBound: 999 }),
+  ).toThrow("unsupported request domain");
+});

@@ -1,5 +1,7 @@
 module space_admission {
   pure val BROKEN = false
+  pure val ORDER = List(0, 1, 2, 3, 4, 5)
+  pure def position(i) = ORDER.indices().filter(k => ORDER[k] == i).fold(0, (sum, k) => sum + k)
   pure val IDS = Set(0, 1, 2, 3, 4, 5)
   // Dense host 0, medium host 1, sparse host 2. IDs are input positions.
   pure val HOSTS = List(0, 0, 0, 1, 1, 2)
@@ -9,9 +11,9 @@ module space_admission {
   var admitted: Set[int]
   var op: str
   var caseIndex: int
-  pure def earlier(xs, i) = xs.filter(j => j < i).size()
+  pure def earlier(xs, i) = xs.filter(j => position(j) < position(i)).size()
   pure def localRank(xs, i) = earlier(xs.filter(j => HOSTS[j] == HOSTS[i]), i)
-  pure def first(xs, i) = xs.filter(j => HOSTS[j] == HOSTS[i]).fold(7, (best, j) => if (j < best) j else best)
+  pure def first(xs, i) = xs.filter(j => HOSTS[j] == HOSTS[i]).fold(7, (best, j) => if (position(j) < best) position(j) else best)
   pure def precedes(xs, j, i) = localRank(xs, j) < localRank(xs, i)
     or (localRank(xs, j) == localRank(xs, i) and first(xs, j) < first(xs, i))
   pure def expected(xs, rs, cap) = {
@@ -61,7 +63,7 @@ module space_admission {
   // Independent properties constrain results without calling expected().
   val fillsCapacity = admitted.size() == (if (bound < present.size()) bound else present.size())
   val hostPrefix = admitted.exclude(relevant).forall(i =>
-    present.exclude(relevant).filter(j => HOSTS[j] == HOSTS[i] and j < i).subseteq(admitted))
+    present.exclude(relevant).filter(j => HOSTS[j] == HOSTS[i] and position(j) < position(i)).subseteq(admitted))
   val roundFairness = Set(0, 1, 2).forall(a => Set(0, 1, 2).forall(b =>
     not(present.exclude(relevant).exclude(admitted).exists(i => HOSTS[i] == a))
     or admitted.exclude(relevant).filter(i => HOSTS[i] == b).size()
