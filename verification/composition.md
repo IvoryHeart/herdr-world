@@ -13,6 +13,9 @@ passing component model cannot authorize a consumer's operation by itself.
 | Qualified terminal/attachment attempt | Creation flow and existing ownership/handoff regressions | Advertisement alone is insufficient; old acknowledgement or cleanup cannot replace the current attempt. |
 | Creation event/request identity | Actual store/coordinator/Bridge in creation replay | Single-flight key includes owner, runtime, kind and source; uncertain dispatch is not retried automatically. |
 | Navigation revision and Inspector intent | Creation admission plus actual SharedViewCreation/terminal-handoff browser suites | A valid mutation result is insufficient for focus after newer user intent; real openers must obey cancellation. |
+| Task/workspace permission and cancellation | Ranger action replay plus real service/task confirmation tests | Supply the live authorization predicate at target checks and immediately before send; readiness cannot replace permission. |
+| Durable endpoint/boot/workspace identity | Ranger SQLite recovery replay plus context/task/SDK storage tests | Obtain a fresh lease only after durable identity comparison; recovered rows still require scheduler and permission admission. |
+| SQLite transaction and exclusive storage lease | Actual task storage rollback/reopen and durable-storage lock-loss tests | Local filesystem and SQLite commit guarantees are assumptions; retain private-file, migration and corruption checks. |
 
 The protocol integration tests connect real sender, admission, Bridge and World
 store. They demonstrate no partial publication, generation-1 rejection after
@@ -26,8 +29,9 @@ existing protocol/HTTP/API tests check the negotiated legacy active-host path.
 Generation-capable clients must supply explicit generation, and explicit unknown
 IDs cannot use that compatibility path. The new generation-omission fault control
 checks this real Bridge boundary. No socket, epoch, readiness or UI intent token
-substitutes for another identity. Ranger permission/durable identities are a
-separate pending composition slice.
+substitutes for another identity. Ranger permission and durable identity now have distinct implementation-connected
+models. Their supplied predicates, scheduler admission and storage assumptions
+still require independent consumer review.
 
 All new mappings await independent review. This record identifies evidence and
 assumptions; it is not acceptance or permission to activate unreviewed model gates.

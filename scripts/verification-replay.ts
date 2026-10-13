@@ -4,6 +4,8 @@ import { replayRuntimeDrain } from "../experiments/quint/runtime-drain";
 import { replayChunkCredits } from "../experiments/quint/chunk-credits";
 import { replayChunkAssembly } from "../experiments/quint/chunk-assembly";
 import { replayCreationFlow } from "../experiments/quint/creation-flow";
+import { replayRangerAuthority } from "../experiments/quint/ranger-authority";
+import { replayRangerRecovery } from "../experiments/quint/ranger-recovery";
 import assert from "node:assert/strict";
 import { readFile, writeFile } from "node:fs/promises";
 import { basename } from "node:path";
@@ -37,6 +39,8 @@ async function replay(request: ReplayRequest, resultPath: string) {
   assert(
     [
       "runtime-leases",
+      "ranger-recovery",
+      "ranger-authority",
       "creation-flow",
       "chunk-assembly",
       "chunk-credits",
@@ -63,6 +67,10 @@ async function replay(request: ReplayRequest, resultPath: string) {
   );
   const exports = request.mutant ? await import(request.mutant) : null;
   const execute = (states: Awaited<ReturnType<typeof loadTrace>>) => {
+    if (request.model === "ranger-recovery")
+      return replayRangerRecovery(states, exports?.openTaskStorage);
+    if (request.model === "ranger-authority")
+      return replayRangerAuthority(states, exports?.prepareAssistantAction);
     if (request.model === "creation-flow")
       return replayCreationFlow(states, exports ?? undefined);
     if (request.model === "chunk-assembly")

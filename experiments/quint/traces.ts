@@ -1,3 +1,5 @@
+import type { RecoveryState } from "./ranger-recovery";
+import type { AuthorityState } from "./ranger-authority";
 import type { PreparationState } from "./browser-preparation";
 import type { DrainState } from "./runtime-drain";
 import type { AssemblyState } from "./chunk-assembly";
@@ -7,6 +9,8 @@ import { readFile } from "node:fs/promises";
 import { decodeItf, type TraceState } from "./replay";
 
 export type Model =
+  | "ranger-recovery"
+  | "ranger-authority"
   | "creation-flow"
   | "chunk-assembly"
   | "chunk-credits"
@@ -18,6 +22,33 @@ export type Model =
   | "space-admission";
 
 const actions = {
+  "ranger-recovery": [
+    "init",
+    "capture",
+    "save",
+    "failedSave",
+    "close",
+    "reopen",
+    "runtimeReplacement",
+    "endpointReplacement",
+    "bootReplacement",
+    "workspaceReplacement",
+    "recover",
+  ],
+  "ranger-authority": [
+    "init",
+    "prepare",
+    "execute",
+    "checked",
+    "release",
+    "duplicate",
+    "revoke",
+    "stopTask",
+    "dispose",
+    "retire",
+    "replaceWorkspace",
+    "mutateInput",
+  ],
   "creation-flow": [
     "init",
     "start",
@@ -146,7 +177,121 @@ export function validateTrace(
       index === 0 ? state.op === "init" : state.op !== "init",
       "invalid initialization order",
     );
-    if (model === "creation-flow") {
+    if (model === "ranger-recovery") {
+      record(state.recovery);
+      integer(state.recovery.generation, 1, 3);
+      assert(
+        state.recovery.generation !== 2,
+        "unsupported recovery generation",
+      );
+      for (const key of [
+        "captured",
+        "saved",
+        "opened",
+        "loaded",
+        "endpoint",
+        "boot",
+        "workspace",
+        "recovered",
+      ])
+        assert(
+          typeof state.recovery[key] === "boolean",
+          "invalid recovery state",
+        );
+      assert(
+        ["none", "accepted", "rejected"].includes(
+          String(state.recovery.result),
+        ),
+        "invalid recovery result",
+      );
+      if (index > 0) {
+        const before: RecoveryState = value[index - 1].recovery;
+        const valid: boolean =
+          state.op === "capture"
+            ? !before.captured
+            : state.op === "save"
+              ? before.captured &&
+                !before.saved &&
+                before.opened &&
+                before.generation === 1 &&
+                before.endpoint &&
+                before.boot &&
+                before.workspace
+              : state.op === "failedSave" || state.op === "close"
+                ? before.saved && before.opened
+                : state.op === "reopen"
+                  ? before.saved && !before.opened
+                  : state.op === "runtimeReplacement"
+                    ? before.saved && before.generation === 1
+                    : state.op === "recover"
+                      ? before.loaded && before.result === "none"
+                      : before.saved &&
+                        !before.recovered &&
+                        before[
+                          state.op === "endpointReplacement"
+                            ? "endpoint"
+                            : state.op === "bootReplacement"
+                              ? "boot"
+                              : "workspace"
+                        ];
+        assert(valid, "invalid recovery action precondition");
+      }
+    } else if (model === "ranger-authority") {
+      record(state.authority);
+      assert(
+        ["idle", "prepared", "checking", "dispatch", "done"].includes(
+          String(state.authority.phase),
+        ),
+        "invalid Ranger phase",
+      );
+      integer(state.authority.writes, 0, 1);
+      for (const key of [
+        "permission",
+        "taskActive",
+        "serviceActive",
+        "runtimeCurrent",
+        "workspaceCurrent",
+      ])
+        assert(
+          typeof state.authority[key] === "boolean",
+          "invalid Ranger authority",
+        );
+      assert(
+        ["none", "failed", "succeeded"].includes(
+          String(state.authority.result),
+        ),
+        "invalid Ranger result",
+      );
+      if (index > 0) {
+        const before: AuthorityState = value[index - 1].authority;
+        const valid: boolean =
+          state.op === "prepare"
+            ? before.phase === "idle"
+            : state.op === "execute"
+              ? before.phase === "prepared"
+              : state.op === "checked"
+                ? before.phase === "checking"
+                : state.op === "release"
+                  ? before.phase === "dispatch"
+                  : state.op === "duplicate"
+                    ? ["checking", "dispatch", "done"].includes(before.phase)
+                    : state.op === "mutateInput"
+                      ? before.phase !== "idle"
+                      : state.op === "replaceWorkspace"
+                        ? before.workspaceCurrent && before.phase === "prepared"
+                        : !["idle", "done"].includes(before.phase) &&
+                          before[
+                            state.op === "revoke"
+                              ? "permission"
+                              : state.op === "stopTask"
+                                ? "taskActive"
+                                : state.op === "dispose"
+                                  ? "serviceActive"
+                                  : "runtimeCurrent"
+                          ];
+        assert(valid, "invalid Ranger action precondition");
+      }
+    } else if (model === "creation-flow") {
       record(state.creation);
       integer(state.creation.intent, 0, 2);
       integer(state.target, -1, 1);

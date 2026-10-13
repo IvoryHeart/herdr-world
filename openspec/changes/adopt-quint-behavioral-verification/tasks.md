@@ -24,10 +24,10 @@
 - [x] 4.2 Deliver the shared-view creation integration slice from prepare/attach through source ownership, dispatch, result admission and conditional focus; verify retirement at each boundary, colliding IDs, newer user intent and uncertain dispatch without retry using existing creation/handoff regressions.
 - [ ] 4.3 Review composition between runtime admission, observation, chunk ownership and creation intent; verify generation, observation epoch, socket/batch and intent tokens remain distinct and each consumer assumption has evidence, including legacy omitted-ID compatibility.
 
-## 5. Separately authorize Ranger authority and recovery
+## 5. Implement Ranger authority and recovery with separate acceptance
 
-- [ ] 5.1 Obtain owner authorization of a bounded Ranger permission/persistence/recovery slice and review its storage/crash assumptions; verify its acceptance boundary is independent of first lifecycle/observation promotion.
-- [ ] 5.2 Model task admission, captured identity, revocation, cancellation/drain and interrupted recovery; verify implementation replay or trace validation with retained integration tests and intended authority mismatches.
+- [ ] 5.1 Owner authorization covers the bounded Ranger permission/persistence/recovery slice. Independently review its documented storage/crash assumptions; verify its acceptance boundary remains separate from lifecycle/observation promotion.
+- [ ] 5.2 Complete task admission, captured identity, revocation, cancellation/drain and interrupted recovery coverage. Action authority and SQLite recovery models/replay are implemented; reconcile retained scheduler/SDK integration evidence and intended authority mismatches before closing this task.
 - [ ] 5.3 Independently accept Ranger consumer/composition mappings; verify current-runtime admission cannot bypass task permission, durable identity or cancellation checks.
 
 ## 6. Integrate policy and required checks

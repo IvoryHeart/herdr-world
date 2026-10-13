@@ -6,6 +6,8 @@ import { runSensitivity } from "./sensitivity";
 import { replayChunkCredits } from "./chunk-credits";
 import { replayChunkAssembly } from "./chunk-assembly";
 import { replayCreationFlow } from "./creation-flow";
+import { replayRangerAuthority } from "./ranger-authority";
+import { replayRangerRecovery } from "./ranger-recovery";
 import assert from "node:assert/strict";
 import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { relative, resolve } from "node:path";
@@ -36,6 +38,50 @@ const artifacts = relative(root, output);
 const cli = quintCli;
 const cancellation = new AbortController();
 const cases = [
+  {
+    name: "ranger-recovery",
+    witnesses: [
+      "stableRecovery",
+      "freshGeneration",
+      "endpointRejected",
+      "bootRejected",
+      "workspaceRejected",
+      "transactionFailure",
+    ],
+    replay: replayRangerRecovery,
+    mismatches: [
+      "recovery.result",
+      "recovery.fresh.generation",
+      "recovery.persisted.task",
+      "recovery.persisted.title",
+      "recovery.persisted.run",
+      "recovery.persisted.targets",
+      "recovery.transaction.rejected",
+    ],
+  },
+  {
+    name: "ranger-authority",
+    witnesses: [
+      "permissionBlocked",
+      "taskBlocked",
+      "serviceBlocked",
+      "runtimeBlocked",
+      "workspaceBlocked",
+      "authorizedWrite",
+      "duplicateExecution",
+    ],
+    replay: replayRangerAuthority,
+    mismatches: [
+      "ranger.checking.expected",
+      "ranger.dispatch.allowed",
+      "ranger.execution.identity",
+      "ranger.writes",
+      "ranger.result",
+      "ranger.write.label",
+      "ranger.write.cwd",
+      "ranger.write.focus",
+    ],
+  },
   {
     name: "creation-flow",
     witnesses: [
@@ -251,25 +297,46 @@ async function implementationMutation(
     (allowed[name] ?? ["primary"]).includes(fault),
     "Unsupported model/fault combination",
   );
+  const owners: Record<Model, string> = {
+    "runtime-leases": "server/src/connections/manager.ts",
+    "runtime-control": "server/src/connections/manager.ts",
+    "runtime-drain": "server/src/connections/manager.ts",
+    "browser-refresh": "web/src/world/runtimeStore.ts",
+    "browser-preparation": "web/src/world/runtimeStore.ts",
+    "space-admission": "web/src/world/spaceAdmission.ts",
+    "chunk-credits": "server/src/bridge/world-snapshot-admission.ts",
+    "chunk-assembly": "web/src/api.ts",
+    "creation-flow": "web/src/creationRequests.ts",
+    "ranger-authority": "server/src/assistant/actions.ts",
+    "ranger-recovery": "server/src/assistant/task-storage.ts",
+  };
   const owner =
-    name === "creation-flow"
-      ? fault === "admission-fence"
-        ? "web/src/world/createdTerminalAdmission.ts"
-        : "web/src/creationRequests.ts"
-      : name === "chunk-assembly"
-        ? "web/src/api.ts"
-        : name === "chunk-credits"
-          ? "server/src/bridge/world-snapshot-admission.ts"
-          : name === "runtime-leases" ||
-              name === "runtime-control" ||
-              name === "runtime-drain"
-            ? "server/src/connections/manager.ts"
-            : name === "browser-refresh" || name === "browser-preparation"
-              ? "web/src/world/runtimeStore.ts"
-              : "web/src/world/spaceAdmission.ts";
+    name === "creation-flow" && fault === "admission-fence"
+      ? "web/src/world/createdTerminalAdmission.ts"
+      : owners[name];
   const original = await readFile(resolve(root, owner), "utf8");
   let contents: string;
-  if (name === "creation-flow") {
+  if (name === "ranger-recovery") {
+    const guard =
+      "const save = db.transaction((state: SavedTaskState) =>\n      write(validate(state)),\n    );";
+    assert.equal(
+      original.split(guard).length,
+      2,
+      "Ranger transaction boundary changed",
+    );
+    contents = original.replace(
+      guard,
+      "const save = { immediate: (state: SavedTaskState) => write(validate(state)) };",
+    );
+  } else if (name === "ranger-authority") {
+    const guard = "lease.isCurrent() && (!authorized || authorized())";
+    assert.equal(
+      original.split(guard).length,
+      2,
+      "Ranger live authorization changed",
+    );
+    contents = original.replace(guard, "lease.isCurrent()");
+  } else if (name === "creation-flow") {
     if (fault === "admission-fence") {
       const guard =
         "if (state.invalidReason) return finish(new Error(state.invalidReason));";
