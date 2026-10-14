@@ -1741,6 +1741,49 @@ async function run() {
       !!mobileInspector.querySelector(".terminal-composer textarea"),
     "mobile Inspector panel includes Composer, Direct and the draft editor",
   );
+  check(
+    !document.querySelector(".mobile-composer-shortcut"),
+    "Inspector input does not show a second hidden Spaces launcher",
+  );
+  const inspectorEditor = mobileInspector.querySelector<HTMLTextAreaElement>(
+    ".terminal-composer textarea",
+  )!;
+  Object.getOwnPropertyDescriptor(
+    HTMLTextAreaElement.prototype,
+    "value",
+  )!.set!.call(inspectorEditor, "Unsent mobile draft");
+  inspectorEditor.dispatchEvent(new InputEvent("input", { bubbles: true }));
+  const uploadInput = mobileInspector.querySelector<HTMLInputElement>(
+    '.terminal-composer input[type="file"]',
+  )!;
+  let pickerOpened = false;
+  uploadInput.addEventListener(
+    "click",
+    (event) => {
+      pickerOpened = true;
+      event.preventDefault();
+    },
+    { once: true },
+  );
+  mobileInspector
+    .querySelector<HTMLButtonElement>('button[aria-label="Add a file"]')!
+    .click();
+  check(pickerOpened, "Office attachment button activates its file picker");
+  const uploadFiles = new DataTransfer();
+  uploadFiles.items.add(
+    new File(["example upload"], "example.txt", { type: "text/plain" }),
+  );
+  uploadInput.files = uploadFiles.files;
+  uploadInput.dispatchEvent(new Event("change", { bubbles: true }));
+  await until(
+    () => inspectorEditor.value.includes("/tmp/example.txt"),
+    "Office attachment uploads and inserts into the retained draft",
+  );
+  const retainedDraft = inspectorEditor.value;
+  check(
+    retainedDraft.includes("Unsent mobile draft"),
+    "attachment preserves typed text",
+  );
   mobileInspector
     .querySelector<HTMLButtonElement>(
       'button[aria-label="Close terminal input"]',
@@ -1750,6 +1793,23 @@ async function run() {
     () => !mobileInspector.querySelector(".terminal-composer"),
     "mobile Inspector input closes without losing its terminal",
   );
+  mobileInspector
+    .querySelector<HTMLButtonElement>(
+      'button[aria-label="Open terminal input"]',
+    )!
+    .click();
+  await until(
+    () =>
+      mobileInspector.querySelector<HTMLTextAreaElement>(
+        ".terminal-composer textarea",
+      )?.value === retainedDraft,
+    "Office Composer retains text and attachment across close/reopen",
+  );
+  mobileInspector
+    .querySelector<HTMLButtonElement>(
+      'button[aria-label="Close terminal input"]',
+    )!
+    .click();
   const compactArrangeTrigger = () =>
     document.querySelector<HTMLButtonElement>(
       '.mobile-nav button[aria-label="Arrange windows"]',

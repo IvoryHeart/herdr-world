@@ -11,7 +11,7 @@ import { prepareTerminalPasteText } from "./terminalPaste";
 const drafts = new Map<string, string>();
 const selections = new Map<string, { start: number; end: number }>();
 const retiredDraftKeys = new Set<string>();
-let activeDraftScopePrefix: string | null = null;
+let activeDraftScopePrefixes: ReadonlySet<string> | null = null;
 type TerminalComposerDraftListener = (text: string) => void;
 type TerminalComposerSubmissionListener = (pending: boolean) => void;
 type TerminalComposerUploadListener = (count: number) => void;
@@ -51,7 +51,8 @@ function terminalComposerDraftScopePrefix(
 function terminalComposerDraftKeyIsActive(key: string): boolean {
   return (
     !retiredDraftKeys.has(key) &&
-    (activeDraftScopePrefix === null || key.startsWith(activeDraftScopePrefix))
+    (activeDraftScopePrefixes === null ||
+      [...activeDraftScopePrefixes].some((prefix) => key.startsWith(prefix)))
   );
 }
 
@@ -192,17 +193,27 @@ export function subscribeTerminalComposerUpload(
 }
 
 /**
- * Activates the app's single browser routing scope. Drafts and submissions
- * outside it are unreachable, and retired async work cannot write them back.
+ * Retains the routing scope and other current managed runtimes. Focus changes
+ * must not retire concurrent Inspector drafts; removed generations and their
+ * async work remain unreachable.
  */
 export function activateTerminalComposerDraftScope(
   connectionId: string,
   connectionGeneration: number,
+  concurrentScopes: readonly {
+    connectionId: string;
+    connectionGeneration: number;
+  }[] = [],
 ): void {
-  activeDraftScopePrefix = terminalComposerDraftScopePrefix(
-    connectionId,
-    connectionGeneration,
-  );
+  activeDraftScopePrefixes = new Set([
+    terminalComposerDraftScopePrefix(connectionId, connectionGeneration),
+    ...concurrentScopes.map((scope) =>
+      terminalComposerDraftScopePrefix(
+        scope.connectionId,
+        scope.connectionGeneration,
+      ),
+    ),
+  ]);
   for (const key of drafts.keys()) {
     if (!terminalComposerDraftKeyIsActive(key)) clearTerminalComposerDraft(key);
   }
