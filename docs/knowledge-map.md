@@ -105,3 +105,10 @@ Maintained models and replay adapters live in top-level [`quint/`](../quint/READ
 Protected delivery includes the [behavioral workflow](../.github/workflows/behavioral-verification.yml),
 [local delivery command](../package.json), [aggregate resource runner](../scripts/verification-resources.ts)
 and [hard Linux envelope](../tools/quint/resources.json); final approval remains separate.
+
+Evidence publication uses [the shared acceptance boundary](../scripts/verification-publication.ts).
+[Canonical finalization regressions](../scripts/verification-parallel.test.ts)
+verify late cancellation invalidates aggregates and retains diagnostics;
+[checker regressions](../scripts/verification-checker.test.ts) cover owned teardown.
+Authoritative [agent guidance](../AGENTS.md#behavioral-verification) describes the
+implemented protected gate separately from outstanding final acceptance.

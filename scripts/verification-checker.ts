@@ -140,5 +140,6 @@ export async function withPrivateChecker<T>(
   }
   if (failure !== undefined) throw failure;
   if (operationFailure !== undefined) throw operationFailure;
+  signal.throwIfAborted();
   return result;
 }

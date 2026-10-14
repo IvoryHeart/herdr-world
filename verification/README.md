@@ -198,3 +198,11 @@ cancellation and OOM controls remain required. For a local focused regression, r
 `HERDR_RESOURCE_MANAGER=user bun test scripts/verification-resources.live.test.ts`;
 CI explicitly selects its system manager. Ordinary unit runs report the missing
 manager prerequisite rather than claiming live cgroup coverage.
+
+Canonical and focused commands accept evidence only after the final manifest
+write and an external cancellation recheck. Cancellation during aggregate
+validation/accounting/publication rewrites the manifest as incomplete and retains
+failure diagnostics. Focused success output follows publication. Private checker
+teardown similarly drains first and checks the external signal before returning.
+Deterministic regressions use completed synthetic worker records to isolate
+finalization; they do not claim a fresh checker exploration.

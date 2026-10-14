@@ -8,10 +8,7 @@ most four concurrent observations, independent host publication, fair priority
 admission and background attempts as bounded slots become available. This is a
 progress requirement, distinct from the browser models' stale-publication safety.
 
-The proposed executable alternative is the actual `WorldSnapshotService` controlled
-scheduler suite in `server/src/world/snapshot.test.ts`. Browser/lease reachability
-witnesses cannot discharge this requirement. Independent review must explicitly
-accept this alternative and its assumptions; no temporal Quint proof is claimed.
+The independently accepted executable alternative is the actual `WorldSnapshotService` controlled scheduler suite in `server/src/world/snapshot.test.ts`, accepted with these assumptions in review 5516249164. Browser/lease reachability witnesses cannot discharge this requirement; no temporal Quint proof is claimed. Mandatory scheduler/transport/lease consumers remain required by delivery.
 
 ## What the implementation evidence establishes
 

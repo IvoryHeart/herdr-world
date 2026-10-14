@@ -104,3 +104,41 @@ setTimeout(() => createServer(socket => socket.end()).listen(port, '127.0.0.1'),
     }
   },
 );
+
+(process.platform === "win32" ? test.skip : test)(
+  "external cancellation during owned checker teardown rejects its completed result",
+  async () => {
+    const root = await mkdtemp(
+      resolve(tmpdir(), "synthetic-checker-retirement-"),
+    );
+    try {
+      const server = resolve(root, "server.mjs");
+      await writeFile(
+        server,
+        `process.on('SIGTERM',()=>{console.log('SYNTHETIC_TEARDOWN');process.exit(0)}); console.log('The Apalache server is running on port '+process.argv[2]+'.'); setInterval(()=>{},1000);`,
+      );
+      const cancellation = new AbortController();
+      const reason = new Error("Synthetic checker teardown cancellation");
+      let pid = 0;
+      await expect(
+        withPrivateChecker(
+          root,
+          cancellation.signal,
+          async () => "synthetic result",
+          (text) => {
+            if (text.includes("SYNTHETIC_TEARDOWN")) cancellation.abort(reason);
+          },
+          {
+            launch: (port) => [process.execPath, server, String(port)],
+            readiness: async (_, owner) => {
+              pid = owner;
+            },
+          },
+        ),
+      ).rejects.toBe(reason);
+      expect(() => process.kill(pid, 0)).toThrow();
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  },
+);

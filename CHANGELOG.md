@@ -20,6 +20,8 @@ are optional because the merged PR history records their source.
   aggregate memory/CPU envelope while retaining existing consumer/platform tests.
   Cancellation is rejected after resource accounting and final cleanup, with
   required deterministic real-cgroup regressions for both post-exit boundaries.
+  Canonical/focused publication and private-checker teardown also reject late
+  cancellation, retaining incomplete evidence and failure diagnostics.
 - SSH profiles can connect to Windows Herdr 0.9.1+ sessions through Windows
   PowerShell, with optional executable and session selection. Unix-only remote
   file, Git and history tools explain their limitations.

@@ -25,6 +25,7 @@ import {
   quintCli,
 } from "../scripts/verification-setup";
 import checker from "../tools/quint/checker.json";
+import { publishVerificationEvidence } from "../scripts/verification-publication";
 import { runVerificationProcess } from "../scripts/verification-process";
 import {
   fingerprintInputs,
@@ -1239,11 +1240,6 @@ export async function runReviewedQuintModels(
       resolve(output, "sensitivity.json"),
       JSON.stringify(sensitivity, null, 2),
     );
-    console.log(
-      "All selected finite models verified; generated production replays and negative controls passed.",
-    );
-    console.log(`Evidence: ${artifacts}`);
-
     const manifest: VerificationManifest = {
       schemaVersion: 1,
       scope: {
@@ -1284,10 +1280,16 @@ export async function runReviewedQuintModels(
       complete: true,
     };
     await validateEvidence(root, manifest, runCases.length);
-    await writeFile(
+    await publishVerificationEvidence(
       resolve(output, "manifest.json"),
-      JSON.stringify(manifest, null, 2),
+      manifest,
+      cancellation.signal,
     );
+    cancellation.signal.throwIfAborted();
+    console.log(
+      "All selected finite models verified; generated production replays and negative controls passed.",
+    );
+    console.log(`Evidence: ${artifacts}`);
   } catch (error) {
     await mkdir(output, { recursive: true });
     const failure = {

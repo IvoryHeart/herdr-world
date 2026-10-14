@@ -86,6 +86,4 @@ in task 3.3; they remain finite sensitivity evidence. No temporal liveness claim
 Run maintained verification and typecheck commands; normal Bun tests execute the
 ten cheap staged replay regressions and real scheduler store tests. The runner records exact per-model/per-seed replay counts and sensitivity
 settings; preparation replays every sampled path to retain rare witnesses. Manifests identify exact staged inputs, tools and results.
-Expanded observation mapping and its scheduler refactor require independent review.
-Q14 records maintained staged/queued evidence without inferring review acceptance.
-Required-CI promotion and final adoption acceptance remain separate decisions.
+Review 5516249164 independently accepts the bounded observation mapping and Q14 staged/queued evidence. Its mandatory scheduler/store/browser consumers and excluded claims remain required. The unfiltered gate is implemented in local and protected CI delivery; final acceptance of gate/resource repairs remains outstanding.

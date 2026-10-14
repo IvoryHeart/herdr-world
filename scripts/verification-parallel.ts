@@ -16,6 +16,7 @@ import {
   sanitizeDiagnostic,
 } from "./verification-diagnostics";
 import execution from "../tools/quint/execution.json";
+import { publishVerificationEvidence } from "./verification-publication";
 
 type CaseEvidence = {
   model: string;
@@ -102,6 +103,11 @@ export async function aggregateVerificationEvidence(
 export async function runParallelVerification(
   root: string,
   signal: AbortSignal,
+  options: {
+    executeCase?: (model: string, signal: AbortSignal) => Promise<CaseEvidence>;
+    readPeak?: () => Promise<string>;
+    publish?: (path: string, data: string) => Promise<void>;
+  } = {},
 ) {
   const began = performance.now();
   assert(
@@ -174,6 +180,11 @@ export async function runParallelVerification(
         progress.push(status);
         let log = "";
         try {
+          if (options.executeCase) {
+            const record = await options.executeCase(model, workerSignal);
+            status.complete = true;
+            return record;
+          }
           const result = await runVerificationProcess(
             [process.execPath, resolve(root, "quint/run.ts"), "--case", model],
             {
@@ -249,7 +260,10 @@ export async function runParallelVerification(
     let cgroupPeakMemoryBytes: number | undefined;
     try {
       const value = Number(
-        (await readFile("/sys/fs/cgroup/memory.peak", "utf8")).trim(),
+        (
+          await (options.readPeak?.() ??
+            readFile("/sys/fs/cgroup/memory.peak", "utf8"))
+        ).trim(),
       );
       if (Number.isSafeInteger(value) && value > 0)
         cgroupPeakMemoryBytes = value;
@@ -275,10 +289,13 @@ export async function runParallelVerification(
         cgroupPeakMemoryBytes,
       },
     };
-    await writeFile(
+    await publishVerificationEvidence(
       resolve(output, "manifest.json"),
-      JSON.stringify(manifest, null, 2),
+      manifest,
+      signal,
+      options.publish,
     );
+    signal.throwIfAborted();
     console.info(
       `All ${verificationModels.length} canonical cases passed in ${(manifest.execution.elapsedMs / 1000).toFixed(1)}s; evidence: ${relative(root, output)}`,
     );

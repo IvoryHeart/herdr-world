@@ -70,7 +70,4 @@ Those consumer/platform behaviors retain dedicated integration evidence.
 
 Run maintained verification/typecheck commands and normal Bun tests. This closes
 the explicitly stated delayed-transport administrative composition gap for the
-bounded scenarios. The administration, lease and drain mappings still require
-independent review together before promotion. The three-seed larger-bound and host-order checks are implemented; actual
-consumer/platform obligations and independent composition review remain required; owner acceptance of the spike does not approve
-this new model.
+bounded scenarios. Review 5516249164 independently accepts administration, lease and drain composition within the documented bounds. Three-seed larger-bound and host-order checks and actual consumer/platform obligations remain required by the implemented local/protected gate. Final acceptance of subsequent gate/resource repairs remains separate.
