@@ -1,7 +1,9 @@
+> Archived completion: implementation and subsequent gate/resource repairs were independently accepted in reviews 5517392425 and 5517420140, owner-approved and merged in PR #188. The rollout narrative below is historical; [tasks](tasks.md#accepted-completion-and-archival) records final evidence and retained limitations.
+
 ## Why
 
 Herdr World's ownership, permission and asynchronous failure contracts need evidence
-across event orderings that example tests can miss. The [Quint spike](../../../docs/quint-adoption-spike.md)
+across event orderings that example tests can miss. The [Quint spike](../../../../docs/quint-adoption-spike.md)
 demonstrates feasible model verification and production replay, while also showing
 why incorrect requirements or incomplete models can produce misleading confidence.
 
@@ -34,7 +36,7 @@ The branch now delivers maintained tooling, 11 models, implementation-connected
 replay, an assessed 43-area inventory and candidate policy/CI guidance. Expanded
 implementation acceptance and protected-check promotion require their own
 independent review; spike acceptance is not inherited. See the
-[current implementation report](../../../docs/quint-adoption-implementation.md).
+[current implementation report](../../../../docs/quint-adoption-implementation.md).
 
 ## Capabilities
 

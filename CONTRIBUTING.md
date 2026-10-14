@@ -88,7 +88,7 @@ repository checks and requiring `verification:gate`, including the diagnostic
 control. Linux CI additionally enforces the aggregate resource envelope described
 in [behavioral evidence](verification/README.md#candidate-commands-and-promotion).
 Independent acceptance is recorded in [promotion decisions](verification/promotion-review.md);
-final gate/resource approval remains separate.
+Final implementation/gate/resource acceptance is recorded in [review 5517420140](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5517420140); owner-approved PR #188 merged as `481ca1e8`. Mandatory consumers and excluded claims remain binding.
 
 For an unmodeled critical change, record and execute the proposed model or justified
 alternative before review. For a mechanical change, explain why contracts and

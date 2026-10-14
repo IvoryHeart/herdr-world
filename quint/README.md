@@ -6,7 +6,7 @@ Read [current coverage](../verification/README.md) and the
 These models and adapters are maintained development tooling under implementation
 review. Existing cooperative preparation yields accept an injected scheduler for
 deterministic replay; application defaults and shipped dependencies are unchanged.
-Bounded contract promotion is independently accepted; local delivery and protected CI require the unfiltered gate. Final delivery approval remains outstanding.
+Bounded contract promotion is independently accepted; local delivery and protected CI require the unfiltered gate. Final implementation/gate/resource acceptance is recorded in [review 5517420140](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5517420140); owner-approved PR #188 merged as `481ca1e8`. Mandatory consumers and excluded claims remain binding.
 
 The reviewed foundation now runs through maintained, isolated tooling:
 

@@ -1,4 +1,4 @@
-# Quint adoption implementation candidate
+# Accepted Quint adoption implementation
 
 PR #188 remains the implementation PR built on the independently reviewed spike
 at `5d73319b`. The owner authorized repository-wide assessment and maintained
@@ -101,14 +101,10 @@ Ranger storage/recovery assumptions and controlled observation progress. The
 [promotion record](../verification/promotion-review.md) retains each mandatory
 consumer and excluded claim. Tasks 3.4, 4.3, 5.1 and 5.3 are closed on that basis.
 
-Gate integration and resource validation are delivered in this checkpoint, with
-an actual over-budget memory control and retained service-subtree peak accounting.
-Exact-head local/CI execution and independent final review must validate this new
-wiring; acceptance of the prior models does not approve its implementation.
+Gate integration, resource limits and subsequent cancellation repairs are independently accepted in reviews 5517392425 and 5517420140, with exact-head CI evidence and owner approval recorded below.
 Existing integration, browser, scheduler, persistence and platform checks remain
 required. The earlier unexplained browser timing failures remain documented in
-PR #188; no limits were weakened. Final expanded approval, merge and archive are
-not inferred from contract acceptance.
+PR #188; no limits were weakened. Final expanded approval and merge were separately authorized; archival was subsequently authorized explicitly.
 
 Rollback guidance and current policy are in [behavioral evidence](../verification/README.md).
 
@@ -134,3 +130,9 @@ cleanup windows, requiring zero child exit, retained accounting and cancellation
 rejection. Both failed before the fix and pass afterward; the required resource
 command runs them in CI. Existing contract acceptance remains intact; final
 acceptance of the repaired gate remains separate.
+
+## Accepted delivery and archive
+
+[PR #188](https://github.com/IvoryHeart/herdr-world/pull/188) merged as `481ca1e817bb1fefb7ea1e24fe4adc2a8021333e` after final independent reviews [5517392425](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5517392425) and [5517420140](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5517420140), owner approval and an explicit merge waiver. [Full CI on reviewed head `4e664ec2`](https://github.com/IvoryHeart/herdr-world/actions/runs/38557803713) passed; its eleven-model/180-command aggregate and retained failure trace were independently validated.
+
+The owner separately authorized [archival](../openspec/changes/archive/2026-10-14-adopt-quint-behavioral-verification/tasks.md#accepted-completion-and-archival). All rollout tasks are complete. Spec synchronization is a no-op under the approved `skip_specs: true` marker: product capability requirements are unchanged. Earlier checkpoint/repair descriptions document the delivery history, not pending adoption work. Finite bounds, mandatory real consumer/platform tests, storage/crash and conditional-progress assumptions remain binding. Historical unexplained browser timing failures remain documented; passing subsequent runs do not diagnose their cause. Future behavioral/tooling changes require fresh applicable evidence and review.

@@ -1,6 +1,8 @@
+> Archived completion: implementation and subsequent gate/resource repairs were independently accepted in reviews 5517392425 and 5517420140, owner-approved and merged in PR #188. The rollout narrative below is historical; [tasks](tasks.md#accepted-completion-and-archival) records final evidence and retained limitations.
+
 ## Context
 
-See [proposal.md](proposal.md) for motivation and [the analysis](../../../docs/quint-adoption-spike.md)
+See [proposal.md](proposal.md) for motivation and [the analysis](../../../../docs/quint-adoption-spike.md)
 for the 43-area inventory, measured results, limitations and reviewer questions.
 Three bounded models passed TLC and 300 traces replayed 7,222 transitions against
 real code. Three model faults and three implementation mutations were detected.
@@ -20,7 +22,7 @@ existing tests, changing product contracts to fit a model, or claiming to verify
 OpenSSH, browser internals, filesystem durability or external Herdr implementation.
 The owner subsequently authorized implementation in the same PR. Candidate guidance
 and checks are implemented; independent promotion and final acceptance remain
-pending. The [implementation report](../../../docs/quint-adoption-implementation.md)
+pending. The [implementation report](../../../../docs/quint-adoption-implementation.md)
 records current evidence without rewriting the historical spike results.
 
 ## Decisions

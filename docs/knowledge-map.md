@@ -84,12 +84,12 @@ Repository workflow lives in [AGENTS.md](../AGENTS.md) and
 under [`.hwf/workflows/`](../.hwf/workflows/). Use synthetic data in tracked evidence.
 The optional [Quint adoption spike](quint-adoption-spike.md) inventories formal
 modeling candidates and records bounded model/replay experiments; it is not a CI gate.
-The [Quint adoption proposal](../openspec/changes/adopt-quint-behavioral-verification/proposal.md)
+The [Quint adoption proposal](../openspec/changes/archive/2026-10-14-adopt-quint-behavioral-verification/proposal.md)
 defines the planned policy, promotion criteria and staged repository-wide coverage.
 The [maintained behavioral evidence](../verification/README.md) maps all 43 areas to
 current requirements, existing tests, accepted delivery and concrete model/consumer
 or alternative evidence decisions. The [implementation report](quint-adoption-implementation.md)
-records maintained checks, actual-delivery audit, claim limits and pending promotion.
+records maintained checks, actual-delivery audit, claim limits and completed acceptance.
 [Consumer evidence](../verification/consumer-evidence.md) explains shared guarantees
 and implementation/browser/platform alternatives.
 
@@ -111,4 +111,6 @@ Evidence publication uses [the shared acceptance boundary](../scripts/verificati
 verify late cancellation invalidates aggregates and retains diagnostics;
 [checker regressions](../scripts/verification-checker.test.ts) cover owned teardown.
 Authoritative [agent guidance](../AGENTS.md#behavioral-verification) describes the
-implemented protected gate separately from outstanding final acceptance.
+implemented protected gate and completed final acceptance.
+
+Quint adoption is accepted and merged in PR #188; [archived completion](../openspec/changes/archive/2026-10-14-adopt-quint-behavioral-verification/tasks.md#accepted-completion-and-archival) records final reviews, owner approval, source-bound CI and the no-op spec synchronization. Current evidence remains maintained under `verification/` and `quint/`.

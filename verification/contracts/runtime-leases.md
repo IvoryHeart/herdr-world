@@ -51,4 +51,4 @@ Run `bun run verification:setup`, then `bun run verification:check` and
 commands and results.
 
 
-Accepted bounded lifecycle/consumer mapping: [review 5516249164](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164). Mandatory consumer and platform tests remain required; final delivery approval remains separate.
+Accepted bounded lifecycle/consumer mapping: [review 5516249164](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164). Mandatory consumer and platform tests remain required; Final implementation/gate/resource acceptance is recorded in [review 5517420140](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5517420140); owner-approved PR #188 merged as `481ca1e8`. Mandatory consumers and excluded claims remain binding.

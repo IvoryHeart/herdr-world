@@ -42,7 +42,7 @@ Run complete required verification for model/contract/adapter/tooling/consumer
 changes; focused `--case` checks do not replace it. Bounded contracts and consumer
 mappings have independent promotion acceptance. Pre-push runs `check:delivery`,
 and behavioral verification is a required protected `Delivery checks` dependency.
-Final acceptance of the implementation and gate/resource repairs remains separate.
+Final implementation/gate/resource acceptance is recorded in [review 5517420140](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5517420140); owner-approved PR #188 merged as `481ca1e8`. Mandatory consumers and excluded claims remain binding.
 See `verification/README.md` and CONTRIBUTING.md for current boundaries.
 
 ## Product shape
