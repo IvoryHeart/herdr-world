@@ -122,3 +122,15 @@ descendant. All existing broader-bound and asymmetric host-order checks remain
 inside the canonical run. CI repeats this envelope and these controls, retaining
 resource JSON linked to its source-bound canonical manifest. These measurements
 apply to supported Linux/systemd execution, not every OS or arbitrary model growth.
+
+## Final-review cancellation repair
+
+[Review 5516713547](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516713547)
+accepted relocation, gates and normal resource behavior but identified cancellation
+after child exit as the remaining blocker. The wrapper now checks cancellation
+after mandatory accounting, service drain and diagnostic retention, immediately
+before returning. Deterministic real-cgroup regressions cover both accounting and
+cleanup windows, requiring zero child exit, retained accounting and cancellation
+rejection. Both failed before the fix and pass afterward; the required resource
+command runs them in CI. Existing contract acceptance remains intact; final
+acceptance of the repaired gate remains separate.

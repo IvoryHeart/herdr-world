@@ -37,28 +37,29 @@ export async function verifyResourceCancellation(
     (error) => ({ error }),
   );
   try {
-    const result = await runConstrainedVerification(
-      root,
-      system,
-      [
-        process.execPath,
-        "-e",
-        'const child=Bun.spawn([process.execPath,"-e","setInterval(()=>{},1000)"],{stdin:"ignore",stdout:"ignore",stderr:"ignore"}); await Bun.write(process.argv[1]+".tmp",JSON.stringify([process.pid,child.pid])); const {rename}=await import("node:fs/promises"); await rename(process.argv[1]+".tmp",process.argv[1]); setInterval(()=>{},1000);',
-        ready,
-      ],
-      {
-        memoryMaxBytes: 128 * 1024 * 1024,
-        cpuQuotaPercent: 200,
-        timeoutMs: 15000,
-      },
-      cancellation.signal,
+    await assert.rejects(
+      runConstrainedVerification(
+        root,
+        system,
+        [
+          process.execPath,
+          "-e",
+          'const child=Bun.spawn([process.execPath,"-e","setInterval(()=>{},1000)"],{stdin:"ignore",stdout:"ignore",stderr:"ignore"}); await Bun.write(process.argv[1]+".tmp",JSON.stringify([process.pid,child.pid])); const {rename}=await import("node:fs/promises"); await rename(process.argv[1]+".tmp",process.argv[1]); setInterval(()=>{},1000);',
+          ready,
+        ],
+        {
+          memoryMaxBytes: 128 * 1024 * 1024,
+          cpuQuotaPercent: 200,
+          timeoutMs: 15000,
+        },
+        cancellation.signal,
+      ),
+      (error: unknown) => error === cancellation.signal.reason,
     );
     const outcome = await started;
     if ("error" in outcome) throw outcome.error;
     assert(
-      result.failure &&
-        result.code === undefined &&
-        cancellation.signal.aborted,
+      cancellation.signal.aborted,
       "Cancellation produced successful evidence",
     );
     for (const pid of outcome.ids) {
@@ -116,6 +117,10 @@ export async function runConstrainedVerification(
     timeoutMs: number;
   },
   signal: AbortSignal,
+  onBoundary?: (
+    phase: "exited" | "cleanup",
+    context: { directory: string },
+  ) => void | Promise<void>,
 ) {
   assert(
     process.platform === "linux",
@@ -223,6 +228,7 @@ export async function runConstrainedVerification(
         Number.isSafeInteger(code) && code >= 0 && code <= 255,
         "Missing child exit code",
       );
+      await onBoundary?.("exited", { directory });
       tail = (await readFile(resolve(directory, "worker.log"), "utf8")).slice(
         -65536,
       );
@@ -256,20 +262,31 @@ export async function runConstrainedVerification(
       options.cpuQuotaPercent,
       "CPU quota not enforced",
     );
-    return { code, failure, evidence, directory };
   } finally {
     clearTimeout(timer);
     watching.abort();
     await completed;
     // The service is separately owned by systemd: killing its client is insufficient.
     try {
-      const before = await control("show", "--property=ActiveState", "--value");
-      if (before !== "inactive" && before !== "failed") await control("stop");
-      const state = await control("show", "--property=ActiveState", "--value");
-      assert(
-        state === "inactive" || state === "failed",
-        "Constrained service did not drain",
-      );
+      try {
+        await onBoundary?.("cleanup", { directory });
+      } finally {
+        const before = await control(
+          "show",
+          "--property=ActiveState",
+          "--value",
+        );
+        if (before !== "inactive" && before !== "failed") await control("stop");
+        const state = await control(
+          "show",
+          "--property=ActiveState",
+          "--value",
+        );
+        assert(
+          state === "inactive" || state === "failed",
+          "Constrained service did not drain",
+        );
+      }
     } finally {
       await writeFile(
         resolve(directory, "resources.json"),
@@ -301,6 +318,67 @@ export async function runConstrainedVerification(
       );
     }
   }
+  // Child completion is not the acceptance boundary: accounting, service drain
+  // and retained diagnostics can all yield after it. Reject only after those
+  // mandatory effects finish, including cancellation during the final write.
+  signal.throwIfAborted();
+  assert(evidence, "Missing constrained resource accounting");
+  return { code, failure, evidence, directory };
+}
+
+/** Deterministic live regression: zero-exit child, then cancellation at a held boundary. */
+export async function verifyPostExitCancellation(
+  root: string,
+  system: boolean,
+  boundary: "exited" | "cleanup",
+) {
+  const cancellation = new AbortController();
+  const reason = new Error(
+    `Synthetic post-exit cancellation during ${boundary}`,
+  );
+  const phases: string[] = [];
+  let directory = "";
+  await assert.rejects(
+    runConstrainedVerification(
+      root,
+      system,
+      [process.execPath, "-e", "process.exit(0)"],
+      {
+        memoryMaxBytes: 128 * 1024 * 1024,
+        cpuQuotaPercent: 200,
+        timeoutMs: 10000,
+      },
+      cancellation.signal,
+      async (phase, context) => {
+        phases.push(phase);
+        directory = context.directory;
+        if (phase === boundary) cancellation.abort(reason);
+        await Promise.resolve();
+      },
+    ),
+    (error: unknown) => error === reason,
+    "Post-exit cancellation returned success",
+  );
+  assert.deepEqual(
+    phases,
+    ["exited", "cleanup"],
+    "Cancellation skipped required cleanup",
+  );
+  const record = JSON.parse(
+    await readFile(resolve(directory, "resources.json"), "utf8"),
+  );
+  assert.equal(
+    record.code,
+    0,
+    "Regression did not reach successful child exit",
+  );
+  assert.equal(
+    record.cancelled,
+    true,
+    "Cancellation absent from retained accounting",
+  );
+  assert.equal(record.oomKills, 0, "Unrelated OOM caused rejection");
+  assert(record.peakBytes > 0, "Cancellation skipped accounting");
 }
 
 if (import.meta.main) {
@@ -339,6 +417,24 @@ if (import.meta.main) {
       "Memory limit control did not kill the over-budget process",
     );
     await verifyResourceCancellation(root, process.argv[2] === "--system");
+    const regressions = await runVerificationProcess(
+      [process.execPath, "test", "scripts/verification-resources.live.test.ts"],
+      {
+        cwd: root,
+        timeoutMs: 45000,
+        env: {
+          ...process.env,
+          HERDR_RESOURCE_MANAGER:
+            process.argv[2] === "--system" ? "system" : "user",
+        },
+        signal: cancellation.signal,
+      },
+    );
+    assert.equal(
+      regressions.code,
+      0,
+      `Post-exit cancellation regression failed: ${regressions.stderr}`,
+    );
     const result = await runConstrainedVerification(
       root,
       process.argv[2] === "--system",

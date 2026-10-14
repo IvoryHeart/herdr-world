@@ -188,3 +188,13 @@ peak memory (approximately 1.07 GiB), with zero OOM kills under the hard 4 GiB l
 The actual 64 MiB memory control and cancellation/descendant control also passed.
 CI repeats the full envelope and controls; future model growth must remain within
 those bounds or justify a reviewed envelope change. Final approval remains pending.
+
+Resource acceptance rechecks cancellation after accounting, service drain and the
+final diagnostic write. Successful child exit is not successful wrapper execution.
+The required resource command runs deterministic real-cgroup regressions that abort
+a zero-exit child at the accounting and cleanup boundaries; both must reject only
+after retaining accounting and draining the service. Running-child/descendant
+cancellation and OOM controls remain required. For a local focused regression, run
+`HERDR_RESOURCE_MANAGER=user bun test scripts/verification-resources.live.test.ts`;
+CI explicitly selects its system manager. Ordinary unit runs report the missing
+manager prerequisite rather than claiming live cgroup coverage.
