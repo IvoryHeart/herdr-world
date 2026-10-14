@@ -1,0 +1,104 @@
+name: Upstream review
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [upstream/roamgate]
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Successful CI run ID for the reviewed upstream PR head
+        required: true
+        type: string
+      head:
+        description: Exact commit reviewed by the separate local Codex session
+        required: true
+        type: string
+      verdict:
+        description: Structured JSON from the independent read-only local reviewer
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+  actions: read
+
+concurrency:
+  group: upstream-review
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    if: github.ref == 'refs/heads/main' && vars.UPSTREAM_SYNC_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      start: ${{ steps.plan.outputs.start }}
+      sync: ${{ steps.plan.outputs.sync }}
+      human: ${{ steps.plan.outputs.human }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: "1.4.3"
+      - id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bun scripts/upstream-sync.ts review-plan
+
+  approve:
+    needs: plan
+    if: github.event_name == 'workflow_dispatch' && needs.plan.outputs.start == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: "1.4.3"
+      - name: Mint independent reviewer identity
+        id: reviewer
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2
+        with:
+          app-id: ${{ vars.UPSTREAM_REVIEW_APP_ID }}
+          private-key: ${{ secrets.UPSTREAM_REVIEW_APP_PRIVATE_KEY }}
+          permission-pull-requests: write
+          permission-contents: read
+      - name: Submit revision-bound independent review
+        id: verdict
+        env:
+          SYNC: ${{ needs.plan.outputs.sync }}
+          HUMAN_REVIEW: ${{ needs.plan.outputs.human }}
+          AUTO_MERGE: ${{ vars.UPSTREAM_AUTO_MERGE }}
+          VERDICT: ${{ inputs.verdict }}
+          GH_TOKEN: ${{ steps.reviewer.outputs.token }}
+        run: bun scripts/upstream-sync.ts post-review
+      - name: Close completed review queue entry
+        env:
+          SYNC: ${{ needs.plan.outputs.sync }}
+          GH_TOKEN: ${{ github.token }}
+        run: bun scripts/upstream-sync.ts close-review
+      - name: Queue merge under existing branch rules
+        if: steps.verdict.outputs.approved == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ fromJSON(needs.plan.outputs.sync).pr }}
+          HEAD_SHA: ${{ fromJSON(needs.plan.outputs.sync).head }}
+        run: gh pr merge "$PR" --repo "$GITHUB_REPOSITORY" --auto --merge --match-head-commit "$HEAD_SHA"
+      - name: Record approval failure for operator recovery
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bun scripts/upstream-sync.ts block

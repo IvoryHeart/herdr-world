@@ -1476,6 +1476,7 @@
         "scripts/release-validation.test.ts",
         "scripts/ci-workflow.test.ts",
         "scripts/prepare-release.test.ts",
+        "scripts/upstream-sync.test.ts",
         "scripts/install-herdr-world.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/186",
@@ -1484,7 +1485,7 @@
       "status": "alternative-evidence",
       "remaining": "Local tests cannot establish every packaged platform or published asset. Protected validation and release checks remain required.",
       "requiredChecks": ["bun run check", "bun run verification:gate"],
-      "evidenceDecision": "Real packaging/installer/release/CI tests exercise archive validation and dependency gates; actual platform/release workflows supply distribution evidence.",
+      "evidenceDecision": "Real packaging/installer/release/CI tests exercise archive validation and dependency gates; actual platform/release workflows supply distribution evidence. Upstream-sync tests directly enumerate bounded repair/authority cases and reconstruct conflicting Git merges with exact ancestry and binary patches; hosted App eligibility, model quality and API execution remain platform evidence (docs/upstream-automation.md).",
       "partialEvidence": {
         "models": [],
         "contracts": ["verification/consumer-evidence.md"],
@@ -1492,6 +1493,7 @@
           "scripts/release-validation.test.ts",
           "scripts/ci-workflow.test.ts",
           "scripts/prepare-release.test.ts",
+          "scripts/upstream-sync.test.ts",
           "scripts/install-herdr-world.test.ts"
         ],
         "checks": ["bun run check"],

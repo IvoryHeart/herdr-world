@@ -35,6 +35,13 @@ decisions and are not current operational guidance.
 
 ## CI and release validation
 
+[Upstream automation](upstream-automation.md) covers Roamgate release detection,
+frozen integration PRs, independent Codex review, credentials and recovery.
+Start with [the synchronization helper](../scripts/upstream-sync.ts) and its
+[regressions](../scripts/upstream-sync.test.ts) for automation changes.
+The [local worker launcher](../scripts/upstream-local.ts) uses cached Codex
+subscription sign-in and serializes scheduled runs on the user's machine.
+
 [Development verification](development.md#verification) describes local and CI
 runner settings. [PR CI](../.github/workflows/ci.yml) and
 [Release](../.github/workflows/release.yml) call the same

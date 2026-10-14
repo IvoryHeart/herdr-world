@@ -40,6 +40,9 @@ refresh. Dialog callback freshness is adapted without that dependency upgrade.
 
 Future source refreshes should merge from the recorded upstream head, resolve
 World-specific conflicts explicitly, and update this record and the changelog.
+The opt-in [upstream automation](docs/upstream-automation.md) checks stable
+releases hourly, freezes one target per PR, and separates Codex integration from
+independent revision-bound review and protected merging.
 World does not depend on a separately installed Roamgate process, data directory,
 service, or private API. Ranger is configured within World and uses its own
 workspace permissions and model credentials.

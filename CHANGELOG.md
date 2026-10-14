@@ -9,6 +9,11 @@ are optional because the merged PR history records their source.
 
 ### Added
 
+- Opt-in hourly Roamgate source synchronization with Codex integration,
+  independent agent review, one bounded repair pass and protected auto-merge.
+  Agent sessions run locally using Codex subscription sign-in, without an API key.
+  Changes to delivery and verification controls retain human approval.
+
 - Maintained Quint development tooling, implementation-connected lifecycle,
   observation, protocol, creation and Ranger models, a reconciled 43-area evidence
   inventory and candidate CI/contributor guidance. Independently accepted bounded evidence is required by local and protected CI delivery gates.

@@ -1,0 +1,9 @@
+{
+  "type": "object",
+  "properties": {
+    "decision": { "type": "string", "enum": ["approve", "request_changes"] },
+    "summary": { "type": "string" }
+  },
+  "required": ["decision", "summary"],
+  "additionalProperties": false
+}
