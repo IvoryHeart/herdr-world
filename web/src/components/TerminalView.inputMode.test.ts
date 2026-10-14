@@ -448,6 +448,34 @@ async function registerDomTests() {
     ).toHaveLength(1);
   });
 
+  test("mobile terminal input opens the shared composer without enabling raw input", async () => {
+    await mount();
+    await click('button[aria-label="Open terminal input"]');
+    expect(container.querySelector(".terminal-composer")).not.toBeNull();
+    expect(selectedMode()).toBe("composer");
+    expect(
+      container.querySelector(".terminal-composer textarea"),
+    ).not.toBeNull();
+    expect(document.activeElement).toBe(
+      container.querySelector(".terminal-composer"),
+    );
+    expectInputBlocked();
+    await click('button[aria-label="Close terminal input"]');
+    expect(container.querySelector(".terminal-composer")).toBeNull();
+    expectInputBlocked();
+  });
+
+  test("mobile terminal input restores Direct only through an explicit opening gesture", async () => {
+    await mount(true);
+    await choose("direct");
+    await setOpen(false);
+    expectInputBlocked();
+    await click('button[aria-label="Open terminal input"]');
+    expect(selectedMode()).toBe("direct");
+    expect(document.activeElement).toBe(currentTerminal().textarea);
+    expect(currentTerminal().options.disableStdin).toBe(false);
+  });
+
   test("legacy terminals keep xterm's existing raw-key encoding", async () => {
     await mount(true);
     await choose("direct");

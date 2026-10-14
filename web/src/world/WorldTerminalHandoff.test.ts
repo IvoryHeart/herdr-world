@@ -30,6 +30,28 @@ test.skipIf(!chrome)(
       async fetch(request) {
         const path = new URL(request.url).pathname;
         if (path === "/office") pageRequested.resolve();
+        if (
+          path === "/api/connections/local/terminal-upload" &&
+          request.method === "POST"
+        ) {
+          const url = new URL(request.url);
+          if (
+            url.searchParams.get("filename") !== "example.txt" ||
+            (await request.text()) !== "example upload"
+          )
+            return new Response("Unexpected upload payload", { status: 400 });
+          return Response.json(
+            { path: "/tmp/example.txt" },
+            {
+              headers: {
+                "X-Herdr-Connection-Id": "local",
+                "X-Herdr-Connection-Generation":
+                  url.searchParams.get("connection_generation") ?? "",
+              },
+            },
+          );
+        }
+
         if (path === "/result" && request.method === "POST") {
           result.resolve(await request.json());
           return new Response("ok");

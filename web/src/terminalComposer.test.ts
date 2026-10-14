@@ -177,6 +177,29 @@ describe("terminal composer drafts", () => {
     expect(readTerminalComposerSelection(key)).toBeNull();
   });
 
+  test("concurrent Inspector drafts and uploads survive focused-host changes but retire with their owner", () => {
+    const inspector = terminalComposerDraftKey("inspector-host", 7, "pane");
+    const scopes = [
+      { connectionId: "inspector-host", connectionGeneration: 7 },
+    ];
+    activateTerminalComposerDraftScope("spaces-host", 3, scopes);
+    writeTerminalComposerDraft(inspector, "Unsent Inspector draft");
+    expect(readTerminalComposerDraft(inspector)).toBe("Unsent Inspector draft");
+    expect(beginTerminalComposerUpload(inspector)).toBe(true);
+    activateTerminalComposerDraftScope("other-spaces-host", 9, scopes);
+    insertIntoTerminalComposerDraft(inspector, "/tmp/example-upload.txt");
+    expect(readTerminalComposerDraft(inspector)).toBe(
+      "Unsent Inspector draft /tmp/example-upload.txt ",
+    );
+    expect(terminalComposerUploadCount(inspector)).toBe(1);
+    activateTerminalComposerDraftScope("spaces-host", 3);
+    expect(readTerminalComposerDraft(inspector)).toBe("");
+    expect(terminalComposerUploadCount(inspector)).toBe(0);
+    writeTerminalComposerDraft(inspector, "stale completion");
+    expect(beginTerminalComposerUpload(inspector)).toBe(false);
+    expect(readTerminalComposerDraft(inspector)).toBe("");
+  });
+
   test("retires drafts, submissions, uploads, and stale writes on scope changes", () => {
     const first = terminalComposerDraftKey("conn-a", 1, "p1");
     const second = terminalComposerDraftKey("conn-b", 2, "p1");

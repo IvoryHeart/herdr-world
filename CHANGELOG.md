@@ -37,6 +37,13 @@ are optional because the merged PR history records their source.
 
 ### Fixed
 
+- Mobile terminals in Office, Desk, Tree and Graph open the shared Spaces
+  Composer/Direct input panel. Inspector title and resource bars collapse while
+  viewing a mobile terminal; existing mobile navigation keeps resource and window
+  controls available. The keyboard launcher opens the visible terminal directly;
+  concurrent Inspector drafts and attachments survive input-panel reopening and
+  focused-host changes without admitting retired runtime work.
+
 - Keep retained unavailable Ranger workspace permissions visible and individually
   revocable without clearing unrelated grants.
 - Reject Ranger history and Git diff reads on Windows SSH runtimes before calling

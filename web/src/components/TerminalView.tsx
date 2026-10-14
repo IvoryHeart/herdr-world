@@ -38,7 +38,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { createPortal } from "react-dom";
+import { createPortal, flushSync } from "react-dom";
 import {
   createReviewAnnotation,
   MAX_QUOTE_LENGTH,
@@ -3665,8 +3665,9 @@ export function TerminalView({
             >
               <button
                 type="button"
-                aria-label="Open device keyboard"
-                title="Open device keyboard"
+                aria-label="Open terminal input"
+                title="Open terminal input"
+                aria-haspopup="dialog"
                 aria-pressed={inputActive}
                 disabled={
                   s.status !== "connected" ||
@@ -3674,7 +3675,15 @@ export function TerminalView({
                   !!terminalAttachError
                 }
                 onMouseDown={(event) => event.preventDefault()}
-                onClick={focusTerminalInput}
+                onClick={() => {
+                  flushSync(() => setComposerOpen(true));
+                  // Match Spaces: neutral dock focus in Composer, explicit
+                  // keyboard handoff only when the saved mode is Direct.
+                  container
+                    ?.closest(".terminal-shell")
+                    ?.querySelector<HTMLElement>(".terminal-composer")
+                    ?.focus({ preventScroll: true });
+                }}
               >
                 <Keyboard size={20} />
               </button>

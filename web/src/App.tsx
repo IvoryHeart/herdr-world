@@ -56,7 +56,7 @@ import {
   Minimize2,
   MoreHorizontal,
   PanelTop,
-  SquarePen,
+  Keyboard,
   SquareStack,
   SquareTerminal,
   X,
@@ -999,6 +999,7 @@ export default function App({
   const s = useStoreSelector(
     (state) => ({
       activeConnectionId: state.activeConnectionId,
+      connections: state.connections,
       connectionGeneration:
         state.serverRuntimeGeneration ?? state.connectionGeneration,
       serverRuntimeGeneration: state.serverRuntimeGeneration,
@@ -1025,8 +1026,12 @@ export default function App({
     activateTerminalComposerDraftScope(
       s.activeConnectionId,
       s.connectionGeneration,
+      s.connections.map((connection) => ({
+        connectionId: connection.id,
+        connectionGeneration: connection.generation,
+      })),
     );
-  }, [operations, s.activeConnectionId, s.connectionGeneration]);
+  }, [operations, s.activeConnectionId, s.connectionGeneration, s.connections]);
   const [sidebarWidth, setSidebarWidth] = useState(loadSidebarWidth);
   const [mobileView, setMobileView] = useState<MobileView>("session");
   const [assistantOpen, setAssistantOpen] = useState(false);
@@ -4430,7 +4435,9 @@ export default function App({
           </button>
         </div>
       </div>
-      {activeTerminalComposerDraftKey && !terminalComposerOpen ? (
+      {operationalShortcutsEnabled &&
+      activeTerminalComposerDraftKey &&
+      !terminalComposerOpen ? (
         <button
           type="button"
           className="mobile-composer-shortcut"
@@ -4450,7 +4457,7 @@ export default function App({
               ?.focus({ preventScroll: true });
           }}
         >
-          <SquarePen size={20} />
+          <Keyboard size={20} />
           {terminalComposerHasDraft ? (
             <span className="mobile-composer-draft-dot" aria-hidden="true" />
           ) : null}

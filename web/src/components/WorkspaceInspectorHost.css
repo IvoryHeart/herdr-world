@@ -473,3 +473,8 @@
   overflow-y: auto;
   padding: 0;
 }
+
+/* The mobile shell already owns resource navigation and Inspector actions. */
+.workspace-inspector-head[hidden] {
+  display: none;
+}
