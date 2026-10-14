@@ -13,7 +13,7 @@ an additional host round before an available host receives its earlier round.
 
 ## Model and implementation mapping
 
-`experiments/quint/space-admission.qnt` has input-position IDs (`present`),
+`quint/space-admission.qnt` has input-position IDs (`present`),
 classification (`relevant`), capacity (`bound`) and selected membership (`admitted`).
 Its ordinal/rank specification is independent of the production bucket loop.
 `replaySpaces` constructs synthetic production objects and invokes the real
@@ -45,6 +45,4 @@ No fairness over time or temporal progress is claimed.
 ## Evidence and promotion
 
 Maintained verification requires complete enumeration, distinct configurations,
-actual witnesses, dedicated negative controls and a complete manifest. Foundation
-review is accepted; larger-domain and consumer mapping review remains pending.
-Required-CI promotion is not inferred from the foundation run.
+actual witnesses, dedicated negative controls and a complete manifest. Accepted within the documented bounds by [independent review 5516249164](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164). Mandatory consumer tests and excluded claims remain unchanged; gate/resource delivery still requires final review.

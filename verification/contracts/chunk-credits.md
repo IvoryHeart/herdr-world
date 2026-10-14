@@ -63,14 +63,11 @@ shape, real timeout and the four-chunk sender window retain actual protocol test
 No temporal progress or network delivery guarantee is claimed. The protocol integration regression connects the real sender, admission, Bridge
 assembly and World store: partial chunks remain unpublished, queued credits are
 suppressed after transport retirement, and runtime replacement during byte
-admission stales only the captured owner. Dedicated browser assembly modeling
-remains pending.
+admission stales only the captured owner. The maintained chunk-assembly model supplies the bounded assembly evidence; actual browser/parser consumers remain mandatory.
 
 ## Evidence and promotion
 
 Use the full maintained verification command. Focused development may run
-`bun experiments/quint/run.ts --case chunk-credits`; its manifest covers only that
+`bun quint/run.ts --case chunk-credits`; its manifest covers only that
 selected model and cannot substitute for the full command. TLC checks finite
-safety; all three seeds require production witnesses and both code controls.
-This contract and consumer assumptions await independent promotion review.
-Q12 records partial credit evidence while assembly/composition remains pending.
+safety; all three seeds require production witnesses and both code controls. Accepted within the documented bounds by [independent review 5516249164](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164). Mandatory consumer tests and excluded claims remain unchanged; gate/resource delivery still requires final review.

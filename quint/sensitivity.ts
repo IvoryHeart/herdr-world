@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile, readdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { loadTrace, type Model, type ReplayDomain } from "./traces";
-import { sha256 } from "../../scripts/verification-setup";
+import { sha256 } from "../scripts/verification-setup";
 
 type Request = {
   model: Model;
@@ -78,7 +78,7 @@ export async function runSensitivity(h: Harness) {
     const item = h.cases.find((item) => item.name === variant.name)!;
     const traceCount = variant.name === "browser-preparation" ? 1000 : 100;
     let source = await readFile(
-      resolve(h.root, `experiments/quint/${variant.name}.qnt`),
+      resolve(h.root, `quint/${variant.name}.qnt`),
       "utf8",
     );
     for (const [before, after] of variant.replacements) {
@@ -189,7 +189,7 @@ export async function runSensitivity(h: Harness) {
   }
   if (!h.cases.some((item) => item.name === "space-admission")) return results;
   const source = await readFile(
-    resolve(h.root, "experiments/quint/space-admission.qnt"),
+    resolve(h.root, "quint/space-admission.qnt"),
     "utf8",
   );
   const orders = [

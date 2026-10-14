@@ -3,7 +3,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { availableParallelism, totalmem } from "node:os";
 import { dirname, relative, resolve } from "node:path";
 import { randomUUID } from "node:crypto";
-import { verificationModels } from "../experiments/quint/models";
+import { verificationModels } from "../quint/models";
 import { runVerificationPool } from "./verification-pool";
 import { runVerificationProcess } from "./verification-process";
 import {
@@ -175,12 +175,7 @@ export async function runParallelVerification(
         let log = "";
         try {
           const result = await runVerificationProcess(
-            [
-              process.execPath,
-              resolve(root, "experiments/quint/run.ts"),
-              "--case",
-              model,
-            ],
+            [process.execPath, resolve(root, "quint/run.ts"), "--case", model],
             {
               cwd: root,
               timeoutMs: execution.workerTimeoutMs,

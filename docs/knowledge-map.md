@@ -94,9 +94,14 @@ records maintained checks, actual-delivery audit, claim limits and pending promo
 and implementation/browser/platform alternatives.
 
 [Promotion review](../verification/promotion-review.md) tracks each contract's bounds,
-consumer obligations and pending acceptance. [Observation progress](../verification/contracts/observation-progress.md)
+accepted consumer obligations and exclusions. [Observation progress](../verification/contracts/observation-progress.md)
 records scheduler/deadline assumptions separately from model reachability.
 
 Canonical Quint execution uses the tracked [bounded worker configuration](../tools/quint/execution.json)
 and produces an aggregate requiring all isolated model-case manifests; see the
 [parallel execution contract](../verification/README.md#bounded-parallel-execution).
+
+Maintained models and replay adapters live in top-level [`quint/`](../quint/README.md).
+Protected delivery includes the [behavioral workflow](../.github/workflows/behavioral-verification.yml),
+[local delivery command](../package.json), [aggregate resource runner](../scripts/verification-resources.ts)
+and [hard Linux envelope](../tools/quint/resources.json); final approval remains separate.

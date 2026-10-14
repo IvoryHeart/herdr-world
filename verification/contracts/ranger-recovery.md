@@ -66,5 +66,4 @@ SQLite admission. Their uncertainty/dedup/session tests remain necessary.
 One task and admitted run, two runtime generations, one change per durable identity,
 bounded close/reopen/failed-save operations. Three seeds sample 500 paths and replay
 100 per seed, up to 25 transitions; TLC checks finite safety. Run canonical checks
-and real context/task/storage/service suites. Consumer and explicit storage/crash
-assumptions await independent Ranger review; no spike acceptance is inherited.
+and real context/task/storage/service suites. Accepted within the documented bounds by [independent review 5516249164](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164). Mandatory consumer tests and excluded claims remain unchanged; gate/resource delivery still requires final review.

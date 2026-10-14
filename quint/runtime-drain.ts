@@ -3,7 +3,7 @@ import {
   ConnectionManager,
   type ConnectionRuntime,
   type ConnectionRuntimeContext,
-} from "../../server/src/connections/manager";
+} from "../server/src/connections/manager";
 import { observe } from "./observations";
 import type { TraceState } from "./replay";
 export type DrainState = {

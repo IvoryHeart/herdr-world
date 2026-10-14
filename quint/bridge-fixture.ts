@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { Bridge } from "../../web/src/api";
+import { Bridge } from "../web/src/api";
 
 export class SyntheticSocket {
   static readonly OPEN = 1;

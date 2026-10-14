@@ -1,12 +1,12 @@
 # Maintained Quint behavioral evidence
 
-Read [current coverage](../../verification/README.md) and the
-[implementation report](../../docs/quint-adoption-implementation.md) first. The
-[spike assessment](../../docs/quint-adoption-spike.md) is historical foundation.
+Read [current coverage](../verification/README.md) and the
+[implementation report](../docs/quint-adoption-implementation.md) first. The
+[spike assessment](../docs/quint-adoption-spike.md) is historical foundation.
 These models and adapters are maintained development tooling under implementation
 review. Existing cooperative preparation yields accept an injected scheduler for
 deterministic replay; application defaults and shipped dependencies are unchanged.
-Required-CI promotion remains pending independent review.
+Bounded contract promotion is independently accepted; local delivery and protected CI require the unfiltered gate. Final delivery approval remains outstanding.
 
 The reviewed foundation now runs through maintained, isolated tooling:
 
@@ -17,7 +17,7 @@ bun run verification:typecheck
 bun run verification:check
 ```
 
-See [the tooling contract](../../tools/quint/README.md) for supported runtimes,
+See [the tooling contract](../tools/quint/README.md) for supported runtimes,
 installation, lockfiles and checker integrity. The dedicated npm lock pins the
 entire development-only graph; the checker archive and executable JAR are
 verified against committed digests. Application resolutions are unchanged.
@@ -44,7 +44,7 @@ actionability, including retained entries after disconnect. Results name each
 killing observation. The cheap harness regressions run with:
 
 ```bash
-bun test experiments/quint/replay.test.ts
+bun test quint/replay.test.ts
 ```
 
 Each model is simulated with seeds 42, 73 and 103, 500 samples per seed and
@@ -53,8 +53,7 @@ preparation, socket credits and creation, which replay all 500 sampled paths per
 witnesses cannot be lost during export. Actual required witnesses must appear in
 every seed's production replay. The administration companion adds explicit
 replacement/removal/error/failed-cleanup/reentry/shutdown coverage; its
-[contract](../../verification/contracts/runtime-control.md) retains pending
-a separate independent-review boundary. The [drain companion](../../verification/contracts/runtime-drain.md)
+[contract](../verification/contracts/runtime-control.md) records its accepted bounded scope. The [drain companion](../verification/contracts/runtime-drain.md)
 adds delayed-transport administrative composition and a direct exhaustive replay
 of its 62 bounded scenarios, including delayed background startup.
 TLC checks all reachable states of each finite abstraction, with no temporal
@@ -71,13 +70,13 @@ files are never modified. The results identify the trace that kills each mutatio
 The refresh case also requires a dropped-catalogue fault control. These faults
 demonstrate detection sensitivity; they are not broad mutation coverage.
 
-The maintained suite also includes [chunk credits](../../verification/contracts/chunk-credits.md),
-[assembly](../../verification/contracts/chunk-assembly.md),
-[creation](../../verification/contracts/creation-flow.md),
-[Ranger authority](../../verification/contracts/ranger-authority.md) and
-[durable recovery](../../verification/contracts/ranger-recovery.md). Read each
+The maintained suite also includes [chunk credits](../verification/contracts/chunk-credits.md),
+[assembly](../verification/contracts/chunk-assembly.md),
+[creation](../verification/contracts/creation-flow.md),
+[Ranger authority](../verification/contracts/ranger-authority.md) and
+[durable recovery](../verification/contracts/ranger-recovery.md). Read each
 contract for real consumers, faults, finite domains and exclusions. All 11 models
-run in the unfiltered candidate CI workflow; independent promotion remains pending.
+run in the unfiltered required CI workflow within their independently accepted bounds.
 
 ## Abstraction boundaries
 
@@ -92,7 +91,7 @@ run in the unfiltered candidate CI workflow; independent promotion remains pendi
   preparation is asynchronous and awaited through an instrumented public refresh
   entry point. Mid-preparation retirement, debounce/fallback timers, request
   failure, priority changes and per-host lifecycle are outside this foundation.
-  The [preparation companion](../../verification/contracts/browser-preparation.md)
+  The [preparation companion](../verification/contracts/browser-preparation.md)
   separately models decode/projection/admission interruptions, per-host retirement
   and request failure, with queued priority follow-ups and real Bridge qualification.
 - Allocation: six ordered spaces on three hosts with every subset of present
@@ -128,7 +127,7 @@ must also detect the prefix-allocation fault. These are finite sensitivity check
 not arbitrary-size proofs. Generated variant models have recorded content digests
 and explicit replay domains in the evidence manifest.
 
-For a focused development check, run `bun experiments/quint/run.ts --case <model>`.
+For a focused development check, run `bun quint/run.ts --case <model>`.
 Its manifest identifies only the selected model(s). It does not replace the full
 canonical entry point. Tool failures retain bounded partial logs and incomplete
 failure records; they cannot complete a manifest. CLI memory is capped at 512 MB

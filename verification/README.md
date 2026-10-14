@@ -14,7 +14,7 @@ checkpoints and a new final review. This does not carry spike acceptance forward
 as approval of expanded models, changed assumptions or activation of the policy.
 
 The baseline references executed CI on the accepted spike. The inventory now has a concrete model, shared-model consumer or justified
-alternative for all 43 areas; their independent acceptance remains pending.
+alternative for all 43 areas; their bounded contracts and individual mappings are accepted in [review 5516249164](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164). Final gate/resource approval remains outstanding.
 [Consumer decisions](consumer-evidence.md) record the rationale and limits. Existing
 delivered product changes are not reopened solely to add a formal-model label.
 
@@ -58,8 +58,8 @@ check that the intended prohibition is exercised, rather than assumed away.
 
 ## Implementation checkpoints
 
-1. Baseline: all 43 areas assessed against existing evidence; every additional
-   model/consumer mapping is pending. Existing repository checks remain required.
+1. Baseline: all 43 areas assessed against existing evidence; every bounded
+   model/consumer mapping is independently accepted. Existing repository checks remain required.
 2. Tooling: locked inputs, validated traces, bounded processes, reliable drain and
    manifests. No claim of expanded behavioral coverage from installing tools.
 3. Lifecycle/observation: expanded transitions and actual replay witnesses; new
@@ -92,13 +92,27 @@ and complete model/replay/sensitivity execution 6m46s. These are observed wall
 times, not peak-memory or all-platform measurements.
 No supplemental exploration substitutes for real consumer/platform/browser checks.
 
-The protected repository delivery check and pre-push gate remain required.
-Behavioral contracts and execution policy cannot use the ordinary Markdown-only
-shortcut. The candidate formal workflow is not yet a protected dependency: task
-3.4 requires independent model/mapping promotion review first. Promotion must
-record the accepted domains, consumer obligations and exact excluded claims, then
-add the unfiltered checks to applicable local/CI delivery gates. Do not infer that
-permission from spike acceptance or from this implementation passing its controls.
+Local pre-push runs `bun run check:delivery`: all existing repository checks followed
+by `verification:gate` (locked setup, types/notices, unfiltered models and the
+required diagnostic control). CI calls the same maintained behavioral workflow as
+a protected Delivery checks dependency alongside repository and World browser jobs.
+Model, adapter, contract, tooling and consumer changes cannot use the documentation
+shortcut. Ordinary docs still require behavioral CI; metadata-only exact-head reuse
+requires a prior successful full Delivery checks result that includes this dependency.
+Failure, missing evidence and cancellation block delivery. No existing integration,
+browser, scheduler, persistence or supported-platform check is replaced.
+
+Linux CI executes the canonical check in an isolated cgroup with hard 4 GiB memory,
+zero swap and two CPUs of quota. The service subtree's `memory.peak`, enforced
+limits and OOM events are retained, bound to the canonical manifest. An actual
+64 MiB over-budget control must be OOM-killed and an actual cancellation control
+must drain its worker and descendant before the complete run is accepted.
+`bun run verification:resources` exercises this through a local systemd user manager;
+CI uses `--system` and its existing passwordless sudo. Missing cgroup accounting or
+unsupported tooling fails rather than silently skipping limits. This establishes
+Linux evidence; macOS checker ownership and application/platform tests retain their
+own prerequisites. An isolated subtree peak includes the pool and descendants,
+unlike per-worker RSS or the runner's lifetime cgroup peak.
 
 Rollback means reverting a reviewed gate/tooling change through normal delivery,
 with the affected evidence decision and limitation recorded. Never make checker
@@ -123,10 +137,11 @@ then validates its retained metadata and replays the exported trace to reproduce
 `refresh.status`. It runs after the normal unfiltered CI check and cannot replace
 it. Downloaded artifacts can be validated with
 `bun scripts/verification-diagnostic-control.ts --validate <diagnostic-directory>`.
-Rerunning `bun experiments/quint/run.ts --case <model>` rebuilds excluded fault
+Rerunning `bun quint/run.ts --case <model>` rebuilds excluded fault
 bundles from the tracked sources and locked tools.
 
-[Promotion decisions](promotion-review.md) remain contract-specific and pending.
+[Promotion decisions](promotion-review.md) record independently accepted bounds,
+mandatory consumers and excluded claims; final gate/resource approval remains pending.
 The [observation progress assessment](contracts/observation-progress.md) separates
 controlled scheduler/deadline evidence from model reachability witnesses and states
 the required event-loop, slot-availability and transport-settlement assumptions.
@@ -167,3 +182,9 @@ Manifests record actual workers, wall/case times and reported case-process max R
 The latter is not simultaneous total memory. Where available, the Linux cgroup
 lifetime peak is recorded separately and includes other job/setup processes.
 All configured JVM/Node caps and finite/consumer evidence limits remain unchanged.
+
+The first complete constrained local run measured 1,149,575,168 bytes of aggregate
+peak memory (approximately 1.07 GiB), with zero OOM kills under the hard 4 GiB limit.
+The actual 64 MiB memory control and cancellation/descendant control also passed.
+CI repeats the full envelope and controls; future model growth must remain within
+those bounds or justify a reviewed envelope change. Final approval remains pending.

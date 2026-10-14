@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { WorldSnapshotAdmission } from "../../server/src/bridge/world-snapshot-admission";
+import { WorldSnapshotAdmission } from "../server/src/bridge/world-snapshot-admission";
 import { replayChunkCredits, type CreditState } from "./chunk-credits";
 import { parseTrace } from "./traces";
 

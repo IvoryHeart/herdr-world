@@ -1,6 +1,6 @@
 # Consumer and alternative evidence decisions
 
-This reconciles the remaining baseline entries without treating a component model as a proof of its consumers. Each decision names the required real tests in `coverage.json`; existing accepted-delivery CI is baseline execution evidence. New candidate execution is reported in PR #188 and source-bound manifests. Environment-gated live/OS checks retain their prerequisites and may not be reported as locally executed. All new mappings and alternatives await independent final review.
+This reconciles the remaining baseline entries without treating a component model as a proof of its consumers. Each decision names the required real tests in `coverage.json`; existing accepted-delivery CI is baseline execution evidence. New candidate execution is reported in PR #188 and source-bound manifests. Environment-gated live/OS checks retain their prerequisites and may not be reported as locally executed. All Q01–Q43 mappings and alternatives are independently accepted in review 5516249164 within their stated bounds. Final gate/resource delivery approval remains outstanding.
 
 ## Shared model consumers
 

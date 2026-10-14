@@ -2,9 +2,9 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { runVerificationProcess } from "./verification-process";
-import { loadTrace } from "../experiments/quint/traces";
-import { replayRefresh } from "../experiments/quint/replay";
-import { expectObservationMismatch } from "../experiments/quint/observations";
+import { loadTrace } from "../quint/traces";
+import { replayRefresh } from "../quint/replay";
+import { expectObservationMismatch } from "../quint/observations";
 
 /** Validate retained or downloaded artifacts, including actual counterexample replay. */
 export async function validateDiagnosticControl(directory: string) {
@@ -58,11 +58,7 @@ if (import.meta.main) {
   else {
     const root = resolve(import.meta.dir, "..");
     const result = await runVerificationProcess(
-      [
-        process.execPath,
-        resolve(root, "experiments/quint/run.ts"),
-        "--diagnostic-control",
-      ],
+      [process.execPath, resolve(root, "quint/run.ts"), "--diagnostic-control"],
       { cwd: root, timeoutMs: 120_000 },
     );
     assert.notEqual(

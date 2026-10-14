@@ -58,7 +58,7 @@ export function isDocumentationPath(path: string): boolean {
     path.endsWith(".md") &&
     ![
       "verification/",
-      "experiments/quint/",
+      "quint/",
       "tools/quint/",
       "openspec/",
       ".agents/",

@@ -12,11 +12,11 @@ import {
   type ConnectionRuntime,
   type ConnectionRuntimeContext,
   type ReadyRuntimeLease,
-} from "../../server/src/connections/manager";
-import { WorldRuntimeStore } from "../../web/src/world/runtimeStore";
-import { admitWorldSpaces } from "../../web/src/world/spaceAdmission";
-import type { WorldSpaceObject } from "../../web/src/world/worldObject";
-import type { ConnectionStatus } from "../../web/src/api";
+} from "../server/src/connections/manager";
+import { WorldRuntimeStore } from "../web/src/world/runtimeStore";
+import { admitWorldSpaces } from "../web/src/world/spaceAdmission";
+import type { WorldSpaceObject } from "../web/src/world/worldObject";
+import type { ConnectionStatus } from "../web/src/api";
 import { observe } from "./observations";
 
 type Host = {

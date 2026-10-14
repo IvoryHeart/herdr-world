@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
-import { Bridge } from "../../web/src/api";
-import { decodeWorldSnapshot } from "../../web/src/worldSnapshotDecode";
+import { Bridge } from "../web/src/api";
+import { decodeWorldSnapshot } from "../web/src/worldSnapshotDecode";
 import { syntheticBridge } from "./bridge-fixture";
 import { observe } from "./observations";
 import type { TraceState } from "./replay";

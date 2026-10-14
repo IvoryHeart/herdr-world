@@ -13,7 +13,7 @@ or an old callback retires a current runtime. Other hosts remain independent.
 
 ## Model and implementation mapping
 
-`experiments/quint/runtime-leases.qnt` maps `gen` to status generation, `phase`
+`quint/runtime-leases.qnt` maps `gen` to status generation, `phase`
 to disconnected/connecting/ready/stopping, `pending` to transport completion,
 `startGen` to captured runtime context and `lease` to a captured ready lease.
 `replayRuntime` calls the real manager. `start` invokes start with a controlled
@@ -48,6 +48,7 @@ No external Herdr transport, SSH, OS or temporal progress claim is made.
 
 Run `bun run verification:setup`, then `bun run verification:check` and
 `bun run verification:typecheck`. Manifests fingerprint tracked inputs, tools,
-commands and results. The foundation was independently reviewed and accepted by
-the owner. Expanded lifecycle coverage requires a separate mapping review.
-The maintained command is available locally; required-CI promotion is pending.
+commands and results.
+
+
+Accepted bounded lifecycle/consumer mapping: [review 5516249164](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164). Mandatory consumer and platform tests remain required; final delivery approval remains separate.

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { WorldSnapshotAdmission } from "../../server/src/bridge/world-snapshot-admission";
+import { WorldSnapshotAdmission } from "../server/src/bridge/world-snapshot-admission";
 import { observe } from "./observations";
 import type { TraceState } from "./replay";
 export type CreditState = {

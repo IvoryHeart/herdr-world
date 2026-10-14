@@ -1,6 +1,6 @@
 import { syntheticBridge } from "./bridge-fixture";
 import assert from "node:assert/strict";
-import { WorldRuntimeStore } from "../../web/src/world/runtimeStore";
+import { WorldRuntimeStore } from "../web/src/world/runtimeStore";
 import { observe } from "./observations";
 import type { TraceState } from "./replay";
 

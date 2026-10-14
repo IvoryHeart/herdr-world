@@ -418,7 +418,7 @@ are insufficient reasons to accept an adoption policy or a correctness claim.
 
 ## Reproduce and validate
 
-The [optional experiment README](../experiments/quint/README.md) gives the exact
+The [optional experiment README](../quint/README.md) gives the exact
 installation and runner commands, bounds and omissions. Runs write fresh evidence
 directories under `.agents/quint-spike/`, including command arguments, durations,
 exit codes, TLC logs, traces, mutants and result summaries. Fresh directories
@@ -429,7 +429,7 @@ Spike TypeScript is checked separately because root TypeScript includes `scripts
 not `experiments/`:
 
 ```bash
-bunx tsc --noEmit -p experiments/quint/tsconfig.json
+bunx tsc --noEmit -p quint/tsconfig.json
 ```
 
 Final validation passed under Bun 1.4.3: the experiment TypeScript check, complete

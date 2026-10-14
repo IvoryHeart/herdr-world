@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { Bridge } from "../../web/src/api";
+import { Bridge } from "../web/src/api";
 import {
   replayChunkAssembly,
   type AssemblyState,

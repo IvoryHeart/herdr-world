@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {
   WorldRuntimeStore,
   type WorldRuntimeState,
-} from "../../web/src/world/runtimeStore";
+} from "../web/src/world/runtimeStore";
 import {
   ObservationMismatch,
   expectObservationMismatch,

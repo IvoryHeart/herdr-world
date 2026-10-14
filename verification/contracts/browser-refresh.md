@@ -13,7 +13,7 @@ owners disappear silently, or ownership is substituted while reporting success.
 
 ## Model and implementation mapping
 
-`experiments/quint/browser-refresh.qnt` maps `epoch` to observation authority,
+`quint/browser-refresh.qnt` maps `epoch` to observation authority,
 `pending` to the request's captured epoch, `queued` to coalesced refresh intent,
 `issued` to actual calls, `admitted` to the last published epoch, and `revision`
 to publication count. `replayRefresh` invokes the real store through a recording
@@ -51,5 +51,4 @@ remain necessary; this model does not establish their timing or rendering.
 ## Evidence and promotion
 
 Use the maintained verification commands and complete input-fingerprinted manifest.
-The foundation was independently reviewed and owner-accepted; expanded stage and
-consumer mappings require new review. CI promotion remains pending.
+  Accepted within the documented bounds by [independent review 5516249164](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164). Mandatory consumer tests and excluded claims remain unchanged; gate/resource delivery still requires final review.

@@ -84,36 +84,41 @@ versus the earlier approximately 243-second complete run. Complete aggregate
 evidence requires all 11 scoped worker results with identical current source/tool
 inputs; partial workers cannot satisfy the gate. Cancellation/failure stops queued
 work and drains peers. Per-case timings/RSS and available cgroup peak data make
-resource assessment explicit without claiming total memory from individual peaks. Focused development uses `bun experiments/quint/run.ts --case <model>`.
-The candidate CI workflow installs locked tools, checks types/notices, runs all
-models/controls/sensitivity and retains manifests even on failure. It has no PR
-label/path shortcut. Local complete execution takes approximately four minutes;
-Fresh Ubuntu candidate CI passed in 7m11s: locked installation 6 seconds and
-model/replay/sensitivity 6m46s. Broader supported-runner and peak-memory evidence
-remain outside that measurement.
-Java heap is bounded to 1 GiB, Node old space to 512 MiB, each checker command to
-240 seconds and the complete command to 15 minutes. These are configured limits,
-not total peak-memory measurements.
+resource assessment explicit without claiming total memory from individual peaks. Focused development uses `bun quint/run.ts --case <model>`.
+The maintained models/adapters now live in top-level `quint/`, alongside
+`openspec/`. Their locked development dependency package remains in `tools/quint/`.
+CI calls the maintained workflow as a protected Delivery checks dependency and
+runs all models/controls/sensitivity within a Linux cgroup resource envelope.
+Local pre-push runs `check:delivery`, retaining the entire existing repository
+suite and requiring locked setup, types/notices, unfiltered verification and the
+diagnostic control. Focused evidence cannot replace the aggregate.
 
 ## Review checkpoint and completion boundary
 
-Existing repository/browser/platform checks remain required. All inventory choices
-are concrete candidates for independent review, with alternative rationales and
-consumer assumptions visible. The candidate formal workflow is deliberately
-separate from protected Delivery checks until task 3.4's independent promotion
-review accepts requirements, mappings and exclusions. Final activation must wire
-accepted checks into local/CI gates; it must not reuse spike approval.
+[Independent review 5516249164](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164)
+accepts all bounded contracts, every Q01–Q43 consumer/alternative mapping, separate
+Ranger storage/recovery assumptions and controlled observation progress. The
+[promotion record](../verification/promotion-review.md) retains each mandatory
+consumer and excluded claim. Tasks 3.4, 4.3, 5.1 and 5.3 are closed on that basis.
 
-[Contract-specific promotion records](../verification/promotion-review.md) and the
-[observation progress assessment](../verification/contracts/observation-progress.md)
-now state pending decisions and scheduler assumptions explicitly. Runtime drain
-includes both startup await boundaries with independent guard controls. Failed
-runs retain bounded sanitized diagnostic artifacts, and an intentional failing
-candidate tests that those artifacts reproduce the named mismatch.
+Gate integration and resource validation are delivered in this checkpoint, with
+an actual over-budget memory control and retained service-subtree peak accounting.
+Exact-head local/CI execution and independent final review must validate this new
+wiring; acceptance of the prior models does not approve its implementation.
+Existing integration, browser, scheduler, persistence and platform checks remain
+required. The earlier unexplained browser timing failures remain documented in
+PR #188; no limits were weakened. Final expanded approval, merge and archive are
+not inferred from contract acceptance.
 
-Review focus is intended-property validity, abstraction completeness, real replay
-fidelity, distinct authority identities, witness coverage, fault controls,
-cleanup and the adequacy of alternatives. Ranger storage/consumer assumptions
-need their separate acceptance. CI resource evidence and any review findings are
-remaining work. The active OpenSpec change is not archived or declared accepted.
 Rollback guidance and current policy are in [behavioral evidence](../verification/README.md).
+
+## Constrained execution checkpoint
+
+The complete relocated pool passed locally under the enforced 4 GiB memory/no-swap
+and two-CPU envelope, peaking at 1,149,575,168 bytes (approximately 1.07 GiB)
+across the service subtree. No OOM kill occurred. The 64 MiB over-budget control
+was actually killed, and cancellation rejected success while draining worker and
+descendant. All existing broader-bound and asymmetric host-order checks remain
+inside the canonical run. CI repeats this envelope and these controls, retaining
+resource JSON linked to its source-bound canonical manifest. These measurements
+apply to supported Linux/systemd execution, not every OS or arbitrary model growth.

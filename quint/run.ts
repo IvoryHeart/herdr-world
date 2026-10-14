@@ -2,7 +2,7 @@ import { verificationModels } from "./models";
 import {
   retainVerificationDiagnostics,
   sanitizeDiagnostic,
-} from "../../scripts/verification-diagnostics";
+} from "../scripts/verification-diagnostics";
 import { removeRuntimeStartGuard } from "./runtime-start-control";
 import { replayRuntimeControl } from "./runtime-control";
 import { replayBrowserPreparation } from "./browser-preparation";
@@ -17,24 +17,24 @@ import { replayRangerRecovery } from "./ranger-recovery";
 import assert from "node:assert/strict";
 import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { relative, resolve } from "node:path";
-import { withPrivateChecker } from "../../scripts/verification-checker";
+import { withPrivateChecker } from "../scripts/verification-checker";
 import {
   assertVerificationInstalled,
   checkerHome,
   checkerJar,
   quintCli,
-} from "../../scripts/verification-setup";
-import checker from "../../tools/quint/checker.json";
-import { runVerificationProcess } from "../../scripts/verification-process";
+} from "../scripts/verification-setup";
+import checker from "../tools/quint/checker.json";
+import { runVerificationProcess } from "../scripts/verification-process";
 import {
   fingerprintInputs,
   validateEvidence,
   type VerificationManifest,
-} from "../../scripts/verification-evidence";
+} from "../scripts/verification-evidence";
 import { replayRefresh, replayRuntime, replaySpaces } from "./replay";
 import { loadTrace, type Model, type ReplayDomain } from "./traces";
 
-const root = resolve(import.meta.dir, "../..");
+const root = resolve(import.meta.dir, "..");
 const output = resolve(
   root,
   ".agents/verification/runs",
@@ -503,9 +503,7 @@ async function implementationMutation(
     entrypoints: [
       resolve(
         root,
-        name === "creation-flow"
-          ? "experiments/quint/creation-subjects.ts"
-          : owner,
+        name === "creation-flow" ? "quint/creation-subjects.ts" : owner,
       ),
     ],
     target: "bun",
@@ -539,7 +537,7 @@ async function command(
   activeLabel = label;
   const started = performance.now();
   const executionArgs = args.map((arg) =>
-    arg.startsWith("experiments/") || arg.startsWith(".agents/")
+    arg.startsWith("quint/") || arg.startsWith(".agents/")
       ? resolve(root, arg)
       : arg,
   );
@@ -814,7 +812,7 @@ export async function runReviewedQuintModels(
     const results = [];
     for (const item of runCases) {
       const traceCount = replayTracesPerSeed(item.name);
-      const model = `experiments/quint/${item.name}.qnt`;
+      const model = `quint/${item.name}.qnt`;
       await command(`${item.name}-types`, ["typecheck", model]);
       const simulation = await command(`${item.name}-simulation`, [
         "run",

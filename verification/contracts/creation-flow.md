@@ -83,5 +83,4 @@ as enumerated. No arbitrary-size or temporal progress guarantee is claimed.
 Run canonical verification/typecheck and normal Bun tests. Existing shared-view
 browser suites remain required project checks. Q06/Q17/Q23 connect these models to
 terminal ownership, creation and Inspector intent with their additional platform
-boundaries. Expanded contracts and consumer mappings await independent review;
-spike acceptance does not approve this implementation or its assumptions.
+boundaries. Accepted within the documented bounds by [independent review 5516249164](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164). Mandatory consumer tests and excluded claims remain unchanged; gate/resource delivery still requires final review.

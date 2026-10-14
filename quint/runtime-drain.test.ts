@@ -110,10 +110,8 @@ test("every bounded retirement/start/cleanup combination drains its captured lif
 });
 
 test("each startup currency fence independently rejects its isolated implementation fault", async () => {
-  const owner = new URL(
-    "../../server/src/connections/manager.ts",
-    import.meta.url,
-  ).pathname;
+  const owner = new URL("../server/src/connections/manager.ts", import.meta.url)
+    .pathname;
   const source = await Bun.file(owner).text();
   for (const boundary of ["transport", "background"] as const) {
     const build = await Bun.build({

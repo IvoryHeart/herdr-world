@@ -6,17 +6,17 @@ import { join } from "node:path";
 import {
   createAssistantContext,
   type RecoveryTarget,
-} from "../../server/src/assistant/context";
+} from "../server/src/assistant/context";
 import {
   openTaskStorage,
   type TaskStorage,
-} from "../../server/src/assistant/task-storage";
+} from "../server/src/assistant/task-storage";
 import {
   validateSavedTasks,
   type PreparedTask,
   type SavedTaskState,
-} from "../../server/src/assistant/tasks";
-import type { LegacyConnectionRuntime } from "../../server/src/connections/runtime";
+} from "../server/src/assistant/tasks";
+import type { LegacyConnectionRuntime } from "../server/src/connections/runtime";
 import { observe } from "./observations";
 import type { TraceState } from "./replay";
 export type RecoveryState = {

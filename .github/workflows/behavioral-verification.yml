@@ -1,10 +1,8 @@
-name: Behavioral verification candidate
+name: Behavioral verification
 
-# This exercises the implementation pending independent promotion review.
-# It is deliberately separate from the protected Delivery checks dependency.
+# Accepted bounded contracts; protected Delivery checks depend on this workflow.
 on:
-  pull_request:
-    types: [opened, synchronize, reopened]
+  workflow_call:
   workflow_dispatch:
 
 permissions:
@@ -16,7 +14,7 @@ concurrency:
 
 jobs:
   candidate:
-    name: Behavioral verification candidate
+    name: Behavioral verification
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -41,8 +39,8 @@ jobs:
         run: |
           bun run verification:typecheck
           bun run verification:notices:check
-      - name: Run all candidate models, real replay and sensitivity controls
-        run: bun run verification:check
+      - name: Run all accepted models within enforced resource limits
+        run: bun run verification:resources --system
       - name: Exercise a failing candidate and verify retained diagnostics
         run: bun run verification:diagnostic-control
       - name: Retain source-bound evidence manifests
@@ -53,5 +51,6 @@ jobs:
           path: |
             .agents/verification/runs/**/manifest.json
             .agents/verification/diagnostics/**
+            .agents/verification/resources/**/resources.json
           if-no-files-found: error
           retention-days: 14

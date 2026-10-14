@@ -1,8 +1,8 @@
 import { expect, test } from "bun:test";
-import { WorldSnapshotAdmission } from "../../server/src/bridge/world-snapshot-admission";
-import { sendWorldSnapshotReply } from "../../server/src/bridge/world-snapshot-reply";
-import { WORLD_SNAPSHOT_CHUNK_CHARACTERS } from "../../shared/worldSnapshotChunks";
-import { WorldRuntimeStore } from "../../web/src/world/runtimeStore";
+import { WorldSnapshotAdmission } from "../server/src/bridge/world-snapshot-admission";
+import { sendWorldSnapshotReply } from "../server/src/bridge/world-snapshot-reply";
+import { WORLD_SNAPSHOT_CHUNK_CHARACTERS } from "../shared/worldSnapshotChunks";
+import { WorldRuntimeStore } from "../web/src/world/runtimeStore";
 import { syntheticBridge, SyntheticSocket } from "./bridge-fixture";
 
 function response() {

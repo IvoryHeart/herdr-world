@@ -30,5 +30,4 @@ browser pointer/keyboard behavior. Floating-point geometry extremes, arbitrary
 owner counts and all DOM event schedules are outside this finite domain.
 
 Run `bun run test web/src/world/windows/windowOrdering.test.ts` and the existing
-window/browser suites through `bun run check`. The alternative, finite domain and
-consumer assumptions await independent adoption review.
+window/browser suites through `bun run check`.  Accepted within the documented bounds by [independent review 5516249164](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164). Mandatory consumer tests and excluded claims remain unchanged; gate/resource delivery still requires final review.

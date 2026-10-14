@@ -1,9 +1,9 @@
-import { createAssistantContext } from "../../server/src/assistant/context";
+import { createAssistantContext } from "../server/src/assistant/context";
 import {
   prepareAssistantAction,
   type PreparedAssistantAction,
-} from "../../server/src/assistant/actions";
-import type { LegacyConnectionRuntime } from "../../server/src/connections/runtime";
+} from "../server/src/assistant/actions";
+import type { LegacyConnectionRuntime } from "../server/src/connections/runtime";
 import { observe } from "./observations";
 import type { TraceState } from "./replay";
 export type AuthorityState = {

@@ -112,6 +112,7 @@ test("CI exposes the protected delivery gate and runs the complete repository ch
     "validation-scope",
     "validation",
     "world-browser",
+    "behavioral",
   ]);
   expect(delivery?.if).toBe("always()");
   expect(
@@ -291,7 +292,7 @@ test("CI exercises the real plugin-managed launchd lifecycle on both protected a
   ).toBe("bun scripts/ci-reuse-full-check.ts");
 });
 
-test("behavioral candidate runs complete evidence without labels or path exclusions before promotion", async () => {
+test("accepted behavioral evidence is an unfiltered protected delivery dependency", async () => {
   const candidate = Bun.YAML.parse(
     await Bun.file(
       new URL(
@@ -304,16 +305,14 @@ test("behavioral candidate runs complete evidence without labels or path exclusi
     permissions: Record<string, string>;
     jobs: Record<string, WorkflowJob & { "timeout-minutes": number }>;
   };
-  expect(candidate.on.pull_request).toEqual({
-    types: ["opened", "synchronize", "reopened"],
-  });
+  expect(candidate.on.workflow_call).toBeNull();
   expect(candidate.permissions).toEqual({ contents: "read" });
   const job = candidate.jobs.candidate;
   expect(job.if).toBeUndefined();
   expect(job["continue-on-error"]).toBeUndefined();
   expect(job["timeout-minutes"]).toBe(20);
   const verify = job.steps.find(
-    (step) => step.run === "bun run verification:check",
+    (step) => step.run === "bun run verification:resources --system",
   )!;
   expect(verify).toBeDefined();
   expect(verify.if).toBeUndefined();
@@ -338,5 +337,16 @@ test("behavioral candidate runs complete evidence without labels or path exclusi
       (step) => step.run === "bun run verification:diagnostic-control",
     ),
   ).toBe(true);
-  expect(workflow.jobs.delivery.needs).not.toContain("candidate");
+  expect(workflow.jobs.delivery.needs).toContain("behavioral");
+  expect(workflow.jobs.behavioral.uses).toBe(
+    "./.github/workflows/behavioral-verification.yml",
+  );
+  expect(workflow.jobs.behavioral.if).toBe(
+    "needs.validation-scope.outputs.mode != 'reuse'",
+  );
+  for (const step of workflow.jobs.delivery.steps.filter(
+    (step) => step.run === "bun scripts/ci-delivery-result.ts",
+  )) {
+    expect(step.env?.BEHAVIORAL_RESULT).toBe("${{ needs.behavioral.result }}");
+  }
 });

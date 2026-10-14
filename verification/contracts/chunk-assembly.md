@@ -76,5 +76,4 @@ network delivery, arbitrary-size or temporal progress guarantee is inferred.
 Canonical verification runs this model and both code controls; focused development
 may select only this case and produces a correspondingly scoped manifest. Normal
 Bun tests execute the nine direct assembly regressions plus protocol composition.
-Q12/Q13 are modeled with explicit consumer/platform boundaries. Their contracts,
-trace projection and implementation mappings await independent promotion review.
+Q12/Q13 are modeled with explicit consumer/platform boundaries.  Accepted within the documented bounds by [independent review 5516249164](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164). Mandatory consumer tests and excluded claims remain unchanged; gate/resource delivery still requires final review.

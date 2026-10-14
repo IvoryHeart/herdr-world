@@ -78,13 +78,17 @@ parser, adapter, timeout and cleanup errors must fail the run.
 
 For modeled changes, run `bun run verification:setup`, then
 `bun run verification:typecheck` and `bun run verification:check`. Focused
-`bun experiments/quint/run.ts --case <model>` runs help iteration but do not replace
-the complete candidate run. The canonical command uses two isolated case workers
+`bun quint/run.ts --case <model>` runs help iteration but do not replace
+the complete required run. The canonical command uses two isolated case workers
 by default, as configured in `tools/quint/execution.json`, and requires complete
-source-consistent aggregate evidence. The separate Behavioral verification candidate CI
-workflow runs all models without labels or path-based exclusions. Its evidence
-records source/model/adapter/checker inputs. Independent promotion review remains
-pending in PR #188; this job is not yet a protected Delivery checks dependency.
+source-consistent aggregate evidence. The Behavioral verification
+workflow runs all models without labels or path exclusions and is a protected
+Delivery checks dependency. Pre-push runs `bun run check:delivery`, preserving all
+repository checks and requiring `verification:gate`, including the diagnostic
+control. Linux CI additionally enforces the aggregate resource envelope described
+in [behavioral evidence](verification/README.md#candidate-commands-and-promotion).
+Independent acceptance is recorded in [promotion decisions](verification/promotion-review.md);
+final gate/resource approval remains separate.
 
 For an unmodeled critical change, record and execute the proposed model or justified
 alternative before review. For a mechanical change, explain why contracts and

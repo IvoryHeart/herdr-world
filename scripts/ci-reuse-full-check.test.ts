@@ -104,7 +104,7 @@ test("documentation scope follows the PR diff and includes nested Markdown", () 
 test("behavioral contracts and agent policy cannot take the Markdown shortcut", () => {
   for (const path of [
     "verification/contracts/runtime-leases.md",
-    "experiments/quint/README.md",
+    "quint/README.md",
     "tools/quint/DEPENDENCY_NOTICES.md",
     "openspec/specs/runtime-federation/spec.md",
     "openspec/changes/adopt-quint-behavioral-verification/tasks.md",

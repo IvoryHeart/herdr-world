@@ -6,7 +6,7 @@ Requirement: [workspace assistant](../../openspec/specs/workspace-assistant/spec
 explicit workspace/model permission, captured interactive runtime and action policy.
 Owner: `server/src/assistant/actions.ts`, with context/service/task consumers;
 accepted source PR #182. The owner authorized this implementation slice in PR #188,
-separately from acceptance of the original spike. New Ranger acceptance is pending.
+separately from acceptance of the original spike. Accepted within the documented bounds by [independent review 5516249164](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164). Mandatory consumer tests and excluded claims remain unchanged; gate/resource delivery still requires final review.
 
 A ready runtime is insufficient to authorize a task write. Workspace permission,
 active task/service, captured runtime and workspace identity remain separate.
@@ -64,6 +64,4 @@ Durability/recovery has a separate contract; permission must be re-admitted ther
 ## Review and evidence
 
 Run maintained verification/typecheck and normal Bun tests, retaining actual
-service/context/task integration suites. Model, predicate-to-consumer mapping and
-excluded claims await independent review. This is not separate owner acceptance
-of Ranger or activation of its required model gate.
+service/context/task integration suites.   Accepted within the documented bounds by [independent review 5516249164](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164). Mandatory consumer tests and excluded claims remain unchanged; gate/resource delivery still requires final review.

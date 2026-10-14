@@ -46,16 +46,18 @@ test("pre-push runs the full check and blocks a failed check", () => {
     const success = run(0);
     expect(success.status).toBe(0);
     expect(success.stdout).toBe("");
-    expect(success.stderr).toMatch(/pre-push: bun run check passed in \d+s/);
+    expect(success.stderr).toMatch(
+      /pre-push: bun run check:delivery passed in \d+s/,
+    );
     expect(readdirSync(deliveryDir)).toEqual(["pre-push.tsv"]);
     expect(readFileSync(reportPath, "utf8")).toMatch(/\t0\t\d+\tfull\n$/);
-    expect(readFileSync(argsPath, "utf8")).toBe("run check\n");
+    expect(readFileSync(argsPath, "utf8")).toBe("run check:delivery\n");
     expect(readFileSync(envPath, "utf8")).toBe("||\n");
 
     const failure = run(37);
     expect(failure.status).toBe(37);
     expect(failure.stderr).toMatch(
-      /pre-push: bun run check failed \(exit 37, \d+s\)/,
+      /pre-push: bun run check:delivery failed \(exit 37, \d+s\)/,
     );
     expect(failure.stderr).toContain("(fail) synthetic browser regression");
     const logPath = failure.stderr.match(/Full log: (.+)\n/)?.[1];
@@ -64,7 +66,7 @@ test("pre-push runs the full check and blocks a failed check", () => {
       "synthetic early diagnostic and stack",
     );
     expect(readFileSync(reportPath, "utf8")).toMatch(/\t37\t\d+\tfull\n$/);
-    expect(readFileSync(argsPath, "utf8")).toBe("run check\n");
+    expect(readFileSync(argsPath, "utf8")).toBe("run check:delivery\n");
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -103,7 +105,7 @@ test("pre-push uses the docs gate only after a successful full gate covers all c
       });
 
     expect(run(base, "0".repeat(40)).status).toBe(0);
-    expect(readFileSync(argsPath, "utf8")).toBe("run check\n");
+    expect(readFileSync(argsPath, "utf8")).toBe("run check:delivery\n");
     mkdirSync(join(root, "docs"));
     writeFileSync(join(root, "docs", "guide.md"), "updated\n");
     git("add", "docs/guide.md");
@@ -128,13 +130,13 @@ test("pre-push uses the docs gate only after a successful full gate covers all c
         `synthetic\t${base}\t0\t0\tfull\n`,
       );
       expect(run(git("rev-parse", "HEAD"), docs).status).toBe(0);
-      expect(readFileSync(argsPath, "utf8")).toBe("run check\n");
+      expect(readFileSync(argsPath, "utf8")).toBe("run check:delivery\n");
     }
     writeFileSync(join(root, "code.ts"), "export const value = 1;\n");
     git("add", "code.ts");
     git("commit", "-qm", "code");
     expect(run(git("rev-parse", "HEAD"), docs).status).toBe(0);
-    expect(readFileSync(argsPath, "utf8")).toBe("run check\n");
+    expect(readFileSync(argsPath, "utf8")).toBe("run check:delivery\n");
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

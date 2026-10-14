@@ -1,28 +1,20 @@
-import { replayRuntimeControl } from "../experiments/quint/runtime-control";
-import { replayBrowserPreparation } from "../experiments/quint/browser-preparation";
-import { replayRuntimeDrain } from "../experiments/quint/runtime-drain";
-import { replayChunkCredits } from "../experiments/quint/chunk-credits";
-import { replayChunkAssembly } from "../experiments/quint/chunk-assembly";
-import { replayCreationFlow } from "../experiments/quint/creation-flow";
-import { replayRangerAuthority } from "../experiments/quint/ranger-authority";
-import { replayRangerRecovery } from "../experiments/quint/ranger-recovery";
+import { replayRuntimeControl } from "../quint/runtime-control";
+import { replayBrowserPreparation } from "../quint/browser-preparation";
+import { replayRuntimeDrain } from "../quint/runtime-drain";
+import { replayChunkCredits } from "../quint/chunk-credits";
+import { replayChunkAssembly } from "../quint/chunk-assembly";
+import { replayCreationFlow } from "../quint/creation-flow";
+import { replayRangerAuthority } from "../quint/ranger-authority";
+import { replayRangerRecovery } from "../quint/ranger-recovery";
 import assert from "node:assert/strict";
 import { readFile, writeFile } from "node:fs/promises";
 import { basename } from "node:path";
-import {
-  replayRefresh,
-  replayRuntime,
-  replaySpaces,
-} from "../experiments/quint/replay";
+import { replayRefresh, replayRuntime, replaySpaces } from "../quint/replay";
 import {
   expectObservationMismatch,
   isObservationMismatch,
-} from "../experiments/quint/observations";
-import {
-  loadTrace,
-  type Model,
-  type ReplayDomain,
-} from "../experiments/quint/traces";
+} from "../quint/observations";
+import { loadTrace, type Model, type ReplayDomain } from "../quint/traces";
 
 type ReplayRequest = {
   model: Model;
