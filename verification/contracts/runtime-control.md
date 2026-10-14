@@ -73,6 +73,5 @@ that failure. Green model/code agreement did not justify weakening authority.
 Run `bun run verification:check` and `bun run verification:typecheck`; cheap replay
 regressions run under normal Bun tests. The maintained suite runs 11 models with 6,900 baseline generated replays,
 3,900 larger-bound replays and exhaustive allocation across six host orders. Manifests identify exact inputs.
- Inventory Q01
-records the three maintained models without implying acceptance; required-CI promotion and
-final implementation acceptance remain pending. Accepted within the documented bounds by [independent review 5516249164](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164). Mandatory consumer tests and excluded claims remain unchanged. Final implementation/gate/resource acceptance is recorded in [review 5517420140](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5517420140); owner-approved PR #188 merged as `481ca1e8`. Mandatory consumers and excluded claims remain binding.
+Inventory Q01 records the three maintained models. Required-CI promotion and
+final implementation acceptance are complete within the documented bounds. The bounded contract was accepted by [independent review 5516249164](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164). Mandatory consumer tests and excluded claims remain unchanged. Final implementation/gate/resource acceptance is recorded in [review 5517420140](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5517420140); owner-approved PR #188 merged as `481ca1e8`. Mandatory consumers and excluded claims remain binding.
