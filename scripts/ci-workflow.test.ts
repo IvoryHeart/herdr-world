@@ -112,6 +112,7 @@ test("CI exposes the protected delivery gate and runs the complete repository ch
     "validation-scope",
     "validation",
     "world-browser",
+    "behavioral",
   ]);
   expect(delivery?.if).toBe("always()");
   expect(
@@ -289,4 +290,63 @@ test("CI exercises the real plugin-managed launchd lifecycle on both protected a
     launchd?.steps.find((step) => step.name === "Determine validation scope")
       ?.run,
   ).toBe("bun scripts/ci-reuse-full-check.ts");
+});
+
+test("accepted behavioral evidence is an unfiltered protected delivery dependency", async () => {
+  const candidate = Bun.YAML.parse(
+    await Bun.file(
+      new URL(
+        "../.github/workflows/behavioral-verification.yml",
+        import.meta.url,
+      ),
+    ).text(),
+  ) as {
+    on: Record<string, unknown>;
+    permissions: Record<string, string>;
+    jobs: Record<string, WorkflowJob & { "timeout-minutes": number }>;
+  };
+  expect(candidate.on.workflow_call).toBeNull();
+  expect(candidate.permissions).toEqual({ contents: "read" });
+  const job = candidate.jobs.candidate;
+  expect(job.if).toBeUndefined();
+  expect(job["continue-on-error"]).toBeUndefined();
+  expect(job["timeout-minutes"]).toBe(20);
+  const verify = job.steps.find(
+    (step) => step.run === "bun run verification:resources --system",
+  )!;
+  expect(verify).toBeDefined();
+  expect(verify.if).toBeUndefined();
+  expect(verify["continue-on-error"]).toBeUndefined();
+  expect(
+    job.steps.some((step) => step.run === "bun run verification:setup"),
+  ).toBe(true);
+  const artifact = job.steps.find(
+    (step) => step.name === "Retain source-bound evidence manifests",
+  )!;
+  expect(artifact.if).toBe("always()");
+  expect((artifact.with as { path?: string }).path).toContain(
+    ".agents/verification/diagnostics/**",
+  );
+  expect(
+    job.steps.find(
+      (step) => step.run === "bun run verification:diagnostic-control",
+    )?.["continue-on-error"],
+  ).toBeUndefined();
+  expect(
+    job.steps.some(
+      (step) => step.run === "bun run verification:diagnostic-control",
+    ),
+  ).toBe(true);
+  expect(workflow.jobs.delivery.needs).toContain("behavioral");
+  expect(workflow.jobs.behavioral.uses).toBe(
+    "./.github/workflows/behavioral-verification.yml",
+  );
+  expect(workflow.jobs.behavioral.if).toBe(
+    "needs.validation-scope.outputs.mode != 'reuse'",
+  );
+  for (const step of workflow.jobs.delivery.steps.filter(
+    (step) => step.run === "bun scripts/ci-delivery-result.ts",
+  )) {
+    expect(step.env?.BEHAVIORAL_RESULT).toBe("${{ needs.behavioral.result }}");
+  }
 });

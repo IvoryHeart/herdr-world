@@ -60,6 +60,7 @@ test("CI and release jobs install once from the workspace root", () => {
     "prepare-release.yml",
     "release.yml",
     "world-browser.yml",
+    "behavioral-verification.yml",
   ]) {
     const workflow = Bun.YAML.parse(
       readFileSync(new URL(`.github/workflows/${file}`, root), "utf8"),
@@ -74,7 +75,10 @@ test("CI and release jobs install once from the workspace root", () => {
     };
     for (const [name, job] of Object.entries(workflow.jobs)) {
       if (job.uses) {
-        expect(job.uses).toBe("./.github/workflows/world-browser.yml");
+        expect([
+          "./.github/workflows/world-browser.yml",
+          "./.github/workflows/behavioral-verification.yml",
+        ]).toContain(job.uses);
         expect(job.steps).toBeUndefined();
         continue;
       }

@@ -82,3 +82,33 @@ pages full-observation matches beyond renderer bounds.
 Repository workflow lives in [AGENTS.md](../AGENTS.md) and
 [agent development](agent-development.md). The optional visible-team recipe is
 under [`.hwf/workflows/`](../.hwf/workflows/). Use synthetic data in tracked evidence.
+The optional [Quint adoption spike](quint-adoption-spike.md) inventories formal
+modeling candidates and records bounded model/replay experiments; it is not a CI gate.
+The [Quint adoption proposal](../openspec/changes/adopt-quint-behavioral-verification/proposal.md)
+defines the planned policy, promotion criteria and staged repository-wide coverage.
+The [maintained behavioral evidence](../verification/README.md) maps all 43 areas to
+current requirements, existing tests, accepted delivery and concrete model/consumer
+or alternative evidence decisions. The [implementation report](quint-adoption-implementation.md)
+records maintained checks, actual-delivery audit, claim limits and pending promotion.
+[Consumer evidence](../verification/consumer-evidence.md) explains shared guarantees
+and implementation/browser/platform alternatives.
+
+[Promotion review](../verification/promotion-review.md) tracks each contract's bounds,
+accepted consumer obligations and exclusions. [Observation progress](../verification/contracts/observation-progress.md)
+records scheduler/deadline assumptions separately from model reachability.
+
+Canonical Quint execution uses the tracked [bounded worker configuration](../tools/quint/execution.json)
+and produces an aggregate requiring all isolated model-case manifests; see the
+[parallel execution contract](../verification/README.md#bounded-parallel-execution).
+
+Maintained models and replay adapters live in top-level [`quint/`](../quint/README.md).
+Protected delivery includes the [behavioral workflow](../.github/workflows/behavioral-verification.yml),
+[local delivery command](../package.json), [aggregate resource runner](../scripts/verification-resources.ts)
+and [hard Linux envelope](../tools/quint/resources.json); final approval remains separate.
+
+Evidence publication uses [the shared acceptance boundary](../scripts/verification-publication.ts).
+[Canonical finalization regressions](../scripts/verification-parallel.test.ts)
+verify late cancellation invalidates aggregates and retains diagnostics;
+[checker regressions](../scripts/verification-checker.test.ts) cover owned teardown.
+Authoritative [agent guidance](../AGENTS.md#behavioral-verification) describes the
+implemented protected gate separately from outstanding final acceptance.

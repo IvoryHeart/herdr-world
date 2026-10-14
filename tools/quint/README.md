@@ -1,0 +1,60 @@
+# Locked development verification tools
+
+This package is deliberately outside the application's Bun workspaces. Its
+`package-lock.json` is an explicit exception to the root Bun-lockfile convention:
+Quint's development-only dependency graph is independently locked and never included
+in shipped application assets or dependency resolution. Use `npm ci --ignore-scripts`,
+not an unlocked global install. The package inventory is in `DEPENDENCY_NOTICES.md`;
+actual tooling/checker redistribution must preserve upstream licence texts.
+
+`checker.json` pins Apalache 0.62.1's release URL, archive SHA-256 and extracted JAR
+SHA-256. That distribution provides translation and TLC. `tlc.json` limits the
+checker to one worker, a 1 GB heap and a 16 MB stack. `verification:setup` downloads
+and verifies the distribution into the checkout's ignored `.agents/verification/`
+cache. The check verifies the installed JAR and does not download a checker.
+It uses a private allocated endpoint for each invocation instead of borrowing an
+existing local server. Readiness requires gRPC reflection and listener ownership,
+not just a startup log line. Linux verifies ownership through `/proc`; macOS
+requires its standard `lsof` tool and separate runner evidence. Checker and replay workers have owned POSIX process groups,
+deadlines and TERM/KILL drain, including grandchildren and inherited pipes.
+
+Use Bun 1.4.3, Node 18+ and Java 17+ on POSIX systems; the measured local
+and candidate CI toolchain uses Node 24.19.0 and Java 21 on Linux. macOS requires
+its own runner evidence before claiming equivalent process/platform coverage:
+
+```bash
+bun run verification:setup
+bun run verification:check
+bun run verification:typecheck
+bun run verification:notices
+```
+
+On Windows, use the POSIX CI job for checker/process supervision; actual Windows
+application/runtime behavior retains its platform tests. A supported check never
+silently skips a missing toolchain or treats a timeout as verification.
+
+Runs use fresh artifact directories and validate source fingerprints before
+completing a manifest. Model/code controls must fail at a named conformance
+observation; malformed traces, adapter errors and cleanup errors abort. Witnesses
+are counted from successfully executed production replay, not only simulation.
+Raw output is kept in bounded local logs and summarized in console output.
+
+The maintained command executes all 11 runtime, observation, allocation, protocol,
+creation and Ranger models, their controls and larger-bound/host-order sensitivity.
+The verified JAR is launched directly. These bounded implementations and consumer mappings are independently accepted in review 5516249164. A complete Linux candidate run takes approximately four minutes
+with the configured bounds; this is execution evidence for this toolchain, not a
+guarantee for other environments or total peak-memory measurement. Final gate/resource approval remains a separate review checkpoint in `verification/`.
+
+The canonical command uses `execution.json`'s bounded case pool (two workers by
+default), with isolated case processes and private checkers. Its aggregate manifest
+requires all 11 focused worker results against one current source/tool identity.
+Failure/cancellation stops queue admission and drains peers; focused results do
+not substitute for this aggregate. Worker count is CPU-capped and recorded with
+case timings/resource observations. Retain conservative concurrency for the
+JVM-backed phases; per-case max RSS is not a combined-memory measurement.
+
+Linux required CI uses `resources.json` to enforce a 4 GiB no-swap cgroup and two
+CPUs of quota over the complete pool and descendants. Its actual aggregate peak,
+OOM events and canonical manifest link are retained. A 64 MiB OOM control verifies
+enforcement; actual cancellation must reject success and drain its descendants. Local `verification:resources` requires a systemd user manager;
+required CI uses its system manager. Missing accounting fails the check.

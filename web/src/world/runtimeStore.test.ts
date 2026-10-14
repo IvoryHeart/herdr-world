@@ -83,6 +83,52 @@ function result(label: string, generation = 1) {
 }
 
 describe("World aggregate runtime store", () => {
+  test("disconnect at a controlled decode yield cannot admit unfinished observation", async () => {
+    const paused = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    let listener: ((status: "connected" | "disconnected") => void) | undefined;
+    let first = true;
+    const runtime = new WorldRuntimeStore(
+      {
+        call: async () => result("Synthetic staged observation"),
+        onControl: () => () => {},
+        onStatus: (value) => {
+          listener = value;
+          return () => {};
+        },
+      },
+      async (stage) => {
+        if (stage === "decode" && first) {
+          first = false;
+          paused.resolve();
+          await release.promise;
+        }
+      },
+    );
+    runtime.start();
+    const refresh = runtime.refresh();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const reached = await Promise.race([
+        paused.promise.then(() => true),
+        new Promise<boolean>((resolve) => {
+          timer = setTimeout(() => resolve(false), 200);
+        }),
+      ]);
+      expect(reached).toBe(true);
+      listener!("disconnected");
+      release.resolve();
+      await refresh;
+      expect(runtime.get().status).toBe("error");
+      expect(runtime.get().connections).toEqual([]);
+    } finally {
+      clearTimeout(timer);
+      release.resolve();
+      await refresh;
+      runtime.stop();
+    }
+  });
+
   test("retirement during cooperative preparation makes only that owner stale", async () => {
     const response = result("synthetic ownership");
     response.connections.push({

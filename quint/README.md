@@ -1,0 +1,135 @@
+# Maintained Quint behavioral evidence
+
+Read [current coverage](../verification/README.md) and the
+[implementation report](../docs/quint-adoption-implementation.md) first. The
+[spike assessment](../docs/quint-adoption-spike.md) is historical foundation.
+These models and adapters are maintained development tooling under implementation
+review. Existing cooperative preparation yields accept an injected scheduler for
+deterministic replay; application defaults and shipped dependencies are unchanged.
+Bounded contract promotion is independently accepted; local delivery and protected CI require the unfiltered gate. Final delivery approval remains outstanding.
+
+The reviewed foundation now runs through maintained, isolated tooling:
+
+```bash
+bun install --frozen-lockfile
+bun run verification:setup
+bun run verification:typecheck
+bun run verification:check
+```
+
+See [the tooling contract](../tools/quint/README.md) for supported runtimes,
+installation, lockfiles and checker integrity. The dedicated npm lock pins the
+entire development-only graph; the checker archive and executable JAR are
+verified against committed digests. Application resolutions are unchanged.
+Network access is needed for setup; execution uses the installed tools.
+
+The runner fails on tool errors, missing witnesses, unexpected trace counts,
+implementation divergence and unsuccessful negative controls. Checker and replay
+workers have deadlines, bounded output and owned process groups. Cancellation
+terminates and drains their descendants before deleting their temporary files.
+Verification starts its own checker server rather than reusing another process.
+
+Each run has a fresh ignored `.agents/verification/runs/<run-time>/` directory
+with logs, traces, counterexamples and a completion manifest. The manifest records
+tracked source/model/adapter fingerprints, tool versions and checker digest,
+settings, commands and results. An interrupted run is incomplete; stale source
+fingerprints invalidate completed evidence. Replay witnesses come from actual
+implementation observations, separately from simulator witness counts.
+
+Counterexamples are decoded and validated before expected-rejection controls.
+Only a dedicated named observation mismatch from the selected model counts as
+conformance rejection; loading, schema/action, adapter and cleanup failures abort.
+Refresh replay checks the admitted catalogue's cardinality, owner, generation and
+actionability, including retained entries after disconnect. Results name each
+killing observation. The cheap harness regressions run with:
+
+```bash
+bun test quint/replay.test.ts
+```
+
+Each model is simulated with seeds 42, 73 and 103, 500 samples per seed and
+at most 25 transitions. One hundred generated traces per seed and case are replayed, except staged
+preparation, socket credits and creation, which replay all 500 sampled paths per seed so rare conditional-admission
+witnesses cannot be lost during export. Actual required witnesses must appear in
+every seed's production replay. The administration companion adds explicit
+replacement/removal/error/failed-cleanup/reentry/shutdown coverage; its
+[contract](../verification/contracts/runtime-control.md) records its accepted bounded scope. The [drain companion](../verification/contracts/runtime-drain.md)
+adds delayed-transport administrative composition and a direct exhaustive replay
+of its 62 bounded scenarios, including delayed background startup.
+TLC checks all reachable states of each finite abstraction, with no temporal
+liveness claim. Model faults are enabled only in generated copies. Their
+counterexamples must violate the model invariant and diverge when replayed
+against the real implementation. This is a model mutation and adapter negative
+control, not an implementation mutation test.
+
+The runner additionally builds one faulty production module per case in an ignored
+bundle, substitutes that module in the replay adapter, and requires a generated
+trace to trigger an assertion failure. Those controls weaken lease validity,
+bypass observation epochs and replace allocation with an input prefix. Production
+files are never modified. The results identify the trace that kills each mutation.
+The refresh case also requires a dropped-catalogue fault control. These faults
+demonstrate detection sensitivity; they are not broad mutation coverage.
+
+The maintained suite also includes [chunk credits](../verification/contracts/chunk-credits.md),
+[assembly](../verification/contracts/chunk-assembly.md),
+[creation](../verification/contracts/creation-flow.md),
+[Ranger authority](../verification/contracts/ranger-authority.md) and
+[durable recovery](../verification/contracts/ranger-recovery.md). Read each
+contract for real consumers, faults, finite domains and exclusions. All 11 models
+run in the unfiltered required CI workflow within their independently accepted bounds.
+
+## Abstraction boundaries
+
+- Runtime: two hosts, generations 0–4, delayed successful transport start and
+  cleanup, one captured callback per host, and all captured ready leases checked
+  in replay. Start and stop completion are independent transitions. No removal,
+  replacement factory, failed cleanup, reentrant observers or shutdown races are
+  included. The replay drains outstanding promises after every trace.
+- Refresh: epochs 0–3, at most six requests, successful well-formed replies,
+  repeated explicit refresh calls and browser disconnects. Completion includes
+  decoding/publication and follow-up dispatch as one model transition. Real
+  preparation is asynchronous and awaited through an instrumented public refresh
+  entry point. Mid-preparation retirement, debounce/fallback timers, request
+  failure, priority changes and per-host lifecycle are outside this foundation.
+  The [preparation companion](../verification/contracts/browser-preparation.md)
+  separately models decode/projection/admission interruptions, per-host retirement
+  and request failure, with queued priority follow-ups and real Bridge qualification.
+- Allocation: six ordered spaces on three hosts with every subset of present
+  and relevant spaces and capacities 0–6. Relevance is represented by workspace
+  focus in replay; selection and leaf-status relevance classification are not
+  covered. The model specifies admission using local ordinal and host order,
+  independently of the implementation's bucket loop. Exact set equality and
+  stable relevant-prefix order are checked; ordinary output order is not asserted.
+  TLC uses `allConfigurations` as initialization and `hold` as the transition,
+  enumerating the complete configuration domain without linking independent calls.
+  The deterministic `enumerate` action generates every one of the 5,103 valid
+  configurations exactly once for production replay. Independent capacity,
+  host-prefix and round-fairness properties supplement reference-function agreement.
+
+Sampling traces does not replay every TLC state or verify production code;
+allocation additionally replays its complete fixed configuration domain.
+Generation/epoch limits make these models finite and need justification before
+using their results for broader claims. Existing focused tests remain necessary.
+
+## Required sensitivity evidence before promotion
+
+The maintained runner also verifies and replays larger finite domains: lease
+and administration generations 6/8; refresh epochs 5 with ten requests; staged
+preparation epochs/requests 4/4. Each variant uses seeds 42/73/103, 1,000 samples
+and 40 transitions. Preparation exports all 1,000 paths per seed; other variants
+export 100. Each seed requires real witnesses and an implementation fault kill.
+Lease variants reverse actual manager registration order.
+
+Allocation verifies and exhaustively replays every one of the 5,103 configurations
+for all six host block orders. The ordinal specification uses an explicit input
+permutation, independent of the implementation's bucket loop. Each reordered run
+must also detect the prefix-allocation fault. These are finite sensitivity checks,
+not arbitrary-size proofs. Generated variant models have recorded content digests
+and explicit replay domains in the evidence manifest.
+
+For a focused development check, run `bun quint/run.ts --case <model>`.
+Its manifest identifies only the selected model(s). It does not replace the full
+canonical entry point. Tool failures retain bounded partial logs and incomplete
+failure records; they cannot complete a manifest. CLI memory is capped at 512 MB
+in addition to checker JVM bounds. Interrupted top-level checks always fail and
+force retirement after ten seconds if ordinary cancellation cannot finish.

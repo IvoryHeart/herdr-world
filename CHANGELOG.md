@@ -9,6 +9,19 @@ are optional because the merged PR history records their source.
 
 ### Added
 
+- Maintained Quint development tooling, implementation-connected lifecycle,
+  observation, protocol, creation and Ranger models, a reconciled 43-area evidence
+  inventory and candidate CI/contributor guidance. Independently accepted bounded evidence is required by local and protected CI delivery gates.
+  Startup currency fences now have independent fault controls, and failed
+  verification runs retain bounded diagnostic artifacts for reproduction. Checker
+  startup waits for protocol readiness before invoking Quint. Canonical verification
+  runs independent cases in a bounded parallel pool with complete aggregate evidence.
+  Models/adapters live in top-level `quint/`; Linux CI enforces and measures an
+  aggregate memory/CPU envelope while retaining existing consumer/platform tests.
+  Cancellation is rejected after resource accounting and final cleanup, with
+  required deterministic real-cgroup regressions for both post-exit boundaries.
+  Canonical/focused publication and private-checker teardown also reject late
+  cancellation, retaining incomplete evidence and failure diagnostics.
 - SSH profiles can connect to Windows Herdr 0.9.1+ sessions through Windows
   PowerShell, with optional executable and session selection. Unix-only remote
   file, Git and history tools explain their limitations.

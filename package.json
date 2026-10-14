@@ -72,7 +72,16 @@
     "start:server": "bun run --filter herdr-world-server start",
     "spec": "openspec",
     "spec:check": "openspec validate --all --strict --no-interactive",
-    "typecheck:bun": "bun scripts/check-bun-types.ts"
+    "typecheck:bun": "bun scripts/check-bun-types.ts",
+    "verification:setup": "bun scripts/verification-setup.ts",
+    "verification:diagnostic-control": "bun scripts/verification-diagnostic-control.ts",
+    "verification:check": "bun scripts/verification-check.ts",
+    "verification:typecheck": "tsc --noEmit -p quint/tsconfig.json",
+    "verification:notices": "bun scripts/verification-notices.ts",
+    "verification:notices:check": "bun scripts/verification-notices.ts --check",
+    "check:delivery": "bun run check && bun run verification:gate",
+    "verification:gate": "bun run verification:setup && bun run verification:typecheck && bun run verification:notices:check && bun run verification:check && bun run verification:diagnostic-control",
+    "verification:resources": "bun scripts/verification-resources.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.15",

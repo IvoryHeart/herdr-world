@@ -164,9 +164,15 @@ jobs:
         if: needs.validation-scope.outputs.mode == 'full'
         uses: ./.github/workflows/world-browser.yml
 
+    behavioral:
+        name: Behavioral verification
+        needs: validation-scope
+        if: needs.validation-scope.outputs.mode != 'reuse'
+        uses: ./.github/workflows/behavioral-verification.yml
+
     delivery:
         name: Delivery checks
-        needs: [validation-scope, validation, world-browser]
+        needs: [validation-scope, validation, world-browser, behavioral]
         if: always()
         runs-on: ubuntu-latest
         steps:
@@ -188,6 +194,7 @@ jobs:
                   SCOPE_RESULT: ${{ needs.validation-scope.result }}
                   VALIDATION_RESULT: ${{ needs.validation.result }}
                   WORLD_RESULT: ${{ needs.world-browser.result }}
+                  BEHAVIORAL_RESULT: ${{ needs.behavioral.result }}
               run: bun scripts/ci-delivery-result.ts
             - name: Verify documentation or reused results
               if: needs.validation-scope.outputs.mode != 'full'
@@ -196,6 +203,7 @@ jobs:
                   SCOPE_RESULT: ${{ needs.validation-scope.result }}
                   VALIDATION_RESULT: ${{ needs.validation.result }}
                   WORLD_RESULT: ${{ needs.world-browser.result }}
+                  BEHAVIORAL_RESULT: ${{ needs.behavioral.result }}
               run: bun scripts/ci-delivery-result.ts
 
     launchd:

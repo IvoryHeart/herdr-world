@@ -842,6 +842,7 @@ const preparedRooms = new WeakMap<WorldSpaceObject, ProjectedRoom>();
 export async function prepareWorldOffice(
   world: WorldObject,
   isCurrent: () => boolean = () => true,
+  yieldTask: () => Promise<void> = yieldWorldTask,
 ): Promise<void> {
   const hosts = new Map(
     world.hosts.map((host, displayOrder): [string, OfficeHost] => [
@@ -936,13 +937,13 @@ export async function prepareWorldOffice(
       OFFICE_PRESENTATION_BOUNDS.barAgents,
       compareBarAgents,
     );
-    if (index % 32 === 31) await yieldWorldTask();
+    if (index % 32 === 31) await yieldTask();
   }
   if (isCurrent()) {
     preparedBarAgents.set(world, bar);
     preparedOffice.set(world, observation);
   }
-  await yieldWorldTask();
+  await yieldTask();
 }
 
 function projectRoom(space: WorldSpaceObject, host: OfficeHost): ProjectedRoom {

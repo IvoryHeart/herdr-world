@@ -30,6 +30,21 @@ and review repairs, invoke the repo-local
 For an optional visible two-agent run, use the
 [Herdr Workflows recipe](docs/agent-development.md#run-an-optional-visible-team).
 
+## Behavioral verification
+
+Assess changed contracts against `verification/coverage.json`. Use maintained
+Quint models for ordering, ownership, authority and recovery when exploration
+adds useful evidence; justify direct exhaustive, browser or platform alternatives.
+Derive properties from requirements and allowed/forbidden scenarios before mapping
+implementation. Update relevant contracts, adapters, consumer tests and evidence.
+Mechanical edits require a no-contract-impact explanation, not a new model.
+Run complete required verification for model/contract/adapter/tooling/consumer
+changes; focused `--case` checks do not replace it. Bounded contracts and consumer
+mappings have independent promotion acceptance. Pre-push runs `check:delivery`,
+and behavioral verification is a required protected `Delivery checks` dependency.
+Final acceptance of the implementation and gate/resource repairs remains separate.
+See `verification/README.md` and CONTRIBUTING.md for current boundaries.
+
 ## Product shape
 
 Herdr World is one Bun service and same-origin React Web/PWA application. The service
@@ -81,7 +96,8 @@ bun install --frozen-lockfile
 
 Use focused tests and type checks when they answer a specific question. The
 pre-commit hook checks formatting and lint without writing files; the pre-push
-hook runs `bun run check` for code changes. A Markdown-only follow-up uses
+hook runs `bun run check:delivery` for code changes, including the unfiltered
+verification gate and diagnostic control. A Markdown-only follow-up uses
 `bun run check:docs` only when a successful full gate already covers its code.
 CI runs documentation checks for Markdown-only PR diffs and full checks for code
 changes. Browser tests require Chrome/Chromium or `CHROME_BIN`:

@@ -1,0 +1,56 @@
+name: Behavioral verification
+
+# Accepted bounded contracts; protected Delivery checks depend on this workflow.
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: behavioral-verification-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  candidate:
+    name: Behavioral verification
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: "1.4.3"
+          no-cache: true
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24.19.0"
+      - name: Select runner Java 21
+        run: |
+          test -n "$JAVA_HOME_21_X64"
+          echo "$JAVA_HOME_21_X64/bin" >> "$GITHUB_PATH"
+      - run: bun install --frozen-lockfile
+      - name: Install locked development tooling and verified checker
+        run: bun run verification:setup
+      - name: Validate maintained types and tooling notices
+        run: |
+          bun run verification:typecheck
+          bun run verification:notices:check
+      - name: Run all accepted models within enforced resource limits
+        run: bun run verification:resources --system
+      - name: Exercise a failing candidate and verify retained diagnostics
+        run: bun run verification:diagnostic-control
+      - name: Retain source-bound evidence manifests
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: behavioral-evidence-${{ github.run_attempt }}
+          path: |
+            .agents/verification/runs/**/manifest.json
+            .agents/verification/diagnostics/**
+            .agents/verification/resources/**/resources.json
+          if-no-files-found: error
+          retention-days: 14
