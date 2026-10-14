@@ -1,6 +1,7 @@
 import { useEffectCallback } from "../useEffectCallback";
 import { preferencesStorageKey } from "../workspaceResource";
 import { subscribeLocalStorage } from "../browserStorage";
+import { useLayoutPreferences } from "../layoutPreferences";
 import { connectionClientScopeKey } from "../useConnectionClient";
 import {
   WindowControls,
@@ -363,6 +364,7 @@ export function WorkspaceInspectorHost({
   const diffViewerRef = useRef<DiffViewerPanelHandle | null>(null);
   const splitId = useId();
   const [hostWidth, setHostWidth] = useState(0);
+  const { mobile } = useLayoutPreferences();
   const [fileDiffState, setFileDiffState] = useState<{
     resourceKey: string;
     entries: GitDiffEntry[];
@@ -572,6 +574,7 @@ export function WorkspaceInspectorHost({
       data-view={state.view}
     >
       <header
+        hidden={mobile && state.view === "terminal"}
         className={`workspace-inspector-head ${
           controlMode === "floating"
             ? "is-window-drag-handle"

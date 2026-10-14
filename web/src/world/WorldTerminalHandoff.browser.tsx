@@ -1709,6 +1709,47 @@ async function run() {
         .length === 1,
     "compact visual presentation showed one Inspector",
   );
+  const mobileInspector = [
+    ...document.querySelectorAll<HTMLElement>(".workspace-inspector"),
+  ].find((inspector) => inspector.getBoundingClientRect().width > 0)!;
+  const mobileHeader = mobileInspector.querySelector<HTMLElement>(
+    ".workspace-inspector-head",
+  )!;
+  check(
+    mobileHeader.getBoundingClientRect().height === 0,
+    "mobile terminal title and resource bars consume no terminal height",
+  );
+  const mobileInput = mobileInspector.querySelector<HTMLButtonElement>(
+    'button[aria-label="Open terminal input"]',
+  );
+  check(
+    !!mobileInput,
+    "mobile Inspector offers the shared terminal input panel",
+  );
+  mobileInput?.click();
+  await until(
+    () => !!mobileInspector.querySelector(".terminal-composer"),
+    "mobile Inspector opens the same Composer panel as Spaces",
+  );
+  check(
+    !!mobileInspector.querySelector(
+      '.terminal-composer input[value="composer"]',
+    ) &&
+      !!mobileInspector.querySelector(
+        '.terminal-composer input[value="direct"]',
+      ) &&
+      !!mobileInspector.querySelector(".terminal-composer textarea"),
+    "mobile Inspector panel includes Composer, Direct and the draft editor",
+  );
+  mobileInspector
+    .querySelector<HTMLButtonElement>(
+      'button[aria-label="Close terminal input"]',
+    )
+    ?.click();
+  await until(
+    () => !mobileInspector.querySelector(".terminal-composer"),
+    "mobile Inspector input closes without losing its terminal",
+  );
   const compactArrangeTrigger = () =>
     document.querySelector<HTMLButtonElement>(
       '.mobile-nav button[aria-label="Arrange windows"]',
@@ -3216,7 +3257,7 @@ async function run() {
     () =>
       persistentReviewerInspector?.getAttribute("data-view") === "terminal" &&
       persistentReviewerInspector.querySelector(
-        'button[aria-label="Open device keyboard"]',
+        'button[aria-label="Open terminal input"]',
       ),
     "compact Inspector Terminal view",
   );
@@ -3226,7 +3267,7 @@ async function run() {
   );
   const compactKeyboardButton =
     persistentReviewerInspector!.querySelector<HTMLButtonElement>(
-      'button[aria-label="Open device keyboard"]',
+      'button[aria-label="Open terminal input"]',
     )!;
   const compactShortcutButton =
     persistentReviewerInspector!.querySelector<HTMLButtonElement>(
@@ -3258,8 +3299,9 @@ async function run() {
   compactKeyboardButton.click();
   await until(
     () =>
-      document.activeElement === terminalInput(persistentReviewerInspector!),
-    "compact World Inspector device keyboard focus",
+      persistentReviewerInspector?.querySelector(".terminal-composer") ===
+      document.activeElement,
+    "compact World Inspector opens Composer with neutral focus",
   );
   compactFilesButton.click();
   await until(
@@ -3288,7 +3330,7 @@ async function run() {
         .querySelector(".workspace-surface-owner")
         ?.classList.contains("is-inactive") &&
       document.querySelector(
-        '.workspace-terminal-surface button[aria-label="Open device keyboard"]',
+        '.workspace-terminal-surface button[aria-label="Open terminal input"]',
       ),
     "Spaces handoff",
   );
