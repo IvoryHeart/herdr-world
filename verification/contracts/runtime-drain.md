@@ -70,4 +70,4 @@ Those consumer/platform behaviors retain dedicated integration evidence.
 
 Run maintained verification/typecheck commands and normal Bun tests. This closes
 the explicitly stated delayed-transport administrative composition gap for the
-bounded scenarios. Review 5516249164 independently accepts administration, lease and drain composition within the documented bounds. Three-seed larger-bound and host-order checks and actual consumer/platform obligations remain required by the implemented local/protected gate. Final acceptance of subsequent gate/resource repairs remains separate.
+bounded scenarios. Review 5516249164 independently accepts administration, lease and drain composition within the documented bounds. Three-seed larger-bound and host-order checks and actual consumer/platform obligations remain required by the implemented local/protected gate. Final implementation/gate/resource acceptance is recorded in [review 5517420140](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5517420140); owner-approved PR #188 merged as `481ca1e8`. Mandatory consumers and excluded claims remain binding.

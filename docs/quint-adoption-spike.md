@@ -8,7 +8,7 @@ reviewed model boundaries and implementation evidence.**
 Promote executable models into required checks as their implementation connections
 and assumptions become reviewable. The spike itself remains experimental; this
 report proposes a policy and does not enact it. The
-[adoption proposal](../openspec/changes/adopt-quint-behavioral-verification/proposal.md)
+[adoption proposal](../openspec/changes/archive/2026-10-14-adopt-quint-behavioral-verification/proposal.md)
 and its design/tasks define the reviewable implementation plan.
 
 Broad adoption requires careful, selective modeling and review before promotion.

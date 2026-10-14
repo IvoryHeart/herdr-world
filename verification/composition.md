@@ -31,7 +31,11 @@ IDs cannot use that compatibility path. The new generation-omission fault contro
 checks this real Bridge boundary. No socket, epoch, readiness or UI intent token
 substitutes for another identity. Ranger permission and durable identity now have distinct implementation-connected
 models. Their supplied predicates, scheduler admission and storage assumptions
-still require independent consumer review.
+remain mandatory consumer obligations.
 
-All new mappings await independent review. This record identifies evidence and
-assumptions; it is not acceptance or permission to activate unreviewed model gates.
+All mappings were independently accepted within their documented bounds in
+[review 5516249164](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164).
+Final implementation and gate acceptance is recorded in
+[review 5517420140](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5517420140);
+owner-approved PR #188 merged as `481ca1e8`. The consumer obligations and storage
+assumptions above remain binding; acceptance does not extend the documented claims.

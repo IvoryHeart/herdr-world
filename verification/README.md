@@ -14,7 +14,7 @@ checkpoints and a new final review. This does not carry spike acceptance forward
 as approval of expanded models, changed assumptions or activation of the policy.
 
 The baseline references executed CI on the accepted spike. The inventory now has a concrete model, shared-model consumer or justified
-alternative for all 43 areas; their bounded contracts and individual mappings are accepted in [review 5516249164](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164). Final gate/resource approval remains outstanding.
+alternative for all 43 areas; their bounded contracts and individual mappings are accepted in [review 5516249164](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164). Final implementation/gate/resource acceptance is recorded in [review 5517420140](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5517420140); owner-approved PR #188 merged as `481ca1e8`. Mandatory consumers and excluded claims remain binding.
 [Consumer decisions](consumer-evidence.md) record the rationale and limits. Existing
 delivered product changes are not reopened solely to add a formal-model label.
 
@@ -70,8 +70,8 @@ check that the intended prohibition is exercised, rather than assumed away.
    declared limitations and independent final review of the expanded implementation.
 
 Record concrete coverage, pending work, required commands and acceptance boundaries
-with each functional checkpoint. Do not archive the adoption change or describe
-the implementation as accepted until its independent final review is complete.
+with each functional checkpoint. The adoption change is archived after independent final acceptance and owner
+approval. Future contract/gate changes require their own applicable review.
 
 ## Candidate commands and promotion
 
@@ -141,7 +141,7 @@ Rerunning `bun quint/run.ts --case <model>` rebuilds excluded fault
 bundles from the tracked sources and locked tools.
 
 [Promotion decisions](promotion-review.md) record independently accepted bounds,
-mandatory consumers and excluded claims; final gate/resource approval remains pending.
+mandatory consumers and excluded claims; Final implementation/gate/resource acceptance is recorded in [review 5517420140](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5517420140); owner-approved PR #188 merged as `481ca1e8`. Mandatory consumers and excluded claims remain binding.
 The [observation progress assessment](contracts/observation-progress.md) separates
 controlled scheduler/deadline evidence from model reachability witnesses and states
 the required event-loop, slot-availability and transport-settlement assumptions.
@@ -187,7 +187,7 @@ The first complete constrained local run measured 1,149,575,168 bytes of aggrega
 peak memory (approximately 1.07 GiB), with zero OOM kills under the hard 4 GiB limit.
 The actual 64 MiB memory control and cancellation/descendant control also passed.
 CI repeats the full envelope and controls; future model growth must remain within
-those bounds or justify a reviewed envelope change. Final approval remains pending.
+those bounds or justify a reviewed envelope change. Final implementation/gate/resource acceptance is recorded in [review 5517420140](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5517420140); owner-approved PR #188 merged as `481ca1e8`. Mandatory consumers and excluded claims remain binding.
 
 Resource acceptance rechecks cancellation after accounting, service drain and the
 final diagnostic write. Successful child exit is not successful wrapper execution.

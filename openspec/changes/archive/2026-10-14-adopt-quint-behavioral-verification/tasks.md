@@ -33,7 +33,7 @@
 ## 6. Integrate policy and required checks
 
 - [x] 6.1 Update agent/contributor guidance and the PR template to require adequate executable evidence, with Quint the normal choice for valuable ordering exploration and reviewed alternatives; verify a modeled change, an unmodeled critical change and a mechanical change without requiring new product specs for routine work.
-- [x] 6.2 Promote accepted checks into required local/CI delivery gates after independent review 5516249164. Local delivery and protected CI integration are implemented; focused gate regressions and the full pre-push/protected CI checkpoint validate the wiring; independent final review remains required.
+- [x] 6.2 Promote accepted checks into required local/CI delivery gates after independent review 5516249164. Local delivery and protected CI integration are implemented; focused gate regressions and the full pre-push/protected CI checkpoint validate the wiring; independent final review is accepted in reviews 5517392425 and 5517420140.
 - [x] 6.3 Validate promoted-check applicability across models, contracts, adapters, tooling and consumers. Candidate CI runs all models without labels/path exclusions and contract/policy Markdown receives full repository gates; model/adapter/consumer/tooling applicability, cancellation and result aggregation must pass the integration checkpoint.
 - [x] 6.4 Measure supported CI resource needs and broader exploration runs; record justified limits and verify supplemental exploration never substitutes for required pre-delivery evidence.
 
@@ -47,9 +47,15 @@
 ## 8. Consolidate and close adoption
 
 - [x] 8.1 Audit several actual deliveries for wrong-property findings, drift, newly exposed ordering gaps and gate reliability; publish evidence and corrections without claiming an unmeasured reduction in production defects.
-- [x] 8.2 Reconcile the knowledge map, adoption analysis and operational guidance with implemented coverage and rollback procedures; verify all 43 entries have concrete model/consumer/alternative decisions and explicit independent-review ownership. Required formal-gate activation and acceptance remain pending; evidence statuses do not silently close those tasks.
-- [ ] 8.3 Run applicable project and model gates, obtain independent acceptance and owner approval of completed adoption, and archive this change only after all authorized implementation and knowledge work is verified.
+- [x] 8.2 Reconcile the knowledge map, adoption analysis and operational guidance with implemented coverage and rollback procedures; verify all 43 entries have concrete model/consumer/alternative decisions and explicit independent-review ownership. Required formal gates are active and final independent acceptance is complete; evidence statuses remain separate from review decisions.
+- [x] 8.3 Run applicable project and model gates, obtain independent acceptance and owner approval of completed adoption, and archive this change only after all authorized implementation and knowledge work is verified.
 
-Independent bounded contract/consumer acceptance: [review 5516249164](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164). Final implementation/gate/resource approval remains separate.
+Independent bounded contract/consumer acceptance: [review 5516249164](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164). Final implementation/gate/resource acceptance is recorded below, separately from bounded contract acceptance.
 
 Resource checkpoint: the entire pool passed locally with a hard 4 GiB cgroup, no swap and 200% CPU quota, measured aggregate peak 1,149,575,168 bytes and no OOM kills. The 64 MiB control was OOM-killed; actual cancellation drained worker and descendant. CI repeats these controls and the existing broader-bound/host-order exploration. This is Linux/systemd evidence, not macOS/Windows resource certification.
+
+## Accepted completion and archival
+
+Independent final acceptance: [review 5517392425](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5517392425) and [review 5517420140](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5517420140). Owner explicitly approved merge with a waiver, then separately authorized archival. PR #188 merged as `481ca1e817bb1fefb7ea1e24fe4adc2a8021333e`. The reviewed source head was `4e664ec2`; [exact-head full CI](https://github.com/IvoryHeart/herdr-world/actions/runs/38557803713) passed, including eleven models/180 commands, protected delivery, browser shards and both macOS lifecycle jobs.
+
+Spec synchronization is a verified no-op: `.openspec.yaml` declares `skip_specs: true`, with no capability deltas. Existing product requirements remain unchanged. Finite bounds, mandatory consumer/platform tests, SQLite/crash assumptions, conditional progress and historical unexplained browser timing failures remain binding. Archival closes implementation planning; it does not expand the accepted claims.
