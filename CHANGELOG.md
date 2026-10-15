@@ -92,6 +92,15 @@ are optional because the merged PR history records their source.
 
 ### Changed
 
+- Follow phone platform conventions on mobile. Office, Graph, Desk and Spaces
+  switch from a bottom navigation bar, replacing the view switcher. Terminal
+  screens show Back, the terminal's name as a workspace switcher, Tabs and a ⋮
+  menu that holds the former floating controls. A Message bar below the output
+  raises the keyboard in Composer with one tap, beside a Direct button. Tabs
+  lists the visible terminal's workspace, and choosing one opens its terminal.
+  The phone's Back gesture closes the newest menu, sheet, Composer or terminal
+  before leaving the scene.
+
 - Remove the mobile Office targets row and visible title-bar summary counts to
   give the Office scene more room. Canvas controls and search remain available.
 - Ranger settings and chat history use clearer sections; compact conversations
