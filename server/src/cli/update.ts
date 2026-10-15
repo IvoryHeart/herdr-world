@@ -6,6 +6,7 @@ import {
   xmlEscape,
 } from "../config/service-definitions";
 import {
+  updateInstallationBlockReason,
   compareVersion,
   curlTransportArgs,
   fetchLatestUpdateManifest,
@@ -172,6 +173,15 @@ export function createUpdateCommand(
         context.error(
           "herdr-world update: only the standalone binary can update itself; pull and rebuild source checkouts.",
         );
+        return EXIT_FAILURE;
+      }
+
+      const blockReason = updateInstallationBlockReason(
+        context.version,
+        runtime.execPath,
+      );
+      if (blockReason) {
+        context.error(`herdr-world update: ${blockReason}`);
         return EXIT_FAILURE;
       }
 

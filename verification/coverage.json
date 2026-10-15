@@ -1310,7 +1310,8 @@
         "server/src/http/herdr-setup.test.ts",
         "server/src/http/update.test.ts",
         "server/src/http/update-install.test.ts",
-        "server/src/config/service-manager.test.ts"
+        "server/src/config/service-manager.test.ts",
+        "scripts/world-plugin.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/186",
       "technique": "alternative",
@@ -1318,7 +1319,7 @@
       "status": "alternative-evidence",
       "remaining": "OS service managers and downloaded artifacts require supported-platform CI/live evidence; environment-gated checks must report prerequisites/skips.",
       "requiredChecks": ["bun run check", "bun run verification:gate"],
-      "evidenceDecision": "Real setup/update/service tests exercise verified assets, replacement failures, request budgets and installation ownership.",
+      "evidenceDecision": "Real setup/update/service tests exercise verified assets, replacement failures, request budgets, saved default diagnostic precedence, package/plugin and preview ownership guards, and moved generated service paths without forcing custom definitions.",
       "partialEvidence": {
         "models": [],
         "contracts": ["verification/consumer-evidence.md"],
@@ -1326,7 +1327,8 @@
           "server/src/http/herdr-setup.test.ts",
           "server/src/http/update.test.ts",
           "server/src/http/update-install.test.ts",
-          "server/src/config/service-manager.test.ts"
+          "server/src/config/service-manager.test.ts",
+          "scripts/world-plugin.test.ts"
         ],
         "checks": ["bun run check"],
         "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."

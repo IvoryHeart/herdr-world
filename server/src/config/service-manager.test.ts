@@ -355,6 +355,43 @@ describe("service commands", () => {
     ).toBe(false);
   });
 
+  test("non-forced reinstall refreshes a moved generated executable", () => {
+    const homeDir = tempHome();
+    const commands: string[][] = [];
+    const install = (execPath: string) =>
+      runServiceCommand(["service", "install"], {
+        runtime: {
+          platform: "linux",
+          homeDir,
+          execPath,
+          argv: [execPath, "service", "install"],
+          uid: 1000,
+        },
+        runCommand: (argv) => {
+          commands.push(argv);
+          return 0;
+        },
+        getLanIPs: () => [],
+        log: () => undefined,
+      });
+    expect(install("/opt/old-plugin/herdr-world")).toBe(0);
+    commands.length = 0;
+    expect(install("/opt/new-plugin/herdr-world")).toBe(0);
+    const definition = readFileSync(
+      join(homeDir, ".config/systemd/user/herdr-world.service"),
+      "utf8",
+    );
+    expect(definition).toContain("ExecStart=/opt/new-plugin/herdr-world");
+    expect(definition).not.toContain("/opt/old-plugin");
+    expect(commands).toContainEqual(["systemctl", "--user", "daemon-reload"]);
+    expect(commands).toContainEqual([
+      "systemctl",
+      "--user",
+      "restart",
+      "herdr-world.service",
+    ]);
+  });
+
   test("preserves a managed custom wrapper command", () => {
     const homeDir = tempHome();
     const definitionPath = join(

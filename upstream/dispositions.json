@@ -182,7 +182,7 @@
       "commit": "f6589cf2e050ddd784d9ffc538943f3016a2dd83",
       "title": "Refresh the service path when restarting the Herdr plugin (#412)",
       "status": "adapted",
-      "reason": "Preserve World launcher service delegation and executable-path ownership instead of copying upstream plugin identity.",
+      "reason": "World plugin restart and panel restart delegate to non-forced service install, refreshing moved generated executable paths while preserving custom service definitions and frozen launcher verbs.",
       "evidence": [
         "scripts/world-plugin.ts",
         "scripts/world-plugin.test.ts",

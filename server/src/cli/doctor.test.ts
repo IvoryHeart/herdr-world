@@ -3,6 +3,10 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { EXIT_FAILURE, EXIT_OK } from "./command";
 import { createDoctorCommand, type DoctorDependencies } from "./doctor";
+import {
+  ConnectionProfileStore,
+  type ConnectionProfile,
+} from "../connections/profiles";
 import { createTestCli, type TestCli } from "./test-context";
 
 let cli: TestCli;
@@ -83,6 +87,111 @@ describe("herdr-world doctor", () => {
     expect(check("Herdr").status).toBe("skip");
     expect(check("Web Push").status).toBe("skip");
     expect(check("Updates").status).toBe("skip");
+  });
+
+  function saveDefault(profile: ConnectionProfile) {
+    return new ConnectionProfileStore({
+      path: join(cli.home, ".config", "herdr-world", "connections.json"),
+    }).save({
+      version: 2,
+      default_connection_id: profile.id,
+      profiles: [profile],
+    });
+  }
+
+  const remote: ConnectionProfile = {
+    id: "remote",
+    label: "Remote",
+    type: "ssh",
+    ssh_destination: "host.example",
+    remote_control_socket_path: "/tmp/herdr.sock",
+    remote_client_socket_path: "/tmp/herdr-client.sock",
+    auto_connect: true,
+  };
+
+  test("a saved SSH default needs no unused local Herdr", async () => {
+    cli = createTestCli();
+    cli.writeConfig("");
+    await saveDefault(remote);
+    let probes = 0;
+    const { code, check } = await doctor({
+      ...healthy,
+      testSockets: async () => {
+        probes++;
+        throw new Error("ENOENT");
+      },
+    });
+    expect(code).toBe(EXIT_OK);
+    expect(check("Herdr").status).toBe("skip");
+    expect(check("Herdr").detail).toContain("host.example");
+    expect(probes).toBe(0);
+  });
+
+  test("a saved local default probes its own sockets", async () => {
+    cli = createTestCli();
+    cli.writeConfig("");
+    const control = join(cli.home, "custom.sock"),
+      client = join(cli.home, "custom-client.sock");
+    await saveDefault({
+      id: "local",
+      label: "Local",
+      type: "local",
+      control_socket_path: control,
+      client_socket_path: client,
+      auto_connect: true,
+    });
+    const probes: string[][] = [];
+    const { code } = await doctor({
+      ...healthy,
+      testSockets: async (...paths) => {
+        probes.push(paths);
+        return { ok: true, version: null, protocol: 7 };
+      },
+    });
+    expect(code).toBe(EXIT_OK);
+    expect(probes).toEqual([[control, client]]);
+  });
+
+  test("an explicit SSH target wins over a saved local default", async () => {
+    cli = createTestCli();
+    cli.writeConfig("HERDR_SSH_HOST=explicit.example\n");
+    await saveDefault({
+      id: "local",
+      label: "Local",
+      type: "local",
+      control_socket_path: "/tmp/custom.sock",
+      client_socket_path: "/tmp/custom-client.sock",
+      auto_connect: true,
+    });
+    const { code, check } = await doctor({
+      ...healthy,
+      testSockets: async () => {
+        throw new Error("must not probe local");
+      },
+    });
+    expect(code).toBe(EXIT_OK);
+    expect(check("Herdr").status).toBe("skip");
+    expect(check("Herdr").detail).toContain("explicit.example");
+  });
+
+  test.each([
+    "HERDR_SOCKET_PATH=/tmp/explicit.sock",
+    "HERDR_CLIENT_SOCKET_PATH=/tmp/explicit-client.sock",
+    "HERDR_SESSION=example",
+  ])("startup override %s wins over saved SSH default", async (override) => {
+    cli = createTestCli();
+    cli.writeConfig(override + "\n");
+    await saveDefault(remote);
+    let probes = 0;
+    const { check } = await doctor({
+      ...healthy,
+      testSockets: async () => {
+        probes++;
+        return { ok: true, version: null, protocol: 7 };
+      },
+    });
+    expect(check("Herdr").status).toBe("ok");
+    expect(probes).toBe(1);
   });
 
   test("warns about available updates", async () => {

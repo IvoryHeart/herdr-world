@@ -205,6 +205,24 @@ export function compareVersion(a: string, b: string): number {
   return 0;
 }
 
+/** Installation ownership and release identity apply to every replacement entry point. */
+export function updateInstallationBlockReason(
+  appVersion: string,
+  execPath: string,
+): string | undefined {
+  if (/^0\.0\.0-rc\.\d+$/.test(appVersion)) {
+    return "Pre-merge previews have no update channel.";
+  }
+  const executableDir = dirname(execPath);
+  if (
+    existsSync(join(executableDir, "VERSION")) ||
+    existsSync(join(dirname(executableDir), "package.json"))
+  ) {
+    return "This installation is managed by a package or plugin. Update it through its installation channel.";
+  }
+  return undefined;
+}
+
 /**
  * Verify and atomically install a release over targetPath, keeping the old
  * executable as targetPath.previous. Shared by the in-app and CLI updaters.
@@ -461,12 +479,12 @@ export function createUpdateHandlers({
     reason?: string;
     targetPath?: string;
   } {
-    if (/^0\.0\.0-rc\.\d+$/.test(appVersion)) {
-      return {
-        canAutoUpdate: false,
-        reason: "Pre-merge previews have no update channel.",
-      };
-    }
+    const installationBlockReason = updateInstallationBlockReason(
+      appVersion,
+      runtime.execPath,
+    );
+    if (installationBlockReason)
+      return { canAutoUpdate: false, reason: installationBlockReason };
     if (!updateTarget) {
       return {
         canAutoUpdate: false,
@@ -479,17 +497,6 @@ export function createUpdateHandlers({
       return {
         canAutoUpdate: false,
         reason: "Auto update is only available in the standalone binary.",
-      };
-    }
-    const executableDir = dirname(runtime.execPath);
-    if (
-      existsSync(join(executableDir, "VERSION")) ||
-      existsSync(join(dirname(executableDir), "package.json"))
-    ) {
-      return {
-        canAutoUpdate: false,
-        reason:
-          "This installation is managed by a package or plugin. Update it through its installation channel.",
       };
     }
     if (!isSupervisorManagedEnvironment(environment)) {

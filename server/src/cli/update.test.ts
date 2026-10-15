@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { chmodSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { EXIT_FAILURE, EXIT_OK } from "./command";
 import { createUpdateCommand, rollbackCommand } from "./update";
 import { createTestCli, type TestCli } from "./test-context";
@@ -93,6 +93,35 @@ describe("herdr-world update", () => {
       await createUpdateCommand(fakeProcess("1.3.0")).run([], cli.context),
     ).toBe(EXIT_FAILURE);
   });
+
+  test.each(["VERSION", "package.json", "preview"])(
+    "refuses replacement for %s without invoking the installer",
+    async (ownership) => {
+      cli = createTestCli();
+      if (ownership === "preview") cli.context.version = "0.0.0-rc.193";
+      else {
+        const directory = dirname(cli.context.runtime.execPath);
+        mkdirSync(directory, { recursive: true });
+        writeFileSync(
+          join(
+            ownership === "VERSION" ? directory : dirname(directory),
+            ownership,
+          ),
+          "managed",
+        );
+      }
+      const fake = fakeProcess("1.3.0");
+      expect(await createUpdateCommand(fake).run([], cli.context)).toBe(
+        EXIT_FAILURE,
+      );
+      expect(fake.calls.some((argv) => argv[0] === "sh")).toBe(false);
+      expect(cli.errors.join("\n")).toContain(
+        ownership === "preview"
+          ? "Pre-merge previews have no update channel"
+          : "installation channel",
+      );
+    },
+  );
 
   test("explains platforms without update packages", async () => {
     cli = createTestCli({ runtime: { platform: "win32" } });

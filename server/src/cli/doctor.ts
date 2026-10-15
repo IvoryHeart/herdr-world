@@ -2,7 +2,11 @@ import { X509Certificate } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { worldEnv } from "../config/environment";
 import { getLanIPs, isAnyHost } from "../config/server-config";
-import { testConnectionSockets } from "../connections/profile-service";
+import {
+  loadConnectionProfileBootstrap,
+  testConnectionSockets,
+} from "../connections/profile-service";
+import { STARTUP_DEFAULT_CONNECTION_ID } from "../connections/types";
 import { ConnectionProfileStore } from "../connections/profiles";
 import { herdrServiceStatus } from "../herdr/service";
 import {
@@ -265,7 +269,50 @@ async function herdrCheck(
       detail: `remote Herdr over SSH (${setup.env.HERDR_SSH_HOST})`,
       hint: "Run `herdr-world connections test` to check the SSH connection.",
     };
-  const sockets = serviceHerdrSockets(context.runtime, setup.env);
+  let sockets = serviceHerdrSockets(context.runtime, setup.env);
+  let savedLocal = false;
+  try {
+    const bootstrap = loadConnectionProfileBootstrap({
+      store: new ConnectionProfileStore({
+        path: connectionRegistryPath(context.runtime, setup.env),
+      }),
+      startupProfile: {
+        id: STARTUP_DEFAULT_CONNECTION_ID,
+        label: "Local",
+        type: "local",
+        control_socket_path: sockets.socketPath,
+        client_socket_path: sockets.clientSocketPath,
+        auto_connect: true,
+      },
+      explicitStartupOverride: Boolean(
+        setup.env.HERDR_SOCKET_PATH ||
+          setup.env.HERDR_CLIENT_SOCKET_PATH ||
+          setup.env.HERDR_SSH_HOST ||
+          setup.env.HERDR_SESSION,
+      ),
+    });
+    const profile = bootstrap.registrations.find(
+      ({ profile }) => profile.id === bootstrap.defaultConnectionId,
+    )?.profile;
+    if (profile?.type === "ssh")
+      return {
+        name: "Herdr",
+        status: "skip",
+        detail: `remote Herdr over SSH (${profile.ssh_destination})`,
+        hint: "Run `herdr-world connections test` to check the SSH connection.",
+      };
+    if (profile?.type === "local") {
+      sockets = {
+        socketPath: profile.control_socket_path,
+        clientSocketPath: profile.client_socket_path,
+      };
+      savedLocal =
+        !bootstrap.explicitStartupOverride && !!bootstrap.persistedRegistry;
+    }
+  } catch {
+    // Startup also falls back to legacy sockets; Connections reports the invalid registry.
+  }
+
   let managed = "";
   try {
     const service = dependencies.herdrService();
@@ -292,9 +339,11 @@ async function herdrCheck(
       name: "Herdr",
       status: "fail",
       detail: `cannot reach ${sockets.socketPath}: ${(error as Error).message}${managed}`,
-      hint: explicit
-        ? "Check HERDR_SOCKET_PATH and HERDR_CLIENT_SOCKET_PATH with `herdr-world config show`."
-        : "Run `herdr-world herdr setup` to install and start Herdr.",
+      hint: savedLocal
+        ? "Run `herdr-world connections test` to check the saved local connection."
+        : explicit
+          ? "Check HERDR_SOCKET_PATH and HERDR_CLIENT_SOCKET_PATH with `herdr-world config show`."
+          : "Run `herdr-world herdr setup` to install and start Herdr.",
     };
   }
 }
