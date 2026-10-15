@@ -123,6 +123,7 @@ import {
   type MobileControls,
   MobileTerminalAppBar,
   usePublishMobileControls,
+  useVisibleTerminalWorkspaceId,
 } from "./components/MobileControls";
 import { useSystemBack } from "./systemBack";
 import { requestClosePane, requestCloseTab, TabBar } from "./components/TabBar";
@@ -1254,15 +1255,20 @@ export default function App({
           tab.workspace_id === focusedWorkspace?.workspace_id,
       ),
   );
+  const visibleTerminalWorkspaceId = useVisibleTerminalWorkspaceId();
   const { workspace: tabWorkspace, tabCount: focusedWorkspaceTabCount } =
     useStoreSelector((state) => {
       const snapshot =
         hasWorkspaceSurface && workspaceSurfaceContext
           ? connectionSnapshot(state, workspaceSurfaceContext.connectionId)
           : state;
-      const workspace = snapshot.workspaces.find(
-        (candidate) => candidate.focused,
-      );
+      const workspace =
+        (visibleTerminalWorkspaceId &&
+          snapshot.workspaces.find(
+            (candidate) =>
+              candidate.workspace_id === visibleTerminalWorkspaceId,
+          )) ||
+        snapshot.workspaces.find((candidate) => candidate.focused);
       return {
         workspace,
         tabCount: snapshot.tabs.filter(
@@ -4430,6 +4436,7 @@ export default function App({
             onClose={() => setMobileTabSheetOpen(false)}
             onShowSession={activateTerminalSurface}
             onSelectTab={focusExplicitTab}
+            workspaceId={tabWorkspace?.workspace_id}
           />
         </OperationalContext.Provider>
         <button

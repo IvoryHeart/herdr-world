@@ -27,6 +27,7 @@ export type MobileControls = {
 };
 
 type MobileTerminalIdentity = {
+  workspaceId: string;
   agent: string;
   place: string;
   status: AgentStateKind;
@@ -96,12 +97,23 @@ export function usePublishMobileTerminal(
   );
   const agent = pane?.display_agent?.trim() || pane?.agent?.trim() || "";
   const status = agentStateKind(pane?.agent_status);
+  const workspaceId = pane?.workspace_id ?? "";
   const visible = active && !!pane;
   useLayoutEffect(() => {
     if (!visible) return;
-    terminalStore.set({ agent: agent || "Terminal", place, status });
+    terminalStore.set({
+      workspaceId,
+      agent: agent || "Terminal",
+      place,
+      status,
+    });
     return () => terminalStore.set(null);
-  }, [visible, agent, place, status]);
+  }, [visible, workspaceId, agent, place, status]);
+}
+
+/** The workspace of the terminal on screen, which Tabs should follow. */
+export function useVisibleTerminalWorkspaceId() {
+  return useStoreValue(terminalStore)?.workspaceId ?? null;
 }
 
 const STATUS_LABEL: Record<AgentStateKind, string> = {
