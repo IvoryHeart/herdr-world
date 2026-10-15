@@ -8,8 +8,14 @@ with their resolution PR so historical records retain a destination.
 
 ## Bun-free plugin installation
 
-Status: deferred, proposed by the integration agent; acceptance requires human
-review of this PR. Source: Roamgate ffca28f2 (#415), v0.8.4.
+Status: implementation proposed; acceptance remains open pending supported-platform
+CI evidence and independent human review. Source: Roamgate ffca28f2 (#415), v0.8.4.
+The candidate adds native World plugin commands and system installers, preserves
+cached launcher argv and adds Unix, Windows and compiled compatibility regressions.
+Local Linux checks cannot establish Windows installation or macOS launchd behavior;
+the Windows installer job and both launchd architectures supply that platform evidence.
+The ledger remains deferred until acceptance is verified. Record the resolution PR
+after that reviewed delivery; no resolution or human approval is claimed here.
 Owner: repository owner prioritizes and approves; the integration agent revisits
 and proposes a compatible implementation, independently reviewed before merge.
 

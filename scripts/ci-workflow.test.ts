@@ -113,6 +113,7 @@ test("CI exposes the protected delivery gate and runs the complete repository ch
     "validation",
     "world-browser",
     "behavioral",
+    "plugin-windows",
   ]);
   expect(delivery?.if).toBe("always()");
   expect(
@@ -349,4 +350,27 @@ test("accepted behavioral evidence is an unfiltered protected delivery dependenc
   )) {
     expect(step.env?.BEHAVIORAL_RESULT).toBe("${{ needs.behavioral.result }}");
   }
+});
+
+test("CI checks native plugin compatibility on Windows and both macOS architectures", () => {
+  const windows = workflow.jobs["plugin-windows"];
+  expect(windows["runs-on"]).toBe("windows-latest");
+  expect(workflow.jobs.delivery.needs).toContain("plugin-windows");
+  expect(
+    workflow.jobs.delivery.steps.find(
+      (step) => step.name === "Require Windows plugin evidence",
+    )?.run,
+  ).toBe('test "$WINDOWS_PLUGIN_RESULT" = success');
+  expect(
+    windows.steps.some((step) =>
+      step.run?.includes(
+        "scripts/install-plugin.windows.test.ts scripts/plugin-native.test.ts server/src/config/plugin-command.test.ts",
+      ),
+    ),
+  ).toBe(true);
+  expect(
+    workflow.jobs.launchd.steps.some((step) =>
+      step.run?.includes("cp server/herdr-world server/herdr-world-plugin.exe"),
+    ),
+  ).toBe(true);
 });
