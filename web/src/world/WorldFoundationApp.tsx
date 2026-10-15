@@ -59,6 +59,7 @@ import {
   focusWorldNode,
   activateWorldNodeHost,
 } from "./worldInspectorSelection";
+import { useSystemBack } from "../systemBack";
 import { WorldControlPlane } from "./WorldControlPlane";
 import { EMPTY_VISUAL_ACTION_EXTENSION } from "./worldControlPlaneContract";
 
@@ -254,6 +255,11 @@ export default function WorldFoundationApp() {
     visualArrangementControl &&
     !visualArrangementControl.disabledReasons["close-all"];
   const returnLabel = `Back to ${view[0].toUpperCase()}${view.slice(1)}`;
+  // The phone's Back gesture leaves a terminal for the scene, like the button.
+  useSystemBack(Boolean(canReturnToView), () => {
+    creationIntentRevision.current++;
+    visualArrangementControl?.onSelect("close-all");
+  });
   const activeArrangementControl =
     view === "spaces" ? spaces.arrangementControl : visualArrangementControl;
   useEffect(() => {

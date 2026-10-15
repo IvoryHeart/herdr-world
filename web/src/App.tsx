@@ -121,8 +121,10 @@ import { GlobalTooltip } from "./components/GlobalTooltip";
 import { MobileTabSheet } from "./components/MobileTabSheet";
 import {
   type MobileControls,
+  MobileTerminalAppBar,
   usePublishMobileControls,
 } from "./components/MobileControls";
+import { useSystemBack } from "./systemBack";
 import { requestClosePane, requestCloseTab, TabBar } from "./components/TabBar";
 import type { WindowArrangementControl } from "./components/TabBar";
 import { WindowArrangementMenu } from "./components/WindowArrangementMenu";
@@ -4129,6 +4131,7 @@ export default function App({
         )}
       </div>
       <div className="topbar-actions">
+        {mobile ? <MobileTerminalAppBar /> : null}
         {!mobile && arrangementControl ? (
           <WindowArrangementMenu control={arrangementControl} />
         ) : null}
@@ -4214,6 +4217,8 @@ export default function App({
       }
     : null;
   usePublishMobileControls(mobileControls);
+  useSystemBack(mobileMoreOpen, () => setMobileMoreOpen(false));
+  useSystemBack(mobileTabSheetOpen, () => setMobileTabSheetOpen(false));
   return (
     <div
       ref={appRef}
@@ -4260,6 +4265,15 @@ export default function App({
             setMobileMoreOpen(false);
         }}
       >
+        {mobile && mobileMoreOpen ? (
+          <div className="mobile-more-head">
+            <span>More options</span>
+            <CloseButton
+              label="Close menu"
+              onClick={() => setMobileMoreOpen(false)}
+            />
+          </div>
+        ) : null}
         <nav
           className="mobile-nav"
           aria-label="Workspace view switcher"
