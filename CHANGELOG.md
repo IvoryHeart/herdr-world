@@ -37,6 +37,10 @@ are optional because the merged PR history records their source.
 
 ### Fixed
 
+- Keep a visible Back action in the mobile app bar while a visual Inspector is
+  open. Return to Office, Desk, Tree or Graph without terminating terminal
+  sessions or expanding the ellipsis controls.
+
 - Mobile terminals in Office, Desk, Tree and Graph open the shared Spaces
   Composer/Direct input panel. Inspector title and resource bars collapse while
   viewing a mobile terminal; existing mobile navigation keeps resource and window
