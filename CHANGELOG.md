@@ -37,9 +37,13 @@ are optional because the merged PR history records their source.
 
 ### Fixed
 
+- Show the resolved build version in the application menu instead of the
+  development manifest placeholder.
+
 - Keep a visible Back action in the mobile app bar while a visual Inspector is
   open. Return to Office, Desk, Tree or Graph without terminating terminal
-  sessions or expanding the ellipsis controls.
+  sessions or expanding the ellipsis controls. Hide the logo and product name
+  from the mobile app bar to give its navigation controls more space.
 
 - Mobile terminals in Office, Desk, Tree and Graph open the shared Spaces
   Composer/Direct input panel. Inspector title and resource bars collapse while

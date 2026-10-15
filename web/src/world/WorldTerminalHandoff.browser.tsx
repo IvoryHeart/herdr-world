@@ -1090,6 +1090,14 @@ async function run() {
       ),
     "Office settings in common menu",
   );
+  check(
+    Boolean(
+      document
+        .querySelector(".config-summary")
+        ?.textContent?.includes("Version 9.8.7-test"),
+    ),
+    "application menu shows the injected build version instead of the manifest placeholder",
+  );
   const inspectorOpeningSelect = document.querySelector<HTMLSelectElement>(
     'select[aria-label="Office Inspector opening"]',
   )!;

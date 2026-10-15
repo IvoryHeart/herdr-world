@@ -135,6 +135,7 @@ test.skipIf(!chrome)(
         ],
         outdir: dir,
         target: "browser",
+        define: { __HERDR_WORLD_VERSION__: JSON.stringify("9.8.7-test") },
         plugins: [
           {
             name: "short-created-pane-deadline",
