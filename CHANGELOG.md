@@ -45,6 +45,12 @@ are optional because the merged PR history records their source.
 - Bind upstream approval to the reviewed World base, reject obsolete source
   baselines, preserve integration evidence in PR descriptions, and keep failure
   blockers effective when unrelated issues share their title.
+- Mobile terminals in Office, Desk, Tree and Graph open the shared Spaces
+  Composer/Direct input panel. Inspector title and resource bars collapse while
+  viewing a mobile terminal; existing mobile navigation keeps resource and window
+  controls available. The keyboard launcher opens the visible terminal directly;
+  concurrent Inspector drafts and attachments survive input-panel reopening and
+  focused-host changes without admitting retired runtime work.
 
 - Keep retained unavailable Ranger workspace permissions visible and individually
   revocable without clearing unrelated grants.

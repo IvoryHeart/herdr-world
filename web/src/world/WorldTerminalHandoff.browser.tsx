@@ -1709,6 +1709,107 @@ async function run() {
         .length === 1,
     "compact visual presentation showed one Inspector",
   );
+  const mobileInspector = [
+    ...document.querySelectorAll<HTMLElement>(".workspace-inspector"),
+  ].find((inspector) => inspector.getBoundingClientRect().width > 0)!;
+  const mobileHeader = mobileInspector.querySelector<HTMLElement>(
+    ".workspace-inspector-head",
+  )!;
+  check(
+    mobileHeader.getBoundingClientRect().height === 0,
+    "mobile terminal title and resource bars consume no terminal height",
+  );
+  const mobileInput = mobileInspector.querySelector<HTMLButtonElement>(
+    'button[aria-label="Open terminal input"]',
+  );
+  check(
+    !!mobileInput,
+    "mobile Inspector offers the shared terminal input panel",
+  );
+  mobileInput?.click();
+  await until(
+    () => !!mobileInspector.querySelector(".terminal-composer"),
+    "mobile Inspector opens the same Composer panel as Spaces",
+  );
+  check(
+    !!mobileInspector.querySelector(
+      '.terminal-composer input[value="composer"]',
+    ) &&
+      !!mobileInspector.querySelector(
+        '.terminal-composer input[value="direct"]',
+      ) &&
+      !!mobileInspector.querySelector(".terminal-composer textarea"),
+    "mobile Inspector panel includes Composer, Direct and the draft editor",
+  );
+  check(
+    !document.querySelector(".mobile-composer-shortcut"),
+    "Inspector input does not show a second hidden Spaces launcher",
+  );
+  const inspectorEditor = mobileInspector.querySelector<HTMLTextAreaElement>(
+    ".terminal-composer textarea",
+  )!;
+  Object.getOwnPropertyDescriptor(
+    HTMLTextAreaElement.prototype,
+    "value",
+  )!.set!.call(inspectorEditor, "Unsent mobile draft");
+  inspectorEditor.dispatchEvent(new InputEvent("input", { bubbles: true }));
+  const uploadInput = mobileInspector.querySelector<HTMLInputElement>(
+    '.terminal-composer input[type="file"]',
+  )!;
+  let pickerOpened = false;
+  uploadInput.addEventListener(
+    "click",
+    (event) => {
+      pickerOpened = true;
+      event.preventDefault();
+    },
+    { once: true },
+  );
+  mobileInspector
+    .querySelector<HTMLButtonElement>('button[aria-label="Add a file"]')!
+    .click();
+  check(pickerOpened, "Office attachment button activates its file picker");
+  const uploadFiles = new DataTransfer();
+  uploadFiles.items.add(
+    new File(["example upload"], "example.txt", { type: "text/plain" }),
+  );
+  uploadInput.files = uploadFiles.files;
+  uploadInput.dispatchEvent(new Event("change", { bubbles: true }));
+  await until(
+    () => inspectorEditor.value.includes("/tmp/example.txt"),
+    "Office attachment uploads and inserts into the retained draft",
+  );
+  const retainedDraft = inspectorEditor.value;
+  check(
+    retainedDraft.includes("Unsent mobile draft"),
+    "attachment preserves typed text",
+  );
+  mobileInspector
+    .querySelector<HTMLButtonElement>(
+      'button[aria-label="Close terminal input"]',
+    )
+    ?.click();
+  await until(
+    () => !mobileInspector.querySelector(".terminal-composer"),
+    "mobile Inspector input closes without losing its terminal",
+  );
+  mobileInspector
+    .querySelector<HTMLButtonElement>(
+      'button[aria-label="Open terminal input"]',
+    )!
+    .click();
+  await until(
+    () =>
+      mobileInspector.querySelector<HTMLTextAreaElement>(
+        ".terminal-composer textarea",
+      )?.value === retainedDraft,
+    "Office Composer retains text and attachment across close/reopen",
+  );
+  mobileInspector
+    .querySelector<HTMLButtonElement>(
+      'button[aria-label="Close terminal input"]',
+    )!
+    .click();
   const compactArrangeTrigger = () =>
     document.querySelector<HTMLButtonElement>(
       '.mobile-nav button[aria-label="Arrange windows"]',
@@ -3216,7 +3317,7 @@ async function run() {
     () =>
       persistentReviewerInspector?.getAttribute("data-view") === "terminal" &&
       persistentReviewerInspector.querySelector(
-        'button[aria-label="Open device keyboard"]',
+        'button[aria-label="Open terminal input"]',
       ),
     "compact Inspector Terminal view",
   );
@@ -3226,7 +3327,7 @@ async function run() {
   );
   const compactKeyboardButton =
     persistentReviewerInspector!.querySelector<HTMLButtonElement>(
-      'button[aria-label="Open device keyboard"]',
+      'button[aria-label="Open terminal input"]',
     )!;
   const compactShortcutButton =
     persistentReviewerInspector!.querySelector<HTMLButtonElement>(
@@ -3258,8 +3359,9 @@ async function run() {
   compactKeyboardButton.click();
   await until(
     () =>
-      document.activeElement === terminalInput(persistentReviewerInspector!),
-    "compact World Inspector device keyboard focus",
+      persistentReviewerInspector?.querySelector(".terminal-composer") ===
+      document.activeElement,
+    "compact World Inspector opens Composer with neutral focus",
   );
   compactFilesButton.click();
   await until(
@@ -3288,7 +3390,7 @@ async function run() {
         .querySelector(".workspace-surface-owner")
         ?.classList.contains("is-inactive") &&
       document.querySelector(
-        '.workspace-terminal-surface button[aria-label="Open device keyboard"]',
+        '.workspace-terminal-surface button[aria-label="Open terminal input"]',
       ),
     "Spaces handoff",
   );

@@ -21,6 +21,7 @@ import {
   initializeLayoutPreferences,
   updateLayoutPreferences,
 } from "./layoutPreferences";
+import { rememberTerminalInputMode } from "./terminalInputMode";
 import { TerminalView } from "./components/TerminalView";
 import type { Pane } from "./types";
 import "./styles/tokens.css";
@@ -135,6 +136,7 @@ const render = (showMobileKeys = false, uiScale = 100) =>
       />,
     ),
   );
+rememberTerminalInputMode("direct");
 render();
 const settle = () => new Promise((resolve) => setTimeout(resolve, 80));
 const frame = (text: string, mouse: boolean | null = true) => {
@@ -165,8 +167,17 @@ const terminalInputText = () =>
     .filter((call) => call.method === "terminal.input")
     .map((call) => atob(String(call.params.data)))
     .join("");
-const click = (selector: string) =>
+const click = (selector: string) => {
+  if (selector === keyboard && document.querySelector(".terminal-composer"))
+    flushSync(() =>
+      document
+        .querySelector<HTMLButtonElement>(
+          'button[aria-label="Close terminal input"]',
+        )!
+        .click(),
+    );
   flushSync(() => document.querySelector<HTMLButtonElement>(selector)!.click());
+};
 const textarea = () =>
   document.querySelector<HTMLTextAreaElement>(".xterm-helper-textarea")!;
 const key = () =>
@@ -260,7 +271,7 @@ const checkEndHandleAlignment = () => {
 
 let copiedOutput = "";
 let readingWheelReports: string[] = [];
-const keyboard = 'button[aria-label="Open device keyboard"]';
+const keyboard = 'button[aria-label="Open terminal input"]';
 
 const point = (selector: string) => {
   const rect = document.querySelector(selector)!.getBoundingClientRect();
@@ -790,6 +801,9 @@ const api = {
     );
   },
   async regressions() {
+    if (document.querySelector(".terminal-composer"))
+      click('button[aria-label="Close terminal input"]');
+    await settle();
     calls.length = 0;
     const screen = () => document.querySelector(".xterm-screen")!;
     const touch = (type: string, col = 2, row = 0, count = 1) => {
