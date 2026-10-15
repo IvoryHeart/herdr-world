@@ -1115,6 +1115,9 @@
       "requirement": "openspec/specs/world-surfaces/spec.md",
       "properties": "Captured roots/owners survive async work; partial upload cleanup; preview admission has no authority escalation",
       "existingTests": [
+        "server/src/workspace/file-mutations.test.ts",
+        "server/src/workspace/path.test.ts",
+        "web/src/components/fileExplorerSelection.test.ts",
         "server/src/workspace/files.test.ts",
         "server/src/workspace/file-paths.test.ts",
         "server/src/workspace/local-files.test.ts",
@@ -1225,6 +1228,7 @@
       "requirement": "openspec/specs/world-surfaces/spec.md",
       "properties": "Partial failure leaves recoverable state; removal cannot target another checkout; hooks run only at valid stages",
       "existingTests": [
+        "web/src/components/WorktreePullRequestBadge.test.ts",
         "server/src/worktree/create.test.ts",
         "server/src/worktree/remove.test.ts",
         "server/src/worktree/worktree-hooks.test.ts"
@@ -1260,6 +1264,8 @@
       "requirement": "openspec/specs/bridge-access/spec.md",
       "properties": "Readers see old or new complete state; interrupted writes preserve valid state",
       "existingTests": [
+        "server/src/cli/auth.test.ts",
+        "server/src/cli/config.test.ts",
         "server/src/config/data-paths.test.ts",
         "server/src/config/gui-settings.test.ts",
         "server/src/config/session-secret.test.ts"
@@ -1295,10 +1301,17 @@
       "requirement": "openspec/specs/distribution-boundaries/spec.md",
       "properties": "Single installation owner; validation precedes replacement; failure preserves runnable installation",
       "existingTests": [
+        "server/src/cli/index.test.ts",
+        "server/src/cli/doctor.test.ts",
+        "server/src/cli/connections.test.ts",
+        "server/src/cli/service-logs.test.ts",
+        "server/src/cli/update.test.ts",
+        "server/src/cli/url.test.ts",
         "server/src/http/herdr-setup.test.ts",
         "server/src/http/update.test.ts",
         "server/src/http/update-install.test.ts",
-        "server/src/config/service-manager.test.ts"
+        "server/src/config/service-manager.test.ts",
+        "scripts/world-plugin.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/186",
       "technique": "alternative",
@@ -1306,7 +1319,7 @@
       "status": "alternative-evidence",
       "remaining": "OS service managers and downloaded artifacts require supported-platform CI/live evidence; environment-gated checks must report prerequisites/skips.",
       "requiredChecks": ["bun run check", "bun run verification:gate"],
-      "evidenceDecision": "Real setup/update/service tests exercise verified assets, replacement failures, request budgets and installation ownership.",
+      "evidenceDecision": "Real setup/update/service tests exercise verified assets, replacement failures, request budgets, saved default diagnostic precedence, package/plugin and preview ownership guards, and moved generated service paths without forcing custom definitions.",
       "partialEvidence": {
         "models": [],
         "contracts": ["verification/consumer-evidence.md"],
@@ -1314,7 +1327,8 @@
           "server/src/http/herdr-setup.test.ts",
           "server/src/http/update.test.ts",
           "server/src/http/update-install.test.ts",
-          "server/src/config/service-manager.test.ts"
+          "server/src/config/service-manager.test.ts",
+          "scripts/world-plugin.test.ts"
         ],
         "checks": ["bun run check"],
         "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."

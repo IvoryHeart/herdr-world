@@ -1,3 +1,6 @@
+import { mkdtempSync, mkdirSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { createAssistantContext } from "../server/src/assistant/context";
 import {
   prepareAssistantAction,
@@ -20,6 +23,11 @@ export async function replayRangerAuthority(
   states: TraceState[],
   prepare = prepareAssistantAction,
 ) {
+  // The real action now validates directories before dispatch. Keep replay on
+  // the real boundary using isolated filesystem state, without weakening it.
+  const directory = mkdtempSync(join(tmpdir(), "world-ranger-authority-"));
+  const createdDirectory = join(directory, "created");
+  mkdirSync(createdDirectory);
   let current = true;
   let workspaceCurrent = true;
   let permission = true;
@@ -40,6 +48,7 @@ export async function replayRangerAuthority(
     },
   ];
   const runtime = {
+    sshHost: () => undefined,
     identity: {
       id: "synthetic-host",
       label: "Synthetic host",
@@ -95,7 +104,7 @@ export async function replayRangerAuthority(
               {
                 workspace_id: "synthetic-created",
                 pane_id: "synthetic-pane",
-                cwd: "/synthetic/created",
+                cwd: createdDirectory,
               },
             ],
           };
@@ -121,7 +130,7 @@ export async function replayRangerAuthority(
     connection_id: "synthetic-host",
     workspace_id: "synthetic-workspace",
     label: "Synthetic created",
-    cwd: "/synthetic/created",
+    cwd: createdDirectory,
   };
   const witnesses = new Set<string>();
   try {
@@ -216,7 +225,7 @@ export async function replayRangerAuthority(
       observe("ranger.result", result?.status ?? "none", expected.result);
       if (writeParams) {
         observe("ranger.write.label", writeParams.label, "Synthetic created");
-        observe("ranger.write.cwd", writeParams.cwd, "/synthetic/created");
+        observe("ranger.write.cwd", writeParams.cwd, createdDirectory);
         observe("ranger.write.focus", writeParams.focus, false);
       }
       if (expected.phase === "done") {
@@ -231,7 +240,11 @@ export async function replayRangerAuthority(
   } finally {
     checked.resolve();
     release.resolve();
-    await task;
+    try {
+      await task;
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
   }
   return witnesses;
 }

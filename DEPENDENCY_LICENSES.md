@@ -14,22 +14,23 @@ Manifest author metadata is retained here when provided.
 - `@aws-sdk/credential-provider-http@3.972.74` — AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)
 - `@aws-sdk/credential-provider-login@3.972.79` — AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)
 - `@aws-sdk/nested-clients@3.997.46` — AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)
-- `@earendil-works/chord@1.0.2` — Earendil Works
-- `@earendil-works/pi-agent-core@1.0.4` — Mario Zechner
-- `@earendil-works/pi-ai@1.0.2` — Mario Zechner
-- `@earendil-works/pi-ai@1.0.4` — Mario Zechner
-- `@earendil-works/pi-codemode@1.0.4` — Earendil Works
-- `@earendil-works/pi-coding-agent@1.0.2` — Mario Zechner
-- `@earendil-works/pi-durable@1.0.2` — Earendil Works
-- `@earendil-works/pi-mcp@1.0.4` — Earendil Works
-- `@earendil-works/pi-telemetry@1.0.4` — Mario Zechner
-- `@earendil-works/pi-tui@1.0.4` — Mario Zechner
+- `@earendil-works/chord@1.1.0` — Earendil Works
+- `@earendil-works/pi-agent-core@1.2.0` — Mario Zechner
+- `@earendil-works/pi-ai@1.1.0` — Mario Zechner
+- `@earendil-works/pi-ai@1.2.0` — Mario Zechner
+- `@earendil-works/pi-codemode@1.1.0` — Earendil Works
+- `@earendil-works/pi-coding-agent@1.1.0` — Mario Zechner
+- `@earendil-works/pi-durable@1.1.0` — Earendil Works
+- `@earendil-works/pi-mcp@1.2.0` — Earendil Works
+- `@earendil-works/pi-telemetry@1.2.0` — Mario Zechner
+- `@earendil-works/pi-tui@1.2.0` — Mario Zechner
 - `@lobehub/icons-static-svg@1.95.1` — LobeHub <i@lobehub.com>
 - `@pixi/colord@2.9.6` — Vlad Shilov <omgovich@ya.ru>
 - `bun-types@1.4.3`
 - `data-uri-to-buffer@4.0.1` — Nathan Rajlich <nathan@tootallnate.net> (http://n8.io/)
 - `http_ece@1.2.0` — Martin Thomson <martin.thomson@gmail.com>
 - `proxy-agent-negotiate@1.1.0` — Nathan Rajlich <nathan@tootallnate.net> (http://n8.io/)
+- `qrcode-generator@2.0.4` — Kazuhiko Arase
 - `react-remove-scroll-bar@2.3.8` — Anton Korzunov <thekashey@gmail.com>
 - `saxes@6.0.0` — Louis-Dominique Dubeau <ldd@lddubeau.com>
 - `standardwebhooks@1.1.1` — Standard Webhooks
@@ -4072,7 +4073,7 @@ Sources:
 Sources:
 
 - `@oxc-project/types@0.152.0` — `LICENSE`
-- `oxlint@1.86.0` — `LICENSE`
+- `oxlint@1.87.0` — `LICENSE`
 
     MIT License
 
@@ -5495,7 +5496,7 @@ Sources:
 
 Sources:
 
-- `happy-dom@20.14.5` — `LICENSE`
+- `happy-dom@20.14.6` — `LICENSE`
 
     MIT License
 
@@ -6667,12 +6668,13 @@ Sources:
 - `@codemirror/lang-sql@6.10.0` — `LICENSE`
 - `@codemirror/lang-vue@0.1.3` — `LICENSE`
 - `@codemirror/lang-xml@6.1.0` — `LICENSE`
-- `@codemirror/language@6.12.4` — `LICENSE`
-- `@codemirror/legacy-modes@6.5.4` — `LICENSE`
+- `@codemirror/language@6.13.1` — `LICENSE`
+- `@codemirror/legacy-modes@6.5.5` — `LICENSE`
 - `@codemirror/lint@6.9.7` — `LICENSE`
 - `@codemirror/search@6.7.2` — `LICENSE`
 - `@codemirror/state@6.7.6` — `LICENSE`
-- `@codemirror/view@6.43.13` — `LICENSE`
+- `@codemirror/streamparser@6.0.0` — `LICENSE`
+- `@codemirror/view@6.43.14` — `LICENSE`
 - `codemirror@6.0.2` — `LICENSE`
 
     MIT License
@@ -9647,7 +9649,7 @@ Sources:
 
 Sources:
 
-- `vite@8.3.3` — `LICENSE.md`
+- `vite@8.3.4` — `LICENSE.md`
 
     # Vite core license
     Vite is released under the MIT license:
@@ -12345,7 +12347,6 @@ Sources:
 
 - `undici-types@8.11.2` — `LICENSE`
 - `undici-types@8.3.0` — `LICENSE`
-- `undici@8.10.2` — `LICENSE`
 - `undici@8.11.2` — `LICENSE`
 
     MIT License

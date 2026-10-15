@@ -390,7 +390,7 @@ function panel(): Promise<number> {
         key === "s"
           ? ["install", "--force"]
           : key === "r"
-            ? ["restart"]
+            ? ["install"]
             : key === "u"
               ? ["uninstall"]
               : null;
@@ -431,7 +431,7 @@ async function main(): Promise<number> {
     case "start":
       return service("install", "--force");
     case "restart":
-      return service("restart");
+      return service("install");
     case "status":
       return service("status");
     case "url":

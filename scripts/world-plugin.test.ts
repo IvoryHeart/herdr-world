@@ -98,6 +98,18 @@ globalThis.fetch = async (url) => {
     );
   }
 
+  test("restart refreshes the installed executable path without forcing custom definitions", () => {
+    const root = checkout();
+    writeFileSync(
+      join(root, "server/herdr-world"),
+      '#!/bin/sh\nif [ "$1" = "--version" ]; then echo "herdr-world 9.8.7"; else printf "%s\\n" "$*"; fi\n',
+      { mode: 0o755 },
+    );
+    const result = invoke(root, "restart");
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout.toString().trim()).toBe("service install");
+  });
+
   test("build-source installs all dependencies and builds without downloading a release", () => {
     const root = checkout();
     const result = invoke(root, "build-source");

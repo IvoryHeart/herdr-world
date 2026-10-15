@@ -1,3 +1,5 @@
+import { unixOnlyMessage } from "./connections/unix-only";
+import { inspectWorkspacePath } from "./workspace/path";
 import { createWorkspaceWorktree } from "./worktree/create";
 import { canRevealFiles } from "./workspace/file-manager";
 import { sendWorldSnapshotReply } from "./bridge/world-snapshot-reply";
@@ -25,11 +27,8 @@ import {
   withLoginToken,
 } from "./config/server-config";
 import { readGuiSettings, updateGuiSettings } from "./config/gui-settings";
-import {
-  runServiceCommand,
-  SERVICE_COMMAND_CONTINUE,
-} from "./config/service-manager";
-import { runHerdrCommand } from "./herdr/cli";
+import { cliCommands, runCli, topLevelHelp } from "./cli";
+import { CONTINUE_TO_SERVER, defaultCliContext } from "./cli/command";
 import { runTaskSummaryCommand } from "./herdr/task-summary";
 import { runAgentCheckoutCommand } from "./herdr/agent-checkout";
 import { createWebPushService } from "./notifications/web-push";
@@ -130,12 +129,6 @@ const APP_VERSION = currentBuildVersion(
   process.env.HERDR_WORLD_BUILD_VERSION,
   packageJson.version,
 );
-const serviceCommandResult = runServiceCommand(process.argv.slice(2));
-if (serviceCommandResult === SERVICE_COMMAND_CONTINUE) {
-  process.argv.splice(2);
-} else if (serviceCommandResult !== null) {
-  process.exit(serviceCommandResult);
-}
 const taskSummaryCommandResult = await runTaskSummaryCommand(
   process.argv.slice(2),
   APP_VERSION,
@@ -149,14 +142,21 @@ if (agentCheckoutCommandResult !== null)
 if (taskSummaryCommandResult !== null) {
   process.exit(taskSummaryCommandResult);
 }
-const herdrCommandResult = await runHerdrCommand(
+const cliCommandList = cliCommands();
+const cliResult = await runCli(
   process.argv.slice(2),
-  APP_VERSION,
+  defaultCliContext(APP_VERSION),
+  cliCommandList,
 );
-if (herdrCommandResult !== null) {
-  process.exit(herdrCommandResult);
+if (cliResult === CONTINUE_TO_SERVER) {
+  // `service run <env>` loaded the service environment; start the listener.
+  process.argv.splice(2);
+} else if (cliResult !== null) {
+  process.exit(cliResult);
 }
-const config = loadServerConfig(APP_VERSION);
+const config = loadServerConfig(APP_VERSION, {
+  helpText: () => topLevelHelp(cliCommandList),
+});
 // Only a listener startup may rotate sessions. Management commands also read
 // ServerConfig, sometimes with a different environment from the running service.
 let sessionSecret = "";
@@ -781,7 +781,8 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
     return;
   }
   const req = parsed as RpcRequest;
-  const { id, method, params } = req;
+  const { id, method } = req;
+  let { params } = req;
   let validationConnectionId: string | undefined;
   let connectionIdValidationFailed = false;
   if (Object.hasOwn(req, "connection_id")) {
@@ -1136,9 +1137,7 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
   ) {
     sendError(
       "unsupported-windows-operation",
-      new Error(
-        "This operation requires a Unix SSH host and is unavailable on Windows.",
-      ),
+      new Error(unixOnlyMessage("This operation")),
     );
     return;
   }
@@ -1157,6 +1156,8 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
     readWorkspaceFile,
     searchWorkspaceFiles,
     revealWorkspaceFile,
+    createWorkspaceDirectory,
+    moveWorkspaceFile,
     readGitDiffSummary,
     readWorkspacePullRequest,
     readGitDiffFile,
@@ -1185,6 +1186,30 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
   } = connection.agentSessions;
 
   if (
+    method === "workspace.path" ||
+    (method === "workspace.create" && params?.cwd != null && params.cwd !== "")
+  ) {
+    try {
+      const info = await inspectWorkspacePath(
+        method === "workspace.path" ? params?.path : params?.cwd,
+        { host: sshHost(), remotePlatform: connection.remotePlatform },
+        method === "workspace.path",
+      );
+      if (method === "workspace.path") {
+        sendReply({ id, result: info }, method);
+        return;
+      }
+      if (info.error) throw new Error(`${info.error} ${info.path}`);
+      if (!requestIsCurrent())
+        throw new Error("Creation connection changed. Reconnect and retry.");
+      params = { ...params, cwd: info.path };
+    } catch (error) {
+      sendError(`${method}-error`, error);
+      return;
+    }
+  }
+
+  if (
     (method === "tab.create" || method === "workspace.create") &&
     params &&
     Object.hasOwn(params, "browser_source")
@@ -1195,6 +1220,20 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
         method,
         params,
         requestIsCurrent,
+        async () => {
+          if (
+            method === "workspace.create" &&
+            params?.cwd != null &&
+            params.cwd !== ""
+          ) {
+            const info = await inspectWorkspacePath(
+              params.cwd,
+              { host: sshHost(), remotePlatform: connection.remotePlatform },
+              false,
+            );
+            if (info.error) throw new Error(`${info.error} ${info.path}`);
+          }
+        },
       );
       sendReply({ id, result }, method);
     } catch (error) {
@@ -1275,6 +1314,17 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
       sendReply({ id, result }, "file-resolve");
     } catch (e) {
       sendError("file-resolve-error", e);
+    }
+    return;
+  }
+  if (method === "file.mkdir" || method === "file.move") {
+    try {
+      const result = await (method === "file.mkdir"
+        ? createWorkspaceDirectory
+        : moveWorkspaceFile)(params ?? {});
+      sendReply({ id, result }, method);
+    } catch (e) {
+      sendError(`${method}-error`, e);
     }
     return;
   }

@@ -7,6 +7,7 @@ import {
   readdirSync,
   rmSync,
   symlinkSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -16,6 +17,7 @@ import {
   dataRoot,
   defaultDataFile,
   publishDataFile,
+  replaceDataFile,
 } from "./data-paths";
 
 const roots: string[] = [];
@@ -92,4 +94,19 @@ test("data path validation rejects product and file symlinks", () => {
   expect(() => assertSafeDataPath(join(product, "settings.json"))).toThrow(
     "symlink",
   );
+});
+
+test("replacement overwrites atomically with private permissions", () => {
+  const root = home();
+  const target = join(root, "herdr-world", "herdr-world.env");
+  publishDataFile(target, "first", 0o644);
+  replaceDataFile(target, "second");
+  expect(readFileSync(target, "utf8")).toBe("second");
+  expect(readdirSync(dirname(target))).toEqual(["herdr-world.env"]);
+  if (process.platform !== "win32")
+    expect(statSync(target).mode & 0o777).toBe(0o600);
+  const link = join(root, "herdr-world", "link.env");
+  symlinkSync(target, link);
+  expect(() => replaceDataFile(link, "third")).toThrow("symlink");
+  expect(readFileSync(target, "utf8")).toBe("second");
 });

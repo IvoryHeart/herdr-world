@@ -620,6 +620,7 @@ export function WorkspaceTree({
           <AgentLayoutControl value={agentLayout} onChange={setAgentLayout} />
         </div>
         <CreateWorkspaceDialog
+          key="create-workspace"
           open={createOpen}
           onClose={() => setCreateOpen(false)}
         />
@@ -897,6 +898,7 @@ export function WorkspaceTree({
         }}
       />
       <CreateWorkspaceDialog
+        key="create-workspace"
         open={createOpen}
         onClose={() => setCreateOpen(false)}
       />

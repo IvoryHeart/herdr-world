@@ -7,7 +7,16 @@ are optional because the merged PR history records their source.
 
 ## [Unreleased]
 
+### Fixed
+
+- Diagnose the saved default Herdr connection, preserve package/plugin and preview
+  update ownership, and refresh generated service paths when restarting the plugin.
+
 ### Added
+
+- Synchronize Roamgate v0.8.4 source: installation-management commands, worktree
+  pull-request badges, safer File Explorer mutations, mobile terminal shortcuts,
+  and Ranger provider fixes. Preserve World packaging and qualified runtime ownership.
 
 - Upstream synchronization records every incoming commit and revisits deferred work;
   new deferrals and intentional divergences require human approval.
