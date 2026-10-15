@@ -10,7 +10,7 @@ import {
 } from "../terminalFileDrop";
 import { uploadTerminalFile } from "../terminalImageUpload";
 import { PaneDragHandle, PaneMoveMenu } from "./PaneMoveMenu";
-import { usePublishMobileTerminal } from "./MobileControls";
+import { MobileTerminalIdentity } from "./MobileControls";
 import { useSystemBack } from "../systemBack";
 import { runTerminalInput, sendTerminalInput } from "../terminalInput";
 import {
@@ -641,7 +641,6 @@ export function TerminalView({
     },
     [controlledComposerOpen, onComposerOpenChange],
   );
-  usePublishMobileTerminal(pane, isActivePane, container);
   useSystemBack(composerOpen && isActivePane, () => setComposerOpen(false));
   const agentHistoryOpen = controlledAgentHistoryOpen ?? localAgentHistoryOpen;
   const setAgentHistoryOpen = useCallback(
@@ -3678,10 +3677,18 @@ export function TerminalView({
               if (event.target === event.currentTarget) focusTerminalInput();
             }}
           />
-          {touchHandles.length === 0 && !composerOpen && isActivePane ? (
+          <MobileTerminalIdentity
+            pane={pane}
+            active={isActivePane}
+            element={container}
+          />
+          {!composerOpen && isActivePane ? (
+            // Selection hides the bar but keeps its place: on phones it sits
+            // below the output, and a resize would clear the selection.
             <div
               className="terminal-mobile-input-actions"
               aria-label="Terminal input"
+              data-reserved={touchHandles.length > 0 || undefined}
             >
               <button
                 type="button"
@@ -3697,7 +3704,10 @@ export function TerminalView({
                 }
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => {
-                  rememberTerminalInputMode("composer");
+                  // On phones this is the Message bar beside a Direct button;
+                  // elsewhere it opens the saved mode.
+                  if (document.documentElement.dataset.layout === "mobile")
+                    rememberTerminalInputMode("composer");
                   flushSync(() => setComposerOpen(true));
                   // The tap is the request to type: focus Composer's editor
                   // inside this gesture so mobile browsers raise the keyboard.
@@ -3725,6 +3735,7 @@ export function TerminalView({
                 className="terminal-mobile-direct"
                 aria-label="Type directly into the terminal"
                 title="Type directly into the terminal"
+                aria-pressed={inputActive}
                 disabled={
                   directDisabled ||
                   s.status !== "connected" ||

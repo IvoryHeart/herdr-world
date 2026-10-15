@@ -1,3 +1,4 @@
+.terminal-mobile-input-actions[data-reserved],
 .terminal-mobile-message-label,
 .terminal-mobile-direct,
 .mobile-terminal-appbar,
@@ -23,10 +24,16 @@
     background: var(--terminal-bg);
   }
 
+  /* Hidden for a touch selection, still holding its height. */
+  .terminal-main > .terminal-mobile-input-actions[data-reserved] {
+    display: flex;
+    visibility: hidden;
+  }
+
   .terminal-main > .terminal-mobile-input-actions button {
     flex: 0 0 auto;
-    min-width: 48px;
-    min-height: 48px;
+    min-width: max(48px, calc(48px / var(--ui-scale, 1)));
+    min-height: max(48px, calc(48px / var(--ui-scale, 1)));
     border-color: transparent;
     border-radius: 24px;
     background: color-mix(in srgb, var(--text-strong) 8%, var(--terminal-bg));
@@ -229,14 +236,18 @@
     }
   }
 
-  /* Beside a terminal the app bar and input bar carry the controls; the
-     floating islands stay hidden until ⋮ shows them as a menu. */
-  .app:has(.terminal-mobile-input-actions, .terminal-composer):not(
-      [data-mobile-more]
-    ) .mobile-controls-stack,
-  .app:has(.terminal-mobile-input-actions, .terminal-composer)
-    .mobile-composer-shortcut {
-    display: none;
+  /* Beside a terminal on a detail screen the app bar and input bar carry
+     the controls; the floating islands stay hidden until ⋮ shows them as a
+     menu. Without World's Back and ⋮ they keep floating. */
+  &:has(.world-back-to-view) {
+    .app:has(.terminal-mobile-input-actions, .terminal-composer):not(
+        [data-mobile-more]
+      )
+      .mobile-controls-stack,
+    .app:has(.terminal-mobile-input-actions, .terminal-composer)
+      .mobile-composer-shortcut {
+      display: none;
+    }
   }
 
   .mobile-more-backdrop {

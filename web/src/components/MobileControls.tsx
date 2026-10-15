@@ -1,9 +1,8 @@
 import { useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { ChevronDown, EllipsisVertical, SquareStack } from "lucide-react";
 import { useStoreSelector } from "../store";
-import type { Pane } from "../types";
+import type { Pane, Tab } from "../types";
 import { agentStateKind, type AgentStateKind } from "./agentSession";
-import { tabName } from "./TabBar";
 import "./MobileControls.css";
 
 /**
@@ -51,6 +50,15 @@ function createStore<T>() {
   };
 }
 
+// TabBar's tabName, kept here so the terminal does not load the tab bar's
+// agent icons.
+function tabName(tab?: Tab) {
+  if (!tab) return "";
+  return tab.label && tab.label !== String(tab.number)
+    ? tab.label
+    : `Tab ${tab.number}`;
+}
+
 const controlsStore = createStore<MobileControls>();
 const terminalStore = createStore<MobileTerminalIdentity>();
 
@@ -87,12 +95,19 @@ export function usePublishMobileControls(controls: MobileControls | null) {
   useLayoutEffect(() => () => controlsStore.set(null), []);
 }
 
-/** The visible, active terminal names itself for the app bar. */
-export function usePublishMobileTerminal(
-  pane: Pane | null | undefined,
-  active: boolean,
-  element: HTMLElement | null,
-) {
+/**
+ * The visible, active terminal names itself for the app bar. A separate
+ * component, so its updates never re-render the terminal mid-gesture.
+ */
+export function MobileTerminalIdentity({
+  pane,
+  active,
+  element,
+}: {
+  pane: Pane | null | undefined;
+  active: boolean;
+  element: HTMLElement | null;
+}) {
   const place = useStoreSelector((state) =>
     pane ? tabName(state.tabs.find((tab) => tab.tab_id === pane.tab_id)) : "",
   );
@@ -130,6 +145,7 @@ export function usePublishMobileTerminal(
       if (terminalStore.get() === identity) terminalStore.set(null);
     };
   }, [visible, workspaceId, agent, place, status]);
+  return null;
 }
 
 /** The workspace of the terminal on screen, which Tabs should follow. */
