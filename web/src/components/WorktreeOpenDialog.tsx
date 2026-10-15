@@ -1,10 +1,16 @@
 import { useEffectCallback } from "../useEffectCallback";
 import { useEffect, useRef, useState } from "react";
 import { useOperationalStore } from "../store";
-import { useConnectionClient } from "../useConnectionClient";
+import { useStoreSelector } from "../store";
+import {
+  connectionClientScopeKey,
+  useConnectionClient,
+} from "../useConnectionClient";
+import { useWorktreePullRequests } from "../useWorktreePullRequests";
 import type { ExistingWorktree, WorktreeList } from "../types";
 import { resolveWorktreeOpenSource } from "../worktree";
 import { CloseButton } from "./CloseButton";
+import { WorktreePullRequestBadge } from "./WorktreePullRequestBadge";
 import { focusDialogElement } from "./dialogFocus";
 import "./WorktreeOpenDialog.css";
 
@@ -23,8 +29,7 @@ function sortWorktrees(a: ExistingWorktree, b: ExistingWorktree) {
 }
 
 type WorktreeListState = {
-  workspaceId: string;
-  loading: boolean;
+  scope: string;
   list: WorktreeList | null;
   error: string;
 };
@@ -44,11 +49,23 @@ export function WorktreeOpenDialog({
 }) {
   const store = useOperationalStore();
   const connectionClient = useConnectionClient();
+  const workspace = useStoreSelector((state) =>
+    state.workspaces.find((entry) => entry.workspace_id === workspaceId),
+  );
+  const [refresh, setRefresh] = useState(0);
+  const scope = connectionClientScopeKey(
+    connectionClient,
+    workspaceId,
+    workspace?.worktree?.repo_key,
+    workspace?.cwd,
+    workspace?.worktree?.git_status?.branch,
+    refresh,
+  );
   const [manualTarget, setManualTarget] = useState("");
   const [query, setQuery] = useState("");
   const [listState, setListState] = useState<WorktreeListState | null>(null);
   const [actionError, setActionError] = useState<{
-    workspaceId: string;
+    scope: string;
     message: string;
   } | null>(null);
   const onCloseEvent = useEffectCallback(onClose);
@@ -61,14 +78,13 @@ export function WorktreeOpenDialog({
     setManualTarget("");
     setQuery("");
     setActionError(null);
-    setListState({ workspaceId, loading: true, list: null, error: "" });
+    setListState({ scope, list: null, error: "" });
 
     connectionClient.call("worktree.list", { workspace_id: workspaceId }).then(
       (result) => {
         if (cancelled || !connectionClient.isCurrent()) return;
         setListState({
-          workspaceId,
-          loading: false,
+          scope,
           list: result as WorktreeList,
           error: "",
         });
@@ -76,8 +92,7 @@ export function WorktreeOpenDialog({
       (err) => {
         if (cancelled || !connectionClient.isCurrent()) return;
         setListState({
-          workspaceId,
-          loading: false,
+          scope,
           list: null,
           error: (err as Error).message,
         });
@@ -92,18 +107,19 @@ export function WorktreeOpenDialog({
       cancelled = true;
       window.removeEventListener("keydown", onKey);
     };
-  }, [connectionClient, open, workspaceId, onCloseEvent]);
+  }, [connectionClient, open, workspaceId, scope, onCloseEvent]);
 
-  const currentListState =
-    listState?.workspaceId === workspaceId ? listState : null;
+  const currentListState = listState?.scope === scope ? listState : null;
   const list = currentListState?.list ?? null;
-  const loading =
-    !!open &&
-    !!workspaceId &&
-    !currentListState?.list &&
-    (currentListState?.loading ?? true);
+  const reviews = useWorktreePullRequests(
+    connectionClient,
+    workspaceId,
+    open ? list : null,
+    refresh,
+  );
+  const loading = !!open && !!workspaceId && !list && !currentListState?.error;
   const error =
-    (actionError?.workspaceId === workspaceId ? actionError.message : "") ||
+    (actionError?.scope === scope ? actionError.message : "") ||
     currentListState?.error ||
     "";
 
@@ -130,8 +146,8 @@ export function WorktreeOpenDialog({
       return store.openWorktreeFromCwd(actionSource.cwd, target);
     }
     setActionError({
-      workspaceId,
-      message: "The repository source is unavailable.",
+      scope,
+      message: "Repository source unavailable.",
     });
     return undefined;
   };
@@ -178,6 +194,14 @@ export function WorktreeOpenDialog({
       >
         <div className="modal-head">
           <h2>Open Worktree</h2>
+          <button
+            type="button"
+            className="ghost"
+            disabled={loading}
+            onClick={() => setRefresh((value) => value + 1)}
+          >
+            Refresh
+          </button>
           <CloseButton onClick={onClose} />
         </div>
 
@@ -208,32 +232,40 @@ export function WorktreeOpenDialog({
         {worktrees.length ? (
           <div className="worktree-list" role="list">
             {worktrees.map((worktree) => (
-              <button
+              <div
                 key={worktree.path}
-                type="button"
                 className="worktree-option"
-                onClick={() => openWorktree(worktree)}
+                role="listitem"
               >
-                <span className="worktree-option-main">
-                  <span className="worktree-option-title">
-                    {worktreeTitle(worktree)}
+                <button
+                  type="button"
+                  className="worktree-option-open"
+                  onClick={() => openWorktree(worktree)}
+                >
+                  <span className="worktree-option-main">
+                    <span className="worktree-option-title">
+                      {worktreeTitle(worktree)}
+                    </span>
+                    <span className="worktree-option-path">
+                      {worktree.path}
+                    </span>
                   </span>
-                  <span className="worktree-option-path">{worktree.path}</span>
-                </span>
-                <span className="worktree-option-tags">
-                  {worktree.is_linked_worktree ? (
-                    <span className="badge">worktree</span>
-                  ) : (
-                    <span className="badge">main</span>
-                  )}
-                  {worktree.is_prunable ? (
-                    <span className="badge">prunable</span>
-                  ) : null}
-                  <span className="badge">
-                    {worktree.open_workspace_id ? "Focus" : "Open"}
+                  <span className="worktree-option-tags">
+                    {worktree.is_linked_worktree ? (
+                      <span className="badge">worktree</span>
+                    ) : (
+                      <span className="badge">main</span>
+                    )}
+                    {worktree.is_prunable ? (
+                      <span className="badge">prunable</span>
+                    ) : null}
+                    <span className="badge">
+                      {worktree.open_workspace_id ? "Focus" : "Open"}
+                    </span>
                   </span>
-                </span>
-              </button>
+                </button>
+                <WorktreePullRequestBadge status={reviews[worktree.path]} />
+              </div>
             ))}
           </div>
         ) : !loading && !error ? (

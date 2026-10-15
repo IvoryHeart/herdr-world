@@ -55,6 +55,7 @@ const LATE_SHORTCUT_IDS: ShortcutId[] = [
   "pane.moveRight",
   "pane.moveUp",
   "pane.moveDown",
+  "terminal.focus",
 ];
 export function validateShortcutPreset(value: unknown): ShortcutPreset {
   if (!value || typeof value !== "object")

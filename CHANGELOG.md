@@ -9,6 +9,10 @@ are optional because the merged PR history records their source.
 
 ### Added
 
+- Synchronize Roamgate v0.8.4 source: installation-management commands, worktree
+  pull-request badges, safer File Explorer mutations, mobile terminal shortcuts,
+  and Ranger provider fixes. Preserve World packaging and qualified runtime ownership.
+
 - Opt-in hourly Roamgate source synchronization with Codex integration,
   independent agent review, one bounded repair pass and protected auto-merge.
   Agent sessions run locally using Codex subscription sign-in, without an API key.

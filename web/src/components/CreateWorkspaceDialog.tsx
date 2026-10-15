@@ -12,8 +12,13 @@ import {
   endpointCreationReason,
   useStoreSelector,
 } from "../store";
+import { useId, useMemo } from "react";
+import { Folder } from "lucide-react";
+import type { WorkspacePathInfo } from "../../../shared/workspacePath";
+import { bridge, type ConnectionClient } from "../api";
 import { CloseButton } from "./CloseButton";
 import { focusDialogElement } from "./dialogFocus";
+import "./CreateWorkspaceDialog.css";
 
 export function CreateWorkspaceDialog({
   open,
@@ -85,6 +90,31 @@ export function CreateWorkspaceDialog({
         : null,
     );
   }, [open]);
+  const client = useMemo(
+    () =>
+      destination
+        ? bridge.connection(
+            destination.connectionId,
+            destination.runtimeGeneration,
+          )
+        : null,
+    [
+      destination?.connectionId,
+      destination?.runtimeGeneration,
+      snapshot.connectionGeneration,
+      snapshot.status,
+      snapshot.terminalAttachEpoch,
+    ],
+  );
+  const [pathState, setPathState] = useState<{
+    client: ConnectionClient;
+    input: string;
+    info?: WorkspacePathInfo;
+    error?: string;
+  } | null>(null);
+  const [createError, setCreateError] = useState("");
+  const cwdRef = useRef<HTMLInputElement>(null);
+  const pathHintId = useId();
 
   useEffect(() => {
     if (!open) return;
@@ -101,19 +131,60 @@ export function CreateWorkspaceDialog({
     };
   }, [open, initialName, initialCwd, onCloseEvent]);
 
+  useEffect(() => {
+    setCreateError("");
+    setPathState(null);
+  }, [open, client]);
+
+  const input = cwd.trim();
+  useEffect(() => {
+    if (!open || !input || !client) return;
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      void client.call("workspace.path", { path: input }).then(
+        (info: WorkspacePathInfo) => {
+          if (!cancelled && client.isCurrent())
+            setPathState({ client, input, info });
+        },
+        (error: Error) => {
+          if (!cancelled && client.isCurrent())
+            setPathState({ client, input, error: error.message });
+        },
+      );
+    }, 200);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [open, client, input]);
+
   if (!open) return null;
 
+  const checked =
+    pathState && pathState.client === client && pathState.input === input
+      ? pathState
+      : null;
+  const pathError = checked?.error || checked?.info?.error;
+  const checking = !!input && !checked;
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (submissionPending.current || createReason) return;
+    if (
+      submissionPending.current ||
+      createReason ||
+      checking ||
+      pathError ||
+      !client?.isCurrent()
+    )
+      return;
     if (!destination) return;
     submissionPending.current = true;
     setSubmitting(true);
+    setCreateError("");
     try {
       await store.createQualifiedWorkspace(
         destination,
         label.trim() || undefined,
-        cwd.trim() || undefined,
+        input ? checked?.info?.path : undefined,
         {
           sourceWorkspaceId:
             destination.connectionId === initialDestination?.connectionId &&
@@ -125,6 +196,7 @@ export function CreateWorkspaceDialog({
       );
       onClose();
     } catch (error) {
+      setCreateError(creationFailureMessage(error, "Workspace"));
       store.notify({
         kind: "error",
         message: creationFailureMessage(error, "Workspace"),
@@ -187,20 +259,87 @@ export function CreateWorkspaceDialog({
           <input
             ref={labelRef}
             value={label}
+            disabled={submitting}
             onChange={(e) => setLabel(e.currentTarget.value)}
             placeholder="Optional"
           />
         </label>
 
         <label className="form-field">
-          <span>CWD</span>
+          <span>Working directory</span>
           <input
+            ref={cwdRef}
             value={cwd}
-            onChange={(e) => setCwd(e.currentTarget.value)}
-            placeholder="Optional path"
+            onChange={(e) => {
+              setCwd(e.currentTarget.value);
+              setCreateError("");
+            }}
+            placeholder="Optional, e.g. ~/Developer/project"
+            spellCheck={false}
+            autoComplete="off"
+            disabled={submitting}
+            aria-invalid={!!pathError}
+            aria-describedby={pathHintId}
           />
         </label>
+        <div id={pathHintId} className="workspace-path-hint" aria-live="polite">
+          {checking ? (
+            <p role="status">Checking directory...</p>
+          ) : pathError ? (
+            <p className="modal-error" role="alert">
+              {pathError}
+            </p>
+          ) : checked?.info ? (
+            <p>
+              Directory: <code>{checked.info.path}</code>
+            </p>
+          ) : (
+            <p>
+              Use an absolute path or ~/ on the connected host. Leave blank to
+              use the default directory.
+            </p>
+          )}
+        </div>
+        {checked?.info?.directories.length ? (
+          <div
+            className="workspace-path-directories"
+            role="list"
+            aria-label="Directory suggestions"
+          >
+            {checked.info.directories.map((directory) => (
+              <div key={directory} role="listitem">
+                <button
+                  type="button"
+                  className="ghost"
+                  disabled={submitting}
+                  title={directory}
+                  onClick={() => {
+                    setCwd(
+                      directory.endsWith("/") ? directory : `${directory}/`,
+                    );
+                    setCreateError("");
+                    cwdRef.current?.focus();
+                  }}
+                >
+                  <Folder size={14} aria-hidden="true" />
+                  <span>
+                    {directory
+                      .split(directory.startsWith("/") ? "/" : /[/\\]/)
+                      .filter(Boolean)
+                      .pop()}
+                    /
+                  </span>
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : null}
 
+        {createError ? (
+          <p className="modal-error" role="alert">
+            {createError}
+          </p>
+        ) : null}
         {createReason ? <p role="status">{createReason}</p> : null}
         <div className="modal-actions">
           <button type="button" className="ghost" onClick={onClose}>
@@ -208,7 +347,7 @@ export function CreateWorkspaceDialog({
           </button>
           <button
             type="submit"
-            disabled={submitting || !!createReason}
+            disabled={submitting || !!createReason || checking || !!pathError}
             title={createReason ?? undefined}
           >
             {submitting ? "Creating…" : "Create"}

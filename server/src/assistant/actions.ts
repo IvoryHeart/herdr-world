@@ -12,7 +12,10 @@ import {
 } from "../config/gui-settings";
 import { validateConnectionId } from "../connections/protocol";
 import type { LegacyConnectionRuntime } from "../connections/runtime";
+import { assertUnixHost } from "../connections/unix-only";
+import { inspectWorkspacePath } from "../workspace/path";
 import { checkoutPath } from "../workspace/utils";
+import { surfaceAssistantUserError } from "./errors";
 
 export type AssistantActionPreview = Omit<
   AssistantAction,
@@ -377,6 +380,18 @@ export async function prepareAssistantAction(args: {
             detail:
               "A workspace with this label already exists. No duplicate was created.",
           };
+        const directory = await read(() =>
+          inspectWorkspacePath(
+            cwd,
+            { host: runtime.sshHost(), remotePlatform: runtime.remotePlatform },
+            false,
+          ),
+        );
+        if (directory.error)
+          return {
+            status: "failed",
+            detail: `${directory.error} Nothing was sent; prepare a new preview.`,
+          };
         const previousIds = new Set(before.map((item) => item.workspace_id));
         let response: unknown;
         try {
@@ -592,6 +607,8 @@ export async function prepareAssistantAction(args: {
             };
       };
     } else if (kind === "create_worktree") {
+      // Git root and hook helpers are Unix-only, unlike native Herdr RPCs.
+      assertUnixHost(runtime, "Ranger worktree creation");
       if (!args.createWorktree)
         throw new Error("Worktree creation is unavailable");
       const branch = text(params.branch);
@@ -1073,8 +1090,9 @@ export async function prepareAssistantAction(args: {
         return execution;
       },
     });
-  } catch {
-    throw new Error(
+  } catch (error) {
+    surfaceAssistantUserError(
+      error,
       "Action preview is unavailable, outside the approved scope, or the target changed.",
     );
   }

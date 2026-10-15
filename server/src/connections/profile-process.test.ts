@@ -1,5 +1,13 @@
 import { afterEach, expect, test } from "bun:test";
-import { chmodSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  mkdirSync,
+  realpathSync,
+  readFileSync,
+  existsSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import * as net from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -331,7 +339,11 @@ test("production dispatcher isolates two local profiles and profile CRUD", async
   chmodSync(root, 0o700);
   const alpha = await fakeHerdr(root, "alpha", 14, undefined, ({ method }) =>
     method === "workspace.get"
-      ? { workspace: { worktree: { checkout_path: root } } }
+      ? {
+          workspace: {
+            worktree: { checkout_path: root, is_linked_worktree: true },
+          },
+        }
       : method === "pane.list"
         ? {
             panes: [
@@ -358,6 +370,9 @@ test("production dispatcher isolates two local profiles and profile CRUD", async
   );
   const env: Record<string, string | undefined> = {
     ...process.env,
+    HOME: root,
+    APPDATA: root,
+    XDG_CONFIG_HOME: root,
     HOST: "127.0.0.1",
     HERDR_WORLD_PASSWORD: password,
     PORT: "0",
@@ -486,6 +501,69 @@ test("production dispatcher isolates two local profiles and profile CRUD", async
     );
     expect(initialAlpha.connection_generation).toBe(oldAlphaGeneration);
     expect(initialAlpha.result.workspaces[0].name).toBe("from-alpha");
+    expect(
+      await rpc(
+        "file.mkdir",
+        { workspace_id: "shared-workspace", name: "files-target" },
+        "alpha",
+        oldAlphaGeneration,
+      ),
+    ).toMatchObject({ path: "files-target" });
+    writeFileSync(join(root, "move-me.txt"), "file contents");
+    expect(
+      await rpc(
+        "file.move",
+        {
+          workspace_id: "shared-workspace",
+          path: "move-me.txt",
+          directory: "files-target",
+        },
+        "alpha",
+        oldAlphaGeneration,
+      ),
+    ).toMatchObject({ path: "files-target/move-me.txt" });
+    expect(existsSync(join(root, "move-me.txt"))).toBe(false);
+    expect(readFileSync(join(root, "files-target/move-me.txt"), "utf8")).toBe(
+      "file contents",
+    );
+    writeFileSync(join(root, "move-me.txt"), "keep source");
+    await expect(
+      rpc(
+        "file.move",
+        {
+          workspace_id: "shared-workspace",
+          path: "move-me.txt",
+          directory: "files-target",
+        },
+        "alpha",
+        oldAlphaGeneration,
+      ),
+    ).rejects.toThrow();
+    expect(readFileSync(join(root, "move-me.txt"), "utf8")).toBe("keep source");
+    // A native teardown failure must stop before dispatching removal to Herdr.
+    const hookPath = join(root, "roamgate.json");
+    writeFileSync(join(root, "paseo.json"), '{"worktree":{"teardown":"true"}}');
+    for (const config of [
+      '{"worktree":{"teardown":"exit 7"}}',
+      '{"worktree":{"teardown":false}}',
+    ]) {
+      writeFileSync(hookPath, config);
+      const removal = await rpc(
+        "worktree.remove",
+        { workspace_id: "shared-workspace" },
+        "alpha",
+        oldAlphaGeneration,
+      );
+      expect(removal).toMatchObject({
+        ok: false,
+        skipped_remove: true,
+        before_remove_hook: { status: "failed" },
+      });
+      expect(JSON.stringify(removal.before_remove_hook)).toContain(hookPath);
+      expect(controlCalls.get("alpha")).not.toContain("worktree.remove");
+    }
+    rmSync(hookPath);
+    rmSync(join(root, "paseo.json"));
     writeFileSync(
       join(root, "page.html"),
       "<h1>HTML marker</h1><script>throw 1</script>",
@@ -751,6 +829,9 @@ for (const { protocol, welcomeProtocol, accepted } of [
     const profile = await fakeHerdr(root, "test", protocol, welcomeProtocol);
     const env: Record<string, string | undefined> = {
       ...process.env,
+      HOME: root,
+      APPDATA: root,
+      XDG_CONFIG_HOME: root,
       HOST: "127.0.0.1",
       HERDR_WORLD_PASSWORD: password,
       PORT: "0",
@@ -821,6 +902,7 @@ test("production routing bootstraps only a verified empty session and serializes
   mkdirSync(root, { recursive: true, mode: 0o700 });
   let valid = false;
   let workspaces: Array<{ workspace_id: string }> = [];
+  let beforeTopology: (() => Promise<void>) | undefined;
   const mutations: Record<string, unknown>[] = [];
   const profile = await fakeHerdr(
     root,
@@ -828,10 +910,12 @@ test("production routing bootstraps only a verified empty session and serializes
     22,
     undefined,
     async (request) => {
-      if (request.method === "workspace.list")
+      if (request.method === "workspace.list") {
+        await beforeTopology?.();
         return valid
           ? { type: "workspace_list", workspaces }
           : { workspaces: [] };
+      }
       if (request.method === "workspace.create") {
         mutations.push(request.params ?? {});
         await Bun.sleep(20);
@@ -857,6 +941,9 @@ test("production routing bootstraps only a verified empty session and serializes
   );
   const env: Record<string, string | undefined> = {
     ...process.env,
+    HOME: root,
+    APPDATA: root,
+    XDG_CONFIG_HOME: root,
     HOST: "127.0.0.1",
     HERDR_WORLD_PASSWORD: password,
     PORT: "0",
@@ -917,7 +1004,9 @@ test("production routing bootstraps only a verified empty session and serializes
           JSON.stringify({
             id,
             method,
-            connection_id: method === "workspace.create" ? "empty" : undefined,
+            connection_id: method.startsWith("workspace.")
+              ? "empty"
+              : undefined,
             ...(generation === undefined
               ? {}
               : { connection_generation: generation }),
@@ -936,6 +1025,15 @@ test("production routing bootstraps only a verified empty session and serializes
       message: "Cannot verify an empty session. Refresh and retry creation.",
     });
     expect(mutations).toHaveLength(0);
+    const chosen = join(realpathSync(root), "chosen");
+    mkdirSync(chosen);
+    expect(
+      (await rpc(browsers[0], "workspace.path", { path: "~/chosen" })).result,
+    ).toEqual({
+      path: chosen,
+      error: null,
+      directories: [],
+    });
     valid = true;
     const results = await Promise.all(
       browsers.map((ws) =>
@@ -952,22 +1050,47 @@ test("production routing bootstraps only a verified empty session and serializes
       (
         await rpc(browsers[0], "workspace.create", {
           browser_source: null,
-          cwd: "/wrong",
+          cwd: join(root, "missing"),
         })
       ).error,
-    ).toBeDefined();
+    ).toMatchObject({
+      message: expect.stringContaining("Directory does not exist."),
+    });
+    expect(mutations).toHaveLength(1);
     workspaces = [];
     expect(
       (
         await rpc(browsers[0], "workspace.create", {
           browser_source: null,
-          cwd: "/explicit",
+          cwd: "~/chosen",
           focus: true,
         })
       ).result.type,
     ).toBe("workspace_created");
-    expect(mutations[1]).toEqual({ cwd: "/explicit", focus: false });
+    expect(mutations[1]).toEqual({ cwd: chosen, focus: false });
     workspaces = [];
+    const topologyEntered = Promise.withResolvers<void>();
+    const releaseTopology = Promise.withResolvers<void>();
+    beforeTopology = async () => {
+      topologyEntered.resolve();
+      await releaseTopology.promise;
+    };
+    try {
+      const creating = rpc(browsers[0], "workspace.create", {
+        browser_source: null,
+        cwd: "~/chosen",
+      });
+      await topologyEntered.promise;
+      rmSync(chosen, { recursive: true });
+      releaseTopology.resolve();
+      expect((await creating).error).toMatchObject({
+        message: expect.stringContaining("Directory does not exist."),
+      });
+      expect(mutations).toHaveLength(2);
+    } finally {
+      releaseTopology.resolve();
+      beforeTopology = undefined;
+    }
     expect(
       (
         await rpc(

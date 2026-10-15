@@ -386,6 +386,9 @@ process.on("SIGINT", () => void stop());
     env: {
       ...process.env,
       PATH: `${bin}:${process.env.PATH ?? ""}`,
+      HOME: root,
+      APPDATA: root,
+      XDG_CONFIG_HOME: root,
       HOST: "127.0.0.1",
       HERDR_WORLD_PASSWORD: password,
       PORT: "0",
