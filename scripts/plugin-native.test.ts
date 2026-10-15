@@ -4,7 +4,6 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
-  realpathSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -59,6 +58,10 @@ for (const tls of [false, true]) {
           entry,
           `import { appendFileSync } from "node:fs";
 import { runPluginCommand } from ${JSON.stringify(join(import.meta.dir, "../server/src/config/plugin-command.ts"))};
+if (process.argv[2] === "record-executable") {
+ console.log(process.execPath);
+ process.exit(0);
+}
 const result = await runPluginCommand(process.argv.slice(2), "9.8.7");
 if (result !== null) process.exit(result);
 if (process.argv[2] === "service") {
@@ -92,6 +95,16 @@ process.exit(2);
             },
             stdin: "pipe",
           });
+        // Ask the actual compiled files for their resolved identities. Bun's
+        // Windows realpath can retain a short path while execPath expands it.
+        const identity = (binary: string) => {
+          const result = invoke(binary, ["record-executable"]);
+          expect(result.exitCode, result.stderr.toString()).toBe(0);
+          return result.stdout.toString().trim();
+        };
+        const canonicalIdentity = identity(canonical);
+        const launcherIdentity = identity(launcher);
+        expect(canonicalIdentity).not.toBe(launcherIdentity);
         for (const verb of [
           "version",
           "url",
@@ -118,15 +131,15 @@ process.exit(2);
           .split("\n")
           .map((line) => {
             const [binary, ...args] = JSON.parse(line) as string[];
-            expect(realpathSync(binary!)).not.toBe(realpathSync(launcher));
-            return [realpathSync(binary!), ...args];
+            expect(binary).not.toBe(launcherIdentity);
+            return [binary, ...args];
           });
         expect(services).toEqual([
-          [realpathSync(canonical), "service", "status"],
-          [realpathSync(canonical), "service", "install", "--force"],
-          [realpathSync(canonical), "service", "install"],
-          [realpathSync(canonical), "service", "status"],
-          [realpathSync(canonical), "service", "uninstall"],
+          [canonicalIdentity, "service", "status"],
+          [canonicalIdentity, "service", "install", "--force"],
+          [canonicalIdentity, "service", "install"],
+          [canonicalIdentity, "service", "status"],
+          [canonicalIdentity, "service", "uninstall"],
         ]);
         expect(
           invoke(canonical, ["plugin", "version"]).stdout.toString().trim(),

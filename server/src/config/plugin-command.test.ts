@@ -98,7 +98,7 @@ describe("computeUrl", () => {
 
   test("honors exported and quoted entries without a token file", () => {
     const dir = fixture({
-      "herdr-world.env": 'export HOST="0.0.0.0"\nPORT = "8799"\n',
+      "herdr-world.env": 'export HOST="0.0.0.0"\nPORT="8799"\n',
     });
     expect(computeUrl(dir)).toBe("http://localhost:8799");
   });

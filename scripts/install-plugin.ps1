@@ -89,7 +89,7 @@ try {
       $target = Join-Path $serverDir $name
       $candidate = Join-Path $staging $name
       if (Test-Path -LiteralPath $target) {
-        [IO.File]::Replace($candidate, $target, $null)
+        [IO.File]::Replace($candidate, $target, (Join-Path $staging ("replaced-$name")))
       } else {
         [IO.File]::Move($candidate, $target)
       }
@@ -100,7 +100,7 @@ try {
       $target = Join-Path $serverDir $name
       $previous = Join-Path $staging ("previous-$name")
       if (Test-Path -LiteralPath $previous) {
-        [IO.File]::Replace($previous, $target, $null)
+        [IO.File]::Replace($previous, $target, (Join-Path $staging ("rollback-$name")))
       } else {
         [IO.File]::Delete($target)
       }

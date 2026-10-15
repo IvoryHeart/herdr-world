@@ -106,6 +106,7 @@ test.skipIf(process.platform !== "win32")(
         "metadata",
         "native-command",
         "download",
+        "launcher-replacement",
       ]) {
         writeFileSync(
           archive,
@@ -125,6 +126,17 @@ test.skipIf(process.platform !== "win32")(
           writeFileSync(target, "keep previous binary");
           writeFileSync(compatibility, "keep previous launcher");
         }
+        const scriptPath = join(root, "scripts/install-plugin.ps1").replaceAll(
+          "'",
+          "''",
+        );
+        const compatibilityPath = compatibility.replaceAll("'", "''");
+        // Keep the second target readable for staging, but deny replacement.
+        // The canonical target must be rolled back after its successful promotion.
+        const invokeInstaller =
+          failure === "launcher-replacement"
+            ? `$locked = [IO.File]::Open('${compatibilityPath}', [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read); try { & '${scriptPath}' } finally { $locked.Dispose() }`
+            : `& '${scriptPath}'`;
         const child = Bun.spawn(
           [
             powershell,
@@ -133,7 +145,7 @@ test.skipIf(process.platform !== "win32")(
             "-ExecutionPolicy",
             "Bypass",
             "-Command",
-            `function Get-FileHash { throw "Get-FileHash must not be required" }; & '${join(root, "scripts/install-plugin.ps1").replaceAll("'", "''")}'`,
+            `function Get-FileHash { throw "Get-FileHash must not be required" }; ${invokeInstaller}`,
           ],
           {
             env: {
