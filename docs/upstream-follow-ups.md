@@ -8,16 +8,17 @@ with their resolution PR so historical records retain a destination.
 
 ## Bun-free plugin installation
 
-Status: implementation proposed; acceptance remains open pending supported-platform
-CI evidence and independent human review. Source: Roamgate ffca28f2 (#415), v0.8.4.
-The candidate adds native World plugin commands and system installers, preserves
-cached launcher argv and adds Unix, Windows and compiled compatibility regressions.
-Local Linux checks cannot establish Windows installation or macOS launchd behavior;
-the Windows installer job and both launchd architectures supply that platform evidence.
-The ledger remains deferred until acceptance is verified. Record the resolution PR
-after that reviewed delivery; no resolution or human approval is claimed here.
-Owner: repository owner prioritizes and approves; the integration agent revisits
-and proposes a compatible implementation, independently reviewed before merge.
+Status: completed in [PR #194](https://github.com/IvoryHeart/herdr-world/pull/194),
+merged through [PR #191](https://github.com/IvoryHeart/herdr-world/pull/191).
+Source: Roamgate ffca28f2 (#415), v0.8.4. The owner accepted the migration and
+explicitly waived the counted independent-approval requirement before merge.
+Independent technical follow-up review supported acceptance of revision b949f67c.
+[Exact-revision CI](https://github.com/IvoryHeart/herdr-world/actions/runs/38751737664)
+passed Windows installation, both macOS launchd architectures and Delivery checks.
+The combined-stack run also passed after retrying a Windows fixture compilation
+that exceeded its five-second test timeout; the initial failure remains in
+[run history](https://github.com/IvoryHeart/herdr-world/actions/runs/38754539559).
+The cumulative ledger now records the upstream feature as adapted.
 
 Goal: released Herdr World plugins install without a separately installed Bun.
 World already runs without external Bun after installation. This deferral is not
@@ -34,10 +35,11 @@ Acceptance:
 - Plugin start/restart/status/URL/version/uninstall/panel behavior is verified on
   supported platforms; documentation, packaging and release tests agree.
 
-Revisit on every source sync and any installer/plugin/launcher/release change.
-No scheduled implementation or completion claim is implied. Until the acceptance
-is delivered in a reviewed PR, retain this entry and explain each reconsideration
-in the integration report. Record the resolution PR here when complete.
+Resolution: native World plugin commands and system installers preserve cached
+launcher argv, checksum/version/native-command validation, source-build support,
+and canonical service ownership. The completed section remains a stable historical
+reference. Reassess regressions during future installer/plugin/launcher changes;
+this item no longer carries an outstanding deferral.
 
 ## World workflow controls
 
