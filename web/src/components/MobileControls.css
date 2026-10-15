@@ -210,8 +210,11 @@
       min-width: 0;
     }
 
+    /* Actions stay in the right corner even without a terminal title, e.g.
+       a space's Files or Changes. */
     .mobile-terminal-appbar {
       flex: 1 1 auto;
+      justify-content: flex-end;
       min-width: 0;
     }
 

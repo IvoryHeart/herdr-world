@@ -641,7 +641,7 @@ export function TerminalView({
     },
     [controlledComposerOpen, onComposerOpenChange],
   );
-  usePublishMobileTerminal(pane, isActivePane);
+  usePublishMobileTerminal(pane, isActivePane, container);
   useSystemBack(composerOpen && isActivePane, () => setComposerOpen(false));
   const agentHistoryOpen = controlledAgentHistoryOpen ?? localAgentHistoryOpen;
   const setAgentHistoryOpen = useCallback(

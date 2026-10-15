@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useSyncExternalStore } from "react";
+import { useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { ChevronDown, EllipsisVertical, SquareStack } from "lucide-react";
 import { useStoreSelector } from "../store";
 import type { Pane } from "../types";
@@ -91,6 +91,7 @@ export function usePublishMobileControls(controls: MobileControls | null) {
 export function usePublishMobileTerminal(
   pane: Pane | null | undefined,
   active: boolean,
+  element: HTMLElement | null,
 ) {
   const place = useStoreSelector((state) =>
     pane ? tabName(state.tabs.find((tab) => tab.tab_id === pane.tab_id)) : "",
@@ -98,16 +99,36 @@ export function usePublishMobileTerminal(
   const agent = pane?.display_agent?.trim() || pane?.agent?.trim() || "";
   const status = agentStateKind(pane?.agent_status);
   const workspaceId = pane?.workspace_id ?? "";
-  const visible = active && !!pane;
+  // Mounted terminals can sit hidden behind another view (Spaces under a
+  // scene, a terminal under a space's Files); only one with size on screen
+  // names the app bar.
+  const [onScreen, setOnScreen] = useState(false);
+  useLayoutEffect(() => {
+    if (!element) {
+      setOnScreen(false);
+      return;
+    }
+    const measure = () =>
+      setOnScreen(element.offsetWidth > 0 && element.offsetHeight > 0);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [element]);
+  const visible = active && !!pane && onScreen;
   useLayoutEffect(() => {
     if (!visible) return;
-    terminalStore.set({
+    const identity = {
       workspaceId,
       agent: agent || "Terminal",
       place,
       status,
-    });
-    return () => terminalStore.set(null);
+    };
+    terminalStore.set(identity);
+    return () => {
+      // Another visible terminal may have published since; keep its name.
+      if (terminalStore.get() === identity) terminalStore.set(null);
+    };
   }, [visible, workspaceId, agent, place, status]);
 }
 
@@ -126,7 +147,13 @@ const STATUS_LABEL: Record<AgentStateKind, string> = {
 
 export function MobileTerminalAppBar() {
   const controls = useStoreValue(controlsStore);
-  const terminal = useStoreValue(terminalStore);
+  const onScreen = useStoreValue(terminalStore);
+  // The workspace list covers the terminal it was opened from; keep that
+  // terminal's title so the same control closes the list again.
+  const lastTerminal = useRef(onScreen);
+  if (onScreen) lastTerminal.current = onScreen;
+  const terminal =
+    onScreen ?? (controls?.workspacesOpen ? lastTerminal.current : null);
   if (!controls) return null;
   const description =
     [
