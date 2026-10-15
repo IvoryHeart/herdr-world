@@ -192,11 +192,7 @@
   overflow: hidden;
 }
 
-/* Replace the mobile view picker while inspecting, without adding a title row. */
-.world-primary-view-select[hidden] {
-  display: none;
-}
-
+/* Keep scene navigation and return actions together without adding a title row. */
 .world-back-to-view {
   flex: 0 0 auto;
   display: grid;

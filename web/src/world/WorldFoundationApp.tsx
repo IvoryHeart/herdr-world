@@ -359,22 +359,7 @@ export default function WorldFoundationApp() {
           )}
           primaryViewControl={
             <div className="world-topbar-control-plane">
-              {canReturnToView ? (
-                <button
-                  type="button"
-                  className="world-back-to-view"
-                  title={returnLabel}
-                  aria-label={returnLabel}
-                  onClick={() => {
-                    creationIntentRevision.current++;
-                    visualArrangementControl?.onSelect("close-all");
-                  }}
-                >
-                  <ArrowLeft size={20} aria-hidden="true" />
-                </button>
-              ) : null}
               <label
-                hidden={Boolean(canReturnToView)}
                 className="world-primary-view-select"
                 title={`World view: ${view}`}
               >
@@ -395,6 +380,20 @@ export default function WorldFoundationApp() {
                   ))}
                 </select>
               </label>
+              {canReturnToView ? (
+                <button
+                  type="button"
+                  className="world-back-to-view"
+                  title={returnLabel}
+                  aria-label={returnLabel}
+                  onClick={() => {
+                    creationIntentRevision.current++;
+                    visualArrangementControl?.onSelect("close-all");
+                  }}
+                >
+                  <ArrowLeft size={20} aria-hidden="true" />
+                </button>
+              ) : null}
               {view !== "spaces" ? (
                 <>
                   <WorldTopbarStatus

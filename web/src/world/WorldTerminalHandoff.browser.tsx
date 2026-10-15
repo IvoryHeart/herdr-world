@@ -4258,6 +4258,28 @@ async function run() {
       backToOffice.getBoundingClientRect().height >= 44,
     "Back to Office has a visible touch target while mobile controls are collapsed",
   );
+  const mobileViewBounds = viewSelect.getBoundingClientRect();
+  const mobileBackBounds = backToOffice.getBoundingClientRect();
+  check(
+    mobileViewBounds.width > 0 &&
+      mobileViewBounds.height > 0 &&
+      mobileViewBounds.right <= mobileBackBounds.left,
+    "mobile view switcher stays visible to the left of Back while an Inspector is open",
+  );
+  viewSelect.value = "graph";
+  viewSelect.dispatchEvent(new Event("change", { bubbles: true }));
+  await until(
+    () =>
+      document.querySelector('button[aria-label="Back to Graph"]') &&
+      document.querySelector(".world-spatial-graph-shell"),
+    "mobile view switcher changes scenes while retaining the Back action",
+  );
+  viewSelect.value = "office";
+  viewSelect.dispatchEvent(new Event("change", { bubbles: true }));
+  await until(
+    () => document.querySelector('button[aria-label="Back to Office"]'),
+    "mobile view switcher returns to Office before dismissing Inspectors",
+  );
   backToOffice.click();
   await until(
     () => !document.querySelector(".workspace-inspector"),
