@@ -391,3 +391,9 @@ describe("GitHub/local authority boundaries", () => {
     expect(merge.run).not.toContain("--admin");
   });
 });
+
+test("adoption policy and tracked follow-up acceptance cannot change through agent approval", () => {
+  expect(requiresHumanReview(["docs/upstream-policy.md"])).toBe(true);
+  expect(requiresHumanReview(["docs/upstream-follow-ups.md"])).toBe(true);
+  expect(requiresHumanReview(["docs/example.md"])).toBe(false);
+});

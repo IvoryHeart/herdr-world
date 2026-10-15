@@ -44,3 +44,14 @@ Use cached ChatGPT subscription sign-in locally. Never upload that login cache,
 tokens or auth.json to GitHub. The machine must be available when the scheduled
 local worker runs. Preserve its worktrees and stop after one item; later work is
 driven by GitHub completion events and the next scheduled invocation.
+
+Follow docs/upstream-policy.md. Read .agents/upstream/changes.json and the base
+upstream/dispositions.json. Classify every supplied upstream commit (including
+release/dependency changes) as adopted, adapted, deferred or divergent, with reason,
+evidence and the frozen reviewedFor target. Carry historical records forward.
+Revisit every outstanding deferral/divergence, check its trigger and update
+reviewedFor; explain the assessment in the integration report. Deferred/divergent
+entries need a durable follow-up with owner, acceptance and revisit conditions.
+World packaging ownership requires compatible adaptation, not automatic exclusion.
+New/changed deferrals or divergences are proposals requiring human approval; do
+not claim permanent owner acceptance or silently label omitted behavior adopted.

@@ -13,6 +13,9 @@ are optional because the merged PR history records their source.
   pull-request badges, safer File Explorer mutations, mobile terminal shortcuts,
   and Ranger provider fixes. Preserve World packaging and qualified runtime ownership.
 
+- Upstream synchronization records every incoming commit and revisits deferred work;
+  new deferrals and intentional divergences require human approval.
+
 - Opt-in hourly Roamgate source synchronization with Codex integration,
   independent agent review, one bounded repair pass and protected auto-merge.
   Agent sessions run locally using Codex subscription sign-in, without an API key.

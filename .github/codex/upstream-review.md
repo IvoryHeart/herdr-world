@@ -24,3 +24,13 @@ summary must explain the review conclusion and any findings. A trusted separate
 job decides whether human approval is mandatory and posts the revision-bound
 verdict using a reviewer identity distinct from the PR author.
 Use the local cached ChatGPT sign-in; no API key is needed.
+
+Compare every actual upstream commit in SYNC.base..SYNC.target with the cumulative
+upstream/dispositions.json, using docs/upstream-policy.md from REVIEW_BASE as policy.
+Verify adopted/adapted claims against implementation and evidence, including clean
+merges. Check deferred/divergent follow-up links exist and contain ownership,
+acceptance and revisit conditions. Independently assess every outstanding item
+for this target; a changed reviewedFor field is not semantic evidence. Flag hidden
+omissions, unjustified permanent exclusions, missing follow-through, or a newly
+triggered revisit condition left unaddressed. New/changed deferrals and divergences
+need human approval even if technically justified; summarize them explicitly.

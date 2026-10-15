@@ -5,6 +5,11 @@ import {
   readFileSync,
   writeFileSync,
 } from "node:fs";
+import {
+  ledgerPath,
+  validateLedger,
+  validateTransition,
+} from "./upstream-dispositions";
 
 export const upstream = "powerfooI/roamgate";
 export const branch = "upstream/roamgate";
@@ -57,7 +62,9 @@ export function requiresHumanReview(paths: string[]): boolean {
       /^(\.github\/|\.agents\/|\.githooks\/|verification\/|quint\/|tools\/quint\/|openspec\/)/.test(
         path,
       ) ||
-      /^(CONTRIBUTING\.md|scripts\/)/.test(path) ||
+      /^(CONTRIBUTING\.md|docs\/upstream-(?:policy|follow-ups)\.md|scripts\/)/.test(
+        path,
+      ) ||
       /(^|\/)package\.json$/.test(path) ||
       /(^|\/)(tsconfig[^/]*\.json|bunfig\.toml|biome\.jsonc?|\.oxlintrc\.json|[^/]*(?:vitest|jest|playwright|vite)\.config\.[^/]+)$/.test(
         path,
@@ -142,6 +149,30 @@ function run(command: string, args: string[], input?: string): string {
 
 function git(...args: string[]): string {
   return run("git", ["-c", "core.hooksPath=/dev/null", ...args]);
+}
+
+function readLedger(ref: string) {
+  return validateLedger(JSON.parse(git("show", `${ref}:${ledgerPath}`)));
+}
+
+function sourceChanges(sync: Sync): string[] {
+  return git("rev-list", `${sync.base}..${sync.target}`)
+    .split("\n")
+    .filter(Boolean);
+}
+
+function dispositionReview(
+  sync: Sync,
+  base: string,
+  candidate: string,
+): boolean {
+  return validateTransition(
+    readLedger(base),
+    readLedger(candidate),
+    sync.base,
+    sync.target,
+    sourceChanges(sync),
+  );
 }
 
 export function reconstructMerge(
@@ -447,6 +478,21 @@ async function prepare(sync: Sync): Promise<void> {
   }
   const start = git("rev-parse", "HEAD");
   writeFileSync(".agents/upstream/start", start);
+  writeFileSync(
+    ".agents/upstream/changes.json",
+    JSON.stringify(
+      {
+        commits: git("log", "--format=%H %s", `${sync.base}..${sync.target}`)
+          .split("\n")
+          .filter(Boolean),
+        outstanding: readLedger("origin/main").changes.filter((entry) =>
+          ["deferred", "divergent"].includes(entry.status),
+        ),
+      },
+      null,
+      2,
+    ),
+  );
   if (!sync.head) {
     try {
       git("merge", "--no-commit", "--no-ff", sync.target);
@@ -467,6 +513,13 @@ function exportPatch(sync: Sync): void {
     throw new Error("Unresolved merge conflicts");
   if (recordedSource(readFileSync("UPSTREAM.md", "utf8")) !== sync.target)
     throw new Error("UPSTREAM.md must record exact target");
+  validateTransition(
+    readLedger("origin/main"),
+    validateLedger(JSON.parse(readFileSync(ledgerPath, "utf8"))),
+    sync.base,
+    sync.target,
+    sourceChanges(sync),
+  );
   git("add", "--all");
   const paths = git("diff", "--cached", "--name-only", "-z", start)
     .split("\0")
@@ -519,6 +572,7 @@ function publishLocal(sync: Sync): void {
   const record = git("show", ":UPSTREAM.md");
   if (recordedSource(record) !== sync.target)
     throw new Error("Candidate source record does not match target");
+  dispositionReview(sync, "origin/main", "");
   run("git", [
     "-c",
     "user.name=github-actions[bot]",
@@ -570,7 +624,15 @@ function publishHead(sync: Sync): void {
   validatePublishPaths(paths);
   if (recordedSource(git("show", `${sync.head}:UPSTREAM.md`)) !== sync.target)
     throw new Error("Published source record differs");
-  const body = bodyFor(sync) + "\nIntegration report:\n\n" + report;
+  const dispositionHuman = dispositionReview(sync, main, sync.head);
+  const body =
+    bodyFor(sync) +
+    `\nDisposition ledger: [${ledgerPath}](https://github.com/${repo}/blob/${sync.head}/${ledgerPath}).` +
+    (dispositionHuman
+      ? " New or changed upstream decisions require human approval.\n"
+      : "\n") +
+    "\nIntegration report:\n\n" +
+    report;
   if (sync.pr) {
     const pr = api<Pull>(`repos/${repo}/pulls/${sync.pr}`);
     checkPull(pr, sync);
@@ -694,7 +756,8 @@ async function reviewPlan(): Promise<void> {
   )
     .split("\0")
     .filter(Boolean);
-  output("human", String(requiresHumanReview(paths)));
+  const dispositionHuman = dispositionReview(sync, base, sync.head!);
+  output("human", String(requiresHumanReview(paths) || dispositionHuman));
   output("sync", JSON.stringify(sync));
   output("base", base);
   output("start", "true");
@@ -712,7 +775,22 @@ function postReview(sync: Sync): void {
   const pr = api<Pull>(`repos/${repo}/pulls/${sync.pr}`);
   checkPull(pr, sync);
   const reviewedBase = validateReviewedBase(process.env.REVIEW_BASE, pr);
-  const human = process.env.HUMAN_REVIEW === "true";
+  git("fetch", "origin", sync.head!);
+  git("fetch", "origin", reviewedBase);
+  const paths = git(
+    "diff",
+    "--name-only",
+    "--no-renames",
+    "-z",
+    `${reviewedBase}...${sync.head}`,
+  )
+    .split("\0")
+    .filter(Boolean);
+  const dispositionHuman = dispositionReview(sync, reviewedBase, sync.head!);
+  const human =
+    process.env.HUMAN_REVIEW === "true" ||
+    requiresHumanReview(paths) ||
+    dispositionHuman;
   api(`repos/${repo}/pulls/${sync.pr}/reviews`, {
     commit_id: sync.head,
     event:
@@ -721,7 +799,7 @@ function postReview(sync: Sync): void {
         : human
           ? "COMMENT"
           : "APPROVE",
-    body: `${verdict.summary}\n\nReviewed revision: ${sync.head}; reviewed base: ${reviewedBase}.${human ? "\nHuman approval required: this integration changes delivery, agent or verification controls." : ""}`,
+    body: `${verdict.summary}\n\nReviewed revision: ${sync.head}; reviewed base: ${reviewedBase}.${human ? "\nHuman approval required: this integration changes upstream decisions or delivery, agent or verification controls." : ""}`,
   });
   if (
     verdict.decision === "approve" &&

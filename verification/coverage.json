@@ -1490,6 +1490,7 @@
         "scripts/prepare-release.test.ts",
         "scripts/upstream-sync.test.ts",
         "scripts/upstream-sync-cli.test.ts",
+        "scripts/upstream-dispositions.test.ts",
         "scripts/install-herdr-world.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/186",
@@ -1508,6 +1509,7 @@
           "scripts/prepare-release.test.ts",
           "scripts/upstream-sync.test.ts",
           "scripts/upstream-sync-cli.test.ts",
+          "scripts/upstream-dispositions.test.ts",
           "scripts/install-herdr-world.test.ts"
         ],
         "checks": ["bun run check"],

@@ -38,9 +38,14 @@ CLI configuration and service inspection use World-owned state only.
 World retains its identity, local/SSH connection ownership, same-origin access,
 session-bound push revocation, aggregate visual views, isolated browser storage,
 and browser regression coverage. World-specific service, packaging, release,
-site and agent tooling remain downstream. The v0.8.4 direct plugin executable/installers and upstream release/action
-changes are excluded: World retains its frozen thin launcher, verified standalone
-archives, npm/Homebrew channels, downstream update scripts and automation controls.
+site and agent tooling remain downstream. The v0.8.4 Bun-free plugin installation
+is [deferred pending a compatible migration](docs/upstream-follow-ups.md#bun-free-plugin-installation),
+not permanently rejected. World currently retains its frozen thin launcher,
+verified standalone archives, npm/Homebrew channels and downstream update scripts.
+Upstream workflow/action changes remain a separately reviewed control divergence.
+The [disposition ledger](upstream/dispositions.json) accounts for every incoming
+commit; [adoption policy](docs/upstream-policy.md) requires human approval of new
+or changed exceptions and reconsideration of outstanding work each source sync.
 Upstream's legacy service migration
 and browser-test removal are excluded; World already checks macOS listener
 conflicts before installing a service. React and React DOM remain on 18.3.1:

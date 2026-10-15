@@ -22,3 +22,14 @@ retained downstream divergences, conflicts resolved, affected coverage.json IDs,
 focused checks actually run, and unresolved decisions or risks. Include a specific
 "Knowledge map impact: unchanged — <reason>" line only if source ownership and
 navigation truly remain unchanged; otherwise update docs/knowledge-map.md.
+
+Follow docs/upstream-policy.md. Read .agents/upstream/changes.json and the base
+upstream/dispositions.json. Classify every supplied upstream commit (including
+release/dependency changes) as adopted, adapted, deferred or divergent, with reason,
+evidence and the frozen reviewedFor target. Carry historical records forward.
+Revisit every outstanding deferral/divergence, check its trigger and update
+reviewedFor; explain the assessment in the integration report. Deferred/divergent
+entries need a durable follow-up with owner, acceptance and revisit conditions.
+World packaging ownership requires compatible adaptation, not automatic exclusion.
+New/changed deferrals or divergences are proposals requiring human approval; do
+not claim permanent owner acceptance or silently label omitted behavior adopted.
