@@ -11,7 +11,8 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
-import { View } from "lucide-react";
+import { ArrowLeft, View } from "lucide-react";
+import { useLayoutPreferences } from "../layoutPreferences";
 import App, { type WorkspaceSurfaceSelection } from "../App";
 import { worldLocalStorage } from "../browserStorage";
 import {
@@ -71,6 +72,7 @@ export const OfficeObservabilityDialog = lazyWithReload(
 
 export default function WorldFoundationApp() {
   const [view, setViewState] = useState<WorldView>(initialView);
+  const { mobile } = useLayoutPreferences();
   const creationIntentRevision = useRef(0);
   const spaces = useSpacesTabWindowArrangement(view === "spaces");
   const [visualView, setVisualView] = useState<Exclude<WorldView, "spaces">>(
@@ -245,6 +247,13 @@ export default function WorldFoundationApp() {
     }
   };
 
+  const canReturnToView =
+    mobile &&
+    view !== "spaces" &&
+    inspectorConversations.length > 0 &&
+    visualArrangementControl &&
+    !visualArrangementControl.disabledReasons["close-all"];
+  const returnLabel = `Back to ${view[0].toUpperCase()}${view.slice(1)}`;
   const activeArrangementControl =
     view === "spaces" ? spaces.arrangementControl : visualArrangementControl;
   useEffect(() => {
@@ -371,6 +380,20 @@ export default function WorldFoundationApp() {
                   ))}
                 </select>
               </label>
+              {canReturnToView ? (
+                <button
+                  type="button"
+                  className="world-back-to-view"
+                  title={returnLabel}
+                  aria-label={returnLabel}
+                  onClick={() => {
+                    creationIntentRevision.current++;
+                    visualArrangementControl?.onSelect("close-all");
+                  }}
+                >
+                  <ArrowLeft size={20} aria-hidden="true" />
+                </button>
+              ) : null}
               {view !== "spaces" ? (
                 <>
                   <WorldTopbarStatus

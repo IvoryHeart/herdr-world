@@ -4087,19 +4087,21 @@ export default function App({
   const topbar = (
     <header className={`topbar ${zenMode && !mobile ? "is-zen" : ""}`}>
       <div className="topbar-start">
-        <div className="brand">
-          <img
-            className="logo"
-            src="/herdr-world-logo.svg"
-            width={24}
-            height={24}
-            alt=""
-          />
-          <span className="brand-title">Herdr World</span>
-          <span className="brand-version" title={`Version ${APP_VERSION}`}>
-            v{APP_VERSION}
-          </span>
-        </div>
+        {!mobile ? (
+          <div className="brand">
+            <img
+              className="logo"
+              src="/herdr-world-logo.svg"
+              width={24}
+              height={24}
+              alt=""
+            />
+            <span className="brand-title">Herdr World</span>
+            <span className="brand-version" title={`Version ${APP_VERSION}`}>
+              v{APP_VERSION}
+            </span>
+          </div>
+        ) : null}
         {primaryViewControl}
         {connectionControl === undefined ? (
           <ConnectionSwitcher />

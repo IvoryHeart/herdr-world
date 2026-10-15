@@ -57,6 +57,16 @@ are optional because the merged PR history records their source.
 - Bind upstream approval to the reviewed World base, reject obsolete source
   baselines, preserve integration evidence in PR descriptions, and keep failure
   blockers effective when unrelated issues share their title.
+
+- Show the resolved build version in the application menu instead of the
+  development manifest placeholder.
+
+- Keep a visible Back action in the mobile app bar while a visual Inspector is
+  open. Return to Office, Desk, Tree or Graph without terminating terminal
+  sessions or expanding the ellipsis controls. Hide the logo and product name
+  from the mobile app bar to give its navigation controls more space. Keep the
+  view switcher at the left beside Back, including while an Inspector is open.
+
 - Mobile terminals in Office, Desk, Tree and Graph open the shared Spaces
   Composer/Direct input panel. Inspector title and resource bars collapse while
   viewing a mobile terminal; existing mobile navigation keeps resource and window

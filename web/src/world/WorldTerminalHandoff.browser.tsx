@@ -1090,6 +1090,14 @@ async function run() {
       ),
     "Office settings in common menu",
   );
+  check(
+    Boolean(
+      document
+        .querySelector(".config-summary")
+        ?.textContent?.includes("Version 9.8.7-test"),
+    ),
+    "application menu shows the injected build version instead of the manifest placeholder",
+  );
   const inspectorOpeningSelect = document.querySelector<HTMLSelectElement>(
     'select[aria-label="Office Inspector opening"]',
   )!;
@@ -4222,6 +4230,78 @@ async function run() {
     ).length === closeRpcBefore,
     "Open all changed a Herdr tab, pane, or session",
   );
+
+  viewSelect.value = "office";
+  viewSelect.dispatchEvent(new Event("change", { bubbles: true }));
+  updateLayoutPreferences({ mode: "mobile" });
+  await until(
+    () => document.documentElement.dataset.layout === "mobile",
+    "mobile Office before return navigation",
+  );
+  document
+    .querySelector<HTMLButtonElement>(
+      'button[aria-label="Hide mobile controls"]',
+    )
+    ?.click();
+  await until(
+    () =>
+      document.querySelector<HTMLButtonElement>(
+        'button[aria-label="Back to Office"]',
+      ),
+    "mobile Office has a visible return button outside the ellipsis menu",
+  );
+  const backToOffice = document.querySelector<HTMLButtonElement>(
+    'button[aria-label="Back to Office"]',
+  )!;
+  check(
+    backToOffice.getBoundingClientRect().width >= 44 &&
+      backToOffice.getBoundingClientRect().height >= 44,
+    "Back to Office has a visible touch target while mobile controls are collapsed",
+  );
+  const mobileViewBounds = viewSelect.getBoundingClientRect();
+  const mobileBackBounds = backToOffice.getBoundingClientRect();
+  check(
+    mobileViewBounds.width > 0 &&
+      mobileViewBounds.height > 0 &&
+      mobileViewBounds.right <= mobileBackBounds.left,
+    "mobile view switcher stays visible to the left of Back while an Inspector is open",
+  );
+  viewSelect.value = "graph";
+  viewSelect.dispatchEvent(new Event("change", { bubbles: true }));
+  await until(
+    () =>
+      document.querySelector('button[aria-label="Back to Graph"]') &&
+      document.querySelector(".world-spatial-graph-shell"),
+    "mobile view switcher changes scenes while retaining the Back action",
+  );
+  viewSelect.value = "office";
+  viewSelect.dispatchEvent(new Event("change", { bubbles: true }));
+  await until(
+    () => document.querySelector('button[aria-label="Back to Office"]'),
+    "mobile view switcher returns to Office before dismissing Inspectors",
+  );
+  backToOffice.click();
+  await until(
+    () => !document.querySelector(".workspace-inspector"),
+    "Back to Office dismisses all mobile Inspector presentations",
+  );
+  check(
+    window.location.pathname === "/office" &&
+      !!document.querySelector(".world-office-shell"),
+    "Back to Office reveals the Office scene without changing route",
+  );
+  check(
+    calls.filter(({ method }) =>
+      ["tab.close", "pane.close", "terminal.kill"].includes(method),
+    ).length === closeRpcBefore,
+    "Back to Office leaves Herdr tabs, panes and sessions running",
+  );
+  check(
+    !document.querySelector('button[aria-label="Back to Office"]'),
+    "return action disappears when no Inspector is open",
+  );
+  updateLayoutPreferences({ mode: "desktop" });
+  await arrangeWindows("Open all terminal windows");
 
   // Desk: previewing the next agent in the docked reading pane must keep
   // keyboard focus in the queue, so triage keys never reach a terminal.
