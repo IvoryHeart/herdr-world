@@ -62,6 +62,15 @@ products. The embedded frontend and compiled service SHALL expose the same revie
 - **THEN** the plugin obtains and starts the matching Herdr World executable and exposes one World
   URL without installing or presenting Roamgate
 
+#### Scenario: Released plugin without Bun
+- **WHEN** a Unix or Windows user installs a published World plugin without Bun
+- **THEN** its system installer verifies the matching World release checksum, metadata,
+  executable version and native plugin support before replacing the installation
+- **AND** cached `server/herdr-world-plugin.exe <verb>` actions remain usable,
+  service operations retain the canonical World executable and update owner,
+  and the external Herdr runtime is never stopped
+- **AND** unreleased source builds and local linking explicitly continue to require Bun
+
 #### Scenario: Existing browser state
 - **WHEN** the Roamgate-derived World first runs on a browser that contains old World or Roamgate
   preference keys

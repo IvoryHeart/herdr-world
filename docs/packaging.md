@@ -47,3 +47,11 @@ Candidates publish to npm's `next` tag and the separate `herdr-world-rc` Formula
 
 The responsive Web/PWA is the supported mobile artifact. This foundation does not
 produce the former Capacitor Android package.
+
+Released Herdr plugins reuse these checksum-verified archives without external Bun.
+The platform installer checks the manifest's exact version and native `plugin`
+commands, then installs the World executable and a copy named
+`server/herdr-world-plugin.exe`. The latter preserves cached action argv and routes
+service operations through the canonical executable. No second release artifact
+or bundled Herdr runtime is needed. Unreleased source builds and local linking
+continue to use Bun through `scripts/world-plugin.ts build-source`.

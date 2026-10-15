@@ -1,12 +1,12 @@
 #!/usr/bin/env bun
-// Thin Herdr plugin shim for Herdr World. Herdr invokes the verbs below
-// through herdr-plugin.toml actions; the verb names and their argv mapping
+// Source-build and legacy Herdr plugin shim for Herdr World. Released installs
+// use system installers and native commands; these verbs and their argv mapping
 // are a frozen contract because managed installs call the action set cached
 // at install time.
 //
 // Verbs: build, build-source, compile-launcher, start, restart, status, url,
-// version, uninstall, panel. Build verbs run on Bun at install time and compile
-// this shim into a standalone launcher for the Herdr server's action environment.
+// version, uninstall, panel. Explicit legacy build verbs run on Bun and compile
+// this shim into a standalone launcher for source builds and cached build actions.
 // `build` downloads the checksum-verified prebuilt release binary matching
 // this checkout's version; `build-source` builds unreleased checkouts.
 // The service verbs (start, restart, status, uninstall) delegate to the binary,
@@ -31,6 +31,12 @@ import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { dataRoot, assertSafeDataPath } from "../server/src/config/data-paths";
+
+import { computeUrl } from "../server/src/config/plugin-command";
+export {
+  computeUrl,
+  readServiceEnv,
+} from "../server/src/config/plugin-command";
 
 const LAUNCHER_NAME = "herdr-world-plugin.exe";
 
@@ -248,60 +254,6 @@ function readableConfigFile(dir: string, name: string): string {
   const path = join(dir, name);
   assertSafeDataPath(path);
   return path;
-}
-
-// Mirrors the server's service env parser: leading whitespace, an optional
-// `export` prefix, whitespace around `=`, and optionally quoted values; the
-// last occurrence wins.
-export function readServiceEnv(
-  contents: string,
-  name: string,
-): string | undefined {
-  let value: string | undefined;
-  for (const line of contents.split(/\r?\n/)) {
-    const match = line.match(
-      new RegExp(`^\\s*(?:export\\s+)?${name}\\s*=\\s*(.*?)\\s*$`),
-    );
-    if (!match) continue;
-    const raw = match[1] ?? "";
-    value =
-      raw.length >= 2 &&
-      (raw.startsWith("'") || raw.startsWith('"')) &&
-      raw.at(-1) === raw[0]
-        ? raw.slice(1, -1)
-        : raw;
-  }
-  return value;
-}
-
-export function computeUrl(dir = configDir()): string {
-  const envFile = readableConfigFile(dir, "herdr-world.env");
-  let host = "127.0.0.1";
-  let port = "8787";
-  let usesFixedPassword = false;
-  if (existsSync(envFile)) {
-    const contents = readFileSync(envFile, "utf8");
-    host = readServiceEnv(contents, "HOST") ?? host;
-    port = readServiceEnv(contents, "PORT") ?? port;
-    usesFixedPassword =
-      (readServiceEnv(contents, "HERDR_WORLD_PASSWORD") ?? "").length > 0;
-  }
-  const anyHost = host === "0.0.0.0" || host === "::";
-  const browserHost = anyHost ? "localhost" : host;
-  const formatted = browserHost.includes(":")
-    ? `[${browserHost}]`
-    : browserHost;
-  let url = `http://${formatted}:${port}`;
-  // Only non-loopback binds require the generated login token (the server
-  // skips auth on loopback); the token file can also be absent or stale.
-  const loopback =
-    host === "127.0.0.1" || host === "localhost" || host === "::1";
-  const tokenPath = readableConfigFile(dir, "auth-token");
-  if (!loopback && !usesFixedPassword && existsSync(tokenPath)) {
-    const token = readFileSync(tokenPath, "utf8").trim();
-    if (token) url = `${url}/?token=${encodeURIComponent(token)}`;
-  }
-  return url;
 }
 
 function printUrl(): number {

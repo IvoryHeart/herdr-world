@@ -97,11 +97,15 @@ test("CI and release jobs install once from the workspace root", () => {
         ]);
         continue;
       }
+      // Native Windows installer/compatibility tests use only Bun and Node builtins.
       const noBunInstall =
         (file === "ci.yml" &&
-          ["homebrew-preview", "validation-scope", "delivery"].includes(
-            name,
-          )) ||
+          [
+            "homebrew-preview",
+            "validation-scope",
+            "delivery",
+            "plugin-windows",
+          ].includes(name)) ||
         (file === "release.yml" &&
           [
             "publish",

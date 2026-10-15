@@ -253,11 +253,22 @@ For a published release:
 herdr plugin install IvoryHeart/herdr-world --ref vX.Y.Z
 ```
 
-The plugin downloads or uses the matching World binary and manages the same user
-service as the CLI. It does not install a second application. Bun is required
-during plugin installation or source building. The installed actions and panel
-use a standalone launcher, so the Herdr server does not need Bun on its `PATH`.
-Reinstall the plugin when upgrading from a version whose actions still invoke Bun.
+Released plugins use the system shell on Unix or Windows PowerShell on Windows
+and download the manifest's exact World release, verifying its checksum, package
+metadata, executable version and native plugin support before replacement. Neither
+installation nor actions require Bun. Unix needs curl, tar with xz support and a
+SHA-256 tool; Windows needs PowerShell and tar.exe. Older releases without native
+plugin support fail with the source-build instructions above; source builds and
+local linking still require Bun.
+
+The plugin manages the same World user service as the CLI and never stops the
+external Herdr runtime. Its native compatibility launcher preserves the cached
+`server/herdr-world-plugin.exe <verb>` action argv, including the panel. It delegates
+service work to the canonical sibling World executable, preserving plugin update
+ownership. Restart refreshes generated service paths and refuses custom definitions;
+start explicitly forces installation. Configured ports and credentials are preserved.
+Update plugins through Herdr rather than standalone update/rollback commands.
+Reinstall only when upgrading from older actions that still invoke Bun.
 
 ```bash
 herdr plugin action invoke ivoryheart.herdr-world.start

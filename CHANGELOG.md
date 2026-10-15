@@ -9,10 +9,16 @@ are optional because the merged PR history records their source.
 
 ### Fixed
 
+- Honor native TLS and managed credentials in plugin URLs and panels, and verify
+  Windows plugin downloads without relying on PowerShell hash cmdlet discovery.
+
 - Diagnose the saved default Herdr connection, preserve package/plugin and preview
   update ownership, and refresh generated service paths when restarting the plugin.
 
 ### Added
+
+- Install released Herdr World plugins on Unix and Windows without external Bun,
+  preserving cached plugin actions, verified World releases and service ownership.
 
 - Synchronize Roamgate v0.8.4 source: installation-management commands, worktree
   pull-request badges, safer File Explorer mutations, mobile terminal shortcuts,

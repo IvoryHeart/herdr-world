@@ -172,7 +172,7 @@ jobs:
 
     delivery:
         name: Delivery checks
-        needs: [validation-scope, validation, world-browser, behavioral]
+        needs: [validation-scope, validation, world-browser, behavioral, plugin-windows]
         if: always()
         runs-on: ubuntu-latest
         steps:
@@ -183,6 +183,10 @@ jobs:
               with:
                   bun-version: "1.4.3"
                   no-cache: true
+            - name: Require Windows plugin evidence
+              env:
+                  WINDOWS_PLUGIN_RESULT: ${{ needs.plugin-windows.result }}
+              run: test "$WINDOWS_PLUGIN_RESULT" = success
             - name: Determine validation scope
               run: echo "Validation mode is $VALIDATION_MODE"
               env:
@@ -247,6 +251,11 @@ jobs:
             - name: Compile the standalone plugin launcher
               if: steps.scope.outputs.mode != 'docs' && steps.scope.outputs.mode != 'reuse'
               run: bun scripts/world-plugin.ts compile-launcher
+            - name: Verify Bun-free installation and prepare the native compatibility launcher
+              if: steps.scope.outputs.mode != 'docs' && steps.scope.outputs.mode != 'reuse'
+              run: |
+                  bun test scripts/install-plugin.test.ts scripts/plugin-native.test.ts server/src/config/plugin-command.test.ts
+                  cp server/herdr-world server/herdr-world-plugin.exe
             - name: Exercise the real plugin-managed launchd lifecycle
               if: steps.scope.outputs.mode != 'docs' && steps.scope.outputs.mode != 'reuse'
               shell: bash
@@ -281,6 +290,21 @@ jobs:
                   PATH=/usr/bin:/bin "$plugin_launcher" uninstall
                   test ! -e "$HOME/Library/LaunchAgents/dev.herdr-world.plist"
                   trap - EXIT
+
+    plugin-windows:
+        name: Windows Bun-free plugin installation
+        runs-on: windows-latest
+        timeout-minutes: 20
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+              with:
+                  persist-credentials: false
+            - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+              with:
+                  bun-version: "1.4.3"
+                  no-cache: true
+            - name: Verify native Windows installation and frozen actions
+              run: bun test scripts/install-plugin.windows.test.ts scripts/plugin-native.test.ts server/src/config/plugin-command.test.ts
 
     release-preview:
         name: Downloadable preview (${{ matrix.platform }})
