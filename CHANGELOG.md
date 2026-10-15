@@ -42,6 +42,10 @@ are optional because the merged PR history records their source.
 
 ### Fixed
 
+- Bind upstream approval to the reviewed World base, reject obsolete source
+  baselines, preserve integration evidence in PR descriptions, and keep failure
+  blockers effective when unrelated issues share their title.
+
 - Keep retained unavailable Ranger workspace permissions visible and individually
   revocable without clearing unrelated grants.
 - Reject Ranger history and Git diff reads on Windows SSH runtimes before calling

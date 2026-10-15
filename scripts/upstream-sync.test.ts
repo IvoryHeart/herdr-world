@@ -17,6 +17,7 @@ import {
   validateSubmittedHead,
   parseApiResponse,
   validatePublication,
+  validateIntegrationReport,
 } from "./upstream-sync";
 
 const base = "a".repeat(40);
@@ -206,6 +207,20 @@ test("successful no-content dispatch responses do not become false failures", ()
   expect(() => parseApiResponse("invalid")).toThrow();
 });
 
+test("report bounds preserve evidence without accepting control bytes or silent truncation", () => {
+  const evidence = "Q41 checks passed; unresolved platform decision remains.\n";
+  expect(validateIntegrationReport(evidence)).toBe(evidence);
+  for (const invalid of [
+    undefined,
+    "",
+    "x".repeat(12001),
+    "é".repeat(6001),
+    evidence + "\u0000",
+  ]) {
+    expect(() => validateIntegrationReport(invalid)).toThrow();
+  }
+});
+
 test("publication retries are idempotent while target drift and extra repair revisions fail", () => {
   const published = { ...sync, head };
   expect(() => validatePublication(published, published)).not.toThrow();
@@ -367,6 +382,7 @@ describe("GitHub/local authority boundaries", () => {
       (step) => step.name === "Submit revision-bound independent review",
     )!;
     expect(submit.env?.GH_TOKEN).toBe("${{ steps.reviewer.outputs.token }}");
+    expect(submit.env?.REVIEW_BASE).toBe("${{ inputs.base }}");
     const merge = approve.steps.find(
       (step) => step.name === "Queue merge under existing branch rules",
     )!;

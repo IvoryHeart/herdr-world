@@ -32,6 +32,13 @@ gate. [Upstream publish](../.github/workflows/upstream-publish.yml) validates th
 pushed revision and ancestry on main, creates the PR as `github-actions[bot]`, and
 explicitly dispatches full CI. It never executes candidate scripts or installs
 candidate dependencies. A merge commit preserves the upstream parent.
+Preparation and publication refresh main and require its recorded Roamgate source
+to equal the frozen source baseline. If a manual integration advanced that record,
+obsolete work stops for reconciliation instead of downgrading it. The worker
+exports its integration report alongside the patch and forwards it as plain
+dispatch data. Initial and repair PR descriptions retain the actual checks,
+adaptations, unresolved decisions and knowledge-map explanation. Reports over
+12,000 UTF-8 bytes or containing control bytes are rejected, never truncated.
 
 Only one `upstream/roamgate` PR is active. Its upstream target freezes immediately;
 later releases wait for merge or closure. A current-head CI failure or change
@@ -47,6 +54,10 @@ trusted review prompt and output schema. It never resumes the implementer's
 conversation. The local controller forwards the unchanged verdict to GitHub;
 the workflow checks the successful CI identity and current PR head again, then
 posts a commit-bound review using a separate reviewer GitHub App.
+The exact World base inspected by the reviewer is carried separately from the
+Roamgate source baseline. Local submission, hosted planning and final approval
+each compare it with current PR/main before accepting the verdict. Advancing only
+main invalidates the comparison even when the candidate head is unchanged.
 
 This trusts the authorized local controller to run the reviewer honestly. GitHub
 can validate revision/CI/identity, but cannot attest that a model session was
@@ -66,8 +77,10 @@ Final merges must retain upstream ancestry; do not squash or rebase sync PRs.
 
 1. On the machine that will perform the work, install the pinned Bun toolchain,
    Codex CLI and GitHub CLI. Run `codex login` and choose ChatGPT subscription
-   sign-in; confirm with `codex login status`. Sign into GitHub with permission
-   to push branches and dispatch workflows. Keep all login caches local.
+   sign-in; confirm with `codex login status`. Sign into GitHub as the repository
+   owner, with permission to push branches and dispatch workflows. Local admission
+   requires that identity so failures produce recognized owner-authored blocker
+   issues. Hosted failures use the Actions bot. Keep all login caches local.
 2. Install a dedicated reviewer GitHub App on this repository with **Contents:
    read** and **Pull requests: write**. Store its ID in the repository variable
    `UPSTREAM_REVIEW_APP_ID` and PEM private key in the repository secret
@@ -112,6 +125,8 @@ PR unapproved. Fix infrastructure and retry the same frozen revision. If main
 advances, update the sync branch and run full CI and independent review again.
 Do not advance the upstream target or reuse old approval. Preserve generated
 worktrees for inspection; normal operator cleanup is separate.
+Blocker creation and admission share the same issue/author predicate: a matching
+PR or outsider-authored issue cannot suppress creation of a trusted failure latch.
 
 This extends inventory Q41 (release/package/CI orchestration). Direct tests
 enumerate bounded repair/authority cases, reject stale or malformed verdicts,
@@ -122,3 +137,9 @@ They do not establish model quality, API availability, App eligibility or actual
 hosted execution. First-run inspection and all protected platform checks remain
 required. Official guidance: [authentication](https://learn.chatgpt.com/docs/auth)
 and [non-interactive mode](https://learn.chatgpt.com/docs/non-interactive-mode).
+
+`scripts/upstream-sync-cli.test.ts` exercises the real helper commands with real
+local Git graphs and intercepted GitHub/network operations: base movement between
+queue/submission/approval, source advancement before preparation/publication,
+blocker collisions and both initial and repair report handoffs. These are direct
+orchestration regressions; they do not create remote issues, PRs or reviews.

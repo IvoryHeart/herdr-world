@@ -17,7 +17,7 @@ before preparing the merge. Use the trusted helper's prepare command with SYNC f
 the plan. Apply the trusted upstream-integrate.md prompt and integration skill.
 Leave HEAD unchanged and write the integration report to .agents/upstream/report.md.
 Use the trusted helper's export command. Then create a separate publication worktree
-at the saved start SHA and copy only candidate.patch into its ignored
+at the saved start SHA and copy candidate.patch and report.md into its ignored
 .agents/upstream/export directory. Run the trusted helper's publish-local command
 there with the original SYNC. This reconstructs the merge or repair, pushes through
 the repository's pre-push delivery gate and dispatches bot PR publication. Preserve
@@ -31,7 +31,8 @@ the implementation conversation or give the reviewer its reasoning. Save the JSO
 verdict under .agents/upstream-local in this trusted checkout, outside the candidate.
 The reviewer must not execute candidate scripts or use GitHub credentials. Invoke
 the trusted helper's submit-review command with that file, SYNC and REVIEW_RUN_ID
-from the plan. GitHub independently checks successful CI, current head and human
+and REVIEW_BASE from the plan. GitHub independently checks successful CI, current
+head, the exact reviewed World base and human
 review policy before posting the verdict through the separate reviewer App.
 Never replace the independent verdict with your own or submit an approving review
 directly. Do not merge any PR yourself.

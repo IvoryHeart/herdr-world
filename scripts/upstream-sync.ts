@@ -219,6 +219,48 @@ function fetchTarget(sync: Sync): void {
   git("merge-base", "--is-ancestor", sync.base, "HEAD");
 }
 
+function refreshSourceBaseline(sync: Sync): string {
+  git("fetch", "origin", "main");
+  const main = git("rev-parse", "origin/main");
+  if (recordedSource(git("show", `${main}:UPSTREAM.md`)) !== sync.base) {
+    throw new Error(
+      "Frozen source baseline changed on main; reconcile obsolete upstream work",
+    );
+  }
+  return main;
+}
+
+function validateReviewedBase(reviewed: unknown, pr: Pull): string {
+  const main = api<{ object: { sha: string } }>(
+    `repos/${repository()}/git/ref/heads/main`,
+  ).object.sha;
+  if (
+    typeof reviewed !== "string" ||
+    !/^[a-f0-9]{40}$/.test(reviewed) ||
+    reviewed !== pr.base.sha ||
+    reviewed !== main
+  ) {
+    throw new Error(
+      "The reviewed base changed or is missing; update the branch and obtain fresh CI and independent review",
+    );
+  }
+  return reviewed;
+}
+
+export function validateIntegrationReport(value: unknown): string {
+  if (
+    typeof value !== "string" ||
+    value.trim().length < 20 ||
+    Buffer.byteLength(value, "utf8") > 12000 ||
+    /[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(value)
+  ) {
+    throw new Error(
+      "Integration report must contain 20–12000 UTF-8 bytes of readable evidence",
+    );
+  }
+  return value;
+}
+
 function bodyFor(sync: Sync): string {
   return (
     `Synchronize Roamgate ${sync.tag} (${sync.target}).\n\n` +
@@ -239,6 +281,27 @@ type Issue = {
   user: { login: string };
   pull_request?: unknown;
 };
+
+function trustedBlocker(issue: Issue): boolean {
+  return (
+    !issue.pull_request &&
+    issue.title === "Upstream automation blocked" &&
+    ["github-actions[bot]", repository().split("/")[0]].includes(
+      issue.user.login,
+    )
+  );
+}
+
+function validateBlockerCreator(): void {
+  const login =
+    process.env.GITHUB_ACTIONS === "true"
+      ? "github-actions[bot]"
+      : api<{ login: string }>("user").login;
+  if (!["github-actions[bot]", repository().split("/")[0]].includes(login))
+    throw new Error(
+      "The local worker must sign into GitHub as the repository owner so its failure blockers are recognized",
+    );
+}
 function queueIssues(): Issue[] {
   return apiList<Issue>(`repos/${repository()}/issues?state=open&per_page=100`);
 }
@@ -288,14 +351,7 @@ function closeQueue(title: string): void {
 async function detect(): Promise<void> {
   const repo = repository();
   const issues = queueIssues();
-  if (
-    issues.some(
-      (issue) =>
-        !issue.pull_request &&
-        issue.title === "Upstream automation blocked" &&
-        ["github-actions[bot]", repo.split("/")[0]].includes(issue.user.login),
-    )
-  ) {
+  if (issues.some(trustedBlocker)) {
     console.info(
       "Upstream automation is blocked; resolve and close its tracking issue before retrying.",
     );
@@ -355,6 +411,7 @@ async function detect(): Promise<void> {
 }
 
 async function prepare(sync: Sync): Promise<void> {
+  refreshSourceBaseline(sync);
   fetchTarget(sync);
   mkdirSync(".agents/upstream", { recursive: true });
   if (sync.head) {
@@ -401,6 +458,9 @@ async function prepare(sync: Sync): Promise<void> {
 }
 
 function exportPatch(sync: Sync): void {
+  const report = validateIntegrationReport(
+    readFileSync(".agents/upstream/report.md", "utf8"),
+  );
   const start = readFileSync(".agents/upstream/start", "utf8");
   if (git("rev-parse", "HEAD") !== start) throw new Error("Agent changed HEAD");
   if (git("diff", "--name-only", "--diff-filter=U"))
@@ -423,6 +483,7 @@ function exportPatch(sync: Sync): void {
   )
     throw new Error("Generated files cannot be published");
   mkdirSync(".agents/upstream/export", { recursive: true });
+  writeFileSync(".agents/upstream/export/report.md", report);
   writeFileSync(
     ".agents/upstream/export/candidate.patch",
     git("diff", "--cached", "--binary", "--full-index", start) + "\n",
@@ -431,6 +492,10 @@ function exportPatch(sync: Sync): void {
 
 function publishLocal(sync: Sync): void {
   const repo = repository();
+  refreshSourceBaseline(sync);
+  const report = validateIntegrationReport(
+    readFileSync(".agents/upstream/export/report.md", "utf8"),
+  );
   fetchTarget(sync);
   if (sync.head) {
     checkPull(api<Pull>(`repos/${repo}/pulls/${sync.pr}`), sync);
@@ -479,32 +544,33 @@ function publishLocal(sync: Sync): void {
   const published = { ...sync, head: git("rev-parse", "HEAD") };
   api(`repos/${repo}/actions/workflows/upstream-publish.yml/dispatches`, {
     ref: "main",
-    inputs: { sync: JSON.stringify(published) },
+    inputs: { sync: JSON.stringify(published), report },
   });
 }
 
 function publishHead(sync: Sync): void {
   const repo = repository();
+  const main = refreshSourceBaseline(sync);
+  const report = validateIntegrationReport(process.env.REPORT);
   if (!sync.head) throw new Error("Missing published head");
   git("fetch", "origin", branch);
   if (git("rev-parse", "FETCH_HEAD") !== sync.head)
     throw new Error("Published branch advanced");
   git("merge-base", "--is-ancestor", sync.target, sync.head);
-  git("merge-base", "--is-ancestor", "HEAD", sync.head);
+  git("merge-base", "--is-ancestor", main, sync.head);
   const paths = git(
     "diff",
     "--name-only",
     "--no-renames",
     "-z",
-    `HEAD...${sync.head}`,
+    `${main}...${sync.head}`,
   )
     .split("\0")
     .filter(Boolean);
   validatePublishPaths(paths);
   if (recordedSource(git("show", `${sync.head}:UPSTREAM.md`)) !== sync.target)
     throw new Error("Published source record differs");
-  const report = git("show", `${sync.head}:UPSTREAM.md`).slice(0, 20000);
-  const body = bodyFor(sync) + "\nSource integration record:\n\n" + report;
+  const body = bodyFor(sync) + "\nIntegration report:\n\n" + report;
   if (sync.pr) {
     const pr = api<Pull>(`repos/${repo}/pulls/${sync.pr}`);
     checkPull(pr, sync);
@@ -530,6 +596,18 @@ function publishHead(sync: Sync): void {
       if (existing.length !== 1) throw new Error("Multiple upstream PRs");
       checkPull(existing[0], sync);
       validatePublication(parseSync(existing[0].body), sync);
+      run(
+        "gh",
+        [
+          "api",
+          `repos/${repo}/pulls/${existing[0].number}`,
+          "--method",
+          "PATCH",
+          "--input",
+          "-",
+        ],
+        JSON.stringify({ body }),
+      );
     } else {
       if (sync.repair !== 0) throw new Error("Cannot repair a missing PR");
       api(`repos/${repo}/pulls`, {
@@ -601,6 +679,12 @@ async function reviewPlan(): Promise<void> {
   git("merge-base", "--is-ancestor", sync.target, sync.head!);
   git("fetch", "origin", "main");
   const base = git("rev-parse", "origin/main");
+  if (!event.workflow_run) {
+    validateReviewedBase(event.inputs?.base, pr);
+    if (event.inputs.base !== base)
+      throw new Error("The reviewed base changed during validation");
+  } else if (pr.base.sha !== base)
+    throw new Error("PR comparison base changed while queueing review");
   const paths = git(
     "diff",
     "--name-only",
@@ -627,6 +711,7 @@ function postReview(sync: Sync): void {
   const repo = repository();
   const pr = api<Pull>(`repos/${repo}/pulls/${sync.pr}`);
   checkPull(pr, sync);
+  const reviewedBase = validateReviewedBase(process.env.REVIEW_BASE, pr);
   const human = process.env.HUMAN_REVIEW === "true";
   api(`repos/${repo}/pulls/${sync.pr}/reviews`, {
     commit_id: sync.head,
@@ -636,7 +721,7 @@ function postReview(sync: Sync): void {
         : human
           ? "COMMENT"
           : "APPROVE",
-    body: `${verdict.summary}\n\nReviewed revision: ${sync.head}.${human ? "\nHuman approval required: this integration changes delivery, agent or verification controls." : ""}`,
+    body: `${verdict.summary}\n\nReviewed revision: ${sync.head}; reviewed base: ${reviewedBase}.${human ? "\nHuman approval required: this integration changes delivery, agent or verification controls." : ""}`,
   });
   if (
     verdict.decision === "approve" &&
@@ -656,14 +741,9 @@ function localPlan(): void {
   );
   if (enabled.value !== "true")
     throw new Error("Upstream automation is disabled");
+  validateBlockerCreator();
   const issues = queueIssues();
-  if (
-    issues.some(
-      (issue) =>
-        issue.title === "Upstream automation blocked" &&
-        ["github-actions[bot]", repo.split("/")[0]].includes(issue.user.login),
-    )
-  )
+  if (issues.some(trustedBlocker))
     throw new Error("Resolve the upstream blocker issue before retrying");
   const pending = issues.filter(
     (issue) =>
@@ -734,7 +814,9 @@ function submitReview(sync: Sync): void {
     JSON.parse(readFileSync(process.argv[3], "utf8")),
   );
   if (!sync.pr || !sync.head) throw new Error("Missing reviewed PR/head");
-  checkPull(api<Pull>(`repos/${repository()}/pulls/${sync.pr}`), sync);
+  const pr = api<Pull>(`repos/${repository()}/pulls/${sync.pr}`);
+  checkPull(pr, sync);
+  const base = validateReviewedBase(process.env.REVIEW_BASE, pr);
   const runId = Number(process.env.REVIEW_RUN_ID);
   if (!Number.isSafeInteger(runId) || runId < 1)
     throw new Error("Missing successful CI run");
@@ -745,6 +827,7 @@ function submitReview(sync: Sync): void {
       inputs: {
         run_id: String(runId),
         head: sync.head,
+        base,
         verdict: JSON.stringify(verdict),
       },
     },
@@ -753,11 +836,13 @@ function submitReview(sync: Sync): void {
 
 function block(): void {
   const title = "Upstream automation blocked";
-  if (!queueIssues().some((issue) => issue.title === title))
+  if (!queueIssues().some(trustedBlocker)) {
+    validateBlockerCreator();
     api(`repos/${repository()}/issues`, {
       title,
       body: "The local Codex worker stopped unsuccessfully. Inspect its local run output, pending queue issues and upstream PR. Resolve the cause and close this issue before starting another worker run. No approval or merge may be assumed.",
     });
+  }
 }
 
 if (import.meta.main) {

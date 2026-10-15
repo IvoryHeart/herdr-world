@@ -19,6 +19,10 @@ on:
         description: Structured JSON from the independent read-only local reviewer
         required: true
         type: string
+      base:
+        description: Exact World main revision inspected by the independent reviewer
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -83,6 +87,7 @@ jobs:
           HUMAN_REVIEW: ${{ needs.plan.outputs.human }}
           AUTO_MERGE: ${{ vars.UPSTREAM_AUTO_MERGE }}
           VERDICT: ${{ inputs.verdict }}
+          REVIEW_BASE: ${{ inputs.base }}
           GH_TOKEN: ${{ steps.reviewer.outputs.token }}
         run: bun scripts/upstream-sync.ts post-review
       - name: Close completed review queue entry
