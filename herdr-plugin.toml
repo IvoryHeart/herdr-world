@@ -5,19 +5,21 @@ min_herdr_version = "0.9.0"
 description = "Herdr World: Visualize and control your agents in Office and Graph across multiple hosts."
 platforms = ["linux", "macos", "windows"]
 
-# Thin launcher: install-time Bun compiles scripts/world-plugin.ts, which
-# downloads the checksum-verified prebuilt release binary matching this
-# checkout's version on demand and forwards service verbs to it (systemd,
-# launchd, or Windows Task Scheduler). The verb set is a frozen contract; see
-# scripts/world-plugin.ts. Actions run without Bun on the Herdr server's PATH.
-# For an unreleased checkout, run `bun scripts/world-plugin.ts build-source`, then
+# System installers verify the matching World release without external Bun.
+# A native compatibility launcher preserves the frozen cached action argv.
+# Unreleased checkouts require `bun scripts/world-plugin.ts build-source`, then
 # `herdr plugin link .`; see docs/DEPLOYMENT.md#herdr-plugin.
 # The panel opens as a session-modal popup in the Herdr TUI by default. Open
 # it with --placement split (or tab/zoomed/overlay) to get a regular pane
 # that other Herdr clients, including Herdr World itself, can see.
 
 [[build]]
-command = ["bun", "scripts/world-plugin.ts", "build"]
+platforms = ["linux", "macos"]
+command = ["sh", "scripts/install-plugin.sh"]
+
+[[build]]
+platforms = ["windows"]
+command = ["powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", "scripts/install-plugin.ps1"]
 
 [[panes]]
 id = "panel"

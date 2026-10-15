@@ -215,9 +215,8 @@ test("plugin actions and panel use the standalone launcher", () => {
     actions: Array<{ command: string[] }>;
   };
   expect(manifest.build[0]?.command).toEqual([
-    "bun",
-    "scripts/world-plugin.ts",
-    "build",
+    "sh",
+    "scripts/install-plugin.sh",
   ]);
   for (const entry of [...manifest.panes, ...manifest.actions]) {
     expect(entry.command[0]).toBe("server/herdr-world-plugin.exe");
@@ -304,7 +303,7 @@ describe("computeUrl", () => {
     expect(computeUrl(fixture({}))).toBe("http://127.0.0.1:8787");
   });
 
-  test("includes the login token only for non-loopback binds", () => {
+  test("includes the login token for non-loopback binds", () => {
     const dir = fixture({
       "herdr-world.env": "HOST=0.0.0.0\nPORT=8791\n",
       "auth-token": "abc123\n",
@@ -312,12 +311,12 @@ describe("computeUrl", () => {
     expect(computeUrl(dir)).toBe("http://localhost:8791/?token=abc123");
   });
 
-  test("ignores a stale token file on loopback binds", () => {
+  test("includes the login token on authenticated loopback binds", () => {
     const dir = fixture({
       "herdr-world.env": "HOST=127.0.0.1\nPORT=8787\n",
       "auth-token": "abc123\n",
     });
-    expect(computeUrl(dir)).toBe("http://127.0.0.1:8787");
+    expect(computeUrl(dir)).toBe("http://127.0.0.1:8787/?token=abc123");
   });
 
   test("password values suppress tokens, while empty values do not", () => {

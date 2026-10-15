@@ -1,3 +1,4 @@
+import { runPluginCommand } from "./config/plugin-command";
 import { unixOnlyMessage } from "./connections/unix-only";
 import { inspectWorkspacePath } from "./workspace/path";
 import { createWorkspaceWorktree } from "./worktree/create";
@@ -129,6 +130,11 @@ const APP_VERSION = currentBuildVersion(
   process.env.HERDR_WORLD_BUILD_VERSION,
   packageJson.version,
 );
+const pluginCommandResult = await runPluginCommand(
+  process.argv.slice(2),
+  APP_VERSION,
+);
+if (pluginCommandResult !== null) process.exit(pluginCommandResult);
 const taskSummaryCommandResult = await runTaskSummaryCommand(
   process.argv.slice(2),
   APP_VERSION,

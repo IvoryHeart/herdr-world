@@ -1,12 +1,12 @@
 #!/usr/bin/env bun
-// Thin Herdr plugin shim for Herdr World. Herdr invokes the verbs below
-// through herdr-plugin.toml actions; the verb names and their argv mapping
+// Source-build and legacy Herdr plugin shim for Herdr World. Released installs
+// use system installers and native commands; these verbs and their argv mapping
 // are a frozen contract because managed installs call the action set cached
 // at install time.
 //
 // Verbs: build, build-source, compile-launcher, start, restart, status, url,
-// version, uninstall, panel. Build verbs run on Bun at install time and compile
-// this shim into a standalone launcher for the Herdr server's action environment.
+// version, uninstall, panel. Explicit legacy build verbs run on Bun and compile
+// this shim into a standalone launcher for source builds and cached build actions.
 // `build` downloads the checksum-verified prebuilt release binary matching
 // this checkout's version; `build-source` builds unreleased checkouts.
 // The service verbs (start, restart, status, uninstall) delegate to the binary,
@@ -292,12 +292,8 @@ export function computeUrl(dir = configDir()): string {
     ? `[${browserHost}]`
     : browserHost;
   let url = `http://${formatted}:${port}`;
-  // Only non-loopback binds require the generated login token (the server
-  // skips auth on loopback); the token file can also be absent or stale.
-  const loopback =
-    host === "127.0.0.1" || host === "localhost" || host === "::1";
   const tokenPath = readableConfigFile(dir, "auth-token");
-  if (!loopback && !usesFixedPassword && existsSync(tokenPath)) {
+  if (!usesFixedPassword && existsSync(tokenPath)) {
     const token = readFileSync(tokenPath, "utf8").trim();
     if (token) url = `${url}/?token=${encodeURIComponent(token)}`;
   }
