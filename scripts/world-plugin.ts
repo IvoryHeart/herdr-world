@@ -32,6 +32,12 @@ import { fileURLToPath } from "node:url";
 
 import { dataRoot, assertSafeDataPath } from "../server/src/config/data-paths";
 
+import { computeUrl } from "../server/src/config/plugin-command";
+export {
+  computeUrl,
+  readServiceEnv,
+} from "../server/src/config/plugin-command";
+
 const LAUNCHER_NAME = "herdr-world-plugin.exe";
 
 export function resolvePluginRoot(
@@ -248,56 +254,6 @@ function readableConfigFile(dir: string, name: string): string {
   const path = join(dir, name);
   assertSafeDataPath(path);
   return path;
-}
-
-// Mirrors the server's service env parser: leading whitespace, an optional
-// `export` prefix, whitespace around `=`, and optionally quoted values; the
-// last occurrence wins.
-export function readServiceEnv(
-  contents: string,
-  name: string,
-): string | undefined {
-  let value: string | undefined;
-  for (const line of contents.split(/\r?\n/)) {
-    const match = line.match(
-      new RegExp(`^\\s*(?:export\\s+)?${name}\\s*=\\s*(.*?)\\s*$`),
-    );
-    if (!match) continue;
-    const raw = match[1] ?? "";
-    value =
-      raw.length >= 2 &&
-      (raw.startsWith("'") || raw.startsWith('"')) &&
-      raw.at(-1) === raw[0]
-        ? raw.slice(1, -1)
-        : raw;
-  }
-  return value;
-}
-
-export function computeUrl(dir = configDir()): string {
-  const envFile = readableConfigFile(dir, "herdr-world.env");
-  let host = "127.0.0.1";
-  let port = "8787";
-  let usesFixedPassword = false;
-  if (existsSync(envFile)) {
-    const contents = readFileSync(envFile, "utf8");
-    host = readServiceEnv(contents, "HOST") ?? host;
-    port = readServiceEnv(contents, "PORT") ?? port;
-    usesFixedPassword =
-      (readServiceEnv(contents, "HERDR_WORLD_PASSWORD") ?? "").length > 0;
-  }
-  const anyHost = host === "0.0.0.0" || host === "::";
-  const browserHost = anyHost ? "localhost" : host;
-  const formatted = browserHost.includes(":")
-    ? `[${browserHost}]`
-    : browserHost;
-  let url = `http://${formatted}:${port}`;
-  const tokenPath = readableConfigFile(dir, "auth-token");
-  if (!usesFixedPassword && existsSync(tokenPath)) {
-    const token = readFileSync(tokenPath, "utf8").trim();
-    if (token) url = `${url}/?token=${encodeURIComponent(token)}`;
-  }
-  return url;
 }
 
 function printUrl(): number {

@@ -9,6 +9,9 @@ are optional because the merged PR history records their source.
 
 ### Fixed
 
+- Honor native TLS and managed credentials in plugin URLs and panels, and verify
+  Windows plugin downloads without relying on PowerShell hash cmdlet discovery.
+
 - Diagnose the saved default Herdr connection, preserve package/plugin and preview
   update ownership, and refresh generated service paths when restarting the plugin.
 

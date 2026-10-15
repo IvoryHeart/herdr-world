@@ -52,23 +52,48 @@ describe("computeUrl", () => {
   });
 
   test("defaults to loopback when no env file exists", () => {
-    expect(computeUrl(fixture({}))).toBe("http://127.0.0.1:8787");
+    expect(computeUrl(fixture({}))).toBe("http://localhost:8787");
   });
 
   test("includes the login token for non-loopback binds", () => {
     const dir = fixture({
       "herdr-world.env": "HOST=0.0.0.0\nPORT=8791\n",
-      "auth-token": "abc123\n",
+      "auth-token":
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n",
     });
-    expect(computeUrl(dir)).toBe("http://localhost:8791/?token=abc123");
+    expect(computeUrl(dir)).toBe(
+      "http://localhost:8791/?token=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    );
   });
 
   test("includes the login token for loopback binds", () => {
     const dir = fixture({
       "herdr-world.env": "HOST=127.0.0.1\nPORT=8787\n",
-      "auth-token": "abc123\n",
+      "auth-token":
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n",
     });
-    expect(computeUrl(dir)).toBe("http://127.0.0.1:8787/?token=abc123");
+    expect(computeUrl(dir)).toBe(
+      "http://localhost:8787/?token=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    );
+  });
+
+  test("does not publish stale tokens for fixed passwords or invalid generated credentials", () => {
+    const dir = fixture({
+      "herdr-world.env":
+        "HOST=::1\nHERDR_WORLD_PASSWORD=synthetic-password-long-enough\n",
+      "auth-token": "a".repeat(64),
+    });
+    expect(computeUrl(dir)).toBe("http://localhost:8787");
+    writeFileSync(join(dir, "herdr-world.env"), "HOST=2001:db8::1\n");
+    writeFileSync(join(dir, "auth-token"), "invalid-token");
+    expect(computeUrl(dir)).toBe("http://[2001:db8::1]:8787");
+  });
+
+  test("rejects incomplete TLS instead of printing an HTTP login link", () => {
+    const dir = fixture({
+      "herdr-world.env": "HERDR_WORLD_TLS_CERT=missing.pem\n",
+    });
+    expect(() => computeUrl(dir)).toThrow("requires both");
   });
 
   test("honors exported and quoted entries without a token file", () => {

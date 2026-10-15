@@ -46,6 +46,10 @@ describe("plugin build commands", () => {
       join(root, "server/src/config/data-paths.ts"),
     );
     writeFileSync(
+      join(root, "server/src/config/plugin-command.ts"),
+      `export * from ${JSON.stringify(join(import.meta.dir, "../server/src/config/plugin-command.ts"))};`,
+    );
+    writeFileSync(
       join(root, "package.json"),
       JSON.stringify({ version: "0.0.0" }),
     );
@@ -300,36 +304,46 @@ describe("computeUrl", () => {
   });
 
   test("defaults to loopback when no env file exists", () => {
-    expect(computeUrl(fixture({}))).toBe("http://127.0.0.1:8787");
+    expect(computeUrl(fixture({}))).toBe("http://localhost:8787");
   });
 
   test("includes the login token for non-loopback binds", () => {
     const dir = fixture({
       "herdr-world.env": "HOST=0.0.0.0\nPORT=8791\n",
-      "auth-token": "abc123\n",
+      "auth-token":
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n",
     });
-    expect(computeUrl(dir)).toBe("http://localhost:8791/?token=abc123");
+    expect(computeUrl(dir)).toBe(
+      "http://localhost:8791/?token=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    );
   });
 
   test("includes the login token on authenticated loopback binds", () => {
     const dir = fixture({
       "herdr-world.env": "HOST=127.0.0.1\nPORT=8787\n",
-      "auth-token": "abc123\n",
+      "auth-token":
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n",
     });
-    expect(computeUrl(dir)).toBe("http://127.0.0.1:8787/?token=abc123");
+    expect(computeUrl(dir)).toBe(
+      "http://localhost:8787/?token=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    );
   });
 
   test("password values suppress tokens, while empty values do not", () => {
     const dir = fixture({
-      "herdr-world.env": "HOST=0.0.0.0\nHERDR_WORLD_PASSWORD=new\n",
-      "auth-token": "saved-token\n",
+      "herdr-world.env":
+        "HOST=0.0.0.0\nHERDR_WORLD_PASSWORD=synthetic-password-long-enough\n",
+      "auth-token":
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n",
     });
     expect(computeUrl(dir)).toBe("http://localhost:8787");
     writeFileSync(
       join(dir, "herdr-world.env"),
       "HOST=0.0.0.0\nHERDR_WORLD_PASSWORD=\n",
     );
-    expect(computeUrl(dir)).toBe("http://localhost:8787/?token=saved-token");
+    expect(computeUrl(dir)).toBe(
+      "http://localhost:8787/?token=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    );
   });
 
   test("honors exported and quoted entries without a token file", () => {

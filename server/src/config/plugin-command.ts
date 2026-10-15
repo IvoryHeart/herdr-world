@@ -1,6 +1,11 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
+import { homedir } from "node:os";
+import { readAuthToken } from "./auth-token";
+import { browserUrlFor, withLoginToken } from "./server-config";
+import { prepareServiceAccess } from "./service-manager";
+import { resolveServicePlatform } from "./service-definitions";
 import { dataRoot, assertSafeDataPath } from "./data-paths";
 
 function capture(binary: string, args: string[]) {
@@ -49,26 +54,22 @@ export function readServiceEnv(
 
 export function computeUrl(dir = configDir()): string {
   const envFile = readableConfigFile(dir, "herdr-world.env");
-  let host = "127.0.0.1";
-  let port = "8787";
-  let usesFixedPassword = false;
-  if (existsSync(envFile)) {
-    const contents = readFileSync(envFile, "utf8");
-    host = readServiceEnv(contents, "HOST") ?? host;
-    port = readServiceEnv(contents, "PORT") ?? port;
-    usesFixedPassword =
-      (readServiceEnv(contents, "HERDR_WORLD_PASSWORD") ?? "").length > 0;
-  }
-  const anyHost = host === "0.0.0.0" || host === "::";
-  const browserHost = anyHost ? "localhost" : host;
-  const formatted = browserHost.includes(":")
-    ? `[${browserHost}]`
-    : browserHost;
-  let url = `http://${formatted}:${port}`;
+  const contents = existsSync(envFile) ? readFileSync(envFile, "utf8") : "";
+  const access = prepareServiceAccess(
+    envFile,
+    contents,
+    resolveServicePlatform(process.platform),
+    homedir(),
+  );
+  let url = browserUrlFor(access.host, access.port, access.tls);
   const tokenPath = readableConfigFile(dir, "auth-token");
-  if (!usesFixedPassword && existsSync(tokenPath)) {
-    const token = readFileSync(tokenPath, "utf8").trim();
-    if (token) url = `${url}/?token=${encodeURIComponent(token)}`;
+  if (!access.usesFixedPassword && existsSync(tokenPath)) {
+    // Match the managed URL command: invalid credentials are never published.
+    try {
+      url = withLoginToken(url, readAuthToken(tokenPath));
+    } catch {
+      // The URL remains useful for repairing the managed service's credentials.
+    }
   }
   return url;
 }

@@ -132,8 +132,8 @@ test.skipIf(process.platform !== "win32")(
             "-NonInteractive",
             "-ExecutionPolicy",
             "Bypass",
-            "-File",
-            join(root, "scripts/install-plugin.ps1"),
+            "-Command",
+            `function Get-FileHash { throw "Get-FileHash must not be required" }; & '${join(root, "scripts/install-plugin.ps1").replaceAll("'", "''")}'`,
           ],
           {
             env: {

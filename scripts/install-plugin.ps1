@@ -38,7 +38,17 @@ try {
   $pattern = '\A([0-9a-fA-F]{64})[ \t]+' + [regex]::Escape($archiveName) + '\r?\n?\z'
   $digest = [regex]::Match([IO.File]::ReadAllText($checksum), $pattern)
   if (!$digest.Success) { throw 'Invalid package checksum file' }
-  if ((Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash -ne $digest.Groups[1].Value) {
+  # Windows PowerShell can run with no module discovery path. Hash through
+  # .NET so integrity verification never depends on Get-FileHash availability.
+  $sha256 = [Security.Cryptography.SHA256]::Create()
+  $archiveStream = [IO.File]::OpenRead($archive)
+  try {
+    $actualDigest = [BitConverter]::ToString($sha256.ComputeHash($archiveStream)).Replace('-', '')
+  } finally {
+    $archiveStream.Dispose()
+    $sha256.Dispose()
+  }
+  if ($actualDigest -ne $digest.Groups[1].Value) {
     throw 'Package checksum mismatch'
   }
   & tar.exe -xJf $archive -C $staging "$packageDir/VERSION" "$packageDir/herdr-world.exe"
