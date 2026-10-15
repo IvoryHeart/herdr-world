@@ -60,6 +60,7 @@ import {
   activateWorldNodeHost,
 } from "./worldInspectorSelection";
 import { useSystemBack } from "../systemBack";
+import { WorldMobileNav, worldViewLabel } from "./WorldMobileNav";
 import { WorldControlPlane } from "./WorldControlPlane";
 import { EMPTY_VISUAL_ACTION_EXTENSION } from "./worldControlPlaneContract";
 
@@ -297,7 +298,7 @@ export default function WorldFoundationApp() {
   }, [activeArrangementControl]);
 
   return (
-    <div className="world-foundation-shell">
+    <div className="world-foundation-shell" data-view={view}>
       <div className="world-topbar-host" ref={setTopbarPortal} />
       <div className="world-spaces-layer is-active">
         <App
@@ -399,6 +400,18 @@ export default function WorldFoundationApp() {
                 >
                   <ArrowLeft size={20} aria-hidden="true" />
                 </button>
+              ) : mobile && view === "spaces" ? (
+                <button
+                  type="button"
+                  className="world-back-to-view"
+                  title={`Back to ${worldViewLabel(visualView)}`}
+                  aria-label={`Back to ${worldViewLabel(visualView)}`}
+                  onClick={() => setView(visualView)}
+                >
+                  <ArrowLeft size={20} aria-hidden="true" />
+                </button>
+              ) : mobile ? (
+                <h1 className="world-mobile-title">{worldViewLabel(view)}</h1>
               ) : null}
               {view !== "spaces" ? (
                 <>
@@ -509,6 +522,9 @@ export default function WorldFoundationApp() {
         />
         {spaces.renderWindows}
       </div>
+      {mobile && view !== "spaces" && !canReturnToView ? (
+        <WorldMobileNav view={view} onSelect={setView} />
+      ) : null}
       {officeMetricsOpen
         ? createPortal(
             <Suspense fallback={null}>

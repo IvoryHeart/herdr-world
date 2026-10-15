@@ -1,0 +1,65 @@
+.world-mobile-nav {
+  flex: 0 0 auto;
+  display: flex;
+  padding: 8px calc(4px + env(safe-area-inset-right, 0px))
+    calc(10px + env(safe-area-inset-bottom, 0px))
+    calc(4px + env(safe-area-inset-left, 0px));
+  border-top: 1px solid var(--border);
+  background: var(--panel);
+}
+
+.world-mobile-nav button {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 56px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  touch-action: manipulation;
+}
+
+.world-mobile-nav-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 32px;
+  border-radius: 16px;
+}
+
+.world-mobile-nav button[aria-current="page"] {
+  color: var(--text-strong);
+  font-weight: 600;
+}
+
+.world-mobile-nav button[aria-current="page"] .world-mobile-nav-icon {
+  background: var(--accent-soft);
+}
+
+/* Typing owns the bottom edge; the scene's controls return with it closed. */
+.keyboard-open .world-mobile-nav {
+  display: none;
+}
+
+.world-mobile-title {
+  min-width: 0;
+  margin: 0 0 0 4px;
+  overflow: hidden;
+  color: var(--text-strong);
+  font-size: 20px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The bottom bar and Back replace the view picker on phones. */
+:where(html[data-layout="mobile"]) .world-primary-view-select {
+  display: none;
+}

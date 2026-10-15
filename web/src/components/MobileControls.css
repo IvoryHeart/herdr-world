@@ -58,12 +58,16 @@
     padding-bottom: 4px;
   }
 
-  /* App bar on any screen showing a terminal: Tabs and ⋮ at the right. */
-  &:has(.terminal-mobile-input-actions, .terminal-composer)
-    .mobile-terminal-appbar {
+  /* App bar: Tabs on every screen; the title and ⋮ join it on detail
+     screens (below). */
+  .mobile-terminal-appbar {
     display: flex;
     align-items: center;
     gap: 0;
+  }
+
+  .mobile-terminal-appbar .mobile-more-button {
+    display: none;
   }
 
   .mobile-terminal-appbar button {
@@ -113,11 +117,29 @@
     color: #fff;
   }
 
-  .mobile-terminal-title {
+  /* The title is the workspace switcher, like an app bar's dropdown. */
+  .mobile-terminal-appbar .mobile-terminal-title {
     display: none;
-    flex-direction: column;
+    grid-template-columns: minmax(0, auto) auto;
+    align-items: center;
+    column-gap: 4px;
+    justify-content: start;
+    width: auto;
     min-width: 0;
-    padding-left: 4px;
+    height: 48px;
+    padding: 0 8px 0 4px;
+    border-radius: 12px;
+    text-align: left;
+  }
+
+  .mobile-terminal-title > span {
+    grid-column: 1;
+  }
+
+  .mobile-terminal-title-chevron {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    color: var(--muted);
   }
 
   .mobile-terminal-name {
@@ -192,10 +214,14 @@
       min-width: 0;
     }
 
-    .mobile-terminal-title {
-      display: flex;
-      flex: 1 1 auto;
+    .mobile-terminal-appbar .mobile-terminal-title {
+      display: grid;
+      flex: 0 1 auto;
       margin-right: auto;
+    }
+
+    .mobile-terminal-appbar .mobile-more-button {
+      display: inline-flex;
     }
   }
 

@@ -4214,11 +4214,19 @@ export default function App({
           setMobileTabSheetOpen(false);
           setMobileMoreOpen((open) => !open);
         },
+        workspacesOpen: mobileView === "workspaces",
+        toggleWorkspaces: () => {
+          setMobileMoreOpen(false);
+          setMobileTabSheetOpen(false);
+          if (mobileView === "workspaces") activateTerminalSurface();
+          else openWorkspaces();
+        },
       }
     : null;
   usePublishMobileControls(mobileControls);
   useSystemBack(mobileMoreOpen, () => setMobileMoreOpen(false));
   useSystemBack(mobileTabSheetOpen, () => setMobileTabSheetOpen(false));
+  useSystemBack(mobileView === "workspaces", activateTerminalSurface);
   return (
     <div
       ref={appRef}

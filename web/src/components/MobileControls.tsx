@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useSyncExternalStore } from "react";
-import { EllipsisVertical, SquareStack } from "lucide-react";
+import { ChevronDown, EllipsisVertical, SquareStack } from "lucide-react";
 import { useStoreSelector } from "../store";
 import type { Pane } from "../types";
 import { agentStateKind, type AgentStateKind } from "./agentSession";
@@ -22,6 +22,8 @@ export type MobileControls = {
   showTabs: () => void;
   moreOpen: boolean;
   toggleMore: () => void;
+  workspacesOpen: boolean;
+  toggleWorkspaces: () => void;
 };
 
 type MobileTerminalIdentity = {
@@ -65,6 +67,7 @@ export function usePublishMobileControls(controls: MobileControls | null) {
         controls.tabsDisabled,
         controls.tabsOpen,
         controls.moreOpen,
+        controls.workspacesOpen,
       ].join("|")
     : "";
   useLayoutEffect(() => {
@@ -75,6 +78,7 @@ export function usePublishMobileControls(controls: MobileControls | null) {
             ...live,
             showTabs: () => latest.current?.showTabs(),
             toggleMore: () => latest.current?.toggleMore(),
+            toggleWorkspaces: () => latest.current?.toggleWorkspaces(),
           }
         : null,
     );
@@ -122,7 +126,13 @@ export function MobileTerminalAppBar() {
   return (
     <div className="mobile-terminal-appbar">
       {terminal ? (
-        <div className="mobile-terminal-title">
+        <button
+          type="button"
+          className="mobile-terminal-title"
+          aria-label={`Switch workspace. Current: ${terminal.agent}${terminal.place ? ` in ${terminal.place}` : ""}`}
+          aria-expanded={controls.workspacesOpen}
+          onClick={controls.toggleWorkspaces}
+        >
           <span className="mobile-terminal-name">
             {terminal.agent}
             {terminal.place ? (
@@ -137,7 +147,12 @@ export function MobileTerminalAppBar() {
               {STATUS_LABEL[terminal.status]}
             </span>
           ) : null}
-        </div>
+          <ChevronDown
+            className="mobile-terminal-title-chevron"
+            size={16}
+            aria-hidden="true"
+          />
+        </button>
       ) : null}
       <button
         type="button"
