@@ -10,6 +10,7 @@ import {
 } from "../terminalFileDrop";
 import { uploadTerminalFile } from "../terminalImageUpload";
 import { PaneDragHandle, PaneMoveMenu } from "./PaneMoveMenu";
+import { MobileMoreButton, MobileTabsButton } from "./MobileControls";
 import { runTerminalInput, sendTerminalInput } from "../terminalInput";
 import {
   ClipboardAddon,
@@ -3679,8 +3680,10 @@ export function TerminalView({
               className="terminal-mobile-input-actions"
               aria-label="Terminal input"
             >
+              <MobileTabsButton variant="row" />
               <button
                 type="button"
+                className="terminal-mobile-message"
                 aria-label="Open terminal input"
                 title="Open terminal input"
                 aria-haspopup="dialog"
@@ -3693,16 +3696,29 @@ export function TerminalView({
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => {
                   flushSync(() => setComposerOpen(true));
-                  // Match Spaces: neutral dock focus in Composer, explicit
-                  // keyboard handoff only when the saved mode is Direct.
-                  container
+                  // The tap is the request to type: focus Composer's editor
+                  // inside this gesture so mobile browsers raise the keyboard.
+                  // Direct keeps its explicit handoff through the dock focus.
+                  const composer = container
                     ?.closest(".terminal-shell")
-                    ?.querySelector<HTMLElement>(".terminal-composer")
-                    ?.focus({ preventScroll: true });
+                    ?.querySelector<HTMLElement>(".terminal-composer");
+                  const target =
+                    composer?.dataset.inputMode === "composer"
+                      ? composer.querySelector<HTMLElement>(
+                          ".terminal-composer-input",
+                        )
+                      : null;
+                  (target ?? composer)?.focus({ preventScroll: true });
                 }}
               >
-                <Keyboard size={20} />
+                <Keyboard size={19} aria-hidden="true" />
+                <span className="terminal-mobile-message-label">
+                  {pane.agent?.trim()
+                    ? `Message ${pane.agent.trim()}…`
+                    : "Type into the terminal…"}
+                </span>
               </button>
+              <MobileMoreButton />
             </div>
           ) : null}
           {touchHandles.length === 0 &&

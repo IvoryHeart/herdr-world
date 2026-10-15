@@ -52,6 +52,7 @@ import {
   isWorkspacePathDrag,
   workspacePathFromDrag,
 } from "../workspacePathDrag";
+import { MobileTabsButton } from "./MobileControls";
 import "./TerminalComposer.css";
 import type { TerminalInputMode } from "../terminalInputMode";
 export type { TerminalInputMode } from "../terminalInputMode";
@@ -467,6 +468,7 @@ export function TerminalComposer({
               </label>
             ))}
           </fieldset>
+          <MobileTabsButton variant="chip" />
           {hasShortcuts ? (
             <button
               type="button"

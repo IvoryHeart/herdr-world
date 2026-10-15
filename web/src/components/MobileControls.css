@@ -1,0 +1,241 @@
+.terminal-mobile-message-label,
+.mobile-tabs-button,
+.mobile-more-button,
+.mobile-more-backdrop {
+  display: none;
+}
+
+:where(html[data-layout="mobile"]) {
+  /* One bottom row below the output: Tabs, Message, More. It sits in flow, so
+     it never covers terminal text, and replaces the floating islands. */
+  .terminal-main {
+    flex-direction: column;
+  }
+
+  .terminal-main > .terminal-mobile-input-actions {
+    position: static;
+    flex: 0 0 auto;
+    padding: 6px calc(10px + env(safe-area-inset-right, 0px))
+      calc(6px + env(safe-area-inset-bottom, 0px))
+      calc(10px + env(safe-area-inset-left, 0px));
+    background: var(--terminal-bg);
+  }
+
+  .terminal-main > .terminal-mobile-input-actions button {
+    flex: 0 0 auto;
+    min-width: 48px;
+    min-height: 48px;
+    border-color: transparent;
+    border-radius: 16px;
+    background: color-mix(in srgb, var(--text-strong) 8%, var(--terminal-bg));
+    box-shadow: none;
+  }
+
+  .terminal-main > .terminal-mobile-input-actions .terminal-mobile-message {
+    flex: 1 1 auto;
+    min-width: 0;
+    justify-content: flex-start;
+    gap: 10px;
+    padding: 0 14px;
+    color: var(--muted);
+    font-size: 16px;
+  }
+
+  .terminal-mobile-message-label {
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .terminal-view .xterm {
+    padding-bottom: 4px;
+  }
+
+  .mobile-tabs-button,
+  .mobile-more-button {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-strong);
+    touch-action: manipulation;
+  }
+
+  .mobile-tabs-button:disabled {
+    opacity: 0.4;
+  }
+
+  .mobile-tabs-button[aria-pressed="true"],
+  .mobile-more-button[aria-expanded="true"] {
+    background: var(--accent-soft);
+  }
+
+  .mobile-tabs-count {
+    position: absolute;
+    right: 5px;
+    bottom: 5px;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 3px;
+    box-sizing: border-box;
+    border-radius: 8px;
+    background: var(--text-strong);
+    color: var(--panel);
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 16px;
+    text-align: center;
+  }
+
+  /* Blocked agents use the same red as their status icon. */
+  .mobile-tabs-attention {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--red);
+    box-shadow: 0 0 0 2px var(--panel);
+  }
+
+  /* In the Composer toolbar: a compact chip, so tabs stay one tap away while
+     typing without closing the input first. */
+  .mobile-tabs-chip {
+    gap: 6px;
+    height: 36px;
+    margin-left: auto;
+    padding: 0 12px;
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    background: transparent;
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .mobile-tabs-chip .mobile-tabs-attention {
+    position: static;
+    order: -1;
+    box-shadow: none;
+  }
+
+  /* Beside a terminal the row and Composer carry the controls; the floating
+     islands stay hidden until More reveals them as a sheet. */
+  .app:has(.terminal-mobile-input-actions, .terminal-composer):not(
+      [data-mobile-more]
+    ) .mobile-controls-stack,
+  .app:has(.terminal-mobile-input-actions, .terminal-composer)
+    .mobile-composer-shortcut {
+    display: none;
+  }
+
+  .mobile-more-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 79;
+    border: 0;
+    padding: 0;
+    background: rgb(0 0 0 / 0.45);
+  }
+
+  .app[data-mobile-more] .mobile-controls-stack {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 80;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 16px calc(12px + env(safe-area-inset-right, 0px))
+      calc(16px + env(safe-area-inset-bottom, 0px))
+      calc(12px + env(safe-area-inset-left, 0px));
+    border-top: 1px solid var(--border);
+    border-radius: 24px 24px 0 0;
+    background: var(--panel);
+    box-shadow: var(--shadow-lg);
+  }
+
+  .app[data-mobile-more] .mobile-controls-stack .mobile-nav,
+  .app[data-mobile-more] .mobile-controls-stack .mobile-terminal-controls {
+    position: static;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    width: 100%;
+    max-width: none;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    transform: none;
+    translate: 0 0;
+    opacity: 1;
+    pointer-events: auto;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  .app[data-mobile-more] .mobile-controls-stack .mobile-terminal-controls {
+    display: block;
+  }
+
+  .app[data-mobile-more] .mobile-controls-stack .mobile-nav button,
+  .app[data-mobile-more] .mobile-controls-stack .mobile-workspace-shortcut {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+    width: auto;
+    min-width: 0;
+    height: 72px;
+    padding: 12px;
+    border: 0;
+    border-radius: 16px;
+    background: color-mix(in srgb, var(--text-strong) 7%, var(--panel));
+    color: var(--text-strong);
+    font-size: 14px;
+    box-shadow: none;
+  }
+
+  .app[data-mobile-more] .mobile-controls-stack .mobile-nav-label {
+    position: static;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    clip: auto;
+  }
+
+  /* Tabs already sit in the row; the collapse toggle has no role here. */
+  .app[data-mobile-more]
+    .mobile-controls-stack
+    .mobile-nav
+    button[aria-label="Show tabs"],
+  .app[data-mobile-more] .mobile-controls-stack .mobile-controls-toggle {
+    display: none;
+  }
+
+  .app[data-mobile-more] .mobile-controls-stack .mobile-workspace-shortcut {
+    position: static;
+    width: calc((100% - 16px) / 3);
+    translate: 0 0;
+    transform: none;
+  }
+
+  .app[data-mobile-more]
+    .mobile-controls-stack
+    .mobile-workspace-shortcut::after {
+    content: "Workspaces";
+  }
+
+  .app[data-mobile-more]
+    .mobile-controls-stack
+    .tabbar-arrangement-trigger::after {
+    content: "Windows";
+  }
+}
