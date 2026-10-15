@@ -14,6 +14,7 @@ import {
   type ServerConfig,
   herdrConfigDir,
   nativeSocketPath,
+  resolveHerdrSocketPaths,
   browserUrlFor,
   loadServerConfig,
   loadServerTls,
@@ -396,6 +397,36 @@ describe("optional PIN configuration", () => {
       }
     } finally {
       rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("resolveHerdrSocketPaths", () => {
+  test("prefers explicit paths, then SSH tunnels, then the session layout", () => {
+    expect(
+      resolveHerdrSocketPaths({
+        socketPath: "/run/a.sock",
+        clientSocketPath: "/run/b.sock",
+        sshHost: "me@box",
+      }),
+    ).toEqual({ socketPath: "/run/a.sock", clientSocketPath: "/run/b.sock" });
+    const tunnel = resolveHerdrSocketPaths({ sshHost: "me@box" });
+    expect(tunnel.socketPath).toMatch(
+      /herdr-world-[a-f0-9]{12}-control\.sock$/,
+    );
+    expect(tunnel.clientSocketPath).toMatch(
+      /herdr-world-[a-f0-9]{12}-client\.sock$/,
+    );
+    if (process.platform !== "win32") {
+      expect(
+        resolveHerdrSocketPaths({
+          session: "work",
+          herdrDir: "/h/.config/herdr",
+        }),
+      ).toEqual({
+        socketPath: "/h/.config/herdr/sessions/work/herdr.sock",
+        clientSocketPath: "/h/.config/herdr/sessions/work/herdr-client.sock",
+      });
     }
   });
 });

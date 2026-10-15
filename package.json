@@ -48,6 +48,7 @@
     "package:windows-arm64": "scripts/package-release.sh windows-arm64",
     "release:prepare": "bun scripts/prepare-release.ts",
     "label:pr": "bun scripts/classify-pr-label.ts",
+    "upstream:work": "bun scripts/upstream-local.ts",
     "agent:worktree": "bun scripts/agent/worktree.mjs",
     "agent:usage": "bun scripts/agent/pr-usage.ts",
     "agent:await": "bun scripts/agent/await.ts",
@@ -89,14 +90,16 @@
     "bun-types": "1.4.3",
     "typescript": "^7.0.2",
     "@fission-ai/openspec": "1.12.0",
-    "oxlint": "1.86.0",
+    "oxlint": "1.87.0",
     "@types/jsdom": "^30.0.0",
     "@types/proper-lockfile": "4.1.4",
-    "happy-dom": "^20.14.5",
+    "happy-dom": "^20.14.6",
     "jsdom": "^30.1.1"
   },
   "overrides": {
-    "highlight.js": "11.12.0"
+    "highlight.js": "11.12.0",
+    "undici": "8.11.2",
+    "@earendil-works/pi-codemode": "1.1.0"
   },
   "packageManager": "bun@1.4.3"
 }

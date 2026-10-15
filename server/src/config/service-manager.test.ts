@@ -12,6 +12,8 @@ import {
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import {
+  launchdJobRunning,
+  worldServiceStatus,
   queryWindowsTask,
   runServiceCommand,
   SERVICE_COMMAND_CONTINUE,
@@ -351,6 +353,43 @@ describe("service commands", () => {
     expect(
       existsSync(join(homeDir, ".config", "herdr-world", "auth-token")),
     ).toBe(false);
+  });
+
+  test("non-forced reinstall refreshes a moved generated executable", () => {
+    const homeDir = tempHome();
+    const commands: string[][] = [];
+    const install = (execPath: string) =>
+      runServiceCommand(["service", "install"], {
+        runtime: {
+          platform: "linux",
+          homeDir,
+          execPath,
+          argv: [execPath, "service", "install"],
+          uid: 1000,
+        },
+        runCommand: (argv) => {
+          commands.push(argv);
+          return 0;
+        },
+        getLanIPs: () => [],
+        log: () => undefined,
+      });
+    expect(install("/opt/old-plugin/herdr-world")).toBe(0);
+    commands.length = 0;
+    expect(install("/opt/new-plugin/herdr-world")).toBe(0);
+    const definition = readFileSync(
+      join(homeDir, ".config/systemd/user/herdr-world.service"),
+      "utf8",
+    );
+    expect(definition).toContain("ExecStart=/opt/new-plugin/herdr-world");
+    expect(definition).not.toContain("/opt/old-plugin");
+    expect(commands).toContainEqual(["systemctl", "--user", "daemon-reload"]);
+    expect(commands).toContainEqual([
+      "systemctl",
+      "--user",
+      "restart",
+      "herdr-world.service",
+    ]);
   });
 
   test("preserves a managed custom wrapper command", () => {
@@ -1086,3 +1125,49 @@ test.each(["12345", "1234567890123", "12345a"])(
     expect(existsSync(paths.definition)).toBe(false);
   },
 );
+
+describe("launchdJobRunning", () => {
+  test("reads only the job's own state, not nested endpoint states", () => {
+    const printed = (state: string) =>
+      `gui/501/dev.roamgate = {\n\tactive count = 1\n\tstate = ${state}\n\tendpoints = {\n\t\t"x" = {\n\t\t\tstate = active\n\t\t}\n\t}\n}\n`;
+    expect(launchdJobRunning(printed("running"))).toBe(true);
+    expect(launchdJobRunning(printed("waiting"))).toBe(false);
+    expect(launchdJobRunning("")).toBe(false);
+  });
+});
+
+describe("worldServiceStatus", () => {
+  test("reports only the World service definition", () => {
+    const homeDir = tempHome();
+    const paths = resolveServicePaths("systemd", homeDir);
+    mkdirSync(dirname(paths.definition), { recursive: true });
+    writeFileSync(
+      paths.definition,
+      "[Service]\nExecStart=/synthetic/herdr-world\n",
+    );
+    const commands: string[][] = [];
+    expect(
+      worldServiceStatus(
+        { platform: "linux", homeDir, execPath: "/synthetic/herdr-world" },
+        (argv) => {
+          commands.push(argv);
+          return 0;
+        },
+      ),
+    ).toEqual({ installed: true, active: true, definition: paths.definition });
+    expect(commands).toEqual([
+      ["systemctl", "--user", "is-active", "--quiet", "herdr-world.service"],
+    ]);
+  });
+  test("does not claim an absent World service is installed", () => {
+    const homeDir = tempHome();
+    expect(
+      worldServiceStatus(
+        { platform: "linux", homeDir, execPath: "/synthetic/herdr-world" },
+        () => {
+          throw new Error("must not inspect another service");
+        },
+      ).installed,
+    ).toBe(false);
+  });
+});

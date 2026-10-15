@@ -7,7 +7,30 @@ are optional because the merged PR history records their source.
 
 ## [Unreleased]
 
+### Fixed
+
+- Honor native TLS and managed credentials in plugin URLs and panels, and verify
+  Windows plugin downloads without relying on PowerShell hash cmdlet discovery.
+
+- Diagnose the saved default Herdr connection, preserve package/plugin and preview
+  update ownership, and refresh generated service paths when restarting the plugin.
+
 ### Added
+
+- Install released Herdr World plugins on Unix and Windows without external Bun,
+  preserving cached plugin actions, verified World releases and service ownership.
+
+- Synchronize Roamgate v0.8.4 source: installation-management commands, worktree
+  pull-request badges, safer File Explorer mutations, mobile terminal shortcuts,
+  and Ranger provider fixes. Preserve World packaging and qualified runtime ownership.
+
+- Upstream synchronization records every incoming commit and revisits deferred work;
+  new deferrals and intentional divergences require human approval.
+
+- Opt-in hourly Roamgate source synchronization with Codex integration,
+  independent agent review, one bounded repair pass and protected auto-merge.
+  Agent sessions run locally using Codex subscription sign-in, without an API key.
+  Changes to delivery and verification controls retain human approval.
 
 - Maintained Quint development tooling, implementation-connected lifecycle,
   observation, protocol, creation and Ranger models, a reconciled 43-area evidence
@@ -37,6 +60,9 @@ are optional because the merged PR history records their source.
 
 ### Fixed
 
+- Bind upstream approval to the reviewed World base, reject obsolete source
+  baselines, preserve integration evidence in PR descriptions, and keep failure
+  blockers effective when unrelated issues share their title.
 - Mobile terminals in Office, Desk, Tree and Graph open the shared Spaces
   Composer/Direct input panel. Inspector title and resource bars collapse while
   viewing a mobile terminal; existing mobile navigation keeps resource and window

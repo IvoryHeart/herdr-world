@@ -46,6 +46,10 @@ describe("plugin build commands", () => {
       join(root, "server/src/config/data-paths.ts"),
     );
     writeFileSync(
+      join(root, "server/src/config/plugin-command.ts"),
+      `export * from ${JSON.stringify(join(import.meta.dir, "../server/src/config/plugin-command.ts"))};`,
+    );
+    writeFileSync(
       join(root, "package.json"),
       JSON.stringify({ version: "0.0.0" }),
     );
@@ -97,6 +101,18 @@ globalThis.fetch = async (url) => {
       },
     );
   }
+
+  test("restart refreshes the installed executable path without forcing custom definitions", () => {
+    const root = checkout();
+    writeFileSync(
+      join(root, "server/herdr-world"),
+      '#!/bin/sh\nif [ "$1" = "--version" ]; then echo "herdr-world 9.8.7"; else printf "%s\\n" "$*"; fi\n',
+      { mode: 0o755 },
+    );
+    const result = invoke(root, "restart");
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout.toString().trim()).toBe("service install");
+  });
 
   test("build-source installs all dependencies and builds without downloading a release", () => {
     const root = checkout();
@@ -203,9 +219,8 @@ test("plugin actions and panel use the standalone launcher", () => {
     actions: Array<{ command: string[] }>;
   };
   expect(manifest.build[0]?.command).toEqual([
-    "bun",
-    "scripts/world-plugin.ts",
-    "build",
+    "sh",
+    "scripts/install-plugin.sh",
   ]);
   for (const entry of [...manifest.panes, ...manifest.actions]) {
     expect(entry.command[0]).toBe("server/herdr-world-plugin.exe");
@@ -289,41 +304,51 @@ describe("computeUrl", () => {
   });
 
   test("defaults to loopback when no env file exists", () => {
-    expect(computeUrl(fixture({}))).toBe("http://127.0.0.1:8787");
+    expect(computeUrl(fixture({}))).toBe("http://localhost:8787");
   });
 
-  test("includes the login token only for non-loopback binds", () => {
+  test("includes the login token for non-loopback binds", () => {
     const dir = fixture({
       "herdr-world.env": "HOST=0.0.0.0\nPORT=8791\n",
-      "auth-token": "abc123\n",
+      "auth-token":
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n",
     });
-    expect(computeUrl(dir)).toBe("http://localhost:8791/?token=abc123");
+    expect(computeUrl(dir)).toBe(
+      "http://localhost:8791/?token=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    );
   });
 
-  test("ignores a stale token file on loopback binds", () => {
+  test("includes the login token on authenticated loopback binds", () => {
     const dir = fixture({
       "herdr-world.env": "HOST=127.0.0.1\nPORT=8787\n",
-      "auth-token": "abc123\n",
+      "auth-token":
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n",
     });
-    expect(computeUrl(dir)).toBe("http://127.0.0.1:8787");
+    expect(computeUrl(dir)).toBe(
+      "http://localhost:8787/?token=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    );
   });
 
   test("password values suppress tokens, while empty values do not", () => {
     const dir = fixture({
-      "herdr-world.env": "HOST=0.0.0.0\nHERDR_WORLD_PASSWORD=new\n",
-      "auth-token": "saved-token\n",
+      "herdr-world.env":
+        "HOST=0.0.0.0\nHERDR_WORLD_PASSWORD=synthetic-password-long-enough\n",
+      "auth-token":
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n",
     });
     expect(computeUrl(dir)).toBe("http://localhost:8787");
     writeFileSync(
       join(dir, "herdr-world.env"),
       "HOST=0.0.0.0\nHERDR_WORLD_PASSWORD=\n",
     );
-    expect(computeUrl(dir)).toBe("http://localhost:8787/?token=saved-token");
+    expect(computeUrl(dir)).toBe(
+      "http://localhost:8787/?token=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    );
   });
 
   test("honors exported and quoted entries without a token file", () => {
     const dir = fixture({
-      "herdr-world.env": 'export HOST="0.0.0.0"\nPORT = "8799"\n',
+      "herdr-world.env": 'export HOST="0.0.0.0"\nPORT="8799"\n',
     });
     expect(computeUrl(dir)).toBe("http://localhost:8799");
   });

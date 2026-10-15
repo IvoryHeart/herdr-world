@@ -1,0 +1,48 @@
+name: Upstream publish
+
+on:
+  workflow_dispatch:
+    inputs:
+      sync:
+        description: Frozen synchronization metadata including the locally pushed exact head
+        required: true
+        type: string
+      report:
+        description: Bounded integration report containing checks, adaptations and unresolved decisions
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+  actions: write
+
+concurrency:
+  group: upstream-publication
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/main' && vars.UPSTREAM_SYNC_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: "1.4.3"
+      - name: Validate pushed revision, open bot PR and dispatch CI
+        env:
+          SYNC: ${{ inputs.sync }}
+          REPORT: ${{ inputs.report }}
+          GH_TOKEN: ${{ github.token }}
+        run: bun scripts/upstream-sync.ts publish-head
+      - name: Record publication failure for operator recovery
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bun scripts/upstream-sync.ts block

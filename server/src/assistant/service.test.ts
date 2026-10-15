@@ -859,10 +859,15 @@ describe("Ranger scheduled task service", () => {
       let confirming = false;
       let paused = false;
       let writes = 0;
+      const actionDirectory = mkdtempSync(
+        join(tmpdir(), "world-action-permission-"),
+      );
+      temporary.push(actionDirectory);
       const workspaces = [
-        { workspace_id: "ws", label: "Workspace", cwd: "/synthetic" },
+        { workspace_id: "ws", label: "Workspace", cwd: actionDirectory },
       ];
       const runtime = {
+        sshHost: () => undefined,
         herdr: {
           async call(
             method: string,
@@ -906,7 +911,7 @@ describe("Ranger scheduled task service", () => {
                   {
                     workspace_id: "created",
                     pane_id: "created:p1",
-                    cwd: "/synthetic",
+                    cwd: actionDirectory,
                   },
                 ],
               };
@@ -929,7 +934,7 @@ describe("Ranger scheduled task service", () => {
           await input.propose!("create_workspace", {
             ...configured.allowed_workspaces[0]!,
             label: "Created",
-            cwd: "/synthetic",
+            cwd: actionDirectory,
           });
           return [];
         },

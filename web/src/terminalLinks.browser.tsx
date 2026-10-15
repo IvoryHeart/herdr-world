@@ -1,5 +1,6 @@
 import { Terminal, type ILink, type ILinkProvider } from "@xterm/xterm";
 import { createRoot } from "react-dom/client";
+import type { WorkspacePathInfo } from "../../shared/workspacePath";
 import { flushSync } from "react-dom";
 import { bridge, type ConnectionClient, type TerminalPush } from "./api";
 import { __storeTesting, store } from "./store";
@@ -92,6 +93,12 @@ const client: ConnectionClient = {
       return heldRows.get(params.row as number) ?? held ?? target;
     }
     if (method === "terminal.focus") rpcRepaint?.(true);
+    if (method === "workspace.path")
+      return {
+        path: String(params.path),
+        error: null,
+        directories: [],
+      } satisfies WorkspacePathInfo;
     if (method === "file.read")
       return {
         root: "/tmp",
@@ -221,9 +228,12 @@ const links = (row: number) =>
     provider.provideLinks(row, (value) => done(value ?? [])),
   );
 const point = (row: number, col: number) => {
-  const rect = term
-    .element!.querySelector(".xterm-screen")!
-    .getBoundingClientRect();
+  const screen = term.element?.querySelector(".xterm-screen");
+  if (!screen)
+    throw new Error(
+      `Missing terminal screen: current=${term === terminals[terminals.length - 1]}, instances=${terminals.length}, connected=${term.element?.isConnected}, calls=${JSON.stringify(calls.slice(-8))}`,
+    );
+  const rect = screen.getBoundingClientRect();
   return {
     x: rect.left + ((col + 0.5) * rect.width) / term.cols,
     y: rect.top + ((row + 0.5) * rect.height) / term.rows,
@@ -474,6 +484,13 @@ async function runTouch() {
         [...dialog.querySelectorAll("input")].map((e) => e.value),
         ["docs", "/tmp/docs"],
         "touch workspace prefill",
+      );
+      await until(
+        () =>
+          dialog
+            .querySelector(".workspace-path-hint")
+            ?.textContent?.includes("Directory: /tmp/docs") === true,
+        "touch workspace directory validation",
       );
       await tap(action("Cancel")!);
     } else {
@@ -1196,7 +1213,11 @@ async function run() {
   await runNativeCopy();
 }
 run()
-  .catch((error: unknown) => failures.push(String(error)))
+  .catch((error: unknown) =>
+    failures.push(
+      error instanceof Error ? (error.stack ?? String(error)) : String(error),
+    ),
+  )
   .finally(() => {
     root.unmount();
     host.remove();

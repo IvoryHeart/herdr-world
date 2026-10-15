@@ -1,0 +1,310 @@
+{
+  "schema": 1,
+  "source": "503a6f565e3432cee651a456bcc0d9800be52a37",
+  "changes": [
+    {
+      "commit": "447f7196b9a23979b026d6b79619836d3337cc06",
+      "title": "Polish Ranger task views and chat controls (#392)",
+      "status": "adapted",
+      "reason": "Ranger task/chat UI refinements retain World-qualified permissions and React 18.",
+      "evidence": [
+        "web/src/components/AssistantTasks.test.ts",
+        "web/src/components/AssistantPanel.test.ts"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "503a6f565e3432cee651a456bcc0d9800be52a37"
+    },
+    {
+      "commit": "75f61e368a45483ac2eeb40c1eef349654843642",
+      "title": "Bump the actions group with 4 updates (#401)",
+      "status": "divergent",
+      "reason": "Retain World-owned workflow controls and action pins; upstream workflow edits require a separate trusted human-reviewed integration.",
+      "evidence": [
+        ".github/workflows/release.yml",
+        "docs/upstream-follow-ups.md#world-workflow-controls"
+      ],
+      "followUp": "docs/upstream-follow-ups.md#world-workflow-controls",
+      "revisitWhen": "Every source sync; manually assess upstream action security fixes and required platform changes.",
+      "reviewedFor": "503a6f565e3432cee651a456bcc0d9800be52a37"
+    },
+    {
+      "commit": "20cb447a808a1e09359cef4f4fb632a385d4485e",
+      "title": "Bump the tooling group with 4 updates (#398)",
+      "status": "adopted",
+      "reason": "Upgrade compatible tooling versions; retain World verification configuration.",
+      "evidence": ["package.json", "web/package.json", "bun.lock"],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "503a6f565e3432cee651a456bcc0d9800be52a37"
+    },
+    {
+      "commit": "f9c51100b34c69a74f0112428d17f3abae22ee4e",
+      "title": "Bump the codemirror group with 3 updates (#396)",
+      "status": "adopted",
+      "reason": "Upgrade the compatible CodeMirror dependency group.",
+      "evidence": ["web/package.json", "bun.lock"],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "503a6f565e3432cee651a456bcc0d9800be52a37"
+    },
+    {
+      "commit": "eb920f5099966d68bed4112a821dd771b596d4fc",
+      "title": "Bump @radix-ui/react-popover from 1.1.23 to 1.2.0 in the radix-ui group (#397)",
+      "status": "adopted",
+      "reason": "Upgrade the Radix popover dependency group within React 18.",
+      "evidence": ["web/package.json", "bun.lock"],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "503a6f565e3432cee651a456bcc0d9800be52a37"
+    },
+    {
+      "commit": "fd82b20f362ab10be0d2ab8d3946696df0572db9",
+      "title": "Restore shared terminal size when a viewer leaves (#393)",
+      "status": "adapted",
+      "reason": "Restore shared terminal dimensions while retaining independently qualified World endpoint sessions.",
+      "evidence": [
+        "server/src/bridge/terminal-bridge.test.ts",
+        "server/src/bridge/endpoint-terminal-session.test.ts"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "503a6f565e3432cee651a456bcc0d9800be52a37"
+    },
+    {
+      "commit": "d892e10774a2bbf6667041c04788b53a57e5ba55",
+      "title": "Keep offline Ranger permissions revocable and enforce Windows read limits (#394)",
+      "status": "adapted",
+      "reason": "Offline Ranger permissions remain revocable with World captured-runtime authority and Windows read limits.",
+      "evidence": [
+        "server/src/assistant/context.test.ts",
+        "server/src/assistant/service.test.ts",
+        "quint/ranger-authority.ts"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "503a6f565e3432cee651a456bcc0d9800be52a37"
+    },
+    {
+      "commit": "53ed794786ad9981cbfa558e99112f0db48d54ff",
+      "title": "Bump undici from 8.10.2 to 8.11.2 (#400)",
+      "status": "adopted",
+      "reason": "Upgrade undici to 8.11.2 and regenerate dependency notices.",
+      "evidence": ["package.json", "DEPENDENCY_NOTICES.md"],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "503a6f565e3432cee651a456bcc0d9800be52a37"
+    },
+    {
+      "commit": "c7a4ae7355c545e2dec382723bf0cb8c52953fe7",
+      "title": "Bump @earendil-works/pi-coding-agent from 1.0.2 to 1.1.0 (#399)",
+      "status": "adapted",
+      "reason": "Upgrade the Ranger SDK to 1.1.0 with compatible codemode pinned to the frozen upstream resolution.",
+      "evidence": [
+        "server/package.json",
+        "package.json",
+        "server/src/assistant/pi-driver.test.ts"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "503a6f565e3432cee651a456bcc0d9800be52a37"
+    },
+    {
+      "commit": "12c4310eee5c6d6b05f14828d94a3eb27af93d2f",
+      "title": "Fix mobile capsule menu drift during drag (#404)",
+      "status": "adapted",
+      "reason": "Mobile menu drag fixes retain World touch and explicit input behavior.",
+      "evidence": [
+        "web/src/components/useMobileControlsDrag.styles.test.ts",
+        "web/src/mobileTerminal.test.ts"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "503a6f565e3432cee651a456bcc0d9800be52a37"
+    },
+    {
+      "commit": "79cac9d5ae53f3cd7670edfc6db95494f8608cbe",
+      "title": "Block Unix-only Ranger operations on Windows SSH hosts (#403)",
+      "status": "adapted",
+      "reason": "Unix-only operations reject Windows SSH contexts rather than use another runtime.",
+      "evidence": [
+        "server/src/connections/unix-only.ts",
+        "server/src/assistant/tools.test.ts"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "503a6f565e3432cee651a456bcc0d9800be52a37"
+    },
+    {
+      "commit": "8ee7d7a32be50e13c7356e55b9d0aba1bac3889a",
+      "title": "Refresh origin tracking refs during workspace sync (#405)",
+      "status": "adopted",
+      "reason": "Refresh origin tracking refs during workspace synchronization.",
+      "evidence": ["server/src/workspace/auto-sync.test.ts"],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "503a6f565e3432cee651a456bcc0d9800be52a37"
+    },
+    {
+      "commit": "b53ac8ea648bff88b74a88905a4d2d6cf76d1f2a",
+      "title": "Preserve dangling tracking prefixes during workspace sync (#406)",
+      "status": "adopted",
+      "reason": "Preserve dangling tracking prefixes during workspace synchronization.",
+      "evidence": ["server/src/workspace/auto-sync.test.ts"],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "503a6f565e3432cee651a456bcc0d9800be52a37"
+    },
+    {
+      "commit": "477a42fe664669a91b0175017bfcd70a3727d1ee",
+      "title": "Release 0.8.3 (#407)",
+      "status": "adopted",
+      "reason": "Release history is retained as part of the exact v0.8.4 source merge.",
+      "evidence": ["UPSTREAM.md"],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "503a6f565e3432cee651a456bcc0d9800be52a37"
+    },
+    {
+      "commit": "fd7acf3c7638ccc9e482373e6463960d06df2b67",
+      "title": "Isolate process tests from the developer's home directory (#408)",
+      "status": "adapted",
+      "reason": "Process fixtures use isolated temporary state and World-owned installation paths.",
+      "evidence": [
+        "server/src/connections/profile-process.test.ts",
+        "server/src/herdr/release.test.ts"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "503a6f565e3432cee651a456bcc0d9800be52a37"
+    },
+    {
+      "commit": "f6589cf2e050ddd784d9ffc538943f3016a2dd83",
+      "title": "Refresh the service path when restarting the Herdr plugin (#412)",
+      "status": "adapted",
+      "reason": "World plugin restart and panel restart delegate to non-forced service install, refreshing moved generated executable paths while preserving custom service definitions and frozen launcher verbs.",
+      "evidence": [
+        "scripts/world-plugin.ts",
+        "scripts/world-plugin.test.ts",
+        "server/src/config/service-manager.test.ts"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "503a6f565e3432cee651a456bcc0d9800be52a37"
+    },
+    {
+      "commit": "1935f6227f053fc1da7a24aa77a1e5fe5deb17bb",
+      "title": "Distinguish Windows Herdr permission failures from SSH errors (#413)",
+      "status": "adapted",
+      "reason": "Windows privilege diagnostics preserve World SSH runtime isolation.",
+      "evidence": ["server/src/bridge/ssh-windows.test.ts"],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "503a6f565e3432cee651a456bcc0d9800be52a37"
+    },
+    {
+      "commit": "f3b5aa31657aef31a10d707127b6be0676de6a5e",
+      "title": "Pin managed Herdr installations to 0.9.4 (#414)",
+      "status": "adapted",
+      "reason": "World managed setup targets verified Herdr 0.9.4 while retaining protocol compatibility checks.",
+      "evidence": [
+        "server/src/herdr/release.test.ts",
+        "server/src/bridge/protocol-compat.ts"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "503a6f565e3432cee651a456bcc0d9800be52a37"
+    },
+    {
+      "commit": "ffca28f20fb24b6bfe1f369e5b3351185cc3e44f",
+      "title": "Run Herdr plugins without external Bun (#415)",
+      "status": "deferred",
+      "reason": "Remove installation-time Bun without breaking cached World plugin actions, verified release identity or source-build support.",
+      "evidence": [
+        "herdr-plugin.toml",
+        "scripts/world-plugin.test.ts",
+        "docs/upstream-follow-ups.md#bun-free-plugin-installation"
+      ],
+      "followUp": "docs/upstream-follow-ups.md#bun-free-plugin-installation",
+      "revisitWhen": "Every source sync and any plugin, installer, release or launcher change.",
+      "reviewedFor": "503a6f565e3432cee651a456bcc0d9800be52a37"
+    },
+    {
+      "commit": "55d0e8dbe1a463211afbda50148acd99f8574e76",
+      "title": "Add CLI management commands: doctor, url --qr, config, auth and more (#416)",
+      "status": "adapted",
+      "reason": "Management CLI uses World identity, private state, service ownership and startup connection IDs; native plugin routing belongs to the deferred packaging migration.",
+      "evidence": [
+        "server/src/cli/index.ts",
+        "server/src/cli/url.test.ts",
+        "server/src/cli/config.test.ts"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "503a6f565e3432cee651a456bcc0d9800be52a37"
+    },
+    {
+      "commit": "ac8041a94042a8ee0ab02f12269f1b8412d5880b",
+      "title": "Fix workspace paths and add directory suggestions (#417)",
+      "status": "adapted",
+      "reason": "Directory suggestions and validation use the captured World destination, including temporary absence.",
+      "evidence": [
+        "server/src/workspace/path.test.ts",
+        "web/src/components/CreateWorkspaceDialog.tsx",
+        "web/src/world/SharedViewCreation.test.ts"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "503a6f565e3432cee651a456bcc0d9800be52a37"
+    },
+    {
+      "commit": "589b059004be5f358ef2153ff5c2e35eaa4fa6eb",
+      "title": "Add folder creation and multi-file drag moves (#418)",
+      "status": "adapted",
+      "reason": "Folder creation and moves retain captured World runtime authority and non-overwrite semantics.",
+      "evidence": [
+        "server/src/workspace/file-mutations.test.ts",
+        "web/src/components/FileExplorerDialog.dom.test.ts"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "503a6f565e3432cee651a456bcc0d9800be52a37"
+    },
+    {
+      "commit": "beeffd70643743600f20aabd84ffccc95c1e678b",
+      "title": "Show PR/MR merge status in worktree dialogs (#420)",
+      "status": "adapted",
+      "reason": "PR status is displayed using qualified World browser contexts.",
+      "evidence": [
+        "web/src/useWorktreePullRequests.ts",
+        "web/src/components/WorktreePullRequestBadge.test.ts"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "503a6f565e3432cee651a456bcc0d9800be52a37"
+    },
+    {
+      "commit": "9c39505fe50417ad1d5059e60934397aeb512307",
+      "title": "Add terminal focus shortcut and input focus highlight (#421)",
+      "status": "adapted",
+      "reason": "Terminal focus and input feedback retain World mobile composer and endpoint ownership.",
+      "evidence": [
+        "web/src/components/TerminalView.tsx",
+        "web/src/activeTerminalInput.test.ts"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "503a6f565e3432cee651a456bcc0d9800be52a37"
+    },
+    {
+      "commit": "503a6f565e3432cee651a456bcc0d9800be52a37",
+      "title": "Release 0.8.4 (#422)",
+      "status": "adopted",
+      "reason": "Recorded exact release source ancestry; World retains its own release version.",
+      "evidence": ["UPSTREAM.md"],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "503a6f565e3432cee651a456bcc0d9800be52a37"
+    }
+  ]
+}

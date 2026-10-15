@@ -133,6 +133,7 @@ let runtimeGeneration = 7;
 let rejectNextWorldSnapshot = false;
 let staleNextWorldSnapshot = false;
 let omitNextWorldTopology = false;
+let siblingObservationGate: Promise<void> | null = null;
 let navigationMode: "shared" | "browser-local" = "browser-local";
 const initialTerminalAttach = Promise.withResolvers<void>();
 let zoomedFocusedPaneId: string | null = null;
@@ -261,6 +262,11 @@ const client: ConnectionClient = {
     if (method === "agent_session.get" && !params.agent)
       return { session: { value: notificationSessionId } };
     if (method === "world.snapshot") {
+      if (
+        siblingObservationGate &&
+        panes.some((pane) => pane.pane_id === "builder-sibling-pane")
+      )
+        await siblingObservationGate;
       if (replaceNotificationSessionOnSnapshot) {
         notificationSessionId = "replacement-session";
         replaceNotificationSessionOnSnapshot = false;
@@ -3554,6 +3560,11 @@ async function run() {
     agent: "builder-sibling",
     display_agent: "Builder Sibling",
   };
+  // Reproduce a coalesced refresh: the first response predates the new pane,
+  // while the successor stays pending until the focused terminal renders it.
+  const siblingObservation = Promise.withResolvers<void>();
+  siblingObservationGate = siblingObservation.promise;
+  void worldRuntimeStore.refresh();
   panes.push(siblingPane);
   tabs[0]!.pane_count = 2;
   worldRevision += 1;
@@ -3570,6 +3581,25 @@ async function run() {
     () => splitBuilderWindow.querySelectorAll(".pane-layout-cell").length === 2,
     "both panes in one floating Builder Inspector",
   );
+  check(
+    !worldRuntimeStore
+      .get()
+      .connections[0]?.snapshot?.panes.some(
+        (pane) => pane.pane_id === siblingPane.pane_id,
+      ),
+    "held aggregate observation must lag the newly rendered local sibling",
+  );
+  siblingObservation.resolve();
+  await until(
+    () =>
+      worldRuntimeStore
+        .get()
+        .connections[0]?.snapshot?.panes.some(
+          (pane) => pane.pane_id === siblingPane.pane_id,
+        ) && graphTarget("Builder Sibling"),
+    "aggregate observation and rendered graph admitted the new sibling",
+  );
+  siblingObservationGate = null;
   const splitBuilderBounds = splitBuilderWindow.getBoundingClientRect();
   const browserLocalSnapshot = store.get();
   navigationMode = "browser-local";
@@ -3600,7 +3630,9 @@ async function run() {
       method === "pane.get" && params.pane_id === "builder-pane",
   ).length;
   splitBuilderWindow
-    .querySelectorAll<HTMLElement>(".pane-layout-cell")[1]!
+    .querySelector<HTMLElement>(
+      '.pane-layout-cell[data-pane-id="builder-sibling-pane"]',
+    )!
     .dispatchEvent(
       new PointerEvent("pointerdown", {
         bubbles: true,

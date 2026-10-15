@@ -6,10 +6,10 @@ separately installed [`herdrdev/herdr`](https://github.com/herdrdev/herdr) runti
 
 Current synchronization points:
 
-- Roamgate source: v0.8.2, `d1a22cb46ce0c07182ec5473454915f1f7ad251c`
-  (11 October 2026). This integration records the exact head as a Git merge
-  parent, following `fc7600772b04ac2038a1a35bd1cf44fccb0db872`.
-- Herdr compatibility: Herdr 0.9.0, terminal protocol 22. Windows SSH hosts
+- Roamgate source: v0.8.4, `503a6f565e3432cee651a456bcc0d9800be52a37`
+  (15 October 2026). This integration records the exact head as a Git merge
+  parent, following `d1a22cb46ce0c07182ec5473454915f1f7ad251c`.
+- Herdr compatibility: Herdr 0.9.4, terminal protocol 22. Windows SSH hosts
   additionally require a running Herdr 0.9.1+ session and Windows PowerShell.
 
 The integration adopts Ranger workspace chat, background and scheduled tasks,
@@ -29,10 +29,24 @@ SSH bridges to Windows Herdr sessions. Remote Windows file and Git tools remain
 unavailable; terminal and native Herdr workspace operations retain qualified
 connection ownership.
 
+The v0.8.4 refresh adds installation-management CLI commands, worktree pull-request
+badges, File Explorer mutations and selection, mobile terminal input shortcuts,
+Windows privilege diagnostics, safer workspace paths and atomic file moves,
+and Ranger provider/error handling fixes. The bundled Herdr setup target is 0.9.4.
+CLI configuration and service inspection use World-owned state only.
+
 World retains its identity, local/SSH connection ownership, same-origin access,
 session-bound push revocation, aggregate visual views, isolated browser storage,
 and browser regression coverage. World-specific service, packaging, release,
-site and agent tooling remain downstream. Upstream's legacy service migration
+site and agent tooling remain downstream. The v0.8.4 Bun-free plugin installation
+is [deferred pending a compatible migration](docs/upstream-follow-ups.md#bun-free-plugin-installation),
+not permanently rejected. World currently retains its frozen thin launcher,
+verified standalone archives, npm/Homebrew channels and downstream update scripts.
+Upstream workflow/action changes remain a separately reviewed control divergence.
+The [disposition ledger](upstream/dispositions.json) accounts for every incoming
+commit; [adoption policy](docs/upstream-policy.md) requires human approval of new
+or changed exceptions and reconsideration of outstanding work each source sync.
+Upstream's legacy service migration
 and browser-test removal are excluded; World already checks macOS listener
 conflicts before installing a service. React and React DOM remain on 18.3.1:
 upstream's React 19 upgrade stalls terminal input during World's dense topology
@@ -40,6 +54,9 @@ refresh. Dialog callback freshness is adapted without that dependency upgrade.
 
 Future source refreshes should merge from the recorded upstream head, resolve
 World-specific conflicts explicitly, and update this record and the changelog.
+The opt-in [upstream automation](docs/upstream-automation.md) checks stable
+releases hourly, freezes one target per PR, and separates Codex integration from
+independent revision-bound review and protected merging.
 World does not depend on a separately installed Roamgate process, data directory,
 service, or private API. Ranger is configured within World and uses its own
 workspace permissions and model credentials.

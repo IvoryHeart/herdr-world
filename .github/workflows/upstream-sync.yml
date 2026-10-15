@@ -1,0 +1,36 @@
+name: Upstream sync
+
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+  repository_dispatch:
+    types: [roamgate-release]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+  actions: read
+
+concurrency:
+  group: upstream-sync
+  cancel-in-progress: false
+
+jobs:
+  detect:
+    if: github.ref == 'refs/heads/main' && vars.UPSTREAM_SYNC_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: "1.4.3"
+      - name: Queue a frozen integration or one repair for local Codex
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bun scripts/upstream-sync.ts detect
