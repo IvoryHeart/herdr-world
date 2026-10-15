@@ -13,6 +13,15 @@ export function useSystemBack(open: boolean, close: () => void) {
   const closeRef = useRef(close);
   closeRef.current = close;
   const active = mobile && open;
+  // Declared first so its cleanup runs first: unmounting the app is not the
+  // user closing a layer, and must not move history.
+  const unmounting = useRef(false);
+  useEffect(() => {
+    unmounting.current = false;
+    return () => {
+      unmounting.current = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!active) return;
@@ -42,10 +51,19 @@ export function useSystemBack(open: boolean, close: () => void) {
       const top = entryStack[entryStack.length - 1] === token;
       removeEntry(token);
       // Closed on screen: drop the entry it added if it is still the newest,
-      // or a closed layer's entry that a racing open left current.
+      // or a closed layer's entry that a racing open left current. A route
+      // pushed since (Go to Spaces) copies the token but not the URL; keep it.
+      // While a Back is pending the current entry is stale: one per commit.
       const current = (window.history.state as { herdrBack?: string } | null)
         ?.herdrBack;
-      if (top && current && !entryStack.includes(current)) {
+      if (
+        top &&
+        !unmounting.current &&
+        pendingBacks === 0 &&
+        current &&
+        !entryStack.includes(current) &&
+        entryUrls.get(current) === window.location.href
+      ) {
         pendingBacks++;
         window.history.back();
       }
@@ -54,6 +72,7 @@ export function useSystemBack(open: boolean, close: () => void) {
 }
 
 const entryStack: string[] = [];
+const entryUrls = new Map<string, string>();
 
 // history.back() is asynchronous: a layer opened before it lands, such as a
 // terminal chosen from the tab sheet, must not read it as the user's Back.
@@ -72,6 +91,7 @@ if (typeof window !== "undefined")
   });
 
 function pushEntry(token: string) {
+  entryUrls.set(token, window.location.href);
   const base: unknown = window.history.state;
   window.history.pushState(
     { ...(typeof base === "object" && base ? base : {}), herdrBack: token },
