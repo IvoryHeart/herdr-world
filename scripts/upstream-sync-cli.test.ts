@@ -51,10 +51,34 @@ function fixture() {
     write("UPSTREAM.md", `Roamgate source: v1.0.0, \`${sha}\`\n`);
   record(source0);
   write("CHANGELOG.md", "Initial\n");
+  mkdirSync(join(root, "upstream"));
+  mkdirSync(join(root, "docs"));
+  write(
+    "docs/upstream-follow-ups.md",
+    "# Synthetic follow-up\nOwner: repository owner. Acceptance: retain compatibility.\n",
+  );
+  const disposition = {
+    commit: source1,
+    title: "Synthetic upstream change",
+    status: "adopted",
+    reason: "Integrated synthetic source.",
+    evidence: ["source.txt"],
+    followUp: null,
+    revisitWhen: null,
+    reviewedFor: source1,
+  };
+  const ledger = (source: string, changes: unknown[]) =>
+    write(
+      "upstream/dispositions.json",
+      JSON.stringify({ schema: 1, source, changes }),
+    );
+  ledger(source0, []);
   const main = commit("World baseline");
+  git("update-ref", "refs/remotes/origin/main", main);
   git("checkout", "-qb", "candidate");
   git("merge", "--no-commit", "--no-ff", source1);
   record(source1);
+  ledger(source1, [disposition]);
   const head = commit("Integrate source one");
   git("checkout", "main");
   const sync = {
@@ -181,6 +205,7 @@ save();process.stdout.write(JSON.stringify(value));
     git("checkout", "main");
     if (source !== source0) git("merge", "--no-commit", "--no-ff", source);
     record(source);
+    ledger(source, source === source0 ? [] : [disposition]);
     write("main-note.txt", "main advanced\n");
     const next = commit("Advance main");
     state = load();
@@ -211,6 +236,101 @@ save();process.stdout.write(JSON.stringify(value));
     cleanup: () => rmSync(root, { recursive: true, force: true }),
   };
 }
+
+test("CLI requires human review when only follow-up acceptance changes", () => {
+  const f = fixture();
+  try {
+    f.git("checkout", "--detach", f.head);
+    f.write(
+      "docs/upstream-follow-ups.md",
+      "# Synthetic follow-up\nAcceptance: omit compatibility checks.\n",
+    );
+    const head = f.commit("Change follow-up acceptance");
+    f.state().head = head;
+    f.state().pr.head.sha = head;
+    f.save();
+    expect(
+      f.run("post-review", {
+        SYNC: JSON.stringify({ ...f.sync, head, pr: 1 }),
+        HUMAN_REVIEW: "false",
+        AUTO_MERGE: "true",
+        VERDICT: JSON.stringify({
+          decision: "approve",
+          summary: "Independent synthetic source review completed.",
+        }),
+      }).status,
+    ).toBe(0);
+    expect(
+      f
+        .calls()
+        .filter((call) => call.body?.event)
+        .at(-1).body.event,
+    ).toBe("COMMENT");
+  } finally {
+    f.cleanup();
+  }
+});
+
+test("CLI gates new deferrals even when the caller requests automatic approval", () => {
+  const f = fixture();
+  try {
+    f.git("checkout", "--detach", f.head);
+    const value = JSON.parse(f.git("show", "HEAD:upstream/dispositions.json"));
+    Object.assign(value.changes[0], {
+      status: "deferred",
+      reason: "Compatibility migration remains pending.",
+      followUp: "docs/upstream-follow-ups.md#synthetic",
+      revisitWhen: "Every source sync.",
+    });
+    f.write("upstream/dispositions.json", JSON.stringify(value));
+    const head = f.commit("Record deferred upstream feature");
+    f.state().head = head;
+    f.state().pr.head.sha = head;
+    f.state().ci.head_sha = head;
+    f.save();
+    const sync = { ...f.sync, head, pr: 1 };
+    f.write("event.json", JSON.stringify({ workflow_run: { id: 123 } }));
+    expect(f.run("review-plan", { SYNC: JSON.stringify(sync) }).status).toBe(0);
+    expect(readFileSync(join(f.root, "output"), "utf8")).toContain(
+      "human=true",
+    );
+    const result = f.run("post-review", {
+      SYNC: JSON.stringify(sync),
+      HUMAN_REVIEW: "false",
+      AUTO_MERGE: "true",
+      VERDICT: JSON.stringify({
+        decision: "approve",
+        summary: "Independent synthetic source review completed.",
+      }),
+    });
+    expect(result.status).toBe(0);
+    expect(
+      f
+        .calls()
+        .filter((call) => call.body?.event)
+        .at(-1).body.event,
+    ).toBe("COMMENT");
+    expect(readFileSync(join(f.root, "output"), "utf8")).not.toContain(
+      "approved=true",
+    );
+    value.changes = [];
+    f.write("upstream/dispositions.json", JSON.stringify(value));
+    const missing = f.commit("Omit a disposition");
+    f.state().head = missing;
+    f.state().pr.head.sha = missing;
+    f.state().ci.head_sha = missing;
+    f.save();
+    expect(
+      f.run("publish-head", {
+        SYNC: JSON.stringify({ ...sync, head: missing }),
+        REPORT: "Synthetic integration report with enough readable evidence.",
+      }).status,
+    ).not.toBe(0);
+    expect(f.run("review-plan").status).not.toBe(0);
+  } finally {
+    f.cleanup();
+  }
+});
 
 test("CLI carries the reviewed World base and rejects main advancing before submission or approval", () => {
   const f = fixture();
@@ -344,6 +464,10 @@ test("CLI transports actual report evidence through export, local dispatch and i
     f.save();
     f.git("merge", "--no-commit", "--no-ff", f.source1);
     f.record(f.source1);
+    f.write(
+      "upstream/dispositions.json",
+      f.git("show", `${f.head}:upstream/dispositions.json`),
+    );
     f.write("CHANGELOG.md", "Integration\n");
     mkdirSync(join(f.root, ".agents/upstream"), { recursive: true });
     f.write(".agents/upstream/start", f.main);

@@ -9,6 +9,9 @@ are optional because the merged PR history records their source.
 
 ### Added
 
+- Upstream synchronization records every incoming commit and revisits deferred work;
+  new deferrals and intentional divergences require human approval.
+
 - Opt-in hourly Roamgate source synchronization with Codex integration,
   independent agent review, one bounded repair pass and protected auto-merge.
   Agent sessions run locally using Codex subscription sign-in, without an API key.

@@ -73,6 +73,25 @@ comment. Other positive verdicts can approve and queue normal auto-merge, subjec
 to all existing required reviews/checks. No ruleset bypass or `--admin` is used.
 Final merges must retain upstream ancestry; do not squash or rebase sync PRs.
 
+## Parity and adoption decisions
+
+[Adoption policy](upstream-policy.md) separates source ancestry from feature parity.
+The cumulative [disposition ledger](../upstream/dispositions.json) covers every
+commit after its explicit bootstrap baseline. Preparation emits an ignored source
+inventory and outstanding decisions. Export/publication/review validate complete
+coverage, retained history and reconsideration of outstanding entries against the
+frozen target. Missing records stop the flow; agent-authored labels still need
+independent semantic review against code and evidence.
+
+New deferrals/divergences or changes to prior decisions require human approval,
+even for an otherwise ordinary source-only update. Final review posting recomputes
+this requirement from the exact base/head; caller flags cannot downgrade it.
+Unchanged deferrals remain visible and are reconsidered every sync; they do not
+make all future routine updates require new human approval. Follow-ups live in
+[the tracked backlog](upstream-follow-ups.md) or linked repository issues and must
+state ownership, acceptance and a revisit trigger. No automatic issue sender or
+unattended follow-up implementation is implied.
+
 ## Setup
 
 1. On the machine that will perform the work, install the pinned Bun toolchain,
