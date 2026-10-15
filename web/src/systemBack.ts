@@ -103,3 +103,12 @@ function removeEntry(token: string) {
   const index = entryStack.indexOf(token);
   if (index >= 0) entryStack.splice(index, 1);
 }
+
+/** History state for a new route entry: a layer's token stays on its own. */
+export function routeHistoryState(state: unknown): unknown {
+  if (typeof state !== "object" || !state || !("herdrBack" in state))
+    return state;
+  const route = { ...(state as Record<string, unknown>) };
+  delete route.herdrBack;
+  return route;
+}

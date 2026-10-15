@@ -3143,17 +3143,27 @@ async function run() {
     ),
     "mobile resource row retained the window arranger",
   );
+  // Beside a terminal the islands wait in the app bar's ⋮ menu.
+  document.querySelector<HTMLButtonElement>(".mobile-more-button")!.click();
+  await until(
+    () =>
+      getComputedStyle(document.querySelector(".mobile-controls-stack")!)
+        .display !== "none",
+    "mobile ⋮ menu shows the floating controls",
+  );
+  // Tabs and the collapse toggle stay in the app bar, hidden in the menu.
   const secondRowButtons = [
     ...document.querySelectorAll<HTMLButtonElement>(
       ".mobile-terminal-controls button",
     ),
-  ];
+  ].filter((button) => button.getBoundingClientRect().width > 0);
+  check(secondRowButtons.length > 0, "mobile ⋮ menu has no terminal controls");
   secondRowButtons.forEach((button, index) => {
     const bounds = button.getBoundingClientRect();
     const previous = secondRowButtons[index - 1]?.getBoundingClientRect();
     check(
-      !previous || bounds.left >= previous.right,
-      "mobile second-row controls overlap",
+      !previous || bounds.top >= previous.bottom,
+      "mobile ⋮ menu rows overlap",
     );
     check(
       button.contains(
@@ -3184,6 +3194,10 @@ async function run() {
       ),
     "mobile ellipsis revealed window arrangements",
   );
+  // The collapse toggle sits inside the menu, so its tap closed it.
+  if (!document.querySelector(".app[data-mobile-more]"))
+    document.querySelector<HTMLButtonElement>(".mobile-more-button")!.click();
+  await settle();
   check(
     !mobileTabBar?.querySelector('button[aria-label="Arrange windows"]') &&
       document
@@ -3192,6 +3206,11 @@ async function run() {
         )!
         .getBoundingClientRect().width > 0,
     "mobile arrangement access created another tab-strip icon",
+  );
+  document.querySelector<HTMLButtonElement>(".mobile-more-button")!.click();
+  await until(
+    () => !document.querySelector(".app[data-mobile-more]"),
+    "mobile ⋮ menu closes",
   );
   const compactReviewerSlot = persistentReviewerInspector?.closest<HTMLElement>(
     ".world-managed-window",
@@ -3371,11 +3390,12 @@ async function run() {
     "compact World Inspector omitted its device keyboard or terminal shortcuts",
   );
   compactKeyboardButton.click();
+  // On phones the Message bar raises the keyboard in Composer's editor.
   await until(
     () =>
-      persistentReviewerInspector?.querySelector(".terminal-composer") ===
+      persistentReviewerInspector?.querySelector(".terminal-composer-input") ===
       document.activeElement,
-    "compact World Inspector opens Composer with neutral focus",
+    "compact World Inspector opens Composer with its editor focused",
   );
   compactFilesButton.click();
   await until(
@@ -4292,11 +4312,12 @@ async function run() {
   );
   const mobileViewBounds = viewSelect.getBoundingClientRect();
   const mobileBackBounds = backToOffice.getBoundingClientRect();
+  // Phones switch scenes from the bottom bar; a detail screen shows only Back.
   check(
-    mobileViewBounds.width > 0 &&
-      mobileViewBounds.height > 0 &&
-      mobileViewBounds.right <= mobileBackBounds.left,
-    "mobile view switcher stays visible to the left of Back while an Inspector is open",
+    mobileViewBounds.width === 0 &&
+      mobileBackBounds.left < 60 &&
+      !document.querySelector(".world-mobile-nav"),
+    "mobile Inspector screen shows Back at the left without scene switchers",
   );
   viewSelect.value = "graph";
   viewSelect.dispatchEvent(new Event("change", { bubbles: true }));

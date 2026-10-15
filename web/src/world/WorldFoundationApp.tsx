@@ -59,7 +59,7 @@ import {
   focusWorldNode,
   activateWorldNodeHost,
 } from "./worldInspectorSelection";
-import { useSystemBack } from "../systemBack";
+import { routeHistoryState, useSystemBack } from "../systemBack";
 import { WorldMobileNav, worldViewLabel } from "./WorldMobileNav";
 import { WorldControlPlane } from "./WorldControlPlane";
 import { EMPTY_VISUAL_ACTION_EXTENSION } from "./worldControlPlaneContract";
@@ -242,7 +242,11 @@ export default function WorldFoundationApp() {
     if (window.location.pathname !== WORLD_VIEW_PATHS[next]) {
       const url = new URL(window.location.href);
       url.pathname = WORLD_VIEW_PATHS[next];
-      window.history.pushState(window.history.state, "", url);
+      window.history.pushState(
+        routeHistoryState(window.history.state),
+        "",
+        url,
+      );
     }
     if (next === "spaces") {
       requestAnimationFrame(() => window.dispatchEvent(new Event("resize")));
