@@ -103,7 +103,7 @@ function fixture() {
     prelude +
       `
 const at=args.indexOf('fetch');
-if(at>=0){record(); const ref=args.at(-1); const sha=ref==='main'?state.main:ref==='upstream/roamgate'?state.head:ref; execFileSync(process.env.REAL_GIT,['update-ref','FETCH_HEAD',sha]); if(ref==='main')execFileSync(process.env.REAL_GIT,['update-ref','refs/remotes/origin/main',sha]);}
+if(at>=0){record(); const ref=args.at(-1); const sha=ref==='main'?state.main:ref==='upstream/roamgate'?state.head:ref; writeFileSync(execFileSync(process.env.REAL_GIT,['rev-parse','--git-path','FETCH_HEAD'],{encoding:'utf8'}).trim(),sha+'\\t\\tsynthetic fetch\\n'); if(ref==='main')execFileSync(process.env.REAL_GIT,['update-ref','refs/remotes/origin/main',sha]);}
 else if(args.includes('ls-remote')) { record(); process.stdout.write(state.pr?state.head+'\\trefs/heads/upstream/roamgate\\n':''); }
 else if(args[0]==='push'){ record(); state.head=execFileSync(process.env.REAL_GIT,['rev-parse','HEAD'],{encoding:'utf8'}).trim(); if(state.pr)state.pr.head.sha=state.head; save(); }
 else process.stdout.write(execFileSync(process.env.REAL_GIT,args));
