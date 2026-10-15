@@ -17,14 +17,10 @@ export function useSystemBack(open: boolean, close: () => void) {
   useEffect(() => {
     if (!active) return;
     const token = `herdr-back-${Math.random().toString(36).slice(2)}`;
-    const base: unknown = window.history.state;
-    window.history.pushState(
-      { ...(typeof base === "object" && base ? base : {}), herdrBack: token },
-      "",
-    );
+    pushEntry(token);
     let popped = false;
     const onPopState = (event: PopStateEvent) => {
-      if (popped) return;
+      if (popped || ownBacks.has(event)) return;
       const state = event.state as { herdrBack?: string } | null;
       // Back landed on this layer's own entry: a layer above it closed.
       if (state?.herdrBack === token) return;
@@ -45,14 +41,43 @@ export function useSystemBack(open: boolean, close: () => void) {
       if (popped) return;
       const top = entryStack[entryStack.length - 1] === token;
       removeEntry(token);
-      // Closed on screen: drop the entry it added if it is still the newest.
-      const state = window.history.state as { herdrBack?: string } | null;
-      if (top && state?.herdrBack === token) window.history.back();
+      // Closed on screen: drop the entry it added if it is still the newest,
+      // or a closed layer's entry that a racing open left current.
+      const current = (window.history.state as { herdrBack?: string } | null)
+        ?.herdrBack;
+      if (top && current && !entryStack.includes(current)) {
+        pendingBacks++;
+        window.history.back();
+      }
     };
   }, [active]);
 }
 
 const entryStack: string[] = [];
+
+// history.back() is asynchronous: a layer opened before it lands, such as a
+// terminal chosen from the tab sheet, must not read it as the user's Back.
+let pendingBacks = 0;
+const ownBacks = new WeakSet<Event>();
+if (typeof window !== "undefined")
+  window.addEventListener("popstate", (event) => {
+    if (pendingBacks === 0) return;
+    pendingBacks--;
+    ownBacks.add(event);
+    // A layer that opened while the Back was pending pushed its entry first,
+    // and the Back went past it; give the newest open layer its entry again.
+    const top = entryStack[entryStack.length - 1];
+    const current = (event.state as { herdrBack?: string } | null)?.herdrBack;
+    if (pendingBacks === 0 && top && current !== top) pushEntry(top);
+  });
+
+function pushEntry(token: string) {
+  const base: unknown = window.history.state;
+  window.history.pushState(
+    { ...(typeof base === "object" && base ? base : {}), herdrBack: token },
+    "",
+  );
+}
 
 function removeEntry(token: string) {
   const index = entryStack.indexOf(token);
