@@ -7,12 +7,12 @@ import { deskAnchor } from "./officeGeometry";
 import PixelOfficeView from "./PixelOfficeView";
 import "./world.css";
 
-export function mountGrowingOffice() {
+export function mountGrowingOffice(options: { roomCount?: number } = {}) {
   const connections = ["Atlas", "Boreal", "Cedar"].map((label, hostIndex) => {
     const workspaces: Workspace[] = [];
     const tabs: Tab[] = [];
     const panes: Pane[] = [];
-    const count = hostIndex === 0 ? 129 : 1;
+    const count = hostIndex === 0 ? (options.roomCount ?? 129) : 1;
     for (let index = 0; index < count; index++) {
       const id = `workspace-${index}`;
       const tabCount = hostIndex === 0 && index === 0 ? 100 : 1;
@@ -151,8 +151,11 @@ export function mountGrowingOffice() {
 
 export async function verifyGrowingOffice(
   check: (condition: boolean, message: string) => void,
+  options: { packingOnly?: boolean } = {},
 ) {
-  const fixture = mountGrowingOffice();
+  const fixture = mountGrowingOffice(
+    options.packingOnly ? { roomCount: 40 } : {},
+  );
   const wait = async (condition: () => boolean, message: string) => {
     for (let index = 0; index < 200; index++) {
       if (condition()) return;
@@ -169,7 +172,7 @@ export async function verifyGrowingOffice(
       const published = renderer?.publishedLayout;
       return (
         renderer?.ready === true &&
-        published?.rooms.length === 131 &&
+        published?.rooms.length === fixture.projection.rooms.length &&
         Boolean(scroller) &&
         published.normalizedInput.availableViewportWidth ===
           scroller!.clientWidth &&
@@ -214,6 +217,24 @@ export async function verifyGrowingOffice(
         "Phone Office skipped its initial reception overview",
       );
     }
+    if (innerWidth > 720) {
+      const large = layout().rooms[0]!;
+      check(
+        large.deskColumns > 4,
+        "Desktop large room retained its four-column restriction",
+      );
+      check(
+        layout()
+          .rooms.slice(1)
+          .some(
+            (room) =>
+              room.y > large.y &&
+              room.y < large.y + large.height &&
+              room.x >= large.x + large.width,
+          ),
+        "Small desktop rooms did not fill space beside the large room",
+      );
+    }
     const lastDesk = firstRoom.desks[99]!;
     const target = lastDesk.paneDevices[0]!;
     const point = deskAnchor(layout().rooms[0]!, 99);
@@ -232,8 +253,12 @@ export async function verifyGrowingOffice(
       "Hundredth desk was not admitted in its viewport",
     );
     check(
-      fixture.host.querySelectorAll(".world-semantic-target").length < 250,
-      "A tall room admitted its complete semantic roster",
+      fixture.host.querySelectorAll(".world-semantic-target").length <
+        50 +
+          (Math.ceil(scroll.clientWidth / 220) + 1) *
+            (Math.ceil((3 * scroll.clientHeight) / 188) + 1) *
+            9,
+      "Office semantic admission exceeded its viewport-area budget",
     );
     targetButton()!.focus();
     targetButton()!.click();
@@ -257,6 +282,35 @@ export async function verifyGrowingOffice(
         target.paneRef.connectionId === "synthetic-0",
       "Colliding synthetic host identifiers redirected activation",
     );
+    if (options.packingOnly) {
+      scroll.scrollTo({ top: layout().rooms[0]!.y, behavior: "instant" });
+      const collapse = () =>
+        [
+          ...fixture.host.querySelectorAll<HTMLButtonElement>(
+            "button[data-room-key]",
+          ),
+        ].find(
+          (button) =>
+            button.dataset.roomKey === firstRoom.key &&
+            button.getAttribute("aria-expanded") === "true",
+        );
+      await wait(
+        () =>
+          diagnostics().ready && Boolean(collapse()) && !collapse()!.disabled,
+        "Wide room collapse action was not reachable",
+      );
+      collapse()!.click();
+      await wait(
+        () => diagnostics().ready && layout().rooms[0]!.collapsed === true,
+        "Wide packed room did not collapse",
+      );
+      check(
+        fixture.projection.rooms[0]!.desks.length === 100 &&
+          fixture.activated.length === 1,
+        "Wide collapse changed qualified room membership",
+      );
+      return;
+    }
     scroll.scrollTo({ top: layout().rooms[120]!.y, behavior: "instant" });
     await wait(
       () =>
@@ -388,9 +442,17 @@ export async function verifyGrowingOffice(
       `Growing an earlier room moved the current room anchor: before=${anchoredTop}, after=${layout().rooms[lastIndex]!.y - scroll.scrollTop}, top=${scroll.scrollTop}, y=${layout().rooms[lastIndex]!.y}`,
     );
     if (innerWidth > 720) {
-      const visible = layout().rooms.find(
-        (room) => room.y + room.height > scroll.scrollTop,
-      )!;
+      const visible = layout()
+        .rooms.filter(
+          (room) =>
+            room.y + room.height > scroll.scrollTop &&
+            room.y < scroll.scrollTop + scroll.clientHeight,
+        )
+        .sort(
+          (left, right) =>
+            Math.abs(left.y - scroll.scrollTop) -
+            Math.abs(right.y - scroll.scrollTop),
+        )[0]!;
       const key = fixture.projection.rooms[visible.index]!.key;
       fixture.host.style.width = "390px";
       await wait(

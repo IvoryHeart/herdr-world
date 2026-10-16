@@ -15,7 +15,7 @@ const chrome =
     ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
     : Bun.which("google-chrome") || Bun.which("chromium"));
 
-test.skipIf(!chrome).each([1280, 390])(
+test.skipIf(!chrome).each([1280, 390, 3440])(
   "the retained Pixel Office preserves its complete responsive scene at %ipx",
   async (width) => {
     const dir = await mkdtemp(join(tmpdir(), "pixel-office-test-"));
@@ -135,7 +135,7 @@ test.skipIf(!chrome).each([1280, 390])(
           "--no-first-run",
           "--no-default-browser-check",
           `--user-data-dir=${join(dir, "profile")}`,
-          server.url.href,
+          server.url.href + (width === 3440 ? "?packing=1" : ""),
         ],
         { stdout: "ignore", stderr: Bun.file(browserLog) },
       );

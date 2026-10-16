@@ -927,10 +927,13 @@ async function verifyAnchorAfterRendererRepaint() {
   }
 }
 
-run()
-  .then(() => verifyAnchorAfterRendererRepaint())
-  .then(() => verifyOfficeRendering(check))
-  .then(() => verifyGrowingOffice(check))
+(new URL(location.href).searchParams.has("packing")
+  ? verifyGrowingOffice(check, { packingOnly: true })
+  : run()
+      .then(() => verifyAnchorAfterRendererRepaint())
+      .then(() => verifyOfficeRendering(check))
+      .then(() => verifyGrowingOffice(check))
+)
   .catch((error: unknown) => {
     const diagnostics = window.__HERDR_WORLD_RENDERER__;
     failures.push(

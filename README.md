@@ -23,7 +23,8 @@ open Inspectors and pending operations keep their captured owners. Use Actions â
 New workspace or New tab in any visual view; Office also provides New room and
 New seat controls. Creation prepares its source terminal and opens the result in
 the current view, including for another ready host. Office rooms grow with their
-observed tabs and agents; room navigation and collapse keep large offices reachable.
+observed tabs and agents. Desktop desk grids adapt to screen width, with smaller
+rooms filling space beside larger ones; navigation and collapse keep offices reachable.
 On phones, attention receptions, Economy, Workforce and
 workspace rooms form one vertical scene.
 

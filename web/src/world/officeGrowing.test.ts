@@ -1,5 +1,13 @@
 import { expect, test } from "bun:test";
-import { deskAnchor, resolveOfficeLayout } from "./officeGeometry";
+import {
+  deskAnchor,
+  resolveOfficeLayout,
+  OFFICE_GEOMETRY,
+} from "./officeGeometry";
+import {
+  officePackedRoomCorridors,
+  officeRoomScrollOffset,
+} from "./officeRoomPacking";
 import { resolveOfficeSceneGeometry } from "./officeSceneLayout";
 import { OfficeLayoutPublisher, officeGeometryDigest } from "./officeLayout";
 import {
@@ -27,9 +35,15 @@ test("logical Office rooms grow past eight desks and the old room total", () => 
     { complete: true },
   );
   expect(layout.rooms).toHaveLength(129);
-  expect(layout.rooms[0]!.deskRows).toBe(25);
-  expect(layout.rooms[0]!.standingRows).toBe(5);
-  expect(deskAnchor(layout.rooms[0]!, 99).row).toBe(24);
+  expect(layout.rooms[0]!.deskRows).toBe(
+    Math.ceil(100 / layout.rooms[0]!.deskColumns),
+  );
+  expect(layout.rooms[0]!.standingRows).toBe(
+    Math.ceil(40 / layout.rooms[0]!.standingColumns),
+  );
+  expect(deskAnchor(layout.rooms[0]!, 99).row).toBe(
+    layout.rooms[0]!.deskRows - 1,
+  );
   expect(layout.ceoBlocks.receptions).toHaveLength(7);
   expect(layout.totalHeight).toBeGreaterThan(layout.rooms[128]!.y);
 });
@@ -257,4 +271,131 @@ test("phone hides empty receptions and keeps qualified attention above Economy a
       }).map((item) => item.index),
     ).toEqual(attentionReceptionIndices);
   }
+});
+
+test("wide desktop adapts desk columns and stacks small rooms beside a large room", () => {
+  const rooms = [
+    { deskCount: 100, standingCount: 0 },
+    ...Array.from({ length: 130 }, () => ({ deskCount: 2, standingCount: 0 })),
+  ];
+  const resolve = (width: number) =>
+    resolveOfficeLayout(width, rooms, "left", undefined, 3, undefined, {
+      complete: true,
+    });
+  const wide = resolve(3440);
+  const narrow = resolve(1280);
+  const large = wide.rooms[0]!;
+  expect(large.deskColumns).toBeGreaterThan(4);
+  expect(large.deskColumns).toBeGreaterThan(narrow.rooms[0]!.deskColumns);
+  expect(large.height).toBeLessThan(narrow.rooms[0]!.height);
+  const beside = wide.rooms
+    .slice(1)
+    .filter(
+      (room) =>
+        room.x >= large.x + large.width && room.y < large.y + large.height,
+    );
+  expect(new Set(beside.map((room) => room.y)).size).toBeGreaterThan(2);
+  expect(beside.length).toBeGreaterThan(wide.columns);
+  expect(wide).toEqual(resolve(3440));
+});
+
+test("fluid desktop preserves readable nonoverlapping rooms across widths and alignment", () => {
+  for (const width of [1024, 1440, 3440])
+    for (const alignment of ["left", "center", "right"] as const) {
+      const layout = resolveOfficeLayout(
+        width,
+        [100, 1, 12, 2, 80, 4, 30, 1, 1, 2, 3, 1].map((deskCount) => ({
+          deskCount,
+          standingCount: 0,
+        })),
+        alignment,
+        undefined,
+        2,
+        undefined,
+        { complete: true },
+      );
+      expect(layout.rooms.map((room) => room.index)).toEqual(
+        Array.from({ length: 12 }, (_, index) => index),
+      );
+      for (const room of layout.rooms) {
+        expect(room.x).toBeGreaterThanOrEqual(12);
+        expect(room.x + room.width).toBeLessThanOrEqual(width - 12);
+        expect(deskAnchor(room, 0).stationSpan).toBeGreaterThanOrEqual(112);
+        expect(layout.totalHeight).toBeGreaterThan(room.y + room.height);
+        for (const other of layout.rooms)
+          if (other.index !== room.index) {
+            expect(
+              room.x + room.width <= other.x ||
+                other.x + other.width <= room.x ||
+                room.y + room.height <= other.y ||
+                other.y + other.height <= room.y,
+            ).toBe(true);
+          }
+      }
+    }
+});
+
+test("packed room corridors stay clear of every unequal neighboring room", () => {
+  for (const width of [1024, 1440, 3440]) {
+    const layout = resolveOfficeLayout(
+      width,
+      [100, 1, 12, 2, 80, 4, 30, 1, 1, 2, 3, 1].map((deskCount) => ({
+        deskCount,
+        standingCount: 0,
+      })),
+      "center",
+      undefined,
+      1,
+      undefined,
+      { complete: true },
+    );
+    for (const room of layout.rooms)
+      for (const corridor of Object.values(
+        officePackedRoomCorridors(
+          room,
+          width - 12,
+          OFFICE_GEOMETRY.roomGap,
+          OFFICE_GEOMETRY.roomRowGap,
+        ),
+      )) {
+        for (const other of layout.rooms)
+          expect(
+            corridor.width === 0 ||
+              corridor.x + corridor.width <= other.x ||
+              other.x + other.width <= corridor.x ||
+              corridor.y + corridor.height <= other.y ||
+              other.y + other.height <= corridor.y,
+          ).toBe(true);
+      }
+  }
+});
+
+test("fluid standing rooms grow across the screen and responsive rows retain their logical item", () => {
+  const resolve = (width: number) =>
+    resolveOfficeLayout(
+      width,
+      [
+        { deskCount: 100, standingCount: 0 },
+        { deskCount: 0, standingCount: 200 },
+      ],
+      "left",
+      undefined,
+      1,
+      undefined,
+      { complete: true },
+    );
+  const narrow = resolve(1024);
+  const wide = resolve(3440);
+  expect(wide.rooms[1]!.standingColumns).toBeGreaterThan(
+    narrow.rooms[1]!.standingColumns,
+  );
+  const before = narrow.rooms[0]!;
+  const after = wide.rooms[0]!;
+  const offset = 56 + 10 * before.deskRowHeight + 7;
+  expect(officeRoomScrollOffset(before, after, offset)).toBe(
+    56 +
+      Math.floor((10 * before.deskColumns) / after.deskColumns) *
+        after.deskRowHeight +
+      7,
+  );
 });

@@ -195,7 +195,9 @@ its CEO/reception/Agent Bar composition. [OfficeNavigator.tsx](OfficeNavigator.t
 pages and searches complete room/agent rosters, and room collapse changes only
 presentation. [useOfficeViewport.ts](useOfficeViewport.ts) shares the canvas window
 with accessible controls, retaining a still-current focused target across scrolling.
-Phone and desktop scroll preferences are separate.
+Phone and desktop scroll preferences are separate. [officeRoomPacking.ts](officeRoomPacking.ts)
+packs desktop rooms into skyline openings with reserved corridor gaps. Large desk
+grids adapt to usable width, and logical desk/standing rows survive column changes.
 
 | Task | Open these owners | Focused evidence |
 | --- | --- | --- |

@@ -7,7 +7,7 @@
 ## 2. Lay out complete responsive Office content
 
 - [x] 2.1 Separate complete observed Office membership from paint admission, preserving qualified stable keys and exact coverage; verify ninth/last tabs, all room agents and rooms beyond the old bounds have logical positions without aliasing equal IDs on different hosts.
-- [x] 2.2 Add the phone's vertical attention-reception/Economy/Workforce/workspace-room geometry and content-derived desk/standing rows on both screen sizes; verify title/action and furniture containment, independent room sizes, small-room forms and preserved ordinary desktop composition.
+- [x] 2.2 Add the phone's vertical attention-reception/Economy/Workforce/workspace-room geometry and content-derived desk/standing rows on both screen sizes; verify title/action and furniture containment, independent room sizes, adaptive desktop columns, packed smaller rooms beside tall rooms, corridor clearance, small-room forms and preserved desktop artwork.
 - [x] 2.3 Extend row-level room/reception drawing, preparation, semantic targets and anchor admission to follow the viewport; verify a large intersecting room admits bounded paint/control work and the hundredth tab and later rooms remain reachable without oversized backing allocations.
 - [x] 2.4 Preserve every pane target through the existing device chooser and give additional room agents reachable standing targets; verify multiple agents share one tab desk and exact pane activation survives agent relocation and runtime retirement.
 

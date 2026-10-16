@@ -47,7 +47,7 @@ Remove only the phone's decorative CEO room. Keep host health, waiting/completed
 agent access and idle-agent access in the reception/status controls and existing
 qualified chooser. An absent expense provider displays an honest unavailable state.
 Desktop retains its CEO, receptions, Agent Bar, roads and independently sized
-workspace rooms; ordinary desktop rooms use the existing column/row rhythm.
+workspace rooms. Desktop room placement uses the fluid packing described below.
 
 The owner compared both axes and selected vertical. A horizontal workspace strip,
 sideways reception carousel and nested per-room scrollboxes are rejected for the
@@ -75,6 +75,35 @@ admit its entire contents. Full logical extent and indexed reveal stay separate
 from the small Pixi/control window. If native scroll-coordinate limits are met,
 rebase the rendered window and retain indexed access rather than truncating the
 logical roster or allocating an oversized surface.
+
+### Fluid desktop room shape and packing
+
+The wide-screen review exposed two independent constraints: shared row height left
+large holes beside a 100-tab room, and the four-column grid forced that room to
+remain tall. Replace both in the production desktop layout. Phone ordering stays
+vertical and the bounded legacy geometry API retains its existing callers.
+
+For large desktop rooms, consider readable desk-column counts that fit the usable
+width, preserving nearby space for another readable room where possible. Prefer
+balanced room aspect ratios and fewer empty desk slots; standing rows derive from
+the resolved width. Small rooms keep their familiar furniture spacing. This is a
+bounded deterministic heuristic, not a claim of globally optimal packing.
+
+Pack the resulting rectangles with a bottom-left skyline in logical input order.
+Reserve horizontal/vertical corridor gaps in each footprint, merge adjacent equal
+skyline spans, and place each new room at the lowest fitting opening. Align the
+complete footprint left, center or right. Draw corridors within reserved space
+beside/below each room, avoiding full-width roads across taller neighboring rooms.
+The approach follows the skyline representation discussed in [Wei et al.](https://www.sciencedirect.com/science/article/pii/S0377221711005510).
+Treemap tessellation was considered but does not naturally preserve minimum desk,
+label and action sizes; global shape/search optimization adds preparation work and
+layout churn without a requirement for a provably optimal solution.
+
+Keep qualified identities and roster order independent of spatial placement. On
+refresh/resize anchor to the nearest visible room header and translate a desk or
+standing row through its logical item index when column counts change. Physical
+surfaces, row paint and controls still follow the viewport; admission evidence
+scales with viewport area rather than a fixed count chosen for the old sparse grid.
 
 ### Reach later rooms without traversing a giant room
 

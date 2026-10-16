@@ -50,7 +50,8 @@ Office growth uses direct geometry, projection and production Pixi browser evide
 for Q19/Q20/Q39/Q43, alongside existing Q17 creation, Q23 Inspector intent and Q42
 preference checks. `officeGrowing.test.ts` covers logical room/desk/standing growth,
 phone section order, complete 129-room geometry and bounded row admission near the
-10000th tab, cooperative immutable publication and cancellation before a stale
+10000th tab, adaptive desktop columns, compact unequal-room packing and corridor
+clearance at 1024/1440/3440 widths and all three alignments, cooperative immutable publication and cancellation before a stale
 layout can replace the current painted revision. A separate real Pixi consumer
 forces font completion without React/scroll changes and checks that the completed
 paint republishes the selected connector anchor. `officeGrowing.browser.tsx`, executed by `PixelOfficeCanvas.test.ts`,
@@ -65,6 +66,11 @@ boundaries, not an exhaustive cardinality, GPU or device guarantee. The existing
 Tree/Graph space-admission model retains its own bounded scope.
 
 ## Review and remaining obligations
+
+An additional production Pixi 3440px case covers a 100-tab room alongside forty
+small rooms, exact late-pane activation and collapse. The 1280px/390px cases retain
+the full 131-room navigation, refresh and responsive lifecycle sequence. Control
+admission is bounded by viewport area, allowing the increased visible density.
 
 Phone Office prioritizes qualified receptions with waiting/completed agents above
 Economy and Workforce; empty receptions are hidden on phones, and workspace rooms

@@ -2,7 +2,6 @@ import { resolveOfficeLayout } from "./officeGeometry";
 import {
   normalizeOfficeGeometryInput,
   officeGeometryDigest,
-  resolveOfficeGeometry,
   resolveOfficeRoomHeader,
   type OfficeGeometryInput,
   type OfficeGeometryResult,
@@ -16,16 +15,6 @@ export function resolveOfficeSceneGeometry(
   collapsedRooms: ReadonlySet<number> = new Set(),
 ): OfficeGeometryResult {
   const compact = input.availableViewportWidth <= 720;
-  if (
-    !compact &&
-    !collapsedRooms.size &&
-    input.rooms.length <= 128 &&
-    (input.ceoReceptionCount ?? 0) <= 6 &&
-    input.rooms.every((room) => room.deskCount <= 8 && room.standingCount <= 16)
-  ) {
-    const ordinary = resolveOfficeGeometry(input);
-    if (!ordinary.omissions.length) return ordinary;
-  }
   const normalized = normalizeOfficeGeometryInput({ ...input, rooms: [] });
   const headerInput = {
     ...normalized,

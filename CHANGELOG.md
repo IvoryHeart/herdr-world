@@ -114,6 +114,7 @@ are optional because the merged PR history records their source.
   without a decorative CEO room or sideways scene navigation. Workspace rooms grow
   with observed tabs and agents on desktop and phones; searchable room navigation
   and collapse keep later rooms reachable while drawing stays near the viewport.
+  Desktop rooms use width-adaptive desk grids and fill space beside taller rooms.
   Conversation connectors are refreshed after font and viewport repaints.
 
 - Follow phone platform conventions on mobile. Office, Graph, Desk and Spaces

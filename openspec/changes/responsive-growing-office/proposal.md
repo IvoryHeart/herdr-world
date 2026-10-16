@@ -15,7 +15,9 @@ workspace instead of letting its room grow with the observed tabs and agents.
   composition; retain its useful status information and access to idle agents.
 - Keep the pixel scene, reception tables, characters, real workspace rooms and
   tab desks. Preserve the desktop CEO/reception/Agent Bar composition while making
-  desktop rooms grow with their own contents.
+  desktop rooms grow with their own contents. Desktop desk grids adapt to width
+  and content; smaller rooms fill space alongside larger rooms without shared
+  tallest-room row gaps.
 - Replace scene-owned room, tab and room-agent totals with complete logical
   layout over the admitted observation. More than eight tabs, sixteen room agents
   or 128 rooms must remain reachable without raising one fixed cap to another.

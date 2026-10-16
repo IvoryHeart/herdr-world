@@ -568,8 +568,13 @@ An unavailable optional expense provider SHALL NOT appear as invented zero cost.
 Room geometry SHALL derive from complete admitted tab and room-agent content and
 title/action requirements. Small rooms SHALL retain readable forms, and larger
 rooms SHALL add desk and standing rows rather than truncate at eight desks or
-sixteen room agents. Desktop SHALL retain natural-width row packing and row
-alignment; phone rooms SHALL stack vertically within the viewport width. Title,
+sixteen room agents. Desktop desk and standing columns SHALL adapt to usable width and content,
+without a four-column room restriction. Desktop SHALL pack independently sized
+rooms into available openings, including multiple smaller rooms beside a tall
+room, without shared tallest-room row spacing or corridors crossing rooms.
+Room placement SHALL be deterministic for equal inputs and SHALL retain qualified
+identities and logical roster order. Left/center/right alignment SHALL apply to
+the packed footprint; phone rooms SHALL stack vertically within the viewport width. Title,
 action and decoration containment, stable gaps and full-name access SHALL remain
 available. A large room SHALL NOT enlarge unrelated rooms.
 
@@ -617,6 +622,15 @@ available. A large room SHALL NOT enlarge unrelated rooms.
 - **THEN** each qualified reception needing attention is reachable by vertical scrolling
   before Economy, Workforce and workspace rooms, without a host carousel or
   six-host scene cap; empty receptions do not occupy phone scene space
+
+
+#### Scenario: Fill a wide desktop beside a large room
+
+- **WHEN** a desktop observation has a 100-tab room and many single-tab rooms
+- **THEN** the large room uses a readable width-dependent desk grid, and smaller
+  rooms fill available space alongside it on multiple levels without overlap
+- **AND** viewport admission stays bounded by visible area, and resize retains
+  qualified room access and the logical desk row instead of its old pixel row
 
 ### Requirement: Terminal file links use the originating Inspector
 

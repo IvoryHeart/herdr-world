@@ -613,6 +613,7 @@ export async function createOfficeRenderer(
           JSON.stringify([
             layout.inputDigest ?? layout,
             visibleRooms.map(({ index }) => index),
+            paintViewport,
           ]),
           (parent) =>
             drawRoomRoads(parent, layout, visibleRooms, paintViewport),

@@ -62,6 +62,7 @@ import {
 } from "./completionSeenState";
 import { preferredOfficeConnectorAnchor } from "./worldConnectorGeometry";
 import { OfficeNavigator } from "./OfficeNavigator";
+import { officeRoomScrollOffset } from "./officeRoomPacking";
 import { useOfficeViewport } from "./useOfficeViewport";
 import { resolveOfficeAnchors } from "./officeRendererAnchors";
 import { officeCreationInputsEqual } from "./officeCreationInputs";
@@ -291,9 +292,25 @@ export default function PixelOfficeView({
       previous.inputDigest !== next.inputDigest &&
       scroll
     ) {
-      const visible = previous.rooms.find(
-        (room) => room.y + room.height > scroll.scrollTop,
-      );
+      // A tall packed room can overlap many later headers vertically. Anchor
+      // the closest visible header instead of always choosing that first room.
+      const visible = previous.rooms
+        .filter(
+          (room) =>
+            room.y + room.height > scroll.scrollTop &&
+            room.y < scroll.scrollTop + scroll.clientHeight &&
+            room.x + room.width > scroll.scrollLeft &&
+            room.x < scroll.scrollLeft + scroll.clientWidth,
+        )
+        .reduce<(typeof previous.rooms)[number] | undefined>(
+          (best, room) =>
+            !best ||
+            Math.abs(room.y - scroll.scrollTop) <
+              Math.abs(best.y - scroll.scrollTop)
+              ? room
+              : best,
+          undefined,
+        );
       const descriptor = previous.normalizedInput.rooms.find(
         (room) => room.sourceIndex === visible?.index,
       );
@@ -305,19 +322,7 @@ export default function PixelOfficeView({
       );
       if (visible && replacement && scroll.scrollTop >= previous.roomStartY) {
         const offset = scroll.scrollTop - visible.y;
-        const row = Math.max(
-          0,
-          Math.floor((offset - 56) / visible.deskRowHeight),
-        );
-        const nextRow = Math.floor(
-          (row * visible.deskColumns) / replacement.deskColumns,
-        );
-        const adjusted =
-          previous.compact !== next.compact && offset > 56
-            ? 56 +
-              nextRow * replacement.deskRowHeight +
-              ((offset - 56) % visible.deskRowHeight)
-            : offset;
+        const adjusted = officeRoomScrollOffset(visible, replacement, offset);
         pendingScrollRestore.current = {
           revision: next.layoutRevision,
           top:

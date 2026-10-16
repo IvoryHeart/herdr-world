@@ -15,6 +15,7 @@ import type {
   OfficeLayout,
   OfficeRoomRect,
 } from "./officeGeometry";
+import { officePackedRoomCorridors } from "./officeRoomPacking";
 import { OfficeFloorTextures } from "./officeFloorTextures";
 import { type AnimatedItem } from "./officeRendererTypes";
 import {
@@ -95,6 +96,34 @@ export function drawRoomRoads(
   viewport?: OfficeRect,
 ) {
   const road = new Graphics();
+  if (layout.packedRooms) {
+    for (const room of visibleRooms) {
+      const { horizontal, vertical } = officePackedRoomCorridors(
+        room,
+        layout.officeWidth - 12,
+        OFFICE_GEOMETRY.roomGap,
+        OFFICE_GEOMETRY.roomRowGap,
+      );
+      drawHorizontalRoad(
+        road,
+        horizontal.x,
+        horizontal.y,
+        horizontal.width,
+        horizontal.height,
+      );
+      if (vertical.width > 0)
+        drawVerticalRoad(
+          road,
+          vertical.x,
+          vertical.y,
+          vertical.width,
+          vertical.height,
+          viewport,
+        );
+    }
+    stage.addChild(road);
+    return;
+  }
   const rows = new Map<number, OfficeRoomRect[]>();
   visibleRooms.forEach((room) => {
     const row = rows.get(room.row) ?? [];
