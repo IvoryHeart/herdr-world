@@ -25,8 +25,10 @@ New seat controls. Creation prepares its source terminal and opens the result in
 the current view, including for another ready host. Office rooms grow with their
 observed tabs and agents. Desktop desk grids adapt to screen width, with smaller
 rooms filling space beside larger ones. Pixel-art host buildings have brickwork
-and wooden signs, use the same packing and can collapse as a group. Navigation
-and collapse keep offices reachable.
+and wooden signs, share useful screen width and can collapse as a group. Carpeted
+interiors and wood reception floors distinguish buildings from exterior roads. Navigation
+and collapse keep offices reachable through the existing Office search, with no
+extra navigation row. Room grids and placement adapt together to fill usable gaps.
 On phones, attention receptions, Economy, Workforce and
 workspace rooms form one vertical scene.
 

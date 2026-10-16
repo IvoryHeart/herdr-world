@@ -37,7 +37,7 @@ import {
   drawReceptionStatusBadge,
 } from "./officeDrawingPrimitives";
 import { drawRoomOverflowMarker } from "./officeRoomDrawing";
-import { drawVerticalRoad, drawAgentBar } from "./officeCommonAreaDrawing";
+import { drawAgentBar } from "./officeCommonAreaDrawing";
 
 export function drawCeoReception(
   stage: Container,
@@ -65,6 +65,18 @@ export function drawCeoReception(
     return;
   }
   if (layout.compact) {
+    const lobby = new Graphics();
+    floors.draw(
+      lobby,
+      4,
+      4,
+      layout.officeWidth - 8,
+      layout.ceoBandHeight - 4,
+      0x362d29,
+      0x42352d,
+      "wood",
+    );
+    band.addChild(lobby);
     for (const { reception, rect } of visibleReceptions) {
       drawReceptionDesk(
         band,
@@ -84,7 +96,7 @@ export function drawCeoReception(
         layout.expenseRect.x,
         layout.expenseRect.y - OFFICE_GEOMETRY.ceoBoardY,
       );
-      drawOtelCostBoard(board, observability, 0);
+      drawOtelCostBoard(board, observability, 0, layout.expenseRect.width - 4);
       band.addChild(board);
     }
     if (layout.workforceRect) {
@@ -93,7 +105,12 @@ export function drawCeoReception(
         layout.workforceRect.x,
         layout.workforceRect.y - OFFICE_GEOMETRY.ceoBoardY,
       );
-      drawLiveStateBlackboard(board, projection, 0);
+      drawLiveStateBlackboard(
+        board,
+        projection,
+        0,
+        layout.workforceRect.width - 4,
+      );
       band.addChild(board);
     }
     stage.addChild(band);
@@ -108,20 +125,26 @@ export function drawCeoReception(
     4,
     ceoRoomRight - 4,
     layout.ceoRect.height,
-    0x131328,
-    0x0e0e1d,
+    0x362d29,
+    0x42352d,
+    "wood",
   );
   floor
     .roundRect(4, 4, ceoRoomRight - 4, layout.ceoRect.height, 4)
     .stroke({ width: 2, color: 0x8d7135, alpha: 0.8 });
   band.addChild(floor);
-  drawVerticalRoad(
-    band,
+  const lobbyPassage = new Graphics();
+  floors.draw(
+    lobbyPassage,
     ceoRoomRight,
     4,
     Math.max(0, layout.agentBarRect.x - ceoRoomRight),
     layout.ceoRect.height,
+    0x29323d,
+    0x303a46,
+    "carpet",
   );
+  band.addChild(lobbyPassage);
   const ceoContent = new Container();
   ceoContent.position.x = ceoBlocks.ceoOriginX;
   ceoContent.scale.x = ceoBlocks.ceoScale;
@@ -216,12 +239,9 @@ function drawLiveStateBlackboard(
   parent: Container,
   projection: HerdrOfficeProjection,
   x: number,
+  width: number = OFFICE_GEOMETRY.ceoBoardWidth,
 ) {
-  const {
-    ceoBoardY: y,
-    ceoBoardWidth: width,
-    ceoBoardHeight: height,
-  } = OFFICE_GEOMETRY;
+  const { ceoBoardY: y, ceoBoardHeight: height } = OFFICE_GEOMETRY;
   const board = new Graphics();
   board
     .roundRect(x + 4, y + 5, width, height, 5)
@@ -285,12 +305,9 @@ function drawOtelCostBoard(
   parent: Container,
   observability: OfficeObservability,
   x: number,
+  width: number = OFFICE_GEOMETRY.ceoOtelBoardWidth,
 ) {
-  const {
-    ceoBoardY: y,
-    ceoOtelBoardWidth: width,
-    ceoBoardHeight: height,
-  } = OFFICE_GEOMETRY;
+  const { ceoBoardY: y, ceoBoardHeight: height } = OFFICE_GEOMETRY;
   const board = new Graphics();
   board
     .roundRect(x + 4, y + 5, width, height, 5)
@@ -324,7 +341,7 @@ function drawOtelCostBoard(
   });
   modelHeader.position.set(x + 12, y + 26);
   parent.addChild(modelHeader);
-  const tokenColumnX = x + 100;
+  const tokenColumnX = x + width * (100 / OFFICE_GEOMETRY.ceoOtelBoardWidth);
   const coinIcon = new Graphics();
   coinIcon
     .circle(tokenColumnX - 4, y + 25, 5)
@@ -365,11 +382,17 @@ function drawOtelCostBoard(
 
   observability.models.slice(0, 4).forEach((model, index) => {
     const rowY = y + 48 + index * 22;
-    const modelLabel = label(formatOfficeModelName(model.model), {
-      size: 11,
-      color: 0xf0ece5,
-      anchor: { x: 0, y: 0.5 },
-    });
+    const modelLabel = label(
+      shortLabel(
+        formatOfficeModelName(model.model),
+        Math.max(4, Math.floor((tokenColumnX - x - 32) / 6.6)),
+      ),
+      {
+        size: 11,
+        color: 0xf0ece5,
+        anchor: { x: 0, y: 0.5 },
+      },
+    );
     modelLabel.position.set(x + 12, rowY);
     parent.addChild(modelLabel);
     const tokenLabel = label(

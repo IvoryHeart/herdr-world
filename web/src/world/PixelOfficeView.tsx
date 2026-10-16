@@ -62,7 +62,6 @@ import {
 } from "./completionSeenState";
 import { preferredOfficeConnectorAnchor } from "./worldConnectorGeometry";
 import { OfficeBuildingsOverlay } from "./OfficeBuildingsOverlay";
-import { OfficeNavigator } from "./OfficeNavigator";
 import { officeRoomScrollOffset } from "./officeRoomPacking";
 import { useOfficeViewport } from "./useOfficeViewport";
 import { resolveOfficeAnchors } from "./officeRendererAnchors";
@@ -380,9 +379,10 @@ export default function PixelOfficeView({
           const adjusted = officeRoomScrollOffset(visible, replacement, offset);
           pendingScrollRestore.current = {
             revision: next.layoutRevision,
-            top:
-              replacement.y +
-              Math.max(0, Math.min(adjusted, replacement.height - 1)),
+            top: Math.max(
+              0,
+              replacement.y + Math.min(adjusted, replacement.height - 1),
+            ),
             left: next.compact ? 0 : scroll.scrollLeft,
           };
         } else if (previous.compact !== next.compact) {
@@ -691,6 +691,43 @@ export default function PixelOfficeView({
     );
   }
 
+  const navigateRoom = (key: string) => {
+    revealPending.current = null;
+    const scroll = scrollRef.current;
+    if (!scroll) return;
+    setCollapsedRoomKeys((current) => {
+      if (!current.has(key)) return current;
+      const next = new Set(current);
+      next.delete(key);
+      return next;
+    });
+    const hostKey = office.rooms.find((room) => room.key === key)?.hostKey;
+    if (hostKey)
+      setCollapsedHostKeys((current) => {
+        if (!current.has(hostKey)) return current;
+        const next = new Set(current);
+        next.delete(hostKey);
+        return next;
+      });
+    setPendingRoomJump(key);
+    const index = office.rooms.findIndex((room) => room.key === key);
+    const rect = layout?.rooms.find((room) => room.index === index);
+    if (rect && !rect.hiddenByHost)
+      scroll.scrollTo({
+        top: rect.y,
+        left: layout?.compact ? 0 : rect.x,
+      });
+  };
+  const selectSearchMatch = (id: string) => {
+    const key = officePresentationKey(office, id) ?? id;
+    revealPending.current = key;
+    setRevealRequest((value) => value + 1);
+    if (office.rooms.some((room) => room.key === key)) navigateRoom(key);
+    else if (office.roster.some((entry) => entry.agent.key === key))
+      openOfficeTerminal(key);
+    else void onSelect(id);
+    setQuery("");
+  };
   const toolbar = (
     <WorldViewToolbar
       viewLabel="Office"
@@ -705,7 +742,7 @@ export default function PixelOfficeView({
       }
       onSubmit={() => {
         const match = searchMatches[0];
-        if (match) void onSelect(match.id);
+        if (match) selectSearchMatch(match.id);
       }}
     />
   );
@@ -713,49 +750,15 @@ export default function PixelOfficeView({
   return (
     <>
       {toolbarPortal ? createPortal(toolbar, toolbarPortal) : toolbar}
-      <WorldSearchResults world={world} query={query} onSelect={onSelect} />
+      <WorldSearchResults
+        world={world}
+        query={query}
+        onSelect={selectSearchMatch}
+      />
       <div className="world-office-shell world-stage-shell">
         <OfficeCompletionNotices
           agents={unseenCompletions}
           onInspect={(agent) => openOfficeTerminal(agent.key)}
-        />
-        <OfficeNavigator
-          office={office}
-          onReceptions={() => scrollRef.current?.scrollTo({ top: 0, left: 0 })}
-          onAgent={(key) => {
-            revealPending.current = key;
-            setRevealRequest((value) => value + 1);
-            openOfficeTerminal(key);
-          }}
-          onRoom={(key) => {
-            revealPending.current = null;
-            const scroll = scrollRef.current;
-            if (!scroll) return;
-            setCollapsedRoomKeys((current) => {
-              if (!current.has(key)) return current;
-              const next = new Set(current);
-              next.delete(key);
-              return next;
-            });
-            const hostKey = office.rooms.find(
-              (room) => room.key === key,
-            )?.hostKey;
-            if (hostKey)
-              setCollapsedHostKeys((current) => {
-                if (!current.has(hostKey)) return current;
-                const next = new Set(current);
-                next.delete(hostKey);
-                return next;
-              });
-            setPendingRoomJump(key);
-            const index = office.rooms.findIndex((room) => room.key === key);
-            const rect = layout?.rooms.find((room) => room.index === index);
-            if (rect && !rect.hiddenByHost)
-              scroll.scrollTo({
-                top: rect.y,
-                left: layout?.compact ? 0 : rect.x,
-              });
-          }}
         />
         <div ref={scrollRef} className="world-stage-scroll">
           <PixelOfficeCanvas

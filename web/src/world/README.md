@@ -191,12 +191,13 @@ operations. Office logically lays out every observed room, tab and room agent. I
 semantic controls admit rows near the viewport rather than truncating room totals.
 Phones stack attention receptions, Economy, Workforce and
 workspace rooms vertically. Desktop retains
-its CEO/reception/Agent Bar composition. [OfficeNavigator.tsx](OfficeNavigator.tsx)
-pages and searches complete room/agent rosters, and room collapse changes only
-presentation. [useOfficeViewport.ts](useOfficeViewport.ts) shares the canvas window
+its CEO/reception/Agent Bar composition. [WorldSearchResults.tsx](WorldSearchResults.tsx) pages the complete search roster
+without a separate navigation row. Office search expands/reveals qualified rooms
+and retains idle-agent access. Room collapse changes only presentation. [useOfficeViewport.ts](useOfficeViewport.ts) shares the canvas window
 with accessible controls, retaining a still-current focused target across scrolling.
 Phone and desktop scroll preferences are separate. [officeRoomPacking.ts](officeRoomPacking.ts)
-packs desktop rooms into skyline openings with reserved corridor gaps. Large desk
+uses [officePackingSearch.ts](officePackingSearch.ts) to fit desktop room shapes
+into maximal free rectangles, retaining cavities and reserved corridor gaps. Large desk
 grids adapt to usable width, and logical desk/standing rows survive column changes.
 [officeBuildings.ts](officeBuildings.ts) applies the same packing inside each qualified
 host building and across buildings, yielding between hosts.

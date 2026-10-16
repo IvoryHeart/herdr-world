@@ -511,7 +511,7 @@ export async function createOfficeRenderer(
         drawLayer(
           "background",
           JSON.stringify([layout.officeWidth, layout.totalHeight]),
-          (parent) => drawBackground(parent, layout),
+          (parent) => drawBackground(parent, layout, floors),
         ),
       ))
     )
@@ -521,7 +521,8 @@ export async function createOfficeRenderer(
         drawLayer(
           "buildings",
           JSON.stringify([layout.inputDigest, paintViewport]),
-          (parent) => drawOfficeBuildings(parent, layout, paintViewport),
+          (parent) =>
+            drawOfficeBuildings(parent, layout, floors, paintViewport),
         ),
       ))
     )

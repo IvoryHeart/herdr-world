@@ -73,6 +73,7 @@ function* resolveOfficeSceneGeometrySteps(
     undefined,
     {
       complete: true,
+      shapeSearch: !input.buildings?.length,
       compact,
       collapsedRooms,
       attentionReceptionIndices: input.attentionReceptionIndices,

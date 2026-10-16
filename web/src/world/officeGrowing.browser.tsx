@@ -8,63 +8,80 @@ import PixelOfficeView from "./PixelOfficeView";
 import "./world.css";
 
 export function mountGrowingOffice(
-  options: { roomCount?: number; firstRoomTabs?: number } = {},
+  options: {
+    roomCount?: number;
+    firstRoomTabs?: number;
+    balancedHosts?: boolean;
+  } = {},
 ) {
-  const connections = ["Atlas", "Boreal", "Cedar"].map((label, hostIndex) => {
-    const workspaces: Workspace[] = [];
-    const tabs: Tab[] = [];
-    const panes: Pane[] = [];
-    const count = hostIndex === 0 ? (options.roomCount ?? 129) : 1;
-    for (let index = 0; index < count; index++) {
-      const id = `workspace-${index}`;
-      const tabCount =
-        hostIndex === 0 && index === 0 ? (options.firstRoomTabs ?? 100) : 1;
-      workspaces.push({
-        workspace_id: id,
-        number: index + 1,
-        label: `Room ${index + 1}`,
-        focused: index === 0,
-        pane_count: tabCount,
-        tab_count: tabCount,
-        agent_status: "working",
-      });
-      for (let tabIndex = 0; tabIndex < tabCount; tabIndex++) {
-        const tabId = `${id}-tab-${tabIndex}`;
-        tabs.push({
-          tab_id: tabId,
+  const connections = ["Atlas", "Boreal", "Cedar"]
+    .slice(0, options.balancedHosts ? 2 : 3)
+    .map((label, hostIndex) => {
+      const workspaces: Workspace[] = [];
+      const tabs: Tab[] = [];
+      const panes: Pane[] = [];
+      const count = options.balancedHosts
+        ? 7
+        : hostIndex === 0
+          ? (options.roomCount ?? 129)
+          : 1;
+      for (let index = 0; index < count; index++) {
+        const id = `workspace-${index}`;
+        const tabCount = options.balancedHosts
+          ? [9, 8, 7, 6, 5, 4, 3][index]!
+          : hostIndex === 0 && index === 0
+            ? (options.firstRoomTabs ?? 100)
+            : 1;
+        workspaces.push({
           workspace_id: id,
-          number: tabIndex + 1,
-          label: `Tab ${tabIndex + 1}`,
-          focused: tabIndex === 0,
-          pane_count: 1,
+          number: index + 1,
+          label: `Room ${index + 1}`,
+          focused: index === 0,
+          pane_count: tabCount,
+          tab_count: tabCount,
           agent_status: "working",
         });
-        panes.push({
-          pane_id: `pane-${tabId}`,
-          terminal_id: `terminal-${tabId}`,
-          workspace_id: id,
-          tab_id: tabId,
-          agent: `Agent ${tabIndex + 1}`,
-          agent_status:
-            hostIndex === 0 ? "working" : hostIndex === 1 ? "blocked" : "idle",
-          focused: tabIndex === 0,
-          revision: 1,
-        });
+        for (let tabIndex = 0; tabIndex < tabCount; tabIndex++) {
+          const tabId = `${id}-tab-${tabIndex}`;
+          tabs.push({
+            tab_id: tabId,
+            workspace_id: id,
+            number: tabIndex + 1,
+            label: `Tab ${tabIndex + 1}`,
+            focused: tabIndex === 0,
+            pane_count: 1,
+            agent_status: "working",
+          });
+          panes.push({
+            pane_id: `pane-${tabId}`,
+            terminal_id: `terminal-${tabId}`,
+            workspace_id: id,
+            tab_id: tabId,
+            agent: `Agent ${tabIndex + 1}`,
+            agent_status:
+              hostIndex === 0
+                ? "working"
+                : hostIndex === 1
+                  ? "blocked"
+                  : "idle",
+            focused: tabIndex === 0,
+            revision: 1,
+          });
+        }
       }
-    }
-    return {
-      connectionId: `synthetic-${hostIndex}`,
-      label,
-      source: "saved-profile" as const,
-      isDefault: hostIndex === 0,
-      state: "ready" as const,
-      generation: 7,
-      snapshotGeneration: 7,
-      stale: false,
-      actionable: true,
-      snapshot: { workspaces, tabs, panes, agents: [] },
-    };
-  });
+      return {
+        connectionId: `synthetic-${hostIndex}`,
+        label,
+        source: "saved-profile" as const,
+        isDefault: hostIndex === 0,
+        state: "ready" as const,
+        generation: 7,
+        snapshotGeneration: 7,
+        stale: false,
+        actionable: true,
+        snapshot: { workspaces, tabs, panes, agents: [] },
+      };
+    });
   const world = buildWorldObject(connections);
   const projection = projectWorldOffice(world, 1);
   const host = document.body.appendChild(document.createElement("div"));
@@ -152,6 +169,56 @@ export function mountGrowingOffice(
   };
 }
 
+async function searchOffice(
+  fixture: ReturnType<typeof mountGrowingOffice>,
+  query: string,
+  wait: (condition: () => boolean, message: string) => Promise<void>,
+) {
+  let input =
+    fixture.host.querySelector<HTMLInputElement>(
+      'input[placeholder="Search Office"]',
+    ) ??
+    document.querySelector<HTMLInputElement>(
+      ".world-view-search-overlay input",
+    );
+  if (!input) {
+    fixture.host
+      .querySelector<HTMLButtonElement>('button[aria-label="Search Office"]')!
+      .click();
+    await wait(
+      () => !!document.querySelector(".world-view-search-overlay input"),
+      "Office search did not open",
+    );
+    input = document.querySelector<HTMLInputElement>(
+      ".world-view-search-overlay input",
+    )!;
+  }
+  Object.getOwnPropertyDescriptor(
+    HTMLInputElement.prototype,
+    "value",
+  )!.set!.call(input, query);
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+  await wait(
+    () => !!fixture.host.querySelector(".world-search-results"),
+    "Office search results did not appear",
+  );
+}
+async function chooseOfficeRoom(
+  fixture: ReturnType<typeof mountGrowingOffice>,
+  key: string,
+  query: string,
+  wait: (condition: () => boolean, message: string) => Promise<void>,
+) {
+  await searchOffice(fixture, query, wait);
+  const selector = `button[data-world-search-result="${CSS.escape(key)}"]`;
+  await wait(
+    () => !!fixture.host.querySelector(selector),
+    "Exact qualified room was not in search results",
+  );
+  fixture.host.querySelector<HTMLButtonElement>(selector)!.click();
+}
+
 export async function verifyGrowingOffice(
   check: (condition: boolean, message: string) => void,
   options: { packingOnly?: boolean } = {},
@@ -209,11 +276,14 @@ export async function verifyGrowingOffice(
       );
       check(
         layout().expenseRect!.y > receptions[1]!.y + receptions[1]!.height &&
-          layout().workforceRect!.y >
-            layout().expenseRect!.y + layout().expenseRect!.height &&
+          layout().workforceRect!.y === layout().expenseRect!.y &&
+          layout().workforceRect!.x >=
+            layout().expenseRect!.x + layout().expenseRect!.width &&
+          layout().workforceRect!.x + layout().workforceRect!.width <=
+            layout().officeWidth - 12 &&
           layout().rooms[0]!.y >
             layout().workforceRect!.y + layout().workforceRect!.height,
-        "Phone sections are not attention receptions, Economy, Workforce, workspace rooms",
+        "Phone does not pack summary boards side by side between attention receptions and workspace rooms",
       );
       check(
         scroll.scrollTop === 0,
@@ -328,25 +398,11 @@ export async function verifyGrowingOffice(
       document.activeElement?.getAttribute("data-target-key") === target.key,
       "Offscreen focused pane was remounted or lost",
     );
-    const findButton = (label: string) =>
-      [...fixture.host.querySelectorAll<HTMLButtonElement>("button")].find(
-        (button) => button.textContent === label,
-      )!;
-    findButton("Rooms").click();
-    await wait(
-      () =>
-        fixture.host.querySelector(".world-office-navigator-list button") !==
-        null,
-      "Room navigator did not open",
-    );
     check(
-      fixture.host.querySelectorAll(".world-office-navigator-list button")
-        .length <= 50,
-      "Room navigator mounts an unbounded roster",
+      !fixture.host.querySelector(".world-office-navigation"),
+      "Office still reserves a navigation row",
     );
-    fixture.host
-      .querySelector<HTMLButtonElement>(".world-office-navigator-list button")!
-      .click();
+    await chooseOfficeRoom(fixture, firstRoom.key, "Room 1", wait);
     const collapse = () =>
       [
         ...fixture.host.querySelectorAll<HTMLButtonElement>(
@@ -371,37 +427,27 @@ export async function verifyGrowingOffice(
         fixture.activated.length === 1,
       "Collapse changed native membership or terminal ownership",
     );
-    findButton("Rooms").click();
-    await wait(
-      () =>
-        fixture.host.querySelector(".world-office-navigator-list button") !==
-        null,
-      "Room navigator did not reopen",
+    await searchOffice(fixture, "Room", wait);
+    check(
+      fixture.host.querySelectorAll("[data-world-search-result]").length <= 32,
+      "Office search mounts an unbounded roster",
     );
-    findButton("Next").click();
+    const nextPage = fixture.host.querySelector<HTMLButtonElement>(
+      'button[aria-label="Next search results"]',
+    )!;
+    nextPage.click();
     await wait(
       () =>
         fixture.host
-          .querySelector(".world-office-navigator-list button")
-          ?.textContent?.includes("Room 51") === true,
-      "Room navigator pagination did not reach later rooms",
+          .querySelector(".world-search-results nav span")
+          ?.textContent?.includes("Page 2") === true,
+      "Search pagination did not advance",
     );
-    findButton("Next").click();
-    await wait(
-      () =>
-        [
-          ...fixture.host.querySelectorAll(
-            ".world-office-navigator-list button",
-          ),
-        ].some((button) => button.textContent?.includes("Room 129")),
-      "Final room was lost beyond 128 rooms",
-    );
-    const finalRoomButton = [
-      ...fixture.host.querySelectorAll<HTMLButtonElement>(
-        ".world-office-navigator-list button",
-      ),
-    ].find((button) => button.textContent?.includes("Room 129"))!;
-    finalRoomButton.click();
+    const lastRoom = fixture.projection.rooms.find(
+      (room) =>
+        room.hostKey === firstRoom.hostKey && room.displayLabel === "Room 129",
+    )!;
+    await chooseOfficeRoom(fixture, lastRoom.key, "Room 129", wait);
     const lastIndex = fixture.projection.rooms.findIndex(
       (room) =>
         room.hostKey === firstRoom.hostKey && room.displayLabel === "Room 129",
@@ -411,16 +457,7 @@ export async function verifyGrowingOffice(
         scroll.scrollTop >= layout().rooms[lastIndex]!.y - scroll.clientHeight,
       "Room picker did not jump beyond the tall room",
     );
-    findButton("Rooms").click();
-    await wait(
-      () =>
-        fixture.host.querySelector(".world-office-navigator-list button") !==
-        null,
-      "Room picker did not reopen for expansion",
-    );
-    fixture.host
-      .querySelector<HTMLButtonElement>(".world-office-navigator-list button")!
-      .click();
+    await chooseOfficeRoom(fixture, firstRoom.key, "Room 1", wait);
     await wait(
       () => diagnostics().ready && layout().rooms[0]!.collapsed !== true,
       "Room did not expand after navigation",
@@ -494,33 +531,16 @@ export async function verifyGrowingOffice(
         "Office did not restore its desktop geometry",
       );
     }
-    const agentPicker = [
-      ...fixture.host.querySelectorAll<HTMLButtonElement>("button"),
-    ].find((button) => button.textContent?.startsWith("Agents ·"))!;
-    agentPicker.click();
+    await searchOffice(fixture, "idle", wait);
+    const idleNode = fixture.projection.roster.find(
+      (entry) => entry.agent.semanticStatus === "idle",
+    )!.agent.nodeId;
+    const idleButton = `button[data-world-search-result="${CSS.escape(idleNode)}"]`;
     await wait(
-      () =>
-        fixture.host.querySelector('input[aria-label="Find Office agents"]') !==
-        null,
-      "Agent roster did not open",
+      () => !!fixture.host.querySelector(idleButton),
+      "Idle agent was not reachable in search",
     );
-    const input = fixture.host.querySelector<HTMLInputElement>(
-      'input[aria-label="Find Office agents"]',
-    )!;
-    Object.getOwnPropertyDescriptor(
-      HTMLInputElement.prototype,
-      "value",
-    )!.set!.call(input, "idle");
-    input.dispatchEvent(new Event("input", { bubbles: true }));
-    await wait(
-      () =>
-        fixture.host.querySelectorAll(".world-office-navigator-list button")
-          .length === 1,
-      "Idle agent was not reachable in the complete roster",
-    );
-    fixture.host
-      .querySelector<HTMLButtonElement>(".world-office-navigator-list button")!
-      .click();
+    fixture.host.querySelector<HTMLButtonElement>(idleButton)!.click();
     const idle = fixture.projection.roster.find(
       (entry) => entry.agent.semanticStatus === "idle",
     )!.agent;
@@ -628,19 +648,7 @@ export async function verifyHostBuildings(
       () => diagnostics().ready && layout().buildings![0]!.collapsed === true,
       "Host did not collapse before room navigation",
     );
-    [...fixture.host.querySelectorAll<HTMLButtonElement>("button")]
-      .find((button) => button.textContent === "Rooms")!
-      .click();
-    await wait(
-      () =>
-        Boolean(
-          fixture.host.querySelector(".world-office-navigator-list button"),
-        ),
-      "Host room navigator did not open",
-    );
-    fixture.host
-      .querySelector<HTMLButtonElement>(".world-office-navigator-list button")!
-      .click();
+    await chooseOfficeRoom(fixture, roomKey, "Room 1", wait);
     await wait(
       () =>
         diagnostics().ready &&
@@ -655,5 +663,71 @@ export async function verifyHostBuildings(
     );
   } finally {
     fixture.dispose();
+  }
+}
+
+export async function verifyFluidOffice(
+  check: (condition: boolean, message: string) => void,
+) {
+  const fixture = mountGrowingOffice({ balancedHosts: true });
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const ready = () =>
+        window.__HERDR_WORLD_RENDERER__?.ready === true &&
+        window.__HERDR_WORLD_RENDERER__?.publishedLayout?.rooms.length === 14;
+      if (ready()) return resolve();
+      const observer = new MutationObserver(() => {
+        if (ready()) {
+          observer.disconnect();
+          clearTimeout(timer);
+          resolve();
+        }
+      });
+      const timer = setTimeout(() => {
+        observer.disconnect();
+        reject(new Error("Fluid Office did not finish painting"));
+      }, 10000);
+      observer.observe(fixture.host, {
+        subtree: true,
+        childList: true,
+        attributes: true,
+      });
+    });
+    const layout = window.__HERDR_WORLD_RENDERER__!.publishedLayout!;
+    const buildings = layout.buildings!;
+    check(
+      buildings.length === 2 && buildings[0]!.rect.y === buildings[1]!.rect.y,
+      "Wide buildings did not pack beside one another",
+    );
+    check(
+      Math.max(...buildings.map(({ rect }) => rect.x + rect.width)) >=
+        layout.officeWidth - 14,
+      "Occupied buildings left the wide screen unused",
+    );
+    for (const building of buildings) {
+      const rooms = building.roomIndices.map((index) => layout.rooms[index]!);
+      check(
+        new Set(rooms.map((room) => room.x)).size >= 3,
+        "Workspace rooms stayed in narrow columns on a wide screen",
+      );
+      check(
+        rooms.every(
+          (room) =>
+            room.x > building.rect.x &&
+            room.x + room.width < building.rect.x + building.rect.width,
+        ),
+        "Fluid rooms escaped their building",
+      );
+    }
+    const scroll = fixture.host.querySelector<HTMLElement>(
+      ".world-stage-scroll",
+    )!;
+    check(
+      scroll.scrollWidth <= scroll.clientWidth + 1,
+      "Fluid Office overflowed horizontally",
+    );
+  } finally {
+    fixture.root.unmount();
+    fixture.host.remove();
   }
 }

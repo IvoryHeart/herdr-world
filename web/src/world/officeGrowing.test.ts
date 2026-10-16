@@ -6,6 +6,7 @@ import {
 } from "./officeGeometry";
 import {
   officePackedRoomCorridors,
+  packOfficeRooms,
   officeRoomScrollOffset,
 } from "./officeRoomPacking";
 import { resolveOfficeSceneGeometry } from "./officeSceneLayout";
@@ -127,7 +128,7 @@ test("phone reception paint admission follows its vertical viewport", () => {
   expect(visible.every((entry) => entry.index > 40)).toBe(true);
 });
 
-test("phone Office stacks attention receptions, Economy, Workforce and rooms within its width", () => {
+test("phone Office stacks attention receptions and rooms around fluid summary boards", () => {
   const layout = resolveOfficeLayout(
     390,
     [
@@ -154,8 +155,9 @@ test("phone Office stacks attention receptions, Economy, Workforce and rooms wit
   expect(layout.rooms[0]!.y).toBeGreaterThan(
     layout.workforceRect!.y + layout.workforceRect!.height,
   );
-  expect(layout.workforceRect!.y).toBeGreaterThan(
-    layout.expenseRect!.y + layout.expenseRect!.height,
+  expect(layout.workforceRect!.y).toBe(layout.expenseRect!.y);
+  expect(layout.workforceRect!.x).toBeGreaterThanOrEqual(
+    layout.expenseRect!.x + layout.expenseRect!.width,
   );
   expect(layout.rooms[0]!.deskColumns).toBe(2);
   expect(layout.rooms[0]!.deskRows).toBe(6);
@@ -164,6 +166,39 @@ test("phone Office stacks attention receptions, Economy, Workforce and rooms wit
   );
   for (const room of layout.rooms)
     expect(room.x + room.width).toBeLessThanOrEqual(390);
+});
+
+test("phone summary boards share available width and wrap only below readable content bounds", () => {
+  for (const width of [240, 320, 360, 375, 390, 430, 600, 720]) {
+    const layout = resolveOfficeLayout(
+      width,
+      [],
+      "left",
+      undefined,
+      0,
+      undefined,
+      { complete: true, compact: true, attentionReceptionIndices: [] },
+    );
+    const economy = layout.expenseRect!,
+      workforce = layout.workforceRect!;
+    if (width >= 380) {
+      expect(workforce.y).toBe(economy.y);
+      expect(workforce.x).toBe(economy.x + economy.width + 12);
+      expect(workforce.x + workforce.width).toBeCloseTo(width - 12);
+    } else {
+      expect(workforce.y).toBe(economy.y + economy.height + 12);
+      expect(economy.width).toBe(width - 24);
+      expect(workforce.width).toBe(economy.width);
+    }
+    for (const board of [economy, workforce]) {
+      expect(board.width - 4).toBeGreaterThanOrEqual(
+        OFFICE_GEOMETRY.compactBoardMinWidth,
+      );
+      expect(board.x + board.width).toBeLessThanOrEqual(width - 12);
+      expect(board.y + board.height).toBeLessThanOrEqual(layout.ceoBandHeight);
+    }
+    expect(layout.ceoBandHeight).toBe(workforce.y + workforce.height + 12);
+  }
 });
 
 test("large Office publication yields and fences superseded geometry without mutating inputs", async () => {
@@ -239,9 +274,7 @@ test("phone hides empty receptions and keeps qualified attention above Economy a
     }).layout;
     const receptions = layout.ceoBlocks.receptions;
     expect(receptions.map((rect) => rect.index)).toEqual([0, 1, 2]);
-    expect(layout.workforceRect!.y).toBeGreaterThan(
-      layout.expenseRect!.y + layout.expenseRect!.height,
-    );
+    expect(layout.workforceRect!.y).toBe(layout.expenseRect!.y);
     expect(
       receptions.filter((rect) => rect.width > 0).map((rect) => rect.index),
     ).toEqual(attentionReceptionIndices);
@@ -295,7 +328,7 @@ test("wide desktop adapts desk columns and stacks small rooms beside a large roo
         room.x >= large.x + large.width && room.y < large.y + large.height,
     );
   expect(new Set(beside.map((room) => room.y)).size).toBeGreaterThan(2);
-  expect(beside.length).toBeGreaterThan(wide.columns);
+  expect(wide.totalHeight).toBeLessThan(narrow.totalHeight);
   expect(wide).toEqual(resolve(3440));
 });
 
@@ -398,4 +431,23 @@ test("fluid standing rooms grow across the screen and responsive rows retain the
         after.deskRowHeight +
       7,
   );
+});
+
+test("packing retains cavities beneath a bridging rectangle for later rooms", () => {
+  const packed = packOfficeRooms(
+    [
+      { width: 300, height: 300 },
+      { width: 200, height: 100 },
+      { width: 400, height: 100 },
+      { width: 100, height: 200 },
+      { width: 100, height: 200 },
+    ],
+    500,
+    0,
+    0,
+  );
+  expect(
+    Math.max(...packed.map((room) => room.y + room.height)),
+  ).toBeLessThanOrEqual(400);
+  expect(packed[4]!.y).toBeLessThan(packed[2]!.y);
 });

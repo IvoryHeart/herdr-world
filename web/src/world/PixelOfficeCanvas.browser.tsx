@@ -2,6 +2,7 @@ window.__HERDR_WORLD_RENDERER_DEBUG__ = true;
 import {
   verifyGrowingOffice,
   verifyHostBuildings,
+  verifyFluidOffice,
 } from "./officeGrowing.browser";
 import { verifyOfficeRendering } from "./officeRendering.browser";
 import { StrictMode } from "react";
@@ -813,15 +814,16 @@ async function run() {
       host.querySelector(".world-office-toolbar") === null,
       "Office retained a scene toolbar for settings",
     );
+    check(
+      host.querySelector(".world-office-navigation") === null,
+      "Office still displays the redundant navigation row",
+    );
     if (compact) {
+      const expectedTop =
+        stageScroll.parentElement!.getBoundingClientRect().top;
       check(
-        Math.abs(
-          stageScroll.getBoundingClientRect().top -
-            host
-              .querySelector(".world-office-navigation")!
-              .getBoundingClientRect().bottom,
-        ) <= 1,
-        "Phone Office adds an unexplained gap after room navigation",
+        Math.abs(stageScroll.getBoundingClientRect().top - expectedTop) <= 1,
+        "Phone Office reserves blank space above the scene",
       );
       check(
         stageScroll.scrollWidth <= stageScroll.clientWidth + 1,
@@ -935,14 +937,16 @@ async function verifyAnchorAfterRendererRepaint() {
   }
 }
 
-(new URL(location.href).searchParams.has("buildings")
-  ? verifyHostBuildings(check)
-  : new URL(location.href).searchParams.has("packing")
-    ? verifyGrowingOffice(check, { packingOnly: true })
-    : run()
-        .then(() => verifyAnchorAfterRendererRepaint())
-        .then(() => verifyOfficeRendering(check))
-        .then(() => verifyGrowingOffice(check))
+(new URL(location.href).searchParams.has("fluid")
+  ? verifyFluidOffice(check)
+  : new URL(location.href).searchParams.has("buildings")
+    ? verifyHostBuildings(check)
+    : new URL(location.href).searchParams.has("packing")
+      ? verifyGrowingOffice(check, { packingOnly: true })
+      : run()
+          .then(() => verifyAnchorAfterRendererRepaint())
+          .then(() => verifyOfficeRendering(check))
+          .then(() => verifyGrowingOffice(check))
 )
   .catch((error: unknown) => {
     const diagnostics = window.__HERDR_WORLD_RENDERER__;

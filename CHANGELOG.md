@@ -116,6 +116,13 @@ are optional because the merged PR history records their source.
   and collapse keep later rooms reachable while drawing stays near the viewport.
   Desktop rooms use width-adaptive desk grids and fill space beside taller rooms.
   Pixel-art host buildings have brick façades, stepped roofs and wooden signs.
+  Populated buildings share usable screen width and reflow their room grids, with
+  carpeted rooms/corridors, wood reception floors and roads between buildings.
+  Rooms choose their desk grids while packing into available gaps, including
+  cavities below neighboring rooms. The separate Rooms/Receptions/Agents row is
+  removed; existing Office search retains room reveal and idle-agent access.
+  Economy and Workforce boards share usable phone width and wrap only when their
+  readable contents require it, with artwork matching their layout footprints.
   They pack alongside each other and can collapse while retaining
   host summaries and individual room choices.
   Conversation connectors are refreshed after font and viewport repaints.

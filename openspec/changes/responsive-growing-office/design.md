@@ -38,7 +38,11 @@ out receptions with waiting/completed agents needing attention first, then the
 Economy board, the existing Workforce counts and workspace rooms. Hide empty
 receptions on phones. Preserve host order among attention receptions and qualified
 identity when attention changes; an empty attention group leaves Economy first.
-All sections fit the phone's usable width.
+All sections fit the phone's usable width. Economy and Workforce use the same
+free-rectangle packing as other Office footprints: their width derives from the
+usable area, sharing a row when both retain readable content, otherwise wrapping
+vertically. Artwork uses those published widths without shrinking text, and the
+lobby height follows the packed boards rather than a desktop minimum.
 Use two readable desk columns where space permits and add rows rather than
 shrinking all furniture to fit. Long titles wrap or compact within their headers;
 full names and rename/close controls stay reachable.
@@ -83,24 +87,35 @@ large holes beside a 100-tab room, and the four-column grid forced that room to
 remain tall. Replace both in the production desktop layout. Phone ordering stays
 vertical and the bounded legacy geometry API retains its existing callers.
 
-For large desktop rooms, consider readable desk-column counts that fit the usable
+For desktop rooms, consider readable desk-column counts that fit the usable
 width, preserving nearby space for another readable room where possible. Prefer
 balanced room aspect ratios and fewer empty desk slots; standing rows derive from
-the resolved width. Small rooms keep their familiar furniture spacing. This is a
+the resolved width. Small rooms keep readable furniture spacing and can use another column when it
+reduces depth without wasting desk slots. This is a
 bounded deterministic heuristic, not a claim of globally optimal packing.
 
-Pack the resulting rectangles with a bottom-left skyline in logical input order.
-Reserve horizontal/vertical corridor gaps in each footprint, merge adjacent equal
-skyline spans, and place each new room at the lowest fitting opening. Align the
-complete footprint left, center or right. Draw corridors within reserved space
-beside/below each room, avoiding full-width roads across taller neighboring rooms.
-The approach follows the skyline representation discussed in [Wei et al.](https://www.sciencedirect.com/science/article/pii/S0377221711005510).
-Treemap tessellation was considered but does not naturally preserve minimum desk,
-label and action sizes; global shape/search optimization adds preparation work and
-layout churn without a requirement for a provably optimal solution.
+Choose room shape and placement together. Enumerate readable desk-column counts
+within the building's usable width, deriving standing rows and minimum title/action
+bounds for each candidate. A bounded beam retains eight partial layouts in logical
+room order. For each next room, consider its legal shapes at the origins of maximal
+free rectangles, ranking resulting scene height, unused desk capacity and wasted
+floor area with deterministic coordinate tie-breaks. Reserve corridor gaps in the
+footprints, split intersected free rectangles and prune contained ones. Unlike an
+outer contour alone, these free rectangles retain cavities under bridging rooms
+for later rooms to fill. Qualified source indices and roster order remain stable.
+
+Use the same free-rectangle kernel for building placement with fixed footprints and
+a single branch. Keep the preliminary whole-World size estimate on its lightweight
+contour pass; it does not choose published room positions. Detailed shape fitting
+runs inside each host with the existing cooperative host handoffs. A 32,768-room
+synthetic preparation check identified and removed an expensive global search pass;
+production responsiveness remains the acceptance test, with unchanged budgets.
+Phone rooms retain their vertical flow and readable fixed-width desk grid. This is
+bounded heuristic search, not a global optimality guarantee or an item-count cap.
 
 Keep qualified identities and roster order independent of spatial placement. On
-refresh/resize anchor to the nearest visible room header and translate a desk or
+refresh/resize anchor to the nearest visible room header, preserving negative
+header offsets when the viewport begins in a corridor, and translate a desk or
 standing row through its logical item index when column counts change. Physical
 surfaces, row paint and controls still follow the viewport; admission evidence
 scales with viewport area rather than a fixed count chosen for the old sparse grid.
@@ -109,8 +124,15 @@ scales with viewport area rather than a fixed count chosen for the old sparse gr
 
 The owner selected named host containers, host-level collapse and the same packing
 algorithm at both levels. Resolve readable, content-derived building widths from
-room area and available width. Run the room skyline inside each building, then
-run it again over building footprints. On phones, stack full-width buildings
+room area and available width. The wide-screen review exposed unused horizontal
+space from independently favoring compact building aspect ratios. Allocate a shared
+width budget to the next hosts whose readable minimum footprints fit, distributing
+remaining width by content area up to each building's useful content width. Collapsed
+and tiny buildings stay compact; larger buildings consume spare width when their
+rooms can use it. These width budgets do not impose shared row heights: the same
+free-rectangle packer still places independent footprints into available openings.
+Run joint room-shape packing inside each building, then the same kernel over
+building footprints. On phones, stack full-width buildings
 vertically after Workforce. Keep the reception/CEO/Agent Bar composition separate.
 
 Render a cutaway pixel-art building with a stepped roof, brick courses, side
@@ -132,10 +154,34 @@ requests before publication. Empty hosts still have truthful summary headers.
 This remains a bounded deterministic heuristic; it does not claim globally optimal
 packing or replace host/runtime admission and stale-generation fences.
 
+### Materials distinguish buildings from their surroundings
+
+Building interiors use continuous slate woven carpet, including the space between
+rooms. Workspace floors use quiet carpet tiles with a muted host tint; identity
+accents remain on room headers, furniture and trim. Activity changes floor tone
+only subtly so characters and state badges carry attention. Reception/common
+areas and the Agent Bar use warm wood planks, matching existing furniture and
+wooden/blackboard signs. Brick façades, stone caps and curbs separate interiors
+from asphalt streets. Street lane markings appear only outside buildings; the
+public lobby's internal passage is carpeted too. The phone's reception, Economy
+and Workforce section shares the wood floor without restoring a decorative CEO.
+
+Use small renderer-owned repeating nearest-pixel material textures, shared by a
+bounded material/theme palette. Each floor is one exact clipped rectangle, even
+at fractional origins and on very tall buildings. Do not prepare per-cell paths,
+allocate a texture as large as a logical floor or let an edge tile protrude into
+a corridor. Keep viewport preparation, painting and physical backing admission.
+The older checker helper retains its pixel-equivalence regression independently
+of the new production materials. Browser evidence covers material containment
+at DPR 1/2 and constant drawing work for large logical areas.
+
 ### Reach later rooms without traversing a giant room
 
-Keep a room picker reachable outside the scrolling scene and support per-room
-collapse. A collapsed room retains its qualified header and truthful item counts.
+Reuse the existing shell Office search for room/agent navigation with bounded
+paged results and support per-room collapse. Remove the separate Rooms / Receptions /
+Agents row on desktop and phone so the scene gains its height. Room search expands
+the qualified host/room and reveals it without opening another Inspector; agent
+search keeps idle-agent terminal access reachable. A collapsed room retains its qualified header and truthful item counts.
 Choosing a target expands it if necessary, reveals the correct logical row and
 then admits its semantic target before focus or activation. Collapse changes only
 presentation; it does not close tabs, change agent state or dismiss Inspectors.

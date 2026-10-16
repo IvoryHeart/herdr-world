@@ -216,10 +216,10 @@ export function drawRoom(
   const parent = new Container();
   const floor = new Graphics();
   const floorA = active
-    ? blendColor(theme.floorA, 0x5d5138, 0.34)
+    ? blendColor(theme.floorA, 0x8a8068, 0.08)
     : theme.floorA;
   const floorB = active
-    ? blendColor(theme.floorB, 0x443a2a, 0.32)
+    ? blendColor(theme.floorB, 0x8a8068, 0.08)
     : theme.floorB;
   floors.draw(
     floor,
@@ -229,6 +229,7 @@ export function drawRoom(
     rect.wallRect.height,
     floorA,
     floorB,
+    "carpet",
   );
   floor
     .rect(

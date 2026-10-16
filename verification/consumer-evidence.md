@@ -78,6 +78,22 @@ Dedicated real Pixi host cases at 390/1280/3440 widths verify focus and summary
 retention, cross-host isolation, restored room choices, navigation into a hidden
 host and unchanged native contents/terminal activation.
 
+Room-shape and retained-cavity regressions cover gaps a contour-only placement
+loses, using readable column candidates without changing qualified/native order.
+The production fixture checks that the separate navigation row is absent and the
+existing shell search can expand/reveal exact rooms, page bounded results and
+open an idle agent's qualified terminal. Its refresh case preserves a room header
+below the viewport origin as well as logical desk/standing rows.
+
+Wide-screen fluidity has a two-host, fourteen-workspace regression that reproduces
+unused horizontal space, then checks occupied width, reduced scene depth,
+containment and non-overlap. A dedicated real 3440px Pixi case verifies the same
+outcome through production preparation/paint. A single large-workspace case
+checks that usable width reduces desk rows. Carpet, wood and asphalt material
+consumers cover exact floor bounds at DPR 1/2 and constant preparation work for
+large logical areas. These are direct rendering/layout alternatives; no global
+packing optimum or native topology mutation is claimed.
+
 Phone Office prioritizes qualified receptions with waiting/completed agents above
 Economy and Workforce; empty receptions are hidden on phones, and workspace rooms
 follow Workforce. Growing geometry and real Pixi phone consumers cover ordering, complete
@@ -86,3 +102,8 @@ reachability, and qualified late-pane activation after this presentation reorder
 Evidence statuses describe concrete decisions; independent acceptance is recorded separately. Review 5516249164 accepts every Q01–Q43 bounded mapping and alternative. Mandatory consumers and excluded claims remain binding. Final implementation/gate/resource acceptance is recorded in [review 5517420140](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5517420140); owner-approved PR #188 merged as `481ca1e8`. Mandatory consumers and excluded claims remain binding. Review must inspect the intended requirement, model/reducer domain, adapter fidelity, actual consumer tests and excluded claims. Q21 has its separate bounded exhaustive contract. Q26–Q28 retain their separately accepted Ranger storage/permission assumptions.
 
 No temporal progress proof has been added. Successful reachability witnesses show that a tested path occurs; they do not establish eventual completion for all schedules. Scheduler/deadline regressions are bounded implementation evidence with their stated transport/storage assumptions. Additional fairness assumptions need an explicit requirement and review before introducing temporal properties.
+
+Phone summary-board geometry is checked across 240–720 px: readable boards share
+width when they fit and wrap otherwise, with exact drawing bounds and content-derived
+lobby height. The production phone Pixi consumer checks the side-by-side arrangement
+between attention receptions and workspace rooms without horizontal scene overflow.

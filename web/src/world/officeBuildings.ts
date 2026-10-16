@@ -1,5 +1,6 @@
 import {
   resolveOfficeLayout,
+  OFFICE_GEOMETRY,
   type OfficeBuildingInput,
   type OfficeLayout,
   type OfficeRect,
@@ -27,49 +28,65 @@ export function* resolveOfficeBuildingsSteps(
   collapsedRooms: ReadonlySet<number>,
 ) {
   const available = base.officeWidth - 24;
-  const areas = groups.map((group) =>
-    group.collapsed
-      ? MIN_BUILDING_WIDTH * COLLAPSED_BUILDING_HEIGHT
-      : Math.max(
-          MIN_BUILDING_WIDTH * 240,
-          group.roomIndices.reduce((sum, index) => {
-            const room = base.rooms[index]!;
-            return sum + (room.width + 16) * (room.height + 28);
-          }, 0),
-        ),
-  );
-  const totalArea = areas.reduce((sum, area) => sum + area, 0);
-  const targetHeight = Math.max(
-    totalArea /
+  const footprints = groups.map((group) => {
+    const minimumRooms = group.roomIndices
+      .map((index) => Math.min(400, base.rooms[index]!.width))
+      .sort((a, b) => a - b);
+    const minimum = Math.min(
+      available,
       Math.max(
         MIN_BUILDING_WIDTH,
-        available -
-          BUILDING_GAP *
-            Math.min(
-              groups.length - 1,
-              Math.floor(available / MIN_BUILDING_WIDTH) - 1,
-            ),
+        group.collapsed
+          ? 0
+          : minimumRooms.slice(0, 2).reduce((sum, width) => sum + width, 48) +
+              (minimumRooms.length > 1 ? OFFICE_GEOMETRY.roomGap : 0),
       ),
-    Math.sqrt(totalArea / 1.5),
-  );
+    );
+    const maximum = group.collapsed
+      ? minimum
+      : Math.max(
+          minimum,
+          Math.min(
+            available,
+            group.roomIndices.reduce((sum, index) => {
+              const room = input.rooms[index]!;
+              const contentWidth = collapsedRooms.has(index)
+                ? MIN_BUILDING_WIDTH
+                : Math.max(
+                    OFFICE_GEOMETRY.minRoomWidth,
+                    base.rooms[index]!.width,
+                    OFFICE_GEOMETRY.roomPadding * 2 +
+                      room.deskCount * OFFICE_GEOMETRY.paneDeskWidth,
+                    OFFICE_GEOMETRY.roomPadding * 2 + room.standingCount * 40,
+                  );
+              return sum + contentWidth + OFFICE_GEOMETRY.roomGap;
+            }, 48) - OFFICE_GEOMETRY.roomGap,
+          ),
+        );
+    const area = group.collapsed
+      ? minimum * COLLAPSED_BUILDING_HEIGHT
+      : Math.max(
+          minimum * 240,
+          group.roomIndices.reduce((sum, index) => {
+            const room = base.rooms[index]!;
+            return (
+              sum +
+              (room.width + OFFICE_GEOMETRY.roomGap) *
+                (room.height + OFFICE_GEOMETRY.roomRowGap)
+            );
+          }, 0),
+        );
+    return { minimum, maximum, area };
+  });
+  const widths = base.compact
+    ? groups.map(() => available)
+    : fluidBuildingWidths(footprints, available);
   const headers = new Map<number, ReturnType<typeof resolveOfficeRoomHeader>>();
   const nested: OfficeRoomRect[][] = [];
   const sizes: { width: number; height: number }[] = [];
   for (let groupIndex = 0; groupIndex < groups.length; groupIndex++) {
     const group = groups[groupIndex]!;
-    const width = base.compact
-      ? available
-      : Math.min(
-          available,
-          Math.max(
-            MIN_BUILDING_WIDTH,
-            Math.min(
-              areas[groupIndex]! / targetHeight,
-              available -
-                (groups.length > 1 ? MIN_BUILDING_WIDTH + BUILDING_GAP : 0),
-            ),
-          ),
-        );
+    const width = widths[groupIndex]!;
     const innerWidth = width - BUILDING_PADDING * 2;
     const descriptors = group.roomIndices.map((index) => {
       const room = input.rooms[index]!;
@@ -205,4 +222,51 @@ function translateRoom(
     clipRect: move(room.clipRect),
     inkBounds: move(room.inkBounds),
   };
+}
+
+/** Allocate useful horizontal space before the skyline chooses independent heights. */
+function fluidBuildingWidths(
+  items: readonly { minimum: number; maximum: number; area: number }[],
+  available: number,
+) {
+  const widths = items.map((item) => item.minimum);
+  let start = 0;
+  while (start < items.length) {
+    let end = start + 1;
+    let used = items[start]!.minimum;
+    while (
+      end < items.length &&
+      used + BUILDING_GAP + items[end]!.minimum <= available
+    ) {
+      used += BUILDING_GAP + items[end]!.minimum;
+      end++;
+    }
+    let remaining = available - used;
+    let flexible = Array.from(
+      { length: end - start },
+      (_, index) => start + index,
+    ).filter((index) => widths[index]! < items[index]!.maximum);
+    while (remaining > 0.01 && flexible.length) {
+      const weight = flexible.reduce(
+        (sum, index) => sum + items[index]!.area,
+        0,
+      );
+      let allocated = 0;
+      for (const index of flexible) {
+        const extra = Math.min(
+          items[index]!.maximum - widths[index]!,
+          (remaining * items[index]!.area) / weight,
+        );
+        widths[index]! += extra;
+        allocated += extra;
+      }
+      remaining -= allocated;
+      flexible = flexible.filter(
+        (index) => items[index]!.maximum - widths[index]! > 0.01,
+      );
+      if (allocated < 0.01) break;
+    }
+    start = end;
+  }
+  return widths.map((width) => Math.floor(width));
 }

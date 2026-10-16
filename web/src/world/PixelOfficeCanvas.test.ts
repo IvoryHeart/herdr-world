@@ -21,6 +21,7 @@ test
     { width: 1280, entry: "" },
     { width: 390, entry: "" },
     { width: 3440, entry: "packing" },
+    { width: 3440, entry: "fluid" },
     ...[1280, 390, 3440].map((width) => ({ width, entry: "buildings" })),
   ])(
   "production Office layout and interactions: %j",

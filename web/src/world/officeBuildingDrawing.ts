@@ -1,11 +1,18 @@
 import { Container, Graphics } from "pixi.js";
 import type { OfficeLayout, OfficeRect } from "./officeGeometry";
+import { OfficeFloorTextures } from "./officeFloorTextures";
+import { officePackedRoomCorridors } from "./officeRoomPacking";
+import {
+  drawHorizontalRoad,
+  drawVerticalRoad,
+} from "./officeCommonAreaDrawing";
 import { officeIntersects } from "./officeVirtualization";
 
 /** Cutaway buildings share the rooms' pixel furniture and wooden sign palette. */
 export function drawOfficeBuildings(
   stage: Container,
   layout: OfficeLayout,
+  floors: OfficeFloorTextures,
   viewport?: OfficeRect,
 ) {
   const walls = new Graphics();
@@ -17,7 +24,38 @@ export function drawOfficeBuildings(
     const edge = building.stale ? 0x766977 : 0x9b7c70;
     walls.rect(x + 4, y + 8, width - 4, height - 4).fill(0x090b12);
     walls.rect(x, y + 8, width, height - 8).fill(0x302a36);
-    walls.rect(x + 8, y + 14, width - 16, height - 22).fill(0x171b27);
+    floors.draw(
+      walls,
+      x + 8,
+      y + 84,
+      width - 16,
+      height - 92,
+      0x29323d,
+      0x303a46,
+      "carpet",
+    );
+    const paths = officePackedRoomCorridors(
+      rect,
+      layout.officeWidth - 12,
+      20,
+      20,
+    );
+    drawHorizontalRoad(
+      walls,
+      paths.horizontal.x,
+      paths.horizontal.y,
+      paths.horizontal.width,
+      paths.horizontal.height,
+    );
+    if (paths.vertical.width > 0)
+      drawVerticalRoad(
+        walls,
+        paths.vertical.x,
+        paths.vertical.y,
+        paths.vertical.width,
+        paths.vertical.height,
+        viewport,
+      );
 
     // Only visible courses are prepared, even on a building thousands of rows tall.
     const firstCourse = Math.max(0, Math.floor(((viewport?.y ?? y) - y) / 10));

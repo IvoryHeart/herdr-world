@@ -1,7 +1,24 @@
+import { packOfficeRoomShapes } from "./officePackingSearch";
 import type { OfficeRect, OfficeRoomRect } from "./officeGeometry";
 
-/** Deterministic bottom-left skyline packing, with reserved corridor space. */
+/** The same free-rectangle packer places fixed building footprints and room shapes. */
 export function packOfficeRooms(
+  sizes: readonly { width: number; height: number }[],
+  availableWidth: number,
+  horizontalGap: number,
+  verticalGap: number,
+) {
+  return packOfficeRoomShapes(
+    sizes.map((size) => [size]),
+    availableWidth,
+    horizontalGap,
+    verticalGap,
+    1,
+  ).map(({ x, y, width, height }) => ({ x, y, width, height }));
+}
+
+/** Lightweight preliminary sizing pass; final rooms/buildings use free rectangles. */
+export function packOfficeRoomContour(
   sizes: readonly { width: number; height: number }[],
   availableWidth: number,
   horizontalGap: number,

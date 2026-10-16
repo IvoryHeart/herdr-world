@@ -18,34 +18,27 @@ import type {
 import { officePackedRoomCorridors } from "./officeRoomPacking";
 import { OfficeFloorTextures } from "./officeFloorTextures";
 import { type AnimatedItem } from "./officeRendererTypes";
-import {
-  STATUS_CUES,
-  label,
-  shortLabel,
-  blendColor,
-} from "./officeDrawingShared";
+import { STATUS_CUES, label, shortLabel } from "./officeDrawingShared";
 import { makeInteractive } from "./officeInteraction";
 import { drawCharacter, addSign } from "./officeDrawingPrimitives";
 
-export function drawBackground(stage: Container, layout: OfficeLayout) {
-  const background = new Graphics();
-  background
-    .roundRect(0, 0, layout.officeWidth, layout.totalHeight, 6)
-    .fill(0x0e0e1c);
-  for (let band = 0; band < 14; band += 1) {
-    background
-      .rect(
-        2,
-        2 + (layout.totalHeight - 4) * (band / 14),
-        layout.officeWidth - 4,
-        layout.totalHeight / 14 + 1,
-      )
-      .fill({ color: blendColor(0x15152a, 0x090914, band / 13), alpha: 0.9 });
-  }
-  background
-    .roundRect(2, 2, layout.officeWidth - 4, layout.totalHeight - 4, 5)
-    .stroke({ width: 2, color: 0x2a2a48, alpha: 0.8 });
-  stage.addChild(background);
+export function drawBackground(
+  stage: Container,
+  layout: OfficeLayout,
+  floors: OfficeFloorTextures,
+) {
+  const ground = new Graphics();
+  floors.draw(
+    ground,
+    0,
+    0,
+    layout.officeWidth,
+    layout.totalHeight,
+    0x1c222c,
+    0x282f3a,
+    "asphalt",
+  );
+  stage.addChild(ground);
 }
 
 export function drawVerticalRoad(
@@ -57,9 +50,9 @@ export function drawVerticalRoad(
   viewport?: OfficeRect,
 ) {
   const road = new Graphics();
-  road.rect(x, y, width, height).fill(0x252537);
-  road.rect(x, y, 1, height).fill({ color: 0x6c6990, alpha: 0.35 });
-  road.rect(x + width - 1, y, 1, height).fill({ color: 0x6c6990, alpha: 0.35 });
+  road.rect(x, y, width, height).fill(0x242c38);
+  road.rect(x, y, 1, height).fill({ color: 0x8d9698, alpha: 0.35 });
+  road.rect(x + width - 1, y, 1, height).fill({ color: 0x8d9698, alpha: 0.35 });
   const firstMarker = viewport
     ? y + 14 + Math.max(0, Math.floor((viewport.y - y - 14) / 18)) * 18
     : y + 14;
@@ -69,7 +62,7 @@ export function drawVerticalRoad(
   for (let markerY = firstMarker; markerY < lastMarker; markerY += 18) {
     road
       .rect(x + width / 2, markerY, 1, 6)
-      .fill({ color: 0x77749a, alpha: 0.38 });
+      .fill({ color: 0xb6a67a, alpha: 0.38 });
   }
   parent.addChild(road);
 }
@@ -79,12 +72,12 @@ export function drawHallways(stage: Container, layout: OfficeLayout) {
   const y = layout.ceoBandHeight;
   hall
     .rect(4, y, layout.officeWidth - 8, OFFICE_GEOMETRY.hallwayHeight)
-    .fill(0x252537);
+    .fill(0x242c38);
   hall
     .rect(4, y, layout.officeWidth - 8, 1)
-    .fill({ color: 0x6c6990, alpha: 0.35 });
+    .fill({ color: 0x8d9698, alpha: 0.35 });
   for (let x = 20; x < layout.officeWidth - 20; x += 18) {
-    hall.rect(x, y + 16, 7, 1).fill({ color: 0x77749a, alpha: 0.38 });
+    hall.rect(x, y + 16, 7, 1).fill({ color: 0xb6a67a, alpha: 0.38 });
   }
   stage.addChild(hall);
 }
@@ -95,6 +88,8 @@ export function drawRoomRoads(
   visibleRooms: readonly OfficeRoomRect[],
   viewport?: OfficeRect,
 ) {
+  // Host interiors already have continuous carpet; street markings stay outside.
+  if (layout.buildings?.length) return;
   const road = new Graphics();
   if (layout.packedRooms) {
     for (const room of visibleRooms) {
@@ -104,32 +99,6 @@ export function drawRoomRoads(
         OFFICE_GEOMETRY.roomGap,
         OFFICE_GEOMETRY.roomRowGap,
       );
-      const building = layout.buildings?.find((group) =>
-        group.roomIndices.includes(room.index),
-      );
-      if (building) {
-        horizontal.height = Math.max(
-          0,
-          Math.min(
-            horizontal.height,
-            building.rect.y + building.rect.height - horizontal.y - 2,
-          ),
-        );
-        vertical.height = Math.max(
-          0,
-          Math.min(
-            vertical.height,
-            building.rect.y + building.rect.height - vertical.y - 2,
-          ),
-        );
-        vertical.width = Math.max(
-          0,
-          Math.min(
-            vertical.width,
-            building.rect.x + building.rect.width - vertical.x - 2,
-          ),
-        );
-      }
       drawHorizontalRoad(
         road,
         horizontal.x,
@@ -193,7 +162,7 @@ export function drawRoomRoads(
   stage.addChild(road);
 }
 
-function drawHorizontalRoad(
+export function drawHorizontalRoad(
   parent: Graphics,
   x: number,
   y: number,
@@ -203,15 +172,15 @@ function drawHorizontalRoad(
   if (width <= 0 || height <= 0) {
     return;
   }
-  parent.rect(x, y, width, height).fill(0x252537);
-  parent.rect(x, y, width, 1).fill({ color: 0x6c6990, alpha: 0.35 });
+  parent.rect(x, y, width, height).fill(0x242c38);
+  parent.rect(x, y, width, 1).fill({ color: 0x8d9698, alpha: 0.35 });
   parent
     .rect(x, y + height - 1, width, 1)
-    .fill({ color: 0x6c6990, alpha: 0.35 });
+    .fill({ color: 0x8d9698, alpha: 0.35 });
   for (let markerX = x + 14; markerX < x + width - 8; markerX += 18) {
     parent
       .rect(markerX, y + height / 2, 7, 1)
-      .fill({ color: 0x77749a, alpha: 0.38 });
+      .fill({ color: 0xb6a67a, alpha: 0.38 });
   }
 }
 
@@ -232,7 +201,7 @@ export function drawAgentBar(
   const height = blocks.agentBarHeight;
   const room = new Container();
   const floor = new Graphics();
-  floors.draw(floor, x, y, width, height, 0x17140f, 0x11100d);
+  floors.draw(floor, x, y, width, height, 0x382a25, 0x49372b, "wood");
   floor
     .roundRect(x, y, width, height, 4)
     .stroke({ width: 2, color: 0xb59048, alpha: 0.72 });

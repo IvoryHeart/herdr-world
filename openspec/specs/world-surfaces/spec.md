@@ -558,7 +558,10 @@ NOT change authoritative host or workspace ancestry.
 Phone Office SHALL use one vertical flow: receptions with waiting or completed
 agents needing attention, Economy, Workforce, then workspace rooms. Empty receptions SHALL be absent
 from the phone scene. Host order SHALL remain stable among attention receptions;
-reordering SHALL preserve qualified identities. Workforce SHALL retain observed
+reordering SHALL preserve qualified identities. Economy and Workforce boards SHALL use available
+width with readable content, sharing a row when both fit and wrapping only when
+necessary. Their published bounds SHALL match their visible artwork; fixed board
+rows SHALL NOT reserve unused phone width or decorative desktop height. Workforce SHALL retain observed
 agent-state counts rather than inventing metrics. Neither reception navigation nor navigation between rooms
 SHALL require horizontal scrolling. The decorative CEO room SHALL be absent from
 the phone layout; useful host status and access to reception and idle agents
@@ -575,12 +578,34 @@ room, without shared tallest-room row spacing or corridors crossing rooms.
 Each host SHALL own a visibly bounded, named building containing its rooms.
 The same content-derived packing strategy SHALL arrange rooms within buildings
 and buildings across desktop width; mobile buildings SHALL stack vertically below
-Workforce. Collapsed room/host footprints SHALL release space for their neighbors.
-Room placement SHALL be deterministic for equal inputs and SHALL retain qualified
+Workforce. Occupied desktop buildings SHALL share usable horizontal width when
+additional room content can use it, rather than retaining narrow footprints while
+the viewport is empty. Small or collapsed buildings SHALL NOT stretch solely to
+fill the screen. Host widths and room column counts SHALL reflow together.
+Interiors and room corridors SHALL use carpeted floors without street markings;
+reception/lounge wood floors, brick walls and exterior asphalt roads SHALL make
+the indoor/outdoor distinction visible. Material drawing SHALL stay bounded and
+respect published floor rectangles. Collapsed room/host footprints SHALL release
+space for their neighbors.
+Room shapes and placement SHALL be considered together so later rooms can fill
+usable gaps, including cavities below another room's footprint; the layout SHALL
+NOT depend only on a contour that discards those openings. Room placement SHALL
+be deterministic for equal inputs and SHALL retain qualified
 identities and logical roster order. Left/center/right alignment SHALL apply to
 the packed footprint; phone rooms SHALL stack vertically within the viewport width. Title,
 action and decoration containment, stable gaps and full-name access SHALL remain
 available. A large room SHALL NOT enlarge unrelated rooms.
+
+#### Scenario: Fit rooms into remaining gaps
+
+- **WHEN** a different readable desk-column count lets a room fit beside its neighbor, or a later room fits an interior cavity
+- **THEN** the layout considers those room shapes and openings, reducing unused interior space without overlapping rooms, shrinking controls or changing native order
+
+#### Scenario: Expand populated buildings across a wide screen
+
+- **WHEN** two hosts with several multi-tab workspaces are shown on a wide desktop
+- **THEN** their buildings use the available horizontal space for readable room packing, making more rooms visible and reducing depth compared with a narrower viewport
+- **AND** rooms remain contained without overlap; interior corridors are carpeted and exterior roads remain between buildings
 
 #### Scenario: Switch between hosts with unequal rooms
 
@@ -627,6 +652,13 @@ available. A large room SHALL NOT enlarge unrelated rooms.
   before Economy, Workforce and workspace rooms, without a host carousel or
   six-host scene cap; empty receptions do not occupy phone scene space
 
+
+#### Scenario: Fit phone summary boards to usable width
+
+- **WHEN** a phone has enough usable width for readable Economy and Workforce boards
+- **THEN** they share a row below attention receptions, fill the available width
+  without reducing label text sizes, and workspace buildings follow that row
+- **AND** narrower viewports wrap the boards vertically without horizontal scrolling
 
 #### Scenario: Fill a wide desktop beside a large room
 
@@ -2055,8 +2087,10 @@ The existing compact device artwork and complete pane chooser SHALL remain usabl
 
 ### Requirement: Office room navigation and presentation continuity
 
-Office SHALL provide reachable room navigation and collapse/expand controls on
-phones and desktop. Collapsing a room SHALL retain its qualified header and exact
+Office SHALL reuse its existing shell search for reachable room/agent navigation
+with bounded paged results and retain collapse/expand controls on phones and
+desktop. It SHALL NOT reserve a separate Rooms / Receptions / Agents navigation
+row. Collapsing a room SHALL retain its qualified header and exact
 observed counts without changing native work, agent state or Inspector ownership.
 Host buildings SHALL expose collapse/expand controls and retain their qualified
 name, connection/stale state, exact room/agent counts and attention summary while

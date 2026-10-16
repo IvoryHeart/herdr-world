@@ -82,6 +82,35 @@ export async function verifyOfficeRendering(
         reference.destroy({ context: true });
         optimized.destroy({ context: true });
       }
+      for (const material of ["carpet", "wood", "asphalt"] as const) {
+        const surface = new Graphics();
+        floors.draw(surface, 4.5, 4.5, 151, 133, 0x29323d, 0x303a46, material);
+        const result = pixels(surface, resolution);
+        const alphaAt = (x: number, y: number) =>
+          result[
+            (y * resolution * (200 * resolution) + x * resolution) * 4 + 3
+          ];
+        check(
+          alphaAt(100, 100) === 255,
+          `${material} did not fill the interior at DPR ${resolution}`,
+        );
+        check(
+          alphaAt(158, 100) === 0 && alphaAt(100, 140) === 0,
+          `${material} leaked beyond its published floor bounds at DPR ${resolution}`,
+        );
+        check(
+          surface.context.instructions.length === 1,
+          `${material} expanded into per-cell paths`,
+        );
+        surface.destroy({ context: true });
+        const huge = new Graphics();
+        floors.draw(huge, 0, 0, 1000000, 1000000, 0x29323d, 0x303a46, material);
+        check(
+          huge.context.instructions.length === 1,
+          `${material} preparation grew with logical area`,
+        );
+        huge.destroy({ context: true });
+      }
       for (const inheritedAlpha of [1, 0.68]) {
         const scene = new Container({ alpha: inheritedAlpha });
         for (let index = 0; index < 4; index++)
