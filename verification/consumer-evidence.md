@@ -51,7 +51,9 @@ for Q19/Q20/Q39/Q43, alongside existing Q17 creation, Q23 Inspector intent and Q
 preference checks. `officeGrowing.test.ts` covers logical room/desk/standing growth,
 phone section order, complete 129-room geometry and bounded row admission near the
 10000th tab, cooperative immutable publication and cancellation before a stale
-layout can replace the current painted revision. `officeGrowing.browser.tsx`, executed by `PixelOfficeCanvas.test.ts`,
+layout can replace the current painted revision. A separate real Pixi consumer
+forces font completion without React/scroll changes and checks that the completed
+paint republishes the selected connector anchor. `officeGrowing.browser.tsx`, executed by `PixelOfficeCanvas.test.ts`,
 uses three hosts with colliding native identifiers and 131 rooms: it reaches tab 100,
 activates its exact qualified pane, bounds mounted controls, collapses without
 closing work, retains focused controls while scrolling, pages to a room beyond

@@ -155,7 +155,9 @@ cooperatively with the observation, and geometry
 publication uses the existing compact 64-bit digest. Large immutable layout copies
 also yield in bounded batches; a newer publication or retired build cancels the old
 copy before its revision becomes observable. Pixi hits, semantic actions and
-connector anchors wait for the matching completed paint. Physical Pixi surfaces and
+connector anchors wait for the matching completed paint. Renderer-owned font and
+resize paint acknowledgements explicitly schedule a fresh anchor report, even
+without a React property update. Physical Pixi surfaces and
 semantic controls follow the viewport, including rows inside a tall room. Readiness
 waits for canvas paint as well as semantic admission. Preparation gates activation
 immediately while retaining a still-current focused control.

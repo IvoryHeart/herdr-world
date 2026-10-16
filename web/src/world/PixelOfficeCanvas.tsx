@@ -263,7 +263,12 @@ export function PixelOfficeCanvas({
       (roomKey) => latestRef.current.onNewSeat(roomKey),
       (hover) => latestRef.current.onHover?.(hover),
       (layout) => latestRef.current.onLayoutChange?.(layout),
-      (revision) => latestRef.current.onCanvasRendered?.(revision),
+      (revision) => {
+        latestRef.current.onCanvasRendered?.(revision);
+        // Renderer-owned font/resize paints can finish without a React update.
+        // Clear preparing anchors and republish only after matching canvas paint.
+        scheduleAnchorReportRef.current();
+      },
       latestRef.current.roomAlignment,
       latestRef.current.longRoomTitleMode,
       initialization.signal,

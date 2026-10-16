@@ -13,6 +13,9 @@ import { projectWorldOffice } from "./herdrOfficeProjection";
 import type { WorldRuntimeConnection } from "./runtimeStore";
 import { buildWorldObject, worldObjectForConnection } from "./worldObject";
 import PixelOfficeView from "./PixelOfficeView";
+import { PixelOfficeCanvas } from "./PixelOfficeCanvas";
+import { EMPTY_OFFICE_OBSERVABILITY } from "./officeObservability";
+import type { PublishedOfficeLayout } from "./officeLayout";
 import "./world.css";
 
 const failures: string[] = [];
@@ -854,7 +857,78 @@ async function run() {
   }
 }
 
+async function verifyAnchorAfterRendererRepaint() {
+  const host = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(host);
+  const statuses = ["working", "working", "working", "working"] as const;
+  const projection = projectWorldOffice(
+    buildWorldObject([connection("repaint", "Repaint", "workspace", statuses)]),
+    1,
+  );
+  let layout: PublishedOfficeLayout | null = null;
+  let anchorReports = 0;
+  let anchored = false;
+  try {
+    root.render(
+      <div className="world-stage-scroll" style={{ height: 600 }}>
+        <PixelOfficeCanvas
+          projection={projection}
+          selectedKey={projection.paneRoster[0]!.device.key}
+          completionSeenKeys={new Set()}
+          observability={EMPTY_OFFICE_OBSERVABILITY}
+          conversationTargets={[]}
+          onSelect={() => {}}
+          onActivateAgent={() => {}}
+          onActivateRoom={() => {}}
+          seatCreationStates={{}}
+          onNewSeat={() => {}}
+          roomAlignment="left"
+          longRoomTitleMode="expand"
+          onLayoutChange={(value) => {
+            layout = value;
+          }}
+          onSelectedAnchorChange={(value) => {
+            anchorReports++;
+            anchored = Boolean(value);
+          }}
+        />
+      </div>,
+    );
+    await waitFor(
+      () => Boolean(layout) && window.__HERDR_WORLD_RENDERER__?.ready === true,
+      "Anchor repaint fixture did not become ready",
+    );
+    const scroll = host.querySelector<HTMLElement>(".world-stage-scroll")!;
+    scroll.scrollTop = layout!.rooms[0]!.y;
+    scroll.dispatchEvent(new Event("scroll"));
+    await waitFor(
+      () => anchored,
+      "Anchor repaint fixture did not reveal its selected desk",
+    );
+    await settle();
+    const beforeReports = anchorReports;
+    const beforePaints = officePaints;
+    // Renderer-owned font completion does not change React props or scroll.
+    document.fonts.dispatchEvent(new Event("loadingdone"));
+    await waitFor(
+      () =>
+        officePaints > beforePaints &&
+        window.__HERDR_WORLD_RENDERER__?.ready === true,
+      "Font completion did not finish its renderer-owned repaint",
+    );
+    await settle();
+    check(
+      anchorReports > beforeReports && anchored,
+      "Renderer-owned repaint did not republish its selected anchor after matching canvas paint",
+    );
+  } finally {
+    root.unmount();
+    host.remove();
+  }
+}
+
 run()
+  .then(() => verifyAnchorAfterRendererRepaint())
   .then(() => verifyOfficeRendering(check))
   .then(() => verifyGrowingOffice(check))
   .catch((error: unknown) => {
