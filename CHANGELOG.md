@@ -9,6 +9,11 @@ are optional because the merged PR history records their source.
 
 ### Fixed
 
+- Retry transient Windows installer-test cleanup locks within a bounded window,
+  while keeping persistent cleanup failures visible to the required gate.
+
+- Keep terminal IME positioning correct when the terminal cursor is hidden.
+
 - Quote compile-time environment filters so native Windows source and release
   builds pass literal patterns to Bun instead of failing shell glob expansion.
 
@@ -19,6 +24,11 @@ are optional because the merged PR history records their source.
   update ownership, and refresh generated service paths when restarting the plugin.
 
 ### Added
+
+- Synchronize Roamgate v0.8.5: searchable desktop shortcut cheat sheet and readable
+  workspace/worktree suggestions, retaining World’s qualified creation flow.
+- Accept login passwords from 8 to 1024 Unicode characters; warn below the
+  recommended 15 characters for access beyond a trusted private network.
 
 - Require native installer checks before merge: build release-shaped candidates,
   test fresh installs and upgrades from the latest stable release on six platforms,

@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { createHash } from "node:crypto";
 import {
   copyFileSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -11,6 +12,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { removeInstallerFixture } from "./installer-upgrade";
 
 test.skipIf(process.platform !== "win32")(
   "Windows plugin installer verifies and stages releases without Bun on PATH",
@@ -219,4 +221,61 @@ test.skipIf(process.platform !== "win32")(
     }
   },
   180_000,
+);
+
+test.skipIf(process.platform !== "win32")(
+  "installer cleanup waits for transient Windows locks and rejects persistent locks",
+  async () => {
+    const powershell = join(
+      process.env.SystemRoot!,
+      "System32/WindowsPowerShell/v1.0/powershell.exe",
+    );
+    for (const transient of [true, false]) {
+      const directory = mkdtempSync(join(tmpdir(), "world-cleanup-lock-"));
+      const file = join(directory, "held.txt");
+      writeFileSync(file, "synthetic locked file");
+      const child = Bun.spawn(
+        [
+          powershell,
+          "-NoProfile",
+          "-Command",
+          "$file=[System.IO.File]::Open($env:WORLD_CLEANUP_LOCK_FILE,[System.IO.FileMode]::Open,[System.IO.FileAccess]::Read,[System.IO.FileShare]::Read); [Console]::WriteLine('locked'); [Console]::Out.Flush(); Start-Sleep -Seconds 30; $file.Dispose()",
+        ],
+        {
+          env: { ...process.env, WORLD_CLEANUP_LOCK_FILE: file },
+          stdout: "pipe",
+          stderr: "pipe",
+        },
+      );
+      let release: ReturnType<typeof setTimeout> | undefined;
+      try {
+        const reader = child.stdout.getReader();
+        const ready = await reader.read();
+        reader.releaseLock();
+        expect(new TextDecoder().decode(ready.value)).toContain("locked");
+        if (transient) {
+          release = setTimeout(() => child.kill(), 150);
+          await removeInstallerFixture(directory);
+          expect(existsSync(directory)).toBe(false);
+        } else {
+          let failure: unknown;
+          try {
+            await removeInstallerFixture(directory);
+          } catch (error) {
+            failure = error;
+          }
+          expect(["EBUSY", "EPERM", "EACCES", "ENOTEMPTY"]).toContain(
+            (failure as NodeJS.ErrnoException)?.code ?? "",
+          );
+          expect(existsSync(file)).toBe(true);
+        }
+      } finally {
+        if (release) clearTimeout(release);
+        child.kill();
+        await child.exited;
+        await removeInstallerFixture(directory);
+      }
+    }
+  },
+  20_000,
 );

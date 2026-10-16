@@ -34,6 +34,13 @@ decisions and are not current operational guidance.
 | Herdr setup, service management and updates | [Access boundary](../openspec/specs/bridge-access/spec.md), [distribution](../openspec/specs/distribution-boundaries/spec.md) | [Herdr CLI](../server/src/herdr/cli.ts), [setup](../server/src/http/herdr-setup.ts), [service manager](../server/src/config/service-manager.ts), [update handler](../server/src/http/update.ts) | [Setup tests](../server/src/http/herdr-setup.test.ts), [update tests](../server/src/http/update.test.ts), [deployment](DEPLOYMENT.md) |
 | Installer, plugin, upstream sync and releases | [Distribution boundaries](../openspec/specs/distribution-boundaries/spec.md) | [Release tooling](../scripts/prepare-release.ts), [plugin tooling](../scripts/world-plugin.ts), [native plugin dispatch](../server/src/config/plugin-command.ts), [Unix installer](../scripts/install-plugin.sh), [Windows installer](../scripts/install-plugin.ps1), [plugin manifest](../herdr-plugin.toml) | [Release tests](../scripts/prepare-release.test.ts), [native compatibility](../scripts/plugin-native.test.ts), [Windows installation](../scripts/install-plugin.windows.test.ts), [upstream record](../UPSTREAM.md), [adoption policy](upstream-policy.md), [disposition ledger](../upstream/dispositions.json), [packaging](packaging.md), [release](release.md), [screenshot capture](SCREENSHOTS.md) |
 
+Desktop shortcut discovery lives in [the read-only cheat sheet](../web/src/components/ShortcutCheatSheet.tsx)
+and [its preset-derived rows and filtering](../web/src/shortcutCheatSheet.ts), with
+[preset/filter regressions](../web/src/shortcutCheatSheet.test.ts). Workspace and
+worktree naming uses [the lazy generator](../web/src/luckyName.ts) and
+[the suggestion lifecycle hook](../web/src/components/useSuggestedName.ts);
+[dialog regressions](../web/src/components/ModalDialogs.test.ts) cover late suggestions.
+
 ## CI and release validation
 
 [Upstream automation](upstream-automation.md) covers Roamgate release detection,

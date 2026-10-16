@@ -1,8 +1,9 @@
 import { useEffectCallback } from "../useEffectCallback";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { CloseButton } from "./CloseButton";
 import { focusDialogElement } from "./dialogFocus";
 import { dialogKeyAction } from "./dialogKeyboard";
+import { useSuggestedName } from "./useSuggestedName";
 
 export function TextInputDialog({
   open,
@@ -18,20 +19,19 @@ export function TextInputDialog({
   open: boolean;
   title: string;
   label: string;
-  initialValue?: string;
+  initialValue?: string | (() => Promise<string>);
   placeholder?: string;
   submitLabel?: string;
   submitting?: boolean;
   onSubmit: (value: string) => void;
   onClose: () => void;
 }) {
-  const [value, setValue] = useState(initialValue);
   const inputRef = useRef<HTMLInputElement>(null);
+  const [value, setValue] = useSuggestedName(open, initialValue, inputRef);
   const onCloseEvent = useEffectCallback(onClose);
 
   useEffect(() => {
     if (!open) return;
-    setValue(initialValue);
     const cancelFocus = focusDialogElement(inputRef.current, { select: true });
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onCloseEvent();
@@ -45,9 +45,11 @@ export function TextInputDialog({
 
   if (!open) return null;
 
+  const canSubmit =
+    !submitting && (typeof initialValue === "string" || !!value.trim());
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!submitting) onSubmit(value);
+    if (canSubmit) onSubmit(value);
   };
 
   return (
@@ -81,7 +83,7 @@ export function TextInputDialog({
           <button type="button" className="ghost" onClick={onClose}>
             Cancel
           </button>
-          <button type="submit" disabled={submitting}>
+          <button type="submit" disabled={!canSubmit}>
             {submitLabel}
           </button>
         </div>

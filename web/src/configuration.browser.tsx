@@ -282,6 +282,7 @@ function Harness() {
   );
   return (
     <ConfigMenu
+      onShowShortcuts={() => {}}
       theme={theme}
       accentColor="blue"
       uiScale={scale}

@@ -429,6 +429,7 @@ are reproduced in `DEPENDENCY_LICENSES.md`.
 | undici-types | 8.11.2 | MIT |
 | undici-types | 8.3.0 | MIT |
 | undici | 8.11.2 | MIT |
+| unique-names-generator | 4.7.1 | MIT |
 | unist-util-is | 6.0.1 | MIT |
 | unist-util-position | 5.0.0 | MIT |
 | unist-util-stringify-position | 4.0.0 | MIT |

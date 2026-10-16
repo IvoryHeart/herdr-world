@@ -141,6 +141,13 @@ operate together. Global creation visibly confirms one destination host.
 See [deployment](./docs/DEPLOYMENT.md) for checksums, profiles, authentication,
 updates, and services.
 
+### Upstream handoff demo
+
+The [Roamgate foundation demo](./docs/images/roamgate-handoff.mp4) shows a Herdr
+workspace moving from computer to phone. It shows upstream Roamgate UI; the
+World screenshots above show this project’s multi-host views.
+[Animated fallback](./docs/images/roamgate-handoff.gif).
+
 ## Install as a PWA
 
 **PWA installation is recommended for daily use:** a separate app window without

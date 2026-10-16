@@ -18,7 +18,9 @@ not a sandbox or multi-user permission system.
 
 The default bind is `127.0.0.1`. Every listener requires login, including
 `127.0.0.1`, `localhost` and `::1`. Configure `HERDR_WORLD_PASSWORD` with
-15–1024 characters or use the generated persistent token. Successful login
+8–1024 characters or use the generated persistent token. Passwords of at least
+15 characters are recommended beyond a trusted private network; startup warns
+when a configured password is shorter. Successful login
 creates a bounded session signed with a separate random key in private World
 storage. Changing the password, generated token or configured PIN rotates that
 key and invalidates existing sessions; ordinary restarts preserve sessions.

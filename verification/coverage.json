@@ -283,7 +283,9 @@
         "web/src/terminalIme.test.ts",
         "web/src/terminalComposition.test.ts",
         "web/src/terminalTouchSelection.test.ts",
-        "web/src/terminalClipboard.test.ts"
+        "web/src/terminalClipboard.test.ts",
+        "server/src/bridge/frame-to-ansi.test.ts",
+        "web/src/endpointFrame.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/186",
       "technique": "alternative",
@@ -291,7 +293,7 @@
       "status": "alternative-evidence",
       "remaining": "IME/browser/clipboard behavior depends on platform events; supported browser scenarios are exercised, not every device keyboard.",
       "requiredChecks": ["bun run check", "bun run verification:gate"],
-      "evidenceDecision": "Real xterm/browser composition, touch and clipboard transitions are the executable subject; synthetic abstract key transitions would omit the shipped core duplication that the regression reproduces.",
+      "evidenceDecision": "Real xterm/browser composition, touch and clipboard transitions are the executable subject; synthetic abstract key transitions would omit the shipped core duplication that the regression reproduces. v0.8.5: Hidden-cursor IME positioning is checked directly at ANSI serialization and browser-frame decoding; no ownership or ordering model changes.",
       "partialEvidence": {
         "models": [],
         "contracts": ["verification/consumer-evidence.md"],
@@ -592,7 +594,8 @@
       "existingTests": [
         "web/src/worldCreation.test.ts",
         "web/src/world/SharedViewCreation.test.ts",
-        "web/src/world/createdTerminalAdmission.test.ts"
+        "web/src/world/createdTerminalAdmission.test.ts",
+        "web/src/components/ModalDialogs.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/175",
       "technique": "creation-composition",
@@ -622,7 +625,8 @@
         "decision": "accepted",
         "review": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",
         "scope": "Accepted documented bounds, mandatory consumers and excluded claims; final implementation/gate/resource acceptance is recorded in review 5517420140."
-      }
+      },
+      "evidenceDecision": "v0.8.5: Asynchronous naming remains a presentation input to qualified creation. DOM schedules exercise editing before suggestion, close/reopen, obsolete results and rejected loading; existing creation models and consumer gates remain mandatory."
     },
     {
       "id": "Q18",
@@ -1086,7 +1090,9 @@
       "existingTests": [
         "server/src/http/auth.test.ts",
         "server/src/http/auth-pin.test.ts",
-        "server/src/http/browser-admission.test.ts"
+        "server/src/http/browser-admission.test.ts",
+        "server/src/config/auth-token.test.ts",
+        "server/src/config/server-config.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/186",
       "technique": "alternative",
@@ -1094,7 +1100,7 @@
       "status": "alternative-evidence",
       "remaining": "No new abstract authentication model replaces protocol/security tests; trusted-single-user and supported deployment assumptions remain unchanged.",
       "requiredChecks": ["bun run check", "bun run verification:gate"],
-      "evidenceDecision": "Real HTTP tests exercise authentication, PIN/rate budgets, cookies and browser admission; real request/response semantics are the security boundary.",
+      "evidenceDecision": "Real HTTP tests exercise authentication, PIN/rate budgets, cookies and browser admission; real request/response semantics are the security boundary. v0.8.5: Configured passwords accept 8\u20131024 Unicode characters with a recommendation warning below 15. Direct boundary tests cover ASCII/Unicode and CLI/environment ingestion; session, Origin and throttling evidence remains mandatory.",
       "partialEvidence": {
         "models": [],
         "contracts": ["verification/consumer-evidence.md"],
@@ -1549,7 +1555,10 @@
       "existingTests": [
         "web/src/browserStorage.test.ts",
         "web/src/workspacePreferences.test.ts",
-        "web/src/appearance.test.ts"
+        "web/src/appearance.test.ts",
+        "web/src/shortcutCheatSheet.test.ts",
+        "web/src/shortcutBindings.test.ts",
+        "web/src/components/ModalDialogs.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/186",
       "technique": "alternative",
@@ -1557,7 +1566,7 @@
       "status": "alternative-evidence",
       "remaining": "Storage quota/browser implementation behavior remains direct evidence; preferences do not authorize downstream operations.",
       "requiredChecks": ["bun run check", "bun run verification:gate"],
-      "evidenceDecision": "Pure bounded key parsing and browser storage tests exercise namespaces, canonicalization, quotas and newest explicit preference. Office stores validated phone and desktop scene positions independently, preserving legacy fields without applying desktop horizontal coordinates to the phone layout.",
+      "evidenceDecision": "Pure bounded key parsing and browser storage tests exercise namespaces, canonicalization, quotas and newest explicit preference. v0.8.5: Shortcut discovery derives read-only rows from active presets, preserving arrangement bindings and old presets. Direct preset/filter tests and DOM focus/dismissal evidence supplement existing preference consumers. Office stores validated phone and desktop scene positions independently, preserving legacy fields without applying desktop horizontal coordinates to the phone layout.",
       "partialEvidence": {
         "models": [],
         "contracts": ["verification/consumer-evidence.md"],

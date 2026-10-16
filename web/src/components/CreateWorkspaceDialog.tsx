@@ -18,6 +18,7 @@ import type { WorkspacePathInfo } from "../../../shared/workspacePath";
 import { bridge, type ConnectionClient } from "../api";
 import { CloseButton } from "./CloseButton";
 import { focusDialogElement } from "./dialogFocus";
+import { useSuggestedName } from "./useSuggestedName";
 import "./CreateWorkspaceDialog.css";
 
 export function CreateWorkspaceDialog({
@@ -67,11 +68,15 @@ export function CreateWorkspaceDialog({
           ? initialDestination.sourceWorkspaceId
           : undefined,
       );
-  const [label, setLabel] = useState("");
+  const labelRef = useRef<HTMLInputElement>(null);
+  const [label, setLabel, namePending] = useSuggestedName(
+    open,
+    initialName?.trim() || luckyWorkspaceName,
+    labelRef,
+  );
   const [cwd, setCwd] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const submissionPending = useRef(false);
-  const labelRef = useRef<HTMLInputElement>(null);
   const onCloseEvent = useEffectCallback(onClose);
 
   useEffect(() => {
@@ -118,7 +123,6 @@ export function CreateWorkspaceDialog({
 
   useEffect(() => {
     if (!open) return;
-    setLabel(initialName?.trim() || luckyWorkspaceName());
     setCwd(initialCwd?.trim() ?? "");
     const cancelFocus = focusDialogElement(labelRef.current, { select: true });
     const onKey = (e: KeyboardEvent) => {
@@ -169,6 +173,7 @@ export function CreateWorkspaceDialog({
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (
+      namePending ||
       submissionPending.current ||
       createReason ||
       checking ||
@@ -347,7 +352,13 @@ export function CreateWorkspaceDialog({
           </button>
           <button
             type="submit"
-            disabled={submitting || !!createReason || checking || !!pathError}
+            disabled={
+              namePending ||
+              submitting ||
+              !!createReason ||
+              checking ||
+              !!pathError
+            }
             title={createReason ?? undefined}
           >
             {submitting ? "Creating…" : "Create"}

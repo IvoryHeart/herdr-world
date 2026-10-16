@@ -325,7 +325,8 @@ service keeps its configured port when a new version is installed.
 
 Every listener requires login, including localhost. World creates a persistent
 login token unless `HERDR_WORLD_PASSWORD` is set to a password containing
-15–1024 characters. Repeated failed login attempts receive a cooldown. A token URL establishes
+8–1024 characters; 15 or more are recommended beyond a trusted private network.
+Startup warns for shorter configured passwords. Repeated failed login attempts receive a cooldown. A token URL establishes
 an HttpOnly session and removes the token from the address bar. Privileged browser HTTP
 and WebSocket admission automatically requires the browser Origin authority to equal
 the request Host authority; loopback listeners also reject non-loopback Host
