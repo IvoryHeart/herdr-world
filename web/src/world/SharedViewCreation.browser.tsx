@@ -517,10 +517,50 @@ async function run() {
       "beta",
     "Inactive host dispatch fell back to alpha",
   );
-  const roomButton = document.querySelector<HTMLButtonElement>(
-    ".world-new-room-canvas-action",
+  const betaHost = buildWorldObject(
+    worldRuntimeStore.get().connections,
+  ).hosts.find((host) => host.connectionId === "beta")!;
+  const betaBuilding =
+    window.__HERDR_WORLD_RENDERER__!.publishedLayout!.buildings!.find(
+      (building) => building.key === betaHost.id,
+    )!;
+  const officeScroll = document.querySelector<HTMLElement>(
+    ".world-office-shell > .world-stage-scroll",
   )!;
-  await until(() => !roomButton.disabled, "room-specific workspace control");
+  officeScroll.scrollTo({ top: betaBuilding.headerRect.y, left: 0 });
+  const hostToggle = () =>
+    [
+      ...document.querySelectorAll<HTMLButtonElement>(
+        "button[data-host-key][aria-expanded]",
+      ),
+    ].find((button) => button.dataset.hostKey === betaHost.id);
+  await until(
+    () => Boolean(hostToggle()) && !hostToggle()!.disabled,
+    "destination building header",
+  );
+  hostToggle()!.click();
+  await until(
+    () =>
+      hostToggle()?.getAttribute("aria-expanded") === "false" &&
+      window.__HERDR_WORLD_RENDERER__?.ready === true,
+    "collapsed host creation control",
+  );
+  const getRoomButton = () =>
+    [
+      ...document.querySelectorAll<HTMLButtonElement>(
+        ".world-new-room-canvas-action",
+      ),
+    ].find((button) => button.dataset.hostKey === betaHost.id);
+  await until(
+    () => Boolean(getRoomButton()) && !getRoomButton()!.disabled,
+    "host-specific workspace control",
+  );
+  const roomButton = getRoomButton()!;
+  check(
+    roomButton.getAttribute("aria-label") ===
+      `New room in ${betaBuilding.title}`,
+    "New room action did not identify its own host",
+  );
   roomButton.click();
   await until(
     () =>

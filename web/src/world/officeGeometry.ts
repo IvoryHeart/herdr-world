@@ -5,7 +5,10 @@
  * derived from the historical Claw-Empire Office geometry. Source provenance,
  * source hashes, and license obligations are recorded in docs/world-assets.md.
  */
-import { packOfficeRoomShapes } from "./officePackingSearch";
+import {
+  type OfficePackingCache,
+  packOfficeRoomShapesSteps,
+} from "./officePackingSearch";
 import { packOfficeRooms, packOfficeRoomContour } from "./officeRoomPacking";
 
 export const OFFICE_GEOMETRY = Object.freeze({
@@ -197,6 +200,7 @@ export type OfficeBuilding = OfficeBuildingInput & {
 export type OfficeSceneOptions = {
   contained?: boolean;
   shapeSearch?: boolean;
+  packingCache?: OfficePackingCache;
   complete?: boolean;
   compact?: boolean;
   collapsedRooms?: ReadonlySet<number>;
@@ -230,6 +234,15 @@ export type OfficeLayout = {
 };
 
 export function resolveOfficeLayout(
+  ...args: Parameters<typeof resolveOfficeLayoutSteps>
+): OfficeLayout {
+  const steps = resolveOfficeLayoutSteps(...args);
+  let step = steps.next();
+  while (!step.done) step = steps.next();
+  return step.value;
+}
+
+export function* resolveOfficeLayoutSteps(
   requestedWidth: number,
   requestedRooms: number | readonly OfficeRoomPresentation[],
   roomAlignment: OfficeRoomAlignment = DEFAULT_OFFICE_ROOM_ALIGNMENT,
@@ -237,7 +250,7 @@ export function resolveOfficeLayout(
   requestedCeoReceptionCount: number = 0,
   requestedMaximumCeoBandHeight: number = Number.POSITIVE_INFINITY,
   options: OfficeSceneOptions = {},
-): OfficeLayout {
+): Generator<void, OfficeLayout, unknown> {
   const officeWidth = Math.max(
     options.compact
       ? 240
@@ -600,7 +613,7 @@ export function resolveOfficeLayout(
   );
   const shapePacking =
     options.complete && !options.compact && options.shapeSearch !== false
-      ? packOfficeRoomShapes(
+      ? yield* packOfficeRoomShapesSteps(
           roomChoices.map((choices) =>
             choices.map((metric) => ({
               width: metric.preferredWidth,
@@ -611,6 +624,8 @@ export function resolveOfficeLayout(
           availableRoomWidth,
           OFFICE_GEOMETRY.roomGap,
           OFFICE_GEOMETRY.roomRowGap,
+          8,
+          options.packingCache,
         )
       : null;
   const roomMetrics = roomChoices.map(

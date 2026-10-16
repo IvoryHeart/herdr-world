@@ -48,6 +48,13 @@ test("qualified host buildings pack side by side on desktop and stack on phones"
     const geometry = resolveOfficeSceneGeometry(input(width));
     const layout = geometry.layout;
     const [a, b] = layout.buildings!;
+    expect(layout.totalHeight).toBe(
+      Math.max(
+        ...layout.buildings!.map(
+          (building) => building.rect.y + building.rect.height,
+        ),
+      ) + 32,
+    );
     expect(a!.key).not.toBe(b!.key);
     expect(a!.title).toBe(b!.title);
     expect(geometry.normalizedInput.rooms.map((room) => room.id)).toEqual(

@@ -1,5 +1,5 @@
 import {
-  resolveOfficeLayout,
+  resolveOfficeLayoutSteps,
   OFFICE_GEOMETRY,
   type OfficeBuildingInput,
   type OfficeLayout,
@@ -11,6 +11,7 @@ import {
   type OfficeGeometryInput,
   type NormalizedOfficeGeometryInput,
 } from "./officeLayout";
+import type { OfficePackingCache } from "./officePackingSearch";
 import { packOfficeRooms } from "./officeRoomPacking";
 
 const BUILDING_GAP = 20;
@@ -19,7 +20,7 @@ const BUILDING_HEADER = 84;
 const COLLAPSED_BUILDING_HEIGHT = BUILDING_HEADER + 16;
 const MIN_BUILDING_WIDTH = 360;
 
-/** The same skyline packs room footprints inside hosts, then host footprints. */
+/** The same free-rectangle packer fits rooms inside hosts, then host footprints. */
 export function* resolveOfficeBuildingsSteps(
   base: OfficeLayout,
   input: OfficeGeometryInput,
@@ -84,6 +85,7 @@ export function* resolveOfficeBuildingsSteps(
   const headers = new Map<number, ReturnType<typeof resolveOfficeRoomHeader>>();
   const nested: OfficeRoomRect[][] = [];
   const sizes: { width: number; height: number }[] = [];
+  const packingCache: OfficePackingCache = new Map();
   for (let groupIndex = 0; groupIndex < groups.length; groupIndex++) {
     const group = groups[groupIndex]!;
     const width = widths[groupIndex]!;
@@ -102,7 +104,7 @@ export function* resolveOfficeBuildingsSteps(
         headerMinTitleBoxWidth: header.titleBoxWidth,
       };
     });
-    const inner = resolveOfficeLayout(
+    const inner = yield* resolveOfficeLayoutSteps(
       innerWidth,
       descriptors,
       "left",
@@ -114,6 +116,7 @@ export function* resolveOfficeBuildingsSteps(
         compact: base.compact,
         contained: true,
         collapsedRooms,
+        packingCache,
       },
     );
     nested.push(
@@ -196,7 +199,7 @@ export function* resolveOfficeBuildingsSteps(
     totalHeight:
       base.roomStartY +
       Math.max(0, ...placements.map((rect) => rect.y + rect.height)) +
-      112,
+      32,
   };
   return { layout: result, headers };
 }

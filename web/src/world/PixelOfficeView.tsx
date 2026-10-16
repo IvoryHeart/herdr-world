@@ -71,7 +71,7 @@ type RoomDialog =
   | {
       mode: "create";
       roomKey: string | null;
-      owner?: { connectionId: string; runtimeGeneration: number };
+      owner: { connectionId: string; runtimeGeneration: number };
     }
   | {
       mode: "rename" | "close";
@@ -512,15 +512,12 @@ export default function PixelOfficeView({
   const canCreateSeat = (roomKey: string) => seatCreationState(roomKey).enabled;
   const createSeatReason = (roomKey: string) =>
     seatCreationState(roomKey).reason;
-  const roomCreationState = (roomKey: string | null) => {
-    const room = roomForKey(roomKey);
-    const destination = room
-      ? world.hosts.find(
-          (host) =>
-            host.connectionId === room.workspaceRef.connectionId &&
-            host.generation === room.workspaceRef.generation,
-        )
-      : world.hosts.find((host) => host.actionable && !host.stale);
+  const sourceRoomForHost = (hostKey: string) => {
+    const room = roomForKey(selectedRoomKey);
+    return room?.hostKey === hostKey ? room : null;
+  };
+  const hostRoomCreationState = (hostKey: string) => {
+    const destination = world.hosts.find((host) => host.id === hostKey);
     const admitted = Boolean(destination?.actionable && !destination.stale);
     return officeCreationActionState(
       admitted,
@@ -528,17 +525,11 @@ export default function PixelOfficeView({
         ? endpointCreationReason(
             connectionSnapshot(creationSnapshot, destination!.connectionId),
             "workspace.create",
-            room?.workspaceRef.nativeId,
+            sourceRoomForHost(hostKey)?.workspaceRef.nativeId,
           )
         : null,
     );
   };
-  const showCreateRoom = (roomKey: string | null) =>
-    roomCreationState(roomKey).visible;
-  const canCreateRoom = (roomKey: string | null) =>
-    roomCreationState(roomKey).enabled;
-  const createRoomReason = (roomKey: string | null) =>
-    roomCreationState(roomKey).reason;
   const canManageRoom = (roomKey: string, action: "rename" | "close") => {
     const room = roomForKey(roomKey);
     if (!room) return false;
@@ -815,6 +806,22 @@ export default function PixelOfficeView({
                   layout={layout}
                   renderedRevision={renderedRevision}
                   viewport={viewport}
+                  creationState={hostRoomCreationState}
+                  onCreateRoom={(hostKey) => {
+                    const destination = world.hosts.find(
+                      (host) => host.id === hostKey,
+                    );
+                    if (!destination || !hostRoomCreationState(hostKey).enabled)
+                      return;
+                    setRoomDialog({
+                      mode: "create",
+                      roomKey: sourceRoomForHost(hostKey)?.key ?? null,
+                      owner: {
+                        connectionId: destination.connectionId,
+                        runtimeGeneration: destination.generation,
+                      },
+                    });
+                  }}
                   onToggle={(key) => {
                     pendingHostAnchor.current = key;
                     setCollapsedHostKeys((current) => {
@@ -849,30 +856,10 @@ export default function PixelOfficeView({
                       return next;
                     })
                   }
-                  selectedRoomKey={selectedRoomKey}
                   showCreateSeat={showCreateSeat}
                   canCreateSeat={canCreateSeat}
                   createSeatReason={createSeatReason}
                   onCreateSeat={(roomKey) => void createSeat(roomKey)}
-                  showCreateRoom={showCreateRoom}
-                  canCreateRoom={canCreateRoom}
-                  createRoomReason={createRoomReason}
-                  onCreateRoom={(roomKey) =>
-                    setRoomDialog({
-                      mode: "create",
-                      roomKey,
-                      ...(roomForKey(roomKey)
-                        ? {
-                            owner: {
-                              connectionId:
-                                roomForKey(roomKey)!.workspaceRef.connectionId,
-                              runtimeGeneration:
-                                roomForKey(roomKey)!.workspaceRef.generation,
-                            },
-                          }
-                        : {}),
-                    })
-                  }
                   canRenameRoom={(roomKey) => canManageRoom(roomKey, "rename")}
                   onRenameRoom={(roomKey) => {
                     const room = roomForKey(roomKey);

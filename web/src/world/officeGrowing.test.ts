@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import {
   deskAnchor,
   resolveOfficeLayout,
+  resolveOfficeLayoutSteps,
   OFFICE_GEOMETRY,
 } from "./officeGeometry";
 import {
@@ -474,4 +475,81 @@ test("packing retains cavities beneath a bridging rectangle for later rooms", ()
     Math.max(...packed.map((room) => room.y + room.height)),
   ).toBeLessThanOrEqual(400);
   expect(packed[4]!.y).toBeLessThan(packed[2]!.y);
+});
+
+test("fitting one dense host yields within its room search and preserves synchronous geometry", () => {
+  const rooms = Array.from({ length: 512 }, () => ({
+    deskCount: 2,
+    standingCount: 7,
+  }));
+  const steps = resolveOfficeLayoutSteps(
+    1280,
+    rooms,
+    "left",
+    undefined,
+    0,
+    undefined,
+    { complete: true },
+  );
+  let yields = 0,
+    step = steps.next();
+  while (!step.done) {
+    yields++;
+    step = steps.next();
+  }
+  expect(yields).toBeGreaterThan(1);
+  expect(step.value).toEqual(
+    resolveOfficeLayout(1280, rooms, "left", undefined, 0, undefined, {
+      complete: true,
+    }),
+  );
+});
+
+test("host fitting reuse keeps qualified indices separate and invalidates changed shapes", () => {
+  const packingCache = new Map();
+  const rooms = Array.from({ length: 32 }, (_, index) => ({
+    sourceIndex: index,
+    deskCount: 2,
+    standingCount: 7,
+  }));
+  const first = resolveOfficeLayout(
+    1280,
+    rooms,
+    "left",
+    undefined,
+    0,
+    undefined,
+    { complete: true, packingCache },
+  );
+  const second = resolveOfficeLayout(
+    1280,
+    rooms.map((room) => ({ ...room, sourceIndex: room.sourceIndex + 1000 })),
+    "left",
+    undefined,
+    0,
+    undefined,
+    { complete: true, packingCache },
+  );
+  expect(first.rooms[0]!.index).toBe(0);
+  expect(second.rooms[0]!.index).toBe(1000);
+  expect(
+    second.rooms.map(({ x, y, width, height }) => ({ x, y, width, height })),
+  ).toEqual(
+    first.rooms.map(({ x, y, width, height }) => ({ x, y, width, height })),
+  );
+  first.rooms[0]!.x = -100;
+  const changed = resolveOfficeLayout(
+    1280,
+    rooms.map((room, index) => ({
+      ...room,
+      deskCount: index === 0 ? 100 : room.deskCount,
+    })),
+    "left",
+    undefined,
+    0,
+    undefined,
+    { complete: true, packingCache },
+  );
+  expect(changed.rooms[0]!.deskRows).toBeGreaterThan(second.rooms[0]!.deskRows);
+  expect(second.rooms[0]!.x).toBeGreaterThanOrEqual(0);
 });

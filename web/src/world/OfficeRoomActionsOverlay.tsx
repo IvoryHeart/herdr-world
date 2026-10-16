@@ -7,7 +7,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { Pencil, Trash2 } from "lucide-react";
 import type { OfficeRect } from "./officeGeometry";
 import { resolveOfficeAnchors } from "./officeRendererAnchors";
 import { officeIntersects } from "./officeVirtualization";
@@ -246,15 +246,10 @@ export function OfficeRoomActionsOverlay({
   layout,
   projection,
   renderedRevision,
-  selectedRoomKey,
   showCreateSeat,
   canCreateSeat,
   createSeatReason,
   onCreateSeat,
-  showCreateRoom,
-  canCreateRoom,
-  createRoomReason,
-  onCreateRoom,
   canRenameRoom,
   onRenameRoom,
   canCloseRoom,
@@ -267,15 +262,10 @@ export function OfficeRoomActionsOverlay({
   layout: PublishedOfficeLayout;
   projection: HerdrOfficeProjection;
   renderedRevision: number;
-  selectedRoomKey: string | null;
   showCreateSeat(roomKey: string): boolean;
   canCreateSeat(roomKey: string): boolean;
   createSeatReason(roomKey: string): string | null;
   onCreateSeat(roomKey: string): void;
-  showCreateRoom(roomKey: string | null): boolean;
-  canCreateRoom(roomKey: string | null): boolean;
-  createRoomReason(roomKey: string | null): string | null;
-  onCreateRoom(roomKey: string | null): void;
   canRenameRoom(roomKey: string): boolean;
   onRenameRoom(roomKey: string): void;
   canCloseRoom(roomKey: string): boolean;
@@ -283,16 +273,6 @@ export function OfficeRoomActionsOverlay({
 }) {
   const layoutReady =
     layout.layoutRevision > 0 && layout.layoutRevision === renderedRevision;
-  const roomBottom = layout.rooms.reduce(
-    (bottom, room) =>
-      room.hiddenByHost ? bottom : Math.max(bottom, room.y + room.height),
-    Math.max(
-      layout.roomStartY,
-      ...(layout.buildings ?? []).map(
-        (building) => building.rect.y + building.rect.height,
-      ),
-    ),
-  );
   return (
     <div
       className="world-room-actions-overlay"
@@ -422,31 +402,6 @@ export function OfficeRoomActionsOverlay({
             </Fragment>
           );
         })}
-      {showCreateRoom(selectedRoomKey) ? (
-        <button
-          className="world-new-room-canvas-action"
-          type="button"
-          aria-label="New room"
-          title={
-            createRoomReason(selectedRoomKey) ?? "Create a new Herdr workspace"
-          }
-          disabled={!layoutReady || !canCreateRoom(selectedRoomKey)}
-          style={{ left: layout.officeWidth / 2 - 28, top: roomBottom + 8 }}
-          onClick={() => onCreateRoom(selectedRoomKey)}
-        >
-          <Plus size={24} aria-hidden="true" />
-          <span>NEW ROOM</span>
-        </button>
-      ) : null}
-      {createRoomReason(selectedRoomKey) ? (
-        <span
-          className="world-creation-reason"
-          role="status"
-          style={{ left: layout.officeWidth / 2 - 90, top: roomBottom + 60 }}
-        >
-          {createRoomReason(selectedRoomKey)}
-        </span>
-      ) : null}
     </div>
   );
 }

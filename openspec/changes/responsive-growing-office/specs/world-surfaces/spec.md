@@ -357,6 +357,13 @@ Actions SHALL agree on the qualified operation's availability, progress, cursor
 and unavailable explanation. Temporary scene-layout readiness SHALL be distinct
 from connection, source and capability unavailability.
 
+Each actionable host building SHALL expose its own New room control in its header,
+including while collapsed. Activation SHALL capture that host's immutable connection
+ID and runtime generation; a selected room on another host SHALL NOT redirect it.
+The shared creation flow SHALL retain qualified source ownership, readiness and
+unavailable explanations. There SHALL be no scene-wide New room footer control or
+space reserved for it.
+
 The number of painted desks SHALL follow a bounded viewport window rather than
 a fixed room total. Creating another admitted tab SHALL extend the workspace's
 logical room when needed, retain a reachable creation control and present the new

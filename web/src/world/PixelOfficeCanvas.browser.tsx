@@ -707,6 +707,12 @@ async function run() {
         .length === 2,
       "Occupied desks lost their distinct tab targets",
     );
+    await waitFor(
+      () =>
+        window.__HERDR_WORLD_RENDERER__?.ready === true &&
+        devices[1]?.disabled === false,
+      "Pane device was not ready after completion acknowledgement",
+    );
     devices[1]?.click();
     await settle();
     check(

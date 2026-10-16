@@ -124,6 +124,9 @@ are optional because the merged PR history records their source.
   removed; existing Office search retains room reveal and idle-agent access.
   Economy and Workforce boards share usable phone width and wrap only when their
   readable contents require it, with artwork matching their layout footprints.
+  Every actionable host building has its own qualified New room control in its
+  header, including while collapsed, replacing the shared footer action. Dense
+  room-shape fitting yields within a host to keep terminal input responsive.
   They pack alongside each other and can collapse while retaining
   host summaries and individual room choices.
   Conversation connectors are refreshed after font and viewport repaints.

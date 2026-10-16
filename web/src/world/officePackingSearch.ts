@@ -6,6 +6,8 @@ export type OfficePackingSize = {
   waste?: number;
 };
 export type OfficePackedChoice = OfficeRect & { variant: number };
+export type OfficePackingCache = Map<string, readonly OfficePackedChoice[]>;
+
 type Placement = {
   previous: Placement | null;
   index: number;
@@ -22,14 +24,35 @@ type State = {
 
 /** Maximal free rectangles retain cavities; a bounded beam compares room shapes. */
 export function packOfficeRoomShapes(
+  ...args: Parameters<typeof packOfficeRoomShapesSteps>
+): OfficePackedChoice[] {
+  const steps = packOfficeRoomShapesSteps(...args);
+  let step = steps.next();
+  while (!step.done) step = steps.next();
+  return step.value;
+}
+
+export function* packOfficeRoomShapesSteps(
   choices: readonly (readonly OfficePackingSize[])[],
   requestedWidth: number,
   horizontalGap: number,
   verticalGap: number,
   beamWidth = 8,
-): OfficePackedChoice[] {
+  cache?: OfficePackingCache,
+): Generator<void, OfficePackedChoice[], unknown> {
   if (!choices.length) return [];
-  const compact = searchOfficeRoomShapes(
+  const cacheKey = cache
+    ? JSON.stringify([
+        requestedWidth,
+        horizontalGap,
+        verticalGap,
+        beamWidth,
+        choices,
+      ])
+    : undefined;
+  const cached = cacheKey ? cache?.get(cacheKey) : undefined;
+  if (cached) return cached.map((rect) => ({ ...rect }));
+  const compact = yield* searchOfficeRoomShapes(
     choices,
     requestedWidth,
     horizontalGap,
@@ -37,27 +60,34 @@ export function packOfficeRoomShapes(
     beamWidth,
     false,
   );
-  if (beamWidth === 1 || !choices.some((variants) => variants.length > 1))
-    return compact.rects;
-  const aligned = searchOfficeRoomShapes(
-    choices,
-    requestedWidth,
-    horizontalGap,
-    verticalGap,
-    beamWidth,
-    true,
-  );
-  // Judge complete buildings: equal-height fits prefer fewer fragmented bands.
-  // Keep the height-first search as a candidate so alignment cannot add depth.
-  const compare =
-    aligned.height - compact.height ||
-    aligned.levels - compact.levels ||
-    aligned.waste - compact.waste ||
-    aligned.holes - compact.holes;
-  return compare < 0 ? aligned.rects : compact.rects;
+  let result = compact.rects;
+  if (beamWidth > 1 && choices.some((variants) => variants.length > 1)) {
+    const aligned = yield* searchOfficeRoomShapes(
+      choices,
+      requestedWidth,
+      horizontalGap,
+      verticalGap,
+      beamWidth,
+      true,
+    );
+    // Judge complete buildings: equal-height fits prefer fewer fragmented bands.
+    // Keep the height-first search as a candidate so alignment cannot add depth.
+    const compare =
+      aligned.height - compact.height ||
+      aligned.levels - compact.levels ||
+      aligned.waste - compact.waste ||
+      aligned.holes - compact.holes;
+    if (compare < 0) result = aligned.rects;
+  }
+  if (cacheKey)
+    cache!.set(
+      cacheKey,
+      result.map((rect) => ({ ...rect })),
+    );
+  return result;
 }
 
-function searchOfficeRoomShapes(
+function* searchOfficeRoomShapes(
   choices: readonly (readonly OfficePackingSize[])[],
   requestedWidth: number,
   horizontalGap: number,
@@ -86,6 +116,8 @@ function searchOfficeRoomShapes(
       levels: align ? new Set<number>() : undefined,
     },
   ];
+  let began = performance.now();
+  let batch = 0;
   for (let index = 0; index < choices.length; index++) {
     type Candidate = {
       state: State;
@@ -172,6 +204,11 @@ function searchOfficeRoomShapes(
     if (!next.length)
       throw new Error("Office packing lost a complete room placement");
     states = next;
+    if (++batch >= 128 || performance.now() - began >= 4) {
+      yield;
+      batch = 0;
+      began = performance.now();
+    }
   }
   const result: OfficePackedChoice[] = new Array(choices.length);
   for (let node = states[0]!.node; node; node = node.previous)

@@ -114,3 +114,20 @@ geometry regression verifies a 5×1 strip becomes 3×2 while a lower four-desk r
 becomes 4×1 at equal building depth. The production two-host Pixi fixture includes
 the creation desk, verifies the five-desk grid, and allows a four-desk room beside
 the top row when that is the tighter fit. Dense preparation remains cooperative.
+
+Host-scoped Office creation is exercised by the existing creation-flow model and
+SharedViewCreation consumers at 390/1440px. The browser collapses an inactive host
+and creates through its header action, asserting the destination and source
+workspace remain on that host while the active Spaces connection is preserved.
+Pixel Office consumers cover rendered-revision admission. The global footer and
+its geometry reservation are removed; complete building bounds retain street space.
+
+A dense single-host regression with 512 rooms and seven standing agents per room
+checks that fitting yields within the host and produces geometry identical to the
+synchronous API. This addresses the shape-search hotspot seen under the normal
+four-process dense animated/browser workload; latency budgets remain unchanged.
+
+Repeated numeric host fits are reused only within a geometry job. The regression
+checks equal geometry with distinct source indices, detached output records and
+invalidation after content changes. Search batches keep the four-millisecond
+time budget; the iteration guard limits uninterrupted work without capping items.

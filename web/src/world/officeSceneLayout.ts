@@ -1,6 +1,6 @@
 import { resolveOfficeBuildingsSteps } from "./officeBuildings";
 import type { OfficeBuildingInput } from "./officeGeometry";
-import { resolveOfficeLayout } from "./officeGeometry";
+import { resolveOfficeLayoutSteps } from "./officeGeometry";
 import {
   normalizeOfficeGeometryInput,
   officeGeometryDigest,
@@ -59,7 +59,7 @@ function* resolveOfficeSceneGeometrySteps(
   let headers = input.rooms.map((room) =>
     resolveOfficeRoomHeader(room, headerInput),
   );
-  let layout = resolveOfficeLayout(
+  let layout = yield* resolveOfficeLayoutSteps(
     input.availableViewportWidth,
     input.rooms.map((room, sourceIndex) => ({
       ...room,

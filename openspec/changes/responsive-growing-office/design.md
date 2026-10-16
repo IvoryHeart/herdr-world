@@ -396,3 +396,31 @@ because the shell restores the qualified logical anchor after canvas readiness.
 The production transport fixture exercises 64 hosts, 32,768 admitted workspaces and
 262,144 admitted leaves without raising the existing input acknowledgement budgets.
 The PR records the final checks; independent review remains a delivery obligation.
+
+### Host-owned workspace creation
+
+Each actionable host building exposes New room in its header, including when
+collapsed. Resolve the destination from that exact host key and capture its
+immutable connection ID and runtime generation in the existing creation dialog.
+A selected room supplies a browser-local source only when it belongs to that host;
+otherwise the shared creation flow resolves a source on the explicit destination.
+Never use another host as a fallback. Preserve endpoint availability, readiness and
+unavailable explanations. Remove the scene-wide footer control and its reserved
+space; building headers remain viewport-admitted, with focused controls retained.
+
+### Interruptible room fitting
+
+Dense animated input profiling exposed a long synchronous fit within a single
+512-room host. Expose fitting as deterministic generator steps and let the existing
+scene scheduler yield after bounded room-search batches, including both complete
+candidate searches. The synchronous geometry API drains the same generator, so
+cooperation changes scheduling rather than layout choices. Retired requests are
+checked between batches before publication. Keep the input latency budgets and
+normal test concurrency unchanged.
+
+Within one geometry job, reuse identical numeric shape/width/gap fits across hosts.
+The job-local cache contains numeric rectangles and variant indices, never host
+identities or operations; each host rebuilds its own qualified room records.
+Changed shapes or widths use separate entries, returned rectangles are detached,
+and the cache is released with the job. Time-based search batches avoid flooding
+the background scheduler with tiny tasks while preserving the input turns.
