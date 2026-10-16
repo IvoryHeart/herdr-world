@@ -39,9 +39,10 @@ World retains its identity, local/SSH connection ownership, same-origin access,
 session-bound push revocation, aggregate visual views, isolated browser storage,
 and browser regression coverage. World-specific service, packaging, release,
 site and agent tooling remain downstream. The v0.8.4 Bun-free plugin installation
-is [deferred pending a compatible migration](docs/upstream-follow-ups.md#bun-free-plugin-installation),
-not permanently rejected. World currently retains its frozen thin launcher,
-verified standalone archives, npm/Homebrew channels and downstream update scripts.
+is [adapted and accepted](docs/upstream-follow-ups.md#bun-free-plugin-installation)
+in PR #194: released plugin installation uses native World installers and commands,
+while preserving cached launcher actions, verified standalone archives, npm/Homebrew
+channels, downstream update ownership and explicit Bun source builds.
 Upstream workflow/action changes remain a separately reviewed control divergence.
 The [disposition ledger](upstream/dispositions.json) accounts for every incoming
 commit; [adoption policy](docs/upstream-policy.md) requires human approval of new
