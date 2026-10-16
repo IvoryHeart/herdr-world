@@ -218,15 +218,18 @@
     {
       "commit": "ffca28f20fb24b6bfe1f369e5b3351185cc3e44f",
       "title": "Run Herdr plugins without external Bun (#415)",
-      "status": "deferred",
-      "reason": "Remove installation-time Bun without breaking cached World plugin actions, verified release identity or source-build support.",
+      "status": "adapted",
+      "reason": "Released World plugins install without external Bun through checksum-verified native installers and canonical executable routing; cached actions, explicit Bun source builds and World service ownership are preserved. Delivered in PR #194 with supported-platform CI and owner acceptance.",
       "evidence": [
-        "herdr-plugin.toml",
-        "scripts/world-plugin.test.ts",
+        "scripts/install-plugin.sh",
+        "scripts/install-plugin.ps1",
+        "scripts/install-plugin.windows.test.ts",
+        "scripts/plugin-native.test.ts",
+        "server/src/config/plugin-command.test.ts",
         "docs/upstream-follow-ups.md#bun-free-plugin-installation"
       ],
-      "followUp": "docs/upstream-follow-ups.md#bun-free-plugin-installation",
-      "revisitWhen": "Every source sync and any plugin, installer, release or launcher change.",
+      "followUp": null,
+      "revisitWhen": null,
       "reviewedFor": "503a6f565e3432cee651a456bcc0d9800be52a37"
     },
     {

@@ -107,8 +107,16 @@ unattended follow-up implementation is implied.
    its approval counts under the active last-push/required-review rules in the
    first PR. Without this identity, use an independent human reviewer; the
    automation cannot manufacture a counted approval from its PR author.
-3. Allow Actions to create PRs in repository workflow permissions. Enable
-   **Allow auto-merge** and retain merge commits, without relaxing review/check rules.
+   For human review without a reviewer App, disable **Upstream review** in Actions
+   (`gh workflow disable upstream-review.yml --repo IvoryHeart/herdr-world`).
+   This prevents queued model-review work from dispatching an App-authenticated job
+   without credentials. Detection, integration, bot publication and full PR CI still
+   run; a human reviews and merges each PR. Leave `UPSTREAM_AUTO_MERGE=false` and
+   repository auto-merge disabled. Before switching to App review, provision its
+   credentials, re-enable the workflow and inspect the first protected approval.
+3. Allow Actions to create PRs in repository workflow permissions. Retain merge commits
+   without relaxing review/check rules. Enable **Allow auto-merge** only when adopting
+   App review after the supervised trial; human-review mode leaves it disabled.
 4. After the reviewed automation PR merges, set `UPSTREAM_SYNC_ENABLED=true` and
    dispatch **Upstream sync** on main. Run `bun run upstream:work` manually and
    inspect its first integration. Set `UPSTREAM_AUTO_MERGE=true` only after
