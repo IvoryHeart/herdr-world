@@ -6,6 +6,10 @@ import { canRevealFiles } from "./workspace/file-manager";
 import { sendWorldSnapshotReply } from "./bridge/world-snapshot-reply";
 import { WorldSnapshotAdmission } from "./bridge/world-snapshot-admission";
 import { loadOrCreateSessionSecret } from "./config/session-secret";
+import {
+  isShortAuthPassword,
+  RECOMMENDED_PASSWORD_LENGTH,
+} from "./config/auth-token";
 import type { ServerWebSocket } from "bun";
 import { createAssistantContext } from "./assistant/context";
 import { isHtmlPath } from "../../shared/filePreview";
@@ -181,6 +185,15 @@ if (config.authRequired) {
 }
 configureServerLogger(config.logLevel);
 const logger = serverLogger;
+if (
+  config.authRequired &&
+  !config.generatedAuthToken &&
+  isShortAuthPassword(config.password)
+) {
+  logger.warn(
+    `The login password is shorter than ${RECOMMENDED_PASSWORD_LENGTH} characters. Use a longer one if this server is reachable beyond a trusted private network.`,
+  );
+}
 if (config.authRequired && config.pin) {
   logger.warn(
     "PIN login is enabled. Use only behind a trusted private network or VPN; keep your password/token available for recovery.",

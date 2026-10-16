@@ -46,6 +46,7 @@ import {
   ChevronLeft,
   ChevronRight,
   CircleAlert,
+  Command,
   Compass,
   FileDiff,
   FolderTree,
@@ -258,6 +259,12 @@ const WorldTerminalPortalList = lazyWithReload(
 const ViewportDebugOverlay = lazyWithReload(
   "viewport-debug-overlay",
   () => import("./components/ViewportDebugOverlay"),
+);
+
+const ShortcutCheatSheet = lazyWithReload("shortcut-cheatsheet", () =>
+  import("./components/ShortcutLookupDialog").then((module) => ({
+    default: module.ShortcutCheatSheet,
+  })),
 );
 
 const MIN_SIDEBAR = 180;
@@ -1092,6 +1099,19 @@ export default function App({
     [resolvedTheme, terminalThemeSelection, customTerminalThemes],
   );
   const [zenMode, setZenMode] = useState(loadZenMode);
+  const [shortcutCheatSheetOpen, setShortcutCheatSheetOpen] = useState(false);
+  const openShortcutCheatSheet = useCallback(
+    () => setShortcutCheatSheetOpen(true),
+    [],
+  );
+  const closeShortcutCheatSheet = useCallback(
+    () => setShortcutCheatSheetOpen(false),
+    [],
+  );
+  // The sheet is desktop-only; do not let it reappear after a mobile layout.
+  useEffect(() => {
+    if (mobile) setShortcutCheatSheetOpen(false);
+  }, [mobile]);
   const [sidebarHidden, setSidebarHidden] = useState(loadZenMode);
   // What the sidebar was doing before Zen hid it, restored when Zen ends.
   const sidebarBeforeZenRef = useRef(false);
@@ -3186,14 +3206,31 @@ export default function App({
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.defaultPrevented || e.isComposing || e.keyCode === 229) return;
-      if (!appShouldHandleGlobalShortcut(operationalShortcutsEnabled, e))
-        return;
       if (
         document.querySelector(
           ".modal-backdrop, .command-popover, .context-menu",
         ) ||
         document.getElementById(CONFIG_MENU_ID)
       )
+        return;
+      // Open but not yet rendered: its chunk is loading, so dismiss it here.
+      if (
+        shortcutCheatSheetOpen &&
+        (e.key === "Escape" || shortcutMatches(e, "shortcuts.show"))
+      ) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!e.repeat) setShortcutCheatSheetOpen(false);
+        return;
+      }
+      if (!paneJumpOpen && shortcutMatches(e, "shortcuts.show")) {
+        if (mobile) return;
+        e.preventDefault();
+        e.stopPropagation();
+        if (!e.repeat) setShortcutCheatSheetOpen(true);
+        return;
+      }
+      if (!appShouldHandleGlobalShortcut(operationalShortcutsEnabled, e))
         return;
       if (paneJumpOpen) {
         const paneJumpNavigationKey =
@@ -3564,6 +3601,7 @@ export default function App({
     paneJumpSearch,
     selectPaneJumpIndex,
     setInspectorExpanded,
+    shortcutCheatSheetOpen,
     toggleAnnotations,
     toggleAssistant,
     toggleDiffViewer,
@@ -4141,6 +4179,22 @@ export default function App({
         {!mobile && arrangementControl ? (
           <WindowArrangementMenu control={arrangementControl} />
         ) : null}
+        {mobile ? null : (
+          <div className="topbar-command-group">
+            <button
+              type="button"
+              className={`topbar-button icon-button ${shortcutCheatSheetOpen ? "is-active" : ""}`}
+              aria-label="Show shortcut cheat sheet"
+              title={shortcutTitle(
+                "Show shortcut cheat sheet",
+                "shortcuts.show",
+              )}
+              onClick={openShortcutCheatSheet}
+            >
+              <Command size={15} aria-hidden="true" />
+            </button>
+          </div>
+        )}
         <div className="topbar-command-group">
           {!mobile ? assistantEntry : null}
           <CommandCombobox
@@ -4154,6 +4208,7 @@ export default function App({
             onOpenFileExplorer={openFileExplorer}
             onOpenFile={openFileExplorerFile}
             onOpenDiffViewer={openDiffViewer}
+            onShowShortcuts={mobile ? undefined : openShortcutCheatSheet}
           />
           <OperationalContext.Provider
             value={
@@ -4188,6 +4243,7 @@ export default function App({
               }
               zenMode={zenMode}
               onZenModeChange={applyZenMode}
+              onShowShortcuts={openShortcutCheatSheet}
               onMobileTerminalShortcutsChange={setMobileTerminalShortcuts}
               onMobileTerminalSideShortcutsChange={
                 setMobileTerminalSideShortcuts
@@ -4916,6 +4972,12 @@ export default function App({
           </div>
         </main>
       </div>
+      {/* Before the tooltip layer, which shares the modal z-index. */}
+      {shortcutCheatSheetOpen && !mobile ? (
+        <Suspense fallback={null}>
+          <ShortcutCheatSheet onClose={closeShortcutCheatSheet} />
+        </Suspense>
+      ) : null}
       <GlobalTooltip />
       {viewportDebugEnabled ? (
         <Suspense fallback={null}>

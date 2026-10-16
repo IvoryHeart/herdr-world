@@ -433,6 +433,28 @@ async function run() {
       await key("Escape", "Escape");
       await until(() => !document.querySelector(".command-popover"));
     }
+    // Discovery remains available in visual views while Spaces operations are disabled.
+    if (document.querySelector('[aria-label="Show shortcut cheat sheet"]')) {
+      selectShortcutPreset("linux");
+      flushSync(() => root.render(<App operationalShortcutsEnabled={false} />));
+      await key("K", "KeyK", 11);
+      await key("K", "KeyK", 11, "keyUp");
+      await until(() =>
+        document.querySelector('[aria-label="Shortcut cheat sheet"]'),
+      );
+      check(
+        !search(),
+        "Shortcut discovery opened pane search outside the switcher",
+      );
+      check(
+        !!document.querySelector(".shortcut-cheatsheet input:focus"),
+        "Shortcut discovery did not focus its filter",
+      );
+      await key("Escape", "Escape");
+      await until(
+        () => !document.querySelector('[aria-label="Shortcut cheat sheet"]'),
+      );
+    }
   } finally {
     root.unmount();
     host.remove();

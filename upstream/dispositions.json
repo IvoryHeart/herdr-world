@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "source": "503a6f565e3432cee651a456bcc0d9800be52a37",
+  "source": "5ce1d8d620549226de76321303e7bffa911ae371",
   "changes": [
     {
       "commit": "447f7196b9a23979b026d6b79619836d3337cc06",
@@ -26,7 +26,7 @@
       ],
       "followUp": "docs/upstream-follow-ups.md#world-workflow-controls",
       "revisitWhen": "Every source sync; manually assess upstream action security fixes and required platform changes.",
-      "reviewedFor": "503a6f565e3432cee651a456bcc0d9800be52a37"
+      "reviewedFor": "5ce1d8d620549226de76321303e7bffa911ae371"
     },
     {
       "commit": "20cb447a808a1e09359cef4f4fb632a385d4485e",
@@ -308,6 +308,108 @@
       "followUp": null,
       "revisitWhen": null,
       "reviewedFor": "503a6f565e3432cee651a456bcc0d9800be52a37"
+    },
+    {
+      "commit": "4936aa04ac25e31f20f6f4534d8a1209ff0e447a",
+      "title": "Show computer-to-phone demo in README and homepage (#423)",
+      "status": "adapted",
+      "reason": "Include upstream handoff media in README and homepage with explicit Roamgate attribution; retain World multi-host screenshots and product identity.",
+      "evidence": ["README.md", "site/index.html", "scripts/build-pages.ts"],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "5ce1d8d620549226de76321303e7bffa911ae371"
+    },
+    {
+      "commit": "1dace69b9cb9ce2021f32c5c74cb2592ce78418c",
+      "title": "Align desktop screenshots in a three-column gallery (#424)",
+      "status": "adapted",
+      "reason": "World already presents desktop screenshots in three equal-width table columns. Retain World captures and existing three-column gallery instead of replacing them with Roamgate captures.",
+      "evidence": ["README.md", "docs/SCREENSHOTS.md"],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "5ce1d8d620549226de76321303e7bffa911ae371"
+    },
+    {
+      "commit": "26924b3bf75b0bb1638f0041f9157354656666e3",
+      "title": "Add read-only shortcut cheat sheet on desktop (#425)",
+      "status": "adapted",
+      "reason": "Use active World presets including arrangement shortcuts; open from every desktop view without enabling hidden Spaces operational shortcuts. Retain lazy loading and read-only behavior.",
+      "evidence": [
+        "web/src/App.tsx",
+        "web/src/shortcutCheatSheet.test.ts",
+        "web/src/shortcutBindings.test.ts"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "5ce1d8d620549226de76321303e7bffa911ae371"
+    },
+    {
+      "commit": "e9f8bec498a558e2334e528f53dbd005c81ff717",
+      "title": "Lower the login password minimum to 8 characters (#427)",
+      "status": "adapted",
+      "reason": "Owner explicitly approved the eight-character minimum. Retain World authentication on every listener, Unicode maximum 1024, startup warning below recommended 15 and World-owned configuration.",
+      "evidence": [
+        "server/src/config/auth-token.test.ts",
+        "server/src/config/server-config.test.ts",
+        "openspec/specs/bridge-access/spec.md"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "5ce1d8d620549226de76321303e7bffa911ae371"
+    },
+    {
+      "commit": "178df92678e50cfbd6dd8ce64df763be7c37f63e",
+      "title": "Improve default names and simplify local pre-commit checks (#428)",
+      "status": "adapted",
+      "reason": "Adopt lazy readable two-word names and late-suggestion safeguards within qualified World creation. World already has read-only format/lint pre-commit and full pre-push verification; retain its local-check split and required guards.",
+      "evidence": [
+        "web/src/luckyName.test.ts",
+        "web/src/components/ModalDialogs.test.ts",
+        ".githooks/pre-commit",
+        ".githooks/pre-push"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "5ce1d8d620549226de76321303e7bffa911ae371"
+    },
+    {
+      "commit": "9e9db4991e3b9b1e1237a610586b491b6ee7303c",
+      "title": "Simplify project documentation (#430)",
+      "status": "adapted",
+      "reason": "Keep World-specific architecture, security, distribution, tutorial anchors and operator contracts; update current feature/security documentation and navigation for this release instead of applying Roamgate-only descriptions and removed sections.",
+      "evidence": [
+        "FEATURES.md",
+        "SECURITY.md",
+        "docs/DEPLOYMENT.md",
+        "docs/knowledge-map.md",
+        "docs/TUTORIAL.md"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "5ce1d8d620549226de76321303e7bffa911ae371"
+    },
+    {
+      "commit": "0edebcb091285b8756450b0b4f12dabd72d8d2af",
+      "title": "Fix IME positioning with hidden terminal cursors (#431)",
+      "status": "adopted",
+      "reason": "Retain hidden cursor coordinates in terminal presentation so IME composition follows the real cursor.",
+      "evidence": [
+        "server/src/bridge/frame-to-ansi.test.ts",
+        "web/src/endpointFrame.test.ts"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "5ce1d8d620549226de76321303e7bffa911ae371"
+    },
+    {
+      "commit": "5ce1d8d620549226de76321303e7bffa911ae371",
+      "title": "Release 0.8.5 (#432)",
+      "status": "adapted",
+      "reason": "Record exact Roamgate release ancestry and source lineage while retaining independent World package/plugin version and release channels.",
+      "evidence": ["UPSTREAM.md", "herdr-plugin.toml", "package.json"],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "5ce1d8d620549226de76321303e7bffa911ae371"
     }
   ]
 }

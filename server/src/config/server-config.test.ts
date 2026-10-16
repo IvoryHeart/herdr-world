@@ -430,3 +430,39 @@ describe("resolveHerdrSocketPaths", () => {
     }
   });
 });
+
+test.each(["12345678", "\u{1f680}".repeat(8)])(
+  "accepts the owner-approved eight-character password through CLI and environment: %s",
+  (password) => {
+    const home = mkdtempSync(join(tmpdir(), "world-password-minimum-"));
+    try {
+      for (const source of ["cli", "environment"] as const) {
+        const result = Bun.spawnSync(
+          [
+            process.execPath,
+            "-e",
+            `import {loadServerConfig} from ${JSON.stringify(join(import.meta.dir, "server-config.ts"))}; process.argv = [process.execPath, "herdr-world", ...${JSON.stringify(source === "cli" ? ["--password", password] : [])}]; console.log(JSON.stringify(loadServerConfig("test")));`,
+          ],
+          {
+            env: {
+              ...process.env,
+              HOME: home,
+              APPDATA: home,
+              NODE_ENV: "production",
+              HERDR_WORLD_PASSWORD: source === "environment" ? password : "",
+            },
+            stdout: "pipe",
+            stderr: "pipe",
+          },
+        );
+        expect(result.exitCode).toBe(0);
+        const config = JSON.parse(result.stdout.toString());
+        expect(config.authRequired).toBe(true);
+        expect(config.password).toBe(password);
+        expect(config.generatedAuthToken).toBeUndefined();
+      }
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  },
+);

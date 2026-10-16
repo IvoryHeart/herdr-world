@@ -74,7 +74,7 @@ import { WorktreeOpenDialog } from "./WorktreeOpenDialog";
 type TextAction =
   | { type: "rename-workspace"; workspace: Workspace }
   | { type: "rename-tab"; tab: Tab }
-  | { type: "create-worktree"; workspace: Workspace; branch: string };
+  | { type: "create-worktree"; workspace: Workspace };
 
 export type ActionDefinition = {
   key: string;
@@ -271,6 +271,7 @@ function OwnedCommandCombobox({
   onSelectTab,
   arrangementControl,
   extension = EMPTY_COMMAND_EXTENSION,
+  onShowShortcuts,
 }: {
   operationalShortcutsEnabled?: boolean;
   onOpenFileExplorer?: (workspaceId?: string) => void;
@@ -279,6 +280,7 @@ function OwnedCommandCombobox({
   onSelectTab?: (tabId: string) => void | Promise<unknown>;
   arrangementControl?: WindowArrangementControl;
   extension?: CommandExtension;
+  onShowShortcuts?: () => void;
 }) {
   useCreationProgress();
   const store = useOperationalStore();
@@ -481,7 +483,7 @@ function OwnedCommandCombobox({
           ? {
               title: "New Worktree",
               label: "Branch",
-              initialValue: textAction.branch,
+              initialValue: luckyWorktreeBranchName,
               placeholder: "my-branch",
               submitLabel: "Create",
             }
@@ -515,7 +517,6 @@ function OwnedCommandCombobox({
         setTextAction({
           type: "create-worktree",
           workspace: focusedWorktreeSource,
-          branch: luckyWorktreeBranchName(),
         }),
     });
   }
@@ -744,7 +745,6 @@ function OwnedCommandCombobox({
         setTextAction({
           type: "create-worktree",
           workspace,
-          branch: luckyWorktreeBranchName(),
         }),
     });
   }
@@ -1016,6 +1016,20 @@ function OwnedCommandCombobox({
     });
   }
 
+  const helpActions: ActionDefinition[] = onShowShortcuts
+    ? [
+        {
+          key: "show-shortcut-cheatsheet",
+          icon: <Keyboard size={15} />,
+          title: "Show shortcut cheat sheet",
+          detail: "Read-only overview of keyboard shortcuts",
+          shortcut: shortcutLabel("shortcuts.show"),
+          keywords: ["keyboard", "shortcuts", "keybindings", "hotkeys", "help"],
+          run: onShowShortcuts,
+        },
+      ]
+    : [];
+
   const arrangementActions: ActionDefinition[] = arrangementControl
     ? WINDOW_ARRANGEMENT_CHOICES.map(
         ({ command, label, description, shortcutId }) => {
@@ -1093,6 +1107,7 @@ function OwnedCommandCombobox({
         ),
       }),
     ),
+    { heading: "Help", actions: helpActions },
   ].filter((group) => group.actions.length > 0);
 
   const normalizedSearch = normalizeSearchText(search);

@@ -6,16 +6,16 @@ separately installed [`herdrdev/herdr`](https://github.com/herdrdev/herdr) runti
 
 Current synchronization points:
 
-- Roamgate source: v0.8.4, `503a6f565e3432cee651a456bcc0d9800be52a37`
-  (15 October 2026). This integration records the exact head as a Git merge
-  parent, following `d1a22cb46ce0c07182ec5473454915f1f7ad251c`.
+- Roamgate source: v0.8.5, `5ce1d8d620549226de76321303e7bffa911ae371`
+  (16 October 2026). This integration records the exact head as a Git merge
+  parent, following `503a6f565e3432cee651a456bcc0d9800be52a37`.
 - Herdr compatibility: Herdr 0.9.4, terminal protocol 22. Windows SSH hosts
   additionally require a running Herdr 0.9.1+ session and Windows PowerShell.
 
 The integration adopts Ranger workspace chat, background and scheduled tasks,
 monitoring alerts, Git commit history and file-preview tabs, tab pinning and
 reordering, pane movement, terminal input/font/upload improvements, instance
-settings, login throttling and mandatory login with 15–1024-character passwords.
+settings, login throttling and mandatory login with 8–1024-character passwords.
 Ranger and uploads are adapted to captured World connection generations.
 The v0.8.1 refresh added structured workspace and agent mentions, quick model
 and thinking controls, custom thinking effort, explicit all-workspace consent in
@@ -34,6 +34,13 @@ badges, File Explorer mutations and selection, mobile terminal input shortcuts,
 Windows privilege diagnostics, safer workspace paths and atomic file moves,
 and Ranger provider/error handling fixes. The bundled Herdr setup target is 0.9.4.
 CLI configuration and service inspection use World-owned state only.
+
+The v0.8.5 refresh adds a searchable desktop shortcut cheat sheet, readable
+asynchronous workspace/worktree name suggestions and corrected IME positioning
+when terminal cursors are hidden. The owner approved the 8-character password
+minimum; startup retains the recommendation for 15+ characters. The handoff demo
+is attributed as upstream UI, alongside World screenshots. Documentation and local
+checks retain World contracts, navigation, formatting and behavioral verification.
 
 World retains its identity, local/SSH connection ownership, same-origin access,
 session-bound push revocation, aggregate visual views, isolated browser storage,

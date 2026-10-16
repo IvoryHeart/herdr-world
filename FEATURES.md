@@ -460,6 +460,16 @@ newer work.
 
 Mobile shortcuts and appearance stay in this browser, not Herdr configuration.
 
+## Shortcut cheat sheet
+
+On desktop, open the searchable, read-only overview of your active shortcut preset
+with Cmd+Shift+K on macOS or Ctrl+Alt+Shift+K on Windows/Linux, the top-bar command
+icon, Actions, or Menu → Shortcut cheat sheet. Numbered actions collapse into 1–9
+rows. Customize assignments in Configuration.
+
+New workspace and worktree dialogs suggest readable two-word names. Suggestions
+load asynchronously; editing the name takes precedence over a late suggestion.
+
 ## Remote, Multi-Client, and Operations
 
 - Manage shared local/SSH profiles with independent browser selection. Disconnect
@@ -483,10 +493,10 @@ Mobile shortcuts and appearance stay in this browser, not Herdr configuration.
   one-click standalone updates under a supported supervisor. Probe `/health` or
   `/healthz`. See [services](docs/DEPLOYMENT.md#user-service).
 
-**Loopback bypasses login even with a password.** Non-loopback generates a token
-unless a fixed password is set. Configure [native HTTPS](docs/DEPLOYMENT.md#native-https)
-or an authenticated HTTPS proxy for encrypted access. World supplies no rate
-limiting, multi-user authorization, or sandboxing; read [SECURITY.md](./SECURITY.md).
+**All listeners require login**, including loopback. World generates a persistent
+token unless an 8–1024-character password is configured; 15+ characters are
+recommended beyond a trusted private network. Failed logins receive a bounded cooldown. Configure [native HTTPS](docs/DEPLOYMENT.md#native-https)
+or an authenticated HTTPS proxy for encrypted access. World supplies no multi-user authorization or sandboxing; read [SECURITY.md](./SECURITY.md).
 
 ## Keyboard Shortcuts
 
