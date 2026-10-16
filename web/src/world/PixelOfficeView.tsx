@@ -61,6 +61,7 @@ import {
   writeCompletionSeen,
 } from "./completionSeenState";
 import { preferredOfficeConnectorAnchor } from "./worldConnectorGeometry";
+import { OfficeBuildingsOverlay } from "./OfficeBuildingsOverlay";
 import { OfficeNavigator } from "./OfficeNavigator";
 import { officeRoomScrollOffset } from "./officeRoomPacking";
 import { useOfficeViewport } from "./useOfficeViewport";
@@ -122,6 +123,11 @@ export default function PixelOfficeView({
   const [collapsedRoomKeys, setCollapsedRoomKeys] = useState<
     ReadonlySet<string>
   >(() => new Set());
+  const [collapsedHostKeys, setCollapsedHostKeys] = useState<
+    ReadonlySet<string>
+  >(() => new Set());
+  const [pendingRoomJump, setPendingRoomJump] = useState<string | null>(null);
+  const pendingHostAnchor = useRef<string | null>(null);
   const previousLayout = useRef<PublishedOfficeLayout | null>(null);
   const restoredLayoutMode = useRef<boolean | null>(null);
   const pendingScrollRestore = useRef<{
@@ -239,6 +245,17 @@ export default function PixelOfficeView({
       (entry) => entry.device.key === selectedKey,
     )?.device;
     const roomKey = agent?.roomKey ?? desk?.roomKey ?? pane?.roomKey;
+    const hostKey = roomKey
+      ? office.rooms.find((room) => room.key === roomKey)?.hostKey
+      : undefined;
+    if (hostKey && collapsedHostKeys.has(hostKey)) {
+      setCollapsedHostKeys((current) => {
+        const next = new Set(current);
+        next.delete(hostKey);
+        return next;
+      });
+      return;
+    }
     if (roomKey && collapsedRoomKeys.has(roomKey)) {
       setCollapsedRoomKeys((current) => {
         const next = new Set(current);
@@ -281,8 +298,27 @@ export default function PixelOfficeView({
     renderedRevision,
     office,
     collapsedRoomKeys,
+    collapsedHostKeys,
     revealRequest,
   ]);
+  useEffect(() => {
+    if (
+      !pendingRoomJump ||
+      !layout ||
+      renderedRevision !== layout.layoutRevision
+    )
+      return;
+    const index = office.rooms.findIndex(
+      (room) => room.key === pendingRoomJump,
+    );
+    const rect = layout.rooms.find((room) => room.index === index);
+    if (!rect || rect.hiddenByHost || rect.collapsed) return;
+    scrollRef.current?.scrollTo({
+      top: rect.y,
+      left: layout.compact ? 0 : rect.x,
+    });
+    setPendingRoomJump(null);
+  }, [pendingRoomJump, layout, renderedRevision, office]);
   const publishLayout = (next: PublishedOfficeLayout | null) => {
     const previous = previousLayout.current;
     const scroll = scrollRef.current;
@@ -292,53 +328,73 @@ export default function PixelOfficeView({
       previous.inputDigest !== next.inputDigest &&
       scroll
     ) {
-      // A tall packed room can overlap many later headers vertically. Anchor
-      // the closest visible header instead of always choosing that first room.
-      const visible = previous.rooms
-        .filter(
-          (room) =>
-            room.y + room.height > scroll.scrollTop &&
-            room.y < scroll.scrollTop + scroll.clientHeight &&
-            room.x + room.width > scroll.scrollLeft &&
-            room.x < scroll.scrollLeft + scroll.clientWidth,
-        )
-        .reduce<(typeof previous.rooms)[number] | undefined>(
-          (best, room) =>
-            !best ||
-            Math.abs(room.y - scroll.scrollTop) <
-              Math.abs(best.y - scroll.scrollTop)
-              ? room
-              : best,
-          undefined,
-        );
-      const descriptor = previous.normalizedInput.rooms.find(
-        (room) => room.sourceIndex === visible?.index,
+      const hostKey = pendingHostAnchor.current;
+      const oldHost = previous.buildings?.find(
+        (building) => building.key === hostKey,
       );
-      const nextDescriptor = next.normalizedInput.rooms.find(
-        (room) => room.id === descriptor?.id,
+      const newHost = next.buildings?.find(
+        (building) => building.key === hostKey,
       );
-      const replacement = next.rooms.find(
-        (room) => room.index === nextDescriptor?.sourceIndex,
-      );
-      if (visible && replacement && scroll.scrollTop >= previous.roomStartY) {
-        const offset = scroll.scrollTop - visible.y;
-        const adjusted = officeRoomScrollOffset(visible, replacement, offset);
+      pendingHostAnchor.current = null;
+      if (oldHost && newHost) {
         pendingScrollRestore.current = {
           revision: next.layoutRevision,
-          top:
-            replacement.y +
-            Math.max(0, Math.min(adjusted, replacement.height - 1)),
+          top: Math.max(
+            0,
+            scroll.scrollTop + newHost.headerRect.y - oldHost.headerRect.y,
+          ),
           left: next.compact ? 0 : scroll.scrollLeft,
         };
-      } else if (previous.compact !== next.compact) {
-        const position = next.compact
-          ? preferencesRef.current.compactScroll
-          : preferencesRef.current.desktopScroll;
-        pendingScrollRestore.current = {
-          revision: next.layoutRevision,
-          top: position?.top ?? 0,
-          left: next.compact ? 0 : (position?.left ?? 0),
-        };
+      } else {
+        // A tall packed room can overlap many later headers vertically. Anchor
+        // the closest visible header instead of always choosing that first room.
+        const visible = previous.rooms
+          .filter(
+            (room) =>
+              !room.hiddenByHost &&
+              room.y + room.height > scroll.scrollTop &&
+              room.y < scroll.scrollTop + scroll.clientHeight &&
+              room.x + room.width > scroll.scrollLeft &&
+              room.x < scroll.scrollLeft + scroll.clientWidth,
+          )
+          .reduce<(typeof previous.rooms)[number] | undefined>(
+            (best, room) =>
+              !best ||
+              Math.abs(room.y - scroll.scrollTop) <
+                Math.abs(best.y - scroll.scrollTop)
+                ? room
+                : best,
+            undefined,
+          );
+        const descriptor = previous.normalizedInput.rooms.find(
+          (room) => room.sourceIndex === visible?.index,
+        );
+        const nextDescriptor = next.normalizedInput.rooms.find(
+          (room) => room.id === descriptor?.id,
+        );
+        const replacement = next.rooms.find(
+          (room) => room.index === nextDescriptor?.sourceIndex,
+        );
+        if (visible && replacement && scroll.scrollTop >= previous.roomStartY) {
+          const offset = scroll.scrollTop - visible.y;
+          const adjusted = officeRoomScrollOffset(visible, replacement, offset);
+          pendingScrollRestore.current = {
+            revision: next.layoutRevision,
+            top:
+              replacement.y +
+              Math.max(0, Math.min(adjusted, replacement.height - 1)),
+            left: next.compact ? 0 : scroll.scrollLeft,
+          };
+        } else if (previous.compact !== next.compact) {
+          const position = next.compact
+            ? preferencesRef.current.compactScroll
+            : preferencesRef.current.desktopScroll;
+          pendingScrollRestore.current = {
+            revision: next.layoutRevision,
+            top: position?.top ?? 0,
+            left: next.compact ? 0 : (position?.left ?? 0),
+          };
+        }
       }
     }
     if ((!previous || restoredLayoutMode.current === null) && next) {
@@ -681,9 +737,20 @@ export default function PixelOfficeView({
               next.delete(key);
               return next;
             });
+            const hostKey = office.rooms.find(
+              (room) => room.key === key,
+            )?.hostKey;
+            if (hostKey)
+              setCollapsedHostKeys((current) => {
+                if (!current.has(hostKey)) return current;
+                const next = new Set(current);
+                next.delete(hostKey);
+                return next;
+              });
+            setPendingRoomJump(key);
             const index = office.rooms.findIndex((room) => room.key === key);
             const rect = layout?.rooms.find((room) => room.index === index);
-            if (rect)
+            if (rect && !rect.hiddenByHost)
               scroll.scrollTo({
                 top: rect.y,
                 left: layout?.compact ? 0 : rect.x,
@@ -694,6 +761,7 @@ export default function PixelOfficeView({
           <PixelOfficeCanvas
             projection={office}
             collapsedRoomKeys={collapsedRoomKeys}
+            collapsedHostKeys={collapsedHostKeys}
             selectedKey={selectedKey}
             completionSeenKeys={completionSeenKeys}
             observability={observability}
@@ -740,6 +808,20 @@ export default function PixelOfficeView({
           >
             {layout ? (
               <>
+                <OfficeBuildingsOverlay
+                  layout={layout}
+                  renderedRevision={renderedRevision}
+                  viewport={viewport}
+                  onToggle={(key) => {
+                    pendingHostAnchor.current = key;
+                    setCollapsedHostKeys((current) => {
+                      const next = new Set(current);
+                      if (next.has(key)) next.delete(key);
+                      else next.add(key);
+                      return next;
+                    });
+                  }}
+                />
                 <OfficeSemanticTargetsOverlay
                   layout={layout}
                   viewport={viewport}

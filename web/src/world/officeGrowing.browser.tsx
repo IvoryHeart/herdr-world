@@ -7,7 +7,9 @@ import { deskAnchor } from "./officeGeometry";
 import PixelOfficeView from "./PixelOfficeView";
 import "./world.css";
 
-export function mountGrowingOffice(options: { roomCount?: number } = {}) {
+export function mountGrowingOffice(
+  options: { roomCount?: number; firstRoomTabs?: number } = {},
+) {
   const connections = ["Atlas", "Boreal", "Cedar"].map((label, hostIndex) => {
     const workspaces: Workspace[] = [];
     const tabs: Tab[] = [];
@@ -15,7 +17,8 @@ export function mountGrowingOffice(options: { roomCount?: number } = {}) {
     const count = hostIndex === 0 ? (options.roomCount ?? 129) : 1;
     for (let index = 0; index < count; index++) {
       const id = `workspace-${index}`;
-      const tabCount = hostIndex === 0 && index === 0 ? 100 : 1;
+      const tabCount =
+        hostIndex === 0 && index === 0 ? (options.firstRoomTabs ?? 100) : 1;
       workspaces.push({
         workspace_id: id,
         number: index + 1,
@@ -220,7 +223,7 @@ export async function verifyGrowingOffice(
     if (innerWidth > 720) {
       const large = layout().rooms[0]!;
       check(
-        large.deskColumns > 4,
+        large.deskColumns > (innerWidth >= 1440 ? 4 : 1),
         "Desktop large room retained its four-column restriction",
       );
       check(
@@ -429,7 +432,18 @@ export async function verifyGrowingOffice(
         scroll.scrollTop >= layout().rooms[lastIndex]!.y - scroll.clientHeight,
       "Late room did not settle before refresh",
     );
-    const anchoredTop = layout().rooms[lastIndex]!.y - scroll.scrollTop;
+    const anchorIndex = layout()
+      .rooms.filter(
+        (room) =>
+          !room.hiddenByHost &&
+          room.y + room.height > scroll.scrollTop &&
+          room.y < scroll.scrollTop + scroll.clientHeight,
+      )
+      .sort(
+        (a, b) =>
+          Math.abs(a.y - scroll.scrollTop) - Math.abs(b.y - scroll.scrollTop),
+      )[0]!.index;
+    const anchoredTop = layout().rooms[anchorIndex]!.y - scroll.scrollTop;
     const oldDigest = layout().inputDigest;
     fixture.addTabs();
     await wait(
@@ -437,9 +451,10 @@ export async function verifyGrowingOffice(
       "New observation did not grow the room",
     );
     check(
-      Math.abs(layout().rooms[lastIndex]!.y - scroll.scrollTop - anchoredTop) <=
-        1,
-      `Growing an earlier room moved the current room anchor: before=${anchoredTop}, after=${layout().rooms[lastIndex]!.y - scroll.scrollTop}, top=${scroll.scrollTop}, y=${layout().rooms[lastIndex]!.y}`,
+      Math.abs(
+        layout().rooms[anchorIndex]!.y - scroll.scrollTop - anchoredTop,
+      ) <= 1,
+      `Growing an earlier room moved the current room anchor: before=${anchoredTop}, after=${layout().rooms[anchorIndex]!.y - scroll.scrollTop}, top=${scroll.scrollTop}, y=${layout().rooms[anchorIndex]!.y}`,
     );
     if (innerWidth > 720) {
       const visible = layout()
@@ -512,6 +527,131 @@ export async function verifyGrowingOffice(
     await wait(
       () => fixture.activated.includes(idle.nodeId),
       "Idle agent roster did not open its exact qualified terminal",
+    );
+  } finally {
+    fixture.dispose();
+  }
+}
+
+export async function verifyHostBuildings(
+  check: (condition: boolean, message: string) => void,
+) {
+  const fixture = mountGrowingOffice({ roomCount: 3, firstRoomTabs: 12 });
+  const wait = async (condition: () => boolean, message: string) => {
+    for (let attempt = 0; attempt < 200; attempt++) {
+      if (condition()) return;
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    throw new Error(message);
+  };
+  const diagnostics = () => window.__HERDR_WORLD_RENDERER__!;
+  const layout = () => diagnostics().publishedLayout!;
+  const hostKey = fixture.projection.hosts[0]!.key;
+  const hostButton = () =>
+    [
+      ...fixture.host.querySelectorAll<HTMLButtonElement>(
+        "button[data-host-key]",
+      ),
+    ].find((button) => button.dataset.hostKey === hostKey);
+  const roomKey = fixture.projection.rooms[0]!.key;
+  const roomButton = () =>
+    [
+      ...fixture.host.querySelectorAll<HTMLButtonElement>(
+        "button[data-room-key]",
+      ),
+    ].find(
+      (button) =>
+        button.dataset.roomKey === roomKey &&
+        button.hasAttribute("aria-expanded"),
+    );
+  try {
+    await wait(
+      () =>
+        diagnostics()?.ready === true &&
+        layout().rooms.length === 5 &&
+        layout().buildings?.length === 3,
+      "Host building fixture did not become ready",
+    );
+    const scroll = fixture.host.querySelector<HTMLElement>(
+      ".world-stage-scroll",
+    )!;
+    scroll.scrollTo({
+      top: layout().buildings![0]!.headerRect.y,
+      left: 0,
+      behavior: "instant",
+    });
+    await wait(
+      () =>
+        diagnostics().ready && Boolean(roomButton()) && !roomButton()!.disabled,
+      "Host room header was not reachable",
+    );
+    roomButton()!.click();
+    await wait(
+      () => diagnostics().ready && layout().rooms[0]!.collapsed === true,
+      "Room did not collapse inside its building",
+    );
+    await wait(
+      () => Boolean(hostButton()) && !hostButton()!.disabled,
+      "Host collapse header was not reachable",
+    );
+    hostButton()!.focus();
+    hostButton()!.click();
+    await wait(
+      () => diagnostics().ready && layout().buildings![0]!.collapsed === true,
+      "Host did not collapse",
+    );
+    check(
+      layout()
+        .rooms.slice(0, 3)
+        .every((room) => room.hiddenByHost) &&
+        layout()
+          .rooms.slice(3)
+          .every((room) => !room.hiddenByHost),
+      "Host collapse crossed a qualified host boundary",
+    );
+    check(
+      document.activeElement === hostButton() &&
+        hostButton()!.textContent!.includes("3 rooms"),
+      "Collapsed host lost focus or its truthful summary",
+    );
+    hostButton()!.click();
+    await wait(
+      () => diagnostics().ready && layout().buildings![0]!.collapsed === false,
+      "Host did not expand",
+    );
+    check(
+      layout().rooms[0]!.collapsed === true && !layout().rooms[1]!.collapsed,
+      "Expanding a host lost individual room collapse state",
+    );
+    hostButton()!.click();
+    await wait(
+      () => diagnostics().ready && layout().buildings![0]!.collapsed === true,
+      "Host did not collapse before room navigation",
+    );
+    [...fixture.host.querySelectorAll<HTMLButtonElement>("button")]
+      .find((button) => button.textContent === "Rooms")!
+      .click();
+    await wait(
+      () =>
+        Boolean(
+          fixture.host.querySelector(".world-office-navigator-list button"),
+        ),
+      "Host room navigator did not open",
+    );
+    fixture.host
+      .querySelector<HTMLButtonElement>(".world-office-navigator-list button")!
+      .click();
+    await wait(
+      () =>
+        diagnostics().ready &&
+        !layout().rooms[0]!.hiddenByHost &&
+        !layout().rooms[0]!.collapsed,
+      "Room navigation did not expand its qualified host and room",
+    );
+    check(
+      fixture.projection.rooms[0]!.desks.length === 12 &&
+        fixture.activated.length === 0,
+      "Host collapse changed native contents or opened a terminal",
     );
   } finally {
     fixture.dispose();

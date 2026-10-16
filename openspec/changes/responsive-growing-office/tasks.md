@@ -11,12 +11,16 @@
 - [x] 2.3 Extend row-level room/reception drawing, preparation, semantic targets and anchor admission to follow the viewport; verify a large intersecting room admits bounded paint/control work and the hundredth tab and later rooms remain reachable without oversized backing allocations.
 - [x] 2.4 Preserve every pane target through the existing device chooser and give additional room agents reachable standing targets; verify multiple agents share one tab desk and exact pane activation survives agent relocation and runtime retirement.
 
+- [x] 2.5 Group rooms inside qualified named host buildings and apply the same adaptive skyline packing at both levels; verify desktop side-by-side placement, vertical phone stacking, containment, equal-label ownership, cooperative preparation and cancellation.
+
 ## 3. Keep navigation and actions usable
 
 - [x] 3.1 Add reachable room navigation, collapse/expand and reveal-before-focus; verify a user can reach a later room past a 100-desk room, collapse never closes native work, and canvas/control geometry stays consistent.
 - [x] 3.2 Preserve qualified room/row scroll anchors across refreshes and responsive changes with validated legacy preference fallback; verify additions above the viewport, selected offscreen targets and keyboard focus do not jump to another entity or layout region.
 - [x] 3.3 Keep host attention priority, truthful Workforce counts, idle-agent access and unavailable metrics usable in the phone composition; verify status location and source identity remain truthful with stale hosts and absent providers.
 - [x] 3.4 Integrate creation with growing rooms and existing qualified readiness/completion; verify ninth/later-tab creation reveals the returned terminal without a scene-capacity block, stale hit target or cross-host fallback.
+
+- [x] 3.5 Add host collapse with truthful summaries and retained room collapse choices; verify keyboard focus, no native mutations, cross-host isolation and automatic expansion for room navigation on desktop, phone and wide browser fixtures.
 
 ## 4. Verify and deliver Office independently
 

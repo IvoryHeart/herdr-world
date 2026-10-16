@@ -502,6 +502,10 @@ sixteen room agents. Desktop desk and standing columns SHALL adapt to usable wid
 without a four-column room restriction. Desktop SHALL pack independently sized
 rooms into available openings, including multiple smaller rooms beside a tall
 room, without shared tallest-room row spacing or corridors crossing rooms.
+Each host SHALL own a visibly bounded, named building containing its rooms.
+The same content-derived packing strategy SHALL arrange rooms within buildings
+and buildings across desktop width; mobile buildings SHALL stack vertically below
+Workforce. Collapsed room/host footprints SHALL release space for their neighbors.
 Room placement SHALL be deterministic for equal inputs and SHALL retain qualified
 identities and logical roster order. Left/center/right alignment SHALL apply to
 the packed footprint; phone rooms SHALL stack vertically within the viewport width. Title,

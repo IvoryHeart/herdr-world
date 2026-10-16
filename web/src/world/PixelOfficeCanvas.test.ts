@@ -15,9 +15,16 @@ const chrome =
     ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
     : Bun.which("google-chrome") || Bun.which("chromium"));
 
-test.skipIf(!chrome).each([1280, 390, 3440])(
-  "the retained Pixel Office preserves its complete responsive scene at %ipx",
-  async (width) => {
+test
+  .skipIf(!chrome)
+  .each([
+    { width: 1280, entry: "" },
+    { width: 390, entry: "" },
+    { width: 3440, entry: "packing" },
+    ...[1280, 390, 3440].map((width) => ({ width, entry: "buildings" })),
+  ])(
+  "production Office layout and interactions: %j",
+  async ({ width, entry }) => {
     const dir = await mkdtemp(join(tmpdir(), "pixel-office-test-"));
     const assets = new Map<string, Blob>();
     const result = Promise.withResolvers<unknown>();
@@ -135,7 +142,7 @@ test.skipIf(!chrome).each([1280, 390, 3440])(
           "--no-first-run",
           "--no-default-browser-check",
           `--user-data-dir=${join(dir, "profile")}`,
-          server.url.href + (width === 3440 ? "?packing=1" : ""),
+          server.url.href + (entry ? `?${entry}=1` : ""),
         ],
         { stdout: "ignore", stderr: Bun.file(browserLog) },
       );

@@ -393,3 +393,62 @@
 .world-canvas-shell:has(> .world-canvas-host[data-office-layout="compact"]) {
   min-width: 0;
 }
+
+.world-office-buildings-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 6;
+}
+.world-office-building-header {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  text-align: left;
+  color: #e4e7ef;
+  background: #252d3a;
+  border: 1px solid #64748b;
+  border-radius: 5px;
+  pointer-events: auto;
+  cursor: pointer;
+  font: inherit;
+}
+.world-office-building-header:focus-visible {
+  outline: 2px solid #eac36b;
+  outline-offset: 2px;
+}
+.world-office-building-header:disabled {
+  cursor: wait;
+}
+.world-office-building-toggle {
+  flex: none;
+  font-size: 19px;
+  width: 18px;
+}
+.world-office-building-description {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  font-size: 11px;
+}
+.world-office-building-description strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+.world-office-building-description > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #bac5d6;
+}
+.world-office-building-attention {
+  flex: none;
+  max-width: 40%;
+  font-size: 11px;
+  color: #f5ce80;
+}

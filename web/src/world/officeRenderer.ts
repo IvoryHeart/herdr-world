@@ -61,11 +61,12 @@ import {
   pointerSequences,
   canvasActivationCandidates,
 } from "./officeInteraction";
-import { resolveOfficeSceneGeometry } from "./officeSceneLayout";
+import { resolveOfficeSceneGeometryAsync } from "./officeSceneLayout";
 import { drawRoom } from "./officeRoomDrawing";
 import { drawCeoReception } from "./officeReceptionDrawing";
 import {
   drawBackground,
+  drawOfficeBuildings,
   drawHallways,
   drawRoomRoads,
 } from "./officeCommonAreaDrawing";
@@ -94,6 +95,7 @@ export async function createOfficeRenderer(
   initializationSignal?: AbortSignal,
   onRendererError?: (error: unknown) => void,
   collapsedRoomKeys: ReadonlySet<string> = new Set(),
+  collapsedHostKeys: ReadonlySet<string> = new Set(),
 ): Promise<OfficeRendererController> {
   officeDebug("renderer:create-start", {
     rooms: projection.rooms.length,
@@ -119,6 +121,7 @@ export async function createOfficeRenderer(
   let currentLongRoomTitleMode = longRoomTitleMode;
   let currentSeatCreationStates = seatCreationStates;
   let currentCollapsedRoomKeys = collapsedRoomKeys;
+  let currentCollapsedHostKeys = collapsedHostKeys;
   const layoutPublisher = new OfficeLayoutPublisher();
   let currentLayout: PublishedOfficeLayout | null = null;
   let lastWidth = 0;
@@ -455,6 +458,7 @@ export async function createOfficeRenderer(
       "background",
       "ceo",
       "hallways",
+      "buildings",
       "roads",
       ...visibleRooms.map(
         ({ index }) => `room:${currentProjection.rooms[index]?.key}`,
@@ -508,6 +512,16 @@ export async function createOfficeRenderer(
           "background",
           JSON.stringify([layout.officeWidth, layout.totalHeight]),
           (parent) => drawBackground(parent, layout),
+        ),
+      ))
+    )
+      return;
+    if (
+      !(await paintSlice(
+        drawLayer(
+          "buildings",
+          JSON.stringify([layout.inputDigest, paintViewport]),
+          (parent) => drawOfficeBuildings(parent, layout, paintViewport),
         ),
       ))
     )
@@ -754,13 +768,40 @@ export async function createOfficeRenderer(
     await yieldWorldTask();
     if (!current()) return;
 
-    const geometry = resolveOfficeSceneGeometry(
+    const roomIndicesByHost = new Map<string, number[]>();
+    currentProjection.rooms.forEach((room, index) => {
+      const indices = roomIndicesByHost.get(room.hostKey) ?? [];
+      indices.push(index);
+      roomIndicesByHost.set(room.hostKey, indices);
+    });
+    const hostCounts = new Map<string, { agents: number; attention: number }>();
+    for (const { agent } of currentProjection.roster) {
+      const counts = hostCounts.get(agent.hostKey) ?? {
+        agents: 0,
+        attention: 0,
+      };
+      counts.agents++;
+      if (agent.semanticStatus === "blocked" || agent.semanticStatus === "done")
+        counts.attention++;
+      hostCounts.set(agent.hostKey, counts);
+    }
+    const geometry = await resolveOfficeSceneGeometryAsync(
       {
         availableViewportWidth: width,
         availableViewportHeight: scrollElement?.clientHeight ?? 0,
         titleMode: currentLongRoomTitleMode,
         roomAlignment: currentRoomAlignment,
         ceoReceptionCount: currentProjection.receptions.length,
+        buildings: currentProjection.hosts.map((host) => ({
+          key: host.key,
+          title: host.accessibleLabel ?? host.displayLabel,
+          state: host.connectionState,
+          stale: host.stale,
+          roomIndices: roomIndicesByHost.get(host.key) ?? [],
+          agentCount: hostCounts.get(host.key)?.agents ?? 0,
+          attentionCount: hostCounts.get(host.key)?.attention ?? 0,
+          collapsed: currentCollapsedHostKeys.has(host.key),
+        })),
         attentionReceptionIndices: currentProjection.receptions.flatMap(
           (reception, index) =>
             reception.observedWaitingAgentCount > 0 ? [index] : [],
@@ -774,9 +815,11 @@ export async function createOfficeRenderer(
           currentCollapsedRoomKeys.has(room.key) ? [index] : [],
         ),
       ),
+      current,
+      yieldWorldTask,
     );
     await yieldWorldTask();
-    if (!current()) return;
+    if (!geometry || !current()) return;
     const layout = await layoutPublisher.publishAsync(
       { canonicalDigest: geometry.inputDigest },
       geometry,
@@ -965,6 +1008,7 @@ export async function createOfficeRenderer(
       nextLongRoomTitleMode = currentLongRoomTitleMode,
       nextSeatCreationStates = currentSeatCreationStates,
       nextCollapsedRoomKeys = currentCollapsedRoomKeys,
+      nextCollapsedHostKeys = currentCollapsedHostKeys,
     ) {
       if (
         nextRoomAlignment !== currentRoomAlignment ||
@@ -980,6 +1024,7 @@ export async function createOfficeRenderer(
       currentObservability = nextObservability;
       currentSeatCreationStates = nextSeatCreationStates;
       currentCollapsedRoomKeys = nextCollapsedRoomKeys;
+      currentCollapsedHostKeys = nextCollapsedHostKeys;
       return build(lastWidth || element.clientWidth);
     },
     getAnchors(selectedKey, conversationTargetKey) {

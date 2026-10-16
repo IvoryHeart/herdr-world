@@ -80,7 +80,7 @@ export function officeSemanticTargets(
 
   layout.rooms.forEach((rect) => {
     const room = projection.rooms[rect.index];
-    if (!room || !officeIntersects(rect, viewport)) {
+    if (!room || rect.hiddenByHost || !officeIntersects(rect, viewport)) {
       return;
     }
     const header = rect.header;

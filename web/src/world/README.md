@@ -198,6 +198,11 @@ with accessible controls, retaining a still-current focused target across scroll
 Phone and desktop scroll preferences are separate. [officeRoomPacking.ts](officeRoomPacking.ts)
 packs desktop rooms into skyline openings with reserved corridor gaps. Large desk
 grids adapt to usable width, and logical desk/standing rows survive column changes.
+[officeBuildings.ts](officeBuildings.ts) applies the same packing inside each qualified
+host building and across buildings, yielding between hosts.
+[OfficeBuildingsOverlay.tsx](OfficeBuildingsOverlay.tsx) retains named status/count
+summaries and focused headers while a host is collapsed. Host and room collapse
+states are independent, and navigation reopens the required host before reveal.
 
 | Task | Open these owners | Focused evidence |
 | --- | --- | --- |

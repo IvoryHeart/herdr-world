@@ -1,3 +1,5 @@
+import { resolveOfficeBuildingsSteps } from "./officeBuildings";
+import type { OfficeBuildingInput } from "./officeGeometry";
 import { resolveOfficeLayout } from "./officeGeometry";
 import {
   normalizeOfficeGeometryInput,
@@ -8,12 +10,44 @@ import {
 } from "./officeLayout";
 
 /** Logical scene extent is independent of the viewport-sized Pixi backing. */
+export type OfficeSceneInput = OfficeGeometryInput & {
+  attentionReceptionIndices?: readonly number[];
+  buildings?: readonly OfficeBuildingInput[];
+};
+
 export function resolveOfficeSceneGeometry(
-  input: OfficeGeometryInput & {
-    attentionReceptionIndices?: readonly number[];
-  },
+  input: OfficeSceneInput,
   collapsedRooms: ReadonlySet<number> = new Set(),
 ): OfficeGeometryResult {
+  const steps = resolveOfficeSceneGeometrySteps(input, collapsedRooms);
+  let next = steps.next();
+  while (!next.done) next = steps.next();
+  return next.value;
+}
+
+export async function resolveOfficeSceneGeometryAsync(
+  input: OfficeSceneInput,
+  collapsedRooms: ReadonlySet<number>,
+  isCurrent: () => boolean,
+  yieldTask: () => Promise<void>,
+): Promise<OfficeGeometryResult | null> {
+  const steps = resolveOfficeSceneGeometrySteps(input, collapsedRooms);
+  let next = steps.next();
+  while (!next.done) {
+    await yieldTask();
+    if (!isCurrent()) {
+      steps.return(null as never);
+      return null;
+    }
+    next = steps.next();
+  }
+  return isCurrent() ? next.value : null;
+}
+
+function* resolveOfficeSceneGeometrySteps(
+  input: OfficeSceneInput,
+  collapsedRooms: ReadonlySet<number>,
+): Generator<void, OfficeGeometryResult> {
   const compact = input.availableViewportWidth <= 720;
   const normalized = normalizeOfficeGeometryInput({ ...input, rooms: [] });
   const headerInput = {
@@ -22,10 +56,10 @@ export function resolveOfficeSceneGeometry(
       ? input.availableViewportWidth - 24
       : normalized.maximumExpandedRoomWidth,
   };
-  const headers = input.rooms.map((room) =>
+  let headers = input.rooms.map((room) =>
     resolveOfficeRoomHeader(room, headerInput),
   );
-  const layout = resolveOfficeLayout(
+  let layout = resolveOfficeLayout(
     input.availableViewportWidth,
     input.rooms.map((room, sourceIndex) => ({
       ...room,
@@ -44,6 +78,19 @@ export function resolveOfficeSceneGeometry(
       attentionReceptionIndices: input.attentionReceptionIndices,
     },
   );
+  if (input.buildings?.length) {
+    const grouped = yield* resolveOfficeBuildingsSteps(
+      layout,
+      input,
+      normalized,
+      input.buildings,
+      collapsedRooms,
+    );
+    layout = grouped.layout;
+    headers = headers.map(
+      (header, index) => grouped.headers.get(index) ?? header,
+    );
+  }
   const rooms = layout.rooms.map((room) => {
     const header = headers[room.index]!;
     const titleBoxX = Math.max(

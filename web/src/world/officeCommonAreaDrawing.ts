@@ -89,6 +89,30 @@ export function drawHallways(stage: Container, layout: OfficeLayout) {
   stage.addChild(hall);
 }
 
+export function drawOfficeBuildings(
+  stage: Container,
+  layout: OfficeLayout,
+  viewport?: OfficeRect,
+) {
+  const walls = new Graphics();
+  for (const building of layout.buildings ?? []) {
+    const rect = building.rect;
+    if (
+      viewport &&
+      (rect.x + rect.width < viewport.x ||
+        rect.x > viewport.x + viewport.width ||
+        rect.y + rect.height < viewport.y ||
+        rect.y > viewport.y + viewport.height)
+    )
+      continue;
+    walls
+      .roundRect(rect.x, rect.y, rect.width, rect.height, 8)
+      .fill(0x151b28)
+      .stroke({ width: 2, color: building.stale ? 0x696274 : 0x596b85 });
+  }
+  stage.addChild(walls);
+}
+
 export function drawRoomRoads(
   stage: Container,
   layout: OfficeLayout,
@@ -104,6 +128,32 @@ export function drawRoomRoads(
         OFFICE_GEOMETRY.roomGap,
         OFFICE_GEOMETRY.roomRowGap,
       );
+      const building = layout.buildings?.find((group) =>
+        group.roomIndices.includes(room.index),
+      );
+      if (building) {
+        horizontal.height = Math.max(
+          0,
+          Math.min(
+            horizontal.height,
+            building.rect.y + building.rect.height - horizontal.y - 2,
+          ),
+        );
+        vertical.height = Math.max(
+          0,
+          Math.min(
+            vertical.height,
+            building.rect.y + building.rect.height - vertical.y - 2,
+          ),
+        );
+        vertical.width = Math.max(
+          0,
+          Math.min(
+            vertical.width,
+            building.rect.x + building.rect.width - vertical.x - 2,
+          ),
+        );
+      }
       drawHorizontalRoad(
         road,
         horizontal.x,

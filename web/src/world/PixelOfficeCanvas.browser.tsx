@@ -1,5 +1,8 @@
 window.__HERDR_WORLD_RENDERER_DEBUG__ = true;
-import { verifyGrowingOffice } from "./officeGrowing.browser";
+import {
+  verifyGrowingOffice,
+  verifyHostBuildings,
+} from "./officeGrowing.browser";
 import { verifyOfficeRendering } from "./officeRendering.browser";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
@@ -744,9 +747,11 @@ async function run() {
         Math.round(layoutShell.getBoundingClientRect().width),
       "The intent overlay reduced the Office stage width",
     );
-    check(
-      selectedAnchor,
-      "The selected Office entity did not publish an anchor",
+    officeScroll.scrollTop = diagnostics.publishedLayout!.rooms[0]!.y;
+    officeScroll.dispatchEvent(new Event("scroll"));
+    await waitFor(
+      () => selectedAnchor,
+      "The selected Office entity did not publish an anchor after its room was revealed",
     );
     // Exercise the second reception row with both statuses; it must render
     // without indexing past the four physical chairs.
@@ -916,10 +921,13 @@ async function verifyAnchorAfterRendererRepaint() {
         window.__HERDR_WORLD_RENDERER__?.ready === true,
       "Font completion did not finish its renderer-owned repaint",
     );
-    await settle();
+    await waitFor(
+      () => anchorReports > beforeReports && anchored,
+      "Renderer-owned repaint did not republish its selected anchor after matching canvas paint",
+    );
     check(
       anchorReports > beforeReports && anchored,
-      "Renderer-owned repaint did not republish its selected anchor after matching canvas paint",
+      `Renderer-owned repaint did not republish its selected anchor after matching canvas paint: reports=${anchorReports}, before=${beforeReports}, anchored=${anchored}, top=${scroll.scrollTop}`,
     );
   } finally {
     root.unmount();
@@ -927,12 +935,14 @@ async function verifyAnchorAfterRendererRepaint() {
   }
 }
 
-(new URL(location.href).searchParams.has("packing")
-  ? verifyGrowingOffice(check, { packingOnly: true })
-  : run()
-      .then(() => verifyAnchorAfterRendererRepaint())
-      .then(() => verifyOfficeRendering(check))
-      .then(() => verifyGrowingOffice(check))
+(new URL(location.href).searchParams.has("buildings")
+  ? verifyHostBuildings(check)
+  : new URL(location.href).searchParams.has("packing")
+    ? verifyGrowingOffice(check, { packingOnly: true })
+    : run()
+        .then(() => verifyAnchorAfterRendererRepaint())
+        .then(() => verifyOfficeRendering(check))
+        .then(() => verifyGrowingOffice(check))
 )
   .catch((error: unknown) => {
     const diagnostics = window.__HERDR_WORLD_RENDERER__;

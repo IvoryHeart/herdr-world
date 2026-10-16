@@ -72,6 +72,12 @@ small rooms, exact late-pane activation and collapse. The 1280px/390px cases ret
 the full 131-room navigation, refresh and responsive lifecycle sequence. Control
 admission is bounded by viewport area, allowing the increased visible density.
 
+`officeBuildings.test.ts` covers nested placement, containment, qualified equal-label
+hosts, independent host/room collapse, complete counts and retired-request cancellation.
+Dedicated real Pixi host cases at 390/1280/3440 widths verify focus and summary
+retention, cross-host isolation, restored room choices, navigation into a hidden
+host and unchanged native contents/terminal activation.
+
 Phone Office prioritizes qualified receptions with waiting/completed agents above
 Economy and Workforce; empty receptions are hidden on phones, and workspace rooms
 follow Workforce. Growing geometry and real Pixi phone consumers cover ordering, complete

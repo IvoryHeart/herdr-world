@@ -105,6 +105,29 @@ standing row through its logical item index when column counts change. Physical
 surfaces, row paint and controls still follow the viewport; admission evidence
 scales with viewport area rather than a fixed count chosen for the old sparse grid.
 
+### Nested host buildings and host collapse
+
+The owner selected named host containers, host-level collapse and the same packing
+algorithm at both levels. Resolve readable, content-derived building widths from
+room area and available width. Run the room skyline inside each building, then
+run it again over building footprints. On phones, stack full-width buildings
+vertically after Workforce. Keep the reception/CEO/Agent Bar composition separate.
+
+Render a neutral outlined boundary and a named header with connection/stale state,
+room/agent counts and attention count. Headers and room targets share the published
+layout and completed-paint readiness. Header controls follow the viewport, retaining
+an eligible focused host header through repaint and collapse. Collapse is local
+presentation state keyed by qualified host identity; it does not change observation,
+operational authority, native work or Inspector ownership. It hides its room paint,
+anchors and controls while preserving complete rosters and each room's collapse set.
+Navigation expands the exact required host/room before revealing a target.
+
+Geometry retains source indices and explicit host membership; equal labels never
+define ownership. Yield between host layout preparations and cancel superseded
+requests before publication. Empty hosts still have truthful summary headers.
+This remains a bounded deterministic heuristic; it does not claim globally optimal
+packing or replace host/runtime admission and stale-generation fences.
+
 ### Reach later rooms without traversing a giant room
 
 Keep a room picker reachable outside the scrolling scene and support per-room

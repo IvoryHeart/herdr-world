@@ -172,11 +172,28 @@ export type OfficeRoomRect = {
   shadowAllowance: number;
   selectionStrokeAllowance: number;
   collapsed?: boolean;
+  hiddenByHost?: boolean;
   header?: OfficeRoomHeaderLayout;
   overflowMarkerRect?: OfficeRect;
 };
 
+export type OfficeBuildingInput = {
+  key: string;
+  title: string;
+  state: string;
+  stale: boolean;
+  roomIndices: readonly number[];
+  agentCount: number;
+  attentionCount: number;
+  collapsed: boolean;
+};
+export type OfficeBuilding = OfficeBuildingInput & {
+  rect: OfficeRect;
+  headerRect: OfficeRect;
+};
+
 export type OfficeSceneOptions = {
+  contained?: boolean;
   complete?: boolean;
   compact?: boolean;
   collapsedRooms?: ReadonlySet<number>;
@@ -185,6 +202,7 @@ export type OfficeSceneOptions = {
 
 export type OfficeLayout = {
   packedRooms?: boolean;
+  buildings?: readonly OfficeBuilding[];
   compact?: boolean;
   expenseRect?: OfficeRect;
   workforceRect?: OfficeRect;
@@ -218,7 +236,11 @@ export function resolveOfficeLayout(
   options: OfficeSceneOptions = {},
 ): OfficeLayout {
   const officeWidth = Math.max(
-    options.compact ? 240 : OFFICE_GEOMETRY.minOfficeWidth,
+    options.compact
+      ? 240
+      : options.contained
+        ? 220
+        : OFFICE_GEOMETRY.minOfficeWidth,
     Math.min(
       OFFICE_GEOMETRY.maxLogicalCanvasWidth,
       Math.floor(Number(requestedWidth) || 0),
@@ -451,7 +473,12 @@ export function resolveOfficeLayout(
       );
       const deskColumns = options.compact
         ? 2
-        : fluid && (deskCount > 8 || standingCount > 16)
+        : fluid &&
+            (deskCount > 8 ||
+              standingCount > 16 ||
+              roomDeskColumns(deskCount) * deskWidth +
+                OFFICE_GEOMETRY.roomPadding * 2 >
+                availableRoomWidth)
           ? fluidDeskColumns(
               deskCount,
               standingCount,
@@ -462,7 +489,12 @@ export function resolveOfficeLayout(
           : roomDeskColumns(deskCount);
       const standingColumns = options.compact
         ? 4
-        : fluid && standingCount > 16
+        : fluid &&
+            standingCount > 0 &&
+            (standingCount > 16 ||
+              roomStandingColumns(standingCount) * 40 +
+                OFFICE_GEOMETRY.roomPadding * 2 >
+                availableRoomWidth)
           ? Math.min(
               standingCount,
               Math.max(

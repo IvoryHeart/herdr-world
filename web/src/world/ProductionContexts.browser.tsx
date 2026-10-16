@@ -639,6 +639,11 @@ async function run() {
       }
       const selectedId = world.leaves[0]?.id ?? null;
       let anchored = false;
+      let finishAnchorWait: (() => void) | null = null;
+      const reportSelectedAnchor = (anchor: unknown) => {
+        anchored = Boolean(anchor);
+        if (anchored) finishAnchorWait?.();
+      };
       if (view === "tree")
         root.render(
           <ConnectedTreeView
@@ -648,9 +653,7 @@ async function run() {
             inlineInspectorNodeId={null}
             onSelect={() => {}}
             onOpenTerminal={async () => {}}
-            onSelectedAnchorChange={(anchor) => {
-              anchored = !!anchor;
-            }}
+            onSelectedAnchorChange={reportSelectedAnchor}
             onNodeAnchorsChange={() => {}}
             onInlineInspectorPortalChange={() => {}}
           />,
@@ -663,9 +666,7 @@ async function run() {
             conversationNodeIds={selectedId ? [selectedId] : []}
             onSelect={() => {}}
             onOpenTerminal={async () => {}}
-            onSelectedAnchorChange={(anchor) => {
-              anchored = !!anchor;
-            }}
+            onSelectedAnchorChange={reportSelectedAnchor}
             onNodeAnchorsChange={() => {}}
           />,
         );
@@ -677,9 +678,7 @@ async function run() {
             floatingTerminals={selectedId ? [{ nodeId: selectedId }] : []}
             onSelect={async () => true}
             onOpenTerminal={async () => {}}
-            onSelectedAnchorChange={(anchor) => {
-              anchored = !!anchor;
-            }}
+            onSelectedAnchorChange={reportSelectedAnchor}
             onConversationNodeAnchorsChange={() => {}}
           />,
         );
@@ -731,6 +730,30 @@ async function run() {
               0,
             )
           : 0;
+      }
+      // Font/viewport preparation can clear an earlier anchor after first-ready.
+      // Keep native input running until matching paint reports the anchor again.
+      if (
+        view === "office" &&
+        (!anchored || !window.__HERDR_WORLD_RENDERER__?.ready)
+      ) {
+        await new Promise<void>((resolve, reject) => {
+          const timer = setTimeout(() => {
+            finishAnchorWait = null;
+            reject(
+              Error(
+                "Office did not republish its selected anchor after completed paint",
+              ),
+            );
+          }, 10000);
+          finishAnchorWait = () => {
+            if (!window.__HERDR_WORLD_RENDERER__?.ready) return;
+            clearTimeout(timer);
+            finishAnchorWait = null;
+            resolve();
+          };
+          if (anchored) finishAnchorWait();
+        });
       }
       check(anchored, view + " did not publish its selected rendered anchor");
       phases[stage] = performance.now() - began;

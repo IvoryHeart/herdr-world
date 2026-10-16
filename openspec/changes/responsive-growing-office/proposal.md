@@ -22,6 +22,10 @@ workspace instead of letting its room grow with the observed tabs and agents.
   layout over the admitted observation. More than eight tabs, sixteen room agents
   or 128 rooms must remain reachable without raising one fixed cap to another.
   Rendering and semantic-control admission remain bounded by the viewport.
+- Give each host a named building with a visible boundary and truthful summary.
+  Use the same packing for rooms inside buildings and buildings across desktop
+  width; stack buildings on phones. Host collapse preserves individual room
+  choices and native work, while navigation reopens the exact necessary host.
 - Add reachable room navigation and room collapse/expand so a large room does
   not force the user to scroll through every desk to reach later workspaces.
 - Preserve qualified selection, exact pane actions, shared Inspector ownership,

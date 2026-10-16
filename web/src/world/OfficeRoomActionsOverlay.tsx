@@ -284,8 +284,14 @@ export function OfficeRoomActionsOverlay({
   const layoutReady =
     layout.layoutRevision > 0 && layout.layoutRevision === renderedRevision;
   const roomBottom = layout.rooms.reduce(
-    (bottom, room) => Math.max(bottom, room.y + room.height),
-    layout.roomStartY,
+    (bottom, room) =>
+      room.hiddenByHost ? bottom : Math.max(bottom, room.y + room.height),
+    Math.max(
+      layout.roomStartY,
+      ...(layout.buildings ?? []).map(
+        (building) => building.rect.y + building.rect.height,
+      ),
+    ),
   );
   return (
     <div
@@ -293,7 +299,9 @@ export function OfficeRoomActionsOverlay({
       aria-label="Office room actions"
     >
       {layout.rooms
-        .filter((rect) => officeIntersects(rect, viewport))
+        .filter(
+          (rect) => !rect.hiddenByHost && officeIntersects(rect, viewport),
+        )
         .map((rect) => {
           const room = projection.rooms[rect.index];
           if (!room || !officeIntersects(rect.headerRect, viewport))
@@ -364,7 +372,9 @@ export function OfficeRoomActionsOverlay({
           );
         })}
       {layout.rooms
-        .filter((rect) => officeIntersects(rect, viewport))
+        .filter(
+          (rect) => !rect.hiddenByHost && officeIntersects(rect, viewport),
+        )
         .map((rect) => {
           const room = projection.rooms[rect.index];
           if (

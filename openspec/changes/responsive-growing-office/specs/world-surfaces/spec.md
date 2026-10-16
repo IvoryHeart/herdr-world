@@ -46,7 +46,11 @@ The existing compact device artwork and complete pane chooser SHALL remain usabl
 Office SHALL provide reachable room navigation and collapse/expand controls on
 phones and desktop. Collapsing a room SHALL retain its qualified header and exact
 observed counts without changing native work, agent state or Inspector ownership.
-Choosing an offscreen room or entity SHALL expand and reveal it as needed before
+Host buildings SHALL expose collapse/expand controls and retain their qualified
+name, connection/stale state, exact room/agent counts and attention summary while
+collapsed. Host collapse SHALL hide only that host's rooms, retain individual room
+collapse choices, and leave native work and Inspectors running.
+Choosing an offscreen room or entity SHALL expand its host and room and reveal it as needed before
 focusing or activating its matching semantic target.
 
 Observation refreshes and additions above the viewport SHALL preserve the visible
@@ -67,6 +71,19 @@ replaced runtime targets SHALL remain non-actionable without another-host fallba
 - **WHEN** a user collapses a room whose agent has an open terminal Inspector
 - **THEN** the room retains its header and counts while the Inspector keeps the
   same qualified resources and native tabs continue running
+
+#### Scenario: Collapse one host with rooms minimized independently
+
+- **WHEN** several hosts have equal room names and a user collapses one host
+- **THEN** only its qualified rooms are hidden, its summary and keyboard focus
+  remain available, and other hosts keep their rooms and native work
+- **AND** expanding the host restores each room's previous collapse choice
+
+#### Scenario: Navigate into a collapsed host
+
+- **WHEN** the room or agent navigator reveals a target inside a collapsed host
+- **THEN** the exact host and necessary room expand before the matching target
+  is revealed, without opening another host's equal identifier
 
 #### Scenario: Refresh while a late row is visible
 
@@ -110,6 +127,10 @@ sixteen room agents. Desktop desk and standing columns SHALL adapt to usable wid
 without a four-column room restriction. Desktop SHALL pack independently sized
 rooms into available openings, including multiple smaller rooms beside a tall
 room, without shared tallest-room row spacing or corridors crossing rooms.
+Each host SHALL own a visibly bounded, named building containing its rooms.
+The same content-derived packing strategy SHALL arrange rooms within buildings
+and buildings across desktop width; mobile buildings SHALL stack vertically below
+Workforce. Collapsed room/host footprints SHALL release space for their neighbors.
 Room placement SHALL be deterministic for equal inputs and SHALL retain qualified
 identities and logical roster order. Left/center/right alignment SHALL apply to
 the packed footprint; phone rooms SHALL stack vertically within the viewport width. Title,

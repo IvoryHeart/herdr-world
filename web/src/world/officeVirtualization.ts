@@ -16,6 +16,7 @@ export function officeVisibleRooms(
   const overscan = Math.max(1, viewportHeight);
   return rooms.filter(
     (room) =>
+      !room.hiddenByHost &&
       room.y + room.height >= scrollTop - overscan &&
       room.y <= scrollTop + viewportHeight + overscan,
   );
