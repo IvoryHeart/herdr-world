@@ -9,6 +9,9 @@ are optional because the merged PR history records their source.
 
 ### Fixed
 
+- Retry transient Windows installer-test cleanup locks within a bounded window,
+  while keeping persistent cleanup failures visible to the required gate.
+
 - Keep terminal IME positioning correct when the terminal cursor is hidden.
 
 - Quote compile-time environment filters so native Windows source and release

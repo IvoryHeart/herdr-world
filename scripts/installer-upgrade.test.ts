@@ -1,12 +1,20 @@
 import { expect, test } from "bun:test";
 import { $ } from "bun";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   candidateVersion,
   runtimeEnvironment,
+  removeInstallerFixture,
   upgradeCookieStatus,
 } from "./installer-upgrade";
 
@@ -134,4 +142,13 @@ test("installer upgrades run native released artifacts on every supported platfo
       "retention-days"
     ],
   ).toBe(1);
+});
+
+test("installer fixture cleanup removes nested files and tolerates an already removed fixture", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "world-cleanup-fixture-"));
+  mkdirSync(join(directory, "nested"));
+  writeFileSync(join(directory, "nested", "fixture.txt"), "synthetic fixture");
+  await removeInstallerFixture(directory);
+  expect(existsSync(directory)).toBe(false);
+  await removeInstallerFixture(directory);
 });

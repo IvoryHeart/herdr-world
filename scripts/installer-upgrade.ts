@@ -7,13 +7,24 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
-  rmSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
+import { rm } from "node:fs/promises";
 import { basename, delimiter, join, resolve } from "node:path";
 
 const repository = "IvoryHeart/herdr-world";
+
+// Windows may retain executable/file handles briefly after child exit. Yield
+// during bounded retries; a persistent lock still fails the required job.
+export async function removeInstallerFixture(root: string): Promise<void> {
+  await rm(root, {
+    recursive: true,
+    force: true,
+    maxRetries: 5,
+    retryDelay: 100,
+  });
+}
 
 export function candidateVersion(tag: string, run: string): string {
   const match = /^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.exec(tag);
@@ -513,7 +524,7 @@ export async function verify() {
       join(reportDir, `${platform}.json`),
       JSON.stringify(report, null, 2) + "\n",
     );
-    rmSync(root, { recursive: true, force: true });
+    await removeInstallerFixture(root);
   }
   console.info(JSON.stringify(report, null, 2));
 }
