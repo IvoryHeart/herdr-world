@@ -59,7 +59,7 @@ import {
   focusWorldNode,
   activateWorldNodeHost,
 } from "./worldInspectorSelection";
-import { routeHistoryState, useSystemBack } from "../systemBack";
+import { pushRoute, useSystemBack } from "../systemBack";
 import { WorldMobileNav, worldViewLabel } from "./WorldMobileNav";
 import { WorldControlPlane } from "./WorldControlPlane";
 import { EMPTY_VISUAL_ACTION_EXTENSION } from "./worldControlPlaneContract";
@@ -236,17 +236,17 @@ export default function WorldFoundationApp() {
     return () => window.removeEventListener("popstate", onPopState);
   }, [view]);
 
-  const setView = (next: WorldView) => {
+  const setView = (next: WorldView, replace = false) => {
     setViewState(next);
     if (next !== "spaces") setVisualView(next);
     if (window.location.pathname !== WORLD_VIEW_PATHS[next]) {
       const url = new URL(window.location.href);
       url.pathname = WORLD_VIEW_PATHS[next];
-      window.history.pushState(
-        routeHistoryState(window.history.state),
-        "",
-        url,
-      );
+      // Records the route it came from, so an on-screen Back can return
+      // through history instead of adding the route again.
+      const state = { herdrFrom: window.location.pathname };
+      if (replace) window.history.replaceState({}, "", url);
+      else pushRoute(state, url);
     }
     if (next === "spaces") {
       requestAnimationFrame(() => window.dispatchEvent(new Event("resize")));
@@ -261,10 +261,22 @@ export default function WorldFoundationApp() {
     !visualArrangementControl.disabledReasons["close-all"];
   const returnLabel = `Back to ${view[0].toUpperCase()}${view.slice(1)}`;
   // The phone's Back gesture leaves a terminal for the scene, like the button.
-  useSystemBack(Boolean(canReturnToView), () => {
-    creationIntentRevision.current++;
-    visualArrangementControl?.onSelect("close-all");
-  });
+  useSystemBack(
+    Boolean(canReturnToView),
+    () => {
+      creationIntentRevision.current++;
+      visualArrangementControl?.onSelect("close-all");
+    },
+    "screen",
+  );
+  // Spaces' Back undoes the in-app navigation that opened it, so the next
+  // system Back does not reopen Spaces. Opened directly, it replaces itself.
+  const leaveSpaces = () => {
+    const from = (window.history.state as { herdrFrom?: unknown } | null)
+      ?.herdrFrom;
+    if (from === WORLD_VIEW_PATHS[visualView]) window.history.back();
+    else setView(visualView, true);
+  };
   const activeArrangementControl =
     view === "spaces" ? spaces.arrangementControl : visualArrangementControl;
   useEffect(() => {
@@ -410,7 +422,7 @@ export default function WorldFoundationApp() {
                   className="world-back-to-view"
                   title={`Back to ${worldViewLabel(visualView)}`}
                   aria-label={`Back to ${worldViewLabel(visualView)}`}
-                  onClick={() => setView(visualView)}
+                  onClick={leaveSpaces}
                 >
                   <ArrowLeft size={20} aria-hidden="true" />
                 </button>

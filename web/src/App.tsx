@@ -4230,9 +4230,13 @@ export default function App({
       }
     : null;
   usePublishMobileControls(mobileControls);
-  useSystemBack(mobileMoreOpen, () => setMobileMoreOpen(false));
-  useSystemBack(mobileTabSheetOpen, () => setMobileTabSheetOpen(false));
-  useSystemBack(mobileView === "workspaces", activateTerminalSurface);
+  useSystemBack(mobileMoreOpen, () => setMobileMoreOpen(false), "popup");
+  useSystemBack(
+    mobileTabSheetOpen,
+    () => setMobileTabSheetOpen(false),
+    "popup",
+  );
+  useSystemBack(mobileView === "workspaces", activateTerminalSurface, "panel");
   return (
     <div
       ref={appRef}

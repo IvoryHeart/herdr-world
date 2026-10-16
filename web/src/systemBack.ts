@@ -2,19 +2,38 @@ import { useEffect, useRef } from "react";
 import { useLayoutPreferences } from "./layoutPreferences";
 
 /**
- * Lets the phone's Back gesture or button close an open mobile layer (menu,
- * sheet, Composer, Inspector) before it leaves the page. Each open layer adds
- * one history entry at the current URL; Back pops the newest one and closes
- * only that layer. Closing a layer with its on-screen control removes its
- * entry again, so visible controls and system Back stay in step.
+ * How a layer stacks for the phone's Back: a screen (a terminal) sits below
+ * a panel (Composer, workspace list), which sits below a popup (menu, sheet).
+ * Back closes the highest open layer; equal levels close newest first.
  */
-export function useSystemBack(open: boolean, close: () => void) {
+export type SystemBackLevel = "screen" | "panel" | "popup";
+const LEVELS: Record<SystemBackLevel, number> = {
+  screen: 0,
+  panel: 1,
+  popup: 2,
+};
+
+type Layer = { level: number; order: number; close: () => void };
+
+/**
+ * Lets the phone's Back gesture or button close an open mobile layer before
+ * it leaves the page. While any layer is open, the current history entry is
+ * one guard entry at the current URL. Back pops it and closes only the top
+ * layer; the guard returns while layers remain. When the last layer closes
+ * on screen, the guard is removed again, so the next Back leaves the page's
+ * route in one press.
+ */
+export function useSystemBack(
+  open: boolean,
+  close: () => void,
+  level: SystemBackLevel,
+) {
   const { mobile } = useLayoutPreferences();
   const closeRef = useRef(close);
   closeRef.current = close;
   const active = mobile && open;
   // Declared first so its cleanup runs first: unmounting the app is not the
-  // user closing a layer, and must not move history.
+  // user closing a layer, and must not move history on its own.
   const unmounting = useRef(false);
   useEffect(() => {
     unmounting.current = false;
@@ -25,90 +44,93 @@ export function useSystemBack(open: boolean, close: () => void) {
 
   useEffect(() => {
     if (!active) return;
-    const token = `herdr-back-${Math.random().toString(36).slice(2)}`;
-    pushEntry(token);
-    let popped = false;
-    const onPopState = (event: PopStateEvent) => {
-      if (popped || ownBacks.has(event)) return;
-      const state = event.state as { herdrBack?: string } | null;
-      // Back landed on this layer's own entry: a layer above it closed.
-      if (state?.herdrBack === token) return;
-      if (!entryStack.includes(token)) return;
-      // Back landed on a newer layer's entry (forward history): not ours.
-      if (
-        entryStack.indexOf(token) < entryStack.indexOf(state?.herdrBack ?? "")
-      )
-        return;
-      popped = true;
-      removeEntry(token);
-      closeRef.current();
+    const layer: Layer = {
+      level: LEVELS[level],
+      order: ++openings,
+      close: () => closeRef.current(),
     };
-    entryStack.push(token);
-    window.addEventListener("popstate", onPopState);
+    layers.add(layer);
+    scheduleReconcile();
     return () => {
-      window.removeEventListener("popstate", onPopState);
-      if (popped) return;
-      const top = entryStack[entryStack.length - 1] === token;
-      removeEntry(token);
-      // Closed on screen: drop the entry it added if it is still the newest,
-      // or a closed layer's entry that a racing open left current. A route
-      // pushed since (Go to Spaces) copies the token but not the URL; keep it.
-      // While a Back is pending the current entry is stale: one per commit.
-      const current = (window.history.state as { herdrBack?: string } | null)
-        ?.herdrBack;
-      if (
-        top &&
-        !unmounting.current &&
-        pendingBacks === 0 &&
-        current &&
-        !entryStack.includes(current) &&
-        entryUrls.get(current) === window.location.href
-      ) {
-        pendingBacks++;
-        window.history.back();
-      }
+      layers.delete(layer);
+      if (!unmounting.current) closedOnScreen = true;
+      scheduleReconcile();
     };
-  }, [active]);
+  }, [active, level]);
 }
 
-const entryStack: string[] = [];
-const entryUrls = new Map<string, string>();
+const GUARD = "herdrBack";
+const layers = new Set<Layer>();
+let openings = 0;
+// Whether a layer closed since the last reconcile other than by unmounting.
+let closedOnScreen = false;
+let reconcileScheduled = false;
+// history.back() is asynchronous; until our own Back lands, the current entry
+// is stale and a popstate is ours, not the user's.
+let backPending = false;
 
-// history.back() is asynchronous: a layer opened before it lands, such as a
-// terminal chosen from the tab sheet, must not read it as the user's Back.
-let pendingBacks = 0;
-const ownBacks = new WeakSet<Event>();
+function isGuard(state: unknown) {
+  return typeof state === "object" && state !== null && GUARD in state;
+}
+
+// Effects of one React commit run together; reconcile once after all of them,
+// so layers that open and close in the same commit settle as one change.
+function scheduleReconcile() {
+  if (reconcileScheduled) return;
+  reconcileScheduled = true;
+  queueMicrotask(reconcile);
+}
+
+function reconcile() {
+  reconcileScheduled = false;
+  if (backPending) return;
+  const guarded = isGuard(window.history.state);
+  if (layers.size > 0 && !guarded) {
+    const base: unknown = window.history.state;
+    window.history.pushState(
+      { ...(typeof base === "object" && base ? base : {}), [GUARD]: true },
+      "",
+    );
+  } else if (layers.size === 0 && guarded && closedOnScreen) {
+    backPending = true;
+    window.history.back();
+  }
+  closedOnScreen = false;
+}
+
 if (typeof window !== "undefined")
   window.addEventListener("popstate", (event) => {
-    if (pendingBacks === 0) return;
-    pendingBacks--;
-    ownBacks.add(event);
-    // A layer that opened while the Back was pending pushed its entry first,
-    // and the Back went past it; give the newest open layer its entry again.
-    const top = entryStack[entryStack.length - 1];
-    const current = (event.state as { herdrBack?: string } | null)?.herdrBack;
-    if (pendingBacks === 0 && top && current !== top) pushEntry(top);
+    if (backPending) {
+      backPending = false;
+      reconcile();
+      return;
+    }
+    // Forward onto a guard, or Back with nothing open: settle the entry.
+    if (isGuard(event.state) || layers.size === 0) {
+      scheduleReconcile();
+      return;
+    }
+    let top: Layer | undefined;
+    for (const layer of layers)
+      if (
+        !top ||
+        layer.level > top.level ||
+        (layer.level === top.level && layer.order > top.order)
+      )
+        top = layer;
+    // The user's Back already removed the guard: nothing to undo.
+    layers.delete(top!);
+    top!.close();
+    scheduleReconcile();
   });
 
-function pushEntry(token: string) {
-  entryUrls.set(token, window.location.href);
-  const base: unknown = window.history.state;
-  window.history.pushState(
-    { ...(typeof base === "object" && base ? base : {}), herdrBack: token },
-    "",
-  );
-}
-
-function removeEntry(token: string) {
-  const index = entryStack.indexOf(token);
-  if (index >= 0) entryStack.splice(index, 1);
-}
-
-/** History state for a new route entry: a layer's token stays on its own. */
-export function routeHistoryState(state: unknown): unknown {
-  if (typeof state !== "object" || !state || !("herdrBack" in state))
-    return state;
-  const route = { ...(state as Record<string, unknown>) };
-  delete route.herdrBack;
-  return route;
+/**
+ * Adds a route entry. A guard left by a layer is replaced rather than kept
+ * below the route, so Back from the route reaches the page before it.
+ */
+export function pushRoute(state: Record<string, unknown>, url: URL) {
+  if (isGuard(window.history.state))
+    window.history.replaceState(state, "", url);
+  else window.history.pushState(state, "", url);
+  scheduleReconcile();
 }

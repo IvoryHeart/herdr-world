@@ -4333,6 +4333,19 @@ async function run() {
     () => document.querySelector('button[aria-label="Back to Office"]'),
     "mobile view switcher returns to Office before dismissing Inspectors",
   );
+  // Back to Office closes the terminal and its Composer in one commit.
+  [
+    ...document.querySelectorAll<HTMLButtonElement>(
+      '.workspace-inspector button[aria-label="Open terminal input"]',
+    ),
+  ]
+    .find((button) => button.getBoundingClientRect().width > 0)
+    ?.click();
+  await until(
+    () => document.querySelector(".workspace-inspector .terminal-composer"),
+    "mobile Inspector opens Composer before Back to Office",
+  );
+  await settle();
   backToOffice.click();
   await until(
     () => !document.querySelector(".workspace-inspector"),
@@ -4352,6 +4365,46 @@ async function run() {
   check(
     !document.querySelector('button[aria-label="Back to Office"]'),
     "return action disappears when no Inspector is open",
+  );
+  // The closed terminal leaves no history entry: one system Back leaves
+  // Office for the scene shown before it.
+  await settle();
+  check(
+    !(
+      typeof history.state === "object" &&
+      history.state !== null &&
+      "herdrBack" in history.state
+    ),
+    "Back to Office left a closed layer's history entry",
+  );
+  history.back();
+  await until(
+    () =>
+      window.location.pathname === "/graph" &&
+      document.querySelector(".world-spatial-graph-shell"),
+    "system Back after Back to Office reaches Graph in one press",
+  );
+  viewSelect.value = "spaces";
+  viewSelect.dispatchEvent(new Event("change", { bubbles: true }));
+  await until(
+    () => document.querySelector('button[aria-label="Back to Graph"]'),
+    "mobile Spaces offers Back to Graph",
+  );
+  document
+    .querySelector<HTMLButtonElement>('button[aria-label="Back to Graph"]')!
+    .click();
+  await until(
+    () => window.location.pathname === "/graph",
+    "Back to Graph leaves Spaces",
+  );
+  history.back();
+  await until(
+    () => window.location.pathname !== "/graph",
+    "system Back after Back to Graph moves on",
+  );
+  check(
+    window.location.pathname === "/office",
+    `system Back after Back to Graph reached ${window.location.pathname}, not Office`,
   );
   updateLayoutPreferences({ mode: "desktop" });
   await arrangeWindows("Open all terminal windows");
