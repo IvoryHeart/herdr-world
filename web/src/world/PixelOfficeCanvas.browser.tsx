@@ -1,4 +1,5 @@
 window.__HERDR_WORLD_RENDERER_DEBUG__ = true;
+import { verifyGrowingOffice } from "./officeGrowing.browser";
 import { verifyOfficeRendering } from "./officeRendering.browser";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
@@ -45,12 +46,15 @@ const check = (condition: boolean, message: string) => {
 };
 const settle = () => new Promise((resolve) => setTimeout(resolve, 50));
 
-async function waitFor(condition: () => boolean, message: string) {
+async function waitFor(
+  condition: () => boolean,
+  message: string | (() => string),
+) {
   for (let index = 0; index < 300; index += 1) {
     if (condition()) return;
     await settle();
   }
-  throw new Error(message);
+  throw new Error(typeof message === "function" ? message() : message);
 }
 
 function workspace(id: string, label: string, paneCount: number): Workspace {
@@ -269,10 +273,6 @@ async function run() {
     const officeCanvas = host.querySelector<HTMLCanvasElement>(
       "canvas[data-office-canvas='true']",
     )!;
-    const visibleSize = {
-      width: officeCanvas.width,
-      height: officeCanvas.height,
-    };
     const mountsBeforeNavigation = diagnostics.mounts;
     layoutShell.style.display = "none";
     world = { ...world };
@@ -285,10 +285,28 @@ async function run() {
     await settle();
     layoutShell.style.removeProperty("display");
     await waitFor(
+      () => {
+        const published = diagnostics.publishedLayout;
+        const resolution = Math.min(2, devicePixelRatio || 1);
+        return (
+          diagnostics.ready &&
+          Boolean(published) &&
+          officeScroll.clientWidth > 0 &&
+          officeScroll.clientHeight > 0 &&
+          officeCanvas.width ===
+            Math.round(
+              Math.min(published!.officeWidth, officeScroll.clientWidth) *
+                resolution,
+            ) &&
+          officeCanvas.height ===
+            Math.round(
+              Math.min(published!.totalHeight, officeScroll.clientHeight) *
+                resolution,
+            )
+        );
+      },
       () =>
-        officeCanvas.width === visibleSize.width &&
-        officeCanvas.height === visibleSize.height,
-      "Office did not restore its canvas after returning from a hidden workspace surface",
+        `Office did not restore its canvas after returning from a hidden workspace surface: canvas=${officeCanvas.width}x${officeCanvas.height}, viewport=${officeScroll.clientWidth}x${officeScroll.clientHeight}, ready=${diagnostics.ready}`,
     );
     check(
       diagnostics.mounts === mountsBeforeNavigation,
@@ -437,6 +455,39 @@ async function run() {
       }
       progressRoot.render(
         <OfficeSemanticTargetsOverlay
+          layout={{
+            ...progressLayout,
+            layoutRevision: progressLayout.layoutRevision + 1,
+          }}
+          projection={progressProjection}
+          renderedRevision={-progressLayout.layoutRevision}
+          selectedKey={null}
+          onSelect={() => {
+            selectedAfterRefresh = "preparing";
+          }}
+          onActivateAgent={() => {
+            selectedAfterRefresh = "preparing";
+          }}
+          onActivateDesk={() => {}}
+          onActivateRoom={() => {}}
+        />,
+      );
+      await settle();
+      focused.click();
+      check(
+        document.activeElement === focused &&
+          focused.isConnected &&
+          selectedAfterRefresh !== "preparing",
+        "Preparing a replacement Office layout lost focus or admitted an unpainted action",
+      );
+      check(
+        progressHost.querySelector(
+          '.world-semantic-targets-overlay[aria-busy="true"]',
+        ) !== null,
+        "Office reported ready before its replacement canvas was painted",
+      );
+      progressRoot.render(
+        <OfficeSemanticTargetsOverlay
           layout={progressLayout}
           projection={progressProjection}
           renderedRevision={0}
@@ -571,7 +622,7 @@ async function run() {
 
     check(canvas !== null, "Pixel Office canvas was not mounted");
     check(
-      canvas?.style.touchAction === "pan-x pan-y",
+      canvas?.style.touchAction === (compact ? "pan-y" : "pan-x pan-y"),
       "Pixel Office canvas did not allow native two-axis touch panning",
     );
     check(
@@ -588,10 +639,15 @@ async function run() {
     );
     check(diagnostics.sceneRenders > 0, "Pixel Office did not render a scene");
     check(layout !== null, "Pixel Office did not publish its layout");
-    check((layout?.ceoRect.width ?? 0) > 0, "CEO Office geometry is missing");
     check(
-      (layout?.agentBarRect.width ?? 0) > 0,
-      "Agent Bar geometry is missing",
+      compact ? layout?.ceoRect.width === 0 : (layout?.ceoRect.width ?? 0) > 0,
+      "Responsive CEO Office geometry is incorrect",
+    );
+    check(
+      compact
+        ? layout?.agentBarRect.width === 0
+        : (layout?.agentBarRect.width ?? 0) > 0,
+      "Responsive Agent Bar geometry is incorrect",
     );
     check(
       layout?.ceoBlocks.receptions.length === 1,
@@ -664,12 +720,12 @@ async function run() {
       "The active host room is missing its new-seat control",
     );
     check(
-      host.querySelectorAll(".world-room-overlay-action").length === 2,
+      host.querySelectorAll(".world-room-overlay-action").length === 3,
       "Room management controls are missing",
     );
     check(
       host.querySelectorAll(".world-room-overlay-action:not(:disabled)")
-        .length === 2,
+        .length === 3,
       "The selected host room did not expose its mutations",
     );
     check(
@@ -753,18 +809,19 @@ async function run() {
       check(
         Math.abs(
           stageScroll.getBoundingClientRect().top -
-            host.querySelector(".world-office-shell")!.getBoundingClientRect()
-              .top,
+            host
+              .querySelector(".world-office-navigation")!
+              .getBoundingClientRect().bottom,
         ) <= 1,
-        "Phone Office still reserves a target-row gap above the scene",
+        "Phone Office adds an unexplained gap after room navigation",
       );
       check(
-        stageScroll.scrollWidth > stageScroll.clientWidth,
-        "Phone Office lost bounded horizontal scene navigation",
+        stageScroll.scrollWidth <= stageScroll.clientWidth + 1,
+        "Phone Office still requires horizontal scene navigation",
       );
       check(
-        Math.abs(stageScroll.scrollLeft - 73) <= 1,
-        "Office scroll preference was not restored at phone width",
+        stageScroll.scrollLeft === 0,
+        "Legacy horizontal scroll was not clamped in the phone layout",
       );
       stageScroll.scrollLeft = 111;
       stageScroll.dispatchEvent(new Event("scroll"));
@@ -773,8 +830,8 @@ async function run() {
         worldLocalStorage.getItem(OFFICE_PREFERENCES_KEY) ?? "{}",
       ) as { scrollLeft?: number };
       check(
-        saved.scrollLeft === 111,
-        "Office scroll preference was not persisted",
+        saved.scrollLeft === 0,
+        "Phone Office persisted a horizontal position outside its layout",
       );
     }
   } finally {
@@ -799,6 +856,7 @@ async function run() {
 
 run()
   .then(() => verifyOfficeRendering(check))
+  .then(() => verifyGrowingOffice(check))
   .catch((error: unknown) => {
     const diagnostics = window.__HERDR_WORLD_RENDERER__;
     failures.push(

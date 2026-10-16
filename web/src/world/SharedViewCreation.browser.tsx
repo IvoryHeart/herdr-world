@@ -1,3 +1,4 @@
+window.__HERDR_WORLD_RENDERER_DEBUG__ = true;
 import { createRoot } from "react-dom/client";
 import { bridge, type ConnectionClient, type TerminalPush } from "../api";
 import { __storeTesting, emptyServerSessionState, store } from "../store";
@@ -6,6 +7,7 @@ import { initializeLayoutPreferences } from "../layoutPreferences";
 import { initializeShortcutPreferences } from "../shortcutPreferences";
 import type { Pane, Tab, Workspace } from "../types";
 import { buildWorldObject } from "./worldObject";
+import { deskAnchor } from "./officeGeometry";
 import { projectWorldOffice } from "./herdrOfficeProjection";
 import { worldRuntimeStore } from "./runtimeStore";
 import WorldFoundationApp from "./WorldFoundationApp";
@@ -348,6 +350,41 @@ async function action(title: string) {
   );
   button.click();
 }
+async function revealSeat(connectionId: string, workspaceId: string) {
+  await until(
+    () => window.__HERDR_WORLD_RENDERER__?.ready === true,
+    "Office canvas ready for room navigation",
+  );
+  const projection = projectWorldOffice(
+    buildWorldObject(worldRuntimeStore.get().connections, "alpha"),
+    Date.now(),
+  );
+  const index = projection.rooms.findIndex(
+    (room) =>
+      room.workspaceRef.connectionId === connectionId &&
+      room.workspaceRef.nativeId === workspaceId,
+  );
+  const room = projection.rooms[index]!;
+  const layout = window.__HERDR_WORLD_RENDERER__!.publishedLayout!;
+  const anchor = deskAnchor(layout.rooms[index]!, room.desks.length);
+  const scroll = document.querySelector<HTMLElement>(
+    ".world-office-shell > .world-stage-scroll",
+  )!;
+  scroll.scrollTo({
+    top: anchor.deskY - scroll.clientHeight / 2,
+    left: layout.compact ? 0 : Math.max(0, anchor.x - scroll.clientWidth / 2),
+  });
+  const control = () =>
+    document.querySelector<HTMLButtonElement>(
+      `.world-new-seat-canvas-action[aria-label*="${room.displayLabel}"]`,
+    );
+  await until(
+    () => Boolean(control()) && !control()!.disabled,
+    "revealed qualified room creation control",
+  );
+  return control()!;
+}
+
 async function run() {
   const width = Number(await (await fetch("/viewport-ready")).text());
   check(
@@ -408,13 +445,7 @@ async function run() {
     document.body.appendChild(document.createElement("div")),
   );
   root.render(<WorldFoundationApp />);
-  await until(
-    () =>
-      document.querySelector(
-        '.world-new-seat-canvas-action[aria-label*="alpha b"]',
-      ),
-    "second room control",
-  );
+  const fullRoom = await revealSeat("alpha", "b");
   check(
     document.querySelector<HTMLSelectElement>('[aria-label="World view"]')
       ?.value === "office",
@@ -424,9 +455,6 @@ async function run() {
     !document.querySelector(".workspace-inspector"),
     "Fresh Office unexpectedly has Inspector",
   );
-  const fullRoom = document.querySelector<HTMLButtonElement>(
-    '.world-new-seat-canvas-action[aria-label*="alpha b"]',
-  )!;
   await until(
     () => !fullRoom.disabled,
     "full room creation admitted after scene render",
@@ -469,12 +497,10 @@ async function run() {
       (room) =>
         room.workspaceRef.connectionId === "alpha" &&
         room.workspaceRef.nativeId === "b",
-    )?.desks.length === 8,
-    "Office exceeded eight displayed desks",
+    )?.desks.length === 9,
+    "Office did not grow to present the ninth observed tab",
   );
-  const betaRoom = document.querySelector<HTMLButtonElement>(
-    '.world-new-seat-canvas-action[aria-label*="beta a"]',
-  )!;
+  const betaRoom = await revealSeat("beta", "a");
   await until(
     () => !betaRoom.disabled,
     "cold inactive host control after scene render",

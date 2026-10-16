@@ -10,6 +10,7 @@ import { Container, Graphics, Texture } from "pixi.js";
 import type { HerdrOfficeProjection } from "./herdrOfficeProjection";
 import { agentBarSlot, OFFICE_GEOMETRY } from "./officeGeometry";
 import type {
+  OfficeRect,
   OfficeCeoBlockLayout,
   OfficeLayout,
   OfficeRoomRect,
@@ -52,12 +53,19 @@ export function drawVerticalRoad(
   y: number,
   width: number,
   height: number,
+  viewport?: OfficeRect,
 ) {
   const road = new Graphics();
   road.rect(x, y, width, height).fill(0x252537);
   road.rect(x, y, 1, height).fill({ color: 0x6c6990, alpha: 0.35 });
   road.rect(x + width - 1, y, 1, height).fill({ color: 0x6c6990, alpha: 0.35 });
-  for (let markerY = y + 14; markerY < y + height - 8; markerY += 18) {
+  const firstMarker = viewport
+    ? y + 14 + Math.max(0, Math.floor((viewport.y - y - 14) / 18)) * 18
+    : y + 14;
+  const lastMarker = viewport
+    ? Math.min(y + height - 8, viewport.y + viewport.height)
+    : y + height - 8;
+  for (let markerY = firstMarker; markerY < lastMarker; markerY += 18) {
     road
       .rect(x + width / 2, markerY, 1, 6)
       .fill({ color: 0x77749a, alpha: 0.38 });
@@ -84,6 +92,7 @@ export function drawRoomRoads(
   stage: Container,
   layout: OfficeLayout,
   visibleRooms: readonly OfficeRoomRect[],
+  viewport?: OfficeRect,
 ) {
   const road = new Graphics();
   const rows = new Map<number, OfficeRoomRect[]>();
@@ -107,6 +116,7 @@ export function drawRoomRoads(
           room.y,
           gap,
           Math.min(room.height, next.height),
+          viewport,
         );
       }
     });

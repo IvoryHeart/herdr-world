@@ -93,8 +93,11 @@ and independently content-sized workspace rooms. Work rooms SHALL represent real
 Herdr workspaces, desks SHALL represent observed tabs, and scene relocation SHALL
 NOT change authoritative host or workspace ancestry.
 
-Phone Office SHALL use one vertical flow: all filtered host receptions, expenses,
-then workspace rooms. Neither reception navigation nor navigation between rooms
+Phone Office SHALL use one vertical flow: receptions with waiting or completed
+agents needing attention, Economy, Workforce, then workspace rooms. Empty receptions SHALL be absent
+from the phone scene. Host order SHALL remain stable among attention receptions;
+reordering SHALL preserve qualified identities. Workforce SHALL retain observed
+agent-state counts rather than inventing metrics. Neither reception navigation nor navigation between rooms
 SHALL require horizontal scrolling. The decorative CEO room SHALL be absent from
 the phone layout; useful host status and access to reception and idle agents
 SHALL remain available. Sections and room headers SHALL fit the usable viewport.
@@ -130,8 +133,7 @@ available. A large room SHALL NOT enlarge unrelated rooms.
 #### Scenario: Office opens at a narrow width
 
 - **WHEN** the viewport cannot contain the resolved logical Office width
-- **THEN** the phone scene fits its usable width, every filtered host reception
-  is in the vertical flow before expenses and workspace rooms, and the shell
+- **THEN** the phone scene fits its usable width, attention receptions precede Economy and Workforce, empty receptions are absent, and workspace rooms follow Workforce; the shell
   does not require horizontal navigation
 
 #### Scenario: Optional observation provider is unavailable
@@ -150,8 +152,9 @@ available. A large room SHALL NOT enlarge unrelated rooms.
 #### Scenario: Compare all host receptions on a phone
 
 - **WHEN** more than six filtered hosts have observed receptions
-- **THEN** each qualified reception is reachable by vertical scrolling before the
-  expenses and workspace rooms, without a host carousel or six-host scene cap
+- **THEN** each qualified reception needing attention is reachable by vertical scrolling
+  before Economy, Workforce and workspace rooms, without a host carousel or
+  six-host scene cap; empty receptions do not occupy phone scene space
 
 ### Requirement: Office reception capacity
 

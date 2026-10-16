@@ -75,10 +75,6 @@ function projection(): HerdrOfficeProjection {
       omittedBarAgents: 0,
     },
     presentationBounds: {
-      rooms: 128,
-      desksPerRoom: 8,
-      roomAgentsPerRoom: 16,
-      receptionDesks: 6,
       waitingAgentsPerReception: 8,
       paneDevicesPerDesk: 4,
       barAgents: 16,

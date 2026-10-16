@@ -9,8 +9,8 @@ workspace instead of letting its room grow with the observed tabs and agents.
 - Deliver Office before the separate, deferred
   [Graph exploration](../elastic-graph-exploration/proposal.md). The owner selected
   vertical scrolling after comparing interactive vertical and horizontal studies.
-- On phones, use one vertical Office flow: every filtered host's reception first,
-  expenses next, then workspace rooms. Neither receptions nor workspace rooms
+- On phones, use one vertical Office flow: receptions needing attention first,
+  then Economy, Workforce and workspace rooms. Neither receptions nor workspace rooms
   require horizontal swiping. Remove the decorative CEO room from the phone
   composition; retain its useful status information and access to idle agents.
 - Keep the pixel scene, reception tables, characters, real workspace rooms and

@@ -20,7 +20,7 @@ import type {
   OfficeLongRoomTitleMode,
   OfficeRoomAlignment,
 } from "./officeGeometry";
-import { OfficeLayoutPublisher, resolveOfficeGeometry } from "./officeLayout";
+import { OfficeLayoutPublisher } from "./officeLayout";
 import type {
   OfficeGeometryRoomDescriptor,
   PublishedOfficeLayout,
@@ -29,6 +29,7 @@ import { officeDebug } from "../officeDebug";
 import {
   officeVisibleReceptions,
   officeVisibleRooms,
+  officeIntersects,
 } from "./officeVirtualization";
 import { cacheOfficeStaticContent } from "./officeStaticCache";
 import { OfficeScenePreparation } from "./officeScenePreparation";
@@ -60,6 +61,7 @@ import {
   pointerSequences,
   canvasActivationCandidates,
 } from "./officeInteraction";
+import { resolveOfficeSceneGeometry } from "./officeSceneLayout";
 import { drawRoom } from "./officeRoomDrawing";
 import { drawCeoReception } from "./officeReceptionDrawing";
 import {
@@ -91,6 +93,7 @@ export async function createOfficeRenderer(
   longRoomTitleMode: OfficeLongRoomTitleMode,
   initializationSignal?: AbortSignal,
   onRendererError?: (error: unknown) => void,
+  collapsedRoomKeys: ReadonlySet<string> = new Set(),
 ): Promise<OfficeRendererController> {
   officeDebug("renderer:create-start", {
     rooms: projection.rooms.length,
@@ -115,6 +118,7 @@ export async function createOfficeRenderer(
   let currentRoomAlignment = roomAlignment;
   let currentLongRoomTitleMode = longRoomTitleMode;
   let currentSeatCreationStates = seatCreationStates;
+  let currentCollapsedRoomKeys = collapsedRoomKeys;
   const layoutPublisher = new OfficeLayoutPublisher();
   let currentLayout: PublishedOfficeLayout | null = null;
   let lastWidth = 0;
@@ -124,6 +128,16 @@ export async function createOfficeRenderer(
   let lastSceneSignature: string | null = null;
   let sceneRequest = 0;
   let sceneComplete = false;
+  let buildRequest = 0;
+  let pendingBuild = 0;
+  const sceneInteractive = () =>
+    !disposed &&
+    sceneComplete &&
+    pendingBuild === 0 &&
+    Boolean(
+      currentLayout &&
+        layoutPublisher.isCanvasReady(currentLayout.layoutRevision),
+    );
   let tick = 0;
   let currentFontReady = officeFontReady();
   const animated: AnimatedItem[] = [];
@@ -252,21 +266,25 @@ export async function createOfficeRenderer(
   }
 
   const select = (key: string) => {
-    if (!disposed) {
+    if (sceneInteractive()) {
       onSelect(key);
     }
   };
   const activateAgent = (key: string) => {
-    if (!disposed) {
+    if (sceneInteractive()) {
       onActivateAgent(key);
     }
   };
   const activateRoom = (key: string) => {
-    if (!disposed) {
+    if (sceneInteractive()) {
       onActivateRoom(key);
     }
   };
   const hover = (event: PointerEvent) => {
+    if (!sceneInteractive()) {
+      onHover?.(null);
+      return;
+    }
     let target: Container | null = app.renderer.events.rootBoundary.hitTest(
       event.offsetX,
       event.offsetY,
@@ -327,12 +345,17 @@ export async function createOfficeRenderer(
     diagnostics.ready = false;
     onRendererError?.(error);
   };
+  let paintedLayoutRevision = 0;
   const acknowledgeCanvas = () => {
     if (
+      pendingBuild === 0 &&
       currentLayout &&
       layoutPublisher.ackCanvasRendered(currentLayout.layoutRevision)
-    )
+    ) {
+      diagnostics.ready = true;
+      paintedLayoutRevision = currentLayout.layoutRevision;
       onCanvasRendered(currentLayout.layoutRevision);
+    }
   };
   const renderScene = async (layout: OfficeLayout) => {
     if (disposed) {
@@ -348,26 +371,37 @@ export async function createOfficeRenderer(
       scrollTop,
       viewportHeight,
     );
+    const paintViewport = {
+      x:
+        Math.floor((scrollElement?.scrollLeft ?? 0) / 128) * 128 -
+        (scrollElement?.clientWidth ?? layout.officeWidth),
+      y: Math.floor(scrollTop / 128) * 128 - viewportHeight - 128,
+      width: 3 * (scrollElement?.clientWidth ?? layout.officeWidth) + 128,
+      height: 3 * viewportHeight + 256,
+    };
+    floors.viewport = paintViewport;
     const visibleReceptions = officeVisibleReceptions(
       currentProjection.receptions,
       layout.ceoBlocks.receptions,
       scrollElement?.scrollLeft ?? 0,
       scrollElement?.clientWidth ?? layout.officeWidth,
+      { y: scrollTop, height: viewportHeight },
     );
-    const sceneSignature = officeSceneSignature({
-      layout,
-      projection: currentProjection,
-      selectedKey: currentSelectedKey,
-      completionSeenKeys: currentCompletionSeenKeys,
-      observability: currentObservability,
-      seatCreationStates: currentSeatCreationStates,
-      visibleRoomIndices: visibleRooms.map(({ index }) => index),
-      roomVersions: visibleRooms.map(({ index }) =>
-        roomVersion(currentProjection.rooms[index]!),
-      ),
-      visibleReceptionIndices: visibleReceptions.map(({ index }) => index),
-    });
-    if (sceneSignature === lastSceneSignature) {
+    const sceneSignature =
+      officeSceneSignature({
+        layout,
+        projection: currentProjection,
+        selectedKey: currentSelectedKey,
+        completionSeenKeys: currentCompletionSeenKeys,
+        observability: currentObservability,
+        seatCreationStates: currentSeatCreationStates,
+        visibleRoomIndices: visibleRooms.map(({ index }) => index),
+        roomVersions: visibleRooms.map(({ index }) =>
+          roomVersion(currentProjection.rooms[index]!),
+        ),
+        visibleReceptionIndices: visibleReceptions.map(({ index }) => index),
+      }) + JSON.stringify(paintViewport);
+    if (sceneSignature === lastSceneSignature && sceneComplete) {
       diagnostics.sceneSkips += 1;
       if (sceneComplete) {
         app.render();
@@ -379,8 +413,15 @@ export async function createOfficeRenderer(
     const request = ++sceneRequest;
     sceneComplete = false;
     diagnostics.ready = false;
+    // Gate activation throughout preparation, retaining the prior painted
+    // revision so a still-current semantic control can keep keyboard focus.
+    onCanvasRendered(paintedLayoutRevision > 0 ? -paintedLayoutRevision : 0);
+    const geometryRequest = buildRequest;
     const current = () =>
-      !disposed && !initializationSignal?.aborted && request === sceneRequest;
+      !disposed &&
+      !initializationSignal?.aborted &&
+      request === sceneRequest &&
+      geometryRequest === buildRequest;
     const paintSlice = async (container?: Container, force = false) => {
       if (!current()) return false;
       if (container && !(await preparation.prepareScene(container, current)))
@@ -531,6 +572,7 @@ export async function createOfficeRenderer(
           : null,
         [...currentCompletionSeenKeys].filter((key) => keys.has(key)).sort(),
         currentSeatCreationStates[room.key],
+        paintViewport,
       ]);
       if (
         !(await paintSlice(
@@ -552,8 +594,11 @@ export async function createOfficeRenderer(
                 enabled: false,
                 reason: null,
               },
-              onNewSeat,
+              (key) => {
+                if (sceneInteractive()) onNewSeat(key);
+              },
               floors,
+              paintViewport,
             ),
           ),
         ))
@@ -569,7 +614,8 @@ export async function createOfficeRenderer(
             layout.inputDigest ?? layout,
             visibleRooms.map(({ index }) => index),
           ]),
-          (parent) => drawRoomRoads(parent, layout, visibleRooms),
+          (parent) =>
+            drawRoomRoads(parent, layout, visibleRooms, paintViewport),
         ),
         true,
       ))
@@ -609,7 +655,7 @@ export async function createOfficeRenderer(
   const syncScrollPosition = () => {
     app.stage.position.x = -(scrollElement?.scrollLeft ?? 0);
     app.stage.position.y = -(scrollElement?.scrollTop ?? 0);
-    if (currentLayout) {
+    if (currentLayout && pendingBuild === 0) {
       void renderScene(currentLayout).catch(reportSceneFailure);
     }
   };
@@ -621,87 +667,124 @@ export async function createOfficeRenderer(
   }
 
   const build = async (requestedWidth = element.clientWidth) => {
+    const request = ++buildRequest;
+    pendingBuild = request;
+    diagnostics.ready = false;
+    const current = () =>
+      !disposed && !initializationSignal?.aborted && request === buildRequest;
+    onCanvasRendered(paintedLayoutRevision > 0 ? -paintedLayoutRevision : 0);
+    await yieldWorldTask();
+    if (!current()) return;
     if (disposed) {
       return;
     }
     const viewportWidth = scrollElement?.clientWidth ?? element.clientWidth;
     const width = Math.floor(viewportWidth || requestedWidth || 0);
-    const roomDescriptors: OfficeGeometryRoomDescriptor[] =
-      currentProjection.rooms.map((room) => {
-        const host = currentProjection.hosts.find(
-          ({ key }) => key === room.hostKey,
-        );
-        const roomTitle = room.accessibleLabel ?? room.displayLabel;
-        const hostTitle = host?.accessibleLabel ?? host?.displayLabel ?? "host";
-        const measuredHeader = measureOfficeRoomHeader(
-          roomTitle,
-          hostTitle,
-          currentLongRoomTitleMode,
-        );
-        return {
-          id: room.key,
-          role: "work",
-          region: "work",
-          title: roomTitle,
-          hostTitle,
-          visualTitle: measuredHeader.workspace,
-          visualHostTitle: measuredHeader.host,
-          headerMinTitleBoxWidth: measuredHeader.titleBoxWidth,
-          headerMinWidth: measuredHeader.roomWidth,
-          deskCount:
-            room.desks.length +
-            (currentSeatCreationStates[room.key]?.visible &&
-            room.desks.length < OFFICE_GEOMETRY.desksPerRoom
-              ? 1
-              : 0),
-          deskFootprintWidth: room.desks.some(
-            ({ paneDevices }) => paneDevices.length,
-          )
-            ? OFFICE_GEOMETRY.paneDeskWidth
-            : undefined,
-          deskFootprintHeight: room.desks.some(
-            ({ paneDevices }) => paneDevices.length,
-          )
-            ? OFFICE_GEOMETRY.paneDeskRowHeight
-            : undefined,
-          standingCount:
-            room.roomAgents.filter(({ placement }) => placement === "standing")
-              .length -
-            room.desks.reduce(
-              (total, desk) =>
-                total +
-                (desk.paneDevices.length
-                  ? Math.min(
-                      OFFICE_NEARBY_AGENT_LIMIT,
-                      room.roomAgents.filter(
-                        ({ placement, deskKey }) =>
-                          placement === "standing" && deskKey === desk.key,
-                      ).length,
-                    )
-                  : 0),
-              0,
-            ),
-          actions: {
-            rename: true,
-            close: true,
-            createSeat: currentSeatCreationStates[room.key]?.visible === true,
-          },
-        };
+    const roomDescriptors: OfficeGeometryRoomDescriptor[] = [];
+    for (const room of currentProjection.rooms) {
+      const host = currentProjection.hosts.find(
+        ({ key }) => key === room.hostKey,
+      );
+      const roomTitle = room.accessibleLabel ?? room.displayLabel;
+      const hostTitle = host?.accessibleLabel ?? host?.displayLabel ?? "host";
+      const standingByDesk = new Map<string, number>();
+      let standingTotal = 0;
+      for (const agent of room.roomAgents) {
+        if (agent.placement !== "standing") continue;
+        standingTotal++;
+        if (agent.deskKey)
+          standingByDesk.set(
+            agent.deskKey,
+            (standingByDesk.get(agent.deskKey) ?? 0) + 1,
+          );
+      }
+      const measuredHeader = measureOfficeRoomHeader(
+        roomTitle,
+        hostTitle,
+        currentLongRoomTitleMode,
+      );
+      roomDescriptors.push({
+        id: room.key,
+        role: "work",
+        region: "work",
+        title: roomTitle,
+        hostTitle,
+        visualTitle: measuredHeader.workspace,
+        visualHostTitle: measuredHeader.host,
+        headerMinTitleBoxWidth: measuredHeader.titleBoxWidth,
+        headerMinWidth: measuredHeader.roomWidth,
+        deskCount:
+          room.desks.length +
+          (currentSeatCreationStates[room.key]?.visible ? 1 : 0),
+        deskFootprintWidth: room.desks.some(
+          ({ paneDevices }) => paneDevices.length,
+        )
+          ? OFFICE_GEOMETRY.paneDeskWidth
+          : undefined,
+        deskFootprintHeight: room.desks.some(
+          ({ paneDevices }) => paneDevices.length,
+        )
+          ? OFFICE_GEOMETRY.paneDeskRowHeight
+          : undefined,
+        standingCount:
+          standingTotal -
+          room.desks.reduce(
+            (total, desk) =>
+              total +
+              (desk.paneDevices.length
+                ? Math.min(
+                    OFFICE_NEARBY_AGENT_LIMIT,
+                    standingByDesk.get(desk.key) ?? 0,
+                  )
+                : 0),
+            0,
+          ),
+        actions: {
+          rename: true,
+          close: true,
+          createSeat: currentSeatCreationStates[room.key]?.visible === true,
+        },
       });
-    const geometry = resolveOfficeGeometry({
-      availableViewportWidth: width,
-      availableViewportHeight: scrollElement?.clientHeight ?? 0,
-      titleMode: currentLongRoomTitleMode,
-      roomAlignment: currentRoomAlignment,
-      ceoReceptionCount: currentProjection.receptions.length,
-      fontKey: "Inter, ui-sans-serif, system-ui, sans-serif",
-      fontReady: currentFontReady,
-      rooms: roomDescriptors,
-    });
-    const layout = layoutPublisher.publish(
+      if (roomDescriptors.length % 64 === 0) {
+        await yieldWorldTask();
+        if (!current()) return;
+      }
+    }
+    await yieldWorldTask();
+    if (!current()) return;
+
+    const geometry = resolveOfficeSceneGeometry(
+      {
+        availableViewportWidth: width,
+        availableViewportHeight: scrollElement?.clientHeight ?? 0,
+        titleMode: currentLongRoomTitleMode,
+        roomAlignment: currentRoomAlignment,
+        ceoReceptionCount: currentProjection.receptions.length,
+        attentionReceptionIndices: currentProjection.receptions.flatMap(
+          (reception, index) =>
+            reception.observedWaitingAgentCount > 0 ? [index] : [],
+        ),
+        fontKey: "Inter, ui-sans-serif, system-ui, sans-serif",
+        fontReady: currentFontReady,
+        rooms: roomDescriptors,
+      },
+      new Set(
+        currentProjection.rooms.flatMap((room, index) =>
+          currentCollapsedRoomKeys.has(room.key) ? [index] : [],
+        ),
+      ),
+    );
+    await yieldWorldTask();
+    if (!current()) return;
+    const layout = await layoutPublisher.publishAsync(
       { canonicalDigest: geometry.inputDigest },
       geometry,
+      current,
+      yieldWorldTask,
     );
+    if (!layout || !current()) return;
+    await yieldWorldTask();
+    if (!current()) return;
     const viewportHeight = Math.min(
       layout.totalHeight,
       Math.max(1, scrollElement?.clientHeight ?? layout.totalHeight),
@@ -711,6 +794,7 @@ export async function createOfficeRenderer(
       Math.max(1, scrollElement?.clientWidth ?? layout.officeWidth),
     );
     currentLayout = layout;
+    pendingBuild = 0;
     const viewport = scrollElement ?? element;
     lastViewportSize = {
       width: viewport.clientWidth,
@@ -726,6 +810,8 @@ export async function createOfficeRenderer(
       app.renderer.resize(canvasWidth, viewportHeight);
       lastRendererSize = { width: canvasWidth, height: viewportHeight };
     }
+    element.dataset.officeLayout = layout.compact ? "compact" : "desktop";
+    canvas.style.touchAction = layout.compact ? "pan-y" : "pan-x pan-y";
     element.style.width = `${layout.officeWidth}px`;
     element.style.height = `${layout.totalHeight}px`;
     app.stage.position.x = -(scrollElement?.scrollLeft ?? 0);
@@ -813,7 +899,7 @@ export async function createOfficeRenderer(
 
   const observer = new ResizeObserver((entries) => {
     const nextWidth = Math.max(
-      OFFICE_GEOMETRY.minOfficeWidth,
+      1,
       Math.floor(entries[0]?.contentRect.width || 0),
     );
     const viewport = scrollElement ?? element;
@@ -877,6 +963,7 @@ export async function createOfficeRenderer(
       nextRoomAlignment = currentRoomAlignment,
       nextLongRoomTitleMode = currentLongRoomTitleMode,
       nextSeatCreationStates = currentSeatCreationStates,
+      nextCollapsedRoomKeys = currentCollapsedRoomKeys,
     ) {
       if (
         nextRoomAlignment !== currentRoomAlignment ||
@@ -891,10 +978,12 @@ export async function createOfficeRenderer(
       currentCompletionSeenKeys = nextCompletionSeenKeys;
       currentObservability = nextObservability;
       currentSeatCreationStates = nextSeatCreationStates;
+      currentCollapsedRoomKeys = nextCollapsedRoomKeys;
       return build(lastWidth || element.clientWidth);
     },
     getAnchors(selectedKey, conversationTargetKey) {
-      return currentLayout
+      if (!sceneInteractive()) return { agent: null, workbench: null };
+      const anchors = currentLayout
         ? resolveOfficeAnchors(
             currentProjection,
             currentLayout,
@@ -902,6 +991,21 @@ export async function createOfficeRenderer(
             conversationTargetKey,
           )
         : { agent: null, workbench: null };
+      const viewport = {
+        x: scrollElement?.scrollLeft ?? 0,
+        y: scrollElement?.scrollTop ?? 0,
+        width: scrollElement?.clientWidth ?? 0,
+        height: scrollElement?.clientHeight ?? 0,
+      };
+      for (const key of ["agent", "workbench"] as const) {
+        const anchor = anchors[key];
+        if (
+          anchor &&
+          !officeIntersects({ ...anchor, width: 1, height: 1 }, viewport)
+        )
+          anchors[key] = null;
+      }
+      return anchors;
     },
     destroy() {
       if (disposed) {

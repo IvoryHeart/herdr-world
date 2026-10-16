@@ -22,7 +22,10 @@ one click away. Hosts defaults to All hosts; filtering changes visibility while
 open Inspectors and pending operations keep their captured owners. Use Actions →
 New workspace or New tab in any visual view; Office also provides New room and
 New seat controls. Creation prepares its source terminal and opens the result in
-the current view, including for another ready host and rooms with eight displayed desks.
+the current view, including for another ready host. Office rooms grow with their
+observed tabs and agents; room navigation and collapse keep large offices reachable.
+On phones, attention receptions, Economy, Workforce and
+workspace rooms form one vertical scene.
 
 <!-- markdownlint-disable MD033 -->
 

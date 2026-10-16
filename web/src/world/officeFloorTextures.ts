@@ -4,6 +4,7 @@ import { OFFICE_GEOMETRY } from "./officeGeometry";
 
 /** Renderer-owned, bounded palette: two by two tiles replace thousands of paths. */
 export class OfficeFloorTextures {
+  viewport?: { y: number; height: number };
   private textures = new Map<string, Texture>();
 
   draw(
@@ -20,7 +21,13 @@ export class OfficeFloorTextures {
     // Fractional tile edges have per-cell MSAA coverage in the vector baseline.
     // Retain those paths rather than changing seams when a room is centred.
     if (!Number.isInteger(x) || !Number.isInteger(y)) {
-      for (let offsetY = 0; offsetY < height; offsetY += tile) {
+      const firstY = this.viewport
+        ? Math.max(0, Math.floor((this.viewport.y - y) / tile) * tile)
+        : 0;
+      const lastY = this.viewport
+        ? Math.min(height, this.viewport.y + this.viewport.height - y + tile)
+        : height;
+      for (let offsetY = firstY; offsetY < lastY; offsetY += tile) {
         for (let offsetX = 0; offsetX < width; offsetX += tile) {
           graphics
             .rect(x + offsetX, y + offsetY, tile, tile)

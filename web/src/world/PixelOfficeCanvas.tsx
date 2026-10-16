@@ -53,6 +53,7 @@ export function PixelOfficeCanvas({
   roomAlignment,
   longRoomTitleMode,
   children,
+  collapsedRoomKeys,
 }: {
   projection: HerdrOfficeProjection;
   selectedKey: string | null;
@@ -72,6 +73,7 @@ export function PixelOfficeCanvas({
   roomAlignment: OfficeRoomAlignment;
   longRoomTitleMode: OfficeLongRoomTitleMode;
   children?: ReactNode;
+  collapsedRoomKeys?: ReadonlySet<string>;
 }) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const controllerRef = useRef<OfficeRendererController | null>(null);
@@ -93,6 +95,7 @@ export function PixelOfficeCanvas({
     onCanvasRendered,
     roomAlignment,
     longRoomTitleMode,
+    collapsedRoomKeys,
   });
   const [failure, setFailure] = useState(false);
   latestRef.current = {
@@ -113,6 +116,7 @@ export function PixelOfficeCanvas({
     onCanvasRendered,
     roomAlignment,
     longRoomTitleMode,
+    collapsedRoomKeys,
   };
 
   const reportAnchors = () => {
@@ -266,6 +270,7 @@ export function PixelOfficeCanvas({
       () => {
         if (!disposed) setFailure(true);
       },
+      latestRef.current.collapsedRoomKeys,
     )
       .then(async (controller) => {
         if (disposed) {
@@ -287,6 +292,7 @@ export function PixelOfficeCanvas({
           latest.roomAlignment,
           latest.longRoomTitleMode,
           latest.seatCreationStates,
+          latest.collapsedRoomKeys,
         );
         scheduleAnchorReportRef.current();
       })
@@ -326,6 +332,7 @@ export function PixelOfficeCanvas({
         roomAlignment,
         longRoomTitleMode,
         seatCreationStates,
+        collapsedRoomKeys,
       )
       .then(() => {
         if (current) scheduleAnchorReportRef.current();
@@ -337,6 +344,7 @@ export function PixelOfficeCanvas({
       current = false;
     };
   }, [
+    collapsedRoomKeys,
     completionSeenKeys,
     longRoomTitleMode,
     observability,

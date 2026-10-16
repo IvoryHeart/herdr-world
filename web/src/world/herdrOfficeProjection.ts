@@ -8,10 +8,6 @@ import type {
 import { boundedOptionalText, yieldWorldTask } from "./worldObject";
 
 export const OFFICE_PRESENTATION_BOUNDS = Object.freeze({
-  rooms: 128,
-  desksPerRoom: 8,
-  roomAgentsPerRoom: 16,
-  receptionDesks: 6,
   waitingAgentsPerReception: 8,
   paneDevicesPerDesk: 4,
   barAgents: 16,
@@ -239,6 +235,77 @@ const projectionInputs = new WeakMap<
   }
 >();
 
+const preparedProjections = new WeakMap<WorldObject, HerdrOfficeProjection>();
+const presentedRoomCache = new WeakMap<WorldSpaceObject, OfficeRoom>();
+const presentationSignatures = new WeakMap<object, string>();
+function presentationSignature(item: object) {
+  let value = presentationSignatures.get(item);
+  if (value === undefined) {
+    value = JSON.stringify(item);
+    presentationSignatures.set(item, value);
+  }
+  return value;
+}
+function presentRoom(
+  entry: ProjectedRoom,
+  selectedId: string | null,
+): OfficeRoom {
+  if (
+    !selectedId ||
+    !entry.source.children.some((leaf) => leaf.id === selectedId)
+  ) {
+    selectedId = null;
+    const cached = presentedRoomCache.get(entry.source);
+    if (cached) return cached;
+  }
+  const desks = entry.desks.map((desk) => {
+    const devices = boundedWithPriority(
+      projectPaneDevices(entry.source.children, desk),
+      OFFICE_PRESENTATION_BOUNDS.paneDevicesPerDesk,
+      (device) => device.nodeId === selectedId,
+    );
+    return {
+      ...desk,
+      paneDevices: devices,
+      omittedPaneCount: Math.max(0, desk.observedPaneCount - devices.length),
+    };
+  });
+  const seated = new Set(
+    desks.flatMap(({ occupantAgentKey }) =>
+      occupantAgentKey ? [occupantAgentKey] : [],
+    ),
+  );
+  const deskOrder = new Map(desks.map((desk, index) => [desk.key, index]));
+  const roomAgents = entry.agents
+    .filter(({ destination }) => destination === "room")
+    .map((agent) => ({
+      ...agent,
+      placement: seated.has(agent.key)
+        ? ("seated" as const)
+        : ("standing" as const),
+    }))
+    .sort((left, right) => compareRoomAgents(left, right, deskOrder));
+  const result: OfficeRoom = {
+    ...entry.room,
+    desks,
+    roomAgents,
+    omittedDeskCount: Math.max(0, entry.source.coverage.tabs - desks.length),
+    omittedAgentCount: Math.max(
+      0,
+      entry.source.coverage.status.working +
+        entry.source.coverage.status.unknown -
+        roomAgents.length,
+    ),
+    observedDeskCount: entry.source.coverage.tabs,
+    observedAgentCount: entry.source.coverage.agents,
+  };
+  if (!selectedId) {
+    presentedRoomCache.set(entry.source, result);
+    presentationSignatures.set(result, JSON.stringify(result));
+  }
+  return result;
+}
+
 /** Retain immutable topology across selection overlays and equivalent refreshes. */
 export function createOfficeProjector() {
   let previousWorld: WorldObject | null = null;
@@ -248,7 +315,9 @@ export function createOfficeProjector() {
     const byKey = new Map(prior.map((item) => [item.key, item]));
     const result = next.map((item) => {
       const old = byKey.get(item.key);
-      return old && JSON.stringify(old) === JSON.stringify(item) ? old : item;
+      return old && presentationSignature(old) === presentationSignature(item)
+        ? old
+        : item;
     });
     return result.length === prior.length &&
       result.every((item, index) => item === prior[index])
@@ -260,6 +329,12 @@ export function createOfficeProjector() {
     generatedAt: number,
     selectedId: string | null,
   ): HerdrOfficeProjection => {
+    const preparedProjection = preparedProjections.get(world);
+    if (preparedProjection && previousWorld !== world) {
+      previous = preparedProjection;
+      previousWorld = world;
+      previousSelected = null;
+    }
     let next: HerdrOfficeProjection | null = null;
     const inputs = previous && projectionInputs.get(previous);
     if (
@@ -279,24 +354,28 @@ export function createOfficeProjector() {
         oldSelection?.kind === "space"
           ? oldSelection.id
           : oldSelection?.parentId;
-      // Selection can reserve otherwise-omitted desks, panes and agents. Those
-      // rooms must run bounded admission again, including when selection clears.
+      // Selection can reserve another compact pane device. Recompute its room
+      // when that artwork admission changes, including when selection clears.
       const boundedAdmissionUnchanged = inputs.allRooms
         .filter(
           (entry) =>
             entry.source.id === selectedSpaceId ||
             entry.source.id === oldSpaceId,
         )
-        .every(
-          (entry) =>
-            entry.desks.length <= OFFICE_PRESENTATION_BOUNDS.desksPerRoom &&
-            entry.agents.filter((agent) => agent.destination === "room")
-              .length <= OFFICE_PRESENTATION_BOUNDS.roomAgentsPerRoom &&
-            entry.desks.every(
-              (desk) =>
-                desk.observedPaneCount <=
-                OFFICE_PRESENTATION_BOUNDS.paneDevicesPerDesk,
-            ),
+        .every((entry) =>
+          entry.desks.every(
+            (desk) =>
+              desk.observedPaneCount <=
+                OFFICE_PRESENTATION_BOUNDS.paneDevicesPerDesk ||
+              [selectedId, previousSelected].every(
+                (id) =>
+                  !id ||
+                  !desk.terminalSelectionKeys.includes(id) ||
+                  projectPaneDevices(entry.source.children, desk)
+                    .slice(0, OFFICE_PRESENTATION_BOUNDS.paneDevicesPerDesk)
+                    .some((device) => device.nodeId === id),
+              ),
+          ),
         );
       const hosts = previous.hosts.map((host, index) => {
         const selected = selection
@@ -307,33 +386,6 @@ export function createOfficeProjector() {
           : world.hosts[index]!.selectedHost;
         return host.selected === selected ? host : { ...host, selected };
       });
-      const selectedHosts = new Set(
-        hosts.filter((host) => host.selected).map((host) => host.key),
-      );
-      const candidates = [...inputs.allRooms].sort(
-        (a, b) =>
-          Number(b.source.id === selectedSpaceId) -
-            Number(a.source.id === selectedSpaceId) || compareRooms(a, b),
-      );
-      const rooms = boundedWithPriority(
-        candidates,
-        OFFICE_PRESENTATION_BOUNDS.rooms,
-        (entry) => selectedHosts.has(entry.host.key),
-      ).sort(compareRooms);
-      const receptions = boundedWithPriority(
-        hosts,
-        OFFICE_PRESENTATION_BOUNDS.receptionDesks,
-        (host) => host.selected,
-      );
-      const sameAdmission =
-        rooms.length === previous.rooms.length &&
-        rooms.every(
-          (entry, index) => entry.room.key === previous!.rooms[index]!.key,
-        ) &&
-        receptions.length === previous.receptions.length &&
-        receptions.every(
-          (host, index) => host.key === previous!.receptions[index]!.hostKey,
-        );
       const inRoom =
         !selection ||
         selection.kind === "host" ||
@@ -355,12 +407,7 @@ export function createOfficeProjector() {
               (agent) => agent.key === previousSelected,
             ),
           ));
-      if (
-        sameAdmission &&
-        inRoom &&
-        !previousMovedQueue &&
-        boundedAdmissionUnchanged
-      ) {
+      if (inRoom && !previousMovedQueue && boundedAdmissionUnchanged) {
         const ranges = inputs.prepared.ranges.get(selectedSpaceId ?? "");
         next = {
           ...previous,
@@ -393,13 +440,26 @@ export function projectWorldOffice(
   generatedAt: number,
   selectedId: string | null = null,
 ): HerdrOfficeProjection {
+  const cached = preparedProjections.get(world);
+  if (cached && selectedId === null) {
+    const result = { ...cached, generatedAt };
+    projectionInputs.set(result, projectionInputs.get(cached)!);
+    return result;
+  }
+  const steps = projectWorldOfficeSteps(world, generatedAt, selectedId);
+  let step = steps.next();
+  while (!step.done) step = steps.next();
+  return step.value;
+}
+
+function* projectWorldOfficeSteps(
+  world: WorldObject,
+  generatedAt: number,
+  selectedId: string | null,
+): Generator<void, HerdrOfficeProjection> {
   const selection = selectedId ? world.nodeById.get(selectedId) : undefined;
   const selectedSpaceId =
     selection?.kind === "space" ? selection.id : selection?.parentId;
-  const selectedLeaf =
-    selection?.kind === "agent" || selection?.kind === "terminal"
-      ? selection
-      : undefined;
   const selectedFirst = (left: { key: string }, right: { key: string }) =>
     Number(right.key === selectedId) - Number(left.key === selectedId);
   const hosts = world.hosts.map(
@@ -432,12 +492,8 @@ export function projectWorldOffice(
       Number(right.source.id === selectedSpaceId) -
         Number(left.source.id === selectedSpaceId) || compareRooms(left, right),
   );
-  // Selection reserves bounded capacity; it does not change room placement.
-  const presentedRooms = boundedWithPriority(
-    roomCandidates,
-    OFFICE_PRESENTATION_BOUNDS.rooms,
-    ({ host }) => host.selected,
-  ).sort(compareRooms);
+  // Complete room membership and placement are independent of selection.
+  const presentedRooms = [...allRooms];
   const presentedRoomKeys = new Set(presentedRooms.map(({ room }) => room.key));
   const prepared = preparedOffice.get(world);
   const allAgents =
@@ -446,68 +502,10 @@ export function projectWorldOffice(
     selectedId && prepared
       ? prepared.roster[prepared.agentIndex.get(selectedId) ?? -1]?.agent
       : undefined;
-  const rooms = presentedRooms.map((entry) => {
-    const desks = boundedWithPriority(
-      entry.desks,
-      OFFICE_PRESENTATION_BOUNDS.desksPerRoom,
-      (desk) =>
-        entry.source.id === selectedSpaceId &&
-        desk.tabRef.nativeId === selectedLeaf?.tabId,
-    ).map((desk) => {
-      const devices = boundedWithPriority(
-        projectPaneDevices(entry.source.children, desk),
-        OFFICE_PRESENTATION_BOUNDS.paneDevicesPerDesk,
-        (device) => device.nodeId === selectedId,
-      );
-      return {
-        ...desk,
-        paneDevices: devices,
-        omittedPaneCount: Math.max(0, desk.observedPaneCount - devices.length),
-      };
-    });
-    const seated = new Set(
-      desks.flatMap(({ occupantAgentKey }) =>
-        occupantAgentKey ? [occupantAgentKey] : [],
-      ),
-    );
-    const deskOrder = new Map(desks.map((desk, index) => [desk.key, index]));
-    const roomAgents = entry.agents
-      .filter(({ destination }) => destination === "room")
-      .map((agent) => ({
-        ...agent,
-        placement: seated.has(agent.key)
-          ? ("seated" as const)
-          : ("standing" as const),
-      }))
-      .sort((left, right) => compareRoomAgents(left, right, deskOrder));
-    return {
-      ...entry.room,
-      desks,
-      roomAgents: boundedWithPriority(
-        roomAgents,
-        OFFICE_PRESENTATION_BOUNDS.roomAgentsPerRoom,
-        (agent) => agent.key === selectedId,
-      ),
-      omittedDeskCount: Math.max(0, entry.source.coverage.tabs - desks.length),
-      omittedAgentCount: Math.max(
-        0,
-        entry.source.coverage.status.working +
-          entry.source.coverage.status.unknown -
-          Math.min(
-            roomAgents.length,
-            OFFICE_PRESENTATION_BOUNDS.roomAgentsPerRoom,
-          ),
-      ),
-      observedDeskCount: entry.source.coverage.tabs,
-      observedAgentCount: entry.source.coverage.agents,
-    };
-  });
+  const rooms = presentedRooms.map((entry) => presentRoom(entry, selectedId));
+  yield;
   const roomByKey = new Map(rooms.map((room) => [room.key, room]));
-  const receptions = boundedWithPriority(
-    hosts,
-    OFFICE_PRESENTATION_BOUNDS.receptionDesks,
-    ({ selected }) => selected,
-  ).map((host): OfficeReception => {
+  const receptions = hosts.map((host): OfficeReception => {
     const waitingAgents = (
       prepared
         ? priorityCandidates(
@@ -604,30 +602,37 @@ export function projectWorldOffice(
   const paneIndex =
     prepared?.paneIndex ??
     new Map(paneRoster.map((entry, index) => [entry.device.key, index]));
+  let admittedRooms = 0;
   for (const entry of presentedRooms) {
+    if (++admittedRooms % 32 === 0) yield;
     const room = roomByKey.get(entry.room.key)!;
     const canonical = canonicalRoomRoster(entry);
+    const deskKeys = new Set(room.desks.map((desk) => desk.key));
+    const paneKeys = new Set(
+      room.desks.flatMap((desk) =>
+        desk.paneDevices.map((device) => device.key),
+      ),
+    );
+    const agentsByKey = new Map(
+      room.roomAgents.map((agent) => [agent.key, agent]),
+    );
     for (const value of canonical.desks)
       deskRoster[deskIndex.get(value.desk.key)!] = {
         ...value,
-        presented: room.desks.some((desk) => desk.key === value.desk.key),
+        presented: deskKeys.has(value.desk.key),
       };
     for (const value of canonical.panes)
       paneRoster[paneIndex.get(value.device.key)!] = {
         ...value,
-        presented: room.desks.some((desk) =>
-          desk.paneDevices.some((device) => device.key === value.device.key),
-        ),
+        presented: paneKeys.has(value.device.key),
       };
     for (const value of canonical.agents) {
       const agent = value.agent;
       roster[agentIndex.get(agent.key)!] = {
         ...value,
-        agent: room.roomAgents.find(({ key }) => key === agent.key) ?? agent,
+        agent: agentsByKey.get(agent.key) ?? agent,
         roomPresented: true,
-        deskPresented:
-          !!agent.deskKey &&
-          room.desks.some(({ key }) => key === agent.deskKey),
+        deskPresented: !!agent.deskKey && deskKeys.has(agent.deskKey),
         destinationPresented:
           presentedRoomAgentKeys.has(agent.key) ||
           presentedWaitingKeys.has(agent.key) ||
@@ -642,6 +647,7 @@ export function projectWorldOffice(
     const index = agentIndex.get(agent.key)!;
     roster[index] = { ...roster[index]!, destinationPresented: true };
   }
+  yield;
   const totalRoomAgents =
     world.coverage.status.working + world.coverage.status.unknown;
   const totalWaitingAgents =
@@ -700,10 +706,7 @@ export function projectWorldOffice(
       omittedRooms,
       omittedDesks: Math.max(0, world.coverage.tabs - renderedDesks),
       omittedRoomAgents: Math.max(0, totalRoomAgents - renderedRoomAgents),
-      omittedReceptionDesks: Math.max(
-        0,
-        hosts.length - OFFICE_PRESENTATION_BOUNDS.receptionDesks,
-      ),
+      omittedReceptionDesks: Math.max(0, hosts.length - receptions.length),
       omittedWaitingAgents: Math.max(
         0,
         totalWaitingAgents - renderedWaitingAgents,
@@ -891,6 +894,7 @@ export async function prepareWorldOffice(
     const space = orderedSpaces[index]!;
     const room = buildRoom(space, hosts.get(space.parentId)!);
     preparedRooms.set(space, room);
+    presentRoom(room, null);
     const canonical = canonicalRoomRoster(room);
     const range = {
       agents: [observation.roster.length, 0] as [number, number],
@@ -942,6 +946,15 @@ export async function prepareWorldOffice(
   if (isCurrent()) {
     preparedBarAgents.set(world, bar);
     preparedOffice.set(world, observation);
+    await yieldTask();
+    const steps = projectWorldOfficeSteps(world, Date.now(), null);
+    let step = steps.next();
+    while (!step.done) {
+      await yieldTask();
+      if (!isCurrent()) return;
+      step = steps.next();
+    }
+    if (isCurrent()) preparedProjections.set(world, step.value);
   }
   await yieldTask();
 }
@@ -954,6 +967,7 @@ function projectRoom(space: WorldSpaceObject, host: OfficeHost): ProjectedRoom {
 function buildRoom(space: WorldSpaceObject, host: OfficeHost): ProjectedRoom {
   const operational = space.capabilities.openSpaces;
   const roomKey = space.id;
+  const leavesByTab = groupLeavesByTab(space.children);
   const desks = [...space.tabs]
     .sort(
       (left, right) =>
@@ -965,8 +979,7 @@ function buildRoom(space: WorldSpaceObject, host: OfficeHost): ProjectedRoom {
         hostKey: host.key,
         roomKey,
         tabRef: target(space, "tab", tab.tab_id),
-        terminalSelectionKeys: space.children
-          .filter(({ tabId }) => tabId === tab.tab_id)
+        terminalSelectionKeys: (leavesByTab.get(tab.tab_id) ?? [])
           .map(({ id }) => id)
           .sort(),
         observedGeneration: space.generation,
@@ -979,7 +992,7 @@ function buildRoom(space: WorldSpaceObject, host: OfficeHost): ProjectedRoom {
         paneDevices: [],
         observedPaneCount: Math.max(
           tab.pane_count,
-          space.children.filter(({ tabId }) => tabId === tab.tab_id).length,
+          (leavesByTab.get(tab.tab_id) ?? []).length,
         ),
         omittedPaneCount: 0,
       }),
@@ -993,7 +1006,15 @@ function buildRoom(space: WorldSpaceObject, host: OfficeHost): ProjectedRoom {
     )
     .map((leaf) => projectAgent(leaf, roomKey, host.key, deskKeys))
     .sort(compareAgents);
+  const agentsByDesk = new Map<string, OfficeAgent[]>();
+  for (const agent of agents) {
+    if (!agent.deskKey) continue;
+    const group = agentsByDesk.get(agent.deskKey) ?? [];
+    group.push(agent);
+    agentsByDesk.set(agent.deskKey, group);
+  }
   for (const desk of desks) {
+    const deskAgents = agentsByDesk.get(desk.key) ?? [];
     desk.paneDevices = projectPaneDevices(space.children, desk).slice(
       0,
       OFFICE_PRESENTATION_BOUNDS.paneDevicesPerDesk,
@@ -1002,17 +1023,12 @@ function buildRoom(space: WorldSpaceObject, host: OfficeHost): ProjectedRoom {
       0,
       desk.observedPaneCount - desk.paneDevices.length,
     );
-    const candidates = agents
-      .filter(
-        (agent) => agent.destination === "room" && agent.deskKey === desk.key,
-      )
+    const candidates = deskAgents
+      .filter((agent) => agent.destination === "room")
       .sort(compareDeskCandidates);
     if (candidates[0]) desk.occupantAgentKey = candidates[0].key;
-    desk.completionAgentKeys = agents
-      .filter(
-        (agent) =>
-          agent.semanticStatus === "done" && agent.deskKey === desk.key,
-      )
+    desk.completionAgentKeys = deskAgents
+      .filter((agent) => agent.semanticStatus === "done")
       .map(({ key }) => key)
       .sort();
   }
@@ -1035,6 +1051,23 @@ function buildRoom(space: WorldSpaceObject, host: OfficeHost): ProjectedRoom {
   };
 }
 
+const leafGroups = new WeakMap<
+  readonly WorldLeafObject[],
+  Map<string, WorldLeafObject[]>
+>();
+function groupLeavesByTab(leaves: readonly WorldLeafObject[]) {
+  let groups = leafGroups.get(leaves);
+  if (groups) return groups;
+  groups = new Map();
+  for (const leaf of leaves) {
+    const group = groups.get(leaf.tabId) ?? [];
+    group.push(leaf);
+    groups.set(leaf.tabId, group);
+  }
+  leafGroups.set(leaves, groups);
+  return groups;
+}
+
 const preparedPaneDevices = new WeakMap<OfficeDesk, OfficePaneDevice[]>();
 function projectPaneDevices(
   leaves: readonly WorldLeafObject[],
@@ -1042,8 +1075,9 @@ function projectPaneDevices(
 ): OfficePaneDevice[] {
   const previous = preparedPaneDevices.get(desk);
   if (previous) return previous;
-  const devices = leaves
-    .filter(({ tabId }) => tabId === desk.tabRef.nativeId)
+  const devices = [
+    ...(groupLeavesByTab(leaves).get(desk.tabRef.nativeId) ?? []),
+  ]
     .sort((left, right) => left.nativeId.localeCompare(right.nativeId))
     .map((leaf, order) => ({
       key: JSON.stringify([

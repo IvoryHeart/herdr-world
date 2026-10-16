@@ -44,7 +44,30 @@ This reconciles the remaining baseline entries without treating a component mode
 | Q42 Preferences/filters/shortcuts | Pure bounded key parsing and browser storage tests exercise namespaces, canonicalization, quotas and newest explicit preference. | Storage quota/browser implementation behavior remains direct evidence; preferences do not authorize downstream operations. |
 | Q43 Rendering/layout/search/metrics/site | Actual production-context/browser/layout and generated site-content tests exercise rendering, search projection and published content. | Pixel/layout/performance/device outcomes require real rendering and supported browser/site checks; no model of every device or accessibility event schedule. |
 
+## Responsive Office consumer evidence
+
+Office growth uses direct geometry, projection and production Pixi browser evidence
+for Q19/Q20/Q39/Q43, alongside existing Q17 creation, Q23 Inspector intent and Q42
+preference checks. `officeGrowing.test.ts` covers logical room/desk/standing growth,
+phone section order, complete 129-room geometry and bounded row admission near the
+10000th tab, cooperative immutable publication and cancellation before a stale
+layout can replace the current painted revision. `officeGrowing.browser.tsx`, executed by `PixelOfficeCanvas.test.ts`,
+uses three hosts with colliding native identifiers and 131 rooms: it reaches tab 100,
+activates its exact qualified pane, bounds mounted controls, collapses without
+closing work, retains focused controls while scrolling, pages to a room beyond
+128 and preserves a late room when an earlier room grows. The production transport
+fixture retains its strict input acknowledgement budgets with 32,768 admitted
+workspaces and 262,144 leaves across 64 hosts. Phone and desktop cases retain the
+production artwork, readiness and cleanup checks. These are concrete tested
+boundaries, not an exhaustive cardinality, GPU or device guarantee. The existing
+Tree/Graph space-admission model retains its own bounded scope.
+
 ## Review and remaining obligations
+
+Phone Office prioritizes qualified receptions with waiting/completed agents above
+Economy and Workforce; empty receptions are hidden on phones, and workspace rooms
+follow Workforce. Growing geometry and real Pixi phone consumers cover ordering, complete
+reachability, and qualified late-pane activation after this presentation reorder.
 
 Evidence statuses describe concrete decisions; independent acceptance is recorded separately. Review 5516249164 accepts every Q01–Q43 bounded mapping and alternative. Mandatory consumers and excluded claims remain binding. Final implementation/gate/resource acceptance is recorded in [review 5517420140](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5517420140); owner-approved PR #188 merged as `481ca1e8`. Mandatory consumers and excluded claims remain binding. Review must inspect the intended requirement, model/reducer domain, adapter fidelity, actual consumer tests and excluded claims. Q21 has its separate bounded exhaustive contract. Q26–Q28 retain their separately accepted Ranger storage/permission assumptions.
 

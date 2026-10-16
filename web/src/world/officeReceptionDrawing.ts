@@ -64,6 +64,41 @@ export function drawCeoReception(
     stage.addChild(band);
     return;
   }
+  if (layout.compact) {
+    for (const { reception, rect } of visibleReceptions) {
+      drawReceptionDesk(
+        band,
+        reception,
+        projection,
+        rect,
+        selectedKey,
+        textures,
+        animated,
+        onSelect,
+        onActivateAgent,
+      );
+    }
+    if (layout.expenseRect) {
+      const board = new Container();
+      board.position.set(
+        layout.expenseRect.x,
+        layout.expenseRect.y - OFFICE_GEOMETRY.ceoBoardY,
+      );
+      drawOtelCostBoard(board, observability, 0);
+      band.addChild(board);
+    }
+    if (layout.workforceRect) {
+      const board = new Container();
+      board.position.set(
+        layout.workforceRect.x,
+        layout.workforceRect.y - OFFICE_GEOMETRY.ceoBoardY,
+      );
+      drawLiveStateBlackboard(board, projection, 0);
+      band.addChild(board);
+    }
+    stage.addChild(band);
+    return;
+  }
   const ceoBlocks = layout.ceoBlocks;
   const ceoRoomRight = layout.ceoRect.x + layout.ceoRect.width;
   const floor = new Graphics();

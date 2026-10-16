@@ -20,7 +20,8 @@ import {
   OFFICE_GEOMETRY,
   standingAnchor,
 } from "./officeGeometry";
-import type { OfficeRoomRect } from "./officeGeometry";
+import { officeDeskRange, officeIntersects } from "./officeVirtualization";
+import type { OfficeRect, OfficeRoomRect } from "./officeGeometry";
 import { OfficeFloorTextures } from "./officeFloorTextures";
 import type { OfficeCreationActionState } from "./officeRoomActions";
 import { officeStandingAgentAnchors } from "./officeSemanticTargets";
@@ -197,6 +198,7 @@ export function drawRoom(
   seatCreationState: OfficeCreationActionState,
   onNewSeat: (roomKey: string) => void,
   floors: OfficeFloorTextures,
+  viewport?: OfficeRect,
 ) {
   const host = projection.hosts.find(({ key }) => key === room.hostKey);
   if (!host) {
@@ -266,6 +268,16 @@ export function drawRoom(
     onSelect,
     onActivateRoom,
   );
+  if (rect.collapsed) {
+    const summary = label(
+      `${room.observedDeskCount} tabs · ${room.observedAgentCount} agents`,
+      { size: 10, color: 0xd7deea },
+    );
+    summary.position.set(rect.x + 18, rect.y + 48);
+    parent.addChild(summary);
+    stage.addChild(parent);
+    return;
+  }
   if (rect.overflowMarkerRect) {
     drawRoomOverflowMarker(parent, rect.overflowMarkerRect, theme.accent);
   }
@@ -280,7 +292,13 @@ export function drawRoom(
   const agentByKey = new Map(
     room.roomAgents.map((agent) => [agent.key, agent]),
   );
-  room.desks.forEach((desk, index) => {
+  const [firstDesk, lastDesk] = officeDeskRange(
+    rect,
+    room.desks.length,
+    viewport,
+  );
+  for (let index = firstDesk; index < lastDesk; index++) {
+    const desk = room.desks[index]!;
     const occupant = desk.occupantAgentKey
       ? agentByKey.get(desk.occupantAgentKey)
       : undefined;
@@ -299,8 +317,15 @@ export function drawRoom(
       onSelect,
       onActivateAgent,
     );
-  });
+  }
   officeStandingAgentAnchors(room, rect).forEach(({ agent, anchor }) => {
+    if (
+      !officeIntersects(
+        { x: anchor.x - 40, y: anchor.nameY - 10, width: 80, height: 130 },
+        viewport,
+      )
+    )
+      return;
     drawStandingAgent(
       parent,
       agent,
@@ -312,7 +337,18 @@ export function drawRoom(
       onActivateAgent,
     );
   });
-  if (seatCreationState.visible) {
+  if (
+    seatCreationState.visible &&
+    officeIntersects(
+      {
+        x: deskAnchor(rect, room.desks.length).x - 40,
+        y: deskAnchor(rect, room.desks.length).nameY,
+        width: 80,
+        height: 140,
+      },
+      viewport,
+    )
+  ) {
     drawNewSeatAction(
       parent,
       room,
@@ -380,7 +416,7 @@ function drawNewSeatAction(
   onNewSeat: (roomKey: string) => void,
 ) {
   const anchor =
-    index >= OFFICE_GEOMETRY.desksPerRoom
+    index >= rect.deskRows * rect.deskColumns
       ? {
           x: rect.x + rect.width / 2,
           deskY: rect.y + rect.height - 40,

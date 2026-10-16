@@ -61,6 +61,9 @@ import {
   writeCompletionSeen,
 } from "./completionSeenState";
 import { preferredOfficeConnectorAnchor } from "./worldConnectorGeometry";
+import { OfficeNavigator } from "./OfficeNavigator";
+import { useOfficeViewport } from "./useOfficeViewport";
+import { resolveOfficeAnchors } from "./officeRendererAnchors";
 import { officeCreationInputsEqual } from "./officeCreationInputs";
 
 type RoomDialog =
@@ -114,6 +117,24 @@ export default function PixelOfficeView({
   );
   const preferencesRef = useRef(preferences);
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const viewport = useOfficeViewport(scrollRef);
+  const [collapsedRoomKeys, setCollapsedRoomKeys] = useState<
+    ReadonlySet<string>
+  >(() => new Set());
+  const previousLayout = useRef<PublishedOfficeLayout | null>(null);
+  const restoredLayoutMode = useRef<boolean | null>(null);
+  const pendingScrollRestore = useRef<{
+    revision: number;
+    top: number;
+    left: number;
+  } | null>(null);
+  const revealPending = useRef<string | null>(
+    selectedId &&
+      floatingTerminals.some((terminal) => terminal.nodeId === selectedId)
+      ? officePresentationKey(office, selectedId)
+      : null,
+  );
+  const [revealRequest, setRevealRequest] = useState(0);
   const [layout, setLayout] = useState<PublishedOfficeLayout | null>(null);
   const [renderedRevision, setRenderedRevision] = useState(0);
   const [roomDialog, setRoomDialog] = useState<RoomDialog | null>(null);
@@ -177,27 +198,160 @@ export default function PixelOfficeView({
   useEffect(() => {
     const scroll = scrollRef.current;
     if (!scroll) return;
-    const frame = requestAnimationFrame(() => {
-      scroll.scrollLeft = preferencesRef.current.scrollLeft;
-      scroll.scrollTop = preferencesRef.current.scrollTop;
-    });
     const onScroll = () => {
+      if (restoredLayoutMode.current === null) return;
+      const mode = previousLayout.current?.compact
+        ? "compactScroll"
+        : "desktopScroll";
       const next = {
         ...preferencesRef.current,
         scrollLeft: scroll.scrollLeft,
         scrollTop: scroll.scrollTop,
+        [mode]: { left: scroll.scrollLeft, top: scroll.scrollTop },
       };
       preferencesRef.current = next;
       writeOfficePreferences(worldLocalStorage, next);
     };
     scroll.addEventListener("scroll", onScroll, { passive: true });
     return () => {
-      cancelAnimationFrame(frame);
       scroll.removeEventListener("scroll", onScroll);
     };
   }, []);
 
   const selectedKey = officePresentationKey(office, selectedId);
+  const previousSelection = useRef(selectedKey);
+  useEffect(() => {
+    if (previousSelection.current !== selectedKey)
+      revealPending.current = selectedKey;
+    previousSelection.current = selectedKey;
+  }, [selectedKey]);
+  useEffect(() => {
+    if (!layout || !selectedKey || revealPending.current !== selectedKey)
+      return;
+    const agent = office.roster.find(
+      (entry) => entry.agent.key === selectedKey,
+    )?.agent;
+    const desk = office.deskRoster.find(
+      (entry) => entry.desk.key === selectedKey,
+    )?.desk;
+    const pane = office.paneRoster.find(
+      (entry) => entry.device.key === selectedKey,
+    )?.device;
+    const roomKey = agent?.roomKey ?? desk?.roomKey ?? pane?.roomKey;
+    if (roomKey && collapsedRoomKeys.has(roomKey)) {
+      setCollapsedRoomKeys((current) => {
+        const next = new Set(current);
+        next.delete(roomKey);
+        return next;
+      });
+      return;
+    }
+    const scroll = scrollRef.current;
+    if (!scroll || renderedRevision !== layout.layoutRevision) return;
+    const anchors = resolveOfficeAnchors(
+      office,
+      layout,
+      selectedKey,
+      selectedKey,
+    );
+    const roomIndex = office.rooms.findIndex(
+      (room) => room.key === selectedKey,
+    );
+    const room = layout.rooms.find((room) => room.index === roomIndex);
+    const anchor = anchors.agent ?? anchors.workbench ?? room;
+    if (!anchor) return;
+    if (
+      anchor.y < scroll.scrollTop + 10 ||
+      anchor.y > scroll.scrollTop + scroll.clientHeight - 40 ||
+      anchor.x < scroll.scrollLeft ||
+      anchor.x > scroll.scrollLeft + scroll.clientWidth
+    ) {
+      scroll.scrollTo({
+        top: Math.max(0, anchor.y - scroll.clientHeight / 3),
+        left: layout.compact
+          ? 0
+          : Math.max(0, anchor.x - scroll.clientWidth / 2),
+      });
+    }
+    revealPending.current = null;
+  }, [
+    selectedKey,
+    layout,
+    renderedRevision,
+    office,
+    collapsedRoomKeys,
+    revealRequest,
+  ]);
+  const publishLayout = (next: PublishedOfficeLayout | null) => {
+    const previous = previousLayout.current;
+    const scroll = scrollRef.current;
+    if (
+      previous &&
+      next &&
+      previous.inputDigest !== next.inputDigest &&
+      scroll
+    ) {
+      const visible = previous.rooms.find(
+        (room) => room.y + room.height > scroll.scrollTop,
+      );
+      const descriptor = previous.normalizedInput.rooms.find(
+        (room) => room.sourceIndex === visible?.index,
+      );
+      const nextDescriptor = next.normalizedInput.rooms.find(
+        (room) => room.id === descriptor?.id,
+      );
+      const replacement = next.rooms.find(
+        (room) => room.index === nextDescriptor?.sourceIndex,
+      );
+      if (visible && replacement && scroll.scrollTop >= previous.roomStartY) {
+        const offset = scroll.scrollTop - visible.y;
+        const row = Math.max(
+          0,
+          Math.floor((offset - 56) / visible.deskRowHeight),
+        );
+        const nextRow = Math.floor(
+          (row * visible.deskColumns) / replacement.deskColumns,
+        );
+        const adjusted =
+          previous.compact !== next.compact && offset > 56
+            ? 56 +
+              nextRow * replacement.deskRowHeight +
+              ((offset - 56) % visible.deskRowHeight)
+            : offset;
+        pendingScrollRestore.current = {
+          revision: next.layoutRevision,
+          top:
+            replacement.y +
+            Math.max(0, Math.min(adjusted, replacement.height - 1)),
+          left: next.compact ? 0 : scroll.scrollLeft,
+        };
+      } else if (previous.compact !== next.compact) {
+        const position = next.compact
+          ? preferencesRef.current.compactScroll
+          : preferencesRef.current.desktopScroll;
+        pendingScrollRestore.current = {
+          revision: next.layoutRevision,
+          top: position?.top ?? 0,
+          left: next.compact ? 0 : (position?.left ?? 0),
+        };
+      }
+    }
+    if ((!previous || restoredLayoutMode.current === null) && next) {
+      const saved = next.compact
+        ? preferencesRef.current.compactScroll
+        : preferencesRef.current.desktopScroll;
+      pendingScrollRestore.current = {
+        revision: next.layoutRevision,
+        top:
+          saved?.top ?? (next.compact ? 0 : preferencesRef.current.scrollTop),
+        left: next.compact
+          ? 0
+          : (saved?.left ?? preferencesRef.current.scrollLeft),
+      };
+    }
+    previousLayout.current = next;
+    setLayout(next);
+  };
   const completionSeenKeys = useMemo(
     () =>
       new Set(
@@ -398,6 +552,11 @@ export default function PixelOfficeView({
       reportRoomActionFailure("Room close", cause);
     }
   };
+  const selectAndReveal = (nodeId: string) => {
+    revealPending.current = officePresentationKey(office, nodeId);
+    setRevealRequest((value) => value + 1);
+    void onSelect(nodeId);
+  };
   const selectOfficeKey = (key: string) => {
     const device = office.paneRoster.find(
       ({ device }) => device.key === key,
@@ -408,7 +567,7 @@ export default function PixelOfficeView({
     }
     const agent = office.roster.find(({ agent }) => agent.key === key)?.agent;
     if (agent) {
-      onSelect(agent.nodeId);
+      selectAndReveal(agent.nodeId);
       return;
     }
     const desk = office.deskRoster.find(({ desk }) => desk.key === key)?.desk;
@@ -418,12 +577,12 @@ export default function PixelOfficeView({
             ({ agent: candidate }) => candidate.key === desk.occupantAgentKey,
           )?.agent
         : null;
-      onSelect(
+      selectAndReveal(
         occupant?.nodeId ?? desk.terminalSelectionKeys[0] ?? desk.roomKey,
       );
       return;
     }
-    onSelect(key);
+    selectAndReveal(key);
   };
   const markCompletionSeen = (agent: OfficeAgent) => {
     setCompletionSeen((current) => {
@@ -499,9 +658,37 @@ export default function PixelOfficeView({
           agents={unseenCompletions}
           onInspect={(agent) => openOfficeTerminal(agent.key)}
         />
+        <OfficeNavigator
+          office={office}
+          onReceptions={() => scrollRef.current?.scrollTo({ top: 0, left: 0 })}
+          onAgent={(key) => {
+            revealPending.current = key;
+            setRevealRequest((value) => value + 1);
+            openOfficeTerminal(key);
+          }}
+          onRoom={(key) => {
+            revealPending.current = null;
+            const scroll = scrollRef.current;
+            if (!scroll) return;
+            setCollapsedRoomKeys((current) => {
+              if (!current.has(key)) return current;
+              const next = new Set(current);
+              next.delete(key);
+              return next;
+            });
+            const index = office.rooms.findIndex((room) => room.key === key);
+            const rect = layout?.rooms.find((room) => room.index === index);
+            if (rect)
+              scroll.scrollTo({
+                top: rect.y,
+                left: layout?.compact ? 0 : rect.x,
+              });
+          }}
+        />
         <div ref={scrollRef} className="world-stage-scroll">
           <PixelOfficeCanvas
             projection={office}
+            collapsedRoomKeys={collapsedRoomKeys}
             selectedKey={selectedKey}
             completionSeenKeys={completionSeenKeys}
             observability={observability}
@@ -525,8 +712,24 @@ export default function PixelOfficeView({
                   : null,
               );
             }}
-            onLayoutChange={setLayout}
-            onCanvasRendered={setRenderedRevision}
+            onLayoutChange={publishLayout}
+            onCanvasRendered={(revision) => {
+              setRenderedRevision(revision);
+              const pending = pendingScrollRestore.current;
+              if (
+                pending &&
+                revision === pending.revision &&
+                scrollRef.current
+              ) {
+                pendingScrollRestore.current = null;
+                restoredLayoutMode.current =
+                  previousLayout.current?.compact === true;
+                scrollRef.current.scrollTo({
+                  top: pending.top,
+                  left: pending.left,
+                });
+              }
+            }}
             roomAlignment={preferences.roomAlignment}
             longRoomTitleMode={preferences.longTitleMode}
           >
@@ -534,6 +737,7 @@ export default function PixelOfficeView({
               <>
                 <OfficeSemanticTargetsOverlay
                   layout={layout}
+                  viewport={viewport}
                   projection={office}
                   renderedRevision={renderedRevision}
                   selectedKey={selectedKey}
@@ -544,8 +748,17 @@ export default function PixelOfficeView({
                 />
                 <OfficeRoomActionsOverlay
                   layout={layout}
+                  viewport={viewport}
                   projection={office}
                   renderedRevision={renderedRevision}
+                  onToggleRoom={(key) =>
+                    setCollapsedRoomKeys((current) => {
+                      const next = new Set(current);
+                      if (next.has(key)) next.delete(key);
+                      else next.add(key);
+                      return next;
+                    })
+                  }
                   selectedRoomKey={selectedRoomKey}
                   showCreateSeat={showCreateSeat}
                   canCreateSeat={canCreateSeat}

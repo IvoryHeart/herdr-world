@@ -99,6 +99,12 @@ are optional because the merged PR history records their source.
 
 ### Changed
 
+- Office on phones stacks attention receptions, Economy, Workforce and workspace
+  rooms vertically, hiding empty receptions
+  without a decorative CEO room or sideways scene navigation. Workspace rooms grow
+  with observed tabs and agents on desktop and phones; searchable room navigation
+  and collapse keep later rooms reachable while drawing stays near the viewport.
+
 - Follow phone platform conventions on mobile. Office, Graph, Desk and Spaces
   switch from a bottom navigation bar, replacing the view switcher. Terminal
   screens show Back, the terminal's name as a workspace switcher, Tabs and a ⋮

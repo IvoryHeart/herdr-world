@@ -34,8 +34,11 @@ chooser target; it must not become a pane or agent access limit.
 ### One vertical phone scene
 
 Resolve a phone-specific scene layout inside the existing Office renderer. Lay
-out one host reception after another, then the optional expense/status region,
-then one workspace room after another. All sections fit the phone's usable width.
+out receptions with waiting/completed agents needing attention first, then the
+Economy board, the existing Workforce counts and workspace rooms. Hide empty
+receptions on phones. Preserve host order among attention receptions and qualified
+identity when attention changes; an empty attention group leaves Economy first.
+All sections fit the phone's usable width.
 Use two readable desk columns where space permits and add rows rather than
 shrinking all furniture to fit. Long titles wrap or compact within their headers;
 full names and rename/close controls stay reachable.
@@ -120,7 +123,8 @@ non-overlap, creation and cross-host/runtime isolation. Cover a very tall room a
 navigation to a later room while observations refresh.
 
 Assess Q17 for creation coordination, Q19 for presentation capacity, Q20 for
-qualified identity, Q23 for Inspector intent, Q39 for renderer lifetime and Q43
+qualified identity, Q23 for Inspector intent, Q39 for renderer lifetime, Q42 for
+validated presentation preferences and Q43
 for rendering/layout under
 `verification/coverage.json`; verify the exact inventory mapping during
 implementation. Geometry and touch/focus need direct implementation/browser
@@ -133,8 +137,34 @@ raise budgets to accommodate growth. Run the full delivery/behavioral gate for
 the implementation, update affected consumer evidence and current contracts, and
 obtain the normal independent PR review.
 
-This planning change changes no production code or current spec. At delivery,
-supersede only the listed Office clauses and preserve unrelated contracts. No
+The implementation supersedes only the listed Office clauses and preserves
+unrelated contracts. The overlapping Office clauses in the older active
+`simultaneous-multi-host` delta are reconciled to prevent restoring retired caps. No
 service or dependency migration is planned. Keep the study out of production
 assets and commits; a rollback restores the previous presentation while native
 workspaces, tabs and terminals remain authoritative.
+
+
+## Implementation evidence
+
+Logical membership is complete; the remaining presentation bounds cover only
+compact pane, reception and Agent Bar artwork backed by complete qualified rosters.
+Room descriptors are prepared in cooperative batches, immutable default room
+presentations, signatures and the complete default projection are prepared
+cooperatively with the observation, and geometry
+publication uses the existing compact 64-bit digest. Large immutable layout copies
+also yield in bounded batches; a newer publication or retired build cancels the old
+copy before its revision becomes observable. Pixi hits, semantic actions and
+connector anchors wait for the matching completed paint. Physical Pixi surfaces and
+semantic controls follow the viewport, including rows inside a tall room. Readiness
+waits for canvas paint as well as semantic admission. Preparation gates activation
+immediately while retaining a still-current focused control.
+
+The production browser regression reaches the hundredth tab with colliding native
+identifiers on three hosts, retains a focused offscreen control, collapses the exact
+qualified room, pages beyond 128 rooms and preserves the visible room when an
+earlier room grows. Native browser scroll anchoring is disabled for this scroller
+because the shell restores the qualified logical anchor after canvas readiness.
+The production transport fixture exercises 64 hosts, 32,768 admitted workspaces and
+262,144 admitted leaves without raising the existing input acknowledgement budgets.
+The PR records the final checks; independent review remains a delivery obligation.

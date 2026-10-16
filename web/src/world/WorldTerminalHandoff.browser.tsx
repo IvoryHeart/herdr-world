@@ -25,6 +25,7 @@ import {
   INSPECTOR_TERMINAL_FILE_EVENT,
   type InspectorTerminalFileRequest,
 } from "./inspectorTerminalHandoff";
+import { deskAnchor } from "./officeGeometry";
 import { CREATED_PANE_ADMISSION_TIMEOUT_MS } from "./officeRoomActions";
 import { worldRuntimeStore } from "./runtimeStore";
 import WorldFoundationApp from "./WorldFoundationApp";
@@ -503,6 +504,18 @@ function agentTarget(label: string) {
       !button.closest("[inert]") &&
       button.getAttribute("aria-label")?.includes(label),
   );
+}
+
+async function clickOfficeAgent(label: string) {
+  await until(() => {
+    const target = agentTarget(label);
+    return (
+      target &&
+      !target.disabled &&
+      !target.closest('[inert], [aria-busy="true"]')
+    );
+  }, `${label} Office target painted`);
+  flushSync(() => agentTarget(label)!.click());
 }
 
 function graphTarget(label: string) {
@@ -1275,9 +1288,19 @@ async function run() {
   await store.refresh();
   omitNextWorldTopology = true;
   await worldRuntimeStore.refresh();
+  const omittedOfficeCommitted = () => {
+    const renderer = window.__HERDR_WORLD_RENDERER__;
+    const rooms = renderer?.publishedLayout?.normalizedInput.rooms;
+    return (
+      renderer?.ready === true &&
+      Boolean(rooms?.length) &&
+      rooms!.every((room) => room.deskCount <= 1) &&
+      worldRuntimeStore.get().connections[0]?.snapshot?.panes.length === 0
+    );
+  };
   await until(
-    () => worldRuntimeStore.get().connections[0]?.snapshot?.panes.length === 0,
-    "notification target omitted from aggregate",
+    omittedOfficeCommitted,
+    "notification target omitted from painted Office",
   );
   window.dispatchEvent(
     new CustomEvent("herdr-world:visual-notification", {
@@ -1306,7 +1329,7 @@ async function run() {
   omitNextWorldTopology = true;
   await worldRuntimeStore.refresh();
   await until(
-    () => !agentTarget("Reviewer"),
+    omittedOfficeCommitted,
     "omitted notification target committed to the rendered overview",
   );
   replaceNotificationSessionOnSnapshot = true;
@@ -1377,7 +1400,7 @@ async function run() {
       '.world-selection-panel button[aria-label="Close profile"]',
     )!
     .click();
-  flushSync(() => agentTarget("Builder")!.click());
+  await clickOfficeAgent("Builder");
   await until(
     () =>
       document.querySelector('[role="dialog"][aria-label="Builder Inspector"]'),
@@ -1404,7 +1427,7 @@ async function run() {
     "selected visual commands displaced native shell commands",
   );
   await setShellActionsOpen(false);
-  flushSync(() => agentTarget("Reviewer")!.click());
+  await clickOfficeAgent("Reviewer");
   await until(
     () =>
       document.querySelector(
@@ -2047,7 +2070,7 @@ async function run() {
     "delayed navigator focus resurrected the closed target Inspector",
   );
 
-  flushSync(() => agentTarget("Reviewer")!.click());
+  await clickOfficeAgent("Reviewer");
   await until(
     () =>
       document.querySelector(
@@ -2108,7 +2131,7 @@ async function run() {
   dockedOpeningSelect.value = "docked";
   dockedOpeningSelect.dispatchEvent(new Event("change", { bubbles: true }));
   toggleTopbarMenu();
-  flushSync(() => agentTarget("Builder")!.click());
+  await clickOfficeAgent("Builder");
   await until(
     () =>
       document
@@ -2204,6 +2227,29 @@ async function run() {
       tabFocusBeforeReviewer + 1,
     "second top workspace tab ran an unqualified focus before World admission",
   );
+  await until(
+    () => window.__HERDR_WORLD_RENDERER__?.ready === true,
+    "Office painted after top workspace selection",
+  );
+  const seatLayout = window.__HERDR_WORLD_RENDERER__!.publishedLayout!;
+  const seatRect = seatLayout.rooms[0]!;
+  const seatIndex = Math.max(
+    0,
+    seatLayout.normalizedInput.rooms[0]!.deskCount - 1,
+  );
+  const seatPoint = deskAnchor(seatRect, seatIndex);
+  const officeScroll = document.querySelector<HTMLElement>(
+    ".world-office-shell > .world-stage-scroll",
+  )!;
+  officeScroll.scrollTo({
+    top: seatPoint.deskY - officeScroll.clientHeight / 2,
+    left: Math.max(0, seatPoint.x - officeScroll.clientWidth / 2),
+  });
+  await until(
+    () =>
+      document.querySelector(".world-new-seat-canvas-action:not(:disabled)"),
+    "Office creation row painted and admitted",
+  );
   const createSeatButton = document.querySelector<HTMLButtonElement>(
     ".world-new-seat-canvas-action:not(:disabled)",
   );
@@ -2275,7 +2321,7 @@ async function run() {
   store.clearNotice();
   await settle();
   await until(() => agentTarget("Builder"), "Builder desk target");
-  flushSync(() => agentTarget("Builder")!.click());
+  await clickOfficeAgent("Builder");
   await until(
     () =>
       document
@@ -2473,7 +2519,7 @@ async function run() {
     "resizing the floating Inspector focused its terminal",
   );
 
-  flushSync(() => agentTarget("Reviewer")!.click());
+  await clickOfficeAgent("Reviewer");
   await until(
     () =>
       document
@@ -2825,7 +2871,7 @@ async function run() {
     "previously focused docked terminal after browser focus return",
   );
 
-  flushSync(() => agentTarget("Reviewer")!.click());
+  await clickOfficeAgent("Reviewer");
   await until(
     () =>
       document
@@ -4250,7 +4296,7 @@ async function run() {
     !document.querySelector(".workspace-inspector"),
     "closed Inspector reappeared through an arrangement",
   );
-  flushSync(() => agentTarget("Builder")!.click());
+  await clickOfficeAgent("Builder");
   await until(
     () => Boolean(document.querySelector(".workspace-inspector")),
     "visual Inspector reopened after Close all",

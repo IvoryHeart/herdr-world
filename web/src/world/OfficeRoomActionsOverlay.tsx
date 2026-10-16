@@ -8,6 +8,9 @@ import {
   useState,
 } from "react";
 import { Pencil, Plus, Trash2 } from "lucide-react";
+import type { OfficeRect } from "./officeGeometry";
+import { resolveOfficeAnchors } from "./officeRendererAnchors";
+import { officeIntersects } from "./officeVirtualization";
 import { OFFICE_GEOMETRY, deskAnchor } from "./officeGeometry";
 import type { HerdrOfficeProjection } from "./herdrOfficeProjection";
 import type { PublishedOfficeLayout } from "./officeLayout";
@@ -28,7 +31,9 @@ export function OfficeSemanticTargetsOverlay({
   onActivateAgent,
   onActivateDesk,
   onActivateRoom,
+  viewport,
 }: {
+  viewport?: OfficeRect;
   layout: PublishedOfficeLayout;
   projection: HerdrOfficeProjection;
   renderedRevision: number;
@@ -38,10 +43,29 @@ export function OfficeSemanticTargetsOverlay({
   onActivateDesk(key: string): void;
   onActivateRoom(key: string): void;
 }) {
-  const targets = useMemo(
-    () => officeSemanticTargets(projection, layout),
-    [projection, layout],
-  );
+  const overlay = useRef<HTMLDivElement>(null);
+  const targets = useMemo(() => {
+    const visible = officeSemanticTargets(projection, layout, viewport);
+    const active = document.activeElement as HTMLElement | null;
+    if (!active || !overlay.current?.contains(active)) return visible;
+    const key = active.dataset.targetKey,
+      kind = active.dataset.kind;
+    if (
+      !key ||
+      visible.some((target) => target.key === key && target.kind === kind)
+    )
+      return visible;
+    const anchors = resolveOfficeAnchors(projection, layout, key, key);
+    const point = anchors.agent ?? anchors.workbench;
+    if (!point) return visible;
+    const focused = officeSemanticTargets(projection, layout, {
+      x: point.x - 150,
+      y: point.y - 150,
+      width: 300,
+      height: 300,
+    }).find((target) => target.key === key && target.kind === kind);
+    return focused ? [...visible, focused] : visible;
+  }, [projection, layout, viewport]);
   // Admission follows qualified identities, not the allocation of a new snapshot.
   // Labels, actions and geometry still come from the current projection.
   const identity = useMemo(
@@ -71,7 +95,17 @@ export function OfficeSemanticTargetsOverlay({
   const pending = targets.length - rendered.length;
   const interactive =
     layout.layoutRevision > 0 && layout.layoutRevision === renderedRevision;
-  const overlay = useRef<HTMLDivElement>(null);
+  const acknowledgedRevision = useRef(0);
+  if (interactive) acknowledgedRevision.current = renderedRevision;
+  const active = document.activeElement as HTMLElement | null;
+  const focusedKey =
+    active && overlay.current?.contains(active)
+      ? active.dataset.targetKey
+      : null;
+  const retainsPreparedGeometry =
+    renderedRevision < 0 &&
+    acknowledgedRevision.current === -renderedRevision &&
+    Boolean(focusedKey && targets.some((target) => target.key === focusedKey));
   const handlers = useRef({
     interactive,
     onSelect,
@@ -82,7 +116,8 @@ export function OfficeSemanticTargetsOverlay({
   useLayoutEffect(() => {
     // React 18 does not forward the boolean inert attribute. Update the native
     // subtree flag once, instead of disabling every admitted button.
-    if (overlay.current) overlay.current.inert = !interactive;
+    if (overlay.current)
+      overlay.current.inert = !interactive && !retainsPreparedGeometry;
     handlers.current = {
       interactive,
       onSelect,
@@ -90,7 +125,14 @@ export function OfficeSemanticTargetsOverlay({
       onActivateDesk,
       onActivateRoom,
     };
-  }, [interactive, onSelect, onActivateAgent, onActivateDesk, onActivateRoom]);
+  }, [
+    interactive,
+    retainsPreparedGeometry,
+    onSelect,
+    onActivateAgent,
+    onActivateDesk,
+    onActivateRoom,
+  ]);
   const actions = useMemo(
     () => ({
       select: (key: string) => {
@@ -122,8 +164,8 @@ export function OfficeSemanticTargetsOverlay({
     <div
       className="world-semantic-targets-overlay"
       aria-label="Office scene targets"
-      aria-busy={pending > 0}
-      aria-hidden={!interactive}
+      aria-busy={pending > 0 || !interactive}
+      aria-hidden={!interactive && !retainsPreparedGeometry}
       ref={overlay}
     >
       {pending ? (
@@ -141,6 +183,10 @@ export function OfficeSemanticTargetsOverlay({
           width={target.rect.width}
           height={target.rect.height}
           selected={selectedKey === target.key}
+          disabled={
+            !interactive &&
+            !(retainsPreparedGeometry && target.key === focusedKey)
+          }
           actions={actions}
         />
       ))}
@@ -159,6 +205,7 @@ const OfficeSemanticButton = memo(function OfficeSemanticButton({
   width,
   height,
   selected,
+  disabled,
   actions,
 }: {
   targetKey: string;
@@ -170,6 +217,7 @@ const OfficeSemanticButton = memo(function OfficeSemanticButton({
   width: number;
   height: number;
   selected: boolean;
+  disabled: boolean;
   actions: {
     select(key: string): void;
     activate(key: string, kind: OfficeSemanticTarget["kind"]): void;
@@ -179,6 +227,7 @@ const OfficeSemanticButton = memo(function OfficeSemanticButton({
     <button
       className="world-semantic-target"
       type="button"
+      disabled={disabled}
       data-kind={kind}
       data-target-key={targetKey}
       aria-label={label}
@@ -210,7 +259,11 @@ export function OfficeRoomActionsOverlay({
   onRenameRoom,
   canCloseRoom,
   onCloseRoom,
+  viewport,
+  onToggleRoom,
 }: {
+  viewport?: OfficeRect;
+  onToggleRoom?(roomKey: string): void;
   layout: PublishedOfficeLayout;
   projection: HerdrOfficeProjection;
   renderedRevision: number;
@@ -239,98 +292,126 @@ export function OfficeRoomActionsOverlay({
       className="world-room-actions-overlay"
       aria-label="Office room actions"
     >
-      {projection.rooms.map((room, index) => {
-        const rect = layout.rooms.find(
-          ({ index: roomIndex }) => roomIndex === index,
-        );
-        if (!rect) return null;
-        const header = rect.header;
-        return (
-          <div
-            key={room.key}
-            className={`world-room-actions${layoutReady ? "" : " world-room-actions-stale"}`}
-            aria-hidden={!layoutReady}
-            style={{
-              left: rect.headerRect.x,
-              top: rect.headerRect.y,
-              width: rect.headerRect.width,
-              height: rect.headerRect.height,
-            }}
-          >
-            <button
-              className="world-room-overlay-action world-room-overlay-action-rename"
-              type="button"
-              aria-label={`Rename room ${room.accessibleLabel ?? room.displayLabel}`}
-              title={`Rename ${room.accessibleLabel ?? room.displayLabel}`}
-              disabled={!layoutReady || !canRenameRoom(room.key)}
+      {layout.rooms
+        .filter((rect) => officeIntersects(rect, viewport))
+        .map((rect) => {
+          const room = projection.rooms[rect.index];
+          if (!room || !officeIntersects(rect.headerRect, viewport))
+            return null;
+          const header = rect.header;
+          return (
+            <div
+              key={room.key}
+              className={`world-room-actions${layoutReady ? "" : " world-room-actions-stale"}`}
+              aria-hidden={!layoutReady}
               style={{
-                left:
-                  header?.renameX ?? Math.max(0, rect.headerRect.width - 52),
-                top: 2,
+                left: rect.headerRect.x,
+                top: rect.headerRect.y,
+                width: rect.headerRect.width,
+                height: rect.headerRect.height,
               }}
-              onClick={() => onRenameRoom(room.key)}
             >
-              <Pencil size={12} aria-hidden="true" />
-            </button>
-            <button
-              className="world-room-overlay-action world-room-overlay-action-danger"
-              type="button"
-              aria-label={`Close room ${room.accessibleLabel ?? room.displayLabel}`}
-              title={`Close ${room.accessibleLabel ?? room.displayLabel}`}
-              disabled={!layoutReady || !canCloseRoom(room.key)}
-              style={{
-                left:
-                  header?.closeX ??
-                  Math.max(
-                    0,
-                    rect.headerRect.width -
-                      OFFICE_GEOMETRY.roomHeaderActionWidth,
-                  ),
-                top: 2,
-              }}
-              onClick={() => onCloseRoom(room.key)}
-            >
-              <Trash2 size={12} aria-hidden="true" />
-            </button>
-          </div>
-        );
-      })}
-      {projection.rooms.map((room, index) => {
-        const rect = layout.rooms.find(
-          ({ index: roomIndex }) => roomIndex === index,
-        );
-        if (!rect || !showCreateSeat(room.key)) return null;
-        const full = room.desks.length >= OFFICE_GEOMETRY.desksPerRoom;
-        const anchor = full
-          ? { x: rect.x + rect.width / 2, deskY: rect.y + rect.height - 40 }
-          : deskAnchor(rect, room.desks.length);
-        const reason = createSeatReason(room.key);
-        return (
-          <Fragment key={`${room.key}:new-seat`}>
-            <button
-              className={`world-new-seat-canvas-action${full ? " world-new-seat-canvas-action-full" : ""}`}
-              type="button"
-              aria-label={`New seat in ${room.accessibleLabel ?? room.displayLabel}`}
-              title={
-                createSeatReason(room.key) ??
-                `Start a new seat in ${room.accessibleLabel ?? room.displayLabel}`
-              }
-              disabled={!layoutReady || !canCreateSeat(room.key)}
-              style={{ left: anchor.x - 25, top: anchor.deskY }}
-              onClick={() => onCreateSeat(room.key)}
-            />
-            {reason ? (
-              <span
-                className="world-creation-reason"
-                role="status"
-                style={{ left: anchor.x - 90, top: anchor.deskY + 48 }}
+              {onToggleRoom ? (
+                <button
+                  className="world-room-overlay-action"
+                  type="button"
+                  aria-label={`${rect.collapsed ? "Expand" : "Collapse"} room ${room.accessibleLabel ?? room.displayLabel}`}
+                  data-room-key={room.key}
+                  aria-expanded={!rect.collapsed}
+                  disabled={!layoutReady}
+                  style={{ left: 0, top: 2 }}
+                  onClick={() => onToggleRoom(room.key)}
+                >
+                  {rect.collapsed ? "+" : "−"}
+                </button>
+              ) : null}
+              <button
+                className="world-room-overlay-action world-room-overlay-action-rename"
+                type="button"
+                aria-label={`Rename room ${room.accessibleLabel ?? room.displayLabel}`}
+                title={`Rename ${room.accessibleLabel ?? room.displayLabel}`}
+                disabled={!layoutReady || !canRenameRoom(room.key)}
+                style={{
+                  left:
+                    header?.renameX ?? Math.max(0, rect.headerRect.width - 52),
+                  top: 2,
+                }}
+                onClick={() => onRenameRoom(room.key)}
               >
-                {reason}
-              </span>
-            ) : null}
-          </Fragment>
-        );
-      })}
+                <Pencil size={12} aria-hidden="true" />
+              </button>
+              <button
+                className="world-room-overlay-action world-room-overlay-action-danger"
+                type="button"
+                aria-label={`Close room ${room.accessibleLabel ?? room.displayLabel}`}
+                title={`Close ${room.accessibleLabel ?? room.displayLabel}`}
+                disabled={!layoutReady || !canCloseRoom(room.key)}
+                style={{
+                  left:
+                    header?.closeX ??
+                    Math.max(
+                      0,
+                      rect.headerRect.width -
+                        OFFICE_GEOMETRY.roomHeaderActionWidth,
+                    ),
+                  top: 2,
+                }}
+                onClick={() => onCloseRoom(room.key)}
+              >
+                <Trash2 size={12} aria-hidden="true" />
+              </button>
+            </div>
+          );
+        })}
+      {layout.rooms
+        .filter((rect) => officeIntersects(rect, viewport))
+        .map((rect) => {
+          const room = projection.rooms[rect.index];
+          if (
+            !room ||
+            !officeIntersects(rect, viewport) ||
+            rect.collapsed ||
+            !showCreateSeat(room.key)
+          )
+            return null;
+          const full = room.desks.length >= rect.deskRows * rect.deskColumns;
+          const anchor = full
+            ? { x: rect.x + rect.width / 2, deskY: rect.y + rect.height - 40 }
+            : deskAnchor(rect, room.desks.length);
+          if (
+            !officeIntersects(
+              { x: anchor.x - 25, y: anchor.deskY, width: 50, height: 60 },
+              viewport,
+            )
+          )
+            return null;
+          const reason = createSeatReason(room.key);
+          return (
+            <Fragment key={`${room.key}:new-seat`}>
+              <button
+                className={`world-new-seat-canvas-action${full ? " world-new-seat-canvas-action-full" : ""}`}
+                type="button"
+                aria-label={`New seat in ${room.accessibleLabel ?? room.displayLabel}`}
+                title={
+                  createSeatReason(room.key) ??
+                  `Start a new seat in ${room.accessibleLabel ?? room.displayLabel}`
+                }
+                disabled={!layoutReady || !canCreateSeat(room.key)}
+                style={{ left: anchor.x - 25, top: anchor.deskY }}
+                onClick={() => onCreateSeat(room.key)}
+              />
+              {reason ? (
+                <span
+                  className="world-creation-reason"
+                  role="status"
+                  style={{ left: anchor.x - 90, top: anchor.deskY + 48 }}
+                >
+                  {reason}
+                </span>
+              ) : null}
+            </Fragment>
+          );
+        })}
       {showCreateRoom(selectedRoomKey) ? (
         <button
           className="world-new-room-canvas-action"
