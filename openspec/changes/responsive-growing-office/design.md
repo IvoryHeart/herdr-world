@@ -183,7 +183,8 @@ In focused mode, a persistent Office host switcher displays Focus: <host>, other
 admitted hosts with attention badges, and All hosts. It must include hosts whose
 receptions are absent because they have no attention. Keep attention access to
 other hosts visible without repeating every full reception inside focused mode.
-A tap on another host switches directly. All hosts restores the previous overview
+A tap on another host switches directly and reveals its building or last room
+without making the user traverse shared panels first. All hosts restores the previous overview
 scroll anchor; each host can retain its own qualified room/row position. System
 Back and Escape should leave focus before leaving Office. Focused mode follows the
 phone's vertical layout; it does not introduce a swipe carousel.
@@ -204,35 +205,77 @@ retains current selection, activation and vertical scrolling. Arrange mode expos
 handles, a lifted pixel-art ghost, valid placement previews and a short snap on
 drop. A visible Done control exits; Escape or a cancel gesture abandons the active
 drag. Provide Move earlier / Move later or choose-position alternatives for touch
-and keyboard, plus Undo and Reset layout. Avoid requiring a phone long-press
+and keyboard, with the scoped undo/reset behaviour described below. Avoid requiring a phone long-press
 anywhere on a working terminal or agent.
 
-Reuse the adaptive packer: moving a building changes its presentation order and
-re-packs valid footprints; moving a room changes order within its host. This keeps
-readable sizes and avoids overlaps at a new viewport width. Preserve a stable
-qualified room/row anchor through the re-pack. Keep automatic attention ordering
-as the default, and make any manual/pinned ordering visible and reversible rather
-than shuffling all buildings on each status update. Reception ordering and its
-corresponding building ordering need a common host identity; reception attention
-priority must remain explicit when a preferred order is active.
+The owner clarified what movement means at each level:
 
-For terminal and agent dragging, visual placement and actual native work movement
-are different product contracts. The recommended first scope is presentation only:
-no remote migration, workspace mutation or terminal reassignment on a visual drop.
-Terminals can have a visual seat order within their existing room. Agent placement
-must preserve the truthful status destination and its associated terminal; moving
-a character cannot pretend blocked work is running or assign it another owner.
-Actual moves would need a separate supported action with source/destination,
-readiness and consequences shown before confirmation. The owner is being asked
-which meaning they intend; this document does not resolve that choice for them.
+| Object | Meaning of a move | Owner |
+| --- | --- | --- |
+| Building / reception | Reorder hosts visually; no host or runtime migration. | Herdr World presentation preferences, keyed by qualified host identity. |
+| Room | Reorder the corresponding workspace within its host. | Herdr workspace order. |
+| Desk | Reorder its tab within the room, or move that tab into another workspace on the same host. | Herdr tab/workspace membership and order. |
+| Agent | Stay attached to its desk, screen or pane and move with that underlying item. | Observed pane/terminal relationship; no independent character move. |
+
+Reuse the adaptive packer for the visible result. Moving a building changes host
+presentation order and re-packs its footprint. Reception signs use the same host
+order; phone attention receptions remain first, with preferred host order applied
+within that group. Hosts without attention remain available in the host switcher.
+A room drag requests Herdr workspace reordering, and a desk drag requests tab
+reordering or a tab transfer. Room and desk order must then come from refreshed
+native state so the Office, sidebar and other clients do not disagree. Preserve
+readable sizes, no overlaps and a stable qualified room/row scroll anchor through
+re-packing. Avoid reordering all buildings on every status update.
+
+### Native operation integration and drop behaviour
+
+The current implementation already exposes `workspace.move` through
+`store.moveWorkspace` and uses it in WorkspaceTree. Office room projection already
+sorts by observed workspace number. Add the qualified connection/generation-aware
+workspace-move entry point before wiring aggregate Office drops; the current
+ambient-focus helper alone is not sufficient for rooms on another host.
+
+Within-workspace tab reordering already uses `tab.move` with insert-before-index
+semantics and advertised capability checks. The qualified store context exposes
+`moveTab`, and TabBar uses the existing reorder/index helpers. Reuse that path for
+moving a desk within its room. Current World calls pass only tab ID and insertion
+index: they do not expose a destination workspace for cross-room transfer. Verify
+the runtime's supported transfer operation and capabilities before designing that
+adapter. A tab transfer must preserve its panes, running processes and attached
+agents; closing and recreating a tab is not an acceptable substitute. Do not
+advertise a valid cross-room drop until the destination operation is supported.
+Cross-host workspace/tab migration is outside the clarified arrangement scope.
+
+While dragging, show the source host/room and the destination room/insertion
+position, plus a ghost for the whole desk with its screens and attached agents.
+An individual character is not a separate draggable work item. Keep truthful agent
+status destinations: a tab transfer must not fabricate a working state for an
+agent currently needing attention. The underlying tab/pane association determines
+which room its work belongs to even when its character is at reception.
+
+A valid native drop commits the captured qualified operation once, marks that
+placement pending, and reconciles it with the authoritative observation after
+completion. No new modal is needed for each ordinary reorder. Cancel before drop
+has no native effect. If a connection retires, a target disappears, the operation
+fails or the result becomes uncertain, refresh and show the authoritative position
+with an explanation; never replay the operation on another connection or treat a
+visual ghost as a completed move. Keep Inspectors attached to their exact panes
+and reconcile any native identity change from observed results.
+
+Undo for host ordering is local. Undo for a native move must be a supported inverse
+operation against current topology, not restoration of an old snapshot. Reset
+layout resets World presentation preferences only; it must not silently reset
+Herdr workspace/tab order. Provide equivalent move controls for touch and keyboard
+and keep dragging distinct from normal vertical scrolling.
 
 Before implementation, compare the focus flow and Arrange mode with synthetic
 phone/wide-screen interactions, including returning from a distant host, receiving
-attention on another host, keyboard/touch cancellation, resize, new/removed items
-and connection retirement during a drag. Keep positioning state separate from
-native topology and bound preview/animation work to the viewport. Start with host
-focus, then host/room arrangement; decide terminal/agent movement only after its
-meaning is agreed.
+attention on another host, keyboard/touch cancellation, workspace reorder and tab
+transfer failures, resize, new/removed items and connection retirement during a
+drag. Keep visual host preferences separate from native order and membership, and
+bound preview/animation work to the viewport. Host focus, host ordering, native
+workspace/tab reordering and supported tab transfer can be reviewed in that order;
+this candidate implements none of those new interactions.
 
 ## Risks / Trade-offs
 

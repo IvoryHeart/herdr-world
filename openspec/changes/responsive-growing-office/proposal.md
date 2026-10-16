@@ -59,3 +59,9 @@ acceptance.
 The later host-focus and playful-arrangement discussion is recorded as a proposed
 interaction study in [the design](design.md#interaction-study-host-focus-and-arranging-proposed-not-implemented).
 It does not authorize those interactions as part of the implemented Office scope.
+
+The owner clarified the proposal: buildings/receptions reorder hosts visually;
+rooms reorder Herdr workspaces; desks reorder tabs or transfer them between
+workspaces on the same host; agents remain attached to their desks/screens/panes.
+The design records existing reorder paths and the cross-workspace transfer
+capability investigation still required before implementation.
