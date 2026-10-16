@@ -114,6 +114,7 @@ test("CI exposes the protected delivery gate and runs the complete repository ch
     "world-browser",
     "behavioral",
     "plugin-windows",
+    "installer-upgrade",
   ]);
   expect(delivery?.if).toBe("always()");
   expect(

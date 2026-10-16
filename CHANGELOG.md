@@ -17,6 +17,10 @@ are optional because the merged PR history records their source.
 
 ### Added
 
+- Require native installer checks before merge: build release-shaped candidates,
+  test fresh installs and upgrades from the latest stable release on six platforms,
+  and verify credentials, settings, cached plugin actions and failed-download recovery.
+
 - Install released Herdr World plugins on Unix and Windows without external Bun,
   preserving cached plugin actions, verified World releases and service ownership.
 
