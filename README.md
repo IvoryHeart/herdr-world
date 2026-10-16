@@ -160,7 +160,9 @@ The process must stay running and reachable. **PWA mode is not offline access.**
 
 - [Website](https://herdr.world/) and
   [hands-on tutorial](https://herdr.world/tutorial/)
-  ([Markdown](./docs/TUTORIAL.md)): local work, mobile, and private remote access.
+  ([Markdown](./docs/TUTORIAL.md)): Office, Desk,
+  [Graph navigation](./docs/TUTORIAL.md#graph), terminal/file review, mobile,
+  and private remote access.
 - [Features and shortcuts](./FEATURES.md)
 - [Deployment](./docs/DEPLOYMENT.md): installation, configuration, services, builds.
 - [Architecture](./docs/ARCHITECTURE.md): system contracts.
@@ -173,7 +175,7 @@ The process must stay running and reachable. **PWA mode is not offline access.**
 
 ## Development
 
-Use Bun 1.4.1 or newer and a running Herdr server:
+Use Bun 1.4.3 or newer and a running Herdr server:
 
 ```bash
 bun install --frozen-lockfile

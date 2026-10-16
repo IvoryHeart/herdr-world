@@ -41,6 +41,14 @@ bun run spec:check
 
 When implementation changes a current contract, source map or operational procedure,
 update the affected spec, knowledge-map row, foundation guide or runbook in the same PR.
+Every significant change also updates the relevant current user or contributor
+guides in the same PR: tutorial/features for changed controls or steps, README
+for first-run behavior, and deployment/packaging for operational changes. Name
+these updates in the handoff, or explain why existing guidance stays accurate.
+A changelog entry alone does not cover usage instructions. Follow
+[documentation maintenance](../AGENTS.md#documentation-maintenance), including
+the site build for tutorial changes.
+
 New foundation modules need an owner and focused evidence in the guide. Leave
 machine- and user-specific data untracked and use synthetic examples in tests.
 

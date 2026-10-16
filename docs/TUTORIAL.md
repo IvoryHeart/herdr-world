@@ -48,9 +48,12 @@ older World or Roamgate installation.
 ### Open your first workspace: about 5 minutes
 
 1. Start Herdr with a trusted project open. See [herdr.dev](https://herdr.dev)
-   for setup; Herdr World does not start it.
+   for setup. If it is not installed, standalone users can run
+   `herdr-world herdr setup` to install and start it.
 2. [Install Herdr World](./DEPLOYMENT.md#install-a-release). Standalone needs no Bun;
-   Windows uses the matching x64/ARM64 archive and `herdr-world.exe`. Alternatively,
+   Windows supports npm (`npm install --global @ivoryheart/herdr-world`,
+   Node.js 22.14.0 or newer) or the matching x64/ARM64 archive and
+   `herdr-world.exe`. Alternatively,
    follow the [plugin setup](./DEPLOYMENT.md#herdr-plugin).
 3. Start it on that computer:
 
@@ -65,7 +68,8 @@ older World or Roamgate installation.
    to `PATH`; skip the standalone command.
 
 4. Open the printed URL (including any token) on **the same computer**. Standalone
-   defaults to `http://127.0.0.1:8787`. Select a workspace and idle shell pane;
+   defaults to `http://127.0.0.1:8787` and opens **Office**. Use the view
+   switcher to open **Spaces**, select a workspace and idle shell pane, then
    run `pwd` (`Get-Location` in PowerShell).
 
 **You are done when:** terminal input shows your project directory. Get this
@@ -78,6 +82,77 @@ working before configuring remote access.
 ![Spaces showing synthetic workspaces, recognized agent states, and a live terminal](./images/herdr-world-desktop-spaces.png)
 
 *Find the project and active pane. Screenshot menu positions can differ by release.*
+
+### Choose a view for the task
+
+Use the view switcher to move between these views without restarting work:
+
+| View | Use it for |
+| --- | --- |
+| Office | See hosts, workspace rooms and agent desks; the default landing view |
+| Desk | Find agents needing input, review finished turns and follow work in flight |
+| Graph | Explore the same hosts, workspaces and agents as a spatial map |
+| Spaces | Work in one workspace's terminal panes, files, changes and history |
+
+**Hosts** starts at **All hosts**. Choose a host set to reduce the overview;
+use **Manage connections** to add or reconnect a local or SSH profile. Filtering
+changes what you see and does not disconnect hosts or retarget open terminals.
+
+### Explore Graph: find an agent and open its terminal
+
+<a id="graph"></a>
+
+1. Switch to **Graph**. Follow a host to its workspace and agent or terminal
+   nodes. These links show containment, not task dependencies or message traffic.
+2. Search for your workspace or agent in the top bar. Matching branches expand
+   while searching; clear the query to return to your saved collapsed branches.
+   Search results can include observed items omitted from the drawn map.
+3. On desktop, drag the background to pan, use the mouse wheel or **Zoom in** /
+   **Zoom out**, and choose **Fit** to bring the graph back into view. Drag a
+   node to position it; **Arrange graph** releases those saved positions and
+   lays out the graph again. **Rotate graph left/right** changes its orientation.
+4. Select your agent to inspect it; double-click a live agent or terminal node
+   to open its terminal. The hierarchy beside the canvas also provides selection,
+   expand/collapse and terminal controls. On narrow screens, use this hierarchy.
+5. In the Inspector, switch between **Terminal**, **Files**, **Changes** and
+   **Agent History**. Use **Actions** for the selected target's resource actions
+   or **Go to Spaces** to continue in its workspace.
+
+Graph positions and collapsed branches are saved in this browser. Moving a node
+changes only its presentation. Offline or stale hosts may retain their last
+observed topology, but their nodes cannot open live resources. Omission counts
+mean the drawing is bounded; they do not mean the other workspaces were deleted.
+
+![Graph showing hosts, workspaces and agent terminals](./images/herdr-world-desktop-graph.png)
+
+**You are done when:** you can find the same agent in Graph and Spaces and open
+its terminal on the expected host.
+
+### Use Office and Desk to follow the same work
+
+In **Office**, select an agent's desk to open its Inspector. Workspace rooms group
+work on each host. Use **Actions > New workspace** or **New tab** from a visual
+view; Office also offers **New room** and **New seat**. Confirm the destination
+host before creating anything. Creation needs a ready host and prepares the
+source terminal before opening the result in the current view.
+
+In **Desk**, start with **Needs you** for blocked agents, **To review** for
+finished turns and **In flight** for running work. Open a card to inspect the
+terminal, files, changes or history. Read the result and verify the diff before
+using **Mark reviewed**; the mark is saved in this browser and does not commit
+files or certify success. **Agents** lists all agents in your Hosts filter;
+**Reviewed** lets you reopen a marked turn.
+
+Use **Actions > Pin** on a live agent or terminal in Office or Graph to
+keep that exact pane in visual triage. These pane pins are shared by browsers
+using the same World service, and clear when the service or host runtime
+restarts. **Pinned only** is a browser preference. Graph node positions and
+workspace pins are separate from these pane pins.
+
+On desktop, **Arrange windows** can tile or cascade open Inspectors; use **Open
+windows** to restore minimized ones. On mobile, one Inspector fills the screen:
+use **Back** to return to the visual view and the ellipsis controls for additional
+navigation. Closing an Inspector leaves the terminal session running.
 
 ### Learn this one hierarchy
 
@@ -253,11 +328,12 @@ as reliable alerts.
 
 ### 3.3 Multiple browsers are not separate permission roles
 
-Browsers share Herdr events, not all fonts, drafts, pins, or shortcuts.
+Browsers share Herdr events and visual pane pins; fonts, review marks, drafts,
+workspace pins and shortcuts can remain browser-local.
 Connection controls can pause your browser or others.
 
-**Profiles are shared; each browser saves its own Hosts filter.** Office, Tree,
-Graph, their counts, and search initially show all hosts and follow that filter.
+**Profiles are shared; each browser saves its own Hosts filter.** Desk, Office,
+Tree, Graph, their counts, and search initially show all hosts and follow that filter.
 Changing the filter preserves open Inspectors and the owners of pending operations.
 Manage connections controls lifecycle separately; global creation confirms one
 destination. Editing a profile affects others' connection lists. There is no

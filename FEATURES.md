@@ -5,7 +5,7 @@ A Web/PWA client for a running [Herdr](https://herdr.dev) server.
 
 ## Visual control plane
 
-- **Desk** is the default view. It organizes the filtered hosts' agents by what
+- **Desk** organizes the filtered hosts' agents by what
   they need from you rather than where they run:
   - **Needs you** lists blocked agents, oldest first, with the question and choices
     read from the agent's screen.
@@ -88,6 +88,20 @@ A Web/PWA client for a running [Herdr](https://herdr.dev) server.
   filter; workspace pins and Graph positions remain separate preferences.
 - World runs as one application and one browser origin. No remote World/Roamgate
   service or browser bridge URL is required for an SSH host.
+
+### Graph navigation
+
+Graph connects hosts to workspaces and their agents/terminals; edges represent
+containment. On desktop, drag the background to pan, scroll to zoom, or use
+**Zoom in**, **Zoom out** and **Fit** in the top bar. Drag nodes to save their
+positions in this browser; **Arrange graph** clears those positions and restarts
+the layout. Rotate controls turn the graph left or right. Expand/collapse host
+and workspace branches; search temporarily expands matching branches.
+
+Select a node to inspect it or double-click a live agent/terminal to open its
+terminal. The accompanying hierarchy provides keyboard-accessible selection and
+terminal controls, and becomes the main presentation on narrow screens. Stale
+nodes remain non-actionable. See the [Graph exercise](./docs/TUTORIAL.md#graph).
 
 ### Foundation cutover boundaries
 
