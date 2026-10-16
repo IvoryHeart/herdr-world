@@ -9,8 +9,10 @@ import {
 } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { promoteChangelog, replaceManifestVersion } from "./prepare-release";
 import {
   dailyDecision,
+  rollingPull,
   reviewedReleasePull,
   stableNotes,
   unreleasedChanges,
@@ -179,6 +181,18 @@ test("generated notes preserve exact lineage, reviewed changes and unresolved is
   ).toThrow();
 });
 
+test("only a matching bot-owned open patch PR can roll forward", () => {
+  const pr = pull();
+  pr.merged_at = null;
+  expect(rollingPull(pr, "0.2.4", "0.2.5")).toBe(true);
+  expect(rollingPull(pr, "0.2.3", "0.2.4")).toBe(false);
+  pr.user.login = "synthetic-maintainer";
+  expect(rollingPull(pr, "0.2.4", "0.2.5")).toBe(false);
+  pr.user.login = "github-actions[bot]";
+  pr.body = "<!-- daily-patch-release {broken} -->";
+  expect(rollingPull(pr, "0.2.4", "0.2.5")).toBe(false);
+});
+
 // These workflows execute on Ubuntu. Exercise the actual CLI against a real Git
 // history and a synthetic GitHub transport, without network writes or credentials.
 test.skipIf(process.platform === "win32")(
@@ -263,7 +277,7 @@ test.skipIf(process.platform === "win32")(
       const fake = join(root, "github.ts");
       writeFileSync(
         fake,
-        `import {readFileSync,appendFileSync} from "node:fs"; const a=process.argv.slice(2); appendFileSync(process.env.DAILY_CALLS!,JSON.stringify(a)+"\\n"); const f=JSON.parse(readFileSync(process.env.DAILY_FIXTURE!,"utf8")); let value; if(a[0]==="api"){const p=a[1]!; value=p.endsWith("releases/latest")?{tag_name:f.latest}:p.includes("state=open")?f.open:p.includes("/commits/")?f.pulls:p.includes("release.yml/runs")?{workflow_runs:f.runs}:null; if(value===null) throw new Error(p); if(a.includes("--slurp"))value=[value];}else if(a[0]==="pr")value=f.checks; else if(a[0]==="workflow")value={};else throw new Error(JSON.stringify(a)); console.log(JSON.stringify(value));`,
+        `import {readFileSync,appendFileSync} from "node:fs"; const a=process.argv.slice(2); appendFileSync(process.env.DAILY_CALLS!,JSON.stringify(a)+"\\n"); const f=JSON.parse(readFileSync(process.env.DAILY_FIXTURE!,"utf8")); let value; if(a[0]==="api"){const p=a[1]!; value=p.endsWith("releases/latest")?{tag_name:f.latest}:p.includes("state=open")?f.open:p.includes("/compare/")?{ahead_by:f.ahead??0}:p.includes("/commits/")?f.pulls:p.includes("release.yml/runs")?{workflow_runs:f.runs}:null; if(value===null) throw new Error(p); if(a.includes("--slurp"))value=[value];}else if(a[0]==="pr")value=a[1]==="view"?{state:"OPEN",headRefOid:f.open[0]?.head.sha,reviewDecision:f.review??"REVIEW_REQUIRED"}:f.checks; else if(a[0]==="workflow")value={};else throw new Error(JSON.stringify(a)); console.log(JSON.stringify(value));`,
       );
       const literal = (value: string) =>
         "'" + value.replaceAll("'", "'\\''") + "'";
@@ -295,7 +309,7 @@ test.skipIf(process.platform === "win32")(
       };
       let result = execute("publication");
       expect(result.error).toBe("");
-      expect(result.code).toBe(0);
+      expect(result.code, result.error).toBe(0);
       expect(result.outputs).toContain("mode=tag");
       expect(result.outputs).toContain(`sha=${release}`);
       expect(result.outputs).not.toContain(`sha=${git("rev-parse", "HEAD")}`);
@@ -322,7 +336,7 @@ test.skipIf(process.platform === "win32")(
       git("tag", "-d", "v0.2.4");
       git("tag", "-a", "v0.2.4", "-m", "Reviewed tag", release);
       result = execute("publication");
-      expect(result.code).toBe(0);
+      expect(result.code, result.error).toBe(0);
       expect(result.outputs).toContain("mode=none");
       fixture.runs = [
         {
@@ -333,7 +347,7 @@ test.skipIf(process.platform === "win32")(
         },
       ];
       result = execute("publication");
-      expect(result.code).toBe(0);
+      expect(result.code, result.error).toBe(0);
       expect(result.outputs).toContain("mode=retry");
       expect(result.outputs).toContain("run_id=42");
       fixture.runs[0].id = -1;
@@ -350,7 +364,7 @@ test.skipIf(process.platform === "win32")(
         '"workflow"',
       );
       result = execute("dispatch");
-      expect(result.code).toBe(0);
+      expect(result.code, result.error).toBe(0);
       expect(result.calls).toContain('"prepare-release.yml"');
       expect(result.calls).toContain('"version=patch"');
       fixture.open = [{ ...pr, title: "Release 0.2.5" }];
@@ -360,12 +374,128 @@ test.skipIf(process.platform === "win32")(
       git("init", "--bare", remote);
       git("remote", "add", "origin", remote);
       result = execute("prepare", { VERSION_INPUT: "patch" });
-      expect(result.code).toBe(0);
+      expect(result.code, result.error).toBe(0);
       expect(result.outputs).toContain("ready=true");
       expect(
         readFileSync(join(root, "docs/releases/v0.2.5.md"), "utf8"),
       ).toContain("Preserve this issue");
       expect(execute("prepare", { VERSION_INPUT: "minor" }).code).not.toBe(0);
+      // Keep one PR/version, bring new reviewed main into its normal merge history,
+      // regenerate notes, and freeze when approval or human branch edits appear.
+      const botEmail = "41898282+github-actions[bot]@users.noreply.github.com";
+      git("config", "user.name", "github-actions[bot]");
+      git("config", "user.email", botEmail);
+      git("checkout", "-b", "release/v0.2.5");
+      writeFileSync(join(root, "herdr-plugin.toml"), 'version = "0.2.5"\n');
+      writeFileSync(
+        join(root, "CHANGELOG.md"),
+        promoteChangelog(changes, "0.2.5", "2026-10-16"),
+      );
+      git(
+        "add",
+        "herdr-plugin.toml",
+        "CHANGELOG.md",
+        "docs/releases/v0.2.5.md",
+      );
+      git("commit", "-m", "Bot patch preparation");
+      const botHead = git("rev-parse", "HEAD");
+      git("push", "origin", "release/v0.2.5");
+      git("checkout", "main");
+      const updatedChanges = changes.replace(
+        "A reviewed feature.",
+        "A reviewed feature.\n- A later reviewed fix.",
+      );
+      writeFileSync(join(root, "CHANGELOG.md"), updatedChanges);
+      writeFileSync(join(root, "new-main.txt"), "New reviewed source");
+      git("add", "CHANGELOG.md", "new-main.txt");
+      git("commit", "-m", "New reviewed main work");
+      git("update-ref", "refs/remotes/origin/main", "HEAD");
+      const mainHead = git("rev-parse", "HEAD");
+      const rolling = {
+        ...pull(),
+        merged_at: null,
+        head: { ...pull().head, sha: botHead },
+      };
+      fixture.open = [
+        rolling,
+        {
+          ...rolling,
+          title: "Unrelated change",
+          head: { ...rolling.head, ref: "feature/example" },
+        },
+      ];
+      fixture.ahead = 1;
+      fixture.review = "APPROVED";
+      result = execute("prepare", { VERSION_INPUT: "patch" });
+      expect(result.code, result.error).toBe(0);
+      expect(result.outputs).toContain("ready=false");
+      fixture.review = "REVIEW_REQUIRED";
+      result = execute("prepare", { VERSION_INPUT: "patch" });
+      expect(result.code, result.error).toBe(0);
+      expect(result.outputs).toContain("pull=10");
+      expect(result.outputs).toContain(`head=${botHead}`);
+      expect(
+        readFileSync(join(root, "docs/releases/v0.2.5.md"), "utf8"),
+      ).toContain("A later reviewed fix");
+      writeFileSync(
+        join(root, "herdr-plugin.toml"),
+        replaceManifestVersion(
+          readFileSync(join(root, "herdr-plugin.toml"), "utf8"),
+          "0.2.4",
+          "0.2.5",
+        ),
+      );
+      writeFileSync(
+        join(root, "CHANGELOG.md"),
+        promoteChangelog(updatedChanges, "0.2.5", "2026-10-16"),
+      );
+      const commitEnv = {
+        VERSION: "0.2.5",
+        RELEASE_PR: "10",
+        RELEASE_HEAD: botHead,
+      };
+      fixture.review = "APPROVED";
+      expect(execute("commit-preparation", commitEnv).outputs).toContain(
+        "committed=false",
+      );
+      expect(git("rev-parse", "HEAD")).toBe(mainHead);
+      fixture.review = "REVIEW_REQUIRED";
+      // Runners start without local release branches; reproduce that checkout.
+      git("branch", "-D", "release/v0.2.5");
+      result = execute("commit-preparation", commitEnv);
+      expect(result.code, result.error).toBe(0);
+      expect(result.outputs).toContain("committed=true");
+      expect(git("rev-parse", "HEAD^1")).toBe(botHead);
+      expect(git("rev-parse", "HEAD^2")).toBe(mainHead);
+      expect(readFileSync(join(root, "new-main.txt"), "utf8")).toBe(
+        "New reviewed source",
+      );
+      expect(readFileSync(join(root, "CHANGELOG.md"), "utf8")).toContain(
+        "A later reviewed fix",
+      );
+      expect(
+        git("diff", "--name-only", mainHead, "HEAD").split("\n").sort(),
+      ).toEqual([
+        "CHANGELOG.md",
+        "docs/releases/v0.2.5.md",
+        "herdr-plugin.toml",
+      ]);
+      git("config", "user.email", "human@example.invalid");
+      writeFileSync(
+        join(root, "docs/releases/v0.2.5.md"),
+        "# Human edited upgrade notes\n",
+      );
+      git("add", "docs/releases/v0.2.5.md");
+      git("commit", "-m", "Human release note edit");
+      rolling.head.sha = git("rev-parse", "HEAD");
+      git("push", "origin", "release/v0.2.5");
+      git("checkout", "main");
+      result = execute("prepare", { VERSION_INPUT: "patch" });
+      expect(result.code, result.error).toBe(0);
+      expect(result.outputs).toContain("ready=false");
+      expect(git("show", "release/v0.2.5:docs/releases/v0.2.5.md")).toBe(
+        "# Human edited upgrade notes",
+      );
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
@@ -408,10 +538,15 @@ test("workflow wiring preserves review gates and restricts the publishing creden
   expect(install).toBeGreaterThan(guard);
   expect(validate).toBeGreaterThan(install);
   expect(create).toBeGreaterThan(validate);
-  for (const step of steps.slice(install))
+  for (const step of steps.slice(install, create))
     expect(step.if).toContain("steps.automatic.outputs.ready == 'true'");
   expect(steps[create].run).toContain('gh workflow run "CI" --ref "$branch"');
   expect(steps[create].run).not.toContain("gh pr merge");
+  expect(steps[create].if).toBe("steps.commit.outputs.committed == 'true'");
+  expect(steps.find((step: any) => step.id === "commit").run).toContain(
+    "commit-preparation",
+  );
+  expect(steps[create].run).not.toContain("--force");
   const publish = workflow("publish-release");
   expect(publish.jobs.publish.if).toContain("refs/heads/main");
   expect(publish.permissions.contents).toBe("read");

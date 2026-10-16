@@ -35,6 +35,13 @@ from the final reviewed immutable release tag.
 - **AND** independent human review and required checks remain necessary; minor, major and
   release candidates remain manual
 
+#### Scenario: Rolling patch review
+- **WHEN** new changes reach main while the bot's patch PR awaits approval
+- **THEN** automation refreshes that same PR and target version with current source and notes,
+  preserves branch ancestry without force-pushing, and reruns CI
+- **AND** approval freezes the candidate; human-authored branch edits pause automatic refresh
+  rather than being overwritten; no release tag is created while review is pending
+
 #### Scenario: Daily patch publication
 - **WHEN** a bot-prepared patch PR is reviewed and merged with required checks passing
 - **THEN** automation tags its exact version-changing merge commit with an authorized identity,

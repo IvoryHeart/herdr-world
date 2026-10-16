@@ -60,26 +60,38 @@ jobs:
           HERDR_TEST_PARALLEL: "1"
           HERDR_TEST_MAX_CONCURRENCY: "2"
         run: bun run precommit
-      - name: Create release PR
+      - id: commit
+        name: Commit new or refreshed release candidate
         if: ${{ !inputs.automatic || steps.automatic.outputs.ready == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.release.outputs.version }}
+          RELEASE_PR: ${{ steps.automatic.outputs.pull }}
+          RELEASE_HEAD: ${{ steps.automatic.outputs.head }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          bun scripts/daily-release.ts commit-preparation
+      - name: Create release PR
+        if: steps.commit.outputs.committed == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.release.outputs.tag }}
           VERSION: ${{ steps.release.outputs.version }}
           AUTOMATIC: ${{ inputs.automatic }}
           BASE_VERSION: ${{ steps.automatic.outputs.from }}
+          RELEASE_PR: ${{ steps.automatic.outputs.pull }}
         run: |
           set -euo pipefail
           branch="release/${TAG}"
 
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git checkout -b "$branch"
-          git add herdr-plugin.toml CHANGELOG.md docs/releases/
-          git commit -m "Release $VERSION"
           gh auth setup-git
           git push origin "$branch"
 
+          if [ -n "$RELEASE_PR" ]; then
+            gh workflow run "CI" --ref "$branch"
+            exit 0
+          fi
           body="$RUNNER_TEMP/release-pr.md"
           cat > "$body" <<EOF
           Prepare $TAG by updating the public plugin version and reviewing the release notes. Stable versions promote the changelog; private development manifests remain at 0.0.0.

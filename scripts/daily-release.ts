@@ -4,6 +4,7 @@ import {
   appendFileSync,
   existsSync,
   readFileSync,
+  unlinkSync,
   writeFileSync,
 } from "node:fs";
 import { resolveNextVersion, parseManifestVersion } from "./prepare-release";
@@ -23,6 +24,7 @@ export type Decision = {
   action: "none" | "prepare" | "publish";
   version: string;
   reason: string;
+  pull?: ReleasePull;
 };
 
 export function unreleasedChanges(changelog: string): string {
@@ -229,6 +231,12 @@ function plan(): Decision {
     "",
   );
   const pulls = list<ReleasePull>("pulls?state=open&base=main&per_page=100");
+  const releasePulls = pulls.filter(
+    (pr) =>
+      pr.head.repo?.full_name === repository &&
+      (pr.head.ref.startsWith("release/") ||
+        /^Release\s+\d+\.\d+\.\d+\b/i.test(pr.title)),
+  );
   const decision = dailyDecision({
     current,
     latest,
@@ -236,16 +244,121 @@ function plan(): Decision {
       unreleasedChanges(readFileSync("CHANGELOG.md", "utf8")),
     ),
     publication: publication(current).state,
-    openRelease: pulls.some(
-      (pr) =>
-        pr.head.repo?.full_name === repository &&
-        (pr.head.ref.startsWith("release/") ||
-          /^Release\s+\d+\.\d+\.\d+\b/i.test(pr.title)),
-    ),
+    openRelease: releasePulls.length > 0,
   });
+  if (
+    decision.action === "none" &&
+    decision.reason === "An existing release PR owns preparation" &&
+    releasePulls.length === 1
+  ) {
+    const pr = releasePulls[0]!;
+    const target = resolveNextVersion(current, "patch");
+    if (rollingPull(pr, current, target)) {
+      const review = pullStatus(pr.number);
+      if (review.reviewDecision === "APPROVED") {
+        summary(
+          `none: #${pr.number} is approved; leave its reviewed head ready to merge`,
+        );
+        return {
+          action: "none",
+          version: target,
+          reason: "Approved release is frozen",
+        };
+      }
+      const comparison = api<{ ahead_by: number }>(
+        `compare/${pr.head.sha}...${git("rev-parse", "origin/main")}`,
+      );
+      if (comparison.ahead_by > 0) {
+        const refresh: Decision = {
+          action: "prepare",
+          version: target,
+          reason: `Refresh existing release PR #${pr.number}`,
+          pull: pr,
+        };
+        summary(`${refresh.action}: ${target} — ${refresh.reason}`);
+        return refresh;
+      }
+      summary(`none: #${pr.number} already includes current main`);
+      return {
+        action: "none",
+        version: target,
+        reason: "Release PR is current",
+      };
+    }
+  }
   summary(`${decision.action}: ${decision.version} — ${decision.reason}`);
   return decision;
 }
+export function rollingPull(
+  pr: ReleasePull,
+  from: string,
+  version: string,
+): boolean {
+  if (
+    pr.merged_at ||
+    pr.user.login !== "github-actions[bot]" ||
+    pr.base.ref !== "main" ||
+    pr.head.repo?.full_name !== repository ||
+    pr.head.ref !== `release/v${version}`
+  )
+    return false;
+  const match = marker.exec(pr.body ?? "");
+  if (!match) return false;
+  try {
+    const record = JSON.parse(match[1]!);
+    return (
+      record.from === from &&
+      record.version === version &&
+      resolveNextVersion(from, "patch") === version
+    );
+  } catch {
+    return false;
+  }
+}
+
+type PullStatus = { state: string; headRefOid: string; reviewDecision: string };
+function pullStatus(number: number): PullStatus {
+  return JSON.parse(
+    command("gh", [
+      "pr",
+      "view",
+      String(number),
+      "--repo",
+      repository,
+      "--json",
+      "state,headRefOid,reviewDecision",
+    ]),
+  ) as PullStatus;
+}
+
+function ownedPreparation(pr: ReleasePull): boolean {
+  git("fetch", "origin", `refs/heads/${pr.head.ref}`);
+  assert.equal(
+    git("rev-parse", "FETCH_HEAD"),
+    pr.head.sha,
+    "Release branch changed during preparation; retry later",
+  );
+  const emails = git(
+    "log",
+    "--first-parent",
+    "--format=%ae",
+    `origin/main..${pr.head.sha}`,
+  ).split("\n");
+  if (
+    !emails.length ||
+    emails.some(
+      (email) =>
+        email !== "41898282+github-actions[bot]@users.noreply.github.com",
+    )
+  ) {
+    summary(
+      `none: #${pr.number} has human-authored branch changes; preserve them for manual preparation`,
+    );
+    return false;
+  }
+  return true;
+}
+
 function releaseCommit(version: string): string {
   for (const sha of git(
     "rev-list",
@@ -395,10 +508,18 @@ function automaticPrepare(): void {
     return;
   }
   const branch = `release/v${decision.version}`;
-  assert(
-    !git("ls-remote", "origin", `refs/heads/${branch}`),
-    "Release branch already exists; inspect or reopen its PR",
-  );
+  if (decision.pull) {
+    if (!ownedPreparation(decision.pull)) {
+      output("ready", "false");
+      return;
+    }
+    output("pull", String(decision.pull.number));
+    output("head", decision.pull.head.sha);
+  } else
+    assert(
+      !git("ls-remote", "origin", `refs/heads/${branch}`),
+      "Release branch already exists; inspect or reopen its PR",
+    );
   const path = `docs/releases/v${decision.version}.md`;
   if (!existsSync(path))
     writeFileSync(
@@ -414,9 +535,65 @@ function automaticPrepare(): void {
   output("from", currentVersion());
 }
 
+// Validation runs on the freshly prepared main tree. Refresh uses the same tree
+// in one normal merge commit, preserving branch ancestry and avoiding force-pushes.
+function commitPreparation(): void {
+  const version = process.env.VERSION ?? "";
+  assert(versionPattern.test(version), "Invalid prepared version");
+  const branch = `release/v${version}`;
+  const pull = process.env.RELEASE_PR;
+  if (!pull) git("checkout", "-b", branch);
+  else {
+    assert(/^\d+$/.test(pull), "Invalid release PR number");
+    const head = process.env.RELEASE_HEAD ?? "";
+    assert(/^[a-f0-9]{40}$/.test(head), "Invalid preparation head");
+    const review = pullStatus(Number(pull));
+    if (
+      review.state !== "OPEN" ||
+      review.reviewDecision === "APPROVED" ||
+      review.headRefOid !== head
+    ) {
+      output("committed", "false");
+      summary(
+        "Release PR was approved, closed or changed during validation; preserve it",
+      );
+      return;
+    }
+    const paths = [
+      "herdr-plugin.toml",
+      "CHANGELOG.md",
+      `docs/releases/v${version}.md`,
+    ];
+    const prepared = paths.map((path) => readFileSync(path));
+    git("restore", "--staged", "--worktree", "--", ...paths.slice(0, 2));
+    if (git("ls-files", paths[2]!))
+      git("restore", "--staged", "--worktree", "--", paths[2]!);
+    else unlinkSync(paths[2]!);
+    git("checkout", "-b", branch, head);
+    git("merge", "--no-commit", "--no-ff", "-s", "ours", "origin/main");
+    git("restore", "--source", "origin/main", "--staged", "--worktree", ".");
+    paths.forEach((path, index) => writeFileSync(path, prepared[index]!));
+  }
+  git(
+    "add",
+    "herdr-plugin.toml",
+    "CHANGELOG.md",
+    `docs/releases/v${version}.md`,
+  );
+  git(
+    "commit",
+    "-m",
+    pull
+      ? `Refresh release ${version} from reviewed main`
+      : `Release ${version}`,
+  );
+  output("committed", "true");
+}
+
 if (import.meta.main) {
   const mode = process.argv[2];
   if (mode === "prepare") automaticPrepare();
+  else if (mode === "commit-preparation") commitPreparation();
   else if (mode === "publication") publicationPlan();
   else if (mode === "dispatch") {
     const decision = plan();

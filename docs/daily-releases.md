@@ -4,7 +4,9 @@ The **Daily patch release** workflow checks `main` at **06:37 UTC daily** and
 can be run manually. GitHub schedules are best effort, so this is not an exact
 publication deadline. It prepares at most one release PR when the Unreleased
 changelog contains changes, the current stable version has a successful Release
-workflow, and no release PR is open. It increments only the patch component:
+workflow, and no release PR is open. Once a bot release PR exists, daily checks
+refresh that same PR when main advances, retaining its target version. It increments
+only the patch component:
 `0.2.4` becomes `0.2.5`. Empty changelogs and standing known issues do not
 produce releases. Minor, major and RC preparation and publication remain manual.
 
@@ -18,8 +20,11 @@ produce releases. Minor, major and RC preparation and publication remain manual.
    and explicitly dispatches CI. Human review and all required checks still apply;
    the pipeline never approves or merges a PR. Review the generated upgrade notes
    and changelog date, and remove resolved standing issues in a reviewed change.
-   New changes on main wait for a later release unless explicitly incorporated
-   into the release PR and reviewed again.
+   Until approval, new reviewed changes on main are incorporated into that same
+   PR and its generated notes on the next daily run. A normal merge commit preserves
+   the branch history; there is no force-push. CI runs again for each refreshed head.
+   Once approved, automatic refresh stops so the reviewed head stays ready to merge;
+   later main changes wait for the next patch. No tag exists before reviewed merge.
 3. A merged PR event checks for a prepared patch promptly; the daily schedule
    provides a fallback. Publication accepts only the bot's marked release PR,
    its consecutive patch version and actual baseline, and passing required PR
@@ -70,8 +75,14 @@ summary. The PR body records the baseline and target version; the immutable tag
 records the reviewed release SHA. Publication validates existing tags and Release
 run revisions before deciding whether to do anything.
 
-- An open release PR owns the version. Update that PR instead of creating another.
-  If its branch remains after the PR is closed, preparation fails and asks an
+- An open release PR owns the version. A matching bot-owned patch PR is refreshed
+  from main until approved. Human-authored release-branch commits pause automatic
+  refresh to preserve manual notes or fixes; maintain that PR manually. Approval,
+  closure or a changed head during validation also cancels submission. A concurrent
+  review immediately around a push is governed by protected-main stale-approval
+  rules, so only the final head can be merged with valid approval. Manual releases
+  and multiple open release PRs block new preparation.
+- If a release branch remains after its PR is closed, preparation fails and asks an
   operator to inspect or reopen it; it never overwrites that branch.
 - A pending Release run is left alone. A failed Release run is retried with
   **failed jobs only**, preserving its exact tag and version. Inspect persistent
@@ -87,7 +98,8 @@ run revisions before deciding whether to do anything.
 
 The direct readiness matrix, temporary Git histories and synthetic GitHub API
 responses in `scripts/daily-release.test.ts` exercise version selection, merged-PR
-identity, checks, tag preservation, retries and workflow wiring without publishing.
+identity, rolling Git merges, approval freezes, human-edit preservation, checks,
+tag preservation, retries and workflow wiring without publishing.
 They do not establish live token authority, GitHub event delivery, native package
 execution or downstream registry availability; protected CI and Release remain
 mandatory evidence for those boundaries.

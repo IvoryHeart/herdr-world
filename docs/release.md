@@ -4,7 +4,8 @@ Releases are prepared and reviewed through pull requests. Never commit or push a
 release change directly to `main`.
 
 [Daily patch automation](daily-releases.md) prepares one reviewed patch PR at a
-time and publishes its exact merged revision after approval and required CI.
+time, refreshes it as main advances until approval, and publishes its exact merged
+revision after required CI and human-approved merge.
 Minor, major and release candidates remain explicit manual releases.
 
 ## Pre-merge installer upgrades
