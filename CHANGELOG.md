@@ -7,6 +7,8 @@ are optional because the merged PR history records their source.
 
 ## [Unreleased]
 
+## [0.2.4] - 2026-10-16
+
 ### Fixed
 
 - Retry transient Windows installer-test cleanup locks within a bounded window,
@@ -22,6 +24,36 @@ are optional because the merged PR history records their source.
 
 - Diagnose the saved default Herdr connection, preserve package/plugin and preview
   update ownership, and refresh generated service paths when restarting the plugin.
+
+- Bind upstream approval to the reviewed World base, reject obsolete source
+  baselines, preserve integration evidence in PR descriptions, and keep failure
+  blockers effective when unrelated issues share their title.
+
+- Show the resolved build version in the application menu instead of the
+  development manifest placeholder.
+
+- Keep a visible Back action in the mobile app bar while a visual Inspector is
+  open. Return to Office, Desk, Tree or Graph without terminating terminal
+  sessions or expanding the ellipsis controls. Hide the logo and product name
+  from the mobile app bar to give its navigation controls more space. Keep the
+  view switcher at the left beside Back, including while an Inspector is open.
+
+- Mobile terminals in Office, Desk, Tree and Graph open the shared Spaces
+  Composer/Direct input panel. Inspector title and resource bars collapse while
+  viewing a mobile terminal; existing mobile navigation keeps resource and window
+  controls available. The keyboard launcher opens the visible terminal directly;
+  concurrent Inspector drafts and attachments survive input-panel reopening and
+  focused-host changes without admitting retired runtime work.
+
+- Keep retained unavailable Ranger workspace permissions visible and individually
+  revocable without clearing unrelated grants.
+- Reject Ranger history and Git diff reads on Windows SSH runtimes before calling
+  Unix-only helpers, while preserving native status and terminal reads.
+
+- Preserve terminal shortcut key identity and modifiers, and prevent duplicate
+  input composition finalization.
+- Surface specific Ranger task errors and retain runtime generations when editing
+  tasks with saved mentions.
 
 ### Added
 
@@ -75,38 +107,6 @@ are optional because the merged PR history records their source.
   signing state and expire when configured credentials change.
 - Ranger can offer Open worktree for existing workspaces not opened as worktrees.
 
-### Fixed
-
-- Bind upstream approval to the reviewed World base, reject obsolete source
-  baselines, preserve integration evidence in PR descriptions, and keep failure
-  blockers effective when unrelated issues share their title.
-
-- Show the resolved build version in the application menu instead of the
-  development manifest placeholder.
-
-- Keep a visible Back action in the mobile app bar while a visual Inspector is
-  open. Return to Office, Desk, Tree or Graph without terminating terminal
-  sessions or expanding the ellipsis controls. Hide the logo and product name
-  from the mobile app bar to give its navigation controls more space. Keep the
-  view switcher at the left beside Back, including while an Inspector is open.
-
-- Mobile terminals in Office, Desk, Tree and Graph open the shared Spaces
-  Composer/Direct input panel. Inspector title and resource bars collapse while
-  viewing a mobile terminal; existing mobile navigation keeps resource and window
-  controls available. The keyboard launcher opens the visible terminal directly;
-  concurrent Inspector drafts and attachments survive input-panel reopening and
-  focused-host changes without admitting retired runtime work.
-
-- Keep retained unavailable Ranger workspace permissions visible and individually
-  revocable without clearing unrelated grants.
-- Reject Ranger history and Git diff reads on Windows SSH runtimes before calling
-  Unix-only helpers, while preserving native status and terminal reads.
-
-- Preserve terminal shortcut key identity and modifiers, and prevent duplicate
-  input composition finalization.
-- Surface specific Ranger task errors and retain runtime generations when editing
-  tasks with saved mentions.
-
 ### Changed
 
 - Follow phone platform conventions on mobile. Office, Graph, Desk and Spaces
@@ -130,6 +130,12 @@ are optional because the merged PR history records their source.
 - Organize the World shell, Inspector coordination, Office drawing and visual-view
   styles into focused modules while preserving connection ownership, presentation
   and the existing responsive CSS cascade.
+
+### Known issues
+
+- Intermittent input-latency budget failures in dense synthetic browser tests
+  remain under investigation for the next release; keep existing budgets unchanged.
+  See [issue #202](https://github.com/IvoryHeart/herdr-world/issues/202).
 
 ## [0.2.3] - 2026-10-08
 
