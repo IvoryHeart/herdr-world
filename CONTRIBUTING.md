@@ -126,6 +126,20 @@ consumer, or in `styles/base.css` when needed globally. A feature's components
 may share co-located CSS when their explicit static imports guarantee it loads
 on every rendering path; do not rely on an unrelated feature being opened.
 
+## Keep documentation current
+
+Every significant change must include the relevant current documentation updates
+in the same PR. Use the [knowledge map](docs/knowledge-map.md) to find affected
+guides: tutorial and features for changed user steps or controls, README for
+first-run changes, deployment/packaging for configuration and distribution, and
+architecture or contributor guidance for contracts and workflows. Update current
+specifications when their contracts change; preserve historical evidence.
+
+Name the affected docs in the PR description. If no update is needed, explain
+why the existing instructions still describe the delivered behavior. Changelog
+entries record changes but do not replace instructions. For tutorial/site edits,
+run the checks below and verify the rendered result.
+
 ## Pages Website and Tutorial
 
 Edit `site/` for the landing page; **only `docs/TUTORIAL.md`** for tutorial text.

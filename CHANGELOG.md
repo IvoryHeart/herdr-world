@@ -7,6 +7,12 @@ are optional because the merged PR history records their source.
 
 ## [Unreleased]
 
+### Changed
+
+- Refresh the tutorial and feature guide for Office, Desk and Graph,
+  including Graph navigation, qualified Inspectors and shared pane pins. Require
+  relevant documentation updates alongside significant changes.
+
 ## [0.2.4] - 2026-10-16
 
 ### Fixed
