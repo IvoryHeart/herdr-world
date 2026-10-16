@@ -94,6 +94,7 @@ async function registerDomTests() {
     connectionGeneration: 1,
     connectionPaused: false,
     connections: [{ id: "connection-a", generation: 1 }],
+    tabs: [],
     layout: {
       tab_id: "tab-a",
       focused_pane_id: "pane-a",
@@ -169,6 +170,7 @@ async function registerDomTests() {
   }));
   mock.module("../layoutPreferences", () => ({
     isMobileLayout: () => true,
+    useLayoutPreferences: () => ({ mobile: true }),
     LAYOUT_CHANGE_EVENT: "test-layout-change",
   }));
   mock.module("./CreateWorkspaceDialog", () => ({
@@ -514,8 +516,9 @@ async function registerDomTests() {
     expect(
       container.querySelector(".terminal-composer textarea"),
     ).not.toBeNull();
+    // The tap raises the keyboard in Composer's editor, never raw input.
     expect(document.activeElement).toBe(
-      container.querySelector(".terminal-composer"),
+      container.querySelector(".terminal-composer-input"),
     );
     expectInputBlocked();
     await click('button[aria-label="Close terminal input"]');

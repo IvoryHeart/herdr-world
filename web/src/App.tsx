@@ -94,7 +94,7 @@ import {
   type ThemePreference,
 } from "./appearance";
 import { AgentIcon } from "./components/AgentIcon";
-import { paneHasAgentHistory } from "./components/agentSession";
+import { agentStateKind, paneHasAgentHistory } from "./components/agentSession";
 import { CloseButton } from "./components/CloseButton";
 import { focusIfUnchanged } from "./components/dialogFocus";
 import { CommandCombobox } from "./components/CommandCombobox";
@@ -119,6 +119,13 @@ import { assistantActionExecuting, useAssistantState } from "./assistant";
 import type { AssistantSource } from "../../shared/assistant";
 import { GlobalTooltip } from "./components/GlobalTooltip";
 import { MobileTabSheet } from "./components/MobileTabSheet";
+import {
+  type MobileControls,
+  MobileTerminalAppBar,
+  usePublishMobileControls,
+  useVisibleTerminalWorkspaceId,
+} from "./components/MobileControls";
+import { useSystemBack } from "./systemBack";
 import { requestClosePane, requestCloseTab, TabBar } from "./components/TabBar";
 import type { WindowArrangementControl } from "./components/TabBar";
 import { WindowArrangementMenu } from "./components/WindowArrangementMenu";
@@ -1105,6 +1112,7 @@ export default function App({
     },
   });
   const [mobileTabSheetOpen, setMobileTabSheetOpen] = useState(false);
+  const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
   const terminalComposerScopeKey = JSON.stringify([
     s.activeConnectionId,
     s.connectionGeneration,
@@ -1247,15 +1255,20 @@ export default function App({
           tab.workspace_id === focusedWorkspace?.workspace_id,
       ),
   );
+  const visibleTerminalWorkspaceId = useVisibleTerminalWorkspaceId();
   const { workspace: tabWorkspace, tabCount: focusedWorkspaceTabCount } =
     useStoreSelector((state) => {
       const snapshot =
         hasWorkspaceSurface && workspaceSurfaceContext
           ? connectionSnapshot(state, workspaceSurfaceContext.connectionId)
           : state;
-      const workspace = snapshot.workspaces.find(
-        (candidate) => candidate.focused,
-      );
+      const workspace =
+        (visibleTerminalWorkspaceId &&
+          snapshot.workspaces.find(
+            (candidate) =>
+              candidate.workspace_id === visibleTerminalWorkspaceId,
+          )) ||
+        snapshot.workspaces.find((candidate) => candidate.focused);
       return {
         workspace,
         tabCount: snapshot.tabs.filter(
@@ -1263,10 +1276,24 @@ export default function App({
         ).length,
       };
     }, shallowEqual);
+  // Another pane in the focused workspace is blocked on the user.
+  const focusedWorkspaceAttention = useStoreSelector((state) => {
+    const snapshot =
+      hasWorkspaceSurface && workspaceSurfaceContext
+        ? connectionSnapshot(state, workspaceSurfaceContext.connectionId)
+        : state;
+    return snapshot.panes.some(
+      (pane) =>
+        pane.workspace_id === tabWorkspace?.workspace_id &&
+        !pane.focused &&
+        agentStateKind(pane.agent_status) === "blocked",
+    );
+  });
   useEffect(() => {
     // Drop mobile-only controls when their context disappears so they cannot
     // stay active invisibly or resurface when the mobile layout returns.
     if (!mobile || !tabWorkspace) setMobileTabSheetOpen(false);
+    if (!mobile) setMobileMoreOpen(false);
     if (!mobile) setOpenTerminalComposerScopeKey(null);
   }, [mobile, tabWorkspace]);
   useEffect(() => {
@@ -4087,19 +4114,21 @@ export default function App({
   const topbar = (
     <header className={`topbar ${zenMode && !mobile ? "is-zen" : ""}`}>
       <div className="topbar-start">
-        <div className="brand">
-          <img
-            className="logo"
-            src="/herdr-world-logo.svg"
-            width={24}
-            height={24}
-            alt=""
-          />
-          <span className="brand-title">Herdr World</span>
-          <span className="brand-version" title={`Version ${APP_VERSION}`}>
-            v{APP_VERSION}
-          </span>
-        </div>
+        {!mobile ? (
+          <div className="brand">
+            <img
+              className="logo"
+              src="/herdr-world-logo.svg"
+              width={24}
+              height={24}
+              alt=""
+            />
+            <span className="brand-title">Herdr World</span>
+            <span className="brand-version" title={`Version ${APP_VERSION}`}>
+              v{APP_VERSION}
+            </span>
+          </div>
+        ) : null}
         {primaryViewControl}
         {connectionControl === undefined ? (
           <ConnectionSwitcher />
@@ -4108,6 +4137,7 @@ export default function App({
         )}
       </div>
       <div className="topbar-actions">
+        {mobile ? <MobileTerminalAppBar /> : null}
         {!mobile && arrangementControl ? (
           <WindowArrangementMenu control={arrangementControl} />
         ) : null}
@@ -4175,6 +4205,38 @@ export default function App({
       </div>
     </header>
   );
+  const mobileControls: MobileControls | null = mobile
+    ? {
+        tabCount: focusedWorkspaceTabCount,
+        attention: focusedWorkspaceAttention,
+        tabsDisabled: !tabWorkspace && !arrangementControl?.windows?.length,
+        tabsOpen: mobileTabSheetOpen,
+        showTabs: () => {
+          setMobileMoreOpen(false);
+          setMobileTabSheetOpen((open) => !open);
+        },
+        moreOpen: mobileMoreOpen,
+        toggleMore: () => {
+          setMobileTabSheetOpen(false);
+          setMobileMoreOpen((open) => !open);
+        },
+        workspacesOpen: mobileView === "workspaces",
+        toggleWorkspaces: () => {
+          setMobileMoreOpen(false);
+          setMobileTabSheetOpen(false);
+          if (mobileView === "workspaces") activateTerminalSurface();
+          else openWorkspaces();
+        },
+      }
+    : null;
+  usePublishMobileControls(mobileControls);
+  useSystemBack(mobileMoreOpen, () => setMobileMoreOpen(false), "popup");
+  useSystemBack(
+    mobileTabSheetOpen,
+    () => setMobileTabSheetOpen(false),
+    "popup",
+  );
+  useSystemBack(mobileView === "workspaces", activateTerminalSurface, "panel");
   return (
     <div
       ref={appRef}
@@ -4186,6 +4248,7 @@ export default function App({
       className={`app ${mobile && assistantVisible ? "assistant-view" : ""} ${mobileControlsPlacement.side === "left" ? "mobile-controls-left" : ""} ${desktopSidebarHidden ? "sidebar-hidden" : ""} ${
         zenMode && !mobile ? "zen" : ""
       } ${mobileControlsCollapsed ? "mobile-controls-collapsed" : ""}`}
+      data-mobile-more={mobile && mobileMoreOpen ? "open" : undefined}
     >
       {topbarPortal ? createPortal(topbar, topbarPortal) : topbar}
       {zenMode && !mobile ? (
@@ -4201,7 +4264,34 @@ export default function App({
         </button>
       ) : null}
 
-      <div className="mobile-controls-stack">
+      {mobile && mobileMoreOpen ? (
+        <button
+          type="button"
+          className="mobile-more-backdrop"
+          aria-label="Close more"
+          onClick={() => setMobileMoreOpen(false)}
+        />
+      ) : null}
+      <div
+        className="mobile-controls-stack"
+        onClick={(event) => {
+          // Choosing a view or tool from the More sheet dismisses it.
+          if (
+            mobileMoreOpen &&
+            (event.target as Element).closest?.("button:not(:disabled)")
+          )
+            setMobileMoreOpen(false);
+        }}
+      >
+        {mobile && mobileMoreOpen ? (
+          <div className="mobile-more-head">
+            <span>More options</span>
+            <CloseButton
+              label="Close menu"
+              onClick={() => setMobileMoreOpen(false)}
+            />
+          </div>
+        ) : null}
         <nav
           className="mobile-nav"
           aria-label="Workspace view switcher"
@@ -4350,6 +4440,7 @@ export default function App({
             onClose={() => setMobileTabSheetOpen(false)}
             onShowSession={activateTerminalSurface}
             onSelectTab={focusExplicitTab}
+            workspaceId={tabWorkspace?.workspace_id}
           />
         </OperationalContext.Provider>
         <button

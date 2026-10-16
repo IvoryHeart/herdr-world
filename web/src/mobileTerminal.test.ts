@@ -158,8 +158,9 @@ test.skipIf(!chrome).each([390, 320])(
               ? []
               : [{ x, y, radiusX: 1, radiusY: 1, force: 1, id: 1 }],
         });
+      const direct = 'button[aria-label="Type directly into the terminal"]';
       const tap = async (selector: string) => {
-        if (selector === 'button[aria-label="Open terminal input"]') {
+        if (selector === direct) {
           await evaluate(`new Promise(resolve => {
             document.querySelector('button[aria-label="Close terminal input"]')?.click();
             requestAnimationFrame(resolve);
@@ -179,7 +180,7 @@ test.skipIf(!chrome).each([390, 320])(
         ...(await point(".xterm-screen")),
       });
       await run("readingWheel");
-      await tap('button[aria-label="Open terminal input"]');
+      await tap(direct);
       await run("typing");
       await run("androidCorrections");
       await cdp("Input.dispatchMouseEvent", {
@@ -199,7 +200,7 @@ test.skipIf(!chrome).each([390, 320])(
       await tap('button[aria-label="Close terminal input"]');
       await tap(".xterm-screen");
       await run("dismissed");
-      await tap('button[aria-label="Open terminal input"]');
+      await tap(direct);
       await tap('button[aria-label="Close terminal input"]');
       const word = await evaluate("mobileTerminalTest.cell(4, 0)");
       await touch("touchStart", word.x, word.y);
@@ -248,7 +249,7 @@ test.skipIf(!chrome).each([390, 320])(
       await run("hybrid");
       await tap(".xterm-screen");
       await run("compatibilityMouse");
-      await tap('button[aria-label="Open terminal input"]');
+      await tap(direct);
       await tap('button[aria-label="Close terminal input"]');
       await tap(".xterm-screen");
       await run("compatibilityMouse");

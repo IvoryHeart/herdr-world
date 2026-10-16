@@ -10,6 +10,8 @@ import {
 } from "../terminalFileDrop";
 import { uploadTerminalFile } from "../terminalImageUpload";
 import { PaneDragHandle, PaneMoveMenu } from "./PaneMoveMenu";
+import { MobileTerminalIdentity } from "./MobileControls";
+import { useSystemBack } from "../systemBack";
 import { runTerminalInput, sendTerminalInput } from "../terminalInput";
 import {
   ClipboardAddon,
@@ -23,7 +25,7 @@ import { installTerminalCompositionRepair } from "../terminalComposition";
 import {
   Columns2,
   Grid2X2,
-  Keyboard,
+  SquareTerminal,
   Maximize2,
   Minimize2,
   Rows2,
@@ -638,6 +640,11 @@ export function TerminalView({
       onComposerOpenChange?.(open);
     },
     [controlledComposerOpen, onComposerOpenChange],
+  );
+  useSystemBack(
+    composerOpen && isActivePane,
+    () => setComposerOpen(false),
+    "panel",
   );
   const agentHistoryOpen = controlledAgentHistoryOpen ?? localAgentHistoryOpen;
   const setAgentHistoryOpen = useCallback(
@@ -3674,13 +3681,22 @@ export function TerminalView({
               if (event.target === event.currentTarget) focusTerminalInput();
             }}
           />
-          {touchHandles.length === 0 && !composerOpen && isActivePane ? (
+          <MobileTerminalIdentity
+            pane={pane}
+            active={isActivePane}
+            element={container}
+          />
+          {!composerOpen && isActivePane ? (
+            // Selection hides the bar but keeps its place: on phones it sits
+            // below the output, and a resize would clear the selection.
             <div
               className="terminal-mobile-input-actions"
               aria-label="Terminal input"
+              data-reserved={touchHandles.length > 0 || undefined}
             >
               <button
                 type="button"
+                className="terminal-mobile-message"
                 aria-label="Open terminal input"
                 title="Open terminal input"
                 aria-haspopup="dialog"
@@ -3692,16 +3708,56 @@ export function TerminalView({
                 }
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => {
+                  // On phones this is the Message bar beside a Direct button;
+                  // elsewhere it opens the saved mode.
+                  if (document.documentElement.dataset.layout === "mobile")
+                    rememberTerminalInputMode("composer");
                   flushSync(() => setComposerOpen(true));
-                  // Match Spaces: neutral dock focus in Composer, explicit
-                  // keyboard handoff only when the saved mode is Direct.
+                  // The tap is the request to type: focus Composer's editor
+                  // inside this gesture so mobile browsers raise the keyboard.
+                  // Direct keeps its explicit handoff through the dock focus.
+                  const composer = container
+                    ?.closest(".terminal-shell")
+                    ?.querySelector<HTMLElement>(".terminal-composer");
+                  const target =
+                    composer?.dataset.inputMode === "composer"
+                      ? composer.querySelector<HTMLElement>(
+                          ".terminal-composer-input",
+                        )
+                      : null;
+                  (target ?? composer)?.focus({ preventScroll: true });
+                }}
+              >
+                <span className="terminal-mobile-message-label">
+                  {pane.agent?.trim()
+                    ? `Message ${pane.agent.trim()}…`
+                    : "Type into the terminal…"}
+                </span>
+              </button>
+              <button
+                type="button"
+                className="terminal-mobile-direct"
+                aria-label="Type directly into the terminal"
+                title="Type directly into the terminal"
+                aria-pressed={inputActive}
+                disabled={
+                  directDisabled ||
+                  s.status !== "connected" ||
+                  s.connectionPaused ||
+                  !!terminalAttachError
+                }
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => {
+                  rememberTerminalInputMode("direct");
+                  flushSync(() => setComposerOpen(true));
+                  // Composer's dock focus hands the keyboard to Direct input.
                   container
                     ?.closest(".terminal-shell")
                     ?.querySelector<HTMLElement>(".terminal-composer")
                     ?.focus({ preventScroll: true });
                 }}
               >
-                <Keyboard size={20} />
+                <SquareTerminal size={19} aria-hidden="true" />
               </button>
             </div>
           ) : null}

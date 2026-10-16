@@ -1096,6 +1096,14 @@ async function run() {
       ),
     "Office settings in common menu",
   );
+  check(
+    Boolean(
+      document
+        .querySelector(".config-summary")
+        ?.textContent?.includes("Version 9.8.7-test"),
+    ),
+    "application menu shows the injected build version instead of the manifest placeholder",
+  );
   const inspectorOpeningSelect = document.querySelector<HTMLSelectElement>(
     'select[aria-label="Office Inspector opening"]',
   )!;
@@ -3135,17 +3143,27 @@ async function run() {
     ),
     "mobile resource row retained the window arranger",
   );
+  // Beside a terminal the islands wait in the app bar's ⋮ menu.
+  document.querySelector<HTMLButtonElement>(".mobile-more-button")!.click();
+  await until(
+    () =>
+      getComputedStyle(document.querySelector(".mobile-controls-stack")!)
+        .display !== "none",
+    "mobile ⋮ menu shows the floating controls",
+  );
+  // Tabs and the collapse toggle stay in the app bar, hidden in the menu.
   const secondRowButtons = [
     ...document.querySelectorAll<HTMLButtonElement>(
       ".mobile-terminal-controls button",
     ),
-  ];
+  ].filter((button) => button.getBoundingClientRect().width > 0);
+  check(secondRowButtons.length > 0, "mobile ⋮ menu has no terminal controls");
   secondRowButtons.forEach((button, index) => {
     const bounds = button.getBoundingClientRect();
     const previous = secondRowButtons[index - 1]?.getBoundingClientRect();
     check(
-      !previous || bounds.left >= previous.right,
-      "mobile second-row controls overlap",
+      !previous || bounds.top >= previous.bottom,
+      "mobile ⋮ menu rows overlap",
     );
     check(
       button.contains(
@@ -3176,6 +3194,10 @@ async function run() {
       ),
     "mobile ellipsis revealed window arrangements",
   );
+  // The collapse toggle sits inside the menu, so its tap closed it.
+  if (!document.querySelector(".app[data-mobile-more]"))
+    document.querySelector<HTMLButtonElement>(".mobile-more-button")!.click();
+  await settle();
   check(
     !mobileTabBar?.querySelector('button[aria-label="Arrange windows"]') &&
       document
@@ -3184,6 +3206,11 @@ async function run() {
         )!
         .getBoundingClientRect().width > 0,
     "mobile arrangement access created another tab-strip icon",
+  );
+  document.querySelector<HTMLButtonElement>(".mobile-more-button")!.click();
+  await until(
+    () => !document.querySelector(".app[data-mobile-more]"),
+    "mobile ⋮ menu closes",
   );
   const compactReviewerSlot = persistentReviewerInspector?.closest<HTMLElement>(
     ".world-managed-window",
@@ -3363,11 +3390,12 @@ async function run() {
     "compact World Inspector omitted its device keyboard or terminal shortcuts",
   );
   compactKeyboardButton.click();
+  // On phones the Message bar raises the keyboard in Composer's editor.
   await until(
     () =>
-      persistentReviewerInspector?.querySelector(".terminal-composer") ===
+      persistentReviewerInspector?.querySelector(".terminal-composer-input") ===
       document.activeElement,
-    "compact World Inspector opens Composer with neutral focus",
+    "compact World Inspector opens Composer with its editor focused",
   );
   compactFilesButton.click();
   await until(
@@ -4254,6 +4282,158 @@ async function run() {
     ).length === closeRpcBefore,
     "Open all changed a Herdr tab, pane, or session",
   );
+
+  viewSelect.value = "office";
+  viewSelect.dispatchEvent(new Event("change", { bubbles: true }));
+  updateLayoutPreferences({ mode: "mobile" });
+  await until(
+    () => document.documentElement.dataset.layout === "mobile",
+    "mobile Office before return navigation",
+  );
+  document
+    .querySelector<HTMLButtonElement>(
+      'button[aria-label="Hide mobile controls"]',
+    )
+    ?.click();
+  await until(
+    () =>
+      document.querySelector<HTMLButtonElement>(
+        'button[aria-label="Back to Office"]',
+      ),
+    "mobile Office has a visible return button outside the ellipsis menu",
+  );
+  const backToOffice = document.querySelector<HTMLButtonElement>(
+    'button[aria-label="Back to Office"]',
+  )!;
+  check(
+    backToOffice.getBoundingClientRect().width >= 44 &&
+      backToOffice.getBoundingClientRect().height >= 44,
+    "Back to Office has a visible touch target while mobile controls are collapsed",
+  );
+  const mobileViewBounds = viewSelect.getBoundingClientRect();
+  const mobileBackBounds = backToOffice.getBoundingClientRect();
+  // Phones switch scenes from the bottom bar; a detail screen shows only Back.
+  check(
+    mobileViewBounds.width === 0 &&
+      mobileBackBounds.left < 60 &&
+      !document.querySelector(".world-mobile-nav"),
+    "mobile Inspector screen shows Back at the left without scene switchers",
+  );
+  viewSelect.value = "graph";
+  viewSelect.dispatchEvent(new Event("change", { bubbles: true }));
+  await until(
+    () =>
+      document.querySelector('button[aria-label="Back to Graph"]') &&
+      document.querySelector(".world-spatial-graph-shell"),
+    "mobile view switcher changes scenes while retaining the Back action",
+  );
+  viewSelect.value = "office";
+  viewSelect.dispatchEvent(new Event("change", { bubbles: true }));
+  await until(
+    () => document.querySelector('button[aria-label="Back to Office"]'),
+    "mobile view switcher returns to Office before dismissing Inspectors",
+  );
+  backToOffice.click();
+  await until(
+    () => !document.querySelector(".workspace-inspector"),
+    "Back to Office dismisses all mobile Inspector presentations",
+  );
+  check(
+    window.location.pathname === "/office" &&
+      !!document.querySelector(".world-office-shell"),
+    "Back to Office reveals the Office scene without changing route",
+  );
+  check(
+    calls.filter(({ method }) =>
+      ["tab.close", "pane.close", "terminal.kill"].includes(method),
+    ).length === closeRpcBefore,
+    "Back to Office leaves Herdr tabs, panes and sessions running",
+  );
+  check(
+    !document.querySelector('button[aria-label="Back to Office"]'),
+    "return action disappears when no Inspector is open",
+  );
+  // The closed terminal leaves no history entry: one system Back leaves
+  // Office for the scene shown before it.
+  await settle();
+  check(
+    !(
+      typeof history.state === "object" &&
+      history.state !== null &&
+      "herdrBack" in history.state
+    ),
+    "Back to Office left a closed layer's history entry",
+  );
+  history.back();
+  await until(
+    () =>
+      window.location.pathname === "/graph" &&
+      document.querySelector(".world-spatial-graph-shell"),
+    "system Back after Back to Office reaches Graph in one press",
+  );
+  viewSelect.value = "spaces";
+  viewSelect.dispatchEvent(new Event("change", { bubbles: true }));
+  await until(
+    () => document.querySelector('button[aria-label="Back to Graph"]'),
+    "mobile Spaces offers Back to Graph",
+  );
+  document
+    .querySelector<HTMLButtonElement>('button[aria-label="Back to Graph"]')!
+    .click();
+  await until(
+    () => window.location.pathname === "/graph",
+    "Back to Graph leaves Spaces",
+  );
+  history.back();
+  await until(
+    () => window.location.pathname !== "/graph",
+    "system Back after Back to Graph moves on",
+  );
+  check(
+    window.location.pathname === "/office",
+    `system Back after Back to Graph reached ${window.location.pathname}, not Office`,
+  );
+  // Spaces opened directly has no in-app route to return through; its Back
+  // still closes an open menu first.
+  viewSelect.value = "spaces";
+  viewSelect.dispatchEvent(new Event("change", { bubbles: true }));
+  await until(
+    () => document.querySelector('button[aria-label="Back to Office"]'),
+    "mobile Spaces offers Back to Office",
+  );
+  history.replaceState({}, "", window.location.href);
+  const spacesMore = () =>
+    [
+      ...document.querySelectorAll<HTMLButtonElement>(
+        'button[aria-label="More options"]',
+      ),
+    ].find((button) => button.getBoundingClientRect().width > 0);
+  spacesMore()?.click();
+  await until(
+    () => spacesMore()?.getAttribute("aria-expanded") === "true",
+    "direct Spaces opens More",
+  );
+  await settle();
+  document
+    .querySelector<HTMLButtonElement>('button[aria-label="Back to Office"]')!
+    .click();
+  await until(
+    () => spacesMore()?.getAttribute("aria-expanded") === "false",
+    "direct Spaces Back closes More first",
+  );
+  check(
+    window.location.pathname === "/spaces",
+    `direct Spaces Back left for ${window.location.pathname} while More was open`,
+  );
+  document
+    .querySelector<HTMLButtonElement>('button[aria-label="Back to Office"]')!
+    .click();
+  await until(
+    () => window.location.pathname === "/office",
+    "direct Spaces Back replaces Spaces with Office",
+  );
+  updateLayoutPreferences({ mode: "desktop" });
+  await arrangeWindows("Open all terminal windows");
 
   // Desk: previewing the next agent in the docked reading pane must keep
   // keyboard focus in the queue, so triage keys never reach a terminal.

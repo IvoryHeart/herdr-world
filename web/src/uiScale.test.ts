@@ -38,6 +38,7 @@ test.skipIf(!chrome).concurrent.each([
   [1300, 1, "terminalLinkProvider", 800, 100],
   [1300, 1, "diffViewer", 800, 100],
   [390, 1, "diffViewer", 800, 100],
+  [390, 1, "systemBack", 800, 100],
 ])(
   "browser interactions preserve layout and input (width %d, DPR %d, %s, height %d, UI %d%%)",
   async (width, deviceScale, fixture, height, scale) => {

@@ -271,7 +271,10 @@ const checkEndHandleAlignment = () => {
 
 let copiedOutput = "";
 let readingWheelReports: string[] = [];
-const keyboard = 'button[aria-label="Open terminal input"]';
+// Phones split terminal input into Message (Composer) and Direct buttons; this
+// fixture types directly.
+const keyboard =
+  'html[data-layout="mobile"] button[aria-label="Type directly into the terminal"], html:not([data-layout="mobile"]) button[aria-label="Open terminal input"]';
 
 const point = (selector: string) => {
   const rect = document.querySelector(selector)!.getBoundingClientRect();
@@ -392,9 +395,9 @@ const api = {
     check(
       rect.width >= 44 &&
         rect.height >= 44 &&
-        rect.bottom <= innerHeight - 60 &&
+        rect.bottom <= innerHeight &&
         rect.right <= innerWidth,
-      "keyboard target above navigation and at least 44px",
+      "keyboard target on screen and at least 44px",
     );
     check(
       !document.querySelector(".terminal-mobile-keys"),

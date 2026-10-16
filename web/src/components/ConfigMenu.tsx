@@ -20,7 +20,7 @@ import {
   Settings,
   Wifi,
 } from "lucide-react";
-import packageJson from "../../package.json";
+import { APP_VERSION } from "../version";
 import { worldLocalStorage } from "../browserStorage";
 import { logoutBrowserSession } from "../api";
 import { connectionHttpPath } from "../connectionHttp";
@@ -48,7 +48,6 @@ const ConfigurationDialog = lazyWithReload("configuration", () =>
     default: module.ConfigurationDialog,
   })),
 );
-const APP_VERSION = packageJson.version;
 const RELEASES_URL = "https://github.com/IvoryHeart/herdr-world/releases";
 export const CONFIG_MENU_ID = "herdr-world-config-menu";
 
