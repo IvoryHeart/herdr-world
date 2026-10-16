@@ -4393,6 +4393,45 @@ async function run() {
     window.location.pathname === "/office",
     `system Back after Back to Graph reached ${window.location.pathname}, not Office`,
   );
+  // Spaces opened directly has no in-app route to return through; its Back
+  // still closes an open menu first.
+  viewSelect.value = "spaces";
+  viewSelect.dispatchEvent(new Event("change", { bubbles: true }));
+  await until(
+    () => document.querySelector('button[aria-label="Back to Office"]'),
+    "mobile Spaces offers Back to Office",
+  );
+  history.replaceState({}, "", window.location.href);
+  const spacesMore = () =>
+    [
+      ...document.querySelectorAll<HTMLButtonElement>(
+        'button[aria-label="More options"]',
+      ),
+    ].find((button) => button.getBoundingClientRect().width > 0);
+  spacesMore()?.click();
+  await until(
+    () => spacesMore()?.getAttribute("aria-expanded") === "true",
+    "direct Spaces opens More",
+  );
+  await settle();
+  document
+    .querySelector<HTMLButtonElement>('button[aria-label="Back to Office"]')!
+    .click();
+  await until(
+    () => spacesMore()?.getAttribute("aria-expanded") === "false",
+    "direct Spaces Back closes More first",
+  );
+  check(
+    window.location.pathname === "/spaces",
+    `direct Spaces Back left for ${window.location.pathname} while More was open`,
+  );
+  document
+    .querySelector<HTMLButtonElement>('button[aria-label="Back to Office"]')!
+    .click();
+  await until(
+    () => window.location.pathname === "/office",
+    "direct Spaces Back replaces Spaces with Office",
+  );
   updateLayoutPreferences({ mode: "desktop" });
   await arrangeWindows("Open all terminal windows");
 

@@ -269,9 +269,11 @@ export default function WorldFoundationApp() {
     },
     "screen",
   );
-  // Spaces' Back undoes the in-app navigation that opened it, so the next
-  // system Back does not reopen Spaces. Opened directly, it replaces itself.
+  // Spaces' Back first closes an open menu or sheet, like the phone's Back.
+  // Then it undoes the in-app navigation that opened Spaces, so the next
+  // system Back does not reopen it. Opened directly, it replaces itself.
   const leaveSpaces = () => {
+    if (stepBack()) return;
     const from = (window.history.state as { herdrFrom?: unknown } | null)
       ?.herdrFrom;
     if (from === WORLD_VIEW_PATHS[visualView]) window.history.back();
