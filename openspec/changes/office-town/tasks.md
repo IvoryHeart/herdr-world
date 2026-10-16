@@ -8,7 +8,7 @@
 
 - [ ] 2.1 Implement `layoutTown` as a pure function with desktop row and phone column forms, building interiors, room capacity steps, lounge and reception slots; verify placement, non-overlap and free-spot invariants in unit tests.
 - [ ] 2.2 Implement live placement stability (new tab takes the first free spot, closed tab frees its spot, rebuild re-derives from native order); verify with topology-change sequences.
-- [ ] 2.3 Generate the pixel atlas (tiles, furniture, roofs, façades, characters with walk/sit/carry frames) and retire the old character PNGs; verify deterministic appearance per identity.
+- [ ] 2.3 Implement the art pipeline from design decision 1a: pixel sprite definitions, a load-time atlas, baked static layers, deterministic characters with all poses, and a sprite gallery fixture; retire the old character PNGs; verify deterministic appearance and review the gallery at 1x and 3x.
 - [ ] 2.4 Render the town on Pixi with zoom levels, room culling and zoom-dependent detail; verify level transitions and that waiting attention is visible at every level in browser cases.
 - [ ] 2.5 Add room status cards and reception boards; verify card text, waiting counts and accessible names at the overview level.
 
@@ -23,9 +23,9 @@
 ## 4. Moves
 
 - [ ] 4.1 Model desk and agent moves in Quint (ordered steps, confirmation, rollback, generation authority, no cross-host, no replay of uncertain steps) and record the coverage entry.
-- [ ] 4.2 Implement the qualified service move operation over `pane.move` with capability gating, confirmation from Herdr events and rollback; verify against the model and with service tests for partial failure.
+- [ ] 4.2 Implement the qualified service move operation over `pane.move` with capability gating, a fresh source check, split-tree reconstruction and replay derived from herdr-drovr (MIT, notice retained in the source header and third-party notices), confirmation from Herdr events and rollback; verify against the model, with drovr-equivalent layout-tree tests and with service tests for partial failure.
 - [ ] 4.3 Add drag and Move-action flows with reserved spots, crew animation and topology-confirmed final placement; verify success, rejection, cross-host refusal and rollback in browser cases.
-- [ ] 4.4 Raise the cross-workspace tab move request with Herdr upstream.
+- [ ] 4.4 Optionally raise a cross-workspace tab move request with Herdr upstream, citing the herdr-drovr workaround.
 
 ## 5. Identity, profile and project signals
 

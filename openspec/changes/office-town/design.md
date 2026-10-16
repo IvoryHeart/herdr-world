@@ -60,6 +60,72 @@ binary art to license and no fixed roster. The twelve existing single-frame
 character PNGs are retired. A licensed CC0 tileset can replace the generated
 atlas later without changing the model.
 
+### 1a. Art direction and assets
+
+The prototype's look is the reference for production art.
+
+**Style**
+
+- **View and scale**: 3/4 top-down pixel art on a 16-pixel tile grid, drawn with
+  nearest-neighbour scaling. Smoothing is used only when zoomed far out.
+- **Outlines**: every sprite has a dark one-pixel outline, with highlight and
+  shade derived from one base colour per material.
+- **Palette**: a warm dusk-green world palette. Each host has a roof, brick and
+  floor colour, and each room a carpet colour, drawn from a fixed set.
+- **Status colours** are reserved: working blue, waiting amber, done green, idle
+  sand and shell green. They always come with text or accessible names.
+- **Lighting**: soft drop shadows and additive screen glow. Ambient motion (tree
+  sway, cloud shadows, fountain, dust puffs) is disabled by reduced motion or
+  Calm.
+- **Text** uses three web fonts: Silkscreen for in-world signs and plaques,
+  Pixelify Sans for headings and Rubik for interface text. Each has a system
+  fallback.
+
+**Characters**
+
+- **Sprite size**: 12 by 18 pixels plus outline.
+- **Directions**: down, up and side views, with left mirrored from right.
+- **Poses**: stand, four-frame walk, sit with two typing frames, and carry.
+- **Blinking and status bubbles**: `!` (waiting), `✓` (done) and a coffee cup
+  (idle).
+- **Appearance**: skin, hair, hair style, shirt and trousers are chosen
+  deterministically from agent identity, which gives profiles a stable avatar
+  for free.
+
+**Asset inventory**
+
+- **Ground**: grass, road, sidewalk and plaza tiles.
+- **Building shell**: walls, windows, façade, door and awning, and roofs with
+  rooftop props.
+- **Interior**: carpets, team tables, chairs (front and back), laptop lids and
+  screens with a per-agent-kind logo colour, the reception counter with its
+  service bell, and lounge furniture (sofa, coffee machine, water cooler).
+- **Outdoors**: plants, trees in three variants, bushes, lamps, benches, the
+  town board and the fountain.
+- **Interface sprites**: status bubbles, the selection ring and the drag ghost.
+
+**Pipeline**
+
+- **Generation**: sprites are defined as compact pixel-drawing functions in
+  `web/src/world/` and composed into a texture atlas at load time. There are no
+  binary assets, and characters and caches regenerate deterministically.
+- **Static layers**: the ground, building interiors, façades and roofs are baked
+  once per layout into cached textures. Only furniture, desks and agents are
+  drawn per frame.
+- **Updating art**: a sprite changes by editing its definition. A sprite gallery
+  fixture renders every sprite and pose so changes can be reviewed visually.
+
+**Licensing**
+
+- **What is allowed**: original art, plus CC0 or MIT assets with a recorded
+  source.
+- **Recording sources**: imported assets go under `web/public/world/` with
+  their licence file and a notices entry.
+- **Third-party tilesets**: one may replace generated sprites later if its
+  licence permits redistribution in this repository and in releases.
+- **Retired images**: the twelve existing character PNGs are removed, and their
+  licence note goes with them if nothing else uses it.
+
 ### 2. Town model as a pure function
 
 `town = layoutTown(projection, formFactor)` produces buildings, rooms, desk
@@ -164,15 +230,23 @@ connections, for retired generations, or for runtimes without `pane.move`.
 - **Desk move** (one tab with n panes):
   1. Send `pane.move` for pane 1 with destination `new_tab` in the target
      workspace and `focus: false`, then record the created tab.
-  2. Move panes 2 to n one at a time into that tab as splits.
+  2. Rebuild the source tab's split tree from the pane rectangles Herdr
+     reports, then replay it: each remaining pane moves into the new tab as a
+     split with the recorded direction and ratio. This reconstruction is
+     derived from herdr-drovr (MIT), keeping its copyright and licence notice.
+     drovr is a Herdr plugin that runs inside Herdr and needs node and fzf, so
+     World ports the algorithm into the service instead of depending on the
+     plugin.
   3. Confirm each step from `pane.moved` and tab events before the next.
   4. If step k fails, move panes 1 to k−1 back into the original tab, which
      still holds the remaining panes, and report the result.
   5. An uncertain step is never retried, matching the existing rule against
      replaying uncertain mutations. If rollback fails, World reports the actual
      split state instead of hiding it.
-  6. Split ratios follow Herdr defaults, so pane layout inside the moved tab can
-     differ from the original. The UI says so.
+  6. Before moving, World checks again that every source pane still exists. If
+     the replayed layout cannot match exactly, World keeps the panes and reports
+     the difference. drovr does not roll back; World adds rollback because the
+     move starts from a drag in the scene, not from a picker the user can retry.
 - **Agent move** (one pane): one `pane.move` into the target tab as a split
   toward the chosen seat, confirmed the same way.
 - **Presentation**: the source and target cells are reserved and the crew
@@ -279,8 +353,10 @@ Dropped:
 
 ## Risks / Trade-offs
 
-- **Non-atomic desk moves**: mitigated by ordered confirmation, rollback and
-  honest reporting, and by asking upstream for a cross-workspace tab move.
+- **Non-atomic desk moves**: mitigated by checking the source again, ordered
+  confirmation, layout replay derived from herdr-drovr, rollback and honest
+  reporting. An upstream cross-workspace tab move would still remove the
+  rollback path.
 - **Structured answer options depend on agent integrations**: without one, the
   peek offers the reply box only, never guessed buttons.
 - **Canvas accessibility**: the semantic target layer must stay in step with the

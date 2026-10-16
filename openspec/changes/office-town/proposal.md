@@ -76,10 +76,12 @@ None. This changes the existing World surfaces contract.
 - **Service**: a qualified move operation that executes ordered `pane.move`
   steps, waits for Herdr confirmation and rolls back on partial failure,
   available only for connections whose runtime advertises the method.
-- **Herdr**: no change is required. Herdr 0.9.3 `tab.move` reorders within a
-  workspace only, so a desk move is several pane moves rather than one atomic
-  operation. A cross-workspace tab move would remove the rollback path and should
-  be raised upstream.
+- **Herdr**: no change is required. Moving panes between tabs is native
+  (`pane.move`). Herdr 0.9.3 `tab.move` reorders within a workspace only, so a
+  desk move is several pane moves. The split-layout replay is derived from
+  [herdr-drovr](https://github.com/AVGVSTVS96/herdr-drovr) (MIT), with its
+  notice retained, and World adds rollback. A cross-workspace tab move upstream
+  would remove the rollback path but is optional.
 - **PR #204**: close in favour of this change once its projection fixes,
   semantic targets, bounded paint and performance fixtures are carried over.
 - **Archive order**: `simultaneous-multi-host` modifies two of the replaced

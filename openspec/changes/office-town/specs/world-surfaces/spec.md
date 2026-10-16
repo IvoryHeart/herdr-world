@@ -206,8 +206,10 @@ host and move an agent pane to a free seat at another desk of the same host, by
 dragging and by a visible Move action. A request SHALL be qualified by connection
 ID and runtime generation and SHALL be refused across hosts, for retired
 generations, or when the runtime does not offer pane moves. A desk move SHALL
-move the tab's first pane to a new tab in the target workspace and then move each
-remaining pane into that tab, confirming each step from Herdr before the next. If
+check that every source pane still exists, move the tab's first pane to a new tab
+in the target workspace and then move each remaining pane into that tab with the
+split direction and ratio recorded from the source layout, confirming each step
+from Herdr before the next. If
 a step fails, World SHALL move the already-moved panes back into the original tab
 and report the outcome; it SHALL NOT retry an uncertain step, and if rollback
 fails it SHALL report the actual resulting topology. An agent move SHALL be a
