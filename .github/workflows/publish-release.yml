@@ -1,7 +1,6 @@
 name: Publish Release
 
-# Run this after the matching Prepare Release PR has merged. The matching
-# release commit on main is tagged, then Release is dispatched on that tag.
+# Tag the reviewed version-changing merge, never moving main.
 on:
   workflow_dispatch:
     inputs:
@@ -9,10 +8,17 @@ on:
         description: Version to publish (X.Y.Z or X.Y.Z-rc.N)
         required: true
         type: string
+      automatic:
+        description: Publish only a reviewed daily patch PR
+        type: boolean
+        default: false
 
 permissions:
-  contents: write
+  contents: read
   actions: write
+  pull-requests: read
+  checks: read
+  statuses: read
 
 concurrency:
   group: publish-release
@@ -22,9 +28,9 @@ concurrency:
 jobs:
   publish:
     name: Tag and start release
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    outputs:
-      tag: ${{ steps.tag.outputs.tag }}
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -35,63 +41,41 @@ jobs:
         with:
           bun-version: "1.4.3"
           no-cache: true
-      - id: tag
-        name: Verify metadata and create tag
+      - id: candidate
+        name: Verify reviewed release and publication state
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ inputs.version }}
-        run: |
-          set -euo pipefail
-          if [[ ! "$VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-rc\.[1-9][0-9]*)?$ ]]; then
-            echo "error: version must be X.Y.Z or X.Y.Z-rc.N" >&2
-            exit 1
-          fi
-
-          read_plugin_version_at() {
-            git show "$1:herdr-plugin.toml" \
-              | bun -e 'const text = await Bun.stdin.text(); console.log(text.match(/^version = "([^"]+)"/m)?.[1] ?? "")'
-          }
-
-          # Find the first-parent commit that changed the public plugin version
-          # to VERSION. Private package manifests intentionally stay at 0.0.0.
-          release_sha=""
-          while read -r candidate_sha; do
-            if [ "$(read_plugin_version_at "$candidate_sha")" != "$VERSION" ]; then
-              continue
-            fi
-            parent_sha="$(git rev-parse "${candidate_sha}^1" 2>/dev/null || true)"
-            if [ -z "$parent_sha" ] || \
-              [ "$(read_plugin_version_at "$parent_sha")" != "$VERSION" ]; then
-              release_sha="$candidate_sha"
-              break
-            fi
-          done < <(git rev-list --first-parent origin/main -- herdr-plugin.toml)
-
-          if [ -z "$release_sha" ]; then
-            echo "error: no release commit for $VERSION exists on main" >&2
-            exit 1
-          fi
-
-          test "$(read_plugin_version_at "$release_sha")" = "$VERSION"
-          for manifest in package.json web/package.json server/package.json; do
-            test "$(git show "$release_sha:$manifest" | bun -e 'console.log(JSON.parse(await Bun.stdin.text()).version)')" = "0.0.0"
-          done
-
-          tag="v$VERSION"
-          if git rev-parse --verify --quiet "refs/tags/$tag" >/dev/null; then
-            test "$(git cat-file -t "refs/tags/$tag")" = "tag"
-            test "$(git rev-list -n 1 "$tag")" = "$release_sha"
-          else
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git tag -a "$tag" -m "Herdr World $VERSION" "$release_sha"
-            gh auth setup-git
-            git push origin "$tag"
-          fi
-          echo "tag=$tag" >> "$GITHUB_OUTPUT"
-      - name: Start Release workflow
+          AUTOMATIC: ${{ inputs.automatic }}
+        run: bun scripts/daily-release.ts publication
+      - name: Retry failed Release jobs on the same immutable tag
+        if: steps.candidate.outputs.mode == 'retry'
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ steps.tag.outputs.tag }}
+          RELEASE_RUN_ID: ${{ steps.candidate.outputs.run_id }}
+        run: gh run rerun "$RELEASE_RUN_ID" --failed --repo IvoryHeart/herdr-world
+      - name: Create the reviewed annotated tag
+        if: steps.candidate.outputs.mode == 'tag'
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_AUTOMATION_TOKEN }}
+          RELEASE_SHA: ${{ steps.candidate.outputs.sha }}
+          TAG: ${{ steps.candidate.outputs.tag }}
+          VERSION: ${{ steps.candidate.outputs.version }}
         run: |
-          gh workflow run "Release" --ref "$TAG"
+          set -euo pipefail
+          if [ -z "$GH_TOKEN" ]; then
+            echo "Configure RELEASE_AUTOMATION_TOKEN for an identity allowed by the release-tag ruleset."
+            exit 1
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" -m "Herdr World $VERSION" "$RELEASE_SHA"
+          gh auth setup-git
+          git push origin "refs/tags/$TAG"
+          # The dedicated token's push starts Release. Do not also dispatch it.
+      - name: Start Release on an existing inspected tag
+        if: steps.candidate.outputs.mode == 'dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.candidate.outputs.tag }}
+        run: gh workflow run release.yml --repo IvoryHeart/herdr-world --ref "$TAG"

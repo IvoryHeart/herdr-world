@@ -27,6 +27,22 @@ from the final reviewed immutable release tag.
 - **WHEN** the release helper prepares a version
 - **THEN** it produces a branch change without pushing main
 
+#### Scenario: Daily patch preparation
+- **WHEN** the daily check finds actual Unreleased changes, a completely published stable
+  baseline and no existing release PR
+- **THEN** it proposes only the next patch version through a normal release PR with generated
+  lineage, upgrade guidance and standing known issues
+- **AND** independent human review and required checks remain necessary; minor, major and
+  release candidates remain manual
+
+#### Scenario: Daily patch publication
+- **WHEN** a bot-prepared patch PR is reviewed and merged with required checks passing
+- **THEN** automation tags its exact version-changing merge commit with an authorized identity,
+  even if main has advanced, and starts the existing release validation and publication workflow
+- **AND** an existing tag cannot move; pending publication blocks another preparation,
+  failed publication retries the same immutable revision, and canceled or indeterminate
+  publication requires operator attention
+
 #### Scenario: Cross-platform release candidate
 - **WHEN** a reviewed `vX.Y.Z-rc.N` tag is published
 - **THEN** all six desktop archives and downstream packages use that exact version,

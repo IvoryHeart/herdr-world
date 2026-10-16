@@ -7,6 +7,11 @@ are optional because the merged PR history records their source.
 
 ## [Unreleased]
 
+### Added
+
+- Daily patch-release preparation through a human-reviewed PR, followed by publication
+  of its exact merged revision, immutable-tag retries and carried-forward known issues.
+
 ## [0.2.4] - 2026-10-16
 
 ### Fixed
