@@ -55,7 +55,6 @@ jobs:
       INSTALLER_BASELINE_TAG: ${{ needs.baseline.outputs.tag }}
       INSTALLER_BASELINE_SHA: ${{ needs.baseline.outputs.sha }}
       INSTALLER_BASELINE_DIR: ${{ github.workspace }}/.agents/worktrees/installer-baseline
-      INSTALLER_REPORT_DIR: ${{ runner.temp }}/installer-report
       INSTALLER_CANDIDATE_SHA: ${{ github.sha }}
     steps:
       # For pull requests, checkout's default is the proposed merge revision.
@@ -79,6 +78,8 @@ jobs:
           PACKAGE_PLATFORM: ${{ matrix.platform }}
         run: bash scripts/package-release.sh "$PACKAGE_PLATFORM"
       - name: Verify fresh installation and upgrade without Bun on the installer PATH
+        env:
+          INSTALLER_REPORT_DIR: ${{ runner.temp }}/installer-report
         run: bun scripts/installer-upgrade.ts verify
       - name: Retain compact installer evidence
         if: always()

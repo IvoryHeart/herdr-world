@@ -63,6 +63,8 @@ test("installer upgrades run native released artifacts on every supported platfo
     ).text(),
   ) as any;
   const job = workflow.jobs.upgrade;
+  // runner context is available to steps, but not reusable-workflow job env.
+  expect(JSON.stringify(job.env)).not.toContain("runner.");
   expect(Object.keys(workflow.on)).toEqual([
     "workflow_call",
     "workflow_dispatch",
