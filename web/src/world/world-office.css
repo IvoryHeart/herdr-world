@@ -195,6 +195,9 @@
   touch-action: pan-x pan-y;
   scrollbar-color: #353554 #0a0a14;
 }
+.world-office-shell > .world-stage-scroll {
+  overflow-anchor: none;
+}
 .world-canvas-shell,
 .world-canvas-host {
   position: relative;
@@ -317,4 +320,91 @@
 }
 .world-renderer-fallback strong {
   color: var(--text, #edf2f7);
+}
+
+.world-canvas-host[data-office-layout="compact"],
+.world-canvas-shell:has(> .world-canvas-host[data-office-layout="compact"]) {
+  min-width: 0;
+}
+
+.world-office-buildings-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 6;
+}
+.world-office-building-header {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px;
+  text-align: left;
+  color: #f1e6c7;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  pointer-events: auto;
+  cursor: pointer;
+  font: inherit;
+}
+.world-office-building-header:hover {
+  background: rgb(255 239 201 / 6%);
+}
+.world-office-building-header:focus-visible {
+  outline: 2px solid #eac36b;
+  outline-offset: 2px;
+}
+.world-office-building-header:disabled {
+  cursor: wait;
+}
+.world-office-building-toggle {
+  flex: none;
+  font-size: 19px;
+  width: 22px;
+  line-height: 22px;
+  text-align: center;
+  color: #f0d49a;
+  border: 1px solid #a08050;
+  background: #453725;
+}
+.world-office-building-description {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  font-size: 11px;
+}
+.world-office-building-description strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.world-office-building-description > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #c9c6ac;
+}
+.world-office-building-signals {
+  flex: none;
+  max-width: 40%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  font-size: 10px;
+  color: #c9c6ac;
+}
+.world-office-building-signals > span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.world-office-building-attention {
+  font-size: 11px;
+  color: #f5ce80;
 }

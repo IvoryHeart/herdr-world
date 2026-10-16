@@ -79,7 +79,7 @@ function resolveOfficeDeskAnchor(
   );
   const room = projection.rooms[roomIndex];
   const rect = layout.rooms.find(({ index }) => index === roomIndex);
-  if (!room || !rect) {
+  if (!room || !rect || rect.collapsed || rect.hiddenByHost) {
     return null;
   }
   const deskIndex = room.desks.findIndex(({ key }) => key === desk.key);
@@ -119,6 +119,7 @@ function resolveOfficeAgentAnchor(
     return { x: anchor.x, y: anchor.characterFeetY - 42 };
   }
   if (agent.destination === "bar") {
+    if (layout.compact) return null;
     const barIndex = projection.barAgents.findIndex(
       ({ key: agentKey }) => agentKey === key,
     );
@@ -133,7 +134,7 @@ function resolveOfficeAgentAnchor(
   );
   const room = projection.rooms[roomIndex];
   const rect = layout.rooms.find(({ index }) => index === roomIndex);
-  if (!room || !rect) {
+  if (!room || !rect || rect.collapsed || rect.hiddenByHost) {
     return null;
   }
   if (agent.placement === "seated") {

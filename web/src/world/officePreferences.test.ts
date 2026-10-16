@@ -7,6 +7,21 @@ import {
 } from "./officePreferences";
 
 describe("Office preferences", () => {
+  test("keeps phone and desktop scroll positions separate and validates deep logical offsets", () => {
+    const storage = memoryStorage(
+      JSON.stringify({
+        compactScroll: { left: -1, top: 2_000_000 },
+        desktopScroll: { left: 80, top: Number.POSITIVE_INFINITY },
+      }),
+    );
+    const preferences = readOfficePreferences(storage);
+    expect(preferences.compactScroll).toEqual({ left: 0, top: 2_000_000 });
+    expect(preferences.desktopScroll).toEqual({ left: 80, top: 0 });
+    writeOfficePreferences(storage, preferences);
+    const written = JSON.parse(storage.value!.value);
+    expect(written.compactScroll.top).toBe(2_000_000);
+    expect(written.desktopScroll.left).toBe(80);
+  });
   test("admits only known layout choices and bounded scroll positions", () => {
     const storage = memoryStorage(
       JSON.stringify({

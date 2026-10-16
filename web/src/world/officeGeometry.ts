@@ -5,6 +5,12 @@
  * derived from the historical Claw-Empire Office geometry. Source provenance,
  * source hashes, and license obligations are recorded in docs/world-assets.md.
  */
+import {
+  type OfficePackingCache,
+  packOfficeRoomShapesSteps,
+} from "./officePackingSearch";
+import { packOfficeRooms, packOfficeRoomContour } from "./officeRoomPacking";
+
 export const OFFICE_GEOMETRY = Object.freeze({
   minOfficeWidth: 1000,
   ceoBandHeight: 214,
@@ -14,6 +20,7 @@ export const OFFICE_GEOMETRY = Object.freeze({
   ceoOtelBoardWidth: 204,
   ceoBoardY: 48,
   ceoBoardHeight: 154,
+  compactBoardMinWidth: 168,
   ceoBlockGap: 24,
   ceoCompactBlockGap: 8,
   agentBarMinWidth: 280,
@@ -169,11 +176,43 @@ export type OfficeRoomRect = {
   inkBounds: OfficeRect;
   shadowAllowance: number;
   selectionStrokeAllowance: number;
+  collapsed?: boolean;
+  hiddenByHost?: boolean;
   header?: OfficeRoomHeaderLayout;
   overflowMarkerRect?: OfficeRect;
 };
 
+export type OfficeBuildingInput = {
+  key: string;
+  title: string;
+  state: string;
+  stale: boolean;
+  roomIndices: readonly number[];
+  agentCount: number;
+  attentionCount: number;
+  collapsed: boolean;
+};
+export type OfficeBuilding = OfficeBuildingInput & {
+  rect: OfficeRect;
+  headerRect: OfficeRect;
+};
+
+export type OfficeSceneOptions = {
+  contained?: boolean;
+  shapeSearch?: boolean;
+  packingCache?: OfficePackingCache;
+  complete?: boolean;
+  compact?: boolean;
+  collapsedRooms?: ReadonlySet<number>;
+  attentionReceptionIndices?: readonly number[];
+};
+
 export type OfficeLayout = {
+  packedRooms?: boolean;
+  buildings?: readonly OfficeBuilding[];
+  compact?: boolean;
+  expenseRect?: OfficeRect;
+  workforceRect?: OfficeRect;
   officeWidth: number;
   totalHeight: number;
   columns: number;
@@ -195,15 +234,29 @@ export type OfficeLayout = {
 };
 
 export function resolveOfficeLayout(
+  ...args: Parameters<typeof resolveOfficeLayoutSteps>
+): OfficeLayout {
+  const steps = resolveOfficeLayoutSteps(...args);
+  let step = steps.next();
+  while (!step.done) step = steps.next();
+  return step.value;
+}
+
+export function* resolveOfficeLayoutSteps(
   requestedWidth: number,
   requestedRooms: number | readonly OfficeRoomPresentation[],
   roomAlignment: OfficeRoomAlignment = DEFAULT_OFFICE_ROOM_ALIGNMENT,
   requestedCeoBandHeight: number = OFFICE_GEOMETRY.ceoBandHeight,
   requestedCeoReceptionCount: number = 0,
   requestedMaximumCeoBandHeight: number = Number.POSITIVE_INFINITY,
-): OfficeLayout {
+  options: OfficeSceneOptions = {},
+): Generator<void, OfficeLayout, unknown> {
   const officeWidth = Math.max(
-    OFFICE_GEOMETRY.minOfficeWidth,
+    options.compact
+      ? 240
+      : options.contained
+        ? 220
+        : OFFICE_GEOMETRY.minOfficeWidth,
     Math.min(
       OFFICE_GEOMETRY.maxLogicalCanvasWidth,
       Math.floor(Number(requestedWidth) || 0),
@@ -212,14 +265,21 @@ export function resolveOfficeLayout(
   const presentations: OfficeRoomPresentation[] =
     typeof requestedRooms === "number"
       ? Array.from(
-          { length: boundedCount(requestedRooms, OFFICE_GEOMETRY.maxRooms) },
+          {
+            length: boundedCount(
+              requestedRooms,
+              options.complete
+                ? Number.MAX_SAFE_INTEGER
+                : OFFICE_GEOMETRY.maxRooms,
+            ),
+          },
           () => ({
             deskCount: 0,
             standingCount: 0,
           }),
         )
       : requestedRooms
-          .slice(0, OFFICE_GEOMETRY.maxRooms)
+          .slice(0, options.complete ? undefined : OFFICE_GEOMETRY.maxRooms)
           .map(
             ({
               sourceIndex,
@@ -237,10 +297,17 @@ export function resolveOfficeLayout(
               maximumHeight,
             }) => ({
               sourceIndex,
-              deskCount: boundedCount(deskCount, OFFICE_GEOMETRY.desksPerRoom),
+              deskCount: boundedCount(
+                deskCount,
+                options.complete
+                  ? Number.MAX_SAFE_INTEGER
+                  : OFFICE_GEOMETRY.desksPerRoom,
+              ),
               standingCount: boundedCount(
                 standingCount,
-                OFFICE_GEOMETRY.standingColumns * 2,
+                options.complete
+                  ? Number.MAX_SAFE_INTEGER
+                  : OFFICE_GEOMETRY.standingColumns * 2,
               ),
               deskFootprintWidth,
               deskFootprintHeight,
@@ -256,27 +323,114 @@ export function resolveOfficeLayout(
           );
   const count = presentations.length;
   const availableRoomWidth = Math.max(0, officeWidth - 24);
+  const minimumNeighborWidth = Math.min(
+    availableRoomWidth,
+    ...presentations.map((room) =>
+      Math.max(
+        OFFICE_GEOMETRY.minRoomWidth,
+        room.headerMinWidth ?? 0,
+        room.headerMinTitleBoxWidth ?? 0,
+        room.contentMinWidth ?? 0,
+        room.preferredWidth ?? 0,
+        OFFICE_GEOMETRY.roomPadding * 2 +
+          Math.max(
+            2 * (room.deskFootprintWidth ?? 112),
+            room.standingCount > 0
+              ? roomStandingColumns(room.standingCount) * 40
+              : 0,
+          ),
+      ),
+    ),
+  );
   const requestedReceptionCount = boundedCount(
     requestedCeoReceptionCount,
-    OFFICE_GEOMETRY.maxReceptionDesks,
+    options.complete
+      ? Number.MAX_SAFE_INTEGER
+      : OFFICE_GEOMETRY.maxReceptionDesks,
   );
   const ceoHeightCap = Math.min(
     Number.isFinite(requestedMaximumCeoBandHeight)
       ? Math.max(0, Math.floor(requestedMaximumCeoBandHeight))
       : Number.POSITIVE_INFINITY,
-    OFFICE_GEOMETRY.maxExpandedRoomHeight,
+    options.complete
+      ? Number.POSITIVE_INFINITY
+      : OFFICE_GEOMETRY.maxExpandedRoomHeight,
   );
-  const ceoBlocks = resolveCeoBlockLayout(
+  let ceoBlocks = resolveCeoBlockLayout(
     officeWidth,
     requestedReceptionCount,
     ceoHeightCap,
+    options.complete,
   );
+  let expenseRect: OfficeRect | undefined;
+  let workforceRect: OfficeRect | undefined;
+  if (options.compact) {
+    const sectionGap = 12;
+    const boardShadow = 4;
+    const boardHeight = OFFICE_GEOMETRY.ceoBoardHeight + 6;
+    const receptionStride = 188;
+    const indices = Array.from(
+      { length: requestedReceptionCount },
+      (_, index) => index,
+    );
+    const attention = new Set(options.attentionReceptionIndices ?? indices);
+    const attentionIndices = indices.filter((index) => attention.has(index));
+    const slots = new Map(attentionIndices.map((index, slot) => [index, slot]));
+    // Keep source indices stable; empty mobile receptions occupy no scene area.
+    const receptions = indices.map((index) =>
+      attention.has(index)
+        ? {
+            index,
+            x: 12,
+            y: sectionGap + slots.get(index)! * receptionStride,
+            width: officeWidth - 24,
+            height: OFFICE_GEOMETRY.receptionStationHeight,
+            gapBefore: 12,
+          }
+        : { index, x: 0, y: 0, width: 0, height: 0, gapBefore: 0 },
+    );
+    const boardAreaWidth = officeWidth - 24;
+    const boardColumns =
+      boardAreaWidth >=
+      2 * (OFFICE_GEOMETRY.compactBoardMinWidth + boardShadow) + sectionGap
+        ? 2
+        : 1;
+    const boardWidth =
+      (boardAreaWidth - (boardColumns - 1) * sectionGap) / boardColumns;
+    const boards = packOfficeRooms(
+      Array.from({ length: 2 }, () => ({
+        width: boardWidth,
+        height: boardHeight,
+      })),
+      boardAreaWidth,
+      sectionGap,
+      sectionGap,
+    ).map((rect) => ({
+      ...rect,
+      x: rect.x + 12,
+      y: rect.y + sectionGap + attentionIndices.length * receptionStride,
+    }));
+    expenseRect = boards[0]!;
+    workforceRect = boards[1]!;
+    ceoBlocks = {
+      ...ceoBlocks,
+      receptions,
+      localReceptions: receptions,
+      ceoOriginX: 0,
+      ceoScale: 1,
+      ceoBandHeight: workforceRect.y + workforceRect.height + sectionGap,
+      agentBarX: officeWidth,
+      agentBarWidth: 0,
+      agentBarHeight: 0,
+      receptionRows: attentionIndices.length,
+    };
+  }
   const ceoBandHeight = Math.min(
     ceoHeightCap,
     Math.max(
-      OFFICE_GEOMETRY.ceoBandHeight,
+      options.compact ? 0 : OFFICE_GEOMETRY.ceoBandHeight,
       ceoBlocks.ceoBandHeight,
-      Math.floor(Number(requestedCeoBandHeight) || 0),
+      options.compact ? 0 : Math.floor(Number(requestedCeoBandHeight) || 0),
     ),
   );
   const roomStartY = ceoBandHeight + OFFICE_GEOMETRY.hallwayHeight;
@@ -285,8 +439,10 @@ export function resolveOfficeLayout(
   const ceoRect = {
     x: 4,
     y: 4,
-    width: Math.max(0, agentBarX - OFFICE_GEOMETRY.agentBarGap - 4),
-    height: Math.max(0, ceoBandHeight - 4),
+    width: options.compact
+      ? 0
+      : Math.max(0, agentBarX - OFFICE_GEOMETRY.agentBarGap - 4),
+    height: options.compact ? 0 : Math.max(0, ceoBandHeight - 4),
   };
   const agentBarRect = {
     x: agentBarX,
@@ -300,22 +456,27 @@ export function resolveOfficeLayout(
     width: Math.max(0, ceoRect.width - 16),
     height: Math.max(0, ceoRect.height - 48),
   };
-  const roomMetrics = presentations.map(
-    ({
-      deskCount,
-      standingCount,
-      deskFootprintWidth = 112,
-      deskFootprintHeight = OFFICE_GEOMETRY.deskRowHeight,
-      sourceIndex,
-      contentMinWidth = 0,
-      headerMinWidth = 0,
-      headerMinTitleBoxWidth = 0,
-      headerMinHeight = OFFICE_GEOMETRY.roomHeaderHeight,
-      preferredWidth,
-      preferredHeight,
-      maximumWidth,
-      maximumHeight,
-    }) => {
+  const roomChoices = presentations.map(
+    (
+      {
+        deskCount,
+        standingCount,
+        deskFootprintWidth = 112,
+        deskFootprintHeight = OFFICE_GEOMETRY.deskRowHeight,
+        sourceIndex,
+        contentMinWidth = 0,
+        headerMinWidth = 0,
+        headerMinTitleBoxWidth = 0,
+        headerMinHeight = OFFICE_GEOMETRY.roomHeaderHeight,
+        preferredWidth,
+        preferredHeight,
+        maximumWidth,
+        maximumHeight,
+      },
+      roomIndex,
+    ) => {
+      const collapsed =
+        options.collapsedRooms?.has(sourceIndex ?? roomIndex) === true;
       const deskRowHeight = Math.max(
         OFFICE_GEOMETRY.deskRowHeight,
         Math.min(
@@ -330,56 +491,145 @@ export function resolveOfficeLayout(
           Number(deskFootprintWidth) || 0,
         ),
       );
-      const deskColumns = roomDeskColumns(deskCount);
-      const standingColumns = roomStandingColumns(standingCount);
-      const deskRows = Math.ceil(deskCount / deskColumns);
-      const standingRows = Math.ceil(standingCount / standingColumns);
-      const contentHeight =
-        42 +
-        deskRows * deskRowHeight +
-        standingRows * OFFICE_GEOMETRY.standingRowHeight +
-        18;
-      const intrinsicWidth = Math.max(
+      const fluid = options.complete && !options.compact;
+      // Leave room for a readable neighbor when several workspaces are present.
+      const shapeWidth = Math.max(
         OFFICE_GEOMETRY.minRoomWidth,
-        headerMinWidth,
-        headerMinTitleBoxWidth,
-        contentMinWidth,
-        preferredWidth ?? 0,
-        OFFICE_GEOMETRY.roomPadding * 2 +
-          Math.max(
-            deskColumns * deskWidth,
-            standingCount > 0 ? standingColumns * 40 : 0,
-          ),
-      );
-      const intrinsicHeight = Math.max(
-        OFFICE_GEOMETRY.minRoomHeight,
-        headerMinHeight,
-        preferredHeight ?? 0,
-        contentHeight,
-      );
-      return {
-        deskColumns,
-        standingColumns,
-        deskRows,
-        deskRowHeight,
-        standingRows,
-        height: Math.min(
-          maximumHeight ?? Number.POSITIVE_INFINITY,
-          intrinsicHeight,
+        Math.min(
+          maximumWidth ?? availableRoomWidth,
+          availableRoomWidth -
+            (count > 1 ? minimumNeighborWidth + OFFICE_GEOMETRY.roomGap : 0),
         ),
-        headerHeight: Math.max(
-          OFFICE_GEOMETRY.roomHeaderHeight,
+      );
+      const build = (forcedColumns?: number) => {
+        const deskColumns =
+          forcedColumns ??
+          (options.compact
+            ? 2
+            : fluid
+              ? fluidDeskColumns(
+                  deskCount,
+                  standingCount,
+                  deskWidth,
+                  deskRowHeight,
+                  shapeWidth,
+                  count === 1,
+                )
+              : roomDeskColumns(deskCount));
+        const standingColumns = options.compact
+          ? 4
+          : fluid &&
+              standingCount > 0 &&
+              (standingCount > 16 ||
+                roomStandingColumns(standingCount) * 40 +
+                  OFFICE_GEOMETRY.roomPadding * 2 >
+                  availableRoomWidth)
+            ? Math.min(
+                standingCount,
+                Math.max(
+                  4,
+                  Math.floor(
+                    (Math.max(
+                      OFFICE_GEOMETRY.minRoomWidth,
+                      deskColumns * deskWidth + OFFICE_GEOMETRY.roomPadding * 2,
+                    ) -
+                      OFFICE_GEOMETRY.roomPadding * 2) /
+                      40,
+                  ),
+                ),
+              )
+            : roomStandingColumns(standingCount);
+        const deskRows = collapsed ? 0 : Math.ceil(deskCount / deskColumns);
+        const standingRows = collapsed
+          ? 0
+          : Math.ceil(standingCount / standingColumns);
+        const contentHeight =
+          42 +
+          deskRows * deskRowHeight +
+          standingRows * OFFICE_GEOMETRY.standingRowHeight +
+          18;
+        const intrinsicWidth = Math.max(
+          OFFICE_GEOMETRY.minRoomWidth,
+          headerMinWidth,
+          headerMinTitleBoxWidth,
+          contentMinWidth,
+          preferredWidth ?? 0,
+          OFFICE_GEOMETRY.roomPadding * 2 +
+            Math.max(
+              deskColumns * deskWidth,
+              standingCount > 0 ? standingColumns * 40 : 0,
+            ),
+        );
+        const intrinsicHeight = Math.max(
+          OFFICE_GEOMETRY.minRoomHeight,
           headerMinHeight,
-        ),
-        preferredWidth: Math.min(
-          maximumWidth ?? Number.POSITIVE_INFINITY,
-          intrinsicWidth,
-        ),
-        maximumWidth,
-        maximumHeight,
-        sourceIndex,
+          preferredHeight ?? 0,
+          contentHeight,
+        );
+        return {
+          collapsed,
+          deskColumns,
+          standingColumns,
+          deskRows,
+          deskRowHeight,
+          standingRows,
+          height: Math.min(
+            maximumHeight ?? Number.POSITIVE_INFINITY,
+            collapsed ? 76 : intrinsicHeight,
+          ),
+          headerHeight: Math.max(
+            OFFICE_GEOMETRY.roomHeaderHeight,
+            headerMinHeight,
+          ),
+          preferredWidth: Math.min(
+            maximumWidth ?? Number.POSITIVE_INFINITY,
+            options.compact ? officeWidth - 24 : intrinsicWidth,
+          ),
+          maximumWidth,
+          maximumHeight,
+          sourceIndex,
+        };
       };
+      const first = build();
+      if (!fluid || options.shapeSearch === false || collapsed) return [first];
+      const capacity = Math.max(
+        2,
+        Math.floor(
+          (Math.min(maximumWidth ?? availableRoomWidth, availableRoomWidth) -
+            OFFICE_GEOMETRY.roomPadding * 2) /
+            deskWidth,
+        ),
+      );
+      const variantCount = Math.min(
+        capacity,
+        Math.max(2, deskCount, Math.ceil((standingCount * 40) / deskWidth)),
+      );
+      const choices = Array.from(
+        { length: Math.max(1, variantCount - 1) },
+        (_, index) => build(index + 2),
+      ).filter((metric) => metric.preferredWidth <= availableRoomWidth + 0.001);
+      return choices.length ? choices : [first];
     },
+  );
+  const shapePacking =
+    options.complete && !options.compact && options.shapeSearch !== false
+      ? yield* packOfficeRoomShapesSteps(
+          roomChoices.map((choices) =>
+            choices.map((metric) => ({
+              width: metric.preferredWidth,
+              height: metric.height,
+              waste: metric.deskRows * metric.deskColumns,
+            })),
+          ),
+          availableRoomWidth,
+          OFFICE_GEOMETRY.roomGap,
+          OFFICE_GEOMETRY.roomRowGap,
+          8,
+          options.packingCache,
+        )
+      : null;
+  const roomMetrics = roomChoices.map(
+    (choices, index) => choices[shapePacking?.[index]?.variant ?? 0]!,
   );
   const packedRows: number[][] = [];
   let currentRow: number[] = [];
@@ -403,9 +653,44 @@ export function resolveOfficeLayout(
   if (currentRow.length > 0) {
     packedRows.push(currentRow);
   }
-  const columns = Math.max(1, ...packedRows.map((row) => row.length));
-  const rows = packedRows.length;
-  const rowHeights = Array.from({ length: rows }, (_, row) =>
+  const packed =
+    shapePacking ??
+    (options.complete && !options.compact
+      ? (options.shapeSearch === false
+          ? packOfficeRoomContour
+          : packOfficeRooms)(
+          roomMetrics.map((metric) => ({
+            width: metric.preferredWidth,
+            height: metric.height,
+          })),
+          availableRoomWidth,
+          OFFICE_GEOMETRY.roomGap,
+          OFFICE_GEOMETRY.roomRowGap,
+        )
+      : null);
+  const packedYs = packed
+    ? [...new Set(packed.map((room) => room.y))].sort((a, b) => a - b)
+    : [];
+  const packedRowByY = new Map(packedYs.map((y, index) => [y, index]));
+  const packedRowCounts = new Map<number, number>();
+  const packedColumns = packed?.map((room) => {
+    const column = packedRowCounts.get(room.y) ?? 0;
+    packedRowCounts.set(room.y, column + 1);
+    return column;
+  });
+  const packedWidth = packed
+    ? Math.max(0, ...packed.map((room) => room.x + room.width))
+    : 0;
+  const packedOffset =
+    roomAlignment === "left"
+      ? 0
+      : (availableRoomWidth - packedWidth) /
+        (roomAlignment === "right" ? 1 : 2);
+  const columns = packed
+    ? Math.max(1, ...packedRowCounts.values())
+    : Math.max(1, ...packedRows.map((row) => row.length));
+  const rows = packed ? packedYs.length : packedRows.length;
+  const rowHeights = Array.from({ length: packedRows.length }, (_, row) =>
     Math.max(...packedRows[row].map((index) => roomMetrics[index].height)),
   );
   const rowYs: number[] = [];
@@ -414,6 +699,15 @@ export function resolveOfficeLayout(
     rowYs.push(nextY);
     nextY += height + OFFICE_GEOMETRY.roomRowGap;
   }
+  if (packed)
+    nextY =
+      roomStartY +
+      Math.max(
+        0,
+        ...packed.map(
+          (room) => room.y + room.height + OFFICE_GEOMETRY.roomRowGap,
+        ),
+      );
   const roomPositions = new Map<number, OfficeRoomRect>();
   packedRows.forEach((row, rowIndex) => {
     const widths = row.map((index) => roomMetrics[index].preferredWidth);
@@ -429,8 +723,8 @@ export function resolveOfficeLayout(
     row.forEach((index, column) => {
       const metric = roomMetrics[index];
       const outerRect = {
-        x,
-        y: rowYs[rowIndex],
+        x: packed ? 12 + packedOffset + packed[index]!.x : x,
+        y: packed ? roomStartY + packed[index]!.y : rowYs[rowIndex],
         width: metric.preferredWidth,
         height: Math.min(
           metric.maximumHeight ?? Number.POSITIVE_INFINITY,
@@ -480,9 +774,10 @@ export function resolveOfficeLayout(
       );
       roomPositions.set(metric.sourceIndex ?? index, {
         index: metric.sourceIndex ?? index,
-        column,
-        row: rowIndex,
+        column: packedColumns?.[index] ?? column,
+        row: packed ? packedRowByY.get(packed[index]!.y)! : rowIndex,
         ...outerRect,
+        collapsed: metric.collapsed || undefined,
         deskColumns: metric.deskColumns,
         standingColumns: metric.standingColumns,
         deskRows: metric.deskRows,
@@ -508,6 +803,10 @@ export function resolveOfficeLayout(
     rooms.length > 0 ? Math.min(...rooms.map(({ x }) => x)) : 0;
   const totalHeight = nextY + 30 + (count < OFFICE_GEOMETRY.maxRooms ? 64 : 0);
   return {
+    compact: options.compact || undefined,
+    packedRooms: Boolean(packed) || undefined,
+    expenseRect,
+    workforceRect,
     officeWidth,
     totalHeight,
     columns,
@@ -606,8 +905,12 @@ export function resolveCeoBlockLayout(
   officeWidth: number,
   receptionCount: number,
   maximumHeight: number = Number.POSITIVE_INFINITY,
+  complete = false,
 ): OfficeCeoBlockLayout {
-  const count = boundedCount(receptionCount, OFFICE_GEOMETRY.maxReceptionDesks);
+  const count = boundedCount(
+    receptionCount,
+    complete ? Number.MAX_SAFE_INTEGER : OFFICE_GEOMETRY.maxReceptionDesks,
+  );
   const coreWidth =
     OFFICE_GEOMETRY.ceoDeskWidth +
     OFFICE_GEOMETRY.ceoBoardWidth +
@@ -804,7 +1107,7 @@ export function receptionTableRect(reception: OfficeReceptionRect) {
 }
 
 export function deskAnchor(room: OfficeRoomRect, deskIndex: number) {
-  const index = boundedCount(deskIndex, OFFICE_GEOMETRY.desksPerRoom - 1);
+  const index = boundedCount(deskIndex, Number.MAX_SAFE_INTEGER);
   const column = index % room.deskColumns;
   const row = Math.floor(index / room.deskColumns);
   const innerWidth = room.width - OFFICE_GEOMETRY.roomPadding * 2;
@@ -862,7 +1165,7 @@ export function deskStandingAnchor(
 }
 
 export function standingAnchor(room: OfficeRoomRect, standingIndex: number) {
-  const index = boundedCount(standingIndex, room.standingColumns * 2 - 1);
+  const index = boundedCount(standingIndex, Number.MAX_SAFE_INTEGER);
   const column = index % room.standingColumns;
   const row = Math.floor(index / room.standingColumns);
   const innerWidth = room.width - OFFICE_GEOMETRY.roomPadding * 2;
@@ -887,6 +1190,56 @@ export function standingAnchor(room: OfficeRoomRect, standingIndex: number) {
 
 function boundedCount(value: number, maximum: number) {
   return Math.max(0, Math.min(maximum, Math.floor(Number(value) || 0)));
+}
+
+function fluidDeskColumns(
+  count: number,
+  standingCount: number,
+  deskWidth: number,
+  rowHeight: number,
+  maxWidth: number,
+  fillWidth = false,
+) {
+  const capacity = Math.max(
+    2,
+    Math.floor((maxWidth - OFFICE_GEOMETRY.roomPadding * 2) / deskWidth),
+  );
+  let best = 2;
+  let bestScore = Number.POSITIVE_INFINITY;
+  for (
+    let columns = 2;
+    columns <=
+    Math.min(
+      Math.max(2, count, Math.ceil((standingCount * 40) / deskWidth)),
+      capacity,
+    );
+    columns++
+  ) {
+    const width = Math.max(
+      OFFICE_GEOMETRY.minRoomWidth,
+      columns * deskWidth + OFFICE_GEOMETRY.roomPadding * 2,
+    );
+    const rows = Math.ceil(count / columns);
+    const standingColumns = Math.max(
+      4,
+      Math.floor((width - OFFICE_GEOMETRY.roomPadding * 2) / 40),
+    );
+    const height =
+      60 +
+      rows * rowHeight +
+      Math.ceil(standingCount / standingColumns) *
+        OFFICE_GEOMETRY.standingRowHeight;
+    const score =
+      (fillWidth
+        ? height / rowHeight
+        : Math.abs(Math.log(width / height / 1.5))) +
+      (count > 0 ? (rows * columns - count) / count : 0);
+    if (score < bestScore) {
+      best = columns;
+      bestScore = score;
+    }
+  }
+  return best;
 }
 
 function roomDeskColumns(deskCount: number) {

@@ -18,12 +18,12 @@ import {
 export const OFFICE_HEADING_TEXT_SIZE = 13;
 
 export const THEMES = Object.freeze([
-  { floorA: 0x0c1620, floorB: 0x0a121c, wall: 0x1e3050, accent: 0x4aa3d8 },
-  { floorA: 0x120c20, floorB: 0x100a1e, wall: 0x34215a, accent: 0x9a6bd1 },
-  { floorA: 0x18140c, floorB: 0x16120a, wall: 0x463522, accent: 0xd69540 },
-  { floorA: 0x0c1a18, floorB: 0x0a1614, wall: 0x20503d, accent: 0x51b677 },
-  { floorA: 0x1a0c10, floorB: 0x180a0e, wall: 0x51232b, accent: 0xd45d70 },
-  { floorA: 0x18100c, floorB: 0x160e0a, wall: 0x482d22, accent: 0xcf7944 },
+  { floorA: 0x29353d, floorB: 0x303c44, wall: 0x344957, accent: 0x4aa3d8 },
+  { floorA: 0x34313e, floorB: 0x3a3745, wall: 0x4d405e, accent: 0x9a6bd1 },
+  { floorA: 0x3a342b, floorB: 0x413b31, wall: 0x5b4930, accent: 0xd69540 },
+  { floorA: 0x2c3933, floorB: 0x333f39, wall: 0x365447, accent: 0x51b677 },
+  { floorA: 0x3c3036, floorB: 0x43373d, wall: 0x5a3e49, accent: 0xd45d70 },
+  { floorA: 0x3d342f, floorB: 0x443b35, wall: 0x624a39, accent: 0xcf7944 },
 ]);
 
 export const STATUS_CUES = Object.freeze({

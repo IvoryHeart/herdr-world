@@ -14,6 +14,7 @@ import {
   receptionAgentAnchor,
   standingAnchor,
 } from "./officeGeometry";
+import { officeDeskRange, officeIntersects } from "./officeVirtualization";
 import type { OfficeRect } from "./officeGeometry";
 import type { PublishedOfficeLayout } from "./officeLayout";
 
@@ -30,6 +31,7 @@ export type OfficeSemanticTarget = {
 export function officeSemanticTargets(
   projection: HerdrOfficeProjection,
   layout: PublishedOfficeLayout,
+  viewport?: OfficeRect,
 ): OfficeSemanticTarget[] {
   if (layout.fallbackMessage) {
     return [];
@@ -40,7 +42,7 @@ export function officeSemanticTargets(
     const rect = layout.ceoBlocks.receptions.find(
       ({ index }) => index === receptionIndex,
     );
-    if (!rect) {
+    if (!rect || !officeIntersects(rect, viewport)) {
       return;
     }
     reception.waitingAgents.forEach((agent, agentIndex) => {
@@ -59,25 +61,26 @@ export function officeSemanticTargets(
     });
   });
 
-  projection.barAgents.forEach((agent, index) => {
-    const slot = agentBarSlot(layout.ceoBlocks, index);
-    targets.push(
-      agentTarget(
-        projection,
-        agent,
-        touchRect(
-          slot.x,
-          slot.rowY - 5,
-          Math.max(MIN_OFFICE_TOUCH_TARGET, 52),
-          slot.characterFeetY - slot.rowY + 10,
+  if (!layout.compact)
+    projection.barAgents.forEach((agent, index) => {
+      const slot = agentBarSlot(layout.ceoBlocks, index);
+      targets.push(
+        agentTarget(
+          projection,
+          agent,
+          touchRect(
+            slot.x,
+            slot.rowY - 5,
+            Math.max(MIN_OFFICE_TOUCH_TARGET, 52),
+            slot.characterFeetY - slot.rowY + 10,
+          ),
         ),
-      ),
-    );
-  });
+      );
+    });
 
-  projection.rooms.forEach((room, roomIndex) => {
-    const rect = layout.rooms.find(({ index }) => index === roomIndex);
-    if (!rect) {
+  layout.rooms.forEach((rect) => {
+    const room = projection.rooms[rect.index];
+    if (!room || rect.hiddenByHost || !officeIntersects(rect, viewport)) {
       return;
     }
     const header = rect.header;
@@ -105,7 +108,14 @@ export function officeSemanticTargets(
       canActivate: room.canOpenInSpaces,
     });
 
-    room.desks.forEach((desk, deskIndex) => {
+    if (rect.collapsed) return;
+    const [firstDesk, lastDesk] = officeDeskRange(
+      rect,
+      room.desks.length,
+      viewport,
+    );
+    for (let deskIndex = firstDesk; deskIndex < lastDesk; deskIndex++) {
+      const desk = room.desks[deskIndex]!;
       const anchor = deskAnchor(rect, deskIndex);
       const occupant = desk.occupantAgentKey
         ? room.roomAgents.find(({ key }) => key === desk.occupantAgentKey)
@@ -171,9 +181,16 @@ export function officeSemanticTargets(
               },
         );
       }
-    });
+    }
 
     officeStandingAgentAnchors(room, rect).forEach(({ agent, anchor }) => {
+      if (
+        !officeIntersects(
+          { x: anchor.x - 40, y: anchor.nameY - 10, width: 80, height: 130 },
+          viewport,
+        )
+      )
+        return;
       targets.push(
         agentTarget(
           projection,
@@ -196,7 +213,9 @@ export function officeSemanticTargets(
     });
   });
 
-  return targets;
+  return viewport
+    ? targets.filter((target) => officeIntersects(target.rect, viewport))
+    : targets;
 }
 
 function touchRect(
@@ -256,11 +275,28 @@ function roomTargetLabel(projection: HerdrOfficeProjection, room: OfficeRoom) {
   return `Room ${room.accessibleLabel ?? room.displayLabel}, ${entry?.hostLabel ?? "host"}`;
 }
 
+const standingAnchorCache = new WeakMap<
+  OfficeRoom,
+  WeakMap<
+    object,
+    Array<{
+      agent: OfficeAgent;
+      anchor:
+        | ReturnType<typeof standingAnchor>
+        | ReturnType<typeof deskStandingAnchor>;
+    }>
+  >
+>();
+
 /** Share the exact grouping between canvas art and accessible targets. */
 export function officeStandingAgentAnchors(
   room: OfficeRoom,
   rect: Parameters<typeof deskAnchor>[0],
 ) {
+  let cache = standingAnchorCache.get(room);
+  if (!cache) standingAnchorCache.set(room, (cache = new WeakMap()));
+  const cached = cache.get(rect);
+  if (cached) return cached;
   const standing = room.roomAgents.filter(
     ({ placement }) => placement === "standing",
   );
@@ -271,19 +307,24 @@ export function officeStandingAgentAnchors(
       | ReturnType<typeof standingAnchor>
       | ReturnType<typeof deskStandingAnchor>;
   }> = [];
+  const byDesk = new Map<string, OfficeAgent[]>();
+  for (const agent of standing) {
+    if (!agent.deskKey) continue;
+    const group = byDesk.get(agent.deskKey) ?? [];
+    group.push(agent);
+    byDesk.set(agent.deskKey, group);
+  }
   room.desks.forEach((desk, deskIndex) => {
     if (!desk.paneDevices?.length) return;
-    const agents = standing
-      .filter(({ deskKey }) => deskKey === desk.key)
-      .sort((left, right) => {
-        const order = (agent: OfficeAgent) => {
-          const index = desk.paneDevices.findIndex(
-            ({ paneRef }) => paneRef.nativeId === agent.currentPaneRef.nativeId,
-          );
-          return index < 0 ? Number.MAX_SAFE_INTEGER : index;
-        };
-        return order(left) - order(right) || left.key.localeCompare(right.key);
-      });
+    const agents = (byDesk.get(desk.key) ?? []).sort((left, right) => {
+      const order = (agent: OfficeAgent) => {
+        const index = desk.paneDevices.findIndex(
+          ({ paneRef }) => paneRef.nativeId === agent.currentPaneRef.nativeId,
+        );
+        return index < 0 ? Number.MAX_SAFE_INTEGER : index;
+      };
+      return order(left) - order(right) || left.key.localeCompare(right.key);
+    });
     agents.slice(0, OFFICE_NEARBY_AGENT_LIMIT).forEach((agent, index) => {
       grouped.add(agent.key);
       result.push({
@@ -297,5 +338,6 @@ export function officeStandingAgentAnchors(
     .forEach((agent, index) =>
       result.push({ agent, anchor: standingAnchor(rect, index) }),
     );
+  cache.set(rect, result);
   return result;
 }

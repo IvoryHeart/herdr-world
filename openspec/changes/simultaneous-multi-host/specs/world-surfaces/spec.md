@@ -477,23 +477,68 @@ replacement, pane closure, or Herdr restart.
 
 ### Requirement: Pixel Office scene
 
-Office SHALL preserve the established Pixel Office composition rather than replace it with generic
-workspace cards. It SHALL present a CEO Office with the user/CEO, one qualified reception station
-per presented host, bounded authoritative status and optional-observability boards, a separate
-Agent Bar, road-separated work rooms, desks and agent characters. Work rooms SHALL represent real
-Herdr workspaces, desks SHALL represent admitted tabs, and scene relocation SHALL not change an
-entity's authoritative host or space ancestry. The Agent Bar SHALL retain its counter, rear shelf
-and one bounded occupancy cue per visible bar agent rather than becoming an ordinary work room.
-For the retained synthetic fixtures, the migrated Office SHALL preserve the established scene
-signature, geometry and visual composition from World commit
-`9c8f650853ad2d598d476dac1eecdeaea16716c6`, except where this change explicitly replaces a
-runtime or shell-owned interaction boundary.
+Office SHALL preserve the Pixel Office artwork and spatial composition, with
+qualified host receptions, status and optional-observability boards, a separate
+Agent Bar, work rooms, tab desks and agent characters. Desktop SHALL retain its
+CEO Office, user/CEO, reception tables, Agent Bar counter and rear shelf, roads
+and independently content-sized workspace rooms. Work rooms SHALL represent real
+Herdr workspaces, desks SHALL represent observed tabs, and scene relocation SHALL
+NOT change authoritative host or workspace ancestry.
 
-Room geometry SHALL derive from admitted content and title/action requirements. Two-to-eight-seat
-room forms, sequential natural-width row packing, left/centre/right row alignment, validated
-expand-or-ellipsis long-title behavior, title and action containment, nested decoration bounds,
-logical-canvas scrolling and stable room gaps SHALL remain available. A wide room in one row SHALL
-NOT force unrelated rows to that width.
+Phone Office SHALL use one vertical flow: receptions with waiting or completed
+agents needing attention, Economy, Workforce, then workspace rooms. Empty receptions SHALL be absent
+from the phone scene. Host order SHALL remain stable among attention receptions;
+reordering SHALL preserve qualified identities. Economy and Workforce boards SHALL use available
+width with readable content, sharing a row when both fit and wrapping only when
+necessary. Their published bounds SHALL match their visible artwork; fixed board
+rows SHALL NOT reserve unused phone width or decorative desktop height. Workforce SHALL retain observed
+agent-state counts rather than inventing metrics. Neither reception navigation nor navigation between rooms
+SHALL require horizontal scrolling. The decorative CEO room SHALL be absent from
+the phone layout; useful host status and access to reception and idle agents
+SHALL remain available. Sections and room headers SHALL fit the usable viewport.
+An unavailable optional expense provider SHALL NOT appear as invented zero cost.
+
+Room geometry SHALL derive from complete admitted tab and room-agent content and
+title/action requirements. Small rooms SHALL retain readable forms, and larger
+rooms SHALL add desk and standing rows rather than truncate at eight desks or
+sixteen room agents. Desktop desk and standing columns SHALL adapt to usable width and content,
+without a four-column room restriction. Desktop SHALL pack independently sized
+rooms into available openings, including multiple smaller rooms beside a tall
+room, without shared tallest-room row spacing or corridors crossing rooms.
+Room-shape selection SHALL compare completed building fits. Equal-height candidates
+SHALL prefer aligned boundaries over avoidable fragmented vertical bands, allowing
+a 3×2 room to free space for a 4×1 neighbour rather than favouring a local 5×1 strip.
+Each host SHALL own a visibly bounded, named building containing its rooms.
+The same content-derived packing strategy SHALL arrange rooms within buildings
+and buildings across desktop width; mobile buildings SHALL stack vertically below
+Workforce. Occupied desktop buildings SHALL share usable horizontal width when
+additional room content can use it, rather than retaining narrow footprints while
+the viewport is empty. Small or collapsed buildings SHALL NOT stretch solely to
+fill the screen. Host widths and room column counts SHALL reflow together.
+Interiors and room corridors SHALL use carpeted floors without street markings;
+reception/lounge wood floors, brick walls and exterior asphalt roads SHALL make
+the indoor/outdoor distinction visible. Material drawing SHALL stay bounded and
+respect published floor rectangles. Collapsed room/host footprints SHALL release
+space for their neighbors.
+Room shapes and placement SHALL be considered together so later rooms can fill
+usable gaps, including cavities below another room's footprint; the layout SHALL
+NOT depend only on a contour that discards those openings. Room placement SHALL
+be deterministic for equal inputs and SHALL retain qualified
+identities and logical roster order. Left/center/right alignment SHALL apply to
+the packed footprint; phone rooms SHALL stack vertically within the viewport width. Title,
+action and decoration containment, stable gaps and full-name access SHALL remain
+available. A large room SHALL NOT enlarge unrelated rooms.
+
+#### Scenario: Fit rooms into remaining gaps
+
+- **WHEN** a different readable desk-column count lets a room fit beside its neighbor, or a later room fits an interior cavity
+- **THEN** the layout considers those room shapes and openings, reducing unused interior space without overlapping rooms, shrinking controls or changing native order
+
+#### Scenario: Expand populated buildings across a wide screen
+
+- **WHEN** two hosts with several multi-tab workspaces are shown on a wide desktop
+- **THEN** their buildings use the available horizontal space for readable room packing, making more rooms visible and reducing depth compared with a narrower viewport
+- **AND** rooms remain contained without overlap; interior corridors are carpeted and exterior roads remain between buildings
 
 #### Scenario: Switch between hosts with unequal rooms
 
@@ -504,9 +549,9 @@ NOT force unrelated rows to that width.
 #### Scenario: Compare the retained Pixel Office fixture
 
 - **WHEN** the approved dense synthetic Office fixture is rendered through the migrated projection
-- **THEN** its CEO Office, receptions, boards, Agent Bar, roads, rooms, desks, characters, labels
-  and deterministic layout match the retained Pixel Office baseline rather than a substitute
-  DOM/CSS interpretation
+- **THEN** ordinary desktop CEO Office, receptions, boards, Agent Bar, roads,
+  rooms, desks, characters and labels retain their established pixel composition,
+  while responsive phone ordering and larger rooms follow this requirement
 
 #### Scenario: Render Office while Spaces is hidden
 
@@ -517,8 +562,8 @@ NOT force unrelated rows to that width.
 #### Scenario: Office opens at a narrow width
 
 - **WHEN** the viewport cannot contain the resolved logical Office width
-- **THEN** the Office stage provides bounded internal navigation and semantic targets while the
-  application shell itself remains within the viewport
+- **THEN** the phone scene fits its usable width, attention receptions precede Economy and Workforce, empty receptions are absent, and workspace rooms follow Workforce; the shell
+  does not require horizontal navigation
 
 #### Scenario: Optional observation provider is unavailable
 
@@ -532,6 +577,29 @@ NOT force unrelated rows to that width.
   credential-free provider URL
 - **THEN** the World service validates and applies it, reports bounded health and updates the
   relevant Office boards without exposing provider access or credentials to the browser
+
+#### Scenario: Compare all host receptions on a phone
+
+- **WHEN** more than six filtered hosts have observed receptions
+- **THEN** each qualified reception needing attention is reachable by vertical scrolling
+  before Economy, Workforce and workspace rooms, without a host carousel or
+  six-host scene cap; empty receptions do not occupy phone scene space
+
+
+#### Scenario: Fit phone summary boards to usable width
+
+- **WHEN** a phone has enough usable width for readable Economy and Workforce boards
+- **THEN** they share a row below attention receptions, fill the available width
+  without reducing label text sizes, and workspace buildings follow that row
+- **AND** narrower viewports wrap the boards vertically without horizontal scrolling
+
+#### Scenario: Fill a wide desktop beside a large room
+
+- **WHEN** a desktop observation has a 100-tab room and many single-tab rooms
+- **THEN** the large room uses a readable width-dependent desk grid, and smaller
+  rooms fill available space alongside it on multiple levels without overlap
+- **AND** viewport admission stays bounded by visible area, and resize retains
+  qualified room access and the logical desk row instead of its old pixel row
 
 ### Requirement: Office state and room operations
 
@@ -547,7 +615,8 @@ Office SHALL retain bounded hover callouts, task summaries, state cues, at least
 semantic targets outside compact desk and reception groups, and a compact Agents/Rooms/Desks chooser. Selected identity and detail SHALL live
 in the shared Inspector rather than a duplicate persistent scene badge. Capability-gated room creation,
 rename and close actions and room-local seat creation SHALL operate on real workspaces and tabs. A
-room at eight desks SHALL retain a disabled Room Full affordance rather than hiding capacity.
+room SHALL retain reachable creation controls whose availability follows the
+qualified operation rather than its number of displayed desks.
 
 Office SHALL expose a persisted Inspector opening preference with Docked and Floating modes through
 the common settings menu, with Floating as the default when no valid preference has been saved. In
@@ -559,11 +628,12 @@ existing entity SHALL focus its current presentation.
 
 When several working or unknown room-destination agents share one tab, Office SHALL choose at most
 one deterministic seated occupant using the established state/focus priority and SHALL present
-remaining room-local agents as standing only within the tested per-room agent bound. Working or
-unknown room-destination agents belonging to tabs omitted beyond the eight-desk presentation bound
-SHALL remain eligible for that bounded standing presentation. Blocked and done agents SHALL remain
-at their qualified reception, idle agents SHALL remain in the Agent Bar, and every bounded omission
-SHALL contribute to the exact relevant omitted count. Presented desks and agents SHALL keep
+remaining room-local agents with reachable standing geometry. Every observed tab
+SHALL have a logical desk; a desk outside the paint window SHALL NOT remove its
+room agents or pane targets from the logical room. Blocked and done agents SHALL
+remain at their qualified reception, idle agents SHALL remain accessible through
+the Agent Bar or its phone control, and upstream observation omissions SHALL
+retain their exact relevant counts. Presented desks and agents SHALL keep
 distinct, nonduplicated semantic targets.
 
 #### Scenario: Agent status changes location
@@ -606,9 +676,9 @@ distinct, nonduplicated semantic targets.
 - **WHEN** working or unknown agents share a tab or belong to a ninth or later tab while blocked,
   idle or done agents occupy the same tab or overflow range
 - **THEN** Office seats at most one deterministic room-local occupant per visible desk, presents
-  remaining room-local agents near their desk within the tested bound, keeps blocked and done agents
-  at reception and idle agents in the Agent Bar, reports exact omissions and exposes no
-  duplicate semantic target
+  remaining room-local agents with reachable standing geometry, keeps blocked and
+  done agents at reception and idle agents accessible through the Agent Bar or
+  its phone control, reports exact observed counts and exposes no duplicate target
 
 #### Scenario: User inspects a completion
 
@@ -630,8 +700,8 @@ distinct, nonduplicated semantic targets.
 
 #### Scenario: Room action is unavailable
 
-- **WHEN** a room is stale or full, or its host lacks the required
-  capability
+- **WHEN** a room is stale, its owning runtime rejects the operation or its host
+  lacks the required capability
 - **THEN** the corresponding control remains understandable but cannot create an Office-only room,
   desk or mutation
 

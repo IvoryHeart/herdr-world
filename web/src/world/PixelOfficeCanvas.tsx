@@ -53,6 +53,8 @@ export function PixelOfficeCanvas({
   roomAlignment,
   longRoomTitleMode,
   children,
+  collapsedRoomKeys,
+  collapsedHostKeys,
 }: {
   projection: HerdrOfficeProjection;
   selectedKey: string | null;
@@ -72,6 +74,8 @@ export function PixelOfficeCanvas({
   roomAlignment: OfficeRoomAlignment;
   longRoomTitleMode: OfficeLongRoomTitleMode;
   children?: ReactNode;
+  collapsedRoomKeys?: ReadonlySet<string>;
+  collapsedHostKeys?: ReadonlySet<string>;
 }) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const controllerRef = useRef<OfficeRendererController | null>(null);
@@ -93,6 +97,8 @@ export function PixelOfficeCanvas({
     onCanvasRendered,
     roomAlignment,
     longRoomTitleMode,
+    collapsedRoomKeys,
+    collapsedHostKeys,
   });
   const [failure, setFailure] = useState(false);
   latestRef.current = {
@@ -113,6 +119,8 @@ export function PixelOfficeCanvas({
     onCanvasRendered,
     roomAlignment,
     longRoomTitleMode,
+    collapsedRoomKeys,
+    collapsedHostKeys,
   };
 
   const reportAnchors = () => {
@@ -259,13 +267,20 @@ export function PixelOfficeCanvas({
       (roomKey) => latestRef.current.onNewSeat(roomKey),
       (hover) => latestRef.current.onHover?.(hover),
       (layout) => latestRef.current.onLayoutChange?.(layout),
-      (revision) => latestRef.current.onCanvasRendered?.(revision),
+      (revision) => {
+        latestRef.current.onCanvasRendered?.(revision);
+        // Renderer-owned font/resize paints can finish without a React update.
+        // Clear preparing anchors and republish only after matching canvas paint.
+        scheduleAnchorReportRef.current();
+      },
       latestRef.current.roomAlignment,
       latestRef.current.longRoomTitleMode,
       initialization.signal,
       () => {
         if (!disposed) setFailure(true);
       },
+      latestRef.current.collapsedRoomKeys,
+      latestRef.current.collapsedHostKeys,
     )
       .then(async (controller) => {
         if (disposed) {
@@ -287,6 +302,8 @@ export function PixelOfficeCanvas({
           latest.roomAlignment,
           latest.longRoomTitleMode,
           latest.seatCreationStates,
+          latest.collapsedRoomKeys,
+          latest.collapsedHostKeys,
         );
         scheduleAnchorReportRef.current();
       })
@@ -326,6 +343,8 @@ export function PixelOfficeCanvas({
         roomAlignment,
         longRoomTitleMode,
         seatCreationStates,
+        collapsedRoomKeys,
+        collapsedHostKeys,
       )
       .then(() => {
         if (current) scheduleAnchorReportRef.current();
@@ -337,6 +356,8 @@ export function PixelOfficeCanvas({
       current = false;
     };
   }, [
+    collapsedRoomKeys,
+    collapsedHostKeys,
     completionSeenKeys,
     longRoomTitleMode,
     observability,

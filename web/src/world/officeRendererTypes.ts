@@ -69,6 +69,8 @@ export type OfficeRendererController = {
     roomAlignment?: OfficeRoomAlignment,
     longRoomTitleMode?: OfficeLongRoomTitleMode,
     seatCreationStates?: Readonly<Record<string, OfficeCreationActionState>>,
+    collapsedRoomKeys?: ReadonlySet<string>,
+    collapsedHostKeys?: ReadonlySet<string>,
   ) => Promise<void>;
   getAnchors: (
     selectedKey: string | null,

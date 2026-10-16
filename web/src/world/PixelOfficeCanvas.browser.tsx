@@ -1,4 +1,9 @@
 window.__HERDR_WORLD_RENDERER_DEBUG__ = true;
+import {
+  verifyGrowingOffice,
+  verifyHostBuildings,
+  verifyFluidOffice,
+} from "./officeGrowing.browser";
 import { verifyOfficeRendering } from "./officeRendering.browser";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
@@ -12,6 +17,9 @@ import { projectWorldOffice } from "./herdrOfficeProjection";
 import type { WorldRuntimeConnection } from "./runtimeStore";
 import { buildWorldObject, worldObjectForConnection } from "./worldObject";
 import PixelOfficeView from "./PixelOfficeView";
+import { PixelOfficeCanvas } from "./PixelOfficeCanvas";
+import { EMPTY_OFFICE_OBSERVABILITY } from "./officeObservability";
+import type { PublishedOfficeLayout } from "./officeLayout";
 import "./world.css";
 
 const failures: string[] = [];
@@ -45,12 +53,15 @@ const check = (condition: boolean, message: string) => {
 };
 const settle = () => new Promise((resolve) => setTimeout(resolve, 50));
 
-async function waitFor(condition: () => boolean, message: string) {
+async function waitFor(
+  condition: () => boolean,
+  message: string | (() => string),
+) {
   for (let index = 0; index < 300; index += 1) {
     if (condition()) return;
     await settle();
   }
-  throw new Error(message);
+  throw new Error(typeof message === "function" ? message() : message);
 }
 
 function workspace(id: string, label: string, paneCount: number): Workspace {
@@ -269,10 +280,6 @@ async function run() {
     const officeCanvas = host.querySelector<HTMLCanvasElement>(
       "canvas[data-office-canvas='true']",
     )!;
-    const visibleSize = {
-      width: officeCanvas.width,
-      height: officeCanvas.height,
-    };
     const mountsBeforeNavigation = diagnostics.mounts;
     layoutShell.style.display = "none";
     world = { ...world };
@@ -285,10 +292,28 @@ async function run() {
     await settle();
     layoutShell.style.removeProperty("display");
     await waitFor(
+      () => {
+        const published = diagnostics.publishedLayout;
+        const resolution = Math.min(2, devicePixelRatio || 1);
+        return (
+          diagnostics.ready &&
+          Boolean(published) &&
+          officeScroll.clientWidth > 0 &&
+          officeScroll.clientHeight > 0 &&
+          officeCanvas.width ===
+            Math.round(
+              Math.min(published!.officeWidth, officeScroll.clientWidth) *
+                resolution,
+            ) &&
+          officeCanvas.height ===
+            Math.round(
+              Math.min(published!.totalHeight, officeScroll.clientHeight) *
+                resolution,
+            )
+        );
+      },
       () =>
-        officeCanvas.width === visibleSize.width &&
-        officeCanvas.height === visibleSize.height,
-      "Office did not restore its canvas after returning from a hidden workspace surface",
+        `Office did not restore its canvas after returning from a hidden workspace surface: canvas=${officeCanvas.width}x${officeCanvas.height}, viewport=${officeScroll.clientWidth}x${officeScroll.clientHeight}, ready=${diagnostics.ready}`,
     );
     check(
       diagnostics.mounts === mountsBeforeNavigation,
@@ -437,6 +462,39 @@ async function run() {
       }
       progressRoot.render(
         <OfficeSemanticTargetsOverlay
+          layout={{
+            ...progressLayout,
+            layoutRevision: progressLayout.layoutRevision + 1,
+          }}
+          projection={progressProjection}
+          renderedRevision={-progressLayout.layoutRevision}
+          selectedKey={null}
+          onSelect={() => {
+            selectedAfterRefresh = "preparing";
+          }}
+          onActivateAgent={() => {
+            selectedAfterRefresh = "preparing";
+          }}
+          onActivateDesk={() => {}}
+          onActivateRoom={() => {}}
+        />,
+      );
+      await settle();
+      focused.click();
+      check(
+        document.activeElement === focused &&
+          focused.isConnected &&
+          selectedAfterRefresh !== "preparing",
+        "Preparing a replacement Office layout lost focus or admitted an unpainted action",
+      );
+      check(
+        progressHost.querySelector(
+          '.world-semantic-targets-overlay[aria-busy="true"]',
+        ) !== null,
+        "Office reported ready before its replacement canvas was painted",
+      );
+      progressRoot.render(
+        <OfficeSemanticTargetsOverlay
           layout={progressLayout}
           projection={progressProjection}
           renderedRevision={0}
@@ -571,7 +629,7 @@ async function run() {
 
     check(canvas !== null, "Pixel Office canvas was not mounted");
     check(
-      canvas?.style.touchAction === "pan-x pan-y",
+      canvas?.style.touchAction === (compact ? "pan-y" : "pan-x pan-y"),
       "Pixel Office canvas did not allow native two-axis touch panning",
     );
     check(
@@ -588,10 +646,15 @@ async function run() {
     );
     check(diagnostics.sceneRenders > 0, "Pixel Office did not render a scene");
     check(layout !== null, "Pixel Office did not publish its layout");
-    check((layout?.ceoRect.width ?? 0) > 0, "CEO Office geometry is missing");
     check(
-      (layout?.agentBarRect.width ?? 0) > 0,
-      "Agent Bar geometry is missing",
+      compact ? layout?.ceoRect.width === 0 : (layout?.ceoRect.width ?? 0) > 0,
+      "Responsive CEO Office geometry is incorrect",
+    );
+    check(
+      compact
+        ? layout?.agentBarRect.width === 0
+        : (layout?.agentBarRect.width ?? 0) > 0,
+      "Responsive Agent Bar geometry is incorrect",
     );
     check(
       layout?.ceoBlocks.receptions.length === 1,
@@ -644,6 +707,12 @@ async function run() {
         .length === 2,
       "Occupied desks lost their distinct tab targets",
     );
+    await waitFor(
+      () =>
+        window.__HERDR_WORLD_RENDERER__?.ready === true &&
+        devices[1]?.disabled === false,
+      "Pane device was not ready after completion acknowledgement",
+    );
     devices[1]?.click();
     await settle();
     check(
@@ -664,12 +733,12 @@ async function run() {
       "The active host room is missing its new-seat control",
     );
     check(
-      host.querySelectorAll(".world-room-overlay-action").length === 2,
+      host.querySelectorAll(".world-room-overlay-action").length === 3,
       "Room management controls are missing",
     );
     check(
       host.querySelectorAll(".world-room-overlay-action:not(:disabled)")
-        .length === 2,
+        .length === 3,
       "The selected host room did not expose its mutations",
     );
     check(
@@ -685,9 +754,11 @@ async function run() {
         Math.round(layoutShell.getBoundingClientRect().width),
       "The intent overlay reduced the Office stage width",
     );
-    check(
-      selectedAnchor,
-      "The selected Office entity did not publish an anchor",
+    officeScroll.scrollTop = diagnostics.publishedLayout!.rooms[0]!.y;
+    officeScroll.dispatchEvent(new Event("scroll"));
+    await waitFor(
+      () => selectedAnchor,
+      "The selected Office entity did not publish an anchor after its room was revealed",
     );
     // Exercise the second reception row with both statuses; it must render
     // without indexing past the four physical chairs.
@@ -749,22 +820,24 @@ async function run() {
       host.querySelector(".world-office-toolbar") === null,
       "Office retained a scene toolbar for settings",
     );
+    check(
+      host.querySelector(".world-office-navigation") === null,
+      "Office still displays the redundant navigation row",
+    );
     if (compact) {
+      const expectedTop =
+        stageScroll.parentElement!.getBoundingClientRect().top;
       check(
-        Math.abs(
-          stageScroll.getBoundingClientRect().top -
-            host.querySelector(".world-office-shell")!.getBoundingClientRect()
-              .top,
-        ) <= 1,
-        "Phone Office still reserves a target-row gap above the scene",
+        Math.abs(stageScroll.getBoundingClientRect().top - expectedTop) <= 1,
+        "Phone Office reserves blank space above the scene",
       );
       check(
-        stageScroll.scrollWidth > stageScroll.clientWidth,
-        "Phone Office lost bounded horizontal scene navigation",
+        stageScroll.scrollWidth <= stageScroll.clientWidth + 1,
+        "Phone Office still requires horizontal scene navigation",
       );
       check(
-        Math.abs(stageScroll.scrollLeft - 73) <= 1,
-        "Office scroll preference was not restored at phone width",
+        stageScroll.scrollLeft === 0,
+        "Legacy horizontal scroll was not clamped in the phone layout",
       );
       stageScroll.scrollLeft = 111;
       stageScroll.dispatchEvent(new Event("scroll"));
@@ -773,8 +846,8 @@ async function run() {
         worldLocalStorage.getItem(OFFICE_PREFERENCES_KEY) ?? "{}",
       ) as { scrollLeft?: number };
       check(
-        saved.scrollLeft === 111,
-        "Office scroll preference was not persisted",
+        saved.scrollLeft === 0,
+        "Phone Office persisted a horizontal position outside its layout",
       );
     }
   } finally {
@@ -797,8 +870,90 @@ async function run() {
   }
 }
 
-run()
-  .then(() => verifyOfficeRendering(check))
+async function verifyAnchorAfterRendererRepaint() {
+  const host = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(host);
+  const statuses = ["working", "working", "working", "working"] as const;
+  const projection = projectWorldOffice(
+    buildWorldObject([connection("repaint", "Repaint", "workspace", statuses)]),
+    1,
+  );
+  let layout: PublishedOfficeLayout | null = null;
+  let anchorReports = 0;
+  let anchored = false;
+  try {
+    root.render(
+      <div className="world-stage-scroll" style={{ height: 600 }}>
+        <PixelOfficeCanvas
+          projection={projection}
+          selectedKey={projection.paneRoster[0]!.device.key}
+          completionSeenKeys={new Set()}
+          observability={EMPTY_OFFICE_OBSERVABILITY}
+          conversationTargets={[]}
+          onSelect={() => {}}
+          onActivateAgent={() => {}}
+          onActivateRoom={() => {}}
+          seatCreationStates={{}}
+          onNewSeat={() => {}}
+          roomAlignment="left"
+          longRoomTitleMode="expand"
+          onLayoutChange={(value) => {
+            layout = value;
+          }}
+          onSelectedAnchorChange={(value) => {
+            anchorReports++;
+            anchored = Boolean(value);
+          }}
+        />
+      </div>,
+    );
+    await waitFor(
+      () => Boolean(layout) && window.__HERDR_WORLD_RENDERER__?.ready === true,
+      "Anchor repaint fixture did not become ready",
+    );
+    const scroll = host.querySelector<HTMLElement>(".world-stage-scroll")!;
+    scroll.scrollTop = layout!.rooms[0]!.y;
+    scroll.dispatchEvent(new Event("scroll"));
+    await waitFor(
+      () => anchored,
+      "Anchor repaint fixture did not reveal its selected desk",
+    );
+    await settle();
+    const beforeReports = anchorReports;
+    const beforePaints = officePaints;
+    // Renderer-owned font completion does not change React props or scroll.
+    document.fonts.dispatchEvent(new Event("loadingdone"));
+    await waitFor(
+      () =>
+        officePaints > beforePaints &&
+        window.__HERDR_WORLD_RENDERER__?.ready === true,
+      "Font completion did not finish its renderer-owned repaint",
+    );
+    await waitFor(
+      () => anchorReports > beforeReports && anchored,
+      "Renderer-owned repaint did not republish its selected anchor after matching canvas paint",
+    );
+    check(
+      anchorReports > beforeReports && anchored,
+      `Renderer-owned repaint did not republish its selected anchor after matching canvas paint: reports=${anchorReports}, before=${beforeReports}, anchored=${anchored}, top=${scroll.scrollTop}`,
+    );
+  } finally {
+    root.unmount();
+    host.remove();
+  }
+}
+
+(new URL(location.href).searchParams.has("fluid")
+  ? verifyFluidOffice(check)
+  : new URL(location.href).searchParams.has("buildings")
+    ? verifyHostBuildings(check)
+    : new URL(location.href).searchParams.has("packing")
+      ? verifyGrowingOffice(check, { packingOnly: true })
+      : run()
+          .then(() => verifyAnchorAfterRendererRepaint())
+          .then(() => verifyOfficeRendering(check))
+          .then(() => verifyGrowingOffice(check))
+)
   .catch((error: unknown) => {
     const diagnostics = window.__HERDR_WORLD_RENDERER__;
     failures.push(

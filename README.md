@@ -22,7 +22,15 @@ one click away. Hosts defaults to All hosts; filtering changes visibility while
 open Inspectors and pending operations keep their captured owners. Use Actions →
 New workspace or New tab in any visual view; Office also provides New room and
 New seat controls. Creation prepares its source terminal and opens the result in
-the current view, including for another ready host and rooms with eight displayed desks.
+the current view, including for another ready host. Office rooms grow with their
+observed tabs and agents. Desktop desk grids adapt to screen width, with smaller
+rooms filling space beside larger ones. Pixel-art host buildings have brickwork
+and wooden signs, share useful screen width and can collapse as a group. Carpeted
+interiors and wood reception floors distinguish buildings from exterior roads. Navigation
+and collapse keep offices reachable through the existing Office search, with no
+extra navigation row. Room grids and placement adapt together to fill usable gaps.
+On phones, attention receptions, Economy, Workforce and
+workspace rooms form one vertical scene.
 
 <!-- markdownlint-disable MD033 -->
 

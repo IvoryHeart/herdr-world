@@ -673,7 +673,10 @@
       "existingTests": [
         "web/src/world/treeProjection.test.ts",
         "web/src/world/graph/graphProjection.test.ts",
-        "quint/replay.test.ts"
+        "quint/replay.test.ts",
+        "web/src/world/officeGrowing.test.ts",
+        "web/src/world/officeBuildings.test.ts",
+        "web/src/world/PixelOfficeCanvas.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/188",
       "technique": "space-admission",
@@ -695,7 +698,7 @@
         "checks": ["bun run check", "bun run verification:check"],
         "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
       },
-      "evidenceDecision": "Real allocation is compared with the independent exhaustive finite allocator across 5,103 configurations and six asymmetric host orders. Tree/graph tests retain ancestor reservations and projection capacity.",
+      "evidenceDecision": "Real allocation is compared with the independent exhaustive finite allocator across 5,103 configurations and six asymmetric host orders. Tree/graph tests retain ancestor reservations and projection capacity. Responsive Office has complete logical room/tab/room-agent membership with viewport row admission. Direct geometry/projection and production Pixi browser cases cover 100 tabs, more than 128 rooms, vertical phone receptions, collapse, paged navigation and exact qualified late-pane activation; a separate geometry case checks bounded admission near tab 10000. Fluid desktop evidence covers width-dependent columns, gap-aware placement, nonoverlap and corridor clearance across alignments, logical row preservation, and a real 3440px consumer. Joint-shape and retained-cavity regressions cover openings discarded by a contour-only layout. Office shell search replaces the separate navigation row while preserving qualified expansion, paged results and idle-agent activation; refresh preserves negative room-header offsets. A two-populated-host regression checks usable wide-screen width, reduced depth and contained rooms, including a real 3440px consumer; a single large workspace reflows into fewer rows. Material consumers verify exact carpet/wood/asphalt bounds at DPR 1/2 and constant drawing work independent of logical floor area. Nested host-building consumers cover qualified containment, cooperative cancellation, independent collapse, retained truthful summaries/focus and qualified reveal without native mutation. This does not extend the Tree/Graph allocator model to arbitrary Office cardinalities.",
       "promotion": {
         "decision": "accepted",
         "review": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",
@@ -710,7 +713,10 @@
       "properties": "Same native ID on different hosts never aliases; child ancestry and omission counts stay consistent",
       "existingTests": [
         "web/src/world/worldObject.test.ts",
-        "web/src/world/treeProjection.test.ts"
+        "web/src/world/treeProjection.test.ts",
+        "web/src/world/officeGrowing.test.ts",
+        "web/src/world/officeBuildings.test.ts",
+        "web/src/world/PixelOfficeCanvas.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/145",
       "technique": "alternative",
@@ -734,7 +740,7 @@
         "checks": ["bun run check", "bun run verification:check"],
         "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
       },
-      "evidenceDecision": "Real object preparation and allocation preserve qualified host identity; object/tree tests check dense cancellation, colliding IDs and ancestry projection.",
+      "evidenceDecision": "Real object preparation and allocation preserve qualified host identity; object/tree tests check dense cancellation, colliding IDs and ancestry projection. Responsive Office has complete logical room/tab/room-agent membership with viewport row admission. Direct geometry/projection and production Pixi browser cases cover 100 tabs, more than 128 rooms, vertical phone receptions, collapse, paged navigation and exact qualified late-pane activation; a separate geometry case checks bounded admission near tab 10000. Fluid desktop evidence covers width-dependent columns, gap-aware placement, nonoverlap and corridor clearance across alignments, logical row preservation, and a real 3440px consumer. Nested host-building consumers cover qualified containment, cooperative cancellation, independent collapse, retained truthful summaries/focus and qualified reveal without native mutation. This does not extend the Tree/Graph allocator model to arbitrary Office cardinalities.",
       "promotion": {
         "decision": "accepted",
         "review": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",
@@ -1435,7 +1441,8 @@
       "existingTests": [
         "web/src/world/officeRendererResources.test.ts",
         "web/src/world/PixelOfficeCanvas.test.ts",
-        "web/src/lazyWithReload.test.ts"
+        "web/src/lazyWithReload.test.ts",
+        "web/src/world/officeGrowing.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/186",
       "technique": "alternative",
@@ -1443,7 +1450,7 @@
       "status": "alternative-evidence",
       "remaining": "GPU/browser/URL behavior requires the actual implementation; arbitrary device/driver failure schedules are excluded.",
       "requiredChecks": ["bun run check", "bun run verification:gate"],
-      "evidenceDecision": "Real rendering-resource and browser/lazy-module tests exercise graphics destruction, shared texture ownership and reload/lifetime behavior.",
+      "evidenceDecision": "Real rendering-resource and browser/lazy-module tests exercise graphics destruction, shared texture ownership and reload/lifetime behavior. Responsive Office has complete logical room/tab/room-agent membership with viewport row admission. Direct geometry/projection and production Pixi browser cases cover 100 tabs, more than 128 rooms, vertical phone receptions, collapse, paged navigation and exact qualified late-pane activation; a separate geometry case checks bounded admission near tab 10000. Fluid desktop evidence covers width-dependent columns, gap-aware placement, nonoverlap and corridor clearance across alignments, logical row preservation, and a real 3440px consumer. Nested host-building consumers cover qualified containment, cooperative cancellation, independent collapse, retained truthful summaries/focus and qualified reveal without native mutation. This does not extend the Tree/Graph allocator model to arbitrary Office cardinalities.",
       "partialEvidence": {
         "models": [],
         "contracts": ["verification/consumer-evidence.md"],
@@ -1561,7 +1568,7 @@
       "status": "alternative-evidence",
       "remaining": "Storage quota/browser implementation behavior remains direct evidence; preferences do not authorize downstream operations.",
       "requiredChecks": ["bun run check", "bun run verification:gate"],
-      "evidenceDecision": "Pure bounded key parsing and browser storage tests exercise namespaces, canonicalization, quotas and newest explicit preference. v0.8.5: Shortcut discovery derives read-only rows from active presets, preserving arrangement bindings and old presets. Direct preset/filter tests and DOM focus/dismissal evidence supplement existing preference consumers.",
+      "evidenceDecision": "Pure bounded key parsing and browser storage tests exercise namespaces, canonicalization, quotas and newest explicit preference. v0.8.5: Shortcut discovery derives read-only rows from active presets, preserving arrangement bindings and old presets. Direct preset/filter tests and DOM focus/dismissal evidence supplement existing preference consumers. Office stores validated phone and desktop scene positions independently, preserving legacy fields without applying desktop horizontal coordinates to the phone layout.",
       "partialEvidence": {
         "models": [],
         "contracts": ["verification/consumer-evidence.md"],
@@ -1588,7 +1595,10 @@
       "existingTests": [
         "web/src/world/ProductionContexts.test.ts",
         "web/src/world/officeLayout.test.ts",
-        "scripts/pages-content.test.ts"
+        "scripts/pages-content.test.ts",
+        "web/src/world/officeGrowing.test.ts",
+        "web/src/world/officeBuildings.test.ts",
+        "web/src/world/PixelOfficeCanvas.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/186",
       "technique": "alternative",
@@ -1596,7 +1606,7 @@
       "status": "alternative-evidence",
       "remaining": "Pixel/layout/performance/device outcomes require real rendering and supported browser/site checks; no model of every device or accessibility event schedule.",
       "requiredChecks": ["bun run check", "bun run verification:gate"],
-      "evidenceDecision": "Actual production-context/browser/layout and generated site-content tests exercise rendering, search projection and published content.",
+      "evidenceDecision": "Actual production-context/browser/layout and generated site-content tests exercise rendering, search projection and published content. Responsive Office has complete logical room/tab/room-agent membership with viewport row admission. Direct geometry/projection and production Pixi browser cases cover 100 tabs, more than 128 rooms, vertical phone receptions, collapse, paged navigation and exact qualified late-pane activation; a separate geometry case checks bounded admission near tab 10000. Fluid desktop evidence covers width-dependent columns, gap-aware placement, nonoverlap and corridor clearance across alignments, logical row preservation, and a real 3440px consumer. Nested host-building consumers cover qualified containment, cooperative cancellation, independent collapse, retained truthful summaries/focus and qualified reveal without native mutation. This does not extend the Tree/Graph allocator model to arbitrary Office cardinalities.",
       "partialEvidence": {
         "models": [],
         "contracts": ["verification/consumer-evidence.md"],

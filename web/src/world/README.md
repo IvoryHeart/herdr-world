@@ -56,7 +56,7 @@ collects acceptance counters without allocating debug node snapshots.
 | Task | Open these owners | Focused evidence |
 | --- | --- | --- |
 | View controls, selection and framing | [PixelOfficeView.tsx](PixelOfficeView.tsx) composes the Office view; [PixelOfficeCanvas.tsx](PixelOfficeCanvas.tsx) mounts the canvas. In [world-office.css](world-office.css), start at the `Retained Pixel Office canvas` comment; `.world-office-*` frames the shell, while `.world-canvas-*`, `.world-room-*`, `.world-completion-*` and `.world-observability-*` cover the scene and controls. | [Canvas tests](PixelOfficeCanvas.test.ts), [Office browser fixture](PixelOfficeCanvas.browser.tsx) |
-| Herdr-to-Office data or room geometry | [herdrOfficeProjection.ts](herdrOfficeProjection.ts) projects qualified topology, pane devices and reception placement; `resolveOfficeGeometry` and `OfficeLayoutPublisher` in [officeLayout.ts](officeLayout.ts) place rooms and content. | [Projection tests](herdrOfficeProjection.test.ts), [geometry tests](officeGeometry.test.ts), [layout tests](officeLayout.test.ts) |
+| Herdr-to-Office data or room geometry | [herdrOfficeProjection.ts](herdrOfficeProjection.ts) projects complete qualified rooms, pane devices and reception placement; [officeSceneLayout.ts](officeSceneLayout.ts) selects complete responsive scene geometry, while `resolveOfficeGeometry` and `OfficeLayoutPublisher` in [officeLayout.ts](officeLayout.ts) place rooms and content. | [Projection tests](herdrOfficeProjection.test.ts), [geometry tests](officeGeometry.test.ts), [growth tests](officeGrowing.test.ts), [layout tests](officeLayout.test.ts) |
 | Pixi drawing, assets or room interaction | `createOfficeRenderer` in [officeRenderer.ts](officeRenderer.ts) owns scene lifetime, preparation, retained layers and scheduling; [officeRoomDrawing.ts](officeRoomDrawing.ts), [officeReceptionDrawing.ts](officeReceptionDrawing.ts) and [officeCommonAreaDrawing.ts](officeCommonAreaDrawing.ts) draw scene regions; [officeDrawingPrimitives.ts](officeDrawingPrimitives.ts) and [officeDrawingShared.ts](officeDrawingShared.ts) share artwork and labels; [officeInteraction.ts](officeInteraction.ts) owns pointer activation; [officeSemanticTargets.ts](officeSemanticTargets.ts) exposes separate desk, pane and agent targets; [officeRendererResources.ts](officeRendererResources.ts) owns renderer resources; [officeRoomActions.ts](officeRoomActions.ts) resolves room actions. | [Semantic target tests](officeSemanticTargets.test.ts), [Office browser fixture](PixelOfficeCanvas.browser.tsx), [room-action tests](officeRoomActions.test.ts) |
 | Office settings or Economy board | [officePreferences.ts](officePreferences.ts), [officeObservability.ts](officeObservability.ts) and [OfficeObservabilityDialog.tsx](OfficeObservabilityDialog.tsx). | [Preference tests](officePreferences.test.ts), [metrics tests](officeObservability.test.ts) |
 
@@ -74,8 +74,9 @@ textures. Renderer teardown releases layer resources and renderer-owned floor
 textures. Fractional floor origins retain vector tile edges for identical coverage.
 [officeArtwork.ts](officeArtwork.ts) shares immutable furniture GraphicsContexts
 with explicit reference ownership; the last consumer releases the context.
-Selection projections reuse equivalent room references, while overflowing rooms
-rerun bounded admission when selection changes or clears. Room versions make
+Selection projections reuse equivalent room references. Rooms and their desks and
+room agents remain complete; pane artwork, reception characters and the Agent Bar
+retain bounded admission with complete qualified roster access. Room versions make
 retained-layer signatures independent of full topology serialization. Qualified
 presentation-key aliases are indexed during cooperative preparation, so connector
 and selection renders do not rescan the complete pane roster.
@@ -186,7 +187,23 @@ manifest, so a lazy view cannot reorder the cascade. Edit view-specific rules in
 Office is the root and invalid-route default; `/desk` remains explicit. The common
 Actions menu creates a workspace on a confirmed host or a tab in the selected
 workspace in Office, Desk, Tree and Graph. Native Spaces controls share the store
-operations. Eight displayed Office desks are a projection bound, not a tab limit.
+operations. Office logically lays out every observed room, tab and room agent. Its renderer and
+semantic controls admit rows near the viewport rather than truncating room totals.
+Phones stack attention receptions, Economy, Workforce and
+workspace rooms vertically. Desktop retains
+its CEO/reception/Agent Bar composition. [WorldSearchResults.tsx](WorldSearchResults.tsx) pages the complete search roster
+without a separate navigation row. Office search expands/reveals qualified rooms
+and retains idle-agent access. Room collapse changes only presentation. [useOfficeViewport.ts](useOfficeViewport.ts) shares the canvas window
+with accessible controls, retaining a still-current focused target across scrolling.
+Phone and desktop scroll preferences are separate. [officeRoomPacking.ts](officeRoomPacking.ts)
+uses [officePackingSearch.ts](officePackingSearch.ts) to fit desktop room shapes
+into maximal free rectangles, retaining cavities and reserved corridor gaps. Large desk
+grids adapt to usable width, and logical desk/standing rows survive column changes.
+[officeBuildings.ts](officeBuildings.ts) applies the same packing inside each qualified
+host building and across buildings, yielding between hosts.
+[OfficeBuildingsOverlay.tsx](OfficeBuildingsOverlay.tsx) retains named status/count
+summaries and focused headers while a host is collapsed. Host and room collapse
+states are independent, and navigation reopens the required host before reveal.
 
 | Task | Open these owners | Focused evidence |
 | --- | --- | --- |

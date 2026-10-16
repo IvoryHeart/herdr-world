@@ -109,6 +109,28 @@ are optional because the merged PR history records their source.
 
 ### Changed
 
+- Office on phones stacks attention receptions, Economy, Workforce and workspace
+  rooms vertically, hiding empty receptions
+  without a decorative CEO room or sideways scene navigation. Workspace rooms grow
+  with observed tabs and agents on desktop and phones; searchable room navigation
+  and collapse keep later rooms reachable while drawing stays near the viewport.
+  Desktop rooms use width-adaptive desk grids and fill space beside taller rooms.
+  Pixel-art host buildings have brick façades, stepped roofs and wooden signs.
+  Populated buildings share usable screen width and reflow their room grids, with
+  carpeted rooms/corridors, wood reception floors and roads between buildings.
+  Rooms choose their desk grids while packing into available gaps, including
+  cavities below neighboring rooms. Completed building fits prefer aligned room
+  boundaries when heights match, avoiding unnecessary staggered bands. The separate Rooms/Receptions/Agents row is
+  removed; existing Office search retains room reveal and idle-agent access.
+  Economy and Workforce boards share usable phone width and wrap only when their
+  readable contents require it, with artwork matching their layout footprints.
+  Every actionable host building has its own qualified New room control in its
+  header, including while collapsed, replacing the shared footer action. Dense
+  room-shape fitting yields within a host to keep terminal input responsive.
+  They pack alongside each other and can collapse while retaining
+  host summaries and individual room choices.
+  Conversation connectors are refreshed after font and viewport repaints.
+
 - Follow phone platform conventions on mobile. Office, Graph, Desk and Spaces
   switch from a bottom navigation bar, replacing the view switcher. Terminal
   screens show Back, the terminal's name as a workspace switcher, Tabs and a ⋮

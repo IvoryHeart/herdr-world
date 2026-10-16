@@ -2,7 +2,11 @@ export type OfficeRoomAlignment = "left" | "center" | "right";
 export type OfficeLongTitleMode = "expand" | "compact";
 export type OfficeInspectorPresentation = "docked" | "floating";
 
+export type OfficeScrollPosition = { left: number; top: number };
+
 export type OfficePreferences = {
+  compactScroll?: OfficeScrollPosition;
+  desktopScroll?: OfficeScrollPosition;
   roomAlignment: OfficeRoomAlignment;
   longTitleMode: OfficeLongTitleMode;
   inspectorPresentation: OfficeInspectorPresentation;
@@ -46,6 +50,7 @@ export function readOfficePreferences(
         : DEFAULT_OFFICE_PREFERENCES.inspectorPresentation,
       scrollLeft: boundedScroll(value.scrollLeft),
       scrollTop: boundedScroll(value.scrollTop),
+      ...scenePositions(value),
     };
   } catch {
     return { ...DEFAULT_OFFICE_PREFERENCES };
@@ -70,6 +75,7 @@ export function writeOfficePreferences(
       : DEFAULT_OFFICE_PREFERENCES.inspectorPresentation,
     scrollLeft: boundedScroll(preferences.scrollLeft),
     scrollTop: boundedScroll(preferences.scrollTop),
+    ...scenePositions(preferences),
   };
   try {
     storage.setItem(OFFICE_PREFERENCES_KEY, JSON.stringify(admitted));
@@ -97,4 +103,26 @@ function boundedScroll(value: unknown) {
   return typeof value === "number" && Number.isFinite(value)
     ? Math.min(MAX_OFFICE_SCROLL, Math.max(0, Math.round(value)))
     : 0;
+}
+
+function scenePositions(value: {
+  compactScroll?: unknown;
+  desktopScroll?: unknown;
+}) {
+  const result: {
+    compactScroll?: OfficeScrollPosition;
+    desktopScroll?: OfficeScrollPosition;
+  } = {};
+  for (const key of ["compactScroll", "desktopScroll"] as const) {
+    const position = value[key];
+    if (!position || typeof position !== "object" || Array.isArray(position))
+      continue;
+    const raw = position as Record<string, unknown>;
+    const read = (value: unknown) =>
+      typeof value === "number" && Number.isFinite(value)
+        ? Math.min(Number.MAX_SAFE_INTEGER, Math.max(0, Math.round(value)))
+        : 0;
+    result[key] = { left: read(raw.left), top: read(raw.top) };
+  }
+  return result;
 }

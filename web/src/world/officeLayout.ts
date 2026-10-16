@@ -435,7 +435,7 @@ export function resolveOfficeGeometry(
   input: OfficeGeometryInput,
 ): OfficeGeometryResult {
   const normalizedInput = normalizeFullOfficeGeometryInput(input);
-  const inputDigest = stableDigest(canonicalSerialize(normalizedInput));
+  const inputDigest = officeGeometryDigest(canonicalSerialize(normalizedInput));
   const boundedNormalizedInput =
     boundNormalizedOfficeGeometryInput(normalizedInput);
   const styleInvalid =
@@ -833,6 +833,7 @@ export function officeHeaderLabels(
 
 export class OfficeLayoutPublisher {
   private revision = 0;
+  private publicationRequest = 0;
   private currentDigest: string | null = null;
   private currentLayout: PublishedOfficeLayout | null = null;
   private renderedRevision = 0;
@@ -846,6 +847,7 @@ export class OfficeLayoutPublisher {
         "Office layout geometry does not match its input generation.",
       );
     }
+    this.publicationRequest += 1;
     if (
       this.currentLayout &&
       this.currentDigest === generation.canonicalDigest
@@ -854,26 +856,44 @@ export class OfficeLayoutPublisher {
     }
     this.revision += 1;
     this.currentDigest = generation.canonicalDigest;
-    const snapshot = {
-      ...geometry.layout,
-      generationId: generation.canonicalDigest,
-      layoutRevision: this.revision,
-      inputDigest: generation.canonicalDigest,
-      normalizedInput: geometry.normalizedInput,
-      roomHeaders: geometry.roomHeaders,
-      rows: geometry.rows,
-      contentItems: geometry.contentItems,
-      omissions: geometry.omissions,
-      omissionSummary: geometry.omissionSummary,
-      normalizationErrors: geometry.normalizationErrors,
-      fallbackMessage: geometry.fallbackMessage,
-      accessibleOverflow: geometry.accessibleOverflow,
-      resolvedCanvasWidth: geometry.resolvedCanvasWidth,
-      resolvedCanvasHeight: geometry.resolvedCanvasHeight,
-    };
+    const snapshot = publishedOfficeSnapshot(
+      generation,
+      geometry,
+      this.revision,
+    );
     this.currentLayout = deepFreeze(
       cloneValue(snapshot),
     ) as PublishedOfficeLayout;
+    return this.currentLayout;
+  }
+
+  /** Geometry is renderer-owned until this cancellable copy has settled. */
+  async publishAsync(
+    generation: OfficeInputGeneration,
+    geometry: OfficeGeometryResult,
+    isCurrent: () => boolean,
+    yieldTask: () => Promise<void>,
+  ): Promise<PublishedOfficeLayout | null> {
+    if (geometry.inputDigest !== generation.canonicalDigest)
+      throw new Error(
+        "Office layout geometry does not match its input generation.",
+      );
+    const request = ++this.publicationRequest;
+    const current = () => request === this.publicationRequest && isCurrent();
+    if (!current()) return null;
+    if (this.currentLayout && this.currentDigest === generation.canonicalDigest)
+      return this.currentLayout;
+    const immutable = await cloneOfficeSnapshot(
+      publishedOfficeSnapshot(generation, geometry, 0),
+      current,
+      yieldTask,
+    );
+    if (!immutable || !current()) return null;
+    this.currentDigest = generation.canonicalDigest;
+    this.currentLayout = Object.freeze({
+      ...immutable,
+      layoutRevision: ++this.revision,
+    }) as PublishedOfficeLayout;
     return this.currentLayout;
   }
 
@@ -895,6 +915,81 @@ export class OfficeLayoutPublisher {
       this.renderedRevision === revision
     );
   }
+}
+
+function publishedOfficeSnapshot(
+  generation: OfficeInputGeneration,
+  geometry: OfficeGeometryResult,
+  revision: number,
+) {
+  return {
+    ...geometry.layout,
+    generationId: generation.canonicalDigest,
+    layoutRevision: revision,
+    inputDigest: generation.canonicalDigest,
+    normalizedInput: geometry.normalizedInput,
+    roomHeaders: geometry.roomHeaders,
+    rows: geometry.rows,
+    contentItems: geometry.contentItems,
+    omissions: geometry.omissions,
+    omissionSummary: geometry.omissionSummary,
+    normalizationErrors: geometry.normalizationErrors,
+    fallbackMessage: geometry.fallbackMessage,
+    accessibleOverflow: geometry.accessibleOverflow,
+    resolvedCanvasWidth: geometry.resolvedCanvasWidth,
+    resolvedCanvasHeight: geometry.resolvedCanvasHeight,
+  };
+}
+
+/** Copy and freeze bounded batches, preserving shared immutable rectangles. */
+async function cloneOfficeSnapshot<T extends object>(
+  source: T,
+  isCurrent: () => boolean,
+  yieldTask: () => Promise<void>,
+): Promise<T | null> {
+  type Mutable = Record<string, unknown>;
+  const allocate = (value: object) =>
+    (Array.isArray(value) ? [] : {}) as unknown as Mutable;
+  const root = allocate(source);
+  const copies = new WeakMap<object, Mutable>([[source, root]]);
+  const frames = [
+    {
+      source: source as Mutable,
+      target: root,
+      keys: Object.keys(source),
+      index: 0,
+    },
+  ];
+  let work = 0;
+  while (frames.length) {
+    const frame = frames[frames.length - 1]!;
+    if (frame.index === frame.keys.length) {
+      Object.freeze(frame.target);
+      frames.pop();
+      continue;
+    }
+    const key = frame.keys[frame.index++]!;
+    const value = frame.source[key];
+    if (value && typeof value === "object") {
+      let target = copies.get(value);
+      if (!target) {
+        target = allocate(value);
+        copies.set(value, target);
+        frames.push({
+          source: value as Mutable,
+          target,
+          keys: Object.keys(value),
+          index: 0,
+        });
+      }
+      frame.target[key] = target;
+    } else frame.target[key] = value;
+    if (++work % 1024 === 0) {
+      await yieldTask();
+      if (!isCurrent()) return null;
+    }
+  }
+  return isCurrent() ? (root as T) : null;
 }
 
 function cloneValue<T>(value: T): T {
@@ -1519,13 +1614,21 @@ function canonicalSerialize(value: unknown): string {
   return "null";
 }
 
-function stableDigest(canonicalInput: string) {
-  let hash = 14695981039346656037n;
-  for (let index = 0; index < canonicalInput.length; index += 1) {
-    hash ^= BigInt(canonicalInput.charCodeAt(index));
-    hash = BigInt.asUintN(64, hash * 1099511628211n);
+/** FNV-1a 64, using exact 32-bit limbs to avoid a BigInt allocation per character. */
+export function officeGeometryDigest(canonicalInput: string) {
+  let low = 0x84222325,
+    high = 0xcbf29ce4;
+  for (let index = 0; index < canonicalInput.length; index++) {
+    low = (low ^ canonicalInput.charCodeAt(index)) >>> 0;
+    const product = low * 0x1b3;
+    high =
+      (Math.imul(high, 0x1b3) +
+        Math.imul(low, 0x100) +
+        Math.floor(product / 0x1_0000_0000)) >>>
+      0;
+    low = product >>> 0;
   }
-  return `office-v1-${hash.toString(16).padStart(16, "0")}`;
+  return `office-v1-${high.toString(16).padStart(8, "0")}${low.toString(16).padStart(8, "0")}`;
 }
 
 function minimumContentWidth(

@@ -44,8 +44,90 @@ This reconciles the remaining baseline entries without treating a component mode
 | Q42 Preferences/filters/shortcuts | Pure bounded key parsing and browser storage tests exercise namespaces, canonicalization, quotas and newest explicit preference. | Storage quota/browser implementation behavior remains direct evidence; preferences do not authorize downstream operations. |
 | Q43 Rendering/layout/search/metrics/site | Actual production-context/browser/layout and generated site-content tests exercise rendering, search projection and published content. | Pixel/layout/performance/device outcomes require real rendering and supported browser/site checks; no model of every device or accessibility event schedule. |
 
+## Responsive Office consumer evidence
+
+Office growth uses direct geometry, projection and production Pixi browser evidence
+for Q19/Q20/Q39/Q43, alongside existing Q17 creation, Q23 Inspector intent and Q42
+preference checks. `officeGrowing.test.ts` covers logical room/desk/standing growth,
+phone section order, complete 129-room geometry and bounded row admission near the
+10000th tab, adaptive desktop columns, compact unequal-room packing and corridor
+clearance at 1024/1440/3440 widths and all three alignments, cooperative immutable publication and cancellation before a stale
+layout can replace the current painted revision. A separate real Pixi consumer
+forces font completion without React/scroll changes and checks that the completed
+paint republishes the selected connector anchor. `officeGrowing.browser.tsx`, executed by `PixelOfficeCanvas.test.ts`,
+uses three hosts with colliding native identifiers and 131 rooms: it reaches tab 100,
+activates its exact qualified pane, bounds mounted controls, collapses without
+closing work, retains focused controls while scrolling, pages to a room beyond
+128 and preserves a late room when an earlier room grows. The production transport
+fixture retains its strict input acknowledgement budgets with 32,768 admitted
+workspaces and 262,144 leaves across 64 hosts. Phone and desktop cases retain the
+production artwork, readiness and cleanup checks. These are concrete tested
+boundaries, not an exhaustive cardinality, GPU or device guarantee. The existing
+Tree/Graph space-admission model retains its own bounded scope.
+
 ## Review and remaining obligations
+
+An additional production Pixi 3440px case covers a 100-tab room alongside forty
+small rooms, exact late-pane activation and collapse. The 1280px/390px cases retain
+the full 131-room navigation, refresh and responsive lifecycle sequence. Control
+admission is bounded by viewport area, allowing the increased visible density.
+
+`officeBuildings.test.ts` covers nested placement, containment, qualified equal-label
+hosts, independent host/room collapse, complete counts and retired-request cancellation.
+Dedicated real Pixi host cases at 390/1280/3440 widths verify focus and summary
+retention, cross-host isolation, restored room choices, navigation into a hidden
+host and unchanged native contents/terminal activation.
+
+Room-shape and retained-cavity regressions cover gaps a contour-only placement
+loses, using readable column candidates without changing qualified/native order.
+The production fixture checks that the separate navigation row is absent and the
+existing shell search can expand/reveal exact rooms, page bounded results and
+open an idle agent's qualified terminal. Its refresh case preserves a room header
+below the viewport origin as well as logical desk/standing rows.
+
+Wide-screen fluidity has a two-host, fourteen-workspace regression that reproduces
+unused horizontal space, then checks occupied width, reduced scene depth,
+containment and non-overlap. A dedicated real 3440px Pixi case verifies the same
+outcome through production preparation/paint. A single large-workspace case
+checks that usable width reduces desk rows. Carpet, wood and asphalt material
+consumers cover exact floor bounds at DPR 1/2 and constant preparation work for
+large logical areas. These are direct rendering/layout alternatives; no global
+packing optimum or native topology mutation is claimed.
+
+Phone Office prioritizes qualified receptions with waiting/completed agents above
+Economy and Workforce; empty receptions are hidden on phones, and workspace rooms
+follow Workforce. Growing geometry and real Pixi phone consumers cover ordering, complete
+reachability, and qualified late-pane activation after this presentation reorder.
 
 Evidence statuses describe concrete decisions; independent acceptance is recorded separately. Review 5516249164 accepts every Q01–Q43 bounded mapping and alternative. Mandatory consumers and excluded claims remain binding. Final implementation/gate/resource acceptance is recorded in [review 5517420140](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5517420140); owner-approved PR #188 merged as `481ca1e8`. Mandatory consumers and excluded claims remain binding. Review must inspect the intended requirement, model/reducer domain, adapter fidelity, actual consumer tests and excluded claims. Q21 has its separate bounded exhaustive contract. Q26–Q28 retain their separately accepted Ranger storage/permission assumptions.
 
 No temporal progress proof has been added. Successful reachability witnesses show that a tested path occurs; they do not establish eventual completion for all schedules. Scheduler/deadline regressions are bounded implementation evidence with their stated transport/storage assumptions. Additional fairness assumptions need an explicit requirement and review before introducing temporal properties.
+
+Phone summary-board geometry is checked across 240–720 px: readable boards share
+width when they fit and wrap otherwise, with exact drawing bounds and content-derived
+lobby height. The production phone Pixi consumer checks the side-by-side arrangement
+between attention receptions and workspace rooms without horizontal scene overflow.
+
+Completed building fits retain a height-first candidate and an alignment-aware
+candidate, choosing by final height and then fragmented vertical bands. The growing
+geometry regression verifies a 5×1 strip becomes 3×2 while a lower four-desk room
+becomes 4×1 at equal building depth. The production two-host Pixi fixture includes
+the creation desk, verifies the five-desk grid, and allows a four-desk room beside
+the top row when that is the tighter fit. Dense preparation remains cooperative.
+
+Host-scoped Office creation is exercised by the existing creation-flow model and
+SharedViewCreation consumers at 390/1440px. The browser collapses an inactive host
+and creates through its header action, asserting the destination and source
+workspace remain on that host while the active Spaces connection is preserved.
+Pixel Office consumers cover rendered-revision admission. The global footer and
+its geometry reservation are removed; complete building bounds retain street space.
+
+A dense single-host regression with 512 rooms and seven standing agents per room
+checks that fitting yields within the host and produces geometry identical to the
+synchronous API. This addresses the shape-search hotspot seen under the normal
+four-process dense animated/browser workload; latency budgets remain unchanged.
+
+Repeated numeric host fits are reused only within a geometry job. The regression
+checks equal geometry with distinct source indices, detached output records and
+invalidation after content changes. Search batches keep the four-millisecond
+time budget; the iteration guard limits uninterrupted work without capping items.
