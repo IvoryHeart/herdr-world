@@ -113,8 +113,12 @@ room area and available width. Run the room skyline inside each building, then
 run it again over building footprints. On phones, stack full-width buildings
 vertically after Workforce. Keep the reception/CEO/Agent Bar composition separate.
 
-Render a neutral outlined boundary and a named header with connection/stale state,
-room/agent counts and attention count. Headers and room targets share the published
+Render a cutaway pixel-art building with a stepped roof, brick courses, side
+pillars and a framed wooden sign board, using the existing office furniture
+palette. The sign retains connection/stale state, room/agent counts and attention
+count. The sign is a native accessible button over matching painted geometry,
+with a minimum 48-pixel touch height; its focus outline stays visible. Prepare only
+visible pillar courses rather than enumerating a tall building's full brickwork. Headers and room targets share the published
 layout and completed-paint readiness. Header controls follow the viewport, retaining
 an eligible focused host header through repaint and collapse. Collapse is local
 presentation state keyed by qualified host identity; it does not change observation,
@@ -152,6 +156,83 @@ generation remains non-actionable even if its old geometry is still cached.
 Creating a ninth or later tab uses the existing prepared source and terminal
 completion path. A room's new logical desk is revealable without using a stale
 hit target during layout preparation. Renderer capacity never disables creation.
+
+## Interaction study: host focus and arranging (proposed, not implemented)
+
+The graphical building treatment above is part of the current implementation.
+The following interactions are a design recommendation prompted by the owner;
+they are not implemented or acceptance claims for this PR. Review them before
+changing scope, contracts or implementation tasks. Graph remains parked.
+
+### Reach a host without scrolling through every building
+
+| Option | Behaviour | Assessment |
+| --- | --- | --- |
+| Focus a host | A reception sign's explicit Focus host action shows just its building in Office; All hosts restores the overview. | Recommended first: directly addresses reaching a host among large buildings. |
+| Bring to front / pin | Move a host earlier in the packed layout, retaining all other buildings. | Useful later for a preferred order; still leaves a long scene. |
+| Free placement | Drag buildings anywhere in a persistent two-dimensional world. | Most like a building game, but arbitrary coordinates conflict with responsive packing and the accepted vertical phone flow. |
+
+Keep agent clicks at reception available for inspection. Do not make one
+unlabelled desk click ambiguously inspect, collapse, hide or reorder. Give the
+reception's host sign a visible Focus host action; on a phone, use an explicit
+button without depending on hover, double-click or a context menu. Collapse on
+the building sign remains a distinct action: it keeps a host summary in the
+current overview, whereas focus scopes the displayed workspace buildings.
+
+In focused mode, a persistent Office host switcher displays Focus: <host>, other
+admitted hosts with attention badges, and All hosts. It must include hosts whose
+receptions are absent because they have no attention. Keep attention access to
+other hosts visible without repeating every full reception inside focused mode.
+A tap on another host switches directly. All hosts restores the previous overview
+scroll anchor; each host can retain its own qualified room/row position. System
+Back and Escape should leave focus before leaving Office. Focused mode follows the
+phone's vertical layout; it does not introduce a swipe carousel.
+
+The current shared Hosts filter affects multiple views. Prefer a separate Office
+focus inside that admitted scope so visiting a building does not silently change
+Desk, Graph, open Inspectors or an operation's captured owner. Label Economy and
+Workforce scope explicitly: keep their current admitted-host totals unless a
+truthful host-specific observation is available. Do not relabel aggregate cost as
+host cost. Keep stale/offline buildings browsable but non-actionable; a disappearing
+focused profile returns to the admitted overview with an explanation. Equal host
+labels must never substitute for qualified keys.
+
+### Make arrangement playful without making ordinary clicks unpredictable
+
+Recommend an explicit Arrange mode after host focus is accepted. Normal mode
+retains current selection, activation and vertical scrolling. Arrange mode exposes
+handles, a lifted pixel-art ghost, valid placement previews and a short snap on
+drop. A visible Done control exits; Escape or a cancel gesture abandons the active
+drag. Provide Move earlier / Move later or choose-position alternatives for touch
+and keyboard, plus Undo and Reset layout. Avoid requiring a phone long-press
+anywhere on a working terminal or agent.
+
+Reuse the adaptive packer: moving a building changes its presentation order and
+re-packs valid footprints; moving a room changes order within its host. This keeps
+readable sizes and avoids overlaps at a new viewport width. Preserve a stable
+qualified room/row anchor through the re-pack. Keep automatic attention ordering
+as the default, and make any manual/pinned ordering visible and reversible rather
+than shuffling all buildings on each status update. Reception ordering and its
+corresponding building ordering need a common host identity; reception attention
+priority must remain explicit when a preferred order is active.
+
+For terminal and agent dragging, visual placement and actual native work movement
+are different product contracts. The recommended first scope is presentation only:
+no remote migration, workspace mutation or terminal reassignment on a visual drop.
+Terminals can have a visual seat order within their existing room. Agent placement
+must preserve the truthful status destination and its associated terminal; moving
+a character cannot pretend blocked work is running or assign it another owner.
+Actual moves would need a separate supported action with source/destination,
+readiness and consequences shown before confirmation. The owner is being asked
+which meaning they intend; this document does not resolve that choice for them.
+
+Before implementation, compare the focus flow and Arrange mode with synthetic
+phone/wide-screen interactions, including returning from a distant host, receiving
+attention on another host, keyboard/touch cancellation, resize, new/removed items
+and connection retirement during a drag. Keep positioning state separate from
+native topology and bound preview/animation work to the viewport. Start with host
+focus, then host/room arrangement; decide terminal/agent movement only after its
+meaning is agreed.
 
 ## Risks / Trade-offs
 

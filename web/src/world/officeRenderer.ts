@@ -66,10 +66,10 @@ import { drawRoom } from "./officeRoomDrawing";
 import { drawCeoReception } from "./officeReceptionDrawing";
 import {
   drawBackground,
-  drawOfficeBuildings,
   drawHallways,
   drawRoomRoads,
 } from "./officeCommonAreaDrawing";
+import { drawOfficeBuildings } from "./officeBuildingDrawing";
 
 export const CHARACTER_URLS = Array.from(
   { length: 12 },

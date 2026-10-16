@@ -89,30 +89,6 @@ export function drawHallways(stage: Container, layout: OfficeLayout) {
   stage.addChild(hall);
 }
 
-export function drawOfficeBuildings(
-  stage: Container,
-  layout: OfficeLayout,
-  viewport?: OfficeRect,
-) {
-  const walls = new Graphics();
-  for (const building of layout.buildings ?? []) {
-    const rect = building.rect;
-    if (
-      viewport &&
-      (rect.x + rect.width < viewport.x ||
-        rect.x > viewport.x + viewport.width ||
-        rect.y + rect.height < viewport.y ||
-        rect.y > viewport.y + viewport.height)
-    )
-      continue;
-    walls
-      .roundRect(rect.x, rect.y, rect.width, rect.height, 8)
-      .fill(0x151b28)
-      .stroke({ width: 2, color: building.stale ? 0x696274 : 0x596b85 });
-  }
-  stage.addChild(walls);
-}
-
 export function drawRoomRoads(
   stage: Container,
   layout: OfficeLayout,

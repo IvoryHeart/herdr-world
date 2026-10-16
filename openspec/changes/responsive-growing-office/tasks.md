@@ -11,7 +11,7 @@
 - [x] 2.3 Extend row-level room/reception drawing, preparation, semantic targets and anchor admission to follow the viewport; verify a large intersecting room admits bounded paint/control work and the hundredth tab and later rooms remain reachable without oversized backing allocations.
 - [x] 2.4 Preserve every pane target through the existing device chooser and give additional room agents reachable standing targets; verify multiple agents share one tab desk and exact pane activation survives agent relocation and runtime retirement.
 
-- [x] 2.5 Group rooms inside qualified named host buildings and apply the same adaptive skyline packing at both levels; verify desktop side-by-side placement, vertical phone stacking, containment, equal-label ownership, cooperative preparation and cancellation.
+- [x] 2.5 Group rooms inside qualified pixel-art host buildings with brick façades and wooden summary signs and apply the same adaptive skyline packing at both levels; verify desktop side-by-side placement, vertical phone stacking, containment, equal-label ownership, cooperative preparation and cancellation.
 
 ## 3. Keep navigation and actions usable
 

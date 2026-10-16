@@ -405,15 +405,18 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 5px 8px;
+  padding: 5px 12px;
   text-align: left;
-  color: #e4e7ef;
-  background: #252d3a;
-  border: 1px solid #64748b;
-  border-radius: 5px;
+  color: #f1e6c7;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
   pointer-events: auto;
   cursor: pointer;
   font: inherit;
+}
+.world-office-building-header:hover {
+  background: rgb(255 239 201 / 6%);
 }
 .world-office-building-header:focus-visible {
   outline: 2px solid #eac36b;
@@ -425,7 +428,12 @@
 .world-office-building-toggle {
   flex: none;
   font-size: 19px;
-  width: 18px;
+  width: 22px;
+  line-height: 22px;
+  text-align: center;
+  color: #f0d49a;
+  border: 1px solid #a08050;
+  background: #453725;
 }
 .world-office-building-description {
   min-width: 0;
@@ -439,16 +447,31 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 .world-office-building-description > span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: #bac5d6;
+  color: #c9c6ac;
 }
-.world-office-building-attention {
+.world-office-building-signals {
   flex: none;
   max-width: 40%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  font-size: 10px;
+  color: #c9c6ac;
+}
+.world-office-building-signals > span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.world-office-building-attention {
   font-size: 11px;
   color: #f5ce80;
 }

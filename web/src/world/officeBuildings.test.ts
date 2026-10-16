@@ -59,7 +59,9 @@ test("qualified host buildings pack side by side on desktop and stack on phones"
       expect(b!.rect.x).toBeGreaterThan(a!.rect.x + a!.rect.width);
       expect(b!.rect.y).toBe(a!.rect.y);
     }
-    for (const building of layout.buildings!)
+    for (const building of layout.buildings!) {
+      expect(building.headerRect.height).toBeGreaterThanOrEqual(48);
+      expect(building.headerRect.y).toBeGreaterThan(building.rect.y);
       for (const index of building.roomIndices) {
         const room = layout.rooms[index]!;
         expect(room.x).toBeGreaterThan(building.rect.x);
@@ -73,6 +75,7 @@ test("qualified host buildings pack side by side on desktop and stack on phones"
           building.rect.y + building.rect.height,
         );
       }
+    }
   }
 });
 

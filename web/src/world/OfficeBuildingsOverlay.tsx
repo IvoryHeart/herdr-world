@@ -69,14 +69,17 @@ export function OfficeBuildingsOverlay({
               <strong>{building.title}</strong>
               <span>
                 {building.roomIndices.length} rooms · {building.agentCount}{" "}
-                agents · {hostState(building.state, building.stale)}
+                agents
               </span>
             </span>
-            {building.attentionCount > 0 ? (
-              <span className="world-office-building-attention">
-                {building.attentionCount} need attention
-              </span>
-            ) : null}
+            <span className="world-office-building-signals">
+              <span>{hostState(building.state, building.stale)}</span>
+              {building.attentionCount > 0 ? (
+                <span className="world-office-building-attention">
+                  {building.attentionCount} need attention
+                </span>
+              ) : null}
+            </span>
           </button>
         ))}
     </div>

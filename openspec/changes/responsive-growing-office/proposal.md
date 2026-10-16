@@ -22,7 +22,8 @@ workspace instead of letting its room grow with the observed tabs and agents.
   layout over the admitted observation. More than eight tabs, sixteen room agents
   or 128 rooms must remain reachable without raising one fixed cap to another.
   Rendering and semantic-control admission remain bounded by the viewport.
-- Give each host a named building with a visible boundary and truthful summary.
+- Give each host a pixel-art building with a stepped roof, brickwork and a
+  wooden host sign containing its truthful summary.
   Use the same packing for rooms inside buildings and buildings across desktop
   width; stack buildings on phones. Host collapse preserves individual room
   choices and native work, while navigation reopens the exact necessary host.
@@ -49,7 +50,12 @@ semantic targets, scrolling preferences and focused tests. Update the Office
 contracts and knowledge routes when implementation is delivered. No service RPC,
 runtime identity, dependency or distribution change is planned.
 
-This is a planning change. Production behaviour and current specs stay unchanged
-until implementation. Tree navigation and Graph appearance, physics and gestures
-are outside Office delivery. The interactive study is evidence for the selected
-scroll direction, not production renderer or performance acceptance.
+The responsive Office layout and host buildings are implemented in this candidate
+and synchronized into current specs. Tree navigation and Graph appearance, physics
+and gestures are outside Office delivery. The original interactive study is
+evidence for the selected scroll direction, not production renderer or performance
+acceptance.
+
+The later host-focus and playful-arrangement discussion is recorded as a proposed
+interaction study in [the design](design.md#interaction-study-host-focus-and-arranging-proposed-not-implemented).
+It does not authorize those interactions as part of the implemented Office scope.

@@ -115,7 +115,8 @@ are optional because the merged PR history records their source.
   with observed tabs and agents on desktop and phones; searchable room navigation
   and collapse keep later rooms reachable while drawing stays near the viewport.
   Desktop rooms use width-adaptive desk grids and fill space beside taller rooms.
-  Named host buildings pack alongside each other and can collapse while retaining
+  Pixel-art host buildings have brick façades, stepped roofs and wooden signs.
+  They pack alongside each other and can collapse while retaining
   host summaries and individual room choices.
   Conversation connectors are refreshed after font and viewport repaints.
 

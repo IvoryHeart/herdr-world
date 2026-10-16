@@ -14,7 +14,8 @@ import { packOfficeRooms } from "./officeRoomPacking";
 
 const BUILDING_GAP = 20;
 const BUILDING_PADDING = 12;
-const BUILDING_HEADER = 60;
+const BUILDING_HEADER = 84;
+const COLLAPSED_BUILDING_HEIGHT = BUILDING_HEADER + 16;
 const MIN_BUILDING_WIDTH = 360;
 
 /** The same skyline packs room footprints inside hosts, then host footprints. */
@@ -28,7 +29,7 @@ export function* resolveOfficeBuildingsSteps(
   const available = base.officeWidth - 24;
   const areas = groups.map((group) =>
     group.collapsed
-      ? MIN_BUILDING_WIDTH * 76
+      ? MIN_BUILDING_WIDTH * COLLAPSED_BUILDING_HEIGHT
       : Math.max(
           MIN_BUILDING_WIDTH * 240,
           group.roomIndices.reduce((sum, index) => {
@@ -104,7 +105,7 @@ export function* resolveOfficeBuildingsSteps(
     sizes.push({
       width,
       height: group.collapsed
-        ? 76
+        ? COLLAPSED_BUILDING_HEIGHT
         : BUILDING_HEADER +
           BUILDING_PADDING * 2 +
           Math.max(
@@ -165,9 +166,9 @@ export function* resolveOfficeBuildingsSteps(
       rect,
       headerRect: {
         x: rect.x + 12,
-        y: rect.y + 8,
+        y: rect.y + 24,
         width: rect.width - 24,
-        height: 44,
+        height: 48,
       },
     };
   });
