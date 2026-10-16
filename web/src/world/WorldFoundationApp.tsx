@@ -11,7 +11,8 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
-import { View } from "lucide-react";
+import { ArrowLeft, View } from "lucide-react";
+import { useLayoutPreferences } from "../layoutPreferences";
 import App, { type WorkspaceSurfaceSelection } from "../App";
 import { worldLocalStorage } from "../browserStorage";
 import {
@@ -58,6 +59,8 @@ import {
   focusWorldNode,
   activateWorldNodeHost,
 } from "./worldInspectorSelection";
+import { pushRoute, stepBack, useSystemBack } from "../systemBack";
+import { WorldMobileNav, worldViewLabel } from "./WorldMobileNav";
 import { WorldControlPlane } from "./WorldControlPlane";
 import { EMPTY_VISUAL_ACTION_EXTENSION } from "./worldControlPlaneContract";
 
@@ -71,6 +74,7 @@ export const OfficeObservabilityDialog = lazyWithReload(
 
 export default function WorldFoundationApp() {
   const [view, setViewState] = useState<WorldView>(initialView);
+  const { mobile } = useLayoutPreferences();
   const creationIntentRevision = useRef(0);
   const spaces = useSpacesTabWindowArrangement(view === "spaces");
   const [visualView, setVisualView] = useState<Exclude<WorldView, "spaces">>(
@@ -232,19 +236,49 @@ export default function WorldFoundationApp() {
     return () => window.removeEventListener("popstate", onPopState);
   }, [view]);
 
-  const setView = (next: WorldView) => {
+  const setView = (next: WorldView, replace = false) => {
     setViewState(next);
     if (next !== "spaces") setVisualView(next);
     if (window.location.pathname !== WORLD_VIEW_PATHS[next]) {
       const url = new URL(window.location.href);
       url.pathname = WORLD_VIEW_PATHS[next];
-      window.history.pushState(window.history.state, "", url);
+      // Records the route it came from, so an on-screen Back can return
+      // through history instead of adding the route again.
+      const state = { herdrFrom: window.location.pathname };
+      if (replace) window.history.replaceState({}, "", url);
+      else pushRoute(state, url);
     }
     if (next === "spaces") {
       requestAnimationFrame(() => window.dispatchEvent(new Event("resize")));
     }
   };
 
+  const canReturnToView =
+    mobile &&
+    view !== "spaces" &&
+    inspectorConversations.length > 0 &&
+    visualArrangementControl &&
+    !visualArrangementControl.disabledReasons["close-all"];
+  const returnLabel = `Back to ${view[0].toUpperCase()}${view.slice(1)}`;
+  // The phone's Back gesture leaves a terminal for the scene, like the button.
+  useSystemBack(
+    Boolean(canReturnToView),
+    () => {
+      creationIntentRevision.current++;
+      visualArrangementControl?.onSelect("close-all");
+    },
+    "screen",
+  );
+  // Spaces' Back first closes an open menu or sheet, like the phone's Back.
+  // Then it undoes the in-app navigation that opened Spaces, so the next
+  // system Back does not reopen it. Opened directly, it replaces itself.
+  const leaveSpaces = () => {
+    if (stepBack()) return;
+    const from = (window.history.state as { herdrFrom?: unknown } | null)
+      ?.herdrFrom;
+    if (from === WORLD_VIEW_PATHS[visualView]) window.history.back();
+    else setView(visualView, true);
+  };
   const activeArrangementControl =
     view === "spaces" ? spaces.arrangementControl : visualArrangementControl;
   useEffect(() => {
@@ -282,7 +316,7 @@ export default function WorldFoundationApp() {
   }, [activeArrangementControl]);
 
   return (
-    <div className="world-foundation-shell">
+    <div className="world-foundation-shell" data-view={view}>
       <div className="world-topbar-host" ref={setTopbarPortal} />
       <div className="world-spaces-layer is-active">
         <App
@@ -371,6 +405,35 @@ export default function WorldFoundationApp() {
                   ))}
                 </select>
               </label>
+              {canReturnToView ? (
+                <button
+                  type="button"
+                  className="world-back-to-view"
+                  title={returnLabel}
+                  aria-label={returnLabel}
+                  onClick={() => {
+                    // Like the phone's Back: an open menu, sheet or Composer
+                    // closes before the terminal does.
+                    if (stepBack()) return;
+                    creationIntentRevision.current++;
+                    visualArrangementControl?.onSelect("close-all");
+                  }}
+                >
+                  <ArrowLeft size={20} aria-hidden="true" />
+                </button>
+              ) : mobile && view === "spaces" ? (
+                <button
+                  type="button"
+                  className="world-back-to-view"
+                  title={`Back to ${worldViewLabel(visualView)}`}
+                  aria-label={`Back to ${worldViewLabel(visualView)}`}
+                  onClick={leaveSpaces}
+                >
+                  <ArrowLeft size={20} aria-hidden="true" />
+                </button>
+              ) : mobile ? (
+                <h1 className="world-mobile-title">{worldViewLabel(view)}</h1>
+              ) : null}
               {view !== "spaces" ? (
                 <>
                   <WorldTopbarStatus
@@ -480,6 +543,9 @@ export default function WorldFoundationApp() {
         />
         {spaces.renderWindows}
       </div>
+      {mobile && view !== "spaces" && !canReturnToView ? (
+        <WorldMobileNav view={view} onSelect={setView} />
+      ) : null}
       {officeMetricsOpen
         ? createPortal(
             <Suspense fallback={null}>

@@ -1,0 +1,413 @@
+.terminal-mobile-input-actions[data-reserved],
+.terminal-mobile-message-label,
+.terminal-mobile-direct,
+.mobile-terminal-appbar,
+.mobile-more-backdrop,
+.mobile-more-head {
+  display: none;
+}
+
+:where(html[data-layout="mobile"]) {
+  /* Bottom of a terminal screen: a messaging-style input bar in flow below
+     the output, so it never covers terminal text. */
+  .terminal-main {
+    flex-direction: column;
+  }
+
+  .terminal-main > .terminal-mobile-input-actions {
+    position: static;
+    flex: 0 0 auto;
+    gap: 8px;
+    padding: 6px calc(8px + env(safe-area-inset-right, 0px))
+      calc(8px + env(safe-area-inset-bottom, 0px))
+      calc(8px + env(safe-area-inset-left, 0px));
+    background: var(--terminal-bg);
+  }
+
+  /* Hidden for a touch selection, still holding its height. */
+  .terminal-main > .terminal-mobile-input-actions[data-reserved] {
+    display: flex;
+    visibility: hidden;
+  }
+
+  .terminal-main > .terminal-mobile-input-actions button {
+    flex: 0 0 auto;
+    min-width: max(48px, calc(48px / var(--ui-scale, 1)));
+    min-height: max(48px, calc(48px / var(--ui-scale, 1)));
+    border-color: transparent;
+    border-radius: 24px;
+    background: color-mix(in srgb, var(--text-strong) 8%, var(--terminal-bg));
+    box-shadow: none;
+  }
+
+  .terminal-main > .terminal-mobile-input-actions .terminal-mobile-message {
+    flex: 1 1 auto;
+    min-width: 0;
+    justify-content: flex-start;
+    padding: 0 18px;
+    color: var(--muted);
+    font-size: 16px;
+  }
+
+  .terminal-mobile-direct {
+    display: inline-flex;
+  }
+
+  .terminal-mobile-message-label {
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .terminal-view .xterm {
+    padding-bottom: 4px;
+  }
+
+  /* App bar: Tabs on every screen; the title and ⋮ join it on detail
+     screens (below). */
+  .mobile-terminal-appbar {
+    display: flex;
+    align-items: center;
+    gap: 0;
+  }
+
+  .mobile-terminal-appbar .mobile-more-button {
+    display: none;
+  }
+
+  .mobile-terminal-appbar button {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    height: 48px;
+    padding: 0;
+    border: 0;
+    border-radius: 24px;
+    background: transparent;
+    color: var(--text-strong);
+    touch-action: manipulation;
+  }
+
+  .mobile-terminal-appbar button:disabled {
+    opacity: 0.4;
+  }
+
+  .mobile-terminal-appbar button[aria-pressed="true"],
+  .mobile-terminal-appbar button[aria-expanded="true"] {
+    background: var(--accent-soft);
+  }
+
+  .mobile-tabs-count {
+    position: absolute;
+    left: 26px;
+    top: 7px;
+    min-width: 17px;
+    height: 17px;
+    padding: 0 4px;
+    box-sizing: border-box;
+    border-radius: 9px;
+    background: var(--text-strong);
+    color: var(--panel);
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 17px;
+    text-align: center;
+  }
+
+  /* Blocked agents use the same red as their status icon. */
+  .mobile-tabs-count[data-attention] {
+    background: var(--red);
+    color: #fff;
+  }
+
+  /* The title is the workspace switcher, like an app bar's dropdown. */
+  .mobile-terminal-appbar .mobile-terminal-title {
+    display: none;
+    grid-template-columns: minmax(0, auto) auto;
+    align-items: center;
+    column-gap: 4px;
+    justify-content: start;
+    width: auto;
+    min-width: 0;
+    height: 48px;
+    padding: 0 10px 0 12px;
+    border-radius: 14px;
+    line-height: 1.25;
+    text-align: left;
+  }
+
+  .mobile-terminal-title > span {
+    grid-column: 1;
+  }
+
+  .mobile-terminal-title-chevron {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    color: var(--muted);
+  }
+
+  .mobile-terminal-name {
+    overflow: hidden;
+    color: var(--text-strong);
+    font-size: 15px;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mobile-terminal-place {
+    color: var(--muted);
+    font-weight: 400;
+  }
+
+  .mobile-terminal-status {
+    color: var(--muted);
+    font-size: 12px;
+  }
+
+  .mobile-terminal-status[data-status="blocked"] {
+    color: var(--red);
+  }
+
+  /* Detail screen (a terminal opened from a scene): Back sits alone at the
+     far left, the terminal names itself, and root-screen controls (view
+     picker, status, search, hosts, commands, menu) wait on the scene. */
+  &:has(.world-back-to-view) {
+    .topbar .world-primary-view-select,
+    .topbar .world-topbar-status,
+    .topbar .world-view-toolbar-host,
+    .topbar .world-hosts-control,
+    .topbar .command-trigger,
+    .topbar .config-menu,
+    .topbar .topbar-command-group {
+      display: none;
+    }
+
+    .topbar {
+      grid-template-columns: auto minmax(0, 1fr);
+      gap: 4px;
+    }
+
+    .topbar .topbar-actions {
+      justify-self: stretch;
+    }
+
+    .topbar .topbar-start,
+    .topbar .world-topbar-control-plane {
+      flex: 0 0 auto;
+      width: auto;
+      min-width: 0;
+    }
+
+    .topbar .world-back-to-view {
+      width: 48px;
+      height: 48px;
+      border: 0;
+      border-radius: 24px;
+      background: transparent;
+      color: var(--text-strong);
+    }
+
+    .topbar .topbar-actions {
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+
+    /* Actions stay in the right corner even without a terminal title, e.g.
+       a space's Files or Changes. */
+    .mobile-terminal-appbar {
+      flex: 1 1 auto;
+      justify-content: flex-end;
+      min-width: 0;
+    }
+
+    .mobile-terminal-appbar .mobile-terminal-title {
+      display: grid;
+      flex: 0 1 auto;
+      margin-right: auto;
+    }
+
+    .mobile-terminal-appbar .mobile-more-button {
+      display: inline-flex;
+    }
+  }
+
+  /* Beside a terminal on a detail screen the app bar and input bar carry
+     the controls; the floating islands stay hidden until ⋮ shows them as a
+     menu. Without World's Back and ⋮ they keep floating. */
+  &:has(.world-back-to-view) {
+    .app:has(.terminal-mobile-input-actions, .terminal-composer):not(
+        [data-mobile-more]
+      )
+      .mobile-controls-stack,
+    .app:has(.terminal-mobile-input-actions, .terminal-composer)
+      .mobile-composer-shortcut {
+      display: none;
+    }
+  }
+
+  .mobile-more-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 79;
+    border: 0;
+    padding: 0;
+    background: rgb(0 0 0 / 0.35);
+  }
+
+  /* ⋮ menu anchored to the top-right corner, one labelled row per item.
+     `body` outranks the compact floating-row rules it restyles. */
+  body .app[data-mobile-more] .mobile-controls-stack {
+    position: fixed;
+    top: calc(60px + env(safe-area-inset-top, 0px));
+    right: calc(8px + env(safe-area-inset-right, 0px));
+    z-index: 80;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    width: min(272px, calc(100vw - 32px));
+    max-width: none;
+    max-height: calc(100dvh - 72px);
+    bottom: auto;
+    left: auto;
+    overflow-x: hidden;
+    overflow-y: auto;
+    direction: ltr;
+    translate: 0 0;
+    padding: 4px 0 8px;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--panel);
+    box-shadow: var(--shadow-lg);
+  }
+
+  body .app[data-mobile-more] .mobile-more-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 0 4px 0 16px;
+    color: var(--muted);
+    font-size: 13px;
+  }
+
+  body .app[data-mobile-more] .mobile-controls-stack .mobile-nav,
+  body .app[data-mobile-more] .mobile-controls-stack .mobile-terminal-controls {
+    position: static;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    width: 100%;
+    max-width: none;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    transform: none;
+    translate: 0 0;
+    opacity: 1;
+    pointer-events: auto;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  body .app[data-mobile-more] .mobile-controls-stack .mobile-terminal-controls {
+    order: 2;
+    border-top: 1px solid var(--border);
+    margin-top: 4px;
+    padding-top: 4px;
+  }
+
+  body .app[data-mobile-more] .mobile-controls-stack .mobile-nav button,
+  body
+    .app[data-mobile-more]
+    .mobile-controls-stack
+    .mobile-workspace-shortcut {
+    position: relative;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 14px;
+    width: 100%;
+    min-width: 0;
+    height: 48px;
+    padding: 0 16px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    color: var(--text-strong);
+    font-size: 15px;
+    box-shadow: none;
+    inset: auto;
+    translate: 0 0;
+    transform: none;
+  }
+
+  body .app[data-mobile-more] .mobile-controls-stack .mobile-nav button.active {
+    background: var(--accent-soft);
+  }
+
+  body .app[data-mobile-more] .mobile-controls-stack .mobile-nav-label {
+    position: static;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    clip: auto;
+  }
+
+  body
+    .app[data-mobile-more]
+    .mobile-controls-stack
+    .mobile-workspace-shortcut {
+    order: 3;
+  }
+
+  body
+    .app[data-mobile-more]
+    .mobile-controls-stack
+    .mobile-workspace-shortcut::after {
+    content: "Workspaces";
+  }
+
+  body
+    .app[data-mobile-more]
+    .mobile-controls-stack
+    .tabbar-arrangement-trigger::after {
+    content: "Arrange windows";
+  }
+
+  body .app[data-mobile-more] .mobile-controls-stack .assistant-entry-running {
+    position: static;
+    margin-left: auto;
+  }
+
+  /* Tabs already sit in the app bar; the collapse toggle has no role here. */
+  body
+    .app[data-mobile-more]
+    .mobile-controls-stack
+    .mobile-nav
+    button[aria-label="Show tabs"],
+  body .app[data-mobile-more] .mobile-controls-stack .mobile-controls-toggle {
+    display: none;
+  }
+
+  /* Its floating-button icon padding would indent this row past the rest. */
+  body
+    .app[data-mobile-more]
+    .mobile-controls-stack
+    .mobile-workspace-shortcut
+    svg {
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    padding: 0;
+    border-radius: 0;
+  }
+}

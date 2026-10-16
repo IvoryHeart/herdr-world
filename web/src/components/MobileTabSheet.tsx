@@ -26,8 +26,11 @@ export function MobileTabSheet({
   onShowSession,
   onSelectTab,
   windows = [],
+  workspaceId,
 }: {
   open: boolean;
+  /** List this workspace's tabs instead of the runtime-focused one. */
+  workspaceId?: string | null;
   windows?: readonly WindowSwitcherEntry[];
   onClose: () => void;
   onShowSession: () => void;
@@ -70,7 +73,9 @@ export function MobileTabSheet({
   };
 
   const pinnedTabIds = useTabPins(s.activeConnectionId);
-  const focusedWs = s.workspaces.find((w) => w.focused);
+  const focusedWs =
+    (workspaceId && s.workspaces.find((w) => w.workspace_id === workspaceId)) ||
+    s.workspaces.find((w) => w.focused);
   const createReason = useEndpointCreationReason(
     "tab.create",
     focusedWs?.workspace_id,
