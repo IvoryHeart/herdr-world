@@ -20,15 +20,18 @@ export function mountGrowingOffice(
       const workspaces: Workspace[] = [];
       const tabs: Tab[] = [];
       const panes: Pane[] = [];
+      // Projection includes a creation desk in each actionable room.
+      const balancedTabs =
+        hostIndex === 0 ? [3, 7, 4, 2, 2, 3] : [8, 3, 4, 2, 2, 2, 1, 1];
       const count = options.balancedHosts
-        ? 7
+        ? balancedTabs.length
         : hostIndex === 0
           ? (options.roomCount ?? 129)
           : 1;
       for (let index = 0; index < count; index++) {
         const id = `workspace-${index}`;
         const tabCount = options.balancedHosts
-          ? [9, 8, 7, 6, 5, 4, 3][index]!
+          ? balancedTabs[index]!
           : hostIndex === 0 && index === 0
             ? (options.firstRoomTabs ?? 100)
             : 1;
@@ -695,6 +698,13 @@ export async function verifyFluidOffice(
     });
     const layout = window.__HERDR_WORLD_RENDERER__!.publishedLayout!;
     const buildings = layout.buildings!;
+    check(
+      layout.rooms[2]!.deskColumns === 3 &&
+        layout.rooms[2]!.deskRows === 2 &&
+        (layout.rooms[5]!.y === layout.rooms[0]!.y ||
+          layout.rooms[5]!.deskRows === 1),
+      "Completed building fit fragmented the five-desk room or failed to fit the four-desk room alongside its neighbours",
+    );
     check(
       buildings.length === 2 && buildings[0]!.rect.y === buildings[1]!.rect.y,
       "Wide buildings did not pack beside one another",

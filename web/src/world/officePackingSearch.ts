@@ -17,6 +17,7 @@ type State = {
   area: number;
   waste: number;
   node: Placement | null;
+  levels?: ReadonlySet<number>;
 };
 
 /** Maximal free rectangles retain cavities; a bounded beam compares room shapes. */
@@ -28,6 +29,42 @@ export function packOfficeRoomShapes(
   beamWidth = 8,
 ): OfficePackedChoice[] {
   if (!choices.length) return [];
+  const compact = searchOfficeRoomShapes(
+    choices,
+    requestedWidth,
+    horizontalGap,
+    verticalGap,
+    beamWidth,
+    false,
+  );
+  if (beamWidth === 1 || !choices.some((variants) => variants.length > 1))
+    return compact.rects;
+  const aligned = searchOfficeRoomShapes(
+    choices,
+    requestedWidth,
+    horizontalGap,
+    verticalGap,
+    beamWidth,
+    true,
+  );
+  // Judge complete buildings: equal-height fits prefer fewer fragmented bands.
+  // Keep the height-first search as a candidate so alignment cannot add depth.
+  const compare =
+    aligned.height - compact.height ||
+    aligned.levels - compact.levels ||
+    aligned.waste - compact.waste ||
+    aligned.holes - compact.holes;
+  return compare < 0 ? aligned.rects : compact.rects;
+}
+
+function searchOfficeRoomShapes(
+  choices: readonly (readonly OfficePackingSize[])[],
+  requestedWidth: number,
+  horizontalGap: number,
+  verticalGap: number,
+  beamWidth: number,
+  align: boolean,
+) {
   const width =
     choices.reduce(
       (limit, variants) =>
@@ -46,6 +83,7 @@ export function packOfficeRoomShapes(
       area: 0,
       waste: 0,
       node: null,
+      levels: align ? new Set<number>() : undefined,
     },
   ];
   for (let index = 0; index < choices.length; index++) {
@@ -56,6 +94,7 @@ export function packOfficeRoomShapes(
       area: number;
       waste: number;
       holes: number;
+      levels: number;
     };
     const candidates: Candidate[] = [];
     states.forEach((state, stateIndex) => {
@@ -83,6 +122,11 @@ export function packOfficeRoomShapes(
             area,
             waste: state.waste + (size.waste ?? 0),
             holes: width * (nextHeight + verticalGap) - area,
+            levels: state.levels
+              ? state.levels.size +
+                Number(!state.levels.has(free.y)) +
+                Number(!state.levels.has(free.y + size.height))
+              : 0,
           });
         }
       });
@@ -90,6 +134,7 @@ export function packOfficeRoomShapes(
     candidates.sort(
       (a, b) =>
         a.height - b.height ||
+        a.levels - b.levels ||
         a.waste - b.waste ||
         a.holes - b.holes ||
         a.rect.y - b.rect.y ||
@@ -114,6 +159,13 @@ export function packOfficeRoomShapes(
         area: candidate.area,
         waste: candidate.waste,
         node: { previous: candidate.state.node, index, rect: candidate.rect },
+        levels: align
+          ? new Set([
+              ...candidate.state.levels!,
+              candidate.rect.y,
+              candidate.rect.y + candidate.rect.height,
+            ])
+          : undefined,
       });
       if (next.length === beamWidth) break;
     }
@@ -124,7 +176,15 @@ export function packOfficeRoomShapes(
   const result: OfficePackedChoice[] = new Array(choices.length);
   for (let node = states[0]!.node; node; node = node.previous)
     result[node.index] = node.rect;
-  return result;
+  const best = states[0]!;
+  return {
+    rects: result,
+    height: best.height,
+    waste: best.waste,
+    levels: new Set(result.flatMap((rect) => [rect.y, rect.y + rect.height]))
+      .size,
+    holes: width * (best.height + verticalGap) - best.area,
+  };
 }
 
 function splitFree(free: readonly OfficeRect[], used: OfficeRect) {

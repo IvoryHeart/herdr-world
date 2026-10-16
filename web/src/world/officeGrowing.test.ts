@@ -201,6 +201,30 @@ test("phone summary boards share available width and wrap only below readable co
   }
 });
 
+test("completed building fit aligns five desks as three by two and frees a four-desk lower room", () => {
+  const layout = resolveOfficeLayout(
+    1508,
+    [4, 8, 5, 3, 3, 4].map((deskCount, index) => ({
+      deskCount,
+      standingCount: 0,
+      headerMinWidth: index === 0 ? 324 : index === 5 ? 354 : 306,
+    })),
+    "left",
+    undefined,
+    0,
+    undefined,
+    { complete: true },
+  );
+  expect(layout.rooms[2]!.deskColumns).toBe(3);
+  expect(layout.rooms[2]!.deskRows).toBe(2);
+  expect(layout.rooms[5]!.deskColumns).toBe(4);
+  expect(layout.rooms[5]!.deskRows).toBe(1);
+  expect(layout.rooms[2]!.y).toBe(layout.rooms[0]!.y);
+  expect(layout.rooms[2]!.y + layout.rooms[2]!.height).toBe(
+    layout.rooms[0]!.y + layout.rooms[0]!.height,
+  );
+});
+
 test("large Office publication yields and fences superseded geometry without mutating inputs", async () => {
   const geometry = resolveOfficeSceneGeometry({
     availableViewportWidth: 390,

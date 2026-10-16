@@ -107,3 +107,10 @@ Phone summary-board geometry is checked across 240–720 px: readable boards sha
 width when they fit and wrap otherwise, with exact drawing bounds and content-derived
 lobby height. The production phone Pixi consumer checks the side-by-side arrangement
 between attention receptions and workspace rooms without horizontal scene overflow.
+
+Completed building fits retain a height-first candidate and an alignment-aware
+candidate, choosing by final height and then fragmented vertical bands. The growing
+geometry regression verifies a 5×1 strip becomes 3×2 while a lower four-desk room
+becomes 4×1 at equal building depth. The production two-host Pixi fixture includes
+the creation desk, verifies the five-desk grid, and allows a four-desk room beside
+the top row when that is the tighter fit. Dense preparation remains cooperative.

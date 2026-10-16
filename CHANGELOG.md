@@ -119,7 +119,8 @@ are optional because the merged PR history records their source.
   Populated buildings share usable screen width and reflow their room grids, with
   carpeted rooms/corridors, wood reception floors and roads between buildings.
   Rooms choose their desk grids while packing into available gaps, including
-  cavities below neighboring rooms. The separate Rooms/Receptions/Agents row is
+  cavities below neighboring rooms. Completed building fits prefer aligned room
+  boundaries when heights match, avoiding unnecessary staggered bands. The separate Rooms/Receptions/Agents row is
   removed; existing Office search retains room reveal and idle-agent access.
   Economy and Workforce boards share usable phone width and wrap only when their
   readable contents require it, with artwork matching their layout footprints.

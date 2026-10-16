@@ -575,6 +575,9 @@ sixteen room agents. Desktop desk and standing columns SHALL adapt to usable wid
 without a four-column room restriction. Desktop SHALL pack independently sized
 rooms into available openings, including multiple smaller rooms beside a tall
 room, without shared tallest-room row spacing or corridors crossing rooms.
+Room-shape selection SHALL compare completed building fits. Equal-height candidates
+SHALL prefer aligned boundaries over avoidable fragmented vertical bands, allowing
+a 3×2 room to free space for a 4×1 neighbour rather than favouring a local 5×1 strip.
 Each host SHALL own a visibly bounded, named building containing its rooms.
 The same content-derived packing strategy SHALL arrange rooms within buildings
 and buildings across desktop width; mobile buildings SHALL stack vertically below

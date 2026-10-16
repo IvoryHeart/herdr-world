@@ -94,7 +94,11 @@ the resolved width. Small rooms keep readable furniture spacing and can use anot
 reduces depth without wasting desk slots. This is a
 bounded deterministic heuristic, not a claim of globally optimal packing.
 
-Choose room shape and placement together. Enumerate readable desk-column counts
+Choose room shape and placement together. Compare two completed building searches:
+one prefers compact height, while the other also retains aligned room boundaries.
+Choose the lower completed height; equal-height fits prefer fewer fragmented
+vertical bands before minimizing empty desk slots. This prevents a locally cheap
+five-desk strip from defeating a 3×2 room and a 4×1 neighbour below it. Enumerate readable desk-column counts
 within the building's usable width, deriving standing rows and minimum title/action
 bounds for each candidate. A bounded beam retains eight partial layouts in logical
 room order. For each next room, consider its legal shapes at the origins of maximal
