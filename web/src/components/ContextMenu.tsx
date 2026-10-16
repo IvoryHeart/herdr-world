@@ -41,7 +41,6 @@ type DialogState =
   | {
       type: "new-worktree";
       workspaceId: string;
-      branch: string;
     }
   | {
       type: "rename-workspace";
@@ -151,7 +150,7 @@ export function ContextMenu({
         open={dialog?.type === "new-worktree"}
         title="New Worktree"
         label="Branch"
-        initialValue={dialog?.type === "new-worktree" ? dialog.branch : ""}
+        initialValue={luckyWorktreeBranchName}
         placeholder="Branch name"
         submitLabel="Create"
         onClose={() => setDialog(null)}
@@ -358,7 +357,6 @@ export function ContextMenu({
         setDialog({
           type: "new-worktree",
           workspaceId: creationSource.workspace_id,
-          branch: luckyWorktreeBranchName(),
         });
       },
     });

@@ -1,12 +1,21 @@
 import { expect, test } from "bun:test";
 import { $ } from "bun";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   candidateVersion,
   runtimeEnvironment,
+  removeInstallerFixture,
   upgradeCookieStatus,
 } from "./installer-upgrade";
 
@@ -135,3 +144,44 @@ test("installer upgrades run native released artifacts on every supported platfo
     ],
   ).toBe(1);
 });
+
+test("installer fixture cleanup removes nested files and tolerates an already removed fixture", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "world-cleanup-fixture-"));
+  mkdirSync(join(directory, "nested"));
+  writeFileSync(join(directory, "nested", "fixture.txt"), "synthetic fixture");
+  await removeInstallerFixture(directory);
+  expect(existsSync(directory)).toBe(false);
+  await removeInstallerFixture(directory);
+});
+
+test.skipIf(process.platform === "win32")(
+  "cleanup yields for transient filesystem denial and fails when denial persists",
+  async () => {
+    for (const transient of [true, false]) {
+      const directory = mkdtempSync(join(tmpdir(), "world-cleanup-denial-"));
+      const nested = join(directory, "nested");
+      mkdirSync(nested);
+      const file = join(nested, "held.txt");
+      writeFileSync(file, "synthetic fixture");
+      chmodSync(nested, 0o500);
+      let release: ReturnType<typeof setTimeout> | undefined;
+      try {
+        if (transient) {
+          release = setTimeout(() => chmodSync(nested, 0o700), 150);
+          await removeInstallerFixture(directory);
+          expect(existsSync(directory)).toBe(false);
+        } else {
+          await expect(
+            removeInstallerFixture(directory),
+          ).rejects.toHaveProperty("code", "EACCES");
+          expect(existsSync(file)).toBe(true);
+        }
+      } finally {
+        if (release) clearTimeout(release);
+        if (existsSync(nested)) chmodSync(nested, 0o700);
+        await removeInstallerFixture(directory);
+      }
+    }
+  },
+  5_000,
+);

@@ -20,8 +20,9 @@ forwarding an operation or publishing its result.
 ### Requirement: Explicit access policy
 World SHALL default to a loopback listener and SHALL use the Roamgate-derived trusted-single-user
 boundary. All listeners, including loopback, SHALL require a generated persistent
-login token or configured password. Configured passwords SHALL contain 15–1024
-characters. Repeated failed login attempts SHALL receive a bounded cooldown. World SHALL not require users to
+login token or configured password. Configured passwords SHALL contain 8–1024
+Unicode characters. World SHALL warn at startup when a configured password is
+shorter than the recommended 15 characters for access beyond a trusted private network. Repeated failed login attempts SHALL receive a bounded cooldown. World SHALL not require users to
 configure bridge Host allow-lists, browser Origin allow-lists or cross-origin connection CSP entries.
 Before processing privileged browser HTTP or WebSocket traffic, World SHALL automatically require
 the browser Origin authority to equal the request Host authority. A loopback listener SHALL reject a
@@ -68,6 +69,12 @@ SHALL use a World-owned name that does not replace Roamgate's cookie on the same
 - **WHEN** a loopback World service connects to a remote Herdr using a saved SSH profile
 - **THEN** the browser continues to use the one World origin without learning remote socket paths,
   SSH credentials or another bridge URL
+
+#### Scenario: Short configured password
+- **WHEN** a user configures an 8-character password
+- **THEN** World accepts it and warns that 15 or more characters are recommended beyond a trusted private network
+- **AND** passwords shorter than 8 or longer than 1024 Unicode characters are rejected
+
 
 ### Requirement: Independent session signing and optional PIN
 Session cookies SHALL use independently stored random signing keys. Credential

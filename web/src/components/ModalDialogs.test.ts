@@ -69,6 +69,8 @@ async function registerDomTests() {
     "./ModalDialogs"
   );
   const { CreateWorkspaceDialog } = await import("./CreateWorkspaceDialog");
+  const luckyNames = await import("../luckyName");
+  const { ShortcutCheatSheet } = await import("./ShortcutCheatSheet");
   const { WorktreeOpenDialog } = await import("./WorktreeOpenDialog");
   const { WorktreeLifecycleDialog } = await import("./WorktreeLifecycleDialog");
   const { useWorktreePullRequests } = await import(
@@ -183,6 +185,208 @@ async function registerDomTests() {
       focus: "input",
     },
   ];
+
+  test("shortcut discovery filters the active preset and dismisses without host operations", async () => {
+    const container = document.createElement("div");
+    const previous = document.createElement("button");
+    document.body.append(previous, container);
+    previous.focus();
+    root = createRoot(container);
+    let closed = 0;
+    const call = spyOn(client, "call");
+    try {
+      await act(async () =>
+        root!.render(
+          h(ShortcutCheatSheet, {
+            onClose: () => {
+              closed++;
+            },
+          }),
+        ),
+      );
+      const input = container.querySelector<HTMLInputElement>(
+        'input[type="search"]',
+      )!;
+      expect(document.activeElement).toBe(input);
+      expect(container.textContent).toContain("Arrange windows");
+      Object.getOwnPropertyDescriptor(
+        browser.HTMLInputElement.prototype,
+        "value",
+      )!.set!.call(input, "shortcut cheat sheet");
+      await act(async () =>
+        input.dispatchEvent(new Event("input", { bubbles: true })),
+      );
+      expect(container.textContent).toContain(
+        "Show the shortcut cheat sheet on desktop",
+      );
+      expect(container.textContent).not.toContain("Switch to tab 1-9");
+      await act(async () =>
+        window.dispatchEvent(
+          new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+        ),
+      );
+      expect(closed).toBe(1);
+      expect(call).not.toHaveBeenCalled();
+      await act(async () => root!.unmount());
+      root = null;
+      expect(document.activeElement).toBe(previous);
+    } finally {
+      call.mockRestore();
+    }
+  });
+
+  for (const kind of ["worktree", "workspace"] as const) {
+    test(`${kind} name suggestions preserve edits, discard old replies, and tolerate loading failures`, async () => {
+      const pending: Array<{
+        resolve: (name: string) => void;
+        reject: (error: Error) => void;
+      }> = [];
+      const generate = () =>
+        new Promise<string>((resolve, reject) => {
+          pending.push({ resolve, reject });
+        });
+      const suggestion =
+        kind === "workspace"
+          ? spyOn(luckyNames, "luckyWorkspaceName").mockImplementation(generate)
+          : null;
+      const container = document.createElement("div");
+      document.body.append(container);
+      root = createRoot(container);
+      let submitted = 0;
+      const create =
+        kind === "workspace"
+          ? spyOn(store, "createQualifiedWorkspace").mockResolvedValue({
+              type: "workspace_created",
+            })
+          : null;
+      const render = (open: boolean) =>
+        root!.render(
+          kind === "workspace"
+            ? h(CreateWorkspaceDialog, { open, onClose: () => {} })
+            : h(TextInputDialog, {
+                open,
+                title: "New Worktree",
+                label: "Branch",
+                initialValue: generate,
+                onClose: () => {},
+                onSubmit: () => {
+                  submitted++;
+                },
+              }),
+        );
+      const input = () => container.querySelector<HTMLInputElement>("input")!;
+      const edit = (value: string) => {
+        Object.getOwnPropertyDescriptor(
+          browser.HTMLInputElement.prototype,
+          "value",
+        )!.set!.call(input(), value);
+        input().dispatchEvent(new Event("input", { bubbles: true }));
+      };
+      try {
+        await act(async () => render(true));
+        expect(input().value).toBe("");
+        expect(pending).toHaveLength(1);
+        expect(
+          container.querySelector<HTMLButtonElement>('[type="submit"]')!
+            .disabled,
+        ).toBe(true);
+        await act(async () =>
+          container
+            .querySelector("form")!
+            .dispatchEvent(
+              new Event("submit", { bubbles: true, cancelable: true }),
+            ),
+        );
+        expect(submitted).toBe(0);
+        if (create) expect(create).not.toHaveBeenCalled();
+        await act(async () => pending.shift()!.resolve("calm-otter"));
+        await browser.happyDOM.whenAsyncComplete();
+        expect(input().value).toBe("calm-otter");
+        expect(input().selectionStart).toBe(0);
+        expect(input().selectionEnd).toBe("calm-otter".length);
+        if (create) {
+          expect(
+            container.querySelector<HTMLButtonElement>('[type="submit"]')!
+              .disabled,
+          ).toBe(false);
+          await act(async () =>
+            container
+              .querySelector("form")!
+              .dispatchEvent(
+                new Event("submit", { bubbles: true, cancelable: true }),
+              ),
+          );
+          expect(create).toHaveBeenLastCalledWith(
+            { connectionId: client.connectionId, runtimeGeneration: 1 },
+            "calm-otter",
+            undefined,
+            { sourceWorkspaceId: undefined },
+          );
+        }
+
+        await act(async () => render(false));
+        await act(async () => render(true));
+        await act(async () => edit("my-branch"));
+        expect(
+          container.querySelector<HTMLButtonElement>('[type="submit"]')!
+            .disabled,
+        ).toBe(false);
+        await act(async () => pending.shift()!.resolve("bright-falcon"));
+        expect(input().value).toBe("my-branch");
+
+        await act(async () => render(false));
+        await act(async () => render(true));
+        await act(async () => render(false));
+        await act(async () => render(true));
+        await act(async () => pending.shift()!.resolve("old-name"));
+        expect(input().value).toBe("");
+        expect(
+          container.querySelector<HTMLButtonElement>('[type="submit"]')!
+            .disabled,
+        ).toBe(true);
+        await act(async () => edit("temporary"));
+        await act(async () => edit(""));
+        await act(async () => pending.shift()!.resolve("new-name"));
+        expect(input().value).toBe("");
+        if (create)
+          expect(
+            container.querySelector<HTMLButtonElement>('[type="submit"]')!
+              .disabled,
+          ).toBe(false);
+
+        await act(async () => render(false));
+        await act(async () => render(true));
+        await act(async () =>
+          pending.shift()!.reject(new Error("Chunk unavailable")),
+        );
+        expect(input().disabled).toBe(false);
+        if (create)
+          expect(
+            container.querySelector<HTMLButtonElement>('[type="submit"]')!
+              .disabled,
+          ).toBe(false);
+        await act(async () => edit("manual-name"));
+        expect(input().value).toBe("manual-name");
+        if (kind === "worktree") {
+          expect(
+            container.querySelector<HTMLButtonElement>('[type="submit"]')!
+              .disabled,
+          ).toBe(false);
+          await act(async () =>
+            container
+              .querySelector("form")!
+              .dispatchEvent(
+                new Event("submit", { bubbles: true, cancelable: true }),
+              ),
+          );
+          expect(submitted).toBe(1);
+        }
+      } finally {
+        create?.mockRestore();
+        suggestion?.mockRestore();
+      }
+    });
+  }
 
   const reviewList: WorktreeList = {
     type: "worktree_list",
@@ -553,6 +757,10 @@ async function registerDomTests() {
 
   test("first workspace creation stays pending across an early topology refresh", async () => {
     const previousState = store.get();
+    const suggestion = spyOn(
+      luckyNames,
+      "luckyWorkspaceName",
+    ).mockResolvedValue("calm-otter");
     let finish!: (result: unknown) => void;
     const create = spyOn(store, "createQualifiedWorkspace").mockImplementation(
       () =>
@@ -617,6 +825,7 @@ async function registerDomTests() {
         container.querySelector('[aria-label="Create workspace"]'),
       ).toBeNull();
     } finally {
+      suggestion.mockRestore();
       create.mockRestore();
       await act(async () => root!.unmount());
       root = null;

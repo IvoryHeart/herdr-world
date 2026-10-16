@@ -7,13 +7,35 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
-  rmSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
+import { rm } from "node:fs/promises";
+import { setTimeout as delay } from "node:timers/promises";
 import { basename, delimiter, join, resolve } from "node:path";
 
 const repository = "IvoryHeart/herdr-world";
+
+// Windows may retain executable/file handles briefly after child exit. Yield
+// during bounded retries; a persistent lock still fails the required job.
+export async function removeInstallerFixture(root: string): Promise<void> {
+  for (let retry = 0; ; retry++) {
+    try {
+      await rm(root, { recursive: true, force: true });
+      return;
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException)?.code;
+      if (
+        retry >= 5 ||
+        !["EBUSY", "EPERM", "EACCES", "ENOTEMPTY", "EMFILE", "ENFILE"].includes(
+          code ?? "",
+        )
+      )
+        throw error;
+      await delay(100 * (retry + 1));
+    }
+  }
+}
 
 export function candidateVersion(tag: string, run: string): string {
   const match = /^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.exec(tag);
@@ -513,7 +535,7 @@ export async function verify() {
       join(reportDir, `${platform}.json`),
       JSON.stringify(report, null, 2) + "\n",
     );
-    rmSync(root, { recursive: true, force: true });
+    await removeInstallerFixture(root);
   }
   console.info(JSON.stringify(report, null, 2));
 }

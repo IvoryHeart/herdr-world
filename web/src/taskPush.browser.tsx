@@ -87,6 +87,7 @@ async function run() {
     flushSync(() =>
       root.render(
         <ConfigMenu
+          onShowShortcuts={() => {}}
           theme={theme}
           accentColor="blue"
           uiScale={100}
