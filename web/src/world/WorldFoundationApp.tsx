@@ -59,7 +59,7 @@ import {
   focusWorldNode,
   activateWorldNodeHost,
 } from "./worldInspectorSelection";
-import { pushRoute, useSystemBack } from "../systemBack";
+import { pushRoute, stepBack, useSystemBack } from "../systemBack";
 import { WorldMobileNav, worldViewLabel } from "./WorldMobileNav";
 import { WorldControlPlane } from "./WorldControlPlane";
 import { EMPTY_VISUAL_ACTION_EXTENSION } from "./worldControlPlaneContract";
@@ -410,6 +410,9 @@ export default function WorldFoundationApp() {
                   title={returnLabel}
                   aria-label={returnLabel}
                   onClick={() => {
+                    // Like the phone's Back: an open menu, sheet or Composer
+                    // closes before the terminal does.
+                    if (stepBack()) return;
                     creationIntentRevision.current++;
                     visualArrangementControl?.onSelect("close-all");
                   }}

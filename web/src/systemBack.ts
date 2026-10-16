@@ -125,6 +125,17 @@ if (typeof window !== "undefined")
   });
 
 /**
+ * Takes the same step as the phone's Back while layers are open: closes the
+ * topmost one through history. Returns false when there is nothing to close.
+ */
+export function stepBack(): boolean {
+  if (layers.size === 0 || backPending || !isGuard(window.history.state))
+    return false;
+  window.history.back();
+  return true;
+}
+
+/**
  * Adds a route entry. A guard left by a layer is replaced rather than kept
  * below the route, so Back from the route reaches the page before it.
  */

@@ -4333,19 +4333,6 @@ async function run() {
     () => document.querySelector('button[aria-label="Back to Office"]'),
     "mobile view switcher returns to Office before dismissing Inspectors",
   );
-  // Back to Office closes the terminal and its Composer in one commit.
-  [
-    ...document.querySelectorAll<HTMLButtonElement>(
-      '.workspace-inspector button[aria-label="Open terminal input"]',
-    ),
-  ]
-    .find((button) => button.getBoundingClientRect().width > 0)
-    ?.click();
-  await until(
-    () => document.querySelector(".workspace-inspector .terminal-composer"),
-    "mobile Inspector opens Composer before Back to Office",
-  );
-  await settle();
   backToOffice.click();
   await until(
     () => !document.querySelector(".workspace-inspector"),

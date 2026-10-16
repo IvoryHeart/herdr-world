@@ -5,7 +5,12 @@ import {
   initializeLayoutPreferences,
   updateLayoutPreferences,
 } from "./layoutPreferences";
-import { pushRoute, useSystemBack, type SystemBackLevel } from "./systemBack";
+import {
+  pushRoute,
+  stepBack,
+  useSystemBack,
+  type SystemBackLevel,
+} from "./systemBack";
 
 const failures: string[] = [];
 const check = (condition: boolean, message: string) => {
@@ -173,6 +178,28 @@ async function run() {
     check(at() === "/office", `${label}: Back from the route went ${at()}`);
     await userBack();
     check(at() === "/graph", `${label}: Back stopped on a stale entry`);
+  }
+
+  {
+    const label = "on-screen Back steps like system Back";
+    await start();
+    show(["terminal", "composer"]);
+    await settle();
+    check(stepBack(), `${label}: nothing to step back from`);
+    await settle();
+    check(
+      closed.join() === "composer" && open.has("terminal") && guarded(),
+      `${label}: closed ${closed.join()} instead of Composer`,
+    );
+    check(stepBack(), `${label}: terminal not closable`);
+    await settle();
+    check(
+      closed.join() === "composer,terminal" && at() === "/office",
+      `${label}: terminal did not close to Office`,
+    );
+    check(!stepBack(), `${label}: stepped back with nothing open`);
+    await userBack();
+    check(at() === "/graph", `${label}: Back did not reach the prior route`);
   }
 
   {
