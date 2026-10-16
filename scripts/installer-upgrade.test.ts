@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { $ } from "bun";
 import {
+  chmodSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -152,3 +153,35 @@ test("installer fixture cleanup removes nested files and tolerates an already re
   expect(existsSync(directory)).toBe(false);
   await removeInstallerFixture(directory);
 });
+
+test.skipIf(process.platform === "win32")(
+  "cleanup yields for transient filesystem denial and fails when denial persists",
+  async () => {
+    for (const transient of [true, false]) {
+      const directory = mkdtempSync(join(tmpdir(), "world-cleanup-denial-"));
+      const nested = join(directory, "nested");
+      mkdirSync(nested);
+      const file = join(nested, "held.txt");
+      writeFileSync(file, "synthetic fixture");
+      chmodSync(nested, 0o500);
+      let release: ReturnType<typeof setTimeout> | undefined;
+      try {
+        if (transient) {
+          release = setTimeout(() => chmodSync(nested, 0o700), 150);
+          await removeInstallerFixture(directory);
+          expect(existsSync(directory)).toBe(false);
+        } else {
+          await expect(
+            removeInstallerFixture(directory),
+          ).rejects.toHaveProperty("code", "EACCES");
+          expect(existsSync(file)).toBe(true);
+        }
+      } finally {
+        if (release) clearTimeout(release);
+        if (existsSync(nested)) chmodSync(nested, 0o700);
+        await removeInstallerFixture(directory);
+      }
+    }
+  },
+  5_000,
+);

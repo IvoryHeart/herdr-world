@@ -11,6 +11,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { rm } from "node:fs/promises";
+import { setTimeout as delay } from "node:timers/promises";
 import { basename, delimiter, join, resolve } from "node:path";
 
 const repository = "IvoryHeart/herdr-world";
@@ -18,12 +19,22 @@ const repository = "IvoryHeart/herdr-world";
 // Windows may retain executable/file handles briefly after child exit. Yield
 // during bounded retries; a persistent lock still fails the required job.
 export async function removeInstallerFixture(root: string): Promise<void> {
-  await rm(root, {
-    recursive: true,
-    force: true,
-    maxRetries: 5,
-    retryDelay: 100,
-  });
+  for (let retry = 0; ; retry++) {
+    try {
+      await rm(root, { recursive: true, force: true });
+      return;
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException)?.code;
+      if (
+        retry >= 5 ||
+        !["EBUSY", "EPERM", "EACCES", "ENOTEMPTY", "EMFILE", "ENFILE"].includes(
+          code ?? "",
+        )
+      )
+        throw error;
+      await delay(100 * (retry + 1));
+    }
+  }
 }
 
 export function candidateVersion(tag: string, run: string): string {
