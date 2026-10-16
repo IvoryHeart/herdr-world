@@ -1,0 +1,91 @@
+name: Installer upgrades
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  baseline:
+    name: Freeze latest stable installer baseline
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      tag: ${{ steps.plan.outputs.baseline_tag }}
+      sha: ${{ steps.plan.outputs.baseline_sha }}
+      version: ${{ steps.plan.outputs.candidate_version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: "1.4.3"
+      - name: Resolve the latest published stable release once
+        id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bun scripts/installer-upgrade.ts plan
+
+  upgrade:
+    name: Installer upgrade (${{ matrix.platform }})
+    needs: baseline
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux-x64
+            runner: ubuntu-24.04
+          - platform: linux-arm64
+            runner: ubuntu-24.04-arm
+          - platform: darwin-x64
+            runner: macos-15-intel
+          - platform: darwin-arm64
+            runner: macos-15
+          - platform: windows-x64
+            runner: windows-latest
+          - platform: windows-arm64
+            runner: windows-11-arm
+    env:
+      HERDR_WORLD_BUILD_VERSION: ${{ needs.baseline.outputs.version }}
+      INSTALLER_BASELINE_TAG: ${{ needs.baseline.outputs.tag }}
+      INSTALLER_BASELINE_SHA: ${{ needs.baseline.outputs.sha }}
+      INSTALLER_BASELINE_DIR: ${{ github.workspace }}/.agents/worktrees/installer-baseline
+      INSTALLER_CANDIDATE_SHA: ${{ github.sha }}
+    steps:
+      # For pull requests, checkout's default is the proposed merge revision.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.baseline.outputs.sha }}
+          path: .agents/worktrees/installer-baseline
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: "1.4.3"
+          no-cache: true
+      - run: bun install --frozen-lockfile
+      - name: Build the proposed merge with the release packaging script
+        shell: bash
+        env:
+          PACKAGE_PLATFORM: ${{ matrix.platform }}
+        run: bash scripts/package-release.sh "$PACKAGE_PLATFORM"
+      - name: Verify fresh installation and upgrade without Bun on the installer PATH
+        env:
+          INSTALLER_REPORT_DIR: ${{ runner.temp }}/installer-report
+        run: bun scripts/installer-upgrade.ts verify
+      - name: Retain compact installer evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: installer-${{ matrix.platform }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/installer-report
+          retention-days: 1
+          if-no-files-found: warn

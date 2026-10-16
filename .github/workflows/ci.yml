@@ -172,7 +172,7 @@ jobs:
 
     delivery:
         name: Delivery checks
-        needs: [validation-scope, validation, world-browser, behavioral, plugin-windows]
+        needs: [validation-scope, validation, world-browser, behavioral, plugin-windows, installer-upgrade]
         if: always()
         runs-on: ubuntu-latest
         steps:
@@ -187,6 +187,10 @@ jobs:
               env:
                   WINDOWS_PLUGIN_RESULT: ${{ needs.plugin-windows.result }}
               run: test "$WINDOWS_PLUGIN_RESULT" = success
+            - name: Require installer upgrade evidence
+              env:
+                  INSTALLER_RESULT: ${{ needs.installer-upgrade.result }}
+              run: test "$INSTALLER_RESULT" = success
             - name: Determine validation scope
               run: echo "Validation mode is $VALIDATION_MODE"
               env:
@@ -209,6 +213,9 @@ jobs:
                   WORLD_RESULT: ${{ needs.world-browser.result }}
                   BEHAVIORAL_RESULT: ${{ needs.behavioral.result }}
               run: bun scripts/ci-delivery-result.ts
+
+    installer-upgrade:
+        uses: ./.github/workflows/installer-upgrade.yml
 
     launchd:
         name: macOS launchd plugin lifecycle (${{ matrix.arch }})

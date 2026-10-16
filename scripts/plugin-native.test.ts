@@ -166,8 +166,14 @@ process.exit(2);
           expect(result.stdout.toString()).not.toContain("token=");
         }
       } finally {
-        rmSync(root, { recursive: true, force: true });
+        rmSync(root, {
+          recursive: true,
+          force: true,
+          maxRetries: 5,
+          retryDelay: 100,
+        });
       }
     },
+    60_000,
   );
 }

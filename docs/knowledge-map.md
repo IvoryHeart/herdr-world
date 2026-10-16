@@ -38,6 +38,11 @@ decisions and are not current operational guidance.
 
 [Upstream automation](upstream-automation.md) covers Roamgate release detection,
 frozen integration PRs, independent Codex review, credentials and recovery.
+[Installer upgrade CI](release.md#pre-merge-installer-upgrades) builds proposed merges
+and checks fresh installation and upgrade from a frozen latest stable release on
+all six native platforms. Start with [the harness](../scripts/installer-upgrade.ts),
+[gate regressions](../scripts/installer-upgrade.test.ts) and
+[the reusable workflow](../.github/workflows/installer-upgrade.yml).
 Start with [the synchronization helper](../scripts/upstream-sync.ts) and its
 [regressions](../scripts/upstream-sync.test.ts) for automation changes.
 The [local worker launcher](../scripts/upstream-local.ts) uses cached Codex

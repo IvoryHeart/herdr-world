@@ -9,6 +9,9 @@ are optional because the merged PR history records their source.
 
 ### Fixed
 
+- Quote compile-time environment filters so native Windows source and release
+  builds pass literal patterns to Bun instead of failing shell glob expansion.
+
 - Honor native TLS and managed credentials in plugin URLs and panels, and verify
   Windows plugin downloads without relying on PowerShell hash cmdlet discovery.
 
@@ -16,6 +19,10 @@ are optional because the merged PR history records their source.
   update ownership, and refresh generated service paths when restarting the plugin.
 
 ### Added
+
+- Require native installer checks before merge: build release-shaped candidates,
+  test fresh installs and upgrades from the latest stable release on six platforms,
+  and verify credentials, settings, cached plugin actions and failed-download recovery.
 
 - Install released Herdr World plugins on Unix and Windows without external Bun,
   preserving cached plugin actions, verified World releases and service ownership.

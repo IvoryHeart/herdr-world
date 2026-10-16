@@ -3,6 +3,43 @@
 Releases are prepared and reviewed through pull requests. Never commit or push a
 release change directly to `main`.
 
+## Pre-merge installer upgrades
+
+Every CI run calls `.github/workflows/installer-upgrade.yml`, and Delivery checks
+requires the entire native matrix: Linux x64/ARM64, macOS Intel/Apple Silicon, and
+Windows x64/ARM64 on standard hosted runners. The workflow can also be dispatched
+manually against a selected ref. It publishes no release, tag, npm package or Formula.
+
+One planning job freezes the current latest stable World release tag and its source
+SHA. Each runner builds the proposed merge revision with `scripts/package-release.sh`
+and a synthetic next-patch release-candidate version unique to the CI run. It uses
+a loopback artifact server to exercise the same candidate installers before public
+release assets exist. The baseline uses its published tag's real plugin build
+command and downloaded release executable; older baselines may require Bun at setup.
+
+The matrix verifies fresh plugin installation, latest-stable plugin upgrade, frozen
+cached action argv, executable versions, HTTP health, login, embedded browser assets,
+configuration and session migration, runtime restart, and checksum
+rejection without changing the working installation. Unix additionally upgrades the
+standalone shell installation from the baseline executable. Each installer and runtime
+subprocess receives isolated synthetic state and a PATH that cannot resolve Bun.
+The v0.2.3 upgrade must reject legacy password-signed cookies and allow re-login;
+new sessions must survive candidate restart. Later baselines require session
+preservation across upgrade as well. Bun remains the build/test driver; this is a no-Bun execution environment, not a claim
+that the entire runner has no Bun files. No live service or external Herdr is managed.
+
+Reports identify the baseline/candidate revisions, native platform, archive digest
+and completed scenarios. Compact JSON evidence is retained for one day; archives
+remain on the disposable runner. Missing baseline assets, failed packaging and any
+matrix failure block Delivery checks. This deliberately depends on GitHub release
+availability and does not silently skip an unavailable latest release.
+
+These checks supplement, rather than replace, the real macOS launchd lifecycle,
+installer fault/rollback tests, release archive checks and npm/Homebrew package tests.
+They do not claim every historical upgrade, real Herdr plugin registration, OS service
+upgrade/reboot, npm/Homebrew channel upgrade or manual browser interaction. Test the
+published RC on the owner's existing installation before promoting a stable release.
+
 ## Pre-merge platform previews
 
 Add the `release-preview` label to a release preparation PR. Its CI run first
