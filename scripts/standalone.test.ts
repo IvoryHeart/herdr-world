@@ -87,10 +87,12 @@ try {
 `,
     );
     // Exercise the actual release flags, not a separate test-only build recipe.
-    const build = await run(
-      [process.execPath, ...serverPackage.scripts.compile.split(" ").slice(1)],
-      dir,
+    // Let the package-script shell parse quoting rather than splitting on spaces.
+    await Bun.write(
+      join(dir, "package.json"),
+      JSON.stringify({ scripts: { compile: serverPackage.scripts.compile } }),
     );
+    const build = await run([process.execPath, "run", "compile"], dir);
     expect(build.code, build.stderr).toBe(0);
     await rename(join(dir, "public"), join(dir, "source-public"));
     await rename(join(dir, "src"), join(dir, "source-src"));

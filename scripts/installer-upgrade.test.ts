@@ -1,9 +1,44 @@
 import { expect, test } from "bun:test";
+import { $ } from "bun";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   candidateVersion,
   runtimeEnvironment,
   upgradeCookieStatus,
 } from "./installer-upgrade";
+
+test("native compile commands pass the build-environment wildcard literally through Bun Shell", async () => {
+  const root = new URL("../server/", import.meta.url);
+  const manifest = JSON.parse(
+    readFileSync(new URL("package.json", root), "utf8"),
+  );
+  const directory = mkdtempSync(join(tmpdir(), "world compiler argv "));
+  const recorder = join(directory, "record.ts");
+  writeFileSync(recorder, "console.log(JSON.stringify(process.argv.slice(2)))");
+  const literal = (value: string) => `'${value.replaceAll("'", "'\\''")}'`;
+  try {
+    for (const [name, script] of Object.entries(manifest.scripts)) {
+      if (!name.startsWith("compile") || name === "compile:all") continue;
+      const replay = (script as string).replace(
+        /^bun build /,
+        `${literal(process.execPath)} ${literal(recorder)} `,
+      );
+      const result = await $`${{ raw: replay }}`
+        .cwd(fileURLToPath(root))
+        .quiet()
+        .nothrow();
+      expect(result.exitCode, `${name}: ${result.stderr.toString()}`).toBe(0);
+      expect(JSON.parse(result.stdout.toString())).toContain(
+        "--env=HERDR_WORLD_BUILD_*",
+      );
+    }
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
 
 test("the legacy cookie migration requires re-login; later upgrades preserve sessions", () => {
   expect(upgradeCookieStatus("v0.2.3")).toBe(401);

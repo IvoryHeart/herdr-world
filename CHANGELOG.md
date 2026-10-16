@@ -9,6 +9,9 @@ are optional because the merged PR history records their source.
 
 ### Fixed
 
+- Quote compile-time environment filters so native Windows source and release
+  builds pass literal patterns to Bun instead of failing shell glob expansion.
+
 - Honor native TLS and managed credentials in plugin URLs and panels, and verify
   Windows plugin downloads without relying on PowerShell hash cmdlet discovery.
 
