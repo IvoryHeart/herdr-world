@@ -432,8 +432,39 @@
   pointer-events: auto;
 }
 
-.town-new-room {
-  position: static !important;
+/* A pixel sign over an empty plot: "+ New room" on one line, like the room
+   plaques, instead of Office's small box. */
+.town-new-room-wrap .town-new-room {
+  position: static;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: auto;
+  height: auto;
+  padding: 7px 12px 7px 9px;
+  white-space: nowrap;
+  color: #f1efe6;
+  background: rgba(14, 17, 24, 0.9);
+  border: 2px dashed #6f8f5a;
+  border-radius: 8px;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
+  font:
+    700 13px / 1 "Pixelify Sans",
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+}
+
+.town-new-room-wrap .town-new-room svg {
+  flex: none;
+  color: #e3aa3a;
+}
+
+.town-new-room-wrap .town-new-room:hover:not(:disabled),
+.town-new-room-wrap .town-new-room:focus-visible {
+  border-color: #e3aa3a;
+  background: rgba(30, 26, 14, 0.95);
 }
 
 /* Accessible targets follow the scene but stay visually silent until focused. */
@@ -457,10 +488,13 @@
   outline-offset: calc(2px * var(--iz));
 }
 
+/* Camera controls sit centred on the right edge on every layout. */
 .town-zoom {
   position: absolute;
+  z-index: 6;
   right: 16px;
-  bottom: 16px;
+  top: 50%;
+  transform: translateY(-50%);
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -495,6 +529,20 @@
 .town-zoom .town-zoom-all {
   font-size: 11px;
   letter-spacing: 0.04em;
+}
+
+.town-zoom .town-zoom-more {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* On the phone, Town's camera group carries the shell's More button, so the
+   shell's own floating controls stay hidden until More opens its sheet. */
+:root[data-town-controls]
+  .app:not([data-mobile-more="open"])
+  .mobile-controls-stack {
+  display: none !important;
 }
 
 @media (prefers-reduced-motion: reduce) {

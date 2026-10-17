@@ -7,6 +7,8 @@ import {
   useRef,
   useState,
 } from "react";
+import { EllipsisVertical } from "lucide-react";
+import { useMobileControls } from "../../components/MobileControls";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import type {
   HerdrOfficeProjection,
@@ -796,6 +798,15 @@ export function TownCanvas({
    * desk, choosing whatever is nearest the centre of the screen. The current
    * step is read from the zoom, so pinching and wheel zoom mix freely.
    */
+  const shellControls = useMobileControls();
+  const ownsShellControls = shellControls !== null;
+  useEffect(() => {
+    if (!ownsShellControls) return;
+    document.documentElement.dataset.townControls = "";
+    return () => {
+      delete document.documentElement.dataset.townControls;
+    };
+  }, [ownsShellControls]);
   const stepZoom = (direction: 1 | -1) => {
     const renderer = rendererRef.current;
     const camera = renderer?.camera;
@@ -971,6 +982,20 @@ export function TownCanvas({
         >
           ALL
         </button>
+        {shellControls ? (
+          // The shell's More menu joins the camera group on the phone, so
+          // Town has one set of floating controls.
+          <button
+            type="button"
+            className="town-zoom-more"
+            aria-label="More options"
+            aria-haspopup="menu"
+            aria-expanded={shellControls.moreOpen}
+            onClick={shellControls.toggleMore}
+          >
+            <EllipsisVertical size={18} aria-hidden="true" />
+          </button>
+        ) : null}
       </div>
     </div>
   );
@@ -1369,8 +1394,8 @@ const TownWorldLayer = memo(function TownWorldLayer({
             disabled={!roomActions.canCreateRoom(selectedRoomKey)}
             onClick={() => roomActions.onCreateRoom(selectedRoomKey)}
           >
-            <Plus size={20} aria-hidden="true" />
-            <span>NEW ROOM</span>
+            <Plus size={16} strokeWidth={3} aria-hidden="true" />
+            <span>New room</span>
           </button>
           {roomActions.createRoomReason(selectedRoomKey) ? (
             <span className="world-creation-reason" role="status">

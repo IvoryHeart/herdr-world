@@ -12,7 +12,8 @@ are optional because the merged PR history records their source.
 - Add Town, a new view next to Office. Each host is a building along a road,
   each workspace a room on a carpet and each tab a team table with one seat per
   pane (a solo desk for one pane, a small face-to-face table for two), with up
-  to 19 desks per room. Agents that need you walk to their host's
+  to 19 desks per room. Plain terminals show a green prompt instead of an
+  agent's laptop. Agents that need you walk to their host's
   reception and queue oldest first, finished agents join them, idle agents take a
   break in the lounge, and speech bubbles show questions, finished work and
   typing.
@@ -21,7 +22,8 @@ are optional because the merged PR history records their source.
   highlighted box, one-tap answers and a reply line with 📎 attachments. On phones the reply line
   opens World's composer (keys, attachments, Insert and Send) right in the
   peek; Inspector opens the agent's files, changes and history. Answers and finished agents show short notices.
-- Town's + and − buttons step between the whole town, one building, one room and
+- Town's + and − buttons, centred on the right edge (with the More menu on
+  phones), step between the whole town, one building, one room and
   one desk. Tap a room to zoom in; very large towns open at roof level. Phones stack the
   buildings in one column. A Town calm motion setting reduces ambient motion.
 

@@ -765,12 +765,14 @@ export async function createTownRenderer(
           if (view.device.visible)
             view.device.texture = textureOf(
               top
-                ? info.agent &&
-                  info.state !== "off" &&
-                  info.state !== "idle" &&
-                  info.state !== "unknown"
-                  ? (sprites.lid[kindOf(info.agent)] ?? sprites.lidOff)
-                  : sprites.lidOff
+                ? info.state === "shell"
+                  ? sprites.lidShell
+                  : info.agent &&
+                      info.state !== "off" &&
+                      info.state !== "idle" &&
+                      info.state !== "unknown"
+                    ? (sprites.lid[kindOf(info.agent)] ?? sprites.lidOff)
+                    : sprites.lidOff
                 : screenCanvas(
                     info.state === "empty" ? "off" : info.state,
                     frame,
@@ -798,11 +800,7 @@ export async function createTownRenderer(
           }
           const glowSprite = view.glow;
           const color = BLOCK_COLORS[info.state];
-          glowSprite.visible =
-            glow &&
-            !lite &&
-            color !== undefined &&
-            (info.state !== "shell" || !top);
+          glowSprite.visible = glow && !lite && color !== undefined;
           if (glowSprite.visible) {
             glowSprite.tint = color!;
             const pulse =
