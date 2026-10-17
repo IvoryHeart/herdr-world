@@ -638,9 +638,26 @@ async function run() {
     opened.length = 0;
   }
 
+  // On a phone, home fits one building; − steps out to the whole town and +
+  // comes back.
+  if (phone) {
+    const home = diagnostics.zoom;
+    host.querySelector<HTMLButtonElement>('[aria-label="Zoom out"]')!.click();
+    await waitFor(
+      () => window.__HERDR_TOWN_RENDERER__!.zoom < home * 0.8,
+      "zoom out did not reach the whole town",
+    );
+    host.querySelector<HTMLButtonElement>('[aria-label="Zoom in"]')!.click();
+    await waitFor(
+      () => Math.abs(window.__HERDR_TOWN_RENDERER__!.zoom - home) < home * 0.05,
+      "zoom in did not return home",
+    );
+  }
+
   // Room card activation zooms into the room.
   const zoomBefore = diagnostics.zoom;
-  (roomCards[0] as HTMLButtonElement).click();
+  // Cards remount when the camera passes the whole-town level.
+  host.querySelector<HTMLButtonElement>(".town-room-card")!.click();
   await waitFor(
     () => window.__HERDR_TOWN_RENDERER__!.zoom > zoomBefore * 1.3,
     "room card did not zoom in",

@@ -840,45 +840,74 @@ export function TownCanvas({
             (a, b) => distance(a.x, a.y, 6, 4) - distance(b.x, b.y, 6, 4),
           )[0]
       : undefined;
-    const zooms = [
-      limits.home,
-      buildingZoom(camera, building),
-      room ? roomZoom(camera, room) : 0,
-      Math.max(limits.desk * 1.2, limits.desk + 0.2),
+    // Steps out to in: the whole town (when it differs from home, as on a
+    // phone where home fits one building's width), home, the nearest
+    // building, its nearest room and a desk.
+    const whole = limits.all < limits.home * 0.93;
+    const steps: { z: number; go(z: number): void }[] = [
+      ...(whole
+        ? [
+            {
+              z: limits.all,
+              go: (z: number) =>
+                camera.flyTo((l.width * T) / 2, (l.height * T) / 2, z),
+            },
+          ]
+        : []),
+      { z: limits.home, go: () => frameHome(renderer, l, true) },
+      {
+        z: buildingZoom(camera, building),
+        go: (z) =>
+          camera.flyTo(
+            (building.x + building.w / 2) * T,
+            (building.y + (building.h + TOWN_FACADE) / 2) * T,
+            z,
+            0.7,
+          ),
+      },
+      ...(room
+        ? [
+            {
+              z: roomZoom(camera, room),
+              go: (z: number) =>
+                camera.flyTo(
+                  (room.x + room.w / 2) * T,
+                  (room.y + room.h / 2) * T,
+                  z,
+                  0.6,
+                ),
+            },
+          ]
+        : []),
+      ...(cell
+        ? [
+            {
+              z: Math.max(limits.desk * 1.2, limits.desk + 0.2),
+              go: (z: number) =>
+                camera.flyTo((cell.x + 3) * T, (cell.y + 2) * T, z, 0.6),
+            },
+          ]
+        : []),
     ];
-    for (let i = 1; i < zooms.length; i += 1)
-      zooms[i] = Math.min(limits.max, Math.max(zooms[i]!, zooms[i - 1]! * 1.2));
+    for (let i = 1; i < steps.length; i += 1)
+      steps[i]!.z = Math.min(
+        limits.max,
+        Math.max(steps[i]!.z, steps[i - 1]!.z * 1.2),
+      );
     let step = 0;
-    zooms.forEach((z, index) => {
+    steps.forEach(({ z }, index) => {
       if (camera.z >= z * 0.93) step = index;
     });
     const next = step + direction;
     if (next < 0) {
-      frameHome(renderer, l, true);
+      steps[0]!.go(steps[0]!.z);
       return;
     }
-    if (next >= zooms.length) {
+    if (next >= steps.length) {
       zoomBy(1.4);
       return;
     }
-    if (next === 0) frameHome(renderer, l, true);
-    else if (next === 1)
-      camera.flyTo(
-        (building.x + building.w / 2) * T,
-        (building.y + (building.h + TOWN_FACADE) / 2) * T,
-        zooms[1]!,
-        0.7,
-      );
-    else if (next === 2 && room)
-      camera.flyTo(
-        (room.x + room.w / 2) * T,
-        (room.y + room.h / 2) * T,
-        zooms[2]!,
-        0.6,
-      );
-    else if (cell)
-      camera.flyTo((cell.x + 3) * T, (cell.y + 2) * T, zooms[3]!, 0.6);
-    else zoomBy(1.4);
+    steps[next]!.go(steps[next]!.z);
     renderer.invalidate();
   };
 
