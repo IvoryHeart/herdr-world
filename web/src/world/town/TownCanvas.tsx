@@ -791,6 +791,82 @@ export function TownCanvas({
     renderer.invalidate();
   };
 
+  /**
+   * The zoom buttons step between whole town, one building, one room and one
+   * desk, choosing whatever is nearest the centre of the screen. The current
+   * step is read from the zoom, so pinching and wheel zoom mix freely.
+   */
+  const stepZoom = (direction: 1 | -1) => {
+    const renderer = rendererRef.current;
+    const camera = renderer?.camera;
+    if (!renderer || !camera?.limits) return;
+    const limits = camera.limits;
+    const l = latest.current.layout;
+    const focus = camera.focusPoint();
+    const at = camera.toWorld(focus.x, focus.y);
+    const distance = (x: number, y: number, w: number, h: number) =>
+      Math.hypot(
+        Math.max(x * T - at.x, 0, at.x - (x + w) * T),
+        Math.max(y * T - at.y, 0, at.y - (y + h) * T),
+      );
+    const building = [...l.buildings].sort(
+      (a, b) =>
+        distance(a.x, a.y, a.w, a.h + TOWN_FACADE) -
+        distance(b.x, b.y, b.w, b.h + TOWN_FACADE),
+    )[0];
+    if (!building) return;
+    const room = [...building.rooms].sort(
+      (a, b) => distance(a.x, a.y, a.w, a.h) - distance(b.x, b.y, b.w, b.h),
+    )[0];
+    const cell = room
+      ? [...room.cells]
+          .filter((candidate) => candidate.deskKey)
+          .sort(
+            (a, b) => distance(a.x, a.y, 6, 4) - distance(b.x, b.y, 6, 4),
+          )[0]
+      : undefined;
+    const zooms = [
+      limits.home,
+      buildingZoom(camera, building),
+      room ? roomZoom(camera, room) : 0,
+      Math.max(limits.desk * 1.2, limits.desk + 0.2),
+    ];
+    for (let i = 1; i < zooms.length; i += 1)
+      zooms[i] = Math.min(limits.max, Math.max(zooms[i]!, zooms[i - 1]! * 1.2));
+    let step = 0;
+    zooms.forEach((z, index) => {
+      if (camera.z >= z * 0.93) step = index;
+    });
+    const next = step + direction;
+    if (next < 0) {
+      frameHome(renderer, l, true);
+      return;
+    }
+    if (next >= zooms.length) {
+      zoomBy(1.4);
+      return;
+    }
+    if (next === 0) frameHome(renderer, l, true);
+    else if (next === 1)
+      camera.flyTo(
+        (building.x + building.w / 2) * T,
+        (building.y + (building.h + TOWN_FACADE) / 2) * T,
+        zooms[1]!,
+        0.7,
+      );
+    else if (next === 2 && room)
+      camera.flyTo(
+        (room.x + room.w / 2) * T,
+        (room.y + room.h / 2) * T,
+        zooms[2]!,
+        0.6,
+      );
+    else if (cell)
+      camera.flyTo((cell.x + 3) * T, (cell.y + 2) * T, zooms[3]!, 0.6);
+    else zoomBy(1.4);
+    renderer.invalidate();
+  };
+
   const focusTarget = (target: TownTarget) => {
     const renderer = rendererRef.current;
     if (!renderer) return;
@@ -867,13 +943,13 @@ export function TownCanvas({
       </div>
       <TownBoard model={model} observability={observability} />
       <div className="town-zoom" role="group" aria-label="Camera">
-        <button type="button" aria-label="Zoom in" onClick={() => zoomBy(1.4)}>
+        <button type="button" aria-label="Zoom in" onClick={() => stepZoom(1)}>
           +
         </button>
         <button
           type="button"
           aria-label="Zoom out"
-          onClick={() => zoomBy(1 / 1.4)}
+          onClick={() => stepZoom(-1)}
         >
           −
         </button>
@@ -919,13 +995,7 @@ function zoomToRoom(
     .find((r) => r.key === roomKey);
   if (!room) return;
   const camera = renderer.camera;
-  const { width, height, inset } = camera.viewport;
-  const fit = Math.min(
-    (width - inset.left - inset.right - 60) / (room.w * T + 40),
-    (height - inset.top - inset.bottom - 20) / (room.h * T + 40),
-  );
-  const limits = camera.limits;
-  const z = Math.max(Math.min(fit, 3), limits ? limits.card * 1.05 : 0.7);
+  const z = roomZoom(camera, room);
   camera.flyTo((room.x + room.w / 2) * T, (room.y + room.h / 2) * T, z, 0.6);
   renderer.invalidate();
 }
@@ -938,13 +1008,7 @@ function zoomToBuilding(
   const building = layout.buildings.find((b) => b.hostKey === hostKey);
   if (!building) return;
   const camera = renderer.camera;
-  const { width, height, inset } = camera.viewport;
-  const fit = Math.min(
-    (width - inset.left - inset.right - 40) / (building.w * T + 40),
-    (height - inset.top - inset.bottom - 10) /
-      ((building.h + TOWN_FACADE) * T + 30),
-  );
-  const z = Math.max(fit, (camera.limits?.roof ?? 0) * 1.06);
+  const z = buildingZoom(camera, building);
   camera.flyTo(
     (building.x + building.w / 2) * T,
     (building.y + (building.h + TOWN_FACADE) / 2) * T,
@@ -952,6 +1016,38 @@ function zoomToBuilding(
     0.8,
   );
   renderer.invalidate();
+}
+
+type TownCameraHandle = TownRendererHandle["camera"];
+
+function roomZoom(
+  camera: TownCameraHandle,
+  room: TownLayout["buildings"][number]["rooms"][number],
+) {
+  const { width, height, inset } = camera.viewport;
+  const fit = Math.min(
+    (width - inset.left - inset.right - 60) / (room.w * T + 40),
+    (height - inset.top - inset.bottom - 20) / (room.h * T + 40),
+  );
+  const limits = camera.limits;
+  return Math.max(Math.min(fit, 3), limits ? limits.card * 1.05 : 0.7);
+}
+
+function buildingZoom(
+  camera: TownCameraHandle,
+  building: TownLayout["buildings"][number],
+) {
+  const { width, height, inset } = camera.viewport;
+  const usableWidth = width - inset.left - inset.right - 40;
+  const widthFit = usableWidth / (building.w * T + 40);
+  const fit = Math.min(
+    widthFit,
+    (height - inset.top - inset.bottom - 10) /
+      ((building.h + TOWN_FACADE) * T + 30),
+  );
+  // Phones already open at a building's width; a building step fills the width.
+  const z = width < 640 ? widthFit : fit;
+  return Math.max(z, (camera.limits?.roof ?? 0) * 1.06);
 }
 
 const NO_CHROME = { left: 0, right: 0 };

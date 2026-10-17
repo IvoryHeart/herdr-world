@@ -59,6 +59,8 @@ export function TownRail({
   const waiting = allCalls.filter((call) => call.kind === "blocked").length;
   const calls = allCalls.slice(0, RAIL_LIMIT);
   const hidden = allCalls.length - calls.length;
+  // Nothing waiting: the rail steps out of the way entirely.
+  if (!waiting) return null;
   const toggle = () => {
     const next = !collapsed;
     onCollapsedChange(next);

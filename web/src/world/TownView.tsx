@@ -886,7 +886,12 @@ export default function TownView({
             observability={observability}
             calm={preferences.townCalm}
             chrome={{
-              left: width >= 640 && !railCollapsed ? 252 : 0,
+              left:
+                width >= 640 &&
+                !railCollapsed &&
+                calls.some((call) => call.kind === "blocked")
+                  ? 252
+                  : 0,
               right:
                 dock && width >= 900 ? Math.min(500, width * 0.42) + 24 : 0,
             }}

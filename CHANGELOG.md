@@ -18,7 +18,8 @@ are optional because the merged PR history records their source.
   Hover or tap an agent to read its question, pick an answer or reply; open the
   chat dock to switch between a desk's panes and message an agent, with the full
   terminal one tap away. Sent replies and finished agents show short notices.
-- Tap a room to zoom in; very large towns open at roof level. Phones stack the
+- Town's + and − buttons step between the whole town, one building, one room and
+  one desk. Tap a room to zoom in; very large towns open at roof level. Phones stack the
   buildings in one column. A Town calm motion setting reduces ambient motion.
 
 ## [0.2.4] - 2026-10-16

@@ -203,8 +203,12 @@ export function TownDock({
         >
           ⏎ Enter
         </button>
-        <button type="button" onClick={onTerminal}>
-          Open full terminal
+        <button
+          type="button"
+          title="Terminal, files, changes and history"
+          onClick={onTerminal}
+        >
+          Open Inspector
         </button>
       </div>
     </aside>

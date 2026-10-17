@@ -209,8 +209,12 @@ export function TownPeek({
         <button type="button" className="town-hot" onClick={onChat}>
           Chat
         </button>
-        <button type="button" onClick={onTerminal}>
-          Terminal
+        <button
+          type="button"
+          title="Terminal, files, changes and history"
+          onClick={onTerminal}
+        >
+          Inspector
         </button>
         {onNext ? (
           <button type="button" onClick={onNext}>
