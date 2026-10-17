@@ -240,8 +240,6 @@ export function townQuestion(
   return { chatter: lines.slice(0, start), question };
 }
 
-/** The "  2. " (or "❯ 1) ") before an option's text. */
-const NUMBER_PREFIX = /^\s*(?:[›❯>]\s*)?\d[.)]\s+/;
 const NUMBERED = /^\s*(?:[›❯>]\s*)?(\d)[.)]\s+(.{1,60}?)\s*$/;
 const YES_NO = /\((y)\/(n)\)|\[(y)\/(n)\]/i;
 
@@ -269,16 +267,12 @@ export function townChoices(lines: readonly string[]): TownChoice[] {
       break;
     }
   if (last >= 0) {
-    // A wrapped option continues under its text, deeper than its number.
-    const lastLine = lines[last]!;
-    const textColumn =
-      lastLine.length - lastLine.replace(NUMBER_PREFIX, "").length;
-    const continues = (line: string) =>
-      line.length - line.trimStart().length >= textColumn &&
-      !/[?:]\s*$/.test(line);
+    // Fail closed: after the last option only blank lines and key hints may
+    // follow. Any other text, even indented, may be a newer prompt, so the
+    // old answers are withdrawn (a wrapped last option loses its buttons).
     const active = lines
       .slice(last + 1)
-      .every((line) => !line.trim() || continues(line) || MENU_HINT.test(line));
+      .every((line) => !line.trim() || MENU_HINT.test(line));
     if (!active) return [];
     // The menu block: numbered entries and their indented continuations.
     const choices: TownChoice[] = [];

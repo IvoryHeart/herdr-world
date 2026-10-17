@@ -53,16 +53,18 @@ test("answers come only from the active menu at the bottom", () => {
     "  What branch name should I use?",
     "Enter a branch name:",
     "Enter a name to continue",
+    "     Type a branch name",
+    "     Reading src/queue.ts",
   ])
     expect(townChoices(["1. Delete files", "2. Keep files", later])).toEqual(
       [],
     );
-  // A wrapped option and a key hint keep the menu active.
+  // An earlier option's wrap and a key hint keep the menu active.
   expect(
     townChoices([
-      "❯ 1. Yes",
-      "  2. No, and tell the agent what to do",
-      "     differently",
+      "❯ 1. Yes, and don't ask again for edits in",
+      "     this project",
+      "  2. No",
       "↑/↓ to navigate · Enter to select",
     ]).map((choice) => choice.key),
   ).toEqual(["1", "2"]);
