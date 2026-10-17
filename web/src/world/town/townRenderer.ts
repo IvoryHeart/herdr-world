@@ -912,7 +912,7 @@ export async function createTownRenderer(
                 actor.mode === "seat" &&
                 !state.completionSeenKeys.has(agent.key)
               ? "done"
-              : near && status === "idle" && actor.mode === "stand"
+              : level === "desk" && status === "idle" && actor.mode === "stand"
                 ? "idle"
                 : chatting
                   ? (`typing${Math.floor(clock * 3) % 3}` as

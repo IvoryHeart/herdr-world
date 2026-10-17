@@ -12,7 +12,8 @@ are optional because the merged PR history records their source.
 - Add Town, a new view next to Office. Each host is a building along a road,
   each workspace a room on a carpet and each tab a team table with one seat per
   pane, with up to 19 desks per room. Agents that need you walk to their host's
-  reception and queue oldest first, idle agents take a break in the lounge, and
+  reception and queue oldest first, agents idle for ten minutes take a break in
+  the lounge, and
   speech bubbles show questions, finished work and typing.
 - Town lists agents that need you in a needs-you rail (a bottom tray on phones).
   Hover or tap an agent to read its question, pick an answer or reply; open the

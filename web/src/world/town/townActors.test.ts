@@ -104,7 +104,7 @@ test("blocked agents beyond the queue stay at their seat", () => {
 });
 
 test("idle agents take distinct lounge spots", () => {
-  const actors = new TownActors();
+  const actors = new TownActors(0);
   actors.sync(world({ a: "idle", b: "idle", c: "idle" }).actorWorld, true);
   const spots = [...actors.actors.values()].map(
     (a) => `${a.spot!.x},${a.spot!.y}`,
@@ -126,4 +126,14 @@ test("an agent whose desk is no longer presented leaves the scene", () => {
   actors.sync(world({ a: "working", b: "working" }).actorWorld, false);
   actors.sync(world({ a: "working" }).actorWorld, false);
   expect([...actors.actors.keys()]).toEqual(["a"]);
+});
+
+test("a briefly idle agent stays at its desk and leaves for the lounge later", () => {
+  let now = 1_000;
+  const actors = new TownActors(60_000, () => now);
+  actors.sync(world({ a: "idle" }).actorWorld, true);
+  expect(actors.actors.get("a")!.goal?.kind).toBe("seat");
+  now += 61_000;
+  actors.step(0.1);
+  expect(actors.actors.get("a")!.goal?.kind).toBe("lounge");
 });
