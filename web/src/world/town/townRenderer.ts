@@ -532,7 +532,8 @@ export async function createTownRenderer(
 
   const GROUND_CHUNK = 512;
   /** Below this zoom the baked tables suffice and desk sprites stay hidden. */
-  const DETAIL_ZOOM = 0.55;
+  // Seated people appear at the same zoom as walking and lounging agents.
+  const DETAIL_ZOOM = 0.35;
   const pendingPods = new Map<string, TownCell[]>();
   let outdoorItems: { x: number; y: number; place: () => void }[] = [];
   const buildingByHost = new Map<string, BuildingView>();
@@ -737,6 +738,8 @@ export async function createTownRenderer(
     blink: (key: string) => boolean,
   ) => {
     const frame = Math.floor(clock * 6);
+    // The same fade as standing and walking agents (updateActors).
+    const peopleBlend = Math.max(deskBlend, townBlend(0.35, 0.6, camera.z));
     for (const building of buildings)
       for (const pod of building.pods) {
         if (!pod.container.visible) continue;
@@ -757,7 +760,7 @@ export async function createTownRenderer(
             );
             const person = pod.people[index]!;
             const seated = Boolean(info.agent && info.seated);
-            person.visible = seated && deskBlend > 0.02 && !lite;
+            person.visible = seated && peopleBlend > 0.02;
             if (person.visible && info.agent) {
               const typing =
                 info.agent.semanticStatus === "working"
@@ -773,7 +776,7 @@ export async function createTownRenderer(
                   resting(info.agent) || blink(info.agent.key),
                 ),
               );
-              person.alpha = deskBlend;
+              person.alpha = peopleBlend;
             }
           } else {
             const screen = pod.screens[index]!;
@@ -787,7 +790,7 @@ export async function createTownRenderer(
               );
             const back = pod.backs[index]!;
             const seated = Boolean(info.agent && info.seated);
-            back.visible = seated && deskBlend > 0.02 && !lite;
+            back.visible = seated && peopleBlend > 0.02;
             if (back.visible && info.agent) {
               const typing =
                 info.agent.semanticStatus === "working"
@@ -802,7 +805,7 @@ export async function createTownRenderer(
                   false,
                 ),
               );
-              back.alpha = deskBlend;
+              back.alpha = peopleBlend;
             }
           }
           const glowSprite = pod.glows[seat]!;
