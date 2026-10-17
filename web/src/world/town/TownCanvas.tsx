@@ -323,7 +323,10 @@ export function TownCanvas({
           const opacity = String(
             Math.round(renderer.roofAlpha(hostKey) * 100) / 100,
           );
-          if (sign.style.opacity !== opacity) sign.style.opacity = opacity;
+          if (sign.style.opacity !== opacity) {
+            sign.style.opacity = opacity;
+            sign.style.visibility = opacity === "0" ? "hidden" : "visible";
+          }
         }
       }
     }

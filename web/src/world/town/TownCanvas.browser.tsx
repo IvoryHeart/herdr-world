@@ -431,6 +431,25 @@ async function run() {
     host.querySelectorAll('[aria-label^="Rename room"]').length === totalRooms,
     "every room needs a rename action",
   );
+  // Room actions hidden at the overview must not take a tap.
+  const hiddenActions = [
+    ...host.querySelectorAll<HTMLElement>(
+      '[aria-label^="Rename room"], [aria-label^="Close room"], [aria-label="New room"], [aria-label^="New seat in"]',
+    ),
+  ];
+  const tappable = hiddenActions.filter((action) => {
+    const box = action.getBoundingClientRect();
+    if (!box.width || box.right < 0 || box.bottom < 0) return false;
+    const hit = document.elementFromPoint(
+      box.left + box.width / 2,
+      box.top + box.height / 2,
+    );
+    return hit !== null && action.contains(hit);
+  });
+  check(
+    tappable.length === 0,
+    `${tappable.length} hidden room actions take taps at the overview`,
+  );
   check(
     host.querySelectorAll('[aria-label^="New seat in"]').length > 0,
     "rooms with free spots need a new seat action",

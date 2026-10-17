@@ -64,7 +64,10 @@
   position: absolute;
   transform: translate(-50%, -50%) scale(var(--iz));
   transform-origin: 50% 50%;
-  transition: opacity 0.2s ease;
+  /* Visibility flips after the fade out, so hidden overlays take no taps. */
+  transition:
+    opacity 0.2s ease,
+    visibility 0.2s;
 }
 
 /* Boards hang from their world point rather than centring on it. */
@@ -79,6 +82,8 @@
   gap: 4px;
   opacity: 0;
   pointer-events: none;
+  /* Hidden overlays take no taps, including their buttons. */
+  visibility: hidden;
 }
 
 .town-building-sign strong {
@@ -147,6 +152,8 @@
   cursor: pointer;
   opacity: 0;
   pointer-events: none;
+  /* Hidden overlays take no taps, including their buttons. */
+  visibility: hidden;
 }
 
 .town-room-card-waiting {
@@ -231,6 +238,8 @@
   border-radius: 5px;
   opacity: 0;
   pointer-events: none;
+  /* Hidden overlays take no taps, including their buttons. */
+  visibility: hidden;
   white-space: nowrap;
 }
 
@@ -281,6 +290,8 @@
   cursor: pointer;
   opacity: 0;
   pointer-events: none;
+  /* Hidden overlays take no taps, including their buttons. */
+  visibility: hidden;
 }
 
 .town-new-seat:hover:not(:disabled),
@@ -303,18 +314,21 @@
 .town-world[data-level="overview"] .town-room-card {
   opacity: 1;
   pointer-events: auto;
+  visibility: visible;
 }
 
 .town-world[data-level="room"] .town-room-plaque,
 .town-world[data-level="desk"] .town-room-plaque {
   opacity: 1;
   pointer-events: auto;
+  visibility: visible;
 }
 
 .town-world[data-level="desk"] .town-new-seat,
 .town-world[data-level="room"] .town-new-seat {
   opacity: 1;
   pointer-events: auto;
+  visibility: visible;
 }
 
 /* Reception boards: visible until the queue itself is readable. */
@@ -338,6 +352,8 @@
 .town-world[data-level="desk"] .town-reception {
   opacity: 0;
   pointer-events: none;
+  /* Hidden overlays take no taps, including their buttons. */
+  visibility: hidden;
 }
 
 .town-reception-title {
@@ -424,12 +440,13 @@
   position: absolute;
   opacity: 0;
   pointer-events: none;
+  /* Hidden overlays take no taps, including their buttons. */
+  visibility: hidden;
   display: grid;
   justify-items: center;
   gap: 6px;
   transform: scale(var(--iz));
   transform-origin: 0 0;
-  pointer-events: auto;
 }
 
 /* A pixel sign over an empty plot: "+ New room" on one line, like the room
@@ -692,6 +709,7 @@
 .town-world[data-level="desk"] .town-new-room-wrap {
   opacity: 1;
   pointer-events: auto;
+  visibility: visible;
 }
 
 .town-visually-hidden {
