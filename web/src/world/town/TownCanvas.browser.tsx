@@ -437,11 +437,9 @@ async function run() {
     "answer went to a pane that is not waiting",
   );
 
-  // Reply: desktop opens the pane's terminal; the phone layout grows World's
+  // The message box: desktop opens the pane's terminal; the phone layout grows World's
   // composer inside the peek, and Send reaches that pane only.
-  [...host.querySelectorAll<HTMLButtonElement>(".town-peek-foot button")]
-    .find((button) => button.textContent === "Reply")!
-    .click();
+  host.querySelector<HTMLButtonElement>(".town-message-box")!.click();
   if (!phone) {
     await waitFor(() => opened.length === 1, "Reply did not open the terminal");
     opened.length = 0;

@@ -1220,3 +1220,23 @@
     min-height: 40px;
   }
 }
+
+/* Looks like a text box; tapping it opens World's composer. */
+.town-peek .town-message-box {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  min-height: 40px;
+  padding: 0 12px;
+  text-align: left;
+  color: var(--town-muted);
+  background: var(--town-term);
+  border: 2px solid var(--town-edge);
+  border-radius: 9px;
+  box-shadow: none;
+  font:
+    400 14px "Rubik",
+    system-ui,
+    sans-serif;
+  cursor: text;
+}

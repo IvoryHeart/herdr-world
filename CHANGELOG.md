@@ -17,7 +17,7 @@ are optional because the merged PR history records their source.
   typing.
 - Town lists agents that need you in a needs-you rail (a bottom tray on phones).
   Hover or tap an agent to read its question and pick an answer; on phones,
-  Reply opens World's composer (keys, attachments, Insert and Send) right in the
+  tapping the peek's message box opens World's composer (keys, attachments, Insert and Send) right in the
   peek, and Inspector opens the agent's files, changes and history. Answers and finished agents show short notices.
 - Town's + and − buttons step between the whole town, one building, one room and
   one desk. Tap a room to zoom in; very large towns open at roof level. Phones stack the

@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useLayoutEffect, useMemo, useRef } from "react";
 import { worldLocalStorage } from "../../browserStorage";
 import { TerminalComposer } from "../../components/TerminalComposer";
 import { mobileTerminalShortcutExecution } from "../../mobileTerminalShortcutAction";
@@ -46,6 +46,13 @@ export function TownComposer({
   onError(message: string): void;
 }) {
   const rows = useMemo(shortcutRows, []);
+  const box = useRef<HTMLDivElement>(null);
+  // Opened from the message box: put the caret in the composer straight away.
+  useLayoutEffect(() => {
+    box.current
+      ?.querySelector<HTMLTextAreaElement>(".terminal-composer-input")
+      ?.focus({ preventScroll: true });
+  }, []);
   const owner = () => {
     const client = townOwner(leaf);
     if (!client)
@@ -57,7 +64,7 @@ export function TownComposer({
   const execution = (shortcut: MobileTerminalShortcut) =>
     mobileTerminalShortcutExecution(shortcut.action, false);
   return (
-    <div className="town-composer">
+    <div className="town-composer" ref={box}>
       <TerminalComposer
         draftKey={terminalComposerDraftKey(
           leaf.connectionId,

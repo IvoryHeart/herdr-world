@@ -191,18 +191,17 @@ export function TownPeek({
           ))}
         </div>
       ) : null}
+      {!chatting && canReply ? (
+        <button
+          type="button"
+          className="town-message-box"
+          aria-label={`Message ${agent.displayLabel}`}
+          onClick={onChat}
+        >
+          Message {agent.displayLabel}…
+        </button>
+      ) : null}
       <div className="town-peek-foot">
-        {chatting ? null : (
-          <button
-            type="button"
-            className="town-hot"
-            disabled={!canReply}
-            title="Write to this agent"
-            onClick={onChat}
-          >
-            Reply
-          </button>
-        )}
         <button
           type="button"
           title="Files, changes and history"
