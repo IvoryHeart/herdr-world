@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { townDragFor, townDropTarget, type TownDrag } from "./townDrag";
 import { EllipsisVertical } from "lucide-react";
 import { useMobileControls } from "../../components/MobileControls";
 import { Pencil, Plus, Trash2 } from "lucide-react";
@@ -71,6 +72,14 @@ export type TownRoomActions = {
   onCloseRoom(roomKey: string): void;
   /** List every pane of a desk with more panes than drawn seats. */
   onChoosePanes(deskKey: string): void;
+  /** Keyboard move: choose another room for a desk (key M on its target). */
+  onMoveDesk(deskKey: string): void;
+  /** Keyboard move: choose another desk for an agent (key M on its target). */
+  onMoveAgent(agentKey: string): void;
+  /** A desk dragged onto another room of its host. */
+  onDropDesk(deskKey: string, roomKey: string): void;
+  /** An agent dragged onto another desk of its host. */
+  onDropAgent(agentKey: string, deskKey: string): void;
 };
 
 /** Camera kept across Office visits within one page session. */
@@ -169,6 +178,7 @@ export function TownCanvas({
     onHover,
     onAnchorChange,
     onSelectedAnchorChange,
+    roomActions,
   });
   latest.current = {
     chrome,
@@ -185,6 +195,7 @@ export function TownCanvas({
     onHover,
     onAnchorChange,
     onSelectedAnchorChange,
+    roomActions,
   };
 
   // Track when agents became blocked so reception and the rail share age order.
@@ -551,7 +562,15 @@ export function TownCanvas({
       vy: number;
       moved: boolean;
       hit: TownHit | null;
+      /** What a drag from this press would carry: a desk or an agent. */
+      candidate?: TownDrag;
+      /** Touch: a press held still on a desk or agent becomes a drag. */
+      hold?: number;
+      drag?: TownDrag;
     } = null;
+    const ghost = document.createElement("div");
+    ghost.className = "town-drag-ghost";
+    ghost.setAttribute("aria-hidden", "true");
     let pinch: null | {
       distance: number;
       z: number;
@@ -620,6 +639,34 @@ export function TownCanvas({
         moved: false,
         hit: hitAt(point.x, point.y),
       };
+      const drag = townDragFor(
+        gesture.hit,
+        latest.current.model,
+        renderer.level,
+      );
+      if (drag) {
+        const pressed = gesture;
+        pressed.candidate = drag;
+        // A mouse drags at once; touch holds still first, so a quick swipe
+        // still pans the map.
+        if (event.pointerType !== "mouse")
+          pressed.hold = window.setTimeout(() => {
+            if (gesture !== pressed || pressed.moved) return;
+            startDrag(pressed, drag);
+            navigator.vibrate?.(12);
+          }, 350);
+      }
+    };
+    const startDrag = (
+      pressed: NonNullable<typeof gesture>,
+      drag: TownDrag,
+    ) => {
+      pressed.drag = drag;
+      latest.current.onHover?.(null);
+      ghost.textContent = drag.label;
+      ghost.dataset.valid = "false";
+      ghost.style.transform = `translate(${pressed.lx}px, ${pressed.ly}px)`;
+      host.append(ghost);
     };
     const move = (event: PointerEvent) => {
       const renderer = rendererRef.current;
@@ -655,12 +702,33 @@ export function TownCanvas({
         return;
       }
       if (event.pointerId !== gesture.id) return;
+      if (gesture.drag) {
+        const target = townDropTarget(
+          gesture.drag,
+          hitAt(point.x, point.y),
+          latest.current.model,
+        );
+        gesture.drag.target = target;
+        ghost.textContent = target.label;
+        ghost.dataset.valid = String(target.key !== null);
+        ghost.style.transform = `translate(${point.x}px, ${point.y}px)`;
+        gesture.lx = point.x;
+        gesture.ly = point.y;
+        return;
+      }
       const dx = point.x - gesture.lx;
       const dy = point.y - gesture.ly;
       if (
         !gesture.moved &&
         Math.hypot(point.x - gesture.sx, point.y - gesture.sy) > 6
       ) {
+        window.clearTimeout(gesture.hold);
+        if (event.pointerType === "mouse" && gesture.candidate) {
+          gesture.lx = point.x;
+          gesture.ly = point.y;
+          startDrag(gesture, gesture.candidate);
+          return;
+        }
         gesture.moved = true;
         latest.current.onHover?.(null);
       }
@@ -687,6 +755,18 @@ export function TownCanvas({
       if (!renderer || !gesture || event.pointerId !== gesture.id) return;
       const finished = gesture;
       gesture = null;
+      window.clearTimeout(finished.hold);
+      if (finished.drag) {
+        ghost.remove();
+        const { drag } = finished;
+        if (event.type !== "pointercancel" && drag.target?.key) {
+          if (drag.kind === "desk")
+            latest.current.roomActions.onDropDesk(drag.key, drag.target.key);
+          else
+            latest.current.roomActions.onDropAgent(drag.key, drag.target.key);
+        }
+        return;
+      }
       if (finished.moved) {
         if (performance.now() - finished.lt < 80)
           renderer.camera.release(finished.vx, finished.vy);
@@ -763,6 +843,8 @@ export function TownCanvas({
     host.addEventListener("pointerleave", leave);
     host.addEventListener("wheel", wheel, { passive: false });
     return () => {
+      if (gesture) window.clearTimeout(gesture.hold);
+      ghost.remove();
       host.removeEventListener("pointerdown", down);
       host.removeEventListener("pointermove", move);
       host.removeEventListener("pointerup", up);
@@ -1523,6 +1605,11 @@ const TownWorldLayer = memo(function TownWorldLayer({
         onActivate={onActivate}
         onActivateRoom={onActivateRoom}
         onFocusTarget={onFocusTarget}
+        onMoveTarget={(kind, key) =>
+          kind === "desk"
+            ? roomActions.onMoveDesk(key)
+            : roomActions.onMoveAgent(key)
+        }
       />
     </>
   );
@@ -1538,6 +1625,7 @@ function TownTargets({
   onActivate,
   onActivateRoom,
   onFocusTarget,
+  onMoveTarget,
 }: {
   targets: readonly TownTarget[];
   selectedKey: string | null;
@@ -1545,6 +1633,8 @@ function TownTargets({
   onActivate(key: string): void;
   onActivateRoom(key: string): void;
   onFocusTarget(target: TownTarget): void;
+  /** Keyboard move (key M) for a focused desk or agent target. */
+  onMoveTarget(kind: "desk" | "agent", key: string): void;
 }) {
   const identity = useMemo(
     () => targets.map(({ kind, key }) => `${kind}:${key}`).join("|"),
@@ -1583,6 +1673,19 @@ function TownTargets({
       className="world-semantic-targets-overlay town-targets"
       aria-label="Office scene targets"
       aria-busy={pending > 0}
+      onKeyDown={(event) => {
+        // M moves the focused desk or agent; the canvas moves by drag.
+        if (event.key !== "m" && event.key !== "M") return;
+        if (event.metaKey || event.ctrlKey || event.altKey) return;
+        const button = (event.target as HTMLElement).closest<HTMLElement>(
+          ".world-semantic-target",
+        );
+        const kind = button?.dataset.kind;
+        const key = button?.dataset.targetKey;
+        if (!key || (kind !== "desk" && kind !== "agent")) return;
+        event.preventDefault();
+        onMoveTarget(kind, key);
+      }}
     >
       {pending ? (
         <span className="town-visually-hidden" role="status">

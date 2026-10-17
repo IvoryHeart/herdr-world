@@ -212,6 +212,7 @@ function topology(seed: number): Topology {
  * (a menu question for blocked agents) and pane.send_input is recorded.
  */
 const sent: { paneId: string; text: string; keys: string[] }[] = [];
+const moves: { method: string; params: Record<string, unknown> }[] = [];
 let statusOf: (paneId: string) => string = () => "working";
 const SCREENS = {
   blocked: [
@@ -280,6 +281,10 @@ const SCREENS = {
           },
         ],
       };
+    if (method === "town.move_desk" || method === "town.move_pane") {
+      moves.push({ method, params: params ?? {} });
+      return { status: "moved", tab_id: "moved-tab", workspace_id: "moved" };
+    }
     if (method === "pane.send_input") {
       sent.push({
         paneId,
@@ -815,6 +820,47 @@ async function run() {
     "zoomed room stayed at overview",
   );
   check(selected.length === 0, "a room tap must not open an Inspector");
+
+  // From the keyboard, M on a desk lists the host's other rooms; choosing one
+  // asks the service to move that desk there.
+  const deskTarget = [
+    ...host.querySelectorAll<HTMLButtonElement>(
+      '.world-semantic-target[data-kind="desk"]',
+    ),
+  ].find(
+    (target) => !target.getAttribute("aria-label")?.endsWith(", 6 panes"),
+  )!;
+  deskTarget.focus();
+  deskTarget.dispatchEvent(
+    new KeyboardEvent("keydown", { key: "m", bubbles: true }),
+  );
+  await waitFor(
+    () => host.querySelectorAll(".town-chooser-list button").length > 0,
+    "M on a desk did not list rooms to move it to",
+  );
+  host.querySelector<HTMLButtonElement>(".town-chooser-list button")!.click();
+  await waitFor(
+    () => moves.length === 1,
+    "choosing a room did not move the desk",
+  );
+  const deskMove = moves[0]!;
+  check(
+    deskMove.method === "town.move_desk" &&
+      typeof deskMove.params.tab_id === "string" &&
+      typeof deskMove.params.workspace_id === "string" &&
+      !String(deskMove.params.tab_id).startsWith(
+        `${deskMove.params.workspace_id}-tab-`,
+      ),
+    `desk move sent ${JSON.stringify(deskMove)}`,
+  );
+  // Town shows no move icons; moving is by drag, hold or the keyboard.
+  check(
+    !host.querySelector(".town-desk-move") &&
+      ![...host.querySelectorAll("button")].some(
+        (button) => button.textContent?.trim() === "Move…",
+      ),
+    "Town shows a visible move control",
+  );
 
   // A blocked agent walks to reception when its status changes.
   const pane = base.agentPanes.find((p) => p.agent_status === "working")!;

@@ -30,6 +30,11 @@ are optional because the merged PR history records their source.
   phones), step between the whole town, one building, one room and
   one desk. Tap a room to zoom in; very large towns open at roof level. Phones stack the
   buildings in one column. A Town calm motion setting reduces ambient motion.
+- Move Town desks and agents: drag a desk onto another room of the same host,
+  or an agent onto another desk (hold, then drag on phones; press M on a
+  focused desk or agent from the keyboard). The live panes move, so agents keep
+  running; a failed move is rolled back, and moving a room's last desk asks
+  first because the room closes.
 
 ### Changed
 

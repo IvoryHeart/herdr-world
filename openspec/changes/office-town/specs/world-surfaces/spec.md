@@ -272,14 +272,21 @@ short notice; a finished agent SHALL announce itself once.
 
 ### Requirement: Town desk and agent moves
 
-Town SHALL let the user move a desk to a free spot in another room of the same
-host and move an agent pane to a free seat at another desk of the same host, by
-dragging and by a visible Move action. A request SHALL be qualified by connection
-ID and runtime generation and SHALL be refused across hosts, for retired
-generations, or when the runtime does not offer pane moves. Before sending any
-move, a desk move SHALL capture the source tab's complete split tree, including
-each split's direction and ratio, and SHALL refuse the move without mutation if
-any source pane is missing or the tree does not account for every pane. It SHALL
+Town SHALL let the user move a desk to the next free spot of another room of
+the same host and move an agent pane to another desk of the same host, by
+dragging with a mouse, by holding and then dragging on touch, and from the
+keyboard by pressing M on a focused desk or agent target, which opens a list of
+destinations. Town SHALL NOT add visible move controls to the scene. While a
+drag is in progress Town SHALL show where the desk or agent would land, or why
+it cannot. A request SHALL be qualified by connection ID and runtime generation,
+SHALL run in the World service, and SHALL be refused across hosts, for retired
+generations, or when the runtime cannot export a tab's layout. Before sending
+any move, a desk move SHALL capture the source tab's complete split tree with
+`layout.export`, including each split's direction and ratio, and SHALL refuse
+the move without mutation if any source pane is missing or the tree does not
+account for every pane. Because Herdr closes a workspace when its last tab
+leaves, moving a room's last desk, or the only pane of a room's last desk, SHALL
+ask the user to confirm that the room will close before anything moves. It SHALL
 then move the captured tree's first pane to a new tab in the target workspace and
 replay the captured tree by moving each remaining pane into that tab with its
 captured direction and ratio, confirming each step from Herdr before the next.
@@ -292,13 +299,14 @@ panes back into the original tab using their current IDs and report the outcome.
 It SHALL NOT retry an uncertain step, and if rollback fails it SHALL report the
 actual resulting topology.
 
-An agent move SHALL be a single confirmed pane move into the target tab with its
-replacement ID recorded. While a move is pending, Town SHALL reserve the source
+An agent move SHALL be a single confirmed pane move into the target tab, next
+to that desk's last pane, splitting across the table when the desk has an odd
+number of panes and beside it otherwise, with its replacement ID recorded. While a move is pending, Town SHALL reserve the source
 and target spots; the final placement SHALL follow confirmed Herdr topology.
 
 #### Scenario: Move a desk to another room
 
-- **WHEN** the user drags a three-pane desk to a free spot in another room of the same host
+- **WHEN** the user drags a three-pane desk onto another room of the same host
 - **THEN** World captures the desk's split tree before moving anything, moves the
   three panes into one new tab in that workspace with the same split directions
   and ratios, shows the desk at the target spot after Herdr confirms, and the
@@ -331,9 +339,15 @@ and target spots; the final placement SHALL follow confirmed Herdr topology.
 - **THEN** no Herdr operation is sent, the desk returns to its spot, and Town
   explains that desks move only within one host
 
+#### Scenario: Move a room's last desk
+
+- **WHEN** the user drops the only desk of a room onto another room of the same host
+- **THEN** Town asks to confirm that the room will close, and moves the desk only
+  after the user confirms
+
 #### Scenario: Move an agent to another desk
 
-- **WHEN** the user moves an agent to an empty seat at another desk in the same host
+- **WHEN** the user drags an agent onto another desk in the same host
 - **THEN** World moves exactly that pane into the target tab and the agent sits at
   the chosen seat after Herdr confirms
 
