@@ -73,6 +73,19 @@ function isGuard(state: unknown) {
   return typeof state === "object" && state !== null && GUARD in state;
 }
 
+/**
+ * How many guard entries sit above the page's own entry. Each open layer has
+ * one, pushed when it opens, so the user's Back consumes one guard per layer
+ * and never has to push another: browsers skip history entries a page adds
+ * without a user gesture (Chrome's back-button intervention), and a guard
+ * re-pushed while handling Back would make the next Back skip the page.
+ */
+function guardDepth(state: unknown) {
+  if (!isGuard(state)) return 0;
+  const depth = (state as Record<string, unknown>)[GUARD];
+  return typeof depth === "number" && depth > 0 ? depth : 1;
+}
+
 // Effects of one React commit run together; reconcile once after all of them,
 // so layers that open and close in the same commit settle as one change.
 function scheduleReconcile() {
@@ -84,16 +97,18 @@ function scheduleReconcile() {
 function reconcile() {
   reconcileScheduled = false;
   if (backPending) return;
-  const guarded = isGuard(window.history.state);
-  if (layers.size > 0 && !guarded) {
+  const depth = guardDepth(window.history.state);
+  if (layers.size > depth) {
     const base: unknown = window.history.state;
-    window.history.pushState(
-      { ...(typeof base === "object" && base ? base : {}), [GUARD]: true },
-      "",
-    );
-  } else if (layers.size === 0 && guarded && closedOnScreen) {
+    for (let next = depth + 1; next <= layers.size; next += 1)
+      window.history.pushState(
+        { ...(typeof base === "object" && base ? base : {}), [GUARD]: next },
+        "",
+      );
+  } else if (layers.size < depth && closedOnScreen) {
+    // Layers closed on screen take their guards with them.
     backPending = true;
-    window.history.back();
+    window.history.go(layers.size - depth);
   }
   closedOnScreen = false;
 }
@@ -105,22 +120,34 @@ if (typeof window !== "undefined")
       reconcile();
       return;
     }
-    // Forward onto a guard, or Back with nothing open: settle the entry.
-    if (isGuard(event.state) || layers.size === 0) {
+    const depth = guardDepth(event.state);
+    if (layers.size === 0) {
+      // A guard with nothing open (left below a route, or reached by
+      // Forward) returns to the page's own entry.
+      if (depth > 0) {
+        backPending = true;
+        window.history.go(-depth);
+      }
+      return;
+    }
+    if (layers.size <= depth) {
+      // Forward onto a guard: nothing to close.
       scheduleReconcile();
       return;
     }
-    let top: Layer | undefined;
-    for (const layer of layers)
-      if (
-        !top ||
-        layer.level > top.level ||
-        (layer.level === top.level && layer.order > top.order)
-      )
-        top = layer;
-    // The user's Back already removed the guard: nothing to undo.
-    layers.delete(top!);
-    top!.close();
+    // The user's Back consumed guards: close as many top layers.
+    while (layers.size > depth) {
+      let top: Layer | undefined;
+      for (const layer of layers)
+        if (
+          !top ||
+          layer.level > top.level ||
+          (layer.level === top.level && layer.order > top.order)
+        )
+          top = layer;
+      layers.delete(top!);
+      top!.close();
+    }
     scheduleReconcile();
   });
 
@@ -129,7 +156,11 @@ if (typeof window !== "undefined")
  * topmost one through history. Returns false when there is nothing to close.
  */
 export function stepBack(): boolean {
-  if (layers.size === 0 || backPending || !isGuard(window.history.state))
+  if (
+    layers.size === 0 ||
+    backPending ||
+    guardDepth(window.history.state) === 0
+  )
     return false;
   window.history.back();
   return true;

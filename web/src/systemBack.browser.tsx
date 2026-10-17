@@ -126,6 +126,37 @@ async function run() {
   }
 
   {
+    // Browsers skip entries a page pushes without a user gesture, so a Back
+    // must never push a guard: each layer's guard is pushed when it opens.
+    const label = "Back pushes no history";
+    await start();
+    show(["terminal"]);
+    await settle();
+    show(["terminal", "composer"]);
+    await settle();
+    const realPush = history.pushState.bind(history);
+    let pushes = 0;
+    history.pushState = (...args: Parameters<History["pushState"]>) => {
+      pushes += 1;
+      realPush(...args);
+    };
+    await userBack();
+    check(
+      closed.join() === "composer" && open.has("terminal"),
+      `${label}: first Back closed ${closed.join()}`,
+    );
+    await userBack();
+    check(
+      closed.join() === "composer,terminal" && at() === "/office",
+      `${label}: second Back did not return to Office (${at()})`,
+    );
+    history.pushState = realPush;
+    check(pushes === 0, `${label}: Back pushed ${pushes} history entries`);
+    await userBack();
+    check(at() === "/graph", `${label}: third Back did not leave Office`);
+  }
+
+  {
     const label = "layers registered together";
     await start();
     show(["terminal", "composer"]);

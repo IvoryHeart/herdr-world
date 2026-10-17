@@ -39,6 +39,12 @@ are optional because the merged PR history records their source.
   even with the Composer open; the phone's own Back still closes the Composer
   first.
 
+### Fixed
+
+- The phone's Back closes open layers one at a time (Composer, then the
+  terminal) instead of leaving the page on the second press in Chrome, which
+  skips history entries a page adds without a tap.
+
 ## [0.2.4] - 2026-10-16
 
 ### Fixed
