@@ -48,19 +48,23 @@ export function useTownFinished(office: HerdrOfficeProjection) {
   );
   const finishedRef = useRef(finished);
   finishedRef.current = finished;
+  /** Agents whose earlier completion no longer counts as seen. */
   const [fresh, setFresh] = useState<readonly OfficeAgent[]>([]);
   useEffect(() => {
     const agents = office.roster.map(({ agent }) => agent);
-    const step = nextTownFinished(
-      previous.current,
-      agents,
-      finishedRef.current,
-    );
+    const before = previous.current;
+    const step = nextTownFinished(before, agents, finishedRef.current);
     previous.current = step.statuses;
     finishedRef.current = step.finished;
     setFinished(step.finished);
-    if (step.started.length)
-      setFresh(agents.filter((agent) => step.started.includes(agent.key)));
+    // A finish, or new work, starts a new completion that nobody has seen.
+    const renewed = agents.filter(
+      (agent) =>
+        step.started.includes(agent.key) ||
+        (BUSY.has(agent.semanticStatus) &&
+          !BUSY.has(before.get(agent.key) ?? "")),
+    );
+    if (renewed.length) setFresh(renewed);
   }, [office]);
   const dismiss = (key: string) => {
     const current = finishedRef.current;

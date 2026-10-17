@@ -132,7 +132,9 @@ desk until its status changes or the user checks the completion by opening its
 terminal or marking it reviewed; a checked agent SHALL then go to the lounge.
 Because Herdr may report a finished agent as idle, Town SHALL also treat an
 agent it observes going from working or blocked to idle as done until checked.
-This browser-local state SHALL NOT represent approval or mutate Herdr. Desks
+A check covers one completion: when the agent works, asks or finishes again,
+its next completion SHALL be unchecked. This browser-local state SHALL NOT
+represent approval or mutate Herdr. Desks
 SHALL carry their tab's name from the room level, and each seat its agent's or
 terminal's name at the desk level. An idle agent SHALL move to a lounge spot in its
 building, or remain seated with an idle cue when no spot is free. When an

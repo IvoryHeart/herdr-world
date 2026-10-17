@@ -215,7 +215,8 @@ export default function TownView({
       ),
     [completionSeen, observedOffice],
   );
-  // A new finish is unchecked even if an earlier finish of that agent was seen.
+  // Seen marks belong to one completion: an agent that works again, or
+  // finishes again, has new work to check.
   useEffect(() => {
     if (!townFinished.fresh.length) return;
     setCompletionSeen((current) => {
