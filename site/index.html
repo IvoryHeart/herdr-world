@@ -148,7 +148,7 @@
               >Herdr</a
             >
             keeps the terminals alive. Herdr.World observes local and SSH hosts
-            together in Office, Tree and Graph. Hosts filters the overview while
+            together in Town, Office, Desk and Graph. Hosts filters the overview while
             terminals, files, changes and history retain their owning host.
           </p>
           <div class="hero-actions">
@@ -162,6 +162,12 @@
               Start the tutorial
             </a>
           </div>
+          <p class="hero-release">
+            <a href="https://github.com/IvoryHeart/herdr-world/releases/latest">
+              <img src="https://img.shields.io/github/v/release/IvoryHeart/herdr-world?label=Latest%20stable" alt="Latest stable Herdr World release" />
+            </a>
+            <a href="https://github.com/IvoryHeart/herdr-world/releases/latest">Release notes</a>
+          </p>
           <div class="platform-line">
             <span>macOS</span>
             <span>Linux</span>
@@ -186,32 +192,29 @@
               <span class="traffic traffic-red" aria-hidden="true"></span>
               <span class="traffic traffic-yellow" aria-hidden="true"></span>
               <span class="traffic traffic-green" aria-hidden="true"></span>
-              <div class="window-title" data-hero-label>Office</div>
+              <div class="window-title" data-hero-label>Town preview</div>
               <div class="hero-carousel-controls" role="group" aria-label="Product screenshots">
                 <button type="button" data-hero-previous aria-label="Previous screenshot">&#8592;</button>
-                <span data-hero-position>01 / 06</span>
+                <span data-hero-position>01 / 07</span>
                 <button type="button" data-hero-next aria-label="Next screenshot">&#8594;</button>
               </div>
             </div>
             <a
-              href="./assets/herdr-world-desktop-office.png"
-              aria-label="Open the Herdr.World Office screenshot"
+              href="./assets/herdr-world-desktop-town.png"
+              aria-label="Open the Herdr.World Town screenshot"
               data-hero-link
             >
               <picture>
                 <source
                   data-hero-source
-                  type="image/avif"
-                  srcset="
-                    ./assets/herdr-world-hero-720.avif   720w,
-                    ./assets/herdr-world-hero-1200.avif 1200w
-                  "
+                  type="image/png"
+                  srcset="./assets/herdr-world-desktop-town.png 1440w"
                   sizes="(max-width: 620px) calc(100vw - 8px), (max-width: 1240px) calc(100vw - 48px), 1180px"
                 />
                 <img
                   data-hero-image
-                  src="./assets/herdr-world-desktop-office.png"
-                  alt="Herdr.World Office showing six agents across four workspaces on one host"
+                  src="./assets/herdr-world-desktop-town.png"
+                  alt="Herdr.World Town source preview showing four demo workspace rooms and terminal desks"
                   width="1440"
                   height="900"
                   loading="lazy"
@@ -258,6 +261,8 @@
 
       <section class="section shell" aria-labelledby="town-guide-title">
         <h2 id="town-guide-title">Start in Town</h2>
+        <p>Town screenshots show a source preview. The latest stable version is
+          listed above; check its release notes for shipped features.</p>
         <p>Town is the default view: hosts become buildings, workspaces become rooms
           and tabs become team tables. Find waiting agents at reception, read their
           questions in a peek, reply or attach files, then open the same pane's
@@ -509,10 +514,26 @@
               <button
                 type="button"
                 role="tab"
-                id="tab-office"
+                id="tab-town"
                 aria-controls="showcase-panel"
                 aria-selected="true"
                 tabindex="0"
+                data-showcase-tab
+                data-image="./assets/herdr-world-desktop-town.png"
+                data-alt="Town source preview showing four demo workspace rooms and terminal desks"
+                data-label="Town preview"
+                data-title="Explore the town, then open the exact pane."
+                data-copy="Source preview: each host is a building, each workspace a room and each tab a team table. Check release notes for stable availability."
+              >
+                <span>01</span> Town
+              </button>
+              <button
+                type="button"
+                role="tab"
+                id="tab-office"
+                aria-controls="showcase-panel"
+                aria-selected="false"
+                tabindex="-1"
                 data-showcase-tab
                 data-image="./assets/herdr-world-desktop-office.png"
                 data-alt="Herdr.World Office showing spaces and agents"
@@ -520,7 +541,7 @@
                 data-title="See agent work across hosts at a glance."
                 data-copy="Scan local and SSH hosts together, filter the overview, and keep host-owned terminals open while you work."
               >
-                <span>01</span> Office
+                <span>02</span> Office
               </button>
               <button
                 type="button"
@@ -536,7 +557,7 @@
                 data-title="Trace every agent back to its runtime."
                 data-copy="Search and collapse qualified spaces and agents across observed hosts, with each runtime and resource kept distinct."
               >
-                <span>02</span> Tree
+                <span>03</span> Tree
               </button>
               <button
                 type="button"
@@ -552,7 +573,7 @@
                 data-title="Follow runtime relationships visually."
                 data-copy="Move from a machine to a workspace to the exact agent or terminal, then hand off into its live Spaces context."
               >
-                <span>03</span> Graph
+                <span>04</span> Graph
               </button>
               <button
                 type="button"
@@ -568,7 +589,7 @@
                 data-title="Inspect the repository without leaving the agent."
                 data-copy="Browse the selected workspace and keep its terminal, changes, and agent identity in one movable Inspector."
               >
-                <span>04</span> Files
+                <span>05</span> Files
               </button>
               <button
                 type="button"
@@ -584,7 +605,7 @@
                 data-title="Review the agent's changes in context."
                 data-copy="See changed files and inspect a diff beside the selected agent's workspace."
               >
-                <span>05</span> Changes
+                <span>06</span> Changes
               </button>
               <button
                 type="button"
@@ -600,7 +621,7 @@
                 data-title="Review what the agent actually did."
                 data-copy="Read the selected agent's session record beside its Office context, then return to the same live terminal."
               >
-                <span>06</span> History
+                <span>07</span> History
               </button>
             </div>
 
@@ -608,24 +629,24 @@
               class="showcase-panel"
               id="showcase-panel"
               role="tabpanel"
-              aria-labelledby="tab-office"
+              aria-labelledby="tab-town"
               tabindex="0"
               data-showcase-panel
             >
               <div class="showcase-window">
                 <div class="showcase-topline">
                   <span><i></i><i></i><i></i></span>
-                  <strong data-showcase-label>Office</strong>
+                  <strong data-showcase-label>Town preview</strong>
                   <em>Local / Connected</em>
                 </div>
                 <a
-                  href="./assets/herdr-world-desktop-office.png"
+                  href="./assets/herdr-world-desktop-town.png"
                   aria-label="Open the current Herdr.World product screenshot"
                   data-showcase-link
                 >
                   <img
-                    src="./assets/herdr-world-desktop-office.png"
-                    alt="Herdr.World Office showing spaces and agents"
+                    src="./assets/herdr-world-desktop-town.png"
+                    alt="Town source preview showing demo workspace rooms and terminal desks"
                     width="1440"
                     height="900"
                     loading="lazy"
@@ -636,12 +657,11 @@
               </div>
               <div class="showcase-caption" aria-live="polite">
                 <h3 data-showcase-title>
-                  See agent work across hosts at a glance.
+                  Explore the town, then open the exact pane.
                 </h3>
                 <p data-showcase-copy>
-                  Keep local and SSH hosts observed in the background, then scan
-                  qualified spaces and recognized agents across hosts without
-                  losing the terminal workflow underneath.
+                  Source preview: hosts become buildings and workspaces become rooms.
+                  Check release notes for stable availability.
                 </p>
               </div>
             </div>
@@ -754,10 +774,10 @@
             </figure>
             <figure class="phone phone-center">
               <div class="phone-speaker"></div>
-              <a href="./assets/herdr-world-mobile-tree.png">
+              <a href="./assets/herdr-world-mobile-town.png">
                 <img
-                  src="./assets/herdr-world-mobile-tree.png"
-                  alt="Herdr.World Tree view on mobile"
+                  src="./assets/herdr-world-mobile-town.png"
+                  alt="Herdr.World Town source preview on mobile"
                   width="390"
                   height="844"
                   loading="lazy"

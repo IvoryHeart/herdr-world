@@ -525,6 +525,15 @@
     margin-top: 28px;
   }
 
+  .hero-release {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 18px;
+  }
+
   .platform-line {
     display: flex;
     align-items: center;

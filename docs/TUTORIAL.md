@@ -101,6 +101,10 @@ changes what you see and does not disconnect hosts or retarget open terminals.
 
 ### Explore Town: find work that needs you
 
+Town is shown here from a source preview. Check the
+[latest release notes](https://github.com/IvoryHeart/herdr-world/releases/latest)
+for availability in the stable download.
+
 <a id="town"></a>
 
 1. Open **Town** from the view switcher, or return to the World root URL. Each
@@ -145,6 +149,10 @@ check the diff using chapter 2 before treating the work as complete.
 
 **You are done when:** you can find an agent on the expected host, read its peek,
 and open its terminal or Inspector without losing its workspace context.
+
+![Town source preview with four disposable workspaces and terminal desks](./images/herdr-world-desktop-town.png)
+
+![Town source preview at phone width](./images/herdr-world-mobile-town.png)
 
 ### Explore Graph: find an agent and open its terminal
 
