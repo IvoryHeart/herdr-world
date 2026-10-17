@@ -856,7 +856,9 @@ export function TownCanvas({
         : []),
       { z: limits.home, go: () => frameHome(renderer, l, true) },
       {
-        z: buildingZoom(camera, building),
+        // Stop where the building's room summaries show, as on a phone, so
+        // the next step goes into a room.
+        z: Math.min(buildingZoom(camera, building), limits.card * 0.95),
         go: (z) =>
           camera.flyTo(
             (building.x + building.w / 2) * T,

@@ -1402,6 +1402,24 @@
   color: #ffb547;
 }
 
+/* Session messages: the user's in gold, tool steps dim, errors red. */
+.town-msg {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.town-msg-user {
+  color: #ffe0a8;
+}
+
+.town-msg-tool {
+  color: #8b949e;
+}
+
+.town-msg-error {
+  color: #ff9a8b;
+}
+
 .town-question {
   display: block;
   margin: 6px 0 2px;

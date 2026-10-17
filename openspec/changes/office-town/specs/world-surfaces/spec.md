@@ -232,8 +232,9 @@ Opening the terminal from a peek SHALL follow the Inspector presentation prefere
 
 ### Requirement: Town peeks show recent chatter and take replies
 
-An agent's peek SHALL show the agent's recent output, read from the exact
-qualified pane, in a small box that scrolls back and follows the newest lines
+An agent's peek SHALL show the agent's recent messages from its session
+history when the agent has a readable session, and otherwise its recent output
+read from the exact qualified pane, in a small box that scrolls back and follows the newest lines
 unless the user has scrolled up. A waiting agent's question SHALL be set apart
 from its earlier output, with its answers as one-tap buttons. The peek SHALL end
 with a reply line and Send. On desktop the reply line SHALL be typed in the peek

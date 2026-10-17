@@ -32,6 +32,7 @@ import {
   townChoices,
   townLeaf,
   townOwner,
+  useTownHistory,
   townScreenLines,
   useTownScreen,
 } from "./town/townChat";
@@ -664,6 +665,11 @@ export default function TownView({
     Boolean(peekAgent),
     peek?.chat ? 1_200 : 2_000,
   );
+  const peekHistory = useTownHistory(
+    peekLeaf,
+    Boolean(peekAgent),
+    peek?.chat ? 2_000 : 4_000,
+  );
   const peekLines = townScreenLines(peekScreen);
   // Answers come only from the question at the bottom of a waiting screen.
   const peekChoices =
@@ -847,6 +853,7 @@ export default function TownView({
             agent={peekAgent}
             where={whereOf(peekAgent.key)}
             lines={peekLines}
+            history={peekHistory}
             loading={peekScreen === null && Boolean(peekLeaf)}
             choices={peekChoices}
             canReply={

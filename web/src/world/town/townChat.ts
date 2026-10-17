@@ -6,6 +6,12 @@
 
 import { useEffect, useState } from "react";
 import { bridge, type ConnectionClient } from "../../api";
+import {
+  mergeAgentHistory,
+  type AgentHistory,
+  type AgentHistoryResponse,
+  type HistoryEntry,
+} from "../../components/agentHistory";
 import { terminalComposerRequest } from "../../terminalComposer";
 import { deskClient } from "../handoffs";
 import { questionFromScreen } from "../paneScreen";
@@ -99,6 +105,81 @@ export function useTownScreen(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [identity, active, intervalMs]);
   return screen?.id === identity ? screen.text : null;
+}
+
+/** Messages the peek shows from the agent's session history. */
+const HISTORY_MESSAGES = 24;
+
+/**
+ * The agent's recent conversation from its session history, as the
+ * Inspector's History shows it, refreshed while `active`. A small pane holds
+ * little on screen, so this is the peek's chatter whenever the agent has a
+ * readable session; null until it does.
+ */
+export function useTownHistory(
+  leaf: WorldLeafObject | null,
+  active: boolean,
+  intervalMs = 4_000,
+): HistoryEntry[] | null {
+  const [history, setHistory] = useState<{
+    id: string;
+    value: AgentHistory;
+  } | null>(null);
+  const agent = leaf?.pane.agent;
+  const identity =
+    leaf && agent
+      ? `${leaf.connectionId}\u0000${leaf.generation}\u0000${leaf.pane.pane_id}\u0000${agent}`
+      : null;
+  useEffect(() => {
+    if (!leaf || !agent || !active || !identity) return;
+    let cancelled = false;
+    let timer: number | undefined;
+    let current: AgentHistory | null = null;
+    const read = async () => {
+      const client = townOwner(leaf);
+      if (client && document.visibilityState !== "hidden")
+        try {
+          const requested = current?.cursor ?? null;
+          const response = (await client.call(
+            "agent_history.get",
+            {
+              history_version: 2,
+              cursor: requested,
+              pane_id: leaf.pane.pane_id,
+              workspace_id: leaf.pane.workspace_id,
+              tab_id: leaf.pane.tab_id,
+              agent,
+            },
+            8_000,
+          )) as AgentHistoryResponse;
+          const merged = mergeAgentHistory(current, response, requested);
+          if (
+            !cancelled &&
+            client.isCurrent() &&
+            merged &&
+            merged !== current
+          ) {
+            current = merged;
+            setHistory({ id: identity, value: merged });
+          }
+        } catch {
+          // Without a readable session the peek shows the screen instead.
+        }
+      if (!cancelled) timer = window.setTimeout(read, intervalMs);
+    };
+    void read();
+    return () => {
+      cancelled = true;
+      if (timer !== undefined) window.clearTimeout(timer);
+    };
+    // identity captures the leaf's owner, pane and agent.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [identity, active, intervalMs]);
+  if (history?.id !== identity) return null;
+  const messages = history.value.messages.filter(
+    (entry) => entry.kind !== "tool_result" || entry.is_error,
+  );
+  return messages.length ? messages.slice(-HISTORY_MESSAGES) : null;
 }
 
 /**

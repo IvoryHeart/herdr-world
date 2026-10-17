@@ -245,6 +245,35 @@ const SCREENS = {
         ),
       };
     }
+    if (method === "agent_history.get")
+      return {
+        history_version: 2,
+        mode: "snapshot",
+        cursor: { epoch: "synthetic", revision: 1 },
+        window_limit: 200,
+        agent: "claude",
+        pane_id: paneId,
+        workspace_id: String(params?.workspace_id ?? ""),
+        tab_id: String(params?.tab_id ?? ""),
+        updated_at: "2026-01-01T00:00:00Z",
+        path: "",
+        entries: [
+          {
+            id: "u1",
+            role: "user",
+            kind: "message",
+            text: "Keep the oldest waiting agent first",
+            sent_at: "2026-01-01T00:00:00Z",
+          },
+          {
+            id: "a1",
+            role: "assistant",
+            kind: "message",
+            text: "I'll sort the reception queue by when agents started waiting.",
+            sent_at: "2026-01-01T00:00:01Z",
+          },
+        ],
+      };
     if (method === "pane.send_input") {
       sent.push({
         paneId,
@@ -497,6 +526,14 @@ async function run() {
   const peekConnection = base.connections.find((connection) =>
     connection.snapshot?.panes.some((pane) => pane.pane_id === peekPane),
   )?.connectionId;
+  // The chatter is the agent's session history when it has one.
+  await waitFor(
+    () =>
+      host
+        .querySelector(".town-peek-screen")
+        ?.textContent?.includes("I'll sort the reception queue") === true,
+    "peek did not show the agent's session messages",
+  );
   // The question sits in its own box above the answers.
   check(
     (
@@ -586,9 +623,9 @@ async function run() {
     const chatScreen =
       host.querySelector(".town-peek-screen")?.textContent ?? "";
     check(
-      chatScreen.includes("Updated the reception queue") &&
+      chatScreen.includes("I'll sort the reception queue") &&
         chatScreen.includes("Do you want"),
-      "chat should show the agent's whole screen",
+      "chat should show the agent's messages and its question",
     );
     // Direct typing happens in the full terminal.
     [...host.querySelectorAll<HTMLLabelElement>(".town-peek label")]

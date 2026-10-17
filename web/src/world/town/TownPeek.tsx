@@ -6,6 +6,7 @@ import {
   type ReactNode,
 } from "react";
 import type { OfficeAgent } from "../herdrOfficeProjection";
+import type { HistoryEntry } from "../../components/agentHistory";
 import { townLineKind, townQuestion, type TownChoice } from "./townChat";
 import { townPortrait } from "./townSprites";
 
@@ -16,6 +17,16 @@ const STATUS: Record<OfficeAgent["semanticStatus"], string> = {
   idle: "On a break",
   unknown: "Unknown",
 };
+
+/** One history entry as a line or two of chat. */
+function townHistoryText(entry: HistoryEntry) {
+  const text = entry.text.replace(/\s+\n/g, "\n").trim();
+  const short = text.length > 600 ? `${text.slice(0, 600)}…` : text;
+  if (entry.kind === "tool_call")
+    return `⏺ ${entry.tool_name ?? "Tool"}${short ? ` · ${short.split("\n")[0]!.slice(0, 120)}` : ""}`;
+  if (entry.kind === "error" || entry.is_error) return `✗ ${short}`;
+  return entry.role === "user" ? `› ${short}` : short || "…";
+}
 
 export function townStatusText(agent: OfficeAgent) {
   return agent.stale
@@ -54,7 +65,10 @@ export function TownPeek({
   inlineReply,
   onAttach,
   onReviewed,
+  history,
 }: {
+  /** Recent messages from the agent's session, shown in place of its screen. */
+  history: readonly HistoryEntry[] | null;
   /** Check a finished agent's work, which sends it for a break. */
   onReviewed(): void;
   /**
@@ -113,7 +127,9 @@ export function TownPeek({
   // Follow the newest lines, as Desk's cards do, unless the reader has
   // scrolled up to read earlier messages.
   const follow = useRef(true);
-  const text = lines.join("\n");
+  const text =
+    lines.join("\n") +
+    (history?.length ? `#${history[history.length - 1]!.id}` : "");
   useEffect(() => {
     follow.current = true;
   }, [agent.key]);
@@ -227,19 +243,29 @@ export function TownPeek({
             24;
         }}
       >
-        {lines.length
-          ? chatter.map((line, index) => (
+        {history?.length
+          ? history.map((entry) => (
               <span
-                key={index}
-                className={`town-line town-line-${townLineKind(line)}`}
+                key={entry.id}
+                className={`town-msg town-msg-${entry.role}${entry.is_error ? " town-msg-error" : ""}`}
               >
-                {line}
+                {townHistoryText(entry)}
                 {"\n"}
               </span>
             ))
-          : loading
-            ? "Reading the screen…"
-            : (agent.taskSummary ?? "Nothing on screen yet.")}
+          : lines.length
+            ? chatter.map((line, index) => (
+                <span
+                  key={index}
+                  className={`town-line town-line-${townLineKind(line)}`}
+                >
+                  {line}
+                  {"\n"}
+                </span>
+              ))
+            : loading
+              ? "Reading the screen…"
+              : (agent.taskSummary ?? "Nothing on screen yet.")}
         {question.length ? (
           <span className="town-question">{question.join("\n")}</span>
         ) : null}

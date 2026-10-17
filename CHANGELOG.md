@@ -20,7 +20,8 @@ are optional because the merged PR history records their source.
   finished work and typing, and desks and seats carry their tab, agent and
   terminal names.
 - Town lists agents that need you in a needs-you rail (a bottom tray on phones).
-  Hover or tap an agent for a peek with its recent chatter, its question in a
+  Hover or tap an agent for a peek with its recent messages (from its session
+  history, or its screen when it has none), its question in a
   highlighted box, one-tap answers and a reply line with 📎 attachments. On phones the reply line
   opens World's composer (keys, attachments, Insert and Send) right in the
   peek; Inspector opens the agent's files, changes and history. Answers and finished agents show short notices.
