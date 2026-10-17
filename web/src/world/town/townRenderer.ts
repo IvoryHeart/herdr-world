@@ -915,9 +915,7 @@ export async function createTownRenderer(
         const kind =
           status === "blocked"
             ? "blocked"
-            : status === "done" &&
-                actor.mode === "seat" &&
-                !state.completionSeenKeys.has(agent.key)
+            : status === "done" && !state.completionSeenKeys.has(agent.key)
               ? "done"
               : level === "desk" && status === "idle" && actor.mode === "stand"
                 ? "idle"

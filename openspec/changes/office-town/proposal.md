@@ -35,14 +35,12 @@ its settings and its contract are unchanged.
 - Add semantic zoom over one placement: town (roofs and host summaries),
   overview (room status cards and reception boards, the desktop default), room
   (tables with per-seat status) and desk (characters, screens and animation).
-- Send blocked agents to their host's reception, where they queue oldest first.
-  Keep done agents at their desk with a completion marker until inspected, and
-  send idle agents to the lounge.
+- Send blocked agents to their host's reception, where they queue oldest first,
+  with finished agents after them, and send idle agents to the lounge.
 - Add an attention rail, grouped host → room → agent and hideable on desktop and
   a flat bottom tray on phones, plus a hover or tap peek showing the pane's
   latest lines, answer options when those lines show a numbered menu or a yes/no
-  prompt, a reply box and type-to-reply, and a chat dock with the desk's panes as
-  tabs, the live screen and a composer.
+  prompt, and Reply, which opens World's terminal composer for that pane.
 - Add desk moves (a tab to a free spot in another room on the same host) and
   agent moves (a pane to a free seat at another table) through Herdr
   `pane.move`, qualified by connection and runtime generation, confirmed by

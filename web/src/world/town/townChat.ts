@@ -7,18 +7,14 @@
 import { useEffect, useState } from "react";
 import { bridge, type ConnectionClient } from "../../api";
 import { terminalComposerRequest } from "../../terminalComposer";
-import { terminalUploadedPathsText } from "../../terminalFileDrop";
-import {
-  uploadTerminalFile,
-  uploadTerminalImage,
-} from "../../terminalImageUpload";
 import { deskClient } from "../handoffs";
 import { activityFromScreen, questionFromScreen } from "../paneScreen";
 import type { WorldLeafObject, WorldObject } from "../worldObject";
 
 export type TownChoice = { key: string; label: string };
 
-const ownerOf = (leaf: WorldLeafObject): ConnectionClient | null =>
+/** The pane's own current connection, or null if its owner changed. */
+export const townOwner = (leaf: WorldLeafObject): ConnectionClient | null =>
   deskClient(
     (candidate: WorldLeafObject) =>
       bridge.connection(candidate.connectionId, candidate.generation),
@@ -64,7 +60,7 @@ export function useTownScreen(
     let cancelled = false;
     let timer: number | undefined;
     const read = async () => {
-      const client = ownerOf(leaf);
+      const client = townOwner(leaf);
       if (client && document.visibilityState !== "hidden")
         try {
           const text = textOf(
@@ -144,34 +140,11 @@ export async function sendTownReply(
   text: string,
   submit: boolean,
 ) {
-  const client = ownerOf(leaf);
+  const client = townOwner(leaf);
   if (!client)
     throw new TownReplyError(
       "This agent's host changed; refresh before replying.",
     );
   const request = terminalComposerRequest(leaf.pane.pane_id, text, submit);
   await client.call(request.method, request.params);
-}
-
-/**
- * Upload files to the pane's own host and return their paths as prompt text.
- * Uploading never writes to the terminal; the caller inserts the text.
- */
-export async function uploadTownFiles(
-  leaf: WorldLeafObject,
-  files: readonly File[],
-): Promise<string> {
-  const client = ownerOf(leaf);
-  if (!client)
-    throw new TownReplyError(
-      "This agent's host changed; refresh before uploading.",
-    );
-  const paths: string[] = [];
-  for (const file of files)
-    paths.push(
-      file.type.startsWith("image/")
-        ? await uploadTerminalImage(client, file)
-        : await uploadTerminalFile(client, file),
-    );
-  return terminalUploadedPathsText(paths);
 }

@@ -2,9 +2,9 @@
  * Presentation-only agent movement for the Office town.
  *
  * Where an agent stands follows its authoritative status: seated while working,
- * unknown or done; queued at its host reception while blocked; still at its
- * desk while briefly idle (an agent waiting at its prompt), and in the lounge
- * once it has been idle for a while. Movement never delays operational state, and every actor keeps
+ * unknown; at its host reception while blocked (oldest first) or finished
+ * (after the waiting agents); and in the lounge while idle. When reception or
+ * the lounge is full, the rest stay at their desks. Movement never delays operational state, and every actor keeps
  * its agent key, so its exact pane target is unchanged wherever it stands.
  */
 
@@ -45,8 +45,8 @@ export type TownActor = {
   queueSlot: number | null;
   spot: TownSpot | null;
   blockedSince: number;
-  /** Wall-clock time this agent was first seen idle, or 0. */
-  idleSince: number;
+  /** Session clock time this agent was first seen finished, or 0. */
+  doneSince: number;
 };
 
 export type TownGoal =
@@ -210,19 +210,10 @@ export function townActorWorld(
 }
 
 /** Owns every actor; `sync` reconciles goals and `step` advances movement. */
-/** An agent idle at least this long leaves its desk for the lounge. */
-export const TOWN_LOUNGE_AFTER_MS = 10 * 60_000;
-
 export class TownActors {
   readonly actors = new Map<string, TownActor>();
   private world: TownActorWorld | null = null;
   private clock = 0;
-  private lastLoungeCheck = 0;
-
-  constructor(
-    private readonly loungeAfterMs = TOWN_LOUNGE_AFTER_MS,
-    private readonly now: () => number = Date.now,
-  ) {}
 
   get time() {
     return this.clock;
@@ -257,7 +248,7 @@ export class TownActors {
           queueSlot: null,
           spot: null,
           blockedSince: agent.semanticStatus === "blocked" ? this.clock : 0,
-          idleSince: 0,
+          doneSince: agent.semanticStatus === "done" ? this.clock : 0,
         };
         this.actors.set(agent.key, actor);
         fresh.add(agent.key);
@@ -266,9 +257,9 @@ export class TownActors {
       if (agent.semanticStatus === "blocked" && actor.blockedSince === 0)
         actor.blockedSince = this.clock || 1e-6;
       if (agent.semanticStatus !== "blocked") actor.blockedSince = 0;
-      if (agent.semanticStatus === "idle") {
-        if (actor.idleSince === 0) actor.idleSince = this.now();
-      } else actor.idleSince = 0;
+      if (agent.semanticStatus === "done" && actor.doneSince === 0)
+        actor.doneSince = this.clock || 1e-6;
+      if (agent.semanticStatus !== "done") actor.doneSince = 0;
     }
     for (const key of [...this.actors.keys()])
       if (!seen.has(key)) {
@@ -293,15 +284,23 @@ export class TownActors {
     const queues = new Map<string, TownActor[]>();
     for (const actor of this.actors.values()) {
       const agent = model.agents.get(actor.key)!;
-      if (agent.semanticStatus !== "blocked") continue;
+      if (agent.semanticStatus !== "blocked" && agent.semanticStatus !== "done")
+        continue;
       const list = queues.get(actor.hostKey) ?? [];
       list.push(actor);
       queues.set(actor.hostKey, list);
     }
     const queueSlots = new Map<string, number>();
     for (const [hostKey, list] of queues) {
+      // Waiting agents first, oldest first; finished agents after them.
+      const waiting = (actor: TownActor) => actor.blockedSince > 0;
       list.sort(
-        (a, b) => a.blockedSince - b.blockedSince || a.key.localeCompare(b.key),
+        (a, b) =>
+          Number(waiting(b)) - Number(waiting(a)) ||
+          (waiting(a)
+            ? a.blockedSince - b.blockedSince
+            : a.doneSince - b.doneSince) ||
+          a.key.localeCompare(b.key),
       );
       const building = world.buildings.get(hostKey)!;
       list
@@ -319,11 +318,7 @@ export class TownActors {
       };
       const slot = queueSlots.get(actor.key);
       if (slot !== undefined) goal = { kind: "queue", slot };
-      else if (
-        agent.semanticStatus === "idle" &&
-        actor.idleSince > 0 &&
-        this.now() - actor.idleSince >= this.loungeAfterMs
-      ) {
+      else if (agent.semanticStatus === "idle") {
         if (actor.spot) goal = { kind: "lounge", spot: actor.spot };
         else {
           const taken = loungeTaken.get(actor.hostKey) ?? new Set();
@@ -445,20 +440,6 @@ export class TownActors {
   /** Advance movement by `dt` seconds. Returns whether anything moved. */
   step(dt: number) {
     this.clock += dt;
-    // Agents that have now been idle long enough head for the lounge.
-    const wall = this.now();
-    if (wall - this.lastLoungeCheck > 5_000) {
-      this.lastLoungeCheck = wall;
-      for (const actor of this.actors.values())
-        if (
-          actor.idleSince > 0 &&
-          actor.goal?.kind === "seat" &&
-          wall - actor.idleSince >= this.loungeAfterMs
-        ) {
-          this.assignGoals(false, new Set());
-          break;
-        }
-    }
     let moved = false;
     for (const actor of this.actors.values()) {
       if (actor.mode === "walk") {

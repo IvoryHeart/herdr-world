@@ -19,7 +19,7 @@
 - [x] 3.3 Implement the peek with bounded latest lines, reply box, type-to-reply and digit answers; offer answer options when the latest lines show a numbered menu or yes/no prompt; verify exact-target delivery, retirement rejection, that hover alone never captures keys (terminal A focused while B is peeked), and that digits in the reply box are text.
 - [ ] 3.4 Route room activation and double-tap to zoom, keep visible zoom controls, and connect phone Back through the shared system Back module; verify on 390 px fixtures.
 - [x] 3.5 Add Town as its own World view next to Office (route, view switcher, phone navigation), restore the Pixel Office as Office, keep the rail inside Town with its own hide control, and use the shell's search, settings and Inspector.
-- [x] 3.6 Add the chat dock (desk panes as tabs, live screen, answers, composer, Enter, Next, full terminal), reply and completion toasts, and question, done, idle and typing bubbles; verify exact-pane delivery in the Town fixture.
+- [x] 3.6 Send replies through World's terminal composer (Reply opens the pane with its composer), open the Inspector on Files, add reply and completion toasts and question, done, idle, sleep and typing bubbles, and queue finished agents at reception; verify exact-pane answers, the composer request and the Inspector view in the Town fixture.
 
 ## 4. Moves
 

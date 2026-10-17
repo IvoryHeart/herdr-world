@@ -1145,7 +1145,14 @@ const TownWorldLayer = memo(function TownWorldLayer({
             agent.hostKey === building.hostKey &&
             agent.semanticStatus === "blocked",
         );
-        const shown = queue.slice(0, 6);
+        // Finished agents wait at reception too, after those who need you.
+        const visitors = attention.filter(
+          (agent) =>
+            agent.hostKey === building.hostKey &&
+            (agent.semanticStatus === "blocked" ||
+              agent.semanticStatus === "done"),
+        );
+        const shown = visitors.slice(0, 6);
         const counts = building.rooms.reduce(
           (sum, placed) => {
             const room = model.rooms.get(placed.key);
@@ -1194,7 +1201,7 @@ const TownWorldLayer = memo(function TownWorldLayer({
                 </span>
                 {queue.length ? <b>{queue.length}</b> : null}
               </div>
-              {queue.length ? (
+              {visitors.length ? (
                 <div className="town-reception-queue">
                   {shown.map((agent) => (
                     <ReceptionEntry
@@ -1208,9 +1215,9 @@ const TownWorldLayer = memo(function TownWorldLayer({
                       onHoverEntry={onHoverEntry}
                     />
                   ))}
-                  {queue.length > shown.length ? (
+                  {visitors.length > shown.length ? (
                     <span className="town-reception-more">
-                      +{queue.length - shown.length}
+                      +{visitors.length - shown.length}
                     </span>
                   ) : null}
                 </div>
@@ -1573,8 +1580,12 @@ function ReceptionEntry({
     <button
       ref={ref}
       type="button"
-      className="town-reception-entry"
-      aria-label={`${agent.displayLabel}, needs input for ${ago(since, now)}`}
+      className={`town-reception-entry${agent.semanticStatus === "done" ? " town-reception-done" : ""}`}
+      aria-label={
+        agent.semanticStatus === "done"
+          ? `${agent.displayLabel}, finished`
+          : `${agent.displayLabel}, needs input for ${ago(since, now)}`
+      }
       title={agent.taskSummary ?? agent.displayLabel}
       onClick={() => onSelect(agent.key)}
       onDoubleClick={() => onActivate(agent.key)}
@@ -1585,7 +1596,9 @@ function ReceptionEntry({
     >
       <img src={portrait(agent.key)} alt="" width={28} height={40} />
       <span>{agent.displayLabel}</span>
-      <small>{ago(since, now)}</small>
+      <small>
+        {agent.semanticStatus === "done" ? "done ✓" : ago(since, now)}
+      </small>
     </button>
   );
 }

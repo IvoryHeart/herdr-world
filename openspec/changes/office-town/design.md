@@ -234,14 +234,17 @@ then done agents newest first.
 - **Actions**: hovering an entry peeks; activating it opens the chat dock, and N
   opens the next agent.
 
-### 7a. Chat dock
+### 7a. Replies through World's composer
 
-Activating an agent, desk or rail entry opens a dock for that exact pane, beside
-the town on desktop and full screen on phones. It shows the desk's panes as tabs,
-the selected pane's visible screen (re-read every 1.5 s while open), answer
-options, a composer that sends text then Enter, an Enter-only control, Next and
-Open full terminal, which uses the shared Inspector. Reads and input use the
-pane's own connection and runtime generation, checked before every call.
+On the phone layout, Reply (and activating an agent, desk or rail entry) grows
+the peek into a chat card that embeds World's `TerminalComposer` for that pane:
+the user's shortcut rows, attachments uploaded to the pane's own host, Insert and
+Send, and the draft shared with that pane's terminal. The card is a column whose
+screen lines shrink so the composer stays above the keyboard. Desktop World has
+no composer and types directly into terminals, so Reply opens the pane's
+terminal there. A Town-only chat dock and peek text box were tried first and
+removed after the phone keyboard covered them. Inspector opens World's Inspector
+on Files through the same `applySelection` path as the shell's Actions menu.
 
 ### 8. Desk and agent moves
 

@@ -124,10 +124,11 @@ Town SHALL seat working and unknown agents at their pane's seat. A blocked agent
 SHALL move to its host's reception and queue in order of when it became blocked,
 oldest first, within a bounded number of queue positions; further blocked agents
 SHALL stay at their seat with a waiting cue and the reception SHALL show the exact
-overflow count. A done agent SHALL remain at its seat with a completion marker
-until that qualified completion is inspected; this browser-local seen state SHALL
-NOT represent approval or mutate Herdr. An idle agent SHALL move to a lounge spot
-in its building or remain seated with an idle cue when no spot is free. When an
+overflow count. A done agent SHALL also go to its host's reception, queued after
+the blocked agents, and show a completion marker until its status changes or the
+completion is inspected; this browser-local seen state SHALL NOT represent
+approval or mutate Herdr. An idle agent SHALL move to a lounge spot in its
+building, or remain seated with an idle cue when no spot is free. When an
 agent's status changes, it SHALL move to its new location, and an answered agent
 SHALL return to its seat. Location and movement SHALL be presentation only: they
 SHALL NOT delay operational state, and every agent SHALL keep its exact qualified
@@ -149,8 +150,8 @@ pane target wherever it stands.
 #### Scenario: An agent finishes
 
 - **WHEN** an agent becomes done
-- **THEN** it stays at its seat with a completion marker until the user inspects
-  that completion, and inspecting it does not change Herdr state
+- **THEN** it walks to its host's reception behind any waiting agents and shows a
+  completion marker, and inspecting it does not change Herdr state
 
 ### Requirement: Town attention rail
 
@@ -161,7 +162,8 @@ collapsible host groups, and the user SHALL be able to hide it to a count and
 restore it; this choice SHALL persist per browser. On phones the list SHALL be a
 bottom tray that remains reachable while a peek or card is open. Hovering an
 entry SHALL open its peek, and activating an entry SHALL open that exact pane in
-the chat dock. A keyboard command SHALL open the next agent that needs the user.
+World's terminal composer. A keyboard command SHALL open the next agent that
+needs the user.
 The rail SHALL list a bounded number of entries and count the rest.
 
 #### Scenario: Work through waiting agents on desktop
@@ -181,17 +183,14 @@ Hovering an agent, a reception entry or a rail entry with a pointer SHALL open a
 peek after a short delay, and tapping one SHALL open a pinned peek. The peek SHALL
 show the agent's name, location and status, the latest bounded lines of its pane
 (the question when it is waiting), answer options only when those lines present a
-numbered menu or a yes/no prompt, a reply box, and actions to open the chat dock,
-open the terminal and go to the next waiting agent. Tapping an agent in Town
+numbered menu or a yes/no prompt, and actions to reply, open the Inspector, open
+the terminal and go to the next waiting agent. Tapping an agent in Town
 SHALL open its peek and SHALL NOT open an Inspector; tapping a room SHALL only
 zoom to it.
 
 Peek keyboard shortcuts SHALL apply only while keyboard focus is in the Town
 scene or in the peek; pointer hover alone SHALL NOT capture keys. In that context,
-digit keys SHALL choose the corresponding answer, and other printable keys SHALL
-move focus to the reply box and type there. While the reply box has focus, digits
-and all other keys SHALL be ordinary text and answer shortcuts SHALL be disabled.
-Town SHALL NOT capture keys while a terminal, search field or other editable
+digit keys SHALL choose the corresponding answer. Town SHALL NOT capture keys while a terminal, search field or other editable
 control has focus, during IME composition, or with Ctrl, Alt or Meta held, and a
 hover peek SHALL NOT change the keyboard target. Answers
 and replies SHALL be sent only to the exact qualified pane through the existing
@@ -205,23 +204,11 @@ Opening the terminal from a peek SHALL follow the Inspector presentation prefere
 - **THEN** exactly that pane receives the answer, the agent becomes working, and
   no other pane receives input
 
-#### Scenario: Reply by typing
-
-- **WHEN** keyboard focus is in the Town scene, a peek is open, and the user types a
-  message and presses Enter
-- **THEN** the message goes to that peek's exact pane without first clicking the reply box
-
 #### Scenario: A terminal has focus while another agent is hovered
 
 - **WHEN** agent A's terminal has keyboard focus and the pointer hovers agent B so
   that B's peek opens, and the user types digits and letters
-- **THEN** every key reaches only A's terminal, no answer is sent to B, and B's
-  reply box receives nothing
-
-#### Scenario: Type digits in the reply box
-
-- **WHEN** the reply box has focus and the user types "3 files"
-- **THEN** the text "3 files" is entered and no answer option is chosen
+- **THEN** every key reaches only A's terminal and no answer is sent to B
 
 #### Scenario: The target retires during a reply
 
@@ -232,35 +219,32 @@ Opening the terminal from a peek SHALL follow the Inspector presentation prefere
 
 - **WHEN** a blocked agent's latest lines contain neither a numbered menu nor a
   yes/no prompt
-- **THEN** the peek offers the reply box and terminal action without answer buttons
+- **THEN** the peek offers Reply and the terminal without answer buttons
 
-### Requirement: Town chat dock
+### Requirement: Town replies use World's terminal composer
 
-Activating an agent, a desk or a rail entry SHALL open a chat dock for that exact
-pane: docked beside the town on desktop and full screen on phones. The dock SHALL
-show the desk's panes as tabs, the selected pane's latest visible screen refreshed
-while the dock is open, answer options under the same rule as the peek, a
-composer that sends text followed by Enter, a control that sends Enter alone, a
-next-waiting-agent action and an action that opens the full terminal in the
-shared Inspector. Input SHALL reach only the selected pane through its own
-connection and runtime generation. Replies SHALL confirm success or failure with
-a short notice, and a finished agent SHALL announce itself once.
+Replying from Town, by the peek's Reply action, by activating an agent or desk,
+or by activating a rail entry, SHALL use World's own terminal composer for that
+exact pane. On the phone layout the peek SHALL grow that composer in place, with
+its keys, attachments and the draft it shares with the pane's terminal, and the
+composer SHALL stay visible above the keyboard while the screen lines shrink. On
+desktop, where World types directly into terminals, Reply SHALL open the pane's
+terminal. Town SHALL NOT keep a separate text box of its own. The peek's Inspector action SHALL open
+World's Inspector on the agent's Files view, from which Changes and History are
+one tap away, using the same path as the shell's Actions menu. One-tap answers
+SHALL be sent only to the exact qualified pane, and the result SHALL be confirmed
+by a short notice; a finished agent SHALL announce itself once.
 
-#### Scenario: Chat with a waiting agent
+#### Scenario: Reply to a waiting agent on a phone
 
-- **WHEN** the user opens a waiting agent's dock, types a message and presses Enter
-- **THEN** exactly that pane receives the text and Enter, and the dock confirms it
+- **WHEN** the user taps Reply in a waiting agent's peek
+- **THEN** the peek shows World's composer for that pane without opening the
+  terminal, and the keyboard does not cover the message field or Send
 
-#### Scenario: Switch panes at a desk
+#### Scenario: Open the Inspector from a peek
 
-- **WHEN** the dock is open on a desk with an agent and a shell pane and the user
-  selects the shell tab
-- **THEN** the screen and composer target the shell pane only
-
-#### Scenario: Open the full terminal
-
-- **WHEN** the user chooses the full terminal from the dock
-- **THEN** the shared Inspector opens that exact pane's terminal
+- **WHEN** the user taps Inspector in an agent's peek
+- **THEN** World's Inspector opens on that agent's Files view
 
 ### Requirement: Town desk and agent moves
 

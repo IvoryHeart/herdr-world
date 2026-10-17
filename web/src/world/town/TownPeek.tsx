@@ -1,4 +1,10 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import type { OfficeAgent } from "../herdrOfficeProjection";
 import type { TownChoice } from "./townChat";
 import { townPortrait } from "./townSprites";
@@ -24,8 +30,8 @@ const typingTarget = (target: EventTarget | null) =>
     target.closest(".xterm, [role='dialog']:not(.town-peek)") !== null);
 
 /**
- * A hover card for one agent: its live screen, one-key answers and a reply
- * box. While pinned, typing anywhere goes straight into the reply.
+ * A hover card for one agent: its live screen and one-tap answers. Replies
+ * open World's terminal composer, so typing and uploads use one window.
  */
 export function TownPeek({
   agent,
@@ -43,7 +49,10 @@ export function TownPeek({
   onNext,
   onClose,
   onHold,
+  composer,
 }: {
+  /** World's composer for this pane; present while chatting. */
+  composer?: ReactNode;
   onInspector(): void;
   agent: OfficeAgent;
   where: string;
@@ -61,15 +70,17 @@ export function TownPeek({
   onClose(): void;
   onHold(hold: boolean): void;
 }) {
-  const [draft, setDraft] = useState("");
-  const [sending, setSending] = useState(false);
-  const input = useRef<HTMLInputElement>(null);
   const card = useRef<HTMLDivElement>(null);
+  const screen = useRef<HTMLPreElement>(null);
+  const chatting = Boolean(composer);
+  // While chatting, follow the newest lines like a conversation.
+  useLayoutEffect(() => {
+    if (chatting && screen.current)
+      screen.current.scrollTop = screen.current.scrollHeight;
+  }, [chatting, lines]);
   const [placed, setPlaced] = useState<{ left: number; top: number } | null>(
     null,
   );
-
-  useEffect(() => setDraft(""), [agent.key]);
 
   useEffect(() => {
     if (!anchor || !card.current) {
@@ -97,6 +108,7 @@ export function TownPeek({
   useEffect(() => {
     if (!pinned) return;
     const keydown = (event: KeyboardEvent) => {
+      if (typingTarget(event.target)) return;
       if (event.key === "Escape") {
         onClose();
         return;
@@ -112,31 +124,19 @@ export function TownPeek({
         (candidate, index) =>
           event.key === String(index + 1) || event.key === candidate.key,
       );
-      if (choice && !draft && canReply) {
+      if (choice && canReply) {
         event.preventDefault();
         void onReply(choice.key, false);
-        return;
       }
-      if (event.key.length === 1 && canReply) input.current?.focus();
     };
     window.addEventListener("keydown", keydown);
     return () => window.removeEventListener("keydown", keydown);
-  }, [pinned, choices, draft, canReply, onClose, onReply]);
-
-  const submit = async (event: FormEvent) => {
-    event.preventDefault();
-    const text = draft.trim();
-    if (!text || sending) return;
-    setSending(true);
-    const sent = await onReply(text, true);
-    setSending(false);
-    if (sent) setDraft("");
-  };
+  }, [pinned, choices, canReply, onClose, onReply]);
 
   return (
     <div
       ref={card}
-      className={`town-peek${anchor ? "" : " town-peek-sheet"}${agent.semanticStatus === "blocked" ? " town-peek-blocked" : ""}`}
+      className={`town-peek${anchor ? "" : " town-peek-sheet"}${chatting ? " town-peek-chat" : ""}${agent.semanticStatus === "blocked" ? " town-peek-blocked" : ""}`}
       role="dialog"
       aria-label={`${agent.displayLabel} peek`}
       style={
@@ -170,7 +170,7 @@ export function TownPeek({
           ×
         </button>
       </div>
-      <pre className="town-peek-screen" aria-label="Latest screen">
+      <pre ref={screen} className="town-peek-screen" aria-label="Latest screen">
         {lines.length
           ? lines.join("\n")
           : loading
@@ -191,26 +191,18 @@ export function TownPeek({
           ))}
         </div>
       ) : null}
-      {canReply ? (
-        <form className="town-reply" onSubmit={(event) => void submit(event)}>
-          <input
-            ref={input}
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            placeholder={pinned ? "Reply… (just start typing)" : "Reply…"}
-            aria-label={`Reply to ${agent.displayLabel}`}
-            autoComplete="off"
-            enterKeyHint="send"
-          />
-          <button type="submit" disabled={!draft.trim() || sending}>
-            Send
-          </button>
-        </form>
-      ) : null}
       <div className="town-peek-foot">
-        <button type="button" className="town-hot" onClick={onChat}>
-          Chat
-        </button>
+        {chatting ? null : (
+          <button
+            type="button"
+            className="town-hot"
+            disabled={!canReply}
+            title="Write to this agent"
+            onClick={onChat}
+          >
+            Reply
+          </button>
+        )}
         <button
           type="button"
           title="Files, changes and history"
@@ -227,6 +219,7 @@ export function TownPeek({
           </button>
         ) : null}
       </div>
+      {composer}
     </div>
   );
 }

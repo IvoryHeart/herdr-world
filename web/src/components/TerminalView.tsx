@@ -2,6 +2,10 @@ import {
   readTerminalInputMode,
   rememberTerminalInputMode,
 } from "../terminalInputMode";
+import {
+  TERMINAL_COMPOSER_REQUEST_EVENT,
+  takeTerminalComposerRequest,
+} from "../world/terminalComposerRequest";
 import { type TerminalInputMode } from "./TerminalComposer";
 import {
   filesFromTerminalDrop,
@@ -646,6 +650,18 @@ export function TerminalView({
     () => setComposerOpen(false),
     "panel",
   );
+  // World seam: a World view may ask this pane's terminal to open its composer.
+  useEffect(() => {
+    if (!paneId || !isActivePane) return;
+    if (takeTerminalComposerRequest(paneId)) setComposerOpen(true);
+    const request = (event: Event) => {
+      if ((event as CustomEvent<string>).detail !== paneId) return;
+      if (takeTerminalComposerRequest(paneId)) setComposerOpen(true);
+    };
+    window.addEventListener(TERMINAL_COMPOSER_REQUEST_EVENT, request);
+    return () =>
+      window.removeEventListener(TERMINAL_COMPOSER_REQUEST_EVENT, request);
+  }, [paneId, isActivePane, setComposerOpen]);
   const agentHistoryOpen = controlledAgentHistoryOpen ?? localAgentHistoryOpen;
   const setAgentHistoryOpen = useCallback(
     (open: boolean) => {

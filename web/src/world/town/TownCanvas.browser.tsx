@@ -260,7 +260,11 @@ function worldFor(connections: WorldRuntimeConnection[]) {
   return buildWorldObject(connections, "local");
 }
 
+const phone = window.innerWidth < 640;
+
 async function run() {
+  // World marks its phone layout on <html>; the composer is styled for it.
+  if (phone) document.documentElement.dataset.layout = "mobile";
   document.body.style.margin = "0";
   document.body.style.background = "#14181f";
   const layoutShell = document.createElement("div");
@@ -281,6 +285,7 @@ async function run() {
   let setWorld: (world: WorldObject) => void = () => {};
   const opened: string[] = [];
   const selected: string[] = [];
+  const inspected: [string, string][] = [];
   function Harness() {
     const [world, set] = useState(() => worldFor(base.connections));
     const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -299,6 +304,7 @@ async function run() {
           opened.push(id);
         }}
         floatingTerminals={[]}
+        onOpenInspectorView={(id, view) => inspected.push([id, view])}
       />
     );
   }
@@ -431,42 +437,47 @@ async function run() {
     "answer went to a pane that is not waiting",
   );
 
-  // Chat opens the dock on the same pane; the composer sends with Enter.
-  host.querySelector<HTMLButtonElement>(".town-peek .town-hot")!.click();
-  await waitFor(
-    () => host.querySelector(".town-dock-screen") !== null,
-    "chat dock did not open",
-  );
-  const composer = host.querySelector<HTMLTextAreaElement>(
-    ".town-dock-composer textarea",
-  )!;
-  const setValue = Object.getOwnPropertyDescriptor(
-    HTMLTextAreaElement.prototype,
-    "value",
-  )!.set!;
-  setValue.call(composer, "Use the newest file");
-  composer.dispatchEvent(new Event("input", { bubbles: true }));
-  await settle();
-  host
-    .querySelector<HTMLButtonElement>(
-      '.town-dock-composer button[type="submit"]',
-    )!
+  // Reply: desktop opens the pane's terminal; the phone layout grows World's
+  // composer inside the peek, and Send reaches that pane only.
+  [...host.querySelectorAll<HTMLButtonElement>(".town-peek-foot button")]
+    .find((button) => button.textContent === "Reply")!
     .click();
-  await waitFor(() => sent.length === 2, "chat message was not sent");
-  check(
-    sent[1]!.paneId === peekPane &&
-      sent[1]!.text.includes("Use the newest file") &&
-      sent[1]!.keys.includes("enter"),
-    `chat sent ${JSON.stringify(sent[1])}`,
-  );
-  host.querySelector<HTMLButtonElement>(".town-dock-back")!.click();
-  await waitFor(
-    () => host.querySelector(".town-dock") === null,
-    "dock did not close",
-  );
+  if (!phone) {
+    await waitFor(() => opened.length === 1, "Reply did not open the terminal");
+    opened.length = 0;
+  } else {
+    await waitFor(
+      () => host.querySelector(".town-peek .terminal-composer-input") !== null,
+      "Reply did not open the composer in the peek",
+    );
+    const composer = host.querySelector<HTMLTextAreaElement>(
+      ".town-peek .terminal-composer-input",
+    )!;
+    const setValue = Object.getOwnPropertyDescriptor(
+      HTMLTextAreaElement.prototype,
+      "value",
+    )!.set!;
+    setValue.call(composer, "Use the newest file");
+    composer.dispatchEvent(new Event("input", { bubbles: true }));
+    await settle();
+    host
+      .querySelector<HTMLButtonElement>(
+        '.town-peek [aria-label="Send draft to the terminal"]',
+      )!
+      .click();
+    await waitFor(() => sent.length === 2, "composer message was not sent");
+    check(
+      sent[1]!.paneId === peekPane &&
+        sent[1]!.text.includes("Use the newest file") &&
+        sent[1]!.keys.includes("enter"),
+      `composer sent ${JSON.stringify(sent[1])}`,
+    );
+    check(opened.length === 0, "chatting must not open the full terminal");
+    host.querySelector<HTMLButtonElement>(".town-peek-close")!.click();
+    await settle();
+  }
 
-  // Inspector selects the agent, which opens World's Inspector (files,
-  // changes, history) the same way Office does.
+  // Inspector opens World's Inspector on Files for that agent.
   host.querySelector<HTMLButtonElement>(".town-reception-entry")!.click();
   await waitFor(
     () => host.querySelector(".town-peek") !== null,
@@ -476,8 +487,11 @@ async function run() {
     .find((button) => button.textContent === "Inspector")!
     .click();
   await settle();
-  check(selected.length === 1, "Inspector did not select the agent");
-  selected.length = 0;
+  check(
+    inspected.length === 1 && inspected[0]![1] === "files",
+    `Inspector opened ${JSON.stringify(inspected)}`,
+  );
+  check(selected.length === 0, "Inspector must not change the selection path");
 
   // Room card activation zooms into the room.
   const zoomBefore = diagnostics.zoom;

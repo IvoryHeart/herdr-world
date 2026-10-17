@@ -105,6 +105,7 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
     focusFloatingInspector,
     retireInspectors,
     showSelectionProfile,
+    applySelection,
   } = controller;
   const {
     workspaceCreationOpen,
@@ -204,6 +205,9 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
                     >
                       <TownView
                         world={presentedWorld}
+                        onOpenInspectorView={(id, view) =>
+                          void applySelection(id, view)
+                        }
                         toolbarPortal={viewToolbarPortal}
                         selectedId={selectedId}
                         onSelect={selectNode}

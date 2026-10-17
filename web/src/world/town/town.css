@@ -648,12 +648,10 @@
   --town-idle: #d9c39b;
   --town-btn: #273141;
   --town-term: #0d1117;
-  --town-dock-w: min(500px, 42vw);
 }
 
 .town-view-shell .town-rail,
 .town-peek,
-.town-dock,
 .town-toast {
   color: var(--town-text);
   background: var(--town-panel);
@@ -670,7 +668,6 @@
 }
 
 .town-peek button,
-.town-dock button,
 .town-rail button {
   color: var(--town-text);
   background: var(--town-btn);
@@ -686,29 +683,24 @@
 }
 
 .town-peek button:hover,
-.town-dock button:hover,
 .town-rail button:hover {
   filter: brightness(1.12);
 }
 
 .town-peek button:active,
-.town-dock button:active,
 .town-rail button:active {
   transform: translateY(1px);
 }
 
-.town-peek button:disabled,
-.town-dock button:disabled {
+.town-peek button:disabled {
   opacity: 0.45;
   cursor: not-allowed;
   filter: none;
 }
 
 .town-peek button:focus-visible,
-.town-dock button:focus-visible,
 .town-rail button:focus-visible,
-.town-peek input:focus-visible,
-.town-dock textarea:focus-visible {
+.town-peek input:focus-visible {
   outline: 2px solid var(--town-accent);
   outline-offset: 2px;
 }
@@ -1056,219 +1048,18 @@
   opacity: 0.7;
 }
 
-.town-reply,
-.town-dock-composer {
+.town-peek-foot {
   display: flex;
   gap: 6px;
   margin-top: 8px;
 }
 
-.town-reply input,
-.town-dock-composer textarea {
-  flex: 1;
-  min-width: 0;
-  min-height: 38px;
-  padding: 8px 12px;
-  box-sizing: border-box;
-  color: var(--town-text);
-  background: var(--town-term);
-  border: 2px solid var(--town-edge);
-  border-radius: 9px;
-  font:
-    400 14px "Rubik",
-    system-ui,
-    sans-serif;
-  resize: none;
-}
-
-.town-reply button,
-.town-dock-composer button {
-  min-height: 38px;
-  padding: 0 14px;
-  font-weight: 600;
-}
-
-.town-peek-foot,
-.town-dock-foot {
-  display: flex;
-  gap: 6px;
-  margin-top: 8px;
-}
-
-.town-peek-foot button,
-.town-dock-foot button {
+.town-peek-foot button {
   flex: 1 1 auto;
   min-height: 32px;
   padding: 3px 8px;
   font-size: 12.5px;
   font-weight: 600;
-}
-
-/* Chat dock: docked right, full screen on phones. */
-.town-dock {
-  position: absolute;
-  z-index: 9;
-  top: 12px;
-  right: 12px;
-  bottom: 12px;
-  width: var(--town-dock-w);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  animation: town-dock-in 0.28s cubic-bezier(0.2, 0.95, 0.25, 1.05);
-}
-
-@keyframes town-dock-in {
-  from {
-    transform: translateX(calc(100% + 40px));
-  }
-}
-
-.town-dock header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
-}
-
-.town-dock .town-dock-back {
-  width: 38px;
-  height: 38px;
-  padding: 0;
-  font-size: 20px;
-}
-
-.town-dock-title {
-  flex: 1;
-  min-width: 0;
-}
-
-.town-dock-title b {
-  display: block;
-  font:
-    700 17px / 1.1 "Pixelify Sans",
-    ui-monospace,
-    monospace;
-}
-
-.town-dock-title small {
-  display: block;
-  margin-top: 3px;
-  font-size: 12px;
-  color: var(--town-muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.town-dock .town-dock-next {
-  min-height: 36px;
-  padding: 0 12px;
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-.town-dock-panes {
-  display: flex;
-  gap: 6px;
-  padding: 8px 10px;
-  overflow-x: auto;
-  scrollbar-width: none;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
-}
-
-.town-dock-panes button {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  flex: none;
-  min-height: 32px;
-  padding: 3px 10px;
-  font-size: 13px;
-}
-
-.town-dock-panes button[aria-pressed="true"] {
-  background: #3a4459;
-  outline: 1px solid rgba(255, 255, 255, 0.18);
-}
-
-.town-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 2px;
-  background: #7fbf7a;
-}
-.town-dot-working {
-  background: var(--town-work);
-}
-.town-dot-blocked {
-  background: var(--town-wait);
-}
-.town-dot-done {
-  background: var(--town-done);
-}
-.town-dot-idle {
-  background: var(--town-idle);
-}
-
-.town-dock-screen {
-  flex: 1;
-  min-height: 0;
-  margin: 0;
-  padding: 12px 14px;
-  overflow: auto;
-  background: var(--town-term);
-  color: #c9d1c3;
-  font:
-    400 12.5px / 1.55 "JetBrains Mono",
-    ui-monospace,
-    SFMono-Regular,
-    Menlo,
-    monospace;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
-.town-dock-answers {
-  margin: 0;
-  padding: 10px 10px 0;
-}
-
-.town-dock-composer {
-  margin: 0;
-  padding: 10px 10px 0;
-}
-
-.town-dock-foot {
-  margin: 0;
-  padding: 8px 10px 10px;
-}
-
-.town-dock-open .town-zoom,
-.town-dock-open .world-completion-notices {
-  right: calc(var(--town-dock-w) + 28px);
-}
-
-@media (max-width: 899px) {
-  .town-dock {
-    inset: 0;
-    width: auto;
-    border-radius: 0;
-    border: 0;
-    animation-name: town-dock-up;
-  }
-
-  @keyframes town-dock-up {
-    from {
-      transform: translateY(100%);
-    }
-  }
-
-  .town-dock-open .town-zoom,
-  .town-dock-open .world-completion-notices {
-    right: 16px;
-  }
 }
 
 /* Toasts. */
@@ -1332,7 +1123,6 @@
 
 @media (prefers-reduced-motion: reduce) {
   .town-peek,
-  .town-dock,
   .town-toast {
     animation: none;
   }
@@ -1347,8 +1137,86 @@
   }
 }
 
-.town-dock .town-dock-attach {
-  min-width: 40px;
-  padding: 0 8px;
-  font-size: 16px;
+.town-reception-entry.town-reception-done {
+  border-color: #3f7d4f;
+}
+
+.town-reception-entry.town-reception-done small {
+  color: #7be08f;
+}
+
+/* Chat: the peek grows World's composer; the screen scrolls, the composer stays. */
+.town-peek-chat {
+  display: flex;
+  flex-direction: column;
+  width: min(460px, calc(100% - 24px));
+  max-height: calc(100% - 24px);
+}
+
+.town-peek-chat .town-peek-screen {
+  flex: 1 1 auto;
+  min-height: 72px;
+  max-height: none;
+  overflow-y: auto;
+}
+
+.town-peek-chat .town-peek-head,
+.town-peek-chat .town-answers,
+.town-peek-chat .town-peek-foot,
+.town-composer {
+  flex: none;
+}
+
+.town-composer {
+  margin: 8px -10px -10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+@media (max-width: 640px) {
+  .town-peek-sheet.town-peek-chat {
+    z-index: 11;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    max-height: 100%;
+    border-radius: 12px 12px 0 0;
+  }
+
+  .town-peek-chat .town-peek-foot button {
+    min-height: 30px;
+  }
+}
+
+@media (min-width: 641px) {
+  .town-peek-sheet.town-peek-chat {
+    bottom: 12px;
+    top: auto;
+  }
+}
+
+@media (max-width: 640px) {
+  /* While chatting on a phone the composer owns the space: one row of answers,
+     no footer (the composer's close returns to the full peek). */
+  .town-peek-chat .town-peek-foot {
+    display: none;
+  }
+
+  .town-peek-chat .town-answers {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .town-peek-chat .town-answers button {
+    flex: none;
+    max-width: 70vw;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .town-peek-chat .town-peek-screen {
+    min-height: 40px;
+  }
 }

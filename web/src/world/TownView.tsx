@@ -19,13 +19,13 @@ import { WORLD_OBSERVABILITY_UPDATED_EVENT } from "../workspaceResource";
 import { TownCanvas } from "./town/TownCanvas";
 import {
   sendTownReply,
-  uploadTownFiles,
   townChoices,
   townLeaf,
   townScreenLines,
   useTownScreen,
 } from "./town/townChat";
-import { TownDock, type TownDockPane } from "./town/TownDock";
+import { requestTerminalComposer } from "./terminalComposerRequest";
+import { TownComposer } from "./town/TownComposer";
 import { TownPeek } from "./town/TownPeek";
 import {
   readTownRailCollapsed,
@@ -95,7 +95,13 @@ export default function TownView({
   onSelectedAnchorChange,
   floatingTerminals,
   onConversationNodeAnchorsChange,
+  onOpenInspectorView,
 }: {
+  /** Open World's Inspector on a view (files, changes, history) for a node. */
+  onOpenInspectorView?: (
+    id: string,
+    view: "files" | "changes" | "history",
+  ) => void;
   world: WorldObject;
   toolbarPortal?: Element | null;
   selectedId: string | null;
@@ -448,7 +454,7 @@ export default function TownView({
     void inspectOfficeTerminal(key).catch(() => undefined);
   };
 
-  /* ---------- Town attention, peek, chat dock and toasts ---------- */
+  /* ---------- Town attention, peek, replies and toasts ---------- */
   const now = useNow(5_000);
   const [railCollapsed, setRailCollapsed] = useState(readTownRailCollapsed);
   const [width, setWidth] = useState(() => window.innerWidth);
@@ -549,6 +555,8 @@ export default function TownView({
     key: string;
     anchor: { x: number; y: number } | null;
     pinned: boolean;
+    /** Showing World's composer for this agent. */
+    chat?: boolean;
   } | null>(null);
   const holdPeek = useRef(false);
   const peekTimer = useRef<number | undefined>(undefined);
@@ -569,76 +577,63 @@ export default function TownView({
     else if (!holdPeek.current) schedulePeek(null, 320);
   };
 
-  const [dock, setDock] = useState<{ paneKey: string } | null>(null);
-  const devicesForAgent = (agentKey: string) =>
-    office.paneRoster.find(({ device }) => device.agentKey === agentKey)
-      ?.device;
-  const openDock = (key: string) => {
-    const device =
-      deviceByKey.get(key)?.device ??
-      devicesForAgent(key) ??
-      (() => {
-        const desk = office.deskRoster.find(
-          ({ desk }) => desk.key === key,
-        )?.desk;
-        return desk?.paneDevices[0];
-      })();
-    if (!device) {
-      openOfficeTerminal(key);
+  /**
+   * Replying opens the pane in World's terminal window with its composer
+   * open, the same composer (with uploads) used everywhere else.
+   */
+  const openReply = (key: string) => {
+    // On the phone layout agents chat in place: the peek grows World's
+    // composer. Desktop World types straight into the terminal instead.
+    const mobile = document.documentElement.dataset.layout === "mobile";
+    const agentKey = agentByKey.has(key)
+      ? key
+      : (deviceByKey.get(key)?.device.agentKey ??
+        office.deskRoster.find(({ desk }) => desk.key === key)?.desk
+          .occupantAgentKey);
+    if (mobile && agentKey && agentByKey.has(agentKey)) {
+      window.clearTimeout(peekTimer.current);
+      setPeek((current) => ({
+        key: agentKey,
+        anchor: sheetMode()
+          ? null
+          : current?.key === agentKey
+            ? current.anchor
+            : lastPointer.current,
+        pinned: true,
+        chat: true,
+      }));
       return;
     }
+    // Otherwise open the pane's terminal, with its composer on the phone layout.
+    const nodeId =
+      deviceByKey.get(key)?.device.nodeId ??
+      agentByKey.get(key)?.agent.nodeId ??
+      office.deskRoster.find(({ desk }) => desk.key === key)?.desk
+        .paneDevices[0]?.nodeId;
+    const leaf = townLeaf(world, nodeId);
     window.clearTimeout(peekTimer.current);
     setPeek(null);
-    setDock({ paneKey: device.key });
-    const agent = device.agentKey
-      ? agentByKey.get(device.agentKey)?.agent
-      : undefined;
-    if (agent?.semanticStatus === "done") markCompletionSeen(agent);
+    if (leaf) requestTerminalComposer(leaf.pane.pane_id);
+    openOfficeTerminal(key);
   };
-  const dockDevice = dock ? deviceByKey.get(dock.paneKey)?.device : undefined;
-  useEffect(() => {
-    if (dock && !dockDevice) setDock(null);
-  }, [dock, dockDevice]);
-  const dockAgent = dockDevice?.agentKey
-    ? agentByKey.get(dockDevice.agentKey)?.agent
-    : undefined;
-  const dockDesk = dockDevice
-    ? office.deskRoster.find(({ desk }) => desk.key === dockDevice.deskKey)
-    : undefined;
-  const dockLeaf = townLeaf(world, dockDevice?.nodeId);
-  const dockScreen = useTownScreen(dockLeaf, Boolean(dockDevice), 1_500);
-  const dockPanes: TownDockPane[] = (dockDesk?.desk.paneDevices ?? []).map(
-    (device) => {
-      const agent = device.agentKey
-        ? agentByKey.get(device.agentKey)?.agent
-        : undefined;
-      return {
-        key: device.key,
-        label: agent?.displayLabel ?? device.displayLabel,
-        status: agent?.semanticStatus ?? "shell",
-      };
-    },
-  );
-
   const peekEntry = peek ? agentByKey.get(peek.key) : undefined;
   useEffect(() => {
     if (peek && !peekEntry) setPeek(null);
   }, [peek, peekEntry]);
   const peekAgent = peekEntry?.agent;
   const peekLeaf = townLeaf(world, peekAgent?.nodeId);
-  const peekScreen = useTownScreen(peekLeaf, Boolean(peekAgent), 2_000);
+  const peekScreen = useTownScreen(
+    peekLeaf,
+    Boolean(peekAgent),
+    peek?.chat ? 1_200 : 2_000,
+  );
   const peekLines = townScreenLines(
     peekScreen,
     peekAgent?.semanticStatus === "blocked",
-    peekAgent?.semanticStatus === "blocked" ? 12 : 8,
+    peek?.chat ? 40 : peekAgent?.semanticStatus === "blocked" ? 12 : 8,
   );
   const peekChoices =
     peekAgent?.semanticStatus === "blocked" ? townChoices(peekLines) : [];
-  const dockChoices =
-    dockAgent?.semanticStatus === "blocked"
-      ? townChoices(townScreenLines(dockScreen, true, 14))
-      : [];
-
   const reply = async (
     leaf: ReturnType<typeof townLeaf>,
     label: string,
@@ -673,14 +668,14 @@ export default function TownView({
       return;
     }
     if (deviceByKey.has(key)) {
-      openDock(key);
+      openReply(key);
       return;
     }
     const desk = office.deskRoster.find(({ desk }) => desk.key === key)?.desk;
     if (desk) {
       if (desk.occupantAgentKey)
         openPeek(desk.occupantAgentKey, lastPointer.current);
-      else openDock(key);
+      else openReply(key);
       return;
     }
     selectOfficeKey(key);
@@ -698,24 +693,18 @@ export default function TownView({
             target.closest(".xterm")))
       )
         return;
-      if (event.key === "Escape" && dock) {
-        setDock(null);
-        return;
-      }
       if ((event.key === "n" || event.key === "N") && !peek?.pinned) {
-        const next = nextCall(dock ? (dockAgent?.key ?? null) : null);
+        const next = nextCall(null);
         if (!next) return;
         event.preventDefault();
-        if (dock) openDock(next.agent.key);
-        else openPeek(next.agent.key, null);
+        openPeek(next.agent.key, null);
       }
     };
     window.addEventListener("keydown", keydown);
     return () => window.removeEventListener("keydown", keydown);
   });
   const whereOf = whereOfAgent;
-  const townSelectedKey =
-    peek?.key ?? dockAgent?.key ?? dockDevice?.key ?? selectedKey;
+  const townSelectedKey = peek?.key ?? selectedKey;
 
   if (!world.hosts.length) {
     return (
@@ -751,7 +740,7 @@ export default function TownView({
       {toolbarPortal ? createPortal(toolbar, toolbarPortal) : toolbar}
       <WorldSearchResults world={world} query={query} onSelect={onSelect} />
       <div
-        className={`world-office-shell world-stage-shell town-view-shell${dock ? " town-dock-open" : ""}`}
+        className={`world-office-shell world-stage-shell town-view-shell`}
         onPointerDownCapture={(event) => {
           lastPointer.current = { x: event.clientX, y: event.clientY };
         }}
@@ -760,7 +749,7 @@ export default function TownView({
           collapsed={railCollapsed}
           onCollapsedChange={setRailCollapsed}
           calls={calls}
-          activeKey={peek?.key ?? dockAgent?.key ?? null}
+          activeKey={peek?.key ?? null}
           now={now}
           onPeek={(key, rect) =>
             key && rect
@@ -770,7 +759,7 @@ export default function TownView({
                 })
               : hoverAgent(null)
           }
-          onOpen={openDock}
+          onOpen={openReply}
         />
         {peekAgent ? (
           <TownPeek
@@ -787,14 +776,16 @@ export default function TownView({
             onReply={(text, submit) =>
               reply(peekLeaf, peekAgent.displayLabel, text, submit)
             }
-            onChat={() => openDock(peekAgent.key)}
+            onChat={() => openReply(peekAgent.key)}
             onTerminal={() => {
               setPeek(null);
               openOfficeTerminal(peekAgent.key);
             }}
             onInspector={() => {
               setPeek(null);
-              void onSelect(peekAgent.nodeId);
+              if (onOpenInspectorView)
+                onOpenInspectorView(peekAgent.nodeId, "files");
+              else void onSelect(peekAgent.nodeId);
             }}
             onNext={
               nextCall(peekAgent.key)
@@ -805,65 +796,31 @@ export default function TownView({
               holdPeek.current = false;
               setPeek(null);
             }}
+            composer={
+              peek!.chat && peekLeaf ? (
+                <TownComposer
+                  leaf={peekLeaf}
+                  onClose={() =>
+                    setPeek((current) =>
+                      current ? { ...current, chat: false } : current,
+                    )
+                  }
+                  onSent={(submitted) =>
+                    toast(
+                      "ok",
+                      submitted
+                        ? `Sent to ${peekAgent.displayLabel}`
+                        : `Inserted for ${peekAgent.displayLabel}`,
+                    )
+                  }
+                  onError={(message) => toast("error", message)}
+                />
+              ) : null
+            }
             onHold={(hold) => {
               holdPeek.current = hold;
               if (hold) window.clearTimeout(peekTimer.current);
               else if (!peek?.pinned) schedulePeek(null, 320);
-            }}
-          />
-        ) : null}
-        {dockDevice ? (
-          <TownDock
-            title={dockAgent?.displayLabel ?? dockDevice.displayLabel}
-            where={`${dockDesk?.desk.displayLabel ?? ""} · ${dockDesk?.roomLabel ?? ""} · ${dockDesk?.hostLabel ?? ""}`}
-            agent={dockAgent ?? null}
-            panes={dockPanes}
-            activePane={dockDevice.key}
-            screen={dockScreen}
-            choices={dockChoices}
-            canReply={
-              Boolean(dockLeaf) &&
-              dockDevice.canOpenInSpaces &&
-              !dockDevice.stale
-            }
-            onPane={(key) => setDock({ paneKey: key })}
-            onReply={(text, submit) =>
-              reply(
-                dockLeaf,
-                dockAgent?.displayLabel ?? dockDevice.displayLabel,
-                text,
-                submit,
-              )
-            }
-            onBack={() => setDock(null)}
-            onNext={
-              nextCall(dockAgent?.key ?? null)
-                ? () => openDock(nextCall(dockAgent?.key ?? null)!.agent.key)
-                : null
-            }
-            onTerminal={() => openOfficeTerminal(dockDevice.key)}
-            onInspector={() => {
-              setDock(null);
-              void onSelect(dockAgent?.nodeId ?? dockDevice.nodeId);
-            }}
-            onAttach={async (files) => {
-              if (!dockLeaf) return null;
-              try {
-                const text = await uploadTownFiles(dockLeaf, files);
-                toast(
-                  "ok",
-                  files.length === 1
-                    ? `Uploaded ${files[0]!.name}`
-                    : `Uploaded ${files.length} files`,
-                );
-                return text;
-              } catch (cause) {
-                toast(
-                  "error",
-                  `Upload failed: ${cause instanceof Error ? cause.message : String(cause)}`,
-                );
-                return null;
-              }
             }}
           />
         ) : null}
@@ -882,7 +839,7 @@ export default function TownView({
             completionSeenKeys={completionSeenKeys}
             conversationTargets={conversationTargets}
             onSelect={tapTown}
-            onActivateAgent={openDock}
+            onActivateAgent={openReply}
             onActivateRoom={() => {
               // In the town a room tap only zooms; it never opens an Inspector.
             }}
@@ -920,8 +877,7 @@ export default function TownView({
                 calls.some((call) => call.kind === "blocked")
                   ? 252
                   : 0,
-              right:
-                dock && width >= 900 ? Math.min(500, width * 0.42) + 24 : 0,
+              right: 0,
             }}
             roomActions={{
               showCreateSeat,

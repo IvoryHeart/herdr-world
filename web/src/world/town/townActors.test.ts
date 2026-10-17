@@ -42,7 +42,7 @@ function settle(actors: TownActors) {
 }
 
 test("agents appear seated at their seat without walking", () => {
-  const { actorWorld } = world({ a: "working", b: "done" });
+  const { actorWorld } = world({ a: "working", b: "unknown" });
   const actors = new TownActors();
   actors.sync(actorWorld, false);
   for (const key of ["a", "b"]) {
@@ -104,7 +104,7 @@ test("blocked agents beyond the queue stay at their seat", () => {
 });
 
 test("idle agents take distinct lounge spots", () => {
-  const actors = new TownActors(0);
+  const actors = new TownActors();
   actors.sync(world({ a: "idle", b: "idle", c: "idle" }).actorWorld, true);
   const spots = [...actors.actors.values()].map(
     (a) => `${a.spot!.x},${a.spot!.y}`,
@@ -128,12 +128,13 @@ test("an agent whose desk is no longer presented leaves the scene", () => {
   expect([...actors.actors.keys()]).toEqual(["a"]);
 });
 
-test("a briefly idle agent stays at its desk and leaves for the lounge later", () => {
-  let now = 1_000;
-  const actors = new TownActors(60_000, () => now);
-  actors.sync(world({ a: "idle" }).actorWorld, true);
-  expect(actors.actors.get("a")!.goal?.kind).toBe("seat");
-  now += 61_000;
-  actors.step(0.1);
-  expect(actors.actors.get("a")!.goal?.kind).toBe("lounge");
+test("finished agents queue at reception after waiting agents", () => {
+  const actors = new TownActors();
+  actors.sync(
+    world({ a: "done", b: "blocked", c: "working" }).actorWorld,
+    true,
+  );
+  expect(actors.actors.get("b")!.goal).toEqual({ kind: "queue", slot: 0 });
+  expect(actors.actors.get("a")!.goal).toEqual({ kind: "queue", slot: 1 });
+  expect(actors.actors.get("c")!.goal?.kind).toBe("seat");
 });
