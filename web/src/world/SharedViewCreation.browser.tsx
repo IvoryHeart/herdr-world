@@ -408,17 +408,24 @@ async function run() {
     document.body.appendChild(document.createElement("div")),
   );
   root.render(<WorldFoundationApp />);
+  // The root opens Town; this case exercises Office's creation controls.
+  await until(
+    () =>
+      document.querySelector<HTMLSelectElement>('[aria-label="World view"]')
+        ?.value === "town",
+    "Root did not default to Town",
+  );
+  const rootViewSelect = document.querySelector<HTMLSelectElement>(
+    '[aria-label="World view"]',
+  )!;
+  rootViewSelect.value = "office";
+  rootViewSelect.dispatchEvent(new Event("change", { bubbles: true }));
   await until(
     () =>
       document.querySelector(
-        '.world-new-seat-canvas-action[aria-label*="alpha b"]',
+        '.world-office-shell .world-new-seat-canvas-action[aria-label*="alpha b"]',
       ),
     "second room control",
-  );
-  check(
-    document.querySelector<HTMLSelectElement>('[aria-label="World view"]')
-      ?.value === "office",
-    "Root did not default to Office",
   );
   check(
     !document.querySelector(".workspace-inspector"),

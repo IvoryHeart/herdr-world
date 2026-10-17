@@ -31,6 +31,14 @@ are optional because the merged PR history records their source.
   one desk. Tap a room to zoom in; very large towns open at roof level. Phones stack the
   buildings in one column. A Town calm motion setting reduces ambient motion.
 
+### Changed
+
+- Town is now the default World view: the World root, unknown routes and
+  invalid view values open Town. Office stays one tap away at `/office`.
+- On phones, the on-screen Back in a terminal returns to the view at once,
+  even with the Composer open; the phone's own Back still closes the Composer
+  first.
+
 ## [0.2.4] - 2026-10-16
 
 ### Fixed

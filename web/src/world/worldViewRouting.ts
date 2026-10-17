@@ -27,7 +27,7 @@ export const WORLD_VIEW_PATHS: Record<WorldView, string> = {
 export function parseWorldView(value: unknown): WorldView {
   return WORLD_VIEWS.includes(value as WorldView)
     ? (value as WorldView)
-    : "office";
+    : "town";
 }
 
 export function worldViewFromPath(pathname: string): WorldView {
@@ -37,7 +37,7 @@ export function worldViewFromPath(pathname: string): WorldView {
   if (pathname === "/graph") return "graph";
   if (pathname === "/office") return "office";
   if (pathname === "/town") return "town";
-  return "office";
+  return "town";
 }
 
 export function initialView() {

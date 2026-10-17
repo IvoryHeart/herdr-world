@@ -4333,6 +4333,17 @@ async function run() {
     () => document.querySelector('button[aria-label="Back to Office"]'),
     "mobile view switcher returns to Office before dismissing Inspectors",
   );
+  // The on-screen Back returns to the view in one tap even with Composer
+  // open; only the phone's own Back closes Composer first.
+  document
+    .querySelector<HTMLButtonElement>(
+      '.workspace-inspector button[aria-label="Open terminal input"]',
+    )
+    ?.click();
+  await until(
+    () => !!document.querySelector(".workspace-inspector .terminal-composer"),
+    "Composer opens before Back to Office",
+  );
   backToOffice.click();
   await until(
     () => !document.querySelector(".workspace-inspector"),
