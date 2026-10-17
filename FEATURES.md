@@ -5,6 +5,32 @@ A Web/PWA client for a running [Herdr](https://herdr.dev) server.
 
 ## Visual control plane
 
+- **Town** is the default view (`/town`); Office remains available at `/office`.
+  Each host is a building, each workspace a room, each tab a team table and each
+  pane a seat. Plain terminals show prompts. Additional panes beyond the drawn
+  seats remain available through the table's count and chooser.
+  - Blocked agents queue at reception oldest first. Finished agents wait there
+    until you open their terminal or mark that completion reviewed, then join
+    idle agents in the lounge. Movement only represents state.
+  - Hover or tap an agent for a peek: recent session messages (screen text when
+    history is unavailable), a question when recognized, supported answer buttons,
+    a reply line and file attachments. Answers send the offered key to that pane;
+    reply **Send** submits text. On phones, the reply line opens World's Composer
+    inside the peek, with keys, attachments, Insert and Send.
+  - **Inspector** opens files, changes and history; **Terminal** opens the live
+    pane. **Next** cycles other waiting agents, then finished agents if none wait.
+    The needs-you list becomes a bottom tray on phones and hides when no agent
+    is blocked. Review marks acknowledge a specific completion in this browser,
+    without certifying its correctness.
+  - **+**, **−** and **ALL** navigate between town, building, room and desk
+    detail. Drag to pan; focused arrow keys pan too. Tap a room to zoom in.
+    Phones stack buildings vertically; large towns can initially show roofs.
+    **Town calm motion** reduces ambient animation. Room actions support
+    workspace/tab creation and room management on the captured host.
+  - Cached failed-host buildings stay stale and non-actionable. Search and Hosts
+    use the shared aggregate; no location in the scene changes resource ownership.
+  See the [Town exercise](./docs/TUTORIAL.md#town).
+
 - **Desk** organizes the filtered hosts' agents by what
   they need from you rather than where they run:
   - **Needs you** lists blocked agents, oldest first, with the question and choices
@@ -28,7 +54,7 @@ A Web/PWA client for a running [Herdr](https://herdr.dev) server.
     answer, review, or watch. Hosts outside the filter appear as summary chips.
 - **Spaces** is the focused operational workspace: terminals, files, changes,
   annotations, worktrees, and Agent History for one selected connection.
-- **Office**, **Tree**, and **Graph** show the aggregate of local and SSH hosts.
+- **Town**, **Office**, **Tree**, and **Graph** show the aggregate of local and SSH hosts.
   **Hosts** defaults to All hosts and persists an explicit host set independently
   of **Manage connections**. Filtering preserves open resources and terminals;
   removed saved identities are pruned, with an explained return to All hosts
@@ -53,7 +79,9 @@ A Web/PWA client for a running [Herdr](https://herdr.dev) server.
   placements; snapping into an occupied region overlaps without rearranging it.
   Tiled windows share resizable dividers. **Open windows** restores minimized windows.
   Window close dismisses presentation; native tab closure remains separate.
-- Mobile shows one active window and preserves desktop positions. Its ellipsis,
+- Mobile shows one active window and preserves desktop positions. The on-screen
+  **Back** returns from a terminal to the visual view even with Composer open;
+  the phone's own Back closes Composer first, then the terminal. Its ellipsis,
   Tabs controls remain floating; Tabs and Arrange sit together in the second row. Tabs also restores minimized
   windows and retains native tab actions. The duplicate list icon and tab strip are hidden. The outer shell coordinates terminal sizing with the keyboard viewport.
 - A Spaces tab window shows that tab's Herdr split panes. An Inspector in a visual

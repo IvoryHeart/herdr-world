@@ -30,8 +30,8 @@ server-rendered output rather than reconstructing a PTY in the bridge.
 Spaces keeps one focused qualified workspace; visual Inspectors retain independent
 operational contexts across ready connections. The bridge-global
 `world.snapshot` path reads bounded topology from every ready runtime. The browser
-qualifies that data by connection and generation into one WorldObject used by Office,
-Tree, and Graph. Aggregate observation is never mutation authority: opening a terminal,
+qualifies that data by connection and generation into one WorldObject used by Town,
+Desk, Office, Tree, and Graph. Aggregate observation is never mutation authority: opening a terminal,
 Files, Changes, or Agent History revalidates the captured owning runtime without
 changing another context. The browser sends bounded deduplicated open-context host
 hints (or visible hosts when no contexts are open) in the global snapshot request.

@@ -56,3 +56,11 @@ This source reorganization changes neither asset bytes nor their provenance.
 PixiJS is pinned as an npm dependency. Its MIT license is retained at
 `web/public/world/LICENSE-PixiJS.txt`. The Claw-Empire Apache-2.0 license is a
 release requirement and is not inferred from PixiJS or any neighboring asset.
+
+## Town art
+
+The Town view draws only original pixel art generated at load time from compact
+definitions in `web/src/world/town/townSprites.ts` and `townPaint.ts`: ground,
+roads, buildings, furniture, speech bubbles and characters, whose appearance is
+derived from each agent's key. It ships no image files and no third-party art.
+

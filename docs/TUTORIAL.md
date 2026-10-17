@@ -68,7 +68,7 @@ older World or Roamgate installation.
    to `PATH`; skip the standalone command.
 
 4. Open the printed URL (including any token) on **the same computer**. Standalone
-   defaults to `http://127.0.0.1:8787` and opens **Office**. Use the view
+   defaults to `http://127.0.0.1:8787` and opens **Town**. Use the view
    switcher to open **Spaces**, select a workspace and idle shell pane, then
    run `pwd` (`Get-Location` in PowerShell).
 
@@ -89,7 +89,8 @@ Use the view switcher to move between these views without restarting work:
 
 | View | Use it for |
 | --- | --- |
-| Office | See hosts, workspace rooms and agent desks; the default landing view |
+| Town | Explore host buildings, workspace rooms and team tables; the default landing view |
+| Office | See the same work as workspace rooms and agent desks |
 | Desk | Find agents needing input, review finished turns and follow work in flight |
 | Graph | Explore the same hosts, workspaces and agents as a spatial map |
 | Spaces | Work in one workspace's terminal panes, files, changes and history |
@@ -97,6 +98,53 @@ Use the view switcher to move between these views without restarting work:
 **Hosts** starts at **All hosts**. Choose a host set to reduce the overview;
 use **Manage connections** to add or reconnect a local or SSH profile. Filtering
 changes what you see and does not disconnect hosts or retarget open terminals.
+
+### Explore Town: find work that needs you
+
+<a id="town"></a>
+
+1. Open **Town** from the view switcher, or return to the World root URL. Each
+   host is a building, each workspace a room, each tab a table and each pane a
+   seat. Plain terminal panes show a prompt rather than an agent character.
+2. Use **+** and **−** to move between town, building, room and desk detail;
+   **ALL** shows the whole town. Drag the background to pan, or use arrow keys
+   when the scene has focus. Tap a room to zoom in. Large towns may initially
+   show roofs; zoom in to see room summaries and desks. Phones stack buildings
+   vertically.
+3. Look at reception for blocked agents waiting for input, oldest first. Finished
+   agents also wait there until you open their terminal or mark that completion
+   reviewed, then join idle agents in the lounge. These locations visualize
+   status; they do not move the underlying pane or change its host.
+4. Hover or tap an agent to open its **peek**. The **NEEDS YOU** list provides
+   another route to waiting agents and becomes a bottom tray on phones; it hides
+   when no agent is blocked. The peek shows recent session messages, falling back
+   to terminal screen text when history is unavailable, and highlights a question
+   when one can be identified.
+5. Read the question before using an answer button: it sends the offered key to
+   that live pane. When no supported choices appear, use the reply line or
+   **Terminal**. Desktop replies send from the peek; on phones the reply line
+   opens World's **Composer** inside the peek, with keys, attachments, **Insert**
+   and **Send**. **Insert** prepares input; **Send** submits it.
+6. Use the paperclip to attach files to the reply. Uploads go to the selected
+   pane's host; review the message and attached paths before sending. Choose
+   **Inspector** for files, changes and history, or **Terminal** for direct work.
+   **Next** cycles waiting agents, then finished agents when no other agent is
+   waiting.
+
+A table with more panes than drawn seats shows the count and offers a chooser
+for every pane. **New room** creates a workspace; room actions also create tabs
+and manage the room. Check the destination host before creation. Stale buildings
+remain visible but cannot accept operations. Use search and the Hosts filter to
+narrow the work you are following. The **Town calm motion** setting reduces
+ambient animation.
+
+**Mark reviewed** acknowledges that completion in this browser. Opening a finished
+agent's terminal also clears its reception stop; neither action proves the result
+is correct. A later completion can need review again. Read the explanation and
+check the diff using chapter 2 before treating the work as complete.
+
+**You are done when:** you can find an agent on the expected host, read its peek,
+and open its terminal or Inspector without losing its workspace context.
 
 ### Explore Graph: find an agent and open its terminal
 
@@ -151,8 +199,10 @@ workspace pins are separate from these pane pins.
 
 On desktop, **Arrange windows** can tile or cascade open Inspectors; use **Open
 windows** to restore minimized ones. On mobile, one Inspector fills the screen:
-use **Back** to return to the visual view and the ellipsis controls for additional
-navigation. Closing an Inspector leaves the terminal session running.
+use the on-screen **Back** to return straight to the visual view, including
+when Composer is open. The phone's own Back closes Composer first, then the
+terminal on the next press. Use the ellipsis controls for additional navigation.
+Closing an Inspector leaves the terminal session running.
 
 ### Learn this one hierarchy
 
@@ -332,7 +382,7 @@ Browsers share Herdr events and visual pane pins; fonts, review marks, drafts,
 workspace pins and shortcuts can remain browser-local.
 Connection controls can pause your browser or others.
 
-**Profiles are shared; each browser saves its own Hosts filter.** Desk, Office,
+**Profiles are shared; each browser saves its own Hosts filter.** Town, Desk, Office,
 Tree, Graph, their counts, and search initially show all hosts and follow that filter.
 Changing the filter preserves open Inspectors and the owners of pending operations.
 Manage connections controls lifecycle separately; global creation confirms one

@@ -5,7 +5,7 @@
 </p>
 
 A **visual control plane** for [Herdr](https://herdr.dev). Connect local and SSH
-hosts, see their agents together in Desk, Office, Tree or Graph, and use independently
+hosts, see their agents together in Town, Desk, Office, Tree or Graph, and use independently
 qualified terminals, files, changes and agent history on desktop or mobile.
 **Requires a running Herdr server.**
 
@@ -15,8 +15,13 @@ qualified terminals, files, changes and agent history on desktop or mobile.
 
 [![Office view showing the selected Herdr host and its agents][desktop-office]][desktop-office]
 
-Office is the default view and groups agent work by host. Desk supports agent
-triage across filtered hosts. Tree and Graph show the same filtered aggregate,
+Town is the default view: it shows the agents as a pixel-art town, where each
+host is a building, each workspace a room and each tab a team table. Agents
+that need you queue at reception and in a needs-you list; hover one to read its
+question and answer, or reply through the terminal composer. Finished agents also
+wait at reception until you open their terminal or mark the completion reviewed.
+Office groups the same agent work by host. Desk supports agent triage across
+filtered hosts. Tree and Graph show the same filtered aggregate,
 while Spaces keeps one qualified workspace's terminal and repository workflow
 one click away. Hosts defaults to All hosts; filtering changes visibility while
 open Inspectors and pending operations keep their captured owners. Use Actions →
@@ -131,8 +136,8 @@ Click any screenshot to open the full-resolution image.
 
 Use Manage connections to add local sockets or an SSH destination. One World
 service owns every connection and the browser stays on that World origin. Hosts
-filters Office, Tree, Graph, the navigator, counts and search; it never connects
-or disconnects a profile. Terminals and Inspectors on different ready hosts can
+filters Town, Desk, Office, Tree, Graph, the navigator, counts and search; it never
+connects or disconnects a profile. Terminals and Inspectors on different ready hosts can
 operate together. Global creation visibly confirms one destination host.
 
 See [deployment](./docs/DEPLOYMENT.md) for checksums, profiles, authentication,
@@ -160,7 +165,7 @@ The process must stay running and reachable. **PWA mode is not offline access.**
 
 - [Website](https://herdr.world/) and
   [hands-on tutorial](https://herdr.world/tutorial/)
-  ([Markdown](./docs/TUTORIAL.md)): Office, Desk,
+  ([Markdown](./docs/TUTORIAL.md)): [Town](./docs/TUTORIAL.md#town), Office, Desk,
   [Graph navigation](./docs/TUTORIAL.md#graph), terminal/file review, mobile,
   and private remote access.
 - [Features and shortcuts](./FEATURES.md)

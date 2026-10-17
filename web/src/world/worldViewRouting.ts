@@ -1,8 +1,15 @@
-export type WorldView = "desk" | "spaces" | "office" | "tree" | "graph";
+export type WorldView =
+  | "desk"
+  | "spaces"
+  | "office"
+  | "town"
+  | "tree"
+  | "graph";
 
 export const WORLD_VIEWS: readonly WorldView[] = [
   "desk",
   "office",
+  "town",
   "spaces",
   "tree",
   "graph",
@@ -12,6 +19,7 @@ export const WORLD_VIEW_PATHS: Record<WorldView, string> = {
   desk: "/desk",
   spaces: "/spaces",
   office: "/office",
+  town: "/town",
   tree: "/tree",
   graph: "/graph",
 };
@@ -19,7 +27,7 @@ export const WORLD_VIEW_PATHS: Record<WorldView, string> = {
 export function parseWorldView(value: unknown): WorldView {
   return WORLD_VIEWS.includes(value as WorldView)
     ? (value as WorldView)
-    : "office";
+    : "town";
 }
 
 export function worldViewFromPath(pathname: string): WorldView {
@@ -28,7 +36,8 @@ export function worldViewFromPath(pathname: string): WorldView {
   if (pathname === "/tree") return "tree";
   if (pathname === "/graph") return "graph";
   if (pathname === "/office") return "office";
-  return "office";
+  if (pathname === "/town") return "town";
+  return "town";
 }
 
 export function initialView() {

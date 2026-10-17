@@ -15,6 +15,7 @@ describe("Office preferences", () => {
         inspectorPresentation: "stacked",
         scrollLeft: -4,
         scrollTop: 9_000_000,
+        townCalm: false,
       }),
     );
 
@@ -24,6 +25,7 @@ describe("Office preferences", () => {
       inspectorPresentation: "floating",
       scrollLeft: 0,
       scrollTop: 1_000_000,
+      townCalm: false,
     });
   });
 
@@ -49,6 +51,7 @@ describe("Office preferences", () => {
       inspectorPresentation: "floating",
       scrollLeft: 12.4,
       scrollTop: Number.POSITIVE_INFINITY,
+      townCalm: false,
     });
 
     expect(storage.value).toEqual({
@@ -59,6 +62,7 @@ describe("Office preferences", () => {
         inspectorPresentation: "floating",
         scrollLeft: 12,
         scrollTop: 0,
+        townCalm: false,
       }),
     });
   });

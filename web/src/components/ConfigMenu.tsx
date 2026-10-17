@@ -20,6 +20,7 @@ import {
   Server,
   Settings,
   Wifi,
+  Wind,
 } from "lucide-react";
 import { APP_VERSION } from "../version";
 import { worldLocalStorage } from "../browserStorage";
@@ -295,7 +296,7 @@ export function ConfigMenu({
                 )}
               </div>
               <div className="config-section config-section-tiles-3">
-                <div className="config-title">Office</div>
+                <div className="config-title">Office and Town</div>
                 <label className="config-preference-row">
                   <span className="config-item-icon">
                     <LayoutDashboard size={15} />
@@ -366,6 +367,32 @@ export function ConfigMenu({
                     <option value="compact">Ellipsis</option>
                   </select>
                 </label>
+                <div className="config-preference-row">
+                  <span className="config-item-icon">
+                    <Wind size={15} />
+                  </span>
+                  <div className="config-item-copy">
+                    <strong>Town calm motion</strong>
+                    <span>Less ambient motion and shorter camera moves</span>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-label="Town calm motion"
+                    aria-checked={officePreferences.townCalm}
+                    className={
+                      "settings-switch" +
+                      (officePreferences.townCalm ? " is-on" : "")
+                    }
+                    onClick={() =>
+                      updateOfficePreferences({
+                        townCalm: !officePreferences.townCalm,
+                      })
+                    }
+                  >
+                    <span />
+                  </button>
+                </div>
                 {onOpenOfficeMetrics ? (
                   <ConfigMenuItem
                     icon={<Activity size={15} />}

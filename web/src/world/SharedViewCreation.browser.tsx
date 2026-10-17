@@ -109,6 +109,8 @@ function addWorkspace(host: string, id: string, count = 1) {
 addWorkspace("alpha", "a");
 addWorkspace("alpha", "b", 8);
 addWorkspace("beta", "a");
+// One agent, so Town has an agent card to open a terminal from.
+runtime.get("beta")!.panes[0]!.agent = "claude";
 function workspaces(host: string) {
   const r = runtime.get(host)!;
   return r.workspaces.map((workspace) => ({
@@ -408,17 +410,84 @@ async function run() {
     document.body.appendChild(document.createElement("div")),
   );
   root.render(<WorldFoundationApp />);
+  // The root opens Town; this case exercises Office's creation controls.
+  await until(
+    () =>
+      document.querySelector<HTMLSelectElement>('[aria-label="World view"]')
+        ?.value === "town",
+    "Root did not default to Town",
+  );
+  // On the phone, a terminal opened from a Town agent's card takes two
+  // Backs to leave: the first closes Composer, the second returns to Town.
+  if (window.innerWidth < 640) {
+    const townPath = window.location.pathname;
+    await until(
+      () =>
+        document.querySelector(
+          '.town-view-shell .world-semantic-target[data-kind="agent"]',
+        ),
+      "Town agent target",
+    );
+    document
+      .querySelector<HTMLButtonElement>(
+        '.town-view-shell .world-semantic-target[data-kind="agent"]',
+      )!
+      .click();
+    await until(
+      () => document.querySelector(".town-peek-foot"),
+      "Town agent card",
+    );
+    [...document.querySelectorAll<HTMLButtonElement>(".town-peek-foot button")]
+      .find((button) => button.textContent === "Terminal")!
+      .click();
+    await until(
+      () =>
+        document.querySelector(
+          '.workspace-inspector button[aria-label="Open terminal input"]',
+        ),
+      "Town opened the agent's terminal",
+    );
+    document
+      .querySelector<HTMLButtonElement>(
+        '.workspace-inspector button[aria-label="Open terminal input"]',
+      )!
+      .click();
+    await until(
+      () => document.querySelector(".workspace-inspector .terminal-composer"),
+      "Composer opened in the terminal",
+    );
+    history.back();
+    await until(
+      () => !document.querySelector(".workspace-inspector .terminal-composer"),
+      "the first Back did not close Composer",
+    );
+    check(
+      !!document.querySelector(".workspace-inspector"),
+      "the first Back closed the terminal too",
+    );
+    history.back();
+    await until(
+      () => !document.querySelector(".workspace-inspector"),
+      "the second Back did not return to Town",
+    );
+    await settle();
+    check(
+      window.location.pathname === townPath &&
+        !!document.querySelector(".town-view-shell"),
+      `the second Back left Town for ${window.location.pathname}`,
+    );
+  }
+  const rootViewSelect = document.querySelector<HTMLSelectElement>(
+    '[aria-label="World view"]',
+  )!;
+  rootViewSelect.value = "office";
+  rootViewSelect.dispatchEvent(new Event("change", { bubbles: true }));
   await until(
     () =>
       document.querySelector(
-        '.world-new-seat-canvas-action[aria-label*="alpha b"]',
+        '.world-office-shell .world-new-seat-canvas-action[aria-label*="alpha b"]',
       ),
     "second room control",
-  );
-  check(
-    document.querySelector<HTMLSelectElement>('[aria-label="World view"]')
-      ?.value === "office",
-    "Root did not default to Office",
   );
   check(
     !document.querySelector(".workspace-inspector"),

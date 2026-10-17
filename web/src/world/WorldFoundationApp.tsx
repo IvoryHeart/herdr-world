@@ -80,7 +80,7 @@ export default function WorldFoundationApp() {
   const [visualView, setVisualView] = useState<Exclude<WorldView, "spaces">>(
     () => {
       const initial = initialView();
-      return initial === "spaces" ? "office" : initial;
+      return initial === "spaces" ? "town" : initial;
     },
   );
   const [topbarPortal, setTopbarPortal] = useState<HTMLElement | null>(null);
@@ -412,9 +412,8 @@ export default function WorldFoundationApp() {
                   title={returnLabel}
                   aria-label={returnLabel}
                   onClick={() => {
-                    // Like the phone's Back: an open menu, sheet or Composer
-                    // closes before the terminal does.
-                    if (stepBack()) return;
+                    // The on-screen Back returns to the view at once, Composer
+                    // or not; the phone's Back closes the Composer first.
                     creationIntentRevision.current++;
                     visualArrangementControl?.onSelect("close-all");
                   }}
