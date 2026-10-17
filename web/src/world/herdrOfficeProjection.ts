@@ -839,6 +839,8 @@ const preparedBarAgents = new WeakMap<WorldObject, OfficeAgent[]>();
 
 const preparedRooms = new WeakMap<WorldSpaceObject, ProjectedRoom>();
 
+const OFFICE_PREPARATION_SLICE_MS = 6;
+
 export async function prepareWorldOffice(
   world: WorldObject,
   isCurrent: () => boolean = () => true,
@@ -886,6 +888,8 @@ export async function prepareWorldOffice(
       left.id.localeCompare(right.id),
   );
   let bar: OfficeAgent[] = [];
+  // Room cost grows with its desks, so preparation yields on elapsed time.
+  let sliceStart = performance.now();
   for (let index = 0; index < orderedSpaces.length; index++) {
     if (!isCurrent()) return;
     const space = orderedSpaces[index]!;
@@ -937,7 +941,10 @@ export async function prepareWorldOffice(
       OFFICE_PRESENTATION_BOUNDS.barAgents,
       compareBarAgents,
     );
-    if (index % 32 === 31) await yieldTask();
+    if (performance.now() - sliceStart >= OFFICE_PREPARATION_SLICE_MS) {
+      await yieldTask();
+      sliceStart = performance.now();
+    }
   }
   if (isCurrent()) {
     preparedBarAgents.set(world, bar);

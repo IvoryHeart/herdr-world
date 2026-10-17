@@ -56,7 +56,9 @@ export function townCanvas(width: number, height: number) {
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
-  const context = canvas.getContext("2d")!;
+  // CPU-backed: these canvases are painted once and uploaded to WebGL, and a
+  // GPU-backed canvas would force a synchronous readback on every upload.
+  const context = canvas.getContext("2d", { willReadFrequently: true })!;
   context.imageSmoothingEnabled = false;
   return [canvas, context] as const;
 }

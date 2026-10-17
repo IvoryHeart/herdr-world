@@ -97,3 +97,23 @@ test("a flight ends exactly on its target and reduced motion jumps", () => {
   camera.flyTo(200, 300, 1);
   expect(camera.flying).toBe(false);
 });
+
+test("a town with too many rooms for cards opens at roof level", () => {
+  const hosts = Array.from({ length: 12 }, (_, index) => `host-${index}`);
+  const large = {
+    hosts: hosts.map((key, displayOrder) => ({ key, displayOrder })),
+    rooms: hosts.flatMap((hostKey) =>
+      Array.from({ length: 6 }, (_, order) => ({
+        key: `${hostKey}/${order}`,
+        hostKey,
+        order,
+        deskKeys: [`${hostKey}/${order}/0`],
+      })),
+    ),
+  };
+  const limits = townZoomLimits(layoutTown(large, "wide").layout, desktop);
+  expect(townLevel(limits.home, limits)).toBe("town");
+  expect(townLevel(limits.card, limits)).toBe("room");
+  expect(limits.roof).toBeLessThan(limits.card);
+  expect(limits.min).toBeLessThan(limits.home);
+});

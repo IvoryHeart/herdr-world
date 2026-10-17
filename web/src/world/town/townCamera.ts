@@ -29,6 +29,9 @@ export type TownZoomLimits = {
   max: number;
 };
 
+/** Above this many rooms, the default wide view shows roofs instead of cards. */
+export const TOWN_OVERVIEW_ROOMS = 48;
+
 export function townZoomLimits(
   layout: TownLayout,
   viewport: TownViewport,
@@ -50,13 +53,22 @@ export function townZoomLimits(
   const widest = Math.max(1, ...layout.buildings.map((b) => b.w));
   const home = narrow ? (usableWidth - 12) / ((widest + 2) * TOWN_TILE) : all;
   const desk = narrow ? 1.05 : 1.3;
+  const card = narrow ? Math.max(0.5, home * 1.35) : 0.62;
+  // A town too large for readable room cards opens at roof level; zooming in
+  // past this point shows the cards of the buildings on screen.
+  const rooms = layout.buildings.reduce((sum, b) => sum + b.rooms.length, 0);
+  const roof = narrow
+    ? home * 0.8
+    : rooms > TOWN_OVERVIEW_ROOMS
+      ? Math.min(card * 0.9, all * 1.5)
+      : all * 0.88;
   return {
     all,
     home,
-    roof: narrow ? home * 0.8 : all * 0.88,
-    card: narrow ? Math.max(0.5, home * 1.35) : 0.62,
+    roof,
+    card,
     desk,
-    min: Math.min(all * 0.85, (narrow ? home * 0.8 : all * 0.88) * 0.8),
+    min: Math.min(all * 0.85, roof * 0.8),
     max: narrow ? 4 : 5,
   };
 }

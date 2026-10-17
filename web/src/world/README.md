@@ -76,10 +76,18 @@ pause while the user types in a terminal and for reduced motion or calm mode.
 Ground is painted in 512-pixel chunks only when a chunk first comes into view,
 with deterministic per-tile randomness, and its trees and lamps join the scene
 with it. A building's interior, façade, roof and desks are baked the first time
-it is visible, at most two per frame. Rooms outside the viewport are culled;
-below the room level tables draw without per-seat detail, and glow appears only
-from the room level. Sprite outlines are composited, never read back from the
-canvas.
+it is visible, one per frame within a five-millisecond budget. Tables and chairs
+are baked into the interior; seated people, screens and glow are created only
+from the room level for desks on screen. Repeating ground, floor, carpet and
+roof detail is drawn from small cached patterns. Paint canvases are CPU-backed
+so WebGL uploads never read back from the GPU, and sprite outlines are
+composited rather than read from the canvas.
+
+The DOM world layer keeps cards, plaques, signs and receptions only for
+buildings within half a viewport of the screen, and drops room cards outside
+the overview and room levels. A town with more than 48 rooms opens at roof
+level on desktop, where hundreds of cards would neither read nor composite
+cheaply.
 
 The town model reads the complete roster once per projection, keeping only
 agents of presented rooms and precomputing per-room counts. Accessible targets

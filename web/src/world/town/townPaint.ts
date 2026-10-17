@@ -11,7 +11,13 @@ import {
   type TownBuilding,
   type TownLayout,
 } from "./townLayout";
-import { townCanvas, townHash, townRandom, townShade } from "./townSprites";
+import {
+  townCanvas,
+  townHash,
+  townRandom,
+  townShade,
+  type TownCanvas,
+} from "./townSprites";
 
 export type TownHostTheme = {
   roof: string;
@@ -58,8 +64,89 @@ function ellipse(
 
 export type TownRegion = { x: number; y: number; w: number; h: number };
 
-const tileRandom = (tx: number, ty: number) =>
-  townRandom(Math.imul(tx + 1, 73856093) ^ Math.imul(ty + 1, 19349663));
+const prepared = new Map<string, TownCanvas>();
+/** Draw a small reusable canvas once per key. */
+function preparedCanvas(
+  key: string,
+  w: number,
+  h: number,
+  draw: (g: CanvasRenderingContext2D) => void,
+) {
+  let canvas = prepared.get(key);
+  if (!canvas) {
+    const [created, g] = townCanvas(w, h);
+    draw(g);
+    prepared.set(key, (canvas = created));
+  }
+  return canvas;
+}
+
+const GRASS_VARIANTS = 8;
+function grassTile(variant: number) {
+  return preparedCanvas(`grass:${variant}`, T, T, (g) => {
+    const random = townRandom(variant * 7919 + 13);
+    g.fillStyle = "#5c9a48";
+    g.fillRect(0, 0, T, T);
+    for (let i = 0; i < 7; i += 1) {
+      g.fillStyle = random() < 0.5 ? "#538e41" : "#69a855";
+      g.fillRect((random() * T) | 0, (random() * T) | 0, 1, 1);
+    }
+    if (variant % 3 === 0) {
+      g.fillStyle = "#4a8239";
+      const gx = (random() * 13) | 0;
+      const gy = (random() * 12) | 0;
+      g.fillRect(gx, gy, 1, 3);
+      g.fillRect(gx + 2, gy + 1, 1, 2);
+    }
+    if (variant === 5 || variant === 7) {
+      const colors = ["#fff5d6", "#f5e27a", "#f2a5c4", "#b9d4ff"];
+      g.fillStyle = colors[variant % colors.length]!;
+      const fx = 3 + ((random() * 8) | 0);
+      const fy = 3 + ((random() * 8) | 0);
+      g.fillRect(fx, fy, 1, 1);
+      g.fillRect(fx + 3, fy + 2, 1, 1);
+      g.fillRect(fx + 1, fy + 4, 1, 1);
+    }
+  });
+}
+
+function roadTile(variant: number) {
+  return preparedCanvas(`road:${variant}`, T, T, (g) => {
+    const random = townRandom(variant * 104729 + 7);
+    g.fillStyle = "#4d5059";
+    g.fillRect(0, 0, T, T);
+    for (let i = 0; i < 6; i += 1) {
+      g.fillStyle = random() < 0.5 ? "#575a63" : "#44474f";
+      g.fillRect((random() * T) | 0, (random() * T) | 0, 1, 1);
+    }
+  });
+}
+
+const walkTile = () =>
+  preparedCanvas("walk", T, T, (g) => {
+    g.fillStyle = "#c9c0ab";
+    g.fillRect(0, 0, T, T);
+    g.fillStyle = "#b4aa93";
+    g.fillRect(T - 1, 0, 1, T);
+    g.fillRect(0, T - 1, T, 1);
+    g.fillStyle = "#d6cfbc";
+    g.fillRect(0, 0, T - 1, 1);
+  });
+
+const plazaTile = (odd: number) =>
+  preparedCanvas(`plaza:${odd}`, T, T, (g) => {
+    g.fillStyle = "#d5c8a9";
+    g.fillRect(0, 0, T, T);
+    g.fillStyle = "#c0b393";
+    for (let yy = 0; yy < T; yy += 8) {
+      g.fillRect(0, yy + 7, T, 1);
+      const offset = ((odd * 2 + yy / 8) % 2) * 4;
+      for (let xx = offset; xx < T; xx += 8) g.fillRect(xx, yy, 1, 7);
+    }
+  });
+
+const tileHash = (tx: number, ty: number) =>
+  (Math.imul(tx + 1, 73856093) ^ Math.imul(ty + 1, 19349663)) >>> 0;
 
 /**
  * Paint one rectangular region (in pixels) of the ground. Each tile seeds its
@@ -85,58 +172,18 @@ export function paintTownGround(
   for (let ty = ty0; ty < ty1; ty += 1)
     for (let tx = tx0; tx < tx1; tx += 1) {
       const type = at(tx, ty);
-      const random = tileRandom(tx, ty);
       const x = tx * T;
       const y = ty * T;
-      if (type === TownGround.grass || type === TownGround.building) {
-        g.fillStyle = "#5c9a48";
-        g.fillRect(x, y, T, T);
-        for (let i = 0; i < 7; i += 1) {
-          g.fillStyle = random() < 0.5 ? "#538e41" : "#69a855";
-          g.fillRect(x + ((random() * T) | 0), y + ((random() * T) | 0), 1, 1);
-        }
-        if (random() < 0.18) {
-          g.fillStyle = "#4a8239";
-          const gx = x + ((random() * 13) | 0);
-          const gy = y + ((random() * 12) | 0);
-          g.fillRect(gx, gy, 1, 3);
-          g.fillRect(gx + 2, gy + 1, 1, 2);
-        }
-        if (random() < 0.035) {
-          const colors = ["#fff5d6", "#f5e27a", "#f2a5c4", "#b9d4ff"];
-          g.fillStyle = colors[(random() * colors.length) | 0]!;
-          const fx = x + 3 + ((random() * 8) | 0);
-          const fy = y + 3 + ((random() * 8) | 0);
-          g.fillRect(fx, fy, 1, 1);
-          g.fillRect(fx + 3, fy + 2, 1, 1);
-          g.fillRect(fx + 1, fy + 4, 1, 1);
-        }
-      } else if (type === TownGround.road) {
-        g.fillStyle = "#4d5059";
-        g.fillRect(x, y, T, T);
-        for (let i = 0; i < 6; i += 1) {
-          g.fillStyle = random() < 0.5 ? "#575a63" : "#44474f";
-          g.fillRect(x + ((random() * T) | 0), y + ((random() * T) | 0), 1, 1);
-        }
-      } else if (type === TownGround.walk || type === TownGround.facade) {
-        g.fillStyle = "#c9c0ab";
-        g.fillRect(x, y, T, T);
-        g.fillStyle = "#b4aa93";
-        g.fillRect(x + T - 1, y, 1, T);
-        g.fillRect(x, y + T - 1, T, 1);
-        g.fillStyle = "#d6cfbc";
-        g.fillRect(x, y, T - 1, 1);
-      } else if (type === TownGround.plaza) {
-        g.fillStyle = "#d5c8a9";
-        g.fillRect(x, y, T, T);
-        g.fillStyle = "#c0b393";
-        for (let yy = 0; yy < T; yy += 8) {
-          g.fillRect(x, y + yy + 7, T, 1);
-          const offset = ((ty * 2 + yy / 8) % 2) * 4;
-          for (let xx = offset; xx < T; xx += 8)
-            g.fillRect(x + xx, y + yy, 1, 7);
-        }
-      }
+      const hash = tileHash(tx, ty);
+      const tile =
+        type === TownGround.grass || type === TownGround.building
+          ? grassTile(hash % GRASS_VARIANTS)
+          : type === TownGround.road
+            ? roadTile(hash % 4)
+            : type === TownGround.plaza
+              ? plazaTile(ty % 2)
+              : walkTile();
+      g.drawImage(tile, x, y);
       if (
         ty > 0 &&
         type !== TownGround.grass &&
@@ -232,10 +279,16 @@ function carpet(
   g.fillRect(x + 1, y + 2, w, h);
   g.fillStyle = color;
   g.fillRect(x, y, w, h);
-  g.fillStyle = townShade(color, -0.09);
-  for (let yy = 6; yy < h - 6; yy += 4)
-    for (let xx = 6 + ((yy / 4) % 2) * 2; xx < w - 6; xx += 4)
-      g.fillRect(x + xx, y + yy, 1, 1);
+  const dots = preparedCanvas(`carpet:${color}`, 4, 8, (p) => {
+    p.fillStyle = townShade(color, -0.09);
+    p.fillRect(0, 0, 1, 1);
+    p.fillRect(2, 4, 1, 1);
+  });
+  g.save();
+  g.translate(x + 6, y + 6);
+  g.fillStyle = g.createPattern(dots, "repeat")!;
+  g.fillRect(0, 0, Math.max(0, w - 12), Math.max(0, h - 12));
+  g.restore();
   g.fillStyle = townShade(color, 0.2);
   g.fillRect(x + 2, y + 2, w - 4, 1);
   g.fillRect(x + 2, y + h - 3, w - 4, 1);
@@ -254,25 +307,40 @@ function carpet(
 }
 
 /** Floor, back wall, carpets, lounge rug and reception lobby. */
+export type TownFurniture = {
+  table: Record<string, TownCanvas>;
+  chair: TownCanvas;
+  chairBack: TownCanvas;
+  woodFor: (deskKey: string) => string;
+};
+
 export function paintTownInterior(
   building: TownBuilding,
   theme: TownHostTheme,
+  furniture?: TownFurniture,
 ) {
   const Wp = building.w * T;
   const Hp = building.h * T;
   const [canvas, g] = townCanvas(Wp, Hp);
-  const random = townRandom(townHash(building.hostKey) + 3);
-  for (let y = 32; y < Hp; y += 4) {
-    const offset = ((y / 4) % 3) * 9;
-    for (let x = -offset; x < Wp; x += 26) {
-      g.fillStyle = townShade(theme.floor, (random() - 0.5) * 0.09);
-      g.fillRect(x, y, 26, 4);
-      g.fillStyle = townShade(theme.floor, -0.24);
-      g.fillRect(x, y, 1, 4);
+  const planks = preparedCanvas(`floor:${theme.floor}`, 78, 12, (p) => {
+    const random = townRandom(townHash(theme.floor));
+    for (let row = 0; row < 3; row += 1) {
+      const y = row * 4;
+      for (let x = -row * 9; x < 78; x += 26) {
+        p.fillStyle = townShade(theme.floor, (random() - 0.5) * 0.09);
+        p.fillRect(x, y, 26, 4);
+        p.fillStyle = townShade(theme.floor, -0.24);
+        p.fillRect(x, y, 1, 4);
+      }
+      p.fillStyle = townShade(theme.floor, -0.15);
+      p.fillRect(0, y + 3, 78, 1);
     }
-    g.fillStyle = townShade(theme.floor, -0.15);
-    g.fillRect(0, y + 3, Wp, 1);
-  }
+  });
+  g.save();
+  g.translate(0, 32);
+  g.fillStyle = g.createPattern(planks, "repeat")!;
+  g.fillRect(0, 0, Wp, Hp - 32);
+  g.restore();
   g.fillStyle = theme.wall;
   g.fillRect(0, 0, Wp, 32);
   g.fillStyle = townShade(theme.wall, -0.045);
@@ -341,6 +409,21 @@ export function paintTownInterior(
   g.fillStyle = "#e3aa3a";
   for (let x = queueX + 6; x < queueX + 12 * T - 6; x += 8)
     g.fillRect(x, queueY + 8, 4, 2);
+  if (furniture)
+    for (const room of building.rooms)
+      for (const cell of room.cells) {
+        if (!cell.deskKey) continue;
+        const X = (cell.x + 1 - building.x) * T;
+        const Y = (cell.y - building.y) * T;
+        g.fillStyle = "rgba(0,0,0,.2)";
+        g.fillRect(X + 3, Y + 50, 62, 4);
+        g.drawImage(furniture.chair, X + 9, Y + 2);
+        g.drawImage(furniture.chair, X + 41, Y + 2);
+        const table = furniture.table[furniture.woodFor(cell.deskKey)];
+        if (table) g.drawImage(table, X - 1, Y + 17);
+        g.drawImage(furniture.chairBack, X + 9, Y + 45);
+        g.drawImage(furniture.chairBack, X + 41, Y + 45);
+      }
   g.fillStyle = "#3a2f2b";
   g.fillRect(0, 0, 6, Hp);
   g.fillRect(Wp - 6, 0, 6, Hp);
@@ -410,7 +493,6 @@ export function paintTownRoof(
   const Wp = building.w * T + 8;
   const Hp = building.h * T + 12;
   const [canvas, g] = townCanvas(Wp, Hp);
-  const random = townRandom(townHash(building.hostKey) + 11);
   const base = stale ? townShade(theme.roof, -0.35) : theme.roof;
   for (let y = 0; y < Hp; y += 6) {
     const row = townShade(base, 0.14 - (y / Hp) * 0.3);
@@ -418,16 +500,22 @@ export function paintTownRoof(
     g.fillRect(0, y, Wp, 6);
     g.fillStyle = townShade(row, -0.24);
     g.fillRect(0, y + 5, Wp, 1);
-    const offset = (y / 6) % 2 ? 4 : 0;
-    for (let x = offset; x < Wp; x += 8) {
-      g.fillStyle = townShade(row, -0.18);
-      g.fillRect(x, y, 1, 5);
-      if (random() < 0.08) {
-        g.fillStyle = townShade(row, 0.12);
-        g.fillRect(x + 1, y, 7, 5);
-      }
-    }
   }
+  // Shingle edges and a few lighter tiles, staggered on alternate rows.
+  const shingles = preparedCanvas("shingles", 32, 12, (p) => {
+    const random = townRandom(11);
+    for (let row = 0; row < 2; row += 1)
+      for (let x = row * 4; x < 32; x += 8) {
+        p.fillStyle = "rgba(0,0,0,.16)";
+        p.fillRect(x, row * 6, 1, 5);
+        if (random() < 0.12) {
+          p.fillStyle = "rgba(255,255,255,.08)";
+          p.fillRect(x + 1, row * 6, 7, 5);
+        }
+      }
+  });
+  g.fillStyle = g.createPattern(shingles, "repeat")!;
+  g.fillRect(0, 0, Wp, Hp);
   g.fillStyle = townShade(base, 0.3);
   g.fillRect(0, 0, Wp, 3);
   g.fillStyle = townShade(base, -0.4);

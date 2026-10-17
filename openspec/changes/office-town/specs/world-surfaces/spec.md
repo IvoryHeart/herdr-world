@@ -83,7 +83,11 @@ mark per seat. The desk level SHALL show characters, screens and animation with
 per-seat targets. Waiting attention SHALL be visible at every level. Status SHALL
 be conveyed by text or accessible names in addition to colour. The desktop
 default view SHALL fit every presented building at the overview level; the phone
-default view SHALL fit the first building's width.
+default view SHALL fit the first building's width. When the presented rooms are
+too many for readable cards at the fit-all zoom, the desktop default MAY fit
+every building at the town level instead, with cards appearing as the user
+zooms in. Only on-screen buildings need to keep their room cards, plaques and
+reception boards in the document.
 
 Activating a room at the overview or room level SHALL zoom to that room, and a
 double tap or double click SHALL zoom in at its location. Zoom controls SHALL
@@ -94,6 +98,13 @@ remain available as visible buttons.
 - **WHEN** the user opens Office on a desktop with three hosts and twenty-four rooms
 - **THEN** every room's status card and every host's reception board are visible
   without panning, and rooms with waiting agents show their waiting count
+
+#### Scenario: Open a town too large for room cards
+
+- **WHEN** the user opens Office on a desktop where the presented rooms are too
+  many for readable cards at the fit-all zoom
+- **THEN** every building is visible under its roof with its host summary, and
+  zooming in shows the room cards of the buildings on screen
 
 #### Scenario: Zoom from a room card to its desks
 

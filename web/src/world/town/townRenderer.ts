@@ -333,6 +333,7 @@ export async function createTownRenderer(
     if (!layout || !model) return;
     clearScene();
     groundChunks.clear();
+    pendingPods.clear();
     sceneLayer.addChild(outdoor);
     outdoor.zIndex = -1;
     const add = (canvas: TownCanvas, x: number, y: number, z: number) => {
@@ -442,7 +443,17 @@ export async function createTownRenderer(
       const stale = model.hosts.get(building.hostKey)?.stale ?? false;
       const container = new Container();
       container.zIndex = (building.y + building.h) * T + 4;
-      const interior = new Sprite(own(paintTownInterior(building, theme)));
+      const interior = new Sprite(
+        own(
+          paintTownInterior(building, theme, {
+            table: sprites.table,
+            chair: sprites.chair,
+            chairBack: sprites.chairBack,
+            woodFor: (deskKey) =>
+              TOWN_WOODS[townHash(deskKey) % TOWN_WOODS.length]!,
+          }),
+        ),
+      );
       interior.position.set(building.x * T, building.y * T);
       const dim = new Graphics();
       const dynamic = new Container();
@@ -492,12 +503,14 @@ export async function createTownRenderer(
       reception.zIndex = (building.counter.y + 3) * T - 2;
       dynamic.addChild(reception);
 
+      // Tables and chairs are baked into the interior; the detailed desk
+      // sprites (people, screens, glow) are created on demand from the room level.
       const pods: PodView[] = [];
+      const pendingCells: TownCell[] = [];
       for (const room of building.rooms)
-        for (const cell of room.cells) {
-          if (!cell.deskKey) continue;
-          pods.push(buildPod(cell, dynamic));
-        }
+        for (const cell of room.cells)
+          if (cell.deskKey) pendingCells.push(cell);
+      pendingPods.set(building.hostKey, pendingCells);
       sceneLayer.addChild(container);
       buildings.push({
         hostKey: building.hostKey,
@@ -518,6 +531,9 @@ export async function createTownRenderer(
   };
 
   const GROUND_CHUNK = 512;
+  /** Below this zoom the baked tables suffice and desk sprites stay hidden. */
+  const DETAIL_ZOOM = 0.55;
+  const pendingPods = new Map<string, TownCell[]>();
   let outdoorItems: { x: number; y: number; place: () => void }[] = [];
   const buildingByHost = new Map<string, BuildingView>();
   const groundChunks = new Map<string, Sprite>();
@@ -525,8 +541,11 @@ export async function createTownRenderer(
   let dimDirty = true;
 
   /** Paint visible ground chunks and bake visible buildings, a few per frame. */
+  const MATERIALIZE_BUDGET_MS = 5;
   const materialize = () => {
     if (!layout) return false;
+    const began = performance.now();
+    const spent = () => performance.now() - began >= MATERIALIZE_BUDGET_MS;
     const left = camera.toWorld(-200, -200);
     const right = camera.toWorld(
       camera.viewport.width + 200,
@@ -568,7 +587,7 @@ export async function createTownRenderer(
         });
         budget -= 1;
       }
-    let buildingBudget = 2;
+    let buildingBudget = spent() ? 0 : 1;
     pendingBuildings = pendingBuildings.filter((building) => {
       if (buildingBudget <= 0) return true;
       const visible =
@@ -581,11 +600,34 @@ export async function createTownRenderer(
       buildingBudget -= 1;
       return false;
     });
+    let podsPending = false;
+    if (camera.z >= DETAIL_ZOOM)
+      for (const view of buildings) {
+        const cells = pendingPods.get(view.hostKey);
+        if (!cells?.length || !view.container.visible) continue;
+        const remaining: TownCell[] = [];
+        for (const cell of cells) {
+          const X = (cell.x + 1) * T;
+          const Y = cell.y * T;
+          const visible =
+            X - 20 < right.x &&
+            X + 84 > left.x &&
+            Y - 20 < right.y &&
+            Y + 70 > left.y;
+          if (!visible || spent()) {
+            remaining.push(cell);
+            if (visible) podsPending = true;
+            continue;
+          }
+          view.pods.push(buildPod(cell, view.dynamic));
+        }
+        pendingPods.set(view.hostKey, remaining);
+      }
     if (dimDirty) {
       dimDirty = false;
       updateDim();
     }
-    return budget <= 0 || buildingBudget <= 0;
+    return budget <= 0 || buildingBudget <= 0 || podsPending;
   };
 
   const buildPod = (cell: TownCell, parent: Container): PodView => {
@@ -1049,10 +1091,12 @@ export async function createTownRenderer(
         (building.y + building.h + TOWN_FACADE) * T > left.y;
       view.container.visible = visible;
       if (!visible) continue;
+      const detailed = camera.z >= DETAIL_ZOOM;
       for (const pod of view.pods) {
         const X = (pod.cell.x + 1) * T;
         const Y = pod.cell.y * T;
         pod.container.visible =
+          detailed &&
           X - 20 < right.x &&
           X + 84 > left.x &&
           Y - 20 < right.y &&

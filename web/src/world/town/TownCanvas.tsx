@@ -281,8 +281,16 @@ export function TownCanvas({
   const signs = useRef(new Map<string, HTMLElement>());
   const signsFor = useRef<TownLayout | null>(null);
   const lastCamera = useRef("");
+  // Only on-screen buildings keep DOM cards, plaques and receptions.
+  const [visible, setVisible] = useState<TownVisible>(NOTHING_VISIBLE);
+  const visibleKey = useRef(NOTHING_VISIBLE.key);
   const onFrame = (camera: TownRendererHandle["camera"], level: TownLevel) => {
     const layer = worldRef.current;
+    const nextVisible = townVisibleHosts(camera, latest.current.layout, level);
+    if (nextVisible.key !== visibleKey.current) {
+      visibleKey.current = nextVisible.key;
+      setVisible(nextVisible);
+    }
     if (layer) {
       const tx = camera.viewport.width / 2 - camera.x * camera.z;
       const ty = camera.viewport.height / 2 - camera.y * camera.z;
@@ -323,6 +331,7 @@ export function TownCanvas({
     }
   };
   const onFrameRef = useRef(onFrame);
+
   onFrameRef.current = onFrame;
 
   const viewport = () => {
@@ -796,6 +805,7 @@ export function TownCanvas({
         <TownWorldLayer
           model={model}
           layout={layout}
+          visible={visible}
           selectedKey={selectedKey}
           blockedSince={blockedSince.current}
           roomActions={roomActions}
@@ -900,6 +910,45 @@ function zoomToBuilding(
 
 /* ---------- DOM world layer ---------- */
 
+type TownVisible = {
+  key: string;
+  hosts: ReadonlySet<string>;
+  /** Room cards are drawn only from the overview level up to the room level. */
+  cards: boolean;
+};
+
+const NOTHING_VISIBLE: TownVisible = {
+  key: "",
+  hosts: new Set(),
+  cards: false,
+};
+
+/** Buildings within half a viewport of the screen, plus whether cards show. */
+function townVisibleHosts(
+  camera: TownRendererHandle["camera"],
+  layout: TownLayout,
+  level: TownLevel,
+): TownVisible {
+  const { width, height } = camera.viewport;
+  const left = camera.toWorld(-width / 2, -height / 2);
+  const right = camera.toWorld(width * 1.5, height * 1.5);
+  const hosts: string[] = [];
+  for (const b of layout.buildings)
+    if (
+      b.x * T < right.x &&
+      (b.x + b.w) * T > left.x &&
+      (b.y - 2) * T < right.y &&
+      (b.y + b.h + TOWN_FACADE + 8) * T > left.y
+    )
+      hosts.push(b.hostKey);
+  const cards = level === "overview" || level === "room";
+  return {
+    key: `${cards ? 1 : 0}:${hosts.join("\u0000")}`,
+    hosts: new Set(hosts),
+    cards,
+  };
+}
+
 const TownWorldLayer = memo(function TownWorldLayer({
   model,
   layout,
@@ -911,9 +960,11 @@ const TownWorldLayer = memo(function TownWorldLayer({
   onActivate,
   onActivateRoom,
   onFocusTarget,
+  visible,
 }: {
   model: TownModel;
   layout: TownLayout;
+  visible: TownVisible;
   selectedKey: string | null;
   blockedSince: ReadonlyMap<string, number>;
   roomActions: TownRoomActions;
@@ -941,6 +992,7 @@ const TownWorldLayer = memo(function TownWorldLayer({
   return (
     <>
       {layout.buildings.map((building) => {
+        if (!visible.hosts.has(building.hostKey)) return null;
         const host = model.hosts.get(building.hostKey);
         const queue = attention.filter(
           (agent) =>
@@ -1040,40 +1092,44 @@ const TownWorldLayer = memo(function TownWorldLayer({
                     height: placed.h * T,
                   }}
                 >
-                  <button
-                    type="button"
-                    className={`town-room-card${c.blocked ? " town-room-card-waiting" : ""}${selectedKey === room.key ? " town-selected" : ""}`}
-                    style={
-                      {
-                        "--room-w": `${placed.w * T}px`,
-                        "--carpet": townCarpetFor(room.key),
-                      } as React.CSSProperties
-                    }
-                    aria-label={`${label}: ${c.desks} desks, ${c.working} working${c.blocked ? `, ${c.blocked} need you` : ""}${c.done ? `, ${c.done} done` : ""}. Zoom in.`}
-                    onClick={() => onActivateRoom(room.key)}
-                    tabIndex={-1}
-                  >
-                    <span className="town-room-card-name">{label}</span>
-                    {c.blocked ? (
-                      <span className="town-room-card-badge">!{c.blocked}</span>
-                    ) : null}
-                    <span className="town-room-card-meta">
-                      {c.desks} desks · {c.working} working
-                      {overflow ? ` · +${overflow} more` : ""}
-                    </span>
-                    <span className="town-room-card-bar" aria-hidden="true">
-                      {(["working", "blocked", "done", "idle"] as const).map(
-                        (status) =>
-                          c[status] ? (
-                            <i
-                              key={status}
-                              data-status={status}
-                              style={{ flexGrow: c[status] / total }}
-                            />
-                          ) : null,
-                      )}
-                    </span>
-                  </button>
+                  {visible.cards ? (
+                    <button
+                      type="button"
+                      className={`town-room-card${c.blocked ? " town-room-card-waiting" : ""}${selectedKey === room.key ? " town-selected" : ""}`}
+                      style={
+                        {
+                          "--room-w": `${placed.w * T}px`,
+                          "--carpet": townCarpetFor(room.key),
+                        } as React.CSSProperties
+                      }
+                      aria-label={`${label}: ${c.desks} desks, ${c.working} working${c.blocked ? `, ${c.blocked} need you` : ""}${c.done ? `, ${c.done} done` : ""}. Zoom in.`}
+                      onClick={() => onActivateRoom(room.key)}
+                      tabIndex={-1}
+                    >
+                      <span className="town-room-card-name">{label}</span>
+                      {c.blocked ? (
+                        <span className="town-room-card-badge">
+                          !{c.blocked}
+                        </span>
+                      ) : null}
+                      <span className="town-room-card-meta">
+                        {c.desks} desks · {c.working} working
+                        {overflow ? ` · +${overflow} more` : ""}
+                      </span>
+                      <span className="town-room-card-bar" aria-hidden="true">
+                        {(["working", "blocked", "done", "idle"] as const).map(
+                          (status) =>
+                            c[status] ? (
+                              <i
+                                key={status}
+                                data-status={status}
+                                style={{ flexGrow: c[status] / total }}
+                              />
+                            ) : null,
+                        )}
+                      </span>
+                    </button>
+                  ) : null}
                   <div className="town-room-plaque">
                     <span className="town-room-plaque-name">
                       {label} <small>{c.desks}</small>

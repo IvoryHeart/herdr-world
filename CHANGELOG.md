@@ -15,6 +15,7 @@ are optional because the merged PR history records their source.
   where agents that need input queue oldest first; tap a room to zoom in, or zoom
   out until the roofs come down. Desks stay where they are as tabs open and close,
   rooms show up to 19 desks, and phones stack the buildings in one vertical flow.
+  Very large towns open at roof level, and room cards appear as you zoom in.
 - Idle agents take a break in their building's lounge, and finished agents keep a
   completion marker at their desk until you inspect them.
 - The Office Economy board now lives on the town board, and a new Calm motion
