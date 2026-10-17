@@ -4334,23 +4334,45 @@ async function run() {
     "mobile view switcher returns to Office before dismissing Inspectors",
   );
   // The on-screen Back returns to the view in one tap even with Composer
-  // open; only the phone's own Back closes Composer first.
-  // The phone shows one terminal, docked or as a compact window; open its
-  // Composer unless it is already open.
+  // open; only the phone's own Back closes Composer first. Open Composer in
+  // the visible Inspector (never a parked terminal owner): focus its pane so
+  // it is the active pane, then open and find Composer inside that window.
+  const visibleInspector = () =>
+    [...document.querySelectorAll<HTMLElement>(".world-managed-window")].find(
+      (window) =>
+        window.getBoundingClientRect().width > 0 &&
+        !window.closest(".world-terminal-parking"),
+    );
+  // The pane cell that holds the visible window's live terminal.
+  const visiblePane = () =>
+    [
+      ...(visibleInspector()?.querySelectorAll<HTMLElement>("[data-pane-id]") ??
+        []),
+    ].find((pane) => pane.querySelector(".xterm"));
+  const visiblePaneId = () => visiblePane()?.dataset.paneId;
+  await until(
+    () => terminalInput(visiblePane() ?? document.createElement("div")),
+    "visible Inspector terminal before Back to Office",
+  );
+  terminalInput(visiblePane()!)!.focus();
   await until(
     () =>
-      !!document.querySelector(".terminal-composer") ||
-      !!document.querySelector('button[aria-label="Open terminal input"]'),
-    "terminal input before Back to Office",
+      !!visiblePaneId() &&
+      store.get().selectedPaneId === visiblePaneId() &&
+      !!visibleInspector()?.querySelector(
+        'button[aria-label="Open terminal input"]',
+      ),
+    () =>
+      `visible Inspector pane ${visiblePaneId()} active before Back to Office`,
   );
-  document
+  visibleInspector()!
     .querySelector<HTMLButtonElement>(
       'button[aria-label="Open terminal input"]',
-    )
-    ?.click();
+    )!
+    .click();
   await until(
-    () => !!document.querySelector(".terminal-composer"),
-    "Composer opens before Back to Office",
+    () => !!visibleInspector()?.querySelector(".terminal-composer"),
+    "Composer opens in the visible Inspector before Back to Office",
   );
   backToOffice.click();
   await until(
