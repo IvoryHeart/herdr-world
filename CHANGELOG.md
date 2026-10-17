@@ -13,7 +13,8 @@ are optional because the merged PR history records their source.
   each workspace a room on a carpet and each tab a team table with one seat per
   pane (a solo desk for one pane, a small face-to-face table for two), with up
   to 19 desks per room. Plain terminals show a green prompt instead of an
-  agent's laptop. Agents that need you walk to their host's
+  agent's laptop. A desk with more panes than seats shows how many more and
+  lists every pane on tap. Agents that need you walk to their host's
   reception and queue oldest first. Finished agents join them with their work
   left on the desk until you open their terminal or mark it reviewed, then take
   a break in the lounge with idle agents. Speech bubbles show questions,

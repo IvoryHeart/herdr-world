@@ -3,6 +3,8 @@ import {
   creationPendingReason,
   creationFailureMessage,
 } from "../creationRequests";
+import { isMobileLayout, useLayoutPreferences } from "../layoutPreferences";
+import { useSystemBack } from "../systemBack";
 import { useTownFinished, withTownFinished } from "./town/townFinished";
 import {
   insertIntoTerminalComposerDraft,
@@ -32,13 +34,14 @@ import {
   townChoices,
   townLeaf,
   townOwner,
+  townPaneIdentity,
   useTownHistory,
   townScreenLines,
   useTownScreen,
 } from "./town/townChat";
 import { requestTerminalComposer } from "./terminalComposerRequest";
 import { TownComposer } from "./town/TownComposer";
-import { TownPeek } from "./town/TownPeek";
+import { TownPeek, townStatusText } from "./town/TownPeek";
 import {
   readTownRailCollapsed,
   TownRail,
@@ -85,6 +88,17 @@ import {
 import { preferredOfficeConnectorAnchor } from "./worldConnectorGeometry";
 import { officeCreationInputsEqual } from "./officeCreationInputs";
 
+/** A keyed index of a list, built the first time it is read. */
+function lazyIndex<T>(items: readonly T[], keyOf: (item: T) => string) {
+  let index: Map<string, T> | null = null;
+  const read = () =>
+    (index ??= new Map(items.map((item) => [keyOf(item), item])));
+  return {
+    get: (key: string) => read().get(key),
+    has: (key: string) => read().has(key),
+  };
+}
+
 type RoomDialog =
   | {
       mode: "create";
@@ -129,6 +143,7 @@ export default function TownView({
     () => createOfficeProjector(TOWN_PRESENTATION_BOUNDS),
     [],
   );
+  const layoutPreferences = useLayoutPreferences();
   const observedOffice = useMemo(
     (): HerdrOfficeProjection => projectOffice(world, Date.now(), selectedId),
     [world, selectedId, projectOffice],
@@ -203,19 +218,31 @@ export default function TownView({
       );
   }, []);
 
-  const completionSeenKeys = useMemo(
-    () =>
-      new Set(
-        completionSeen.size === 0
-          ? []
-          : observedOffice.roster
-              .filter(({ agent }) =>
-                completionSeen.has(officeCompletionIdentity(agent)),
-              )
-              .map(({ agent }) => agent.key),
-      ),
-    [completionSeen, observedOffice],
-  );
+  // Seen marks name their agent last; only those agents need their full
+  // identity checked, not the whole roster.
+  const seenAgentKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const identity of completionSeen)
+      try {
+        const parts: unknown = JSON.parse(identity);
+        if (Array.isArray(parts) && typeof parts[3] === "string")
+          keys.add(parts[3]);
+      } catch {
+        // A malformed mark names no agent.
+      }
+    return keys;
+  }, [completionSeen]);
+  const completionSeenKeys = useMemo(() => {
+    const keys = new Set<string>();
+    if (seenAgentKeys.size)
+      for (const { agent } of observedOffice.roster)
+        if (
+          seenAgentKeys.has(agent.key) &&
+          completionSeen.has(officeCompletionIdentity(agent))
+        )
+          keys.add(agent.key);
+    return keys;
+  }, [completionSeen, seenAgentKeys, observedOffice]);
   // Seen marks belong to one completion: an agent that works again, or
   // finishes again, has new work to check.
   useEffect(() => {
@@ -500,6 +527,12 @@ export default function TownView({
     return () => window.removeEventListener("resize", resize);
   }, []);
   const blockedSince = useRef(new Map<string, number>());
+  // Built on first use: a dense town's roster is large, and these lookups are
+  // only needed by taps, hovers and an open peek.
+  const agentByKey = useMemo(
+    () => lazyIndex(office.roster, (entry) => entry.agent.key),
+    [office.roster],
+  );
   const calls = useMemo((): TownCall[] => {
     const since = blockedSince.current;
     const live = new Set<string>();
@@ -524,9 +557,7 @@ export default function TownView({
       (a, b) => a.since - b.since || a.agent.key.localeCompare(b.agent.key),
     );
     const finished = unseenCompletions.flatMap((agent): TownCall[] => {
-      const entry = office.roster.find(
-        ({ agent: candidate }) => candidate.key === agent.key,
-      );
+      const entry = agentByKey.get(agent.key);
       return entry
         ? [
             {
@@ -542,17 +573,13 @@ export default function TownView({
         : [];
     });
     return [...blocked, ...finished];
-  }, [office.roster, unseenCompletions]);
-  const agentByKey = useMemo(
-    () => new Map(office.roster.map((entry) => [entry.agent.key, entry])),
-    [office.roster],
-  );
+  }, [office.roster, unseenCompletions, agentByKey]);
   const whereOfAgent = (agentKey: string) => {
     const entry = agentByKey.get(agentKey);
     return entry ? `${entry.roomLabel} · ${entry.hostLabel}` : "";
   };
   const deviceByKey = useMemo(
-    () => new Map(office.paneRoster.map((entry) => [entry.device.key, entry])),
+    () => lazyIndex(office.paneRoster, (entry) => entry.device.key),
     [office.paneRoster],
   );
 
@@ -587,6 +614,8 @@ export default function TownView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [unseenCompletions, toast]);
 
+  /** The desk whose panes are listed, for a desk with more panes than seats. */
+  const [chooser, setChooser] = useState<string | null>(null);
   const [peek, setPeek] = useState<{
     key: string;
     anchor: { x: number; y: number } | null;
@@ -617,10 +646,23 @@ export default function TownView({
    * Replying opens the pane in World's terminal window with its composer
    * open, the same composer (with uploads) used everywhere else.
    */
+  const crowdedDesk = (key: string) => {
+    const desk = office.deskRoster.find(({ desk }) => desk.key === key)?.desk;
+    return desk && desk.observedPaneCount > desk.paneDevices.length
+      ? desk
+      : null;
+  };
   const openReply = (key: string) => {
+    // A desk with more panes than seats lists them all rather than guessing.
+    if (crowdedDesk(key)) {
+      window.clearTimeout(peekTimer.current);
+      setPeek(null);
+      setChooser(key);
+      return;
+    }
     // On the phone layout agents chat in place: the peek grows World's
     // composer. Desktop World types straight into the terminal instead.
-    const mobile = document.documentElement.dataset.layout === "mobile";
+    const mobile = isMobileLayout();
     const agentKey = agentByKey.has(key)
       ? key
       : (deviceByKey.get(key)?.device.agentKey ??
@@ -651,14 +693,41 @@ export default function TownView({
     setPeek(null);
     // Desktop World has no visible composer; an open one would take the
     // terminal's keystrokes, so it is requested only on the phone layout.
-    if (leaf && mobile) requestTerminalComposer(leaf.pane.pane_id);
+    if (leaf && mobile)
+      requestTerminalComposer({
+        connectionId: leaf.connectionId,
+        generation: leaf.generation,
+        paneId: leaf.pane.pane_id,
+      });
     openOfficeTerminal(key);
   };
+  // The phone's Back closes the composer, then the peek or chooser, before
+  // it leaves Town.
+  useSystemBack(
+    peek !== null,
+    () => {
+      holdPeek.current = false;
+      setPeek(null);
+    },
+    "panel",
+  );
+  useSystemBack(
+    Boolean(peek?.chat),
+    () => setPeek((current) => (current ? { ...current, chat: false } : null)),
+    "popup",
+  );
+  useSystemBack(chooser !== null, () => setChooser(null), "popup");
   const peekEntry = peek ? agentByKey.get(peek.key) : undefined;
   useEffect(() => {
     if (peek && !peekEntry) setPeek(null);
   }, [peek, peekEntry]);
   const peekAgent = peekEntry?.agent;
+  const chooserDesk = chooser ? crowdedDesk(chooser) : null;
+  const chooserPanes = chooserDesk
+    ? office.paneRoster
+        .filter(({ device }) => device.deskKey === chooserDesk.key)
+        .sort((a, b) => a.device.order - b.device.order)
+    : [];
   const peekLeaf = townLeaf(world, peekAgent?.nodeId);
   const peekScreen = useTownScreen(
     peekLeaf,
@@ -710,7 +779,7 @@ export default function TownView({
       toast("error", "This agent's host changed; refresh before attaching.");
       return null;
     }
-    const mobile = document.documentElement.dataset.layout === "mobile";
+    const mobile = isMobileLayout();
     // The composer only takes inserted paths while it is mounted.
     if (mobile) openReply(agentKey);
     try {
@@ -848,8 +917,54 @@ export default function TownView({
           }
           onOpen={(key) => openPeek(key, null)}
         />
+        {chooserDesk ? (
+          <div
+            className="town-peek town-peek-sheet town-chooser"
+            role="dialog"
+            aria-label={`Panes at ${chooserDesk.displayLabel}`}
+          >
+            <div className="town-peek-head">
+              <div>
+                <b>{chooserDesk.displayLabel}</b>
+                <small>{chooserDesk.observedPaneCount} panes</small>
+              </div>
+              <button
+                type="button"
+                className="town-peek-close"
+                aria-label="Close panes"
+                onClick={() => setChooser(null)}
+              >
+                ×
+              </button>
+            </div>
+            <div className="town-chooser-list">
+              {chooserPanes.map(({ device }) => {
+                const agent = device.agentKey
+                  ? agentByKey.get(device.agentKey)?.agent
+                  : undefined;
+                return (
+                  <button
+                    key={device.key}
+                    type="button"
+                    onClick={() => {
+                      setChooser(null);
+                      if (agent) openPeek(agent.key, null);
+                      else openReply(device.key);
+                    }}
+                  >
+                    <span>{device.displayLabel}</span>
+                    <small>{agent ? townStatusText(agent) : "terminal"}</small>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
         {peekAgent ? (
           <TownPeek
+            // One card per agent session: late upload or reply results of
+            // another agent never land in this one.
+            key={peekLeaf ? townPaneIdentity(peekLeaf) : peekAgent.key}
             agent={peekAgent}
             where={whereOf(peekAgent.key)}
             lines={peekLines}
@@ -864,7 +979,7 @@ export default function TownView({
             onReply={(text, submit) =>
               reply(peekLeaf, peekAgent.displayLabel, text, submit)
             }
-            inlineReply={document.documentElement.dataset.layout !== "mobile"}
+            inlineReply={!layoutPreferences.mobile}
             onReviewed={() => {
               markCompletionSeen(peekAgent);
               toast("ok", `${peekAgent.displayLabel}'s work reviewed`);
@@ -980,6 +1095,10 @@ export default function TownView({
               right: 0,
             }}
             roomActions={{
+              onChoosePanes: (deskKey) => {
+                setPeek(null);
+                setChooser(deskKey);
+              },
               showCreateSeat,
               canCreateSeat,
               createSeatReason,

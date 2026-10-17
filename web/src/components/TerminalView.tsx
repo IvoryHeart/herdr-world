@@ -5,6 +5,7 @@ import {
 import {
   TERMINAL_COMPOSER_REQUEST_EVENT,
   takeTerminalComposerRequest,
+  terminalComposerRequestKey,
 } from "../world/terminalComposerRequest";
 import { type TerminalInputMode } from "./TerminalComposer";
 import {
@@ -651,17 +652,31 @@ export function TerminalView({
     "panel",
   );
   // World seam: a World view may ask this pane's terminal to open its composer.
+  // Requests are qualified by owner, so another host's pane with the same ID
+  // never takes them.
   useEffect(() => {
     if (!paneId || !isActivePane) return;
-    if (takeTerminalComposerRequest(paneId)) setComposerOpen(true);
+    const target = {
+      connectionId: s.activeConnectionId,
+      generation: s.connectionGeneration,
+      paneId,
+    };
+    const key = terminalComposerRequestKey(target);
+    if (takeTerminalComposerRequest(target)) setComposerOpen(true);
     const request = (event: Event) => {
-      if ((event as CustomEvent<string>).detail !== paneId) return;
-      if (takeTerminalComposerRequest(paneId)) setComposerOpen(true);
+      if ((event as CustomEvent<string>).detail !== key) return;
+      if (takeTerminalComposerRequest(target)) setComposerOpen(true);
     };
     window.addEventListener(TERMINAL_COMPOSER_REQUEST_EVENT, request);
     return () =>
       window.removeEventListener(TERMINAL_COMPOSER_REQUEST_EVENT, request);
-  }, [paneId, isActivePane, setComposerOpen]);
+  }, [
+    paneId,
+    isActivePane,
+    setComposerOpen,
+    s.activeConnectionId,
+    s.connectionGeneration,
+  ]);
   const agentHistoryOpen = controlledAgentHistoryOpen ?? localAgentHistoryOpen;
   const setAgentHistoryOpen = useCallback(
     (open: boolean) => {

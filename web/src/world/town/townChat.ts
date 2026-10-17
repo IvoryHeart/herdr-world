@@ -14,7 +14,7 @@ import {
 } from "../../components/agentHistory";
 import { terminalComposerRequest } from "../../terminalComposer";
 import { deskClient } from "../handoffs";
-import { questionFromScreen } from "../paneScreen";
+import { questionFromScreen, screenIdentity } from "../paneScreen";
 import type { WorldLeafObject, WorldObject } from "../worldObject";
 
 export type TownChoice = { key: string; label: string };
@@ -49,6 +49,13 @@ function textOf(result: unknown): string | null {
   return null;
 }
 
+/**
+ * The screen a peek shows: one pane in one runtime generation running one
+ * agent session. A new session on the same pane never inherits the old
+ * session's screen, messages or answer buttons.
+ */
+export const townPaneIdentity = (leaf: WorldLeafObject) => screenIdentity(leaf);
+
 /** Lines of recent output the peek reads, as the agent's latest chatter. */
 const PEEK_LINES = 150;
 
@@ -61,9 +68,7 @@ export function useTownScreen(
   const [screen, setScreen] = useState<{ id: string; text: string } | null>(
     null,
   );
-  const identity = leaf
-    ? `${leaf.connectionId}\u0000${leaf.generation}\u0000${leaf.pane.pane_id}`
-    : null;
+  const identity = leaf ? townPaneIdentity(leaf) : null;
   useEffect(() => {
     if (!leaf || !active || !identity) return;
     let cancelled = false;
@@ -127,9 +132,7 @@ export function useTownHistory(
   } | null>(null);
   const agent = leaf?.pane.agent;
   const identity =
-    leaf && agent
-      ? `${leaf.connectionId}\u0000${leaf.generation}\u0000${leaf.pane.pane_id}\u0000${agent}`
-      : null;
+    leaf && agent ? `${townPaneIdentity(leaf)}\u0000${agent}` : null;
   useEffect(() => {
     if (!leaf || !agent || !active || !identity) return;
     let cancelled = false;
@@ -240,17 +243,41 @@ export function townQuestion(
 const NUMBERED = /^\s*(?:[›❯>]\s*)?(\d)[.)]\s+(.{1,60}?)\s*$/;
 const YES_NO = /\((y)\/(n)\)|\[(y)\/(n)\]/i;
 
-/** Numbered menu entries, or y/n, from the bottom of a question. */
+/** A hint an agent draws under its menu, such as "Esc to cancel". */
+const MENU_HINT = /esc|enter|select|navigate|confirm|↑|↓|tab to/i;
+
+/**
+ * Numbered menu entries, or y/n, from the active prompt at the bottom of a
+ * question. A menu followed by other output or a later question is no longer
+ * active and yields no answers.
+ */
 export function townChoices(lines: readonly string[]): TownChoice[] {
-  const choices: TownChoice[] = [];
-  for (const line of lines) {
-    const match = NUMBERED.exec(line);
-    if (match && !choices.some((choice) => choice.key === match[1]))
-      choices.push({ key: match[1]!, label: match[2]! });
+  let last = -1;
+  for (let index = lines.length - 1; index >= 0; index -= 1)
+    if (NUMBERED.test(lines[index]!)) {
+      last = index;
+      break;
+    }
+  if (last >= 0) {
+    const after = lines.slice(last + 1);
+    const active = after.every(
+      (line) => !line.trim() || /^\s/.test(line) || MENU_HINT.test(line),
+    );
+    if (!active) return [];
+    // The menu block: numbered entries and their indented continuations.
+    const choices: TownChoice[] = [];
+    for (let index = last; index >= 0; index -= 1) {
+      const line = lines[index]!;
+      const match = NUMBERED.exec(line);
+      if (match) {
+        if (!choices.some((choice) => choice.key === match[1]))
+          choices.unshift({ key: match[1]!, label: match[2]! });
+      } else if (!/^\s/.test(line) || !line.trim()) break;
+    }
+    return choices.length >= 2 ? choices.slice(0, 6) : [];
   }
-  if (choices.length >= 2) return choices.slice(0, 6);
-  const last = lines.slice(-3).join(" ");
-  return YES_NO.test(last)
+  const tail = lines.slice(-3).join(" ");
+  return YES_NO.test(tail)
     ? [
         { key: "y", label: "Yes" },
         { key: "n", label: "No" },

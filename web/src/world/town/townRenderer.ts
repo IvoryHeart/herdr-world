@@ -219,6 +219,10 @@ type BuildingView = {
 
 type ActorView = { sprite: Sprite; shadow: Graphics; look: TownLook };
 
+/** Yield to the browser so pending input runs before the next setup step. */
+export const nextTownTask = () =>
+  new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+
 export async function createTownRenderer(
   element: HTMLElement,
   onFrame: (camera: TownCamera, level: TownLevel) => void,
@@ -231,6 +235,9 @@ export async function createTownRenderer(
   stats.activeApplications += 1;
   stats.activeTickers += 1;
   stats.ready = false;
+  // Setup runs as separate tasks, so input is not held behind React's commit,
+  // the WebGL context and sprite painting all at once.
+  await nextTownTask();
   const app = new Application();
   try {
     await app.init({
@@ -272,6 +279,7 @@ export async function createTownRenderer(
   canvas.style.touchAction = "none";
   element.replaceChildren(canvas);
 
+  await nextTownTask();
   const sprites = buildTownSprites();
   const camera = new TownCamera();
   const actors = new TownActors();

@@ -6,6 +6,7 @@ import type { Pane, Tab, Workspace } from "../../types";
 import type { WorldRuntimeConnection } from "../runtimeStore";
 import { buildWorldObject, type WorldObject } from "../worldObject";
 import TownView from "../TownView";
+import { initializeLayoutPreferences } from "../../layoutPreferences";
 import { bridge, type ConnectionClient } from "../../api";
 import "../world.css";
 
@@ -141,8 +142,13 @@ function topology(seed: number): Topology {
       let paneTotal = 0;
       for (let d = 0; d < deskCount; d += 1) {
         const tabId = `${workspaceId}-tab-${d}`;
+        // One crowded desk has more panes than drawn seats.
         const paneCount =
-          scale === "max" ? 3 + Math.floor(r() * 2) : 2 + Math.floor(r() * 3);
+          host === HOSTS[0] && roomIndex === 0 && d === 0
+            ? 6
+            : scale === "max"
+              ? 3 + Math.floor(r() * 2)
+              : 2 + Math.floor(r() * 3);
         const agents = Math.min(paneCount, 1 + (r() < 0.55 ? 1 : 0));
         tabs.push({
           tab_id: tabId,
@@ -288,6 +294,8 @@ const SCREENS = {
 
 // Uploads answer as the World service does, for the connection asked.
 const uploads: string[] = [];
+/** While set, uploads wait for it, as a slow upload would. */
+let uploadGate: Promise<void> | null = null;
 const realFetch = window.fetch.bind(window);
 window.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   const url = new URL(
@@ -300,6 +308,7 @@ window.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   if (!match) return realFetch(input, init);
   const connectionId = decodeURIComponent(match[1]!);
   uploads.push(connectionId);
+  if (uploadGate) await uploadGate;
   return new Response(
     JSON.stringify({ path: `/uploads/${url.searchParams.get("filename")}` }),
     {
@@ -330,8 +339,8 @@ function worldFor(connections: WorldRuntimeConnection[]) {
 const phone = window.innerWidth < 640;
 
 async function run() {
-  // World marks its phone layout on <html>; the composer is styled for it.
-  if (phone) document.documentElement.dataset.layout = "mobile";
+  // World resolves its phone layout from the viewport, as the app does.
+  initializeLayoutPreferences();
   document.body.style.margin = "0";
   document.body.style.background = "#14181f";
   const layoutShell = document.createElement("div");
@@ -577,6 +586,41 @@ async function run() {
       uploads.length === 1 && uploads[0] === peekConnection,
       `attachment uploaded through ${JSON.stringify(uploads)}`,
     );
+    // A number key pressed on another control never answers the agent.
+    const zoomIn = host.querySelector<HTMLButtonElement>(
+      '[aria-label="Zoom in"]',
+    )!;
+    zoomIn.focus();
+    zoomIn.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "1", bubbles: true }),
+    );
+    await settle();
+    check(sent.length === 2, "a number key outside the peek sent an answer");
+    // An upload that finishes after switching agents stays with its agent.
+    let release!: () => void;
+    uploadGate = new Promise<void>((resolve) => (release = resolve));
+    await attachNote(host);
+    const firstCard = host.querySelector(".town-peek");
+    [...host.querySelectorAll<HTMLButtonElement>(".town-peek-foot button")]
+      .find((button) => button.textContent?.startsWith("Next"))!
+      .click();
+    // Each agent session gets its own card.
+    await waitFor(
+      () =>
+        host.querySelector(".town-peek") !== null &&
+        host.querySelector(".town-peek") !== firstCard,
+      "Next did not move to another agent",
+    );
+    release();
+    uploadGate = null;
+    await settle();
+    await settle();
+    check(
+      !host
+        .querySelector<HTMLInputElement>(".town-reply input:not([type])")
+        ?.value.includes("/uploads/"),
+      "an earlier agent's upload landed in the next agent's reply",
+    );
   } else {
     // 📎 uploads through the pane's own connection into World's composer.
     await attachNote(host);
@@ -639,6 +683,48 @@ async function run() {
     opened.length = 0;
   }
 
+  // A desk with more panes than seats lists every pane.
+  const crowded = [
+    ...host.querySelectorAll<HTMLButtonElement>(
+      '.world-semantic-target[data-kind="desk"]',
+    ),
+  ].find((target) => target.getAttribute("aria-label")?.endsWith(", 6 panes"));
+  check(crowded !== undefined, "the six-pane desk has no target");
+  crowded?.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+  await waitFor(
+    () => host.querySelectorAll(".town-chooser-list button").length === 6,
+    "the six-pane desk did not list all six panes",
+  );
+  host.querySelector<HTMLButtonElement>('[aria-label="Close panes"]')!.click();
+  await settle();
+  opened.length = 0;
+
+  // On the phone, Back closes the composer, then the peek, before Town.
+  if (phone) {
+    host.querySelector<HTMLButtonElement>(".town-reception-entry")!.click();
+    await waitFor(
+      () => host.querySelector(".town-message-box") !== null,
+      "peek did not open for Back",
+    );
+    host.querySelector<HTMLButtonElement>(".town-message-box")!.click();
+    await waitFor(
+      () => host.querySelector(".town-peek .terminal-composer-input") !== null,
+      "composer did not open for Back",
+    );
+    history.back();
+    await waitFor(
+      () =>
+        host.querySelector(".town-peek .terminal-composer-input") === null &&
+        host.querySelector(".town-peek") !== null,
+      "Back did not close the composer first",
+    );
+    history.back();
+    await waitFor(
+      () => host.querySelector(".town-peek") === null,
+      "Back did not close the peek",
+    );
+  }
+
   // Inspector opens World's Inspector on Files for that agent.
   host.querySelector<HTMLButtonElement>(".town-reception-entry")!.click();
   await waitFor(
@@ -661,9 +747,13 @@ async function run() {
     let composerRequests = 0;
     const countRequest = () => (composerRequests += 1);
     window.addEventListener(TERMINAL_COMPOSER_REQUEST_EVENT, countRequest);
-    host
-      .querySelector<HTMLButtonElement>(
+    [
+      ...host.querySelectorAll<HTMLButtonElement>(
         '.world-semantic-target[data-kind="desk"]',
+      ),
+    ]
+      .find(
+        (target) => !target.getAttribute("aria-label")?.endsWith(", 6 panes"),
       )!
       .dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
     await waitFor(() => opened.length === 1, "desk did not open its terminal");

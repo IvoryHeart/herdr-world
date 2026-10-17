@@ -172,11 +172,14 @@ export function TownPeek({
         onClose();
         return;
       }
+      // Answers and typing belong to the card: a key pressed while focus is
+      // on another control (zoom, the rail) never writes to the agent.
       if (
-        typingTarget(event.target) ||
         event.metaKey ||
         event.ctrlKey ||
-        event.altKey
+        event.altKey ||
+        !(event.target instanceof Node) ||
+        !card.current?.contains(event.target)
       )
         return;
       const choice = choices.find(
@@ -194,12 +197,20 @@ export function TownPeek({
     window.addEventListener("keydown", keydown);
     return () => window.removeEventListener("keydown", keydown);
   }, [pinned, choices, canReply, onClose, onReply]);
+  // A pinned card takes focus, so its answer keys work at once, unless the
+  // user is already typing somewhere.
+  useEffect(() => {
+    if (!pinned || !card.current) return;
+    if (!typingTarget(document.activeElement))
+      card.current.focus({ preventScroll: true });
+  }, [pinned, agent.key]);
 
   return (
     <div
       ref={card}
       className={`town-peek${anchor ? "" : " town-peek-sheet"}${chatting ? " town-peek-chat" : ""}${agent.semanticStatus === "blocked" ? " town-peek-blocked" : ""}`}
       role="dialog"
+      tabIndex={-1}
       aria-label={`${agent.displayLabel} peek`}
       style={
         anchor

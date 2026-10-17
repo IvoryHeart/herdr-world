@@ -2,6 +2,8 @@ import type { TownLevel } from "./townCamera";
 import {
   TOWN_FACADE,
   TOWN_TILE as T,
+  townDeskSlots,
+  townSeat,
   type TownBuilding,
   type TownLayout,
 } from "./townLayout";
@@ -79,9 +81,9 @@ export function townHitTest(
       if (x < X - 2 || x > X + 66 || y < Y || y > Y + 60) continue;
       if (detailed) {
         const desk = context.model.desks.get(cell.deskKey);
-        for (let seat = 0; seat < 4; seat += 1) {
-          const cx = X + (seat % 2 ? 48 : 16);
-          const top = seat < 2;
+        // The seats as drawn: solo, face to face or a team table.
+        for (let seat = 0; seat < townDeskSlots(cell.seats).length; seat += 1) {
+          const { cx, top } = townSeat(cell, seat);
           if (Math.abs(x - cx) > 11 || !(top ? y < Y + 22 : y > Y + 34))
             continue;
           const device = desk?.paneDevices[seat];

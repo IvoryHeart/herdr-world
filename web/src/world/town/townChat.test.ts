@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { townLineKind, townQuestion } from "./townChat";
+import { townChoices, townLineKind, townQuestion } from "./townChat";
 
 const screen = [
   "● Updated the queue so the oldest agent waits first.",
@@ -28,4 +28,27 @@ test("lines are coloured as the agent marks them", () => {
   expect(townLineKind("  ✓ 13 passed")).toBe("ok");
   expect(townLineKind("✻ Thinking…")).toBe("busy");
   expect(townLineKind("The queue now keeps its order.")).toBe("text");
+});
+
+test("answers come only from the active menu at the bottom", () => {
+  expect(
+    townChoices([
+      "Do you want to make this edit?",
+      "❯ 1. Yes",
+      "  2. No, and tell the agent what to do differently (esc)",
+      "Esc to cancel",
+    ]).map((choice) => choice.key),
+  ).toEqual(["1", "2"]);
+  // A later question supersedes an earlier menu.
+  expect(
+    townChoices([
+      "1. Delete files",
+      "2. Keep files",
+      "What branch name should I use?",
+    ]),
+  ).toEqual([]);
+  expect(townChoices(["Overwrite the file? (y/n)"]).map((c) => c.key)).toEqual([
+    "y",
+    "n",
+  ]);
 });

@@ -46,7 +46,11 @@ import {
   type TownModel,
 } from "./townModel";
 import { townCarpetFor } from "./townPaint";
-import { createTownRenderer, type TownRendererHandle } from "./townRenderer";
+import {
+  createTownRenderer,
+  nextTownTask,
+  type TownRendererHandle,
+} from "./townRenderer";
 import { townPortrait } from "./townSprites";
 import { townTargets, type TownTarget } from "./townTargets";
 import { yieldWorldTask } from "../worldObject";
@@ -65,6 +69,8 @@ export type TownRoomActions = {
   onRenameRoom(roomKey: string): void;
   canCloseRoom(roomKey: string): boolean;
   onCloseRoom(roomKey: string): void;
+  /** List every pane of a desk with more panes than drawn seats. */
+  onChoosePanes(deskKey: string): void;
 };
 
 /** Camera kept across Office visits within one page session. */
@@ -447,7 +453,9 @@ export function TownCanvas({
       (camera, level) => onFrameRef.current(camera, level),
       abort.signal,
     )
-      .then((renderer) => {
+      .then(async (renderer) => {
+        // Building the scene is its own task, after the renderer's setup.
+        if (!disposed) await nextTownTask();
         if (disposed) {
           renderer.destroy();
           return;
@@ -1373,20 +1381,35 @@ const TownWorldLayer = memo(function TownWorldLayer({
                           <div
                             key={desk.key}
                             className="town-desk-tags"
-                            aria-hidden="true"
                             style={{
                               left: (cell.x + 1 - placed.x) * T,
                               top: (cell.y - placed.y) * T,
                             }}
                           >
-                            <span className="town-desk-tag">
+                            <span className="town-desk-tag" aria-hidden="true">
                               {desk.displayLabel}
                             </span>
+                            {desk.observedPaneCount >
+                            desk.paneDevices.length ? (
+                              <button
+                                type="button"
+                                className="town-desk-more"
+                                aria-label={`All ${desk.observedPaneCount} panes at ${desk.displayLabel}`}
+                                onClick={() =>
+                                  roomActions.onChoosePanes(desk.key)
+                                }
+                              >
+                                +
+                                {desk.observedPaneCount -
+                                  desk.paneDevices.length}
+                              </button>
+                            ) : null}
                             {townDeskSlots(cell.seats).map((slot, seat) => {
                               const device = desk.paneDevices[seat];
                               return device ? (
                                 <span
                                   key={device.key}
+                                  aria-hidden="true"
                                   className={`town-seat-tag${slot.top ? " town-seat-tag-top" : ""}${device.agentKey ? "" : " town-seat-tag-shell"}`}
                                   style={{ left: slot.chairX + 7 }}
                                 >

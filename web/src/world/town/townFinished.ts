@@ -15,29 +15,49 @@ import type {
 const BUSY = new Set(["working", "blocked"]);
 
 /**
- * One observation: agents that went from busy to idle have finished; agents
- * that are busy again, or gone, are no longer finished.
+ * One observation, in a single pass over the roster: agents that went from
+ * busy to idle have finished; agents that are busy again, or gone, are no
+ * longer finished. `renewed` are agents whose earlier completion no longer
+ * counts as seen: they just finished or just started working again.
  */
-export function nextTownFinished(
+export function nextTownFinished<
+  T extends Pick<OfficeAgent, "key" | "semanticStatus">,
+>(
   before: ReadonlyMap<string, string>,
-  agents: readonly Pick<OfficeAgent, "key" | "semanticStatus">[],
+  agents: Iterable<T>,
   current: ReadonlySet<string>,
 ) {
   const statuses = new Map<string, string>();
   const started: string[] = [];
-  const next = new Set(current);
+  const renewed: T[] = [];
+  let next: Set<string> | null = null;
+  const change = () => (next ??= new Set(current));
   for (const agent of agents) {
-    statuses.set(agent.key, agent.semanticStatus);
+    const status = agent.semanticStatus;
+    statuses.set(agent.key, status);
     const was = before.get(agent.key);
-    if (was && BUSY.has(was) && agent.semanticStatus === "idle") {
+    const busy = BUSY.has(status);
+    if (was !== undefined && BUSY.has(was) && status === "idle") {
       started.push(agent.key);
-      next.add(agent.key);
-    } else if (BUSY.has(agent.semanticStatus)) next.delete(agent.key);
+      renewed.push(agent);
+      if (!current.has(agent.key)) change().add(agent.key);
+    } else if (busy) {
+      if (!BUSY.has(was ?? "")) renewed.push(agent);
+      if (current.has(agent.key)) change().delete(agent.key);
+    }
   }
-  for (const key of next) if (!statuses.has(key)) next.delete(key);
-  const same =
-    next.size === current.size && [...next].every((key) => current.has(key));
-  return { statuses, started, finished: same ? current : next };
+  for (const key of current) if (!statuses.has(key)) change().delete(key);
+  return { statuses, started, renewed, finished: next ?? current };
+}
+
+/**
+ * The agents Town places: in rooms, at reception and at the bar. A dense
+ * roster also holds agents Town does not present; they need no tracking.
+ */
+function* presentedAgents(office: HerdrOfficeProjection) {
+  for (const room of office.rooms) yield* room.roomAgents;
+  for (const reception of office.receptions) yield* reception.waitingAgents;
+  yield* office.barAgents;
 }
 
 /** Agents that finished while Town was watching and are not yet checked. */
@@ -51,20 +71,17 @@ export function useTownFinished(office: HerdrOfficeProjection) {
   /** Agents whose earlier completion no longer counts as seen. */
   const [fresh, setFresh] = useState<readonly OfficeAgent[]>([]);
   useEffect(() => {
-    const agents = office.roster.map(({ agent }) => agent);
-    const before = previous.current;
-    const step = nextTownFinished(before, agents, finishedRef.current);
-    previous.current = step.statuses;
-    finishedRef.current = step.finished;
-    setFinished(step.finished);
-    // A finish, or new work, starts a new completion that nobody has seen.
-    const renewed = agents.filter(
-      (agent) =>
-        step.started.includes(agent.key) ||
-        (BUSY.has(agent.semanticStatus) &&
-          !BUSY.has(before.get(agent.key) ?? "")),
+    const step = nextTownFinished(
+      previous.current,
+      presentedAgents(office),
+      finishedRef.current,
     );
-    if (renewed.length) setFresh(renewed);
+    previous.current = step.statuses;
+    if (step.finished !== finishedRef.current) {
+      finishedRef.current = step.finished;
+      setFinished(step.finished);
+    }
+    if (step.renewed.length) setFresh(step.renewed);
   }, [office]);
   const dismiss = (key: string) => {
     const current = finishedRef.current;
@@ -105,20 +122,24 @@ export function withTownFinished(
     }
     return next;
   };
+  // Only containers holding a changed agent are copied.
+  const list = (agents: OfficeAgent[]) =>
+    agents.some(changes) ? agents.map(present) : agents;
   return {
     ...office,
-    rooms: office.rooms.map((room) => ({
-      ...room,
-      roomAgents: room.roomAgents.map(present),
-    })),
-    receptions: office.receptions.map((reception) => ({
-      ...reception,
-      waitingAgents: reception.waitingAgents.map(present),
-    })),
-    barAgents: office.barAgents.map(present),
-    roster: office.roster.map((entry) => ({
-      ...entry,
-      agent: present(entry.agent),
-    })),
+    rooms: office.rooms.map((room) => {
+      const roomAgents = list(room.roomAgents);
+      return roomAgents === room.roomAgents ? room : { ...room, roomAgents };
+    }),
+    receptions: office.receptions.map((reception) => {
+      const waitingAgents = list(reception.waitingAgents);
+      return waitingAgents === reception.waitingAgents
+        ? reception
+        : { ...reception, waitingAgents };
+    }),
+    barAgents: list(office.barAgents),
+    roster: office.roster.map((entry) =>
+      changes(entry.agent) ? { ...entry, agent: present(entry.agent) } : entry,
+    ),
   };
 }
