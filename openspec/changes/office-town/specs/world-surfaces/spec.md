@@ -161,8 +161,8 @@ desktop the list SHALL be a left rail grouped by host and then room, with
 collapsible host groups, and the user SHALL be able to hide it to a count and
 restore it; this choice SHALL persist per browser. On phones the list SHALL be a
 bottom tray that remains reachable while a peek or card is open. Hovering an
-entry SHALL open its peek, and activating an entry SHALL open that exact pane in
-World's terminal composer. A keyboard command SHALL open the next agent that
+entry SHALL open its peek, and activating an entry SHALL open that peek pinned,
+where its message box opens World's composer. A keyboard command SHALL open the next agent that
 needs the user.
 The rail SHALL list a bounded number of entries and count the rest.
 

@@ -73,11 +73,17 @@ export function TownPeek({
   const card = useRef<HTMLDivElement>(null);
   const screen = useRef<HTMLPreElement>(null);
   const chatting = Boolean(composer);
-  // While chatting, follow the newest lines like a conversation.
+  // Follow the newest lines, as Desk's cards do, unless the reader has
+  // scrolled up to read earlier messages.
+  const follow = useRef(true);
+  const text = lines.join("\n");
+  useEffect(() => {
+    follow.current = true;
+  }, [agent.key]);
   useLayoutEffect(() => {
-    if (chatting && screen.current)
+    if (follow.current && screen.current)
       screen.current.scrollTop = screen.current.scrollHeight;
-  }, [chatting, lines]);
+  }, [text, chatting]);
   const [placed, setPlaced] = useState<{ left: number; top: number } | null>(
     null,
   );
@@ -170,7 +176,17 @@ export function TownPeek({
           ×
         </button>
       </div>
-      <pre ref={screen} className="town-peek-screen" aria-label="Latest screen">
+      <pre
+        ref={screen}
+        className="town-peek-screen"
+        aria-label="Latest messages"
+        onScroll={(event) => {
+          const element = event.currentTarget;
+          follow.current =
+            element.scrollHeight - element.scrollTop - element.clientHeight <
+            24;
+        }}
+      >
         {lines.length
           ? lines.join("\n")
           : loading

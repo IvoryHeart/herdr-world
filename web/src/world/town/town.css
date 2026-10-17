@@ -1010,7 +1010,8 @@
   margin: 8px 0 0;
   padding: 8px 10px;
   max-height: 180px;
-  overflow: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   background: var(--town-term);
   border-radius: 8px;
   color: #c9d1c3;
@@ -1154,10 +1155,9 @@
 }
 
 .town-peek-chat .town-peek-screen {
-  flex: 1 1 auto;
-  min-height: 72px;
-  max-height: none;
-  overflow-y: auto;
+  flex: 0 1 auto;
+  min-height: 48px;
+  max-height: min(180px, 26dvh);
 }
 
 .town-peek-chat .town-peek-head,
@@ -1215,10 +1215,6 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
-
-  .town-peek-chat .town-peek-screen {
-    min-height: 40px;
-  }
 }
 
 /* Looks like a text box; tapping it opens World's composer. */
@@ -1239,16 +1235,4 @@
     system-ui,
     sans-serif;
   cursor: text;
-}
-
-@media (max-width: 640px) {
-  /* Chatting fills the view so the agent's screen gets the room above the
-     composer, keyboard or not. */
-  .town-peek-sheet.town-peek-chat {
-    top: 8px;
-  }
-
-  .town-peek-chat .town-peek-screen {
-    min-height: 96px;
-  }
 }

@@ -8,7 +8,7 @@ import { useEffect, useState } from "react";
 import { bridge, type ConnectionClient } from "../../api";
 import { terminalComposerRequest } from "../../terminalComposer";
 import { deskClient } from "../handoffs";
-import { activityFromScreen, questionFromScreen } from "../paneScreen";
+import { questionFromScreen } from "../paneScreen";
 import type { WorldLeafObject, WorldObject } from "../worldObject";
 
 export type TownChoice = { key: string; label: string };
@@ -96,41 +96,15 @@ export function useTownScreen(
   return screen?.id === identity ? screen.text : null;
 }
 
-/** The lines worth showing: the question when blocked, else recent output. */
+/**
+ * The agent's recent messages, as Desk's cards show them: the last lines of
+ * its screen without terminal chrome. The peek scrolls back through them.
+ */
 export function townScreenLines(
   screen: string | null,
-  blocked: boolean,
-  maxLines: number,
+  maxLines = 40,
 ): string[] {
-  if (!screen) return [];
-  return blocked
-    ? questionFromScreen(screen, maxLines)
-    : activityFromScreen(screen, maxLines);
-}
-
-const FRAME_ONLY = /^[\s─━│┃╭╮╰╯┌┐└┘├┤┬┴┼═║╔╗╚╝▔▁▏▕]*$/;
-
-/**
- * The agent's whole visible screen for chatting: everything it printed, with
- * box-drawing frames removed, so the conversation reads like the terminal.
- */
-export function townChatLines(screen: string | null, maxLines = 120): string[] {
-  if (!screen) return [];
-  const lines = screen
-    .split("\n")
-    .map((line) =>
-      line
-        .replace(/^\s*[│┃]\s?/, "")
-        .replace(/\s?[│┃]\s*$/, "")
-        .trimEnd(),
-    )
-    .filter((line) => !FRAME_ONLY.test(line) || line === "");
-  // Collapse runs of blank lines and trim the ends.
-  const out: string[] = [];
-  for (const line of lines)
-    if (line || (out.length && out[out.length - 1] !== "")) out.push(line);
-  while (out.length && out[out.length - 1] === "") out.pop();
-  return out.slice(-maxLines);
+  return screen ? questionFromScreen(screen, maxLines) : [];
 }
 
 const NUMBERED = /^\s*(?:[›❯>]\s*)?(\d)[.)]\s+(.{1,60}?)\s*$/;
