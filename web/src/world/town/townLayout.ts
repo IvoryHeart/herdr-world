@@ -58,6 +58,8 @@ export type TownCell = {
   x: number;
   y: number;
   deskKey: string | null;
+  /** Seats at the desk's table: 1 solo, 2 face to face, 3-4 a team table. */
+  seats: number;
 };
 
 export type TownRoom = {
@@ -118,6 +120,8 @@ export type TownInputRoom = {
   order: number;
   /** Desk keys in native tab order. */
   deskKeys: readonly string[];
+  /** Seats per desk (its panes, at most four); a desk without one has four. */
+  deskSeats?: readonly number[];
 };
 
 export type TownInputHost = { key: string; displayOrder: number };
@@ -284,6 +288,11 @@ export function layoutTown(
       nextMemory,
     ),
   );
+  const seatsOf = new Map<string, number>();
+  for (const room of input.rooms)
+    room.deskKeys.forEach((key, index) =>
+      seatsOf.set(key, room.deskSeats?.[index] ?? 4),
+    );
   // Up to four hosts share one street; larger towns wrap into a grid of streets.
   const perRow =
     formFactor === "narrow"
@@ -422,6 +431,7 @@ export function layoutTown(
       const byCoordinate = new Map<string, string>();
       for (const [deskKey, at] of room.placement)
         byCoordinate.set(`${at.col},${at.row}`, deskKey);
+
       const cells: TownCell[] = [];
       for (let row = 0; row < room.rows; row += 1)
         for (let col = 0; col < room.cols; col += 1)
@@ -431,6 +441,7 @@ export function layoutTown(
             x: rx + col * CELL,
             y: ry + 1 + row * CELL,
             deskKey: byCoordinate.get(`${col},${row}`) ?? null,
+            seats: seatsOf.get(byCoordinate.get(`${col},${row}`) ?? "") ?? 4,
           });
       return {
         key: room.key,
@@ -566,19 +577,55 @@ export function layoutTown(
   };
 }
 
-/** Seat geometry for one desk cell, in pixels. Seats 0-1 face the viewer. */
+export type TownDeskSlot = {
+  /** A top seat faces the viewer; a bottom seat shows its back. */
+  top: boolean;
+  /** Chair's left edge, in pixels from the table's left edge. */
+  chairX: number;
+};
+
+const SOLO: readonly TownDeskSlot[] = [{ top: true, chairX: 25 }];
+const PAIR: readonly TownDeskSlot[] = [
+  { top: true, chairX: 25 },
+  { top: false, chairX: 25 },
+];
+const TEAM: readonly TownDeskSlot[] = [
+  { top: true, chairX: 9 },
+  { top: true, chairX: 41 },
+  { top: false, chairX: 9 },
+  { top: false, chairX: 41 },
+];
+
+/**
+ * A desk's furniture follows its panes: one pane is a solo desk, two sit face
+ * to face at a small table, and three or four share a team table.
+ */
+export function townDeskSlots(seats: number): readonly TownDeskSlot[] {
+  return seats <= 1 ? SOLO : seats === 2 ? PAIR : TEAM;
+}
+
+/** The table's left edge and width, in pixels from the desk's left edge. */
+export function townDeskTable(seats: number) {
+  return seats <= 2 ? { x: 14, w: 36 } : { x: -1, w: 64 };
+}
+
+/** Seat geometry for one desk cell, in pixels. Top seats face the viewer. */
 export function townSeat(cell: TownCell, seat: number) {
   const X = (cell.x + 1) * TOWN_TILE;
   const Y = cell.y * TOWN_TILE;
-  const top = seat < 2;
-  const cx = X + (seat % 2 ? 48 : 16);
+  const slot = townDeskSlots(cell.seats)[seat] ?? TEAM[seat % 4]!;
+  const top = slot.top;
+  const cx = X + slot.chairX + 7;
   return {
     tableX: X,
     tableY: Y,
     cx,
     top,
     /** Aisle tile the agent walks to before sliding into the seat. */
-    entry: { x: seat % 2 ? cell.x + 5 : cell.x, y: top ? cell.y : cell.y + 3 },
+    entry: {
+      x: slot.chairX > 25 ? cell.x + 5 : cell.x,
+      y: top ? cell.y : cell.y + 3,
+    },
     /** Feet position while seated. */
     seatedY: top ? Y + 12 : Y + 60,
   };

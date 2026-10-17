@@ -8,6 +8,8 @@ import {
   TOWN_FACADE,
   TOWN_TILE as T,
   TownGround,
+  townDeskSlots,
+  townDeskTable,
   type TownBuilding,
   type TownLayout,
 } from "./townLayout";
@@ -309,6 +311,7 @@ function carpet(
 /** Floor, back wall, carpets, lounge rug and reception lobby. */
 export type TownFurniture = {
   table: Record<string, TownCanvas>;
+  tableSmall: Record<string, TownCanvas>;
   chair: TownCanvas;
   chairBack: TownCanvas;
   woodFor: (deskKey: string) => string;
@@ -415,14 +418,19 @@ export function paintTownInterior(
         if (!cell.deskKey) continue;
         const X = (cell.x + 1 - building.x) * T;
         const Y = (cell.y - building.y) * T;
+        const slots = townDeskSlots(cell.seats);
+        const place = townDeskTable(cell.seats);
         g.fillStyle = "rgba(0,0,0,.2)";
-        g.fillRect(X + 3, Y + 50, 62, 4);
-        g.drawImage(furniture.chair, X + 9, Y + 2);
-        g.drawImage(furniture.chair, X + 41, Y + 2);
-        const table = furniture.table[furniture.woodFor(cell.deskKey)];
-        if (table) g.drawImage(table, X - 1, Y + 17);
-        g.drawImage(furniture.chairBack, X + 9, Y + 45);
-        g.drawImage(furniture.chairBack, X + 41, Y + 45);
+        g.fillRect(X + place.x + 4, Y + 50, place.w - 2, 4);
+        for (const slot of slots)
+          if (slot.top) g.drawImage(furniture.chair, X + slot.chairX, Y + 2);
+        const table = (
+          cell.seats <= 2 ? furniture.tableSmall : furniture.table
+        )[furniture.woodFor(cell.deskKey)];
+        if (table) g.drawImage(table, X + place.x, Y + 17);
+        for (const slot of slots)
+          if (!slot.top)
+            g.drawImage(furniture.chairBack, X + slot.chairX, Y + 45);
       }
   g.fillStyle = "#3a2f2b";
   g.fillRect(0, 0, 6, Hp);

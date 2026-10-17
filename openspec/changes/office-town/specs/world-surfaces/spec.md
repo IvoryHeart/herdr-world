@@ -5,7 +5,9 @@
 Town SHALL present a town in which each presented host is one building along a
 road, each admitted Herdr workspace of that host is a room on a carpet inside its
 building, and each admitted tab is a desk in its room. A desk SHALL be a table
-with one seat per admitted pane up to four drawn seats; an agent pane SHALL show
+with one seat per admitted pane up to four drawn seats, sized to its panes: a
+one-pane desk SHALL be a solo desk, a two-pane desk a small table with one seat on
+each side, and three or four panes a four-seat team table; an agent pane SHALL show
 its agent character at its seat while seated, and a non-agent pane SHALL show a
 screen without a character. Panes beyond the drawn seats SHALL remain
 individually reachable through an exact count and chooser. Each building SHALL

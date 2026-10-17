@@ -341,22 +341,25 @@ export type TownStaticSprites = ReturnType<typeof buildTownSprites>;
 
 /** Build every non-character sprite once. */
 export function buildTownSprites() {
+  const tableOf = (W: number, w: string) =>
+    townSprite(W, 32, (R) => {
+      R(0, 0, W, 24, w);
+      R(0, 0, W, 1, townShade(w, 0.28));
+      R(0, 11, W, 2, townShade(w, -0.16));
+      R(0, 13, W, 1, townShade(w, 0.12));
+      R(0, 23, W, 1, townShade(w, -0.1));
+      R(0, 24, W, 6, townShade(w, -0.24));
+      R(0, 24, W, 1, townShade(w, -0.42));
+      R(2, 30, 3, 2, townShade(w, -0.55));
+      R(W - 5, 30, 3, 2, townShade(w, -0.55));
+      if (W > 40) R(W / 2 - 2, 30, 4, 2, townShade(w, -0.55));
+    });
   const table = Object.fromEntries(
-    TOWN_WOODS.map((w) => [
-      w,
-      townSprite(64, 32, (R) => {
-        R(0, 0, 64, 24, w);
-        R(0, 0, 64, 1, townShade(w, 0.28));
-        R(0, 11, 64, 2, townShade(w, -0.16));
-        R(0, 13, 64, 1, townShade(w, 0.12));
-        R(0, 23, 64, 1, townShade(w, -0.1));
-        R(0, 24, 64, 6, townShade(w, -0.24));
-        R(0, 24, 64, 1, townShade(w, -0.42));
-        R(2, 30, 3, 2, townShade(w, -0.55));
-        R(59, 30, 3, 2, townShade(w, -0.55));
-        R(30, 30, 4, 2, townShade(w, -0.55));
-      }),
-    ]),
+    TOWN_WOODS.map((w) => [w, tableOf(64, w)]),
+  ) as Record<string, TownCanvas>;
+  /** The small table of a solo or face-to-face desk. */
+  const tableSmall = Object.fromEntries(
+    TOWN_WOODS.map((w) => [w, tableOf(36, w)]),
   ) as Record<string, TownCanvas>;
   const lid = (logo: string) =>
     townSprite(14, 7, (R) => {
@@ -395,6 +398,7 @@ export function buildTownSprites() {
     );
   return {
     table,
+    tableSmall,
     chair: townSprite(14, 11, (R) => {
       R(1, 0, 12, 8, "#3b4354");
       R(2, 1, 10, 1, "#56617b");

@@ -93,6 +93,9 @@ export function townModelFromProjection(
         hostKey: room.hostKey,
         order: room.order,
         deskKeys: room.desks.map((desk) => desk.key),
+        deskSeats: room.desks.map((desk) =>
+          Math.max(1, Math.min(4, desk.paneDevices.length)),
+        ),
       })),
     },
     hosts,

@@ -3,6 +3,7 @@ import {
   layoutTown,
   TOWN_MAX_RENDERED_DESKS,
   TOWN_ROOM_TIERS,
+  townDeskSlots,
   townSeat,
   townTierFor,
   TownGround,
@@ -223,4 +224,37 @@ test("layout is deterministic for the same input", () => {
   const two = layoutTown(input, "wide").layout;
   expect(one.trees).toEqual(two.trees);
   expect(Buffer.from(one.ground)).toEqual(Buffer.from(two.ground));
+});
+
+test("a desk's furniture follows its panes", () => {
+  const { layout } = layoutTown(
+    {
+      hosts: [{ key: "host", displayOrder: 0 }],
+      rooms: [
+        {
+          key: "room",
+          hostKey: "host",
+          order: 0,
+          deskKeys: ["solo", "pair", "trio", "team"],
+          deskSeats: [1, 2, 3, 4],
+        },
+      ],
+    },
+    "wide",
+  );
+  const cells = new Map(
+    layout.buildings[0]!.rooms[0]!.cells.flatMap((cell) =>
+      cell.deskKey ? [[cell.deskKey, cell] as const] : [],
+    ),
+  );
+  expect([...cells.values()].map((cell) => cell.seats)).toEqual([1, 2, 3, 4]);
+  const solo = townSeat(cells.get("solo")!, 0);
+  const pair = [0, 1].map((seat) => townSeat(cells.get("pair")!, seat));
+  // A solo desk and a face-to-face pair sit at the table's middle.
+  expect(solo.cx - solo.tableX).toBe(32);
+  expect(pair.map((seat) => [seat.cx - seat.tableX, seat.top])).toEqual([
+    [32, true],
+    [32, false],
+  ]);
+  expect(townDeskSlots(3).length).toBe(4);
 });

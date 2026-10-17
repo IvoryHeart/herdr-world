@@ -33,6 +33,8 @@ import {
 import {
   TOWN_FACADE,
   TOWN_TILE as T,
+  townDeskSlots,
+  townDeskTable,
   townSeat,
   type TownCell,
   type TownLayout,
@@ -183,16 +185,18 @@ const kindOf = (agent: OfficeAgent) => {
       : "claude";
 };
 
+/** One seat's sprites: a top seat has a person and laptop lid, a bottom seat a screen and back. */
+type SeatView = {
+  top: boolean;
+  person: Sprite;
+  device: Sprite;
+  glow: Sprite;
+};
+
 type PodView = {
   container: Container;
   deskKey: string;
-  chairs: Sprite[];
-  people: Sprite[];
-  table: Sprite;
-  lids: Sprite[];
-  screens: Sprite[];
-  backs: Sprite[];
-  glows: Sprite[];
+  seats: SeatView[];
   item: Sprite | null;
   cell: TownCell;
 };
@@ -447,6 +451,7 @@ export async function createTownRenderer(
         own(
           paintTownInterior(building, theme, {
             table: sprites.table,
+            tableSmall: sprites.tableSmall,
             chair: sprites.chair,
             chairBack: sprites.chairBack,
             woodFor: (deskKey) =>
@@ -653,51 +658,60 @@ export async function createTownRenderer(
       sprite.visible = false;
       return sprite;
     };
+    const place = townDeskTable(cell.seats);
     const shadow = new Graphics()
-      .rect(X + 3, Y + 50, 62, 4)
+      .rect(X + place.x + 4, Y + 50, place.w - 2, 4)
       .fill({ color: 0x000000, alpha: 0.2 });
     container.addChild(shadow);
-    const chairs = [
-      make(sprites.chair, X + 9, Y + 2),
-      make(sprites.chair, X + 41, Y + 2),
-    ];
-    const people = [make(null, X + 9, Y + 5), make(null, X + 41, Y + 5)];
-    const table = make(sprites.table[wood]!, X - 1, Y + 17);
-    const lids = [
-      make(sprites.lidOff, X + 9, Y + 13),
-      make(sprites.lidOff, X + 41, Y + 13),
-    ];
+    const slots = townDeskSlots(cell.seats);
+    // Layered back to front: top chairs and people, the table, then laptops,
+    // screens, the people seen from behind and their chair backs.
+    for (const slot of slots)
+      if (slot.top) make(sprites.chair, X + slot.chairX, Y + 2);
+    const people = slots.map((slot) =>
+      slot.top ? make(null, X + slot.chairX, Y + 5) : null,
+    );
+    make(
+      (cell.seats <= 2 ? sprites.tableSmall : sprites.table)[wood]!,
+      X + place.x,
+      Y + 17,
+    );
+    const devices = slots.map((slot) =>
+      make(
+        slot.top ? sprites.lidOff : null,
+        X + slot.chairX,
+        slot.top ? Y + 13 : Y + 26,
+      ),
+    );
     const itemIndex = townHash(`${desk.key}:item`) % 4;
+    const itemX = X + (cell.seats <= 2 ? 41 : 29);
     const item =
       itemIndex === 0
-        ? make(sprites.mug, X + 30, Y + 22)
+        ? make(sprites.mug, itemX + 1, Y + 22)
         : itemIndex === 1
-          ? make(sprites.cactus, X + 29, Y + 19)
+          ? make(sprites.cactus, itemX, Y + 19)
           : null;
-    const screens = [make(null, X + 9, Y + 26), make(null, X + 41, Y + 26)];
-    const glows = [
-      glow(X + 16, Y + 12, 38),
-      glow(X + 48, Y + 12, 38),
-      glow(X + 16, Y + 30, 30),
-      glow(X + 48, Y + 30, 30),
-    ];
+    const glows = slots.map((slot) =>
+      slot.top
+        ? glow(X + slot.chairX + 7, Y + 12, 38)
+        : glow(X + slot.chairX + 7, Y + 30, 30),
+    );
     for (const sprite of glows) container.addChild(sprite);
-    const backs = [make(null, X + 9, Y + 34), make(null, X + 41, Y + 34)];
-    const chairBacks = [
-      make(sprites.chairBack, X + 9, Y + 45),
-      make(sprites.chairBack, X + 41, Y + 45),
-    ];
+    const backs = slots.map((slot) =>
+      slot.top ? null : make(null, X + slot.chairX, Y + 34),
+    );
+    for (const slot of slots)
+      if (!slot.top) make(sprites.chairBack, X + slot.chairX, Y + 45);
     parent.addChild(container);
     return {
       container,
       deskKey: desk.key,
-      chairs,
-      people,
-      table,
-      lids,
-      screens,
-      backs: [...backs, ...chairBacks],
-      glows,
+      seats: slots.map((slot, seat) => ({
+        top: slot.top,
+        person: (people[seat] ?? backs[seat])!,
+        device: devices[seat]!,
+        glow: glows[seat]!,
+      })),
       item,
       cell,
     };
@@ -743,72 +757,46 @@ export async function createTownRenderer(
     for (const building of buildings)
       for (const pod of building.pods) {
         if (!pod.container.visible) continue;
-        for (let seat = 0; seat < 4; seat += 1) {
+        pod.seats.forEach((view, seat) => {
           const info = seatState(pod.deskKey, seat);
-          const top = seat < 2;
-          const index = seat % 2;
+          const top = view.top;
           const present = info.state !== "empty";
-          if (top) {
-            pod.lids[index]!.visible = present && !lite;
-            pod.lids[index]!.texture = textureOf(
-              info.agent &&
-                info.state !== "off" &&
-                info.state !== "idle" &&
-                info.state !== "unknown"
-                ? (sprites.lid[kindOf(info.agent)] ?? sprites.lidOff)
-                : sprites.lidOff,
+          view.device.visible = present && !lite;
+          if (view.device.visible)
+            view.device.texture = textureOf(
+              top
+                ? info.agent &&
+                  info.state !== "off" &&
+                  info.state !== "idle" &&
+                  info.state !== "unknown"
+                  ? (sprites.lid[kindOf(info.agent)] ?? sprites.lidOff)
+                  : sprites.lidOff
+                : screenCanvas(
+                    info.state === "empty" ? "off" : info.state,
+                    frame,
+                  ),
             );
-            const person = pod.people[index]!;
-            const seated = Boolean(info.agent && info.seated);
-            person.visible = seated && peopleBlend > 0.02;
-            if (person.visible && info.agent) {
-              const typing =
-                info.agent.semanticStatus === "working"
-                  ? Math.floor(clock * 7 + (townHash(info.agent.key) % 7)) % 2
-                  : 0;
-              person.texture = textureOf(
-                townCharacter(
-                  lookOf(info.agent.key),
-                  "down",
-                  typing,
-                  "sit",
-                  // Idle agents doze with their eyes closed.
-                  resting(info.agent) || blink(info.agent.key),
-                ),
-              );
-              person.alpha = peopleBlend;
-            }
-          } else {
-            const screen = pod.screens[index]!;
-            screen.visible = present && !lite;
-            if (screen.visible)
-              screen.texture = textureOf(
-                screenCanvas(
-                  info.state === "empty" ? "off" : info.state,
-                  frame,
-                ),
-              );
-            const back = pod.backs[index]!;
-            const seated = Boolean(info.agent && info.seated);
-            back.visible = seated && peopleBlend > 0.02;
-            if (back.visible && info.agent) {
-              const typing =
-                info.agent.semanticStatus === "working"
-                  ? Math.floor(clock * 7 + (townHash(info.agent.key) % 7)) % 2
-                  : 0;
-              back.texture = textureOf(
-                townCharacter(
-                  lookOf(info.agent.key),
-                  "up",
-                  typing,
-                  "sit",
-                  false,
-                ),
-              );
-              back.alpha = peopleBlend;
-            }
+          const person = view.person;
+          const seated = Boolean(info.agent && info.seated);
+          person.visible = seated && peopleBlend > 0.02;
+          if (person.visible && info.agent) {
+            const typing =
+              info.agent.semanticStatus === "working"
+                ? Math.floor(clock * 7 + (townHash(info.agent.key) % 7)) % 2
+                : 0;
+            person.texture = textureOf(
+              townCharacter(
+                lookOf(info.agent.key),
+                top ? "down" : "up",
+                typing,
+                "sit",
+                // Idle agents doze with their eyes closed.
+                top && (resting(info.agent) || blink(info.agent.key)),
+              ),
+            );
+            person.alpha = peopleBlend;
           }
-          const glowSprite = pod.glows[seat]!;
+          const glowSprite = view.glow;
           const color = BLOCK_COLORS[info.state];
           glowSprite.visible =
             glow &&
@@ -823,11 +811,8 @@ export async function createTownRenderer(
                 : 0.5 + 0.08 * Math.sin(clock * 23 + seat);
             glowSprite.alpha = info.state === "shell" ? 0.3 : pulse;
           }
-        }
-        for (const chair of pod.chairs) chair.visible = true;
+        });
         if (pod.item) pod.item.visible = !lite;
-        pod.backs[2]!.visible = true;
-        pod.backs[3]!.visible = true;
       }
   };
 
@@ -1213,7 +1198,7 @@ export async function createTownRenderer(
       layout = nextLayout;
       state = nextState;
       camera.calm = nextState.calm;
-      const key = `${nextLayout.width}x${nextLayout.height}:${nextLayout.buildings.map((b) => `${b.hostKey}@${b.x},${b.y},${b.w},${b.h}:${b.rooms.map((r) => r.cells.map((c) => c.deskKey ?? "-").join(",")).join("|")}`).join(";")}`;
+      const key = `${nextLayout.width}x${nextLayout.height}:${nextLayout.buildings.map((b) => `${b.hostKey}@${b.x},${b.y},${b.w},${b.h}:${b.rooms.map((r) => r.cells.map((c) => (c.deskKey ? `${c.deskKey}#${c.seats}` : "-")).join(",")).join("|")}`).join(";")}`;
       if (layoutChanged && key !== sceneKey) {
         sceneKey = key;
         buildScene();
