@@ -41,6 +41,7 @@ import {
 } from "./town/townChat";
 import { requestTerminalComposer } from "./terminalComposerRequest";
 import { TownComposer } from "./town/TownComposer";
+import { TownChooser } from "./town/TownChooser";
 import { TownPeek, townStatusText } from "./town/TownPeek";
 import {
   readTownRailCollapsed,
@@ -918,47 +919,26 @@ export default function TownView({
           onOpen={(key) => openPeek(key, null)}
         />
         {chooserDesk ? (
-          <div
-            className="town-peek town-peek-sheet town-chooser"
-            role="dialog"
-            aria-label={`Panes at ${chooserDesk.displayLabel}`}
-          >
-            <div className="town-peek-head">
-              <div>
-                <b>{chooserDesk.displayLabel}</b>
-                <small>{chooserDesk.observedPaneCount} panes</small>
-              </div>
-              <button
-                type="button"
-                className="town-peek-close"
-                aria-label="Close panes"
-                onClick={() => setChooser(null)}
-              >
-                ×
-              </button>
-            </div>
-            <div className="town-chooser-list">
-              {chooserPanes.map(({ device }) => {
-                const agent = device.agentKey
-                  ? agentByKey.get(device.agentKey)?.agent
-                  : undefined;
-                return (
-                  <button
-                    key={device.key}
-                    type="button"
-                    onClick={() => {
-                      setChooser(null);
-                      if (agent) openPeek(agent.key, null);
-                      else openReply(device.key);
-                    }}
-                  >
-                    <span>{device.displayLabel}</span>
-                    <small>{agent ? townStatusText(agent) : "terminal"}</small>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+          <TownChooser
+            title={chooserDesk.displayLabel}
+            detail={`${chooserDesk.observedPaneCount} panes`}
+            onClose={() => setChooser(null)}
+            entries={chooserPanes.map(({ device }) => {
+              const agent = device.agentKey
+                ? agentByKey.get(device.agentKey)?.agent
+                : undefined;
+              return {
+                key: device.key,
+                label: device.displayLabel,
+                detail: agent ? townStatusText(agent) : "terminal",
+                onChoose: () => {
+                  setChooser(null);
+                  if (agent) openPeek(agent.key, null);
+                  else openReply(device.key);
+                },
+              };
+            })}
+          />
         ) : null}
         {peekAgent ? (
           <TownPeek

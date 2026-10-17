@@ -1,6 +1,10 @@
 import { expect, test } from "bun:test";
 import type { HerdrOfficeProjection } from "../herdrOfficeProjection";
-import { nextTownFinished, withTownFinished } from "./townFinished";
+import {
+  nextTownFinished,
+  townTrackedAgents,
+  withTownFinished,
+} from "./townFinished";
 
 const statuses = (entries: Record<string, string>) =>
   new Map(Object.entries(entries));
@@ -63,4 +67,28 @@ test("Town presents unchecked finishes as done and checked ones as idle", () => 
     presented.rooms[0]!.roomAgents.map((agent) => agent.semanticStatus),
   ).toEqual(["done", "idle"]);
   expect(withTownFinished(office, new Set(), new Set())).toBe(office);
+});
+
+test("finishes are tracked for every agent of a presented room", () => {
+  // Office's bar shows at most 16 agents; the 17th still sits in Town.
+  const roster = Array.from({ length: 17 }, (_, index) => ({
+    agent: { key: `a${index}`, roomKey: "room", semanticStatus: "idle" },
+  }));
+  roster.push({
+    agent: { key: "elsewhere", roomKey: "hidden", semanticStatus: "idle" },
+  });
+  const office = {
+    rooms: [{ key: "room" }],
+    roster,
+    barAgents: roster.slice(0, 16).map(({ agent }) => agent),
+  } as unknown as HerdrOfficeProjection;
+  const tracked = townTrackedAgents(office).map((agent) => agent.key);
+  expect(tracked).toContain("a16");
+  expect(tracked).not.toContain("elsewhere");
+  const step = nextTownFinished(
+    new Map([["a16", "working"]]),
+    townTrackedAgents(office),
+    new Set(),
+  );
+  expect([...step.finished]).toEqual(["a16"]);
 });

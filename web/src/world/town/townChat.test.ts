@@ -47,6 +47,25 @@ test("answers come only from the active menu at the bottom", () => {
       "What branch name should I use?",
     ]),
   ).toEqual([]);
+  // Later prompts that are indented or use a key word are not menu chrome.
+  for (const later of [
+    "Please select a branch name?",
+    "  What branch name should I use?",
+    "Enter a branch name:",
+    "Enter a name to continue",
+  ])
+    expect(townChoices(["1. Delete files", "2. Keep files", later])).toEqual(
+      [],
+    );
+  // A wrapped option and a key hint keep the menu active.
+  expect(
+    townChoices([
+      "❯ 1. Yes",
+      "  2. No, and tell the agent what to do",
+      "     differently",
+      "↑/↓ to navigate · Enter to select",
+    ]).map((choice) => choice.key),
+  ).toEqual(["1", "2"]);
   expect(townChoices(["Overwrite the file? (y/n)"]).map((c) => c.key)).toEqual([
     "y",
     "n",

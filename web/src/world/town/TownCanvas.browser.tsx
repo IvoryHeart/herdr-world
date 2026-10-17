@@ -690,13 +690,34 @@ async function run() {
     ),
   ].find((target) => target.getAttribute("aria-label")?.endsWith(", 6 panes"));
   check(crowded !== undefined, "the six-pane desk has no target");
-  crowded?.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+  // From the keyboard: Shift+Enter opens it with focus on the first pane,
+  // and Escape closes it with focus back on the desk.
+  crowded!.focus();
+  crowded!.dispatchEvent(
+    new KeyboardEvent("keydown", {
+      key: "Enter",
+      shiftKey: true,
+      bubbles: true,
+    }),
+  );
   await waitFor(
     () => host.querySelectorAll(".town-chooser-list button").length === 6,
     "the six-pane desk did not list all six panes",
   );
-  host.querySelector<HTMLButtonElement>('[aria-label="Close panes"]')!.click();
   await settle();
+  check(
+    document.activeElement === host.querySelector(".town-chooser-list button"),
+    "the chooser did not take focus",
+  );
+  document.activeElement!.dispatchEvent(
+    new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+  );
+  await waitFor(
+    () => host.querySelector(".town-chooser") === null,
+    "Escape did not close the chooser",
+  );
+  await settle();
+  check(document.activeElement === crowded, "focus did not return to the desk");
   opened.length = 0;
 
   // On the phone, Back closes the composer, then the peek, before Town.

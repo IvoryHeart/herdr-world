@@ -240,11 +240,21 @@ export function townQuestion(
   return { chatter: lines.slice(0, start), question };
 }
 
+/** The "  2. " (or "❯ 1) ") before an option's text. */
+const NUMBER_PREFIX = /^\s*(?:[›❯>]\s*)?\d[.)]\s+/;
 const NUMBERED = /^\s*(?:[›❯>]\s*)?(\d)[.)]\s+(.{1,60}?)\s*$/;
 const YES_NO = /\((y)\/(n)\)|\[(y)\/(n)\]/i;
 
-/** A hint an agent draws under its menu, such as "Esc to cancel". */
-const MENU_HINT = /esc|enter|select|navigate|confirm|↑|↓|tab to/i;
+/**
+ * Key hints an agent draws under its menu, such as "Esc to cancel" or
+ * "↑/↓ to navigate · Enter to select": a line that starts with a key and
+ * tells what it does, never a question or a request for text.
+ */
+const MENU_KEY = String.raw`(?:esc|enter|return|tab|space|ctrl\+\w|shift\+\w|↑|↓|←|→)`;
+const MENU_HINT = new RegExp(
+  String.raw`^\s*${MENU_KEY}(?:\s*/\s*${MENU_KEY})*\s+to\s+(?:navigate|select|confirm|cancel|choose|go back|exit|move)\b[^?:]*$`,
+  "i",
+);
 
 /**
  * Numbered menu entries, or y/n, from the active prompt at the bottom of a
@@ -259,10 +269,16 @@ export function townChoices(lines: readonly string[]): TownChoice[] {
       break;
     }
   if (last >= 0) {
-    const after = lines.slice(last + 1);
-    const active = after.every(
-      (line) => !line.trim() || /^\s/.test(line) || MENU_HINT.test(line),
-    );
+    // A wrapped option continues under its text, deeper than its number.
+    const lastLine = lines[last]!;
+    const textColumn =
+      lastLine.length - lastLine.replace(NUMBER_PREFIX, "").length;
+    const continues = (line: string) =>
+      line.length - line.trimStart().length >= textColumn &&
+      !/[?:]\s*$/.test(line);
+    const active = lines
+      .slice(last + 1)
+      .every((line) => !line.trim() || continues(line) || MENU_HINT.test(line));
     if (!active) return [];
     // The menu block: numbered entries and their indented continuations.
     const choices: TownChoice[] = [];

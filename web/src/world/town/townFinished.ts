@@ -51,13 +51,16 @@ export function nextTownFinished<
 }
 
 /**
- * The agents Town places: in rooms, at reception and at the bar. A dense
- * roster also holds agents Town does not present; they need no tracking.
+ * The agents Town shows: every agent of a presented room, as Town's model
+ * admits them, independent of Office's room, reception and bar caps. Only
+ * these are stored, so a dense roster costs one cheap pass.
  */
-function* presentedAgents(office: HerdrOfficeProjection) {
-  for (const room of office.rooms) yield* room.roomAgents;
-  for (const reception of office.receptions) yield* reception.waitingAgents;
-  yield* office.barAgents;
+export function townTrackedAgents(office: HerdrOfficeProjection) {
+  const rooms = new Set(office.rooms.map((room) => room.key));
+  const agents: OfficeAgent[] = [];
+  for (const { agent } of office.roster)
+    if (rooms.has(agent.roomKey)) agents.push(agent);
+  return agents;
 }
 
 /** Agents that finished while Town was watching and are not yet checked. */
@@ -73,7 +76,7 @@ export function useTownFinished(office: HerdrOfficeProjection) {
   useEffect(() => {
     const step = nextTownFinished(
       previous.current,
-      presentedAgents(office),
+      townTrackedAgents(office),
       finishedRef.current,
     );
     previous.current = step.statuses;
