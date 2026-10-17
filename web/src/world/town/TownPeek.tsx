@@ -52,7 +52,13 @@ export function TownPeek({
   onHold,
   composer,
   inlineReply,
+  onAttach,
 }: {
+  /**
+   * Upload files for this pane. Resolves to the text to put in the reply
+   * line, or null when the upload went to World's composer instead.
+   */
+  onAttach(files: File[], image: boolean): Promise<string | null>;
   /** Type the reply in the card itself rather than opening the composer. */
   inlineReply: boolean;
   /** World's composer for this pane; present while chatting. */
@@ -80,6 +86,22 @@ export function TownPeek({
   const input = useRef<HTMLInputElement>(null);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
+  const [uploads, setUploads] = useState(0);
+  const filePicker = useRef<HTMLInputElement>(null);
+  const attach = (files: File[], image: boolean) => {
+    if (!files.length) return;
+    setUploads((count) => count + 1);
+    void onAttach(files, image).then((text) => {
+      setUploads((count) => count - 1);
+      if (text)
+        setDraft((current) =>
+          current && !current.endsWith(" ")
+            ? `${current} ${text}`
+            : current + text,
+        );
+      input.current?.focus();
+    });
+  };
   useEffect(() => setDraft(""), [agent.key]);
   const { chatter, question } =
     agent.semanticStatus === "blocked"
@@ -244,7 +266,7 @@ export function TownPeek({
               onChat();
               return;
             }
-            if (!text || sending) return;
+            if (!text || sending || uploads > 0) return;
             setSending(true);
             void onReply(text, true).then((sent) => {
               setSending(false);
@@ -252,14 +274,46 @@ export function TownPeek({
             });
           }}
         >
+          <button
+            type="button"
+            className="town-attach"
+            aria-label="Attach files"
+            title="Attach files"
+            disabled={uploads > 0}
+            onClick={() => filePicker.current?.click()}
+          >
+            📎
+          </button>
+          <input
+            ref={filePicker}
+            type="file"
+            multiple
+            hidden
+            onChange={(event) => {
+              const files = Array.from(event.target.files ?? []);
+              // Reset so picking the same file again still fires change.
+              event.target.value = "";
+              attach(files, false);
+            }}
+          />
           {inlineReply ? (
             <input
               ref={input}
               value={draft}
               aria-label={`Reply to ${agent.displayLabel}`}
-              placeholder={`Reply to ${agent.displayLabel}…`}
+              placeholder={
+                uploads > 0 ? "Uploading…" : `Reply to ${agent.displayLabel}…`
+              }
               autoComplete="off"
               onChange={(event) => setDraft(event.target.value)}
+              onPaste={(event) => {
+                const images = Array.from(event.clipboardData.files).filter(
+                  (file) => file.type.startsWith("image/"),
+                );
+                if (!images.length) return;
+                event.preventDefault();
+                attach(images, true);
+              }}
             />
           ) : (
             <button
@@ -273,7 +327,7 @@ export function TownPeek({
           )}
           <button
             type="submit"
-            disabled={inlineReply && (!draft.trim() || sending)}
+            disabled={inlineReply && (!draft.trim() || sending || uploads > 0)}
           >
             Send
           </button>

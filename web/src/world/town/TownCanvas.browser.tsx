@@ -257,6 +257,43 @@ const SCREENS = {
   },
 });
 
+// Uploads answer as the World service does, for the connection asked.
+const uploads: string[] = [];
+const realFetch = window.fetch.bind(window);
+window.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+  const url = new URL(
+    input instanceof Request ? input.url : String(input),
+    window.location.origin,
+  );
+  const match = /^\/api\/connections\/([^/]+)\/terminal-upload$/.exec(
+    url.pathname,
+  );
+  if (!match) return realFetch(input, init);
+  const connectionId = decodeURIComponent(match[1]!);
+  uploads.push(connectionId);
+  return new Response(
+    JSON.stringify({ path: `/uploads/${url.searchParams.get("filename")}` }),
+    {
+      headers: {
+        "content-type": "application/json",
+        "X-Herdr-Connection-Id": connectionId,
+        "X-Herdr-Connection-Generation":
+          url.searchParams.get("connection_generation") ?? "",
+      },
+    },
+  );
+}) as typeof fetch;
+
+async function attachNote(host: HTMLElement) {
+  const picker = host.querySelector<HTMLInputElement>(
+    '.town-reply input[type="file"]',
+  )!;
+  const files = new DataTransfer();
+  files.items.add(new File(["synthetic"], "notes.txt", { type: "text/plain" }));
+  picker.files = files.files;
+  picker.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
 function worldFor(connections: WorldRuntimeConnection[]) {
   return buildWorldObject(connections, "local");
 }
@@ -438,6 +475,9 @@ async function run() {
     "answer went to a pane that is not waiting",
   );
 
+  const peekConnection = base.connections.find((connection) =>
+    connection.snapshot?.panes.some((pane) => pane.pane_id === peekPane),
+  )?.connectionId;
   // The question sits in its own box above the answers.
   check(
     (
@@ -448,7 +488,9 @@ async function run() {
   // The reply line: desktop types in the card; the phone layout grows World's
   // composer inside the peek. Either way Send reaches that pane only.
   if (!phone) {
-    const reply = host.querySelector<HTMLInputElement>(".town-reply input")!;
+    const reply = host.querySelector<HTMLInputElement>(
+      ".town-reply input:not([type])",
+    )!;
     Object.getOwnPropertyDescriptor(
       HTMLInputElement.prototype,
       "value",
@@ -466,8 +508,35 @@ async function run() {
       `reply sent ${JSON.stringify(sent[1])}`,
     );
     check(opened.length === 0, "replying must not open the full terminal");
+    // 📎 uploads through the pane's own connection into the reply line.
+    await attachNote(host);
+    await waitFor(
+      () =>
+        host
+          .querySelector<HTMLInputElement>(".town-reply input:not([type])")
+          ?.value.includes("/uploads/notes.txt") === true,
+      "attachment did not reach the reply line",
+    );
+    check(
+      uploads.length === 1 && uploads[0] === peekConnection,
+      `attachment uploaded through ${JSON.stringify(uploads)}`,
+    );
   } else {
-    host.querySelector<HTMLButtonElement>(".town-message-box")!.click();
+    // 📎 uploads through the pane's own connection into World's composer.
+    await attachNote(host);
+    await waitFor(
+      () =>
+        host
+          .querySelector<HTMLTextAreaElement>(
+            ".town-peek .terminal-composer-input",
+          )
+          ?.value.includes("/uploads/notes.txt") === true,
+      "attachment did not reach the composer",
+    );
+    check(
+      uploads.length === 1 && uploads[0] === peekConnection,
+      `attachment uploaded through ${JSON.stringify(uploads)}`,
+    );
     await waitFor(
       () => host.querySelector(".town-peek .terminal-composer-input") !== null,
       "Reply did not open the composer in the peek",

@@ -3,6 +3,15 @@ import {
   creationPendingReason,
   creationFailureMessage,
 } from "../creationRequests";
+import {
+  insertIntoTerminalComposerDraft,
+  terminalComposerDraftKey,
+} from "../terminalComposer";
+import { terminalUploadedPathsText } from "../terminalFileDrop";
+import {
+  uploadTerminalFile,
+  uploadTerminalImage,
+} from "../terminalImageUpload";
 import { WorldSearchResults } from "./WorldSearchResults";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -21,6 +30,7 @@ import {
   sendTownReply,
   townChoices,
   townLeaf,
+  townOwner,
   townScreenLines,
   useTownScreen,
 } from "./town/townChat";
@@ -654,6 +664,51 @@ export default function TownView({
       return false;
     }
   };
+  /**
+   * Upload files for a pane as World's composer does. On the phone layout the
+   * paths go into that composer's shared draft, which opens in the peek.
+   */
+  const attach = async (
+    leaf: ReturnType<typeof townLeaf>,
+    agentKey: string,
+    files: File[],
+    image: boolean,
+  ): Promise<string | null> => {
+    const client = leaf && townOwner(leaf);
+    if (!leaf || !client) {
+      toast("error", "This agent's host changed; refresh before attaching.");
+      return null;
+    }
+    const mobile = document.documentElement.dataset.layout === "mobile";
+    // The composer only takes inserted paths while it is mounted.
+    if (mobile) openReply(agentKey);
+    try {
+      const paths: string[] = [];
+      for (const file of files)
+        paths.push(
+          await (image ? uploadTerminalImage : uploadTerminalFile)(
+            client,
+            file,
+          ),
+        );
+      const text = terminalUploadedPathsText(paths);
+      if (!mobile) return text;
+      insertIntoTerminalComposerDraft(
+        terminalComposerDraftKey(
+          leaf.connectionId,
+          leaf.generation,
+          leaf.pane.pane_id,
+        ),
+        text,
+      );
+    } catch (cause) {
+      toast(
+        "error",
+        `Upload failed: ${cause instanceof Error ? cause.message : String(cause)}`,
+      );
+    }
+    return null;
+  };
   const nextCall = (currentKey: string | null) =>
     calls.find(
       (call) => call.agent.key !== currentKey && call.kind === "blocked",
@@ -778,6 +833,9 @@ export default function TownView({
               reply(peekLeaf, peekAgent.displayLabel, text, submit)
             }
             inlineReply={document.documentElement.dataset.layout !== "mobile"}
+            onAttach={(files, image) =>
+              attach(peekLeaf, peekAgent.key, files, image)
+            }
             onChat={() => openReply(peekAgent.key)}
             onTerminal={() => {
               setPeek(null);
