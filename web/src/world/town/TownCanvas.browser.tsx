@@ -471,8 +471,23 @@ async function run() {
       `composer sent ${JSON.stringify(sent[1])}`,
     );
     check(opened.length === 0, "chatting must not open the full terminal");
-    host.querySelector<HTMLButtonElement>(".town-peek-close")!.click();
-    await settle();
+    const chatScreen =
+      host.querySelector(".town-peek-screen")?.textContent ?? "";
+    check(
+      chatScreen.includes("Updated the reception queue") &&
+        chatScreen.includes("Do you want"),
+      "chat should show the agent's whole screen",
+    );
+    // Direct typing happens in the full terminal.
+    [...host.querySelectorAll<HTMLLabelElement>(".town-peek label")]
+      .find((label) => label.textContent?.trim() === "Direct")!
+      .querySelector("input")!
+      .click();
+    await waitFor(
+      () => opened.length === 1,
+      "Direct did not open the terminal",
+    );
+    opened.length = 0;
   }
 
   // Inspector opens World's Inspector on Files for that agent.

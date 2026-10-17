@@ -108,6 +108,31 @@ export function townScreenLines(
     : activityFromScreen(screen, maxLines);
 }
 
+const FRAME_ONLY = /^[\s─━│┃╭╮╰╯┌┐└┘├┤┬┴┼═║╔╗╚╝▔▁▏▕]*$/;
+
+/**
+ * The agent's whole visible screen for chatting: everything it printed, with
+ * box-drawing frames removed, so the conversation reads like the terminal.
+ */
+export function townChatLines(screen: string | null, maxLines = 120): string[] {
+  if (!screen) return [];
+  const lines = screen
+    .split("\n")
+    .map((line) =>
+      line
+        .replace(/^\s*[│┃]\s?/, "")
+        .replace(/\s?[│┃]\s*$/, "")
+        .trimEnd(),
+    )
+    .filter((line) => !FRAME_ONLY.test(line) || line === "");
+  // Collapse runs of blank lines and trim the ends.
+  const out: string[] = [];
+  for (const line of lines)
+    if (line || (out.length && out[out.length - 1] !== "")) out.push(line);
+  while (out.length && out[out.length - 1] === "") out.pop();
+  return out.slice(-maxLines);
+}
+
 const NUMBERED = /^\s*(?:[›❯>]\s*)?(\d)[.)]\s+(.{1,60}?)\s*$/;
 const YES_NO = /\((y)\/(n)\)|\[(y)\/(n)\]/i;
 

@@ -19,6 +19,7 @@ import { WORLD_OBSERVABILITY_UPDATED_EVENT } from "../workspaceResource";
 import { TownCanvas } from "./town/TownCanvas";
 import {
   sendTownReply,
+  townChatLines,
   townChoices,
   townLeaf,
   townScreenLines,
@@ -627,13 +628,18 @@ export default function TownView({
     Boolean(peekAgent),
     peek?.chat ? 1_200 : 2_000,
   );
-  const peekLines = townScreenLines(
-    peekScreen,
-    peekAgent?.semanticStatus === "blocked",
-    peek?.chat ? 40 : peekAgent?.semanticStatus === "blocked" ? 12 : 8,
-  );
+  const peekLines = peek?.chat
+    ? townChatLines(peekScreen)
+    : townScreenLines(
+        peekScreen,
+        peekAgent?.semanticStatus === "blocked",
+        peekAgent?.semanticStatus === "blocked" ? 12 : 8,
+      );
+  // Answers come only from the question at the bottom of a waiting screen.
   const peekChoices =
-    peekAgent?.semanticStatus === "blocked" ? townChoices(peekLines) : [];
+    peekAgent?.semanticStatus === "blocked"
+      ? townChoices(townScreenLines(peekScreen, true, 12))
+      : [];
   const reply = async (
     leaf: ReturnType<typeof townLeaf>,
     label: string,
@@ -800,6 +806,10 @@ export default function TownView({
               peek!.chat && peekLeaf ? (
                 <TownComposer
                   leaf={peekLeaf}
+                  onDirect={() => {
+                    setPeek(null);
+                    openOfficeTerminal(peekAgent.key);
+                  }}
                   onClose={() =>
                     setPeek((current) =>
                       current ? { ...current, chat: false } : current,

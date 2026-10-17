@@ -39,8 +39,11 @@ export function TownComposer({
   onClose,
   onSent,
   onError,
+  onDirect,
 }: {
   leaf: WorldLeafObject;
+  /** Direct typing happens in the pane's full terminal. */
+  onDirect(): void;
   onClose(): void;
   onSent(submitted: boolean): void;
   onError(message: string): void;
@@ -73,9 +76,11 @@ export function TownComposer({
         )}
         agent={leaf.pane.agent}
         mode="composer"
-        onModeChange={() => {}}
-        onFocusDirect={() => {}}
-        directDisabled
+        onModeChange={(mode) => {
+          if (mode === "direct") onDirect();
+        }}
+        onFocusDirect={onDirect}
+        directDisabled={false}
         shortcutRows={rows}
         onRunShortcut={(shortcut) => {
           const run = execution(shortcut);
