@@ -203,7 +203,16 @@ reception board or the rail:
   from the existing pane observation; answer options when the agent integration
   exposes a structured choice; a reply box; Open terminal; Profile and moves; and
   Next, which goes to the next waiting agent.
-- **Keys**: digits pick an answer, and printable keys go to the reply box.
+- **Keys**: shortcuts work only when keyboard focus is in the Office scene or
+  the peek itself; pointer hover alone never captures keys.
+  - **Scene or peek focused** (not the reply box): digits pick an answer and other
+    printable keys move focus into the reply box and type there.
+  - **Reply box focused**: digits and every other key are ordinary text, and
+    answer shortcuts are off.
+  - **Never captured**: keys while a terminal, search field, editor or any other
+    editable control has focus, keys during IME composition, and keys with
+    Ctrl, Alt or Meta held. A hover peek over another agent does not change the
+    keyboard target.
 - **Delivery**: replies use the existing qualified input path to the exact pane.
   A retired target closes the peek and never redirects input.
 - **Open terminal** uses the existing Inspector presentation preference, Docked
@@ -228,27 +237,42 @@ tab and panes, and target workspace or tab. The service rejects requests across
 connections, for retired generations, or for runtimes without `pane.move`.
 
 - **Desk move** (one tab with n panes):
-  1. Send `pane.move` for pane 1 with destination `new_tab` in the target
-     workspace and `focus: false`, then record the created tab.
-  2. Rebuild the source tab's split tree from the pane rectangles Herdr
-     reports, then replay it: each remaining pane moves into the new tab as a
-     split with the recorded direction and ratio. This reconstruction is
-     derived from herdr-drovr (MIT), keeping its copyright and licence notice.
-     drovr is a Herdr plugin that runs inside Herdr and needs node and fzf, so
-     World ports the algorithm into the service instead of depending on the
-     plugin.
-  3. Confirm each step from `pane.moved` and tab events before the next.
-  4. If step k fails, move panes 1 to k−1 back into the original tab, which
-     still holds the remaining panes, and report the result.
-  5. An uncertain step is never retried, matching the existing rule against
+  1. **Capture before any change.** Read the source tab's layout and rebuild its
+     complete split tree from the pane rectangles Herdr reports. This must
+     happen first, because moving a pane collapses its split and removes the
+     direction and ratio the replay needs. Validate that every source pane
+     still exists and the tree accounts for all of them; otherwise refuse the
+     move without sending anything. This reconstruction is derived from
+     herdr-drovr (MIT), which also snapshots the tree before its first move.
+     World keeps drovr's copyright and licence notice. drovr is a Herdr plugin
+     that runs inside Herdr and needs node and fzf, so World ports the
+     algorithm into the service instead of depending on the plugin.
+  2. **Anchor.** Send `pane.move` for the tree's first pane with destination
+     `new_tab` in the target workspace and `focus: false`.
+  3. **Replay.** Walk the captured tree and move each remaining pane into the
+     new tab as a split with its captured direction and ratio.
+  4. **Follow pane ID changes.** A move can replace a pane's operational ID:
+     `pane.moved` carries `previous_pane_id` and the new `pane_id`, as
+     `server/src/workspace/last-step-turns.ts` already handles. World keeps an
+     old-to-new ID map from each confirmed event and uses the current ID for
+     every later split target, for rollback and for any further change during
+     rollback. drovr keeps the same kind of map.
+  5. **Confirm each step** from `pane.moved` and tab events before the next.
+  6. **Roll back on failure.** If step k fails, move the already-moved panes back
+     into the original tab, which still holds the remaining panes, using their
+     current IDs and the captured tree, and report the result. drovr does not
+     roll back; World adds rollback because the move starts from a drag in the
+     scene, not from a picker the user can retry.
+  7. **Never retry an uncertain step**, matching the existing rule against
      replaying uncertain mutations. If rollback fails, World reports the actual
-     split state instead of hiding it.
-  6. Before moving, World checks again that every source pane still exists. If
-     the replayed layout cannot match exactly, World keeps the panes and reports
-     the difference. drovr does not roll back; World adds rollback because the
-     move starts from a drag in the scene, not from a picker the user can retry.
+     resulting topology instead of hiding it.
 - **Agent move** (one pane): one `pane.move` into the target tab as a split
-  toward the chosen seat, confirmed the same way.
+  toward the chosen seat, confirmed the same way, with the pane's replacement ID
+  recorded.
+- **Identity vs. pane ID**: agent identity (decision 9) is separate from the
+  operational pane ID. Office follows each confirmed replacement ID, so the
+  agent keeps its appearance, profile and location while its seat, peek, rail
+  entry and terminal targets switch to the new pane ID.
 - **Presentation**: the source and target cells are reserved and the crew
   animate carrying the table. The final placement always follows confirmed Herdr
   topology. On failure the table is carried back.

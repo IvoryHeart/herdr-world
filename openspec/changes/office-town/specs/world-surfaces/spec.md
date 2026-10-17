@@ -171,8 +171,16 @@ peek after a short delay, and tapping one SHALL open a pinned peek. The peek SHA
 show the agent's name, location and status, the latest bounded lines of its pane,
 answer options only when the agent integration exposes a structured choice, a
 reply box, and actions to open the terminal, open the profile and moves, and go to
-the next waiting agent. While a peek is open, digit keys SHALL choose the
-corresponding answer and other printable keys SHALL go to its reply box. Answers
+the next waiting agent.
+
+Peek keyboard shortcuts SHALL apply only while keyboard focus is in the Office
+scene or in the peek; pointer hover alone SHALL NOT capture keys. In that context,
+digit keys SHALL choose the corresponding answer, and other printable keys SHALL
+move focus to the reply box and type there. While the reply box has focus, digits
+and all other keys SHALL be ordinary text and answer shortcuts SHALL be disabled.
+Office SHALL NOT capture keys while a terminal, search field or other editable
+control has focus, during IME composition, or with Ctrl, Alt or Meta held, and a
+hover peek SHALL NOT change the keyboard target. Answers
 and replies SHALL be sent only to the exact qualified pane through the existing
 input path. If the target closes, moves away or its runtime generation retires,
 the peek SHALL close or show it as unavailable and SHALL NOT send input elsewhere.
@@ -186,8 +194,21 @@ Opening the terminal from a peek SHALL follow the Inspector presentation prefere
 
 #### Scenario: Reply by typing
 
-- **WHEN** a peek is open and the user types a message and presses Enter
+- **WHEN** keyboard focus is in the Office scene, a peek is open, and the user types a
+  message and presses Enter
 - **THEN** the message goes to that peek's exact pane without first clicking the reply box
+
+#### Scenario: A terminal has focus while another agent is hovered
+
+- **WHEN** agent A's terminal has keyboard focus and the pointer hovers agent B so
+  that B's peek opens, and the user types digits and letters
+- **THEN** every key reaches only A's terminal, no answer is sent to B, and B's
+  reply box receives nothing
+
+#### Scenario: Type digits in the reply box
+
+- **WHEN** the reply box has focus and the user types "3 files"
+- **THEN** the text "3 files" is entered and no answer option is chosen
 
 #### Scenario: The target retires during a reply
 
@@ -205,28 +226,53 @@ Office SHALL let the user move a desk to a free spot in another room of the same
 host and move an agent pane to a free seat at another desk of the same host, by
 dragging and by a visible Move action. A request SHALL be qualified by connection
 ID and runtime generation and SHALL be refused across hosts, for retired
-generations, or when the runtime does not offer pane moves. A desk move SHALL
-check that every source pane still exists, move the tab's first pane to a new tab
-in the target workspace and then move each remaining pane into that tab with the
-split direction and ratio recorded from the source layout, confirming each step
-from Herdr before the next. If
-a step fails, World SHALL move the already-moved panes back into the original tab
-and report the outcome; it SHALL NOT retry an uncertain step, and if rollback
-fails it SHALL report the actual resulting topology. An agent move SHALL be a
-single confirmed pane move into the target tab. While a move is pending, Office
-SHALL reserve the source and target spots; the final placement SHALL follow
-confirmed Herdr topology.
+generations, or when the runtime does not offer pane moves. Before sending any
+move, a desk move SHALL capture the source tab's complete split tree, including
+each split's direction and ratio, and SHALL refuse the move without mutation if
+any source pane is missing or the tree does not account for every pane. It SHALL
+then move the captured tree's first pane to a new tab in the target workspace and
+replay the captured tree by moving each remaining pane into that tab with its
+captured direction and ratio, confirming each step from Herdr before the next.
+
+Because a move can replace a pane's operational ID, World SHALL record each
+confirmed replacement from `pane.moved` and SHALL address every later split
+target, rollback step and Office target by the current ID, including any further
+replacement during rollback. If a step fails, World SHALL move the already-moved
+panes back into the original tab using their current IDs and report the outcome.
+It SHALL NOT retry an uncertain step, and if rollback fails it SHALL report the
+actual resulting topology.
+
+An agent move SHALL be a single confirmed pane move into the target tab with its
+replacement ID recorded. While a move is pending, Office SHALL reserve the source
+and target spots; the final placement SHALL follow confirmed Herdr topology.
 
 #### Scenario: Move a desk to another room
 
 - **WHEN** the user drags a three-pane desk to a free spot in another room of the same host
-- **THEN** World moves the three panes into one new tab in that workspace, Office
-  shows the desk at the target spot after Herdr confirms, and the agents keep their pane identities
+- **THEN** World captures the desk's split tree before moving anything, moves the
+  three panes into one new tab in that workspace with the same split directions
+  and ratios, shows the desk at the target spot after Herdr confirms, and the
+  agents keep their agent identities while Office follows each replacement pane ID
+
+#### Scenario: A moved pane receives a new ID
+
+- **WHEN** Herdr confirms the first pane of a desk move with a different `pane_id`
+  than its `previous_pane_id`
+- **THEN** World addresses the next split and any rollback by the new ID, and
+  Office's seat, peek and terminal targets for that agent use the new ID
+
+#### Scenario: A source pane disappears before the move
+
+- **WHEN** a pane of the selected desk closes between the user's drop and the
+  capture of the split tree
+- **THEN** World sends no pane move, the desk stays in place, and the user sees
+  that the move could not start
 
 #### Scenario: A desk move fails part-way
 
 - **WHEN** Herdr rejects the second pane move of a three-pane desk
-- **THEN** World moves the first pane back into the original tab, Office returns
+- **THEN** World moves the first pane back into the original tab by its current
+  ID, Office returns
   the desk to its original spot, and the user sees that the move failed
 
 #### Scenario: Drop on another host
