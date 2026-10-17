@@ -4335,20 +4335,21 @@ async function run() {
   );
   // The on-screen Back returns to the view in one tap even with Composer
   // open; only the phone's own Back closes Composer first.
+  // The phone shows one terminal, docked or as a compact window; open its
+  // Composer unless it is already open.
   await until(
     () =>
-      !!document.querySelector(
-        '.workspace-inspector button[aria-label="Open terminal input"]',
-      ),
-    "terminal input button before Back to Office",
+      !!document.querySelector(".terminal-composer") ||
+      !!document.querySelector('button[aria-label="Open terminal input"]'),
+    "terminal input before Back to Office",
   );
   document
     .querySelector<HTMLButtonElement>(
-      '.workspace-inspector button[aria-label="Open terminal input"]',
-    )!
-    .click();
+      'button[aria-label="Open terminal input"]',
+    )
+    ?.click();
   await until(
-    () => !!document.querySelector(".workspace-inspector .terminal-composer"),
+    () => !!document.querySelector(".terminal-composer"),
     "Composer opens before Back to Office",
   );
   backToOffice.click();
