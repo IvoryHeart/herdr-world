@@ -147,13 +147,11 @@ if (typeof window !== "undefined") {
     if (forwardBase !== undefined) {
       const id = forwardBase;
       forwardBase = undefined;
-      if (
-        layers.size === 0 &&
-        !isGuard(event.state) &&
-        baseId(event.state) === id
-      ) {
+      // Forward ended inside a run of leftover guards and the user went
+      // Back: skip the rest of the run and its page, which all look alike.
+      if (layers.size === 0 && baseId(event.state) === id) {
         backPending = true;
-        window.history.back();
+        window.history.go(-(guardDepth(event.state) + 1));
         return;
       }
     }
@@ -220,5 +218,7 @@ export function pushRoute(state: Record<string, unknown>, url: URL) {
     window.history.replaceState(state, "", url);
   else window.history.pushState(state, "", url);
   previousState = window.history.state;
+  // A route replaces any leftover guard the user had moved Forward onto.
+  forwardBase = undefined;
   scheduleReconcile();
 }

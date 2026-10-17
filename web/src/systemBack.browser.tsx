@@ -244,6 +244,46 @@ async function run() {
   }
 
   {
+    // Two layers closed on screen leave two guards as Forward history.
+    // Forward ends inside them; one Back then leaves the page.
+    const label = "Forward ends in stacked leftover guards";
+    await start();
+    show(["terminal"]);
+    await settle();
+    show(["terminal", "composer"]);
+    await settle();
+    show([]);
+    await settle();
+    check(at() === "/office" && !guarded(), `${label}: guards left current`);
+    history.forward();
+    await settle();
+    await userBack();
+    check(at() === "/graph", `${label}: Back after Forward reached ${at()}`);
+  }
+
+  {
+    // A route chosen after Forward onto a leftover guard replaces it; Back
+    // then returns to the page instead of skipping it.
+    const label = "route chosen on a leftover guard";
+    await start();
+    show(["terminal"]);
+    await settle();
+    show([]);
+    await settle();
+    history.forward();
+    await settle();
+    const url = new URL(location.href);
+    url.pathname = "/spaces";
+    pushRoute({ herdrFrom: "/office" }, url);
+    await settle();
+    check(at() === "/spaces", `${label}: route not current`);
+    await userBack();
+    check(at() === "/office", `${label}: Back from the route reached ${at()}`);
+    await userBack();
+    check(at() === "/graph", `${label}: Back did not leave Office`);
+  }
+
+  {
     const label = "on-screen Back steps like system Back";
     await start();
     show(["terminal", "composer"]);
