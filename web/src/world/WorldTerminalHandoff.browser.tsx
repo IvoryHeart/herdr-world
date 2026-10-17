@@ -4354,6 +4354,22 @@ async function run() {
     () => terminalInput(visiblePane() ?? document.createElement("div")),
     "visible Inspector terminal before Back to Office",
   );
+  // Select the pane the way a tap does: panes and windows activate on
+  // pointerdown, not on focus.
+  const visibleTerminal = visiblePane()!.querySelector<HTMLElement>(".xterm")!;
+  const terminalBox = visibleTerminal.getBoundingClientRect();
+  for (const type of ["pointerdown", "pointerup"])
+    visibleTerminal.dispatchEvent(
+      new PointerEvent(type, {
+        bubbles: true,
+        button: 0,
+        buttons: type === "pointerdown" ? 1 : 0,
+        pointerId: 9,
+        pointerType: "touch",
+        clientX: terminalBox.left + terminalBox.width / 2,
+        clientY: terminalBox.top + terminalBox.height / 2,
+      }),
+    );
   terminalInput(visiblePane()!)!.focus();
   await until(
     () =>
