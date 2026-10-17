@@ -151,8 +151,10 @@ export function townTierFor(desks: number, minimumTier = 0) {
 }
 
 /**
- * Assign desks to grid coordinates. Remembered desks keep their coordinate;
- * new desks take the first free coordinate in row-major order.
+ * Assign desks to grid coordinates. Remembered desks keep their coordinate
+ * and new desks take the first free coordinate in row-major order. When a
+ * desk closes, the desks after it close up in their existing order, so a
+ * room never keeps a gap; desks before it stay where they are.
  */
 function placeRoomDesks(
   deskKeys: readonly string[],
@@ -165,11 +167,23 @@ function placeRoomDesks(
   const used = new Set<string>();
   const current = new Set(deskKeys);
   if (previous) {
-    for (const [key, at] of previous.cells) {
-      if (!current.has(key) || at.col >= cols || at.row >= rows) continue;
-      cells.set(key, at);
-      used.add(`${at.col},${at.row}`);
-    }
+    const kept = [...previous.cells].filter(
+      ([key, at]) => current.has(key) && at.col < cols && at.row < rows,
+    );
+    if (kept.length < previous.cells.size) {
+      // A desk closed: renumber the remaining ones in reading order, which
+      // leaves every desk before the gap in place.
+      kept.sort(([, a], [, b]) => a.row - b.row || a.col - b.col);
+      kept.forEach(([key], index) => {
+        const at = { col: index % cols, row: Math.floor(index / cols) };
+        cells.set(key, at);
+        used.add(`${at.col},${at.row}`);
+      });
+    } else
+      for (const [key, at] of kept) {
+        cells.set(key, at);
+        used.add(`${at.col},${at.row}`);
+      }
   }
   const overflow: string[] = [];
   for (const key of deskKeys) {

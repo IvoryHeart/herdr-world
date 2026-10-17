@@ -41,6 +41,7 @@ are optional because the merged PR history records their source.
 
 ### Fixed
 
+- Town closes up a room when a desk closes, instead of leaving an empty gap.
 - The phone's Back closes open layers one at a time (Composer, then the
   terminal) instead of leaving the page on the second press in Chrome, which
   skips history entries a page adds without a tap.

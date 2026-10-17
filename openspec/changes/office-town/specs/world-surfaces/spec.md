@@ -49,10 +49,13 @@ supplies it.
 Town SHALL derive room order from Herdr's native workspace order and desk order
 from native tab order within each host. A room's capacity SHALL step through a
 bounded set of grid sizes that always leaves at least one free desk spot. While a
-scene is live, a topology change SHALL NOT move an existing desk to another spot
-or reorder rooms: a new tab SHALL take the first free spot of its room, a closed
-tab SHALL free its spot, and a room that reaches a new capacity step MAY shift
-later rooms and rows of the same building without reordering rooms. Placement SHALL be
+scene is live, a topology change SHALL NOT reorder rooms or move a desk to
+another room: a new tab SHALL take the first free spot of its room without
+moving other desks, and a closed tab SHALL leave no gap: the desks after it in
+reading order SHALL close up in their existing order while the desks before it
+keep their spots. A room that reaches a new capacity step MAY shift later rooms
+and rows of the same building without reordering rooms, and SHALL keep its size
+step when desks close. Placement SHALL be
 re-derived from native order when the scene is rebuilt. Desktop SHALL lay out
 buildings in one row; phones SHALL stack buildings in one vertical column.
 
@@ -65,7 +68,8 @@ buildings in one row; phones SHALL stack buildings in one vertical column.
 #### Scenario: A tab closes in the middle of a room
 
 - **WHEN** a tab whose desk sits between other desks closes
-- **THEN** its spot becomes free and no other desk moves until the scene is rebuilt
+- **THEN** the desks after it close up in order, the desks before it keep their
+  spots, and the room keeps no empty gap
 
 #### Scenario: A room fills its capacity step
 
