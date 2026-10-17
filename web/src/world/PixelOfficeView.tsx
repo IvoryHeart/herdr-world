@@ -492,6 +492,7 @@ export default function PixelOfficeView({
             }}
             selectedRoomKey={selectedRoomKey}
             observability={observability}
+            calm={preferences.calm}
             roomActions={{
               showCreateSeat,
               canCreateSeat,

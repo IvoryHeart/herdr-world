@@ -104,8 +104,10 @@ export function TownCanvas({
   roomActions,
   selectedRoomKey,
   observability,
+  calm = false,
 }: {
   observability: OfficeObservability;
+  calm?: boolean;
   projection: HerdrOfficeProjection;
   selectedKey: string | null;
   completionSeenKeys: ReadonlySet<string>;
@@ -158,6 +160,7 @@ export function TownCanvas({
     layout,
     selectedKey,
     hover,
+    calm,
     completionSeenKeys,
     conversationTargets,
     onSelect,
@@ -168,6 +171,7 @@ export function TownCanvas({
     onSelectedAnchorChange,
   });
   latest.current = {
+    calm,
     model,
     layout,
     selectedKey,
@@ -370,7 +374,7 @@ export function TownCanvas({
     hoverKey: latest.current.hover,
     completionSeenKeys: latest.current.completionSeenKeys,
     openHostKey: null,
-    calm: false,
+    calm: latest.current.calm,
   });
 
   useEffect(() => {
@@ -457,7 +461,7 @@ export function TownCanvas({
   useEffect(() => {
     rendererRef.current?.setState(sceneState());
     scheduleAnchors();
-  }, [selectedKey, hover, completionSeenKeys]);
+  }, [selectedKey, hover, completionSeenKeys, calm]);
 
   useEffect(() => {
     scheduleAnchors();

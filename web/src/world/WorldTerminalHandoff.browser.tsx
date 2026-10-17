@@ -1108,13 +1108,8 @@ async function run() {
   check(
     inspectorOpeningSelect.value === "floating" &&
       Boolean(
-        document.querySelector<HTMLSelectElement>(
-          'select[aria-label="Office room alignment"]',
-        ),
-      ) &&
-      Boolean(
-        document.querySelector<HTMLSelectElement>(
-          'select[aria-label="Office long room titles"]',
+        document.querySelector<HTMLButtonElement>(
+          'button[role="switch"][aria-label="Office calm motion"]',
         ),
       ),
     "Office controls were not menu-owned or did not default to Floating",

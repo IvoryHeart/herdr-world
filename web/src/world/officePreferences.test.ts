@@ -7,23 +7,20 @@ import {
 } from "./officePreferences";
 
 describe("Office preferences", () => {
-  test("admits only known layout choices and bounded scroll positions", () => {
+  test("admits only known choices and ignores retired Pixel Office fields", () => {
     const storage = memoryStorage(
       JSON.stringify({
         roomAlignment: "sideways",
         longTitleMode: "compact",
         inspectorPresentation: "stacked",
         scrollLeft: -4,
-        scrollTop: 9_000_000,
+        calm: "yes",
       }),
     );
 
     expect(readOfficePreferences(storage)).toEqual({
-      roomAlignment: "left",
-      longTitleMode: "compact",
       inspectorPresentation: "floating",
-      scrollLeft: 0,
-      scrollTop: 1_000_000,
+      calm: false,
     });
   });
 
@@ -44,22 +41,13 @@ describe("Office preferences", () => {
   test("writes only a normalized World-owned preference record", () => {
     const storage = memoryStorage(null);
     writeOfficePreferences(storage, {
-      roomAlignment: "right",
-      longTitleMode: "expand",
-      inspectorPresentation: "floating",
-      scrollLeft: 12.4,
-      scrollTop: Number.POSITIVE_INFINITY,
+      inspectorPresentation: "docked",
+      calm: true,
     });
 
     expect(storage.value).toEqual({
       key: OFFICE_PREFERENCES_KEY,
-      value: JSON.stringify({
-        roomAlignment: "right",
-        longTitleMode: "expand",
-        inspectorPresentation: "floating",
-        scrollLeft: 12,
-        scrollTop: 0,
-      }),
+      value: JSON.stringify({ inspectorPresentation: "docked", calm: true }),
     });
   });
 });

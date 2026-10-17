@@ -7,6 +7,20 @@ are optional because the merged PR history records their source.
 
 ## [Unreleased]
 
+### Changed
+
+- Office is now a pixel-art town. Each host is a building along a road, each
+  workspace a room on a carpet and each tab a team table with one seat per pane.
+  The default view shows a status card for every room and each host's reception,
+  where agents that need input queue oldest first; tap a room to zoom in, or zoom
+  out until the roofs come down. Desks stay where they are as tabs open and close,
+  rooms show up to 19 desks, and phones stack the buildings in one vertical flow.
+- Idle agents take a break in their building's lounge, and finished agents keep a
+  completion marker at their desk until you inspect them.
+- The Office Economy board now lives on the town board, and a new Calm motion
+  setting reduces ambient motion and shortens camera moves. The room alignment
+  and long room title settings were removed with the old layout.
+
 ## [0.2.4] - 2026-10-16
 
 ### Fixed

@@ -50,7 +50,7 @@ bounded set of grid sizes that always leaves at least one free desk spot. While 
 scene is live, a topology change SHALL NOT move an existing desk to another spot
 or reorder rooms: a new tab SHALL take the first free spot of its room, a closed
 tab SHALL free its spot, and a room that reaches a new capacity step MAY shift
-later rows of the same building without reordering rooms. Placement SHALL be
+later rooms and rows of the same building without reordering rooms. Placement SHALL be
 re-derived from native order when the scene is rebuilt. Desktop SHALL lay out
 buildings in one row; phones SHALL stack buildings in one vertical column.
 
@@ -374,6 +374,41 @@ terminal opened from Office remains the same presentation after switching views.
 - **WHEN** the user is in Office on a phone
 - **THEN** the shell's bottom navigation remains available to switch to Graph,
   Desk or Spaces, and the Office tray sits above it
+
+## MODIFIED Requirements
+
+### Requirement: Office creation affordances follow operational capacity
+
+Office's creation affordances, their semantic browser controls and shared
+Actions SHALL agree on the qualified operation's availability, progress, cursor
+and unavailable explanation. Temporary scene readiness SHALL be distinct from
+connection, source and capability unavailability.
+
+The number of rendered desks per room SHALL remain bounded by the room capacity
+steps, and overflow SHALL remain visible as an exact count with chooser access.
+Reaching a room's rendered desk bound SHALL NOT prohibit creating another
+admitted tab in that workspace. Office SHALL retain a reachable creation control
+and present the new terminal independently of scene capacity.
+
+#### Scenario: A room already renders eight desks
+
+- **WHEN** a ready workspace already renders eight or more desks, up to its
+  largest rendered capacity, and the user activates its creation control
+- **THEN** World can create another tab and open its terminal while preserving
+  bounded rendering and truthful overflow information
+
+#### Scenario: Canvas and browser control change readiness
+
+- **WHEN** a room's source preparation or availability changes
+- **THEN** its creation control and semantic browser control expose consistent
+  availability and pointer feedback, with an explanation reachable on touch
+  devices
+
+#### Scenario: Scene geometry is being updated
+
+- **WHEN** Office temporarily lacks matching scene and control geometry
+- **THEN** it prevents stale activation, distinguishes this rendering state
+  from runtime failure and keeps the shared creation menu usable
 
 ## REMOVED Requirements
 
