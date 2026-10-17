@@ -593,3 +593,43 @@
   clip: rect(0 0 0 0);
   white-space: nowrap;
 }
+
+@media (max-width: 640px) {
+  /* Compact reception: a single row of faces fits between stacked buildings. */
+  .town-reception {
+    min-width: 0;
+    gap: 3px;
+    padding: 4px 6px 5px;
+  }
+
+  .town-reception-entry {
+    width: auto;
+    padding: 2px;
+  }
+
+  .town-reception-entry span,
+  .town-reception-entry small {
+    display: none;
+  }
+
+  .town-reception-entry img {
+    width: 20px;
+    height: 29px;
+  }
+
+  .town-reception-empty {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  /* On phones, completion notices shrink to the newest one plus a count. */
+  .world-completion-notices button:nth-of-type(n + 2) {
+    display: none;
+  }
+
+  .world-completion-notices {
+    left: 56px;
+    width: auto;
+  }
+}

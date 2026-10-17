@@ -301,13 +301,19 @@ export function layoutTown(
   })[] = [];
   const roads: number[] = [];
   const verticalRoads: TownLayout["verticalRoads"] = [];
+  const widestDraft = Math.max(0, ...drafts.map((draft) => draft.w));
   let y = MARGIN + 2;
   let width = MARGIN;
   for (const row of rowsOfBuildings) {
     if (!row.length) continue;
     const tallest = Math.max(...row.map((b) => b.h));
     const roadY = y + tallest + TOWN_FACADE + YARD;
-    let x = MARGIN;
+    // A single stacked building is centred on the street so every floor plan
+    // shares one vertical axis on phones.
+    let x =
+      row.length === 1
+        ? MARGIN + Math.floor((widestDraft - row[0]!.w) / 2)
+        : MARGIN;
     row.forEach((draft, index) => {
       placedBuildings.push({ ...draft, x, y: y + (tallest - draft.h), roadY });
       x += draft.w;
@@ -318,7 +324,8 @@ export function layoutTown(
     });
     width = Math.max(width, x);
     roads.push(roadY);
-    y = roadY + ROAD_GAP + 2;
+    // Stacked phone streets leave room for the reception board under each building.
+    y = roadY + ROAD_GAP + (formFactor === "narrow" ? 8 : 2);
   }
   if (!roads.length) roads.push(MARGIN + 2);
   width = Math.max(width + MARGIN, 40);

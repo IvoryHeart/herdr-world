@@ -351,7 +351,7 @@ export function TownCanvas({
     if (!limits) return;
     if (l.formFactor === "narrow") {
       const first = l.buildings[0];
-      const x = first ? (first.x + first.w / 2) * T : (l.width * T) / 2;
+      const x = (l.width * T) / 2;
       const focus = renderer.camera.focusPoint();
       const y = first
         ? first.y * T - 24 + (focus.y - viewport().inset.top) / limits.home
