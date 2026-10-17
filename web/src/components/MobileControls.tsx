@@ -66,6 +66,11 @@ function useStoreValue<T>(store: ReturnType<typeof createStore<T>>) {
   return useSyncExternalStore(store.subscribe, store.get, () => null);
 }
 
+/** The shell's published mobile controls, or null outside the phone layout. */
+export function useMobileControls() {
+  return useStoreValue(controlsStore);
+}
+
 export function usePublishMobileControls(controls: MobileControls | null) {
   const latest = useRef(controls);
   latest.current = controls;

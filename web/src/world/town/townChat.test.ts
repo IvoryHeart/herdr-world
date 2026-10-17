@@ -1,0 +1,31 @@
+import { expect, test } from "bun:test";
+import { townLineKind, townQuestion } from "./townChat";
+
+const screen = [
+  "● Updated the queue so the oldest agent waits first.",
+  "  src/queue.ts  +18 -6",
+  "Do you want to make this edit to",
+  "src/queue.ts?",
+  "❯ 1. Yes",
+  "  2. No, and tell the agent what to do differently (esc)",
+];
+
+test("a waiting agent's question is split from its earlier chatter", () => {
+  expect(townQuestion(screen, true)).toEqual({
+    chatter: screen.slice(0, 2),
+    question: ["Do you want to make this edit to", "src/queue.ts?"],
+  });
+  expect(townQuestion(screen, false).question).toEqual(screen.slice(2));
+});
+
+test("chatter without a question has no question box", () => {
+  const lines = ["● Reading src/rooms.ts", "✻ Thinking…"];
+  expect(townQuestion(lines, true)).toEqual({ chatter: lines, question: [] });
+});
+
+test("lines are coloured as the agent marks them", () => {
+  expect(townLineKind("● Reading src/rooms.ts")).toBe("tool");
+  expect(townLineKind("  ✓ 13 passed")).toBe("ok");
+  expect(townLineKind("✻ Thinking…")).toBe("busy");
+  expect(townLineKind("The queue now keeps its order.")).toBe("text");
+});

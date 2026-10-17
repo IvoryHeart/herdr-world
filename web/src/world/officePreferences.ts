@@ -8,6 +8,8 @@ export type OfficePreferences = {
   inspectorPresentation: OfficeInspectorPresentation;
   scrollLeft: number;
   scrollTop: number;
+  /** Less ambient motion and shorter camera moves in Town. */
+  townCalm: boolean;
 };
 
 export const DEFAULT_OFFICE_PREFERENCES: OfficePreferences = Object.freeze({
@@ -16,6 +18,7 @@ export const DEFAULT_OFFICE_PREFERENCES: OfficePreferences = Object.freeze({
   inspectorPresentation: "floating",
   scrollLeft: 0,
   scrollTop: 0,
+  townCalm: false,
 });
 
 export const OFFICE_PREFERENCES_KEY = "officePreferences:v1";
@@ -46,6 +49,7 @@ export function readOfficePreferences(
         : DEFAULT_OFFICE_PREFERENCES.inspectorPresentation,
       scrollLeft: boundedScroll(value.scrollLeft),
       scrollTop: boundedScroll(value.scrollTop),
+      townCalm: value.townCalm === true,
     };
   } catch {
     return { ...DEFAULT_OFFICE_PREFERENCES };
@@ -70,6 +74,7 @@ export function writeOfficePreferences(
       : DEFAULT_OFFICE_PREFERENCES.inspectorPresentation,
     scrollLeft: boundedScroll(preferences.scrollLeft),
     scrollTop: boundedScroll(preferences.scrollTop),
+    townCalm: preferences.townCalm === true,
   };
   try {
     storage.setItem(OFFICE_PREFERENCES_KEY, JSON.stringify(admitted));

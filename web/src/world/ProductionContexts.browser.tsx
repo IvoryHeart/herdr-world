@@ -18,6 +18,7 @@ import type { Pane, Tab, Workspace } from "../types";
 import ConnectedTreeView from "./ConnectedTreeView";
 import SpatialGraphView from "./SpatialGraphView";
 import PixelOfficeView from "./PixelOfficeView";
+import TownView from "./TownView";
 import { WorldRuntimeStore } from "./runtimeStore";
 import { buildWorldObject, type WorldObject } from "./worldObject";
 import "../styles/tokens.css";
@@ -683,6 +684,20 @@ async function run() {
             onConversationNodeAnchorsChange={() => {}}
           />,
         );
+      if (view === "town")
+        root.render(
+          <TownView
+            world={world}
+            selectedId={selectedId}
+            floatingTerminals={selectedId ? [{ nodeId: selectedId }] : []}
+            onSelect={async () => true}
+            onOpenTerminal={async () => {}}
+            onSelectedAnchorChange={(anchor) => {
+              anchored = !!anchor;
+            }}
+            onConversationNodeAnchorsChange={() => {}}
+          />,
+        );
       await frames(4);
       if (view === "tree")
         await waitFor(
@@ -692,13 +707,13 @@ async function run() {
             ),
           "Tree did not finish progressive mount",
         );
-      if (view === "office")
+      if (view === "office" || view === "town")
         await waitFor(
           () =>
             !!scene.querySelector(
               '.world-semantic-targets-overlay[aria-busy="false"]',
             ),
-          "Office did not finish progressive controls",
+          `${view} did not finish progressive controls`,
         );
       if (view === "graph")
         await waitFor(

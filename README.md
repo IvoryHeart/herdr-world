@@ -15,7 +15,11 @@ qualified terminals, files, changes and agent history on desktop or mobile.
 
 [![Office view showing the selected Herdr host and its agents][desktop-office]][desktop-office]
 
-Office is the default view and groups agent work by host. Desk supports agent
+Office is the default view and groups agent work by host. Town shows the same
+agents as a pixel-art town: each host is a building, each workspace a room and
+each tab a team table. Agents that need you queue at reception and in a
+needs-you list; hover one to read its question and answer, or reply through the
+terminal composer. Desk supports agent
 triage across filtered hosts. Tree and Graph show the same filtered aggregate,
 while Spaces keeps one qualified workspace's terminal and repository workflow
 one click away. Hosts defaults to All hosts; filtering changes visibility while

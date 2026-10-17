@@ -1,5 +1,6 @@
 import {
   Building2,
+  Castle,
   LayoutDashboard,
   type LucideIcon,
   Network,
@@ -14,6 +15,7 @@ const DESTINATIONS: readonly {
   Icon: LucideIcon;
 }[] = [
   { view: "office", label: "Office", Icon: Building2 },
+  { view: "town", label: "Town", Icon: Castle },
   { view: "graph", label: "Graph", Icon: Network },
   { view: "desk", label: "Desk", Icon: LayoutDashboard },
   { view: "spaces", label: "Spaces", Icon: PanelsTopLeft },

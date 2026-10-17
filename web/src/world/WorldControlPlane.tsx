@@ -29,6 +29,8 @@ const PixelOfficeView = lazyWithReload(
   () => import("./PixelOfficeView"),
 );
 
+const TownView = lazyWithReload("world-town", () => import("./TownView"));
+
 const ConnectedTreeView = lazyWithReload(
   "world-connected-tree",
   () => import("./ConnectedTreeView"),
@@ -103,6 +105,7 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
     focusFloatingInspector,
     retireInspectors,
     showSelectionProfile,
+    applySelection,
   } = controller;
   const {
     workspaceCreationOpen,
@@ -183,6 +186,28 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
                     >
                       <PixelOfficeView
                         world={presentedWorld}
+                        toolbarPortal={viewToolbarPortal}
+                        selectedId={selectedId}
+                        onSelect={selectNode}
+                        floatingTerminals={inspectorConversations}
+                        onConversationNodeAnchorsChange={
+                          setVisualConversationAnchors
+                        }
+                        onOpenTerminal={openTerminalById}
+                        onSelectedAnchorChange={setSelectedVisualAnchor}
+                      />
+                    </Suspense>
+                  ) : view === "town" ? (
+                    <Suspense
+                      fallback={
+                        <div className="world-view-loading">Loading Town…</div>
+                      }
+                    >
+                      <TownView
+                        world={presentedWorld}
+                        onOpenInspectorView={(id, view) =>
+                          void applySelection(id, view)
+                        }
                         toolbarPortal={viewToolbarPortal}
                         selectedId={selectedId}
                         onSelect={selectNode}
