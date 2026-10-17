@@ -1,0 +1,39 @@
+name: Daily patch release
+
+on:
+  schedule:
+    - cron: "37 6 * * *"
+  workflow_dispatch:
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+permissions:
+  contents: read
+  actions: write
+  pull-requests: read
+
+concurrency:
+  group: daily-patch-release
+  queue: max
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    if: github.repository == 'IvoryHeart/herdr-world' && github.ref == 'refs/heads/main' && (github.event_name != 'pull_request' || github.event.pull_request.merged)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: "1.4.3"
+      - name: Prepare or publish one reviewed patch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PUBLISH_ONLY: ${{ github.event_name == 'pull_request' }}
+        run: bun scripts/daily-release.ts dispatch

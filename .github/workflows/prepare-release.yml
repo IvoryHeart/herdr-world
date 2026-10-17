@@ -1,7 +1,7 @@
 name: Prepare Release
 
 # Create a normal, reviewable release PR after running the project gates.
-# Merging the PR does not publish the release; run Publish Release afterward.
+# Daily patch PRs publish after reviewed merge; other versions remain manual.
 on:
   workflow_dispatch:
     inputs:
@@ -9,6 +9,10 @@ on:
         description: Version to release (X.Y.Z, X.Y.Z-rc.N, or patch/minor/major)
         required: true
         type: string
+      automatic:
+        description: Recheck daily patch readiness and generate notes from the changelog
+        type: boolean
+        default: false
 
 permissions:
   actions: write
@@ -23,6 +27,7 @@ concurrency:
 jobs:
   prepare:
     name: Create release PR
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -34,37 +39,71 @@ jobs:
         with:
           bun-version: "1.4.3"
           no-cache: true
+      - id: automatic
+        name: Recheck automatic patch readiness
+        if: inputs.automatic
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION_INPUT: ${{ inputs.version }}
+        run: bun scripts/daily-release.ts prepare
       - run: bun install --frozen-lockfile
+        if: ${{ !inputs.automatic || steps.automatic.outputs.ready == 'true' }}
       - id: release
         name: Prepare release files
+        if: ${{ !inputs.automatic || steps.automatic.outputs.ready == 'true' }}
         env:
           VERSION_INPUT: ${{ inputs.version }}
         run: bun scripts/prepare-release.ts "$VERSION_INPUT"
       - name: Validate prepared release
+        if: ${{ !inputs.automatic || steps.automatic.outputs.ready == 'true' }}
         env:
           HERDR_TEST_PARALLEL: "1"
           HERDR_TEST_MAX_CONCURRENCY: "2"
         run: bun run precommit
+      - id: commit
+        name: Commit new or refreshed release candidate
+        if: ${{ !inputs.automatic || steps.automatic.outputs.ready == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.release.outputs.version }}
+          RELEASE_PR: ${{ steps.automatic.outputs.pull }}
+          RELEASE_HEAD: ${{ steps.automatic.outputs.head }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          bun scripts/daily-release.ts commit-preparation
       - name: Create release PR
+        if: steps.commit.outputs.committed == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.release.outputs.tag }}
           VERSION: ${{ steps.release.outputs.version }}
+          AUTOMATIC: ${{ inputs.automatic }}
+          BASE_VERSION: ${{ steps.automatic.outputs.from }}
+          RELEASE_PR: ${{ steps.automatic.outputs.pull }}
         run: |
           set -euo pipefail
           branch="release/${TAG}"
 
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git checkout -b "$branch"
-          git add herdr-plugin.toml CHANGELOG.md docs/releases/
-          git commit -m "Release $VERSION"
           gh auth setup-git
           git push origin "$branch"
 
+          if [ -n "$RELEASE_PR" ]; then
+            gh workflow run "CI" --ref "$branch"
+            exit 0
+          fi
+          body="$RUNNER_TEMP/release-pr.md"
+          cat > "$body" <<EOF
+          Prepare $TAG by updating the public plugin version and reviewing the release notes. Stable versions promote the changelog; private development manifests remain at 0.0.0.
+
+          Review and merge only after the required CI passes. Daily patch PRs publish their exact reviewed merge commit automatically; manual major/minor/RC preparations still require an explicit Publish Release invocation.
+          EOF
+          if [ "$AUTOMATIC" = "true" ]; then
+            bun -e 'console.log("\n<!-- daily-patch-release " + JSON.stringify({from: process.env.BASE_VERSION, version: process.env.VERSION}) + " -->")' >> "$body"
+          fi
           gh pr create \
             --base main \
             --head "$branch" \
             --title "Release $VERSION" \
-            --body "Prepare $TAG by updating the public plugin version and referencing its reviewed release notes. Stable versions also promote the changelog. Private development package manifests remain at 0.0.0; release builds derive their version from this reviewed tag. Review and merge this PR after its explicitly dispatched CI check passes, then run the Publish Release workflow for $VERSION."
+            --body-file "$body"
           gh workflow run "CI" --ref "$branch"

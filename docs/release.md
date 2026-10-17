@@ -3,6 +3,11 @@
 Releases are prepared and reviewed through pull requests. Never commit or push a
 release change directly to `main`.
 
+[Daily patch automation](daily-releases.md) prepares one reviewed patch PR at a
+time, refreshes it as main advances until approval, and publishes its exact merged
+revision after required CI and human-approved merge.
+Minor, major and release candidates remain explicit manual releases.
+
 ## Pre-merge installer upgrades
 
 Every CI run calls `.github/workflows/installer-upgrade.yml`, and Delivery checks
@@ -129,11 +134,13 @@ are checked again during the RC release workflow.
    ```
 
    The tag push starts **Release** automatically. Do not also dispatch **Publish
-   Release** for that tag. The **Prepare Release** and **Publish Release** workflows
-   require repository settings that currently block their GitHub token: Actions
-   cannot create pull requests, and the release tag ruleset permits only the
-   maintainer account to create `v*` tags. If those settings change, the automated
-   path can be used after confirming its token has the required access.
+   Release** for that tag. Alternatively, dispatch **Publish Release** on `main`
+   with the reviewed version: it verifies the merged PR and required checks,
+   then uses `RELEASE_AUTOMATION_TOKEN` to create the exact annotated tag. See
+   [token setup and retry rules](daily-releases.md). Actions can create release
+   PRs with the current repository setting; protected tags still require the
+   dedicated authorized identity. Never push a tag and also dispatch a new
+   Release run for it.
 4. The Release workflow revalidates metadata and repository tests with one file
    worker and at most two concurrent cases. Its World browser tests use the same
    [eight-shard workflow](../.github/workflows/world-browser.yml) as PR CI, with one
