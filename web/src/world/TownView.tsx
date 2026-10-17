@@ -613,7 +613,9 @@ export default function TownView({
     const leaf = townLeaf(world, nodeId);
     window.clearTimeout(peekTimer.current);
     setPeek(null);
-    if (leaf) requestTerminalComposer(leaf.pane.pane_id);
+    // Desktop World has no visible composer; an open one would take the
+    // terminal's keystrokes, so it is requested only on the phone layout.
+    if (leaf && mobile) requestTerminalComposer(leaf.pane.pane_id);
     openOfficeTerminal(key);
   };
   const peekEntry = peek ? agentByKey.get(peek.key) : undefined;

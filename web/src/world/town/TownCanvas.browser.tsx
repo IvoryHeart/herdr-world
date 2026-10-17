@@ -1,4 +1,5 @@
 window.__HERDR_WORLD_RENDERER_DEBUG__ = true;
+import { TERMINAL_COMPOSER_REQUEST_EVENT } from "../terminalComposerRequest";
 import { StrictMode, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import type { Pane, Tab, Workspace } from "../../types";
@@ -528,6 +529,26 @@ async function run() {
     `Inspector opened ${JSON.stringify(inspected)}`,
   );
   check(selected.length === 0, "Inspector must not change the selection path");
+
+  // Opening a desk's terminal on desktop must leave its keys to the terminal:
+  // no hidden composer may be requested.
+  if (!phone) {
+    let composerRequests = 0;
+    const countRequest = () => (composerRequests += 1);
+    window.addEventListener(TERMINAL_COMPOSER_REQUEST_EVENT, countRequest);
+    host
+      .querySelector<HTMLButtonElement>(
+        '.world-semantic-target[data-kind="desk"]',
+      )!
+      .dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+    await waitFor(() => opened.length === 1, "desk did not open its terminal");
+    window.removeEventListener(TERMINAL_COMPOSER_REQUEST_EVENT, countRequest);
+    check(
+      composerRequests === 0,
+      "desktop terminals must not open World's composer",
+    );
+    opened.length = 0;
+  }
 
   // Room card activation zooms into the room.
   const zoomBefore = diagnostics.zoom;
