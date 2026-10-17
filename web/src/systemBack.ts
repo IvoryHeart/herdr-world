@@ -144,34 +144,38 @@ if (typeof window !== "undefined") {
       reconcile();
       return;
     }
-    if (forwardBase !== undefined) {
-      const id = forwardBase;
-      forwardBase = undefined;
-      // Forward ended inside a run of leftover guards and the user went
-      // Back: skip the rest of the run and its page, which all look alike.
-      if (layers.size === 0 && baseId(event.state) === id) {
-        backPending = true;
-        window.history.go(-(guardDepth(event.state) + 1));
-        return;
-      }
-    }
+    // Direction within one guard run: a higher guard of the same pair means
+    // Forward; anything else (a lower entry, or arriving from a route above
+    // the run) means Back.
+    const id = baseId(event.state);
     const depth = guardDepth(event.state);
+    const samePair = id !== undefined && baseId(from) === id;
+    const forward = samePair && depth > guardDepth(from);
+    if (forwardBase !== id) forwardBase = undefined;
     if (layers.size === 0) {
-      if (depth === 0) return;
-      // A leftover guard with nothing open, for example one left below a
-      // route opened from a layer. Keep moving the way the user went:
-      // Forward from its page (or a lower guard) continues Forward; Back
-      // returns to the page's own entry.
-      const id = baseId(event.state);
-      if (id !== undefined && baseId(from) === id && guardDepth(from) < depth) {
+      if (forward && depth > 0) {
+        // Continue Forward past the leftover guards, toward any route above.
         forwardBase = id;
         window.history.forward();
         return;
       }
-      backPending = true;
-      window.history.go(-depth);
+      if (forwardBase !== undefined && samePair) {
+        // Forward ended inside the run and the user went Back: skip the rest
+        // of the run and its page, which all look alike, in one press.
+        forwardBase = undefined;
+        backPending = true;
+        window.history.go(-(depth + 1));
+        return;
+      }
+      forwardBase = undefined;
+      // A leftover guard reached going Back returns to its page.
+      if (depth > 0) {
+        backPending = true;
+        window.history.go(-depth);
+      }
       return;
     }
+    forwardBase = undefined;
     if (layers.size <= depth) {
       // Forward onto a guard: nothing to close.
       scheduleReconcile();

@@ -220,6 +220,9 @@ async function run() {
     await settle();
     show(["terminal", "composer"]);
     await settle();
+    // Three layers leave two guards below the route.
+    show(["terminal", "composer", "menu"]);
+    await settle();
     const url = new URL(location.href);
     url.pathname = "/spaces";
     pushRoute({ herdrFrom: "/office" }, url);
@@ -257,6 +260,8 @@ async function run() {
     check(at() === "/office" && !guarded(), `${label}: guards left current`);
     history.forward();
     await settle();
+    // Forward has nowhere real to go: it must not leave Office.
+    check(at() === "/office", `${label}: Forward left Office for ${at()}`);
     await userBack();
     check(at() === "/graph", `${label}: Back after Forward reached ${at()}`);
   }
