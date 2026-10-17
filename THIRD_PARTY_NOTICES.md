@@ -15,13 +15,11 @@ Roamgate is source lineage, not a separately installed World dependency.
 
 ## Claw-Empire character assets
 
-The website film embeds downscaled copies of character sprites that originate from
+The character sprites under `web/public/world/characters` originate from
 [`GreenSheep01201/claw-empire`](https://github.com/GreenSheep01201/claw-empire)
 at commit `66a24ea7df2435ef897c48c147deb7ec572c01c2`, licensed under Apache-2.0,
 Copyright 2026 GreenSheep01201 (seowongil@gmail.com). The licence is retained in
 [`LICENSES/CLAW-EMPIRE-APACHE-2.0.txt`](LICENSES/CLAW-EMPIRE-APACHE-2.0.txt).
-The application no longer ships these sprites: the Office town draws its art from
-original definitions (see [docs/world-assets.md](docs/world-assets.md)).
 
 ## Website film fonts
 

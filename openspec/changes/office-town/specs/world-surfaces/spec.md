@@ -1,8 +1,8 @@
 ## ADDED Requirements
 
-### Requirement: Office town scene
+### Requirement: Town scene
 
-Office SHALL present a town in which each presented host is one building along a
+Town SHALL present a town in which each presented host is one building along a
 road, each admitted Herdr workspace of that host is a room on a carpet inside its
 building, and each admitted tab is a desk in its room. A desk SHALL be a table
 with one seat per admitted pane up to four drawn seats; an agent pane SHALL show
@@ -14,14 +14,14 @@ its counter. Scene position SHALL NOT change an entity's authoritative host,
 workspace, tab or pane ancestry.
 
 A building for a host whose topology is cached after failure SHALL be visibly
-stale and its entities SHALL be non-actionable. Office SHALL NOT invent activity,
+stale and its entities SHALL be non-actionable. Town SHALL NOT invent activity,
 cost, completion or project data when no authoritative state or optional provider
 supplies it.
 
 #### Scenario: Several hosts with different workspaces
 
 - **WHEN** three filtered hosts expose different numbers of workspaces, tabs and panes
-- **THEN** Office shows three buildings, each containing exactly its host's rooms,
+- **THEN** Town shows three buildings, each containing exactly its host's rooms,
   desks and seats with qualified identities, and no room appears in another host's building
 
 #### Scenario: A tab has more panes than drawn seats
@@ -32,19 +32,19 @@ supplies it.
 
 #### Scenario: A host's runtime fails
 
-- **WHEN** a presented host's connection fails and Office retains its cached topology
+- **WHEN** a presented host's connection fails and Town retains its cached topology
 - **THEN** its building is marked stale, its desks and agents cannot start
   operations, and other buildings remain fully usable
 
 #### Scenario: No observation provider is configured
 
 - **WHEN** no optional provider supplies cost, activity or project data
-- **THEN** Office shows authoritative Herdr state only and omits or labels the
+- **THEN** Town shows authoritative Herdr state only and omits or labels the
   unavailable figures instead of showing estimates
 
-### Requirement: Stable Office placement
+### Requirement: Stable Town placement
 
-Office SHALL derive room order from Herdr's native workspace order and desk order
+Town SHALL derive room order from Herdr's native workspace order and desk order
 from native tab order within each host. A room's capacity SHALL step through a
 bounded set of grid sizes that always leaves at least one free desk spot. While a
 scene is live, a topology change SHALL NOT move an existing desk to another spot
@@ -71,9 +71,9 @@ buildings in one row; phones SHALL stack buildings in one vertical column.
 - **THEN** the room grows to the next capacity step with a free spot, rooms keep
   their order, and desks keep their room
 
-### Requirement: Office zoom levels
+### Requirement: Town zoom levels
 
-Office SHALL present town, overview, room and desk levels over the same
+Town SHALL present town, overview, room and desk levels over the same
 placement, selected by on-screen size. The town level SHALL show roofs with host
 summaries. The overview level SHALL show one status card per room with its name,
 desk count, working count, a status distribution, a waiting count when non-zero
@@ -95,13 +95,13 @@ remain available as visible buttons.
 
 #### Scenario: Read the whole office at a glance
 
-- **WHEN** the user opens Office on a desktop with three hosts and twenty-four rooms
+- **WHEN** the user opens Town on a desktop with three hosts and twenty-four rooms
 - **THEN** every room's status card and every host's reception board are visible
   without panning, and rooms with waiting agents show their waiting count
 
 #### Scenario: Open a town too large for room cards
 
-- **WHEN** the user opens Office on a desktop where the presented rooms are too
+- **WHEN** the user opens Town on a desktop where the presented rooms are too
   many for readable cards at the fit-all zoom
 - **THEN** every building is visible under its roof with its host summary, and
   zooming in shows the room cards of the buildings on screen
@@ -109,7 +109,7 @@ remain available as visible buttons.
 #### Scenario: Zoom from a room card to its desks
 
 - **WHEN** the user activates a room's status card
-- **THEN** Office zooms to that room and its tables, seats and agents become
+- **THEN** Town zooms to that room and its tables, seats and agents become
   individually targetable
 
 #### Scenario: Zoom out past the overview
@@ -118,9 +118,9 @@ remain available as visible buttons.
 - **THEN** roofs cover the buildings and each roof shows its host's room and desk
   counts while the reception boards keep showing waiting agents
 
-### Requirement: Office agent locations
+### Requirement: Town agent locations
 
-Office SHALL seat working and unknown agents at their pane's seat. A blocked agent
+Town SHALL seat working and unknown agents at their pane's seat. A blocked agent
 SHALL move to its host's reception and queue in order of when it became blocked,
 oldest first, within a bounded number of queue positions; further blocked agents
 SHALL stay at their seat with a waiting cue and the reception SHALL show the exact
@@ -152,44 +152,46 @@ pane target wherever it stands.
 - **THEN** it stays at its seat with a completion marker until the user inspects
   that completion, and inspecting it does not change Herdr state
 
-### Requirement: Office attention rail
+### Requirement: Town attention rail
 
-Office SHALL present the agents that need the user in the same order as Desk
+Town SHALL present the agents that need the user in the same order as Desk
 attention triage: blocked agents oldest first, then done agents newest first. On
 desktop the list SHALL be a left rail grouped by host and then room, with
 collapsible host groups, and the user SHALL be able to hide it to a count and
 restore it; this choice SHALL persist per browser. On phones the list SHALL be a
-bottom tray that remains reachable while a peek or card is open. Activating an
-entry SHALL open that exact pane's terminal on desktop and its peek on phones;
-activating a room entry SHALL zoom to that room. A keyboard command SHALL open the
-next agent that needs the user.
+bottom tray that remains reachable while a peek or card is open. Hovering an
+entry SHALL open its peek, and activating an entry SHALL open that exact pane in
+the chat dock. A keyboard command SHALL open the next agent that needs the user.
+The rail SHALL list a bounded number of entries and count the rest.
 
 #### Scenario: Work through waiting agents on desktop
 
 - **WHEN** three agents in two hosts are blocked and the user presses the next-agent key repeatedly
-- **THEN** Office opens each agent's exact terminal in age order and the rail
+- **THEN** Town opens each agent's exact pane in age order and the rail
   reflects each answer without reordering unrelated entries
 
 #### Scenario: Hide the rail
 
-- **WHEN** the user hides the desktop rail and reloads Office
+- **WHEN** the user hides the desktop rail and reloads Town
 - **THEN** the rail stays hidden, shows the waiting count, and can be restored with one action
 
-### Requirement: Office agent peek
+### Requirement: Town agent peek
 
 Hovering an agent, a reception entry or a rail entry with a pointer SHALL open a
 peek after a short delay, and tapping one SHALL open a pinned peek. The peek SHALL
-show the agent's name, location and status, the latest bounded lines of its pane,
-answer options only when the agent integration exposes a structured choice, a
-reply box, and actions to open the terminal, open the profile and moves, and go to
-the next waiting agent.
+show the agent's name, location and status, the latest bounded lines of its pane
+(the question when it is waiting), answer options only when those lines present a
+numbered menu or a yes/no prompt, a reply box, and actions to open the chat dock,
+open the terminal and go to the next waiting agent. Tapping an agent in Town
+SHALL open its peek and SHALL NOT open an Inspector; tapping a room SHALL only
+zoom to it.
 
-Peek keyboard shortcuts SHALL apply only while keyboard focus is in the Office
+Peek keyboard shortcuts SHALL apply only while keyboard focus is in the Town
 scene or in the peek; pointer hover alone SHALL NOT capture keys. In that context,
 digit keys SHALL choose the corresponding answer, and other printable keys SHALL
 move focus to the reply box and type there. While the reply box has focus, digits
 and all other keys SHALL be ordinary text and answer shortcuts SHALL be disabled.
-Office SHALL NOT capture keys while a terminal, search field or other editable
+Town SHALL NOT capture keys while a terminal, search field or other editable
 control has focus, during IME composition, or with Ctrl, Alt or Meta held, and a
 hover peek SHALL NOT change the keyboard target. Answers
 and replies SHALL be sent only to the exact qualified pane through the existing
@@ -205,7 +207,7 @@ Opening the terminal from a peek SHALL follow the Inspector presentation prefere
 
 #### Scenario: Reply by typing
 
-- **WHEN** keyboard focus is in the Office scene, a peek is open, and the user types a
+- **WHEN** keyboard focus is in the Town scene, a peek is open, and the user types a
   message and presses Enter
 - **THEN** the message goes to that peek's exact pane without first clicking the reply box
 
@@ -226,14 +228,43 @@ Opening the terminal from a peek SHALL follow the Inspector presentation prefere
 - **WHEN** the peeked pane closes or its runtime generation retires before the reply is sent
 - **THEN** World rejects the reply and does not redirect it to another pane, tab or host
 
-#### Scenario: No structured choice is available
+#### Scenario: No recognizable choice is on screen
 
-- **WHEN** a blocked agent's integration does not expose a structured choice
-- **THEN** the peek offers the reply box and terminal action without guessed answer buttons
+- **WHEN** a blocked agent's latest lines contain neither a numbered menu nor a
+  yes/no prompt
+- **THEN** the peek offers the reply box and terminal action without answer buttons
 
-### Requirement: Office desk and agent moves
+### Requirement: Town chat dock
 
-Office SHALL let the user move a desk to a free spot in another room of the same
+Activating an agent, a desk or a rail entry SHALL open a chat dock for that exact
+pane: docked beside the town on desktop and full screen on phones. The dock SHALL
+show the desk's panes as tabs, the selected pane's latest visible screen refreshed
+while the dock is open, answer options under the same rule as the peek, a
+composer that sends text followed by Enter, a control that sends Enter alone, a
+next-waiting-agent action and an action that opens the full terminal in the
+shared Inspector. Input SHALL reach only the selected pane through its own
+connection and runtime generation. Replies SHALL confirm success or failure with
+a short notice, and a finished agent SHALL announce itself once.
+
+#### Scenario: Chat with a waiting agent
+
+- **WHEN** the user opens a waiting agent's dock, types a message and presses Enter
+- **THEN** exactly that pane receives the text and Enter, and the dock confirms it
+
+#### Scenario: Switch panes at a desk
+
+- **WHEN** the dock is open on a desk with an agent and a shell pane and the user
+  selects the shell tab
+- **THEN** the screen and composer target the shell pane only
+
+#### Scenario: Open the full terminal
+
+- **WHEN** the user chooses the full terminal from the dock
+- **THEN** the shared Inspector opens that exact pane's terminal
+
+### Requirement: Town desk and agent moves
+
+Town SHALL let the user move a desk to a free spot in another room of the same
 host and move an agent pane to a free seat at another desk of the same host, by
 dragging and by a visible Move action. A request SHALL be qualified by connection
 ID and runtime generation and SHALL be refused across hosts, for retired
@@ -247,14 +278,14 @@ captured direction and ratio, confirming each step from Herdr before the next.
 
 Because a move can replace a pane's operational ID, World SHALL record each
 confirmed replacement from `pane.moved` and SHALL address every later split
-target, rollback step and Office target by the current ID, including any further
+target, rollback step and Town target by the current ID, including any further
 replacement during rollback. If a step fails, World SHALL move the already-moved
 panes back into the original tab using their current IDs and report the outcome.
 It SHALL NOT retry an uncertain step, and if rollback fails it SHALL report the
 actual resulting topology.
 
 An agent move SHALL be a single confirmed pane move into the target tab with its
-replacement ID recorded. While a move is pending, Office SHALL reserve the source
+replacement ID recorded. While a move is pending, Town SHALL reserve the source
 and target spots; the final placement SHALL follow confirmed Herdr topology.
 
 #### Scenario: Move a desk to another room
@@ -263,14 +294,14 @@ and target spots; the final placement SHALL follow confirmed Herdr topology.
 - **THEN** World captures the desk's split tree before moving anything, moves the
   three panes into one new tab in that workspace with the same split directions
   and ratios, shows the desk at the target spot after Herdr confirms, and the
-  agents keep their agent identities while Office follows each replacement pane ID
+  agents keep their agent identities while Town follows each replacement pane ID
 
 #### Scenario: A moved pane receives a new ID
 
 - **WHEN** Herdr confirms the first pane of a desk move with a different `pane_id`
   than its `previous_pane_id`
 - **THEN** World addresses the next split and any rollback by the new ID, and
-  Office's seat, peek and terminal targets for that agent use the new ID
+  Town's seat, peek and terminal targets for that agent use the new ID
 
 #### Scenario: A source pane disappears before the move
 
@@ -283,13 +314,13 @@ and target spots; the final placement SHALL follow confirmed Herdr topology.
 
 - **WHEN** Herdr rejects the second pane move of a three-pane desk
 - **THEN** World moves the first pane back into the original tab by its current
-  ID, Office returns
+  ID, Town returns
   the desk to its original spot, and the user sees that the move failed
 
 #### Scenario: Drop on another host
 
 - **WHEN** the user drops a desk over another host's building
-- **THEN** no Herdr operation is sent, the desk returns to its spot, and Office
+- **THEN** no Herdr operation is sent, the desk returns to its spot, and Town
   explains that desks move only within one host
 
 #### Scenario: Move an agent to another desk
@@ -298,9 +329,9 @@ and target spots; the final placement SHALL follow confirmed Herdr topology.
 - **THEN** World moves exactly that pane into the target tab and the agent sits at
   the chosen seat after Herdr confirms
 
-### Requirement: Office agent identity
+### Requirement: Town agent identity
 
-Office SHALL derive an agent's identity from its connection profile and the agent
+Town SHALL derive an agent's identity from its connection profile and the agent
 session identity reported to Herdr when present, and otherwise from its qualified
 pane. Its appearance SHALL be a deterministic function of that identity. The agent
 profile SHALL show only figures backed by authoritative state or an optional
@@ -314,13 +345,13 @@ provider and SHALL identify figures that are unavailable.
 #### Scenario: No session identity is reported
 
 - **WHEN** an agent pane reports no session identity
-- **THEN** Office uses the qualified pane identity and does not merge it with another agent
+- **THEN** Town uses the qualified pane identity and does not merge it with another agent
 
 ### Requirement: Room project signals
 
 A room status card SHALL reserve a line for project signals, such as open pull
 requests, the latest deployment and spend, supplied by optional providers mapped
-to that workspace. Office SHALL omit the line when no provider supplies values and
+to that workspace. Town SHALL omit the line when no provider supplies values and
 SHALL convey a failed deployment with text as well as colour.
 
 #### Scenario: Provider supplies deployment status
@@ -333,126 +364,61 @@ SHALL convey a failed deployment with text as well as colour.
 - **WHEN** no provider supplies project signals for a workspace
 - **THEN** its room card shows no project line and no placeholder values
 
-### Requirement: Office targets, motion and phone layout
+### Requirement: Town targets, motion and phone layout
 
-Office SHALL provide keyboard- and pointer-accessible semantic targets for
+Town SHALL provide keyboard- and pointer-accessible semantic targets for
 buildings, rooms, desks, seats, agents, reception entries and rail entries, with
 names that include status text. Compact targets inside desks and the reception
 SHALL be at least 24 by 24 CSS pixels and other targets at least 48 by 48. Every
-gesture SHALL have a visible control. Office SHALL honour reduced-motion
+gesture SHALL have a visible control. Town SHALL honour reduced-motion
 preferences and offer a calm setting that removes ambient motion and shortens
-camera moves. On phones, Office SHALL keep one vertical navigation direction,
+camera moves. On phones, Town SHALL keep one vertical navigation direction,
 open peeks as a sheet above the tray, and close the peek, card and terminal
-through the shared system Back behaviour. Office SHALL keep the established input
+through the shared system Back behaviour. Town SHALL keep the established input
 acknowledgement budgets at the dense fixtures and at three hosts with eight rooms,
 fifteen desks per room and four panes per desk.
 
-#### Scenario: Navigate Office by keyboard
+#### Scenario: Navigate Town by keyboard
 
-- **WHEN** a keyboard user moves through Office targets
+- **WHEN** a keyboard user moves through Town targets
 - **THEN** each building, room, desk, seat and agent is reachable with a name that
   includes its status, and activating it performs the same action as a pointer
 
-#### Scenario: Use Office on a phone
+#### Scenario: Use Town on a phone
 
-- **WHEN** the user opens Office at a 390 px width
+- **WHEN** the user opens Town at a 390 px width
 - **THEN** buildings are stacked vertically, room cards and the reception board are
-  readable, the tray stays at the bottom, and Back closes an open peek before leaving Office
+  readable, the tray stays at the bottom, and Back closes an open peek before leaving Town
 
 #### Scenario: Maximum observed scale
 
 - **WHEN** three hosts present eight rooms each with fifteen desks of four panes
-- **THEN** Office renders every room and keeps terminal input acknowledgement within the established budgets
+- **THEN** Town renders every room and keeps terminal input acknowledgement within the established budgets
 
-### Requirement: Office within the World shell
+### Requirement: Town within the World shell
 
-Office SHALL render as a view inside the shared World shell and SHALL keep the
-shell's existing view switching between Office, Graph, Desk and Spaces on desktop
-and phone. Office SHALL NOT add a second application top bar. On desktop, the
-Office attention rail SHALL occupy the shell's left sidebar slot while Office is
-active and SHALL use the sidebar's hide control. Office search, settings and
-terminals SHALL use the shell's search, common menu and shared Inspector, so a
-terminal opened from Office remains the same presentation after switching views.
+Town SHALL be a separate World view next to Office, with its own route and
+entries in the shell's view switcher and phone navigation; Office SHALL keep the
+Pixel Office scene unchanged. Town SHALL render inside the shared World shell and
+SHALL NOT add a second application top bar. Its attention rail SHALL live inside
+the Town view and be hideable there. Town search, settings and full terminals
+SHALL use the shell's search, common menu and shared Inspector, so a terminal
+opened from Town remains the same presentation after switching views.
 
-#### Scenario: Switch from Office to Graph with a terminal open
+#### Scenario: Switch from Town to Graph with a terminal open
 
-- **WHEN** the user opens an agent's terminal from an Office peek and switches to Graph
+- **WHEN** the user opens an agent's terminal from a Town peek and switches to Graph
 - **THEN** the shell's view switcher changes the view and the same qualified
   terminal presentation remains open without being recreated
 
 #### Scenario: Switch views on a phone
 
-- **WHEN** the user is in Office on a phone
-- **THEN** the shell's bottom navigation remains available to switch to Graph,
-  Desk or Spaces, and the Office tray sits above it
+- **WHEN** the user is in Town on a phone
+- **THEN** the shell's bottom navigation remains available to switch to Office,
+  Graph, Desk or Spaces, and the Town tray sits above it
 
-## MODIFIED Requirements
+#### Scenario: Office is unchanged
 
-### Requirement: Office creation affordances follow operational capacity
-
-Office's creation affordances, their semantic browser controls and shared
-Actions SHALL agree on the qualified operation's availability, progress, cursor
-and unavailable explanation. Temporary scene readiness SHALL be distinct from
-connection, source and capability unavailability.
-
-The number of rendered desks per room SHALL remain bounded by the room capacity
-steps, and overflow SHALL remain visible as an exact count with chooser access.
-Reaching a room's rendered desk bound SHALL NOT prohibit creating another
-admitted tab in that workspace. Office SHALL retain a reachable creation control
-and present the new terminal independently of scene capacity.
-
-#### Scenario: A room already renders eight desks
-
-- **WHEN** a ready workspace already renders eight or more desks, up to its
-  largest rendered capacity, and the user activates its creation control
-- **THEN** World can create another tab and open its terminal while preserving
-  bounded rendering and truthful overflow information
-
-#### Scenario: Canvas and browser control change readiness
-
-- **WHEN** a room's source preparation or availability changes
-- **THEN** its creation control and semantic browser control expose consistent
-  availability and pointer feedback, with an explanation reachable on touch
-  devices
-
-#### Scenario: Scene geometry is being updated
-
-- **WHEN** Office temporarily lacks matching scene and control geometry
-- **THEN** it prevents stale activation, distinguishes this rendering state
-  from runtime failure and keeps the shared creation menu usable
-
-## REMOVED Requirements
-
-### Requirement: Pixel Office scene
-
-**Reason**: The CEO Office, Agent Bar and road-separated room bands are replaced
-by the Office town, and content-packed room geometry is replaced by stable
-placement.
-
-**Migration**: See Office town scene, Stable Office placement and Office zoom
-levels. Qualified identity, stale-host and provider-absent behaviour carry over.
-
-### Requirement: Office pane-linked devices
-
-**Reason**: Pane devices around a desk are replaced by one seat per pane at a team
-table.
-
-**Migration**: See Office town scene. Exact pane targets, counts and chooser
-access for undrawn panes carry over.
-
-### Requirement: Office reception capacity
-
-**Reason**: Reception becomes a queue for blocked agents only.
-
-**Migration**: See Office agent locations. The bounded presentation with an exact
-overflow count and roster access carries over.
-
-### Requirement: Office state and room operations
-
-**Reason**: Agent locations change (done agents stay at their desk and idle agents
-use the lounge instead of the Agent Bar), and room operations gain moves.
-
-**Migration**: See Office agent locations, Office attention rail, Office agent peek
-and Office desk and agent moves. The browser-local seen rule, capability-gated room
-and seat creation through the shared creation coordinator, and the Docked/Floating
-Inspector preference carry over unchanged.
+- **WHEN** the user opens Office after Town is added
+- **THEN** Office shows the Pixel Office scene, settings and room actions it had
+  before

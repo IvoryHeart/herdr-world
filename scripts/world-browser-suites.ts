@@ -11,9 +11,13 @@ export const worldBrowserShards = [
     "HostsFilter.cold",
   ],
   ["HostsFilter.actions", "ProductionContexts.tree"],
-  ["HostsFilter.navigation", "ProductionContexts.graph"],
-  ["HostsFilter.creation", "ProductionContexts.office", "town/TownCanvas"],
-  ["HostsFilter.resources", "ProductionContexts.animated"],
+  [
+    "HostsFilter.navigation",
+    "ProductionContexts.graph",
+    "ProductionContexts.town",
+  ],
+  ["HostsFilter.creation", "ProductionContexts.office", "PixelOfficeCanvas"],
+  ["HostsFilter.resources", "ProductionContexts.animated", "town/TownCanvas"],
   [
     "HostsFilter.pending",
     "SharedViewCreation",

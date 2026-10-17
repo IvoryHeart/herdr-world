@@ -87,14 +87,14 @@ export type TownRendererDiagnostics = {
 declare global {
   interface Window {
     __HERDR_WORLD_FORCE_RENDERER_FAILURE__?: boolean;
-    __HERDR_WORLD_RENDERER__?: TownRendererDiagnostics;
+    __HERDR_TOWN_RENDERER__?: TownRendererDiagnostics;
   }
 }
 
 function diagnostics(): TownRendererDiagnostics {
   const enabled = worldRendererCountersEnabled();
-  if (enabled && window.__HERDR_WORLD_RENDERER__)
-    return window.__HERDR_WORLD_RENDERER__;
+  if (enabled && window.__HERDR_TOWN_RENDERER__)
+    return window.__HERDR_TOWN_RENDERER__;
   const value: TownRendererDiagnostics = {
     mounts: 0,
     destroys: 0,
@@ -114,7 +114,7 @@ function diagnostics(): TownRendererDiagnostics {
     animation: { characters: 0, monitors: 0, statuses: 0 },
     layout: null,
   };
-  if (enabled) window.__HERDR_WORLD_RENDERER__ = value;
+  if (enabled) window.__HERDR_TOWN_RENDERER__ = value;
   return value;
 }
 
@@ -887,7 +887,7 @@ export async function createTownRenderer(
       }
   };
 
-  const updateBubbles = (deskBlend: number) => {
+  const updateBubbles = () => {
     const scale = Math.min(4, Math.max(2, Math.round(camera.z * 1.5)));
     const wanted = new Set<string>();
     if (model && level !== "town")
@@ -895,17 +895,31 @@ export async function createTownRenderer(
         const agent = model.agents.get(actor.key);
         if (!agent) continue;
         const status = agent.semanticStatus;
+        const near = level === "room" || level === "desk";
+        // Working agents chat in short bursts: a typing bubble a third of the time.
+        const phase = clock * 0.35 + (townHash(actor.key) % 97) / 97;
+        const chatting =
+          near &&
+          !state.calm &&
+          !camera.reducedMotion &&
+          status === "working" &&
+          actor.mode === "seat" &&
+          phase - Math.floor(phase) < 0.33;
         const kind =
           status === "blocked"
             ? "blocked"
-            : deskBlend > 0.5 &&
-                status === "done" &&
+            : status === "done" &&
                 actor.mode === "seat" &&
                 !state.completionSeenKeys.has(agent.key)
               ? "done"
-              : deskBlend > 0.5 && status === "idle" && actor.mode === "stand"
+              : near && status === "idle" && actor.mode === "stand"
                 ? "idle"
-                : null;
+                : chatting
+                  ? (`typing${Math.floor(clock * 3) % 3}` as
+                      | "typing0"
+                      | "typing1"
+                      | "typing2")
+                  : null;
         if (!kind) continue;
         let headX = actor.x;
         let headY = actor.y - 20;
@@ -935,7 +949,8 @@ export async function createTownRenderer(
           bubbles.set(actor.key, bubble);
         }
         bubble.texture = textureOf(sprites.bubble[kind]);
-        const bubbleScale = kind === "blocked" && deskBlend < 0.5 ? 2 : scale;
+        const bubbleScale =
+          (kind === "blocked" || kind === "done") && !near ? 2 : scale;
         bubble.scale.set(bubbleScale);
         const bounce =
           kind === "blocked" && !camera.reducedMotion && !state.calm
@@ -1128,7 +1143,7 @@ export async function createTownRenderer(
     cull();
     updatePods(deskBlend, camera.z >= 0.6, lite, blink);
     updateActors(Math.max(deskBlend, townBlend(0.35, 0.6, camera.z)));
-    updateBubbles(deskBlend);
+    updateBubbles();
     drawEffects();
     app.renderer.render(app.stage);
     stats.level = level;

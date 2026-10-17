@@ -6,10 +6,7 @@ import { initializeLayoutPreferences } from "../layoutPreferences";
 import { initializeShortcutPreferences } from "../shortcutPreferences";
 import type { Pane, Tab, Workspace } from "../types";
 import { buildWorldObject } from "./worldObject";
-import {
-  OFFICE_PRESENTATION_BOUNDS,
-  projectWorldOffice,
-} from "./herdrOfficeProjection";
+import { projectWorldOffice } from "./herdrOfficeProjection";
 import { worldRuntimeStore } from "./runtimeStore";
 import WorldFoundationApp from "./WorldFoundationApp";
 import "../styles/tokens.css";
@@ -472,8 +469,8 @@ async function run() {
       (room) =>
         room.workspaceRef.connectionId === "alpha" &&
         room.workspaceRef.nativeId === "b",
-    )?.desks.length === Math.min(9, OFFICE_PRESENTATION_BOUNDS.desksPerRoom),
-    "Office did not present the created desk within its desk bound",
+    )?.desks.length === 8,
+    "Office exceeded eight displayed desks",
   );
   const betaRoom = document.querySelector<HTMLButtonElement>(
     '.world-new-seat-canvas-action[aria-label*="beta a"]',

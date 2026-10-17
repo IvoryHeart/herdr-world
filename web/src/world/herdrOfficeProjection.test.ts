@@ -261,16 +261,15 @@ describe("Pixel Office projection", () => {
     ).toBe(true);
   });
   test("an observed search selection reserves its omitted desk, pane and agent without expanding Office bounds", async () => {
-    const tabs = Array.from(
-      { length: OFFICE_PRESENTATION_BOUNDS.desksPerRoom + 12 },
-      (_, index) => tab(`tab-${index}`, index + 1),
+    const tabs = Array.from({ length: 20 }, (_, index) =>
+      tab(`tab-${index}`, index + 1),
     );
     const panes = tabs.map((entry, index) =>
       pane(entry.tab_id, "working", `Synthetic ${index}`),
     );
     const world = buildWorldObject([connection("beta", tabs, panes)], null);
     await prepareWorldOffice(world);
-    const selected = world.leaves[tabs.length - 1]!;
+    const selected = world.leaves[19]!;
     const before = projectWorldOffice(world, 1);
     expect(
       before.paneRoster.find(({ device }) => device.nodeId === selected.id)
@@ -460,14 +459,12 @@ describe("Pixel Office projection", () => {
   });
 
   test("seats only one bounded room agent per desk and reports exact omissions", () => {
-    const desks = OFFICE_PRESENTATION_BOUNDS.desksPerRoom;
-    const tabs = Array.from({ length: desks + 1 }, (_, index) =>
+    const tabs = Array.from({ length: 9 }, (_, index) =>
       tab(`tab-${index}`, index + 1),
     );
-    const total = 2 * desks + 2;
-    const panes = Array.from({ length: total }, (_, index) =>
+    const panes = Array.from({ length: 18 }, (_, index) =>
       pane(
-        index === total - 1 ? `tab-${desks}` : `tab-${index % desks}`,
+        index === 17 ? "tab-8" : `tab-${index % 8}`,
         index % 2 ? "unknown" : "working",
         `agent-${index}`,
         index,
@@ -483,22 +480,16 @@ describe("Pixel Office projection", () => {
     expect(room.roomAgents).toHaveLength(
       OFFICE_PRESENTATION_BOUNDS.roomAgentsPerRoom,
     );
-    const seated = room.roomAgents.filter(
-      ({ placement }) => placement === "seated",
-    );
-    expect(seated.length).toBeLessThanOrEqual(desks);
-    expect(new Set(seated.map(({ deskKey }) => deskKey)).size).toBe(
-      seated.length,
-    );
+    expect(
+      room.roomAgents.filter(({ placement }) => placement === "seated"),
+    ).toHaveLength(8);
     expect(room.omittedDeskCount).toBe(1);
-    expect(room.omittedAgentCount).toBe(
-      total - OFFICE_PRESENTATION_BOUNDS.roomAgentsPerRoom,
-    );
+    expect(room.omittedAgentCount).toBe(2);
     expect(office.coverage).toMatchObject({
       omittedDesks: 1,
-      omittedRoomAgents: total - OFFICE_PRESENTATION_BOUNDS.roomAgentsPerRoom,
+      omittedRoomAgents: 2,
     });
-    expect(office.roster).toHaveLength(total);
+    expect(office.roster).toHaveLength(18);
   });
 
   test("reports exact Office omissions when aggregate records are bounded", () => {
@@ -562,22 +553,16 @@ describe("Pixel Office projection", () => {
     });
   });
 
-  test("keeps mixed-status shared tabs truthful beyond the scene desk bound", () => {
-    const tabs = Array.from(
-      { length: OFFICE_PRESENTATION_BOUNDS.desksPerRoom + 1 },
-      (_, index) => tab(`tab-${index}`, index + 1),
+  test("keeps mixed-status shared tabs truthful beyond the eight-desk scene bound", () => {
+    const tabs = Array.from({ length: 9 }, (_, index) =>
+      tab(`tab-${index}`, index + 1),
     );
     const working = pane("tab-0", "working", "working", 1);
     const unknown = {
       ...pane("tab-0", "unknown", "unknown", 2),
       focused: true,
     };
-    const outside = pane(
-      `tab-${OFFICE_PRESENTATION_BOUNDS.desksPerRoom}`,
-      "working",
-      "outside",
-      3,
-    );
+    const outside = pane("tab-8", "working", "outside", 3);
     const office = projectWorldOffice(
       buildWorldObject(
         [connection("local", tabs, [unknown, working, outside])],
@@ -691,17 +676,14 @@ describe("Pixel Office projection", () => {
     });
     expect(office.rooms).toHaveLength(128);
     expect(office.roomRoster).toHaveLength(129);
-    expect(office.rooms[0].desks).toHaveLength(
-      Math.min(11, OFFICE_PRESENTATION_BOUNDS.desksPerRoom),
-    );
+    expect(office.rooms[0].desks).toHaveLength(8);
     expect(office.rooms[0].roomAgents).toHaveLength(16);
     expect(office.receptions[0].waitingAgents).toHaveLength(8);
     expect(office.barAgents).toHaveLength(10);
     expect(office.roster).toHaveLength(44);
     expect(office.coverage).toMatchObject({
       omittedRooms: 1,
-      omittedDesks:
-        Math.max(0, 11 - OFFICE_PRESENTATION_BOUNDS.desksPerRoom) + 1,
+      omittedDesks: 4,
       omittedRoomAgents: 2,
       omittedReceptionDesks: 1,
       omittedWaitingAgents: 8,

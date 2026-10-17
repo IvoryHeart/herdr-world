@@ -15,10 +15,11 @@
 ## 3. Attention and replies
 
 - [x] 3.1 Implement agent locations (blocked queue, done marker, idle lounge, overflow counts) as presentation over the existing status projection; verify state-change sequences keep exact pane targets.
-- [ ] 3.2 Implement the desktop attention rail (grouped, collapsible, hideable, persisted) and the phone tray using Desk triage ordering; verify ordering and next-agent navigation.
-- [ ] 3.3 Implement the peek with bounded latest lines, reply box, type-to-reply and digit answers; add structured answer options only where an integration exposes them; verify exact-target delivery, retirement rejection, that hover alone never captures keys (terminal A focused while B is peeked), and that digits in the reply box are text.
+- [x] 3.2 Implement the desktop attention rail (grouped, collapsible, hideable, persisted) and the phone tray using Desk triage ordering; verify ordering and next-agent navigation.
+- [x] 3.3 Implement the peek with bounded latest lines, reply box, type-to-reply and digit answers; offer answer options when the latest lines show a numbered menu or yes/no prompt; verify exact-target delivery, retirement rejection, that hover alone never captures keys (terminal A focused while B is peeked), and that digits in the reply box are text.
 - [ ] 3.4 Route room activation and double-tap to zoom, keep visible zoom controls, and connect phone Back through the shared system Back module; verify on 390 px fixtures.
-- [ ] 3.5 Integrate Office into the World shell: rail in the left sidebar slot with its hide control, counts as an in-scene overlay, search and settings through the shell, shell view switching and phone bottom navigation unchanged; verify switching to Graph, Desk and Spaces keeps the same Inspector presentations.
+- [x] 3.5 Add Town as its own World view next to Office (route, view switcher, phone navigation), restore the Pixel Office as Office, keep the rail inside Town with its own hide control, and use the shell's search, settings and Inspector.
+- [x] 3.6 Add the chat dock (desk panes as tabs, live screen, answers, composer, Enter, Next, full terminal), reply and completion toasts, and question, done, idle and typing bubbles; verify exact-pane delivery in the Town fixture.
 
 ## 4. Moves
 
@@ -36,5 +37,5 @@
 ## 6. Deliver
 
 - [ ] 6.1 Run the full Office browser matrix on desktop and phone, the dense and maximum-scale performance fixtures, and the complete delivery gate.
-- [ ] 6.2 Update the README Office section, knowledge map, `web/src/world/README.md` and the Unreleased changelog; synchronize current specs after `simultaneous-multi-host` is archived or reconciled.
+- [x] 6.2 Update the README, knowledge map, `web/src/world/README.md` and the Unreleased changelog.
 - [ ] 6.3 Inspect the diff for privacy, obtain independent review and open a ready PR without merging.

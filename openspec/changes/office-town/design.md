@@ -46,6 +46,10 @@ Owner decisions from the review:
 
 ## Decisions
 
+**Update 2026-10-17:** the owner kept the Pixel Office as Office and asked for the
+town as a separate **Town** view. "Office" in the decisions below means the Town
+view; replacing Office is no longer planned.
+
 ### 1. Keep the projection and Pixi; replace the scene
 
 The qualified projection (`herdrOfficeProjection.ts`), the semantic target layer
@@ -200,9 +204,10 @@ reception board or the rail:
   unless the user has pinned it by clicking, tapping or typing. A tap opens it
   pinned.
 - **Content**: the agent's name, room, desk and host; the latest bounded lines
-  from the existing pane observation; answer options when the agent integration
-  exposes a structured choice; a reply box; Open terminal; Profile and moves; and
-  Next, which goes to the next waiting agent.
+  from a `pane.read` of that pane (the question when it is waiting); answer
+  options when those lines show a numbered menu or a yes/no prompt; a reply box;
+  Chat, Terminal and Next, which goes to the next waiting agent. Profile and
+  moves join the peek with their tranches.
 - **Keys**: shortcuts work only when keyboard focus is in the Office scene or
   the peek itself; pointer hover alone never captures keys.
   - **Scene or peek focused** (not the reply box): digits pick an answer and other
@@ -226,9 +231,17 @@ then done agents newest first.
 - **Desktop**: a left rail grouped host → room → agent, with collapsible hosts.
   It can be hidden to a count chip, and that choice is remembered per browser.
 - **Phone**: a flat bottom tray.
-- **Actions**: hovering an entry peeks; activating it opens the terminal (on a
-  phone, it peeks). Activating a room entry zooms to that room, and N opens the
-  next agent.
+- **Actions**: hovering an entry peeks; activating it opens the chat dock, and N
+  opens the next agent.
+
+### 7a. Chat dock
+
+Activating an agent, desk or rail entry opens a dock for that exact pane, beside
+the town on desktop and full screen on phones. It shows the desk's panes as tabs,
+the selected pane's visible screen (re-read every 1.5 s while open), answer
+options, a composer that sends text then Enter, an Enter-only control, Next and
+Open full terminal, which uses the shared Inspector. Reads and input use the
+pane's own connection and runtime generation, checked before every call.
 
 ### 8. Desk and agent moves
 
@@ -317,9 +330,8 @@ Roamgate. The prototype's top bar was a stand-in. In production:
 - **No second top bar**: Office adds nothing above the scene. Its counts move into
   a compact overlay inside the scene; Jump to uses the shell's search; and Calm and
   Office settings join the shell's common menu.
-- **Desktop rail**: while Office is active, the attention rail occupies the shell's
-  left sidebar slot. It uses the sidebar's existing hide control, so a single
-  left column holds the hierarchy.
+- **Desktop rail**: the attention rail sits inside the Town view under the town
+  board, with its own hide control; the camera frames the town beside it.
 - **Terminals** open in the shared Inspector, Docked or Floating, so moving to
   Graph, Desk or Spaces keeps the same terminal windows.
 - **Roamgate files**: changes stay in World-owned layers plus the minimal marked
@@ -393,14 +405,14 @@ Dropped:
 
 ## Migration Plan
 
-Office is replaced in place behind the existing route; there is no feature flag.
-The work is delivered in the tranches listed in `tasks.md`, each keeping Office
-complete and usable. The settings for room alignment and long titles become
-obsolete and are removed, while the Inspector presentation preference is kept.
+Town is added as a new view at `/town`; Office and its route, settings and
+contract stay as they are. Town shares the Inspector presentation preference
+and adds a Town calm motion setting. The work is delivered in the tranches
+listed in `tasks.md`.
 
 ## Open Questions
 
 - Should building order follow the host filter order, or be draggable later?
-- Which agent integrations can expose structured choices today, beyond the
-  Claude Code permission prompt?
+- Should answer options come from agent integrations that expose structured
+  choices, rather than from the numbered menu on screen?
 - Should a later "tidy room" action compact free cells on demand?

@@ -1,4 +1,4 @@
-import type { OfficeCanvasAnchor } from "./officeCanvasAnchors";
+import type { OfficeCanvasAnchor } from "./PixelOfficeCanvas";
 import {
   type WorldConnectorTargetBounds,
   worldConnectorPath,

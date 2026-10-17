@@ -1,6 +1,6 @@
 import type { OfficeAgent } from "./herdrOfficeProjection";
 
-const MAX_VISIBLE_COMPLETIONS = 3;
+const MAX_VISIBLE_COMPLETIONS = 8;
 
 export function OfficeCompletionNotices({
   agents,

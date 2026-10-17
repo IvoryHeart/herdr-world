@@ -1,23 +1,33 @@
+export type OfficeRoomAlignment = "left" | "center" | "right";
+export type OfficeLongTitleMode = "expand" | "compact";
 export type OfficeInspectorPresentation = "docked" | "floating";
 
 export type OfficePreferences = {
+  roomAlignment: OfficeRoomAlignment;
+  longTitleMode: OfficeLongTitleMode;
   inspectorPresentation: OfficeInspectorPresentation;
-  /** Less ambient motion and shorter camera moves in the Office town. */
-  calm: boolean;
+  scrollLeft: number;
+  scrollTop: number;
+  /** Less ambient motion and shorter camera moves in Town. */
+  townCalm: boolean;
 };
 
 export const DEFAULT_OFFICE_PREFERENCES: OfficePreferences = Object.freeze({
+  roomAlignment: "left",
+  longTitleMode: "expand",
   inspectorPresentation: "floating",
-  calm: false,
+  scrollLeft: 0,
+  scrollTop: 0,
+  townCalm: false,
 });
 
 export const OFFICE_PREFERENCES_KEY = "officePreferences:v1";
 export const WORLD_OFFICE_PREFERENCES_CHANGED_EVENT =
   "herdr-world:office-preferences-changed";
+const MAX_OFFICE_SCROLL = 1_000_000;
 
 type OfficePreferenceStorage = Pick<Storage, "getItem" | "setItem">;
 
-/** Read Office preferences; fields from the retired Pixel Office are ignored. */
 export function readOfficePreferences(
   storage: OfficePreferenceStorage,
 ): OfficePreferences {
@@ -25,7 +35,22 @@ export function readOfficePreferences(
     const raw = storage.getItem(OFFICE_PREFERENCES_KEY);
     if (!raw) return { ...DEFAULT_OFFICE_PREFERENCES };
     const value = JSON.parse(raw) as Record<string, unknown>;
-    return admit(value);
+    return {
+      roomAlignment: isRoomAlignment(value.roomAlignment)
+        ? value.roomAlignment
+        : DEFAULT_OFFICE_PREFERENCES.roomAlignment,
+      longTitleMode: isLongTitleMode(value.longTitleMode)
+        ? value.longTitleMode
+        : DEFAULT_OFFICE_PREFERENCES.longTitleMode,
+      inspectorPresentation: isInspectorPresentation(
+        value.inspectorPresentation,
+      )
+        ? value.inspectorPresentation
+        : DEFAULT_OFFICE_PREFERENCES.inspectorPresentation,
+      scrollLeft: boundedScroll(value.scrollLeft),
+      scrollTop: boundedScroll(value.scrollTop),
+      townCalm: value.townCalm === true,
+    };
   } catch {
     return { ...DEFAULT_OFFICE_PREFERENCES };
   }
@@ -35,7 +60,22 @@ export function writeOfficePreferences(
   storage: OfficePreferenceStorage,
   preferences: OfficePreferences,
 ) {
-  const admitted = admit(preferences);
+  const admitted: OfficePreferences = {
+    roomAlignment: isRoomAlignment(preferences.roomAlignment)
+      ? preferences.roomAlignment
+      : DEFAULT_OFFICE_PREFERENCES.roomAlignment,
+    longTitleMode: isLongTitleMode(preferences.longTitleMode)
+      ? preferences.longTitleMode
+      : DEFAULT_OFFICE_PREFERENCES.longTitleMode,
+    inspectorPresentation: isInspectorPresentation(
+      preferences.inspectorPresentation,
+    )
+      ? preferences.inspectorPresentation
+      : DEFAULT_OFFICE_PREFERENCES.inspectorPresentation,
+    scrollLeft: boundedScroll(preferences.scrollLeft),
+    scrollTop: boundedScroll(preferences.scrollTop),
+    townCalm: preferences.townCalm === true,
+  };
   try {
     storage.setItem(OFFICE_PREFERENCES_KEY, JSON.stringify(admitted));
   } catch {
@@ -44,23 +84,22 @@ export function writeOfficePreferences(
   return admitted;
 }
 
-function admit(
-  value: Record<string, unknown> | OfficePreferences,
-): OfficePreferences {
-  const record = value as Record<string, unknown>;
-  return {
-    inspectorPresentation: isInspectorPresentation(record.inspectorPresentation)
-      ? record.inspectorPresentation
-      : DEFAULT_OFFICE_PREFERENCES.inspectorPresentation,
-    calm:
-      typeof record.calm === "boolean"
-        ? record.calm
-        : DEFAULT_OFFICE_PREFERENCES.calm,
-  };
+function isRoomAlignment(value: unknown): value is OfficeRoomAlignment {
+  return value === "left" || value === "center" || value === "right";
+}
+
+function isLongTitleMode(value: unknown): value is OfficeLongTitleMode {
+  return value === "expand" || value === "compact";
 }
 
 function isInspectorPresentation(
   value: unknown,
 ): value is OfficeInspectorPresentation {
   return value === "docked" || value === "floating";
+}
+
+function boundedScroll(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value)
+    ? Math.min(MAX_OFFICE_SCROLL, Math.max(0, Math.round(value)))
+    : 0;
 }

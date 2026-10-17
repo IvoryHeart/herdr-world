@@ -1,5 +1,6 @@
 import {
   memo,
+  useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -17,7 +18,7 @@ import type {
   OfficeCanvasHover,
   OfficeConversationAnchors,
   OfficeConversationAnchorTarget,
-} from "../officeCanvasAnchors";
+} from "../PixelOfficeCanvas";
 import {
   formatOfficeCost,
   formatOfficeModelNames,
@@ -43,7 +44,7 @@ import {
 } from "./townModel";
 import { townCarpetFor } from "./townPaint";
 import { createTownRenderer, type TownRendererHandle } from "./townRenderer";
-import { townCharacter, townLookFor } from "./townSprites";
+import { townPortrait } from "./townSprites";
 import { townTargets, type TownTarget } from "./townTargets";
 import { yieldWorldTask } from "../worldObject";
 import "./town.css";
@@ -69,21 +70,7 @@ const savedCameras = new Map<
   { x: number; y: number; z: number }
 >();
 
-const portraitCache = new Map<string, string>();
-function portrait(key: string) {
-  let url = portraitCache.get(key);
-  if (!url) {
-    url = townCharacter(
-      townLookFor(key),
-      "down",
-      0,
-      "stand",
-      false,
-    ).toDataURL();
-    portraitCache.set(key, url);
-  }
-  return url;
-}
+const portrait = townPortrait;
 
 function ago(since: number, now: number) {
   const seconds = Math.max(0, Math.round((now - since) / 1000));
@@ -105,9 +92,12 @@ export function TownCanvas({
   selectedRoomKey,
   observability,
   calm = false,
+  chrome = NO_CHROME,
 }: {
   observability: OfficeObservability;
   calm?: boolean;
+  /** Screen pixels covered by panels on wide screens (rail, chat dock). */
+  chrome?: { left: number; right: number };
   projection: HerdrOfficeProjection;
   selectedKey: string | null;
   completionSeenKeys: ReadonlySet<string>;
@@ -156,6 +146,7 @@ export function TownCanvas({
   const blockedSince = useRef(new Map<string, number>());
   const [hover, setHover] = useState<string | null>(null);
   const latest = useRef({
+    chrome,
     model,
     layout,
     selectedKey,
@@ -171,6 +162,7 @@ export function TownCanvas({
     onSelectedAnchorChange,
   });
   latest.current = {
+    chrome,
     calm,
     model,
     layout,
@@ -281,6 +273,19 @@ export function TownCanvas({
   const signs = useRef(new Map<string, HTMLElement>());
   const signsFor = useRef<TownLayout | null>(null);
   const lastCamera = useRef("");
+  const hoverEntry = useCallback(
+    (key: string | null, rect?: DOMRect) =>
+      latest.current.onHover?.(
+        key && rect
+          ? {
+              key,
+              clientX: rect.right,
+              clientY: rect.top + rect.height / 2,
+            }
+          : null,
+      ),
+    [],
+  );
   // Only on-screen buildings keep DOM cards, plaques and receptions.
   const [visible, setVisible] = useState<TownVisible>(NOTHING_VISIBLE);
   const visibleKey = useRef(NOTHING_VISIBLE.key);
@@ -339,14 +344,26 @@ export function TownCanvas({
     const width = host.clientWidth || 1;
     const height = host.clientHeight || 1;
     const narrow = width < 640;
+    // Phones frame the first building below any floating notices.
+    let covered = 0;
+    if (narrow) {
+      const top = host.getBoundingClientRect().top;
+      for (const overlay of host
+        .closest(".world-office-shell")
+        ?.querySelectorAll<HTMLElement>(".world-completion-notices") ?? [])
+        covered = Math.max(
+          covered,
+          overlay.getBoundingClientRect().bottom - top,
+        );
+    }
     return {
       width,
       height,
       inset: {
-        top: narrow ? 12 : 16,
-        right: narrow ? 12 : 72,
+        top: narrow ? Math.max(12, Math.min(height / 3, covered + 8)) : 16,
+        right: narrow ? 12 : Math.max(72, latest.current.chrome.right),
         bottom: narrow ? 12 : 16,
-        left: narrow ? 12 : 16,
+        left: narrow ? 12 : Math.max(16, latest.current.chrome.left),
       },
     };
   };
@@ -358,6 +375,12 @@ export function TownCanvas({
   ) => {
     const limits = renderer.camera.limits;
     if (!limits) return;
+    const record = () => {
+      const target = renderer.camera.flying ? null : renderer.camera;
+      homePose.current = target
+        ? { x: target.x, y: target.y, z: target.z }
+        : null;
+    };
     if (l.formFactor === "narrow") {
       const first = l.buildings[0];
       const x = (l.width * T) / 2;
@@ -375,8 +398,30 @@ export function TownCanvas({
         (l.height * T) / 2,
         limits.home,
       );
+    if (!animate) record();
+    else homePose.current = null;
     renderer.invalidate();
   };
+  const homePose = useRef<{ x: number; y: number; z: number } | null>(null);
+  const atHome = (renderer: TownRendererHandle) => {
+    const home = homePose.current;
+    const camera = renderer.camera;
+    return (
+      home !== null &&
+      Math.abs(camera.z - home.z) < home.z * 0.01 &&
+      Math.hypot(camera.x - home.x, camera.y - home.y) * camera.z < 4
+    );
+  };
+
+  // Panels opening or closing re-frame the town only if it is still at home.
+  useEffect(() => {
+    const renderer = rendererRef.current;
+    if (!renderer || !hostRef.current) return;
+    const wasHome = atHome(renderer);
+    renderer.setViewport(viewport());
+    if (wasHome) frameHome(renderer, latest.current.layout, false);
+    // viewport() reads the latest chrome.
+  }, [chrome.left, chrome.right]);
 
   const sceneState = () => ({
     selectedKey: latest.current.selectedKey,
@@ -421,8 +466,8 @@ export function TownCanvas({
       })
       .catch((error: unknown) => {
         if (disposed) return;
-        if (window.__HERDR_WORLD_RENDERER__)
-          window.__HERDR_WORLD_RENDERER__.lastError =
+        if (window.__HERDR_TOWN_RENDERER__)
+          window.__HERDR_TOWN_RENDERER__.lastError =
             error instanceof Error
               ? error.message.slice(0, 160)
               : "renderer failed";
@@ -806,6 +851,7 @@ export function TownCanvas({
           model={model}
           layout={layout}
           visible={visible}
+          onHoverEntry={hoverEntry}
           selectedKey={selectedKey}
           blockedSince={blockedSince.current}
           roomActions={roomActions}
@@ -908,6 +954,8 @@ function zoomToBuilding(
   renderer.invalidate();
 }
 
+const NO_CHROME = { left: 0, right: 0 };
+
 /* ---------- DOM world layer ---------- */
 
 type TownVisible = {
@@ -961,10 +1009,12 @@ const TownWorldLayer = memo(function TownWorldLayer({
   onActivateRoom,
   onFocusTarget,
   visible,
+  onHoverEntry,
 }: {
   model: TownModel;
   layout: TownLayout;
   visible: TownVisible;
+  onHoverEntry(key: string | null, rect?: DOMRect): void;
   selectedKey: string | null;
   blockedSince: ReadonlyMap<string, number>;
   roomActions: TownRoomActions;
@@ -1059,6 +1109,7 @@ const TownWorldLayer = memo(function TownWorldLayer({
                       selected={selectedKey === agent.key}
                       onSelect={onSelect}
                       onActivate={onActivate}
+                      onHoverEntry={onHoverEntry}
                     />
                   ))}
                   {queue.length > shown.length ? (
@@ -1407,6 +1458,7 @@ function ReceptionEntry({
   selected,
   onSelect,
   onActivate,
+  onHoverEntry,
 }: {
   agent: OfficeAgent;
   since: number;
@@ -1414,6 +1466,7 @@ function ReceptionEntry({
   selected: boolean;
   onSelect(key: string): void;
   onActivate(key: string): void;
+  onHoverEntry(key: string | null, rect?: DOMRect): void;
 }) {
   const ref = useRef<HTMLButtonElement | null>(null);
   useLayoutEffect(() => {
@@ -1429,6 +1482,10 @@ function ReceptionEntry({
       title={agent.taskSummary ?? agent.displayLabel}
       onClick={() => onSelect(agent.key)}
       onDoubleClick={() => onActivate(agent.key)}
+      onMouseEnter={(event) =>
+        onHoverEntry(agent.key, event.currentTarget.getBoundingClientRect())
+      }
+      onMouseLeave={() => onHoverEntry(null)}
     >
       <img src={portrait(agent.key)} alt="" width={28} height={40} />
       <span>{agent.displayLabel}</span>

@@ -7,20 +7,19 @@ are optional because the merged PR history records their source.
 
 ## [Unreleased]
 
-### Changed
+### Added
 
-- Office is now a pixel-art town. Each host is a building along a road, each
-  workspace a room on a carpet and each tab a team table with one seat per pane.
-  The default view shows a status card for every room and each host's reception,
-  where agents that need input queue oldest first; tap a room to zoom in, or zoom
-  out until the roofs come down. Desks stay where they are as tabs open and close,
-  rooms show up to 19 desks, and phones stack the buildings in one vertical flow.
-  Very large towns open at roof level, and room cards appear as you zoom in.
-- Idle agents take a break in their building's lounge, and finished agents keep a
-  completion marker at their desk until you inspect them.
-- The Office Economy board now lives on the town board, and a new Calm motion
-  setting reduces ambient motion and shortens camera moves. The room alignment
-  and long room title settings were removed with the old layout.
+- Add Town, a new view next to Office. Each host is a building along a road,
+  each workspace a room on a carpet and each tab a team table with one seat per
+  pane, with up to 19 desks per room. Agents that need you walk to their host's
+  reception and queue oldest first, idle agents take a break in the lounge, and
+  speech bubbles show questions, finished work and typing.
+- Town lists agents that need you in a needs-you rail (a bottom tray on phones).
+  Hover or tap an agent to read its question, pick an answer or reply; open the
+  chat dock to switch between a desk's panes and message an agent, with the full
+  terminal one tap away. Sent replies and finished agents show short notices.
+- Tap a room to zoom in; very large towns open at roof level. Phones stack the
+  buildings in one column. A Town calm motion setting reduces ambient motion.
 
 ## [0.2.4] - 2026-10-16
 

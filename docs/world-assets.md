@@ -1,43 +1,27 @@
-# Office town art and asset provenance
+# Pixel Office asset provenance
 
-## Office town
+The Herdr World Pixel Office port uses character assets traceable to the
+Claw-Empire repository at revision
+`66a24ea7df2435ef897c48c147deb7ec572c01c2`, under `public/sprites/`. The
+tracked PNGs are byte-identical to those source files. That source carries the
+Apache License 2.0 and the copyright notice `Copyright 2026 GreenSheep01201
+(seowongil@gmail.com)`. Herdr World has no build or runtime dependency on the
+reference workspace. The copied character sprites now live under
+`web/public/world/characters/`.
 
-The Office town's art is original work generated at runtime. Pixel definitions in
-[`townSprites.ts`](../web/src/world/town/townSprites.ts) draw characters,
-furniture, trees and status bubbles into canvases; [`townPaint.ts`](../web/src/world/town/townPaint.ts)
-paints the ground, building interiors, façades and roofs. The renderer uploads
-those canvases as textures. There are no binary art assets and no third-party
-art in the application.
+The reference workspace is historical provenance only; contributors do not
+need to clone or start another repository to build, test, or run Herdr World.
+The release notice bundle MUST include the Apache-2.0 license and this
+attribution. The adapted TypeScript geometry/drawing files are modified files
+and MUST carry a prominent modification notice as required by Apache-2.0
+Section 4(b); the provenance manifest will identify the exact source hashes,
+copied-file hashes, and notices.
 
-- **Style**: 3/4 top-down pixel art on a 16-pixel tile grid with nearest-neighbour
-  scaling, a one-pixel dark outline per sprite and shading derived from one base
-  colour per material.
-- **Characters**: 12 by 18 pixels plus outline, with down, up and side views
-  (left mirrored from right), and stand, four-frame walk, sit (two typing frames)
-  and carry poses. Appearance is a deterministic function of the agent's identity.
-- **Status colours** are reserved: working blue, waiting amber, done green, idle
-  sand and shell green, always paired with text or an accessible name.
-
-New art must be original, CC0 or MIT-licensed with a recorded source. Imported
-assets go under `web/public/world/` with their licence file and an entry in
-[THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md).
-
-PixiJS is pinned as an npm dependency. Its MIT licence is retained at
-`web/public/world/LICENSE-PixiJS.txt`.
-
-## Retired Pixel Office
-
-The previous Pixel Office used character sprites and drawing code adapted from
-the Claw-Empire repository at revision `66a24ea7df2435ef897c48c147deb7ec572c01c2`
-(Apache License 2.0, `Copyright 2026 GreenSheep01201 (seowongil@gmail.com)`). The
-Office town replaced that renderer, and the sprites and adapted drawing modules
-were removed from the application.
-
-The website film still embeds downscaled copies of those character sprites, so
-the release notice bundle keeps the Apache-2.0 licence in
-[`LICENSES/CLAW-EMPIRE-APACHE-2.0.txt`](../LICENSES/CLAW-EMPIRE-APACHE-2.0.txt)
-and the attribution in [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md). The
-copied sprites had these SHA-256 values:
+The historical reference Office directory was untracked in the source
+checkout at port time, so that local directory has no source commit to cite.
+The immutable Extension 001 approval commit authorizing this port is
+`7be916e3c4713582c72665cd787ef0300658ea26`. The Claw-Empire revision and
+these SHA-256 values identify the exact copied assets:
 
 | Asset | SHA-256 |
 | --- | --- |
@@ -53,3 +37,30 @@ copied sprites had these SHA-256 values:
 | `10-D-1.png` | `c4d22e7ccec30505873469a2e1cef76cf8435be84d71d3f201d84147de8f5738` |
 | `11-D-1.png` | `6e2c79f2fdb5afe8fd8c1537ba550a8ada9d301e4b493e4a528dbb37d3d4a549` |
 | `12-D-1.png` | `334595aa69f05095faa88227413dcddd6d1a2f177fbaeb625bd78f8dc7bcef34` |
+
+The geometry and drawing behavior are TypeScript adaptations of `office-geometry.js`,
+`office-drawing.js`, and the rendering portions of `office-scene.js`; their source hashes at port
+time were respectively:
+
+- `6ab54a94369e8695c3bac2cf94ac76bab62613563382e4a712944ff0ff70e028`
+- `56edfdd364ace64663e4a98c931d15d2ef5bfcb725acee8d8791e88f974fd210`
+- `f4975a6e840506a003f39153dfa6e32830d311624402980a1884ecb5351a1e3f`
+
+The adapted drawing code is organized under `web/src/world/` in
+`officeRoomDrawing.ts`, `officeReceptionDrawing.ts`, `officeCommonAreaDrawing.ts`,
+`officeDrawingPrimitives.ts`, `officeDrawingShared.ts` and `officeInteraction.ts`.
+`officeRenderer.ts` composes those modules and owns renderer lifetime; anchor,
+texture, diagnostics and type modules retain the same modification notice.
+This source reorganization changes neither asset bytes nor their provenance.
+
+PixiJS is pinned as an npm dependency. Its MIT license is retained at
+`web/public/world/LICENSE-PixiJS.txt`. The Claw-Empire Apache-2.0 license is a
+release requirement and is not inferred from PixiJS or any neighboring asset.
+
+## Town art
+
+The Town view draws only original pixel art generated at load time from compact
+definitions in `web/src/world/town/townSprites.ts` and `townPaint.ts`: ground,
+roads, buildings, furniture, speech bubbles and characters, whose appearance is
+derived from each agent's key. It ships no image files and no third-party art.
+

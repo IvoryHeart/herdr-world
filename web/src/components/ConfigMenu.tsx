@@ -8,8 +8,9 @@ import {
   Download,
   ExternalLink,
   Focus,
+  ALargeSmall,
   Activity,
-  Wind,
+  LayoutDashboard,
   Keyboard,
   LogOut,
   Palette,
@@ -19,6 +20,7 @@ import {
   Server,
   Settings,
   Wifi,
+  Wind,
 } from "lucide-react";
 import { APP_VERSION } from "../version";
 import { worldLocalStorage } from "../browserStorage";
@@ -294,7 +296,31 @@ export function ConfigMenu({
                 )}
               </div>
               <div className="config-section config-section-tiles-3">
-                <div className="config-title">Office</div>
+                <div className="config-title">Office and Town</div>
+                <label className="config-preference-row">
+                  <span className="config-item-icon">
+                    <LayoutDashboard size={15} />
+                  </span>
+                  <span className="config-item-copy">
+                    <strong>Room alignment</strong>
+                    <span>Align rooms within each row</span>
+                  </span>
+                  <select
+                    className="config-preference-select"
+                    aria-label="Office room alignment"
+                    value={officePreferences.roomAlignment}
+                    onChange={(event) =>
+                      updateOfficePreferences({
+                        roomAlignment: event.target
+                          .value as OfficePreferences["roomAlignment"],
+                      })
+                    }
+                  >
+                    <option value="left">Left</option>
+                    <option value="center">Centre</option>
+                    <option value="right">Right</option>
+                  </select>
+                </label>
                 <label className="config-preference-row">
                   <span className="config-item-icon">
                     <Focus size={15} />
@@ -318,25 +344,50 @@ export function ConfigMenu({
                     <option value="docked">Snap right</option>
                   </select>
                 </label>
+                <label className="config-preference-row">
+                  <span className="config-item-icon">
+                    <ALargeSmall size={15} />
+                  </span>
+                  <span className="config-item-copy">
+                    <strong>Long room titles</strong>
+                    <span>Expand the room or shorten its label</span>
+                  </span>
+                  <select
+                    className="config-preference-select"
+                    aria-label="Office long room titles"
+                    value={officePreferences.longTitleMode}
+                    onChange={(event) =>
+                      updateOfficePreferences({
+                        longTitleMode: event.target
+                          .value as OfficePreferences["longTitleMode"],
+                      })
+                    }
+                  >
+                    <option value="expand">Expand room</option>
+                    <option value="compact">Ellipsis</option>
+                  </select>
+                </label>
                 <div className="config-preference-row">
                   <span className="config-item-icon">
                     <Wind size={15} />
                   </span>
                   <div className="config-item-copy">
-                    <strong>Calm motion</strong>
+                    <strong>Town calm motion</strong>
                     <span>Less ambient motion and shorter camera moves</span>
                   </div>
                   <button
                     type="button"
                     role="switch"
-                    aria-label="Office calm motion"
-                    aria-checked={officePreferences.calm}
+                    aria-label="Town calm motion"
+                    aria-checked={officePreferences.townCalm}
                     className={
                       "settings-switch" +
-                      (officePreferences.calm ? " is-on" : "")
+                      (officePreferences.townCalm ? " is-on" : "")
                     }
                     onClick={() =>
-                      updateOfficePreferences({ calm: !officePreferences.calm })
+                      updateOfficePreferences({
+                        townCalm: !officePreferences.townCalm,
+                      })
                     }
                   >
                     <span />

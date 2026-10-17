@@ -15,17 +15,18 @@ qualified terminals, files, changes and agent history on desktop or mobile.
 
 [![Office view showing the selected Herdr host and its agents][desktop-office]][desktop-office]
 
-Office is the default view: a pixel-art town where each host is a building, each
-workspace a room on a carpet and each tab a team table with a seat per pane. The
-default view shows every room's status card and each host's reception, where
-agents that need you queue; zoom in to see agents working at their desks. Desk supports agent
+Office is the default view and groups agent work by host. Town shows the same
+agents as a pixel-art town: each host is a building, each workspace a room and
+each tab a team table. Agents that need you queue at reception and in a
+needs-you list; hover one to read its question and answer, or open a chat dock to
+talk to it. Desk supports agent
 triage across filtered hosts. Tree and Graph show the same filtered aggregate,
 while Spaces keeps one qualified workspace's terminal and repository workflow
 one click away. Hosts defaults to All hosts; filtering changes visibility while
 open Inspectors and pending operations keep their captured owners. Use Actions →
 New workspace or New tab in any visual view; Office also provides New room and
 New seat controls. Creation prepares its source terminal and opens the result in
-the current view, including for another ready host.
+the current view, including for another ready host and rooms with eight displayed desks.
 
 <!-- markdownlint-disable MD033 -->
 

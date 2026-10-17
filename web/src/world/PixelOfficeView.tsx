@@ -16,15 +16,19 @@ import {
   useStoreSelector,
 } from "../store";
 import { WORLD_OBSERVABILITY_UPDATED_EVENT } from "../workspaceResource";
-import { TownCanvas } from "./town/TownCanvas";
+import { PixelOfficeCanvas } from "./PixelOfficeCanvas";
 import type {
   OfficeCanvasAnchor,
   OfficeCanvasHover,
   OfficeConversationAnchors,
-} from "./officeCanvasAnchors";
+} from "./PixelOfficeCanvas";
 import { OfficeCanvasCallout } from "./OfficeCanvasCallout";
 import { OfficeCompletionNotices } from "./OfficeCompletionNotices";
 export { OfficeObservabilityDialog } from "./OfficeObservabilityDialog";
+import {
+  OfficeRoomActionsOverlay,
+  OfficeSemanticTargetsOverlay,
+} from "./OfficeRoomActionsOverlay";
 import {
   createOfficeProjector,
   type OfficeAgent,
@@ -36,9 +40,11 @@ import {
   type OfficeObservability,
 } from "./officeObservability";
 import { officeCalloutForKey, officePresentationKey } from "./officeSelection";
+import type { PublishedOfficeLayout } from "./officeLayout";
 import {
   readOfficePreferences,
   WORLD_OFFICE_PREFERENCES_CHANGED_EVENT,
+  writeOfficePreferences,
   type OfficePreferences,
 } from "./officePreferences";
 import type { WorldObject } from "./worldObject";
@@ -107,6 +113,9 @@ export default function PixelOfficeView({
     readOfficePreferences(worldLocalStorage),
   );
   const preferencesRef = useRef(preferences);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const [layout, setLayout] = useState<PublishedOfficeLayout | null>(null);
+  const [renderedRevision, setRenderedRevision] = useState(0);
   const [roomDialog, setRoomDialog] = useState<RoomDialog | null>(null);
   const [completionSeen, setCompletionSeen] = useState(() =>
     readCompletionSeen(worldLocalStorage),
@@ -163,6 +172,29 @@ export default function PixelOfficeView({
         WORLD_OFFICE_PREFERENCES_CHANGED_EVENT,
         refresh,
       );
+  }, []);
+
+  useEffect(() => {
+    const scroll = scrollRef.current;
+    if (!scroll) return;
+    const frame = requestAnimationFrame(() => {
+      scroll.scrollLeft = preferencesRef.current.scrollLeft;
+      scroll.scrollTop = preferencesRef.current.scrollTop;
+    });
+    const onScroll = () => {
+      const next = {
+        ...preferencesRef.current,
+        scrollLeft: scroll.scrollLeft,
+        scrollTop: scroll.scrollTop,
+      };
+      preferencesRef.current = next;
+      writeOfficePreferences(worldLocalStorage, next);
+    };
+    scroll.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      cancelAnimationFrame(frame);
+      scroll.removeEventListener("scroll", onScroll);
+    };
   }, []);
 
   const selectedKey = officePresentationKey(office, selectedId);
@@ -467,15 +499,18 @@ export default function PixelOfficeView({
           agents={unseenCompletions}
           onInspect={(agent) => openOfficeTerminal(agent.key)}
         />
-        <div className="town-stage">
-          <TownCanvas
+        <div ref={scrollRef} className="world-stage-scroll">
+          <PixelOfficeCanvas
             projection={office}
             selectedKey={selectedKey}
             completionSeenKeys={completionSeenKeys}
+            observability={observability}
             conversationTargets={conversationTargets}
             onSelect={selectOfficeKey}
             onActivateAgent={openOfficeTerminal}
             onActivateRoom={selectOfficeKey}
+            seatCreationStates={seatCreationStates}
+            onNewSeat={(roomKey) => void createSeat(roomKey)}
             onHover={setSceneHover}
             onSelectedAnchorChange={onSelectedAnchorChange}
             onAnchorChange={(anchors: OfficeConversationAnchors | null) => {
@@ -490,64 +525,85 @@ export default function PixelOfficeView({
                   : null,
               );
             }}
-            selectedRoomKey={selectedRoomKey}
-            observability={observability}
-            calm={preferences.calm}
-            roomActions={{
-              showCreateSeat,
-              canCreateSeat,
-              createSeatReason,
-              onCreateSeat: (roomKey) => void createSeat(roomKey),
-              showCreateRoom,
-              canCreateRoom,
-              createRoomReason,
-              onCreateRoom: (roomKey) =>
-                setRoomDialog({
-                  mode: "create",
-                  roomKey,
-                  ...(roomForKey(roomKey)
-                    ? {
+            onLayoutChange={setLayout}
+            onCanvasRendered={setRenderedRevision}
+            roomAlignment={preferences.roomAlignment}
+            longRoomTitleMode={preferences.longTitleMode}
+          >
+            {layout ? (
+              <>
+                <OfficeSemanticTargetsOverlay
+                  layout={layout}
+                  projection={office}
+                  renderedRevision={renderedRevision}
+                  selectedKey={selectedKey}
+                  onSelect={selectOfficeKey}
+                  onActivateAgent={openOfficeTerminal}
+                  onActivateDesk={openOfficeTerminal}
+                  onActivateRoom={selectOfficeKey}
+                />
+                <OfficeRoomActionsOverlay
+                  layout={layout}
+                  projection={office}
+                  renderedRevision={renderedRevision}
+                  selectedRoomKey={selectedRoomKey}
+                  showCreateSeat={showCreateSeat}
+                  canCreateSeat={canCreateSeat}
+                  createSeatReason={createSeatReason}
+                  onCreateSeat={(roomKey) => void createSeat(roomKey)}
+                  showCreateRoom={showCreateRoom}
+                  canCreateRoom={canCreateRoom}
+                  createRoomReason={createRoomReason}
+                  onCreateRoom={(roomKey) =>
+                    setRoomDialog({
+                      mode: "create",
+                      roomKey,
+                      ...(roomForKey(roomKey)
+                        ? {
+                            owner: {
+                              connectionId:
+                                roomForKey(roomKey)!.workspaceRef.connectionId,
+                              runtimeGeneration:
+                                roomForKey(roomKey)!.workspaceRef.generation,
+                            },
+                          }
+                        : {}),
+                    })
+                  }
+                  canRenameRoom={(roomKey) => canManageRoom(roomKey, "rename")}
+                  onRenameRoom={(roomKey) => {
+                    const room = roomForKey(roomKey);
+                    if (room) {
+                      setRoomDialog({
+                        mode: "rename",
+                        roomKey,
+                        label: room.displayLabel,
                         owner: {
-                          connectionId:
-                            roomForKey(roomKey)!.workspaceRef.connectionId,
-                          runtimeGeneration:
-                            roomForKey(roomKey)!.workspaceRef.generation,
+                          connectionId: room.workspaceRef.connectionId,
+                          runtimeGeneration: room.workspaceRef.generation,
                         },
-                      }
-                    : {}),
-                }),
-              canRenameRoom: (roomKey) => canManageRoom(roomKey, "rename"),
-              onRenameRoom: (roomKey) => {
-                const room = roomForKey(roomKey);
-                if (room) {
-                  setRoomDialog({
-                    mode: "rename",
-                    roomKey,
-                    label: room.displayLabel,
-                    owner: {
-                      connectionId: room.workspaceRef.connectionId,
-                      runtimeGeneration: room.workspaceRef.generation,
-                    },
-                  });
-                }
-              },
-              canCloseRoom: (roomKey) => canManageRoom(roomKey, "close"),
-              onCloseRoom: (roomKey) => {
-                const room = roomForKey(roomKey);
-                if (room) {
-                  setRoomDialog({
-                    mode: "close",
-                    roomKey,
-                    label: room.displayLabel,
-                    owner: {
-                      connectionId: room.workspaceRef.connectionId,
-                      runtimeGeneration: room.workspaceRef.generation,
-                    },
-                  });
-                }
-              },
-            }}
-          />
+                      });
+                    }
+                  }}
+                  canCloseRoom={(roomKey) => canManageRoom(roomKey, "close")}
+                  onCloseRoom={(roomKey) => {
+                    const room = roomForKey(roomKey);
+                    if (room) {
+                      setRoomDialog({
+                        mode: "close",
+                        roomKey,
+                        label: room.displayLabel,
+                        owner: {
+                          connectionId: room.workspaceRef.connectionId,
+                          runtimeGeneration: room.workspaceRef.generation,
+                        },
+                      });
+                    }
+                  }}
+                />
+              </>
+            ) : null}
+          </PixelOfficeCanvas>
         </div>
         {sceneHover && sceneHover.key !== selectedKey ? (
           <OfficeCanvasCallout

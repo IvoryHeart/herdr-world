@@ -53,22 +53,96 @@ collects acceptance counters without allocating debug node snapshots.
 
 ## Office
 
-Office is a town: each host is a building, each workspace a room on a carpet and
-each tab a team table with one seat per pane. See the `office-town` OpenSpec
-change for the contract.
+| Task | Open these owners | Focused evidence |
+| --- | --- | --- |
+| View controls, selection and framing | [PixelOfficeView.tsx](PixelOfficeView.tsx) composes the Office view; [PixelOfficeCanvas.tsx](PixelOfficeCanvas.tsx) mounts the canvas. In [world-office.css](world-office.css), start at the `Retained Pixel Office canvas` comment; `.world-office-*` frames the shell, while `.world-canvas-*`, `.world-room-*`, `.world-completion-*` and `.world-observability-*` cover the scene and controls. | [Canvas tests](PixelOfficeCanvas.test.ts), [Office browser fixture](PixelOfficeCanvas.browser.tsx) |
+| Herdr-to-Office data or room geometry | [herdrOfficeProjection.ts](herdrOfficeProjection.ts) projects qualified topology, pane devices and reception placement; `resolveOfficeGeometry` and `OfficeLayoutPublisher` in [officeLayout.ts](officeLayout.ts) place rooms and content. | [Projection tests](herdrOfficeProjection.test.ts), [geometry tests](officeGeometry.test.ts), [layout tests](officeLayout.test.ts) |
+| Pixi drawing, assets or room interaction | `createOfficeRenderer` in [officeRenderer.ts](officeRenderer.ts) owns scene lifetime, preparation, retained layers and scheduling; [officeRoomDrawing.ts](officeRoomDrawing.ts), [officeReceptionDrawing.ts](officeReceptionDrawing.ts) and [officeCommonAreaDrawing.ts](officeCommonAreaDrawing.ts) draw scene regions; [officeDrawingPrimitives.ts](officeDrawingPrimitives.ts) and [officeDrawingShared.ts](officeDrawingShared.ts) share artwork and labels; [officeInteraction.ts](officeInteraction.ts) owns pointer activation; [officeSemanticTargets.ts](officeSemanticTargets.ts) exposes separate desk, pane and agent targets; [officeRendererResources.ts](officeRendererResources.ts) owns renderer resources; [officeRoomActions.ts](officeRoomActions.ts) resolves room actions. | [Semantic target tests](officeSemanticTargets.test.ts), [Office browser fixture](PixelOfficeCanvas.browser.tsx), [room-action tests](officeRoomActions.test.ts) |
+| Office settings or Economy board | [officePreferences.ts](officePreferences.ts), [officeObservability.ts](officeObservability.ts) and [OfficeObservabilityDialog.tsx](OfficeObservabilityDialog.tsx). | [Preference tests](officePreferences.test.ts), [metrics tests](officeObservability.test.ts) |
+
+### Office rendering performance
+
+Office owns a retained layer per room plus background, reception, hallway and road
+layers. A scene signature selects changes; equivalent layers preserve their GPU
+resources. Static runs are cached in painter order around animated nodes, so
+characters and monitor/status effects keep moving without repainting every piece
+of furniture. Subtrees beneath translucent ancestors keep per-primitive opacity
+instead of being flattened. The cache admits at most four viewport areas of device pixels;
+fractional bounds are rounded outward before resolution and power-of-two backing
+size admission. Individual targets are bounded to 2048 pixels per axis. Pixi owns pooled backing
+textures. Renderer teardown releases layer resources and renderer-owned floor
+textures. Fractional floor origins retain vector tile edges for identical coverage.
+[officeArtwork.ts](officeArtwork.ts) shares immutable furniture GraphicsContexts
+with explicit reference ownership; the last consumer releases the context.
+Selection projections reuse equivalent room references, while overflowing rooms
+rerun bounded admission when selection changes or clears. Room versions make
+retained-layer signatures independent of full topology serialization. Qualified
+presentation-key aliases are indexed during cooperative preparation, so connector
+and selection renders do not rescan the complete pane roster.
+
+`OfficeScenePreparation` uses Pixi's preparation hooks in batches of at most 64
+nodes or four milliseconds, yielding ordinary tasks between batches. Each batch
+checks renderer lifetime and scene revision. These protected preparation hooks
+are tied to pinned Pixi 8.22.0: rerun preparation/cancellation and backing-size
+regressions when changing that pin. Animation waits for prepared scenes,
+stops for hidden documents or reduced motion, and resumes on visibility/preference
+changes. Terminal key, input and paste events defer decorative frames until a
+180 ms quiet interval; state updates and scrolling still paint independently of
+animation. The transport fixture covers both initially idle and continuously
+working agents, checking that motion resumes when terminal typing stops.
+
+`OfficeSemanticTargetsOverlay` admits controls by ordered qualified identity;
+refreshed labels, geometry, permissions and callbacks remain current without
+remounting unchanged controls or losing keyboard focus, including across topology
+insertions and removals. A flat identity-keyed list of memoized buttons admits
+16 controls per task and retains previously admitted identities on refresh. One native
+`inert` subtree flag gates readiness without updating every button; callback
+guards also reject programmatic activation before the scene is ready. Office subscribes only to
+the endpoint-creation inputs it consumes; room actions resolve through the
+qualified World index and still validate host, generation and native identity.
+
+Use `bun run test ./web/src/world/ProductionContexts.office.test.ts ./web/src/world/ProductionContexts.animated.test.ts --parallel=1 --test-name-pattern
+'office'` for the synthetic desktop/mobile transport workload. Keep native key
+scheduling, cold initialization, aggregate refresh and the strict Office/Graph p95
+<150 ms / maximum <450 ms acknowledgement budgets (tightened from 200/500 ms).
+These are regression ceilings, not optimization targets: preserve them as future
+graphics and animation are added, and lower them when repeated measurements
+demonstrate headroom. Do not relax the limits or exclude slow phases to make a
+change pass. On Linux, repeat with `taskset -c
+<cpu-a>,<cpu-b>` after checking the CPU/core mapping: separate cores and sibling
+logical CPUs measure different contention conditions. Run cases sequentially and
+report every run; affinity is a stress proxy, not a model of CI hardware. The
+canvas fixture also checks pixel equivalence, painter order, motion, retained
+controls and cleanup. For timing investigation, set `WORLD_TRACE_PREFIX` to a
+private temporary path; `WORLD_TIMINGS_ONLY=1` keeps acknowledgement/phase and
+Long Animation Frame evidence without the overhead of a full Chrome trace.
+
+Keep the existing text and character resources: BitmapText and a combined
+character atlas were measured and rejected because glyph/atlas preparation
+increased cold-start latency on the constrained workload. Lowering animation
+cadence or regrouping translucent paths would change presentation and is not a
+substitute for reducing work. A full OffscreenCanvas migration is unnecessary
+for the current workload; physics already runs off the main thread.
+
+## Town
+
+Town is a separate view next to Office: each host is a building, each workspace a
+room on a carpet and each tab a team table with one seat per pane. See the
+`office-town` OpenSpec change for the contract.
 
 | Task | Open these owners | Focused evidence |
 | --- | --- | --- |
-| View composition, selection, room dialogs and creation | [PixelOfficeView.tsx](PixelOfficeView.tsx) owns selection, terminal opening, room dialogs and seat/room creation and mounts [TownCanvas.tsx](town/TownCanvas.tsx). | [Town browser fixture](town/TownCanvas.browser.tsx), [room-action tests](officeRoomActions.test.ts) |
-| Herdr-to-Office data | [herdrOfficeProjection.ts](herdrOfficeProjection.ts) projects qualified topology and pane devices; [townModel.ts](town/townModel.ts) indexes presented rooms, desks, seats and per-room counts. | [Projection tests](herdrOfficeProjection.test.ts) |
+| View composition, room dialogs and creation | [TownView.tsx](TownView.tsx) owns taps, peeks, the chat dock, toasts, room dialogs and seat/room creation and mounts [TownCanvas.tsx](town/TownCanvas.tsx). | [Town browser fixture](town/TownCanvas.browser.tsx), [room-action tests](officeRoomActions.test.ts) |
+| Needs-you rail, peek and chat dock | [TownRail.tsx](town/TownRail.tsx), [TownPeek.tsx](town/TownPeek.tsx) and [TownDock.tsx](town/TownDock.tsx); [townChat.ts](town/townChat.ts) reads pane screens and sends replies through each pane's own connection and generation. | [Town browser fixture](town/TownCanvas.browser.tsx) |
+| Herdr-to-Town data | [herdrOfficeProjection.ts](herdrOfficeProjection.ts) projects qualified topology and pane devices with `TOWN_PRESENTATION_BOUNDS`; [townModel.ts](town/townModel.ts) indexes presented rooms, desks, seats and per-room counts. | [Projection tests](herdrOfficeProjection.test.ts) |
 | Town placement | [townLayout.ts](town/townLayout.ts) places buildings, rooms, desk cells, lounge and reception from native order, keeping desks in place while a scene is live. | [Layout tests](town/townLayout.test.ts) |
 | Camera and zoom levels | [townCamera.ts](town/townCamera.ts) owns pan, zoom about a point, flights and the town/overview/room/desk thresholds. | [Camera tests](town/townCamera.test.ts) |
 | Agent locations and movement | [townActors.ts](town/townActors.ts) seats, queues and walks agents (presentation only) with per-building pathfinding. | [Actor tests](town/townActors.test.ts) |
 | Pixi drawing and art | [townRenderer.ts](town/townRenderer.ts) owns renderer lifetime and per-frame updates; [townPaint.ts](town/townPaint.ts) bakes ground, interiors, façades and roofs; [townSprites.ts](town/townSprites.ts) holds the generated pixel art. See [world asset provenance](../../../docs/world-assets.md). | [Town browser test](town/TownCanvas.test.ts) |
 | Room cards, receptions, targets and room actions | The DOM world layer in [TownCanvas.tsx](town/TownCanvas.tsx) follows the camera; [townTargets.ts](town/townTargets.ts) builds accessible targets and [townHitTest.ts](town/townHitTest.ts) maps pointer hits to keys. Styles live in [town.css](town/town.css). | [Town browser test](town/TownCanvas.test.ts) |
-| Office settings or Economy board | [officePreferences.ts](officePreferences.ts) (Inspector opening, calm motion), [officeObservability.ts](officeObservability.ts) and [OfficeObservabilityDialog.tsx](OfficeObservabilityDialog.tsx). | [Preference tests](officePreferences.test.ts), [metrics tests](officeObservability.test.ts) |
+| Town settings or Economy board | [officePreferences.ts](officePreferences.ts) (shared Inspector opening, Town calm motion) and [officeObservability.ts](officeObservability.ts). | [Preference tests](officePreferences.test.ts), [metrics tests](officeObservability.test.ts) |
 
-### Office rendering performance
+### Town rendering performance
 
 The renderer draws through the shared World frame scheduler: state frames for
 camera, roof and walking changes, motion frames for ambient animation, which
@@ -94,28 +168,8 @@ agents of presented rooms and precomputing per-room counts. Accessible targets
 are admitted 16 per task and memoized by identity, label and geometry, so
 refreshes do not remount unchanged targets.
 
-Use `bun run test ./web/src/world/ProductionContexts.office.test.ts ./web/src/world/ProductionContexts.animated.test.ts --parallel=1 --test-name-pattern
-'office'` for the synthetic desktop/mobile transport workload. Keep native key
-scheduling, cold initialization, aggregate refresh and the strict Office/Graph p95
-<150 ms / maximum <450 ms acknowledgement budgets (tightened from 200/500 ms).
-These are regression ceilings, not optimization targets: preserve them as future
-graphics and animation are added, and lower them when repeated measurements
-demonstrate headroom. Do not relax the limits or exclude slow phases to make a
-change pass. On Linux, repeat with `taskset -c
-<cpu-a>,<cpu-b>` after checking the CPU/core mapping: separate cores and sibling
-logical CPUs measure different contention conditions. Run cases sequentially and
-report every run; affinity is a stress proxy, not a model of CI hardware. The
-town fixture also checks room cards, reception queueing, zooming into a room,
-walking and renderer lifetime across StrictMode and unmount. For timing investigation, set `WORLD_TRACE_PREFIX` to a
-private temporary path; `WORLD_TIMINGS_ONLY=1` keeps acknowledgement/phase and
-Long Animation Frame evidence without the overhead of a full Chrome trace.
-
-Keep the existing text and character resources: BitmapText and a combined
-character atlas were measured and rejected because glyph/atlas preparation
-increased cold-start latency on the constrained workload. Lowering animation
-cadence or regrouping translucent paths would change presentation and is not a
-substitute for reducing work. A full OffscreenCanvas migration is unnecessary
-for the current workload; physics already runs off the main thread.
+Town has its own dense acceptance case (`ProductionContexts.town.test.ts`) under
+the same 150 ms p95 / 450 ms maximum budget as Office.
 
 ## Tree
 

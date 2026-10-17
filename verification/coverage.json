@@ -1429,11 +1429,12 @@
     {
       "id": "Q39",
       "area": "Renderer and lazy-module lifetime",
-      "owner": "web/src/world/town/townRenderer.ts",
+      "owner": "web/src/world/officeRenderer.ts",
       "requirement": "openspec/specs/world-surfaces/spec.md",
       "properties": "Unmount disposes one renderer; late initialization cannot resurrect it; reload attempts stay bounded",
       "existingTests": [
-        "web/src/world/town/TownCanvas.test.ts",
+        "web/src/world/officeRendererResources.test.ts",
+        "web/src/world/PixelOfficeCanvas.test.ts",
         "web/src/lazyWithReload.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/186",
@@ -1447,7 +1448,8 @@
         "models": [],
         "contracts": ["verification/consumer-evidence.md"],
         "tests": [
-          "web/src/world/town/TownCanvas.test.ts",
+          "web/src/world/officeRendererResources.test.ts",
+          "web/src/world/PixelOfficeCanvas.test.ts",
           "web/src/lazyWithReload.test.ts"
         ],
         "checks": ["bun run check"],
@@ -1585,7 +1587,7 @@
       "properties": "Deterministic geometry/counts; renderer lifetime; bounded metric/cache work",
       "existingTests": [
         "web/src/world/ProductionContexts.test.ts",
-        "web/src/world/town/townLayout.test.ts",
+        "web/src/world/officeLayout.test.ts",
         "scripts/pages-content.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/186",
@@ -1600,7 +1602,7 @@
         "contracts": ["verification/consumer-evidence.md"],
         "tests": [
           "web/src/world/ProductionContexts.test.ts",
-          "web/src/world/town/townLayout.test.ts",
+          "web/src/world/officeLayout.test.ts",
           "scripts/pages-content.test.ts"
         ],
         "checks": ["bun run check"],

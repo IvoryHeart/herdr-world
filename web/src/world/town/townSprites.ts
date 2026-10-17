@@ -518,9 +518,31 @@ export function buildTownSprites() {
       R(16, 12, 10, 3, "#fffaf0");
     }),
     bubble: {
+      // A question mark: the agent is asking you something.
       blocked: bubble((R) => {
-        R(5, 2, 2, 4, "#e8820c");
-        R(5, 7, 2, 1, "#e8820c");
+        const c = "#e8820c";
+        R(4, 1, 3, 1, c);
+        R(3, 2, 1, 2, c);
+        R(7, 2, 1, 2, c);
+        R(6, 4, 1, 1, c);
+        R(5, 5, 1, 2, c);
+        R(5, 8, 1, 1, c);
+      }),
+      // Typing dots, one frame per lit dot.
+      typing0: bubble((R) => {
+        R(2, 5, 1, 1, "#4f7cc9");
+        R(5, 5, 1, 1, "#b9c3d1");
+        R(8, 5, 1, 1, "#b9c3d1");
+      }),
+      typing1: bubble((R) => {
+        R(2, 5, 1, 1, "#b9c3d1");
+        R(5, 5, 1, 1, "#4f7cc9");
+        R(8, 5, 1, 1, "#b9c3d1");
+      }),
+      typing2: bubble((R) => {
+        R(2, 5, 1, 1, "#b9c3d1");
+        R(5, 5, 1, 1, "#b9c3d1");
+        R(8, 5, 1, 1, "#4f7cc9");
       }),
       done: bubble((R) => {
         for (const [x, y] of [
@@ -584,4 +606,21 @@ export function townScreen(state: string, frame: number) {
     },
     null,
   );
+}
+
+const portraits = new Map<string, string>();
+/** A standing, front-facing portrait of an agent as an image URL. */
+export function townPortrait(key: string) {
+  let url = portraits.get(key);
+  if (!url) {
+    url = townCharacter(
+      townLookFor(key),
+      "down",
+      0,
+      "stand",
+      false,
+    ).toDataURL();
+    portraits.set(key, url);
+  }
+  return url;
 }

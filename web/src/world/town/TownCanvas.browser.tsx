@@ -4,7 +4,8 @@ import { createRoot } from "react-dom/client";
 import type { Pane, Tab, Workspace } from "../../types";
 import type { WorldRuntimeConnection } from "../runtimeStore";
 import { buildWorldObject, type WorldObject } from "../worldObject";
-import PixelOfficeView from "../PixelOfficeView";
+import TownView from "../TownView";
+import { bridge, type ConnectionClient } from "../../api";
 import "../world.css";
 
 /*
@@ -199,6 +200,62 @@ function topology(seed: number): Topology {
   return { connections, agentPanes };
 }
 
+/*
+ * A fake owner for every synthetic host: pane.read returns an invented screen
+ * (a menu question for blocked agents) and pane.send_input is recorded.
+ */
+const sent: { paneId: string; text: string; keys: string[] }[] = [];
+let statusOf: (paneId: string) => string = () => "working";
+const SCREENS = {
+  blocked: [
+    "● Updated the reception queue so the oldest agent waits first.",
+    "",
+    "  src/reception.ts  +18 -6",
+    "",
+    "Do you want to make this edit to src/reception.ts?",
+    "❯ 1. Yes",
+    "  2. Yes, and don't ask again this session",
+    "  3. No, and tell the agent what to do differently (esc)",
+  ],
+  working: [
+    "● Reading src/rooms.ts",
+    "● Running the layout tests",
+    "  ✓ 13 passed",
+    "● Writing src/townLayout.ts",
+    "✻ Thinking…",
+  ],
+};
+(bridge as unknown as { connection: unknown }).connection = (
+  connectionId: string,
+  generation: number,
+): ConnectionClient => ({
+  connectionId,
+  generation,
+  serverRuntimeGeneration: generation,
+  isCurrent: () => true,
+  acceptsServerGeneration: () => true,
+  call: async (method: string, params?: Record<string, unknown>) => {
+    const paneId = String(params?.pane_id ?? "");
+    if (method === "pane.read") {
+      const status = statusOf(paneId);
+      return {
+        text: (status === "blocked" ? SCREENS.blocked : SCREENS.working).join(
+          "\n",
+        ),
+      };
+    }
+    if (method === "pane.send_input") {
+      sent.push({
+        paneId,
+        text: String(params?.text ?? ""),
+        keys: (params?.keys as string[]) ?? [],
+      });
+      return {};
+    }
+    throw new Error(`unsupported ${method}`);
+  },
+});
+
 function worldFor(connections: WorldRuntimeConnection[]) {
   return buildWorldObject(connections, "local");
 }
@@ -219,6 +276,8 @@ async function run() {
   const base = topology(7);
   const blocked = base.agentPanes.filter((_, index) => index % 23 === 4);
   for (const pane of blocked) pane.agent_status = "blocked";
+  statusOf = (paneId) =>
+    base.agentPanes.find((pane) => pane.pane_id === paneId)?.agent_status ?? "";
   let setWorld: (world: WorldObject) => void = () => {};
   const opened: string[] = [];
   const selected: string[] = [];
@@ -229,7 +288,7 @@ async function run() {
       setWorld = set;
     }, []);
     return (
-      <PixelOfficeView
+      <TownView
         world={world}
         selectedId={selectedId}
         onSelect={(id) => {
@@ -250,7 +309,7 @@ async function run() {
     </StrictMode>,
   );
   await waitFor(
-    () => window.__HERDR_WORLD_RENDERER__?.ready === true,
+    () => window.__HERDR_TOWN_RENDERER__?.ready === true,
     "town renderer did not become ready",
   );
   await waitFor(
@@ -291,7 +350,7 @@ async function run() {
     return;
   }
 
-  const diagnostics = window.__HERDR_WORLD_RENDERER__!;
+  const diagnostics = window.__HERDR_TOWN_RENDERER__!;
   check(
     diagnostics.level === "overview",
     `default level is ${diagnostics.level}, expected overview`,
@@ -333,23 +392,87 @@ async function run() {
     "rooms with free spots need a new seat action",
   );
 
-  // Activating a reception entry selects that exact agent.
+  // The rail lists every agent that needs you.
+  const blockedCount = base.agentPanes.filter(
+    (p) => p.agent_status === "blocked",
+  ).length;
+  check(
+    host.querySelectorAll(".town-rail-tree .town-call-blocked").length ===
+      blockedCount,
+    `rail should list ${blockedCount} waiting agents`,
+  );
+
+  // A reception entry opens a peek on that agent's live question.
   const entry = host.querySelector<HTMLButtonElement>(".town-reception-entry")!;
   entry.click();
+  await waitFor(
+    () =>
+      host
+        .querySelector(".town-peek-screen")
+        ?.textContent?.includes("Do you want") === true,
+    "peek did not show the agent's question",
+  );
+  check(selected.length === 0, "a peek must not select or open an Inspector");
+  const answers = host.querySelectorAll<HTMLButtonElement>(
+    ".town-peek .town-answers button",
+  );
+  check(answers.length === 3, `expected 3 answers, found ${answers.length}`);
+  answers[0]!.click();
+  await waitFor(() => sent.length === 1, "answer was not sent");
+  check(
+    sent[0]!.text === "1" && sent[0]!.keys.length === 0,
+    `answer sent ${JSON.stringify(sent[0])}`,
+  );
+  const peekPane = sent[0]!.paneId;
+  check(
+    base.agentPanes.some(
+      (p) => p.pane_id === peekPane && p.agent_status === "blocked",
+    ),
+    "answer went to a pane that is not waiting",
+  );
+
+  // Chat opens the dock on the same pane; the composer sends with Enter.
+  host.querySelector<HTMLButtonElement>(".town-peek .town-hot")!.click();
+  await waitFor(
+    () => host.querySelector(".town-dock-screen") !== null,
+    "chat dock did not open",
+  );
+  const composer = host.querySelector<HTMLTextAreaElement>(
+    ".town-dock-composer textarea",
+  )!;
+  const setValue = Object.getOwnPropertyDescriptor(
+    HTMLTextAreaElement.prototype,
+    "value",
+  )!.set!;
+  setValue.call(composer, "Use the newest file");
+  composer.dispatchEvent(new Event("input", { bubbles: true }));
   await settle();
-  check(selected.length > 0, "reception entry did not select its agent");
+  host.querySelector<HTMLButtonElement>(".town-dock-composer button")!.click();
+  await waitFor(() => sent.length === 2, "chat message was not sent");
+  check(
+    sent[1]!.paneId === peekPane &&
+      sent[1]!.text.includes("Use the newest file") &&
+      sent[1]!.keys.includes("enter"),
+    `chat sent ${JSON.stringify(sent[1])}`,
+  );
+  host.querySelector<HTMLButtonElement>(".town-dock-back")!.click();
+  await waitFor(
+    () => host.querySelector(".town-dock") === null,
+    "dock did not close",
+  );
 
   // Room card activation zooms into the room.
   const zoomBefore = diagnostics.zoom;
   (roomCards[0] as HTMLButtonElement).click();
   await waitFor(
-    () => window.__HERDR_WORLD_RENDERER__!.zoom > zoomBefore * 1.3,
+    () => window.__HERDR_TOWN_RENDERER__!.zoom > zoomBefore * 1.3,
     "room card did not zoom in",
   );
   await waitFor(
-    () => window.__HERDR_WORLD_RENDERER__!.level !== "overview",
+    () => window.__HERDR_TOWN_RENDERER__!.level !== "overview",
     "zoomed room stayed at overview",
   );
+  check(selected.length === 0, "a room tap must not open an Inspector");
 
   // A blocked agent walks to reception when its status changes.
   const pane = base.agentPanes.find((p) => p.agent_status === "working")!;
@@ -367,8 +490,8 @@ async function run() {
   );
   await waitFor(
     () =>
-      window.__HERDR_WORLD_RENDERER__!.walking > 0 ||
-      window.__HERDR_WORLD_RENDERER__!.reducedMotion,
+      window.__HERDR_TOWN_RENDERER__!.walking > 0 ||
+      window.__HERDR_TOWN_RENDERER__!.reducedMotion,
     "blocked agent did not walk",
   );
   check(
@@ -388,7 +511,7 @@ async function run() {
   root.unmount();
   await settle();
   check(
-    window.__HERDR_WORLD_RENDERER__!.activeApplications === 0,
+    window.__HERDR_TOWN_RENDERER__!.activeApplications === 0,
     "unmount left a live renderer",
   );
   check(

@@ -155,6 +155,7 @@ export const productionContextGroups = [
   "tree",
   "graph",
   "office",
+  "town",
   "animated",
 ] as const;
 export type ProductionContextGroup = (typeof productionContextGroups)[number];
@@ -166,6 +167,7 @@ export const productionContextCases = [
   { view: "graph", entry: "" },
   { view: "office", entry: "" },
   { view: "office", entry: "animated" },
+  { view: "town", entry: "" },
 ].flatMap((item) => [1440, 390].map((width) => ({ ...item, width })));
 export function productionContextGroup({
   view,
