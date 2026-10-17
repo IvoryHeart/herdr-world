@@ -19,6 +19,7 @@ import { WORLD_OBSERVABILITY_UPDATED_EVENT } from "../workspaceResource";
 import { TownCanvas } from "./town/TownCanvas";
 import {
   sendTownReply,
+  uploadTownFiles,
   townChoices,
   townLeaf,
   townScreenLines,
@@ -791,6 +792,10 @@ export default function TownView({
               setPeek(null);
               openOfficeTerminal(peekAgent.key);
             }}
+            onInspector={() => {
+              setPeek(null);
+              void onSelect(peekAgent.nodeId);
+            }}
             onNext={
               nextCall(peekAgent.key)
                 ? () => openPeek(nextCall(peekAgent.key)!.agent.key, null)
@@ -837,6 +842,29 @@ export default function TownView({
                 : null
             }
             onTerminal={() => openOfficeTerminal(dockDevice.key)}
+            onInspector={() => {
+              setDock(null);
+              void onSelect(dockAgent?.nodeId ?? dockDevice.nodeId);
+            }}
+            onAttach={async (files) => {
+              if (!dockLeaf) return null;
+              try {
+                const text = await uploadTownFiles(dockLeaf, files);
+                toast(
+                  "ok",
+                  files.length === 1
+                    ? `Uploaded ${files[0]!.name}`
+                    : `Uploaded ${files.length} files`,
+                );
+                return text;
+              } catch (cause) {
+                toast(
+                  "error",
+                  `Upload failed: ${cause instanceof Error ? cause.message : String(cause)}`,
+                );
+                return null;
+              }
+            }}
           />
         ) : null}
         <div className="town-toasts" role="status" aria-live="polite">

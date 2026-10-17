@@ -727,6 +727,9 @@ export async function createTownRenderer(
     return look;
   };
 
+  const resting = (agent: { semanticStatus: string }) =>
+    agent.semanticStatus === "idle" || agent.semanticStatus === "unknown";
+
   const updatePods = (
     deskBlend: number,
     glow: boolean,
@@ -745,7 +748,10 @@ export async function createTownRenderer(
           if (top) {
             pod.lids[index]!.visible = present && !lite;
             pod.lids[index]!.texture = textureOf(
-              info.agent && info.state !== "off"
+              info.agent &&
+                info.state !== "off" &&
+                info.state !== "idle" &&
+                info.state !== "unknown"
                 ? (sprites.lid[kindOf(info.agent)] ?? sprites.lidOff)
                 : sprites.lidOff,
             );
@@ -763,7 +769,8 @@ export async function createTownRenderer(
                   "down",
                   typing,
                   "sit",
-                  blink(info.agent.key),
+                  // Idle agents doze with their eyes closed.
+                  resting(info.agent) || blink(info.agent.key),
                 ),
               );
               person.alpha = deskBlend;
@@ -823,7 +830,7 @@ export async function createTownRenderer(
 
   const screenCanvases = new Map<string, TownCanvas>();
   const screenCanvas = (stateName: string, frame: number) => {
-    const key = `${stateName}:${stateName === "working" ? frame % 7 : stateName === "off" ? 0 : frame % 2}`;
+    const key = `${stateName}:${stateName === "working" ? frame % 7 : stateName === "off" ? 0 : stateName === "idle" || stateName === "unknown" ? Math.floor(frame / 6) % 36 : frame % 2}`;
     let canvasValue = screenCanvases.get(key);
     if (!canvasValue)
       screenCanvases.set(
@@ -914,12 +921,14 @@ export async function createTownRenderer(
               ? "done"
               : level === "desk" && status === "idle" && actor.mode === "stand"
                 ? "idle"
-                : chatting
-                  ? (`typing${Math.floor(clock * 3) % 3}` as
-                      | "typing0"
-                      | "typing1"
-                      | "typing2")
-                  : null;
+                : near && status === "idle" && actor.mode === "seat"
+                  ? "sleep"
+                  : chatting
+                    ? (`typing${Math.floor(clock * 3) % 3}` as
+                        | "typing0"
+                        | "typing1"
+                        | "typing2")
+                    : null;
         if (!kind) continue;
         let headX = actor.x;
         let headY = actor.y - 20;

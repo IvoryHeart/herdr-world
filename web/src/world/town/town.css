@@ -1346,3 +1346,9 @@
     width: 460px;
   }
 }
+
+.town-dock .town-dock-attach {
+  min-width: 40px;
+  padding: 0 8px;
+  font-size: 16px;
+}

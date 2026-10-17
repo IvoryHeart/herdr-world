@@ -34,7 +34,12 @@ export function TownDock({
   onBack,
   onNext,
   onTerminal,
+  onInspector,
+  onAttach,
 }: {
+  onInspector(): void;
+  /** Upload files to the pane's host; resolves to the text to insert. */
+  onAttach(files: File[]): Promise<string | null>;
   title: string;
   where: string;
   agent: OfficeAgent | null;
@@ -51,6 +56,19 @@ export function TownDock({
 }) {
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileInput = useRef<HTMLInputElement>(null);
+  const attach = async (files: File[]) => {
+    if (!files.length || uploading) return;
+    setUploading(true);
+    const text = await onAttach(files);
+    setUploading(false);
+    if (text)
+      setDraft((current) =>
+        current && !/\s$/.test(current) ? `${current} ${text}` : current + text,
+      );
+    composer.current?.focus({ preventScroll: true });
+  };
   const screenRef = useRef<HTMLPreElement>(null);
   const follow = useRef(true);
   const composer = useRef<HTMLTextAreaElement>(null);
@@ -91,7 +109,19 @@ export function TownDock({
   const lines = (screen ?? "").replace(/\s+$/, "");
 
   return (
-    <aside className="town-dock" aria-label={`Chat with ${title}`}>
+    <aside
+      className="town-dock"
+      aria-label={`Chat with ${title}`}
+      onDragOver={(event) => {
+        if (canReply && event.dataTransfer.types.includes("Files"))
+          event.preventDefault();
+      }}
+      onDrop={(event) => {
+        if (!canReply || !event.dataTransfer.files.length) return;
+        event.preventDefault();
+        void attach([...event.dataTransfer.files]);
+      }}
+    >
       <header>
         <button
           type="button"
@@ -175,6 +205,27 @@ export function TownDock({
         </div>
       ) : null}
       <form className="town-dock-composer" onSubmit={submit}>
+        <input
+          ref={fileInput}
+          type="file"
+          multiple
+          hidden
+          onChange={(event) => {
+            const files = [...(event.currentTarget.files ?? [])];
+            event.currentTarget.value = "";
+            void attach(files);
+          }}
+        />
+        <button
+          type="button"
+          className="town-dock-attach"
+          aria-label="Attach files"
+          title="Upload files to this agent's host and add their paths"
+          disabled={!canReply || uploading}
+          onClick={() => fileInput.current?.click()}
+        >
+          {uploading ? "…" : "📎"}
+        </button>
         <textarea
           ref={composer}
           rows={1}
@@ -182,6 +233,12 @@ export function TownDock({
           disabled={!canReply}
           onChange={(event) => setDraft(event.target.value)}
           onKeyDown={keydown}
+          onPaste={(event) => {
+            const files = [...event.clipboardData.files];
+            if (!files.length || !canReply) return;
+            event.preventDefault();
+            void attach(files);
+          }}
           placeholder={
             canReply
               ? "Message the agent…"
@@ -205,10 +262,13 @@ export function TownDock({
         </button>
         <button
           type="button"
-          title="Terminal, files, changes and history"
-          onClick={onTerminal}
+          title="Files, changes and history"
+          onClick={onInspector}
         >
-          Open Inspector
+          Inspector
+        </button>
+        <button type="button" onClick={onTerminal}>
+          Terminal
         </button>
       </div>
     </aside>

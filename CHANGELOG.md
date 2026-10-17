@@ -17,8 +17,9 @@ are optional because the merged PR history records their source.
   speech bubbles show questions, finished work and typing.
 - Town lists agents that need you in a needs-you rail (a bottom tray on phones).
   Hover or tap an agent to read its question, pick an answer or reply; open the
-  chat dock to switch between a desk's panes and message an agent, with the full
-  terminal one tap away. Sent replies and finished agents show short notices.
+  chat dock to switch between a desk's panes, message an agent and attach files
+  (uploaded to the agent's host), with the Inspector and full terminal one tap
+  away. Idle agents doze at their desks. Sent replies and finished agents show short notices.
 - Town's + and − buttons step between the whole town, one building, one room and
   one desk. Tap a room to zoom in; very large towns open at roof level. Phones stack the
   buildings in one column. A Town calm motion setting reduces ambient motion.

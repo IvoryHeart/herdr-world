@@ -528,6 +528,17 @@ export function buildTownSprites() {
         R(5, 5, 1, 2, c);
         R(5, 8, 1, 1, c);
       }),
+      // Asleep at the desk.
+      sleep: bubble((R) => {
+        const c = "#6b7a8f";
+        R(3, 2, 4, 1, c);
+        R(5, 3, 1, 1, c);
+        R(4, 4, 1, 1, c);
+        R(3, 5, 4, 1, c);
+        R(7, 6, 2, 1, c);
+        R(8, 7, 1, 1, c);
+        R(7, 8, 2, 1, c);
+      }),
       // Typing dots, one frame per lit dot.
       typing0: bubble((R) => {
         R(2, 5, 1, 1, "#4f7cc9");
@@ -597,6 +608,9 @@ export function townScreen(state: string, frame: number) {
           [8, 2],
         ] as const)
           R(x, y, 1, 1, "#7be08f");
+      } else if (state === "idle" || state === "unknown") {
+        // A slow screensaver dot: the agent is not doing anything.
+        R(2 + (frame % 9), 2 + ((frame >> 1) % 4), 1, 1, "#33465c");
       } else if (state === "shell") {
         R(2, 2, 2, 1, "#7fbf7a");
         R(5, 2, 5, 1, "#7fbf7a");

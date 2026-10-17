@@ -447,7 +447,11 @@ async function run() {
   setValue.call(composer, "Use the newest file");
   composer.dispatchEvent(new Event("input", { bubbles: true }));
   await settle();
-  host.querySelector<HTMLButtonElement>(".town-dock-composer button")!.click();
+  host
+    .querySelector<HTMLButtonElement>(
+      '.town-dock-composer button[type="submit"]',
+    )!
+    .click();
   await waitFor(() => sent.length === 2, "chat message was not sent");
   check(
     sent[1]!.paneId === peekPane &&
@@ -460,6 +464,20 @@ async function run() {
     () => host.querySelector(".town-dock") === null,
     "dock did not close",
   );
+
+  // Inspector selects the agent, which opens World's Inspector (files,
+  // changes, history) the same way Office does.
+  host.querySelector<HTMLButtonElement>(".town-reception-entry")!.click();
+  await waitFor(
+    () => host.querySelector(".town-peek") !== null,
+    "peek did not reopen",
+  );
+  [...host.querySelectorAll<HTMLButtonElement>(".town-peek-foot button")]
+    .find((button) => button.textContent === "Inspector")!
+    .click();
+  await settle();
+  check(selected.length === 1, "Inspector did not select the agent");
+  selected.length = 0;
 
   // Room card activation zooms into the room.
   const zoomBefore = diagnostics.zoom;

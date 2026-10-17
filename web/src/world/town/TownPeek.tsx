@@ -39,10 +39,12 @@ export function TownPeek({
   onReply,
   onChat,
   onTerminal,
+  onInspector,
   onNext,
   onClose,
   onHold,
 }: {
+  onInspector(): void;
   agent: OfficeAgent;
   where: string;
   lines: readonly string[];
@@ -211,10 +213,13 @@ export function TownPeek({
         </button>
         <button
           type="button"
-          title="Terminal, files, changes and history"
-          onClick={onTerminal}
+          title="Files, changes and history"
+          onClick={onInspector}
         >
           Inspector
+        </button>
+        <button type="button" onClick={onTerminal}>
+          Terminal
         </button>
         {onNext ? (
           <button type="button" onClick={onNext}>
