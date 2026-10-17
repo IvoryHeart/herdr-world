@@ -44,6 +44,7 @@ import { TownComposer } from "./town/TownComposer";
 import { TownChooser } from "./town/TownChooser";
 import { TownPeek, townStatusText } from "./town/TownPeek";
 import {
+  nextTownCall,
   readTownRailCollapsed,
   TownRail,
   type TownCall,
@@ -811,9 +812,7 @@ export default function TownView({
     return null;
   };
   const nextCall = (currentKey: string | null) =>
-    calls.find(
-      (call) => call.agent.key !== currentKey && call.kind === "blocked",
-    ) ?? calls.find((call) => call.agent.key !== currentKey);
+    nextTownCall(calls, currentKey);
   const openPeek = (key: string, anchor: { x: number; y: number } | null) => {
     window.clearTimeout(peekTimer.current);
     setPeek({ key, anchor: sheetMode() ? null : anchor, pinned: true });

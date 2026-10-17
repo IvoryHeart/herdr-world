@@ -60,8 +60,16 @@ export function useSystemBack(
 }
 
 const GUARD = "herdrBack";
+// Pairs guards with the page entry below them, so a leftover guard reached by
+// Forward can continue Forward instead of returning to that page.
+const BASE = "herdrBackBase";
 const layers = new Set<Layer>();
 let openings = 0;
+let bases = 0;
+let previousState: unknown;
+// Set while continuing Forward past a leftover guard; if Forward could not
+// move, the next Back also skips the paired page entry, which looks the same.
+let forwardBase: string | undefined;
 // Whether a layer closed since the last reconcile other than by unmounting.
 let closedOnScreen = false;
 let reconcileScheduled = false;
@@ -80,6 +88,12 @@ function isGuard(state: unknown) {
  * without a user gesture (Chrome's back-button intervention), and a guard
  * re-pushed while handling Back would make the next Back skip the page.
  */
+function baseId(state: unknown): string | undefined {
+  if (typeof state !== "object" || state === null || !(BASE in state)) return;
+  const value = (state as Record<string, unknown>)[BASE];
+  return typeof value === "string" ? value : undefined;
+}
+
 function guardDepth(state: unknown) {
   if (!isGuard(state)) return 0;
   const depth = (state as Record<string, unknown>)[GUARD];
@@ -98,13 +112,20 @@ function reconcile() {
   reconcileScheduled = false;
   if (backPending) return;
   const depth = guardDepth(window.history.state);
+  if (layers.size > 0) forwardBase = undefined;
   if (layers.size > depth) {
-    const base: unknown = window.history.state;
+    const state: unknown = window.history.state;
+    let base: Record<string, unknown>;
+    if (depth === 0) {
+      base = {
+        ...(typeof state === "object" && state ? state : {}),
+        [BASE]: `${Date.now()}:${++bases}`,
+      };
+      window.history.replaceState(base, "");
+    } else base = { ...(state as Record<string, unknown>) };
     for (let next = depth + 1; next <= layers.size; next += 1)
-      window.history.pushState(
-        { ...(typeof base === "object" && base ? base : {}), [GUARD]: next },
-        "",
-      );
+      window.history.pushState({ ...base, [GUARD]: next }, "");
+    previousState = window.history.state;
   } else if (layers.size < depth && closedOnScreen) {
     // Layers closed on screen take their guards with them.
     backPending = true;
@@ -113,21 +134,44 @@ function reconcile() {
   closedOnScreen = false;
 }
 
-if (typeof window !== "undefined")
+if (typeof window !== "undefined") {
+  previousState = window.history.state;
   window.addEventListener("popstate", (event) => {
+    const from = previousState;
+    previousState = event.state;
     if (backPending) {
       backPending = false;
       reconcile();
       return;
     }
+    if (forwardBase !== undefined) {
+      const id = forwardBase;
+      forwardBase = undefined;
+      if (
+        layers.size === 0 &&
+        !isGuard(event.state) &&
+        baseId(event.state) === id
+      ) {
+        backPending = true;
+        window.history.back();
+        return;
+      }
+    }
     const depth = guardDepth(event.state);
     if (layers.size === 0) {
-      // A guard with nothing open (left below a route, or reached by
-      // Forward) returns to the page's own entry.
-      if (depth > 0) {
-        backPending = true;
-        window.history.go(-depth);
+      if (depth === 0) return;
+      // A leftover guard with nothing open, for example one left below a
+      // route opened from a layer. Keep moving the way the user went:
+      // Forward from its page (or a lower guard) continues Forward; Back
+      // returns to the page's own entry.
+      const id = baseId(event.state);
+      if (id !== undefined && baseId(from) === id && guardDepth(from) < depth) {
+        forwardBase = id;
+        window.history.forward();
+        return;
       }
+      backPending = true;
+      window.history.go(-depth);
       return;
     }
     if (layers.size <= depth) {
@@ -150,6 +194,7 @@ if (typeof window !== "undefined")
     }
     scheduleReconcile();
   });
+}
 
 /**
  * Takes the same step as the phone's Back while layers are open: closes the
@@ -174,5 +219,6 @@ export function pushRoute(state: Record<string, unknown>, url: URL) {
   if (isGuard(window.history.state))
     window.history.replaceState(state, "", url);
   else window.history.pushState(state, "", url);
+  previousState = window.history.state;
   scheduleReconcile();
 }

@@ -286,8 +286,20 @@ export function townChoices(lines: readonly string[]): TownChoice[] {
     }
     return choices.length >= 2 ? choices.slice(0, 6) : [];
   }
-  const tail = lines.slice(-3).join(" ");
-  return YES_NO.test(tail)
+  // A y/n prompt is active only when nothing but blank lines or key hints
+  // follows it, as with a numbered menu.
+  let prompt = -1;
+  for (let index = lines.length - 1; index >= 0; index -= 1)
+    if (YES_NO.test(lines[index]!)) {
+      prompt = index;
+      break;
+    }
+  const active =
+    prompt >= 0 &&
+    lines
+      .slice(prompt + 1)
+      .every((line) => !line.trim() || MENU_HINT.test(line));
+  return active
     ? [
         { key: "y", label: "Yes" },
         { key: "n", label: "No" },

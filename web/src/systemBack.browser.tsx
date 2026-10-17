@@ -212,6 +212,38 @@ async function run() {
   }
 
   {
+    // Two layers leave a lower guard below a route opened from them. Back
+    // skips it to the page; Forward must continue past it to the route.
+    const label = "route opened from stacked layers";
+    await start();
+    show(["terminal"]);
+    await settle();
+    show(["terminal", "composer"]);
+    await settle();
+    const url = new URL(location.href);
+    url.pathname = "/spaces";
+    pushRoute({ herdrFrom: "/office" }, url);
+    show([]);
+    await settle();
+    check(at() === "/spaces", `${label}: route not current`);
+    await userBack();
+    check(
+      at() === "/office" && !guarded(),
+      `${label}: Back from the route reached ${at()}`,
+    );
+    history.forward();
+    await settle();
+    check(
+      at() === "/spaces",
+      `${label}: Forward from Office stayed at ${at()}`,
+    );
+    await userBack();
+    check(at() === "/office", `${label}: second Back reached ${at()}`);
+    await userBack();
+    check(at() === "/graph", `${label}: Back did not leave Office`);
+  }
+
+  {
     const label = "on-screen Back steps like system Back";
     await start();
     show(["terminal", "composer"]);

@@ -13,6 +13,20 @@ export type TownCall = {
   roomLabel: string;
 };
 
+/**
+ * The agent Next moves to: the next waiting agent after the current one in
+ * the attention order, wrapping at the end, or the next finished one when
+ * no other agent is waiting. Repeated Next visits every agent in turn.
+ */
+export function nextTownCall(
+  calls: readonly TownCall[],
+  currentKey: string | null,
+): TownCall | null {
+  const at = calls.findIndex((call) => call.agent.key === currentKey);
+  const after = [...calls.slice(at + 1), ...calls.slice(0, Math.max(0, at))];
+  return after.find((call) => call.kind === "blocked") ?? after[0] ?? null;
+}
+
 const COLLAPSED_KEY = "townRailCollapsed:v1";
 /** The rail lists at most this many agents; the rest are counted. */
 const RAIL_LIMIT = 60;

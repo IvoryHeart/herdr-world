@@ -68,6 +68,18 @@ test("answers come only from the active menu at the bottom", () => {
       "↑/↓ to navigate · Enter to select",
     ]).map((choice) => choice.key),
   ).toEqual(["1", "2"]);
+  // A later prompt or output supersedes a y/n question too.
+  for (const later of [
+    "What branch name should I use?",
+    "Reading src/queue.ts",
+    "     Type a branch name",
+  ])
+    expect(townChoices(["Overwrite the file? (y/n)", later])).toEqual([]);
+  expect(
+    townChoices(["Overwrite the file? (y/n)", "Esc to cancel"]).map(
+      (c) => c.key,
+    ),
+  ).toEqual(["y", "n"]);
   expect(townChoices(["Overwrite the file? (y/n)"]).map((c) => c.key)).toEqual([
     "y",
     "n",
