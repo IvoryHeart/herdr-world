@@ -654,7 +654,7 @@ export function registerProductionContextTests(group: ProductionContextGroup) {
           // Canvas rendering improvements ratchet both view limits down;
           // keep cold initialization and refresh tails in both measurements.
           const latencyBudget =
-            view === "office" || view === "graph"
+            view === "office" || view === "town" || view === "graph"
               ? { p95: 150, maximum: 450 }
               : { p95: 200, maximum: 500 };
           expect(delays[Math.ceil(delays.length * 0.95) - 1]).toBeLessThan(

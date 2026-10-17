@@ -22,16 +22,16 @@ test("World suite splitting preserves every original viewport/operation/view cas
     expect(assigned.some((item) => hostFilterGroup(item) === group)).toBe(true);
 });
 
-test("production workload splitting preserves all fourteen original view/entry/viewport cases", () => {
-  expect(productionContextCases).toHaveLength(14);
+test("production workload splitting preserves all sixteen view/entry/viewport cases, including Town", () => {
+  expect(productionContextCases).toHaveLength(16);
   expect(
     new Set(productionContextCases.map((item) => JSON.stringify(item))).size,
-  ).toBe(14);
+  ).toBe(16);
   const assigned = productionContextGroups.flatMap((group) =>
     productionContextCases.filter(
       (item) => productionContextGroup(item) === group,
     ),
   );
-  expect(assigned).toHaveLength(14);
+  expect(assigned).toHaveLength(16);
   expect(new Set(assigned)).toEqual(new Set(productionContextCases));
 });

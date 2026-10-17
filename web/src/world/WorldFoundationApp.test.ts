@@ -235,18 +235,20 @@ describe("World view preference", () => {
     expect(parseWorldView("graph")).toBe("graph");
     expect(parseWorldView("spaces")).toBe("spaces");
     expect(parseWorldView("desk")).toBe("desk");
-    expect(parseWorldView("legacy-world")).toBe("office");
-    expect(parseWorldView(null)).toBe("office");
+    expect(parseWorldView("town")).toBe("town");
+    expect(parseWorldView("legacy-world")).toBe("town");
+    expect(parseWorldView(null)).toBe("town");
   });
 
   test("maps canonical paths without accepting arbitrary routes", () => {
-    expect(worldViewFromPath("/")).toBe("office");
+    expect(worldViewFromPath("/")).toBe("town");
+    expect(worldViewFromPath("/town")).toBe("town");
     expect(worldViewFromPath("/desk")).toBe("desk");
     expect(worldViewFromPath("/spaces")).toBe("spaces");
     expect(worldViewFromPath("/office")).toBe("office");
     expect(worldViewFromPath("/tree")).toBe("tree");
     expect(worldViewFromPath("/graph")).toBe("graph");
-    expect(worldViewFromPath("/other")).toBe("office");
+    expect(worldViewFromPath("/other")).toBe("town");
   });
 
   test("resolves each current top-tab owner independently of ambient focus with colliding IDs", () => {

@@ -124,6 +124,53 @@ cadence or regrouping translucent paths would change presentation and is not a
 substitute for reducing work. A full OffscreenCanvas migration is unnecessary
 for the current workload; physics already runs off the main thread.
 
+## Town
+
+Town is a separate view next to Office: each host is a building, each workspace a
+room on a carpet and each tab a team table with one seat per pane. See the
+`office-town` OpenSpec change for the contract.
+
+| Task | Open these owners | Focused evidence |
+| --- | --- | --- |
+| View composition, room dialogs and creation | [TownView.tsx](TownView.tsx) owns taps, peeks, replies through World's terminal composer, toasts, room dialogs and seat/room creation and mounts [TownCanvas.tsx](town/TownCanvas.tsx). | [Town browser fixture](town/TownCanvas.browser.tsx), [room-action tests](officeRoomActions.test.ts) |
+| Needs-you rail and peek | [TownRail.tsx](town/TownRail.tsx) and [TownPeek.tsx](town/TownPeek.tsx); [townChat.ts](town/townChat.ts) reads pane screens and sends one-tap answers through each pane's own connection and generation; [terminalComposerRequest.ts](terminalComposerRequest.ts) asks the pane's terminal to open its composer. | [Town browser fixture](town/TownCanvas.browser.tsx) |
+| Herdr-to-Town data | [herdrOfficeProjection.ts](herdrOfficeProjection.ts) projects qualified topology and pane devices with `TOWN_PRESENTATION_BOUNDS`; [townModel.ts](town/townModel.ts) indexes presented rooms, desks, seats and per-room counts. | [Projection tests](herdrOfficeProjection.test.ts) |
+| Town placement | [townLayout.ts](town/townLayout.ts) places buildings, rooms, desk cells, lounge and reception from native order, keeping desks in place while a scene is live. | [Layout tests](town/townLayout.test.ts) |
+| Camera and zoom levels | [townCamera.ts](town/townCamera.ts) owns pan, zoom about a point, flights and the town/overview/room/desk thresholds. | [Camera tests](town/townCamera.test.ts) |
+| Agent locations and movement | [townActors.ts](town/townActors.ts) seats, queues and walks agents (presentation only) with per-building pathfinding. | [Actor tests](town/townActors.test.ts) |
+| Pixi drawing and art | [townRenderer.ts](town/townRenderer.ts) owns renderer lifetime and per-frame updates; [townPaint.ts](town/townPaint.ts) bakes ground, interiors, façades and roofs; [townSprites.ts](town/townSprites.ts) holds the generated pixel art. See [world asset provenance](../../../docs/world-assets.md). | [Town browser test](town/TownCanvas.test.ts) |
+| Room cards, receptions, targets and room actions | The DOM world layer in [TownCanvas.tsx](town/TownCanvas.tsx) follows the camera; [townTargets.ts](town/townTargets.ts) builds accessible targets and [townHitTest.ts](town/townHitTest.ts) maps pointer hits to keys. Styles live in [town.css](town/town.css). | [Town browser test](town/TownCanvas.test.ts) |
+| Town settings or Economy board | [officePreferences.ts](officePreferences.ts) (shared Inspector opening, Town calm motion) and [officeObservability.ts](officeObservability.ts). | [Preference tests](officePreferences.test.ts), [metrics tests](officeObservability.test.ts) |
+
+### Town rendering performance
+
+The renderer draws through the shared World frame scheduler: state frames for
+camera, roof and walking changes, motion frames for ambient animation, which
+pause while the user types in a terminal and for reduced motion or calm mode.
+Ground is painted in 512-pixel chunks only when a chunk first comes into view,
+with deterministic per-tile randomness, and its trees and lamps join the scene
+with it. A building's interior, façade, roof and desks are baked the first time
+it is visible, one per frame within a five-millisecond budget. Tables and chairs
+are baked into the interior; seated people, screens and glow are created only
+from the room level for desks on screen. Repeating ground, floor, carpet and
+roof detail is drawn from small cached patterns. Paint canvases are CPU-backed
+so WebGL uploads never read back from the GPU, and sprite outlines are
+composited rather than read from the canvas.
+
+The DOM world layer keeps cards, plaques, signs and receptions only for
+buildings within half a viewport of the screen, and drops room cards outside
+the overview and room levels. A town with more than 48 rooms opens at roof
+level on desktop, where hundreds of cards would neither read nor composite
+cheaply.
+
+The town model reads the complete roster once per projection, keeping only
+agents of presented rooms and precomputing per-room counts. Accessible targets
+are admitted 16 per task and memoized by identity, label and geometry, so
+refreshes do not remount unchanged targets.
+
+Town has its own dense acceptance case (`ProductionContexts.town.test.ts`) under
+the same 150 ms p95 / 450 ms maximum budget as Office.
+
 ## Tree
 
 | Task | Open these owners | Focused evidence |

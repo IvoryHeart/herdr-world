@@ -2809,13 +2809,17 @@ async function run() {
         () => !!document.querySelector(`[aria-label="${title} controls"]`),
         `${title} controls did not mount`,
       );
-      await frame();
-      check(
-        document
-          .querySelector(".world-topbar-status")
-          ?.getAttribute("aria-label")
-          ?.includes("40 observed agents") ?? false,
+      // The status follows the mounted view's presented world; wait for it
+      // rather than sampling a single frame on a loaded runner.
+      await waitFor(
+        () =>
+          document
+            .querySelector(".world-topbar-status")
+            ?.getAttribute("aria-label")
+            ?.includes("40 observed agents") ?? false,
         `${title} counts do not share the beta filter`,
+      ).catch(() =>
+        check(false, `${title} counts do not share the beta filter`),
       );
       check(
         document.querySelectorAll(

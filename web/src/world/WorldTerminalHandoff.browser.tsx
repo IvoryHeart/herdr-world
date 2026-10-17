@@ -4333,6 +4333,63 @@ async function run() {
     () => document.querySelector('button[aria-label="Back to Office"]'),
     "mobile view switcher returns to Office before dismissing Inspectors",
   );
+  // The on-screen Back returns to the view in one tap even with Composer
+  // open; only the phone's own Back closes Composer first. Open Composer in
+  // the visible Inspector (never a parked terminal owner): focus its pane so
+  // it is the active pane, then open and find Composer inside that window.
+  const visibleInspector = () =>
+    [...document.querySelectorAll<HTMLElement>(".world-managed-window")].find(
+      (window) =>
+        window.getBoundingClientRect().width > 0 &&
+        !window.closest(".world-terminal-parking"),
+    );
+  // The pane cell that holds the visible window's live terminal.
+  const visiblePane = () =>
+    [
+      ...(visibleInspector()?.querySelectorAll<HTMLElement>("[data-pane-id]") ??
+        []),
+    ].find((pane) => pane.querySelector(".xterm"));
+  const visiblePaneId = () => visiblePane()?.dataset.paneId;
+  await until(
+    () => terminalInput(visiblePane() ?? document.createElement("div")),
+    "visible Inspector terminal before Back to Office",
+  );
+  // Select the pane the way a tap does: panes and windows activate on
+  // pointerdown, not on focus.
+  const visibleTerminal = visiblePane()!.querySelector<HTMLElement>(".xterm")!;
+  const terminalBox = visibleTerminal.getBoundingClientRect();
+  for (const type of ["pointerdown", "pointerup"])
+    visibleTerminal.dispatchEvent(
+      new PointerEvent(type, {
+        bubbles: true,
+        button: 0,
+        buttons: type === "pointerdown" ? 1 : 0,
+        pointerId: 9,
+        pointerType: "touch",
+        clientX: terminalBox.left + terminalBox.width / 2,
+        clientY: terminalBox.top + terminalBox.height / 2,
+      }),
+    );
+  terminalInput(visiblePane()!)!.focus();
+  await until(
+    () =>
+      !!visiblePaneId() &&
+      store.get().selectedPaneId === visiblePaneId() &&
+      !!visibleInspector()?.querySelector(
+        'button[aria-label="Open terminal input"]',
+      ),
+    () =>
+      `visible Inspector pane ${visiblePaneId()} active before Back to Office`,
+  );
+  visibleInspector()!
+    .querySelector<HTMLButtonElement>(
+      'button[aria-label="Open terminal input"]',
+    )!
+    .click();
+  await until(
+    () => !!visibleInspector()?.querySelector(".terminal-composer"),
+    "Composer opens in the visible Inspector before Back to Office",
+  );
   backToOffice.click();
   await until(
     () => !document.querySelector(".workspace-inspector"),
