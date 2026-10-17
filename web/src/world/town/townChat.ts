@@ -43,7 +43,10 @@ function textOf(result: unknown): string | null {
   return null;
 }
 
-/** The visible screen of one pane, refreshed while `active`. */
+/** Lines of recent output the peek reads, as the agent's latest chatter. */
+const PEEK_LINES = 150;
+
+/** One pane's recent output, refreshed while `active`. */
 export function useTownScreen(
   leaf: WorldLeafObject | null,
   active: boolean,
@@ -68,7 +71,9 @@ export function useTownScreen(
               "pane.read",
               {
                 pane_id: leaf.pane.pane_id,
-                source: "visible",
+                source: "recent",
+                lines: PEEK_LINES,
+                format: "text",
                 strip_ansi: true,
               },
               8_000,
@@ -105,6 +110,50 @@ export function townScreenLines(
   maxLines = 40,
 ): string[] {
   return screen ? questionFromScreen(screen, maxLines) : [];
+}
+
+export type TownLineKind = "text" | "tool" | "ok" | "busy";
+
+/** How the peek colours one line, as the agent's TUI marks it. */
+export function townLineKind(line: string): TownLineKind {
+  const head = line.trimStart();
+  if (/^[✓✔]|^(done|tests? pass)/i.test(head)) return "ok";
+  if (/^[✻✳✶✢✽·⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏*]\s*\S.*(…|\.\.\.)/.test(head)) return "busy";
+  if (
+    /^[⏺●•⎿└]|^(Read|Edit|Write|Bash|Update|Search|Ran|Explored|Edited)\b/.test(
+      head,
+    )
+  )
+    return "tool";
+  return "text";
+}
+
+/**
+ * Split a waiting agent's lines into its earlier chatter and the question at
+ * the bottom. With answer buttons shown, the menu lines are left out of the
+ * question so the card stays small.
+ */
+export function townQuestion(
+  lines: readonly string[],
+  hideChoices: boolean,
+): { chatter: string[]; question: string[] } {
+  const first = lines.findIndex(
+    (line, index) => index >= lines.length - 12 && NUMBERED.test(line),
+  );
+  const end = first < 0 ? lines.length : first;
+  // The question ends at the last line ending "?" above the menu, and starts
+  // where its sentence starts (a wrapped line begins in lower case).
+  let start = -1;
+  for (let index = end - 1; index >= Math.max(0, end - 4); index -= 1)
+    if (/\?\s*$/.test(lines[index]!)) {
+      start = index;
+      break;
+    }
+  if (start < 0) return { chatter: [...lines], question: [] };
+  while (start > 0 && start > end - 6 && !/^\s*[A-Z]/.test(lines[start]!))
+    start -= 1;
+  const question = hideChoices ? lines.slice(start, end) : lines.slice(start);
+  return { chatter: lines.slice(0, start), question };
 }
 
 const NUMBERED = /^\s*(?:[›❯>]\s*)?(\d)[.)]\s+(.{1,60}?)\s*$/;

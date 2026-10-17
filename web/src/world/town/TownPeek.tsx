@@ -6,7 +6,7 @@ import {
   type ReactNode,
 } from "react";
 import type { OfficeAgent } from "../herdrOfficeProjection";
-import type { TownChoice } from "./townChat";
+import { townLineKind, townQuestion, type TownChoice } from "./townChat";
 import { townPortrait } from "./townSprites";
 
 const STATUS: Record<OfficeAgent["semanticStatus"], string> = {
@@ -30,8 +30,9 @@ const typingTarget = (target: EventTarget | null) =>
     target.closest(".xterm, [role='dialog']:not(.town-peek)") !== null);
 
 /**
- * A hover card for one agent: its live screen and one-tap answers. Replies
- * open World's terminal composer, so typing and uploads use one window.
+ * A hover card for one agent: its latest chatter, the question it is asking,
+ * one-tap answers and a reply line. On the phone the reply line opens World's
+ * composer, so typing, keys and uploads use one window.
  */
 export function TownPeek({
   agent,
@@ -50,7 +51,10 @@ export function TownPeek({
   onClose,
   onHold,
   composer,
+  inlineReply,
 }: {
+  /** Type the reply in the card itself rather than opening the composer. */
+  inlineReply: boolean;
   /** World's composer for this pane; present while chatting. */
   composer?: ReactNode;
   onInspector(): void;
@@ -73,6 +77,14 @@ export function TownPeek({
   const card = useRef<HTMLDivElement>(null);
   const screen = useRef<HTMLPreElement>(null);
   const chatting = Boolean(composer);
+  const input = useRef<HTMLInputElement>(null);
+  const [draft, setDraft] = useState("");
+  const [sending, setSending] = useState(false);
+  useEffect(() => setDraft(""), [agent.key]);
+  const { chatter, question } =
+    agent.semanticStatus === "blocked"
+      ? townQuestion(lines, choices.length > 0 && canReply)
+      : { chatter: [...lines], question: [] };
   // Follow the newest lines, as Desk's cards do, unless the reader has
   // scrolled up to read earlier messages.
   const follow = useRef(true);
@@ -133,7 +145,10 @@ export function TownPeek({
       if (choice && canReply) {
         event.preventDefault();
         void onReply(choice.key, false);
+        return;
       }
+      // Any other typing goes straight into the reply line.
+      if (event.key.length === 1 && input.current) input.current.focus();
     };
     window.addEventListener("keydown", keydown);
     return () => window.removeEventListener("keydown", keydown);
@@ -188,10 +203,21 @@ export function TownPeek({
         }}
       >
         {lines.length
-          ? lines.join("\n")
+          ? chatter.map((line, index) => (
+              <span
+                key={index}
+                className={`town-line town-line-${townLineKind(line)}`}
+              >
+                {line}
+                {"\n"}
+              </span>
+            ))
           : loading
             ? "Reading the screen…"
             : (agent.taskSummary ?? "Nothing on screen yet.")}
+        {question.length ? (
+          <span className="town-question">{question.join("\n")}</span>
+        ) : null}
       </pre>
       {choices.length && canReply ? (
         <div className="town-answers" role="group" aria-label="Answers">
@@ -199,23 +225,59 @@ export function TownPeek({
             <button
               key={choice.key}
               type="button"
+              title={choice.label}
               onClick={() => void onReply(choice.key, false)}
             >
-              {choice.label}
+              <span>{choice.label}</span>
               <kbd>{index + 1}</kbd>
             </button>
           ))}
         </div>
       ) : null}
       {!chatting && canReply ? (
-        <button
-          type="button"
-          className="town-message-box"
-          aria-label={`Message ${agent.displayLabel}`}
-          onClick={onChat}
+        <form
+          className="town-reply"
+          onSubmit={(event) => {
+            event.preventDefault();
+            const text = draft.trim();
+            if (!inlineReply) {
+              onChat();
+              return;
+            }
+            if (!text || sending) return;
+            setSending(true);
+            void onReply(text, true).then((sent) => {
+              setSending(false);
+              if (sent) setDraft("");
+            });
+          }}
         >
-          Message {agent.displayLabel}…
-        </button>
+          {inlineReply ? (
+            <input
+              ref={input}
+              value={draft}
+              aria-label={`Reply to ${agent.displayLabel}`}
+              placeholder={`Reply to ${agent.displayLabel}…`}
+              autoComplete="off"
+              onChange={(event) => setDraft(event.target.value)}
+            />
+          ) : (
+            <button
+              type="button"
+              className="town-message-box"
+              aria-label={`Message ${agent.displayLabel}`}
+              onClick={onChat}
+            >
+              Reply to {agent.displayLabel}…
+            </button>
+          )}
+          <button
+            type="submit"
+            disabled={inlineReply && (!draft.trim() || sending)}
+          >
+            Send
+          </button>
+        </form>
       ) : null}
       <div className="town-peek-foot">
         <button

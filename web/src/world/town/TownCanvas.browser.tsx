@@ -437,13 +437,36 @@ async function run() {
     "answer went to a pane that is not waiting",
   );
 
-  // The message box: desktop opens the pane's terminal; the phone layout grows World's
-  // composer inside the peek, and Send reaches that pane only.
-  host.querySelector<HTMLButtonElement>(".town-message-box")!.click();
+  // The question sits in its own box above the answers.
+  check(
+    (
+      host.querySelector(".town-peek .town-question")?.textContent ?? ""
+    ).startsWith("Do you want"),
+    "the peek should box the agent's question",
+  );
+  // The reply line: desktop types in the card; the phone layout grows World's
+  // composer inside the peek. Either way Send reaches that pane only.
   if (!phone) {
-    await waitFor(() => opened.length === 1, "Reply did not open the terminal");
-    opened.length = 0;
+    const reply = host.querySelector<HTMLInputElement>(".town-reply input")!;
+    Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "value",
+    )!.set!.call(reply, "Use the newest file");
+    reply.dispatchEvent(new Event("input", { bubbles: true }));
+    await settle();
+    host
+      .querySelector<HTMLButtonElement>('.town-reply button[type="submit"]')!
+      .click();
+    await waitFor(() => sent.length === 2, "reply was not sent");
+    check(
+      sent[1]!.paneId === peekPane &&
+        sent[1]!.text.includes("Use the newest file") &&
+        sent[1]!.keys.includes("enter"),
+      `reply sent ${JSON.stringify(sent[1])}`,
+    );
+    check(opened.length === 0, "replying must not open the full terminal");
   } else {
+    host.querySelector<HTMLButtonElement>(".town-message-box")!.click();
     await waitFor(
       () => host.querySelector(".town-peek .terminal-composer-input") !== null,
       "Reply did not open the composer in the peek",

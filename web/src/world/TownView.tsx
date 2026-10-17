@@ -775,6 +775,7 @@ export default function TownView({
             onReply={(text, submit) =>
               reply(peekLeaf, peekAgent.displayLabel, text, submit)
             }
+            inlineReply={document.documentElement.dataset.layout !== "mobile"}
             onChat={() => openReply(peekAgent.key)}
             onTerminal={() => {
               setPeek(null);

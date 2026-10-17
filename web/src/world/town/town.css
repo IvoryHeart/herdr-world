@@ -1027,17 +1027,32 @@
 
 .town-answers {
   display: flex;
-  flex-wrap: wrap;
   gap: 6px;
   margin-top: 8px;
 }
 
+/* One row of short answers; the full label is the button's title. */
 .town-answers button {
-  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1 1 0;
+  min-width: 0;
   min-height: 36px;
-  padding: 5px 10px;
+  padding: 5px 8px;
   font-size: 13px;
-  text-align: left;
+}
+
+.town-answers button:first-child {
+  color: #1f1606;
+  background: #e3aa3a;
+}
+
+.town-answers button span {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .town-answers kbd {
@@ -1196,36 +1211,29 @@
 }
 
 @media (max-width: 640px) {
-  /* While chatting on a phone the composer owns the space: one row of answers,
-     no footer (the composer's close returns to the full peek). */
+  /* While chatting on a phone the composer owns the space: no footer (the
+     composer's close returns to the full peek). */
   .town-peek-chat .town-peek-foot {
     display: none;
   }
-
-  .town-peek-chat .town-answers {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-
-  .town-peek-chat .town-answers button {
-    flex: none;
-    max-width: 70vw;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
 }
 
-/* Looks like a text box; tapping it opens World's composer. */
-.town-peek .town-message-box {
-  display: block;
-  width: 100%;
+/* The reply line: an input with Send, as in a chat. On the phone the box opens
+   World's composer. */
+.town-reply {
+  display: flex;
+  gap: 6px;
   margin-top: 8px;
-  min-height: 40px;
+}
+
+.town-reply input,
+.town-peek .town-message-box {
+  flex: 1;
+  min-width: 0;
+  min-height: 38px;
   padding: 0 12px;
   text-align: left;
-  color: var(--town-muted);
+  color: var(--town-text);
   background: var(--town-term);
   border: 2px solid var(--town-edge);
   border-radius: 9px;
@@ -1234,5 +1242,45 @@
     400 14px "Rubik",
     system-ui,
     sans-serif;
+}
+
+.town-peek .town-message-box {
+  color: var(--town-muted);
   cursor: text;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.town-reply input::placeholder {
+  color: var(--town-muted);
+}
+
+.town-reply button[type="submit"] {
+  flex: none;
+  padding: 0 14px;
+  font-weight: 600;
+}
+
+/* The latest chatter, coloured as the agent's TUI marks it. */
+.town-line-tool {
+  color: #8b949e;
+}
+
+.town-line-ok {
+  color: #7be08f;
+}
+
+.town-line-busy {
+  color: #ffb547;
+}
+
+.town-question {
+  display: block;
+  margin: 6px 0 2px;
+  padding: 7px 9px;
+  color: #ffe0a8;
+  background: #1d1708;
+  border: 1px solid #5a4410;
+  border-radius: 6px;
 }

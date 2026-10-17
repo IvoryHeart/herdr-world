@@ -16,9 +16,10 @@ are optional because the merged PR history records their source.
   break in the lounge, and speech bubbles show questions, finished work and
   typing.
 - Town lists agents that need you in a needs-you rail (a bottom tray on phones).
-  Hover or tap an agent to read its question and pick an answer; on phones,
-  tapping the peek's message box opens World's composer (keys, attachments, Insert and Send) right in the
-  peek, and Inspector opens the agent's files, changes and history. Answers and finished agents show short notices.
+  Hover or tap an agent for a peek with its recent chatter, its question in a
+  highlighted box, one-tap answers and a reply line. On phones the reply line
+  opens World's composer (keys, attachments, Insert and Send) right in the
+  peek; Inspector opens the agent's files, changes and history. Answers and finished agents show short notices.
 - Town's + and − buttons step between the whole town, one building, one room and
   one desk. Tap a room to zoom in; very large towns open at roof level. Phones stack the
   buildings in one column. A Town calm motion setting reduces ambient motion.

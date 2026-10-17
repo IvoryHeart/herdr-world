@@ -162,7 +162,7 @@ collapsible host groups, and the user SHALL be able to hide it to a count and
 restore it; this choice SHALL persist per browser. On phones the list SHALL be a
 bottom tray that remains reachable while a peek or card is open. Hovering an
 entry SHALL open its peek, and activating an entry SHALL open that peek pinned,
-where its message box opens World's composer. A keyboard command SHALL open the next agent that
+where its reply line takes a reply. A keyboard command SHALL open the next agent that
 needs the user.
 The rail SHALL list a bounded number of entries and count the rest.
 
@@ -221,23 +221,33 @@ Opening the terminal from a peek SHALL follow the Inspector presentation prefere
   yes/no prompt
 - **THEN** the peek offers Reply and the terminal without answer buttons
 
-### Requirement: Town replies use World's terminal composer
+### Requirement: Town peeks show recent chatter and take replies
 
-Replying from Town, by the peek's Reply action, by activating an agent or desk,
-or by activating a rail entry, SHALL use World's own terminal composer for that
-exact pane. On the phone layout the peek SHALL grow that composer in place, with
+An agent's peek SHALL show the agent's recent output, read from the exact
+qualified pane, in a small box that scrolls back and follows the newest lines
+unless the user has scrolled up. A waiting agent's question SHALL be set apart
+from its earlier output, with its answers as one-tap buttons. The peek SHALL end
+with a reply line and Send. On desktop the reply line SHALL be typed in the peek
+itself and typing while a peek is pinned SHALL go to it. On the phone layout
+tapping the reply line SHALL grow World's own terminal composer in place, with
 its keys, attachments and the draft it shares with the pane's terminal, and the
-composer SHALL stay visible above the keyboard while the screen lines shrink. On
-desktop, where World types directly into terminals, Reply SHALL open the pane's
-terminal. Town SHALL NOT keep a separate text box of its own. The peek's Inspector action SHALL open
-World's Inspector on the agent's Files view, from which Changes and History are
-one tap away, using the same path as the shell's Actions menu. One-tap answers
-SHALL be sent only to the exact qualified pane, and the result SHALL be confirmed
-by a short notice; a finished agent SHALL announce itself once.
+composer SHALL stay visible above the keyboard while the screen lines shrink.
+The peek's Terminal action, and the composer's Direct mode, SHALL open the
+pane's full terminal. The peek's Inspector action SHALL open World's Inspector
+on the agent's Files view, from which Changes and History are one tap away,
+using the same path as the shell's Actions menu. Answers and replies SHALL be
+sent only to the exact qualified pane, and the result SHALL be confirmed by a
+short notice; a finished agent SHALL announce itself once.
+
+#### Scenario: Reply from a desktop peek
+
+- **WHEN** the user types in a waiting agent's peek and presses Send
+- **THEN** the text and Enter reach that agent's pane and the terminal does not
+  open
 
 #### Scenario: Reply to a waiting agent on a phone
 
-- **WHEN** the user taps Reply in a waiting agent's peek
+- **WHEN** the user taps the reply line in a waiting agent's peek
 - **THEN** the peek shows World's composer for that pane without opening the
   terminal, and the keyboard does not cover the message field or Send
 
