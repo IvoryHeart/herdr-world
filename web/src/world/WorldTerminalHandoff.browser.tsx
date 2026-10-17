@@ -626,9 +626,9 @@ async function run() {
       getComputedStyle(seat).cursor === "not-allowed"
     );
   }, "browser-local Office creation controls with shared pending endpoint state");
-  const pendingCreationSceneRenders =
-    window.__HERDR_WORLD_RENDERER__!.sceneRenders;
   initialTerminalAttach.resolve();
+  // Town creation affordances are DOM controls over the scene, so their
+  // enabled state is the readiness signal; no canvas repaint is involved.
   await until(
     () =>
       document.querySelector<HTMLButtonElement>(".world-new-seat-canvas-action")
@@ -636,9 +636,7 @@ async function run() {
       document.querySelector<HTMLButtonElement>(".world-new-room-canvas-action")
         ?.disabled === false &&
       document.querySelector<HTMLButtonElement>(".tabbar-add")?.disabled ===
-        false &&
-      window.__HERDR_WORLD_RENDERER__!.sceneRenders >
-        pendingCreationSceneRenders,
+        false,
     "browser-local Office room, seat and tab-strip actions",
   );
   check(

@@ -1,7 +1,7 @@
 import type {
   OfficeCanvasAnchor,
   OfficeCanvasAnchors,
-} from "./PixelOfficeCanvas";
+} from "./officeCanvasAnchors";
 
 export type WorldConnectorTargetBounds = {
   left: number;

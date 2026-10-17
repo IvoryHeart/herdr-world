@@ -1,0 +1,407 @@
+window.__HERDR_WORLD_RENDERER_DEBUG__ = true;
+import { StrictMode, useEffect, useState } from "react";
+import { createRoot } from "react-dom/client";
+import type { Pane, Tab, Workspace } from "../../types";
+import type { WorldRuntimeConnection } from "../runtimeStore";
+import { buildWorldObject, type WorldObject } from "../worldObject";
+import PixelOfficeView from "../PixelOfficeView";
+import "../world.css";
+
+/*
+ * Synthetic Office town fixture. `?mode=test` runs checks and posts them to
+ * /result; `?mode=preview` keeps running with changing statuses for review.
+ * Every host, workspace and agent name here is invented.
+ */
+
+const params = new URL(location.href).searchParams;
+const mode = params.get("mode") ?? "test";
+const scale = params.get("scale") ?? "typical";
+const failures: string[] = [];
+const check = (condition: boolean, message: string) => {
+  if (!condition) failures.push(message);
+};
+const settle = () => new Promise((resolve) => setTimeout(resolve, 50));
+async function waitFor(condition: () => boolean, message: string) {
+  for (let index = 0; index < 400; index += 1) {
+    if (condition()) return;
+    await settle();
+  }
+  throw new Error(message);
+}
+
+function random(seed: number) {
+  let a = seed | 0;
+  return () => {
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+const HOSTS = [
+  {
+    id: "local",
+    label: "atlas",
+    rooms: [
+      "orbit",
+      "harbor",
+      "meadow",
+      "lantern",
+      "summit",
+      "delta",
+      "quarry",
+      "willow",
+    ],
+  },
+  {
+    id: "build",
+    label: "nova",
+    rooms: [
+      "gateway",
+      "ledger",
+      "canvas",
+      "pocket",
+      "compass",
+      "keystone",
+      "relay",
+      "almanac",
+    ],
+  },
+  {
+    id: "lab",
+    label: "lab",
+    rooms: [
+      "prism",
+      "sextant",
+      "archive",
+      "notebook",
+      "forge",
+      "bench",
+      "manuscript",
+      "sandbox",
+    ],
+  },
+];
+const AGENTS = ["claude", "codex", "gemini"];
+const NAMES = [
+  "Mira",
+  "Juno",
+  "Theo",
+  "Ivy",
+  "Sol",
+  "Pip",
+  "Rae",
+  "Ezra",
+  "Lux",
+  "Nia",
+  "Kai",
+  "Bo",
+  "Wren",
+  "Odin",
+  "Fay",
+  "Ada",
+  "Moe",
+  "Lyn",
+  "Tess",
+  "Ari",
+];
+const STATUSES = [
+  "working",
+  "working",
+  "working",
+  "working",
+  "working",
+  "done",
+  "idle",
+  "working",
+];
+
+type Topology = { connections: WorldRuntimeConnection[]; agentPanes: Pane[] };
+
+function topology(seed: number): Topology {
+  const r = random(seed);
+  const agentPanes: Pane[] = [];
+  const connections = HOSTS.map((host): WorldRuntimeConnection => {
+    const roomNames =
+      scale === "max"
+        ? host.rooms
+        : host.rooms.slice(0, 5 + Math.floor(r() * 4));
+    const workspaces: Workspace[] = [];
+    const tabs: Tab[] = [];
+    const panes: Pane[] = [];
+    roomNames.forEach((roomName, roomIndex) => {
+      const workspaceId = `${host.id}-${roomName}`;
+      const deskCount =
+        scale === "max"
+          ? 11 + Math.floor(r() * 5)
+          : 3 + Math.floor(r() * r() * 13);
+      let paneTotal = 0;
+      for (let d = 0; d < deskCount; d += 1) {
+        const tabId = `${workspaceId}-tab-${d}`;
+        const paneCount =
+          scale === "max" ? 3 + Math.floor(r() * 2) : 2 + Math.floor(r() * 3);
+        const agents = Math.min(paneCount, 1 + (r() < 0.55 ? 1 : 0));
+        tabs.push({
+          tab_id: tabId,
+          workspace_id: workspaceId,
+          number: d + 1,
+          label: `task ${d + 1}`,
+          focused: d === 0,
+          pane_count: paneCount,
+          agent_status: "working",
+        });
+        for (let p = 0; p < paneCount; p += 1) {
+          const isAgent = p < agents;
+          const name = NAMES[Math.floor(r() * NAMES.length)]!;
+          const pane: Pane = {
+            pane_id: `${tabId}-pane-${p}`,
+            terminal_id: `${tabId}-terminal-${p}`,
+            workspace_id: workspaceId,
+            tab_id: tabId,
+            focused: p === 0,
+            agent: isAgent ? AGENTS[Math.floor(r() * AGENTS.length)]! : "",
+            agent_status: isAgent
+              ? STATUSES[Math.floor(r() * STATUSES.length)]!
+              : "",
+            task_summary: isAgent ? `${name} on ${roomName}` : undefined,
+            revision: 1,
+          };
+          panes.push(pane);
+          if (isAgent) agentPanes.push(pane);
+        }
+        paneTotal += paneCount;
+      }
+      workspaces.push({
+        workspace_id: workspaceId,
+        number: roomIndex + 1,
+        label: roomName,
+        focused: roomIndex === 0,
+        pane_count: paneTotal,
+        tab_count: deskCount,
+        active_tab_id: `${workspaceId}-tab-0`,
+        agent_status: "working",
+      });
+    });
+    return {
+      connectionId: host.id,
+      label: host.label,
+      source: "saved-profile",
+      isDefault: host.id === "local",
+      state: "ready",
+      generation: 3,
+      snapshotGeneration: 3,
+      stale: false,
+      actionable: true,
+      snapshot: { workspaces, tabs, panes, agents: [] },
+    };
+  });
+  return { connections, agentPanes };
+}
+
+function worldFor(connections: WorldRuntimeConnection[]) {
+  return buildWorldObject(connections, "local");
+}
+
+async function run() {
+  document.body.style.margin = "0";
+  document.body.style.background = "#14181f";
+  const layoutShell = document.createElement("div");
+  layoutShell.className = "world-view-layout";
+  layoutShell.style.cssText =
+    "position:relative;width:100vw;height:100vh;display:flex";
+  const host = document.createElement("div");
+  host.className = "world-view-stage";
+  host.style.cssText =
+    "position:relative;flex:1;min-width:0;display:flex;flex-direction:column";
+  layoutShell.append(host);
+  document.body.append(layoutShell);
+  const base = topology(7);
+  const blocked = base.agentPanes.filter((_, index) => index % 23 === 4);
+  for (const pane of blocked) pane.agent_status = "blocked";
+  let setWorld: (world: WorldObject) => void = () => {};
+  const opened: string[] = [];
+  const selected: string[] = [];
+  function Harness() {
+    const [world, set] = useState(() => worldFor(base.connections));
+    const [selectedId, setSelectedId] = useState<string | null>(null);
+    useEffect(() => {
+      setWorld = set;
+    }, []);
+    return (
+      <PixelOfficeView
+        world={world}
+        selectedId={selectedId}
+        onSelect={(id) => {
+          selected.push(id);
+          setSelectedId(id);
+        }}
+        onOpenTerminal={async (id) => {
+          opened.push(id);
+        }}
+        floatingTerminals={[]}
+      />
+    );
+  }
+  const root = createRoot(host);
+  root.render(
+    <StrictMode>
+      <Harness />
+    </StrictMode>,
+  );
+  await waitFor(
+    () => window.__HERDR_WORLD_RENDERER__?.ready === true,
+    "town renderer did not become ready",
+  );
+  await waitFor(
+    () =>
+      host.querySelector(
+        '.world-semantic-targets-overlay[aria-busy="false"]',
+      ) !== null,
+    "town targets did not finish progressive admission",
+  );
+
+  if (mode === "preview") {
+    // Keep the town alive: flip a few statuses every couple of seconds.
+    const r = random(99);
+    window.setInterval(() => {
+      for (let i = 0; i < 3; i += 1) {
+        const pane = base.agentPanes[Math.floor(r() * base.agentPanes.length)]!;
+        const roll = r();
+        pane.agent_status =
+          pane.agent_status === "blocked"
+            ? "working"
+            : roll < 0.12
+              ? "blocked"
+              : roll < 0.3
+                ? "done"
+                : roll < 0.45
+                  ? "idle"
+                  : "working";
+      }
+      const next = base.connections.map((connection) => ({
+        ...connection,
+        snapshot: connection.snapshot && {
+          ...connection.snapshot,
+          panes: connection.snapshot.panes.map((pane) => ({ ...pane })),
+        },
+      }));
+      setWorld(worldFor(next));
+    }, 2500);
+    return;
+  }
+
+  const diagnostics = window.__HERDR_WORLD_RENDERER__!;
+  check(
+    diagnostics.level === "overview",
+    `default level is ${diagnostics.level}, expected overview`,
+  );
+  check(
+    (diagnostics.layout?.buildings ?? 0) === 3,
+    "town did not lay out three buildings",
+  );
+  const roomCards = host.querySelectorAll(".town-room-card");
+  const totalRooms = base.connections.reduce(
+    (sum, c) => sum + (c.snapshot?.workspaces.length ?? 0),
+    0,
+  );
+  check(
+    roomCards.length === totalRooms,
+    `expected ${totalRooms} room cards, found ${roomCards.length}`,
+  );
+  const receptions = host.querySelectorAll(".town-reception");
+  check(receptions.length === 3, "every host needs one reception board");
+  const waitingEntries = host.querySelectorAll(".town-reception-entry").length;
+  check(waitingEntries > 0, "blocked agents did not appear at reception");
+  const deskTargets = host.querySelectorAll(
+    '.world-semantic-target[data-kind="desk"]',
+  ).length;
+  const totalTabs = base.connections.reduce(
+    (sum, c) => sum + (c.snapshot?.tabs.length ?? 0),
+    0,
+  );
+  check(
+    deskTargets === totalTabs,
+    `expected ${totalTabs} desk targets, found ${deskTargets}`,
+  );
+  check(
+    host.querySelectorAll('[aria-label^="Rename room"]').length === totalRooms,
+    "every room needs a rename action",
+  );
+  check(
+    host.querySelectorAll('[aria-label^="New seat in"]').length > 0,
+    "rooms with free spots need a new seat action",
+  );
+
+  // Activating a reception entry selects that exact agent.
+  const entry = host.querySelector<HTMLButtonElement>(".town-reception-entry")!;
+  entry.click();
+  await settle();
+  check(selected.length > 0, "reception entry did not select its agent");
+
+  // Room card activation zooms into the room.
+  const zoomBefore = diagnostics.zoom;
+  (roomCards[0] as HTMLButtonElement).click();
+  await waitFor(
+    () => window.__HERDR_WORLD_RENDERER__!.zoom > zoomBefore * 1.3,
+    "room card did not zoom in",
+  );
+  await waitFor(
+    () => window.__HERDR_WORLD_RENDERER__!.level !== "overview",
+    "zoomed room stayed at overview",
+  );
+
+  // A blocked agent walks to reception when its status changes.
+  const pane = base.agentPanes.find((p) => p.agent_status === "working")!;
+  pane.agent_status = "blocked";
+  setWorld(
+    worldFor(
+      base.connections.map((connection) => ({
+        ...connection,
+        snapshot: connection.snapshot && {
+          ...connection.snapshot,
+          panes: connection.snapshot.panes.map((p) => ({ ...p })),
+        },
+      })),
+    ),
+  );
+  await waitFor(
+    () =>
+      window.__HERDR_WORLD_RENDERER__!.walking > 0 ||
+      window.__HERDR_WORLD_RENDERER__!.reducedMotion,
+    "blocked agent did not walk",
+  );
+  check(
+    diagnostics.lastError === null,
+    `renderer error: ${diagnostics.lastError}`,
+  );
+
+  // StrictMode mounts twice; exactly one renderer and canvas must survive.
+  check(
+    diagnostics.activeApplications === 1,
+    `expected one live renderer, found ${diagnostics.activeApplications}`,
+  );
+  check(
+    document.querySelectorAll("canvas[data-office-canvas]").length === 1,
+    "duplicate town canvases",
+  );
+  root.unmount();
+  await settle();
+  check(
+    window.__HERDR_WORLD_RENDERER__!.activeApplications === 0,
+    "unmount left a live renderer",
+  );
+  check(
+    document.querySelectorAll("canvas[data-office-canvas]").length === 0,
+    "unmount left a town canvas",
+  );
+}
+
+run()
+  .catch((error: unknown) => {
+    failures.push(error instanceof Error ? error.message : String(error));
+  })
+  .finally(() => {
+    if (mode === "test")
+      void fetch("/result", { method: "POST", body: JSON.stringify(failures) });
+  });

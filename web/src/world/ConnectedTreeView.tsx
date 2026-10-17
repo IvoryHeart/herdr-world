@@ -11,7 +11,7 @@ import {
 import { createPortal } from "react-dom";
 import { worldLocalStorage } from "../browserStorage";
 import { AgentIcon } from "../components/AgentIcon";
-import type { OfficeCanvasAnchor } from "./PixelOfficeCanvas";
+import type { OfficeCanvasAnchor } from "./officeCanvasAnchors";
 import { readTreePreferences, writeTreePreferences } from "./treePreferences";
 import {
   projectWorldTree,

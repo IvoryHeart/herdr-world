@@ -17,7 +17,7 @@ import {
   useLayoutEffect,
   useRef,
 } from "react";
-import type { OfficeCanvasAnchor } from "../PixelOfficeCanvas";
+import type { OfficeCanvasAnchor } from "../officeCanvasAnchors";
 import {
   arrangeGraphLayout,
   graphBounds,

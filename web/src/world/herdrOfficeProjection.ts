@@ -9,7 +9,7 @@ import { boundedOptionalText, yieldWorldTask } from "./worldObject";
 
 export const OFFICE_PRESENTATION_BOUNDS = Object.freeze({
   rooms: 128,
-  desksPerRoom: 8,
+  desksPerRoom: 19,
   roomAgentsPerRoom: 16,
   receptionDesks: 6,
   waitingAgentsPerReception: 8,

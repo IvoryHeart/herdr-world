@@ -16,7 +16,7 @@ import {
 } from "../workspaceResource";
 import { worldRuntimeStore, type WorldRuntimePriority } from "./runtimeStore";
 import { buildWorldObject, type WorldObjectNode } from "./worldObject";
-import type { OfficeCanvasAnchor } from "./PixelOfficeCanvas";
+import type { OfficeCanvasAnchor } from "./officeCanvasAnchors";
 import type { WorldConnectorTargetBounds } from "./worldConnectorGeometry";
 import {
   reconcileWorldInspectorConversation,
