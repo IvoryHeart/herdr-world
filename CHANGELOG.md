@@ -14,9 +14,11 @@ are optional because the merged PR history records their source.
   pane (a solo desk for one pane, a small face-to-face table for two), with up
   to 19 desks per room. Plain terminals show a green prompt instead of an
   agent's laptop. Agents that need you walk to their host's
-  reception and queue oldest first, finished agents join them, idle agents take a
-  break in the lounge, and speech bubbles show questions, finished work and
-  typing.
+  reception and queue oldest first. Finished agents join them with their work
+  left on the desk until you open their terminal or mark it reviewed, then take
+  a break in the lounge with idle agents. Speech bubbles show questions,
+  finished work and typing, and desks and seats carry their tab, agent and
+  terminal names.
 - Town lists agents that need you in a needs-you rail (a bottom tray on phones).
   Hover or tap an agent for a peek with its recent chatter, its question in a
   highlighted box, one-tap answers and a reply line with 📎 attachments. On phones the reply line

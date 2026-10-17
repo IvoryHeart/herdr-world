@@ -191,6 +191,8 @@ type SeatView = {
   person: Sprite;
   device: Sprite;
   glow: Sprite;
+  /** Finished work left at the seat until the user checks it. */
+  papers: Sprite;
 };
 
 type PodView = {
@@ -697,6 +699,16 @@ export async function createTownRenderer(
         : glow(X + slot.chairX + 7, Y + 30, 30),
     );
     for (const sprite of glows) container.addChild(sprite);
+    // Beside the laptop or screen, on the table top.
+    const papers = slots.map((slot) => {
+      const sprite = make(
+        sprites.papers,
+        X + slot.chairX + 14,
+        slot.top ? Y + 18 : Y + 28,
+      );
+      sprite.visible = false;
+      return sprite;
+    });
     const backs = slots.map((slot) =>
       slot.top ? null : make(null, X + slot.chairX, Y + 34),
     );
@@ -711,6 +723,7 @@ export async function createTownRenderer(
         person: (people[seat] ?? backs[seat])!,
         device: devices[seat]!,
         glow: glows[seat]!,
+        papers: papers[seat]!,
       })),
       item,
       cell,
@@ -778,6 +791,11 @@ export async function createTownRenderer(
                     frame,
                   ),
             );
+          view.papers.visible = Boolean(
+            info.agent &&
+              info.agent.semanticStatus === "done" &&
+              !state.completionSeenKeys.has(info.agent.key),
+          );
           const person = view.person;
           const seated = Boolean(info.agent && info.seated);
           person.visible = seated && peopleBlend > 0.02;

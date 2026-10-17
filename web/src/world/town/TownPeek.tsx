@@ -53,7 +53,10 @@ export function TownPeek({
   composer,
   inlineReply,
   onAttach,
+  onReviewed,
 }: {
+  /** Check a finished agent's work, which sends it for a break. */
+  onReviewed(): void;
   /**
    * Upload files for this pane. Resolves to the text to put in the reply
    * line, or null when the upload went to World's composer instead.
@@ -254,6 +257,21 @@ export function TownPeek({
               <kbd>{index + 1}</kbd>
             </button>
           ))}
+        </div>
+      ) : null}
+      {agent.semanticStatus === "done" ? (
+        <div className="town-answers" role="group" aria-label="Finished work">
+          <button type="button" onClick={onReviewed}>
+            <span>Mark reviewed</span>
+          </button>
+          {canReply ? (
+            <button
+              type="button"
+              onClick={() => (inlineReply ? input.current?.focus() : onChat())}
+            >
+              <span>Follow up</span>
+            </button>
+          ) : null}
         </div>
       ) : null}
       {!chatting && canReply ? (

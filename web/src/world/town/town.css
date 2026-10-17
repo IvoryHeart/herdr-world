@@ -467,6 +467,67 @@
   background: rgba(30, 26, 14, 0.95);
 }
 
+/* Name tags: the desk's (tab's) name under its table from the room level, and
+   each seat's agent or terminal name at the desk level. */
+.town-desk-tags {
+  position: absolute;
+  width: 64px;
+  height: 80px;
+  pointer-events: none;
+}
+
+.town-desk-tag,
+.town-seat-tag {
+  position: absolute;
+  max-width: 76px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transform: translateX(-50%);
+  font:
+    600 7px / 1.25 "JetBrains Mono",
+    ui-monospace,
+    monospace;
+  color: #f1efe6;
+  background: rgba(14, 17, 24, 0.82);
+  border-radius: 3px;
+  padding: 0 3px;
+}
+
+.town-desk-tag {
+  left: 32px;
+  top: 59px;
+  max-width: 48px;
+  color: #ffe9c2;
+  border: 1px solid #6d5a3a;
+  /* Readable from the room level without outgrowing the desk's cell. */
+  transform: translateX(-50%) scale(clamp(1, var(--iz), 1.6));
+  transform-origin: 50% 0;
+}
+
+.town-seat-tag {
+  display: none;
+  top: 56px;
+  max-width: 28px;
+  font-size: 5px;
+}
+
+.town-seat-tag-top {
+  top: -3px;
+}
+
+.town-seat-tag-shell {
+  color: #9fd89a;
+}
+
+.town-world[data-level="desk"] .town-seat-tag {
+  display: block;
+}
+
+.town-world[data-level="desk"] .town-desk-tag {
+  top: 63px;
+}
+
 /* Accessible targets follow the scene but stay visually silent until focused. */
 .town-targets {
   position: absolute;

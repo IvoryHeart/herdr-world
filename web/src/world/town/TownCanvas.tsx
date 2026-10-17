@@ -33,6 +33,7 @@ import {
   layoutTown,
   TOWN_FACADE,
   TOWN_TILE as T,
+  townDeskSlots,
   townSeat,
   type TownFormFactor,
   type TownLayout,
@@ -1084,12 +1085,15 @@ type TownVisible = {
   hosts: ReadonlySet<string>;
   /** Room cards are drawn only from the overview level up to the room level. */
   cards: boolean;
+  /** Rooms on screen whose desks carry name tags (room and desk levels). */
+  tagRooms: ReadonlySet<string>;
 };
 
 const NOTHING_VISIBLE: TownVisible = {
   key: "",
   hosts: new Set(),
   cards: false,
+  tagRooms: new Set(),
 };
 
 /** Buildings within half a viewport of the screen, plus whether cards show. */
@@ -1111,10 +1115,26 @@ function townVisibleHosts(
     )
       hosts.push(b.hostKey);
   const cards = level === "overview" || level === "room";
+  // Name tags only for rooms on screen, so a large town adds few elements.
+  const tagRooms: string[] = [];
+  if (level === "room" || level === "desk") {
+    const from = camera.toWorld(0, 0);
+    const to = camera.toWorld(width, height);
+    for (const b of layout.buildings)
+      for (const room of b.rooms)
+        if (
+          room.x * T < to.x &&
+          (room.x + room.w) * T > from.x &&
+          room.y * T < to.y &&
+          (room.y + room.h) * T > from.y
+        )
+          tagRooms.push(room.key);
+  }
   return {
-    key: `${cards ? 1 : 0}:${hosts.join("\u0000")}`,
+    key: `${cards ? 1 : 0}:${hosts.join("\u0000")}:${tagRooms.join("\u0000")}`,
     hosts: new Set(hosts),
     cards,
+    tagRooms: new Set(tagRooms),
   };
 }
 
@@ -1309,6 +1329,41 @@ const TownWorldLayer = memo(function TownWorldLayer({
                       </span>
                     </button>
                   ) : null}
+                  {visible.tagRooms.has(room.key)
+                    ? placed.cells.map((cell) => {
+                        const desk = cell.deskKey
+                          ? model.desks.get(cell.deskKey)
+                          : undefined;
+                        if (!desk) return null;
+                        return (
+                          <div
+                            key={desk.key}
+                            className="town-desk-tags"
+                            aria-hidden="true"
+                            style={{
+                              left: (cell.x + 1 - placed.x) * T,
+                              top: (cell.y - placed.y) * T,
+                            }}
+                          >
+                            <span className="town-desk-tag">
+                              {desk.displayLabel}
+                            </span>
+                            {townDeskSlots(cell.seats).map((slot, seat) => {
+                              const device = desk.paneDevices[seat];
+                              return device ? (
+                                <span
+                                  key={device.key}
+                                  className={`town-seat-tag${slot.top ? " town-seat-tag-top" : ""}${device.agentKey ? "" : " town-seat-tag-shell"}`}
+                                  style={{ left: slot.chairX + 7 }}
+                                >
+                                  {device.displayLabel}
+                                </span>
+                              ) : null;
+                            })}
+                          </div>
+                        );
+                      })
+                    : null}
                   <div className="town-room-plaque">
                     <span className="town-room-plaque-name">
                       {label} <small>{c.desks}</small>

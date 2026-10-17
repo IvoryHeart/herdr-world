@@ -415,6 +415,15 @@ export function buildTownSprites() {
       Object.entries(TOWN_KIND_LOGOS).map(([kind, logo]) => [kind, lid(logo)]),
     ) as Record<string, TownCanvas>,
     lidOff: lid("#6a707b"),
+    /** Finished work waiting on the desk: a stack of pages with a green tab. */
+    papers: townSprite(11, 9, (R) => {
+      R(1, 3, 9, 6, "#c9c0ad");
+      R(0, 1, 9, 6, "#e8e1d0");
+      R(1, 0, 9, 6, "#fffaf0");
+      R(2, 2, 6, 1, "#9aa3ad");
+      R(2, 4, 5, 1, "#9aa3ad");
+      R(8, 0, 2, 3, "#5fcf7a");
+    }),
     /** A plain terminal's lid: dark, with a green prompt instead of a logo. */
     lidShell: townSprite(14, 7, (R) => {
       R(0, 0, 14, 5, "#2b3340");

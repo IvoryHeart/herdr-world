@@ -3,6 +3,7 @@ import {
   creationPendingReason,
   creationFailureMessage,
 } from "../creationRequests";
+import { useTownFinished, withTownFinished } from "./town/townFinished";
 import {
   insertIntoTerminalComposerDraft,
   terminalComposerDraftKey,
@@ -127,10 +128,11 @@ export default function TownView({
     () => createOfficeProjector(TOWN_PRESENTATION_BOUNDS),
     [],
   );
-  const office = useMemo(
+  const observedOffice = useMemo(
     (): HerdrOfficeProjection => projectOffice(world, Date.now(), selectedId),
     [world, selectedId, projectOffice],
   );
+  const townFinished = useTownFinished(observedOffice);
   // Terminal frames and unrelated store updates must not reconcile the scene.
   // These are exactly the inputs read by endpointCreationReason below.
   const creationProgress = useCreationProgress();
@@ -200,20 +202,41 @@ export default function TownView({
       );
   }, []);
 
-  const selectedKey = officePresentationKey(office, selectedId);
   const completionSeenKeys = useMemo(
     () =>
       new Set(
         completionSeen.size === 0
           ? []
-          : office.roster
+          : observedOffice.roster
               .filter(({ agent }) =>
                 completionSeen.has(officeCompletionIdentity(agent)),
               )
               .map(({ agent }) => agent.key),
       ),
-    [completionSeen, office],
+    [completionSeen, observedOffice],
   );
+  // A new finish is unchecked even if an earlier finish of that agent was seen.
+  useEffect(() => {
+    if (!townFinished.fresh.length) return;
+    setCompletionSeen((current) => {
+      const next = new Set(current);
+      for (const agent of townFinished.fresh)
+        next.delete(officeCompletionIdentity(agent));
+      if (next.size === current.size) return current;
+      writeCompletionSeen(worldLocalStorage, next);
+      return next;
+    });
+  }, [townFinished.fresh]);
+  const office = useMemo(
+    () =>
+      withTownFinished(
+        observedOffice,
+        townFinished.finished,
+        completionSeenKeys,
+      ),
+    [observedOffice, townFinished.finished, completionSeenKeys],
+  );
+  const selectedKey = officePresentationKey(office, selectedId);
   const unseenCompletions = useMemo(
     () =>
       office.roster
@@ -429,6 +452,7 @@ export default function TownView({
     onSelect(key);
   };
   const markCompletionSeen = (agent: OfficeAgent) => {
+    townFinished.dismiss(agent.key);
     setCompletionSeen((current) => {
       const next = new Set(current);
       next.add(officeCompletionIdentity(agent));
@@ -833,6 +857,10 @@ export default function TownView({
               reply(peekLeaf, peekAgent.displayLabel, text, submit)
             }
             inlineReply={document.documentElement.dataset.layout !== "mobile"}
+            onReviewed={() => {
+              markCompletionSeen(peekAgent);
+              toast("ok", `${peekAgent.displayLabel}'s work reviewed`);
+            }}
             onAttach={(files, image) =>
               attach(peekLeaf, peekAgent.key, files, image)
             }

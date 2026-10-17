@@ -127,9 +127,14 @@ SHALL move to its host's reception and queue in order of when it became blocked,
 oldest first, within a bounded number of queue positions; further blocked agents
 SHALL stay at their seat with a waiting cue and the reception SHALL show the exact
 overflow count. A done agent SHALL also go to its host's reception, queued after
-the blocked agents, and show a completion marker until its status changes or the
-completion is inspected; this browser-local seen state SHALL NOT represent
-approval or mutate Herdr. An idle agent SHALL move to a lounge spot in its
+the blocked agents, show a completion marker, and leave finished work on its
+desk until its status changes or the user checks the completion by opening its
+terminal or marking it reviewed; a checked agent SHALL then go to the lounge.
+Because Herdr may report a finished agent as idle, Town SHALL also treat an
+agent it observes going from working or blocked to idle as done until checked.
+This browser-local state SHALL NOT represent approval or mutate Herdr. Desks
+SHALL carry their tab's name from the room level, and each seat its agent's or
+terminal's name at the desk level. An idle agent SHALL move to a lounge spot in its
 building, or remain seated with an idle cue when no spot is free. When an
 agent's status changes, it SHALL move to its new location, and an answered agent
 SHALL return to its seat. Location and movement SHALL be presentation only: they
