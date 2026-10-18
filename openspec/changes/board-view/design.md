@@ -19,6 +19,8 @@ Owner decisions from the review:
 - Files, changes and history belong in the panel for quick access, for tabs and
   for workspaces.
 - Name the view Board. Graph, Tree and the old Office retire gradually, later.
+- Notes belong to the whole board, strung to what they concern; a disconnected
+  workspace must not move or remove them.
 
 ## Goals / Non-Goals
 
@@ -80,29 +82,58 @@ notes and host labels enlarge in world units so they stay legible. Strings to a
 hidden tab attach to its workspace. Fit measures what is drawn at the current
 level.
 
-### 4. Identity and anchors
+### 4. Identity, continuity and anchors
 
-A probe in an isolated Herdr 0.9.3 session showed workspace, tab and pane IDs
-(`w2`, `w2:t1`, `w2:p1`) survive a server restart and are not renumbered when
-other workspaces close; terminal IDs change on restart; pane IDs change on
-`pane.move` (World learns the replacement from the move result); metadata
-tokens are lost on restart.
+Probes in isolated Herdr 0.9.3 sessions (deleted afterwards) showed:
 
-Board items are therefore anchored to the connection profile ID plus the
-Herdr workspace, tab or pane ID, with a fingerprint (workspace label and cwd,
-tab label, pane agent) captured when the item is attached. On each topology
-read:
+- workspace, tab and pane IDs (`w2`, `w2:t1`, `w2:p1`) survive a server
+  restart, and within one running server they are never reused: after closing
+  `w2` the next workspace is `w3`, after closing `t2` the next tab is `t3`;
+- a fresh session starts again at `w1`, so IDs alone cannot tell a restored
+  session from a new one;
+- terminal IDs are random, survive `pane.move`, and change when the server
+  restarts;
+- pane IDs change on `pane.move` (World learns the replacement from the move
+  result);
+- Herdr exposes no session or server instance identity, and metadata tokens
+  are lost on restart.
 
-- an anchor whose ID exists and whose fingerprint matches stays attached;
-- a World-initiated pane move rewrites the pane anchor through the move
-  result;
-- an anchor whose ID is missing, or whose fingerprint no longer matches (for
-  example a new Herdr session reusing `w1`), detaches its notes into a
-  "Needs a home" tray. Detached items are never deleted, never silently
-  re-attached, and the user can re-attach or discard them.
+**Anchors.** A string attaches to a pane, a tab or a workspace by connection
+profile ID and Herdr ID. Labels, directories and agent kinds are display data
+only: renames and agent start or stop never detach anything.
 
-Board positions for cards are keyed the same way; a card whose anchor is gone
-simply disappears with its topology.
+**Continuity witness.** With every anchor the store keeps the terminal IDs of
+the target's panes as last observed (for a pane anchor, its own terminal ID),
+refreshed on each authoritative observation. Because terminal IDs change only
+when Herdr restarts, an anchor is _confirmed_ when its target exists and at
+least one witnessed terminal ID is still present in it. This covers World
+restarts, reconnects and other clients without user action.
+
+**Anchor states.**
+
+- _Attached_: confirmed on the current runtime generation. Fully actionable.
+- _Unresolved_: the host is connecting, offline, stale, filtered, or the target
+  is outside the admitted topology. The note keeps its place; its string is
+  drawn dashed to the last known card position (or the host zone) with the
+  reason; Send and answers are disabled. Nothing is detached while unresolved.
+- _Unconfirmed_: the host is current and the ID exists, but no witnessed
+  terminal survives (Herdr restarted, or a new session reuses the ID). World
+  cannot prove it is the same target, so the string is dashed, Send is
+  disabled, and the host shows one prompt listing the affected notes with
+  Keep (re-witness) or Detach, per item or for all.
+- _Detached_: absence is authoritative, meaning a close event observed on the
+  current generation, or a qualified `workspace.get`, `tab.get` or `pane.get` on
+  the current generation answering not found. The item moves to the "Needs a
+  home" tray. Items are never deleted or re-attached without the user.
+
+A World-initiated pane move rewrites the pane anchor through the move result
+and keeps its witness. A pane moved outside World leaves its old ID absent and
+detaches; Herdr does not report a moved pane's previous ID.
+
+**Disconnected hosts.** Notes belong to the whole board, so a disconnected
+workspace never moves or removes a note. Its strings become unresolved and
+re-attach automatically when the host returns with a surviving witness, or ask
+for confirmation if Herdr restarted meanwhile.
 
 ### 5. A bounded World store
 
@@ -114,9 +145,11 @@ connection ID; patches carry the base revision and conflicting item edits are
 rejected and re-read rather than merged blindly. The service broadcasts board
 changes so other open clients (for example the phone) update live.
 
-Notes are user content stored only on the service host. They leave it only
-when the user explicitly sends a note to an agent. Nothing from the board is
-written to Herdr in this change.
+Board content is user content kept by the World service. Authenticated World
+clients of that service (for example the user's phone) receive it to display
+and edit the board. Note text goes to Herdr or an agent only when the user
+explicitly sends it. Nothing else from the board is written to Herdr in this
+change.
 
 Herdr's display-only metadata cannot hold this data. If the owner approves, a
 follow-up proposes durable annotations to Herdr (attached to a workspace, tab or
@@ -125,16 +158,27 @@ anchored notes to it.
 
 ### 6. Agent operations reuse existing paths
 
-- Answering a waiting agent uses the same exact-pane path as Town's peek
+- A tab can hold several panes and agents, so every agent operation targets an
+  exact pane. Stringing a note to a tab with more than one pane asks which pane
+  (the chooser Town uses); a single-pane tab selects its pane. A note may also
+  be strung to a tab or workspace as context, but Send needs a pane string.
+- Answering: the tab panel lists each pane that needs the user, with its own
+  question and answers, delivered over the same exact-pane path as Town's peek
   (qualified by connection ID and runtime generation).
-- Sending a note uses Herdr `agent.prompt` on the strung agent's pane through
-  the qualified connection route, with the note text as the prompt. It is only
-  ever triggered by the user's Send.
+- Sending a note: at Send, World revalidates the string (attached, current
+  generation, witness present, `agent.get` reports an agent on that pane) and
+  then calls `agent.prompt` with that pane as the target and the note text.
+  Any failed check refuses with its reason. It is only ever triggered by the
+  user's Send.
 - Starting an agent from a note creates a tab in the chosen workspace
   (`tab.create`), starts the chosen agent in its root pane (`agent.start`, which
-  requires a pane), prompts it with the note (`agent.prompt`) and strings the
-  note to the new pane. A failure at any step is reported with what was
-  created; nothing is retried automatically.
+  requires a pane), then waits, bounded, for `agent.get` to report the agent on
+  that pane as `interactive_ready`, as World's assistant start flow already
+  does (`server/src/assistant/actions.ts`). Only then does it prompt with the
+  note and string the note to the pane. A timeout is reported as uncertain
+  ("the agent may still be starting; the note was not sent") with a Send
+  action; no step, and never the prompt, is retried automatically. Any failure
+  reports what was created.
 - The detail panel's Files, Changes and History use `agent_history.*`,
   `file.read`, `git.diff_summary`, `git.diff_file` and the commit operations,
   opening the existing Inspector views for full detail. Workspace Changes use
@@ -158,11 +202,13 @@ the shared system Back module.
 
 ## Risks / Trade-offs
 
-- [Anchors after a Herdr session is recreated] → fingerprints detach rather
-  than mis-attach; the tray makes recovery explicit.
+- [A new Herdr session reuses IDs] → without a surviving terminal witness the
+  anchor is unconfirmed and needs the user's Keep; nothing is sent meanwhile.
+- [A Herdr restart restores the same session] → the same prompt appears once
+  per host; Keep all re-witnesses every anchor. Durable annotations or a
+  session identity in Herdr would remove this prompt (optional follow-up).
 - [Pane moves made outside World] → the pane anchor detaches into the tray.
-  Herdr does not report a moved pane's previous ID in topology reads, so World
-  cannot follow those moves without a Herdr change.
+  Herdr does not report a moved pane's previous ID in topology reads.
 - [DOM card count at maximum scale] → overview hides tabs; viewport culling;
   verified against the Town input budgets.
 - [Store growth] → hard bounds with clear errors; no unbounded history.
@@ -171,8 +217,6 @@ the shared system Back module.
 
 ## Open Questions
 
-- Whether notes belong to the whole board or to a workspace (moving with it).
-  The prototype keeps notes where the user puts them, strung to what they
-  concern.
-- Whether to raise durable annotations with Herdr upstream now or after Board
-  ships.
+- Durable annotations (or a session identity) in Herdr: the owner chose to
+  track this in a World issue now and raise it upstream as a proposal after
+  Board ships.

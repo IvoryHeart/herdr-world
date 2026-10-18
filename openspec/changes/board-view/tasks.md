@@ -14,23 +14,23 @@
 
 ## 3. Detail panel
 
-- [ ] 3.1 Add the tab panel (status, answers, Output, Files, Changes, History, open terminal and composer) over the existing agent history, file and git operations; verify exact-pane answers and retirement rejection.
+- [ ] 3.1 Add the tab panel (status, per-pane questions and answers, Output, Files, Changes, History, open terminal and composer) over the existing agent history, file and git operations; verify exact-pane answers with two waiting panes in one tab and retirement rejection.
 - [ ] 3.2 Add the workspace panel (Tabs, combined Files and History, repository Changes, new tab, fold, tidy).
 - [ ] 3.3 Present the panel as a bottom sheet on phones with phone Back through the shared system Back module.
 
 ## 4. Notes and strings
 
-- [ ] 4.1 Add notes (create by double-click or double-tap, edit, colour, delete) and strings (drag from a card's handle, String to…, cut from the string or the panel).
-- [ ] 4.2 Send a note to a strung agent with `agent.prompt` over the qualified route, only on the user's Send; verify the exact pane, generation rejection and that nothing is sent otherwise.
-- [ ] 4.3 Start a new agent from a note: `tab.create` in the chosen workspace, `agent.start` in its root pane, `agent.prompt` with the note, then string the note to it; verify partial-failure reporting.
+- [ ] 4.1 Add notes (create by double-click or double-tap, edit, colour, delete) and strings (drag from a card's handle, String to…, a pane chooser for multi-pane tabs, cut from the string or the panel).
+- [ ] 4.2 Send a note to a strung agent pane with `agent.prompt` over the qualified route, only on the user's Send and after revalidation (attached, current generation, agent present); verify the exact pane, each refusal and that nothing is sent otherwise.
+- [ ] 4.3 Start a new agent from a note: `tab.create`, `agent.start` in its root pane, a bounded wait for `interactive_ready` (as in `server/src/assistant/actions.ts`), then `agent.prompt` and the string; verify partial failure, the uncertain timeout and that nothing is retried.
 
 ## 5. Persistence and identity
 
 - [ ] 5.1 Add the bounded, revisioned board store in the service beside the connection profiles, with qualified read and patch RPCs and a change broadcast; verify bounds, atomic writes, conflict rejection and isolation between connection profiles.
-- [ ] 5.2 Anchor items to workspace, tab and pane IDs with fingerprints; rewrite pane anchors from World move results; detach mismatched or missing anchors into a "Needs a home" tray with re-attach and discard; verify with restart, closed-workspace, reused-ID and external-move sequences.
+- [ ] 5.2 Anchor strings to workspace, tab and pane IDs with terminal-ID continuity witnesses and the attached, unresolved, unconfirmed and detached states; rewrite pane anchors from World move results; add the Needs a home tray and the per-host keep-or-detach prompt; verify with delayed-host recovery, offline host, World restart, Herdr restart, reused IDs with identical names, rename, close and external-move sequences.
 - [ ] 5.3 Record the behavioural verification decision for the store and anchors in `verification/coverage.json` (a Quint model or a justified direct alternative).
 
 ## 6. Delivery
 
 - [ ] 6.1 Update `docs/TUTORIAL.md`, `FEATURES.md`, the README view list and the knowledge map; add CHANGELOG entries.
-- [ ] 6.2 Optional, with owner approval: propose durable workspace, tab and pane annotations to Herdr upstream, citing the display-only metadata limits.
+- [ ] 6.2 After Board ships, raise issue #216 upstream as a Herdr proposal for durable workspace, tab and pane annotations or a session identity, citing the display-only metadata limits and the restart prompt it would remove.

@@ -84,10 +84,11 @@ badge without them.
 
 ### Requirement: Board detail panel
 
-Selecting a tab SHALL open a panel with its status, its agent, its workspace
+Selecting a tab SHALL open a panel with its status, its agents, its workspace
 and host, Output, Files, Changes and History, and actions to open the terminal,
-add a note, string it, pin it and close it with confirmation. A waiting tab
-SHALL offer answers delivered to that exact pane, qualified by connection and
+add a note, string it, pin it and close it with confirmation. The panel SHALL
+list each pane that needs the user with its own question and answers, and each
+answer SHALL be delivered to that exact pane, qualified by connection and
 runtime generation. Selecting a workspace SHALL open a panel with its Tabs,
 the combined Files and History of its tabs, its repository's Changes, and
 actions to create a tab, fold, tidy, add a note and string it. Files, Changes
@@ -100,6 +101,11 @@ panel SHALL be a bottom sheet that phone Back closes.
 - **WHEN** the user selects a waiting tab and chooses Yes
 - **THEN** the answer is delivered to that pane only, and a retired runtime rejects it
 
+#### Scenario: Two agents need the user in one tab
+
+- **WHEN** a tab has two panes whose agents both need the user
+- **THEN** the panel shows both questions separately and each answer goes only to its own pane
+
 #### Scenario: Workspace changes
 
 - **WHEN** the user opens Changes on a workspace panel
@@ -108,23 +114,39 @@ panel SHALL be a bottom sheet that phone Back closes.
 ### Requirement: Board notes and strings
 
 The user SHALL be able to create a note by double-click or double-tap on empty
-board or from a card, and edit, colour and delete it. The user SHALL be able to
+board or from a card, and edit, colour and delete it. Notes SHALL belong to the whole board. The user SHALL be able to
 string a note or card to another card by dragging from a card's handle or with
 String to…, and to cut a string from the string itself or from the panel.
 Dragging a handle onto empty board SHALL create a note strung to that card.
+Stringing to a tab with more than one pane SHALL ask which pane; a single-pane
+tab SHALL select its pane. A string to a tab or workspace SHALL be context only.
 
-A note strung to an agent's tab SHALL offer to send the note to that agent; the
-note text SHALL be delivered as a prompt to that exact pane only when the user
-chooses Send. A note SHALL offer to start a new agent in a chosen workspace,
-which creates a tab, starts the agent in it, prompts it with the note and
-strings the note to it; a failure at any step SHALL be reported with what was
-created and SHALL NOT be retried automatically. Agent replies or results MAY be
+A note strung to an agent's pane SHALL offer to send the note to that agent.
+The note text SHALL be delivered as a prompt to that exact pane only when the
+user chooses Send, and only after World revalidates that the string is
+attached on the current runtime generation and that an agent is present on that
+pane; otherwise Send SHALL be refused with its reason. A note SHALL offer to
+start a new agent in a chosen workspace, which creates a tab, starts the agent
+in it, waits within a bound for the agent to become interactive, then prompts
+it with the note and strings the note to it. A timeout SHALL be reported as
+uncertain without sending the note; a failure at any step SHALL be reported
+with what was created; no step SHALL be retried automatically. Agent replies or results MAY be
 shown on the note when they are reported; World SHALL NOT invent them.
 
 #### Scenario: Send a note
 
-- **WHEN** a note is strung to an agent's tab and the user chooses Send
+- **WHEN** a note is strung to an agent's pane and the user chooses Send
 - **THEN** the agent in that pane receives the note text as a prompt, and nothing is sent to any other pane
+
+#### Scenario: String to a tab with two agents
+
+- **WHEN** the user drags a note's string onto a tab with two agent panes
+- **THEN** World asks which pane, and the string attaches to the chosen pane
+
+#### Scenario: A new agent is slow to start
+
+- **WHEN** the user starts an agent from a note and it is not interactive within the bound
+- **THEN** World reports that the agent may still be starting and that the note was not sent, and offers Send
 
 #### Scenario: Cut a string
 
@@ -137,25 +159,59 @@ The World service SHALL persist board layout, pins, folds, notes and strings
 per connection profile, bounded in size, written atomically and revisioned, and
 SHALL broadcast changes to other open clients. A board change based on an
 outdated revision SHALL be rejected and re-read rather than overwrite newer
-content. Notes SHALL leave the service host only when the user sends them to an
-agent.
+content. Authenticated World clients of the service MAY receive board content;
+note text SHALL go to Herdr or an agent only on the user's explicit Send.
 
-Board items SHALL be anchored to the connection profile and the Herdr workspace,
-tab or pane ID, with a fingerprint captured when attached. A pane anchor SHALL
-follow a pane moved by World through the move result. An item whose anchor is
-missing or whose fingerprint no longer matches SHALL be detached into a "Needs a
-home" tray, where the user can re-attach or discard it; detached items SHALL NOT
-be deleted or re-attached without the user.
+Strings SHALL be anchored to the connection profile and the Herdr workspace,
+tab or pane ID. Labels, directories and agent kinds SHALL NOT decide identity;
+renames and agent start or stop SHALL NOT detach a string. With each anchor the
+store SHALL keep the terminal IDs last observed in its target as a continuity
+witness. An anchor SHALL be:
+
+- attached when its target exists on the current runtime generation and at
+  least one witnessed terminal ID is still present in it;
+- unresolved, keeping its saved anchor, while its host is connecting, offline,
+  stale or filtered or its target is outside the admitted topology;
+- unconfirmed when its host is current and its ID exists but no witnessed
+  terminal ID survives, until the user keeps or detaches it;
+- detached into a "Needs a home" tray only on authoritative absence: a close
+  observed on the current generation, or a qualified get on the current
+  generation answering not found.
+
+Only attached strings SHALL be actionable. Unresolved and unconfirmed strings
+SHALL be drawn as such with their reason. A pane anchor SHALL follow a pane
+moved by World through the move result. Items SHALL NOT be deleted or
+re-attached without the user.
+
+#### Scenario: World restarts while Herdr keeps running
+
+- **WHEN** World restarts and its first observation of a host has no children yet
+- **THEN** that host's strings are unresolved, and when the host's topology arrives with the same terminals they are attached again without any prompt
+
+#### Scenario: A host disconnects
+
+- **WHEN** a host goes offline
+- **THEN** its notes stay where they are, their strings are drawn as unresolved, Send is disabled, and nothing moves to Needs a home
 
 #### Scenario: Herdr restarts
 
-- **WHEN** Herdr restarts and its workspaces, tabs and panes return with the same IDs and fingerprints
-- **THEN** every note, string and card position is shown as before
+- **WHEN** Herdr restarts and its workspaces, tabs and panes return with the same IDs but new terminals
+- **THEN** the host shows one prompt listing the affected notes, and nothing is sent to those panes until the user keeps them
 
-#### Scenario: A reused workspace ID
+#### Scenario: A new session reuses IDs with identical names
 
-- **WHEN** a new Herdr session reuses a workspace ID for a workspace with a different label and directory
-- **THEN** notes anchored to the old workspace move to the Needs a home tray instead of attaching to the new one
+- **WHEN** a new Herdr session reuses a workspace ID with the same label, directory and agent kind
+- **THEN** the strings to it are unconfirmed rather than attached, because no witnessed terminal survives
+
+#### Scenario: A renamed tab
+
+- **WHEN** the user renames a tab that a note is strung to
+- **THEN** the string stays attached
+
+#### Scenario: A closed tab
+
+- **WHEN** a tab that a note is strung to closes while its host is observed
+- **THEN** the note stays on the board and its string moves to Needs a home
 
 #### Scenario: Phone and desktop
 
