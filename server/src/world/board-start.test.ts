@@ -9,6 +9,8 @@ function herdr(
     blocked?: boolean;
     lostStart?: boolean;
     changes?: boolean;
+    /** The agent that answers is not the one launched. */
+    impostor?: boolean;
   } = {},
 ) {
   const calls: string[] = [];
@@ -39,6 +41,9 @@ function herdr(
       return {
         agent: {
           pane_id: "w1:p9",
+          terminal_id: "term_new",
+          agent: options.impostor ? "codex" : "claude",
+          name: "plan",
           agent_status: options.blocked ? "blocked" : "idle",
           interactive_ready: !options.never,
         },
@@ -118,6 +123,16 @@ describe("Starting an agent from a note", () => {
     expect(outcome).toMatchObject({
       status: "uncertain",
       message: expect.stringContaining("reconnected"),
+    });
+    expect(h.calls).not.toContain("agent.prompt");
+  });
+
+  test("an agent that is not the one launched is never prompted", async () => {
+    const h = herdr({ impostor: true });
+    expect(await startFromNote(h.call, request())).toMatchObject({
+      status: "failed",
+      message: expect.stringContaining("different agent"),
+      pane_id: "w1:p9",
     });
     expect(h.calls).not.toContain("agent.prompt");
   });

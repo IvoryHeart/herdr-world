@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { anchorFor, confirmed, followMove, targetOf } from "./boardAnchors";
+import { anchorFor, confirmed, nextWitness, targetOf } from "./boardAnchors";
 import { fixtureHost, fixtureWorld } from "./boardFixture";
 import { projectBoard } from "./boardModel";
 
@@ -60,51 +60,30 @@ describe("Board anchors", () => {
     expect(targetOf(model, { ...anchor, native_id: "w9:p9" })).toBeNull();
     expect(confirmed(anchor, null)).toBe(false);
   });
-  test("strings follow a moved tab: new pane and tab IDs, same witnesses", () => {
-    const pane = (native_id: string) => ({
-      anchor: {
-        connection_id: "alpha",
-        kind: "pane" as const,
-        native_id,
-        witness: ["term_1"],
-      },
+
+  test("an anchor to an empty target is confirmed while it exists, and its witness keeps up", () => {
+    const empty = {
+      connection_id: "alpha",
+      kind: "workspace" as const,
+      native_id: "w5",
+      witness: [],
+    };
+    const target = (terminals: string[]) => ({
+      cardKey: "alpha:w5",
+      terminals,
     });
-    const strings = [
-      { id: "a", from: { note: "n1" }, to: pane("w1:p2") },
-      {
-        id: "b",
-        from: { note: "n1" },
-        to: {
-          anchor: {
-            connection_id: "alpha",
-            kind: "tab" as const,
-            native_id: "w1:t1",
-            witness: [],
-          },
-        },
-      },
-      { id: "c", from: { note: "n1" }, to: pane("w1:p9") },
-      {
-        id: "d",
-        from: { note: "n1" },
-        to: { anchor: { ...pane("w1:p2").anchor, connection_id: "beta" } },
-      },
-    ];
-    const changed = followMove(strings, "alpha", "w1:t1", {
-      tab_id: "w2:t4",
-      panes: [{ previous: "w1:p2", current: "w2:p7" }],
-    });
-    expect(changed.map((string) => string.id)).toEqual(["a", "b"]);
-    expect(changed[0]!.to).toEqual({
-      anchor: {
-        connection_id: "alpha",
-        kind: "pane",
-        native_id: "w2:p7",
-        witness: ["term_1"],
-      },
-    });
-    expect(changed[1]!.to).toMatchObject({
-      anchor: { kind: "tab", native_id: "w2:t4" },
-    });
+    expect(confirmed(empty, target([]))).toBe(true);
+    expect(confirmed(empty, null)).toBe(false);
+    // A tab opens in it: still confirmed, and the new terminal is recorded.
+    expect(nextWitness(empty, target(["term_9"]))).toEqual(["term_9"]);
+    const witnessed = { ...empty, witness: ["term_9"] };
+    expect(nextWitness(witnessed, target(["term_9"]))).toBeNull();
+    // A pane is added beside the witnessed one: recorded too.
+    expect(nextWitness(witnessed, target(["term_9", "term_10"]))).toEqual([
+      "term_9",
+      "term_10",
+    ]);
+    // After a restart nothing survives: not confirmed, nothing recorded.
+    expect(nextWitness(witnessed, target(["term_new"]))).toBeNull();
   });
 });

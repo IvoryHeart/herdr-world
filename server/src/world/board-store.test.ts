@@ -14,6 +14,7 @@ import {
   BOARD_LIMITS,
   BoardConflictError,
   BoardStore,
+  moveFollowOps,
   type BoardAnchor,
 } from "./board-store";
 
@@ -284,5 +285,69 @@ describe("Board store", () => {
       "board.json.unreadable-42",
     );
     expect(logs[0]).toContain("unreadable");
+  });
+
+  test("strings follow a move made in any view: new pane and tab IDs, same witnesses", () => {
+    const pane = (native_id: string, connection_id = "alpha") => ({
+      anchor: {
+        connection_id,
+        kind: "pane" as const,
+        native_id,
+        witness: ["term_1"],
+      },
+    });
+    const store = new BoardStore(path);
+    store.patch([
+      { op: "note.put", note: note("n1") },
+      {
+        op: "string.put",
+        string: { id: "a", from: { note: "n1" }, to: pane("w1:p2") },
+      },
+      {
+        op: "string.put",
+        string: {
+          id: "b",
+          from: { note: "n1" },
+          to: {
+            anchor: {
+              connection_id: "alpha",
+              kind: "tab",
+              native_id: "w1:t1",
+              witness: [],
+            },
+          },
+        },
+      },
+      {
+        op: "string.put",
+        string: { id: "c", from: { note: "n1" }, to: pane("w1:p9") },
+      },
+      {
+        op: "string.put",
+        string: { id: "d", from: { note: "n1" }, to: pane("w1:p2", "beta") },
+      },
+    ]);
+    const desk = moveFollowOps(store.get(), "alpha", "w1:t1", {
+      tab_id: "w2:t4",
+      panes: [{ previous: "w1:p2", current: "w2:p7" }],
+    });
+    expect(desk.map((op) => op.op === "string.put" && op.string.id)).toEqual([
+      "a",
+      "b",
+    ]);
+    store.patch(desk);
+    const after = store.get().strings;
+    expect(after.find((s) => s.id === "a")!.to).toEqual(pane("w2:p7"));
+    expect(after.find((s) => s.id === "b")!.to).toMatchObject({
+      anchor: { native_id: "w2:t4" },
+    });
+    // A single pane moved into another desk: only that pane's anchor changes.
+    const single = moveFollowOps(store.get(), "alpha", null, {
+      tab_id: "w3:t1",
+      panes: [{ previous: "w1:p9", current: "w3:p2" }],
+    });
+    expect(single.map((op) => op.op === "string.put" && op.string.id)).toEqual([
+      "c",
+    ]);
   });
 });

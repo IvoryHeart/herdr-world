@@ -4,6 +4,7 @@ import BoardView from "./BoardView";
 import {
   BoardDocumentStore,
   type BoardDocument,
+  type BoardEnd,
   type BoardOp,
 } from "./board/boardDocument";
 import {
@@ -155,7 +156,13 @@ const store = new BoardDocumentStore({
 
 const selected: string[] = [];
 const opened: string[] = [];
-const sent: { paneId: string; terminalId: string; text: string }[] = [];
+const sent: {
+  paneId: string;
+  terminalId: string;
+  text: string;
+  stringId: string;
+  rev: number;
+}[] = [];
 /** Pane IDs the fake service reports as closed ("not found"). */
 const closedPanes = new Set<string>();
 const started: {
@@ -188,20 +195,40 @@ function mount(key: number, shown = world, selectedId: string | null = null) {
         onSelect={(id) => selected.push(id)}
         onOpenTerminal={(id) => opened.push(id)}
         store={store}
-        sendNote={async (target, text) => {
+        sendNote={async (target, note) => {
           sent.push({
             paneId: target.paneId,
             terminalId: target.terminalId,
-            text,
+            text: note.text,
+            stringId: target.stringId,
+            rev: note.rev,
           });
           return { status: "sent", agent: target.label };
         }}
         moveTab={async (tab, space) => {
           movedTabs.push({ tab: tab.nativeId, to: space.nativeId });
-          return { status: "moved", tab_id: `${space.nativeId}:t9`, panes: [] };
+          const tabId = `${space.nativeId}:t9`;
+          // As the service does for every move: strings to the tab follow it.
+          const ops = saved.strings.flatMap((string) => {
+            const follow = (end: BoardEnd): BoardEnd =>
+              "anchor" in end &&
+              end.anchor.kind === "tab" &&
+              end.anchor.native_id === tab.nativeId
+                ? { anchor: { ...end.anchor, native_id: tabId } }
+                : end;
+            const from = follow(string.from),
+              to = follow(string.to);
+            return from !== string.from || to !== string.to
+              ? [{ op: "string.put" as const, string: { ...string, from, to } }]
+              : [];
+          });
+          if (ops.length) apply(ops);
+          return { status: "moved", tab_id: tabId, panes: [] };
         }}
         createTab={async (space, name) => {
           createdTabs.push(`${space.nativeId}:${name ?? ""}`);
+          // A name the fake refuses: created, but naming failed.
+          return name === "Refused" ? { namingProblem: "no such tab" } : {};
         }}
         startAgent={async (space, kind, name, text) => {
           started.push({ workspace: space.nativeId, kind, text, name });
@@ -697,8 +724,10 @@ async function run() {
     "anchor" in remaining &&
       sent[0]!.paneId === remaining.anchor.native_id &&
       remaining.anchor.witness.includes(sent[0]!.terminalId) &&
-      sent[0]!.text === "Ship the login fix",
-    "the note goes to the strung pane, with its witnessed terminal",
+      sent[0]!.text === "Ship the login fix" &&
+      saved.strings.some((string) => string.id === sent[0]!.stringId) &&
+      saved.notes.some((note) => note.rev === sent[0]!.rev),
+    "the note goes to the strung pane, with its witnessed terminal, string and revision",
   );
 
   // A mouse double-click on empty board uses the browser's own double-click.
@@ -1053,6 +1082,19 @@ async function run() {
       createdTabs.length === 1 && createdTabs[0]!.endsWith(":Logs"),
       "Terminal opens a plain tab with the given name",
     );
+    await pick("Terminal", "Refused");
+    await waitFor(
+      () =>
+        Boolean(
+          host
+            .querySelector(".board-toast")
+            ?.textContent?.includes(
+              "Opened a terminal in web-app, but it could not be named",
+            ),
+        ),
+      "a naming failure reports the created tab, not a failed create",
+    );
+    check(createdTabs.length === 2, "the failed name creates no second tab");
     await pick("Codex");
     check(
       started.length === 2 &&
@@ -1111,6 +1153,30 @@ async function run() {
           a.y < r.bottom,
         "the line meets the selected card's right edge",
       );
+    }
+    {
+      // Zoomed out, the line goes to the workspace, not the hidden tab.
+      for (
+        let i = 0;
+        i < 14 && !boardEl().classList.contains("board-far");
+        i++
+      ) {
+        host
+          .querySelector<HTMLButtonElement>('[aria-label="Zoom out"]')!
+          .click();
+        await settle(40);
+      }
+      await rest();
+      await settle(100);
+      const ws = card("studio:w1")!.getBoundingClientRect();
+      const a = lastAnchors![id]!;
+      check(
+        Math.abs(a.x - Math.min(ws.right, innerWidth - 4)) < 6 &&
+          a.y > ws.top - 4 &&
+          a.y < ws.bottom + 4,
+        "zoomed out, the line goes to the tab's workspace",
+      );
+      await bringIntoView(() => card(tabKey)!);
     }
     const before = getComputedStyle(card(tabKey)!).backgroundColor;
     host
@@ -1260,6 +1326,43 @@ async function run() {
     check(
       Math.hypot(noteUndone.x - noteBefore.x, noteUndone.y - noteBefore.y) < 3,
       "Undo puts the note back too",
+    );
+  }
+
+  // Another client moves a workspace and folds it: the open board follows,
+  // and its own next save keeps that change rather than restoring its old one.
+  {
+    await settle(800);
+    const key = "studio:w2";
+    const was = at(key)!;
+    const offset = saved.layout.offsets[key] ?? { x: 0, y: 0 };
+    apply([
+      {
+        op: "layout.set",
+        offsets: { [key]: { x: offset.x + 400, y: offset.y } },
+        folded: [...saved.layout.folded, key],
+      },
+    ]);
+    await store.refresh();
+    await rest();
+    await settle(400);
+    check(
+      Math.abs(at(key)!.x - was.x - 400) < 3,
+      "another client's move reaches the open board",
+    );
+    check(
+      card(key)!.classList.contains("board-folded"),
+      "another client's fold reaches the open board",
+    );
+    // A local change afterwards saves the whole layout including that move.
+    host.querySelector<HTMLButtonElement>(`[aria-label="Open docs"]`)!.click();
+    await waitFor(
+      () => !saved.layout.folded.includes(key),
+      "a local change saves after the remote one",
+    );
+    check(
+      Math.abs((saved.layout.offsets[key]?.x ?? 0) - offset.x - 400) < 1,
+      "the local save keeps the other client's move",
     );
   }
 
@@ -1427,6 +1530,131 @@ async function run() {
     () => !host.querySelector(".board-trace"),
     "closing turns the trace off",
   );
+
+  // A stale host's cached panes are never offered as Send targets.
+  {
+    const noteOf = (end: (typeof saved.strings)[number]["from"]) =>
+      "note" in end ? end.note : null;
+    const strungNote =
+      noteOf(saved.strings[0]!.from) ?? noteOf(saved.strings[0]!.to)!;
+    const sendShown = () =>
+      [...host.querySelectorAll(".board-notebar button")].some((b) =>
+        b.textContent?.startsWith("Send to"),
+      );
+    const tapNote = async () => {
+      await bringIntoView(() => card(`note:${strungNote}`)!);
+      const c = centre(card(`note:${strungNote}`)!);
+      pointer(card(`note:${strungNote}`)!, "pointerdown", c.x, c.y, 36);
+      pointer(card(`note:${strungNote}`)!, "pointerup", c.x, c.y, 36);
+      await settle(100);
+    };
+    await tapNote();
+    check(sendShown(), "a live strung agent offers Send");
+    mount(
+      2,
+      fixtureWorld(
+        world.hosts.map((h) => ({
+          ...h,
+          stale: true,
+          spaces: h.spaces.map((space) => ({
+            ...space,
+            stale: true,
+            actionable: false,
+          })),
+        })),
+      ),
+    );
+    await settle(200);
+    await tapNote();
+    check(!sendShown(), "a stale host's pane offers no Send");
+    check(
+      Boolean(host.querySelector(".board-yarn-loose")),
+      "a stale host's strings are drawn dashed",
+    );
+    // The strung pane is not on the board (but not known to be gone): its
+    // string stays drawn, dashed, where the pane was last seen.
+    const paneId = strungPane()?.native_id;
+    const strings = host.querySelectorAll(
+      ".board-yarn:not(.board-yarn-temp)",
+    ).length;
+    mount(
+      2,
+      variant((leaf) => (leaf.nativeId === paneId ? null : leaf)),
+    );
+    await settle(300);
+    check(
+      host.querySelectorAll(".board-yarn:not(.board-yarn-temp)").length ===
+        strings && Boolean(host.querySelector(".board-yarn-loose")),
+      "a string whose target left the board stays drawn, dashed",
+    );
+    mount(2);
+    await settle(200);
+  }
+
+  // Editing a note while another client edits it: the draft survives the
+  // refresh, the save is refused rather than overwriting, and Keep mine saves it.
+  {
+    const count = saved.notes.length;
+    const spot = emptySpot();
+    boardEl().dispatchEvent(
+      new MouseEvent("dblclick", {
+        bubbles: true,
+        clientX: spot.x,
+        clientY: spot.y,
+      }),
+    );
+    await waitFor(() => saved.notes.length === count + 1, "a note to edit");
+    const id = saved.notes[saved.notes.length - 1]!.id;
+    await waitFor(
+      () => document.activeElement?.getAttribute("aria-label") === "Note text",
+      "the new note is being edited",
+    );
+    const editor = document.activeElement as HTMLElement;
+    editor.textContent = "My draft";
+    const remote = saved.notes.find((n) => n.id === id)!;
+    apply([
+      {
+        op: "note.put",
+        note: {
+          id,
+          text: "Their edit",
+          color: remote.color,
+          x: remote.x,
+          y: remote.y,
+        },
+        rev: remote.rev,
+      },
+    ]);
+    await store.refresh();
+    await settle(100);
+    check(
+      editor.isConnected && editor.textContent === "My draft",
+      "a remote edit leaves the draft alone",
+    );
+    editor.blur();
+    await waitFor(
+      () =>
+        Boolean(
+          host
+            .querySelector(".board-toast")
+            ?.textContent?.includes("changed on another device"),
+        ),
+      "a conflicting save is reported, not applied",
+    );
+    check(
+      saved.notes.find((n) => n.id === id)!.text === "Their edit",
+      "the other client's edit is not overwritten",
+    );
+    [...host.querySelectorAll<HTMLButtonElement>(".board-toast button")]
+      .find((b) => b.textContent === "Keep mine")!
+      .click();
+    await waitFor(
+      () => saved.notes.find((n) => n.id === id)!.text === "My draft",
+      "Keep mine saves the draft over the newer text",
+    );
+    mount(2);
+    await settle(200);
+  }
 }
 
 if (mode === "test")

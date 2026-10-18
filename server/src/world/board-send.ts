@@ -5,6 +5,8 @@
  * request was made against. The prompt is sent once and never retried.
  */
 
+import type { BoardDocument } from "./board-store";
+
 export type HerdrCall = (
   method: string,
   params: Record<string, unknown>,
@@ -111,4 +113,48 @@ export async function sendNote(
       message: `The prompt may not have been sent: ${error instanceof Error ? error.message : String(error)}`,
     };
   }
+}
+
+/**
+ * The note's current text, provided the saved board still strings that note
+ * to exactly this pane and the note is the revision the user sent. Another
+ * client may have cut the string, or edited or deleted the note, since this
+ * one drew its Send button.
+ */
+export function linkedNoteText(
+  doc: BoardDocument,
+  link: {
+    connection_id: string;
+    pane_id: string;
+    terminal_id: string;
+    note_id: string;
+    string_id: string;
+    note_rev: number;
+  },
+): { text: string } | SendNoteOutcome {
+  const note = doc.notes.find((entry) => entry.id === link.note_id);
+  if (!note)
+    return refuse("changed", "The note was deleted; nothing was sent.");
+  if (note.rev !== link.note_rev)
+    return refuse(
+      "changed",
+      "The note changed since it was shown; check it and send again.",
+    );
+  const string = doc.strings.find((entry) => entry.id === link.string_id);
+  const ends = string && !string.detached ? [string.from, string.to] : [];
+  const noted = ends.some((end) => "note" in end && end.note === note.id);
+  const pane = ends.some(
+    (end) =>
+      "anchor" in end &&
+      end.anchor.kind === "pane" &&
+      end.anchor.connection_id === link.connection_id &&
+      end.anchor.native_id === link.pane_id &&
+      end.anchor.witness.includes(link.terminal_id),
+  );
+  if (!noted || !pane)
+    return refuse(
+      "changed",
+      "The note is no longer strung to that agent; nothing was sent.",
+    );
+  return { text: note.text };
 }

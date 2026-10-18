@@ -1,4 +1,4 @@
-import type { BoardAnchor, BoardEnd } from "./boardDocument";
+import type { BoardAnchor } from "./boardDocument";
 import {
   boardKey,
   type BoardModel,
@@ -98,55 +98,34 @@ export function targetOf(
 
 /**
  * An anchor is confirmed when its target is on the board and still holds a
- * terminal it was last seen with. Terminal IDs change only when Herdr
+ * terminal it was last seen with (or held none and still exists). Terminal IDs change only when Herdr
  * restarts, so this holds across World restarts and reconnects.
  */
 export function confirmed(anchor: BoardAnchor, target: AnchorTarget | null) {
-  return Boolean(
-    target &&
-      anchor.witness.some((terminal) => target.terminals.includes(terminal)),
-  );
+  if (!target) return false;
+  // A workspace (or tab) that held no terminals when it was strung or kept
+  // has nothing to witness; it is confirmed while it exists. Such anchors
+  // never authorise Send, which needs a pane.
+  if (!anchor.witness.length) return true;
+  return anchor.witness.some((terminal) => target.terminals.includes(terminal));
+}
+
+/**
+ * The witness to record for a confirmed anchor whose target's terminals have
+ * changed (a pane opened or closed, or an empty workspace got a tab), so its
+ * continuity carries on; null when nothing changed or it is not confirmed.
+ */
+export function nextWitness(
+  anchor: BoardAnchor,
+  target: AnchorTarget | null,
+  limit = 16,
+): string[] | null {
+  if (!target || !confirmed(anchor, target)) return null;
+  const now = target.terminals.slice(0, limit);
+  const same =
+    now.length === anchor.witness.length &&
+    now.every((terminal) => anchor.witness.includes(terminal));
+  return same ? null : now;
 }
 
 /** What a desk move reports: the new tab and each pane's old and new ID. */
-export type MoveResult = {
-  tab_id: string;
-  panes: { previous: string; current: string }[];
-};
-
-/**
- * After World moves a tab to another workspace, strings follow it: pane
- * anchors take each pane's new ID (terminal witnesses are unchanged, since
- * moved panes keep their terminals) and tab anchors take the new tab ID.
- * Returns the strings that changed.
- */
-export function followMove<
-  S extends { id: string; from: BoardEnd; to: BoardEnd },
->(
-  strings: readonly S[],
-  connectionId: string,
-  oldTabId: string,
-  moved: MoveResult,
-): S[] {
-  const panes = new Map(
-    moved.panes.map((pane) => [pane.previous, pane.current]),
-  );
-  const rewrite = (end: BoardEnd): BoardEnd => {
-    if (!("anchor" in end) || end.anchor.connection_id !== connectionId)
-      return end;
-    const { anchor } = end;
-    if (anchor.kind === "pane" && panes.has(anchor.native_id))
-      return { anchor: { ...anchor, native_id: panes.get(anchor.native_id)! } };
-    if (anchor.kind === "tab" && anchor.native_id === oldTabId)
-      return { anchor: { ...anchor, native_id: moved.tab_id } };
-    return end;
-  };
-  const changed: S[] = [];
-  for (const string of strings) {
-    const from = rewrite(string.from),
-      to = rewrite(string.to);
-    if (from !== string.from || to !== string.to)
-      changed.push({ ...string, from, to });
-  }
-  return changed;
-}

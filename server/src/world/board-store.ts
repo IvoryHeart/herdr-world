@@ -439,3 +439,40 @@ function applyOp(next: BoardDocument, op: BoardOp, current: BoardDocument) {
       fail("unknown operation");
   }
 }
+
+/**
+ * After a move in any view: anchors to a moved pane take its new ID (moved
+ * panes keep their terminals, so witnesses stay), and anchors to a moved tab
+ * take its new tab ID. Returns the string updates to save, if any.
+ */
+export function moveFollowOps(
+  document: BoardDocument,
+  connectionId: string,
+  movedTab: string | null,
+  moved: {
+    tab_id: string;
+    panes: readonly { previous: string; current: string }[];
+  },
+): BoardOp[] {
+  const panes = new Map(
+    moved.panes.map((pane) => [pane.previous, pane.current]),
+  );
+  const rewrite = (end: BoardEnd): BoardEnd => {
+    if (!("anchor" in end) || end.anchor.connection_id !== connectionId)
+      return end;
+    const { anchor } = end;
+    if (anchor.kind === "pane" && panes.has(anchor.native_id))
+      return { anchor: { ...anchor, native_id: panes.get(anchor.native_id)! } };
+    if (anchor.kind === "tab" && movedTab && anchor.native_id === movedTab)
+      return { anchor: { ...anchor, native_id: moved.tab_id } };
+    return end;
+  };
+  const ops: BoardOp[] = [];
+  for (const string of document.strings) {
+    const from = rewrite(string.from),
+      to = rewrite(string.to);
+    if (from !== string.from || to !== string.to)
+      ops.push({ op: "string.put", string: { ...string, from, to } });
+  }
+  return ops;
+}

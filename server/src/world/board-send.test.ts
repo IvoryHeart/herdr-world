@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { sendNote, type HerdrCall } from "./board-send";
+import { linkedNoteText, sendNote, type HerdrCall } from "./board-send";
 
 function herdr(
   options: {
@@ -89,5 +89,75 @@ describe("Sending a Board note", () => {
     expect(await sendNote(herdr({ prompt: {} }).call, request())).toMatchObject(
       { status: "failed" },
     );
+  });
+});
+
+describe("the saved link a Send relies on", () => {
+  const doc = (
+    patch: { rev?: number; detached?: boolean; witness?: string[] } = {},
+  ) => ({
+    version: 1 as const,
+    revision: 3,
+    layout: { anchors: {}, offsets: {}, pinned: {}, folded: [], colors: {} },
+    notes: [
+      {
+        id: "n1",
+        text: "Ship it",
+        color: "yellow" as const,
+        x: 0,
+        y: 0,
+        rev: patch.rev ?? 2,
+      },
+    ],
+    strings: [
+      {
+        id: "s1",
+        from: { note: "n1" },
+        to: {
+          anchor: {
+            connection_id: "studio",
+            kind: "pane" as const,
+            native_id: "w1:p1",
+            witness: patch.witness ?? ["term_1"],
+          },
+        },
+        ...(patch.detached ? { detached: true } : {}),
+      },
+    ],
+  });
+  const link = {
+    connection_id: "studio",
+    pane_id: "w1:p1",
+    terminal_id: "term_1",
+    note_id: "n1",
+    string_id: "s1",
+    note_rev: 2,
+  };
+  test("an intact link yields the saved text", () => {
+    expect(linkedNoteText(doc(), link)).toEqual({ text: "Ship it" });
+  });
+  test("an edited, deleted or unstrung note, or another pane, is refused", () => {
+    expect(linkedNoteText(doc({ rev: 3 }), link)).toMatchObject({
+      status: "refused",
+      reason: "changed",
+    });
+    expect(linkedNoteText({ ...doc(), notes: [] }, link)).toMatchObject({
+      status: "refused",
+    });
+    expect(linkedNoteText({ ...doc(), strings: [] }, link)).toMatchObject({
+      status: "refused",
+    });
+    expect(linkedNoteText(doc({ detached: true }), link)).toMatchObject({
+      status: "refused",
+    });
+    expect(linkedNoteText(doc(), { ...link, pane_id: "w1:p2" })).toMatchObject({
+      status: "refused",
+    });
+    expect(
+      linkedNoteText(doc(), { ...link, connection_id: "other" }),
+    ).toMatchObject({ status: "refused" });
+    expect(linkedNoteText(doc({ witness: ["term_9"] }), link)).toMatchObject({
+      status: "refused",
+    });
   });
 });

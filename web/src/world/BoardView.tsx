@@ -25,7 +25,7 @@ import { worldLocalStorage } from "../browserStorage";
 import {
   anchorFor,
   confirmed,
-  followMove,
+  nextWitness,
   targetOf,
 } from "./board/boardAnchors";
 import {
@@ -134,6 +134,8 @@ export type SendTarget = {
   generation: number;
   paneId: string;
   terminalId: string;
+  /** The string that links the note to this pane; the service rechecks it. */
+  stringId: string;
 };
 export type SendOutcome = { status: string; message?: string; agent?: string };
 export type TabMoveOutcome = {
@@ -180,19 +182,36 @@ const CreateWorkspaceDialog = lazy(() =>
   })),
 );
 /** A plain terminal tab through World's store, which refreshes the topology. */
-async function createTabThroughStore(space: BoardWorkspace, name?: string) {
+/**
+ * Creating and naming are separate outcomes: a tab that was created but not
+ * named is reported as created, so the user finds it instead of retrying.
+ */
+export type CreateTabOutcome = { namingProblem?: string };
+async function createTabThroughStore(
+  space: BoardWorkspace,
+  name?: string,
+): Promise<CreateTabOutcome> {
   const { store } = await import("../store");
   const result = (await store.createQualifiedTab(
     { connectionId: space.connectionId, runtimeGeneration: space.generation },
     space.nativeId,
     { numberedLabel: !name },
   )) as { tab?: { tab_id?: unknown } } | undefined;
+  if (!name) return {};
   const tabId = result?.tab?.tab_id;
-  if (!name || typeof tabId !== "string") return;
-  const { bridge } = await import("../api");
-  await bridge
-    .connection(space.connectionId, space.generation)
-    .call("tab.rename", { tab_id: tabId, label: name });
+  if (typeof tabId !== "string")
+    return { namingProblem: "Herdr did not say which tab it created" };
+  try {
+    const { bridge } = await import("../api");
+    await bridge
+      .connection(space.connectionId, space.generation)
+      .call("tab.rename", { tab_id: tabId, label: name });
+    return {};
+  } catch (error) {
+    return {
+      namingProblem: error instanceof Error ? error.message : String(error),
+    };
+  }
 }
 async function startAgentThroughService(
   space: BoardWorkspace,
@@ -224,15 +243,20 @@ async function checkAnchorThroughService(host: BoardHost, anchor: BoardAnchor) {
       15_000,
     )) as { state: string };
 }
-async function sendNoteThroughService(target: SendTarget, text: string) {
+/** The service sends the saved note's text, after rechecking note and string. */
+async function sendNoteThroughService(target: SendTarget, note: BoardNote) {
   const { bridge } = await import("../api");
-  return (await bridge
-    .connection(target.connectionId, target.generation)
-    .call(
-      "board.send_note",
-      { pane_id: target.paneId, terminal_id: target.terminalId, text },
-      30_000,
-    )) as SendOutcome;
+  return (await bridge.connection(target.connectionId, target.generation).call(
+    "board.send_note",
+    {
+      pane_id: target.paneId,
+      terminal_id: target.terminalId,
+      note_id: note.id,
+      note_rev: note.rev,
+      string_id: target.stringId,
+    },
+    30_000,
+  )) as SendOutcome;
 }
 type Camera = { x: number; y: number; s: number };
 
@@ -322,7 +346,7 @@ export default function BoardView({
   /** Board's saved state; World's own service store by default. */
   store?: BoardDocumentStore;
   /** Send a note to an agent's pane; World's service by default. */
-  sendNote?: (target: SendTarget, text: string) => Promise<SendOutcome>;
+  sendNote?: (target: SendTarget, note: BoardNote) => Promise<SendOutcome>;
   /** Move a tab to another workspace of its host; World's service by default. */
   moveTab?: (
     tab: BoardTab,
@@ -344,7 +368,10 @@ export default function BoardView({
   ): void;
   onSelectedAnchorChange?(anchor: OfficeCanvasAnchor | null): void;
   /** Open a plain terminal tab in a workspace; World's store by default. */
-  createTab?: (space: BoardWorkspace, name?: string) => Promise<unknown>;
+  createTab?: (
+    space: BoardWorkspace,
+    name?: string,
+  ) => Promise<CreateTabOutcome | void>;
   /** Ask the service whether an anchor's target exists; World's by default. */
   checkAnchor?: (
     host: BoardHost,
@@ -392,6 +419,8 @@ export default function BoardView({
   const [toast, setToast] = useState<{
     text: string;
     undo?: () => void;
+    /** The undo button's label; Undo by default. */
+    action?: string;
   } | null>(null);
 
   const boardRef = useRef<HTMLDivElement>(null);
@@ -461,6 +490,8 @@ export default function BoardView({
   const barRef = useRef<HTMLDivElement>(null);
   const barKey = useRef<string | null>(null);
   const tempYarn = useRef<SVGPathElement | null>(null);
+  /** Where each anchored string end was last drawn, for when it leaves the board. */
+  const lastSeen = useRef(new Map<string, Point>());
   /** The last anchors reported to World, to report only changes. */
   const reportedAnchors = useRef("");
   const anchorProps = useRef({
@@ -477,6 +508,10 @@ export default function BoardView({
   };
   const loaded = useRef(false);
   const saveTimer = useRef(0);
+  /** True while a layout save is waiting to go out. */
+  const savePending = useRef(false);
+  /** The saved layout this board last applied or sent, as a signature. */
+  const layoutSeen = useRef("");
   const lastPointerType = useRef("mouse");
   const latest = useRef({
     model,
@@ -593,10 +628,40 @@ export default function BoardView({
     }
     for (const key of [...cards.current.keys()])
       if (isNoteKey(key) && !present.has(key)) cards.current.delete(key);
+    const incoming = saved ? layoutSignature(saved.layout) : "";
+    if (
+      saved &&
+      loaded.current &&
+      incoming !== layoutSeen.current &&
+      !held.current &&
+      !savePending.current
+    ) {
+      // Another client changed the arrangement: glide to it. While this board
+      // is mid-drag or has a save waiting, its own save follows and wins
+      // (whole-layout last writer wins).
+      layoutSeen.current = incoming;
+      layout.current = placeNew(
+        model,
+        {
+          anchors: new Map(Object.entries(saved.layout.anchors)),
+          offsets: new Map(Object.entries(saved.layout.offsets)),
+          pinned: new Map(Object.entries(saved.layout.pinned)),
+        },
+        { phone: isPhone(), sizeOf },
+      );
+      travelToLayout(model);
+      const folded = new Set(saved.layout.folded);
+      if (
+        folded.size !== latest.current.collapsed.size ||
+        [...folded].some((key) => !latest.current.collapsed.has(key))
+      )
+        setCollapsed(folded);
+    }
     if (saved && !loaded.current) {
       // The first saved layout replaces the default one; new cards still get
       // free space.
       loaded.current = true;
+      layoutSeen.current = incoming;
       layout.current = placeNew(
         model,
         {
@@ -625,18 +690,22 @@ export default function BoardView({
   const scheduleSave = () => {
     if (!loaded.current) return;
     window.clearTimeout(saveTimer.current);
+    savePending.current = true;
     saveTimer.current = window.setTimeout(() => {
       const l = layout.current;
-      void boardStore.patch([
-        {
-          op: "layout.set",
-          replace: true,
-          anchors: Object.fromEntries(l.anchors),
-          offsets: Object.fromEntries(l.offsets),
-          pinned: Object.fromEntries(l.pinned),
-          folded: [...latest.current.collapsed],
-        },
-      ]);
+      const sent = {
+        anchors: Object.fromEntries(l.anchors),
+        offsets: Object.fromEntries(l.offsets),
+        pinned: Object.fromEntries(l.pinned),
+        folded: [...latest.current.collapsed],
+      };
+      // Its own save comes back unchanged and must not move anything.
+      layoutSeen.current = layoutSignature(sent);
+      void boardStore
+        .patch([{ op: "layout.set", replace: true, ...sent }])
+        .finally(() => {
+          savePending.current = false;
+        });
     }, SAVE_DELAY_MS);
   };
   useEffect(() => {
@@ -883,7 +952,11 @@ export default function BoardView({
         for (const tab of m.tabs) {
           const pane = tab.panes.find((p) => p.leaf.id === id);
           if (!pane) continue;
-          const card = shown(cardEls.current.get(tab.key));
+          // Zoomed out or folded, tabs are hidden (by opacity, so the DOM
+          // still lays them out): the line goes to the workspace.
+          const hidden =
+            farRef.current || latest.current.collapsed.has(tab.workspaceKey);
+          const card = hidden ? null : shown(cardEls.current.get(tab.key));
           el =
             shown(
               card?.querySelector<HTMLElement>(
@@ -1010,9 +1083,22 @@ export default function BoardView({
       const card = cards.current.get(NOTE_PREFIX + end.note);
       return card ? { at: { x: card.x, y: card.y }, firm: true } : null;
     }
+    const anchorKey = `${end.anchor.connection_id}|${end.anchor.kind}|${end.anchor.native_id}`;
     const target = targetOf(m, end.anchor);
-    if (!target) return null;
-    const firm = confirmed(end.anchor, target);
+    if (!target) {
+      // Off the board (filtered, not yet admitted, or gone): still drawn,
+      // dashed, to where it was last seen or to its host's zone.
+      const last = lastSeen.current.get(anchorKey);
+      if (last) return { at: last, firm: false };
+      const hostAnchor = m.hostByKey.has(end.anchor.connection_id)
+        ? layout.current.anchors.get(end.anchor.connection_id)
+        : undefined;
+      return hostAnchor ? { at: hostAnchor, firm: false } : null;
+    }
+    // Cached topology from a failed host is never a firm target.
+    const firm =
+      confirmed(end.anchor, target) &&
+      !m.hostByKey.get(end.anchor.connection_id)?.stale;
     let key = target.cardKey;
     const tab = m.tabByKey.get(key);
     // A tab hidden by the overview or a fold is drawn as its workspace.
@@ -1023,6 +1109,7 @@ export default function BoardView({
       key = tab.workspaceKey;
     const card = cards.current.get(key);
     if (!card) return null;
+    lastSeen.current.set(anchorKey, { x: card.x, y: card.y });
     if (key === target.cardKey && target.paneKey) {
       const el = cardEls.current.get(key);
       const row = el?.querySelector<HTMLElement>(
@@ -1818,6 +1905,39 @@ export default function BoardView({
         },
       ]),
     );
+  /**
+   * Save an edit against the revision editing started from. If the note
+   * changed elsewhere meanwhile, the store refuses it; the draft is kept and
+   * can still be saved over the newer text on purpose.
+   */
+  const saveDraft = async (started: BoardNote, text: string) => {
+    const problem = await boardStore.patch([
+      {
+        op: "note.put",
+        note: {
+          id: started.id,
+          text,
+          color: started.color,
+          x: started.x,
+          y: started.y,
+        },
+        rev: started.rev,
+      },
+    ]);
+    if (!problem) return;
+    trace.record("save", { problem });
+    setToast({
+      text: `This note changed on another device, so your edit was not saved: “${text.slice(0, 60)}${text.length > 60 ? "…" : ""}”`,
+      action: "Keep mine",
+      undo: () => {
+        const current = latest.current.saved?.notes.find(
+          (n) => n.id === started.id,
+        );
+        setToast(null);
+        if (current) void saveNote(current, { text });
+      },
+    });
+  };
   const deleteNote = (note: BoardNote) => {
     setNoteSelected(null);
     void report(
@@ -1923,6 +2043,29 @@ export default function BoardView({
     // report and boardStore are stable for this purpose.
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [anchorStates, checkAnchor]);
+  // Confirmed anchors on live hosts keep their witness in step with their
+  // target's terminals, so continuity survives panes opening and closing.
+  const rewitnessing = useRef(new Set<string>());
+  useEffect(() => {
+    const ops: BoardOp[] = [];
+    for (const string of saved?.strings ?? []) {
+      if (string.detached) continue;
+      for (const end of ["from", "to"] as const) {
+        const side = string[end];
+        if (!("anchor" in side)) continue;
+        const host = model.hostByKey.get(side.anchor.connection_id);
+        if (!host || host.stale) continue;
+        const witness = nextWitness(side.anchor, targetOf(model, side.anchor));
+        const key = `${string.id}:${end}:${witness?.join(",")}`;
+        if (!witness || rewitnessing.current.has(key)) continue;
+        rewitnessing.current.add(key);
+        ops.push({ op: "anchor.witness", string_id: string.id, end, witness });
+      }
+    }
+    if (ops.length) void report(boardStore.patch(ops));
+    // report and boardStore are stable for this purpose.
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+  }, [saved, model]);
   const keepAnchors = (hostKey: string) => {
     const list = anchorStates.unconfirmed.get(hostKey) ?? [];
     void report(
@@ -1965,6 +2108,16 @@ export default function BoardView({
           .get(target.cardKey)
           ?.panes.find((p) => p.key === target.paneKey);
         if (!pane?.isAgent) continue;
+        // Only a current, actionable pane: cached topology from a failed
+        // host can still show matching terminals.
+        const owner = model.tabByKey.get(target.cardKey);
+        if (
+          !owner ||
+          owner.stale ||
+          !owner.actionable ||
+          model.hostByKey.get(owner.hostKey)?.stale
+        )
+          continue;
         const terminal = end.anchor.witness.find((t) =>
           target.terminals.includes(t),
         )!;
@@ -1985,6 +2138,7 @@ export default function BoardView({
           generation: pane.leaf.generation,
           paneId: pane.leaf.nativeId,
           terminalId: terminal,
+          stringId: string.id,
         });
       }
     }
@@ -1992,7 +2146,7 @@ export default function BoardView({
   };
   const send = async (note: BoardNote, target: SendTarget) => {
     try {
-      const outcome = await sendNote(target, note.text);
+      const outcome = await sendNote(target, note);
       setToast({
         text:
           outcome.status === "sent"
@@ -2027,19 +2181,9 @@ export default function BoardView({
     try {
       const outcome = await moveTab(tab, space, allowClose);
       if (outcome.status === "moved" && outcome.tab_id) {
-        const changed = followMove(
-          latest.current.saved?.strings ?? [],
-          space.connectionId,
-          tab.nativeId,
-          {
-            tab_id: outcome.tab_id,
-            panes: outcome.panes ?? [],
-          },
-        );
-        if (changed.length)
-          await boardStore.patch(
-            changed.map((string) => ({ op: "string.put" as const, string })),
-          );
+        // The service rewrites saved strings for every move (here or in
+        // another view) and broadcasts the board; refresh to draw them now.
+        void boardStore.refresh();
         setToast({ text: `Moved ${tab.label} to ${space.label}` });
       } else if (outcome.reason === "room_would_close")
         setMoveAsk({ tabKey, workspaceKey, lastTab: true });
@@ -2049,7 +2193,6 @@ export default function BoardView({
     }
   }
   /** A new terminal or agent in a workspace, with no note. */
-  /** A new terminal or agent in a workspace, with no note. */
   const addToWorkspace = async (
     space: BoardWorkspace,
     kind: string | null,
@@ -2058,8 +2201,12 @@ export default function BoardView({
     setAddTo(null);
     if (!kind) {
       try {
-        await createTab(space, name || undefined);
-        setToast({ text: `Opened a terminal in ${space.label}` });
+        const outcome = await createTab(space, name || undefined);
+        setToast({
+          text: outcome?.namingProblem
+            ? `Opened a terminal in ${space.label}, but it could not be named: ${outcome.namingProblem}`
+            : `Opened a terminal in ${space.label}`,
+        });
       } catch (error) {
         setToast({ text: `The terminal was not opened: ${String(error)}` });
       }
@@ -2544,42 +2691,13 @@ export default function BoardView({
             >
               <span className="board-tape" aria-hidden="true" />
               {editing === note.id ? (
-                <div
-                  className="board-note-text"
-                  contentEditable
-                  suppressContentEditableWarning
-                  role="textbox"
-                  aria-label="Note text"
-                  ref={(el) => {
-                    if (el && document.activeElement !== el) {
-                      // Never scroll World's page for the keyboard: on a phone
-                      // the page stayed scrolled and hid the note bar.
-                      el.focus({ preventScroll: true });
-                      const range = document.createRange();
-                      range.selectNodeContents(el);
-                      range.collapse(false);
-                      getSelection()?.removeAllRanges();
-                      getSelection()?.addRange(range);
-                    }
-                  }}
-                  onBlur={(event) => {
+                <NoteEditor
+                  note={note}
+                  onDone={(started, text) => {
                     setEditing(null);
-                    const text = event.currentTarget.textContent?.trim() ?? "";
-                    if (text !== note.text) void saveNote(note, { text });
+                    if (text !== started.text) void saveDraft(started, text);
                   }}
-                  onKeyDown={(event) => {
-                    if (
-                      event.key === "Escape" ||
-                      (event.key === "Enter" &&
-                        (event.metaKey || event.ctrlKey))
-                    ) {
-                      event.preventDefault();
-                      event.currentTarget.blur();
-                    }
-                  }}
-                >
-                  {note.text}
-                </div>
+                />
               ) : (
                 <div className="board-note-text">
                   {note.text || "Empty note"}
@@ -2971,13 +3089,63 @@ export default function BoardView({
             <span>{toast.text}</span>
             {toast.undo ? (
               <button type="button" onClick={() => toast.undo?.()}>
-                Undo
+                {toast.action ?? "Undo"}
               </button>
             ) : null}
           </div>
         ) : null}
       </div>
     </>
+  );
+}
+
+/**
+ * A note being edited. The draft and the revision it started from are kept
+ * from the moment editing begins, so a refresh from another client neither
+ * replaces the unfinished text nor lets the save overwrite that client's edit.
+ */
+function NoteEditor({
+  note,
+  onDone,
+}: {
+  note: BoardNote;
+  onDone(started: BoardNote, text: string): void;
+}) {
+  const [started] = useState(note);
+  return (
+    <div
+      className="board-note-text"
+      contentEditable
+      suppressContentEditableWarning
+      role="textbox"
+      aria-label="Note text"
+      ref={(el) => {
+        if (el && document.activeElement !== el) {
+          // Never scroll World's page for the keyboard: on a phone the page
+          // stayed scrolled and hid the note bar.
+          el.focus({ preventScroll: true });
+          const range = document.createRange();
+          range.selectNodeContents(el);
+          range.collapse(false);
+          getSelection()?.removeAllRanges();
+          getSelection()?.addRange(range);
+        }
+      }}
+      onBlur={(event) =>
+        onDone(started, event.currentTarget.textContent?.trim() ?? "")
+      }
+      onKeyDown={(event) => {
+        if (
+          event.key === "Escape" ||
+          (event.key === "Enter" && (event.metaKey || event.ctrlKey))
+        ) {
+          event.preventDefault();
+          event.currentTarget.blur();
+        }
+      }}
+    >
+      {started.text}
+    </div>
   );
 }
 
@@ -3122,6 +3290,25 @@ function workspaceCounts(space: BoardWorkspace) {
   return parts.join(" · ");
 }
 const NO_IDS: readonly string[] = [];
+/** A saved layout, comparable regardless of key order or float noise. */
+function layoutSignature(layout: {
+  anchors: Record<string, Point>;
+  offsets: Record<string, Point>;
+  pinned: Record<string, Point>;
+  folded: string[];
+}) {
+  const points = (map: Record<string, Point>) =>
+    Object.entries(map)
+      .map(([key, p]) => `${key}:${Math.round(p.x)},${Math.round(p.y)}`)
+      .sort()
+      .join(";");
+  return [
+    points(layout.anchors),
+    points(layout.offsets),
+    points(layout.pinned),
+    [...layout.folded].sort().join(";"),
+  ].join("|");
+}
 /** A card's right edge as a line anchor, pinned to the board's edge when off screen. */
 function edgeAnchor(rect: DOMRect, clip: DOMRect): OfficeCanvasAnchor {
   const visible =

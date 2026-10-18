@@ -124,6 +124,21 @@ export async function startFromNote(
         };
     }
     if (agent) {
+      // The ready agent must be the one just launched here: after a lost
+      // start reply another agent may hold this pane.
+      if (
+        agent.pane_id !== created.pane_id ||
+        (agent.terminal_id != null &&
+          agent.terminal_id !== created.terminal_id) ||
+        (agent.agent != null && agent.agent !== request.kind) ||
+        agent.name !== request.name
+      )
+        return {
+          status: "failed",
+          message:
+            "A different agent answered in the new tab; the note was not sent.",
+          ...created,
+        };
       if (agent.agent_status === "blocked")
         return {
           status: "uncertain",
@@ -131,7 +146,7 @@ export async function startFromNote(
             "The agent is waiting on a question before it is ready; the note was not sent.",
           ...created,
         };
-      if (agent.interactive_ready === true) {
+      if (agent.agent === request.kind && agent.interactive_ready === true) {
         if (!request.isCurrent()) return stale();
         try {
           const sent = await call("agent.prompt", {

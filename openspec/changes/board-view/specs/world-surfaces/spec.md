@@ -188,9 +188,13 @@ shown on the note when they are reported; World SHALL NOT invent them.
 The World service SHALL persist board layout, pins, folds, notes and strings as
 one board document, with every Herdr anchor qualified by its connection profile,
 bounded in size, written atomically and revisioned, and SHALL broadcast changes
-to other open clients. An edit to a note based on an outdated revision of that
-note SHALL be rejected with the current board rather than overwrite newer
-content. Authenticated World clients of the service MAY receive board content;
+to other open clients. An open Board SHALL apply layout changes saved by other
+clients; while it has a local drag or save in progress its own save follows and
+replaces the layout (last writer wins). An edit to a note based on an outdated
+revision of that note SHALL be rejected with the current board rather than
+overwrite newer content; a note being edited SHALL keep its draft and the
+revision editing started from, and a rejected draft SHALL be kept for the user
+to save on purpose. Authenticated World clients of the service MAY receive board content;
 note text SHALL go to Herdr or an agent only on the user's explicit Send.
 
 Strings SHALL be anchored to the connection profile and the Herdr workspace,
@@ -200,7 +204,9 @@ store SHALL keep the terminal IDs last observed in its target as a continuity
 witness. An anchor SHALL be:
 
 - attached when its target exists on the current runtime generation and at
-  least one witnessed terminal ID is still present in it;
+  least one witnessed terminal ID is still present in it, or, for a workspace
+  or tab that held no terminals when strung or kept, while it exists (weak
+  evidence, acceptable because such anchors never authorise Send);
 - unresolved, keeping its saved anchor, while its host is connecting, offline,
   stale or filtered or its target is outside the admitted topology;
 - unconfirmed when its host is current and its ID exists but no witnessed
@@ -209,10 +215,22 @@ witness. An anchor SHALL be:
   observed on the current generation, or a qualified get on the current
   generation answering not found.
 
-Only attached strings SHALL be actionable. Unresolved and unconfirmed strings
-SHALL be drawn as such with their reason. A pane anchor SHALL follow a pane
-moved by World through the move result. Items SHALL NOT be deleted or
-re-attached without the user.
+While an anchor is attached on a current host, Board SHALL keep its witness in
+step with the target's present terminals, so continuity survives panes opening
+and closing. Only attached strings SHALL be actionable, and Send SHALL be
+offered only for a current, actionable pane. At Send the service SHALL check
+that the saved board still strings that note to that pane and that the note is
+the revision the user sent, and SHALL send the saved text. Unresolved and
+unconfirmed strings SHALL be drawn as such with their reason, at the target's
+last known position or its host's zone when the target is not on the board. A
+pane or tab anchor SHALL follow a pane or tab moved by World, from any view or
+client, through the move result, rewritten by the service. Items SHALL NOT be
+deleted or re-attached without the user.
+
+Card positions, pins, folds and colours are a layout preference keyed by
+connection profile and Herdr ID, not a claim of identity: a new entity that
+reuses an ID inherits that arrangement, while strings keep the continuity rules
+above.
 
 #### Scenario: World restarts while Herdr keeps running
 
@@ -243,6 +261,16 @@ re-attached without the user.
 
 - **WHEN** a tab that a note is strung to closes while its host is observed
 - **THEN** the note stays on the board and its string moves to Needs a home
+
+#### Scenario: A string to an empty workspace
+
+- **WHEN** the user strings a note to a workspace with no tabs, and later opens a tab in it
+- **THEN** the string is attached throughout, and the new tab's terminal becomes its witness
+
+#### Scenario: A move made in another view
+
+- **WHEN** a note is strung to a pane and the user moves that agent to another desk in Town
+- **THEN** the service rewrites the string to the pane's new ID, and Board shows it attached to the moved pane
 
 #### Scenario: Phone and desktop
 

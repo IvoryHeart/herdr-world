@@ -122,8 +122,12 @@ import { rpcLogLevel } from "./utils/rpc-logging";
 import { DOWNLOAD_TIMEOUT_MS } from "./workspace/file-constants";
 import { WorldSnapshotService } from "./world/snapshot";
 import { WorldWatchlistRegistry } from "./world/watchlist";
-import { BoardConflictError, BoardStore } from "./world/board-store";
-import { sendNote } from "./world/board-send";
+import {
+  moveFollowOps,
+  BoardConflictError,
+  BoardStore,
+} from "./world/board-store";
+import { linkedNoteText, sendNote } from "./world/board-send";
 import { checkAnchor } from "./world/board-anchor";
 import { startFromNote } from "./world/board-start";
 import {
@@ -1354,15 +1358,35 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
   if (method === "board.send_note") {
     try {
       const p = (params ?? {}) as Record<string, unknown>;
-      const result = await sendNote(
-        (rpc, rpcParams) => herdr.call(rpc, rpcParams, 15_000),
-        {
-          pane_id: String(p.pane_id ?? ""),
-          terminal_id: String(p.terminal_id ?? ""),
-          text: String(p.text ?? ""),
-          isCurrent: requestIsCurrent,
-        },
-      );
+      // Send what the saved board says, not the caller's copy: the string
+      // and note must still be the ones the user saw.
+      const linked =
+        route.scope === "connection"
+          ? linkedNoteText(board().get(), {
+              connection_id: route.connectionId,
+              pane_id: String(p.pane_id ?? ""),
+              terminal_id: String(p.terminal_id ?? ""),
+              note_id: String(p.note_id ?? ""),
+              string_id: String(p.string_id ?? ""),
+              note_rev: Number(p.note_rev),
+            })
+          : ({
+              status: "refused",
+              reason: "changed",
+              message: "No host was named; nothing was sent.",
+            } as const);
+      const result =
+        "text" in linked
+          ? await sendNote(
+              (rpc, rpcParams) => herdr.call(rpc, rpcParams, 15_000),
+              {
+                pane_id: String(p.pane_id ?? ""),
+                terminal_id: String(p.terminal_id ?? ""),
+                text: linked.text,
+                isCurrent: requestIsCurrent,
+              },
+            )
+          : linked;
       sendReply({ id, result }, method);
     } catch (error) {
       sendError(`${method}-error`, error);
@@ -1396,6 +1420,22 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
               isCurrent: requestIsCurrent,
             }),
       );
+      // Board's strings follow the move whichever view or client made it.
+      if (result.status === "moved" && route.scope === "connection") {
+        try {
+          const ops = moveFollowOps(
+            board().get(),
+            route.connectionId,
+            method === "town.move_desk" ? String(p.tab_id ?? "") : null,
+            result,
+          );
+          if (ops.length) publishBoardChanged(board().patch(ops).revision);
+        } catch (error) {
+          logger.warn("Board strings did not follow a move", {
+            detail: String(error),
+          });
+        }
+      }
       sendReply({ id, result }, method);
     } catch (error) {
       sendError(`${method}-error`, error);
