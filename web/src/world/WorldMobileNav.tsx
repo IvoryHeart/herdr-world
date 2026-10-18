@@ -3,8 +3,8 @@ import {
   Castle,
   LayoutDashboard,
   type LucideIcon,
-  Network,
   PanelsTopLeft,
+  StickyNote,
 } from "lucide-react";
 import type { WorldView } from "./worldViewRouting";
 import "./WorldMobileNav.css";
@@ -16,7 +16,8 @@ const DESTINATIONS: readonly {
 }[] = [
   { view: "office", label: "Office", Icon: Building2 },
   { view: "town", label: "Town", Icon: Castle },
-  { view: "graph", label: "Graph", Icon: Network },
+  // Board takes Graph's place on phones, where Graph is only a list.
+  { view: "board", label: "Board", Icon: StickyNote },
   { view: "desk", label: "Desk", Icon: LayoutDashboard },
   { view: "spaces", label: "Spaces", Icon: PanelsTopLeft },
 ];

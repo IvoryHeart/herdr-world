@@ -10,7 +10,7 @@ export const worldBrowserShards = [
     "windows/WindowFrame",
     "HostsFilter.cold",
   ],
-  ["HostsFilter.actions", "ProductionContexts.tree"],
+  ["HostsFilter.actions", "ProductionContexts.tree", "BoardView"],
   [
     "HostsFilter.navigation",
     "ProductionContexts.graph",

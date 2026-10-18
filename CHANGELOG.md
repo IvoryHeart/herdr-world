@@ -7,6 +7,16 @@ are optional because the merged PR history records their source.
 
 ## [Unreleased]
 
+### Added
+
+- Add Board, a pin board view next to Graph (in progress). Hosts are zones,
+  workspaces are cards and tabs sit around their workspace. Cards are springy
+  while you move them and settle within about a second; a workspace carries its
+  tabs, folds into a stack and opens into free space; Tidy works on a workspace
+  or the whole board and can be undone. Zooming out shows each workspace's tabs
+  as status squares. Tabs pulse in their status colour, which the view's ⋯ menu
+  can turn off. On phones Board replaces Graph in the bottom navigation.
+
 ### Fixed
 
 - When a Town move finishes, the dragged table or agent fades or springs home

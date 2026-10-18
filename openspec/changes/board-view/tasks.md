@@ -6,8 +6,8 @@
 
 ## 2. Board view
 
-- [ ] 2.1 Add Board as a World view next to Graph (route, view switcher, phone navigation) with DOM cards, the SVG string layer, host zones, pan, wheel and pinch zoom, zoom controls and fit.
-- [ ] 2.2 Add semantic zoom (overview with workspace status squares; tabs return when zoomed in) with hysteresis; verify at desktop and 390 px browser sizes.
+- [x] 2.1 Add Board as a World view next to Graph (route, view switcher, phone navigation) with DOM cards, the SVG string layer, host zones, pan, wheel and pinch zoom, zoom controls and fit.
+- [x] 2.2 Add semantic zoom (overview with workspace status squares; tabs return when zoomed in) with hysteresis; verify at desktop and 390 px browser sizes.
 - [ ] 2.3 Add fold and unfold into free space, pinning, tidy with undo, search and Next; verify in browser cases.
 - [ ] 2.4 Add status pulses with reduced-motion handling and the ⋯ menu settings (pulses, board surface, help).
 - [ ] 2.5 Verify input acknowledgement at maximum scale against the Town baseline.
