@@ -91,6 +91,7 @@ Use the view switcher to move between these views without restarting work:
 | View | Use it for |
 | --- | --- |
 | Town | Explore host buildings, workspace rooms and team tables; the default landing view |
+| Board | Pin notes beside hosts, workspaces and agents, string them together and send a note to an agent |
 | Office | See the same work as workspace rooms and agent desks |
 | Desk | Find agents needing input, review finished turns and follow work in flight |
 | Graph | Explore the same hosts, workspaces and agents as a spatial map |
@@ -166,6 +167,51 @@ and open its terminal or Inspector without losing its workspace context.
 ![Town source preview with four disposable workspaces and terminal desks](./images/herdr-world-desktop-town.png)
 
 ![Town source preview at phone width](./images/herdr-world-mobile-town.png)
+
+### Use Board: notes and strings for your agents
+
+<a id="board"></a>
+
+Board shows the same hosts, workspaces and tabs as cards on a pin board, beside
+your own notes. Notes are saved by the World service, so the same board appears
+on your phone and desktop.
+
+1. Choose **Board** from the view switcher (on a phone it is in the bottom bar).
+   Each host is a dashed zone, each workspace a card, and each tab a card around
+   its workspace. A tab with several panes lists them as rows; a tab of plain
+   shells looks like a small terminal. Tabs pulse in their status colour; the
+   **⋯** menu turns the pulses off.
+2. Scroll or pinch to zoom, drag empty board to pan, or use the controls at the
+   bottom right. Zoomed out, each workspace shows a square per pane (hollow for
+   shells); tap a workspace there to zoom in on it.
+3. Drag a workspace and its tabs follow; cards settle within about a second.
+   **−** on a workspace folds its tabs behind a count, and tapping the count opens
+   them into free space. The sparkle button tidies the selected workspace, or
+   the whole board, and offers **Undo**; notes strung to cards move with them.
+4. Tap a workspace, tab or pane row to open its Inspector with Terminal, Files,
+   Changes and Agent History. Double-click a tab to open its terminal.
+5. Double-click (or double-tap) empty board to pin a note and type. Tap a note
+   for its bar: colour, **Edit**, **String to…**, **Delete** (or press Delete).
+6. Drag a card's red dot onto a pane row, a tab or a workspace to string a note
+   to it; a tab with several panes asks which pane. Drop it on empty board for a
+   new note strung to where you started. Click a string, then **Delete**, to
+   remove it.
+7. A note strung to an agent's pane offers **Send to <agent>**. World checks the
+   pane still holds the same agent and sends the note once; nothing is ever sent
+   without **Send**. **Start an agent…** opens a new tab in a workspace you choose
+   and sends the note once the agent is ready. (Starting a chosen agent kind
+   currently opens a shell; see
+   [issue 219](https://github.com/IvoryHeart/herdr-world/issues/219).)
+8. Drag a tab onto another workspace of the same host to move it there. Board
+   asks first, with **Don't ask again**, and always asks before moving a
+   workspace's last tab, which closes that workspace. Strings follow the move.
+
+After Herdr restarts, Board cannot prove that a workspace or agent is the one a
+string was made with, so it draws those strings dashed and asks once per host:
+**Keep** or **Detach**. A string whose target closed waits in **Needs a home**
+(the red count in the controls), where you can re-attach its note or discard
+the string; notes always stay. If Board misbehaves, **⋯ → Event trace** shows
+what it received; **Copy trace** gives you text to attach to a bug report.
 
 ### Explore Graph: find an agent and open its terminal
 

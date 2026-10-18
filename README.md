@@ -5,7 +5,7 @@
 </p>
 
 A **visual control plane** for [Herdr](https://herdr.dev). Connect local and SSH
-hosts, see their agents together in Town, Desk, Office, Tree or Graph, and use independently
+hosts, see their agents together in Town, Board, Desk, Office, Tree or Graph, and use independently
 qualified terminals, files, changes and agent history on desktop or mobile.
 **Requires a running Herdr server.**
 
@@ -22,6 +22,8 @@ host is a building, each workspace a room and each tab a team table. Agents
 that need you queue at reception and in a needs-you list; hover one to read its
 question and answer, or reply through the terminal composer. Finished agents also
 wait at reception until you open their terminal or mark the completion reviewed.
+Board puts the same hosts, workspaces and agents on a pin board beside your
+notes, which you can string to an exact agent and send to it.
 Office groups the same agent work by host. Desk supports agent triage across
 filtered hosts. Tree and Graph show the same filtered aggregate,
 while Spaces keeps one qualified workspace's terminal and repository workflow

@@ -34,5 +34,5 @@ Replaced by World's shared Inspector (owner review, 2026-10-18): Board selects t
 
 ## 6. Delivery
 
-- [ ] 6.1 Update `docs/TUTORIAL.md`, `FEATURES.md`, the README view list and the knowledge map; add CHANGELOG entries.
+- [x] 6.1 Update `docs/TUTORIAL.md`, `FEATURES.md`, the README view list and the knowledge map; add CHANGELOG entries.
 - [ ] 6.2 After Board ships, raise issue #216 upstream as a Herdr proposal for durable workspace, tab and pane annotations or a session identity, citing the display-only metadata limits and the restart prompt it would remove.
