@@ -334,7 +334,13 @@ async function rollBack(
   };
   let where = await locate();
   let stopped: string | null = null;
-  let movedBack = 0;
+  // Whether any pane left its tab, judged from observation and attempts,
+  // never from replies: a compensating move can succeed and lose its reply.
+  let disturbed =
+    where === null ||
+    [...terminalOf.values()].some(
+      (terminal) => where!.get(terminal)?.tab_id !== request.tab_id,
+    );
   for (const terminal of terminalOf.values()) {
     if (!where) break;
     const pane = where.get(terminal);
@@ -352,22 +358,18 @@ async function rollBack(
       stopped = "The host reconnected before the desk could be moved back.";
       break;
     }
+    disturbed = true;
     try {
-      if (
-        movedPane(
-          await call("pane.move", {
-            pane_id: pane.pane_id,
-            destination: {
-              type: "tab",
-              tab_id: request.tab_id,
-              split: "right",
-              target_pane_id: home.pane_id,
-            },
-            focus: false,
-          }),
-        )
-      )
-        movedBack += 1;
+      await call("pane.move", {
+        pane_id: pane.pane_id,
+        destination: {
+          type: "tab",
+          tab_id: request.tab_id,
+          split: "right",
+          target_pane_id: home.pane_id,
+        },
+        focus: false,
+      });
     } catch {
       // The next observation shows where the pane really is.
     }
@@ -393,7 +395,7 @@ async function rollBack(
       })
     : [];
   const message = restored
-    ? movedBack
+    ? disturbed
       ? `${failure} The desk was moved back to its room; its pane layout may differ.`
       : `${failure} Nothing was moved.`
     : `${failure} ${stopped ?? (where ? "Some panes could not be moved back." : "Where its panes are now could not be read.")}`;
@@ -401,7 +403,7 @@ async function rollBack(
     status: "failed",
     message,
     rolled_back: restored,
-    layout_restored: restored && movedBack === 0,
+    layout_restored: restored && !disturbed,
     topology_known: where !== null,
     topology,
   };

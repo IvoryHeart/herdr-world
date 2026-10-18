@@ -14,7 +14,46 @@ import type {
 export type TownMoveOutcome =
   | { status: "moved"; tab_id: string; workspace_id: string }
   | { status: "refused"; reason: string; message: string }
-  | { status: "failed"; message: string; rolled_back: boolean };
+  | {
+      status: "failed";
+      message: string;
+      /** True only when every pane was confirmed back where it started. */
+      rolled_back: boolean;
+      /** False when the panes' locations could not be read. */
+      topology_known?: boolean;
+      topology?: { terminal_id: string; pane_id: string; tab_id: string }[];
+    };
+
+/** How a move ended, for the drag animation and the notice. */
+export type TownMoveResult = "moved" | "returned" | "uncertain";
+
+export function townMoveResult(outcome: TownMoveOutcome): TownMoveResult {
+  if (outcome.status === "moved") return "moved";
+  return outcome.status === "failed" && !outcome.rolled_back
+    ? "uncertain"
+    : "returned";
+}
+
+/**
+ * The notice for a move that did not complete. A failed move that could not
+ * be confirmed back must not read as "nothing happened": say where the panes
+ * are, or that their locations are unknown.
+ */
+export function townMoveNotice(
+  label: string,
+  outcome: TownMoveOutcome,
+  sourceTab: string,
+): string {
+  if (outcome.status === "moved") return `${label} moved`;
+  if (outcome.status === "refused" || outcome.rolled_back)
+    return `${label} not moved: ${outcome.message}`;
+  if (outcome.topology_known === false || !outcome.topology?.length)
+    return `${label} may be split between rooms: ${outcome.message} Check both rooms.`;
+  const away = outcome.topology.filter(
+    (pane) => pane.tab_id !== sourceTab,
+  ).length;
+  return `${label} was only partly moved: ${away} of ${outcome.topology.length} panes are now outside the original desk. ${outcome.message}`;
+}
 
 /** Desks and agents move only within one host and its current runtime. */
 const sameOwner = (

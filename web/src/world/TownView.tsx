@@ -6,7 +6,10 @@ import {
 import {
   requestAgentMove,
   requestDeskMove,
+  townMoveNotice,
+  townMoveResult,
   type TownMoveOutcome,
+  type TownMoveResult,
 } from "./town/townMoves";
 import { isMobileLayout, useLayoutPreferences } from "../layoutPreferences";
 import { useSystemBack } from "../systemBack";
@@ -673,36 +676,45 @@ export default function TownView({
   };
   const deskForKey = (key: string) =>
     office.deskRoster.find(({ desk }) => desk.key === key)?.desk ?? null;
-  const reportMove = (label: string, outcome: TownMoveOutcome) => {
-    if (outcome.status === "moved") toast("ok", `${label} moved`);
-    else toast("error", `${label} not moved: ${outcome.message}`);
+  const reportMove = (
+    label: string,
+    outcome: TownMoveOutcome,
+    sourceTab: string,
+  ) => {
+    toast(
+      outcome.status === "moved" ? "ok" : "error",
+      townMoveNotice(label, outcome, sourceTab),
+    );
+    return townMoveResult(outcome);
   };
   const runDeskMove = async (
     deskKey: string,
     roomKey: string,
     allowCloseRoom = false,
-  ) => {
+  ): Promise<TownMoveResult> => {
     const desk = deskForKey(deskKey);
     const room = roomForKey(roomKey);
     const source = desk ? roomForKey(desk.roomKey) : null;
-    if (!desk || !room || movingKey) return false;
+    if (!desk || !room || movingKey) return "returned";
     // Herdr closes a room when its last desk leaves; ask first.
     if (!allowCloseRoom && (source?.observedDeskCount ?? 2) <= 1) {
       setMoveConfirm({
         message: `“${desk.displayLabel}” is the last desk in “${source?.displayLabel}”. Moving it to “${room.displayLabel}” closes that room.`,
         run: () => void runDeskMove(deskKey, roomKey, true),
       });
-      return false;
+      return "returned";
     }
     setMovingKey(desk.key);
     toast("ok", `Moving ${desk.displayLabel} to ${room.displayLabel}…`);
     try {
       const outcome = await requestDeskMove(desk, room, allowCloseRoom);
-      reportMove(desk.displayLabel, outcome);
-      return outcome.status === "moved";
+      return reportMove(desk.displayLabel, outcome, desk.tabRef.nativeId);
     } catch (cause) {
-      toast("error", `${desk.displayLabel} not moved: ${String(cause)}`);
-      return false;
+      toast(
+        "error",
+        `${desk.displayLabel} may not have moved: ${String(cause)}`,
+      );
+      return "uncertain";
     } finally {
       setMovingKey(null);
     }
@@ -711,7 +723,7 @@ export default function TownView({
     agentKey: string,
     deskKey: string,
     allowCloseRoom = false,
-  ) => {
+  ): Promise<TownMoveResult> => {
     const agent = agentByKey.get(agentKey)?.agent;
     const device = office.paneRoster.find(
       ({ device }) => device.agentKey === agentKey,
@@ -719,7 +731,7 @@ export default function TownView({
     const target = deskForKey(deskKey);
     const sourceDesk = device ? deskForKey(device.deskKey) : null;
     const sourceRoom = sourceDesk ? roomForKey(sourceDesk.roomKey) : null;
-    if (!agent || !device || !target || movingKey) return false;
+    if (!agent || !device || !target || movingKey) return "returned";
     if (
       !allowCloseRoom &&
       (sourceDesk?.observedPaneCount ?? 2) <= 1 &&
@@ -729,17 +741,23 @@ export default function TownView({
         message: `${agent.displayLabel} is alone at the last desk in “${sourceRoom?.displayLabel}”. Moving it closes that room.`,
         run: () => void runAgentMove(agentKey, deskKey, true),
       });
-      return false;
+      return "returned";
     }
     setMovingKey(agentKey);
     toast("ok", `Moving ${agent.displayLabel} to ${target.displayLabel}…`);
     try {
       const outcome = await requestAgentMove(device, target, allowCloseRoom);
-      reportMove(agent.displayLabel, outcome);
-      return outcome.status === "moved";
+      return reportMove(
+        agent.displayLabel,
+        outcome,
+        sourceDesk?.tabRef.nativeId ?? "",
+      );
     } catch (cause) {
-      toast("error", `${agent.displayLabel} not moved: ${String(cause)}`);
-      return false;
+      toast(
+        "error",
+        `${agent.displayLabel} may not have moved: ${String(cause)}`,
+      );
+      return "uncertain";
     } finally {
       setMovingKey(null);
     }
@@ -1239,9 +1257,12 @@ export default function TownView({
               right: 0,
             }}
             roomActions={{
-              onDropDesk: (deskKey, roomKey) => runDeskMove(deskKey, roomKey),
-              onDropAgent: (agentKey, deskKey) =>
-                runAgentMove(agentKey, deskKey),
+              // Only a move confirmed back springs home; a partial move lets
+              // the refreshed topology show where the panes really are.
+              onDropDesk: async (deskKey, roomKey) =>
+                (await runDeskMove(deskKey, roomKey)) !== "returned",
+              onDropAgent: async (agentKey, deskKey) =>
+                (await runAgentMove(agentKey, deskKey)) !== "returned",
               onMoveDesk: (deskKey) => {
                 setPeek(null);
                 setMoveFlow({ step: "room", deskKey });

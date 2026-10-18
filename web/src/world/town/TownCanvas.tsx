@@ -76,9 +76,9 @@ export type TownRoomActions = {
   onMoveDesk(deskKey: string): void;
   /** Keyboard move: choose another desk for an agent (key M on its target). */
   onMoveAgent(agentKey: string): void;
-  /** A desk dragged onto another room of its host; resolves true once moved. */
+  /** A desk dragged onto another room; resolves false only when nothing moved. */
   onDropDesk(deskKey: string, roomKey: string): Promise<boolean>;
-  /** An agent dragged onto another desk of its host; resolves true once moved. */
+  /** An agent dragged onto another desk; resolves false only when nothing moved. */
   onDropAgent(agentKey: string, deskKey: string): Promise<boolean>;
 };
 

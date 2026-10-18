@@ -377,6 +377,40 @@ describe("rollback evidence and ordering", () => {
     expect(herdr.moves()).toBe(4);
   });
 
+  test("a move back whose reply is lost still reports that the layout may differ", async () => {
+    // Move 1 succeeds, move 2 is rejected, compensation (move 3) succeeds
+    // but its reply is lost.
+    const herdr = fakeHerdr({ failAt: 2, uncertainAt: 3 });
+    const desk = threePaneDesk(herdr);
+    const outcome = await moveDesk(herdr.call, {
+      tab_id: desk.tab,
+      workspace_id: "w2",
+      isCurrent: current,
+    });
+    expect(outcome).toMatchObject({
+      status: "failed",
+      rolled_back: true,
+      layout_restored: false,
+    });
+    if (outcome.status === "failed")
+      expect(outcome.message).toContain("layout may differ");
+  });
+
+  test("a move that failed before anything left reports the layout intact", async () => {
+    const herdr = fakeHerdr({ failAt: 1 });
+    const desk = threePaneDesk(herdr);
+    const outcome = await moveDesk(herdr.call, {
+      tab_id: desk.tab,
+      workspace_id: "w2",
+      isCurrent: current,
+    });
+    expect(outcome).toMatchObject({
+      status: "failed",
+      rolled_back: true,
+      layout_restored: true,
+    });
+  });
+
   test("an unreadable topology never counts as rolled back", async () => {
     const herdr = fakeHerdr({ uncertainAt: 1, listFailsAfterMoves: 1 });
     const desk = threePaneDesk(herdr);
