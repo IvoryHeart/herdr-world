@@ -27,8 +27,14 @@ A Web/PWA client for a running [Herdr](https://herdr.dev) server.
     Phones stack buildings vertically; large towns can initially show roofs.
     **Town calm motion** reduces ambient animation. Room actions support
     workspace/tab creation and room management on the captured host.
+  - Drag a table onto another room of the same host, or an agent onto another
+    table, to move it (hold, then drag on phones; **M** on a focused table or
+    agent from the keyboard). The live panes move, agents keep running, a failed
+    move is rolled back, and moving a room's last table asks first because the
+    room closes. When a table closes, the tables after it close up.
   - Cached failed-host buildings stay stale and non-actionable. Search and Hosts
-    use the shared aggregate; no location in the scene changes resource ownership.
+    use the shared aggregate. Reception and lounge positions only show status;
+    only an explicit move changes Herdr's layout, always within one host.
   See the [Town exercise](./docs/TUTORIAL.md#town).
 
 - **Desk** organizes the filtered hosts' agents by what
