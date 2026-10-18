@@ -115,32 +115,18 @@ badge without them.
 
 ### Requirement: Board detail panel
 
-Selecting a tab SHALL open a panel with its status, its agents, its workspace
-and host, Output, Files, Changes and History, and actions to open the terminal,
-add a note, string it, pin it and close it with confirmation. The panel SHALL
-list each pane that needs the user with its own question and answers, and each
-answer SHALL be delivered to that exact pane, qualified by connection and
-runtime generation. Selecting a workspace SHALL open a panel with its Tabs,
-the combined Files and History of its tabs, its repository's Changes, and
-actions to create a tab, fold, tidy, add a note and string it. Files, Changes
-and History SHALL use World's existing agent history, file and git operations
-and SHALL open the existing Inspector views for full detail. On phones the
-panel SHALL be a bottom sheet that phone Back closes.
+Selecting a workspace, a tab or one of its panes on Board SHALL open World's
+shared Inspector for that exact entity, with the same Terminal, Files, Changes
+and Agent History tabs, docking and phone presentation as the other views,
+rather than a Board-specific panel. Answers to a waiting agent SHALL go through
+that Inspector's terminal and composer to the exact pane, qualified by
+connection and runtime generation. In the overview, a tap on a workspace SHALL
+centre it and zoom in instead of selecting it.
 
-#### Scenario: Answer from the panel
+#### Scenario: Open a pane's detail
 
-- **WHEN** the user selects a waiting tab and chooses Yes
-- **THEN** the answer is delivered to that pane only, and a retired runtime rejects it
-
-#### Scenario: Two agents need the user in one tab
-
-- **WHEN** a tab has two panes whose agents both need the user
-- **THEN** the panel shows both questions separately and each answer goes only to its own pane
-
-#### Scenario: Workspace changes
-
-- **WHEN** the user opens Changes on a workspace panel
-- **THEN** the workspace repository's changed files are listed with additions and deletions, and choosing one opens its diff
+- **WHEN** the user taps the row of one pane in a tab with several panes
+- **THEN** World's shared Inspector opens for that pane, with its Terminal, Files, Changes and Agent History
 
 ### Requirement: Board notes and strings
 

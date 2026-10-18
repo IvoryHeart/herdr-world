@@ -493,6 +493,11 @@ async function run() {
     "typing in a note saves it",
   );
   const noteKey = `note:${saved.notes[0]!.id}`;
+  // Focusing a note (a phone keyboard) can scroll the board; it never stays scrolled.
+  boardEl().scrollTop = 80;
+  boardEl().dispatchEvent(new Event("scroll"));
+  await settle(50);
+  check(boardEl().scrollTop === 0, "the board never stays scrolled");
   await waitFor(() => Boolean(card(noteKey)), "the note is on the board");
 
   /** Leave the overview and pan so an element is in the middle of the screen. */

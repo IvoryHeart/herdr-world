@@ -14,9 +14,11 @@
 
 ## 3. Detail panel
 
-- [ ] 3.1 Add the tab panel (status, per-pane questions and answers, Output, Files, Changes, History, open terminal and composer) over the existing agent history, file and git operations; verify exact-pane answers with two waiting panes in one tab and retirement rejection.
-- [ ] 3.2 Add the workspace panel (Tabs, combined Files and History, repository Changes, new tab, fold, tidy).
-- [ ] 3.3 Present the panel as a bottom sheet on phones with phone Back through the shared system Back module.
+Replaced by World's shared Inspector (owner review, 2026-10-18): Board selects the exact workspace or pane and the Inspector provides Terminal, Files, Changes and Agent History, docked or floating, on desktop and phone.
+
+- [x] 3.1 Add the tab panel (status, per-pane questions and answers, Output, Files, Changes, History, open terminal and composer) over the existing agent history, file and git operations; verify exact-pane answers with two waiting panes in one tab and retirement rejection.
+- [x] 3.2 Add the workspace panel (Tabs, combined Files and History, repository Changes, new tab, fold, tidy).
+- [x] 3.3 Present the panel as a bottom sheet on phones with phone Back through the shared system Back module.
 
 ## 4. Notes and strings
 

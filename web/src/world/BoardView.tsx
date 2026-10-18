@@ -1889,6 +1889,12 @@ export default function BoardView({
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
+        onScroll={(event) => {
+          // The board pans with its camera and never scrolls; focusing a note
+          // (a phone keyboard) can scroll it anyway, hiding the note bar.
+          const el = event.currentTarget;
+          if (el.scrollTop || el.scrollLeft) el.scrollTo(0, 0);
+        }}
         onLostPointerCapture={(event) => {
           // A finger whose lift went elsewhere is no longer on the board.
           if (pointers.current.has(event.pointerId)) onPointerUp(event);
@@ -2138,7 +2144,9 @@ export default function BoardView({
                   aria-label="Note text"
                   ref={(el) => {
                     if (el && document.activeElement !== el) {
-                      el.focus();
+                      // Never scroll World's page for the keyboard: on a phone
+                      // the page stayed scrolled and hid the note bar.
+                      el.focus({ preventScroll: true });
                       const range = document.createRange();
                       range.selectNodeContents(el);
                       range.collapse(false);
