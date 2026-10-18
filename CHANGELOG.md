@@ -45,6 +45,11 @@ are optional because the merged PR history records their source.
 
 ### Fixed
 
+- Remove the upstream demo from the public website, clarify Town copy, and keep
+  release details together. Stop featuring Tree in the website showcase.
+  Version built CSS and JavaScript URLs to prevent
+  older cached assets from breaking a newly deployed page.
+
 - The phone's Back closes open layers one at a time (Composer, then the
   terminal) instead of leaving the page on the second press in Chrome, which
   skips history entries a page adds without a tap.
