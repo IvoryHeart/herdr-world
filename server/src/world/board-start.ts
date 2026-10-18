@@ -1,8 +1,9 @@
 /**
  * Start a new agent from a Board note: create a tab in the chosen workspace,
  * start the agent in its root pane, wait (within a bound) until it is
- * interactive, then prompt it with the note once. Nothing is retried; a
- * failure reports what was created so the user can inspect it.
+ * interactive, then prompt it with the note once. With no text it starts the
+ * agent and sends nothing. Nothing is retried; a failure reports what was
+ * created so the user can inspect it.
  */
 
 export type HerdrCall = (
@@ -24,7 +25,7 @@ export type StartFromNoteRequest = {
 
 export type Created = { tab_id: string; pane_id: string; terminal_id: string };
 export type StartFromNoteOutcome =
-  | ({ status: "sent" } & Created)
+  | ({ status: "sent" | "started" } & Created)
   | ({ status: "uncertain" | "failed"; message: string } & Partial<Created>);
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -39,7 +40,6 @@ export async function startFromNote(
   const sleep =
     request.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
   const text = request.text.trim();
-  if (!text) return { status: "failed", message: "The note is empty." };
   if (!KINDS.test(request.kind))
     return { status: "failed", message: "Unknown agent kind." };
   if (!request.isCurrent())
@@ -82,9 +82,17 @@ export async function startFromNote(
       name: request.name,
       timeout_ms: request.timeoutMs ?? 60_000,
     });
-  } catch {
+  } catch (error) {
     // A lost reply may still have started the agent: inspect, never relaunch.
+    if (!text)
+      return {
+        status: "uncertain",
+        message: `The agent may not have started: ${error instanceof Error ? error.message : String(error)}`,
+        ...created,
+      };
   }
+  // Nothing to send: the agent is started and becomes ready on its own.
+  if (!text) return { status: "started", ...created };
 
   const deadline = now() + (request.timeoutMs ?? 60_000);
   while (now() < deadline) {

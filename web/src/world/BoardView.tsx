@@ -7,6 +7,8 @@ import {
   Sparkles,
 } from "lucide-react";
 import {
+  lazy,
+  Suspense,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -165,6 +167,21 @@ export type StartOutcome = {
   pane_id?: string;
   terminal_id?: string;
 };
+/** World's shared New workspace dialog, loaded when first opened. */
+const CreateWorkspaceDialog = lazy(() =>
+  import("../components/CreateWorkspaceDialog").then((m) => ({
+    default: m.CreateWorkspaceDialog,
+  })),
+);
+/** A plain terminal tab through World's store, which refreshes the topology. */
+async function createTabThroughStore(space: BoardWorkspace) {
+  const { store } = await import("../store");
+  await store.createQualifiedTab(
+    { connectionId: space.connectionId, runtimeGeneration: space.generation },
+    space.nativeId,
+    { numberedLabel: true },
+  );
+}
 async function startAgentThroughService(
   space: BoardWorkspace,
   kind: string,
@@ -280,6 +297,7 @@ export default function BoardView({
   checkAnchor = checkAnchorThroughService,
   startAgent = startAgentThroughService,
   moveTab = moveTabThroughService,
+  createTab = createTabThroughStore,
 }: {
   world: WorldObject;
   toolbarPortal?: Element | null;
@@ -303,6 +321,8 @@ export default function BoardView({
     name: string,
     text: string,
   ) => Promise<StartOutcome>;
+  /** Open a plain terminal tab in a workspace; World's store by default. */
+  createTab?: (space: BoardWorkspace) => Promise<unknown>;
   /** Ask the service whether an anchor's target exists; World's by default. */
   checkAnchor?: (
     host: BoardHost,
@@ -323,6 +343,10 @@ export default function BoardView({
   const [trayOpen, setTrayOpen] = useState(false);
   /** The note an agent is being started for, while the chooser is open. */
   const [startFor, setStartFor] = useState<string | null>(null);
+  /** The workspace whose "New" chooser is open. */
+  const [addTo, setAddTo] = useState<string | null>(null);
+  /** The host whose New workspace dialog is open. */
+  const [newWorkspaceOn, setNewWorkspaceOn] = useState<BoardHost | null>(null);
   /** The workspace a dragged tab is over: dropping offers to move it there. */
   const glue = useRef<string | null>(null);
   const [moveAsk, setMoveAsk] = useState<{
@@ -1905,6 +1929,31 @@ export default function BoardView({
       setToast({ text: `${tab.label} may not have moved: ${String(error)}` });
     }
   }
+  /** A new terminal or agent in a workspace, with no note. */
+  const addToWorkspace = async (space: BoardWorkspace, kind: string | null) => {
+    setAddTo(null);
+    if (!kind) {
+      try {
+        await createTab(space);
+        setToast({ text: `Opened a terminal in ${space.label}` });
+      } catch (error) {
+        setToast({ text: `The terminal was not opened: ${String(error)}` });
+      }
+      return;
+    }
+    setToast({ text: `Starting ${kind} in ${space.label}…` });
+    try {
+      const outcome = await startAgent(space, kind, kind, "");
+      setToast({
+        text:
+          outcome.status === "started"
+            ? `Started ${kind} in ${space.label}`
+            : (outcome.message ?? "The agent was not started."),
+      });
+    } catch (error) {
+      setToast({ text: `The agent may not have started: ${String(error)}` });
+    }
+  };
   const startFromNote = async (
     note: BoardNote,
     space: BoardWorkspace,
@@ -2131,7 +2180,18 @@ export default function BoardView({
                 title="Drag to move the whole host"
               >
                 {host.label}
-                {host.stale ? <small>offline</small> : null}
+                {host.stale ? (
+                  <small>offline</small>
+                ) : (
+                  <button
+                    type="button"
+                    className="board-zone-add"
+                    aria-label={`New workspace on ${host.label}`}
+                    onClick={() => setNewWorkspaceOn(host)}
+                  >
+                    +
+                  </button>
+                )}
               </div>
             </div>
           ))}
@@ -2173,6 +2233,17 @@ export default function BoardView({
                   >
                     {folded ? space.tabKeys.length : "−"}
                   </button>
+                  {space.actionable ? (
+                    <button
+                      type="button"
+                      className="board-fold board-add"
+                      aria-label={`New in ${space.label}`}
+                      onPointerDown={(event) => event.stopPropagation()}
+                      onClick={() => setAddTo(space.key)}
+                    >
+                      +
+                    </button>
+                  ) : null}
                 </div>
                 <span
                   className="board-handle"
@@ -2422,6 +2493,58 @@ export default function BoardView({
               );
             }}
           />
+        ) : null}
+        {addTo && model.workspaceByKey.get(addTo) ? (
+          <div
+            className="board-chooser"
+            role="dialog"
+            aria-label="New in workspace"
+          >
+            <div className="board-chooser-head">
+              <strong>New in {model.workspaceByKey.get(addTo)!.label}</strong>
+              <button
+                type="button"
+                aria-label="Close"
+                onClick={() => setAddTo(null)}
+              >
+                ×
+              </button>
+            </div>
+            <div className="board-tray-row">
+              <span className="board-tray-text">A new tab</span>
+              <button
+                type="button"
+                onClick={() =>
+                  void addToWorkspace(model.workspaceByKey.get(addTo)!, null)
+                }
+              >
+                Terminal
+              </button>
+              {START_KINDS.map(({ kind, label }) => (
+                <button
+                  key={kind}
+                  type="button"
+                  onClick={() =>
+                    void addToWorkspace(model.workspaceByKey.get(addTo)!, kind)
+                  }
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
+        {newWorkspaceOn ? (
+          <Suspense fallback={null}>
+            <CreateWorkspaceDialog
+              open
+              initialDestination={{
+                connectionId: newWorkspaceOn.key,
+                runtimeGeneration: newWorkspaceOn.generation,
+              }}
+              onClose={() => setNewWorkspaceOn(null)}
+            />
+          </Suspense>
         ) : null}
         {startFor && saved?.notes.find((n) => n.id === startFor) ? (
           <div

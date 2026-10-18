@@ -1055,3 +1055,20 @@
 .board-cut[hidden] {
   display: none;
 }
+
+/* New terminal or agent in a workspace; new workspace on a host. */
+.board-add {
+  margin-left: 4px;
+}
+.board-zone-add {
+  margin-left: 8px;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--board-line);
+  border-radius: 6px;
+  background: var(--board-card);
+  color: var(--board-ink);
+  font: inherit;
+  line-height: 1;
+  cursor: pointer;
+}

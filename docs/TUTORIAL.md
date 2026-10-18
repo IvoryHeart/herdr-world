@@ -179,19 +179,22 @@ on your phone and desktop.
 1. Choose **Board** from the view switcher (on a phone it is in the bottom bar).
    Each host is a dashed zone, each workspace a card, and each tab a card around
    its workspace. A tab with several panes lists them as rows; a tab of plain
-   shells looks like a small terminal. Tabs pulse in their status colour; the
-   **⋯** menu turns the pulses off.
+   shells looks like a small terminal. A working agent's tab pulses (as does the
+   selected tab); idle, finished and waiting tabs stay still, and the **⋯** menu
+   turns the pulses off. **+** on a workspace opens a new terminal or starts
+   Claude or Codex in a new tab; **+** beside a host's name creates a workspace.
 2. Scroll or pinch to zoom, drag empty board to pan, or use the controls at the
    bottom right. Zoomed out, each workspace shows a square per pane (hollow for
    shells); tap a workspace there to zoom in on it.
 3. Drag a workspace and its tabs follow; cards settle within about a second.
    **−** on a workspace folds its tabs behind a count, and tapping the count opens
    them into free space. The sparkle button tidies the selected workspace, or
-   the whole board, and offers **Undo**; notes strung to cards move with them.
+   the whole board, and offers **Undo**; notes strung to cards move with them,
+   and notes left on a card move to free space.
 4. Tap a workspace, tab or pane row to open its Inspector with Terminal, Files,
    Changes and Agent History. Double-click a tab to open its terminal.
-5. Double-click (or double-tap) empty board to pin a note and type. Tap a note
-   for its bar: colour, **Edit**, **String to…**, **Delete** (or press Delete).
+5. Double-click (or double-tap) empty board to pin a note and type; double-click
+   a note to edit it. Tap a note for its bar: colour, **Edit**, **String to…**, **Delete** (or press Delete).
 6. Drag a card's red dot onto a pane row, a tab or a workspace to string a note
    to it; a tab with several panes asks which pane. Drop it on empty board for a
    new note strung to where you started. Click a string, then **Delete**, to

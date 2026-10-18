@@ -122,14 +122,27 @@ describe("Starting an agent from a note", () => {
     expect(h.calls).not.toContain("agent.prompt");
   });
 
-  test("an empty note or an unknown kind does nothing", async () => {
+  test("an unknown kind does nothing", async () => {
     const h = herdr();
-    expect(await startFromNote(h.call, request({ text: "  " }))).toMatchObject({
-      status: "failed",
-    });
     expect(
       await startFromNote(h.call, request({ kind: "rm -rf" })),
     ).toMatchObject({ status: "failed" });
     expect(h.calls).toEqual([]);
+  });
+
+  test("with no text the agent is started and nothing is sent", async () => {
+    const h = herdr();
+    expect(await startFromNote(h.call, request({ text: "  " }))).toEqual({
+      status: "started",
+      tab_id: "w1:t9",
+      pane_id: "w1:p9",
+      terminal_id: "term_new",
+    });
+    expect(h.calls).toEqual(["tab.create", "agent.start"]);
+    const lost = herdr({ lostStart: true });
+    expect(await startFromNote(lost.call, request({ text: "" }))).toMatchObject(
+      { status: "uncertain", pane_id: "w1:p9" },
+    );
+    expect(lost.calls.filter((m) => m === "agent.start")).toHaveLength(1);
   });
 });

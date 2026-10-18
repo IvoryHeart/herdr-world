@@ -42,8 +42,10 @@ A Web/PWA client for a running [Herdr](https://herdr.dev) server.
   move them and settle within a second; workspaces fold into a count and open
   into free space; Tidy (with Undo) rearranges a workspace or the board and
   carries strung notes along. Zoomed out, workspaces show a square per pane.
-  - Tabs list each pane as a row; plain-shell tabs look like terminals; tabs
-    pulse in their most urgent agent's status colour (a ⋯ setting).
+  - Tabs list each pane as a row; plain-shell tabs look like terminals; only a
+    working agent's tab (or the selected one) pulses (a ⋯ setting).
+  - **+** on a workspace opens a terminal or starts Claude or Codex in a new
+    tab; **+** on a host creates a workspace.
   - Notes and strings are saved by the World service and shared across your
     devices. Strings attach to an exact pane, tab or workspace; a note strung to
     an agent can be sent to it, only when you press Send, after World checks the

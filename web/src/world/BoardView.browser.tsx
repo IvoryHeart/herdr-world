@@ -154,6 +154,7 @@ const sent: { paneId: string; terminalId: string; text: string }[] = [];
 /** Pane IDs the fake service reports as closed ("not found"). */
 const closedPanes = new Set<string>();
 const started: { workspace: string; kind: string; text: string }[] = [];
+const createdTabs: string[] = [];
 const movedTabs: { tab: string; to: string }[] = [];
 const host = document.createElement("div");
 host.style.cssText = "position:fixed;inset:0";
@@ -181,6 +182,9 @@ function mount(key: number, shown = world) {
         moveTab={async (tab, space) => {
           movedTabs.push({ tab: tab.nativeId, to: space.nativeId });
           return { status: "moved", tab_id: `${space.nativeId}:t9`, panes: [] };
+        }}
+        createTab={async (space) => {
+          createdTabs.push(space.nativeId);
         }}
         startAgent={async (space, kind, _name, text) => {
           started.push({ workspace: space.nativeId, kind, text });
@@ -970,6 +974,43 @@ async function run() {
       startedEnd.anchor.witness.length === 1,
     "the string goes to the new pane with its terminal as witness",
   );
+
+  // Without a note: + on a workspace opens a terminal or starts an agent.
+  {
+    const pick = async (label: string) => {
+      host
+        .querySelector<HTMLButtonElement>('[aria-label="New in web-app"]')!
+        .click();
+      await waitFor(
+        () => Boolean(host.querySelector('[aria-label="New in workspace"]')),
+        "+ on a workspace offers a new terminal or agent",
+      );
+      [
+        ...host.querySelectorAll<HTMLButtonElement>(
+          '[aria-label="New in workspace"] button',
+        ),
+      ]
+        .find((b) => b.textContent === label)!
+        .click();
+      await settle(50);
+    };
+    await pick("Terminal");
+    check(
+      createdTabs.length === 1,
+      "Terminal opens a plain tab in that workspace",
+    );
+    await pick("Codex");
+    check(
+      started.length === 2 &&
+        started[1]!.kind === "codex" &&
+        started[1]!.text === "",
+      "an agent starts with no note and nothing to send",
+    );
+    check(
+      Boolean(host.querySelector('[aria-label^="New workspace on "]')),
+      "each host offers a new workspace",
+    );
+  }
 
   // Drag a tab onto another workspace: it glues, and asks before moving.
   if (innerWidth > 720) {

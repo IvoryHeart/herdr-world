@@ -1326,6 +1326,11 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
       sendReply({ id, result }, method);
     } catch (error) {
       sendError(`${method}-error`, error);
+    } finally {
+      // Starting an agent in a new tab need not raise a Herdr event after
+      // the tab appears, so the World views would keep showing a shell.
+      if (route.scope === "connection" && route.isCurrent())
+        publishWorldInvalidation(route.connectionId, route.generation);
     }
     return;
   }

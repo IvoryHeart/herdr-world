@@ -798,6 +798,41 @@ test("production dispatcher isolates two local profiles and profile CRUD", async
 
     // Explicitly retain old-client compatibility for both RPC and HTTP while
     // proving generation-bound current requests reach only the replacement.
+    // Starting an agent from a note invalidates World when it finishes,
+    // whatever happened, since Herdr need not report the agent starting.
+    const controlsBeforeStart = browserB.controls.length;
+    await browserA.raw(
+      "board.start_agent",
+      {
+        workspace_id: "shared-workspace",
+        kind: "claude",
+        name: "note",
+        text: "Synthetic note",
+      },
+      "alpha",
+    );
+    for (
+      let attempt = 0;
+      attempt < 50 &&
+      !browserB.controls
+        .slice(controlsBeforeStart)
+        .some(
+          (control) =>
+            control.type === "world_invalidated" &&
+            control.connection_id === "alpha",
+        );
+      attempt++
+    )
+      await Bun.sleep(10);
+    expect(
+      browserB.controls
+        .slice(controlsBeforeStart)
+        .some(
+          (control) =>
+            control.type === "world_invalidated" &&
+            control.connection_id === "alpha",
+        ),
+    ).toBe(true);
     const legacySnapshot = await browserA.rpc("workspace.list", {}, "alpha");
     expect(legacySnapshot.workspaces[0].name).toBe("from-beta");
     expect(legacySnapshot.navigation_mode).toBe("shared");
