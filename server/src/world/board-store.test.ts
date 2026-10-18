@@ -166,6 +166,20 @@ describe("Board store", () => {
     });
   });
 
+  test("a replacing layout save drops entries for cards that are gone", () => {
+    const store = new BoardStore(path);
+    store.patch([
+      {
+        op: "layout.set",
+        offsets: { old: { x: 1, y: 1 }, kept: { x: 2, y: 2 } },
+      },
+    ]);
+    store.patch([
+      { op: "layout.set", replace: true, offsets: { kept: { x: 3, y: 3 } } },
+    ]);
+    expect(store.get().layout.offsets).toEqual({ kept: { x: 3, y: 3 } });
+  });
+
   test("bounds are enforced with clear errors", () => {
     const store = new BoardStore(path);
     expect(() =>

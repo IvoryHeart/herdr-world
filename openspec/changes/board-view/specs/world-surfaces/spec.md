@@ -166,10 +166,11 @@ shown on the note when they are reported; World SHALL NOT invent them.
 
 ### Requirement: Board persistence and identity
 
-The World service SHALL persist board layout, pins, folds, notes and strings
-per connection profile, bounded in size, written atomically and revisioned, and
-SHALL broadcast changes to other open clients. A board change based on an
-outdated revision SHALL be rejected and re-read rather than overwrite newer
+The World service SHALL persist board layout, pins, folds, notes and strings as
+one board document, with every Herdr anchor qualified by its connection profile,
+bounded in size, written atomically and revisioned, and SHALL broadcast changes
+to other open clients. An edit to a note based on an outdated revision of that
+note SHALL be rejected with the current board rather than overwrite newer
 content. Authenticated World clients of the service MAY receive board content;
 note text SHALL go to Herdr or an agent only on the user's explicit Send.
 

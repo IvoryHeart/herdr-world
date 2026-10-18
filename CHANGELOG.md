@@ -17,7 +17,10 @@ are optional because the merged PR history records their source.
   as status squares (hollow for plain terminals). A tab with several panes lists
   them as rows you can select or open on their own, and a tab of plain shells
   looks like a small terminal. Tabs pulse in their most urgent agent's status
-  colour, which the view's ⋯ menu can turn off. On phones Board replaces Graph in the bottom navigation.
+  colour, which the view's ⋯ menu can turn off. Double-tap the board for a
+  sticky note and drag a card's red dot to string a note to a workspace, tab or
+  exact pane; click a string to cut it. Notes, strings and the board's layout
+  are saved by the World service and appear on every device. On phones Board replaces Graph in the bottom navigation.
 
 ### Fixed
 

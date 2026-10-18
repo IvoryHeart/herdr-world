@@ -137,13 +137,18 @@ for confirmation if Herdr restarted meanwhile.
 
 ### 5. A bounded World store
 
-The service owns the board store beside the connection profiles: one document
-per connection profile, written atomically, revisioned, and bounded (notes of
-at most 4,000 characters, at most 500 notes and 2,000 strings per profile, at
-most 2,000 positioned cards). Browser RPCs read and patch it qualified by
-connection ID; patches carry the base revision and conflicting item edits are
-rejected and re-read rather than merged blindly. The service broadcasts board
-changes so other open clients (for example the phone) update live.
+The service owns the board store beside the connection profiles
+(`server/src/world/board-store.ts`): one board document, because notes belong to
+the whole board and can be strung to cards on different hosts. Every anchor is
+qualified by its connection profile. The document is written atomically,
+revisioned and bounded (notes of at most 4,000 characters, at most 500 notes,
+2,000 strings and 2,000 layout entries). `world.board.get` reads it and
+`world.board.patch` applies operations all or none. A note edit carries the
+note's revision, and an edit against an older revision is rejected with the
+current board instead of overwriting it. Layout saves replace the saved layout,
+since the browser holds all of it, including hosts that are offline. The
+service broadcasts `world_board_changed` so other open clients (for example the
+phone) refresh. An unreadable file is kept aside and the board starts empty.
 
 Board content is user content kept by the World service. Authenticated World
 clients of that service (for example the user's phone) receive it to display

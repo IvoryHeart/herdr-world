@@ -2,6 +2,11 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import BoardView from "./BoardView";
 import {
+  BoardDocumentStore,
+  type BoardDocument,
+  type BoardOp,
+} from "./board/boardDocument";
+import {
   fixtureHost,
   fixtureWorld,
   type FixtureSpace,
@@ -76,21 +81,81 @@ const world = fixtureWorld([
   ]),
 ]);
 
+/** An in-memory board store applying the service's operations. */
+let saved: BoardDocument = {
+  version: 1,
+  revision: 0,
+  layout: { anchors: {}, offsets: {}, pinned: {}, folded: [] },
+  notes: [],
+  strings: [],
+};
+function apply(ops: BoardOp[]) {
+  const next = structuredClone(saved);
+  for (const op of ops) {
+    if (op.op === "note.put") {
+      const at = next.notes.findIndex((note) => note.id === op.note.id);
+      if (at < 0) next.notes.push({ ...op.note, rev: 1 });
+      else if (op.rev !== next.notes[at]!.rev)
+        return { conflict: "That note changed elsewhere.", document: saved };
+      else next.notes[at] = { ...op.note, rev: op.rev + 1 };
+    } else if (op.op === "note.delete") {
+      next.notes = next.notes.filter((note) => note.id !== op.id);
+      next.strings = next.strings.filter(
+        (string) =>
+          !("note" in string.from && string.from.note === op.id) &&
+          !("note" in string.to && string.to.note === op.id),
+      );
+    } else if (op.op === "string.put") {
+      next.strings = next.strings.filter(
+        (string) => string.id !== op.string.id,
+      );
+      next.strings.push(op.string);
+    } else if (op.op === "string.delete")
+      next.strings = next.strings.filter((string) => string.id !== op.id);
+    else if (op.op === "layout.set") {
+      if (op.replace)
+        next.layout = { ...next.layout, anchors: {}, offsets: {}, pinned: {} };
+      Object.assign(next.layout.anchors, op.anchors ?? {});
+      Object.assign(next.layout.offsets, op.offsets ?? {});
+      Object.assign(next.layout.pinned, op.pinned ?? {});
+      if (op.folded) next.layout.folded = op.folded;
+    }
+  }
+  next.revision = saved.revision + 1;
+  saved = next;
+  return { document: structuredClone(saved) };
+}
+const store = new BoardDocumentStore({
+  call: async (method, params) =>
+    method === "world.board.get"
+      ? structuredClone(saved)
+      : apply((params as { ops: BoardOp[] }).ops),
+  onControl: () => () => {},
+  onStatus: () => () => {},
+});
+
 const selected: string[] = [];
 const opened: string[] = [];
 const host = document.createElement("div");
 host.style.cssText = "position:fixed;inset:0";
 document.body.appendChild(host);
-createRoot(host).render(
-  <StrictMode>
-    <BoardView
-      world={world}
-      selectedId={null}
-      onSelect={(id) => selected.push(id)}
-      onOpenTerminal={(id) => opened.push(id)}
-    />
-  </StrictMode>,
-);
+const root = createRoot(host);
+/** Mount Board; a new key remounts it, as a reload would. */
+function mount(key: number) {
+  root.render(
+    <StrictMode>
+      <BoardView
+        key={key}
+        world={world}
+        selectedId={null}
+        onSelect={(id) => selected.push(id)}
+        onOpenTerminal={(id) => opened.push(id)}
+        store={store}
+      />
+    </StrictMode>,
+  );
+}
+mount(1);
 
 const card = (key: string) =>
   host.querySelector<HTMLElement>(`[data-key="${key}"]`);
@@ -193,7 +258,8 @@ async function run() {
   }
 
   // Zoom in so cards are large enough to grab.
-  const board = host.querySelector<HTMLElement>(".board")!;
+  // Looked up each time: a remount replaces the element.
+  const boardEl = () => host.querySelector<HTMLElement>(".board")!;
   for (let i = 0; i < 4; i++)
     host.querySelector<HTMLButtonElement>('[aria-label="Zoom in"]')!.click();
   await settle(100);
@@ -339,12 +405,170 @@ async function run() {
     );
   }
 
+  // Notes: a double-tap on empty board pins one, ready to type in.
+  const emptySpot = () => {
+    for (let y = innerHeight - 40; y > 80; y -= 37)
+      for (let x = 30; x < innerWidth - 30; x += 41) {
+        const el = document.elementFromPoint(x, y);
+        if (
+          el &&
+          !el.closest(".board-card, .board-controls, .board-zone-label")
+        )
+          return { x, y };
+      }
+    throw new Error("no empty board to tap");
+  };
+  const spot = emptySpot();
+  for (let i = 0; i < 2; i++) {
+    pointer(boardEl(), "pointerdown", spot.x, spot.y, 7);
+    pointer(boardEl(), "pointerup", spot.x, spot.y, 7);
+    await settle(60);
+  }
+  await waitFor(() => saved.notes.length === 1, "a double-tap created a note");
+  await waitFor(
+    () => document.activeElement?.getAttribute("aria-label") === "Note text",
+    "the new note is ready to type in",
+  );
+  const textbox = document.activeElement as HTMLElement;
+  textbox.textContent = "Ship the login fix";
+  textbox.blur();
+  await waitFor(
+    () => saved.notes[0]?.text === "Ship the login fix",
+    "typing in a note saves it",
+  );
+  const noteKey = `note:${saved.notes[0]!.id}`;
+  await waitFor(() => Boolean(card(noteKey)), "the note is on the board");
+
+  /** Leave the overview and pan so an element is in the middle of the screen. */
+  const bringIntoView = async (el: () => Element) => {
+    for (let i = 0; i < 12 && boardEl().classList.contains("board-far"); i++) {
+      host.querySelector<HTMLButtonElement>('[aria-label="Zoom in"]')!.click();
+      await settle(30);
+    }
+    const r = el().getBoundingClientRect();
+    const dx = innerWidth / 2 - (r.left + r.width / 2);
+    const dy = innerHeight / 2 - (r.top + r.height / 2);
+    const from = emptySpot();
+    pointer(boardEl(), "pointerdown", from.x, from.y, 10);
+    pointer(boardEl(), "pointermove", from.x + dx / 2, from.y + dy / 2, 10);
+    pointer(boardEl(), "pointermove", from.x + dx, from.y + dy, 10);
+    await settle(200);
+    pointer(boardEl(), "pointerup", from.x + dx, from.y + dy, 10);
+    await rest();
+  };
+
+  // Strings: drag a note's handle onto one pane of a two-pane tab.
+  const dragHandle = async (fromKey: string, to: Element) => {
+    const handle = card(fromKey)!.querySelector<HTMLElement>(".board-handle")!;
+    const a = centre(handle),
+      b = centre(to);
+    pointer(handle, "pointerdown", a.x, a.y, 8);
+    for (let step = 1; step <= 6; step++) {
+      pointer(
+        handle,
+        "pointermove",
+        a.x + ((b.x - a.x) * step) / 6,
+        a.y + ((b.y - a.y) * step) / 6,
+        8,
+      );
+      await settle(16);
+    }
+    pointer(handle, "pointerup", b.x, b.y, 8);
+  };
+  await bringIntoView(() => card("studio:w1:t4")!);
+  const pairSecond =
+    card("studio:w1:t4")!.querySelectorAll<HTMLElement>("[data-pane]")[1]!;
+  await dragHandle(noteKey, pairSecond);
+  await waitFor(
+    () => saved.strings.length === 1,
+    "dropping on a pane row strings the note",
+  );
+  const end = saved.strings[0]!.to;
+  check(
+    "anchor" in end &&
+      end.anchor.kind === "pane" &&
+      end.anchor.native_id ===
+        pairSecond.dataset.pane!.split(":").slice(1).join(":"),
+    `the string attaches to that exact pane (${JSON.stringify(end)} vs ${pairSecond.dataset.pane}; notes ${saved.notes.length})`,
+  );
+  // Onto a tab with several panes but no row: the chooser asks which pane.
+  await bringIntoView(() => card("studio:w3:t2")!);
+  await dragHandle(
+    noteKey,
+    card("studio:w3:t2")!.querySelector(".board-label")!,
+  );
+  await waitFor(
+    () =>
+      Boolean(
+        host
+          .querySelector(".board-chooser")
+          ?.textContent?.includes("String to which pane"),
+      ),
+    "stringing to a multi-pane tab asks which pane",
+  );
+  host
+    .querySelectorAll<HTMLButtonElement>(".board-chooser .board-pane")[2]!
+    .click();
+  await waitFor(
+    () => saved.strings.length === 2,
+    "choosing a pane finishes the string",
+  );
+  await waitFor(
+    () =>
+      host.querySelectorAll(".board-yarn:not(.board-yarn-temp)").length === 2,
+    "both strings are drawn",
+  );
+  check(
+    !host.querySelector(".board-yarn-loose"),
+    "strings to live panes are confirmed",
+  );
+
+  // Cut a string: pick it, then Cut string.
+  const yarn = host.querySelector<SVGPathElement>(".board-yarn-hit")!;
+  const box = yarn.getBoundingClientRect();
+  yarn.dispatchEvent(
+    new PointerEvent("pointerdown", {
+      bubbles: true,
+      pointerId: 9,
+      clientX: box.left + box.width / 2,
+      clientY: box.top + box.height / 2,
+    }),
+  );
+  await waitFor(
+    () => !host.querySelector<HTMLButtonElement>(".board-cut")!.hidden,
+    "picking a string offers Cut",
+  );
+  host.querySelector<HTMLButtonElement>(".board-cut")!.click();
+  await waitFor(() => saved.strings.length === 1, "Cut string removes it");
+
+  // A reload keeps notes, strings and the layout.
+  await settle(900);
+  const wsBefore2 = at("studio:w2")!;
+  const beforeReload = boardEl();
+  mount(2);
+  // Wait for the new tree: the old one stays until React commits.
+  await waitFor(
+    () => boardEl() !== beforeReload && Boolean(card(noteKey)),
+    "the note is back after a reload",
+  );
+  await rest();
+  const wsAfter2 = at("studio:w2")!;
+  check(
+    Math.hypot(wsAfter2.x - wsBefore2.x, wsAfter2.y - wsBefore2.y) < 2,
+    "the layout is restored after a reload",
+  );
+  await waitFor(
+    () =>
+      host.querySelectorAll(".board-yarn:not(.board-yarn-temp)").length === 1,
+    "the string is back after a reload",
+  );
+
   // Zoom out to the overview: tabs fold into status squares, nothing moves.
   const before = at("studio:w1:t1")!;
   for (let i = 0; i < 12; i++)
     host.querySelector<HTMLButtonElement>('[aria-label="Zoom out"]')!.click();
   await waitFor(
-    () => board.classList.contains("board-far"),
+    () => boardEl().classList.contains("board-far"),
     "zooming out shows the overview",
   );
   check(
@@ -375,7 +599,7 @@ async function run() {
   );
   host.querySelector<HTMLButtonElement>('[role="menuitemcheckbox"]')!.click();
   await waitFor(
-    () => board.classList.contains("board-no-pulse"),
+    () => boardEl().classList.contains("board-no-pulse"),
     "the settings menu turns pulses off",
   );
 }

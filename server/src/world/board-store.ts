@@ -65,6 +65,12 @@ export type BoardOp =
       /** Keys that are no longer pinned. */
       unpinned?: string[];
       folded?: string[];
+      /**
+       * Replace anchors, offsets and pinned positions instead of merging, so
+       * entries for cards that are gone do not accumulate. The browser holds
+       * the whole layout, including hosts that are offline.
+       */
+      replace?: boolean;
     }
   | {
       op: "anchor.witness";
@@ -348,6 +354,11 @@ function applyOp(next: BoardDocument, op: BoardOp, current: BoardDocument) {
       next.strings = next.strings.filter((entry) => entry.id !== op.id);
       return;
     case "layout.set": {
+      if (op.replace === true) {
+        next.layout.anchors = {};
+        next.layout.offsets = {};
+        next.layout.pinned = {};
+      }
       Object.assign(next.layout.anchors, points(op.anchors, "anchors"));
       Object.assign(next.layout.offsets, points(op.offsets, "offsets"));
       Object.assign(next.layout.pinned, points(op.pinned, "pinned"));

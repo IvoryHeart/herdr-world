@@ -16,6 +16,16 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { worldLocalStorage } from "../browserStorage";
+import { anchorFor, confirmed, targetOf } from "./board/boardAnchors";
+import {
+  NOTE_COLORS,
+  sharedBoardStore,
+  useBoardDocument,
+  type BoardDocumentStore,
+  type BoardEnd,
+  type BoardNote,
+  type BoardOp,
+} from "./board/boardDocument";
 import {
   boardStatusOrder,
   projectBoard,
@@ -88,7 +98,21 @@ type Drag =
       paneKey?: string;
     }
   | { type: "host"; key: string; last: Point }
+  | {
+      type: "string";
+      from: StringEnd;
+      sx: number;
+      sy: number;
+      at: Point;
+      over: StringEnd | null;
+    }
   | { type: "pinch"; d0: number; s0: number; m0: Point; cam0: Camera };
+/** A card (note, workspace or tab) and optionally one of its panes. */
+type StringEnd = { cardKey: string; paneKey?: string };
+const NOTE_PREFIX = "note:";
+const isNoteKey = (key: string) => key.startsWith(NOTE_PREFIX);
+const NOTE_SIZE: Size = { w: 180, h: 110 };
+const SAVE_DELAY_MS = 600;
 type Sample = { x: number; y: number; t: number };
 type Camera = { x: number; y: number; s: number };
 
@@ -169,19 +193,36 @@ export default function BoardView({
   selectedId,
   onSelect,
   onOpenTerminal,
+  store,
 }: {
   world: WorldObject;
   toolbarPortal?: Element | null;
   selectedId: string | null;
   onSelect(id: string): unknown;
   onOpenTerminal(id: string): unknown;
+  /** Board's saved state; World's own service store by default. */
+  store?: BoardDocumentStore;
 }) {
   const model = useMemo(() => projectBoard(world), [world]);
+  const boardStore = useMemo(() => store ?? sharedBoardStore(), [store]);
+  useEffect(() => {
+    boardStore.start();
+    return () => boardStore.stop();
+  }, [boardStore]);
+  const { document: saved } = useBoardDocument(boardStore);
+  const [editing, setEditing] = useState<string | null>(null);
+  const [noteSelected, setNoteSelected] = useState<string | null>(null);
+  const [picked, setPicked] = useState<string | null>(null);
+  const [stringFrom, setStringFrom] = useState<StringEnd | null>(null);
   const [far, setFar] = useState(false);
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
   const [query, setQuery] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
-  const [chooser, setChooser] = useState<string | null>(null);
+  /** The pane chooser: to pick a pane, or to finish a string to one. */
+  const [chooser, setChooser] = useState<{
+    tabKey: string;
+    stringFrom?: StringEnd;
+  } | null>(null);
   const [pulses, setPulses] = useState(readPulses);
   const [toast, setToast] = useState<{
     text: string;
@@ -213,8 +254,28 @@ export default function BoardView({
   const dirty = useRef(true);
   const fitted = useRef(false);
   const farRef = useRef(false);
-  const latest = useRef({ model, collapsed, onSelect, onOpenTerminal });
-  latest.current = { model, collapsed, onSelect, onOpenTerminal };
+  const yarnEls = useRef(new Map<string, SVGPathElement[]>());
+  const cutRef = useRef<HTMLButtonElement>(null);
+  const tempYarn = useRef<SVGPathElement | null>(null);
+  const loaded = useRef(false);
+  const saveTimer = useRef(0);
+  const lastTap = useRef<{ t: number; x: number; y: number } | null>(null);
+  const latest = useRef({
+    model,
+    collapsed,
+    onSelect,
+    onOpenTerminal,
+    saved,
+    picked,
+  });
+  latest.current = {
+    model,
+    collapsed,
+    onSelect,
+    onOpenTerminal,
+    saved,
+    picked,
+  };
 
   const kindOf = (key: string, m: BoardModel) =>
     m.workspaceByKey.has(key) ? "workspace" : "tab";
@@ -274,6 +335,95 @@ export default function BoardView({
     dirty.current = true;
   }, [collapsed, far]);
 
+  /* ---------- Saved state: notes as free cards, layout loaded once ---------- */
+  useLayoutEffect(() => {
+    const notes = saved?.notes ?? [];
+    const held = drag.current?.type === "card" ? drag.current.key : null;
+    const present = new Set<string>();
+    for (const note of notes) {
+      const key = NOTE_PREFIX + note.id;
+      present.add(key);
+      const el = cardEls.current.get(key);
+      const size = el?.offsetWidth
+        ? { w: el.offsetWidth, h: el.offsetHeight }
+        : NOTE_SIZE;
+      const card = cards.current.get(key);
+      if (!card)
+        cards.current.set(key, {
+          key,
+          x: note.x,
+          y: note.y,
+          vx: 0,
+          vy: 0,
+          size,
+          home: null,
+          fixed: true,
+          gliding: false,
+          stiffness: 0,
+        });
+      else {
+        card.size = size;
+        if (held !== key) {
+          card.x = note.x;
+          card.y = note.y;
+        }
+      }
+    }
+    for (const key of [...cards.current.keys()])
+      if (isNoteKey(key) && !present.has(key)) cards.current.delete(key);
+    if (saved && !loaded.current) {
+      // The first saved layout replaces the default one; new cards still get
+      // free space.
+      loaded.current = true;
+      layout.current = placeNew(
+        model,
+        {
+          anchors: new Map(Object.entries(saved.layout.anchors)),
+          offsets: new Map(Object.entries(saved.layout.offsets)),
+          pinned: new Map(Object.entries(saved.layout.pinned)),
+        },
+        { phone: isPhone(), sizeOf },
+      );
+      for (const [key, point] of positions(model, layout.current)) {
+        const card = cards.current.get(key);
+        if (card) {
+          card.x = point.x;
+          card.y = point.y;
+        }
+      }
+      setCollapsed(new Set(saved.layout.folded));
+      fit(true);
+    }
+    dirty.current = true;
+    // The layout is read through refs; only saved state starts this.
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+  }, [saved]);
+
+  /** Save the layout shortly after it changes; never before it has loaded. */
+  const scheduleSave = () => {
+    if (!loaded.current) return;
+    window.clearTimeout(saveTimer.current);
+    saveTimer.current = window.setTimeout(() => {
+      const l = layout.current;
+      void boardStore.patch([
+        {
+          op: "layout.set",
+          replace: true,
+          anchors: Object.fromEntries(l.anchors),
+          offsets: Object.fromEntries(l.offsets),
+          pinned: Object.fromEntries(l.pinned),
+          folded: [...latest.current.collapsed],
+        },
+      ]);
+    }, SAVE_DELAY_MS);
+  };
+  useEffect(() => {
+    scheduleSave();
+    // scheduleSave reads refs only.
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+  }, [collapsed]);
+  useEffect(() => () => window.clearTimeout(saveTimer.current), []);
+
   /* ---------- Homes: anchor plus offset, read every frame ---------- */
   const baseOf = (key: string, m: BoardModel): Point | null => {
     const space = m.workspaceByKey.get(key);
@@ -305,7 +455,11 @@ export default function BoardView({
         x: card.x - base.x,
         y: card.y - base.y,
       });
+    scheduleSave();
   };
+  // The frame loop runs once; it reaches the current keepWhereItIs here.
+  const keepRef = useRef(keepWhereItIs);
+  keepRef.current = keepWhereItIs;
 
   /* ---------- Camera ---------- */
   const toWorld = (sx: number, sy: number): Point => {
@@ -405,6 +559,7 @@ export default function BoardView({
         const list = visibleCards().map(([key, card]) => {
           card.home = homeOf(key, m);
           card.fixed =
+            isNoteKey(key) ||
             layout.current.pinned.has(key) ||
             tweens.current.has(key) ||
             (holding && (drag.current as { key: string }).key === key);
@@ -414,9 +569,10 @@ export default function BoardView({
           ...stepPhysics(list, physics.current, dt / 2),
           ...stepPhysics(list, physics.current, dt / 2),
         ])
-          keepWhereItIs(key, m);
+          keepRef.current(key, m);
         if (cool(list, physics.current, dt, Boolean(holding)))
-          for (const card of list) if (!card.fixed) keepWhereItIs(card.key, m);
+          for (const card of list)
+            if (!card.fixed) keepRef.current(card.key, m);
         dirty.current = true;
       }
       const goal = camGoal.current;
@@ -505,6 +661,7 @@ export default function BoardView({
         path.remove();
         paths.current.delete(key);
       }
+    paintStrings(svg, m);
     for (const host of m.hosts) {
       const zone = zoneEls.current.get(host.key);
       if (!zone) continue;
@@ -540,14 +697,160 @@ export default function BoardView({
     }
   }
 
+  /** Where a string end is drawn: a note, a card, or a pane row in it. */
+  function pointOf(
+    end: BoardEnd,
+    m: BoardModel,
+  ): { at: Point; firm: boolean } | null {
+    if ("note" in end) {
+      const card = cards.current.get(NOTE_PREFIX + end.note);
+      return card ? { at: { x: card.x, y: card.y }, firm: true } : null;
+    }
+    const target = targetOf(m, end.anchor);
+    if (!target) return null;
+    const firm = confirmed(end.anchor, target);
+    let key = target.cardKey;
+    const tab = m.tabByKey.get(key);
+    // A tab hidden by the overview or a fold is drawn as its workspace.
+    if (
+      tab &&
+      (farRef.current || latest.current.collapsed.has(tab.workspaceKey))
+    )
+      key = tab.workspaceKey;
+    const card = cards.current.get(key);
+    if (!card) return null;
+    if (key === target.cardKey && target.paneKey) {
+      const el = cardEls.current.get(key);
+      const row = el?.querySelector<HTMLElement>(
+        `[data-pane="${CSS.escape(target.paneKey)}"]`,
+      );
+      if (el && row)
+        return {
+          at: {
+            x: card.x,
+            y:
+              card.y -
+              el.offsetHeight / 2 +
+              row.offsetTop +
+              row.offsetHeight / 2,
+          },
+          firm,
+        };
+    }
+    return { at: { x: card.x, y: card.y }, firm };
+  }
+  const sag = (a: Point, b: Point) => {
+    const d = Math.hypot(b.x - a.x, b.y - a.y);
+    const mid = {
+      x: (a.x + b.x) / 2,
+      y: (a.y + b.y) / 2 + Math.min(90, d * 0.18),
+    };
+    return {
+      d: `M${a.x},${a.y} Q${mid.x},${mid.y} ${b.x},${b.y}`,
+      mid: { x: (a.x + 2 * mid.x + b.x) / 4, y: (a.y + 2 * mid.y + b.y) / 4 },
+    };
+  };
+  function paintStrings(svg: SVGSVGElement, m: BoardModel) {
+    const strings = latest.current.saved?.strings ?? [];
+    const seen = new Set<string>();
+    let cutAt: Point | null = null;
+    for (const string of strings) {
+      const a = pointOf(string.from, m),
+        b = pointOf(string.to, m);
+      if (!a || !b) continue;
+      seen.add(string.id);
+      let pair = yarnEls.current.get(string.id);
+      if (!pair) {
+        const line = document.createElementNS(
+          "http://www.w3.org/2000/svg",
+          "path",
+        );
+        const hit = document.createElementNS(
+          "http://www.w3.org/2000/svg",
+          "path",
+        );
+        hit.setAttribute("class", "board-yarn-hit");
+        hit.dataset.string = string.id;
+        svg.append(line, hit);
+        pair = [line, hit];
+        yarnEls.current.set(string.id, pair);
+      }
+      const curve = sag(a.at, b.at);
+      const loose = !a.firm || !b.firm;
+      pair[0]!.setAttribute(
+        "class",
+        `board-yarn${loose ? " board-yarn-loose" : ""}${latest.current.picked === string.id ? " board-yarn-picked" : ""}`,
+      );
+      pair[0]!.setAttribute("d", curve.d);
+      pair[1]!.setAttribute("d", curve.d);
+      if (latest.current.picked === string.id) cutAt = curve.mid;
+    }
+    for (const [id, pair] of yarnEls.current)
+      if (!seen.has(id)) {
+        for (const el of pair) el.remove();
+        yarnEls.current.delete(id);
+      }
+    const d = drag.current;
+    if (d?.type === "string") {
+      const from = pointOf(endFor(d.from, m) ?? { note: "" }, m) ?? {
+        at: d.at,
+        firm: true,
+      };
+      if (!tempYarn.current) {
+        tempYarn.current = document.createElementNS(
+          "http://www.w3.org/2000/svg",
+          "path",
+        );
+        tempYarn.current.setAttribute("class", "board-yarn board-yarn-temp");
+        svg.appendChild(tempYarn.current);
+      }
+      tempYarn.current.setAttribute("d", sag(from.at, d.at).d);
+    } else if (tempYarn.current) {
+      tempYarn.current.remove();
+      tempYarn.current = null;
+    }
+    const cut = cutRef.current;
+    if (cut) {
+      cut.hidden = !cutAt;
+      if (cutAt) {
+        cut.style.left = `${cam.current.x + cutAt.x * cam.current.s}px`;
+        cut.style.top = `${cam.current.y + cutAt.y * cam.current.s}px`;
+      }
+    }
+  }
+  useEffect(() => {
+    dirty.current = true;
+  }, [saved, picked]);
+
+  /** The saved end for a card (or a pane in it), or null for an unknown card. */
+  function endFor(end: StringEnd, m: BoardModel): BoardEnd | null {
+    if (isNoteKey(end.cardKey))
+      return { note: end.cardKey.slice(NOTE_PREFIX.length) };
+    const anchor = anchorFor(m, end.cardKey, end.paneKey);
+    return anchor ? { anchor } : null;
+  }
+  /** The card and pane under a screen point, for a string's far end. */
+  function endAt(x: number, y: number): StringEnd | null {
+    const el = document.elementFromPoint(x, y) as HTMLElement | null;
+    const cardEl = el?.closest<HTMLElement>(".board-card");
+    if (!cardEl?.dataset.key) return null;
+    return {
+      cardKey: cardEl.dataset.key,
+      paneKey: el?.closest<HTMLElement>("[data-pane]")?.dataset.pane,
+    };
+  }
+
   /* ---------- Pointer input ---------- */
   const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     const target = event.target as HTMLElement;
-    if (
-      target.closest("button, input, a, [contenteditable='true']") &&
-      !target.closest(".board-card")
-    )
+    if (target.closest("[contenteditable='true']")) return;
+    if (target.closest("button, input, a") && !target.closest(".board-card"))
       return;
+    const hit = target.closest<SVGPathElement>(".board-yarn-hit");
+    if (hit?.dataset.string) {
+      setPicked(hit.dataset.string);
+      return;
+    }
     pointers.current.set(event.pointerId, {
       x: event.clientX,
       y: event.clientY,
@@ -574,6 +877,18 @@ export default function BoardView({
     const cardEl = target.closest<HTMLElement>(".board-card");
     const zoneLabel = target.closest<HTMLElement>(".board-zone-label");
     const at = toWorld(event.clientX, event.clientY);
+    if (cardEl?.dataset.key && target.closest(".board-handle")) {
+      drag.current = {
+        type: "string",
+        from: { cardKey: cardEl.dataset.key },
+        sx: event.clientX,
+        sy: event.clientY,
+        at,
+        over: null,
+      };
+      dirty.current = true;
+      return;
+    }
     if (cardEl?.dataset.key) {
       const card = cards.current.get(cardEl.dataset.key);
       if (!card) return;
@@ -644,6 +959,22 @@ export default function BoardView({
       return;
     }
     const at = toWorld(event.clientX, event.clientY);
+    if (d.type === "string") {
+      d.at = at;
+      const over = endAt(event.clientX, event.clientY);
+      const next = over && over.cardKey !== d.from.cardKey ? over : null;
+      if (next?.cardKey !== d.over?.cardKey) {
+        if (d.over)
+          cardEls.current
+            .get(d.over.cardKey)
+            ?.classList.remove("board-link-target");
+        if (next)
+          cardEls.current.get(next.cardKey)?.classList.add("board-link-target");
+      }
+      d.over = next;
+      dirty.current = true;
+      return;
+    }
     if (d.type === "host") {
       const anchor = layout.current.anchors.get(d.key) ?? { x: 0, y: 0 };
       layout.current.anchors.set(d.key, {
@@ -692,7 +1023,36 @@ export default function BoardView({
     }
     drag.current = null;
     const m = latest.current.model;
+    if (d.type === "string") {
+      if (d.over)
+        cardEls.current
+          .get(d.over.cardKey)
+          ?.classList.remove("board-link-target");
+      dirty.current = true;
+      if (d.over) finishString(d.from, d.over);
+      else if (Math.hypot(event.clientX - d.sx, event.clientY - d.sy) > 40)
+        // Dropped on empty board: a new note, strung to where it started.
+        void createNote(d.at, d.from);
+      return;
+    }
     if (d.type === "pan") {
+      if (Math.hypot(event.clientX - d.sx, event.clientY - d.sy) < 6) {
+        // A tap on empty board clears picks; a second tap soon after, close
+        // by, pins a new note there.
+        const now = performance.now();
+        const tap = lastTap.current;
+        if (
+          tap &&
+          now - tap.t < 340 &&
+          Math.hypot(event.clientX - tap.x, event.clientY - tap.y) < 28
+        ) {
+          lastTap.current = null;
+          void createNote(toWorld(event.clientX, event.clientY));
+        } else lastTap.current = { t: now, x: event.clientX, y: event.clientY };
+        setPicked(null);
+        setNoteSelected(null);
+        setStringFrom(null);
+      }
       if (Math.hypot(event.clientX - d.sx, event.clientY - d.sy) >= 6) {
         const v = velocity(d.hist);
         if (
@@ -705,11 +1065,31 @@ export default function BoardView({
     }
     if (d.type === "host") {
       warm(physics.current);
+      scheduleSave();
       return;
     }
     const card = cards.current.get(d.key);
     if (!d.lifted || !card) {
+      setPicked(null);
+      if (stringFrom) {
+        finishString(stringFrom, { cardKey: d.key, paneKey: d.paneKey });
+        setStringFrom(null);
+        return;
+      }
+      if (isNoteKey(d.key)) {
+        setNoteSelected(d.key.slice(NOTE_PREFIX.length));
+        return;
+      }
+      setNoteSelected(null);
       selectCard(d.key, m, d.paneKey);
+      return;
+    }
+    if (isNoteKey(d.key)) {
+      cardEls.current.get(d.key)?.classList.remove("board-lifted");
+      const note = latest.current.saved?.notes.find(
+        (n) => NOTE_PREFIX + n.id === d.key,
+      );
+      if (note) void saveNote(note, { x: card.x, y: card.y });
       return;
     }
     cardEls.current.get(d.key)?.classList.remove("board-lifted");
@@ -795,6 +1175,7 @@ export default function BoardView({
     }
     physics.current.heat = 0;
     dirty.current = true;
+    scheduleSave();
   };
   const toggleFold = (space: BoardWorkspace) => {
     const next = new Set(collapsed);
@@ -857,6 +1238,109 @@ export default function BoardView({
     );
     return () => window.clearTimeout(timer);
   }, [toast]);
+  /* ---------- Notes and strings ---------- */
+  const report = async (pending: Promise<string | null>) => {
+    const problem = await pending;
+    if (problem) setToast({ text: problem });
+  };
+  async function createNote(at: Point, stringTo?: StringEnd) {
+    const id = crypto.randomUUID();
+    const notes = latest.current.saved?.notes ?? [];
+    const color = NOTE_COLORS[notes.length % NOTE_COLORS.length]!;
+    const ops: BoardOp[] = [
+      { op: "note.put", note: { id, text: "", color, x: at.x, y: at.y } },
+    ];
+    const end = stringTo && endFor(stringTo, latest.current.model);
+    if (end)
+      ops.push({
+        op: "string.put",
+        string: { id: crypto.randomUUID(), from: { note: id }, to: end },
+      });
+    const problem = await boardStore.patch(ops);
+    if (problem) setToast({ text: problem });
+    else {
+      setNoteSelected(id);
+      setEditing(id);
+    }
+  }
+  const saveNote = (
+    note: BoardNote,
+    change: Partial<Omit<BoardNote, "id" | "rev">>,
+  ) =>
+    report(
+      boardStore.patch([
+        {
+          op: "note.put",
+          note: {
+            id: note.id,
+            text: note.text,
+            color: note.color,
+            x: note.x,
+            y: note.y,
+            ...change,
+          },
+          rev: note.rev,
+        },
+      ]),
+    );
+  const deleteNote = (note: BoardNote) => {
+    setNoteSelected(null);
+    void report(
+      boardStore.patch([{ op: "note.delete", id: note.id, rev: note.rev }]),
+    );
+  };
+  /** Finish a string; a tab with several panes asks which pane first. */
+  function finishString(from: StringEnd, to: StringEnd) {
+    const m = latest.current.model;
+    if (from.cardKey === to.cardKey) return;
+    const tab = m.tabByKey.get(to.cardKey);
+    if (tab && tab.panes.length > 1 && !to.paneKey) {
+      setChooser({ tabKey: tab.key, stringFrom: from });
+      return;
+    }
+    const single = tab?.panes.length === 1 ? tab.panes[0]!.key : undefined;
+    const a = endFor(from, m),
+      b = endFor({ ...to, paneKey: to.paneKey ?? single }, m);
+    if (!a || !b) return;
+    void report(
+      boardStore.patch([
+        {
+          op: "string.put",
+          string: { id: crypto.randomUUID(), from: a, to: b },
+        },
+      ]),
+    );
+  }
+  const cutString = (id: string) => {
+    setPicked(null);
+    void report(boardStore.patch([{ op: "string.delete", id }]));
+  };
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (
+        (event.target as HTMLElement | null)?.closest?.(
+          "input, textarea, [contenteditable='true']",
+        )
+      )
+        return;
+      if (
+        (event.key === "Delete" || event.key === "Backspace") &&
+        latest.current.picked
+      ) {
+        event.preventDefault();
+        cutString(latest.current.picked);
+      }
+      if (event.key === "Escape") {
+        setPicked(null);
+        setStringFrom(null);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // cutString reads refs and the store only.
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const togglePulses = () => {
     const next = !pulses;
     setPulses(next);
@@ -1006,6 +1490,10 @@ export default function BoardView({
                     {folded ? space.tabKeys.length : "−"}
                   </button>
                 </div>
+                <span
+                  className="board-handle"
+                  title="Drag to string this to a note or card"
+                />
                 <div className="board-sum" aria-hidden="true">
                   {space.squares.map((square, i) => (
                     <span
@@ -1103,7 +1591,7 @@ export default function BoardView({
                         type="button"
                         className="board-more"
                         onPointerDown={(event) => event.stopPropagation()}
-                        onClick={() => setChooser(tab.key)}
+                        onClick={() => setChooser({ tabKey: tab.key })}
                       >
                         +{hidden} more
                       </button>
@@ -1118,18 +1606,122 @@ export default function BoardView({
                   </div>
                 )}
                 <span className="board-badge" aria-hidden="true" />
+                <span
+                  className="board-handle"
+                  title="Drag to string this to a note or card"
+                />
               </div>
             );
           })}
+          {(saved?.notes ?? []).map((note) => (
+            <div
+              key={note.id}
+              ref={ref(NOTE_PREFIX + note.id)}
+              data-key={NOTE_PREFIX + note.id}
+              role="button"
+              tabIndex={0}
+              aria-label={`Note: ${note.text || "empty"}`}
+              className={[
+                "board-card board-note",
+                `board-note-${note.color}`,
+                noteSelected === note.id ? "board-selected" : "",
+              ].join(" ")}
+              onDoubleClick={() => setEditing(note.id)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && editing !== note.id) {
+                  event.preventDefault();
+                  setNoteSelected(note.id);
+                  setEditing(note.id);
+                }
+              }}
+            >
+              <span className="board-tape" aria-hidden="true" />
+              {editing === note.id ? (
+                <div
+                  className="board-note-text"
+                  contentEditable
+                  suppressContentEditableWarning
+                  role="textbox"
+                  aria-label="Note text"
+                  ref={(el) => {
+                    if (el && document.activeElement !== el) {
+                      el.focus();
+                      const range = document.createRange();
+                      range.selectNodeContents(el);
+                      range.collapse(false);
+                      getSelection()?.removeAllRanges();
+                      getSelection()?.addRange(range);
+                    }
+                  }}
+                  onBlur={(event) => {
+                    setEditing(null);
+                    const text = event.currentTarget.textContent?.trim() ?? "";
+                    if (text !== note.text) void saveNote(note, { text });
+                  }}
+                  onKeyDown={(event) => {
+                    if (
+                      event.key === "Escape" ||
+                      (event.key === "Enter" &&
+                        (event.metaKey || event.ctrlKey))
+                    ) {
+                      event.preventDefault();
+                      event.currentTarget.blur();
+                    }
+                  }}
+                >
+                  {note.text}
+                </div>
+              ) : (
+                <div className="board-note-text">
+                  {note.text || "Empty note"}
+                </div>
+              )}
+              <span
+                className="board-handle"
+                title="Drag to string this note to a card"
+              />
+            </div>
+          ))}
         </div>
-        {chooser && model.tabByKey.get(chooser) ? (
+        <button
+          ref={cutRef}
+          type="button"
+          className="board-cut"
+          hidden
+          onClick={() => {
+            if (picked) cutString(picked);
+          }}
+        >
+          Cut string
+        </button>
+        {noteSelected && saved?.notes.find((n) => n.id === noteSelected) ? (
+          <NoteBar
+            note={saved.notes.find((n) => n.id === noteSelected)!}
+            onColor={(color) => {
+              const note = saved.notes.find((n) => n.id === noteSelected)!;
+              void saveNote(note, { color });
+            }}
+            onEdit={() => setEditing(noteSelected)}
+            onString={() => {
+              setStringFrom({ cardKey: NOTE_PREFIX + noteSelected });
+              setToast({ text: "Tap the card or pane to string the note to" });
+            }}
+            onDelete={() =>
+              deleteNote(saved.notes.find((n) => n.id === noteSelected)!)
+            }
+          />
+        ) : null}
+        {chooser && model.tabByKey.get(chooser.tabKey) ? (
           <div
             className="board-chooser"
             role="dialog"
-            aria-label={`Panes in ${model.tabByKey.get(chooser)!.label}`}
+            aria-label={`Panes in ${model.tabByKey.get(chooser.tabKey)!.label}`}
           >
             <div className="board-chooser-head">
-              <strong>{model.tabByKey.get(chooser)!.label}</strong>
+              <strong>
+                {chooser.stringFrom ? "String to which pane in " : ""}
+                {model.tabByKey.get(chooser.tabKey)!.label}
+              </strong>
               <button
                 type="button"
                 aria-label="Close"
@@ -1138,17 +1730,25 @@ export default function BoardView({
                 ×
               </button>
             </div>
-            {model.tabByKey.get(chooser)!.panes.map((row) => (
+            {model.tabByKey.get(chooser.tabKey)!.panes.map((row) => (
               <button
                 key={row.key}
                 type="button"
                 className={`board-pane${row.isAgent ? ` board-s-${row.status}` : " board-pane-shell"}`}
                 onClick={() => {
-                  void onSelect(row.leaf.id);
+                  if (chooser.stringFrom)
+                    finishString(chooser.stringFrom, {
+                      cardKey: chooser.tabKey,
+                      paneKey: row.key,
+                    });
+                  else void onSelect(row.leaf.id);
                   setChooser(null);
                 }}
                 onDoubleClick={() => {
-                  if (model.tabByKey.get(chooser)!.actionable)
+                  if (
+                    !chooser.stringFrom &&
+                    model.tabByKey.get(chooser.tabKey)!.actionable
+                  )
                     void onOpenTerminal(row.leaf.id);
                 }}
               >
@@ -1254,5 +1854,44 @@ export default function BoardView({
         ) : null}
       </div>
     </>
+  );
+}
+
+/** Actions for the selected note: colour, edit, string and delete. */
+function NoteBar({
+  note,
+  onColor,
+  onEdit,
+  onString,
+  onDelete,
+}: {
+  note: BoardNote;
+  onColor(color: BoardNote["color"]): void;
+  onEdit(): void;
+  onString(): void;
+  onDelete(): void;
+}) {
+  return (
+    <div className="board-notebar" role="toolbar" aria-label="Note">
+      {NOTE_COLORS.map((color) => (
+        <button
+          key={color}
+          type="button"
+          className={`board-swatch board-note-${color}`}
+          aria-label={`Colour ${color}`}
+          aria-pressed={note.color === color}
+          onClick={() => onColor(color)}
+        />
+      ))}
+      <button type="button" onClick={onEdit}>
+        Edit
+      </button>
+      <button type="button" onClick={onString}>
+        String to…
+      </button>
+      <button type="button" className="board-danger" onClick={onDelete}>
+        Delete
+      </button>
+    </div>
   );
 }
