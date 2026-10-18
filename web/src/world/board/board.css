@@ -754,6 +754,9 @@
   cursor: pointer;
 }
 .board-cut {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   position: absolute;
   z-index: 6;
   transform: translate(-50%, -130%);
@@ -793,6 +796,19 @@
   font: inherit;
   font-size: 13px;
   cursor: pointer;
+}
+/* The swatches show their colour: more specific than the bar's buttons. */
+.board-notebar .board-swatch.board-note-yellow {
+  background: var(--note-yellow);
+}
+.board-notebar .board-swatch.board-note-pink {
+  background: var(--note-pink);
+}
+.board-notebar .board-swatch.board-note-blue {
+  background: var(--note-blue);
+}
+.board-notebar .board-swatch.board-note-green {
+  background: var(--note-green);
 }
 .board-notebar .board-swatch {
   width: 26px;

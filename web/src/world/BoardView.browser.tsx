@@ -615,8 +615,30 @@ async function run() {
   );
   (document.activeElement as HTMLElement | null)?.blur();
   await settle(100);
-  // The new note is selected; the Delete key deletes it.
-  window.dispatchEvent(
+  // The new note is selected and its swatches show their colours.
+  const swatch = host.querySelector<HTMLElement>(
+    ".board-notebar .board-swatch",
+  );
+  check(
+    Boolean(swatch) &&
+      !["rgba(0, 0, 0, 0)", "transparent"].includes(
+        getComputedStyle(swatch!).backgroundColor,
+      ),
+    "note colour swatches are filled",
+  );
+  // Select it with a tap (as after a terminal had focus), then Delete.
+  const secondNote = [
+    ...host.querySelectorAll<HTMLElement>(".board-note"),
+  ].find((el) => el.dataset.key !== noteKey)!;
+  const sc = centre(secondNote);
+  pointer(secondNote, "pointerdown", sc.x, sc.y, 14);
+  pointer(secondNote, "pointerup", sc.x, sc.y, 14);
+  await settle(50);
+  check(
+    document.activeElement === secondNote,
+    "a tapped note takes the keyboard focus",
+  );
+  secondNote.dispatchEvent(
     new KeyboardEvent("keydown", { key: "Delete", bubbles: true }),
   );
   await waitFor(

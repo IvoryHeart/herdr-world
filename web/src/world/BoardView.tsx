@@ -1,4 +1,5 @@
 import {
+  Trash2,
   EllipsisVertical,
   Maximize2,
   Minus,
@@ -1133,6 +1134,8 @@ export default function BoardView({
       }
       if (isNoteKey(d.key)) {
         setNoteSelected(d.key.slice(NOTE_PREFIX.length));
+        // Keys go to the note, not to a terminal that had focus.
+        cardEls.current.get(d.key)?.focus({ preventScroll: true });
         return;
       }
       setNoteSelected(null);
@@ -1775,10 +1778,18 @@ export default function BoardView({
               ].join(" ")}
               onDoubleClick={() => setEditing(note.id)}
               onKeyDown={(event) => {
-                if (event.key === "Enter" && editing !== note.id) {
+                if (editing === note.id) return;
+                if (event.key === "Enter") {
                   event.preventDefault();
                   setNoteSelected(note.id);
                   setEditing(note.id);
+                } else if (
+                  event.key === "Delete" ||
+                  event.key === "Backspace"
+                ) {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  deleteNote(note);
                 }
               }}
             >
@@ -1834,12 +1845,14 @@ export default function BoardView({
           ref={cutRef}
           type="button"
           className="board-cut"
+          aria-label="Delete string"
           hidden
           onClick={() => {
             if (picked) cutString(picked);
           }}
         >
-          Cut string
+          <Trash2 size={14} aria-hidden="true" />
+          Delete
         </button>
         {noteSelected && saved?.notes.find((n) => n.id === noteSelected) ? (
           <NoteBar
