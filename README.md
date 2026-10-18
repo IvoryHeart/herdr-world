@@ -15,8 +15,6 @@ qualified terminals, files, changes and agent history on desktop or mobile.
 
 [![Town source preview showing four disposable workspaces and terminal desks](./docs/images/herdr-world-desktop-town.png)](./docs/images/herdr-world-desktop-town.png)
 
-Town screenshots show a source preview; check the release notes for shipped features.
-
 [![Office view showing the selected Herdr host and its agents][desktop-office]][desktop-office]
 
 Town is the default view: it shows the agents as a pixel-art town, where each
@@ -148,13 +146,6 @@ operate together. Global creation visibly confirms one destination host.
 
 See [deployment](./docs/DEPLOYMENT.md) for checksums, profiles, authentication,
 updates, and services.
-
-### Upstream handoff demo
-
-The [Roamgate foundation demo](./docs/images/roamgate-handoff.mp4) shows a Herdr
-workspace moving from computer to phone. It shows upstream Roamgate UI; the
-World screenshots above show this project’s multi-host views.
-[Animated fallback](./docs/images/roamgate-handoff.gif).
 
 ## Install as a PWA
 

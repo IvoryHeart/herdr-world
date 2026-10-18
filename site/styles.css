@@ -527,11 +527,40 @@
 
   .hero-release {
     display: flex;
-    align-items: center;
     justify-content: center;
+    margin-top: 20px;
+  }
+
+  .hero-release-link {
+    display: inline-flex;
+    align-items: center;
     flex-wrap: wrap;
+    justify-content: center;
     gap: 12px;
-    margin-top: 18px;
+    color: var(--text-soft);
+    font-size: 0.85rem;
+  }
+
+  .hero-release-link img {
+    flex: 0 0 auto;
+    object-fit: contain;
+  }
+
+  .town-next {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 24px;
+  }
+
+  .town-next p {
+    flex: 1 1 360px;
+    color: var(--text-soft);
+    line-height: 1.7;
+  }
+
+  .town-next .button {
+    flex: 0 0 auto;
   }
 
   .platform-line {

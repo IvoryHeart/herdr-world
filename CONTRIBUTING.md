@@ -151,7 +151,10 @@ bun run test scripts/pages-content.test.ts scripts/pages-workflow.test.ts
 bun run build:site
 ```
 
-Serve `.pages-dist/` locally and check `/tutorial/`, narrow screens, keyboard
+The build adds content versions to local CSS and JavaScript URLs so a new page
+loads its matching assets rather than a cached stylesheet from a previous deploy.
+
+Serve `.pages-dist/` locally and check the homepage and `/tutorial/`, narrow screens, keyboard
 navigation, and JavaScript-disabled reading. Production canonical URLs, social
 images, and the sitemap use <https://herdr.world/>. Do not commit `.pages-dist/`.
 
