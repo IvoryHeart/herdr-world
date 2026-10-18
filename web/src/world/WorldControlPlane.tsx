@@ -230,8 +230,11 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
                         world={presentedWorld}
                         toolbarPortal={viewToolbarPortal}
                         selectedId={selectedId}
+                        conversationNodeIds={conversationNodeIds}
                         onSelect={selectNode}
                         onOpenTerminal={openTerminalById}
+                        onSelectedAnchorChange={setSelectedVisualAnchor}
+                        onNodeAnchorsChange={setVisualConversationAnchors}
                       />
                     </Suspense>
                   ) : view === "tree" ? (

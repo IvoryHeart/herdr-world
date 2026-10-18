@@ -183,7 +183,8 @@ on your phone and desktop.
    selected tab); idle, finished and waiting tabs stay still, and the **⋯** menu
    turns the pulses off. Each workspace card counts its agents by status.
    The round **+** on a workspace's right edge (shown on hover or selection)
-   opens a new terminal or starts Claude or Codex in a new tab; **+** beside a host's name creates a workspace. Select a workspace or
+   opens **New tab**: choose a Terminal, Claude or Codex, optionally name the
+   tab, and press **Create**; **+** beside a host's name creates a workspace. Select a workspace or
    tab to give it a colour of your own (a tab takes its workspace's colour
    unless it has one); status keeps its own colours.
 2. Scroll or pinch to zoom, drag empty board to pan, or use the controls at the
@@ -195,7 +196,7 @@ on your phone and desktop.
    the whole board, and offers **Undo**; notes strung to cards move with them,
    and notes left on a card move to free space.
 4. Tap a workspace, tab or pane row to open its Inspector with Terminal, Files,
-   Changes and Agent History. Double-click a tab to open its terminal.
+   Changes and Agent History; a line joins each Inspector window to its card. Double-click a tab to open its terminal.
 5. Double-click (or double-tap) empty board to pin a note and type; double-click
    a note to edit it. Tap a note for its bar: colour, **Edit**, **String to…**, **Delete** (or press Delete).
 6. Drag a card's red dot onto a pane row, a tab or a workspace to string a note
@@ -204,8 +205,9 @@ on your phone and desktop.
    remove it.
 7. A note strung to an agent's pane offers **Send to <agent>**. World checks the
    pane still holds the same agent and sends the note once; nothing is ever sent
-   without **Send**. **Start an agent…** opens a new tab in a workspace you choose
-   and sends the note once the agent is ready. (Starting a chosen agent kind
+   without **Send**. **Start an agent…** opens the same dialog: choose the workspace
+   and the agent, optionally name the tab, and press **Start and send**; the
+   note is sent once the agent is ready. (Starting a chosen agent kind
    currently opens a shell; see
    [issue 219](https://github.com/IvoryHeart/herdr-world/issues/219).)
 8. Drag a tab onto another workspace of the same host to move it there. Board

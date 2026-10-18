@@ -82,6 +82,7 @@ import {
   type Size,
 } from "./board/boardPlacement";
 import type { WorldAgentStatus, WorldObject } from "./worldObject";
+import type { OfficeCanvasAnchor } from "./PixelOfficeCanvas";
 import { WorldViewToolbar } from "./WorldViewToolbar";
 import "./board/board.css";
 
@@ -179,13 +180,19 @@ const CreateWorkspaceDialog = lazy(() =>
   })),
 );
 /** A plain terminal tab through World's store, which refreshes the topology. */
-async function createTabThroughStore(space: BoardWorkspace) {
+async function createTabThroughStore(space: BoardWorkspace, name?: string) {
   const { store } = await import("../store");
-  await store.createQualifiedTab(
+  const result = (await store.createQualifiedTab(
     { connectionId: space.connectionId, runtimeGeneration: space.generation },
     space.nativeId,
-    { numberedLabel: true },
-  );
+    { numberedLabel: !name },
+  )) as { tab?: { tab_id?: unknown } } | undefined;
+  const tabId = result?.tab?.tab_id;
+  if (!name || typeof tabId !== "string") return;
+  const { bridge } = await import("../api");
+  await bridge
+    .connection(space.connectionId, space.generation)
+    .call("tab.rename", { tab_id: tabId, label: name });
 }
 async function startAgentThroughService(
   space: BoardWorkspace,
@@ -303,6 +310,9 @@ export default function BoardView({
   startAgent = startAgentThroughService,
   moveTab = moveTabThroughService,
   createTab = createTabThroughStore,
+  conversationNodeIds = NO_IDS,
+  onNodeAnchorsChange,
+  onSelectedAnchorChange,
 }: {
   world: WorldObject;
   toolbarPortal?: Element | null;
@@ -326,8 +336,15 @@ export default function BoardView({
     name: string,
     text: string,
   ) => Promise<StartOutcome>;
+  /** Nodes with an open Inspector window, so World can draw their lines. */
+  conversationNodeIds?: readonly string[];
+  /** Where those nodes (and the selection) are on screen, for the lines. */
+  onNodeAnchorsChange?(
+    anchors: Record<string, OfficeCanvasAnchor> | null,
+  ): void;
+  onSelectedAnchorChange?(anchor: OfficeCanvasAnchor | null): void;
   /** Open a plain terminal tab in a workspace; World's store by default. */
-  createTab?: (space: BoardWorkspace) => Promise<unknown>;
+  createTab?: (space: BoardWorkspace, name?: string) => Promise<unknown>;
   /** Ask the service whether an anchor's target exists; World's by default. */
   checkAnchor?: (
     host: BoardHost,
@@ -444,6 +461,20 @@ export default function BoardView({
   const barRef = useRef<HTMLDivElement>(null);
   const barKey = useRef<string | null>(null);
   const tempYarn = useRef<SVGPathElement | null>(null);
+  /** The last anchors reported to World, to report only changes. */
+  const reportedAnchors = useRef("");
+  const anchorProps = useRef({
+    conversationNodeIds,
+    selectedId,
+    onNodeAnchorsChange,
+    onSelectedAnchorChange,
+  });
+  anchorProps.current = {
+    conversationNodeIds,
+    selectedId,
+    onNodeAnchorsChange,
+    onSelectedAnchorChange,
+  };
   const loaded = useRef(false);
   const saveTimer = useRef(0);
   const lastPointerType = useRef("mouse");
@@ -826,6 +857,68 @@ export default function BoardView({
     };
   }, [trace]);
 
+  /**
+   * Tell World where the selected node and every node with an open Inspector
+   * window are on screen, so it draws the line from each window to its card:
+   * a pane's row, else its tab, else its workspace (folded or zoomed out).
+   */
+  function reportAnchors(m: BoardModel) {
+    const props = anchorProps.current;
+    if (!props.onNodeAnchorsChange) return;
+    const board = boardRef.current;
+    if (!board) return;
+    const clip = board.getBoundingClientRect();
+    const wanted = new Set([
+      ...(props.selectedId ? [props.selectedId] : []),
+      ...props.conversationNodeIds,
+    ]);
+    const anchors: Record<string, OfficeCanvasAnchor> = {};
+    const shown = (el: HTMLElement | null | undefined) =>
+      el && el.offsetParent !== null ? el : null;
+    for (const id of wanted) {
+      let el: HTMLElement | null = null;
+      const space = m.workspaces.find((s) => s.space.id === id);
+      if (space) el = shown(cardEls.current.get(space.key));
+      else
+        for (const tab of m.tabs) {
+          const pane = tab.panes.find((p) => p.leaf.id === id);
+          if (!pane) continue;
+          const card = shown(cardEls.current.get(tab.key));
+          el =
+            shown(
+              card?.querySelector<HTMLElement>(
+                `[data-pane="${CSS.escape(pane.key)}"]`,
+              ),
+            ) ??
+            card ??
+            shown(cardEls.current.get(tab.workspaceKey));
+          break;
+        }
+      if (el) anchors[id] = edgeAnchor(el.getBoundingClientRect(), clip);
+    }
+    const signature = JSON.stringify(anchors, (_k, v) =>
+      typeof v === "number" ? Math.round(v) : v,
+    );
+    if (signature === reportedAnchors.current) return;
+    reportedAnchors.current = signature;
+    props.onNodeAnchorsChange(anchors);
+    props.onSelectedAnchorChange?.(
+      props.selectedId ? (anchors[props.selectedId] ?? null) : null,
+    );
+  }
+  useEffect(() => {
+    reportedAnchors.current = "";
+    invalidate("anchors");
+    // invalidate only asks the frame loop for a frame.
+  }, [selectedId, conversationNodeIds]);
+  useEffect(
+    () => () => {
+      anchorProps.current.onNodeAnchorsChange?.(null);
+      anchorProps.current.onSelectedAnchorChange?.(null);
+    },
+    [],
+  );
+
   function paint(svg: SVGSVGElement, m: BoardModel) {
     const c = cam.current;
     const worldEl = worldRef.current,
@@ -1024,6 +1117,7 @@ export default function BoardView({
       tempYarn.current.remove();
       tempYarn.current = null;
     }
+    reportAnchors(m);
     const bar = barRef.current;
     const barCard = barKey.current ? cards.current.get(barKey.current) : null;
     if (bar && barCard && bar.firstElementChild) {
@@ -1955,11 +2049,16 @@ export default function BoardView({
     }
   }
   /** A new terminal or agent in a workspace, with no note. */
-  const addToWorkspace = async (space: BoardWorkspace, kind: string | null) => {
+  /** A new terminal or agent in a workspace, with no note. */
+  const addToWorkspace = async (
+    space: BoardWorkspace,
+    kind: string | null,
+    name: string,
+  ) => {
     setAddTo(null);
     if (!kind) {
       try {
-        await createTab(space);
+        await createTab(space, name || undefined);
         setToast({ text: `Opened a terminal in ${space.label}` });
       } catch (error) {
         setToast({ text: `The terminal was not opened: ${String(error)}` });
@@ -1968,7 +2067,7 @@ export default function BoardView({
     }
     setToast({ text: `Starting ${kind} in ${space.label}…` });
     try {
-      const outcome = await startAgent(space, kind, kind, "");
+      const outcome = await startAgent(space, kind, name || kind, "");
       setToast({
         text:
           outcome.status === "started"
@@ -1983,11 +2082,10 @@ export default function BoardView({
     note: BoardNote,
     space: BoardWorkspace,
     kind: string,
+    chosenName: string,
   ) => {
     setStartFor(null);
-    const name =
-      note.text.trim().split(/\s+/).slice(0, 3).join(" ").slice(0, 40) ||
-      "note";
+    const name = chosenName || noteTabName(note);
     setToast({ text: `Starting ${kind} in ${space.label}…` });
     try {
       const outcome = await startAgent(space, kind, name, note.text);
@@ -2550,44 +2648,17 @@ export default function BoardView({
           />
         ) : null}
         {addTo && model.workspaceByKey.get(addTo) ? (
-          <div
-            className="board-chooser"
-            role="dialog"
-            aria-label="New in workspace"
-          >
-            <div className="board-chooser-head">
-              <strong>New in {model.workspaceByKey.get(addTo)!.label}</strong>
-              <button
-                type="button"
-                aria-label="Close"
-                onClick={() => setAddTo(null)}
-              >
-                ×
-              </button>
-            </div>
-            <div className="board-tray-row">
-              <span className="board-tray-text">A new tab</span>
-              <button
-                type="button"
-                onClick={() =>
-                  void addToWorkspace(model.workspaceByKey.get(addTo)!, null)
-                }
-              >
-                Terminal
-              </button>
-              {START_KINDS.map(({ kind, label }) => (
-                <button
-                  key={kind}
-                  type="button"
-                  onClick={() =>
-                    void addToWorkspace(model.workspaceByKey.get(addTo)!, kind)
-                  }
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          </div>
+          <NewTabDialog
+            workspaces={model.workspaces.filter((space) => space.actionable)}
+            hostLabel={(space) =>
+              model.hostByKey.get(space.hostKey)?.label ?? ""
+            }
+            initialWorkspace={addTo}
+            onCancel={() => setAddTo(null)}
+            onCreate={(space, kind, name) =>
+              void addToWorkspace(space, kind, name)
+            }
+          />
         ) : null}
         {newWorkspaceOn ? (
           <Suspense fallback={null}>
@@ -2602,54 +2673,23 @@ export default function BoardView({
           </Suspense>
         ) : null}
         {startFor && saved?.notes.find((n) => n.id === startFor) ? (
-          <div
-            className="board-chooser"
-            role="dialog"
-            aria-label="Start an agent with this note"
-          >
-            <div className="board-chooser-head">
-              <strong>Start an agent with this note</strong>
-              <button
-                type="button"
-                aria-label="Close"
-                onClick={() => setStartFor(null)}
-              >
-                ×
-              </button>
-            </div>
-            <p className="board-tray-hint">
-              A new tab opens in the workspace you choose; the note is sent once
-              the agent is ready.
-            </p>
-            {model.workspaces
-              .filter((space) => space.actionable)
-              .map((space) => (
-                <div key={space.key} className="board-tray-row">
-                  <span className="board-tray-text">
-                    {space.label}
-                    <small className="board-tray-host">
-                      {" "}
-                      · {model.hostByKey.get(space.hostKey)?.label}
-                    </small>
-                  </span>
-                  {START_KINDS.map(({ kind, label }) => (
-                    <button
-                      key={kind}
-                      type="button"
-                      onClick={() =>
-                        void startFromNote(
-                          saved.notes.find((n) => n.id === startFor)!,
-                          space,
-                          kind,
-                        )
-                      }
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              ))}
-          </div>
+          <NewTabDialog
+            note={saved.notes.find((n) => n.id === startFor)!}
+            workspaces={model.workspaces.filter((space) => space.actionable)}
+            hostLabel={(space) =>
+              model.hostByKey.get(space.hostKey)?.label ?? ""
+            }
+            initialWorkspace={selectedWorkspace() ?? null}
+            onCancel={() => setStartFor(null)}
+            onCreate={(space, kind, name) =>
+              void startFromNote(
+                saved.notes.find((n) => n.id === startFor)!,
+                space,
+                kind!,
+                name,
+              )
+            }
+          />
         ) : null}
         {trayOpen && detached.length ? (
           <div
@@ -2941,6 +2981,127 @@ export default function BoardView({
   );
 }
 
+/** A note's first words, as the name of the tab it starts. */
+const noteTabName = (note: BoardNote) =>
+  note.text.trim().split(/\s+/).slice(0, 3).join(" ").slice(0, 40) || "note";
+
+/**
+ * One dialog for a new tab: from a workspace's + (workspace chosen) or from a
+ * note (the agent is sent the note). The user picks the workspace and what to
+ * start, may name the tab, and confirms; nothing starts until Create.
+ */
+function NewTabDialog({
+  note,
+  workspaces,
+  hostLabel,
+  initialWorkspace,
+  onCancel,
+  onCreate,
+}: {
+  note?: BoardNote;
+  workspaces: BoardWorkspace[];
+  hostLabel(space: BoardWorkspace): string;
+  initialWorkspace: string | null;
+  onCancel(): void;
+  onCreate(space: BoardWorkspace, kind: string | null, name: string): void;
+}) {
+  const [workspace, setWorkspace] = useState(
+    initialWorkspace && workspaces.some((s) => s.key === initialWorkspace)
+      ? initialWorkspace
+      : "",
+  );
+  // null is a plain terminal; a note always starts an agent.
+  const [kind, setKind] = useState<string | null | undefined>(undefined);
+  const [name, setName] = useState("");
+  const kinds: { kind: string | null; label: string }[] = [
+    ...(note ? [] : [{ kind: null, label: "Terminal" }]),
+    ...START_KINDS,
+  ];
+  const space = workspaces.find((s) => s.key === workspace);
+  const title = note
+    ? "Start an agent with this note"
+    : `New tab${space ? ` in ${space.label}` : ""}`;
+  return (
+    <div
+      className="board-chooser board-newtab"
+      role="dialog"
+      aria-label={title}
+    >
+      <div className="board-chooser-head">
+        <strong>{title}</strong>
+        <button type="button" aria-label="Close" onClick={onCancel}>
+          ×
+        </button>
+      </div>
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (space && kind !== undefined) onCreate(space, kind, name.trim());
+        }}
+      >
+        <label className="board-field">
+          <span>Workspace</span>
+          <select
+            value={workspace}
+            onChange={(event) => setWorkspace(event.target.value)}
+          >
+            <option value="" disabled>
+              Choose a workspace
+            </option>
+            {workspaces.map((s) => (
+              <option key={s.key} value={s.key}>
+                {s.label} · {hostLabel(s)}
+              </option>
+            ))}
+          </select>
+        </label>
+        <fieldset className="board-field">
+          <legend>Start</legend>
+          <div className="board-kinds" role="radiogroup">
+            {kinds.map((choice) => (
+              <button
+                key={choice.label}
+                type="button"
+                role="radio"
+                aria-checked={kind === choice.kind}
+                onClick={() => setKind(choice.kind)}
+              >
+                {choice.label}
+              </button>
+            ))}
+          </div>
+        </fieldset>
+        <label className="board-field">
+          <span>Tab name (optional)</span>
+          <input
+            value={name}
+            maxLength={64}
+            placeholder={note ? noteTabName(note) : "Herdr names it"}
+            onChange={(event) => setName(event.target.value)}
+          />
+        </label>
+        {note ? (
+          <p className="board-tray-hint">
+            The note is sent once the agent is ready.
+          </p>
+        ) : null}
+        <div className="board-dialog-actions">
+          <button type="button" onClick={onCancel}>
+            Cancel
+          </button>
+          <button
+            type="submit"
+            className="board-primary"
+            disabled={!space || kind === undefined}
+          >
+            {note ? "Start and send" : "Create"}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
 /** A workspace's agents by status, and its shells: "3 agents · 1 working · 2 idle". */
 const COUNT_ORDER: [WorldAgentStatus, string][] = [
   ["blocked", "waiting"],
@@ -2959,6 +3120,31 @@ function workspaceCounts(space: BoardWorkspace) {
   }
   if (shells) parts.push(`${shells} shell${shells === 1 ? "" : "s"}`);
   return parts.join(" · ");
+}
+const NO_IDS: readonly string[] = [];
+/** A card's right edge as a line anchor, pinned to the board's edge when off screen. */
+function edgeAnchor(rect: DOMRect, clip: DOMRect): OfficeCanvasAnchor {
+  const visible =
+    rect.right > clip.left &&
+    rect.left < clip.right &&
+    rect.bottom > clip.top &&
+    rect.top < clip.bottom;
+  const cx = (rect.left + rect.right) / 2,
+    cy = (rect.top + rect.bottom) / 2;
+  return {
+    x: Math.max(clip.left + 4, Math.min(clip.right - 4, rect.right)),
+    y: Math.max(clip.top + 4, Math.min(clip.bottom - 4, cy)),
+    visible,
+    edge: visible
+      ? null
+      : cy < clip.top
+        ? "top"
+        : cy > clip.bottom
+          ? "bottom"
+          : cx < clip.left
+            ? "left"
+            : "right",
+  };
 }
 const tintStyle = (color: CardColor | undefined) =>
   color ? ({ "--tint": `var(--card-${color})` } as CSSProperties) : undefined;

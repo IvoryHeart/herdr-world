@@ -1168,3 +1168,67 @@
   left: 50%;
   margin: 0 0 0 -8px;
 }
+
+/* New tab: workspace, what to start, optional name, then Create. */
+.board-newtab form {
+  display: grid;
+  gap: 10px;
+}
+.board-field {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  font-size: 13px;
+}
+.board-field > span,
+.board-field > legend {
+  padding: 0;
+  color: var(--board-soft);
+  font-size: 12px;
+}
+.board-field select,
+.board-field input {
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--board-line);
+  border-radius: 8px;
+  background: var(--board-ground);
+  color: var(--board-ink);
+  font: inherit;
+}
+.board-kinds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.board-kinds button,
+.board-dialog-actions button {
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--board-line);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--board-ink);
+  font: inherit;
+  cursor: pointer;
+}
+.board-kinds button[aria-checked="true"] {
+  border-color: var(--board-accent);
+  background: color-mix(in srgb, var(--board-accent) 18%, transparent);
+}
+.board-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.board-dialog-actions .board-primary {
+  border-color: var(--board-accent);
+  background: var(--board-accent);
+  color: var(--board-card);
+}
+.board-dialog-actions .board-primary:disabled {
+  opacity: 0.45;
+  cursor: default;
+}

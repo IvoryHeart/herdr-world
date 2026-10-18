@@ -158,8 +158,17 @@ const opened: string[] = [];
 const sent: { paneId: string; terminalId: string; text: string }[] = [];
 /** Pane IDs the fake service reports as closed ("not found"). */
 const closedPanes = new Set<string>();
-const started: { workspace: string; kind: string; text: string }[] = [];
+const started: {
+  workspace: string;
+  kind: string;
+  text: string;
+  name: string;
+}[] = [];
 const createdTabs: string[] = [];
+let lastAnchors: Record<
+  string,
+  { x: number; y: number; visible: boolean }
+> | null = null;
 const movedTabs: { tab: string; to: string }[] = [];
 const host = document.createElement("div");
 host.style.cssText = "position:fixed;inset:0";
@@ -173,6 +182,9 @@ function mount(key: number, shown = world, selectedId: string | null = null) {
         key={key}
         world={shown}
         selectedId={selectedId}
+        onNodeAnchorsChange={(anchors) => {
+          lastAnchors = anchors;
+        }}
         onSelect={(id) => selected.push(id)}
         onOpenTerminal={(id) => opened.push(id)}
         store={store}
@@ -188,11 +200,11 @@ function mount(key: number, shown = world, selectedId: string | null = null) {
           movedTabs.push({ tab: tab.nativeId, to: space.nativeId });
           return { status: "moved", tab_id: `${space.nativeId}:t9`, panes: [] };
         }}
-        createTab={async (space) => {
-          createdTabs.push(space.nativeId);
+        createTab={async (space, name) => {
+          createdTabs.push(`${space.nativeId}:${name ?? ""}`);
         }}
-        startAgent={async (space, kind, _name, text) => {
-          started.push({ workspace: space.nativeId, kind, text });
+        startAgent={async (space, kind, name, text) => {
+          started.push({ workspace: space.nativeId, kind, text, name });
           // The fake new agent lands in an existing pane of that workspace.
           const leaf = space.space.children[0]!;
           return {
@@ -217,6 +229,24 @@ function at(key: string) {
     card(key)?.style.transform ?? "",
   );
   return match ? { x: Number(match[1]), y: Number(match[2]) } : null;
+}
+/** Set a React-controlled field as a user would. */
+function type(input: HTMLInputElement, value: string) {
+  Object.getOwnPropertyDescriptor(
+    HTMLInputElement.prototype,
+    "value",
+  )!.set!.call(input, value);
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+}
+function choose(select: HTMLSelectElement, index: number) {
+  const option = select.querySelectorAll("option:not([disabled])")[
+    index
+  ] as HTMLOptionElement;
+  Object.getOwnPropertyDescriptor(
+    HTMLSelectElement.prototype,
+    "value",
+  )!.set!.call(select, option.value);
+  select.dispatchEvent(new Event("change", { bubbles: true }));
 }
 function pointer(
   target: Element,
@@ -950,18 +980,33 @@ async function run() {
   [...host.querySelectorAll<HTMLButtonElement>(".board-notebar button")]
     .find((b) => b.textContent === "Start an agent…")!
     .click();
+  const noteDialog = '[aria-label="Start an agent with this note"]';
   await waitFor(
-    () =>
-      host.querySelectorAll(
-        '[aria-label="Start an agent with this note"] .board-tray-row',
-      ).length === 5,
-    "the chooser lists each workspace",
+    () => Boolean(host.querySelector(noteDialog)),
+    "a note opens the new-tab dialog",
   );
-  host
-    .querySelector<HTMLButtonElement>(
-      '[aria-label="Start an agent with this note"] .board-tray-row button',
-    )!
+  check(
+    host.querySelectorAll(`${noteDialog} select option:not([disabled])`)
+      .length === 5,
+    "the dialog lists each workspace",
+  );
+  check(
+    ![...host.querySelectorAll(`${noteDialog} [role="radio"]`)].some(
+      (b) => b.textContent === "Terminal",
+    ),
+    "a note starts an agent, not a plain terminal",
+  );
+  const submit = () =>
+    host.querySelector<HTMLButtonElement>(`${noteDialog} [type="submit"]`)!;
+  check(submit().disabled, "nothing starts before a choice");
+  choose(host.querySelector<HTMLSelectElement>(`${noteDialog} select`)!, 0);
+  [...host.querySelectorAll<HTMLButtonElement>(`${noteDialog} [role="radio"]`)]
+    .find((b) => b.textContent === "Claude")!
     .click();
+  await settle(30);
+  check(!submit().disabled, "choosing a workspace and an agent enables Start");
+  check(started.length === 0, "nothing starts until confirmed");
+  submit().click();
   await waitFor(
     () => saved.strings.length === 1,
     "the new agent is strung to the note",
@@ -969,8 +1014,9 @@ async function run() {
   check(
     started.length === 1 &&
       started[0]!.kind === "claude" &&
-      started[0]!.text === "Ship the login fix",
-    "the agent starts with the note",
+      started[0]!.text === "Ship the login fix" &&
+      started[0]!.name === "Ship the login",
+    "the agent starts with the note, its tab named from the note",
   );
   const startedEnd = saved.strings[0]!.to;
   check(
@@ -982,27 +1028,30 @@ async function run() {
 
   // Without a note: + on a workspace opens a terminal or starts an agent.
   {
-    const pick = async (label: string) => {
+    const newTab = '[aria-label="New tab in web-app"]';
+    const pick = async (label: string, name = "") => {
       host
         .querySelector<HTMLButtonElement>('[aria-label="New in web-app"]')!
         .click();
       await waitFor(
-        () => Boolean(host.querySelector('[aria-label="New in workspace"]')),
-        "+ on a workspace offers a new terminal or agent",
+        () => Boolean(host.querySelector(newTab)),
+        "+ on a workspace opens the new-tab dialog with it chosen",
       );
-      [
-        ...host.querySelectorAll<HTMLButtonElement>(
-          '[aria-label="New in workspace"] button',
-        ),
-      ]
+      [...host.querySelectorAll<HTMLButtonElement>(`${newTab} [role="radio"]`)]
         .find((b) => b.textContent === label)!
+        .click();
+      if (name)
+        type(host.querySelector<HTMLInputElement>(`${newTab} input`)!, name);
+      await settle(30);
+      host
+        .querySelector<HTMLButtonElement>(`${newTab} [type="submit"]`)!
         .click();
       await settle(50);
     };
-    await pick("Terminal");
+    await pick("Terminal", "Logs");
     check(
-      createdTabs.length === 1,
-      "Terminal opens a plain tab in that workspace",
+      createdTabs.length === 1 && createdTabs[0]!.endsWith(":Logs"),
+      "Terminal opens a plain tab with the given name",
     );
     await pick("Codex");
     check(
@@ -1046,6 +1095,21 @@ async function run() {
         (bar.bottom <= tab.top + 1 && tab.top - bar.bottom < 40) ||
           (bar.top >= tab.bottom - 1 && bar.top - tab.bottom < 40),
         "the colour bar rides next to its card",
+      );
+    }
+    await waitFor(
+      () => Boolean(lastAnchors?.[id]),
+      "Board reports where the selected node is, for the Inspector's line",
+    );
+    {
+      const a = lastAnchors![id]!;
+      const r = card(tabKey)!.getBoundingClientRect();
+      check(
+        a.visible &&
+          Math.abs(a.x - r.right) < 3 &&
+          a.y > r.top &&
+          a.y < r.bottom,
+        "the line meets the selected card's right edge",
       );
     }
     const before = getComputedStyle(card(tabKey)!).backgroundColor;
