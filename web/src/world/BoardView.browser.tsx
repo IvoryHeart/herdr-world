@@ -16,6 +16,9 @@ import "./world.css";
 
 const params = new URL(location.href).searchParams;
 const mode = params.get("mode") ?? "test";
+const theme = params.get("theme");
+if (theme === "light" || theme === "dark")
+  document.documentElement.dataset.theme = theme;
 const failures: string[] = [];
 const check = (condition: boolean, message: string) => {
   if (!condition) failures.push(message);

@@ -7,6 +7,7 @@
   --board-grid: #2b3430;
   --board-card: #252d29;
   --board-line: #45504a;
+  --board-wire: #7d8a82;
   --board-ink: #e7ebe3;
   --board-soft: #a2aba1;
   --board-zone: #92b3ff;
@@ -38,6 +39,7 @@
   --board-grid: #d6d9cf;
   --board-card: #ffffff;
   --board-line: #c2c7bb;
+  --board-wire: #8f978b;
   --board-ink: #1e231f;
   --board-soft: #5a6159;
   --board-zone: #2a59c9;
@@ -70,8 +72,8 @@
 }
 .board-tree {
   fill: none;
-  stroke: var(--board-line);
-  stroke-width: 1.8;
+  stroke: var(--board-wire);
+  stroke-width: 2;
 }
 
 /* Hosts */
@@ -79,7 +81,7 @@
   position: absolute;
   left: 0;
   top: 0;
-  border: 2px dashed color-mix(in srgb, var(--board-zone) 45%, transparent);
+  border: 2px dashed color-mix(in srgb, var(--board-zone) 60%, transparent);
   border-radius: 28px;
   background: color-mix(in srgb, var(--board-zone) 4%, transparent);
   pointer-events: none;
@@ -96,7 +98,7 @@
   align-items: baseline;
   gap: 8px;
   padding: 4px 14px;
-  border: 2px solid color-mix(in srgb, var(--board-zone) 45%, transparent);
+  border: 2px solid color-mix(in srgb, var(--board-zone) 60%, transparent);
   border-radius: 999px;
   background: var(--board-ground);
   color: var(--board-zone);
