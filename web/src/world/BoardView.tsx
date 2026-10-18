@@ -113,6 +113,7 @@ const NOTE_PREFIX = "note:";
 const isNoteKey = (key: string) => key.startsWith(NOTE_PREFIX);
 const NOTE_SIZE: Size = { w: 180, h: 110 };
 const SAVE_DELAY_MS = 600;
+const DOUBLE_TAP_MS = 450;
 
 /** An agent pane a note is strung to, with what the service needs to check. */
 export type SendTarget = {
@@ -874,6 +875,12 @@ export default function BoardView({
       setPicked(hit.dataset.string);
       return;
     }
+    // The first finger of a new gesture: forget fingers whose lift was never
+    // seen, which would otherwise turn later touches into a stuck pinch.
+    if (event.isPrimary) {
+      pointers.current.clear();
+      drag.current = null;
+    }
     pointers.current.set(event.pointerId, {
       x: event.clientX,
       y: event.clientY,
@@ -1060,14 +1067,16 @@ export default function BoardView({
     }
     if (d.type === "pan") {
       if (Math.hypot(event.clientX - d.sx, event.clientY - d.sy) < 6) {
-        // A tap on empty board clears picks; a second tap soon after, close
-        // by, pins a new note there.
+        // A tap on empty board clears picks. On touch, a second tap soon
+        // after, close by, pins a new note; a mouse uses the browser's own
+        // double-click, which follows the system setting.
         const now = performance.now();
         const tap = lastTap.current;
         if (
+          event.pointerType !== "mouse" &&
           tap &&
-          now - tap.t < 340 &&
-          Math.hypot(event.clientX - tap.x, event.clientY - tap.y) < 28
+          now - tap.t < DOUBLE_TAP_MS &&
+          Math.hypot(event.clientX - tap.x, event.clientY - tap.y) < 32
         ) {
           lastTap.current = null;
           void createNote(toWorld(event.clientX, event.clientY));
@@ -1494,6 +1503,20 @@ export default function BoardView({
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
+        onLostPointerCapture={(event) => {
+          // A finger whose lift went elsewhere is no longer on the board.
+          if (pointers.current.has(event.pointerId)) onPointerUp(event);
+        }}
+        onDoubleClick={(event) => {
+          const target = event.target as HTMLElement;
+          if (
+            target.closest(
+              ".board-card, .board-controls, .board-zone-label, .board-notebar, .board-chooser, .board-cut, .board-toast",
+            )
+          )
+            return;
+          void createNote(toWorld(event.clientX, event.clientY));
+        }}
       >
         <div ref={worldRef} className="board-world">
           {model.hosts.map((host) => (

@@ -174,12 +174,20 @@ function at(key: string) {
   );
   return match ? { x: Number(match[1]), y: Number(match[2]) } : null;
 }
-function pointer(target: Element, type: string, x: number, y: number, id = 1) {
+function pointer(
+  target: Element,
+  type: string,
+  x: number,
+  y: number,
+  id = 1,
+  touch: { primary: boolean } | null = null,
+) {
   target.dispatchEvent(
     new PointerEvent(type, {
       bubbles: true,
       pointerId: id,
-      pointerType: "mouse",
+      pointerType: touch ? "touch" : "mouse",
+      isPrimary: touch?.primary ?? false,
       button: 0,
       buttons: type === "pointerup" ? 0 : 1,
       clientX: x,
@@ -428,10 +436,11 @@ async function run() {
     throw new Error("no empty board to tap");
   };
   const spot = emptySpot();
+  // A double-tap with a finger, the second tap 300 ms after the first.
   for (let i = 0; i < 2; i++) {
-    pointer(boardEl(), "pointerdown", spot.x, spot.y, 7);
-    pointer(boardEl(), "pointerup", spot.x, spot.y, 7);
-    await settle(60);
+    pointer(boardEl(), "pointerdown", spot.x, spot.y, 7 + i, { primary: true });
+    pointer(boardEl(), "pointerup", spot.x, spot.y, 7 + i, { primary: true });
+    await settle(300);
   }
   await waitFor(() => saved.notes.length === 1, "a double-tap created a note");
   await waitFor(
@@ -576,6 +585,48 @@ async function run() {
       sent[0]!.text === "Ship the login fix",
     "the note goes to the strung pane, with its witnessed terminal",
   );
+
+  // A mouse double-click on empty board uses the browser's own double-click.
+  const spot2 = emptySpot();
+  for (let i = 0; i < 2; i++) {
+    pointer(boardEl(), "pointerdown", spot2.x, spot2.y, 1);
+    pointer(boardEl(), "pointerup", spot2.x, spot2.y, 1);
+  }
+  check(saved.notes.length === 1, "two mouse clicks alone do not make a note");
+  document.elementFromPoint(spot2.x, spot2.y)!.dispatchEvent(
+    new MouseEvent("dblclick", {
+      bubbles: true,
+      clientX: spot2.x,
+      clientY: spot2.y,
+    }),
+  );
+  await waitFor(
+    () => saved.notes.length === 2,
+    "a mouse double-click makes a note",
+  );
+  (document.activeElement as HTMLElement | null)?.blur();
+
+  // A finger whose lift was never seen must not break the next pinch.
+  const scale = () =>
+    Number(
+      /scale\(([\d.e+-]+)\)/.exec(
+        host.querySelector<HTMLElement>(".board-world")!.style.transform,
+      )?.[1],
+    );
+  const p0 = emptySpot();
+  pointer(boardEl(), "pointerdown", p0.x, p0.y, 40, { primary: true });
+  const before3 = scale();
+  pointer(boardEl(), "pointerdown", p0.x, p0.y, 41, { primary: true });
+  pointer(boardEl(), "pointerdown", p0.x + 20, p0.y, 42, { primary: false });
+  pointer(boardEl(), "pointermove", p0.x + 120, p0.y, 42, { primary: false });
+  await settle(100);
+  check(
+    scale() > before3 * 1.5,
+    `a new pinch zooms after a stuck finger (${before3} → ${scale()})`,
+  );
+  pointer(boardEl(), "pointerup", p0.x + 120, p0.y, 42, { primary: false });
+  pointer(boardEl(), "pointerup", p0.x, p0.y, 41, { primary: true });
+  await rest();
 
   // A reload keeps notes, strings and the layout.
   await settle(900);
