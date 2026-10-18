@@ -985,6 +985,63 @@ async function run() {
     }
   }
 
+  // Tidy carries strung notes with their cards.
+  {
+    const strungTo = saved.strings[0]!.to;
+    const paneId = "anchor" in strungTo ? strungTo.anchor.native_id : "";
+    const tabKey =
+      [...host.querySelectorAll<HTMLElement>(".board-tab")].find(
+        (el) =>
+          el.querySelector(`[data-pane$=":${paneId}"]`) ||
+          el.dataset.key === `studio:${paneId.split(":")[0]}:t1`,
+      )?.dataset.key ?? "studio:w1:t1";
+    await bringIntoView(() => card("studio:w1")!);
+    const ws = card("studio:w1")!;
+    const wc = centre(ws.querySelector(".board-label")!);
+    pointer(ws, "pointerdown", wc.x, wc.y, 31);
+    for (let i = 1; i <= 8; i++) {
+      pointer(ws, "pointermove", wc.x + i * 25, wc.y + i * 10, 31);
+      await settle(16);
+    }
+    await settle(150);
+    pointer(ws, "pointerup", wc.x + 200, wc.y + 80, 31);
+    await rest();
+    await settle(700);
+    const noteBefore = at(noteKey)!,
+      tabBefore = at(tabKey)!;
+    host
+      .querySelector<HTMLButtonElement>('[aria-label="Tidy the board"]')!
+      .click();
+    await rest();
+    await settle(300);
+    const noteAfter = at(noteKey)!,
+      tabAfter = at(tabKey)!;
+    const tabMoved = {
+      x: tabAfter.x - tabBefore.x,
+      y: tabAfter.y - tabBefore.y,
+    };
+    check(Math.hypot(tabMoved.x, tabMoved.y) > 20, "tidy moved the strung tab");
+    check(
+      Math.abs(noteAfter.x - noteBefore.x - tabMoved.x) < 3 &&
+        Math.abs(noteAfter.y - noteBefore.y - tabMoved.y) < 3,
+      "a strung note moves with its card when the board is tidied",
+    );
+    await waitFor(
+      () => Math.abs(saved.notes[0]!.x - noteAfter.x) < 1,
+      "the note's new place is saved",
+    );
+    [...host.querySelectorAll<HTMLButtonElement>(".board-toast button")]
+      .find((b) => b.textContent === "Undo")!
+      .click();
+    await rest();
+    await settle(300);
+    const noteUndone = at(noteKey)!;
+    check(
+      Math.hypot(noteUndone.x - noteBefore.x, noteUndone.y - noteBefore.y) < 3,
+      "Undo puts the note back too",
+    );
+  }
+
   // Zoom out to the overview: tabs fold into status squares, nothing moves.
   const before = at("studio:w1:t1")!;
   for (let i = 0; i < 12; i++)

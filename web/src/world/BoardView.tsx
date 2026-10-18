@@ -518,7 +518,8 @@ export default function BoardView({
         });
       else {
         card.size = size;
-        if (heldKey !== key) {
+        // A note on its way (tidy) finishes its tween before taking the saved spot.
+        if (heldKey !== key && !tweens.current.has(key)) {
           card.x = note.x;
           card.y = note.y;
         }
@@ -1494,6 +1495,53 @@ export default function BoardView({
         return tab.workspaceKey;
     return undefined;
   };
+  /**
+   * When the board rearranges itself, a note strung to a card moves by as much
+   * as that card does, so it stays beside what it is about. Notes on no card
+   * stay where the user put them.
+   */
+  const moveStrungNotes = (from: BoardLayout, to: BoardLayout) => {
+    const m = latest.current.model;
+    const doc = latest.current.saved;
+    if (!doc) return;
+    const was = positions(m, from),
+      now = positions(m, to);
+    const ops: BoardOp[] = [];
+    for (const note of doc.notes) {
+      let cardKey: string | null = null;
+      for (const string of doc.strings) {
+        if (string.detached || cardKey) continue;
+        const ends = [string.from, string.to];
+        if (!ends.some((end) => "note" in end && end.note === note.id))
+          continue;
+        for (const end of ends)
+          if ("anchor" in end && !cardKey)
+            cardKey = targetOf(m, end.anchor)?.cardKey ?? null;
+      }
+      const a = cardKey && was.get(cardKey),
+        b = cardKey && now.get(cardKey);
+      if (!a || !b || Math.hypot(b.x - a.x, b.y - a.y) < 1) continue;
+      const x = note.x + b.x - a.x,
+        y = note.y + b.y - a.y;
+      const card = cards.current.get(NOTE_PREFIX + note.id);
+      if (card)
+        tweens.current.set(card.key, {
+          fx: card.x,
+          fy: card.y,
+          tx: x,
+          ty: y,
+          t: 0,
+        });
+      ops.push({
+        op: "note.put",
+        note: { id: note.id, text: note.text, color: note.color, x, y },
+        rev: note.rev,
+      });
+    }
+    if (!ops.length) return;
+    invalidate("notes-follow");
+    void report(boardStore.patch(ops));
+  };
   const runTidy = () => {
     const before = cloneLayout(layout.current);
     const workspaceKey = selectedWorkspace();
@@ -1503,6 +1551,7 @@ export default function BoardView({
       sizeOf,
     });
     travelToLayout(model);
+    moveStrungNotes(before, layout.current);
     if (!workspaceKey) window.setTimeout(() => fit(false), 400);
     const label = workspaceKey
       ? model.workspaceByKey.get(workspaceKey)?.label
@@ -1510,8 +1559,10 @@ export default function BoardView({
     setToast({
       text: label ? `Tidied “${label}”` : "Tidied the board",
       undo: () => {
+        const after = cloneLayout(layout.current);
         layout.current = before;
         travelToLayout(latest.current.model);
+        moveStrungNotes(after, before);
         setToast({ text: "Restored" });
       },
     });
