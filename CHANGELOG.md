@@ -7,6 +7,8 @@ are optional because the merged PR history records their source.
 
 ## [Unreleased]
 
+## [0.2.5] - 2026-10-18
+
 ### Added
 
 - Add Town, a new view next to Office. Each host is a building along a road,
