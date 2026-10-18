@@ -9,6 +9,8 @@ const outputDirectory = join(root, ".pages-dist");
 const assetDirectory = join(outputDirectory, "assets");
 
 const assets = [
+  ["docs/images/herdr-world-desktop-town.png", "herdr-world-desktop-town.png"],
+  ["docs/images/herdr-world-mobile-town.png", "herdr-world-mobile-town.png"],
   ["docs/images/roamgate-handoff.gif", "roamgate-handoff.gif"],
   ["docs/images/roamgate-handoff.mp4", "roamgate-handoff.mp4"],
   ["docs/images/roamgate-handoff.webp", "roamgate-handoff.webp"],

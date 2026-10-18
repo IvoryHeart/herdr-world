@@ -2,6 +2,7 @@
 
 - What changed and why:
 - Parent PR or branch, if stacked:
+- Documentation impact: <list relevant guides updated, or explain why existing instructions remain accurate; changelog alone is insufficient>
 - Knowledge map impact: <updated, or unchanged — explain why navigation did not change>
 
 ## Verification

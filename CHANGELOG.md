@@ -33,6 +33,10 @@ are optional because the merged PR history records their source.
 
 ### Changed
 
+- Refresh the tutorial and feature guide for Town, Office, Desk and Graph,
+  including Town replies and mobile navigation. Require relevant documentation
+  updates alongside significant changes. Add desktop/mobile Town source-preview
+  screenshots to Pages and show the latest stable release with an updating badge.
 - Town is now the default World view: the World root, unknown routes and
   invalid view values open Town. Office stays one tap away at `/office`.
 - On phones, the on-screen Back in a terminal returns to the view at once,
