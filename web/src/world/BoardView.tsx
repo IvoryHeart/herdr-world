@@ -306,6 +306,7 @@ export default function BoardView({
     onOpenTerminal,
     saved,
     picked,
+    noteSelected,
   });
   latest.current = {
     model,
@@ -314,6 +315,7 @@ export default function BoardView({
     onOpenTerminal,
     saved,
     picked,
+    noteSelected,
   };
 
   const kindOf = (key: string, m: BoardModel) =>
@@ -359,8 +361,9 @@ export default function BoardView({
         stiffness: kind === "tab" ? 60 : 30,
       });
     }
+    // Topology changes remove cards that left; notes are not topology.
     for (const key of [...cards.current.keys()])
-      if (!at.has(key)) cards.current.delete(key);
+      if (!at.has(key) && !isNoteKey(key)) cards.current.delete(key);
     if (!fitted.current && at.size) {
       fitted.current = true;
       fit(true);
@@ -577,7 +580,6 @@ export default function BoardView({
   useEffect(() => {
     let frame = 0;
     let last = performance.now();
-    const svg = svgRef.current!;
     const tick = (t: number) => {
       const dt = Math.min(0.033, Math.max(0.001, (t - last) / 1000));
       last = t;
@@ -645,7 +647,8 @@ export default function BoardView({
         if (Math.hypot(pv.x, pv.y) < 12) panVelocity.current = null;
         dirty.current = true;
       }
-      if (dirty.current) {
+      const svg = svgRef.current;
+      if (dirty.current && svg) {
         dirty.current = false;
         paint(svg, m);
       }
@@ -682,6 +685,7 @@ export default function BoardView({
           b = cards.current.get(tab.key);
         if (!a || !b) continue;
         let path = paths.current.get(tab.key);
+        if (path && path.ownerSVGElement !== svg) path = undefined;
         if (!path) {
           path = document.createElementNS("http://www.w3.org/2000/svg", "path");
           path.setAttribute("class", "board-tree");
@@ -799,6 +803,7 @@ export default function BoardView({
       if (!a || !b) continue;
       seen.add(string.id);
       let pair = yarnEls.current.get(string.id);
+      if (pair && pair[0]!.ownerSVGElement !== svg) pair = undefined;
       if (!pair) {
         const line = document.createElementNS(
           "http://www.w3.org/2000/svg",
@@ -835,6 +840,8 @@ export default function BoardView({
         at: d.at,
         firm: true,
       };
+      if (tempYarn.current && tempYarn.current.ownerSVGElement !== svg)
+        tempYarn.current = null;
       if (!tempYarn.current) {
         tempYarn.current = document.createElementNS(
           "http://www.w3.org/2000/svg",
@@ -1400,8 +1407,10 @@ export default function BoardView({
         const terminal = end.anchor.witness.find((t) =>
           target.terminals.includes(t),
         )!;
+        const tab = model.tabByKey.get(target.cardKey)!;
         out.push({
-          label: paneName(pane),
+          // Two agents of the same kind would read the same; name the tab.
+          label: `${paneName(pane)} in ${tab.label}`,
           connectionId: pane.leaf.connectionId,
           generation: pane.leaf.generation,
           paneId: pane.leaf.nativeId,
@@ -1436,12 +1445,20 @@ export default function BoardView({
         )
       )
         return;
-      if (
-        (event.key === "Delete" || event.key === "Backspace") &&
-        latest.current.picked
-      ) {
-        event.preventDefault();
-        cutString(latest.current.picked);
+      if (event.key === "Delete" || event.key === "Backspace") {
+        const {
+          picked: string,
+          noteSelected: noteId,
+          saved: doc,
+        } = latest.current;
+        const note = noteId && doc?.notes.find((n) => n.id === noteId);
+        if (string) {
+          event.preventDefault();
+          cutString(string);
+        } else if (note) {
+          event.preventDefault();
+          deleteNote(note);
+        }
       }
       if (event.key === "Escape") {
         setPicked(null);
@@ -1499,15 +1516,6 @@ export default function BoardView({
     return keys;
   }, [model, selectedId]);
 
-  if (!model.hosts.length)
-    return (
-      <div className="world-empty" role="status">
-        <img src="/herdr-world-logo.svg" alt="" width="68" height="68" />
-        <h2>No connected spaces yet</h2>
-        <p>Add or connect a local or SSH Herdr profile from Spaces.</p>
-      </div>
-    );
-
   const toolbar = (
     <WorldViewToolbar
       viewLabel="Board"
@@ -1560,6 +1568,16 @@ export default function BoardView({
           void createNote(toWorld(event.clientX, event.clientY));
         }}
       >
+        {/* The board stays mounted when the topology is empty for a moment
+            (for example while a terminal opens), so its listeners, frame
+            loop and string layer keep working when hosts come back. */}
+        {!model.hosts.length ? (
+          <div className="world-empty board-empty" role="status">
+            <img src="/herdr-world-logo.svg" alt="" width="68" height="68" />
+            <h2>No connected spaces yet</h2>
+            <p>Add or connect a local or SSH Herdr profile from Spaces.</p>
+          </div>
+        ) : null}
         <div ref={worldRef} className="board-world">
           {model.hosts.map((host) => (
             <div

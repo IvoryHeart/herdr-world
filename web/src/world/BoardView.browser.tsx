@@ -148,12 +148,12 @@ host.style.cssText = "position:fixed;inset:0";
 document.body.appendChild(host);
 const root = createRoot(host);
 /** Mount Board; a new key remounts it, as a reload would. */
-function mount(key: number) {
+function mount(key: number, shown = world) {
   root.render(
     <StrictMode>
       <BoardView
         key={key}
-        world={world}
+        world={shown}
         selectedId={null}
         onSelect={(id) => selected.push(id)}
         onOpenTerminal={(id) => opened.push(id)}
@@ -614,6 +614,15 @@ async function run() {
     "a mouse double-click makes a note",
   );
   (document.activeElement as HTMLElement | null)?.blur();
+  await settle(100);
+  // The new note is selected; the Delete key deletes it.
+  window.dispatchEvent(
+    new KeyboardEvent("keydown", { key: "Delete", bubbles: true }),
+  );
+  await waitFor(
+    () => saved.notes.length === 1,
+    "the Delete key deletes the selected note",
+  );
 
   // A finger whose lift was never seen must not break the next pinch.
   const scale = () =>
@@ -657,6 +666,68 @@ async function run() {
     () =>
       host.querySelectorAll(".board-yarn:not(.board-yarn-temp)").length === 1,
     "the string is back after a reload",
+  );
+
+  // World's topology can be empty for a moment (for example while a terminal
+  // opens or closes). Afterwards the board must still zoom, drag and draw.
+  mount(2, fixtureWorld([]));
+  await waitFor(
+    () => !host.querySelector(".board-workspace"),
+    "an empty world shows no workspaces",
+  );
+  mount(2);
+  await waitFor(() => Boolean(card("studio:w2")), "the board comes back");
+  await rest();
+  check(
+    [
+      ...host.querySelectorAll<SVGPathElement>(
+        ".board-yarn:not(.board-yarn-temp)",
+      ),
+    ].some(
+      (path) =>
+        path.isConnected &&
+        path.getBoundingClientRect().width +
+          path.getBoundingClientRect().height >
+          0,
+    ),
+    "strings are drawn after the topology comes back",
+  );
+  const scaleNow = () =>
+    Number(
+      /scale\(([\d.e+-]+)\)/.exec(
+        host.querySelector<HTMLElement>(".board-world")!.style.transform,
+      )?.[1],
+    );
+  const wheelBefore = scaleNow();
+  const wc = centre(boardEl());
+  boardEl().dispatchEvent(
+    new WheelEvent("wheel", {
+      bubbles: true,
+      cancelable: true,
+      deltaY: -120,
+      clientX: wc.x,
+      clientY: wc.y,
+    }),
+  );
+  await settle(100);
+  check(
+    scaleNow() > wheelBefore,
+    `the mouse wheel zooms after the topology comes back (${wheelBefore} → ${scaleNow()})`,
+  );
+  const dragged = card("studio:w2")!;
+  const dragFrom = at("studio:w2")!;
+  const dc = centre(dragged);
+  pointer(dragged, "pointerdown", dc.x, dc.y, 13);
+  for (let i = 1; i <= 8; i++) {
+    pointer(dragged, "pointermove", dc.x + i * 10, dc.y, 13);
+    await settle(16);
+  }
+  pointer(dragged, "pointerup", dc.x + 80, dc.y, 13);
+  await rest();
+  const dragTo = at("studio:w2")!;
+  check(
+    Math.hypot(dragTo.x - dragFrom.x, dragTo.y - dragFrom.y) > 20,
+    "cards still drag after the topology comes back",
   );
 
   // Zoom out to the overview: tabs fold into status squares, nothing moves.

@@ -819,3 +819,10 @@
   opacity: 0.5;
   cursor: default;
 }
+
+.board-empty {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  cursor: default;
+}
