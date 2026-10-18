@@ -7,6 +7,12 @@ are optional because the merged PR history records their source.
 
 ## [Unreleased]
 
+### Fixed
+
+- When a Town move finishes, the dragged table or agent fades or springs home
+  from where it was waiting on the target, instead of jumping back to where it
+  was dropped first.
+
 ## [0.2.5] - 2026-10-18
 
 ### Added
