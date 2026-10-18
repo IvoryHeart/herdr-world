@@ -129,7 +129,7 @@ test("a new tab takes the first free spot and nothing else moves", () => {
   expect(cellOf(second.layout, "a/room-0/tab-5")).not.toBeNull();
 });
 
-test("a closed tab frees its spot without moving its neighbours", () => {
+test("a closed tab leaves no gap: later desks close up in order", () => {
   const first = layoutTown(town({ a: [5] }), "wide");
   const input = town({ a: [5] });
   const keys = [...input.rooms[0]!.deskKeys];
@@ -140,15 +140,21 @@ test("a closed tab frees its spot without moving its neighbours", () => {
     "wide",
     first.memory,
   );
-  for (const key of keys) {
+  // Desks before the closed one keep their spots.
+  for (const key of keys.slice(0, 2)) {
     const was = cellOf(first.layout, key)!;
     const now = cellOf(second.layout, key)!;
     expect([now.col, now.row]).toEqual([was.col, was.row]);
   }
+  // The next desk takes the freed spot, and the rest follow in order.
+  const next = cellOf(second.layout, keys[2]!)!;
+  expect([next.col, next.row]).toEqual([freed.col, freed.row]);
   const room = second.layout.buildings[0]!.rooms[0]!;
-  expect(
-    room.cells.find((c) => c.col === freed.col && c.row === freed.row)!.deskKey,
-  ).toBeNull();
+  const occupied = room.cells.filter((cell) => cell.deskKey);
+  expect(occupied.map((cell) => cell.deskKey)).toEqual(keys);
+  expect(room.cells.indexOf(occupied[occupied.length - 1]!)).toBe(
+    keys.length - 1,
+  );
 });
 
 test("growing a capacity step keeps every desk's grid coordinate", () => {

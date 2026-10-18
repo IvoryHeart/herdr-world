@@ -1,4 +1,8 @@
 import { runPluginCommand } from "./config/plugin-command";
+import { createMoveQueue, moveDesk, movePane } from "./world/desk-move";
+
+/** Town moves run one at a time per connection (see world/desk-move). */
+const townMoveQueues = new Map<string, ReturnType<typeof createMoveQueue>>();
 import { unixOnlyMessage } from "./connections/unix-only";
 import { inspectWorkspacePath } from "./workspace/path";
 import { createWorkspaceWorktree } from "./worktree/create";
@@ -1253,6 +1257,42 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
             if (info.error) throw new Error(`${info.error} ${info.path}`);
           }
         },
+      );
+      sendReply({ id, result }, method);
+    } catch (error) {
+      sendError(`${method}-error`, error);
+    }
+    return;
+  }
+
+  // Town desk and agent moves: several confirmed pane moves on this exact
+  // connection and runtime generation, with rollback (see world/desk-move).
+  if (method === "town.move_desk" || method === "town.move_pane") {
+    const call = (rpc: string, rpcParams: Record<string, unknown>) =>
+      herdr.call(rpc, rpcParams, 15_000);
+    // One move at a time per connection: each re-reads the topology (and the
+    // last-desk check) only once the previous move has finished.
+    let queue = townMoveQueues.get(route.connectionId);
+    if (!queue) {
+      queue = createMoveQueue();
+      townMoveQueues.set(route.connectionId, queue);
+    }
+    try {
+      const p = params ?? {};
+      const result = await queue(() =>
+        method === "town.move_desk"
+          ? moveDesk(call, {
+              tab_id: String(p.tab_id ?? ""),
+              workspace_id: String(p.workspace_id ?? ""),
+              allow_close_room: p.allow_close_room === true,
+              isCurrent: requestIsCurrent,
+            })
+          : movePane(call, {
+              pane_id: String(p.pane_id ?? ""),
+              tab_id: String(p.tab_id ?? ""),
+              allow_close_room: p.allow_close_room === true,
+              isCurrent: requestIsCurrent,
+            }),
       );
       sendReply({ id, result }, method);
     } catch (error) {

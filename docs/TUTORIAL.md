@@ -135,9 +135,21 @@ for availability in the stable download.
    **Inspector** for files, changes and history, or **Terminal** for direct work.
    **Next** cycles waiting agents, then finished agents when no other agent is
    waiting.
+7. To move a table to another room, zoom in until you see tables, then drag it
+   with the mouse, or hold it for a moment on a phone and then drag. Drop it on
+   another room of the same building; the plaque under your pointer says where
+   it will land, or why it cannot. To move one agent, drag it onto another
+   table instead. From the keyboard, focus a table or agent and press **M** to
+   choose a destination. The live panes move, so agents keep running. If a move
+   fails part-way, Town tries to move the panes back, and its notice says what
+   happened: back in the original room (the table's pane layout may differ),
+   only partly moved, or locations unknown. Unless the notice says the table is
+   back, check both rooms before you carry on. Moving a room's last table
+   closes that room, so Town asks first.
 
 A table with more panes than drawn seats shows the count and offers a chooser
-for every pane. **New room** creates a workspace; room actions also create tabs
+for every pane. When a table closes, the tables after it close up so the room
+keeps no gap. **New room** creates a workspace; room actions also create tabs
 and manage the room. Check the destination host before creation. Stale buildings
 remain visible but cannot accept operations. Use search and the Hosts filter to
 narrow the work you are following. The **Town calm motion** setting reduces

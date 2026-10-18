@@ -542,6 +542,34 @@
   transform-origin: 0 0;
 }
 
+/* A desk or agent being dragged: a label that follows the pointer. */
+.town-drag-ghost {
+  position: absolute;
+  z-index: 12;
+  left: 0;
+  top: 0;
+  /* A plaque under the pointer, as in the prototype; the desk itself is drawn
+     on the canvas. */
+  margin: 44px 0 0 0;
+  translate: -50% 0;
+  padding: 4px 9px;
+  pointer-events: none;
+  white-space: nowrap;
+  font:
+    600 12px "Rubik",
+    system-ui,
+    sans-serif;
+  color: #f1efe6;
+  background: rgba(14, 17, 24, 0.94);
+  border: 2px solid #6b7480;
+  border-radius: 8px;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+}
+
+.town-drag-ghost[data-valid="true"] {
+  border-color: #e3aa3a;
+}
+
 .town-peek:focus {
   outline: none;
 }

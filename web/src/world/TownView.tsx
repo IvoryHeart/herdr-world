@@ -3,6 +3,14 @@ import {
   creationPendingReason,
   creationFailureMessage,
 } from "../creationRequests";
+import {
+  requestAgentMove,
+  requestDeskMove,
+  townMoveNotice,
+  townMoveResult,
+  type TownMoveOutcome,
+  type TownMoveResult,
+} from "./town/townMoves";
 import { isMobileLayout, useLayoutPreferences } from "../layoutPreferences";
 import { useSystemBack } from "../systemBack";
 import { useTownFinished, withTownFinished } from "./town/townFinished";
@@ -618,6 +626,18 @@ export default function TownView({
 
   /** The desk whose panes are listed, for a desk with more panes than seats. */
   const [chooser, setChooser] = useState<string | null>(null);
+  /** A desk or agent move being chosen: what to move, then where. */
+  const [moveFlow, setMoveFlow] = useState<
+    | { step: "room"; deskKey: string }
+    | { step: "desk"; agentKey: string }
+    | null
+  >(null);
+  /** The desk or agent being moved; further moves wait for it. */
+  const [movingKey, setMovingKey] = useState<string | null>(null);
+  const [moveConfirm, setMoveConfirm] = useState<{
+    message: string;
+    run(): void;
+  } | null>(null);
   const [peek, setPeek] = useState<{
     key: string;
     anchor: { x: number; y: number } | null;
@@ -653,6 +673,149 @@ export default function TownView({
     return desk && desk.observedPaneCount > desk.paneDevices.length
       ? desk
       : null;
+  };
+  const deskForKey = (key: string) =>
+    office.deskRoster.find(({ desk }) => desk.key === key)?.desk ?? null;
+  const reportMove = (
+    label: string,
+    outcome: TownMoveOutcome,
+    sourceTab: string,
+  ) => {
+    toast(
+      outcome.status === "moved" ? "ok" : "error",
+      townMoveNotice(label, outcome, sourceTab),
+    );
+    return townMoveResult(outcome);
+  };
+  const runDeskMove = async (
+    deskKey: string,
+    roomKey: string,
+    allowCloseRoom = false,
+  ): Promise<TownMoveResult> => {
+    const desk = deskForKey(deskKey);
+    const room = roomForKey(roomKey);
+    const source = desk ? roomForKey(desk.roomKey) : null;
+    if (!desk || !room || movingKey) return "returned";
+    // Herdr closes a room when its last desk leaves; ask first.
+    if (!allowCloseRoom && (source?.observedDeskCount ?? 2) <= 1) {
+      setMoveConfirm({
+        message: `“${desk.displayLabel}” is the last desk in “${source?.displayLabel}”. Moving it to “${room.displayLabel}” closes that room.`,
+        run: () => void runDeskMove(deskKey, roomKey, true),
+      });
+      return "returned";
+    }
+    setMovingKey(desk.key);
+    toast("ok", `Moving ${desk.displayLabel} to ${room.displayLabel}…`);
+    try {
+      const outcome = await requestDeskMove(desk, room, allowCloseRoom);
+      return reportMove(desk.displayLabel, outcome, desk.tabRef.nativeId);
+    } catch (cause) {
+      toast(
+        "error",
+        `${desk.displayLabel} may not have moved: ${String(cause)}`,
+      );
+      return "uncertain";
+    } finally {
+      setMovingKey(null);
+    }
+  };
+  const runAgentMove = async (
+    agentKey: string,
+    deskKey: string,
+    allowCloseRoom = false,
+  ): Promise<TownMoveResult> => {
+    const agent = agentByKey.get(agentKey)?.agent;
+    const device = office.paneRoster.find(
+      ({ device }) => device.agentKey === agentKey,
+    )?.device;
+    const target = deskForKey(deskKey);
+    const sourceDesk = device ? deskForKey(device.deskKey) : null;
+    const sourceRoom = sourceDesk ? roomForKey(sourceDesk.roomKey) : null;
+    if (!agent || !device || !target || movingKey) return "returned";
+    if (
+      !allowCloseRoom &&
+      (sourceDesk?.observedPaneCount ?? 2) <= 1 &&
+      (sourceRoom?.observedDeskCount ?? 2) <= 1
+    ) {
+      setMoveConfirm({
+        message: `${agent.displayLabel} is alone at the last desk in “${sourceRoom?.displayLabel}”. Moving it closes that room.`,
+        run: () => void runAgentMove(agentKey, deskKey, true),
+      });
+      return "returned";
+    }
+    setMovingKey(agentKey);
+    toast("ok", `Moving ${agent.displayLabel} to ${target.displayLabel}…`);
+    try {
+      const outcome = await requestAgentMove(device, target, allowCloseRoom);
+      return reportMove(
+        agent.displayLabel,
+        outcome,
+        sourceDesk?.tabRef.nativeId ?? "",
+      );
+    } catch (cause) {
+      toast(
+        "error",
+        `${agent.displayLabel} may not have moved: ${String(cause)}`,
+      );
+      return "uncertain";
+    } finally {
+      setMovingKey(null);
+    }
+  };
+  /** The choices for each step of a move. */
+  const moveChooser = (flow: NonNullable<typeof moveFlow>) => {
+    if (flow.step === "room") {
+      const desk = deskForKey(flow.deskKey);
+      const rooms = desk
+        ? office.rooms.filter(
+            (room) =>
+              room.hostKey === desk.hostKey &&
+              room.key !== desk.roomKey &&
+              room.workspaceRef.connectionId === desk.tabRef.connectionId,
+          )
+        : [];
+      return {
+        title: `Move ${desk?.displayLabel ?? "desk"}`,
+        detail: rooms.length
+          ? "Choose a room on this host"
+          : "No other room on this host",
+        entries: rooms.map((room) => ({
+          key: room.key,
+          label: room.displayLabel,
+          detail: `${room.observedDeskCount} desks`,
+          onChoose: () => {
+            setMoveFlow(null);
+            void runDeskMove(flow.deskKey, room.key);
+          },
+        })),
+      };
+    }
+    const agent = agentByKey.get(flow.agentKey)?.agent;
+    const desks = agent
+      ? office.deskRoster
+          .map(({ desk }) => desk)
+          .filter(
+            (desk) =>
+              desk.hostKey === agent.hostKey &&
+              desk.key !== agent.deskKey &&
+              desk.paneDevices.length > 0,
+          )
+      : [];
+    return {
+      title: `Move ${agent?.displayLabel ?? "agent"}`,
+      detail: desks.length
+        ? "Choose a desk on this host"
+        : "No other desk on this host",
+      entries: desks.map((desk) => ({
+        key: desk.key,
+        label: desk.displayLabel,
+        detail: roomForKey(desk.roomKey)?.displayLabel ?? "",
+        onChoose: () => {
+          setMoveFlow(null);
+          void runAgentMove(flow.agentKey, desk.key);
+        },
+      })),
+    };
   };
   const openReply = (key: string) => {
     // A desk with more panes than seats lists them all rather than guessing.
@@ -719,6 +882,7 @@ export default function TownView({
     "popup",
   );
   useSystemBack(chooser !== null, () => setChooser(null), "popup");
+  useSystemBack(moveFlow !== null, () => setMoveFlow(null), "popup");
   const peekEntry = peek ? agentByKey.get(peek.key) : undefined;
   useEffect(() => {
     if (peek && !peekEntry) setPeek(null);
@@ -917,6 +1081,25 @@ export default function TownView({
           }
           onOpen={(key) => openPeek(key, null)}
         />
+        {moveFlow ? (
+          <TownChooser
+            {...moveChooser(moveFlow)}
+            onClose={() => setMoveFlow(null)}
+          />
+        ) : null}
+        <ConfirmDialog
+          open={moveConfirm !== null}
+          title="Close the room?"
+          message={moveConfirm?.message ?? ""}
+          confirmLabel="Move and close room"
+          danger
+          onClose={() => setMoveConfirm(null)}
+          onConfirm={() => {
+            const run = moveConfirm?.run;
+            setMoveConfirm(null);
+            run?.();
+          }}
+        />
         {chooserDesk ? (
           <TownChooser
             title={chooserDesk.displayLabel}
@@ -1074,6 +1257,17 @@ export default function TownView({
               right: 0,
             }}
             roomActions={{
+              onDropDesk: (deskKey, roomKey) => runDeskMove(deskKey, roomKey),
+              onDropAgent: (agentKey, deskKey) =>
+                runAgentMove(agentKey, deskKey),
+              onMoveDesk: (deskKey) => {
+                setPeek(null);
+                setMoveFlow({ step: "room", deskKey });
+              },
+              onMoveAgent: (agentKey) => {
+                setPeek(null);
+                setMoveFlow({ step: "desk", agentKey });
+              },
               onChoosePanes: (deskKey) => {
                 setPeek(null);
                 setChooser(deskKey);

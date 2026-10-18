@@ -49,10 +49,13 @@ supplies it.
 Town SHALL derive room order from Herdr's native workspace order and desk order
 from native tab order within each host. A room's capacity SHALL step through a
 bounded set of grid sizes that always leaves at least one free desk spot. While a
-scene is live, a topology change SHALL NOT move an existing desk to another spot
-or reorder rooms: a new tab SHALL take the first free spot of its room, a closed
-tab SHALL free its spot, and a room that reaches a new capacity step MAY shift
-later rooms and rows of the same building without reordering rooms. Placement SHALL be
+scene is live, a topology change SHALL NOT reorder rooms or move a desk to
+another room: a new tab SHALL take the first free spot of its room without
+moving other desks, and a closed tab SHALL leave no gap: the desks after it in
+reading order SHALL close up in their existing order while the desks before it
+keep their spots. A room that reaches a new capacity step MAY shift later rooms
+and rows of the same building without reordering rooms, and SHALL keep its size
+step when desks close. Placement SHALL be
 re-derived from native order when the scene is rebuilt. Desktop SHALL lay out
 buildings in one row; phones SHALL stack buildings in one vertical column.
 
@@ -65,7 +68,8 @@ buildings in one row; phones SHALL stack buildings in one vertical column.
 #### Scenario: A tab closes in the middle of a room
 
 - **WHEN** a tab whose desk sits between other desks closes
-- **THEN** its spot becomes free and no other desk moves until the scene is rebuilt
+- **THEN** the desks after it close up in order, the desks before it keep their
+  spots, and the room keeps no empty gap
 
 #### Scenario: A room fills its capacity step
 
@@ -268,14 +272,21 @@ short notice; a finished agent SHALL announce itself once.
 
 ### Requirement: Town desk and agent moves
 
-Town SHALL let the user move a desk to a free spot in another room of the same
-host and move an agent pane to a free seat at another desk of the same host, by
-dragging and by a visible Move action. A request SHALL be qualified by connection
-ID and runtime generation and SHALL be refused across hosts, for retired
-generations, or when the runtime does not offer pane moves. Before sending any
-move, a desk move SHALL capture the source tab's complete split tree, including
-each split's direction and ratio, and SHALL refuse the move without mutation if
-any source pane is missing or the tree does not account for every pane. It SHALL
+Town SHALL let the user move a desk to the next free spot of another room of
+the same host and move an agent pane to another desk of the same host, by
+dragging with a mouse, by holding and then dragging on touch, and from the
+keyboard by pressing M on a focused desk or agent target, which opens a list of
+destinations. Town SHALL NOT add visible move controls to the scene. While a
+drag is in progress Town SHALL show where the desk or agent would land, or why
+it cannot. A request SHALL be qualified by connection ID and runtime generation,
+SHALL run in the World service, and SHALL be refused across hosts, for retired
+generations, or when the runtime cannot export a tab's layout. Before sending
+any move, a desk move SHALL capture the source tab's complete split tree with
+`layout.export`, including each split's direction and ratio, and SHALL refuse
+the move without mutation if any source pane is missing or the tree does not
+account for every pane. Because Herdr closes a workspace when its last tab
+leaves, moving a room's last desk, or the only pane of a room's last desk, SHALL
+ask the user to confirm that the room will close before anything moves. It SHALL
 then move the captured tree's first pane to a new tab in the target workspace and
 replay the captured tree by moving each remaining pane into that tab with its
 captured direction and ratio, confirming each step from Herdr before the next.
@@ -288,13 +299,23 @@ panes back into the original tab using their current IDs and report the outcome.
 It SHALL NOT retry an uncertain step, and if rollback fails it SHALL report the
 actual resulting topology.
 
-An agent move SHALL be a single confirmed pane move into the target tab with its
-replacement ID recorded. While a move is pending, Town SHALL reserve the source
+An agent move SHALL be a single confirmed pane move into the target tab. The
+service SHALL read the destination tab's complete layout, including panes Town
+does not draw, and join the pane next to its last pane, splitting across the
+table when the tab has an odd number of panes and beside it otherwise, with its
+replacement ID recorded. Moves on one connection SHALL run one at a time, each
+reading the topology, including the last-desk check, only when it starts.
+Rollback SHALL be reported as complete only when every captured pane is found
+back in the original tab; an unreadable topology, a retired runtime or a failed
+compensation SHALL be reported as an incomplete move, and the runtime SHALL be
+checked before every compensating move. When panes were moved back, World SHALL
+report that the desk's pane layout may differ, because Herdr cannot always
+rebuild the original split tree. While a move is pending, Town SHALL reserve the source
 and target spots; the final placement SHALL follow confirmed Herdr topology.
 
 #### Scenario: Move a desk to another room
 
-- **WHEN** the user drags a three-pane desk to a free spot in another room of the same host
+- **WHEN** the user drags a three-pane desk onto another room of the same host
 - **THEN** World captures the desk's split tree before moving anything, moves the
   three panes into one new tab in that workspace with the same split directions
   and ratios, shows the desk at the target spot after Herdr confirms, and the
@@ -327,9 +348,15 @@ and target spots; the final placement SHALL follow confirmed Herdr topology.
 - **THEN** no Herdr operation is sent, the desk returns to its spot, and Town
   explains that desks move only within one host
 
+#### Scenario: Move a room's last desk
+
+- **WHEN** the user drops the only desk of a room onto another room of the same host
+- **THEN** Town asks to confirm that the room will close, and moves the desk only
+  after the user confirms
+
 #### Scenario: Move an agent to another desk
 
-- **WHEN** the user moves an agent to an empty seat at another desk in the same host
+- **WHEN** the user drags an agent onto another desk in the same host
 - **THEN** World moves exactly that pane into the target tab and the agent sits at
   the chosen seat after Herdr confirms
 

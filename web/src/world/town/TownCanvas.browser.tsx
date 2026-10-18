@@ -212,6 +212,7 @@ function topology(seed: number): Topology {
  * (a menu question for blocked agents) and pane.send_input is recorded.
  */
 const sent: { paneId: string; text: string; keys: string[] }[] = [];
+const moves: { method: string; params: Record<string, unknown> }[] = [];
 let statusOf: (paneId: string) => string = () => "working";
 const SCREENS = {
   blocked: [
@@ -280,6 +281,10 @@ const SCREENS = {
           },
         ],
       };
+    if (method === "town.move_desk" || method === "town.move_pane") {
+      moves.push({ method, params: params ?? {} });
+      return { status: "moved", tab_id: "moved-tab", workspace_id: "moved" };
+    }
     if (method === "pane.send_input") {
       sent.push({
         paneId,
@@ -815,6 +820,98 @@ async function run() {
     "zoomed room stayed at overview",
   );
   check(selected.length === 0, "a room tap must not open an Inspector");
+
+  // From the keyboard, M on a desk lists the host's other rooms; choosing one
+  // asks the service to move that desk there.
+  const deskTarget = [
+    ...host.querySelectorAll<HTMLButtonElement>(
+      '.world-semantic-target[data-kind="desk"]',
+    ),
+  ].find(
+    (target) => !target.getAttribute("aria-label")?.endsWith(", 6 panes"),
+  )!;
+  deskTarget.focus();
+  deskTarget.dispatchEvent(
+    new KeyboardEvent("keydown", { key: "m", bubbles: true }),
+  );
+  await waitFor(
+    () => host.querySelectorAll(".town-chooser-list button").length > 0,
+    "M on a desk did not list rooms to move it to",
+  );
+  host.querySelector<HTMLButtonElement>(".town-chooser-list button")!.click();
+  await waitFor(
+    () => moves.length === 1,
+    "choosing a room did not move the desk",
+  );
+  const deskMove = moves[0]!;
+  check(
+    deskMove.method === "town.move_desk" &&
+      typeof deskMove.params.tab_id === "string" &&
+      typeof deskMove.params.workspace_id === "string" &&
+      !String(deskMove.params.tab_id).startsWith(
+        `${deskMove.params.workspace_id}-tab-`,
+      ),
+    `desk move sent ${JSON.stringify(deskMove)}`,
+  );
+  // A touch hold lifts a desk; a second finger turns it into a pinch and
+  // drops the drag cleanly.
+  const canvasHost = host.querySelector("canvas")!.parentElement!;
+  const heldDesk = [
+    ...host.querySelectorAll<HTMLElement>(
+      '.world-semantic-target[data-kind="desk"]',
+    ),
+  ].find((target) => {
+    const box = target.getBoundingClientRect();
+    return (
+      box.width > 0 &&
+      box.left > 0 &&
+      box.top > 0 &&
+      box.right < window.innerWidth &&
+      box.bottom < window.innerHeight
+    );
+  });
+  if (heldDesk) {
+    const box = heldDesk.getBoundingClientRect();
+    const touch = (type: string, id: number, x: number, y: number) =>
+      canvasHost.dispatchEvent(
+        new PointerEvent(type, {
+          bubbles: true,
+          pointerId: id,
+          pointerType: "touch",
+          button: 0,
+          buttons: type === "pointerup" ? 0 : 1,
+          clientX: x,
+          clientY: y,
+        }),
+      );
+    touch(
+      "pointerdown",
+      21,
+      box.left + box.width / 2,
+      box.top + box.height / 2,
+    );
+    await waitFor(
+      () => host.querySelector(".town-drag-ghost") !== null,
+      "holding a desk did not lift it",
+    );
+    touch("pointerdown", 22, box.left + 4, box.top + 4);
+    await waitFor(
+      () => host.querySelector(".town-drag-ghost") === null,
+      "a second finger did not drop the drag",
+    );
+    touch("pointerup", 22, box.left + 4, box.top + 4);
+    touch("pointerup", 21, box.left + box.width / 2, box.top + box.height / 2);
+    check(moves.length === 1, "a cancelled drag must not move anything");
+  }
+
+  // Town shows no move icons; moving is by drag, hold or the keyboard.
+  check(
+    !host.querySelector(".town-desk-move") &&
+      ![...host.querySelectorAll("button")].some(
+        (button) => button.textContent?.trim() === "Move…",
+      ),
+    "Town shows a visible move control",
+  );
 
   // A blocked agent walks to reception when its status changes.
   const pane = base.agentPanes.find((p) => p.agent_status === "working")!;
