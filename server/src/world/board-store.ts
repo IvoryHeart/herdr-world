@@ -1,0 +1,372 @@
+import { existsSync, readFileSync, renameSync } from "node:fs";
+import { join } from "node:path";
+import { dataRoot, replaceDataFile } from "../config/data-paths";
+import { worldEnv } from "../config/environment";
+
+/**
+ * Board's saved state: layout, notes and strings. One document for the World
+ * service; every Herdr anchor is qualified by its connection profile. Bounded,
+ * revisioned and written atomically. Notes are user content: they stay on the
+ * service host and its authenticated World clients, and reach Herdr or an
+ * agent only when the user sends one.
+ */
+
+export type BoardPoint = { x: number; y: number };
+export type NoteColor = "yellow" | "pink" | "blue" | "green";
+export type BoardAnchorKind = "workspace" | "tab" | "pane";
+
+/** A Herdr target, with the terminal IDs last seen in it as a witness. */
+export type BoardAnchor = {
+  connection_id: string;
+  kind: BoardAnchorKind;
+  native_id: string;
+  witness: string[];
+};
+export type BoardEnd = { note: string } | { anchor: BoardAnchor };
+
+export type BoardNote = {
+  id: string;
+  text: string;
+  color: NoteColor;
+  x: number;
+  y: number;
+  rev: number;
+};
+export type BoardString = { id: string; from: BoardEnd; to: BoardEnd };
+export type BoardLayoutDocument = {
+  anchors: Record<string, BoardPoint>;
+  offsets: Record<string, BoardPoint>;
+  pinned: Record<string, BoardPoint>;
+  folded: string[];
+};
+export type BoardDocument = {
+  version: 1;
+  revision: number;
+  layout: BoardLayoutDocument;
+  notes: BoardNote[];
+  strings: BoardString[];
+};
+
+export type BoardOp =
+  | {
+      op: "note.put";
+      note: Omit<BoardNote, "rev">;
+      /** The revision the client edited; omitted when creating. */
+      rev?: number;
+    }
+  | { op: "note.delete"; id: string; rev: number }
+  | { op: "string.put"; string: BoardString }
+  | { op: "string.delete"; id: string }
+  | {
+      op: "layout.set";
+      anchors?: Record<string, BoardPoint>;
+      offsets?: Record<string, BoardPoint>;
+      pinned?: Record<string, BoardPoint>;
+      /** Keys that are no longer pinned. */
+      unpinned?: string[];
+      folded?: string[];
+    }
+  | {
+      op: "anchor.witness";
+      string_id: string;
+      end: "from" | "to";
+      witness: string[];
+    };
+
+export const BOARD_LIMITS = Object.freeze({
+  notes: 500,
+  noteText: 4_000,
+  strings: 2_000,
+  layoutEntries: 2_000,
+  witness: 16,
+  key: 512,
+  ops: 500,
+  bytes: 2_000_000,
+});
+
+export class BoardConflictError extends Error {
+  constructor(
+    message: string,
+    readonly document: BoardDocument,
+  ) {
+    super(message);
+    this.name = "BoardConflictError";
+  }
+}
+
+const COLORS: readonly NoteColor[] = ["yellow", "pink", "blue", "green"];
+const KINDS: readonly BoardAnchorKind[] = ["workspace", "tab", "pane"];
+
+export function emptyBoardDocument(): BoardDocument {
+  return {
+    version: 1,
+    revision: 0,
+    layout: { anchors: {}, offsets: {}, pinned: {}, folded: [] },
+    notes: [],
+    strings: [],
+  };
+}
+
+export function defaultBoardPath() {
+  return worldEnv("BOARD_PATH") ?? join(dataRoot(), "boards", "board.json");
+}
+
+/* ---------- Validation ---------- */
+
+function fail(message: string): never {
+  throw new Error(`invalid board: ${message}`);
+}
+const isObject = (value: unknown): value is Record<string, unknown> =>
+  Boolean(value) && typeof value === "object" && !Array.isArray(value);
+function text(value: unknown, what: string, max: number, empty = false) {
+  if (typeof value !== "string" || value.length > max || (!empty && !value))
+    fail(`${what} must be a string of at most ${max} characters`);
+  return value;
+}
+function point(value: unknown, what: string): BoardPoint {
+  if (
+    !isObject(value) ||
+    !Number.isFinite(value.x) ||
+    !Number.isFinite(value.y) ||
+    Math.abs(value.x as number) > 1e7 ||
+    Math.abs(value.y as number) > 1e7
+  )
+    fail(`${what} must be a point`);
+  return { x: value.x as number, y: value.y as number };
+}
+function points(value: unknown, what: string): Record<string, BoardPoint> {
+  if (value === undefined) return {};
+  if (!isObject(value)) fail(`${what} must be an object`);
+  const out: Record<string, BoardPoint> = {};
+  for (const [key, entry] of Object.entries(value)) {
+    text(key, `${what} key`, BOARD_LIMITS.key);
+    out[key] = point(entry, `${what}.${key}`);
+  }
+  return out;
+}
+function keys(value: unknown, what: string): string[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) fail(`${what} must be a list`);
+  return value.map((key) => text(key, `${what} entry`, BOARD_LIMITS.key));
+}
+function anchor(value: unknown): BoardAnchor {
+  if (!isObject(value)) fail("anchor must be an object");
+  if (!KINDS.includes(value.kind as BoardAnchorKind)) fail("anchor kind");
+  const witness = keys(value.witness, "anchor witness");
+  if (witness.length > BOARD_LIMITS.witness) fail("anchor witness is too long");
+  return {
+    connection_id: text(
+      value.connection_id,
+      "anchor connection",
+      BOARD_LIMITS.key,
+    ),
+    kind: value.kind as BoardAnchorKind,
+    native_id: text(value.native_id, "anchor target", BOARD_LIMITS.key),
+    witness,
+  };
+}
+function end(value: unknown): BoardEnd {
+  if (!isObject(value)) fail("string end must be an object");
+  if ("note" in value)
+    return { note: text(value.note, "note id", BOARD_LIMITS.key) };
+  return { anchor: anchor(value.anchor) };
+}
+function note(value: unknown, rev: number): BoardNote {
+  if (!isObject(value)) fail("note must be an object");
+  if (!COLORS.includes(value.color as NoteColor)) fail("note colour");
+  const at = point(value, "note position");
+  return {
+    id: text(value.id, "note id", BOARD_LIMITS.key),
+    text: text(value.text, "note text", BOARD_LIMITS.noteText, true),
+    color: value.color as NoteColor,
+    x: at.x,
+    y: at.y,
+    rev,
+  };
+}
+function string(value: unknown): BoardString {
+  if (!isObject(value)) fail("string must be an object");
+  return {
+    id: text(value.id, "string id", BOARD_LIMITS.key),
+    from: end(value.from),
+    to: end(value.to),
+  };
+}
+
+/** Parse a stored document strictly; anything unexpected is rejected. */
+export function parseBoardDocument(value: unknown): BoardDocument {
+  if (!isObject(value) || value.version !== 1) fail("unsupported version");
+  if (!Number.isSafeInteger(value.revision) || (value.revision as number) < 0)
+    fail("revision");
+  const layout = isObject(value.layout) ? value.layout : fail("layout");
+  const notes = Array.isArray(value.notes) ? value.notes : fail("notes");
+  const strings = Array.isArray(value.strings)
+    ? value.strings
+    : fail("strings");
+  const document: BoardDocument = {
+    version: 1,
+    revision: value.revision as number,
+    layout: {
+      anchors: points(layout.anchors, "anchors"),
+      offsets: points(layout.offsets, "offsets"),
+      pinned: points(layout.pinned, "pinned"),
+      folded: keys(layout.folded, "folded"),
+    },
+    notes: notes.map((entry) => {
+      const rev =
+        isObject(entry) && Number.isSafeInteger(entry.rev)
+          ? (entry.rev as number)
+          : fail("note rev");
+      return note(entry, rev);
+    }),
+    strings: strings.map(string),
+  };
+  checkBounds(document);
+  return document;
+}
+
+function checkBounds(document: BoardDocument) {
+  const { layout } = document;
+  if (document.notes.length > BOARD_LIMITS.notes)
+    fail(`at most ${BOARD_LIMITS.notes} notes`);
+  if (document.strings.length > BOARD_LIMITS.strings)
+    fail(`at most ${BOARD_LIMITS.strings} strings`);
+  const entries =
+    Object.keys(layout.anchors).length +
+    Object.keys(layout.offsets).length +
+    Object.keys(layout.pinned).length +
+    layout.folded.length;
+  if (entries > BOARD_LIMITS.layoutEntries)
+    fail(`at most ${BOARD_LIMITS.layoutEntries} layout entries`);
+  const noteIds = new Set(document.notes.map((entry) => entry.id));
+  if (noteIds.size !== document.notes.length) fail("duplicate note ids");
+  const stringIds = new Set(document.strings.map((entry) => entry.id));
+  if (stringIds.size !== document.strings.length) fail("duplicate string ids");
+  for (const entry of document.strings)
+    for (const side of [entry.from, entry.to])
+      if ("note" in side && !noteIds.has(side.note))
+        fail("a string refers to a missing note");
+}
+
+/* ---------- Store ---------- */
+
+export class BoardStore {
+  private document: BoardDocument;
+
+  constructor(
+    private readonly path: string = defaultBoardPath(),
+    private readonly options: {
+      now?: () => number;
+      log?: (message: string) => void;
+    } = {},
+  ) {
+    this.document = this.load();
+  }
+
+  private load(): BoardDocument {
+    if (!existsSync(this.path)) return emptyBoardDocument();
+    try {
+      return parseBoardDocument(JSON.parse(readFileSync(this.path, "utf8")));
+    } catch (error) {
+      // Keep the unreadable file for recovery and start an empty board.
+      const aside = `${this.path}.unreadable-${(this.options.now ?? Date.now)()}`;
+      try {
+        renameSync(this.path, aside);
+      } catch {
+        // Leave it where it is; the next save replaces it.
+      }
+      this.options.log?.(
+        `board store unreadable (${String(error)}); kept at ${aside}`,
+      );
+      return emptyBoardDocument();
+    }
+  }
+
+  get(): BoardDocument {
+    return structuredClone(this.document);
+  }
+
+  /**
+   * Apply every operation or none. A note edit made against an older note
+   * revision is refused with the current document, so a second client never
+   * overwrites a newer note.
+   */
+  patch(ops: readonly BoardOp[]): BoardDocument {
+    if (!Array.isArray(ops) || ops.length > BOARD_LIMITS.ops)
+      fail(`1 to ${BOARD_LIMITS.ops} operations`);
+    const next = structuredClone(this.document);
+    for (const op of ops) applyOp(next, op, this.document);
+    next.revision = this.document.revision + 1;
+    checkBounds(next);
+    const payload = JSON.stringify(next);
+    if (payload.length > BOARD_LIMITS.bytes) fail("the board is too large");
+    replaceDataFile(this.path, payload);
+    this.document = next;
+    return this.get();
+  }
+}
+
+function applyOp(next: BoardDocument, op: BoardOp, current: BoardDocument) {
+  if (!isObject(op)) fail("operation must be an object");
+  switch (op.op) {
+    case "note.put": {
+      const existing = next.notes.findIndex(
+        (entry) => entry.id === op.note?.id,
+      );
+      if (existing < 0) {
+        if (op.rev !== undefined)
+          throw new BoardConflictError("That note was deleted.", current);
+        next.notes.push(note(op.note, 1));
+      } else {
+        if (op.rev !== next.notes[existing]!.rev)
+          throw new BoardConflictError("That note changed elsewhere.", current);
+        next.notes[existing] = note(op.note, next.notes[existing]!.rev + 1);
+      }
+      return;
+    }
+    case "note.delete": {
+      const existing = next.notes.find((entry) => entry.id === op.id);
+      if (!existing) return;
+      if (existing.rev !== op.rev)
+        throw new BoardConflictError("That note changed elsewhere.", current);
+      next.notes = next.notes.filter((entry) => entry.id !== op.id);
+      // A note's strings go with it.
+      next.strings = next.strings.filter(
+        (entry) =>
+          !("note" in entry.from && entry.from.note === op.id) &&
+          !("note" in entry.to && entry.to.note === op.id),
+      );
+      return;
+    }
+    case "string.put": {
+      const parsed = string(op.string);
+      next.strings = next.strings.filter((entry) => entry.id !== parsed.id);
+      next.strings.push(parsed);
+      return;
+    }
+    case "string.delete":
+      next.strings = next.strings.filter((entry) => entry.id !== op.id);
+      return;
+    case "layout.set": {
+      Object.assign(next.layout.anchors, points(op.anchors, "anchors"));
+      Object.assign(next.layout.offsets, points(op.offsets, "offsets"));
+      Object.assign(next.layout.pinned, points(op.pinned, "pinned"));
+      for (const key of keys(op.unpinned, "unpinned"))
+        delete next.layout.pinned[key];
+      if (op.folded !== undefined)
+        next.layout.folded = keys(op.folded, "folded");
+      return;
+    }
+    case "anchor.witness": {
+      const target = next.strings.find((entry) => entry.id === op.string_id);
+      const side = target?.[op.end === "to" ? "to" : "from"];
+      if (!side || !("anchor" in side)) fail("no such anchored string end");
+      const witness = keys(op.witness, "witness");
+      if (witness.length > BOARD_LIMITS.witness) fail("witness is too long");
+      side.anchor.witness = witness;
+      return;
+    }
+    default:
+      fail("unknown operation");
+  }
+}

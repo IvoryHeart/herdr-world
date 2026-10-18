@@ -630,6 +630,55 @@ test("production dispatcher isolates two local profiles and profile CRUD", async
         (connection: { actionable: boolean }) => connection.actionable,
       ),
     ).toBe(true);
+    // Board: one client saves a note, the other is told and reads it; an
+    // edit based on an older note revision comes back as a conflict.
+    expect(await browserA.rpc("world.board.get")).toMatchObject({
+      revision: 0,
+      notes: [],
+    });
+    const synthetic = {
+      id: "n1",
+      text: "Synthetic note",
+      color: "yellow",
+      x: 0,
+      y: 0,
+    };
+    const saved = await browserA.rpc("world.board.patch", {
+      ops: [{ op: "note.put", note: synthetic }],
+    });
+    expect(saved.document).toMatchObject({
+      revision: 1,
+      notes: [{ id: "n1", rev: 1 }],
+    });
+    for (
+      let attempt = 0;
+      attempt < 20 &&
+      !browserB.controls.some(
+        (control) =>
+          control.type === "world_board_changed" && control.revision === 1,
+      );
+      attempt++
+    ) {
+      await Bun.sleep(10);
+    }
+    expect(
+      browserB.controls.some(
+        (control) =>
+          control.type === "world_board_changed" && control.revision === 1,
+      ),
+    ).toBe(true);
+    expect(await browserB.rpc("world.board.get")).toMatchObject({
+      notes: [{ text: "Synthetic note" }],
+    });
+    await browserB.rpc("world.board.patch", {
+      ops: [{ op: "note.put", note: { ...synthetic, text: "From B" }, rev: 1 }],
+    });
+    const stale = await browserA.rpc("world.board.patch", {
+      ops: [{ op: "note.put", note: { ...synthetic, text: "From A" }, rev: 1 }],
+    });
+    expect(stale.conflict).toBeString();
+    expect(stale.document.notes[0].text).toBe("From B");
+
     expect(await browserA.rpc("world.watchlist.list")).toEqual({
       revision: 0,
       records: [],

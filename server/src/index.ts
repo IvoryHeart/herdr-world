@@ -122,6 +122,7 @@ import { rpcLogLevel } from "./utils/rpc-logging";
 import { DOWNLOAD_TIMEOUT_MS } from "./workspace/file-constants";
 import { WorldSnapshotService } from "./world/snapshot";
 import { WorldWatchlistRegistry } from "./world/watchlist";
+import { BoardConflictError, BoardStore } from "./world/board-store";
 import {
   createOfficeObservabilityHttpHandler,
   resolveOfficeObservabilityBootstrap,
@@ -462,6 +463,21 @@ const connectionFailureReporters = new Map<string, RecoveryReporter>();
 const readyConnectionGenerations = new Map<string, number>();
 let worldSnapshots: WorldSnapshotService<LegacyConnectionRuntime> | null = null;
 const worldWatchlist = new WorldWatchlistRegistry();
+let boardStore: BoardStore | null = null;
+/** Opened on first use, so a World without Board never touches the file. */
+function board() {
+  boardStore ??= new BoardStore(undefined, {
+    log: (message) => console.warn(message),
+  });
+  return boardStore;
+}
+
+function publishBoardChanged(revision: number) {
+  const line = JSON.stringify({
+    control: { type: "world_board_changed", revision },
+  });
+  for (const ws of clients) safeSend(ws, line, "world-board");
+}
 
 function publishWatchlistChanged(revision: number) {
   const line = JSON.stringify({
@@ -1000,6 +1016,30 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
       sendError("world-snapshot-error", error);
     } finally {
       transfer?.close();
+    }
+    return;
+  }
+  if (method === "world.board.get") {
+    try {
+      sendReply({ id, result: board().get() }, "world-board-get");
+    } catch (error) {
+      sendError("world-board-get-error", error);
+    }
+    return;
+  }
+  if (method === "world.board.patch") {
+    try {
+      const ops = (params as { ops?: unknown } | undefined)?.ops;
+      const result = board().patch(ops as never);
+      publishBoardChanged(result.revision);
+      sendReply({ id, result: { document: result } }, "world-board-patch");
+    } catch (error) {
+      if (error instanceof BoardConflictError)
+        sendReply(
+          { id, result: { conflict: error.message, document: error.document } },
+          "world-board-patch",
+        );
+      else sendError("world-board-patch-error", error);
     }
     return;
   }
