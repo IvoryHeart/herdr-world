@@ -19,6 +19,12 @@ import "./world.css";
  * workspace and agent name here is invented.
  */
 
+// World is often opened over plain HTTP on a LAN or tailnet address, where
+// crypto.randomUUID does not exist; tests run as if on such an origin.
+Object.defineProperty(Crypto.prototype, "randomUUID", {
+  value: undefined,
+  configurable: true,
+});
 const params = new URL(location.href).searchParams;
 const mode = params.get("mode") ?? "test";
 const theme = params.get("theme");
@@ -211,9 +217,12 @@ async function rest(limit = 600) {
   let still = 0;
   for (let i = 0; i < limit; i++) {
     await frame();
-    const now = [...host.querySelectorAll<HTMLElement>(".board-card")]
-      .map((el) => el.style.transform)
-      .join("|");
+    // Cards and the camera both: a flight is not rest.
+    const now =
+      [...host.querySelectorAll<HTMLElement>(".board-card")]
+        .map((el) => el.style.transform)
+        .join("|") +
+      (host.querySelector<HTMLElement>(".board-world")?.style.transform ?? "");
     still = now === before ? still + 1 : 0;
     if (still >= 3) return i;
     before = now;
@@ -674,6 +683,31 @@ async function run() {
   check(
     Math.hypot(after.x - before.x, after.y - before.y) < 1,
     "zooming never moves cards",
+  );
+
+  // In the overview, tapping a workspace zooms in on it instead of selecting.
+  const selectedBefore = selected.length;
+  const target = card("build-box:w2")!;
+  const tc = centre(target);
+  pointer(target, "pointerdown", tc.x, tc.y, 12);
+  pointer(target, "pointerup", tc.x, tc.y, 12);
+  await waitFor(
+    () => !boardEl().classList.contains("board-far"),
+    "tapping a workspace in the overview zooms in",
+  );
+  await rest();
+  const tc2 = centre(card("build-box:w2")!);
+  const bc = centre(boardEl());
+  check(
+    Math.hypot(tc2.x - bc.x, tc2.y - bc.y) < 40,
+    "the tapped workspace is centred",
+  );
+  check(selected.length === selectedBefore, "an overview tap does not select");
+  for (let i = 0; i < 12; i++)
+    host.querySelector<HTMLButtonElement>('[aria-label="Zoom out"]')!.click();
+  await waitFor(
+    () => boardEl().classList.contains("board-far"),
+    "back to the overview",
   );
 
   // Pulses can be turned off.

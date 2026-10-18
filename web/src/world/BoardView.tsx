@@ -115,6 +115,20 @@ const NOTE_SIZE: Size = { w: 180, h: 110 };
 const SAVE_DELAY_MS = 600;
 const DOUBLE_TAP_MS = 450;
 
+/**
+ * A unique ID for a note or string. crypto.randomUUID exists only on secure
+ * origins (HTTPS or localhost), and World is often opened over plain HTTP on
+ * a LAN or tailnet address; getRandomValues works everywhere.
+ */
+function newId() {
+  if (typeof crypto.randomUUID === "function" && window.isSecureContext)
+    return crypto.randomUUID();
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join(
+    "",
+  );
+}
+
 /** An agent pane a note is strung to, with what the service needs to check. */
 export type SendTarget = {
   label: string;
@@ -284,6 +298,7 @@ export default function BoardView({
   const loaded = useRef(false);
   const saveTimer = useRef(0);
   const lastTap = useRef<{ t: number; x: number; y: number } | null>(null);
+  const lastPointerType = useRef("mouse");
   const latest = useRef({
     model,
     collapsed,
@@ -875,6 +890,7 @@ export default function BoardView({
       setPicked(hit.dataset.string);
       return;
     }
+    lastPointerType.current = event.pointerType;
     // The first finger of a new gesture: forget fingers whose lift was never
     // seen, which would otherwise turn later touches into a stuck pinch.
     if (event.isPrimary) {
@@ -1113,6 +1129,12 @@ export default function BoardView({
         return;
       }
       setNoteSelected(null);
+      // In the overview a workspace tap zooms in on it, so its tabs open
+      // where the user is looking; up close a tap selects as usual.
+      if (farRef.current && m.workspaceByKey.has(d.key)) {
+        focusWorkspace(d.key);
+        return;
+      }
       selectCard(d.key, m, d.paneKey);
       return;
     }
@@ -1183,6 +1205,24 @@ export default function BoardView({
       primaryPane(tab);
     if (pane && tab.actionable) void onOpenTerminal(pane.leaf.id);
   };
+  /** Center a workspace and zoom in until its tabs show; unfold it if folded. */
+  function focusWorkspace(key: string) {
+    const el = boardRef.current;
+    const card = cards.current.get(key);
+    const space = latest.current.model.workspaceByKey.get(key);
+    if (!el || !card || !space) return;
+    if (latest.current.collapsed.has(key)) toggleFold(space);
+    const s = Math.max(0.85, OVERVIEW_OUT + 0.1);
+    const goal = {
+      s,
+      x: el.clientWidth / 2 - card.x * s,
+      y: el.clientHeight / 2 - card.y * s,
+    };
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches)
+      cam.current = goal;
+    else camGoal.current = goal;
+    dirty.current = true;
+  }
   /** Send every card to its place in the layout on a short tween. */
   const travelToLayout = (m: BoardModel) => {
     const reduce = window.matchMedia(
@@ -1276,7 +1316,7 @@ export default function BoardView({
     if (problem) setToast({ text: problem });
   };
   async function createNote(at: Point, stringTo?: StringEnd) {
-    const id = crypto.randomUUID();
+    const id = newId();
     const notes = latest.current.saved?.notes ?? [];
     const color = NOTE_COLORS[notes.length % NOTE_COLORS.length]!;
     const ops: BoardOp[] = [
@@ -1286,7 +1326,7 @@ export default function BoardView({
     if (end)
       ops.push({
         op: "string.put",
-        string: { id: crypto.randomUUID(), from: { note: id }, to: end },
+        string: { id: newId(), from: { note: id }, to: end },
       });
     const problem = await boardStore.patch(ops);
     if (problem) setToast({ text: problem });
@@ -1338,7 +1378,7 @@ export default function BoardView({
       boardStore.patch([
         {
           op: "string.put",
-          string: { id: crypto.randomUUID(), from: a, to: b },
+          string: { id: newId(), from: a, to: b },
         },
       ]),
     );
@@ -1508,6 +1548,8 @@ export default function BoardView({
           if (pointers.current.has(event.pointerId)) onPointerUp(event);
         }}
         onDoubleClick={(event) => {
+          // Phones fire dblclick after a double-tap too; touch has its own.
+          if (lastPointerType.current !== "mouse") return;
           const target = event.target as HTMLElement;
           if (
             target.closest(
