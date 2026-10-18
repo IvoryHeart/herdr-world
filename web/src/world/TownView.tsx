@@ -6,7 +6,6 @@ import {
 import {
   requestAgentMove,
   requestDeskMove,
-  townSeatSplit,
   type TownMoveOutcome,
 } from "./town/townMoves";
 import { isMobileLayout, useLayoutPreferences } from "../layoutPreferences";
@@ -718,10 +717,9 @@ export default function TownView({
       ({ device }) => device.agentKey === agentKey,
     )?.device;
     const target = deskForKey(deskKey);
-    const neighbour = target?.paneDevices[target.paneDevices.length - 1];
     const sourceDesk = device ? deskForKey(device.deskKey) : null;
     const sourceRoom = sourceDesk ? roomForKey(sourceDesk.roomKey) : null;
-    if (!agent || !device || !target || !neighbour || movingKey) return false;
+    if (!agent || !device || !target || movingKey) return false;
     if (
       !allowCloseRoom &&
       (sourceDesk?.observedPaneCount ?? 2) <= 1 &&
@@ -736,13 +734,7 @@ export default function TownView({
     setMovingKey(agentKey);
     toast("ok", `Moving ${agent.displayLabel} to ${target.displayLabel}…`);
     try {
-      const outcome = await requestAgentMove(
-        device,
-        target,
-        neighbour,
-        townSeatSplit(target),
-        allowCloseRoom,
-      );
+      const outcome = await requestAgentMove(device, target, allowCloseRoom);
       reportMove(agent.displayLabel, outcome);
       return outcome.status === "moved";
     } catch (cause) {

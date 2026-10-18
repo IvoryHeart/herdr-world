@@ -622,6 +622,12 @@ export function TownCanvas({
       pointers.set(event.pointerId, point);
       renderer.camera.stop();
       if (pointers.size === 2) {
+        // A second finger turns the gesture into a pinch: drop any drag.
+        if (gesture) window.clearTimeout(gesture.hold);
+        if (gesture?.drag) {
+          ghost.remove();
+          renderer.endDrag("cancel");
+        }
         gesture = null;
         const [a, b] = [...pointers.values()];
         pinch = {

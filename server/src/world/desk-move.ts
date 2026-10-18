@@ -56,7 +56,12 @@ export type MoveOutcome =
   | {
       status: "failed";
       message: string;
+      /** True only when every pane was confirmed back where it started. */
       rolled_back: boolean;
+      /** False when panes were moved back: Herdr cannot always rebuild a layout. */
+      layout_restored?: boolean;
+      /** False when the panes' locations could not be read. */
+      topology_known?: boolean;
       /** Where each of the desk's panes is now, by terminal. */
       topology: { terminal_id: string; pane_id: string; tab_id: string }[];
     };
@@ -249,9 +254,12 @@ export async function moveDesk(
   const steps = planDeskMove(root);
   for (const step of steps) {
     if (!request.isCurrent())
-      return rollBack(call, request, terminalOf, moved, current, targetTab, {
-        message: "The host reconnected during the move.",
-      });
+      return rollBack(
+        call,
+        request,
+        terminalOf,
+        "The host reconnected during the move.",
+      );
     const destination =
       step.kind === "anchor"
         ? {
@@ -283,10 +291,12 @@ export async function moveDesk(
     if (failure || !result) {
       // Never retry an uncertain step: find where the pane really is, then
       // roll back whatever moved.
-      return rollBack(call, request, terminalOf, moved, current, targetTab, {
-        message: `Moving the desk failed: ${failure}`,
-        uncertain: step.pane,
-      });
+      return rollBack(
+        call,
+        request,
+        terminalOf,
+        `Moving the desk failed: ${failure}`,
+      );
     }
     current.set(step.pane, result.pane_id);
     moved.push(step.pane);
@@ -301,51 +311,50 @@ export async function moveDesk(
 }
 
 /**
- * Move the panes that reached the new tab back into the original tab, next to
- * a pane still there, then report where every pane of the desk is.
+ * Move the desk's panes back into the original tab, next to a pane still
+ * there. Success is claimed only after every captured terminal is found back
+ * in that tab; an unreadable topology, a reconnect or a failed move leaves
+ * the outcome uncertain rather than restored. Herdr can only split a target
+ * rightward or downward, so the original layout cannot always be rebuilt:
+ * a desk that had panes moved back reports that its layout may differ.
  */
 async function rollBack(
   call: HerdrCall,
   request: DeskMoveRequest,
   terminalOf: Map<string, string>,
-  moved: string[],
-  current: Map<string, string>,
-  targetTab: string | null,
-  failure: { message: string; uncertain?: string },
+  failure: string,
 ): Promise<MoveOutcome> {
-  const locate = async () => {
-    const live = await listPanes(call).catch(() => [] as PaneRecord[]);
-    const byTerminal = new Map(live.map((pane) => [pane.terminal_id, pane]));
-    return { live, byTerminal };
-  };
-  let { byTerminal } = await locate();
-  // An uncertain step may still have moved its pane.
-  if (failure.uncertain) {
-    const pane = byTerminal.get(terminalOf.get(failure.uncertain)!);
-    if (pane) {
-      current.set(failure.uncertain, pane.pane_id);
-      if (targetTab && pane.tab_id === targetTab) moved.push(failure.uncertain);
-      else if (!targetTab && pane.tab_id !== request.tab_id) {
-        targetTab = pane.tab_id;
-        moved.push(failure.uncertain);
-      }
+  const locate = async (): Promise<Map<string, PaneRecord> | null> => {
+    try {
+      const live = await listPanes(call);
+      return new Map(live.map((pane) => [pane.terminal_id, pane]));
+    } catch {
+      return null;
     }
-  }
-  let rolledBack = moved.length === 0;
-  if (moved.length && request.isCurrent()) {
-    rolledBack = true;
-    for (const original of moved) {
-      const pane = byTerminal.get(terminalOf.get(original)!);
-      const home = [...byTerminal.values()].find(
-        (candidate) => candidate.tab_id === request.tab_id,
-      );
-      if (!pane || pane.tab_id === request.tab_id) continue;
-      if (!home) {
-        rolledBack = false;
-        break;
-      }
-      try {
-        const result = movedPane(
+  };
+  let where = await locate();
+  let stopped: string | null = null;
+  let movedBack = 0;
+  for (const terminal of terminalOf.values()) {
+    if (!where) break;
+    const pane = where.get(terminal);
+    // A pane that cannot be found stays unknown; it is never assumed home.
+    if (!pane || pane.tab_id === request.tab_id) continue;
+    const home = [...where.values()].find(
+      (candidate) => candidate.tab_id === request.tab_id,
+    );
+    if (!home) {
+      stopped = "The original desk has no pane left to return to.";
+      break;
+    }
+    // Every compensating move needs the same runtime the move started on.
+    if (!request.isCurrent()) {
+      stopped = "The host reconnected before the desk could be moved back.";
+      break;
+    }
+    try {
+      if (
+        movedPane(
           await call("pane.move", {
             pane_id: pane.pane_id,
             destination: {
@@ -356,49 +365,85 @@ async function rollBack(
             },
             focus: false,
           }),
-        );
-        if (!result) rolledBack = false;
-      } catch {
-        rolledBack = false;
-      }
-      ({ byTerminal } = await locate());
+        )
+      )
+        movedBack += 1;
+    } catch {
+      // The next observation shows where the pane really is.
     }
-  } else if (moved.length) rolledBack = false;
-  const topology = [...terminalOf.values()].flatMap((terminal) => {
-    const pane = byTerminal.get(terminal);
-    return pane
-      ? [{ terminal_id: terminal, pane_id: pane.pane_id, tab_id: pane.tab_id }]
-      : [];
-  });
+    where = await locate();
+  }
+  const restored =
+    where !== null &&
+    [...terminalOf.values()].every(
+      (terminal) => where!.get(terminal)?.tab_id === request.tab_id,
+    );
+  const topology = where
+    ? [...terminalOf.values()].flatMap((terminal) => {
+        const pane = where!.get(terminal);
+        return pane
+          ? [
+              {
+                terminal_id: terminal,
+                pane_id: pane.pane_id,
+                tab_id: pane.tab_id,
+              },
+            ]
+          : [];
+      })
+    : [];
+  const message = restored
+    ? movedBack
+      ? `${failure} The desk was moved back to its room; its pane layout may differ.`
+      : `${failure} Nothing was moved.`
+    : `${failure} ${stopped ?? (where ? "Some panes could not be moved back." : "Where its panes are now could not be read.")}`;
   return {
     status: "failed",
-    message: rolledBack
-      ? `${failure.message} The desk was moved back.`
-      : `${failure.message} Some panes could not be moved back.`,
-    rolled_back: rolledBack,
+    message,
+    rolled_back: restored,
+    layout_restored: restored && movedBack === 0,
+    topology_known: where !== null,
     topology,
   };
 }
 
 export type PaneMoveRequest = {
   pane_id: string;
+  /** The destination desk (tab). */
   tab_id: string;
-  target_pane_id: string;
-  split: SplitDirection;
   allow_close_room?: boolean;
   isCurrent: () => boolean;
 };
 
-/** Move one pane into another desk, next to the pane nearest its new seat. */
+/**
+ * Move one pane into another desk. The service reads the destination's full
+ * layout, so a crowded desk (more panes than Town draws) is handled: the pane
+ * joins next to the desk's last pane, across the table (down) when the desk
+ * has an odd number of panes and beside it (right) otherwise.
+ */
 export async function movePane(
   call: HerdrCall,
   request: PaneMoveRequest,
 ): Promise<MoveOutcome> {
+  let exported: unknown;
+  try {
+    exported = await call("layout.export", { tab_id: request.tab_id });
+  } catch (error) {
+    return /unknown|not found|unsupported|method/i.test(errorText(error))
+      ? refuse("unsupported", "Moving agents needs the latest Herdr.")
+      : refuse("not_found", `That desk could not be read: ${errorText(error)}`);
+  }
+  const layout = (exported as { layout?: Record<string, unknown> })?.layout;
+  const root = parseLayout(layout?.root);
+  if (!root)
+    return refuse("not_found", "That desk's layout could not be read.");
+  const destination = leavesOf(root);
+  const neighbour = destination[destination.length - 1]!;
+  const split: SplitDirection = destination.length % 2 === 1 ? "down" : "right";
+
   const panes = await listPanes(call);
   const pane = panes.find((candidate) => candidate.pane_id === request.pane_id);
-  const target = panes.find(
-    (candidate) => candidate.pane_id === request.target_pane_id,
-  );
+  const target = panes.find((candidate) => candidate.pane_id === neighbour);
   if (!pane || !target || target.tab_id !== request.tab_id)
     return refuse("desk_changed", "The desks changed. Try again.");
   if (pane.tab_id === request.tab_id)
@@ -422,7 +467,7 @@ export async function movePane(
         destination: {
           type: "tab",
           tab_id: request.tab_id,
-          split: request.split,
+          split,
           target_pane_id: target.pane_id,
         },
         focus: false,
@@ -436,14 +481,27 @@ export async function movePane(
       panes: [{ previous: pane.pane_id, current: result.pane_id }],
     };
   } catch (error) {
-    const live = await listPanes(call).catch(() => [] as PaneRecord[]);
-    const now = live.find(
-      (candidate) => candidate.terminal_id === pane.terminal_id,
-    );
+    // Never retry: report where the pane is, and claim it stayed home only
+    // when it is positively found there.
+    let now: PaneRecord | undefined;
+    let known = true;
+    try {
+      now = (await listPanes(call)).find(
+        (candidate) => candidate.terminal_id === pane.terminal_id,
+      );
+    } catch {
+      known = false;
+    }
+    const home = Boolean(now && now.tab_id === pane.tab_id);
     return {
       status: "failed",
-      message: `Moving the agent failed: ${errorText(error)}`,
-      rolled_back: !now || now.tab_id === pane.tab_id,
+      message: home
+        ? `Moving the agent failed: ${errorText(error)}`
+        : known && now
+          ? `Moving the agent may have partly happened: ${errorText(error)}`
+          : `Moving the agent failed, and where it is now could not be read: ${errorText(error)}`,
+      rolled_back: home,
+      topology_known: known,
       topology: now
         ? [
             {
@@ -455,4 +513,19 @@ export async function movePane(
         : [],
     };
   }
+}
+
+/**
+ * Runs moves for one connection one at a time. A move reads the source room
+ * (for example the last-desk check) and then mutates over several calls; two
+ * overlapping moves could otherwise both pass the check and close a room no
+ * one agreed to close. Each queued move re-reads the topology when it starts.
+ */
+export function createMoveQueue() {
+  let tail: Promise<unknown> = Promise.resolve();
+  return <T>(task: () => Promise<T>): Promise<T> => {
+    const run = tail.then(task, task);
+    tail = run.catch(() => undefined);
+    return run;
+  };
 }

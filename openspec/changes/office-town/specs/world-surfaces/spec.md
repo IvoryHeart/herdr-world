@@ -299,9 +299,18 @@ panes back into the original tab using their current IDs and report the outcome.
 It SHALL NOT retry an uncertain step, and if rollback fails it SHALL report the
 actual resulting topology.
 
-An agent move SHALL be a single confirmed pane move into the target tab, next
-to that desk's last pane, splitting across the table when the desk has an odd
-number of panes and beside it otherwise, with its replacement ID recorded. While a move is pending, Town SHALL reserve the source
+An agent move SHALL be a single confirmed pane move into the target tab. The
+service SHALL read the destination tab's complete layout, including panes Town
+does not draw, and join the pane next to its last pane, splitting across the
+table when the tab has an odd number of panes and beside it otherwise, with its
+replacement ID recorded. Moves on one connection SHALL run one at a time, each
+reading the topology, including the last-desk check, only when it starts.
+Rollback SHALL be reported as complete only when every captured pane is found
+back in the original tab; an unreadable topology, a retired runtime or a failed
+compensation SHALL be reported as an incomplete move, and the runtime SHALL be
+checked before every compensating move. When panes were moved back, World SHALL
+report that the desk's pane layout may differ, because Herdr cannot always
+rebuild the original split tree. While a move is pending, Town SHALL reserve the source
 and target spots; the final placement SHALL follow confirmed Herdr topology.
 
 #### Scenario: Move a desk to another room

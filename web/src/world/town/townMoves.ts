@@ -67,11 +67,14 @@ export async function requestDeskMove(
   );
 }
 
+/**
+ * Move one agent pane to another desk. The service reads the destination's
+ * full layout and joins the pane next to its last pane, so crowded desks
+ * (more panes than Town draws) land correctly.
+ */
 export async function requestAgentMove(
   device: OfficePaneDevice,
   desk: OfficeDesk,
-  neighbour: OfficePaneDevice,
-  split: "right" | "down",
   allowCloseRoom: boolean,
 ): Promise<TownMoveOutcome> {
   if (!sameOwner(device.paneRef, desk.tabRef))
@@ -90,19 +93,9 @@ export async function requestAgentMove(
       {
         pane_id: device.paneRef.nativeId,
         tab_id: desk.tabRef.nativeId,
-        target_pane_id: neighbour.paneRef.nativeId,
-        split,
         allow_close_room: allowCloseRoom,
       },
       moveTimeoutMs,
     ),
   );
-}
-
-/**
- * Where an agent joins a desk: next to the last pane, across the table when
- * that keeps the desk balanced (an odd number of panes), beside it otherwise.
- */
-export function townSeatSplit(desk: OfficeDesk): "right" | "down" {
-  return desk.paneDevices.length % 2 === 1 ? "down" : "right";
 }

@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  createMoveQueue,
   leavesOf,
   moveDesk,
   movePane,
@@ -19,6 +20,8 @@ function fakeHerdr(options: {
   failAt?: number;
   uncertainAt?: number;
   noLayoutExport?: boolean;
+  /** pane.list fails once this many pane moves have been attempted. */
+  listFailsAfterMoves?: number;
 }) {
   const panes = new Map<string, Pane>();
   const tabs = new Map<string, { workspace: string; label: string }>();
@@ -31,6 +34,7 @@ function fakeHerdr(options: {
   };
   let tree: LayoutNode | null = null;
   let moves = 0;
+  const calls: string[] = [];
   const addTab = (workspace: string, label: string, count: number) => {
     const tab = next(workspace, "t");
     tabs.set(tab, { workspace, label });
@@ -45,17 +49,41 @@ function fakeHerdr(options: {
   const call: HerdrCall = async (method, params) => {
     if (method === "layout.export") {
       if (options.noLayoutExport) throw new Error("unknown method");
-      const tab = tabs.get(params.tab_id as string);
-      if (!tab || !tree) throw new Error("tab not found");
+      const tabId = params.tab_id as string;
+      const tab = tabs.get(tabId);
+      if (!tab) throw new Error("tab not found");
+      const ids = [...panes]
+        .filter(([, pane]) => pane.tab === tabId)
+        .map(([id]) => id);
+      // The configured desk tree while it is intact, else a row of panes.
+      const intact =
+        tree !== null &&
+        leavesOf(tree).every((id) => panes.get(id)?.tab === tabId);
+      const chain = (rest: string[]): LayoutNode =>
+        rest.length === 1
+          ? { type: "pane", pane_id: rest[0]! }
+          : {
+              type: "split",
+              direction: "right",
+              ratio: 0.5,
+              first: { type: "pane", pane_id: rest[0]! },
+              second: chain(rest.slice(1)),
+            };
       return {
         type: "layout_export",
         layout: {
           workspace_id: tab.workspace,
-          tab_id: params.tab_id,
-          root: tree,
+          tab_id: tabId,
+          root: intact ? tree : chain(ids),
         },
       };
     }
+    if (
+      method === "pane.list" &&
+      options.listFailsAfterMoves !== undefined &&
+      moves >= options.listFailsAfterMoves
+    )
+      throw new Error("list unavailable");
     if (method === "pane.list")
       return {
         panes: [...panes].map(([pane_id, pane]) => ({
@@ -77,6 +105,7 @@ function fakeHerdr(options: {
       };
     if (method === "pane.move") {
       moves += 1;
+      calls.push(params.pane_id as string);
       if (moves === options.failAt) throw new Error("rejected");
       const id = params.pane_id as string;
       const pane = panes.get(id);
@@ -125,6 +154,7 @@ function fakeHerdr(options: {
     setTree: (root: LayoutNode) => (tree = root),
     roomGone: (workspace: string) => counters.has(`${workspace}:gone`),
     moves: () => moves,
+    calls,
   };
 }
 
@@ -205,11 +235,16 @@ describe("desk moves", () => {
     expect(herdr.tabs.has(desk.tab)).toBe(false);
   });
 
-  test("refuses without moving anything when the desk changed", async () => {
+  test("refuses without moving anything when a pane closes after the layout is captured", async () => {
     const herdr = fakeHerdr({});
     const desk = threePaneDesk(herdr);
-    herdr.panes.delete(desk.p3);
-    const outcome = await moveDesk(herdr.call, {
+    // The pane closes between layout.export and the pane check.
+    const call: HerdrCall = async (method, params) => {
+      const result = await herdr.call(method, params);
+      if (method === "layout.export") herdr.panes.delete(desk.p3);
+      return result;
+    };
+    const outcome = await moveDesk(call, {
       tab_id: desk.tab,
       workspace_id: "w2",
       isCurrent: current,
@@ -276,6 +311,11 @@ describe("desk moves", () => {
         isCurrent: current,
       });
       expect(outcome).toMatchObject({ status: "failed", rolled_back: true });
+      if (outcome.status === "failed" && failAt > 1) {
+        // Panes moved back; Herdr cannot always rebuild the split layout.
+        expect(outcome.layout_restored).toBe(false);
+        expect(outcome.message).toContain("layout may differ");
+      }
       // All three terminals are back in the original tab.
       const home = [...herdr.panes.values()].filter((p) => p.tab === desk.tab);
       expect(home.map((p) => p.terminal).sort()).toEqual(
@@ -318,21 +358,84 @@ describe("desk moves", () => {
   });
 });
 
+describe("rollback evidence and ordering", () => {
+  test("rollback stops when the runtime retires between compensating moves", async () => {
+    const herdr = fakeHerdr({ failAt: 3 });
+    const desk = threePaneDesk(herdr);
+    let retired = false;
+    const outcome = await moveDesk(herdr.call, {
+      tab_id: desk.tab,
+      workspace_id: "w2",
+      // Retire as soon as the first compensating move (move 4) was sent.
+      isCurrent: () => {
+        if (herdr.moves() >= 4) retired = true;
+        return !retired;
+      },
+    });
+    expect(outcome).toMatchObject({ status: "failed", rolled_back: false });
+    // Two forward moves, the failed third, and exactly one compensation.
+    expect(herdr.moves()).toBe(4);
+  });
+
+  test("an unreadable topology never counts as rolled back", async () => {
+    const herdr = fakeHerdr({ uncertainAt: 1, listFailsAfterMoves: 1 });
+    const desk = threePaneDesk(herdr);
+    const outcome = await moveDesk(herdr.call, {
+      tab_id: desk.tab,
+      workspace_id: "w2",
+      isCurrent: current,
+    });
+    expect(outcome).toMatchObject({
+      status: "failed",
+      rolled_back: false,
+      topology_known: false,
+    });
+  });
+
+  test("queued moves re-check the last desk: a room's two desks never both leave silently", async () => {
+    const herdr = fakeHerdr({});
+    const first = herdr.addTab("w1", "one", 1);
+    const second = herdr.addTab("w1", "two", 1);
+    herdr.addTab("w2", "target", 1);
+    const queue = createMoveQueue();
+    const move = (tab: string) =>
+      queue(() =>
+        moveDesk(herdr.call, {
+          tab_id: tab,
+          workspace_id: "w2",
+          isCurrent: current,
+        }),
+      );
+    const outcomes = await Promise.all([move(first.tab), move(second.tab)]);
+    expect(outcomes.map((o) => o.status).sort()).toEqual(["moved", "refused"]);
+    expect(outcomes.find((o) => o.status === "refused")).toMatchObject({
+      reason: "room_would_close",
+    });
+    expect(herdr.roomGone("w1")).toBe(false);
+  });
+});
+
 describe("agent moves", () => {
-  test("moves one pane next to the chosen neighbour at another desk", async () => {
+  test("joins a crowded desk next to its last pane, across the table for an odd count", async () => {
     const herdr = fakeHerdr({});
     const source = herdr.addTab("w1", "a", 2);
-    const target = herdr.addTab("w1", "b", 1);
-    const outcome = await movePane(herdr.call, {
+    const target = herdr.addTab("w1", "b", 5);
+    let sent: Record<string, unknown> | undefined;
+    const call: HerdrCall = (method, params) => {
+      if (method === "pane.move") sent = params;
+      return herdr.call(method, params);
+    };
+    const outcome = await movePane(call, {
       pane_id: source.ids[1]!,
       tab_id: target.tab,
-      target_pane_id: target.ids[0]!,
-      split: "down",
       isCurrent: current,
     });
     expect(outcome.status).toBe("moved");
-    expect(herdr.panes.get(source.ids[1]!)?.tab).toBe(target.tab);
-    expect(herdr.moves()).toBe(1);
+    // The fifth pane, not the fourth Town draws; five panes split down.
+    expect(sent?.destination).toMatchObject({
+      target_pane_id: target.ids[4],
+      split: "down",
+    });
   });
 
   test("asks before moving the only pane of a room's last desk", async () => {
@@ -342,8 +445,6 @@ describe("agent moves", () => {
     const outcome = await movePane(herdr.call, {
       pane_id: source.ids[0]!,
       tab_id: target.tab,
-      target_pane_id: target.ids[0]!,
-      split: "right",
       isCurrent: current,
     });
     expect(outcome).toMatchObject({
@@ -351,5 +452,21 @@ describe("agent moves", () => {
       reason: "room_would_close",
     });
     expect(herdr.moves()).toBe(0);
+  });
+
+  test("a failed agent move whose location cannot be read is not called rolled back", async () => {
+    const herdr = fakeHerdr({ failAt: 1, listFailsAfterMoves: 1 });
+    const source = herdr.addTab("w1", "a", 2);
+    const target = herdr.addTab("w1", "b", 1);
+    const outcome = await movePane(herdr.call, {
+      pane_id: source.ids[1]!,
+      tab_id: target.tab,
+      isCurrent: current,
+    });
+    expect(outcome).toMatchObject({
+      status: "failed",
+      rolled_back: false,
+      topology_known: false,
+    });
   });
 });

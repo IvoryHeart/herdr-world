@@ -1254,6 +1254,8 @@ export async function createTownRenderer(
     lastX: number;
     target: { x: number; y: number; w: number; h: number } | null;
     dimmed: Container | null;
+    /** The desk snapshot made for this drag; cached textures are never ours. */
+    snapshot: Texture | null;
     phase:
       | { name: "drag" }
       | { name: "back"; t: number; x0: number; y0: number }
@@ -1268,7 +1270,10 @@ export async function createTownRenderer(
   const clearDrag = () => {
     if (!drag) return;
     if (drag.dimmed && !drag.dimmed.destroyed) drag.dimmed.alpha = 1;
-    drag.ghost.destroy({ children: true, texture: true });
+    // Cached textures (characters, tables) are shared with the scene: destroy
+    // only the sprites, and the snapshot made for this drag.
+    drag.ghost.destroy({ children: true });
+    drag.snapshot?.destroy(true);
     drag.shadow.destroy();
     drag.highlight.destroy();
     drag.slot?.destroy();
@@ -1285,6 +1290,7 @@ export async function createTownRenderer(
     const ghost = new Container();
     let home = { x, y };
     let dimmed: Container | null = null;
+    let snapshot: Texture | null = null;
     if (kind === "desk") {
       const cell = layoutCells.get(key);
       const pod = podOf(key);
@@ -1292,7 +1298,8 @@ export async function createTownRenderer(
       let image: Sprite;
       if (pod) {
         // A snapshot of the desk as drawn, people and screens included.
-        image = new Sprite(app.renderer.generateTexture(pod.container));
+        snapshot = app.renderer.generateTexture(pod.container);
+        image = new Sprite(snapshot);
         pod.container.alpha = 0.25;
         dimmed = pod.container;
       } else {
@@ -1338,6 +1345,7 @@ export async function createTownRenderer(
       lastX: x,
       target: null,
       dimmed,
+      snapshot,
       phase: { name: "drag" },
     };
     puffAt(

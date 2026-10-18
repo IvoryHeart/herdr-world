@@ -853,6 +853,57 @@ async function run() {
       ),
     `desk move sent ${JSON.stringify(deskMove)}`,
   );
+  // A touch hold lifts a desk; a second finger turns it into a pinch and
+  // drops the drag cleanly.
+  const canvasHost = host.querySelector("canvas")!.parentElement!;
+  const heldDesk = [
+    ...host.querySelectorAll<HTMLElement>(
+      '.world-semantic-target[data-kind="desk"]',
+    ),
+  ].find((target) => {
+    const box = target.getBoundingClientRect();
+    return (
+      box.width > 0 &&
+      box.left > 0 &&
+      box.top > 0 &&
+      box.right < window.innerWidth &&
+      box.bottom < window.innerHeight
+    );
+  });
+  if (heldDesk) {
+    const box = heldDesk.getBoundingClientRect();
+    const touch = (type: string, id: number, x: number, y: number) =>
+      canvasHost.dispatchEvent(
+        new PointerEvent(type, {
+          bubbles: true,
+          pointerId: id,
+          pointerType: "touch",
+          button: 0,
+          buttons: type === "pointerup" ? 0 : 1,
+          clientX: x,
+          clientY: y,
+        }),
+      );
+    touch(
+      "pointerdown",
+      21,
+      box.left + box.width / 2,
+      box.top + box.height / 2,
+    );
+    await waitFor(
+      () => host.querySelector(".town-drag-ghost") !== null,
+      "holding a desk did not lift it",
+    );
+    touch("pointerdown", 22, box.left + 4, box.top + 4);
+    await waitFor(
+      () => host.querySelector(".town-drag-ghost") === null,
+      "a second finger did not drop the drag",
+    );
+    touch("pointerup", 22, box.left + 4, box.top + 4);
+    touch("pointerup", 21, box.left + box.width / 2, box.top + box.height / 2);
+    check(moves.length === 1, "a cancelled drag must not move anything");
+  }
+
   // Town shows no move icons; moving is by drag, hold or the keyboard.
   check(
     !host.querySelector(".town-desk-move") &&
