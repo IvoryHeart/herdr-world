@@ -144,10 +144,19 @@ async function registerDomTest() {
     }
     const back = async () => {
       await act(async () => {
-        // A browser Back lands on the unguarded base before firing popstate.
-        browser.history.replaceState(null, "");
+        // A browser Back pops one guard (each open layer has its own) and
+        // lands on the entry below before firing popstate.
+        const state = browser.history.state as Record<string, unknown> | null;
+        const depth =
+          typeof state?.roamgateBack === "number"
+            ? state.roamgateBack
+            : state && "roamgateBack" in state
+              ? 1
+              : 0;
+        const below = depth > 1 ? { ...state, roamgateBack: depth - 1 } : null;
+        browser.history.replaceState(below, "");
         browser.dispatchEvent(
-          new browser.PopStateEvent("popstate", { state: null }),
+          new browser.PopStateEvent("popstate", { state: below }),
         );
       });
       await act(async () => browser.happyDOM.whenAsyncComplete());

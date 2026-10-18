@@ -13,11 +13,14 @@ type Layer = { level: number; order: number; close: () => void };
 
 /**
  * Lets the phone's Back gesture or button close an open mobile layer before
- * it leaves the page. While any layer is open, the current history entry is
- * one guard entry at the current URL. Back pops it and closes only the top
- * layer; the guard returns while layers remain. When the last layer closes
- * on screen, the guard is removed again, so the next Back leaves the page in
- * one press.
+ * it leaves the page. Each open layer has one guard entry at the current URL,
+ * pushed when the layer opens. Back pops one guard and closes only the top
+ * layer; the remaining layers keep their own guards, so handling Back never
+ * pushes an entry. Browsers skip entries a page pushes without a user gesture
+ * (Chrome's back-button intervention), so a guard re-pushed while handling
+ * Back would make the next Back leave the page instead of closing the next
+ * layer. When layers close on screen, their guards are removed again, so the
+ * next Back leaves the page in one press.
  */
 export function useSystemBack(
   open: boolean,
@@ -63,6 +66,13 @@ function isGuard(state: unknown) {
   return typeof state === "object" && state !== null && GUARD in state;
 }
 
+/** Guard entries above the page's own entry: one per open layer. */
+function guardDepth(state: unknown) {
+  if (!isGuard(state)) return 0;
+  const depth = (state as Record<string, unknown>)[GUARD];
+  return typeof depth === "number" && depth > 0 ? depth : 1;
+}
+
 function baseId(state: unknown): string | undefined {
   if (typeof state !== "object" || state === null || !(BASE in state)) return;
   const value = (state as Record<string, unknown>)[BASE];
@@ -80,19 +90,24 @@ function scheduleReconcile() {
 function reconcile() {
   reconcileScheduled = false;
   if (backPending || leaving) return;
-  const guarded = isGuard(window.history.state);
+  const depth = guardDepth(window.history.state);
   if (layers.size > 0) forwardBase = undefined;
-  if (layers.size > 0 && !guarded) {
+  if (layers.size > depth) {
     const state: unknown = window.history.state;
-    // Pair the entries so an obsolete guard can be crossed in either direction.
-    const base = {
-      ...(typeof state === "object" && state ? state : {}),
-      [BASE]: `${Date.now()}:${++guards}`,
-    };
-    window.history.replaceState(base, "");
-    window.history.pushState({ ...base, [GUARD]: true }, "");
+    let base: Record<string, unknown>;
+    if (depth === 0) {
+      // Pair the entries so an obsolete guard can be crossed in either direction.
+      base = {
+        ...(typeof state === "object" && state ? state : {}),
+        [BASE]: `${Date.now()}:${++guards}`,
+      };
+      window.history.replaceState(base, "");
+    } else base = { ...(state as Record<string, unknown>) };
+    for (let next = depth + 1; next <= layers.size; next += 1)
+      window.history.pushState({ ...base, [GUARD]: next }, "");
     previousState = window.history.state;
-  } else if (layers.size === 0 && guarded && forwardBase === undefined) {
+  } else if (layers.size < depth && forwardBase === undefined) {
+    // Layers closed on screen take their guards with them, one step at a time.
     backPending = true;
     window.history.back();
   }
@@ -122,16 +137,21 @@ if (typeof window !== "undefined") {
     }
     if (forwardBase !== undefined) {
       const id = forwardBase;
-      forwardBase = undefined;
-      if (
-        layers.size === 0 &&
-        !isGuard(event.state) &&
-        baseId(event.state) === id
-      ) {
+      if (layers.size === 0 && baseId(event.state) === id) {
+        if (isGuard(event.state)) {
+          // A layer stack can leave several consecutive obsolete guards.
+          // Keep crossing them in the same direction, without pushing history.
+          if (guardDepth(event.state) > guardDepth(from))
+            window.history.forward();
+          else window.history.back();
+          return;
+        }
+        forwardBase = undefined;
         backPending = true;
         window.history.back();
         return;
       }
+      forwardBase = undefined;
     }
     const id = baseId(event.state);
     if (
@@ -147,21 +167,25 @@ if (typeof window !== "undefined") {
       window.history.forward();
       return;
     }
-    if (isGuard(event.state) || layers.size === 0) {
+    const depth = guardDepth(event.state);
+    if (layers.size <= depth) {
       scheduleReconcile();
       return;
     }
-    let top: Layer | undefined;
-    for (const layer of layers)
-      if (
-        !top ||
-        layer.level > top.level ||
-        (layer.level === top.level && layer.order > top.order)
-      )
-        top = layer;
-    // The user's Back already removed the guard: nothing to undo.
-    layers.delete(top!);
-    top!.close();
+    // The user's Back consumed guards: close as many top layers. The others
+    // keep their guards, so nothing is pushed while handling Back.
+    while (layers.size > depth) {
+      let top: Layer | undefined;
+      for (const layer of layers)
+        if (
+          !top ||
+          layer.level > top.level ||
+          (layer.level === top.level && layer.order > top.order)
+        )
+          top = layer;
+      layers.delete(top!);
+      top!.close();
+    }
     scheduleReconcile();
   });
 }
