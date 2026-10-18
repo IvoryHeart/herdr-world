@@ -392,11 +392,13 @@ export default function BoardView({
    * A draft that could not be saved (the note changed or was deleted
    * elsewhere). It stays until the user saves or discards it.
    */
-  const [unsaved, setUnsaved] = useState<{
-    started: BoardNote;
-    text: string;
-    reason: "changed" | "deleted";
-  } | null>(null);
+  const [unsaved, setUnsaved] = useState<UnsavedDraft[]>([]);
+  /** Add a draft that could not be saved; one per note, newest text wins. */
+  const keepDraft = (draft: Omit<UnsavedDraft, "key">) =>
+    setUnsaved((list) => [
+      ...list.filter((entry) => entry.started.id !== draft.started.id),
+      { ...draft, key: newId() },
+    ]);
   const [noteSelected, setNoteSelected] = useState<string | null>(null);
   const [picked, setPicked] = useState<string | null>(null);
   const [stringFrom, setStringFrom] = useState<StringEnd | null>(null);
@@ -1938,7 +1940,7 @@ export default function BoardView({
     if (!problem) return;
     trace.record("save", { problem });
     const exists = latest.current.saved?.notes.some((n) => n.id === started.id);
-    setUnsaved({ started, text, reason: exists ? "changed" : "deleted" });
+    keepDraft({ started, text, reason: exists ? "changed" : "deleted" });
   };
   // The note being edited was deleted elsewhere: keep what was typed.
   useEffect(() => {
@@ -1948,12 +1950,61 @@ export default function BoardView({
     setEditing(null);
     draftRef.current = null;
     if (draft.text.trim() && draft.text !== draft.started.text)
-      setUnsaved({
+      keepDraft({
         started: draft.started,
         text: draft.text,
         reason: "deleted",
       });
   }, [saved, editing]);
+  /**
+   * Save a kept draft over its note or as a new note. The draft stays until
+   * the store confirms the write; a failure or another conflict stays on it.
+   */
+  const recoverDraft = async (draft: UnsavedDraft, mode: "over" | "new") => {
+    const update = (patch: Partial<UnsavedDraft>) =>
+      setUnsaved((list) =>
+        list.map((d) => (d.key === draft.key ? { ...d, ...patch } : d)),
+      );
+    const current = latest.current.saved?.notes.find(
+      (n) => n.id === draft.started.id,
+    );
+    if (mode === "over" && !current) {
+      update({ reason: "deleted", error: "the note no longer exists" });
+      return;
+    }
+    update({ saving: true, error: undefined });
+    let problem: string | null;
+    try {
+      problem = await boardStore.patch([
+        mode === "over"
+          ? {
+              op: "note.put",
+              note: {
+                id: current!.id,
+                text: draft.text,
+                color: current!.color,
+                x: current!.x,
+                y: current!.y,
+              },
+              rev: current!.rev,
+            }
+          : {
+              op: "note.put",
+              note: {
+                id: newId(),
+                text: draft.text,
+                color: draft.started.color,
+                x: draft.started.x + 40,
+                y: draft.started.y + 40,
+              },
+            },
+      ]);
+    } catch (error) {
+      problem = String(error instanceof Error ? error.message : error);
+    }
+    if (problem) update({ saving: false, error: problem });
+    else setUnsaved((list) => list.filter((d) => d.key !== draft.key));
+  };
   const deleteNote = (note: BoardNote) => {
     setNoteSelected(null);
     void report(
@@ -2042,7 +2093,8 @@ export default function BoardView({
   // Herdr's own "not found" detaches the string.
   useEffect(() => {
     for (const item of anchorStates.missing) {
-      const key = `${item.string.id}:${item.end}`;
+      // Keyed by the anchor too: after a move the new target is checked anew.
+      const key = `${item.string.id}:${item.end}:${item.anchor.kind}:${item.anchor.native_id}`;
       if (checkedAnchors.current.has(key)) continue;
       checkedAnchors.current.add(key);
       void checkAnchor(item.host, item.anchor)
@@ -2769,55 +2821,51 @@ export default function BoardView({
           <Trash2 size={14} aria-hidden="true" />
           Delete
         </button>
-        {unsaved ? (
+        {unsaved.length ? (
           <div className="board-banner board-unsaved" role="alert">
-            <span>
-              {unsaved.reason === "deleted"
-                ? "This note was deleted on another device before your edit was saved:"
-                : "This note changed on another device, so your edit was not saved:"}{" "}
-              <q>{unsaved.text}</q>
-            </span>
-            {unsaved.reason === "changed" &&
-            saved?.notes.some((n) => n.id === unsaved.started.id) ? (
-              <button
-                type="button"
-                onClick={() => {
-                  const current = saved.notes.find(
-                    (n) => n.id === unsaved.started.id,
-                  )!;
-                  setUnsaved(null);
-                  void saveNote(current, { text: unsaved.text });
-                }}
-              >
-                Keep mine
-              </button>
-            ) : null}
-            <button
-              type="button"
-              onClick={() => {
-                const { started, text } = unsaved;
-                setUnsaved(null);
-                void report(
-                  boardStore.patch([
-                    {
-                      op: "note.put",
-                      note: {
-                        id: newId(),
-                        text,
-                        color: started.color,
-                        x: started.x + 40,
-                        y: started.y + 40,
-                      },
-                    },
-                  ]),
-                );
-              }}
-            >
-              Save as a new note
-            </button>
-            <button type="button" onClick={() => setUnsaved(null)}>
-              Discard
-            </button>
+            {unsaved.map((draft) => (
+              <div key={draft.key} className="board-unsaved-row">
+                <span>
+                  {draft.reason === "deleted"
+                    ? "This note was deleted on another device before your edit was saved:"
+                    : "This note changed on another device, so your edit was not saved:"}{" "}
+                  <q>{draft.text}</q>
+                  {draft.error ? (
+                    <small className="board-unsaved-error">
+                      {" "}
+                      Not saved yet: {draft.error}
+                    </small>
+                  ) : null}
+                </span>
+                {saved?.notes.some((n) => n.id === draft.started.id) ? (
+                  <button
+                    type="button"
+                    disabled={draft.saving}
+                    onClick={() => void recoverDraft(draft, "over")}
+                  >
+                    Keep mine
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  disabled={draft.saving}
+                  onClick={() => void recoverDraft(draft, "new")}
+                >
+                  Save as a new note
+                </button>
+                <button
+                  type="button"
+                  disabled={draft.saving}
+                  onClick={() =>
+                    setUnsaved((list) =>
+                      list.filter((d) => d.key !== draft.key),
+                    )
+                  }
+                >
+                  Discard
+                </button>
+              </div>
+            ))}
           </div>
         ) : null}
         {[...anchorStates.unconfirmed].map(([hostKey, list]) => (
@@ -3250,6 +3298,16 @@ function NoteEditor({
     </div>
   );
 }
+
+/** An edit that could not be saved, kept until saved or discarded. */
+type UnsavedDraft = {
+  key: string;
+  started: BoardNote;
+  text: string;
+  reason: "changed" | "deleted";
+  saving?: boolean;
+  error?: string;
+};
 
 /** A note's first words, as the name of the tab it starts. */
 const noteTabName = (note: BoardNote) =>

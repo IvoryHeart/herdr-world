@@ -506,7 +506,8 @@ export function moveFollowOps(
  * After a move that failed (and maybe rolled back), panes can sit under new
  * IDs. Using only what the outcome positively observed (terminal to pane and
  * tab), a pane anchor whose witnessed terminal was seen takes that pane's ID,
- * and a tab anchor whose seen terminals all sit in one tab takes that tab.
+ * and a tab anchor whose witnessed terminals were all seen in one tab takes
+ * that tab.
  * Anchors with no observed terminal are left as they are (unresolved).
  */
 export function reconcileOps(
@@ -533,6 +534,9 @@ export function reconcileOps(
         : { anchor: { ...anchor, native_id: pane } };
     }
     if (anchor.kind === "tab") {
+      // Only when every witnessed terminal was seen, all in one tab: a
+      // partial observation may have missed panes still in the old tab.
+      if (seen.length !== anchor.witness.length) return end;
       const tabs = new Set(seen.map((entry) => entry.tab_id));
       const [tab] = [...tabs];
       return tabs.size === 1 && tab !== anchor.native_id

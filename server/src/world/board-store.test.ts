@@ -451,6 +451,12 @@ describe("Board store", () => {
     expect(store.get().strings.find((s) => s.id === "a")!.to).toEqual(
       pane("w1:p5", ["term_1"]),
     );
+    // Only some of the tab's terminals were seen, in another tab: not moved.
+    expect(
+      reconcileOps(store.get(), "studio", [
+        { terminal_id: "term_1", pane_id: "w2:p1", tab_id: "w2:t1" },
+      ]).filter((op) => op.op === "string.put" && op.string.id === "c"),
+    ).toEqual([]);
     // Split across tabs: the tab anchor is not guessed.
     expect(
       reconcileOps(store.get(), "studio", [

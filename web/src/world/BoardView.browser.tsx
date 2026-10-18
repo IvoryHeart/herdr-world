@@ -154,11 +154,15 @@ function apply(ops: BoardOp[]) {
   saved = next;
   return { document: structuredClone(saved) };
 }
+/** How many of the next board writes the fake service rejects. */
+let failingWrites = 0;
 const store = new BoardDocumentStore({
   call: async (method, params) =>
-    method === "world.board.get"
-      ? structuredClone(saved)
-      : apply((params as { ops: BoardOp[] }).ops),
+    method !== "world.board.get" && failingWrites > 0 && failingWrites--
+      ? Promise.reject(new Error("write failed"))
+      : method === "world.board.get"
+        ? structuredClone(saved)
+        : apply((params as { ops: BoardOp[] }).ops),
   onControl: () => () => {},
   onStatus: () => () => {},
 });
@@ -1672,9 +1676,27 @@ async function run() {
       Boolean(host.querySelector(".board-unsaved")),
       "the unsaved draft outlasts other notices",
     );
-    [...host.querySelectorAll<HTMLButtonElement>(".board-unsaved button")]
-      .find((b) => b.textContent === "Keep mine")!
-      .click();
+    const keepMine = () =>
+      [...host.querySelectorAll<HTMLButtonElement>(".board-unsaved button")]
+        .find((b) => b.textContent === "Keep mine")!
+        .click();
+    // A failed write keeps the draft, with the error, for a retry.
+    failingWrites = 1;
+    keepMine();
+    await waitFor(
+      () =>
+        Boolean(
+          host
+            .querySelector(".board-unsaved-error")
+            ?.textContent?.includes("write failed"),
+        ),
+      "a failed Keep mine keeps the draft and says why",
+    );
+    check(
+      saved.notes.find((n) => n.id === id)!.text === "Their edit",
+      "nothing was written",
+    );
+    keepMine();
     await waitFor(
       () => saved.notes.find((n) => n.id === id)!.text === "My draft",
       "Keep mine saves the draft over the newer text",
@@ -1721,12 +1743,28 @@ async function run() {
         ),
       "a draft whose note was deleted elsewhere is kept",
     );
-    [...host.querySelectorAll<HTMLButtonElement>(".board-unsaved button")]
-      .find((b) => b.textContent === "Save as a new note")!
-      .click();
+    const saveNew = () =>
+      [...host.querySelectorAll<HTMLButtonElement>(".board-unsaved button")]
+        .find((b) => b.textContent === "Save as a new note")!
+        .click();
+    failingWrites = 1;
+    saveNew();
+    await waitFor(
+      () => Boolean(host.querySelector(".board-unsaved-error")),
+      "a failed Save as a new note keeps the draft",
+    );
+    check(
+      !saved.notes.some((n) => n.text === "Typed before it vanished"),
+      "no note was saved by the failed write",
+    );
+    saveNew();
     await waitFor(
       () => saved.notes.some((n) => n.text === "Typed before it vanished"),
       "the kept draft can be saved as a new note",
+    );
+    await waitFor(
+      () => !host.querySelector(".board-unsaved"),
+      "a saved draft leaves the panel",
     );
   }
 
@@ -1778,6 +1816,21 @@ async function run() {
       !saved.strings.find((candidate) => candidate.id === string.id)!.detached,
       "a late absent reply about the old pane does not detach the moved string",
     );
+    // The moved string's new pane is still checked when it disappears.
+    closedPanes.add(live.nativeId);
+    mount(
+      2,
+      variant((leaf) => (leaf.nativeId === live.nativeId ? null : leaf)),
+    );
+    await waitFor(
+      () =>
+        saved.strings.find((candidate) => candidate.id === string.id)!
+          .detached === true,
+      "a moved string whose new pane closes reaches Needs a home",
+    );
+    closedPanes.delete(live.nativeId);
+    mount(2);
+    await settle(100);
   }
 
   // A workspace's witness follows its terminals, including a pane that
