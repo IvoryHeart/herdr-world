@@ -218,6 +218,11 @@ async function run() {
   );
   host.querySelector<HTMLButtonElement>('[aria-label="Fold web-app"]')!.click();
   await waitFor(() => !card("studio:w1:t1"), "folding hid the tabs");
+  await settle(100);
+  check(
+    host.querySelectorAll(".board-tree").length === 8,
+    "folding removes the folded tabs' lines at once",
+  );
   check(
     host.querySelector('[aria-label="Open web-app"]')?.textContent === "4",
     "a folded workspace shows its tab count",

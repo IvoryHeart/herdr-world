@@ -213,6 +213,12 @@ export default function BoardView({
     dirty.current = true;
   }, [model, sizeOf]);
 
+  // Folding and the overview change what is visible without moving a card:
+  // repaint so lines to hidden tabs go at once.
+  useEffect(() => {
+    dirty.current = true;
+  }, [collapsed, far]);
+
   /* ---------- Homes: anchor plus offset, read every frame ---------- */
   const baseOf = (key: string, m: BoardModel): Point | null => {
     const space = m.workspaceByKey.get(key);
