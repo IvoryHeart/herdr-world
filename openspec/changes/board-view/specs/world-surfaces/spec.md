@@ -64,6 +64,26 @@ SHALL NOT follow its workspace.
 - **WHEN** the user tidies the board and chooses Undo
 - **THEN** every card returns to its position before the tidy
 
+### Requirement: Board moves between workspaces
+
+Dragging a tab card over another workspace card of the same host SHALL mark
+that workspace as the drop target, and dropping it there SHALL ask "Move the
+tab to <workspace>?" with an option not to be asked again. The move SHALL use
+World's qualified service move, the same as Town's, and strings to the moved
+tab and its panes SHALL follow the move result. Moving a workspace's last tab
+SHALL always ask, whatever the option says, and SHALL say that the workspace
+will close. A tab SHALL NOT be dropped on another host.
+
+#### Scenario: Move a terminal
+
+- **WHEN** the user drags a terminal's tab onto another workspace of its host and confirms
+- **THEN** the tab moves there with its panes still running, and notes strung to its panes stay attached
+
+#### Scenario: Last tab
+
+- **WHEN** the user drops a workspace's only tab onto another workspace, even with "Don't ask again" chosen
+- **THEN** Board asks first and says the workspace will close
+
 ### Requirement: Board semantic zoom
 
 Board SHALL zoom with the mouse wheel around the pointer, with pinch on touch

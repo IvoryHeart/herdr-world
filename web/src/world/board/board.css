@@ -921,3 +921,53 @@
   opacity: 0.5;
   cursor: default;
 }
+
+/* Moving a tab: the workspace it is over glows; the tab leans toward it. */
+.board-card.board-glue {
+  outline: 3px solid var(--board-accent);
+  outline-offset: 6px;
+  box-shadow:
+    0 0 0 10px color-mix(in srgb, var(--board-accent) 18%, transparent),
+    var(--board-shadow);
+}
+.board-card.board-gluing {
+  opacity: 0.85;
+  outline: 2px dashed var(--board-accent);
+  outline-offset: 3px;
+}
+.board-move .board-chooser-head strong {
+  font-size: 14px;
+  line-height: 1.35;
+}
+.board-warn {
+  color: var(--s-blocked);
+}
+.board-noask {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  margin: 4px 0 8px;
+}
+.board-move-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.board-move-actions button {
+  height: 34px;
+  padding: 0 14px;
+  border: 1px solid var(--board-line);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--board-ink);
+  font: inherit;
+  font-size: 13.5px;
+  cursor: pointer;
+}
+.board-move-actions .board-primary-button {
+  border-color: var(--board-accent);
+  background: var(--board-accent);
+  color: var(--board-card);
+  font-weight: 700;
+}

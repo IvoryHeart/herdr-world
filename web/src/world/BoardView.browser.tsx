@@ -154,6 +154,7 @@ const sent: { paneId: string; terminalId: string; text: string }[] = [];
 /** Pane IDs the fake service reports as closed ("not found"). */
 const closedPanes = new Set<string>();
 const started: { workspace: string; kind: string; text: string }[] = [];
+const movedTabs: { tab: string; to: string }[] = [];
 const host = document.createElement("div");
 host.style.cssText = "position:fixed;inset:0";
 document.body.appendChild(host);
@@ -176,6 +177,10 @@ function mount(key: number, shown = world) {
             text,
           });
           return { status: "sent", agent: target.label };
+        }}
+        moveTab={async (tab, space) => {
+          movedTabs.push({ tab: tab.nativeId, to: space.nativeId });
+          return { status: "moved", tab_id: `${space.nativeId}:t9`, panes: [] };
         }}
         startAgent={async (space, kind, _name, text) => {
           started.push({ workspace: space.nativeId, kind, text });
@@ -910,6 +915,70 @@ async function run() {
       startedEnd.anchor.witness.length === 1,
     "the string goes to the new pane with its terminal as witness",
   );
+
+  // Drag a tab onto another workspace: it glues, and asks before moving.
+  if (innerWidth > 720) {
+    try {
+      localStorage.removeItem("herdr-world.board.move-no-ask");
+    } catch {
+      // Storage unavailable in this browser: the dialog shows anyway.
+    }
+    await bringIntoView(() => card("studio:w2")!);
+    const moving = card("studio:w2:t2")!;
+    const target = card("studio:w1")!;
+    const from = centre(moving.querySelector(".board-label")!),
+      to = centre(target);
+    const dragTo = async () => {
+      pointer(moving, "pointerdown", from.x, from.y, 16);
+      for (let i = 1; i <= 10; i++) {
+        pointer(
+          moving,
+          "pointermove",
+          from.x + ((to.x - from.x) * i) / 10,
+          from.y + ((to.y - from.y) * i) / 10,
+          16,
+        );
+        await settle(16);
+      }
+    };
+    await dragTo();
+    check(
+      target.classList.contains("board-glue"),
+      "the workspace a tab is over glows",
+    );
+    pointer(moving, "pointerup", to.x, to.y, 16);
+    await waitFor(
+      () => Boolean(host.querySelector(".board-move")),
+      "dropping on a workspace asks first",
+    );
+    check(
+      host.querySelector(".board-move")!.textContent!.includes("site build") &&
+        host.querySelector(".board-move")!.textContent!.includes("web-app"),
+      "the question names the tab and the workspace",
+    );
+    host.querySelector<HTMLInputElement>(".board-noask input")!.click();
+    [...host.querySelectorAll<HTMLButtonElement>(".board-move button")]
+      .find((b) => b.textContent === "Move")!
+      .click();
+    await waitFor(() => movedTabs.length === 1, "Move moves the tab");
+    check(
+      movedTabs[0]!.tab === "w2:t2" && movedTabs[0]!.to === "w1",
+      "the right tab goes to the right workspace",
+    );
+    await rest();
+    await dragTo();
+    pointer(moving, "pointerup", to.x, to.y, 16);
+    await waitFor(
+      () => movedTabs.length === 2,
+      "with Don't ask again, a drop moves at once",
+    );
+    check(!host.querySelector(".board-move"), "and no question is shown");
+    try {
+      localStorage.removeItem("herdr-world.board.move-no-ask");
+    } catch {
+      // Nothing stored.
+    }
+  }
 
   // Zoom out to the overview: tabs fold into status squares, nothing moves.
   const before = at("studio:w1:t1")!;

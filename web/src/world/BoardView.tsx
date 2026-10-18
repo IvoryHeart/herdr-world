@@ -17,7 +17,12 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { worldLocalStorage } from "../browserStorage";
-import { anchorFor, confirmed, targetOf } from "./board/boardAnchors";
+import {
+  anchorFor,
+  confirmed,
+  followMove,
+  targetOf,
+} from "./board/boardAnchors";
 import {
   NOTE_COLORS,
   sharedBoardStore,
@@ -142,6 +147,37 @@ export type SendTarget = {
   terminalId: string;
 };
 export type SendOutcome = { status: string; message?: string; agent?: string };
+export type TabMoveOutcome = {
+  status: string;
+  reason?: string;
+  message?: string;
+  tab_id?: string;
+  panes?: { previous: string; current: string }[];
+};
+async function moveTabThroughService(
+  tab: BoardTab,
+  space: BoardWorkspace,
+  allowClose: boolean,
+) {
+  const { bridge } = await import("../api");
+  return (await bridge.connection(space.connectionId, space.generation).call(
+    "town.move_desk",
+    {
+      tab_id: tab.nativeId,
+      workspace_id: space.nativeId,
+      allow_close_room: allowClose,
+    },
+    90_000,
+  )) as TabMoveOutcome;
+}
+const MOVE_NO_ASK_KEY = "herdr-world.board.move-no-ask";
+function readMoveNoAsk() {
+  try {
+    return worldLocalStorage.getItem(MOVE_NO_ASK_KEY) === "yes";
+  } catch {
+    return false;
+  }
+}
 export type StartOutcome = {
   status: string;
   message?: string;
@@ -272,6 +308,7 @@ export default function BoardView({
   sendNote = sendNoteThroughService,
   checkAnchor = checkAnchorThroughService,
   startAgent = startAgentThroughService,
+  moveTab = moveTabThroughService,
 }: {
   world: WorldObject;
   toolbarPortal?: Element | null;
@@ -282,6 +319,12 @@ export default function BoardView({
   store?: BoardDocumentStore;
   /** Send a note to an agent's pane; World's service by default. */
   sendNote?: (target: SendTarget, text: string) => Promise<SendOutcome>;
+  /** Move a tab to another workspace of its host; World's service by default. */
+  moveTab?: (
+    tab: BoardTab,
+    space: BoardWorkspace,
+    allowClose: boolean,
+  ) => Promise<TabMoveOutcome>;
   /** Start an agent in a workspace with a note; World's service by default. */
   startAgent?: (
     space: BoardWorkspace,
@@ -309,6 +352,13 @@ export default function BoardView({
   const [trayOpen, setTrayOpen] = useState(false);
   /** The note an agent is being started for, while the chooser is open. */
   const [startFor, setStartFor] = useState<string | null>(null);
+  /** The workspace a dragged tab is over: dropping offers to move it there. */
+  const glue = useRef<string | null>(null);
+  const [moveAsk, setMoveAsk] = useState<{
+    tabKey: string;
+    workspaceKey: string;
+    lastTab: boolean;
+  } | null>(null);
   /** Anchors already asked about this session: `string id:end`. */
   const checkedAnchors = useRef(new Set<string>());
   const [far, setFar] = useState(false);
@@ -1120,6 +1170,37 @@ export default function BoardView({
     d.hist.push({ x: card.x, y: card.y, t: now });
     if (d.hist.length > 8) d.hist.shift();
     warm(physics.current);
+    // A tab dragged over another workspace of its host glues to it.
+    const tab = latest.current.model.tabByKey.get(d.key);
+    if (tab) {
+      const under = document
+        .elementsFromPoint(event.clientX, event.clientY)
+        .map((el) =>
+          (el as HTMLElement).closest?.<HTMLElement>(".board-workspace"),
+        )
+        .find((el) => el && el.dataset.key);
+      const key = under?.dataset.key ?? null;
+      const space = key
+        ? latest.current.model.workspaceByKey.get(key)
+        : undefined;
+      const next =
+        space &&
+        space.key !== tab.workspaceKey &&
+        space.hostKey === tab.hostKey &&
+        space.actionable &&
+        tab.actionable
+          ? space.key
+          : null;
+      if (next !== glue.current) {
+        if (glue.current)
+          cardEls.current.get(glue.current)?.classList.remove("board-glue");
+        cardEls.current
+          .get(d.key)
+          ?.classList.toggle("board-gluing", Boolean(next));
+        if (next) cardEls.current.get(next)?.classList.add("board-glue");
+        glue.current = next;
+      }
+    }
   };
 
   const onPointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -1224,6 +1305,16 @@ export default function BoardView({
       return;
     }
     cardEls.current.get(d.key)?.classList.remove("board-lifted");
+    if (glue.current) {
+      const workspaceKey = glue.current;
+      cardEls.current.get(workspaceKey)?.classList.remove("board-glue");
+      cardEls.current.get(d.key)?.classList.remove("board-gluing");
+      glue.current = null;
+      // The tab goes back to its place until the move is confirmed and done.
+      travelToLayout(m);
+      offerMove(d.key, workspaceKey);
+      return;
+    }
     const v = velocity(d.hist);
     if (
       Math.hypot(v.x, v.y) < 80 ||
@@ -1591,6 +1682,51 @@ export default function BoardView({
       setToast({ text: `The note may not have been sent: ${String(error)}` });
     }
   };
+  /** Ask before moving a tab, unless the user said not to ask again. */
+  function offerMove(tabKey: string, workspaceKey: string) {
+    const m = latest.current.model;
+    const tab = m.tabByKey.get(tabKey);
+    const lastTab =
+      (m.workspaceByKey.get(tab?.workspaceKey ?? "")?.tabKeys.length ?? 0) <= 1;
+    // Closing a workspace is never silent, whatever "don't ask" says.
+    if (readMoveNoAsk() && !lastTab) void runMove(tabKey, workspaceKey, false);
+    else setMoveAsk({ tabKey, workspaceKey, lastTab });
+  }
+  async function runMove(
+    tabKey: string,
+    workspaceKey: string,
+    allowClose: boolean,
+  ) {
+    setMoveAsk(null);
+    const m = latest.current.model;
+    const tab = m.tabByKey.get(tabKey),
+      space = m.workspaceByKey.get(workspaceKey);
+    if (!tab || !space) return;
+    setToast({ text: `Moving ${tab.label} to ${space.label}…` });
+    try {
+      const outcome = await moveTab(tab, space, allowClose);
+      if (outcome.status === "moved" && outcome.tab_id) {
+        const changed = followMove(
+          latest.current.saved?.strings ?? [],
+          space.connectionId,
+          tab.nativeId,
+          {
+            tab_id: outcome.tab_id,
+            panes: outcome.panes ?? [],
+          },
+        );
+        if (changed.length)
+          await boardStore.patch(
+            changed.map((string) => ({ op: "string.put" as const, string })),
+          );
+        setToast({ text: `Moved ${tab.label} to ${space.label}` });
+      } else if (outcome.reason === "room_would_close")
+        setMoveAsk({ tabKey, workspaceKey, lastTab: true });
+      else setToast({ text: outcome.message ?? `${tab.label} was not moved.` });
+    } catch (error) {
+      setToast({ text: `${tab.label} may not have moved: ${String(error)}` });
+    }
+  }
   const startFromNote = async (
     note: BoardNote,
     space: BoardWorkspace,
@@ -2069,6 +2205,32 @@ export default function BoardView({
             </button>
           </div>
         ))}
+        {moveAsk &&
+        model.tabByKey.get(moveAsk.tabKey) &&
+        model.workspaceByKey.get(moveAsk.workspaceKey) ? (
+          <MoveDialog
+            tab={model.tabByKey.get(moveAsk.tabKey)!}
+            space={model.workspaceByKey.get(moveAsk.workspaceKey)!}
+            from={model.workspaceByKey.get(
+              model.tabByKey.get(moveAsk.tabKey)!.workspaceKey,
+            )}
+            lastTab={moveAsk.lastTab}
+            onCancel={() => setMoveAsk(null)}
+            onMove={(noAsk) => {
+              if (noAsk)
+                try {
+                  worldLocalStorage.setItem(MOVE_NO_ASK_KEY, "yes");
+                } catch {
+                  // Storage unavailable: ask again next time.
+                }
+              void runMove(
+                moveAsk.tabKey,
+                moveAsk.workspaceKey,
+                moveAsk.lastTab,
+              );
+            }}
+          />
+        ) : null}
         {startFor && saved?.notes.find((n) => n.id === startFor) ? (
           <div
             className="board-chooser"
@@ -2427,6 +2589,75 @@ function NoteBar({
       <button type="button" className="board-danger" onClick={onDelete}>
         Delete
       </button>
+    </div>
+  );
+}
+
+/** "Move the terminal to <workspace>?", with "Don't ask again". */
+function MoveDialog({
+  tab,
+  space,
+  from,
+  lastTab,
+  onCancel,
+  onMove,
+}: {
+  tab: BoardTab;
+  space: BoardWorkspace;
+  from: BoardWorkspace | undefined;
+  lastTab: boolean;
+  onCancel(): void;
+  onMove(noAsk: boolean): void;
+}) {
+  const [noAsk, setNoAsk] = useState(false);
+  const what = tab.shellOnly
+    ? "terminal"
+    : tab.panes.some((pane) => pane.isAgent)
+      ? "tab and its agents"
+      : "tab";
+  return (
+    <div
+      className="board-chooser board-move"
+      role="dialog"
+      aria-label={`Move ${tab.label}`}
+    >
+      <div className="board-chooser-head">
+        <strong>
+          Move the {what} “{tab.label}” to {space.label}?
+        </strong>
+      </div>
+      {lastTab ? (
+        <p className="board-tray-hint board-warn">
+          It is the last tab in {from?.label ?? "its workspace"}; moving it
+          closes that workspace.
+        </p>
+      ) : (
+        <p className="board-tray-hint">
+          Its panes keep running; their notes and strings move with them.
+        </p>
+      )}
+      {!lastTab ? (
+        <label className="board-noask">
+          <input
+            type="checkbox"
+            checked={noAsk}
+            onChange={(event) => setNoAsk(event.target.checked)}
+          />
+          Don't ask again
+        </label>
+      ) : null}
+      <div className="board-move-actions">
+        <button type="button" onClick={onCancel}>
+          Cancel
+        </button>
+        <button
+          type="button"
+          className="board-primary-button"
+          onClick={() => onMove(noAsk)}
+        >
+          {lastTab ? "Move and close the workspace" : "Move"}
+        </button>
+      </div>
     </div>
   );
 }

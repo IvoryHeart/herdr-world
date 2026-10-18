@@ -26,7 +26,8 @@ are optional because the merged PR history records their source.
   before trusting strings whose terminals changed; strings whose target closed
   wait in a Needs a home tray instead of attaching to the wrong card. A note can
   also start a new agent in a chosen workspace, which receives the note once
-  it is ready. On phones Board replaces Graph in the bottom navigation.
+  it is ready. Drag a tab onto another workspace to move it there (Board asks
+  first, with "Don't ask again"); strings follow the moved panes. On phones Board replaces Graph in the bottom navigation.
 
 ### Fixed
 
