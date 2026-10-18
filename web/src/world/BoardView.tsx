@@ -17,8 +17,10 @@ import {
 import { createPortal } from "react-dom";
 import { worldLocalStorage } from "../browserStorage";
 import {
+  boardStatusOrder,
   projectBoard,
   type BoardModel,
+  type BoardPane,
   type BoardTab,
   type BoardWorkspace,
 } from "./board/boardModel";
@@ -82,6 +84,8 @@ type Drag =
       sy: number;
       lifted: boolean;
       hist: Sample[];
+      /** The pane row pressed, for a tap that selects that pane. */
+      paneKey?: string;
     }
   | { type: "host"; key: string; last: Point }
   | { type: "pinch"; d0: number; s0: number; m0: Point; cam0: Camera };
@@ -108,9 +112,55 @@ function velocity(hist: Sample[]) {
   return { x: (last.x - first.x) / dt, y: (last.y - first.y) / dt };
 }
 
-/** The pane a tab card selects or opens: the most urgent one. */
+/** The pane a tab card selects or opens: its most urgent agent, else the first. */
 function primaryPane(tab: BoardTab) {
-  return tab.panes.find((pane) => pane.status === tab.status) ?? tab.panes[0];
+  return (
+    tab.panes.find((pane) => pane.isAgent && pane.status === tab.status) ??
+    tab.panes[0]
+  );
+}
+
+/** A tab card draws up to four pane rows; the rest are in the chooser. */
+const MAX_ROWS = 4;
+function rowsOf(tab: BoardTab): BoardPane[] {
+  if (tab.panes.length <= MAX_ROWS) return tab.panes;
+  // With more panes than rows, show the ones that need attention first.
+  return tab.panes
+    .slice()
+    .sort((a, b) =>
+      a.isAgent !== b.isAgent
+        ? a.isAgent
+          ? -1
+          : 1
+        : boardStatusOrder(a.status, b.status),
+    )
+    .slice(0, MAX_ROWS - 1);
+}
+
+function paneName(pane: BoardPane) {
+  if (!pane.isAgent) return "shell";
+  return pane.leaf.agentName ?? pane.leaf.agentLabel ?? "agent";
+}
+
+function paneLine(pane: BoardPane, status: WorldAgentStatus) {
+  if (!pane.isAgent) return pane.leaf.terminalTitle ?? "shell";
+  return (
+    pane.leaf.taskSummary ?? pane.leaf.terminalTitle ?? STATUS_LABEL[status]
+  );
+}
+
+function tabSummary(tab: BoardTab) {
+  if (tab.shellOnly)
+    return `terminal${tab.panes.length > 1 ? `, ${tab.panes.length} panes` : ""}`;
+  const agents = tab.panes.filter((pane) => pane.isAgent).length;
+  const shells = tab.panes.length - agents;
+  return [
+    `${agents} agent${agents === 1 ? "" : "s"}`,
+    shells ? `${shells} shell${shells === 1 ? "" : "s"}` : "",
+    STATUS_LABEL[tab.status],
+  ]
+    .filter(Boolean)
+    .join(", ");
 }
 
 export default function BoardView({
@@ -131,6 +181,7 @@ export default function BoardView({
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
   const [query, setQuery] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
+  const [chooser, setChooser] = useState<string | null>(null);
   const [pulses, setPulses] = useState(readPulses);
   const [toast, setToast] = useState<{
     text: string;
@@ -167,9 +218,13 @@ export default function BoardView({
 
   const kindOf = (key: string, m: BoardModel) =>
     m.workspaceByKey.has(key) ? "workspace" : "tab";
+  // Placement uses each card's rendered size (new cards are already in the
+  // DOM when placement runs); the overview's enlarged cards are never measured.
   const sizeOf = useCallback((key: string, kind: "workspace" | "tab"): Size => {
-    const card = cards.current.get(key);
-    return card?.size ?? DEFAULT_SIZE[kind];
+    const el = cardEls.current.get(key);
+    if (el?.offsetWidth && !farRef.current)
+      return { w: el.offsetWidth, h: el.offsetHeight };
+    return cards.current.get(key)?.size ?? DEFAULT_SIZE[kind];
   }, []);
 
   /* ---------- Model changes: measure, place new cards, keep the rest ---------- */
@@ -531,6 +586,7 @@ export default function BoardView({
         sy: event.clientY,
         lifted: false,
         hist: [],
+        paneKey: target.closest<HTMLElement>("[data-pane]")?.dataset.pane,
       };
       return;
     }
@@ -653,7 +709,7 @@ export default function BoardView({
     }
     const card = cards.current.get(d.key);
     if (!d.lifted || !card) {
-      selectCard(d.key, m);
+      selectCard(d.key, m, d.paneKey);
       return;
     }
     cardEls.current.get(d.key)?.classList.remove("board-lifted");
@@ -699,15 +755,20 @@ export default function BoardView({
   }, [onWheel]);
 
   /* ---------- Actions ---------- */
-  function selectCard(key: string, m: BoardModel) {
+  function selectCard(key: string, m: BoardModel, paneKey?: string) {
     const space = m.workspaceByKey.get(key);
     if (space) return void latest.current.onSelect(space.space.id);
     const tab = m.tabByKey.get(key);
-    const pane = tab && primaryPane(tab);
+    const pane =
+      tab &&
+      (tab.panes.find((candidate) => candidate.key === paneKey) ??
+        primaryPane(tab));
     if (pane) void latest.current.onSelect(pane.leaf.id);
   }
-  const openTab = (tab: BoardTab) => {
-    const pane = primaryPane(tab);
+  const openTab = (tab: BoardTab, paneKey?: string) => {
+    const pane =
+      tab.panes.find((candidate) => candidate.key === paneKey) ??
+      primaryPane(tab);
     if (pane && tab.actionable) void onOpenTerminal(pane.leaf.id);
   };
   /** Send every card to its place in the layout on a short tween. */
@@ -946,8 +1007,15 @@ export default function BoardView({
                   </button>
                 </div>
                 <div className="board-sum" aria-hidden="true">
-                  {space.statuses.map((status, i) => (
-                    <span key={i} className={`board-s-${status}`} />
+                  {space.squares.map((square, i) => (
+                    <span
+                      key={i}
+                      className={
+                        square.isAgent
+                          ? `board-s-${square.status}`
+                          : "board-sq-shell"
+                      }
+                    />
                   ))}
                 </div>
               </div>
@@ -956,9 +1024,9 @@ export default function BoardView({
           {model.tabs.map((tab) => {
             if (collapsed.has(tab.workspaceKey)) return null;
             const pane = primaryPane(tab);
-            const agent = pane?.isAgent
-              ? (pane.leaf.agentLabel ?? pane.leaf.agentName ?? "agent")
-              : "shell";
+            const multi = tab.panes.length > 1;
+            const rows = rowsOf(tab);
+            const hidden = tab.panes.length - rows.length;
             return (
               <div
                 key={tab.key}
@@ -966,15 +1034,24 @@ export default function BoardView({
                 data-key={tab.key}
                 role="button"
                 tabIndex={0}
-                aria-label={`${tab.label}, ${agent}, ${STATUS_LABEL[tab.status]}`}
+                aria-label={`${tab.label}, ${tabSummary(tab)}`}
                 className={[
                   "board-card board-tab",
                   `board-s-${tab.status}`,
+                  tab.shellOnly ? "board-terminal" : "",
+                  multi ? "board-multi" : "",
                   tab.stale ? "board-stale" : "",
                   selectedKeys.has(tab.key) ? "board-selected" : "",
                   matches && !matches.has(tab.key) ? "board-dim" : "",
                 ].join(" ")}
-                onDoubleClick={() => openTab(tab)}
+                onDoubleClick={(event) =>
+                  openTab(
+                    tab,
+                    (event.target as HTMLElement).closest<HTMLElement>(
+                      "[data-pane]",
+                    )?.dataset.pane,
+                  )
+                }
                 onKeyDown={(event) => {
                   if (event.key === "Enter") {
                     event.preventDefault();
@@ -983,23 +1060,113 @@ export default function BoardView({
                 }}
               >
                 <div className="board-row">
-                  <span className="board-dot" />
+                  {tab.shellOnly ? (
+                    <span className="board-prompt" aria-hidden="true">
+                      &gt;_
+                    </span>
+                  ) : (
+                    <span className="board-dot" />
+                  )}
                   <span className="board-label">{tab.label}</span>
-                  <span className="board-who">{agent}</span>
+                  <span className="board-who">
+                    {multi
+                      ? `${tab.panes.length} panes`
+                      : pane
+                        ? paneName(pane)
+                        : ""}
+                  </span>
                 </div>
-                <div className="board-line">
-                  {pane?.leaf.taskSummary ??
-                    pane?.leaf.terminalTitle ??
-                    STATUS_LABEL[tab.status]}
-                </div>
-                {tab.panes.length > 1 ? (
-                  <span className="board-count">{tab.panes.length} panes</span>
-                ) : null}
+                {multi ? (
+                  <div className="board-panes">
+                    {rows.map((row) => (
+                      <div
+                        key={row.key}
+                        data-pane={row.key}
+                        className={`board-pane${row.isAgent ? ` board-s-${row.status}` : " board-pane-shell"}${selectedId === row.leaf.id ? " board-pane-selected" : ""}`}
+                        aria-label={`${paneName(row)}, ${row.isAgent ? STATUS_LABEL[row.status] : "shell"}`}
+                      >
+                        {row.isAgent ? (
+                          <span className="board-dot" />
+                        ) : (
+                          <span className="board-prompt" aria-hidden="true">
+                            &gt;_
+                          </span>
+                        )}
+                        <span className="board-pane-name">{paneName(row)}</span>
+                        <span className="board-pane-state">
+                          {row.isAgent ? STATUS_LABEL[row.status] : "shell"}
+                        </span>
+                      </div>
+                    ))}
+                    {hidden > 0 ? (
+                      <button
+                        type="button"
+                        className="board-more"
+                        onPointerDown={(event) => event.stopPropagation()}
+                        onClick={() => setChooser(tab.key)}
+                      >
+                        +{hidden} more
+                      </button>
+                    ) : null}
+                  </div>
+                ) : (
+                  <div className="board-line">
+                    {tab.shellOnly ? "$ " : ""}
+                    {pane
+                      ? paneLine(pane, tab.status)
+                      : STATUS_LABEL[tab.status]}
+                  </div>
+                )}
                 <span className="board-badge" aria-hidden="true" />
               </div>
             );
           })}
         </div>
+        {chooser && model.tabByKey.get(chooser) ? (
+          <div
+            className="board-chooser"
+            role="dialog"
+            aria-label={`Panes in ${model.tabByKey.get(chooser)!.label}`}
+          >
+            <div className="board-chooser-head">
+              <strong>{model.tabByKey.get(chooser)!.label}</strong>
+              <button
+                type="button"
+                aria-label="Close"
+                onClick={() => setChooser(null)}
+              >
+                ×
+              </button>
+            </div>
+            {model.tabByKey.get(chooser)!.panes.map((row) => (
+              <button
+                key={row.key}
+                type="button"
+                className={`board-pane${row.isAgent ? ` board-s-${row.status}` : " board-pane-shell"}`}
+                onClick={() => {
+                  void onSelect(row.leaf.id);
+                  setChooser(null);
+                }}
+                onDoubleClick={() => {
+                  if (model.tabByKey.get(chooser)!.actionable)
+                    void onOpenTerminal(row.leaf.id);
+                }}
+              >
+                {row.isAgent ? (
+                  <span className="board-dot" />
+                ) : (
+                  <span className="board-prompt" aria-hidden="true">
+                    &gt;_
+                  </span>
+                )}
+                <span className="board-pane-name">{paneName(row)}</span>
+                <span className="board-pane-state">
+                  {row.isAgent ? STATUS_LABEL[row.status] : "shell"}
+                </span>
+              </button>
+            ))}
+          </div>
+        ) : null}
         <div
           className="board-controls"
           role="group"

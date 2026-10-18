@@ -31,10 +31,17 @@ export type BoardWorkspace = {
   stale: boolean;
   actionable: boolean;
   tabKeys: string[];
-  /** Every pane's status, most urgent first, for the overview squares. */
+  /**
+   * One square per pane for the overview: agents first, most urgent first,
+   * then shells, which are drawn hollow.
+   */
+  squares: BoardSquare[];
+  /** Agent pane statuses, most urgent first. */
   statuses: WorldAgentStatus[];
   space: WorldSpaceObject;
 };
+
+export type BoardSquare = { status: WorldAgentStatus; isAgent: boolean };
 
 export type BoardPane = {
   key: string;
@@ -49,8 +56,10 @@ export type BoardTab = {
   hostKey: string;
   nativeId: string;
   label: string;
-  /** The tab's most urgent pane status. */
+  /** The tab's most urgent agent status; idle when it has no agent. */
   status: WorldAgentStatus;
+  /** Every pane is a plain terminal: drawn as a small terminal, no pulse. */
+  shellOnly: boolean;
   stale: boolean;
   actionable: boolean;
   panes: BoardPane[];
@@ -122,6 +131,7 @@ export function projectBoard(world: WorldObject): BoardModel {
       }
       const tabKeys: string[] = [];
       const statuses: WorldAgentStatus[] = [];
+      const squares: BoardSquare[] = [];
       const order = space.tabs.map((tab) => tab.tab_id);
       for (const tabId of panesByTab.keys())
         if (!order.includes(tabId)) order.push(tabId);
@@ -130,8 +140,13 @@ export function projectBoard(world: WorldObject): BoardModel {
         const panes = panesByTab.get(tabId) ?? [];
         const key = boardKey(space.connectionId, tabId);
         tabKeys.push(key);
-        const paneStatuses = panes.map((pane) => pane.status);
+        // Shells never colour a tab: their status says nothing about work.
+        const paneStatuses = panes
+          .filter((pane) => pane.isAgent)
+          .map((pane) => pane.status);
         statuses.push(...paneStatuses);
+        for (const pane of panes)
+          squares.push({ status: pane.status, isAgent: pane.isAgent });
         tabs.push({
           key,
           workspaceKey,
@@ -139,6 +154,7 @@ export function projectBoard(world: WorldObject): BoardModel {
           nativeId: tabId,
           label: tab?.label || panes[0]?.leaf.tabLabel || tabId,
           status: mostUrgentStatus(paneStatuses),
+          shellOnly: panes.length > 0 && panes.every((pane) => !pane.isAgent),
           stale: space.stale,
           actionable: space.actionable,
           panes,
@@ -155,6 +171,13 @@ export function projectBoard(world: WorldObject): BoardModel {
         actionable: space.actionable,
         tabKeys,
         statuses: statuses.sort(boardStatusOrder),
+        squares: squares.sort((a, b) =>
+          a.isAgent !== b.isAgent
+            ? a.isAgent
+              ? -1
+              : 1
+            : boardStatusOrder(a.status, b.status),
+        ),
         space,
       });
     }

@@ -92,4 +92,32 @@ describe("Board model", () => {
     });
     expect(board.tabs[0]).toMatchObject({ stale: true, actionable: false });
   });
+  test("shells never colour a tab, and overview squares put agents before shells", () => {
+    const board = projectBoard(
+      fixtureWorld([
+        fixtureHost("alpha", [
+          {
+            label: "web",
+            tabs: [
+              { label: "pair", panes: [["unknown", false], ["working"]] },
+              { label: "terminal", panes: [["unknown", false]] },
+            ],
+          },
+        ]),
+      ]),
+    );
+    expect(board.tabByKey.get("alpha:w1:t1")).toMatchObject({
+      status: "working",
+      shellOnly: false,
+    });
+    expect(board.tabByKey.get("alpha:w1:t2")).toMatchObject({
+      status: "idle",
+      shellOnly: true,
+    });
+    expect(board.workspaceByKey.get("alpha:w1")?.squares).toEqual([
+      { status: "working", isAgent: true },
+      { status: "unknown", isAgent: false },
+      { status: "unknown", isAgent: false },
+    ]);
+  });
 });

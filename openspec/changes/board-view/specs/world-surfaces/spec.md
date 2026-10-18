@@ -6,7 +6,12 @@ World SHALL offer a Board view next to Graph in the view switcher and the phone
 navigation. Board SHALL present each presented host as a labelled zone, each
 admitted Herdr workspace of that host as a workspace card inside its zone, each
 admitted tab as a tab card near its workspace, and the user's notes. Every
-admitted tab SHALL remain reachable. Board position SHALL NOT change an entity's
+admitted tab and pane SHALL remain reachable. A tab with several panes SHALL show
+a row per pane, each with its own status, selectable and openable on its own, up
+to four rows with an exact count and a chooser for the rest. A tab's status SHALL
+be its most urgent agent pane's; plain terminal panes SHALL NOT colour it. A tab
+whose panes are all plain terminals SHALL be drawn as a terminal without a status
+pulse. Board position SHALL NOT change an entity's
 authoritative host, workspace, tab or pane ancestry. A host whose topology is
 cached after failure SHALL be visibly stale and its cards SHALL be
 non-actionable. Graph, Tree and the Pixel Office SHALL be unaffected.
@@ -15,6 +20,11 @@ non-actionable. Graph, Tree and the Pixel Office SHALL be unaffected.
 
 - **WHEN** the user chooses Board with two hosts that expose workspaces and tabs
 - **THEN** each host appears as a zone with its workspace cards, and each workspace's tabs appear around it with their status
+
+#### Scenario: A tab with an agent and a shell
+
+- **WHEN** a tab holds an agent that needs the user and an idle shell
+- **THEN** its card shows both panes as rows and pulses as needing the user, and tapping the shell row selects the shell
 
 #### Scenario: Stale host
 
@@ -58,8 +68,9 @@ SHALL NOT follow its workspace.
 
 Board SHALL zoom with the mouse wheel around the pointer, with pinch on touch
 screens and with visible zoom controls, and SHALL fit everything on request.
-Below an overview threshold Board SHALL hide tab cards and show each tab as a
-status square on its workspace card, with workspace, note and host labels
+Below an overview threshold Board SHALL hide tab cards and show each pane as a
+square on its workspace card, filled in its status colour for an agent and
+hollow for a plain terminal, with workspace, note and host labels
 enlarged so they remain readable; above it the tab cards SHALL return. Strings
 to a hidden tab SHALL attach to its workspace.
 

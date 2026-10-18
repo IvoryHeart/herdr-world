@@ -479,3 +479,151 @@
     transition: none;
   }
 }
+
+/* Several panes in one tab: a row each, its own status and target. */
+.board-multi {
+  width: 236px;
+}
+.board-panes {
+  display: grid;
+  gap: 2px;
+  margin-top: 8px;
+}
+.board-pane {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--board-ink) 5%, transparent);
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+}
+.board-pane.board-pane-selected {
+  outline: 2px solid var(--board-accent);
+}
+.board-pane .board-dot {
+  width: 8px;
+  height: 8px;
+}
+.board-pane-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 700;
+}
+.board-pane-state {
+  flex: none;
+  font-size: 11px;
+  color: var(--board-soft);
+}
+.board-pane-shell .board-pane-name {
+  font-weight: 400;
+  color: var(--board-soft);
+}
+.board-more {
+  justify-self: start;
+  margin-top: 2px;
+  padding: 2px 8px;
+  border: 1px solid var(--board-line);
+  border-radius: 7px;
+  background: var(--board-ground);
+  color: var(--board-soft);
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+.board-more:hover,
+.board-more:focus-visible {
+  border-color: var(--board-accent);
+  color: var(--board-accent);
+}
+
+/* A plain terminal: the same dark face in both themes, a green prompt and no
+   status ring, since an idle shell is normal. */
+.board-prompt {
+  flex: none;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--board-term-fg);
+}
+.board {
+  --board-term-bg: #121815;
+  --board-term-fg: #7ee08f;
+  --board-term-ink: #d5dfd6;
+}
+.board-terminal {
+  background: var(--board-term-bg);
+  border-color: color-mix(
+    in srgb,
+    var(--board-term-fg) 30%,
+    var(--board-term-bg)
+  );
+  color: var(--board-term-ink);
+}
+.board-terminal::after {
+  display: none;
+}
+.board-terminal .board-who,
+.board-terminal .board-line {
+  color: color-mix(in srgb, var(--board-term-ink) 70%, transparent);
+}
+.board-terminal .board-line {
+  color: var(--board-term-fg);
+}
+.board-sum .board-sq-shell {
+  background: transparent;
+  box-shadow: inset 0 0 0 2px var(--s-idle);
+  animation: none;
+}
+
+/* The chooser for panes beyond the drawn rows. */
+.board-chooser {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 10;
+  display: grid;
+  gap: 4px;
+  width: min(320px, calc(100% - 32px));
+  max-height: 60%;
+  overflow: auto;
+  padding: 12px;
+  border: 1px solid var(--board-line);
+  border-radius: 14px;
+  background: var(--board-card);
+  box-shadow: var(--board-lift);
+}
+.board-chooser-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+.board-chooser-head button {
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font-size: 18px;
+  cursor: pointer;
+}
+.board-chooser .board-pane {
+  padding: 8px 10px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.board-chooser .board-pane:hover,
+.board-chooser .board-pane:focus-visible {
+  background: color-mix(in srgb, var(--board-accent) 14%, transparent);
+}

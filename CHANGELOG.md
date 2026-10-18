@@ -14,8 +14,10 @@ are optional because the merged PR history records their source.
   while you move them and settle within about a second; a workspace carries its
   tabs, folds into a stack and opens into free space; Tidy works on a workspace
   or the whole board and can be undone. Zooming out shows each workspace's tabs
-  as status squares. Tabs pulse in their status colour, which the view's ⋯ menu
-  can turn off. On phones Board replaces Graph in the bottom navigation.
+  as status squares (hollow for plain terminals). A tab with several panes lists
+  them as rows you can select or open on their own, and a tab of plain shells
+  looks like a small terminal. Tabs pulse in their most urgent agent's status
+  colour, which the view's ⋯ menu can turn off. On phones Board replaces Graph in the bottom navigation.
 
 ### Fixed
 

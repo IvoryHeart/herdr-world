@@ -32,14 +32,18 @@ async function waitFor(condition: () => boolean, message: string, tries = 200) {
   throw new Error(message);
 }
 
+type Status = "working" | "blocked" | "done" | "idle" | "unknown";
+/** "shell" is a plain terminal pane (Herdr reports it as idle). */
 const space = (
   label: string,
-  tabs: [string, ...("working" | "blocked" | "done" | "idle" | "unknown")[]][],
+  tabs: [string, ...(Status | "shell")[]][],
 ): FixtureSpace => ({
   label,
-  tabs: tabs.map(([tab, ...statuses]) => ({
+  tabs: tabs.map(([tab, ...panes]) => ({
     label: tab,
-    panes: statuses.map((status) => [status] as [typeof status]),
+    panes: panes.map((pane) =>
+      pane === "shell" ? (["idle", false] as const) : ([pane] as const),
+    ) as FixtureSpace["tabs"][number]["panes"],
   })),
 });
 const world = fixtureWorld([
@@ -47,22 +51,23 @@ const world = fixtureWorld([
     space("web-app", [
       ["login fix", "blocked"],
       ["review", "done"],
-      ["dev server", "idle"],
+      ["dev server", "shell"],
       ["pair", "working", "blocked"],
     ]),
     space("docs", [
       ["tutorial", "working"],
-      ["site build", "idle"],
+      ["site build", "shell"],
     ]),
     space("api", [
       ["migrations", "unknown"],
+      ["swarm", "working", "done", "blocked", "working", "idle", "shell"],
       ["tests", "working"],
     ]),
   ]),
   fixtureHost("build-box", [
     space("infra", [
       ["deploy", "working"],
-      ["logs", "idle"],
+      ["logs", "shell"],
     ]),
     space("nightly", [
       ["benchmarks", "done"],
@@ -136,7 +141,7 @@ async function rest(limit = 600) {
 
 async function run() {
   await waitFor(
-    () => host.querySelectorAll(".board-tab").length === 12,
+    () => host.querySelectorAll(".board-tab").length === 13,
     "the board did not render every tab",
   );
   check(
@@ -156,6 +161,26 @@ async function run() {
     "a workspace with a waiting tab is marked",
   );
   check((await rest()) < 120, "the board is still at first sight");
+
+  // Taller cards (pane rows) are placed by their real size: no overlaps.
+  // Only cards on show: the overview hides tab cards (opacity 0).
+  const rects = [...host.querySelectorAll<HTMLElement>(".board-card")]
+    .filter((el) => !(el.closest(".board-far") && el.matches(".board-tab")))
+    .map((el) => el.getBoundingClientRect());
+  let overlapping = 0;
+  for (let i = 0; i < rects.length; i++)
+    for (let j = i + 1; j < rects.length; j++) {
+      const a = rects[i]!,
+        b = rects[j]!;
+      if (
+        a.left < b.right &&
+        a.right > b.left &&
+        a.top < b.bottom &&
+        a.bottom > b.top
+      )
+        overlapping++;
+    }
+  check(overlapping === 0, `no cards overlap (${overlapping} pairs)`);
 
   if (innerWidth <= 720) {
     const zones = [...host.querySelectorAll(".board-zone")].map((el) =>
@@ -212,6 +237,50 @@ async function run() {
   tab.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
   check(opened.length === 1, "a double-click opens the terminal");
 
+  // Several panes: a row each; a tap on a row selects that pane.
+  const pair = card("studio:w1:t4")!;
+  const pairRows = pair.querySelectorAll<HTMLElement>("[data-pane]");
+  check(pairRows.length === 2, "a two-pane tab shows a row per pane");
+  check(
+    pair.classList.contains("board-s-blocked"),
+    "a tab takes its most urgent agent's status",
+  );
+  const second = centre(pairRows[1]!);
+  pointer(pairRows[1]!, "pointerdown", second.x, second.y);
+  pointer(pairRows[1]!, "pointerup", second.x, second.y);
+  // Pane keys are `connection:pane`; leaf IDs end with the pane ID.
+  const secondPane = pairRows[1]!.dataset.pane!.split(":").slice(1).join(":");
+  check(
+    selected[selected.length - 1]?.endsWith(secondPane) ?? false,
+    "a tap on a pane row selects that pane",
+  );
+  // A tab with more panes than rows lists the rest in a chooser.
+  const swarm = card("studio:w3:t2")!;
+  check(
+    swarm.querySelectorAll("[data-pane]").length === 3,
+    "a six-pane tab draws three rows",
+  );
+  const more = swarm.querySelector<HTMLButtonElement>(".board-more");
+  check(more?.textContent === "+3 more", "and says how many more");
+  more?.click();
+  await waitFor(
+    () => host.querySelectorAll(".board-chooser .board-pane").length === 6,
+    "the chooser lists every pane",
+  );
+  host
+    .querySelector<HTMLButtonElement>('.board-chooser [aria-label="Close"]')!
+    .click();
+  // A plain terminal looks like one and never pulses.
+  const shell = card("studio:w1:t3")!;
+  check(
+    shell.classList.contains("board-terminal"),
+    "a shell-only tab is drawn as a terminal",
+  );
+  check(
+    getComputedStyle(shell, "::after").display === "none",
+    "a terminal has no status ring",
+  );
+
   // Fold and unfold: no other card moves.
   const others = ["studio:w2", "studio:w3", "studio:w2:t1", "build-box:w1"].map(
     (key) => [key, at(key)] as const,
@@ -220,7 +289,7 @@ async function run() {
   await waitFor(() => !card("studio:w1:t1"), "folding hid the tabs");
   await settle(100);
   check(
-    host.querySelectorAll(".board-tree").length === 8,
+    host.querySelectorAll(".board-tree").length === 9,
     "folding removes the folded tabs' lines at once",
   );
   check(
@@ -283,7 +352,11 @@ async function run() {
     "overview tabs cannot be grabbed",
   );
   check(
-    host.querySelectorAll(".board-sum span").length === 13,
+    host.querySelectorAll(".board-sum .board-sq-shell").length === 4,
+    "overview squares draw shells hollow",
+  );
+  check(
+    host.querySelectorAll(".board-sum span").length === 19,
     "workspace cards show a square per pane",
   );
   const after = at("studio:w1:t1")!;
