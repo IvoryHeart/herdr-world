@@ -126,6 +126,11 @@ function apply(ops: BoardOp[]) {
         (candidate) => candidate.id === op.string_id,
       )?.[op.end];
       if (side && "anchor" in side) side.anchor.witness = op.witness;
+    } else if (op.op === "card.color") {
+      const colors = { ...(next.layout.colors ?? {}) };
+      if (op.color) colors[op.key] = op.color;
+      else delete colors[op.key];
+      next.layout.colors = colors;
     } else if (op.op === "layout.set") {
       if (op.replace)
         next.layout = { ...next.layout, anchors: {}, offsets: {}, pinned: {} };
@@ -161,13 +166,13 @@ host.style.cssText = "position:fixed;inset:0";
 document.body.appendChild(host);
 const root = createRoot(host);
 /** Mount Board; a new key remounts it, as a reload would. */
-function mount(key: number, shown = world) {
+function mount(key: number, shown = world, selectedId: string | null = null) {
   root.render(
     <StrictMode>
       <BoardView
         key={key}
         world={shown}
-        selectedId={null}
+        selectedId={selectedId}
         onSelect={(id) => selected.push(id)}
         onOpenTerminal={(id) => opened.push(id)}
         store={store}
@@ -1010,6 +1015,55 @@ async function run() {
       Boolean(host.querySelector('[aria-label^="New workspace on "]')),
       "each host offers a new workspace",
     );
+    check(
+      card("studio:w1")!
+        .querySelector(".board-counts")!
+        .textContent!.includes("agent"),
+      "a workspace card counts its agents",
+    );
+  }
+
+  // Colours: the user picks a tab or workspace colour; status keeps its own.
+  {
+    const tabKey = "studio:w1:t2";
+    await bringIntoView(() => card(tabKey)!);
+    const c = centre(card(tabKey)!);
+    pointer(card(tabKey)!, "pointerdown", c.x, c.y, 35);
+    pointer(card(tabKey)!, "pointerup", c.x, c.y, 35);
+    const id = selected[selected.length - 1]!;
+    mount(2, world, id);
+    await waitFor(
+      () => Boolean(host.querySelector('[aria-label="Colour of review"]')),
+      "selecting a tab offers its colours",
+    );
+    const before = getComputedStyle(card(tabKey)!).backgroundColor;
+    host
+      .querySelector<HTMLButtonElement>(
+        '[aria-label="Colour of review"] [aria-label="Colour teal"]',
+      )!
+      .click();
+    await waitFor(
+      () => saved.layout.colors?.[tabKey] === "teal",
+      "the colour is saved",
+    );
+    await waitFor(
+      () => getComputedStyle(card(tabKey)!).backgroundColor !== before,
+      "the tab takes the colour",
+    );
+    check(
+      card(tabKey)!.classList.contains("board-s-done"),
+      "the status stays on the card",
+    );
+    [
+      ...host.querySelectorAll<HTMLButtonElement>(
+        '[aria-label="Colour of review"] button',
+      ),
+    ]
+      .find((b) => b.textContent === "No colour")!
+      .click();
+    await waitFor(() => !saved.layout.colors?.[tabKey], "No colour clears it");
+    mount(2, world, null);
+    await settle(50);
   }
 
   // Drag a tab onto another workspace: it glues, and asks before moving.

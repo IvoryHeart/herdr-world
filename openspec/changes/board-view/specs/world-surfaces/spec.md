@@ -16,6 +16,14 @@ authoritative host, workspace, tab or pane ancestry. A host whose topology is
 cached after failure SHALL be visibly stale and its cards SHALL be
 non-actionable. Graph, Tree and the Pixel Office SHALL be unaffected.
 
+A workspace card SHALL count its agents by status and its shells. The user MAY
+give any workspace or tab card a colour from a fixed palette, saved with the
+board; a tab without its own colour SHALL take its workspace's. A card's colour
+SHALL never stand for or hide a status: status keeps its own colours on the dot,
+ring, badge and overview squares. From an actionable workspace card the user MAY
+open a plain terminal tab or start an agent in a new tab without a note, and
+from a live host's label MAY open World's New workspace dialog.
+
 #### Scenario: Open Board
 
 - **WHEN** the user chooses Board with two hosts that expose workspaces and tabs
@@ -24,7 +32,12 @@ non-actionable. Graph, Tree and the Pixel Office SHALL be unaffected.
 #### Scenario: A tab with an agent and a shell
 
 - **WHEN** a tab holds an agent that needs the user and an idle shell
-- **THEN** its card shows both panes as rows and pulses as needing the user, and tapping the shell row selects the shell
+- **THEN** its card shows both panes as rows and is marked as needing the user, and tapping the shell row selects the shell
+
+#### Scenario: Colour a workspace
+
+- **WHEN** the user selects a workspace and picks teal
+- **THEN** the workspace and its tabs without their own colour are tinted teal on every device, and each tab still shows its status colour
 
 #### Scenario: Stale host
 
@@ -102,11 +115,11 @@ to a hidden tab SHALL attach to its workspace.
 ### Requirement: Board status pulses
 
 Each tab card SHALL show its status (working, needs you, finished but not
-checked, idle, no signal) by colour and, by default, by a pulse in that colour
-whose pace reflects urgency, with needs you fastest. A workspace with a tab that
-needs the user SHALL pulse. Pulses SHALL be switchable from the view's ⋯ menu
-and SHALL stop under reduced motion; status SHALL remain visible by colour and
-badge without them.
+checked, idle, no signal) by colour and badge. By default a tab whose agent is
+working, and the selected tab, SHALL pulse; idle, finished, waiting and
+no-signal tabs SHALL stay still, with needs you marked by its border and badge.
+Pulses SHALL be switchable from the view's ⋯ menu and SHALL stop under reduced
+motion; status SHALL remain visible by colour and badge without them.
 
 #### Scenario: Turn pulses off
 

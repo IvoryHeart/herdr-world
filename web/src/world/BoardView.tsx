@@ -1,4 +1,6 @@
 import {
+  ChevronDown,
+  ChevronUp,
   Trash2,
   EllipsisVertical,
   Maximize2,
@@ -15,6 +17,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import { createPortal } from "react-dom";
@@ -27,6 +30,8 @@ import {
 } from "./board/boardAnchors";
 import {
   NOTE_COLORS,
+  CARD_COLORS,
+  type CardColor,
   sharedBoardStore,
   useBoardDocument,
   type BoardDocumentStore,
@@ -2081,6 +2086,18 @@ export default function BoardView({
     return keys;
   }, [model, selectedId]);
 
+  /** Colours the user chose; a tab without its own takes its workspace's. */
+  const cardColors = saved?.layout.colors ?? {};
+  const tabColor = (tab: BoardTab) =>
+    cardColors[tab.key] ?? cardColors[tab.workspaceKey];
+  /** The workspace or tab whose colour the bar changes. */
+  const colorKey =
+    [...selectedKeys].find((key) => model.tabByKey.has(key)) ??
+    [...selectedKeys].find((key) => model.workspaceByKey.has(key)) ??
+    null;
+  const setCardColor = (key: string, color: CardColor | null) =>
+    void report(boardStore.patch([{ op: "card.color", key, color }]));
+
   const toolbar = (
     <WorldViewToolbar
       viewLabel="Board"
@@ -2207,8 +2224,10 @@ export default function BoardView({
                 role="button"
                 tabIndex={0}
                 aria-label={`Workspace ${space.label}, ${space.tabKeys.length} tabs`}
+                style={tintStyle(cardColors[space.key])}
                 className={[
                   "board-card board-workspace",
+                  cardColors[space.key] ? "board-tinted" : "",
                   folded ? "board-folded" : "",
                   attention ? "board-attn" : "",
                   space.stale ? "board-stale" : "",
@@ -2229,19 +2248,28 @@ export default function BoardView({
                     className="board-fold"
                     aria-label={`${folded ? "Open" : "Fold"} ${space.label}`}
                     onPointerDown={(event) => event.stopPropagation()}
+                    title={folded ? "Show the tabs" : "Fold the tabs away"}
                     onClick={() => toggleFold(space)}
                   >
-                    {folded ? space.tabKeys.length : "−"}
+                    {folded ? (
+                      <>
+                        {space.tabKeys.length}
+                        <ChevronDown size={14} aria-hidden="true" />
+                      </>
+                    ) : (
+                      <ChevronUp size={14} aria-hidden="true" />
+                    )}
                   </button>
                   {space.actionable ? (
                     <button
                       type="button"
                       className="board-fold board-add"
                       aria-label={`New in ${space.label}`}
+                      title="New terminal or agent"
                       onPointerDown={(event) => event.stopPropagation()}
                       onClick={() => setAddTo(space.key)}
                     >
-                      +
+                      <Plus size={14} aria-hidden="true" />
                     </button>
                   ) : null}
                 </div>
@@ -2249,6 +2277,7 @@ export default function BoardView({
                   className="board-handle"
                   title="Drag to string this to a note or card"
                 />
+                <div className="board-counts">{workspaceCounts(space)}</div>
                 <div className="board-sum" aria-hidden="true">
                   {space.squares.map((square, i) => (
                     <span
@@ -2278,9 +2307,11 @@ export default function BoardView({
                 role="button"
                 tabIndex={0}
                 aria-label={`${tab.label}, ${tabSummary(tab)}`}
+                style={tintStyle(tabColor(tab))}
                 className={[
                   "board-card board-tab",
                   `board-s-${tab.status}`,
+                  tabColor(tab) ? "board-tinted" : "",
                   tab.shellOnly ? "board-terminal" : "",
                   multi ? "board-multi" : "",
                   tab.stale ? "board-stale" : "",
@@ -2671,6 +2702,17 @@ export default function BoardView({
             })}
           </div>
         ) : null}
+        {!noteSelected && colorKey ? (
+          <CardBar
+            label={
+              model.tabByKey.get(colorKey)?.label ??
+              model.workspaceByKey.get(colorKey)?.label ??
+              ""
+            }
+            color={cardColors[colorKey] ?? null}
+            onColor={(color) => setCardColor(colorKey, color)}
+          />
+        ) : null}
         {noteSelected && saved?.notes.find((n) => n.id === noteSelected) ? (
           <NoteBar
             note={saved.notes.find((n) => n.id === noteSelected)!}
@@ -2864,6 +2906,66 @@ export default function BoardView({
         ) : null}
       </div>
     </>
+  );
+}
+
+/** A workspace's agents by status, and its shells: "3 agents · 1 working · 2 idle". */
+const COUNT_ORDER: [WorldAgentStatus, string][] = [
+  ["blocked", "waiting"],
+  ["working", "working"],
+  ["done", "done"],
+  ["idle", "idle"],
+  ["unknown", "unknown"],
+];
+function workspaceCounts(space: BoardWorkspace) {
+  const agents = space.squares.filter((square) => square.isAgent);
+  const shells = space.squares.length - agents.length;
+  const parts = [`${agents.length} agent${agents.length === 1 ? "" : "s"}`];
+  for (const [status, word] of COUNT_ORDER) {
+    const n = agents.filter((square) => square.status === status).length;
+    if (n) parts.push(`${n} ${word}`);
+  }
+  if (shells) parts.push(`${shells} shell${shells === 1 ? "" : "s"}`);
+  return parts.join(" · ");
+}
+const tintStyle = (color: CardColor | undefined) =>
+  color ? ({ "--tint": `var(--card-${color})` } as CSSProperties) : undefined;
+
+/** The selected workspace or tab's colour: the user's choice, never a status. */
+function CardBar({
+  label,
+  color,
+  onColor,
+}: {
+  label: string;
+  color: CardColor | null;
+  onColor(color: CardColor | null): void;
+}) {
+  return (
+    <div
+      className="board-notebar"
+      role="toolbar"
+      aria-label={`Colour of ${label}`}
+    >
+      {CARD_COLORS.map((choice) => (
+        <button
+          key={choice}
+          type="button"
+          className="board-swatch board-card-swatch"
+          style={tintStyle(choice)}
+          aria-label={`Colour ${choice}`}
+          aria-pressed={color === choice}
+          onClick={() => onColor(choice)}
+        />
+      ))}
+      <button
+        type="button"
+        aria-pressed={color === null}
+        onClick={() => onColor(null)}
+      >
+        No colour
+      </button>
+    </div>
   );
 }
 

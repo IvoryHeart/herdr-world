@@ -45,7 +45,9 @@ A Web/PWA client for a running [Herdr](https://herdr.dev) server.
   - Tabs list each pane as a row; plain-shell tabs look like terminals; only a
     working agent's tab (or the selected one) pulses (a ⋯ setting).
   - **+** on a workspace opens a terminal or starts Claude or Codex in a new
-    tab; **+** on a host creates a workspace.
+    tab; **+** on a host creates a workspace. Workspace cards count their
+    agents by status; workspaces and tabs take a colour the user picks, while
+    status keeps its own colours.
   - Notes and strings are saved by the World service and shared across your
     devices. Strings attach to an exact pane, tab or workspace; a note strung to
     an agent can be sent to it, only when you press Send, after World checks the

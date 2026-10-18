@@ -3,6 +3,7 @@ import {
   existsSync,
   mkdirSync,
   readdirSync,
+  readFileSync,
   rmSync,
   statSync,
   writeFileSync,
@@ -178,6 +179,39 @@ describe("Board store", () => {
       { op: "layout.set", replace: true, offsets: { kept: { x: 3, y: 3 } } },
     ]);
     expect(store.get().layout.offsets).toEqual({ kept: { x: 3, y: 3 } });
+  });
+
+  test("card colours are set, cleared, kept by layout saves and persisted", () => {
+    const store = new BoardStore(path);
+    store.patch([
+      { op: "card.color", key: "studio:w1", color: "teal" },
+      { op: "card.color", key: "studio:w1:t2", color: "purple" },
+    ]);
+    store.patch([{ op: "card.color", key: "studio:w1:t2", color: null }]);
+    store.patch([
+      {
+        op: "layout.set",
+        replace: true,
+        offsets: { "studio:w1": { x: 1, y: 1 } },
+      },
+    ]);
+    expect(new BoardStore(path).get().layout.colors).toEqual({
+      "studio:w1": "teal",
+    });
+    expect(() =>
+      store.patch([
+        { op: "card.color", key: "studio:w1", color: "plaid" as never },
+      ]),
+    ).toThrow("card colour");
+  });
+
+  test("a board saved before card colours loads with none", () => {
+    const store = new BoardStore(path);
+    store.patch([{ op: "note.put", note: note("n1") }]);
+    const raw = JSON.parse(readFileSync(path, "utf8"));
+    delete raw.layout.colors;
+    writeFileSync(path, JSON.stringify(raw));
+    expect(new BoardStore(path).get().layout.colors).toEqual({});
   });
 
   test("a string whose target is gone is detached, not deleted", () => {

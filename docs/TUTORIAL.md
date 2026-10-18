@@ -181,13 +181,16 @@ on your phone and desktop.
    its workspace. A tab with several panes lists them as rows; a tab of plain
    shells looks like a small terminal. A working agent's tab pulses (as does the
    selected tab); idle, finished and waiting tabs stay still, and the **⋯** menu
-   turns the pulses off. **+** on a workspace opens a new terminal or starts
-   Claude or Codex in a new tab; **+** beside a host's name creates a workspace.
+   turns the pulses off. Each workspace card counts its agents by status.
+   **+** on a workspace opens a new terminal or starts Claude or Codex in a new
+   tab; **+** beside a host's name creates a workspace. Select a workspace or
+   tab to give it a colour of your own (a tab takes its workspace's colour
+   unless it has one); status keeps its own colours.
 2. Scroll or pinch to zoom, drag empty board to pan, or use the controls at the
    bottom right. Zoomed out, each workspace shows a square per pane (hollow for
    shells); tap a workspace there to zoom in on it.
 3. Drag a workspace and its tabs follow; cards settle within about a second.
-   **−** on a workspace folds its tabs behind a count, and tapping the count opens
+   The chevron on a workspace folds its tabs behind a count, and tapping the count opens
    them into free space. The sparkle button tidies the selected workspace, or
    the whole board, and offers **Undo**; notes strung to cards move with them,
    and notes left on a card move to free space.

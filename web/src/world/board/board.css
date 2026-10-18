@@ -95,9 +95,9 @@
   left: 22px;
   top: -20px;
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 8px;
-  padding: 4px 14px;
+  padding: 4px 6px 4px 14px;
   border: 2px solid color-mix(in srgb, var(--board-zone) 60%, transparent);
   border-radius: 999px;
   background: var(--board-ground);
@@ -1061,14 +1061,55 @@
   margin-left: 4px;
 }
 .board-zone-add {
-  margin-left: 8px;
-  width: 22px;
-  height: 22px;
-  border: 1px solid var(--board-line);
-  border-radius: 6px;
-  background: var(--board-card);
-  color: var(--board-ink);
-  font: inherit;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1.5px solid color-mix(in srgb, var(--board-zone) 60%, transparent);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--board-zone);
+  font-size: 18px;
+  font-weight: 600;
   line-height: 1;
   cursor: pointer;
+}
+.board-zone-add:hover {
+  background: color-mix(in srgb, var(--board-zone) 16%, transparent);
+}
+.board-fold {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+}
+
+/* Colours the user gives cards. Status keeps its own colours (dot, ring,
+   badge, squares), so a tinted card still shows what its agents are doing. */
+.board {
+  --card-red: #e5534b;
+  --card-orange: #e8853d;
+  --card-yellow: #d9b43b;
+  --card-green: #57ab5a;
+  --card-teal: #39b5a4;
+  --card-blue: #4f8ef7;
+  --card-purple: #9a6ef0;
+  --card-pink: #e26fae;
+}
+.board-card.board-tinted {
+  background: color-mix(in srgb, var(--tint) 20%, var(--board-card));
+  border-color: color-mix(in srgb, var(--tint) 75%, var(--board-line));
+}
+.board-notebar .board-swatch.board-card-swatch {
+  background: var(--tint);
+}
+.board-counts {
+  margin-top: 4px;
+  color: var(--board-soft);
+  font-size: 12px;
+  line-height: 1.35;
+}
+.board-far .board-counts {
+  font-size: 20px;
 }

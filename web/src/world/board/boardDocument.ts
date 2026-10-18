@@ -12,6 +12,26 @@ import {
 
 export type BoardPoint = { x: number; y: number };
 export type NoteColor = "yellow" | "pink" | "blue" | "green";
+/** Colours the user gives workspace and tab cards; status colours are separate. */
+export type CardColor =
+  | "red"
+  | "orange"
+  | "yellow"
+  | "green"
+  | "teal"
+  | "blue"
+  | "purple"
+  | "pink";
+export const CARD_COLORS: readonly CardColor[] = [
+  "red",
+  "orange",
+  "yellow",
+  "green",
+  "teal",
+  "blue",
+  "purple",
+  "pink",
+];
 export const NOTE_COLORS: readonly NoteColor[] = [
   "yellow",
   "pink",
@@ -47,6 +67,8 @@ export type BoardDocument = {
     offsets: Record<string, BoardPoint>;
     pinned: Record<string, BoardPoint>;
     folded: string[];
+    /** Card key to the colour the user chose; absent before card colours. */
+    colors?: Record<string, CardColor>;
   };
   notes: BoardNote[];
   strings: BoardString[];
@@ -66,6 +88,7 @@ export type BoardOp =
       folded?: string[];
       replace?: boolean;
     }
+  | { op: "card.color"; key: string; color: CardColor | null }
   | {
       op: "anchor.witness";
       string_id: string;

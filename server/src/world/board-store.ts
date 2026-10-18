@@ -39,11 +39,23 @@ export type BoardString = {
   /** Its target is gone (Herdr said so); it waits in Needs a home. */
   detached?: boolean;
 };
+/** Colours the user gives workspace and tab cards; status colours are separate. */
+export type CardColor =
+  | "red"
+  | "orange"
+  | "yellow"
+  | "green"
+  | "teal"
+  | "blue"
+  | "purple"
+  | "pink";
 export type BoardLayoutDocument = {
   anchors: Record<string, BoardPoint>;
   offsets: Record<string, BoardPoint>;
   pinned: Record<string, BoardPoint>;
   folded: string[];
+  /** Card key to the colour the user chose for it. */
+  colors: Record<string, CardColor>;
 };
 export type BoardDocument = {
   version: 1;
@@ -79,6 +91,7 @@ export type BoardOp =
        */
       replace?: boolean;
     }
+  | { op: "card.color"; key: string; color: CardColor | null }
   | {
       op: "anchor.witness";
       string_id: string;
@@ -109,12 +122,22 @@ export class BoardConflictError extends Error {
 
 const COLORS: readonly NoteColor[] = ["yellow", "pink", "blue", "green"];
 const KINDS: readonly BoardAnchorKind[] = ["workspace", "tab", "pane"];
+export const CARD_COLORS: readonly CardColor[] = [
+  "red",
+  "orange",
+  "yellow",
+  "green",
+  "teal",
+  "blue",
+  "purple",
+  "pink",
+];
 
 export function emptyBoardDocument(): BoardDocument {
   return {
     version: 1,
     revision: 0,
-    layout: { anchors: {}, offsets: {}, pinned: {}, folded: [] },
+    layout: { anchors: {}, offsets: {}, pinned: {}, folded: [], colors: {} },
     notes: [],
     strings: [],
   };
@@ -161,6 +184,17 @@ function keys(value: unknown, what: string): string[] {
   if (value === undefined) return [];
   if (!Array.isArray(value)) fail(`${what} must be a list`);
   return value.map((key) => text(key, `${what} entry`, BOARD_LIMITS.key));
+}
+function colors(value: unknown): Record<string, CardColor> {
+  if (value === undefined) return {};
+  if (!isObject(value)) fail("colors must be an object");
+  const out: Record<string, CardColor> = {};
+  for (const [key, entry] of Object.entries(value)) {
+    text(key, "colors key", BOARD_LIMITS.key);
+    if (!CARD_COLORS.includes(entry as CardColor)) fail("card colour");
+    out[key] = entry as CardColor;
+  }
+  return out;
 }
 function anchor(value: unknown): BoardAnchor {
   if (!isObject(value)) fail("anchor must be an object");
@@ -225,6 +259,8 @@ export function parseBoardDocument(value: unknown): BoardDocument {
       offsets: points(layout.offsets, "offsets"),
       pinned: points(layout.pinned, "pinned"),
       folded: keys(layout.folded, "folded"),
+      // Boards saved before card colours have none.
+      colors: colors(layout.colors),
     },
     notes: notes.map((entry) => {
       const rev =
@@ -249,7 +285,8 @@ function checkBounds(document: BoardDocument) {
     Object.keys(layout.anchors).length +
     Object.keys(layout.offsets).length +
     Object.keys(layout.pinned).length +
-    layout.folded.length;
+    layout.folded.length +
+    Object.keys(layout.colors).length;
   if (entries > BOARD_LIMITS.layoutEntries)
     fail(`at most ${BOARD_LIMITS.layoutEntries} layout entries`);
   const noteIds = new Set(document.notes.map((entry) => entry.id));
@@ -379,6 +416,14 @@ function applyOp(next: BoardDocument, op: BoardOp, current: BoardDocument) {
         delete next.layout.pinned[key];
       if (op.folded !== undefined)
         next.layout.folded = keys(op.folded, "folded");
+      return;
+    }
+    case "card.color": {
+      const key = text(op.key, "card key", BOARD_LIMITS.key);
+      if (op.color === null) delete next.layout.colors[key];
+      else if (CARD_COLORS.includes(op.color))
+        next.layout.colors[key] = op.color;
+      else fail("card colour");
       return;
     }
     case "anchor.witness": {
