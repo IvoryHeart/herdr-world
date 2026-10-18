@@ -1,8 +1,8 @@
 ## 1. Model and placement
 
-- [ ] 1.1 Implement the board model as a pure projection of World's bounded topology (hosts, workspaces, tabs, status) plus board items; verify completeness against the maximum-scale fixture.
-- [ ] 1.2 Implement free-space placement, offsets and tidy (selection or whole board, with undo) as pure functions; verify non-overlap, stability under topology changes and zoom independence in unit tests.
-- [ ] 1.3 Implement the short-lived physics (springs to anchor plus offset, overlap resolution, throw with friction, cooling to rest); verify it reaches rest within the time bound and writes offsets.
+- [x] 1.1 Implement the board model as a pure projection of World's bounded topology (hosts, workspaces, tabs, status) plus board items; verify completeness against the maximum-scale fixture.
+- [x] 1.2 Implement free-space placement, offsets and tidy (selection or whole board, with undo) as pure functions; verify non-overlap, stability under topology changes and zoom independence in unit tests.
+- [x] 1.3 Implement the short-lived physics (springs to anchor plus offset, overlap resolution, throw with friction, cooling to rest); verify it reaches rest within the time bound and writes offsets.
 
 ## 2. Board view
 
