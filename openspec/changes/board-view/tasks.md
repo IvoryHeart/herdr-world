@@ -27,7 +27,7 @@
 ## 5. Persistence and identity
 
 - [x] 5.1 Add the bounded, revisioned board store in the service beside the connection profiles, with qualified read and patch RPCs and a change broadcast; verify bounds, atomic writes, conflict rejection and isolation between connection profiles.
-- [ ] 5.2 Anchor strings to workspace, tab and pane IDs with terminal-ID continuity witnesses and the attached, unresolved, unconfirmed and detached states; rewrite pane anchors from World move results; add the Needs a home tray and the per-host keep-or-detach prompt; verify with delayed-host recovery, offline host, World restart, Herdr restart, reused IDs with identical names, rename, close and external-move sequences.
+- [x] 5.2 Anchor strings to workspace, tab and pane IDs with terminal-ID continuity witnesses and the attached, unresolved, unconfirmed and detached states; rewrite pane anchors from World move results; add the Needs a home tray and the per-host keep-or-detach prompt; verify with delayed-host recovery, offline host, World restart, Herdr restart, reused IDs with identical names, rename, close and external-move sequences.
 - [ ] 5.3 Record the behavioural verification decision for the store and anchors in `verification/coverage.json` (a Quint model or a justified direct alternative).
 
 ## 6. Delivery

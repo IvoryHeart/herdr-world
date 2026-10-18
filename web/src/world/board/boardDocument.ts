@@ -33,7 +33,12 @@ export type BoardNote = {
   y: number;
   rev: number;
 };
-export type BoardString = { id: string; from: BoardEnd; to: BoardEnd };
+export type BoardString = {
+  id: string;
+  from: BoardEnd;
+  to: BoardEnd;
+  detached?: boolean;
+};
 export type BoardDocument = {
   version: 1;
   revision: number;
@@ -51,6 +56,7 @@ export type BoardOp =
   | { op: "note.delete"; id: string; rev: number }
   | { op: "string.put"; string: BoardString }
   | { op: "string.delete"; id: string }
+  | { op: "string.detach"; id: string }
   | {
       op: "layout.set";
       anchors?: Record<string, BoardPoint>;

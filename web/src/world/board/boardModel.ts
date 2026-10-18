@@ -16,6 +16,8 @@ import type {
 export type BoardHost = {
   key: string;
   connectionId: string;
+  /** The runtime generation the topology was read from. */
+  generation: number;
   label: string;
   stale: boolean;
   workspaceKeys: string[];
@@ -108,6 +110,7 @@ export function projectBoard(world: WorldObject): BoardModel {
     const boardHost: BoardHost = {
       key: hostKey,
       connectionId: host.connectionId,
+      generation: host.generation,
       label: host.label,
       stale: host.stale,
       workspaceKeys: [],

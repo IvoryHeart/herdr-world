@@ -118,7 +118,15 @@ function apply(ops: BoardOp[]) {
       next.strings.push(op.string);
     } else if (op.op === "string.delete")
       next.strings = next.strings.filter((string) => string.id !== op.id);
-    else if (op.op === "layout.set") {
+    else if (op.op === "string.detach") {
+      const string = next.strings.find((candidate) => candidate.id === op.id);
+      if (string) string.detached = true;
+    } else if (op.op === "anchor.witness") {
+      const side = next.strings.find(
+        (candidate) => candidate.id === op.string_id,
+      )?.[op.end];
+      if (side && "anchor" in side) side.anchor.witness = op.witness;
+    } else if (op.op === "layout.set") {
       if (op.replace)
         next.layout = { ...next.layout, anchors: {}, offsets: {}, pinned: {} };
       Object.assign(next.layout.anchors, op.anchors ?? {});
@@ -143,6 +151,8 @@ const store = new BoardDocumentStore({
 const selected: string[] = [];
 const opened: string[] = [];
 const sent: { paneId: string; terminalId: string; text: string }[] = [];
+/** Pane IDs the fake service reports as closed ("not found"). */
+const closedPanes = new Set<string>();
 const host = document.createElement("div");
 host.style.cssText = "position:fixed;inset:0";
 document.body.appendChild(host);
@@ -166,6 +176,9 @@ function mount(key: number, shown = world) {
           });
           return { status: "sent", agent: target.label };
         }}
+        checkAnchor={async (_host, anchor) => ({
+          state: closedPanes.has(anchor.native_id) ? "absent" : "present",
+        })}
       />
     </StrictMode>,
   );
@@ -750,6 +763,94 @@ async function run() {
   check(
     Math.hypot(dragTo.x - dragFrom.x, dragTo.y - dragFrom.y) > 20,
     "cards still drag after the topology comes back",
+  );
+
+  /** The fixture world with each pane changed by `edit`, or dropped if null. */
+  const variant = (
+    edit: (leaf: (typeof world.leaves)[number]) => typeof leaf | null,
+  ) =>
+    fixtureWorld(
+      world.hosts.map((h) => ({
+        ...h,
+        spaces: h.spaces.map((space) => ({
+          ...space,
+          children: space.children.flatMap((leaf) => {
+            const next = edit(leaf);
+            return next ? [next] : [];
+          }),
+        })),
+      })),
+    );
+  const strungPane = () => {
+    const end = saved.strings[0]!.to;
+    return "anchor" in end ? end.anchor : null;
+  };
+
+  // Herdr restarted: same IDs, new terminals. Board asks before trusting them.
+  mount(
+    2,
+    variant((leaf) => ({
+      ...leaf,
+      terminalId: `${leaf.terminalId}_restarted`,
+    })),
+  );
+  await waitFor(
+    () => Boolean(host.querySelector(".board-banner")),
+    "a restarted Herdr asks to keep or detach",
+  );
+  await waitFor(
+    () => Boolean(host.querySelector(".board-yarn-loose")),
+    "unconfirmed strings are dashed",
+  );
+  [...host.querySelectorAll<HTMLButtonElement>(".board-banner button")]
+    .find((b) => b.textContent === "Keep")!
+    .click();
+  await waitFor(
+    () => strungPane()?.witness.some((t) => t.endsWith("_restarted")) ?? false,
+    "Keep records the new terminals",
+  );
+  await waitFor(
+    () => !host.querySelector(".board-banner"),
+    "the prompt goes once kept",
+  );
+  // Back to the original terminals: Keep again so the rest of the test runs as before.
+  mount(2);
+  await waitFor(
+    () => Boolean(host.querySelector(".board-banner")),
+    "the original terminals are unconfirmed again",
+  );
+  [...host.querySelectorAll<HTMLButtonElement>(".board-banner button")]
+    .find((b) => b.textContent === "Keep")!
+    .click();
+  await waitFor(() => !host.querySelector(".board-banner"), "kept again");
+
+  // The strung pane closes and Herdr says it is not found: Needs a home.
+  const gone = strungPane()!.native_id;
+  closedPanes.add(gone);
+  mount(
+    2,
+    variant((leaf) => (leaf.nativeId === gone ? null : leaf)),
+  );
+  await waitFor(
+    () => saved.strings[0]?.detached === true,
+    "a closed target detaches its string",
+  );
+  check(saved.notes.length === 1, "the note stays on the board");
+  host.querySelector<HTMLButtonElement>(".board-tray-button")!.click();
+  await waitFor(
+    () => host.querySelectorAll(".board-tray-row").length === 1,
+    "Needs a home lists the string",
+  );
+  [...host.querySelectorAll<HTMLButtonElement>(".board-tray-row button")]
+    .find((b) => b.textContent === "Discard")!
+    .click();
+  await waitFor(() => saved.strings.length === 0, "Discard removes the string");
+  closedPanes.clear();
+  mount(2);
+  // Wait for the restored world itself: the closed pane's square is back.
+  await waitFor(
+    () => host.querySelectorAll(".board-sum span").length === 19,
+    "the board is back with every pane",
   );
 
   // Zoom out to the overview: tabs fold into status squares, nothing moves.

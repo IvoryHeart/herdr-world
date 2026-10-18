@@ -32,7 +32,13 @@ export type BoardNote = {
   y: number;
   rev: number;
 };
-export type BoardString = { id: string; from: BoardEnd; to: BoardEnd };
+export type BoardString = {
+  id: string;
+  from: BoardEnd;
+  to: BoardEnd;
+  /** Its target is gone (Herdr said so); it waits in Needs a home. */
+  detached?: boolean;
+};
 export type BoardLayoutDocument = {
   anchors: Record<string, BoardPoint>;
   offsets: Record<string, BoardPoint>;
@@ -57,6 +63,7 @@ export type BoardOp =
   | { op: "note.delete"; id: string; rev: number }
   | { op: "string.put"; string: BoardString }
   | { op: "string.delete"; id: string }
+  | { op: "string.detach"; id: string }
   | {
       op: "layout.set";
       anchors?: Record<string, BoardPoint>;
@@ -196,6 +203,7 @@ function string(value: unknown): BoardString {
     id: text(value.id, "string id", BOARD_LIMITS.key),
     from: end(value.from),
     to: end(value.to),
+    ...(value.detached === true ? { detached: true } : {}),
   };
 }
 
@@ -353,6 +361,11 @@ function applyOp(next: BoardDocument, op: BoardOp, current: BoardDocument) {
     case "string.delete":
       next.strings = next.strings.filter((entry) => entry.id !== op.id);
       return;
+    case "string.detach": {
+      const target = next.strings.find((entry) => entry.id === op.id);
+      if (target) target.detached = true;
+      return;
+    }
     case "layout.set": {
       if (op.replace === true) {
         next.layout.anchors = {};

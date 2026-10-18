@@ -180,6 +180,26 @@ describe("Board store", () => {
     expect(store.get().layout.offsets).toEqual({ kept: { x: 3, y: 3 } });
   });
 
+  test("a string whose target is gone is detached, not deleted", () => {
+    const store = new BoardStore(path);
+    store.patch([
+      { op: "note.put", note: note("n1") },
+      {
+        op: "string.put",
+        string: {
+          id: "s1",
+          from: { note: "n1" },
+          to: { anchor: anchor("w1:p1") },
+        },
+      },
+    ]);
+    store.patch([{ op: "string.detach", id: "s1" }]);
+    expect(new BoardStore(path).get().strings[0]).toMatchObject({
+      id: "s1",
+      detached: true,
+    });
+  });
+
   test("bounds are enforced with clear errors", () => {
     const store = new BoardStore(path);
     expect(() =>

@@ -842,3 +842,73 @@
   z-index: 4;
   cursor: default;
 }
+
+/* After a Herdr restart: strings that cannot be confirmed wait for the user. */
+.board-banner {
+  position: absolute;
+  z-index: 7;
+  left: 50%;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 72px);
+  transform: translateX(-50%);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  width: min(560px, calc(100% - 32px));
+  padding: 10px 12px;
+  border: 1.5px solid var(--s-blocked);
+  border-radius: 12px;
+  background: var(--board-card);
+  color: var(--board-ink);
+  box-shadow: var(--board-shadow);
+  font-size: 13.5px;
+}
+.board-banner span {
+  flex: 1 1 260px;
+}
+.board-banner button,
+.board-tray-row button {
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--board-line);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--board-ink);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.board-banner button:first-of-type {
+  border-color: var(--board-accent);
+  background: var(--board-accent);
+  color: var(--board-card);
+  font-weight: 700;
+}
+.board-controls .board-tray-button {
+  width: auto;
+  min-width: 36px;
+  padding: 0 8px;
+  border: 1.5px solid var(--board-yarn);
+  color: var(--board-yarn);
+  font: inherit;
+  font-weight: 700;
+}
+.board-tray-hint {
+  margin: 0 0 6px;
+  color: var(--board-soft);
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+.board-tray-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 0;
+  border-top: 1px solid var(--board-line);
+}
+.board-tray-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}

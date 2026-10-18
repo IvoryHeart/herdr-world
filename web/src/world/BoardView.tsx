@@ -24,12 +24,15 @@ import {
   useBoardDocument,
   type BoardDocumentStore,
   type BoardEnd,
+  type BoardAnchor,
   type BoardNote,
   type BoardOp,
+  type BoardString,
 } from "./board/boardDocument";
 import {
   boardStatusOrder,
   projectBoard,
+  type BoardHost,
   type BoardModel,
   type BoardPane,
   type BoardTab,
@@ -139,6 +142,16 @@ export type SendTarget = {
   terminalId: string;
 };
 export type SendOutcome = { status: string; message?: string; agent?: string };
+async function checkAnchorThroughService(host: BoardHost, anchor: BoardAnchor) {
+  const { bridge } = await import("../api");
+  return (await bridge
+    .connection(host.connectionId, host.generation)
+    .call(
+      "board.check_anchor",
+      { kind: anchor.kind, native_id: anchor.native_id },
+      15_000,
+    )) as { state: string };
+}
 async function sendNoteThroughService(target: SendTarget, text: string) {
   const { bridge } = await import("../api");
   return (await bridge
@@ -231,6 +244,7 @@ export default function BoardView({
   onOpenTerminal,
   store,
   sendNote = sendNoteThroughService,
+  checkAnchor = checkAnchorThroughService,
 }: {
   world: WorldObject;
   toolbarPortal?: Element | null;
@@ -241,6 +255,11 @@ export default function BoardView({
   store?: BoardDocumentStore;
   /** Send a note to an agent's pane; World's service by default. */
   sendNote?: (target: SendTarget, text: string) => Promise<SendOutcome>;
+  /** Ask the service whether an anchor's target exists; World's by default. */
+  checkAnchor?: (
+    host: BoardHost,
+    anchor: BoardAnchor,
+  ) => Promise<{ state: string }>;
 }) {
   const model = useMemo(() => projectBoard(world), [world]);
   const boardStore = useMemo(() => store ?? sharedBoardStore(), [store]);
@@ -253,6 +272,9 @@ export default function BoardView({
   const [noteSelected, setNoteSelected] = useState<string | null>(null);
   const [picked, setPicked] = useState<string | null>(null);
   const [stringFrom, setStringFrom] = useState<StringEnd | null>(null);
+  const [trayOpen, setTrayOpen] = useState(false);
+  /** Anchors already asked about this session: `string id:end`. */
+  const checkedAnchors = useRef(new Set<string>());
   const [far, setFar] = useState(false);
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
   const [query, setQuery] = useState("");
@@ -799,6 +821,7 @@ export default function BoardView({
     const seen = new Set<string>();
     let cutAt: Point | null = null;
     for (const string of strings) {
+      if (string.detached) continue;
       const a = pointOf(string.from, m),
         b = pointOf(string.to, m);
       if (!a || !b) continue;
@@ -1393,10 +1416,98 @@ export default function BoardView({
       ]),
     );
   }
+  /**
+   * Strings whose target is on the board but holds none of the terminals it
+   * was made with (Herdr restarted, or a new session reuses the IDs), grouped
+   * by host; and strings whose target is missing from a current host, to ask
+   * the service about.
+   */
+  const anchorStates = useMemo(() => {
+    const unconfirmed = new Map<
+      string,
+      { string: BoardString; end: "from" | "to"; terminals: string[] }[]
+    >();
+    const missing: {
+      string: BoardString;
+      end: "from" | "to";
+      host: BoardHost;
+      anchor: BoardAnchor;
+    }[] = [];
+    for (const string of saved?.strings ?? []) {
+      if (string.detached) continue;
+      for (const side of ["from", "to"] as const) {
+        const end = string[side];
+        if (!("anchor" in end)) continue;
+        const host = model.hostByKey.get(end.anchor.connection_id);
+        if (!host || host.stale) continue;
+        const target = targetOf(model, end.anchor);
+        if (target && !confirmed(end.anchor, target)) {
+          const list = unconfirmed.get(host.key) ?? [];
+          list.push({
+            string,
+            end: side,
+            terminals: target.terminals.slice(0, 16),
+          });
+          unconfirmed.set(host.key, list);
+        } else if (!target)
+          missing.push({ string, end: side, host, anchor: end.anchor });
+      }
+    }
+    return { unconfirmed, missing };
+  }, [saved, model]);
+  // Ask once per anchor whether a missing target is really gone; only
+  // Herdr's own "not found" detaches the string.
+  useEffect(() => {
+    for (const item of anchorStates.missing) {
+      const key = `${item.string.id}:${item.end}`;
+      if (checkedAnchors.current.has(key)) continue;
+      checkedAnchors.current.add(key);
+      void checkAnchor(item.host, item.anchor)
+        .then((result) => {
+          if (result.state === "absent")
+            void report(
+              boardStore.patch([{ op: "string.detach", id: item.string.id }]),
+            );
+          // Unknown or present: ask again after the next topology change.
+          else checkedAnchors.current.delete(key);
+        })
+        .catch(() => checkedAnchors.current.delete(key));
+    }
+    // report and boardStore are stable for this purpose.
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+  }, [anchorStates, checkAnchor]);
+  const keepAnchors = (hostKey: string) => {
+    const list = anchorStates.unconfirmed.get(hostKey) ?? [];
+    void report(
+      boardStore.patch(
+        list.map(({ string, end, terminals }) => ({
+          op: "anchor.witness" as const,
+          string_id: string.id,
+          end,
+          witness: terminals,
+        })),
+      ),
+    );
+  };
+  const detachAnchors = (hostKey: string) => {
+    const ids = new Set(
+      (anchorStates.unconfirmed.get(hostKey) ?? []).map(
+        ({ string }) => string.id,
+      ),
+    );
+    void report(
+      boardStore.patch(
+        [...ids].map((id) => ({ op: "string.detach" as const, id })),
+      ),
+    );
+  };
+  const detached = (saved?.strings ?? []).filter((string) => string.detached);
+
   /** The agents a note can be sent to: confirmed strings to agent panes. */
   const sendTargets = (noteId: string): SendTarget[] => {
     const out: SendTarget[] = [];
     for (const string of saved?.strings ?? []) {
+      if (string.detached) continue;
       const ends = [string.from, string.to];
       if (!ends.some((end) => "note" in end && end.note === noteId)) continue;
       for (const end of ends) {
@@ -1854,6 +1965,97 @@ export default function BoardView({
           <Trash2 size={14} aria-hidden="true" />
           Delete
         </button>
+        {[...anchorStates.unconfirmed].map(([hostKey, list]) => (
+          <div key={hostKey} className="board-banner" role="alert">
+            <span>
+              Herdr on {model.hostByKey.get(hostKey)?.label ?? hostKey} has
+              restarted, so {list.length} string{list.length === 1 ? "" : "s"}{" "}
+              can't be confirmed. Nothing is sent to{" "}
+              {list.length === 1 ? "it" : "them"} until you choose.
+            </span>
+            <button type="button" onClick={() => keepAnchors(hostKey)}>
+              Keep
+            </button>
+            <button type="button" onClick={() => detachAnchors(hostKey)}>
+              Detach
+            </button>
+          </div>
+        ))}
+        {trayOpen && detached.length ? (
+          <div
+            className="board-chooser board-tray"
+            role="dialog"
+            aria-label="Needs a home"
+          >
+            <div className="board-chooser-head">
+              <strong>Needs a home</strong>
+              <button
+                type="button"
+                aria-label="Close"
+                onClick={() => setTrayOpen(false)}
+              >
+                ×
+              </button>
+            </div>
+            <p className="board-tray-hint">
+              These strings' targets have closed. Re-attach a note to another
+              card, or discard the string; the notes stay on the board.
+            </p>
+            {detached.map((string) => {
+              const noteEnd = [string.from, string.to].find(
+                (end) => "note" in end,
+              ) as { note: string } | undefined;
+              const anchorEnd = [string.from, string.to].find(
+                (end) => "anchor" in end,
+              ) as { anchor: BoardAnchor } | undefined;
+              const note =
+                noteEnd && saved?.notes.find((n) => n.id === noteEnd.note);
+              return (
+                <div key={string.id} className="board-tray-row">
+                  <span className="board-tray-text">
+                    {note
+                      ? `“${(note.text || "Empty note").slice(0, 48)}”`
+                      : "A string"}
+                    {anchorEnd
+                      ? ` was strung to a closed ${anchorEnd.anchor.kind}`
+                      : ""}
+                  </span>
+                  {note ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void report(
+                          boardStore.patch([
+                            { op: "string.delete", id: string.id },
+                          ]),
+                        );
+                        setStringFrom({ cardKey: NOTE_PREFIX + note.id });
+                        setTrayOpen(false);
+                        setToast({
+                          text: "Tap the card or pane to string the note to",
+                        });
+                      }}
+                    >
+                      Re-attach
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      void report(
+                        boardStore.patch([
+                          { op: "string.delete", id: string.id },
+                        ]),
+                      )
+                    }
+                  >
+                    Discard
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        ) : null}
         {noteSelected && saved?.notes.find((n) => n.id === noteSelected) ? (
           <NoteBar
             note={saved.notes.find((n) => n.id === noteSelected)!}
@@ -1982,6 +2184,16 @@ export default function BoardView({
           >
             <Sparkles size={15} aria-hidden="true" />
           </button>
+          {detached.length ? (
+            <button
+              type="button"
+              className="board-tray-button"
+              aria-label={`Needs a home: ${detached.length} string${detached.length === 1 ? "" : "s"}`}
+              onClick={() => setTrayOpen(!trayOpen)}
+            >
+              {detached.length}
+            </button>
+          ) : null}
           <div className="board-menu-wrap">
             <button
               type="button"
