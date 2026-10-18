@@ -1049,6 +1049,40 @@ async function run() {
     () => boardEl().classList.contains("board-no-pulse"),
     "the settings menu turns pulses off",
   );
+
+  // The event trace: on from the menu, it records input and gestures.
+  [
+    ...host.querySelectorAll<HTMLButtonElement>(
+      '.board-menu [role="menuitemcheckbox"]',
+    ),
+  ]
+    .find((b) => b.textContent?.includes("Event trace"))!
+    .click();
+  await waitFor(
+    () => Boolean(host.querySelector(".board-trace")),
+    "Event trace opens the trace",
+  );
+  const tapAt = emptySpot();
+  pointer(boardEl(), "pointerdown", tapAt.x, tapAt.y, 30);
+  pointer(boardEl(), "pointerup", tapAt.x, tapAt.y, 30);
+  await waitFor(
+    () =>
+      Boolean(
+        host.querySelector(".board-trace")?.textContent?.includes("input"),
+      ),
+    "the trace records input",
+  );
+  check(
+    host.querySelector(".board-trace-head")!.textContent!.includes("idle"),
+    "the trace shows the gesture state",
+  );
+  host
+    .querySelector<HTMLButtonElement>('[aria-label="Close the event trace"]')!
+    .click();
+  await waitFor(
+    () => !host.querySelector(".board-trace"),
+    "closing turns the trace off",
+  );
 }
 
 if (mode === "test")

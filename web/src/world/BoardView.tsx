@@ -44,6 +44,16 @@ import {
   type BoardWorkspace,
 } from "./board/boardModel";
 import {
+  initialGesture,
+  stepGesture,
+  type GestureEffect,
+  type GestureEvent,
+  type GestureTarget,
+} from "./board/boardGesture";
+import { createFrameLoop, type FrameLoop } from "./board/boardScheduler";
+import { createTrace, traceRequested, TRACE_KEY } from "./board/boardTrace";
+import { BoardTraceOverlay } from "./board/BoardTraceOverlay";
+import {
   cool,
   stepPhysics,
   warm,
@@ -85,44 +95,12 @@ const MAX_ZOOM = 2.4;
 const PULSES_KEY = "herdr-world.board.pulses";
 const TWEEN_SECONDS = 0.26;
 
-type Drag =
-  | {
-      type: "pan";
-      lx: number;
-      ly: number;
-      sx: number;
-      sy: number;
-      hist: Sample[];
-    }
-  | {
-      type: "card";
-      key: string;
-      offX: number;
-      offY: number;
-      sx: number;
-      sy: number;
-      lifted: boolean;
-      hist: Sample[];
-      /** The pane row pressed, for a tap that selects that pane. */
-      paneKey?: string;
-    }
-  | { type: "host"; key: string; last: Point }
-  | {
-      type: "string";
-      from: StringEnd;
-      sx: number;
-      sy: number;
-      at: Point;
-      over: StringEnd | null;
-    }
-  | { type: "pinch"; d0: number; s0: number; m0: Point; cam0: Camera };
 /** A card (note, workspace or tab) and optionally one of its panes. */
 type StringEnd = { cardKey: string; paneKey?: string };
 const NOTE_PREFIX = "note:";
 const isNoteKey = (key: string) => key.startsWith(NOTE_PREFIX);
 const NOTE_SIZE: Size = { w: 180, h: 110 };
 const SAVE_DELAY_MS = 600;
-const DOUBLE_TAP_MS = 450;
 
 /**
  * A unique ID for a note or string. crypto.randomUUID exists only on secure
@@ -224,7 +202,6 @@ async function sendNoteThroughService(target: SendTarget, text: string) {
       30_000,
     )) as SendOutcome;
 }
-type Sample = { x: number; y: number; t: number };
 type Camera = { x: number; y: number; s: number };
 
 const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
@@ -236,15 +213,6 @@ function readPulses() {
   } catch {
     return true;
   }
-}
-
-function velocity(hist: Sample[]) {
-  if (hist.length < 2) return { x: 0, y: 0 };
-  const last = hist[hist.length - 1]!;
-  const first = hist.find((h) => last.t - h.t < 110) ?? hist[0]!;
-  const dt = (last.t - first.t) / 1000;
-  if (dt <= 0 || performance.now() - last.t > 90) return { x: 0, y: 0 };
-  return { x: (last.x - first.x) / dt, y: (last.y - first.y) / dt };
 }
 
 /** The pane a tab card selects or opens: its most urgent agent, else the first. */
@@ -371,6 +339,7 @@ export default function BoardView({
     stringFrom?: StringEnd;
   } | null>(null);
   const [pulses, setPulses] = useState(readPulses);
+  const [tracing, setTracing] = useState(false);
   const [toast, setToast] = useState<{
     text: string;
     undo?: () => void;
@@ -396,9 +365,45 @@ export default function BoardView({
       { fx: number; fy: number; tx: number; ty: number; t: number }
     >(),
   );
-  const drag = useRef<Drag | null>(null);
-  const pointers = useRef(new Map<number, Point>());
-  const dirty = useRef(true);
+  /** The card under the pointer while dragged, and where it was grabbed. */
+  const held = useRef<{ key: string; grab: Point } | null>(null);
+  /** A string being drawn from a card or note. */
+  const stringDrag = useRef<{
+    from: StringEnd;
+    at: Point;
+    over: StringEnd | null;
+  } | null>(null);
+  const gesture = useRef(initialGesture());
+  const pinchStart = useRef<{ cam: Camera; mid: Point } | null>(null);
+  const trace = useMemo(() => {
+    const created = createTrace();
+    let stored: string | null = null;
+    try {
+      stored = worldLocalStorage.getItem(TRACE_KEY);
+    } catch {
+      // Storage unavailable: only the URL can turn tracing on.
+    }
+    created.enabled = traceRequested(window.location.search, stored);
+    return created;
+  }, []);
+  useEffect(() => setTracing(trace.enabled), [trace]);
+  const setTrace = (on: boolean) => {
+    trace.enabled = on;
+    if (!on) trace.clear();
+    setTracing(on);
+    try {
+      worldLocalStorage.setItem(TRACE_KEY, on ? "on" : "off");
+    } catch {
+      // Storage unavailable: the choice lasts for this page.
+    }
+  };
+  // Anything that changes what is on screen asks for a frame.
+  const loopRef = useRef<FrameLoop | null>(null);
+  const invalidate = (reason: string) => loopRef.current?.invalidate(reason);
+  const warmUp = () => {
+    warm(physics.current);
+    invalidate("physics");
+  };
   const fitted = useRef(false);
   const farRef = useRef(false);
   const yarnEls = useRef(new Map<string, SVGPathElement[]>());
@@ -406,7 +411,6 @@ export default function BoardView({
   const tempYarn = useRef<SVGPathElement | null>(null);
   const loaded = useRef(false);
   const saveTimer = useRef(0);
-  const lastTap = useRef<{ t: number; x: number; y: number } | null>(null);
   const lastPointerType = useRef("mouse");
   const latest = useRef({
     model,
@@ -477,19 +481,19 @@ export default function BoardView({
       fitted.current = true;
       fit(true);
     }
-    dirty.current = true;
+    invalidate("change");
   }, [model, sizeOf]);
 
   // Folding and the overview change what is visible without moving a card:
   // repaint so lines to hidden tabs go at once.
   useEffect(() => {
-    dirty.current = true;
+    invalidate("change");
   }, [collapsed, far]);
 
   /* ---------- Saved state: notes as free cards, layout loaded once ---------- */
   useLayoutEffect(() => {
     const notes = saved?.notes ?? [];
-    const held = drag.current?.type === "card" ? drag.current.key : null;
+    const heldKey = held.current?.key ?? null;
     const present = new Set<string>();
     for (const note of notes) {
       const key = NOTE_PREFIX + note.id;
@@ -514,7 +518,7 @@ export default function BoardView({
         });
       else {
         card.size = size;
-        if (held !== key) {
+        if (heldKey !== key) {
           card.x = note.x;
           card.y = note.y;
         }
@@ -545,7 +549,7 @@ export default function BoardView({
       setCollapsed(new Set(saved.layout.folded));
       fit(true);
     }
-    dirty.current = true;
+    invalidate("change");
     // The layout is read through refs; only saved state starts this.
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [saved]);
@@ -630,7 +634,7 @@ export default function BoardView({
       y: sy - rect.top - at.y * next,
     };
     camGoal.current = null;
-    dirty.current = true;
+    invalidate("change");
   };
   const visibleCards = () => {
     const m = latest.current.model;
@@ -682,98 +686,109 @@ export default function BoardView({
     )
       cam.current = goal;
     else camGoal.current = goal;
-    dirty.current = true;
+    invalidate("change");
   }
 
   /* ---------- Frame loop ---------- */
+  /** One frame: tweens, physics, camera, then paint. True while moving. */
+  const frame = (dt: number, reasons: ReadonlySet<string>) => {
+    const m = latest.current.model;
+    const holdingKey = held.current?.key ?? null;
+    if (trace.enabled && [...reasons].some((reason) => reason !== "animate"))
+      trace.record("frame", [...reasons]);
+    for (const [key, tw] of tweens.current) {
+      const card = cards.current.get(key);
+      tw.t += dt;
+      const k = 1 - Math.pow(1 - Math.min(1, tw.t / TWEEN_SECONDS), 3);
+      if (card) {
+        card.x = tw.fx + (tw.tx - tw.fx) * k;
+        card.y = tw.fy + (tw.ty - tw.fy) * k;
+      }
+      if (tw.t >= TWEEN_SECONDS) tweens.current.delete(key);
+    }
+    let gliding = false;
+    if (physics.current.heat > 0 || holdingKey) {
+      const list = visibleCards().map(([key, card]) => {
+        card.home = homeOf(key, m);
+        card.fixed =
+          isNoteKey(key) ||
+          layout.current.pinned.has(key) ||
+          tweens.current.has(key) ||
+          holdingKey === key;
+        return card;
+      });
+      for (const key of [
+        ...stepPhysics(list, physics.current, dt / 2),
+        ...stepPhysics(list, physics.current, dt / 2),
+      ])
+        keepWhereItIs(key, m);
+      if (cool(list, physics.current, dt, Boolean(holdingKey)))
+        for (const card of list) if (!card.fixed) keepWhereItIs(card.key, m);
+      gliding = list.some((card) => card.gliding);
+    }
+    const goal = camGoal.current;
+    if (goal) {
+      const k = 1 - Math.pow(0.0015, dt);
+      const c = cam.current;
+      cam.current = {
+        x: c.x + (goal.x - c.x) * k,
+        y: c.y + (goal.y - c.y) * k,
+        s: c.s + (goal.s - c.s) * k,
+      };
+      if (
+        Math.abs(goal.x - c.x) + Math.abs(goal.y - c.y) < 0.5 &&
+        Math.abs(goal.s - c.s) < 0.001
+      ) {
+        cam.current = goal;
+        camGoal.current = null;
+      }
+    }
+    const pv = panVelocity.current;
+    if (pv) {
+      cam.current = {
+        ...cam.current,
+        x: cam.current.x + pv.x * dt,
+        y: cam.current.y + pv.y * dt,
+      };
+      const fr = Math.pow(0.9, dt * 60);
+      pv.x *= fr;
+      pv.y *= fr;
+      if (Math.hypot(pv.x, pv.y) < 12) panVelocity.current = null;
+    }
+    const svg = svgRef.current;
+    if (svg) paint(svg, m);
+    return (
+      tweens.current.size > 0 ||
+      physics.current.heat > 0 ||
+      Boolean(holdingKey) ||
+      gliding ||
+      camGoal.current !== null ||
+      panVelocity.current !== null
+    );
+  };
+  const frameRef = useRef(frame);
+  frameRef.current = frame;
+  // One loop per mount: a cleanup stops it for good, and React may mount a
+  // component twice (development, remounts), so each mount makes its own.
   useEffect(() => {
-    let frame = 0;
-    let last = performance.now();
-    const frameBody = (t: number) => {
-      const dt = Math.min(0.033, Math.max(0.001, (t - last) / 1000));
-      last = t;
-      const m = latest.current.model;
-      const holding = drag.current?.type === "card" && drag.current.lifted;
-      for (const [key, tw] of tweens.current) {
-        const card = cards.current.get(key);
-        tw.t += dt;
-        const k = 1 - Math.pow(1 - Math.min(1, tw.t / TWEEN_SECONDS), 3);
-        if (card) {
-          card.x = tw.fx + (tw.tx - tw.fx) * k;
-          card.y = tw.fy + (tw.ty - tw.fy) * k;
-        }
-        if (tw.t >= TWEEN_SECONDS) tweens.current.delete(key);
-        dirty.current = true;
-      }
-      if (physics.current.heat > 0 || holding) {
-        const list = visibleCards().map(([key, card]) => {
-          card.home = homeOf(key, m);
-          card.fixed =
-            isNoteKey(key) ||
-            layout.current.pinned.has(key) ||
-            tweens.current.has(key) ||
-            (holding && (drag.current as { key: string }).key === key);
-          return card;
-        });
-        for (const key of [
-          ...stepPhysics(list, physics.current, dt / 2),
-          ...stepPhysics(list, physics.current, dt / 2),
-        ])
-          keepRef.current(key, m);
-        if (cool(list, physics.current, dt, Boolean(holding)))
-          for (const card of list)
-            if (!card.fixed) keepRef.current(card.key, m);
-        dirty.current = true;
-      }
-      const goal = camGoal.current;
-      if (goal) {
-        const k = 1 - Math.pow(0.0015, dt);
-        const c = cam.current;
-        cam.current = {
-          x: c.x + (goal.x - c.x) * k,
-          y: c.y + (goal.y - c.y) * k,
-          s: c.s + (goal.s - c.s) * k,
-        };
-        if (
-          Math.abs(goal.x - c.x) + Math.abs(goal.y - c.y) < 0.5 &&
-          Math.abs(goal.s - c.s) < 0.001
-        ) {
-          cam.current = goal;
-          camGoal.current = null;
-        }
-        dirty.current = true;
-      }
-      const pv = panVelocity.current;
-      if (pv) {
-        cam.current = {
-          ...cam.current,
-          x: cam.current.x + pv.x * dt,
-          y: cam.current.y + pv.y * dt,
-        };
-        const fr = Math.pow(0.9, dt * 60);
-        pv.x *= fr;
-        pv.y *= fr;
-        if (Math.hypot(pv.x, pv.y) < 12) panVelocity.current = null;
-        dirty.current = true;
-      }
-      const svg = svgRef.current;
-      if (dirty.current && svg) {
-        dirty.current = false;
-        paint(svg, m);
-      }
-    };
-    // One bad frame must not stop the board: report it and keep going.
-    const tick = (t: number) => {
-      try {
-        frameBody(t);
-      } catch (error) {
+    const loop = createFrameLoop({
+      frame: (dt, reasons) => frameRef.current(dt, reasons),
+      onError: (error, reasons) => {
         console.error("Board frame failed", error);
-      }
-      frame = requestAnimationFrame(tick);
+        trace.record("error", {
+          where: "frame",
+          reasons: [...reasons],
+          message: String(error),
+        });
+      },
+    });
+    loopRef.current = loop;
+    loop.invalidate("mount");
+    return () => {
+      loop.stop();
+      if (loopRef.current === loop) loopRef.current = null;
     };
-    frame = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(frame);
-  }, []);
+  }, [trace]);
 
   function paint(svg: SVGSVGElement, m: BoardModel) {
     const c = cam.current;
@@ -952,8 +967,8 @@ export default function BoardView({
         for (const el of pair) el.remove();
         yarnEls.current.delete(id);
       }
-    const d = drag.current;
-    if (d?.type === "string") {
+    const d = stringDrag.current;
+    if (d) {
       const from = pointOf(endFor(d.from, m) ?? { note: "" }, m) ?? {
         at: d.at,
         firm: true,
@@ -983,7 +998,7 @@ export default function BoardView({
     }
   }
   useEffect(() => {
-    dirty.current = true;
+    invalidate("change");
   }, [saved, picked]);
 
   /** The saved end for a card (or a pane in it), or null for an unknown card. */
@@ -1005,329 +1020,360 @@ export default function BoardView({
   }
 
   /* ---------- Pointer input ---------- */
-  const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
-    const target = event.target as HTMLElement;
-    if (target.closest("[contenteditable='true']")) return;
-    if (target.closest("button, input, a") && !target.closest(".board-card"))
-      return;
+  /** What a pointer landed on; null for controls and text being edited. */
+  function classify(target: HTMLElement): GestureTarget | null {
+    if (target.closest("[contenteditable='true']")) return null;
+    if (
+      target.closest("button, input, a, label") &&
+      !target.closest(".board-card")
+    )
+      return null;
     const hit = target.closest<SVGPathElement>(".board-yarn-hit");
-    if (hit?.dataset.string) {
-      setPicked(hit.dataset.string);
-      return;
-    }
-    lastPointerType.current = event.pointerType;
-    // The first finger of a new gesture: forget fingers whose lift was never
-    // seen, which would otherwise turn later touches into a stuck pinch.
-    if (event.isPrimary) {
-      pointers.current.clear();
-      drag.current = null;
-    }
-    pointers.current.set(event.pointerId, {
-      x: event.clientX,
-      y: event.clientY,
-    });
-    try {
-      boardRef.current?.setPointerCapture(event.pointerId);
-    } catch {
-      // Synthetic pointers cannot be captured.
-    }
-    camGoal.current = null;
-    panVelocity.current = null;
-    if (pointers.current.size === 2) {
-      const [a, b] = [...pointers.current.values()] as [Point, Point];
-      drag.current = {
-        type: "pinch",
-        d0: Math.hypot(a.x - b.x, a.y - b.y) || 1,
-        s0: cam.current.s,
-        m0: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 },
-        cam0: { ...cam.current },
-      };
-      return;
-    }
-    if (pointers.current.size > 2) return;
-    const cardEl = target.closest<HTMLElement>(".board-card");
-    const zoneLabel = target.closest<HTMLElement>(".board-zone-label");
-    const at = toWorld(event.clientX, event.clientY);
-    if (cardEl?.dataset.key && target.closest(".board-handle")) {
-      drag.current = {
-        type: "string",
-        from: { cardKey: cardEl.dataset.key },
-        sx: event.clientX,
-        sy: event.clientY,
-        at,
-        over: null,
-      };
-      dirty.current = true;
-      return;
-    }
-    if (cardEl?.dataset.key) {
-      const card = cards.current.get(cardEl.dataset.key);
-      if (!card) return;
-      drag.current = {
-        type: "card",
-        key: card.key,
-        offX: at.x - card.x,
-        offY: at.y - card.y,
-        sx: event.clientX,
-        sy: event.clientY,
-        lifted: false,
-        hist: [],
+    if (hit?.dataset.string) return { kind: "string", id: hit.dataset.string };
+    const card = target.closest<HTMLElement>(".board-card");
+    if (card?.dataset.key) {
+      if (target.closest(".board-handle"))
+        return { kind: "handle", key: card.dataset.key };
+      return {
+        kind: "card",
+        key: card.dataset.key,
         paneKey: target.closest<HTMLElement>("[data-pane]")?.dataset.pane,
       };
-      return;
     }
-    if (zoneLabel?.dataset.host) {
-      drag.current = { type: "host", key: zoneLabel.dataset.host, last: at };
-      return;
+    const host = target.closest<HTMLElement>(".board-zone-label");
+    if (host?.dataset.host) return { kind: "host", key: host.dataset.host };
+    return { kind: "empty" };
+  }
+  /** Frequent effects are left out of the trace to keep it readable. */
+  const QUIET = new Set([
+    "panBy",
+    "moveCard",
+    "moveString",
+    "pinch",
+    "moveHost",
+    "stopCamera",
+  ]);
+  function feed(event: GestureEvent) {
+    const before = gesture.current.mode.name;
+    const result = stepGesture(gesture.current, event);
+    gesture.current = result.state;
+    if (trace.enabled) {
+      if (event.type !== "move") trace.record("input", event);
+      if (result.state.mode.name !== before)
+        trace.record("gesture", `${before} → ${result.state.mode.name}`);
+      for (const effect of result.effects)
+        if (!QUIET.has(effect.type)) trace.record("effect", effect);
     }
-    drag.current = {
-      type: "pan",
-      lx: event.clientX,
-      ly: event.clientY,
-      sx: event.clientX,
-      sy: event.clientY,
-      hist: [],
-    };
-    boardRef.current?.classList.add("board-panning");
+    for (const effect of result.effects) apply(effect);
+  }
+  const atOf = (event: ReactPointerEvent) => ({
+    x: event.clientX,
+    y: event.clientY,
+  });
+  const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const target = classify(event.target as HTMLElement);
+    if (!target) return;
+    lastPointerType.current = event.pointerType;
+    if (target.kind !== "string")
+      try {
+        boardRef.current?.setPointerCapture(event.pointerId);
+      } catch {
+        // Synthetic pointers cannot be captured.
+      }
+    feed({
+      type: "down",
+      id: event.pointerId,
+      at: atOf(event),
+      time: performance.now(),
+      target,
+      primary: event.isPrimary,
+      pointerType: event.pointerType,
+    });
+  };
+  const onPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!gesture.current.pointers.has(event.pointerId)) return;
+    feed({
+      type: "move",
+      id: event.pointerId,
+      at: atOf(event),
+      time: performance.now(),
+    });
+  };
+  const onPointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!gesture.current.pointers.has(event.pointerId)) return;
+    feed({
+      type: "up",
+      id: event.pointerId,
+      at: atOf(event),
+      time: performance.now(),
+    });
+  };
+  const onPointerCancel = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!gesture.current.pointers.has(event.pointerId)) return;
+    feed({ type: "cancel", id: event.pointerId });
   };
 
-  const onPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
-    const d = drag.current;
-    if (!d || !pointers.current.has(event.pointerId)) return;
-    pointers.current.set(event.pointerId, {
-      x: event.clientX,
-      y: event.clientY,
-    });
-    const now = performance.now();
-    if (d.type === "pinch") {
-      if (pointers.current.size < 2) return;
-      const [a, b] = [...pointers.current.values()] as [Point, Point];
-      const rect = boardRef.current!.getBoundingClientRect();
-      const s = clamp(
-        (d.s0 * Math.hypot(a.x - b.x, a.y - b.y)) / d.d0,
-        MIN_ZOOM,
-        MAX_ZOOM,
-      );
-      const wx = (d.m0.x - rect.left - d.cam0.x) / d.cam0.s,
-        wy = (d.m0.y - rect.top - d.cam0.y) / d.cam0.s;
-      const mx = (a.x + b.x) / 2 - rect.left,
-        my = (a.y + b.y) / 2 - rect.top;
-      cam.current = { s, x: mx - wx * s, y: my - wy * s };
-      dirty.current = true;
-      return;
-    }
-    if (d.type === "pan") {
-      cam.current = {
-        ...cam.current,
-        x: cam.current.x + event.clientX - d.lx,
-        y: cam.current.y + event.clientY - d.ly,
-      };
-      d.lx = event.clientX;
-      d.ly = event.clientY;
-      d.hist.push({ x: event.clientX, y: event.clientY, t: now });
-      if (d.hist.length > 8) d.hist.shift();
-      dirty.current = true;
-      return;
-    }
-    const at = toWorld(event.clientX, event.clientY);
-    if (d.type === "string") {
-      d.at = at;
-      const over = endAt(event.clientX, event.clientY);
-      const next = over && over.cardKey !== d.from.cardKey ? over : null;
-      if (next?.cardKey !== d.over?.cardKey) {
-        if (d.over)
+  /** Carry out what the gesture machine decided. */
+  function apply(effect: GestureEffect) {
+    switch (effect.type) {
+      case "stopCamera":
+        camGoal.current = null;
+        panVelocity.current = null;
+        return;
+      case "panBy":
+        cam.current = {
+          ...cam.current,
+          x: cam.current.x + effect.dx,
+          y: cam.current.y + effect.dy,
+        };
+        boardRef.current?.classList.add("board-panning");
+        invalidate("pan");
+        return;
+      case "fling":
+        boardRef.current?.classList.remove("board-panning");
+        if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+          panVelocity.current = { x: effect.vx, y: effect.vy };
+          invalidate("fling");
+        }
+        return;
+      case "pinchStart":
+        pinchStart.current = { cam: { ...cam.current }, mid: effect.mid };
+        return;
+      case "pinch": {
+        const start = pinchStart.current,
+          el = boardRef.current;
+        if (!start || !el) return;
+        const rect = el.getBoundingClientRect();
+        const s = clamp(start.cam.s * effect.scale, MIN_ZOOM, MAX_ZOOM);
+        const wx = (start.mid.x - rect.left - start.cam.x) / start.cam.s;
+        const wy = (start.mid.y - rect.top - start.cam.y) / start.cam.s;
+        cam.current = {
+          s,
+          x: effect.mid.x - rect.left - wx * s,
+          y: effect.mid.y - rect.top - wy * s,
+        };
+        invalidate("pinch");
+        return;
+      }
+      case "liftCard": {
+        const card = cards.current.get(effect.key);
+        if (!card) return;
+        const grab = toWorld(effect.grab.x, effect.grab.y);
+        held.current = {
+          key: effect.key,
+          grab: { x: grab.x - card.x, y: grab.y - card.y },
+        };
+        tweens.current.delete(effect.key);
+        card.gliding = false;
+        cardEls.current.get(effect.key)?.classList.add("board-lifted");
+        moveHeld(effect.at);
+        return;
+      }
+      case "moveCard":
+        moveHeld(effect.at);
+        return;
+      case "dropCard":
+        dropHeld(effect.vx / cam.current.s, effect.vy / cam.current.s);
+        return;
+      case "settleCard":
+        dropHeld(0, 0);
+        return;
+      case "tap":
+        boardRef.current?.classList.remove("board-panning");
+        tap(effect.target);
+        return;
+      case "doubleTap":
+        void createNote(toWorld(effect.at.x, effect.at.y));
+        return;
+      case "startString":
+        stringDrag.current = {
+          from: { cardKey: effect.key },
+          at: toWorld(effect.at.x, effect.at.y),
+          over: null,
+        };
+        invalidate("string");
+        return;
+      case "moveString": {
+        const d = stringDrag.current;
+        if (!d) return;
+        d.at = toWorld(effect.at.x, effect.at.y);
+        const over = endAt(effect.at.x, effect.at.y);
+        const next = over && over.cardKey !== d.from.cardKey ? over : null;
+        if (next?.cardKey !== d.over?.cardKey) {
+          if (d.over)
+            cardEls.current
+              .get(d.over.cardKey)
+              ?.classList.remove("board-link-target");
+          if (next)
+            cardEls.current
+              .get(next.cardKey)
+              ?.classList.add("board-link-target");
+        }
+        d.over = next;
+        invalidate("string");
+        return;
+      }
+      case "dropString": {
+        const d = stringDrag.current;
+        stringDrag.current = null;
+        invalidate("string");
+        if (!d) return;
+        if (d.over) {
           cardEls.current
             .get(d.over.cardKey)
             ?.classList.remove("board-link-target");
-        if (next)
-          cardEls.current.get(next.cardKey)?.classList.add("board-link-target");
+          finishString(d.from, d.over);
+        } else if (effect.travelled > 40)
+          // Dropped on empty board: a new note, strung to where it started.
+          void createNote(d.at, d.from);
+        return;
       }
-      d.over = next;
-      dirty.current = true;
-      return;
-    }
-    if (d.type === "host") {
-      const anchor = layout.current.anchors.get(d.key) ?? { x: 0, y: 0 };
-      layout.current.anchors.set(d.key, {
-        x: anchor.x + at.x - d.last.x,
-        y: anchor.y + at.y - d.last.y,
-      });
-      d.last = at;
-      warm(physics.current);
-      return;
-    }
-    if (!d.lifted) {
-      if (Math.hypot(event.clientX - d.sx, event.clientY - d.sy) < 6) return;
-      d.lifted = true;
-      cardEls.current.get(d.key)?.classList.add("board-lifted");
-    }
-    const card = cards.current.get(d.key);
-    if (!card) return;
-    card.x = at.x - d.offX;
-    card.y = at.y - d.offY;
-    card.vx = card.vy = 0;
-    card.gliding = false;
-    d.hist.push({ x: card.x, y: card.y, t: now });
-    if (d.hist.length > 8) d.hist.shift();
-    warm(physics.current);
-    // A tab dragged over another workspace of its host glues to it.
-    const tab = latest.current.model.tabByKey.get(d.key);
-    if (tab) {
-      const under = document
-        .elementsFromPoint(event.clientX, event.clientY)
-        .map((el) =>
-          (el as HTMLElement).closest?.<HTMLElement>(".board-workspace"),
-        )
-        .find((el) => el && el.dataset.key);
-      const key = under?.dataset.key ?? null;
-      const space = key
-        ? latest.current.model.workspaceByKey.get(key)
-        : undefined;
-      const next =
-        space &&
-        space.key !== tab.workspaceKey &&
-        space.hostKey === tab.hostKey &&
-        space.actionable &&
-        tab.actionable
-          ? space.key
-          : null;
-      if (next !== glue.current) {
-        if (glue.current)
-          cardEls.current.get(glue.current)?.classList.remove("board-glue");
-        cardEls.current
-          .get(d.key)
-          ?.classList.toggle("board-gluing", Boolean(next));
-        if (next) cardEls.current.get(next)?.classList.add("board-glue");
-        glue.current = next;
+      case "cancelString": {
+        const d = stringDrag.current;
+        if (d?.over)
+          cardEls.current
+            .get(d.over.cardKey)
+            ?.classList.remove("board-link-target");
+        stringDrag.current = null;
+        invalidate("string");
+        return;
       }
+      case "moveHost": {
+        const anchor = layout.current.anchors.get(effect.key) ?? {
+          x: 0,
+          y: 0,
+        };
+        layout.current.anchors.set(effect.key, {
+          x: anchor.x + effect.dx / cam.current.s,
+          y: anchor.y + effect.dy / cam.current.s,
+        });
+        warmUp();
+        return;
+      }
+      case "dropHost":
+        warmUp();
+        scheduleSave();
+        return;
+      case "pickString":
+        setPicked(effect.id);
+        return;
     }
-  };
+  }
 
-  const onPointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (!pointers.current.has(event.pointerId)) return;
-    pointers.current.delete(event.pointerId);
-    boardRef.current?.classList.remove("board-panning");
-    const d = drag.current;
-    if (!d) return;
-    if (d.type === "pinch") {
-      const rest = [...pointers.current.values()][0];
-      drag.current = rest
-        ? {
-            type: "pan",
-            lx: rest.x,
-            ly: rest.y,
-            sx: Number.NaN,
-            sy: Number.NaN,
-            hist: [],
-          }
+  /** Move the held card under the pointer; a tab over another workspace glues. */
+  function moveHeld(screen: Point) {
+    const h = held.current;
+    const card = h && cards.current.get(h.key);
+    if (!h || !card) return;
+    const at = toWorld(screen.x, screen.y);
+    card.x = at.x - h.grab.x;
+    card.y = at.y - h.grab.y;
+    card.vx = card.vy = 0;
+    warmUp();
+    const tab = latest.current.model.tabByKey.get(h.key);
+    if (!tab) return;
+    const under = document
+      .elementsFromPoint(screen.x, screen.y)
+      .map((el) =>
+        (el as HTMLElement).closest?.<HTMLElement>(".board-workspace"),
+      )
+      .find((el) => el && el.dataset.key);
+    const key = under?.dataset.key ?? null;
+    const space = key
+      ? latest.current.model.workspaceByKey.get(key)
+      : undefined;
+    const next =
+      space &&
+      space.key !== tab.workspaceKey &&
+      space.hostKey === tab.hostKey &&
+      space.actionable &&
+      tab.actionable
+        ? space.key
         : null;
-      return;
+    if (next !== glue.current) {
+      if (glue.current)
+        cardEls.current.get(glue.current)?.classList.remove("board-glue");
+      cardEls.current
+        .get(h.key)
+        ?.classList.toggle("board-gluing", Boolean(next));
+      if (next) cardEls.current.get(next)?.classList.add("board-glue");
+      glue.current = next;
     }
-    drag.current = null;
+  }
+
+  /** Let go of the held card: a note is saved, a tab may move, others glide or stay. */
+  function dropHeld(vx: number, vy: number) {
+    const h = held.current;
+    held.current = null;
+    if (!h) return;
     const m = latest.current.model;
-    if (d.type === "string") {
-      if (d.over)
-        cardEls.current
-          .get(d.over.cardKey)
-          ?.classList.remove("board-link-target");
-      dirty.current = true;
-      if (d.over) finishString(d.from, d.over);
-      else if (Math.hypot(event.clientX - d.sx, event.clientY - d.sy) > 40)
-        // Dropped on empty board: a new note, strung to where it started.
-        void createNote(d.at, d.from);
-      return;
-    }
-    if (d.type === "pan") {
-      if (Math.hypot(event.clientX - d.sx, event.clientY - d.sy) < 6) {
-        // A tap on empty board clears picks. On touch, a second tap soon
-        // after, close by, pins a new note; a mouse uses the browser's own
-        // double-click, which follows the system setting.
-        const now = performance.now();
-        const tap = lastTap.current;
-        if (
-          event.pointerType !== "mouse" &&
-          tap &&
-          now - tap.t < DOUBLE_TAP_MS &&
-          Math.hypot(event.clientX - tap.x, event.clientY - tap.y) < 32
-        ) {
-          lastTap.current = null;
-          void createNote(toWorld(event.clientX, event.clientY));
-        } else lastTap.current = { t: now, x: event.clientX, y: event.clientY };
-        setPicked(null);
-        setNoteSelected(null);
-        setStringFrom(null);
-      }
-      if (Math.hypot(event.clientX - d.sx, event.clientY - d.sy) >= 6) {
-        const v = velocity(d.hist);
-        if (
-          Math.hypot(v.x, v.y) > 150 &&
-          !window.matchMedia("(prefers-reduced-motion: reduce)").matches
-        )
-          panVelocity.current = v;
-      }
-      return;
-    }
-    if (d.type === "host") {
-      warm(physics.current);
-      scheduleSave();
-      return;
-    }
-    const card = cards.current.get(d.key);
-    if (!d.lifted || !card) {
-      setPicked(null);
-      if (stringFrom) {
-        finishString(stringFrom, { cardKey: d.key, paneKey: d.paneKey });
-        setStringFrom(null);
-        return;
-      }
-      if (isNoteKey(d.key)) {
-        setNoteSelected(d.key.slice(NOTE_PREFIX.length));
-        // Keys go to the note, not to a terminal that had focus.
-        cardEls.current.get(d.key)?.focus({ preventScroll: true });
-        return;
-      }
-      setNoteSelected(null);
-      // In the overview a workspace tap zooms in on it, so its tabs open
-      // where the user is looking; up close a tap selects as usual.
-      if (farRef.current && m.workspaceByKey.has(d.key)) {
-        focusWorkspace(d.key);
-        return;
-      }
-      selectCard(d.key, m, d.paneKey);
-      return;
-    }
-    if (isNoteKey(d.key)) {
-      cardEls.current.get(d.key)?.classList.remove("board-lifted");
+    const card = cards.current.get(h.key);
+    cardEls.current.get(h.key)?.classList.remove("board-lifted");
+    if (!card) return;
+    if (isNoteKey(h.key)) {
       const note = latest.current.saved?.notes.find(
-        (n) => NOTE_PREFIX + n.id === d.key,
+        (n) => NOTE_PREFIX + n.id === h.key,
       );
       if (note) void saveNote(note, { x: card.x, y: card.y });
+      invalidate("note");
       return;
     }
-    cardEls.current.get(d.key)?.classList.remove("board-lifted");
     if (glue.current) {
       const workspaceKey = glue.current;
       cardEls.current.get(workspaceKey)?.classList.remove("board-glue");
-      cardEls.current.get(d.key)?.classList.remove("board-gluing");
+      cardEls.current.get(h.key)?.classList.remove("board-gluing");
       glue.current = null;
       // The tab goes back to its place until the move is confirmed and done.
       travelToLayout(m);
-      offerMove(d.key, workspaceKey);
+      offerMove(h.key, workspaceKey);
       return;
     }
-    const v = velocity(d.hist);
-    if (
-      Math.hypot(v.x, v.y) < 80 ||
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches
-    )
-      keepWhereItIs(d.key, m);
+    const reduce = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+    if (Math.hypot(vx, vy) < 80 || reduce) keepWhereItIs(h.key, m);
     else {
-      card.vx = clamp(v.x, -2200, 2200);
-      card.vy = clamp(v.y, -2200, 2200);
+      card.vx = clamp(vx, -2200, 2200);
+      card.vy = clamp(vy, -2200, 2200);
       card.gliding = true;
     }
-    warm(physics.current);
-  };
+    warmUp();
+  }
+
+  /** A tap: finish a pending string, select a note, zoom into an overview workspace, or select. */
+  function tap(target: GestureTarget) {
+    const m = latest.current.model;
+    if (target.kind === "empty") {
+      setPicked(null);
+      setNoteSelected(null);
+      setStringFrom(null);
+      return;
+    }
+    if (target.kind !== "card") return;
+    setPicked(null);
+    if (stringFrom) {
+      finishString(stringFrom, {
+        cardKey: target.key,
+        paneKey: target.paneKey,
+      });
+      setStringFrom(null);
+      return;
+    }
+    if (isNoteKey(target.key)) {
+      setNoteSelected(target.key.slice(NOTE_PREFIX.length));
+      // Keys go to the note, not to a terminal that had focus.
+      cardEls.current.get(target.key)?.focus({ preventScroll: true });
+      return;
+    }
+    setNoteSelected(null);
+    // In the overview a workspace tap zooms in on it, so its tabs open
+    // where the user is looking; up close a tap selects as usual.
+    if (farRef.current && m.workspaceByKey.has(target.key)) {
+      focusWorkspace(target.key);
+      return;
+    }
+    selectCard(target.key, m, target.paneKey);
+  }
 
   const onWheel = useCallback((event: WheelEvent) => {
     event.preventDefault();
@@ -1339,7 +1385,7 @@ export default function BoardView({
         x: cam.current.x - (event.deltaX || event.deltaY),
         y: cam.current.y - (event.deltaX ? event.deltaY : 0),
       };
-      dirty.current = true;
+      invalidate("change");
       return;
     }
     const k = event.deltaMode === 1 ? 0.06 : event.ctrlKey ? 0.012 : 0.0018;
@@ -1389,7 +1435,7 @@ export default function BoardView({
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches)
       cam.current = goal;
     else camGoal.current = goal;
-    dirty.current = true;
+    invalidate("change");
   }
   /** Send every card to its place in the layout on a short tween. */
   const travelToLayout = (m: BoardModel) => {
@@ -1414,7 +1460,7 @@ export default function BoardView({
         });
     }
     physics.current.heat = 0;
-    dirty.current = true;
+    invalidate("change");
     scheduleSave();
   };
   const toggleFold = (space: BoardWorkspace) => {
@@ -1481,7 +1527,10 @@ export default function BoardView({
   /* ---------- Notes and strings ---------- */
   const report = async (pending: Promise<string | null>) => {
     const problem = await pending;
-    if (problem) setToast({ text: problem });
+    if (problem) {
+      trace.record("save", { problem });
+      setToast({ text: problem });
+    }
   };
   async function createNote(at: Point, stringTo?: StringEnd) {
     const id = newId();
@@ -1888,17 +1937,14 @@ export default function BoardView({
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
-        onPointerCancel={onPointerUp}
+        onPointerCancel={onPointerCancel}
         onScroll={(event) => {
           // The board pans with its camera and never scrolls; focusing a note
           // (a phone keyboard) can scroll it anyway, hiding the note bar.
           const el = event.currentTarget;
           if (el.scrollTop || el.scrollLeft) el.scrollTo(0, 0);
         }}
-        onLostPointerCapture={(event) => {
-          // A finger whose lift went elsewhere is no longer on the board.
-          if (pointers.current.has(event.pointerId)) onPointerUp(event);
-        }}
+        onLostPointerCapture={onPointerCancel}
         onDoubleClick={(event) => {
           // Phones fire dblclick after a double-tap too; touch has its own.
           if (lastPointerType.current !== "mouse") return;
@@ -2523,10 +2569,28 @@ export default function BoardView({
                 >
                   Status pulses <span className="board-switch" />
                 </button>
+                <button
+                  type="button"
+                  role="menuitemcheckbox"
+                  aria-checked={tracing}
+                  onClick={() => setTrace(!tracing)}
+                >
+                  Event trace <span className="board-switch" />
+                </button>
               </div>
             ) : null}
           </div>
         </div>
+        {tracing ? (
+          <BoardTraceOverlay
+            trace={trace}
+            status={() => ({
+              mode: gesture.current.mode.name,
+              pointers: gesture.current.pointers.size,
+            })}
+            onClose={() => setTrace(false)}
+          />
+        ) : null}
         {toast ? (
           <div className="board-toast" role="status">
             <span>{toast.text}</span>
