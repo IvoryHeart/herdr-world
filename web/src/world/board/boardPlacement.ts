@@ -267,11 +267,8 @@ export function tidy(
   options: { workspaceKey?: string; phone?: boolean; sizeOf?: SizeOf } = {},
 ): BoardLayout {
   const sizeOf = options.sizeOf ?? defaultSizeOf;
-  if (!options.workspaceKey) {
-    const kept = emptyLayout();
-    for (const [key, point] of previous.pinned) kept.pinned.set(key, point);
-    return placeNew(model, kept, options);
-  }
+  if (!options.workspaceKey)
+    return tidyBoard(model, previous, sizeOf, options.phone ?? false);
   const space = model.workspaceByKey.get(options.workspaceKey);
   if (!space) return previous;
   const layout = cloneLayout(previous);
@@ -297,4 +294,129 @@ export function tidy(
     layout.offsets.set(key, { x: spot.x - center.x, y: spot.y - center.y });
   }
   return layout;
+}
+
+/**
+ * The whole board, rebuilt from measured sizes: each workspace's tabs are
+ * laid out around it, the clusters are packed into columns and rows by their
+ * real bounds, and each host starts past the previous host's real extent, so
+ * no two cards overlap. Pinned cards keep their places and are avoided.
+ */
+function tidyBoard(
+  model: BoardModel,
+  previous: BoardLayout,
+  sizeOf: SizeOf,
+  phone: boolean,
+): BoardLayout {
+  const layout = emptyLayout();
+  for (const [key, point] of previous.pinned) layout.pinned.set(key, point);
+  const pinnedRects = [...layout.pinned].map(([key, point]) =>
+    rectAt(
+      sizeOf(key, model.workspaceByKey.has(key) ? "workspace" : "tab"),
+      point,
+    ),
+  );
+  let cursor = 0;
+  for (const host of model.hosts) {
+    // Each workspace's cluster, around its own origin.
+    const clusters = host.workspaceKeys.flatMap((key) => {
+      const space = model.workspaceByKey.get(key);
+      if (!space || layout.pinned.has(key)) return [];
+      const own = rectAt(sizeOf(key, "workspace"), { x: 0, y: 0 });
+      const items = space.tabKeys
+        .filter((tabKey) => !layout.pinned.has(tabKey))
+        .map((tabKey) => ({ key: tabKey, size: sizeOf(tabKey, "tab") }));
+      const spots = freeSpots({ x: 0, y: 0 }, items, [own]);
+      const box = { ...own };
+      for (const item of items) {
+        const r = rectAt(item.size, spots.get(item.key)!);
+        box.x0 = Math.min(box.x0, r.x0);
+        box.y0 = Math.min(box.y0, r.y0);
+        box.x1 = Math.max(box.x1, r.x1);
+        box.y1 = Math.max(box.y1, r.y1);
+      }
+      return [{ key, spots, box }];
+    });
+    const cols = Math.min(GRID_COLS, Math.max(1, clusters.length));
+    const widths = new Array<number>(cols).fill(0);
+    const heights: number[] = [];
+    clusters.forEach((cluster, i) => {
+      const col = i % cols,
+        row = Math.floor(i / cols);
+      widths[col] = Math.max(widths[col]!, cluster.box.x1 - cluster.box.x0);
+      heights[row] = Math.max(
+        heights[row] ?? 0,
+        cluster.box.y1 - cluster.box.y0,
+      );
+    });
+    const anchor = phone ? { x: 0, y: cursor } : { x: cursor, y: 0 };
+    layout.anchors.set(host.key, anchor);
+    clusters.forEach((cluster, i) => {
+      const col = i % cols,
+        row = Math.floor(i / cols);
+      let left = 0;
+      for (let c = 0; c < col; c++) left += widths[c]! + 3 * GAP;
+      let top = 0;
+      for (let r = 0; r < row; r++) top += heights[r]! + 3 * GAP;
+      const offset = { x: left - cluster.box.x0, y: top - cluster.box.y0 };
+      layout.offsets.set(cluster.key, offset);
+      for (const [tabKey, spot] of cluster.spots)
+        layout.offsets.set(tabKey, spot);
+    });
+    let width = 0;
+    for (const w of widths) width += w;
+    width += Math.max(0, cols - 1) * 3 * GAP;
+    let height = 0;
+    for (const h of heights) height += h;
+    height += Math.max(0, heights.length - 1) * 3 * GAP;
+    cursor += (phone ? height : width) + HOST_GAP;
+  }
+  // Clusters that landed on a pinned card move clear of it, as one piece.
+  if (pinnedRects.length) {
+    const at = positions(model, layout);
+    for (const space of model.workspaces) {
+      if (layout.pinned.has(space.key)) continue;
+      const keys = [
+        space.key,
+        ...space.tabKeys.filter((k) => !layout.pinned.has(k)),
+      ];
+      const hits = () =>
+        keys.some((key) => {
+          const point = at.get(key);
+          if (!point) return false;
+          const r = rectAt(
+            sizeOf(key, key === space.key ? "workspace" : "tab"),
+            point,
+          );
+          return pinnedRects.some((p) => overlaps(r, p));
+        });
+      for (let step = 0; step < 40 && hits(); step++) {
+        const offset = layout.offsets.get(space.key)!;
+        layout.offsets.set(space.key, { x: offset.x, y: offset.y + RING.step });
+        for (const key of keys) {
+          const point = at.get(key);
+          if (point) at.set(key, { x: point.x, y: point.y + RING.step });
+        }
+      }
+    }
+  }
+  return layout;
+}
+
+/**
+ * Move each item to the nearest spot that clears every rectangle and the items
+ * placed before it; an item already clear stays exactly where it is.
+ */
+export function clearSpots(
+  items: readonly { key: string; size: Size; at: Point }[],
+  taken: Rect[],
+): Map<string, Point> {
+  const occupied = taken.slice();
+  const out = new Map<string, Point>();
+  for (const item of items) {
+    const spot = freeSpots(item.at, [item], occupied, 0).get(item.key)!;
+    out.set(item.key, spot);
+    occupied.push(rectAt(item.size, spot));
+  }
+  return out;
 }

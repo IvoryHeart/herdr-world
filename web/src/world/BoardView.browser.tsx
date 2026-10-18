@@ -1092,6 +1092,72 @@ async function run() {
     );
   }
 
+  // Tidy moves any note left on a card to free space.
+  {
+    const notesBefore = saved.notes.length;
+    const spot = emptySpot();
+    boardEl().dispatchEvent(
+      new MouseEvent("dblclick", {
+        bubbles: true,
+        clientX: spot.x,
+        clientY: spot.y,
+      }),
+    );
+    await waitFor(
+      () => saved.notes.length === notesBefore + 1,
+      "a note to drop on a card",
+    );
+    (document.activeElement as HTMLElement | null)?.blur();
+    await settle(100);
+    const fresh = saved.notes[saved.notes.length - 1]!;
+    const noteEl = card(`note:${fresh.id}`)!;
+    const from = centre(noteEl),
+      to = centre(card("studio:w1")!);
+    pointer(noteEl, "pointerdown", from.x, from.y, 34);
+    for (let i = 1; i <= 6; i++) {
+      pointer(
+        noteEl,
+        "pointermove",
+        from.x + ((to.x - from.x) * i) / 6,
+        from.y + ((to.y - from.y) * i) / 6,
+        34,
+      );
+      await settle(16);
+    }
+    await settle(150);
+    pointer(noteEl, "pointerup", to.x, to.y, 34);
+    await settle(300);
+    const onCard = () => {
+      const notes = [...host.querySelectorAll<HTMLElement>(".board-note")].map(
+        (el) => el.getBoundingClientRect(),
+      );
+      const others = [
+        ...host.querySelectorAll<HTMLElement>(".board-card:not(.board-note)"),
+      ]
+        .filter(
+          (el) =>
+            el.offsetParent !== null && getComputedStyle(el).display !== "none",
+        )
+        .map((el) => el.getBoundingClientRect());
+      return notes.some((n) =>
+        others.some(
+          (o) =>
+            n.left < o.right &&
+            n.right > o.left &&
+            n.top < o.bottom &&
+            n.bottom > o.top,
+        ),
+      );
+    };
+    check(onCard(), "the dropped note sits on a card");
+    host
+      .querySelector<HTMLButtonElement>('[aria-label="Tidy the board"]')!
+      .click();
+    await rest();
+    await settle(400);
+    check(!onCard(), "after Tidy no note sits on a card");
+  }
+
   // Zoom out to the overview: tabs fold into status squares, nothing moves.
   const before = at("studio:w1:t1")!;
   for (let i = 0; i < 12; i++)

@@ -62,13 +62,16 @@ import {
 } from "./board/boardPhysics";
 import {
   DEFAULT_SIZE,
+  clearSpots,
   cloneLayout,
   emptyLayout,
   placeNew,
   positions,
+  rectAt,
   tidy,
   type BoardLayout,
   type Point,
+  type Rect,
   type Size,
 } from "./board/boardPlacement";
 import type { WorldAgentStatus, WorldObject } from "./worldObject";
@@ -1496,18 +1499,32 @@ export default function BoardView({
     return undefined;
   };
   /**
-   * When the board rearranges itself, a note strung to a card moves by as much
-   * as that card does, so it stays beside what it is about. Notes on no card
-   * stay where the user put them.
+   * After the board rearranges itself: a note strung to a card moves by as much
+   * as that card did, so it stays beside what it is about, and any note that
+   * would now sit on a card moves to the nearest free spot. Returns where the
+   * notes were, for Undo.
    */
-  const moveStrungNotes = (from: BoardLayout, to: BoardLayout) => {
+  const arrangeNotes = (from: BoardLayout, to: BoardLayout) => {
     const m = latest.current.model;
     const doc = latest.current.saved;
-    if (!doc) return;
-    const was = positions(m, from),
-      now = positions(m, to);
-    const ops: BoardOp[] = [];
-    for (const note of doc.notes) {
+    const was = new Map<string, Point>();
+    if (!doc?.notes.length) return was;
+    const before = positions(m, from),
+      after = positions(m, to);
+    const collapsed = latest.current.collapsed;
+    const obstacles: Rect[] = [];
+    for (const [key, point] of after) {
+      const tab = m.tabByKey.get(key);
+      // Tabs hidden by the overview still count: zooming in shows them.
+      if (tab && collapsed.has(tab.workspaceKey)) continue;
+      obstacles.push(
+        rectAt(
+          sizeOf(key, m.workspaceByKey.has(key) ? "workspace" : "tab"),
+          point,
+        ),
+      );
+    }
+    const wanted = doc.notes.map((note) => {
       let cardKey: string | null = null;
       for (const string of doc.strings) {
         if (string.detached || cardKey) continue;
@@ -1518,27 +1535,63 @@ export default function BoardView({
           if ("anchor" in end && !cardKey)
             cardKey = targetOf(m, end.anchor)?.cardKey ?? null;
       }
-      const a = cardKey && was.get(cardKey),
-        b = cardKey && now.get(cardKey);
-      if (!a || !b || Math.hypot(b.x - a.x, b.y - a.y) < 1) continue;
-      const x = note.x + b.x - a.x,
-        y = note.y + b.y - a.y;
+      const a = cardKey ? before.get(cardKey) : undefined,
+        b = cardKey ? after.get(cardKey) : undefined;
+      const el = cardEls.current.get(NOTE_PREFIX + note.id);
+      // Where the note is on screen: a drop may not have saved yet.
+      const live = cards.current.get(NOTE_PREFIX + note.id);
+      const here = live ? { x: live.x, y: live.y } : { x: note.x, y: note.y };
+      const size =
+        el?.offsetWidth && !farRef.current
+          ? { w: el.offsetWidth, h: el.offsetHeight }
+          : { w: 180, h: 120 };
+      return {
+        key: note.id,
+        size,
+        here,
+        at: a && b ? { x: here.x + b.x - a.x, y: here.y + b.y - a.y } : here,
+      };
+    });
+    const spots = clearSpots(wanted, obstacles);
+    const moves = new Map<string, Point>();
+    for (const { key, here } of wanted) {
+      const spot = spots.get(key)!;
+      if (Math.hypot(spot.x - here.x, spot.y - here.y) < 1) continue;
+      was.set(key, here);
+      moves.set(key, spot);
+    }
+    placeNotes(moves);
+    return was;
+  };
+  /** Glide notes to new places and save them in one batch. */
+  const placeNotes = (moves: Map<string, Point>) => {
+    const doc = latest.current.saved;
+    if (!doc || !moves.size) return;
+    const ops: BoardOp[] = [];
+    for (const note of doc.notes) {
+      const to = moves.get(note.id);
+      if (!to) continue;
       const card = cards.current.get(NOTE_PREFIX + note.id);
       if (card)
         tweens.current.set(card.key, {
           fx: card.x,
           fy: card.y,
-          tx: x,
-          ty: y,
+          tx: to.x,
+          ty: to.y,
           t: 0,
         });
       ops.push({
         op: "note.put",
-        note: { id: note.id, text: note.text, color: note.color, x, y },
+        note: {
+          id: note.id,
+          text: note.text,
+          color: note.color,
+          x: to.x,
+          y: to.y,
+        },
         rev: note.rev,
       });
     }
-    if (!ops.length) return;
     invalidate("notes-follow");
     void report(boardStore.patch(ops));
   };
@@ -1551,7 +1604,7 @@ export default function BoardView({
       sizeOf,
     });
     travelToLayout(model);
-    moveStrungNotes(before, layout.current);
+    const notesWere = arrangeNotes(before, layout.current);
     if (!workspaceKey) window.setTimeout(() => fit(false), 400);
     const label = workspaceKey
       ? model.workspaceByKey.get(workspaceKey)?.label
@@ -1559,10 +1612,9 @@ export default function BoardView({
     setToast({
       text: label ? `Tidied “${label}”` : "Tidied the board",
       undo: () => {
-        const after = cloneLayout(layout.current);
         layout.current = before;
         travelToLayout(latest.current.model);
-        moveStrungNotes(after, before);
+        placeNotes(notesWere);
         setToast({ text: "Restored" });
       },
     });

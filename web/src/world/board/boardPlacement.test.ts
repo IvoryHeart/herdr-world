@@ -8,7 +8,9 @@ import {
   placeNew,
   positions,
   rectAt,
+  clearSpots,
   tidy,
+  type SizeOf,
   type BoardLayout,
 } from "./boardPlacement";
 
@@ -21,11 +23,15 @@ const spaces = (tabCounts: number[]): FixtureSpace[] =>
     })),
   }));
 
-function overlapping(model: BoardModel, layout: BoardLayout) {
+function overlapping(
+  model: BoardModel,
+  layout: BoardLayout,
+  sizeOf: SizeOf = (_key, kind) => DEFAULT_SIZE[kind],
+) {
   const at = positions(model, layout);
   const rects = [...at].map(([key, point]) =>
     rectAt(
-      DEFAULT_SIZE[model.workspaceByKey.has(key) ? "workspace" : "tab"],
+      sizeOf(key, model.workspaceByKey.has(key) ? "workspace" : "tab"),
       point,
     ),
   );
@@ -139,5 +145,41 @@ describe("Board placement", () => {
       y: 0,
     });
     expect(overlapping(model, tidied)).toBe(0);
+  });
+
+  test("tidying the whole board uses real card sizes, so tall tabs and many hosts never overlap", () => {
+    const model = projectBoard(
+      fixtureWorld([
+        fixtureHost("alpha", spaces([9, 2, 6, 1, 4])),
+        fixtureHost("beta", spaces([3, 8])),
+      ]),
+    );
+    // Tabs with pane rows and task lines are much taller than the default.
+    const sizeOf: SizeOf = (key, kind) =>
+      kind === "workspace"
+        ? { w: 236, h: 84 }
+        : { w: 210 + (key.length % 3) * 30, h: 66 + (key.length % 4) * 45 };
+    for (const phone of [false, true]) {
+      const tidied = tidy(model, placeNew(model, emptyLayout()), {
+        phone,
+        sizeOf,
+      });
+      expect(overlapping(model, tidied, sizeOf)).toBe(0);
+    }
+  });
+
+  test("clearing notes moves only those on a card, to the nearest free spot", () => {
+    const card = rectAt({ w: 200, h: 80 }, { x: 0, y: 0 });
+    const spots = clearSpots(
+      [
+        { key: "on", size: { w: 120, h: 60 }, at: { x: 10, y: 5 } },
+        { key: "off", size: { w: 120, h: 60 }, at: { x: 600, y: 0 } },
+      ],
+      [card],
+    );
+    expect(spots.get("off")).toEqual({ x: 600, y: 0 });
+    expect(overlaps(rectAt({ w: 120, h: 60 }, spots.get("on")!), card)).toBe(
+      false,
+    );
   });
 });
