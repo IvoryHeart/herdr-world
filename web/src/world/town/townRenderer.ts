@@ -23,6 +23,11 @@ import {
 } from "../worldFrameScheduler";
 import { worldRendererCountersEnabled } from "../worldRendererDebug";
 import { TownActors, townActorWorld, type TownActor } from "./townActors";
+import {
+  stepTownDrag,
+  townDragPhase,
+  type TownDragMotion,
+} from "./townDragMotion";
 import type { TownMoveResult } from "./townMoves";
 import {
   TownCamera,
@@ -1258,13 +1263,7 @@ export async function createTownRenderer(
     dimmed: Container | null;
     /** The desk snapshot made for this drag; cached textures are never ours. */
     snapshot: Texture | null;
-    phase:
-      | { name: "drag" }
-      | { name: "back"; t: number; x0: number; y0: number }
-      | { name: "park"; t: number; x0: number; y0: number }
-      | { name: "land"; t: number }
-      | { name: "fade"; t: number };
-  };
+  } & TownDragMotion;
   let drag: DragVisual | null = null;
   const podOf = (deskKey: string) =>
     buildings.flatMap((b) => b.pods).find((pod) => pod.deskKey === deskKey);
@@ -1350,6 +1349,7 @@ export async function createTownRenderer(
       dimmed,
       snapshot,
       phase: { name: "drag" },
+      shown: { x, y, tilt: 0, alpha: 1, scale: 1 },
     };
     puffAt(
       home.x,
@@ -1412,9 +1412,10 @@ export async function createTownRenderer(
   };
   const endDrag = (mode: "cancel" | "park") => {
     if (!drag || drag.phase.name !== "drag") return;
-    if (mode === "park" && drag.target)
-      drag.phase = { name: "park", t: 0, x0: drag.x, y0: drag.y };
-    else drag.phase = { name: "back", t: 0, x0: drag.x, y0: drag.y };
+    drag.phase = townDragPhase(
+      drag,
+      mode === "park" && drag.target ? "park" : "back",
+    );
     frames?.request("state");
   };
   const finishMove = (result: TownMoveResult) => {
@@ -1422,7 +1423,7 @@ export async function createTownRenderer(
     // An uncertain move neither lands nor springs home: the ghost fades where
     // it was dropped and the refreshed scene shows where the panes are.
     if (result === "uncertain") {
-      drag.phase = { name: "fade", t: 0 };
+      drag.phase = townDragPhase(drag, "fade");
       frames?.request("state");
       return;
     }
@@ -1433,7 +1434,7 @@ export async function createTownRenderer(
         14,
       );
       drag.phase = { name: "land", t: 0 };
-    } else drag.phase = { name: "back", t: 0, x0: drag.x, y0: drag.y };
+    } else drag.phase = townDragPhase(drag, "back");
     frames?.request("state");
   };
   /** Advance drag effects and puffs; true while anything still moves. */
@@ -1455,54 +1456,13 @@ export async function createTownRenderer(
         .fill({ color: 0xe8dcc4, alpha: Math.min(0.5, puff.life) });
     }
     if (!drag) return puffs.length > 0;
-    const fast = quiet() ? 20 : 1;
-    const ease = (t: number) => 1 - Math.pow(1 - Math.min(1, t), 3);
-    let x = drag.x;
-    let y = drag.y;
-    let tilt = drag.tilt;
-    let alpha = 1;
-    let scale = 1;
-    const phase = drag.phase;
-    if (phase.name === "back") {
-      phase.t += (dt / 0.28) * fast;
-      const k = ease(phase.t);
-      x = phase.x0 + (drag.home.x - phase.x0) * k;
-      y = phase.y0 + (drag.home.y - phase.y0) * k;
-      tilt = drag.tilt * (1 - k);
-      if (phase.t >= 1) {
-        clearDrag();
-        return puffs.length > 0;
-      }
-    } else if (phase.name === "park" && drag.target) {
-      phase.t += dt * fast;
-      const k = ease(phase.t / 0.35);
-      const tx = drag.target.x + drag.target.w / 2;
-      const ty = drag.target.y + drag.target.h / 2 - 8;
-      const bob = quiet() ? 0 : Math.sin(clock * 5) * 2;
-      x = phase.x0 + (tx - phase.x0) * k;
-      y = phase.y0 + (ty - phase.y0) * k + bob * k;
-      tilt = drag.tilt * (1 - k);
-      alpha = 1 - 0.3 * k;
-    } else if (phase.name === "fade") {
-      phase.t += (dt / 0.35) * fast;
-      alpha = Math.max(0, 1 - phase.t);
-      tilt = 0;
-      if (phase.t >= 1) {
-        clearDrag();
-        return puffs.length > 0;
-      }
-    } else if (phase.name === "land" && drag.target) {
-      phase.t += (dt / 0.35) * fast;
-      x = drag.target.x + drag.target.w / 2;
-      y = drag.target.y + drag.target.h / 2 - 8 * (1 - phase.t);
-      scale = 1 + 0.15 * Math.sin(Math.min(1, phase.t) * Math.PI);
-      alpha = Math.max(0, 1 - phase.t);
-      tilt = 0;
-      if (phase.t >= 1) {
-        clearDrag();
-        return puffs.length > 0;
-      }
+    const { pose, done } = stepTownDrag(drag, dt, clock, quiet());
+    if (done) {
+      clearDrag();
+      return puffs.length > 0;
     }
+    const { x, y, tilt, alpha, scale } = pose;
+    const phase = drag.phase;
     drag.ghost.position.set(x, y);
     drag.ghost.rotation = tilt;
     drag.ghost.alpha = alpha;
