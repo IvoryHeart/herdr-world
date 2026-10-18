@@ -83,6 +83,11 @@ describe("Board anchors", () => {
       "term_9",
       "term_10",
     ]);
+    // A pane anchor without a witness is never confirmed or bound later.
+    const bare = { ...empty, kind: "pane" as const, native_id: "w5:p1" };
+    expect(confirmed(bare, target([]))).toBe(false);
+    expect(confirmed(bare, target(["term_9"]))).toBe(false);
+    expect(nextWitness(bare, target(["term_9"]))).toBeNull();
     // After a restart nothing survives: not confirmed, nothing recorded.
     expect(nextWitness(witnessed, target(["term_new"]))).toBeNull();
   });

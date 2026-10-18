@@ -78,7 +78,20 @@ export type BoardOp =
   | { op: "note.delete"; id: string; rev: number }
   | { op: "string.put"; string: BoardString }
   | { op: "string.delete"; id: string }
-  | { op: "string.detach"; id: string }
+  | {
+      op: "string.detach";
+      id: string;
+      /**
+       * Detach only if this end still names this target: a move may have
+       * rewritten the string while the absence check was in flight.
+       */
+      if_anchor?: {
+        end: "from" | "to";
+        connection_id: string;
+        kind: "workspace" | "tab" | "pane";
+        native_id: string;
+      };
+    }
   | {
       op: "layout.set";
       anchors?: Record<string, BoardPoint>;

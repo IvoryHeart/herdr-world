@@ -1232,3 +1232,8 @@
   opacity: 0.45;
   cursor: default;
 }
+
+/* An edit that could not be saved stays on screen until saved or discarded. */
+.board-banner.board-unsaved q {
+  overflow-wrap: anywhere;
+}

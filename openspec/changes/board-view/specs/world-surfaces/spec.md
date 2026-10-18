@@ -193,8 +193,9 @@ clients; while it has a local drag or save in progress its own save follows and
 replaces the layout (last writer wins). An edit to a note based on an outdated
 revision of that note SHALL be rejected with the current board rather than
 overwrite newer content; a note being edited SHALL keep its draft and the
-revision editing started from, and a rejected draft SHALL be kept for the user
-to save on purpose. Authenticated World clients of the service MAY receive board content;
+revision editing started from, and a draft that cannot be saved (the note
+changed or was deleted elsewhere) SHALL stay available until the user saves it
+over the note, saves it as a new note, or discards it. Authenticated World clients of the service MAY receive board content;
 note text SHALL go to Herdr or an agent only on the user's explicit Send.
 
 Strings SHALL be anchored to the connection profile and the Herdr workspace,
@@ -206,14 +207,17 @@ witness. An anchor SHALL be:
 - attached when its target exists on the current runtime generation and at
   least one witnessed terminal ID is still present in it, or, for a workspace
   or tab that held no terminals when strung or kept, while it exists (weak
-  evidence, acceptable because such anchors never authorise Send);
+  evidence, acceptable because such anchors never authorise Send); a pane
+  anchor always needs a matching witnessed terminal;
 - unresolved, keeping its saved anchor, while its host is connecting, offline,
   stale or filtered or its target is outside the admitted topology;
 - unconfirmed when its host is current and its ID exists but no witnessed
   terminal ID survives, until the user keeps or detaches it;
 - detached into a "Needs a home" tray only on authoritative absence: a close
   observed on the current generation, or a qualified get on the current
-  generation answering not found.
+  generation answering not found. The detach SHALL apply only if the string
+  still names the checked target, so a reply about an ID the string no longer
+  uses (after a move) changes nothing.
 
 While an anchor is attached on a current host, Board SHALL keep its witness in
 step with the target's present terminals, so continuity survives panes opening
@@ -224,7 +228,9 @@ the revision the user sent, and SHALL send the saved text. Unresolved and
 unconfirmed strings SHALL be drawn as such with their reason, at the target's
 last known position or its host's zone when the target is not on the board. A
 pane or tab anchor SHALL follow a pane or tab moved by World, from any view or
-client, through the move result, rewritten by the service. Items SHALL NOT be
+client, through the move result, rewritten by the service. After a move that
+failed or rolled back, the service SHALL reconcile witnessed anchors from the
+terminals the outcome positively observed and leave the rest unresolved. Items SHALL NOT be
 deleted or re-attached without the user.
 
 Card positions, pins, folds and colours are a layout preference keyed by

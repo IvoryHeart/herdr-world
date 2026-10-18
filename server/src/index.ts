@@ -124,6 +124,7 @@ import { WorldSnapshotService } from "./world/snapshot";
 import { WorldWatchlistRegistry } from "./world/watchlist";
 import {
   moveFollowOps,
+  reconcileOps,
   BoardConflictError,
   BoardStore,
 } from "./world/board-store";
@@ -1421,14 +1422,26 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
             }),
       );
       // Board's strings follow the move whichever view or client made it.
-      if (result.status === "moved" && route.scope === "connection") {
+      if (
+        (result.status === "moved" || result.status === "failed") &&
+        route.scope === "connection"
+      ) {
         try {
-          const ops = moveFollowOps(
-            board().get(),
-            route.connectionId,
-            method === "town.move_desk" ? String(p.tab_id ?? "") : null,
-            result,
-          );
+          // A failed move may have left (or put back) panes under new IDs:
+          // reconcile from what it positively observed.
+          const ops =
+            result.status === "moved"
+              ? moveFollowOps(
+                  board().get(),
+                  route.connectionId,
+                  method === "town.move_desk" ? String(p.tab_id ?? "") : null,
+                  result,
+                )
+              : reconcileOps(
+                  board().get(),
+                  route.connectionId,
+                  result.topology ?? [],
+                );
           if (ops.length) publishBoardChanged(board().patch(ops).revision);
         } catch (error) {
           logger.warn("Board strings did not follow a move", {

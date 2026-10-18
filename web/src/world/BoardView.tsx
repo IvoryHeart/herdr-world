@@ -386,6 +386,17 @@ export default function BoardView({
   }, [boardStore]);
   const { document: saved } = useBoardDocument(boardStore);
   const [editing, setEditing] = useState<string | null>(null);
+  /** The text being typed into a note, kept apart from the saved notes. */
+  const draftRef = useRef<{ started: BoardNote; text: string } | null>(null);
+  /**
+   * A draft that could not be saved (the note changed or was deleted
+   * elsewhere). It stays until the user saves or discards it.
+   */
+  const [unsaved, setUnsaved] = useState<{
+    started: BoardNote;
+    text: string;
+    reason: "changed" | "deleted";
+  } | null>(null);
   const [noteSelected, setNoteSelected] = useState<string | null>(null);
   const [picked, setPicked] = useState<string | null>(null);
   const [stringFrom, setStringFrom] = useState<StringEnd | null>(null);
@@ -1926,18 +1937,23 @@ export default function BoardView({
     ]);
     if (!problem) return;
     trace.record("save", { problem });
-    setToast({
-      text: `This note changed on another device, so your edit was not saved: “${text.slice(0, 60)}${text.length > 60 ? "…" : ""}”`,
-      action: "Keep mine",
-      undo: () => {
-        const current = latest.current.saved?.notes.find(
-          (n) => n.id === started.id,
-        );
-        setToast(null);
-        if (current) void saveNote(current, { text });
-      },
-    });
+    const exists = latest.current.saved?.notes.some((n) => n.id === started.id);
+    setUnsaved({ started, text, reason: exists ? "changed" : "deleted" });
   };
+  // The note being edited was deleted elsewhere: keep what was typed.
+  useEffect(() => {
+    const draft = draftRef.current;
+    if (!editing || !draft || draft.started.id !== editing) return;
+    if (saved?.notes.some((n) => n.id === editing)) return;
+    setEditing(null);
+    draftRef.current = null;
+    if (draft.text.trim() && draft.text !== draft.started.text)
+      setUnsaved({
+        started: draft.started,
+        text: draft.text,
+        reason: "deleted",
+      });
+  }, [saved, editing]);
   const deleteNote = (note: BoardNote) => {
     setNoteSelected(null);
     void report(
@@ -2031,9 +2047,26 @@ export default function BoardView({
       checkedAnchors.current.add(key);
       void checkAnchor(item.host, item.anchor)
         .then((result) => {
+          // A reply about an older runtime says nothing about this one.
+          const host = latest.current.model.hostByKey.get(item.host.key);
+          if (!host || host.generation !== item.host.generation) {
+            checkedAnchors.current.delete(key);
+            return;
+          }
           if (result.state === "absent")
             void report(
-              boardStore.patch([{ op: "string.detach", id: item.string.id }]),
+              boardStore.patch([
+                {
+                  op: "string.detach",
+                  id: item.string.id,
+                  if_anchor: {
+                    end: item.end,
+                    connection_id: item.anchor.connection_id,
+                    kind: item.anchor.kind,
+                    native_id: item.anchor.native_id,
+                  },
+                },
+              ]),
             );
           // Unknown or present: ask again after the next topology change.
           else checkedAnchors.current.delete(key);
@@ -2045,6 +2078,7 @@ export default function BoardView({
   }, [anchorStates, checkAnchor]);
   // Confirmed anchors on live hosts keep their witness in step with their
   // target's terminals, so continuity survives panes opening and closing.
+  /** Witness writes in flight, so a refresh does not send one twice. */
   const rewitnessing = useRef(new Set<string>());
   useEffect(() => {
     const ops: BoardOp[] = [];
@@ -2062,7 +2096,15 @@ export default function BoardView({
         ops.push({ op: "anchor.witness", string_id: string.id, end, witness });
       }
     }
-    if (ops.length) void report(boardStore.patch(ops));
+    if (!ops.length) return;
+    const keys = ops.map((op) =>
+      op.op === "anchor.witness"
+        ? `${op.string_id}:${op.end}:${op.witness.join(",")}`
+        : "",
+    );
+    void report(boardStore.patch(ops)).finally(() => {
+      for (const key of keys) rewitnessing.current.delete(key);
+    });
     // report and boardStore are stable for this purpose.
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [saved, model]);
@@ -2693,7 +2735,11 @@ export default function BoardView({
               {editing === note.id ? (
                 <NoteEditor
                   note={note}
+                  onDraft={(started, text) => {
+                    draftRef.current = { started, text };
+                  }}
                   onDone={(started, text) => {
+                    draftRef.current = null;
                     setEditing(null);
                     if (text !== started.text) void saveDraft(started, text);
                   }}
@@ -2723,6 +2769,57 @@ export default function BoardView({
           <Trash2 size={14} aria-hidden="true" />
           Delete
         </button>
+        {unsaved ? (
+          <div className="board-banner board-unsaved" role="alert">
+            <span>
+              {unsaved.reason === "deleted"
+                ? "This note was deleted on another device before your edit was saved:"
+                : "This note changed on another device, so your edit was not saved:"}{" "}
+              <q>{unsaved.text}</q>
+            </span>
+            {unsaved.reason === "changed" &&
+            saved?.notes.some((n) => n.id === unsaved.started.id) ? (
+              <button
+                type="button"
+                onClick={() => {
+                  const current = saved.notes.find(
+                    (n) => n.id === unsaved.started.id,
+                  )!;
+                  setUnsaved(null);
+                  void saveNote(current, { text: unsaved.text });
+                }}
+              >
+                Keep mine
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => {
+                const { started, text } = unsaved;
+                setUnsaved(null);
+                void report(
+                  boardStore.patch([
+                    {
+                      op: "note.put",
+                      note: {
+                        id: newId(),
+                        text,
+                        color: started.color,
+                        x: started.x + 40,
+                        y: started.y + 40,
+                      },
+                    },
+                  ]),
+                );
+              }}
+            >
+              Save as a new note
+            </button>
+            <button type="button" onClick={() => setUnsaved(null)}>
+              Discard
+            </button>
+          </div>
+        ) : null}
         {[...anchorStates.unconfirmed].map(([hostKey, list]) => (
           <div key={hostKey} className="board-banner" role="alert">
             <span>
@@ -3106,9 +3203,11 @@ export default function BoardView({
  */
 function NoteEditor({
   note,
+  onDraft,
   onDone,
 }: {
   note: BoardNote;
+  onDraft(started: BoardNote, text: string): void;
   onDone(started: BoardNote, text: string): void;
 }) {
   const [started] = useState(note);
@@ -3131,6 +3230,9 @@ function NoteEditor({
           getSelection()?.addRange(range);
         }
       }}
+      onInput={(event) =>
+        onDraft(started, event.currentTarget.textContent ?? "")
+      }
       onBlur={(event) =>
         onDone(started, event.currentTarget.textContent?.trim() ?? "")
       }

@@ -75,7 +75,20 @@ export type BoardOp =
   | { op: "note.delete"; id: string; rev: number }
   | { op: "string.put"; string: BoardString }
   | { op: "string.delete"; id: string }
-  | { op: "string.detach"; id: string }
+  | {
+      op: "string.detach";
+      id: string;
+      /**
+       * Detach only if this end still names this target: a move may have
+       * rewritten the string while the absence check was in flight.
+       */
+      if_anchor?: {
+        end: "from" | "to";
+        connection_id: string;
+        kind: "workspace" | "tab" | "pane";
+        native_id: string;
+      };
+    }
   | {
       op: "layout.set";
       anchors?: Record<string, BoardPoint>;
@@ -400,7 +413,19 @@ function applyOp(next: BoardDocument, op: BoardOp, current: BoardDocument) {
       return;
     case "string.detach": {
       const target = next.strings.find((entry) => entry.id === op.id);
-      if (target) target.detached = true;
+      if (!target) return;
+      const expected = op.if_anchor;
+      if (expected) {
+        const side = target[expected.end === "to" ? "to" : "from"];
+        if (
+          !("anchor" in side) ||
+          side.anchor.connection_id !== expected.connection_id ||
+          side.anchor.kind !== expected.kind ||
+          side.anchor.native_id !== expected.native_id
+        )
+          return;
+      }
+      target.detached = true;
       return;
     }
     case "layout.set": {
@@ -465,6 +490,55 @@ export function moveFollowOps(
       return { anchor: { ...anchor, native_id: panes.get(anchor.native_id)! } };
     if (anchor.kind === "tab" && movedTab && anchor.native_id === movedTab)
       return { anchor: { ...anchor, native_id: moved.tab_id } };
+    return end;
+  };
+  const ops: BoardOp[] = [];
+  for (const string of document.strings) {
+    const from = rewrite(string.from),
+      to = rewrite(string.to);
+    if (from !== string.from || to !== string.to)
+      ops.push({ op: "string.put", string: { ...string, from, to } });
+  }
+  return ops;
+}
+
+/**
+ * After a move that failed (and maybe rolled back), panes can sit under new
+ * IDs. Using only what the outcome positively observed (terminal to pane and
+ * tab), a pane anchor whose witnessed terminal was seen takes that pane's ID,
+ * and a tab anchor whose seen terminals all sit in one tab takes that tab.
+ * Anchors with no observed terminal are left as they are (unresolved).
+ */
+export function reconcileOps(
+  document: BoardDocument,
+  connectionId: string,
+  topology: readonly { terminal_id: string; pane_id: string; tab_id: string }[],
+): BoardOp[] {
+  const byTerminal = new Map(
+    topology.map((entry) => [entry.terminal_id, entry]),
+  );
+  const rewrite = (end: BoardEnd): BoardEnd => {
+    if (!("anchor" in end) || end.anchor.connection_id !== connectionId)
+      return end;
+    const { anchor } = end;
+    const seen = anchor.witness.flatMap((terminal) => {
+      const entry = byTerminal.get(terminal);
+      return entry ? [entry] : [];
+    });
+    if (!seen.length) return end;
+    if (anchor.kind === "pane") {
+      const pane = seen[0]!.pane_id;
+      return pane === anchor.native_id
+        ? end
+        : { anchor: { ...anchor, native_id: pane } };
+    }
+    if (anchor.kind === "tab") {
+      const tabs = new Set(seen.map((entry) => entry.tab_id));
+      const [tab] = [...tabs];
+      return tabs.size === 1 && tab !== anchor.native_id
+        ? { anchor: { ...anchor, native_id: tab! } }
+        : end;
+    }
     return end;
   };
   const ops: BoardOp[] = [];

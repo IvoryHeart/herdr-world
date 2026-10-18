@@ -8,6 +8,7 @@ import {
   type HerdrCall,
   type LayoutNode,
 } from "./desk-move";
+import { reconcileOps, type BoardDocument } from "./board-store";
 
 type Pane = { terminal: string; tab: string; workspace: string };
 
@@ -326,6 +327,57 @@ describe("desk moves", () => {
         [...herdr.tabs.values()].filter((t) => t.workspace === "w2").length,
       ).toBe(1);
     });
+
+  test("a Board string to a pane follows its terminal back after a rolled-back move", async () => {
+    const herdr = fakeHerdr({ failAt: 2 });
+    const desk = threePaneDesk(herdr);
+    const first = desk.ids[0]!;
+    const outcome = await moveDesk(herdr.call, {
+      tab_id: desk.tab,
+      workspace_id: "w2",
+      isCurrent: current,
+    });
+    expect(outcome).toMatchObject({ status: "failed", rolled_back: true });
+    const doc: BoardDocument = {
+      version: 1,
+      revision: 1,
+      layout: { anchors: {}, offsets: {}, pinned: {}, folded: [], colors: {} },
+      notes: [{ id: "n1", text: "Note", color: "yellow", x: 0, y: 0, rev: 1 }],
+      strings: [
+        {
+          id: "s1",
+          from: { note: "n1" },
+          to: {
+            anchor: {
+              connection_id: "studio",
+              kind: "pane",
+              native_id: first,
+              witness: [`term-${first}`],
+            },
+          },
+        },
+      ],
+    };
+    const ops = reconcileOps(
+      doc,
+      "studio",
+      outcome.status === "failed" ? outcome.topology : [],
+    );
+    // The terminal is home again; the string names wherever it now is.
+    const now = [...herdr.panes].find(
+      ([, pane]) => pane.terminal === `term-${first}`,
+    )![0];
+    // Rolled back, the pane came home under a new ID.
+    expect(now).not.toBe(first);
+    expect(ops).toEqual([
+      expect.objectContaining({
+        op: "string.put",
+        string: expect.objectContaining({
+          to: { anchor: expect.objectContaining({ native_id: now }) },
+        }),
+      }),
+    ]);
+  });
 
   test("an uncertain step that did move its pane is rolled back too", async () => {
     const herdr = fakeHerdr({ uncertainAt: 2 });

@@ -15,6 +15,7 @@ import {
   BoardConflictError,
   BoardStore,
   moveFollowOps,
+  reconcileOps,
   type BoardAnchor,
 } from "./board-store";
 
@@ -349,5 +350,113 @@ describe("Board store", () => {
     expect(single.map((op) => op.op === "string.put" && op.string.id)).toEqual([
       "c",
     ]);
+  });
+
+  test("a conditional detach applies only while the end still names the checked target", () => {
+    const store = new BoardStore(path);
+    store.patch([
+      { op: "note.put", note: note("n1") },
+      {
+        op: "string.put",
+        string: {
+          id: "s1",
+          from: { note: "n1" },
+          to: { anchor: anchor("w1:p1") },
+        },
+      },
+    ]);
+    const ifOld = {
+      end: "to" as const,
+      connection_id: "studio",
+      kind: "pane" as const,
+      native_id: "w1:p1",
+    };
+    // A move rewrote the string first: the late detach is a no-op.
+    store.patch([
+      {
+        op: "string.put",
+        string: {
+          id: "s1",
+          from: { note: "n1" },
+          to: { anchor: anchor("w2:p4") },
+        },
+      },
+    ]);
+    store.patch([{ op: "string.detach", id: "s1", if_anchor: ifOld }]);
+    expect(store.get().strings[0]!.detached).toBeUndefined();
+    store.patch([
+      {
+        op: "string.detach",
+        id: "s1",
+        if_anchor: { ...ifOld, native_id: "w2:p4" },
+      },
+    ]);
+    expect(store.get().strings[0]!.detached).toBe(true);
+  });
+
+  test("after a compensated move, witnessed anchors follow the observed panes", () => {
+    const pane = (native_id: string, witness: string[]) => ({
+      anchor: {
+        connection_id: "studio",
+        kind: "pane" as const,
+        native_id,
+        witness,
+      },
+    });
+    const store = new BoardStore(path);
+    store.patch([
+      { op: "note.put", note: note("n1") },
+      // The string's terminal was put back in its tab under a new pane ID.
+      {
+        op: "string.put",
+        string: {
+          id: "a",
+          from: { note: "n1" },
+          to: pane("w1:p1", ["term_1"]),
+        },
+      },
+      // Its terminal was not observed: left as it is.
+      {
+        op: "string.put",
+        string: {
+          id: "b",
+          from: { note: "n1" },
+          to: pane("w1:p3", ["term_3"]),
+        },
+      },
+      {
+        op: "string.put",
+        string: {
+          id: "c",
+          from: { note: "n1" },
+          to: {
+            anchor: {
+              connection_id: "studio",
+              kind: "tab",
+              native_id: "w1:t1",
+              witness: ["term_1", "term_2"],
+            },
+          },
+        },
+      },
+    ]);
+    const ops = reconcileOps(store.get(), "studio", [
+      { terminal_id: "term_1", pane_id: "w1:p5", tab_id: "w1:t1" },
+      { terminal_id: "term_2", pane_id: "w1:p6", tab_id: "w1:t1" },
+    ]);
+    expect(ops.map((op) => op.op === "string.put" && op.string.id)).toEqual([
+      "a",
+    ]);
+    store.patch(ops);
+    expect(store.get().strings.find((s) => s.id === "a")!.to).toEqual(
+      pane("w1:p5", ["term_1"]),
+    );
+    // Split across tabs: the tab anchor is not guessed.
+    expect(
+      reconcileOps(store.get(), "studio", [
+        { terminal_id: "term_1", pane_id: "w1:p5", tab_id: "w1:t1" },
+        { terminal_id: "term_2", pane_id: "w2:p1", tab_id: "w2:t1" },
+      ]).map((op) => op.op === "string.put" && op.string.id),
+    ).toEqual([]);
   });
 });

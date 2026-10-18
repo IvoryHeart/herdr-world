@@ -105,8 +105,8 @@ export function confirmed(anchor: BoardAnchor, target: AnchorTarget | null) {
   if (!target) return false;
   // A workspace (or tab) that held no terminals when it was strung or kept
   // has nothing to witness; it is confirmed while it exists. Such anchors
-  // never authorise Send, which needs a pane.
-  if (!anchor.witness.length) return true;
+  // never authorise Send. A pane always needs a matching witnessed terminal.
+  if (!anchor.witness.length) return anchor.kind !== "pane";
   return anchor.witness.some((terminal) => target.terminals.includes(terminal));
 }
 

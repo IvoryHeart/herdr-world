@@ -121,7 +121,16 @@ function apply(ops: BoardOp[]) {
       next.strings = next.strings.filter((string) => string.id !== op.id);
     else if (op.op === "string.detach") {
       const string = next.strings.find((candidate) => candidate.id === op.id);
-      if (string) string.detached = true;
+      const want = op.if_anchor;
+      const side = want && string?.[want.end];
+      const unchanged =
+        !want ||
+        (side &&
+          "anchor" in side &&
+          side.anchor.connection_id === want.connection_id &&
+          side.anchor.kind === want.kind &&
+          side.anchor.native_id === want.native_id);
+      if (string && unchanged) string.detached = true;
     } else if (op.op === "anchor.witness") {
       const side = next.strings.find(
         (candidate) => candidate.id === op.string_id,
@@ -165,6 +174,8 @@ const sent: {
 }[] = [];
 /** Pane IDs the fake service reports as closed ("not found"). */
 const closedPanes = new Set<string>();
+/** While set, anchor checks wait here until the test answers them. */
+let heldChecks: ((state: string) => void)[] | null = null;
 const started: {
   workspace: string;
   kind: string;
@@ -240,9 +251,15 @@ function mount(key: number, shown = world, selectedId: string | null = null) {
             terminal_id: leaf.terminalId,
           };
         }}
-        checkAnchor={async (_host, anchor) => ({
-          state: closedPanes.has(anchor.native_id) ? "absent" : "present",
-        })}
+        checkAnchor={async (_host, anchor) =>
+          heldChecks
+            ? new Promise((resolve) =>
+                heldChecks!.push((state) => resolve({ state })),
+              )
+            : {
+                state: closedPanes.has(anchor.native_id) ? "absent" : "present",
+              }
+        }
       />
     </StrictMode>,
   );
@@ -1611,6 +1628,7 @@ async function run() {
     );
     const editor = document.activeElement as HTMLElement;
     editor.textContent = "My draft";
+    editor.dispatchEvent(new Event("input", { bubbles: true }));
     const remote = saved.notes.find((n) => n.id === id)!;
     apply([
       {
@@ -1636,22 +1654,185 @@ async function run() {
       () =>
         Boolean(
           host
-            .querySelector(".board-toast")
+            .querySelector(".board-unsaved")
             ?.textContent?.includes("changed on another device"),
         ),
-      "a conflicting save is reported, not applied",
+      "a conflicting save is kept on screen, not applied",
     );
     check(
       saved.notes.find((n) => n.id === id)!.text === "Their edit",
       "the other client's edit is not overwritten",
     );
-    [...host.querySelectorAll<HTMLButtonElement>(".board-toast button")]
+    // A later notice does not take the draft away.
+    host
+      .querySelector<HTMLButtonElement>('[aria-label="Tidy the board"]')!
+      .click();
+    await settle(100);
+    check(
+      Boolean(host.querySelector(".board-unsaved")),
+      "the unsaved draft outlasts other notices",
+    );
+    [...host.querySelectorAll<HTMLButtonElement>(".board-unsaved button")]
       .find((b) => b.textContent === "Keep mine")!
       .click();
     await waitFor(
       () => saved.notes.find((n) => n.id === id)!.text === "My draft",
       "Keep mine saves the draft over the newer text",
     );
+    // Deleted elsewhere while being edited: what was typed is kept, and can
+    // be saved as a new note.
+    (document.activeElement as HTMLElement | null)?.blur();
+    await settle(100);
+    const before = saved.notes.length;
+    const spot2 = emptySpot();
+    boardEl().dispatchEvent(
+      new MouseEvent("dblclick", {
+        bubbles: true,
+        clientX: spot2.x,
+        clientY: spot2.y,
+      }),
+    );
+    await waitFor(
+      () => saved.notes.length === before + 1,
+      "another note to edit",
+    );
+    const goneId = saved.notes[saved.notes.length - 1]!.id;
+    await waitFor(
+      () => document.activeElement?.getAttribute("aria-label") === "Note text",
+      "editing the second note",
+    );
+    const editor2 = document.activeElement as HTMLElement;
+    editor2.textContent = "Typed before it vanished";
+    editor2.dispatchEvent(new Event("input", { bubbles: true }));
+    apply([
+      {
+        op: "note.delete",
+        id: goneId,
+        rev: saved.notes.find((n) => n.id === goneId)!.rev,
+      },
+    ]);
+    await store.refresh();
+    await waitFor(
+      () =>
+        Boolean(
+          host
+            .querySelector(".board-unsaved")
+            ?.textContent?.includes("deleted on another device"),
+        ),
+      "a draft whose note was deleted elsewhere is kept",
+    );
+    [...host.querySelectorAll<HTMLButtonElement>(".board-unsaved button")]
+      .find((b) => b.textContent === "Save as a new note")!
+      .click();
+    await waitFor(
+      () => saved.notes.some((n) => n.text === "Typed before it vanished"),
+      "the kept draft can be saved as a new note",
+    );
+  }
+
+  // A late "absent" about a pane the string no longer names never detaches
+  // it: a move rewrote the string while the check was in flight.
+  {
+    const string = saved.strings.find((candidate) => {
+      const end = candidate.to;
+      return (
+        !candidate.detached && "anchor" in end && end.anchor.kind === "pane"
+      );
+    })!;
+    const end = string.to as Extract<BoardEnd, { anchor: unknown }>;
+    const old = end.anchor.native_id;
+    heldChecks = [];
+    mount(
+      2,
+      variant((leaf) => (leaf.nativeId === old ? null : leaf)),
+    );
+    await waitFor(
+      () => (heldChecks?.length ?? 0) > 0,
+      "the missing pane is checked",
+    );
+    const live = world.leaves.find(
+      (leaf) => leaf.nativeId !== old && leaf.kind === "agent",
+    )!;
+    apply([
+      {
+        op: "string.put",
+        string: {
+          ...string,
+          to: {
+            anchor: {
+              ...end.anchor,
+              native_id: live.nativeId,
+              witness: [live.terminalId],
+            },
+          },
+        },
+      },
+    ]);
+    await store.refresh();
+    mount(2);
+    await settle(100);
+    for (const answer of heldChecks!) answer("absent");
+    heldChecks = null;
+    await settle(200);
+    check(
+      !saved.strings.find((candidate) => candidate.id === string.id)!.detached,
+      "a late absent reply about the old pane does not detach the moved string",
+    );
+  }
+
+  // A workspace's witness follows its terminals, including a pane that
+  // leaves and comes back more than once.
+  {
+    const docs = world.leaves.filter(
+      (leaf) => leaf.workspaceId === "w2" && leaf.connectionId === "studio",
+    );
+    const all = docs.map((leaf) => leaf.terminalId).sort();
+    const leaving = docs[docs.length - 1]!;
+    const noteId = saved.notes[0]!.id;
+    apply([
+      {
+        op: "string.put",
+        string: {
+          id: "witness-check",
+          from: { note: noteId },
+          to: {
+            anchor: {
+              connection_id: "studio",
+              kind: "workspace",
+              native_id: "w2",
+              witness: all,
+            },
+          },
+        },
+      },
+    ]);
+    await store.refresh();
+    const witness = () => {
+      const end = saved.strings.find(
+        (string) => string.id === "witness-check",
+      )!.to;
+      return "anchor" in end ? [...end.anchor.witness].sort().join(",") : "";
+    };
+    const without = all.filter((t) => t !== leaving.terminalId).join(",");
+    for (let round = 1; round <= 2; round++) {
+      mount(
+        2,
+        variant((leaf) =>
+          leaf.nativeId === leaving.nativeId && leaf.workspaceId === "w2"
+            ? null
+            : leaf,
+        ),
+      );
+      await waitFor(
+        () => witness() === without,
+        `round ${round}: a pane leaving updates the witness`,
+      );
+      mount(2);
+      await waitFor(
+        () => witness() === all.join(","),
+        `round ${round}: the pane coming back is recorded again`,
+      );
+    }
     mount(2);
     await settle(200);
   }
