@@ -8,9 +8,10 @@ const publicRoot = fileURLToPath(new URL("../server/public/", import.meta.url));
 // entry points. Keep total bytes and eager JS constrained while allowing the
 // shared visual-view ownership wiring in the shell.
 const maxFileCount = 190;
-// Ranger, commit history and the diff worker add bounded lazy assets. Keep the
-// startup and file-count budgets unchanged.
-const maxTotalBytes = 14.5 * 1024 * 1024;
+// Ranger, commit history and the diff worker add bounded lazy assets, and the
+// lazy Board view (about 52 KB minified) adds its own chunk. Keep the startup
+// and file-count budgets unchanged.
+const maxTotalBytes = 14.75 * 1024 * 1024;
 const maxInitialJsBytes = 660 * 1024;
 const maxInitialJsGzipBytes = 202 * 1024;
 const maxInitialCssBytes = 196 * 1024;
