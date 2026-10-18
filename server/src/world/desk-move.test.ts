@@ -411,6 +411,35 @@ describe("rollback evidence and ordering", () => {
     });
   });
 
+  test("a pane that vanishes during a partial move leaves the topology unknown", async () => {
+    // Move 1 succeeds; move 2 is rejected and its pane closes meanwhile.
+    const herdr = fakeHerdr({ failAt: 2 });
+    const desk = threePaneDesk(herdr);
+    const call: HerdrCall = async (method, params) => {
+      try {
+        return await herdr.call(method, params);
+      } catch (error) {
+        if (method === "pane.move")
+          herdr.panes.delete(params.pane_id as string);
+        throw error;
+      }
+    };
+    const outcome = await moveDesk(call, {
+      tab_id: desk.tab,
+      workspace_id: "w2",
+      isCurrent: current,
+    });
+    expect(outcome).toMatchObject({
+      status: "failed",
+      rolled_back: false,
+      topology_known: false,
+    });
+    if (outcome.status === "failed") {
+      expect(outcome.topology).toHaveLength(2);
+      expect(outcome.message).toContain("1 of its panes could not be found");
+    }
+  });
+
   test("an unreadable topology never counts as rolled back", async () => {
     const herdr = fakeHerdr({ uncertainAt: 1, listFailsAfterMoves: 1 });
     const desk = threePaneDesk(herdr);

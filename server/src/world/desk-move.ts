@@ -60,7 +60,11 @@ export type MoveOutcome =
       rolled_back: boolean;
       /** False when panes were moved back: Herdr cannot always rebuild a layout. */
       layout_restored?: boolean;
-      /** False when the panes' locations could not be read. */
+      /**
+       * True only when every pane of the desk was found: false when the
+       * topology could not be read or a pane vanished, so `topology` lists
+       * fewer panes than the desk had.
+       */
       topology_known?: boolean;
       /** Where each of the desk's panes is now, by terminal. */
       topology: { terminal_id: string; pane_id: string; tab_id: string }[];
@@ -394,17 +398,18 @@ async function rollBack(
           : [];
       })
     : [];
+  const known = where !== null && topology.length === terminalOf.size;
   const message = restored
     ? disturbed
       ? `${failure} The desk was moved back to its room; its pane layout may differ.`
       : `${failure} Nothing was moved.`
-    : `${failure} ${stopped ?? (where ? "Some panes could not be moved back." : "Where its panes are now could not be read.")}`;
+    : `${failure} ${stopped ?? (known ? "Some panes could not be moved back." : where ? `${terminalOf.size - topology.length} of its panes could not be found.` : "Where its panes are now could not be read.")}`;
   return {
     status: "failed",
     message,
     rolled_back: restored,
     layout_restored: restored && !disturbed,
-    topology_known: where !== null,
+    topology_known: known,
     topology,
   };
 }
@@ -503,7 +508,8 @@ export async function movePane(
           ? `Moving the agent may have partly happened: ${errorText(error)}`
           : `Moving the agent failed, and where it is now could not be read: ${errorText(error)}`,
       rolled_back: home,
-      topology_known: known,
+      // Read but not found (the pane closed) is not a known location.
+      topology_known: known && Boolean(now),
       topology: now
         ? [
             {

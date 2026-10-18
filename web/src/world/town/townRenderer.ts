@@ -23,6 +23,7 @@ import {
 } from "../worldFrameScheduler";
 import { worldRendererCountersEnabled } from "../worldRendererDebug";
 import { TownActors, townActorWorld, type TownActor } from "./townActors";
+import type { TownMoveResult } from "./townMoves";
 import {
   TownCamera,
   townBlend,
@@ -146,7 +147,8 @@ export type TownRendererHandle = {
   /** Spring back to its spot, or wait at the target while Herdr moves it. */
   endDrag(mode: "cancel" | "park"): void;
   /** The move finished: land with a puff, or spring back on failure. */
-  finishMove(moved: boolean): void;
+  /** Land on the target, spring home, or fade in place when uncertain. */
+  finishMove(result: TownMoveResult): void;
   destroy(): void;
 };
 
@@ -1260,7 +1262,8 @@ export async function createTownRenderer(
       | { name: "drag" }
       | { name: "back"; t: number; x0: number; y0: number }
       | { name: "park"; t: number; x0: number; y0: number }
-      | { name: "land"; t: number };
+      | { name: "land"; t: number }
+      | { name: "fade"; t: number };
   };
   let drag: DragVisual | null = null;
   const podOf = (deskKey: string) =>
@@ -1414,9 +1417,16 @@ export async function createTownRenderer(
     else drag.phase = { name: "back", t: 0, x0: drag.x, y0: drag.y };
     frames?.request("state");
   };
-  const finishMove = (moved: boolean) => {
+  const finishMove = (result: TownMoveResult) => {
     if (!drag) return;
-    if (moved && drag.target) {
+    // An uncertain move neither lands nor springs home: the ghost fades where
+    // it was dropped and the refreshed scene shows where the panes are.
+    if (result === "uncertain") {
+      drag.phase = { name: "fade", t: 0 };
+      frames?.request("state");
+      return;
+    }
+    if (result === "moved" && drag.target) {
       puffAt(
         drag.target.x + drag.target.w / 2,
         drag.target.y + drag.target.h - 4,
@@ -1473,6 +1483,14 @@ export async function createTownRenderer(
       y = phase.y0 + (ty - phase.y0) * k + bob * k;
       tilt = drag.tilt * (1 - k);
       alpha = 1 - 0.3 * k;
+    } else if (phase.name === "fade") {
+      phase.t += (dt / 0.35) * fast;
+      alpha = Math.max(0, 1 - phase.t);
+      tilt = 0;
+      if (phase.t >= 1) {
+        clearDrag();
+        return puffs.length > 0;
+      }
     } else if (phase.name === "land" && drag.target) {
       phase.t += (dt / 0.35) * fast;
       x = drag.target.x + drag.target.w / 2;

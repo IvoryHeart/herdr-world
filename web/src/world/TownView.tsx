@@ -1257,12 +1257,9 @@ export default function TownView({
               right: 0,
             }}
             roomActions={{
-              // Only a move confirmed back springs home; a partial move lets
-              // the refreshed topology show where the panes really are.
-              onDropDesk: async (deskKey, roomKey) =>
-                (await runDeskMove(deskKey, roomKey)) !== "returned",
-              onDropAgent: async (agentKey, deskKey) =>
-                (await runAgentMove(agentKey, deskKey)) !== "returned",
+              onDropDesk: (deskKey, roomKey) => runDeskMove(deskKey, roomKey),
+              onDropAgent: (agentKey, deskKey) =>
+                runAgentMove(agentKey, deskKey),
               onMoveDesk: (deskKey) => {
                 setPeek(null);
                 setMoveFlow({ step: "room", deskKey });

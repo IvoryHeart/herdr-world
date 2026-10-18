@@ -19,7 +19,7 @@ export type TownMoveOutcome =
       message: string;
       /** True only when every pane was confirmed back where it started. */
       rolled_back: boolean;
-      /** False when the panes' locations could not be read. */
+      /** False when any pane's location could not be found or read. */
       topology_known?: boolean;
       topology?: { terminal_id: string; pane_id: string; tab_id: string }[];
     };

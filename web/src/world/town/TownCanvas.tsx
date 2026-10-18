@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
 } from "react";
+import type { TownMoveResult } from "./townMoves";
 import { townDragFor, townDropTarget, type TownDrag } from "./townDrag";
 import { EllipsisVertical } from "lucide-react";
 import { useMobileControls } from "../../components/MobileControls";
@@ -76,10 +77,10 @@ export type TownRoomActions = {
   onMoveDesk(deskKey: string): void;
   /** Keyboard move: choose another desk for an agent (key M on its target). */
   onMoveAgent(agentKey: string): void;
-  /** A desk dragged onto another room; resolves false only when nothing moved. */
-  onDropDesk(deskKey: string, roomKey: string): Promise<boolean>;
-  /** An agent dragged onto another desk; resolves false only when nothing moved. */
-  onDropAgent(agentKey: string, deskKey: string): Promise<boolean>;
+  /** A desk dragged onto another room; resolves how the move ended. */
+  onDropDesk(deskKey: string, roomKey: string): Promise<TownMoveResult>;
+  /** An agent dragged onto another desk; resolves how the move ended. */
+  onDropAgent(agentKey: string, deskKey: string): Promise<TownMoveResult>;
 };
 
 /** Camera kept across Office visits within one page session. */
@@ -789,8 +790,8 @@ export function TownCanvas({
             ? actions.onDropDesk(drag.key, targetKey)
             : actions.onDropAgent(drag.key, targetKey)
         )
-          .catch(() => false)
-          .then((moved) => rendererRef.current?.finishMove(moved));
+          .catch((): TownMoveResult => "uncertain")
+          .then((result) => rendererRef.current?.finishMove(result));
         return;
       }
       if (finished.moved) {
