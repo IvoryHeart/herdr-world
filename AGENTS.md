@@ -30,6 +30,18 @@ and review repairs, invoke the repo-local
 For an optional visible two-agent run, use the
 [Herdr Workflows recipe](docs/agent-development.md#run-an-optional-visible-team).
 
+## Documentation maintenance
+
+Every significant product, API, configuration, installation or workflow change
+must update the relevant current documentation in the same change. Use the
+knowledge map to identify affected guides. Update `docs/TUTORIAL.md` and
+`FEATURES.md` when user steps or controls change, `README.md` for first-run
+changes, and deployment, architecture or contributor guidance as applicable.
+Tutorial text has one source: `docs/TUTORIAL.md`; run `bun run build:site` for
+tutorial or site changes. Keep historical evidence historical. In the handoff,
+name the updated docs or explain concretely why existing guidance remains
+accurate; a changelog entry alone does not replace usage documentation.
+
 ## Behavioral verification
 
 Assess changed contracts against `verification/coverage.json`. Use maintained

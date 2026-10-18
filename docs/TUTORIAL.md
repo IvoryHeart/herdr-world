@@ -47,10 +47,14 @@ older World or Roamgate installation.
 
 ### Open your first workspace: about 5 minutes
 
-1. Start Herdr with a trusted project open. See [herdr.dev](https://herdr.dev)
-   for setup; Herdr World does not start it.
+1. If Herdr is already installed, start it with a trusted project open. See
+   [herdr.dev](https://herdr.dev) for setup. If it is not installed, complete the
+   **standalone World installation in step 2 first**, then run
+   `herdr-world herdr setup` to install and start Herdr before step 3.
 2. [Install Herdr World](./DEPLOYMENT.md#install-a-release). Standalone needs no Bun;
-   Windows uses the matching x64/ARM64 archive and `herdr-world.exe`. Alternatively,
+   Windows supports npm (`npm install --global @ivoryheart/herdr-world`,
+   Node.js 22.14.0 or newer) or the matching x64/ARM64 archive and
+   `herdr-world.exe`. Alternatively,
    follow the [plugin setup](./DEPLOYMENT.md#herdr-plugin).
 3. Start it on that computer:
 
@@ -65,7 +69,8 @@ older World or Roamgate installation.
    to `PATH`; skip the standalone command.
 
 4. Open the printed URL (including any token) on **the same computer**. Standalone
-   defaults to `http://127.0.0.1:8787`. Select a workspace and idle shell pane;
+   defaults to `http://127.0.0.1:8787` and opens **Town**. Use the view
+   switcher to open **Spaces**, select a workspace and idle shell pane, then
    run `pwd` (`Get-Location` in PowerShell).
 
 **You are done when:** terminal input shows your project directory. Get this
@@ -78,6 +83,135 @@ working before configuring remote access.
 ![Spaces showing synthetic workspaces, recognized agent states, and a live terminal](./images/herdr-world-desktop-spaces.png)
 
 *Find the project and active pane. Screenshot menu positions can differ by release.*
+
+### Choose a view for the task
+
+Use the view switcher to move between these views without restarting work:
+
+| View | Use it for |
+| --- | --- |
+| Town | Explore host buildings, workspace rooms and team tables; the default landing view |
+| Office | See the same work as workspace rooms and agent desks |
+| Desk | Find agents needing input, review finished turns and follow work in flight |
+| Graph | Explore the same hosts, workspaces and agents as a spatial map |
+| Spaces | Work in one workspace's terminal panes, files, changes and history |
+
+**Hosts** starts at **All hosts**. Choose a host set to reduce the overview;
+use **Manage connections** to add or reconnect a local or SSH profile. Filtering
+changes what you see and does not disconnect hosts or retarget open terminals.
+
+### Explore Town: find work that needs you
+
+Town is shown here from a source preview. Check the
+[latest release notes](https://github.com/IvoryHeart/herdr-world/releases/latest)
+for availability in the stable download.
+
+<a id="town"></a>
+
+1. Open **Town** from the view switcher, or return to the World root URL. Each
+   host is a building, each workspace a room, each tab a table and each pane a
+   seat. Plain terminal panes show a prompt rather than an agent character.
+2. Use **+** and **−** to move between town, building, room and desk detail;
+   **ALL** shows the whole town. Drag the background to pan, or use arrow keys
+   when the scene has focus. Tap a room to zoom in. Large towns may initially
+   show roofs; zoom in to see room summaries and desks. Phones stack buildings
+   vertically.
+3. Look at reception for blocked agents waiting for input, oldest first. Finished
+   agents also wait there until you open their terminal or mark that completion
+   reviewed, then join idle agents in the lounge. These locations visualize
+   status; they do not move the underlying pane or change its host.
+4. Hover or tap an agent to open its **peek**. The **NEEDS YOU** list provides
+   another route to waiting agents and becomes a bottom tray on phones; it hides
+   when no agent is blocked. The peek shows recent session messages, falling back
+   to terminal screen text when history is unavailable, and highlights a question
+   when one can be identified.
+5. Read the question before using an answer button: it sends the offered key to
+   that live pane. When no supported choices appear, use the reply line or
+   **Terminal**. Desktop replies send from the peek; on phones the reply line
+   opens World's **Composer** inside the peek, with keys, attachments, **Insert**
+   and **Send**. **Insert** prepares input; **Send** submits it.
+6. Use the paperclip to attach files to the reply. Uploads go to the selected
+   pane's host; review the message and attached paths before sending. Choose
+   **Inspector** for files, changes and history, or **Terminal** for direct work.
+   **Next** cycles waiting agents, then finished agents when no other agent is
+   waiting.
+
+A table with more panes than drawn seats shows the count and offers a chooser
+for every pane. **New room** creates a workspace; room actions also create tabs
+and manage the room. Check the destination host before creation. Stale buildings
+remain visible but cannot accept operations. Use search and the Hosts filter to
+narrow the work you are following. The **Town calm motion** setting reduces
+ambient animation.
+
+**Mark reviewed** acknowledges that completion in this browser. Opening a finished
+agent's terminal also clears its reception stop; neither action proves the result
+is correct. A later completion can need review again. Read the explanation and
+check the diff using chapter 2 before treating the work as complete.
+
+**You are done when:** you can find an agent on the expected host, read its peek,
+and open its terminal or Inspector without losing its workspace context.
+
+![Town source preview with four disposable workspaces and terminal desks](./images/herdr-world-desktop-town.png)
+
+![Town source preview at phone width](./images/herdr-world-mobile-town.png)
+
+### Explore Graph: find an agent and open its terminal
+
+<a id="graph"></a>
+
+1. Switch to **Graph**. Follow a host to its workspace and agent or terminal
+   nodes. These links show containment, not task dependencies or message traffic.
+2. Search for your workspace or agent in the top bar. Matching branches expand
+   while searching; clear the query to return to your saved collapsed branches.
+   Search results can include observed items omitted from the drawn map.
+3. On desktop, drag the background to pan, use the mouse wheel or **Zoom in** /
+   **Zoom out**, and choose **Fit** to bring the graph back into view. Drag a
+   node to position it; **Arrange graph** releases those saved positions and
+   lays out the graph again. **Rotate graph left/right** changes its orientation.
+4. Select your agent to inspect it; double-click a live agent or terminal node
+   to open its terminal. The hierarchy beside the canvas also provides selection,
+   expand/collapse and terminal controls. On narrow screens, use this hierarchy.
+5. In the Inspector, switch between **Terminal**, **Files**, **Changes** and
+   **Agent History**. Use **Actions** for the selected target's resource actions
+   or **Go to Spaces** to continue in its workspace.
+
+Graph positions and collapsed branches are saved in this browser. Moving a node
+changes only its presentation. Offline or stale hosts may retain their last
+observed topology, but their nodes cannot open live resources. Omission counts
+mean the drawing is bounded; they do not mean the other workspaces were deleted.
+
+![Graph showing hosts, workspaces and agent terminals](./images/herdr-world-desktop-graph.png)
+
+**You are done when:** you can find the same agent in Graph and Spaces and open
+its terminal on the expected host.
+
+### Use Office and Desk to follow the same work
+
+In **Office**, select an agent's desk to open its Inspector. Workspace rooms group
+work on each host. Use **Actions > New workspace** or **New tab** from a visual
+view; Office also offers **New room** and **New seat**. Confirm the destination
+host before creating anything. Creation needs a ready host and prepares the
+source terminal before opening the result in the current view.
+
+In **Desk**, start with **Needs you** for blocked agents, **To review** for
+finished turns and **In flight** for running work. Open a card to inspect the
+terminal, files, changes or history. Read the result and verify the diff before
+using **Mark reviewed**; the mark is saved in this browser and does not commit
+files or certify success. **Agents** lists all agents in your Hosts filter;
+**Reviewed** lets you reopen a marked turn.
+
+Use **Actions > Pin** on a live agent or terminal in Office or Graph to
+keep that exact pane in visual triage. These pane pins are shared by browsers
+using the same World service, and clear when the service or host runtime
+restarts. **Pinned only** is a browser preference. Graph node positions and
+workspace pins are separate from these pane pins.
+
+On desktop, **Arrange windows** can tile or cascade open Inspectors; use **Open
+windows** to restore minimized ones. On mobile, one Inspector fills the screen:
+use the on-screen **Back** to return straight to the visual view, including
+when Composer is open. The phone's own Back closes Composer first, then the
+terminal on the next press. Use the ellipsis controls for additional navigation.
+Closing an Inspector leaves the terminal session running.
 
 ### Learn this one hierarchy
 
@@ -253,11 +387,12 @@ as reliable alerts.
 
 ### 3.3 Multiple browsers are not separate permission roles
 
-Browsers share Herdr events, not all fonts, drafts, pins, or shortcuts.
+Browsers share Herdr events and visual pane pins; fonts, review marks, drafts,
+workspace pins and shortcuts can remain browser-local.
 Connection controls can pause your browser or others.
 
-**Profiles are shared; each browser saves its own Hosts filter.** Office, Tree,
-Graph, their counts, and search initially show all hosts and follow that filter.
+**Profiles are shared; each browser saves its own Hosts filter.** Town, Desk, Office,
+Tree, Graph, their counts, and search initially show all hosts and follow that filter.
 Changing the filter preserves open Inspectors and the owners of pending operations.
 Manage connections controls lifecycle separately; global creation confirms one
 destination. Editing a profile affects others' connection lists. There is no
