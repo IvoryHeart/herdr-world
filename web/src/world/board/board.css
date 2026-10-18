@@ -912,3 +912,12 @@
   font-size: 13px;
   overflow-wrap: anywhere;
 }
+
+.board-tray-host {
+  color: var(--board-soft);
+  font-size: 12px;
+}
+.board-notebar button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

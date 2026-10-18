@@ -24,7 +24,9 @@ are optional because the merged PR history records their source.
   agent's pane can be sent to that agent; World first checks the pane still
   holds the same agent and sends it once. After Herdr restarts, Board asks
   before trusting strings whose terminals changed; strings whose target closed
-  wait in a Needs a home tray instead of attaching to the wrong card. On phones Board replaces Graph in the bottom navigation.
+  wait in a Needs a home tray instead of attaching to the wrong card. A note can
+  also start a new agent in a chosen workspace, which receives the note once
+  it is ready. On phones Board replaces Graph in the bottom navigation.
 
 ### Fixed
 

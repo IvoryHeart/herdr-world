@@ -125,6 +125,7 @@ import { WorldWatchlistRegistry } from "./world/watchlist";
 import { BoardConflictError, BoardStore } from "./world/board-store";
 import { sendNote } from "./world/board-send";
 import { checkAnchor } from "./world/board-anchor";
+import { startFromNote } from "./world/board-start";
 import {
   createOfficeObservabilityHttpHandler,
   resolveOfficeObservabilityBootstrap,
@@ -1309,6 +1310,25 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
 
   // Town desk and agent moves: several confirmed pane moves on this exact
   // connection and runtime generation, with rollback (see world/desk-move).
+  if (method === "board.start_agent") {
+    try {
+      const p = (params ?? {}) as Record<string, unknown>;
+      const result = await startFromNote(
+        (rpc, rpcParams) => herdr.call(rpc, rpcParams, 70_000),
+        {
+          workspace_id: String(p.workspace_id ?? ""),
+          kind: String(p.kind ?? ""),
+          name: String(p.name ?? "").slice(0, 64) || "note",
+          text: String(p.text ?? ""),
+          isCurrent: requestIsCurrent,
+        },
+      );
+      sendReply({ id, result }, method);
+    } catch (error) {
+      sendError(`${method}-error`, error);
+    }
+    return;
+  }
   if (method === "board.check_anchor") {
     try {
       const p = (params ?? {}) as Record<string, unknown>;

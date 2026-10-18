@@ -142,6 +142,32 @@ export type SendTarget = {
   terminalId: string;
 };
 export type SendOutcome = { status: string; message?: string; agent?: string };
+export type StartOutcome = {
+  status: string;
+  message?: string;
+  pane_id?: string;
+  terminal_id?: string;
+};
+async function startAgentThroughService(
+  space: BoardWorkspace,
+  kind: string,
+  name: string,
+  text: string,
+) {
+  const { bridge } = await import("../api");
+  return (await bridge
+    .connection(space.connectionId, space.generation)
+    .call(
+      "board.start_agent",
+      { workspace_id: space.nativeId, kind, name, text },
+      120_000,
+    )) as StartOutcome;
+}
+/** Agents Board offers to start; Herdr validates the kind. */
+const START_KINDS = [
+  { kind: "claude", label: "Claude" },
+  { kind: "codex", label: "Codex" },
+];
 async function checkAnchorThroughService(host: BoardHost, anchor: BoardAnchor) {
   const { bridge } = await import("../api");
   return (await bridge
@@ -245,6 +271,7 @@ export default function BoardView({
   store,
   sendNote = sendNoteThroughService,
   checkAnchor = checkAnchorThroughService,
+  startAgent = startAgentThroughService,
 }: {
   world: WorldObject;
   toolbarPortal?: Element | null;
@@ -255,6 +282,13 @@ export default function BoardView({
   store?: BoardDocumentStore;
   /** Send a note to an agent's pane; World's service by default. */
   sendNote?: (target: SendTarget, text: string) => Promise<SendOutcome>;
+  /** Start an agent in a workspace with a note; World's service by default. */
+  startAgent?: (
+    space: BoardWorkspace,
+    kind: string,
+    name: string,
+    text: string,
+  ) => Promise<StartOutcome>;
   /** Ask the service whether an anchor's target exists; World's by default. */
   checkAnchor?: (
     host: BoardHost,
@@ -273,6 +307,8 @@ export default function BoardView({
   const [picked, setPicked] = useState<string | null>(null);
   const [stringFrom, setStringFrom] = useState<StringEnd | null>(null);
   const [trayOpen, setTrayOpen] = useState(false);
+  /** The note an agent is being started for, while the chooser is open. */
+  const [startFor, setStartFor] = useState<string | null>(null);
   /** Anchors already asked about this session: `string id:end`. */
   const checkedAnchors = useRef(new Set<string>());
   const [far, setFar] = useState(false);
@@ -603,7 +639,7 @@ export default function BoardView({
   useEffect(() => {
     let frame = 0;
     let last = performance.now();
-    const tick = (t: number) => {
+    const frameBody = (t: number) => {
       const dt = Math.min(0.033, Math.max(0.001, (t - last) / 1000));
       last = t;
       const m = latest.current.model;
@@ -674,6 +710,14 @@ export default function BoardView({
       if (dirty.current && svg) {
         dirty.current = false;
         paint(svg, m);
+      }
+    };
+    // One bad frame must not stop the board: report it and keep going.
+    const tick = (t: number) => {
+      try {
+        frameBody(t);
+      } catch (error) {
+        console.error("Board frame failed", error);
       }
       frame = requestAnimationFrame(tick);
     };
@@ -1547,8 +1591,52 @@ export default function BoardView({
       setToast({ text: `The note may not have been sent: ${String(error)}` });
     }
   };
+  const startFromNote = async (
+    note: BoardNote,
+    space: BoardWorkspace,
+    kind: string,
+  ) => {
+    setStartFor(null);
+    const name =
+      note.text.trim().split(/\s+/).slice(0, 3).join(" ").slice(0, 40) ||
+      "note";
+    setToast({ text: `Starting ${kind} in ${space.label}…` });
+    try {
+      const outcome = await startAgent(space, kind, name, note.text);
+      // String the note to the new pane whenever one was created, so the
+      // agent can be found (and sent the note later if it was not ready).
+      if (outcome.pane_id && outcome.terminal_id)
+        await boardStore.patch([
+          {
+            op: "string.put",
+            string: {
+              id: newId(),
+              from: { note: note.id },
+              to: {
+                anchor: {
+                  connection_id: space.connectionId,
+                  kind: "pane",
+                  native_id: outcome.pane_id,
+                  witness: [outcome.terminal_id],
+                },
+              },
+            },
+          },
+        ]);
+      setToast({
+        text:
+          outcome.status === "sent"
+            ? `Started ${kind} in ${space.label} with the note`
+            : (outcome.message ?? "The agent was not started."),
+      });
+    } catch (error) {
+      setToast({ text: `The agent may not have started: ${String(error)}` });
+    }
+  };
   const cutString = (id: string) => {
     setPicked(null);
+    // Hide at once; the next frame would, but not if the string is gone.
+    if (cutRef.current) cutRef.current.hidden = true;
     void report(boardStore.patch([{ op: "string.delete", id }]));
   };
   useEffect(() => {
@@ -1981,6 +2069,56 @@ export default function BoardView({
             </button>
           </div>
         ))}
+        {startFor && saved?.notes.find((n) => n.id === startFor) ? (
+          <div
+            className="board-chooser"
+            role="dialog"
+            aria-label="Start an agent with this note"
+          >
+            <div className="board-chooser-head">
+              <strong>Start an agent with this note</strong>
+              <button
+                type="button"
+                aria-label="Close"
+                onClick={() => setStartFor(null)}
+              >
+                ×
+              </button>
+            </div>
+            <p className="board-tray-hint">
+              A new tab opens in the workspace you choose; the note is sent once
+              the agent is ready.
+            </p>
+            {model.workspaces
+              .filter((space) => space.actionable)
+              .map((space) => (
+                <div key={space.key} className="board-tray-row">
+                  <span className="board-tray-text">
+                    {space.label}
+                    <small className="board-tray-host">
+                      {" "}
+                      · {model.hostByKey.get(space.hostKey)?.label}
+                    </small>
+                  </span>
+                  {START_KINDS.map(({ kind, label }) => (
+                    <button
+                      key={kind}
+                      type="button"
+                      onClick={() =>
+                        void startFromNote(
+                          saved.notes.find((n) => n.id === startFor)!,
+                          space,
+                          kind,
+                        )
+                      }
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              ))}
+          </div>
+        ) : null}
         {trayOpen && detached.length ? (
           <div
             className="board-chooser board-tray"
@@ -2075,6 +2213,7 @@ export default function BoardView({
             onDelete={() =>
               deleteNote(saved.notes.find((n) => n.id === noteSelected)!)
             }
+            onStart={() => setStartFor(noteSelected)}
           />
         ) : null}
         {chooser && model.tabByKey.get(chooser.tabKey) ? (
@@ -2242,6 +2381,7 @@ function NoteBar({
   onEdit,
   onString,
   onDelete,
+  onStart,
 }: {
   note: BoardNote;
   targets: SendTarget[];
@@ -2250,6 +2390,7 @@ function NoteBar({
   onEdit(): void;
   onString(): void;
   onDelete(): void;
+  onStart(): void;
 }) {
   return (
     <div className="board-notebar" role="toolbar" aria-label="Note">
@@ -2279,6 +2420,9 @@ function NoteBar({
       </button>
       <button type="button" onClick={onString}>
         String to…
+      </button>
+      <button type="button" disabled={!note.text.trim()} onClick={onStart}>
+        Start an agent…
       </button>
       <button type="button" className="board-danger" onClick={onDelete}>
         Delete

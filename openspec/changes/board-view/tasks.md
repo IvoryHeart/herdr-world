@@ -22,7 +22,7 @@
 
 - [x] 4.1 Add notes (create by double-click or double-tap, edit, colour, delete) and strings (drag from a card's handle, String to…, a pane chooser for multi-pane tabs, cut from the string or the panel).
 - [x] 4.2 Send a note to a strung agent pane with `agent.prompt` over the qualified route, only on the user's Send and after revalidation (attached, current generation, agent present); verify the exact pane, each refusal and that nothing is sent otherwise.
-- [ ] 4.3 Start a new agent from a note: `tab.create`, `agent.start` in its root pane, a bounded wait for `interactive_ready` (as in `server/src/assistant/actions.ts`), then `agent.prompt` and the string; verify partial failure, the uncertain timeout and that nothing is retried.
+- [x] 4.3 Start a new agent from a note: `tab.create`, `agent.start` in its root pane, a bounded wait for `interactive_ready` (as in `server/src/assistant/actions.ts`), then `agent.prompt` and the string; verify partial failure, the uncertain timeout and that nothing is retried.
 
 ## 5. Persistence and identity
 

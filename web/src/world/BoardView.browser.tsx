@@ -153,6 +153,7 @@ const opened: string[] = [];
 const sent: { paneId: string; terminalId: string; text: string }[] = [];
 /** Pane IDs the fake service reports as closed ("not found"). */
 const closedPanes = new Set<string>();
+const started: { workspace: string; kind: string; text: string }[] = [];
 const host = document.createElement("div");
 host.style.cssText = "position:fixed;inset:0";
 document.body.appendChild(host);
@@ -175,6 +176,16 @@ function mount(key: number, shown = world) {
             text,
           });
           return { status: "sent", agent: target.label };
+        }}
+        startAgent={async (space, kind, _name, text) => {
+          started.push({ workspace: space.nativeId, kind, text });
+          // The fake new agent lands in an existing pane of that workspace.
+          const leaf = space.space.children[0]!;
+          return {
+            status: "sent",
+            pane_id: leaf.nativeId,
+            terminal_id: leaf.terminalId,
+          };
         }}
         checkAnchor={async (_host, anchor) => ({
           state: closedPanes.has(anchor.native_id) ? "absent" : "present",
@@ -851,6 +862,53 @@ async function run() {
   await waitFor(
     () => host.querySelectorAll(".board-sum span").length === 19,
     "the board is back with every pane",
+  );
+
+  // Start a new agent from the note: a workspace and a kind, then strung.
+  const noteAgain = card(noteKey)!;
+  const na = centre(noteAgain);
+  pointer(noteAgain, "pointerdown", na.x, na.y, 15);
+  pointer(noteAgain, "pointerup", na.x, na.y, 15);
+  await waitFor(
+    () =>
+      Boolean(
+        [...host.querySelectorAll(".board-notebar button")].find(
+          (b) => b.textContent === "Start an agent…",
+        ),
+      ),
+    "a note offers to start an agent",
+  );
+  [...host.querySelectorAll<HTMLButtonElement>(".board-notebar button")]
+    .find((b) => b.textContent === "Start an agent…")!
+    .click();
+  await waitFor(
+    () =>
+      host.querySelectorAll(
+        '[aria-label="Start an agent with this note"] .board-tray-row',
+      ).length === 5,
+    "the chooser lists each workspace",
+  );
+  host
+    .querySelector<HTMLButtonElement>(
+      '[aria-label="Start an agent with this note"] .board-tray-row button',
+    )!
+    .click();
+  await waitFor(
+    () => saved.strings.length === 1,
+    "the new agent is strung to the note",
+  );
+  check(
+    started.length === 1 &&
+      started[0]!.kind === "claude" &&
+      started[0]!.text === "Ship the login fix",
+    "the agent starts with the note",
+  );
+  const startedEnd = saved.strings[0]!.to;
+  check(
+    "anchor" in startedEnd &&
+      startedEnd.anchor.kind === "pane" &&
+      startedEnd.anchor.witness.length === 1,
+    "the string goes to the new pane with its terminal as witness",
   );
 
   // Zoom out to the overview: tabs fold into status squares, nothing moves.
