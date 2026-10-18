@@ -1,18 +1,23 @@
 /* Board: a pin board drawn from World's theme tokens, so a light theme reads as
    a whiteboard and a dark theme as a blackboard. */
 .board {
-  --board-ground: color-mix(in srgb, var(--bg) 92%, var(--text));
-  --board-grid: color-mix(in srgb, var(--text) 14%, transparent);
-  --board-card: var(--panel);
-  --board-line: var(--border);
-  --board-ink: var(--text);
-  --board-soft: var(--muted);
-  --board-zone: var(--accent);
-  --s-working: var(--blue);
-  --s-blocked: var(--yellow);
-  --s-done: var(--green);
-  --s-idle: color-mix(in srgb, var(--muted) 80%, var(--text));
-  --s-unknown: #b48ef0;
+  /* The prototype's palettes: a blackboard for dark themes (the default)
+     and a whiteboard for light ones. */
+  --board-ground: #1c2320;
+  --board-grid: #2b3430;
+  --board-card: #252d29;
+  --board-line: #45504a;
+  --board-ink: #e7ebe3;
+  --board-soft: #a2aba1;
+  --board-zone: #92b3ff;
+  --board-accent: #92b3ff;
+  --board-shadow: 0 1px 0 rgb(0 0 0 / 20%), 0 6px 18px rgb(0 0 0 / 35%);
+  --board-lift: 0 14px 34px rgb(0 0 0 / 55%);
+  --s-working: #7fa7ff;
+  --s-blocked: #ffc25a;
+  --s-done: #6dd29a;
+  --s-idle: #8e978e;
+  --s-unknown: #c3a2ff;
   position: absolute;
   inset: 0;
   overflow: hidden;
@@ -27,6 +32,23 @@
     var(--board-grid) 1.2px,
     transparent 1.4px
   );
+}
+:root[data-theme="light"] .board {
+  --board-ground: #f2f3ee;
+  --board-grid: #d6d9cf;
+  --board-card: #ffffff;
+  --board-line: #c2c7bb;
+  --board-ink: #1e231f;
+  --board-soft: #5a6159;
+  --board-zone: #2a59c9;
+  --board-accent: #2a59c9;
+  --board-shadow: 0 1px 0 rgb(30 35 31 / 6%), 0 6px 18px rgb(30 35 31 / 11%);
+  --board-lift: 0 14px 34px rgb(30 35 31 / 24%);
+  --s-working: #2a6bd4;
+  --s-blocked: #c47f08;
+  --s-done: #2a8753;
+  --s-idle: #8a9189;
+  --s-unknown: #8656c4;
 }
 .board.board-panning {
   cursor: grabbing;
@@ -49,7 +71,7 @@
 .board-tree {
   fill: none;
   stroke: var(--board-line);
-  stroke-width: 1.6;
+  stroke-width: 1.8;
 }
 
 /* Hosts */
@@ -104,7 +126,7 @@
   border: 1.5px solid var(--board-line);
   border-radius: 12px;
   background: var(--board-card);
-  box-shadow: 0 6px 18px rgb(0 0 0 / 18%);
+  box-shadow: var(--board-shadow);
   cursor: pointer;
   will-change: transform;
   transition:
@@ -114,13 +136,13 @@
 }
 .board-card:focus-visible,
 .board-card.board-selected {
-  outline: 2.5px solid var(--accent);
+  outline: 2.5px solid var(--board-accent);
   outline-offset: 3px;
 }
 .board-card.board-lifted {
   z-index: 5;
   cursor: grabbing;
-  box-shadow: 0 14px 34px rgb(0 0 0 / 35%);
+  box-shadow: var(--board-lift);
 }
 .board-card.board-dim {
   opacity: 0.22;
@@ -309,12 +331,12 @@
 }
 .board-fold:hover,
 .board-fold:focus-visible {
-  border-color: var(--accent);
-  color: var(--accent);
+  border-color: var(--board-accent);
+  color: var(--board-accent);
 }
 .board-folded .board-fold {
-  background: var(--accent);
-  border-color: var(--accent);
+  background: var(--board-accent);
+  border-color: var(--board-accent);
   color: var(--board-card);
 }
 
@@ -370,7 +392,7 @@
 }
 .board-controls button:hover,
 .board-controls button:focus-visible {
-  background: var(--accent-soft);
+  background: color-mix(in srgb, var(--board-accent) 16%, transparent);
 }
 .board-menu-wrap {
   position: relative;
@@ -416,7 +438,7 @@
   transition: transform 0.15s;
 }
 [aria-checked="true"] > .board-switch {
-  background: var(--accent);
+  background: var(--board-accent);
 }
 [aria-checked="true"] > .board-switch::after {
   transform: translateX(14px);
@@ -439,7 +461,7 @@
 .board-toast button {
   border: 0;
   background: transparent;
-  color: var(--accent);
+  color: var(--board-accent);
   font: inherit;
   font-weight: 700;
   cursor: pointer;

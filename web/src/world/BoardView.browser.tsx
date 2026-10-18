@@ -110,14 +110,22 @@ const centre = (el: Element) => {
   return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
 };
 /** Positions stop changing: the board is at rest. */
-async function rest(limit = 60) {
+/**
+ * Animation frames until card positions stop changing for three frames: the
+ * board is at rest. Counted in frames, not milliseconds, so a busy machine
+ * (slower frames) does not change the result.
+ */
+async function rest(limit = 600) {
+  const frame = () => new Promise((resolve) => requestAnimationFrame(resolve));
   let before = "";
+  let still = 0;
   for (let i = 0; i < limit; i++) {
-    await settle(50);
+    await frame();
     const now = [...host.querySelectorAll<HTMLElement>(".board-card")]
       .map((el) => el.style.transform)
       .join("|");
-    if (now === before) return i * 50;
+    still = now === before ? still + 1 : 0;
+    if (still >= 3) return i;
     before = now;
   }
   return Infinity;
@@ -144,7 +152,7 @@ async function run() {
     Boolean(host.querySelector(".board-workspace.board-attn")),
     "a workspace with a waiting tab is marked",
   );
-  check((await rest()) < 2000, "the board is still at first sight");
+  check((await rest()) < 120, "the board is still at first sight");
 
   if (innerWidth <= 720) {
     const zones = [...host.querySelectorAll(".board-zone")].map((el) =>
@@ -174,10 +182,11 @@ async function run() {
   }
   await settle(200);
   pointer(ws, "pointerup", from.x + 120, from.y + 80);
-  const restMs = await rest();
+  // About a second at 60 frames a second; more frames means it never settles.
+  const restFrames = await rest();
   check(
-    restMs < 1600,
-    `the board comes to rest within about a second (${restMs} ms)`,
+    restFrames < 100,
+    `the board comes to rest within about a second (${restFrames} frames)`,
   );
   const wsAfter = at("studio:w2")!,
     tabAfter = at("studio:w2:t1")!;
