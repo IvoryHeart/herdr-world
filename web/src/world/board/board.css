@@ -808,3 +808,14 @@
   color: var(--board-yarn);
   border-color: var(--board-yarn);
 }
+
+.board-notebar .board-primary {
+  border-color: var(--board-accent);
+  background: var(--board-accent);
+  color: var(--board-card);
+  font-weight: 700;
+}
+.board-notebar .board-primary:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

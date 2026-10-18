@@ -113,6 +113,26 @@ const NOTE_PREFIX = "note:";
 const isNoteKey = (key: string) => key.startsWith(NOTE_PREFIX);
 const NOTE_SIZE: Size = { w: 180, h: 110 };
 const SAVE_DELAY_MS = 600;
+
+/** An agent pane a note is strung to, with what the service needs to check. */
+export type SendTarget = {
+  label: string;
+  connectionId: string;
+  generation: number;
+  paneId: string;
+  terminalId: string;
+};
+export type SendOutcome = { status: string; message?: string; agent?: string };
+async function sendNoteThroughService(target: SendTarget, text: string) {
+  const { bridge } = await import("../api");
+  return (await bridge
+    .connection(target.connectionId, target.generation)
+    .call(
+      "board.send_note",
+      { pane_id: target.paneId, terminal_id: target.terminalId, text },
+      30_000,
+    )) as SendOutcome;
+}
 type Sample = { x: number; y: number; t: number };
 type Camera = { x: number; y: number; s: number };
 
@@ -194,6 +214,7 @@ export default function BoardView({
   onSelect,
   onOpenTerminal,
   store,
+  sendNote = sendNoteThroughService,
 }: {
   world: WorldObject;
   toolbarPortal?: Element | null;
@@ -202,6 +223,8 @@ export default function BoardView({
   onOpenTerminal(id: string): unknown;
   /** Board's saved state; World's own service store by default. */
   store?: BoardDocumentStore;
+  /** Send a note to an agent's pane; World's service by default. */
+  sendNote?: (target: SendTarget, text: string) => Promise<SendOutcome>;
 }) {
   const model = useMemo(() => projectBoard(world), [world]);
   const boardStore = useMemo(() => store ?? sharedBoardStore(), [store]);
@@ -1311,6 +1334,47 @@ export default function BoardView({
       ]),
     );
   }
+  /** The agents a note can be sent to: confirmed strings to agent panes. */
+  const sendTargets = (noteId: string): SendTarget[] => {
+    const out: SendTarget[] = [];
+    for (const string of saved?.strings ?? []) {
+      const ends = [string.from, string.to];
+      if (!ends.some((end) => "note" in end && end.note === noteId)) continue;
+      for (const end of ends) {
+        if (!("anchor" in end) || end.anchor.kind !== "pane") continue;
+        const target = targetOf(model, end.anchor);
+        if (!target || !confirmed(end.anchor, target)) continue;
+        const pane = model.tabByKey
+          .get(target.cardKey)
+          ?.panes.find((p) => p.key === target.paneKey);
+        if (!pane?.isAgent) continue;
+        const terminal = end.anchor.witness.find((t) =>
+          target.terminals.includes(t),
+        )!;
+        out.push({
+          label: paneName(pane),
+          connectionId: pane.leaf.connectionId,
+          generation: pane.leaf.generation,
+          paneId: pane.leaf.nativeId,
+          terminalId: terminal,
+        });
+      }
+    }
+    return out;
+  };
+  const send = async (note: BoardNote, target: SendTarget) => {
+    try {
+      const outcome = await sendNote(target, note.text);
+      setToast({
+        text:
+          outcome.status === "sent"
+            ? `Sent the note to ${target.label}`
+            : (outcome.message ?? "The note was not sent."),
+      });
+    } catch (error) {
+      setToast({ text: `The note may not have been sent: ${String(error)}` });
+    }
+  };
   const cutString = (id: string) => {
     setPicked(null);
     void report(boardStore.patch([{ op: "string.delete", id }]));
@@ -1697,6 +1761,10 @@ export default function BoardView({
         {noteSelected && saved?.notes.find((n) => n.id === noteSelected) ? (
           <NoteBar
             note={saved.notes.find((n) => n.id === noteSelected)!}
+            targets={sendTargets(noteSelected)}
+            onSend={(target) =>
+              void send(saved.notes.find((n) => n.id === noteSelected)!, target)
+            }
             onColor={(color) => {
               const note = saved.notes.find((n) => n.id === noteSelected)!;
               void saveNote(note, { color });
@@ -1860,12 +1928,16 @@ export default function BoardView({
 /** Actions for the selected note: colour, edit, string and delete. */
 function NoteBar({
   note,
+  targets,
+  onSend,
   onColor,
   onEdit,
   onString,
   onDelete,
 }: {
   note: BoardNote;
+  targets: SendTarget[];
+  onSend(target: SendTarget): void;
   onColor(color: BoardNote["color"]): void;
   onEdit(): void;
   onString(): void;
@@ -1882,6 +1954,17 @@ function NoteBar({
           aria-pressed={note.color === color}
           onClick={() => onColor(color)}
         />
+      ))}
+      {targets.map((target) => (
+        <button
+          key={`${target.connectionId}:${target.paneId}`}
+          type="button"
+          className="board-primary"
+          disabled={!note.text.trim()}
+          onClick={() => onSend(target)}
+        >
+          Send to {target.label}
+        </button>
       ))}
       <button type="button" onClick={onEdit}>
         Edit

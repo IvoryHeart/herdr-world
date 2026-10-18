@@ -136,6 +136,7 @@ const store = new BoardDocumentStore({
 
 const selected: string[] = [];
 const opened: string[] = [];
+const sent: { paneId: string; terminalId: string; text: string }[] = [];
 const host = document.createElement("div");
 host.style.cssText = "position:fixed;inset:0";
 document.body.appendChild(host);
@@ -151,6 +152,14 @@ function mount(key: number) {
         onSelect={(id) => selected.push(id)}
         onOpenTerminal={(id) => opened.push(id)}
         store={store}
+        sendNote={async (target, text) => {
+          sent.push({
+            paneId: target.paneId,
+            terminalId: target.terminalId,
+            text,
+          });
+          return { status: "sent", agent: target.label };
+        }}
       />
     </StrictMode>,
   );
@@ -540,6 +549,33 @@ async function run() {
   );
   host.querySelector<HTMLButtonElement>(".board-cut")!.click();
   await waitFor(() => saved.strings.length === 1, "Cut string removes it");
+
+  // Send the note to the agent it is strung to.
+  const noteEl = card(noteKey)!;
+  const nc = centre(noteEl);
+  pointer(noteEl, "pointerdown", nc.x, nc.y, 11);
+  pointer(noteEl, "pointerup", nc.x, nc.y, 11);
+  await waitFor(
+    () =>
+      Boolean(
+        [...host.querySelectorAll(".board-notebar button")].find((b) =>
+          b.textContent?.startsWith("Send to"),
+        ),
+      ),
+    "a note strung to an agent offers Send",
+  );
+  [...host.querySelectorAll<HTMLButtonElement>(".board-notebar button")]
+    .find((b) => b.textContent?.startsWith("Send to"))!
+    .click();
+  await waitFor(() => sent.length === 1, "Send sends the note");
+  const remaining = saved.strings[0]!.to;
+  check(
+    "anchor" in remaining &&
+      sent[0]!.paneId === remaining.anchor.native_id &&
+      remaining.anchor.witness.includes(sent[0]!.terminalId) &&
+      sent[0]!.text === "Ship the login fix",
+    "the note goes to the strung pane, with its witnessed terminal",
+  );
 
   // A reload keeps notes, strings and the layout.
   await settle(900);
