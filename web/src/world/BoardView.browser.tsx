@@ -347,6 +347,36 @@ async function run() {
   check(followed, "its tabs followed and kept their arrangement");
 
   // A tap selects; a double-click opens the terminal.
+  const emptySpot = () => {
+    for (let y = innerHeight - 40; y > 80; y -= 37)
+      for (let x = 30; x < innerWidth - 30; x += 41) {
+        const el = document.elementFromPoint(x, y);
+        if (
+          el &&
+          !el.closest(".board-card, .board-controls, .board-zone-label")
+        )
+          return { x, y };
+      }
+    throw new Error("no empty board to tap");
+  };
+  /** Leave the overview and pan so an element is in the middle of the screen. */
+  const bringIntoView = async (el: () => Element) => {
+    for (let i = 0; i < 12 && boardEl().classList.contains("board-far"); i++) {
+      host.querySelector<HTMLButtonElement>('[aria-label="Zoom in"]')!.click();
+      await settle(30);
+    }
+    const r = el().getBoundingClientRect();
+    const dx = innerWidth / 2 - (r.left + r.width / 2);
+    const dy = innerHeight / 2 - (r.top + r.height / 2);
+    const from = emptySpot();
+    pointer(boardEl(), "pointerdown", from.x, from.y, 10);
+    pointer(boardEl(), "pointermove", from.x + dx / 2, from.y + dy / 2, 10);
+    pointer(boardEl(), "pointermove", from.x + dx, from.y + dy, 10);
+    await settle(200);
+    pointer(boardEl(), "pointerup", from.x + dx, from.y + dy, 10);
+    await rest();
+  };
+
   const tab = card("studio:w1:t1")!;
   const t = centre(tab);
   pointer(tab, "pointerdown", t.x, t.y);
@@ -355,8 +385,14 @@ async function run() {
     selected.length === 1 && selected[0]!.includes("w1:p1"),
     "a tap selects the tab's pane",
   );
-  tab.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+  // The board captures the pointer, so a real dblclick targets the board.
+  await bringIntoView(() => card("studio:w1:t1")!);
+  const tv = centre(card("studio:w1:t1")!);
+  boardEl().dispatchEvent(
+    new MouseEvent("dblclick", { bubbles: true, clientX: tv.x, clientY: tv.y }),
+  );
   check(opened.length === 1, "a double-click opens the terminal");
+  check(saved.notes.length === 0, "a double-click on a tab makes no note");
 
   // Several panes: a row each; a tap on a row selects that pane.
   const pair = card("studio:w1:t4")!;
@@ -461,18 +497,6 @@ async function run() {
   }
 
   // Notes: a double-tap on empty board pins one, ready to type in.
-  const emptySpot = () => {
-    for (let y = innerHeight - 40; y > 80; y -= 37)
-      for (let x = 30; x < innerWidth - 30; x += 41) {
-        const el = document.elementFromPoint(x, y);
-        if (
-          el &&
-          !el.closest(".board-card, .board-controls, .board-zone-label")
-        )
-          return { x, y };
-      }
-    throw new Error("no empty board to tap");
-  };
   const spot = emptySpot();
   // A double-tap with a finger, the second tap 300 ms after the first.
   for (let i = 0; i < 2; i++) {
@@ -499,24 +523,6 @@ async function run() {
   await settle(50);
   check(boardEl().scrollTop === 0, "the board never stays scrolled");
   await waitFor(() => Boolean(card(noteKey)), "the note is on the board");
-
-  /** Leave the overview and pan so an element is in the middle of the screen. */
-  const bringIntoView = async (el: () => Element) => {
-    for (let i = 0; i < 12 && boardEl().classList.contains("board-far"); i++) {
-      host.querySelector<HTMLButtonElement>('[aria-label="Zoom in"]')!.click();
-      await settle(30);
-    }
-    const r = el().getBoundingClientRect();
-    const dx = innerWidth / 2 - (r.left + r.width / 2);
-    const dy = innerHeight / 2 - (r.top + r.height / 2);
-    const from = emptySpot();
-    pointer(boardEl(), "pointerdown", from.x, from.y, 10);
-    pointer(boardEl(), "pointermove", from.x + dx / 2, from.y + dy / 2, 10);
-    pointer(boardEl(), "pointermove", from.x + dx, from.y + dy, 10);
-    await settle(200);
-    pointer(boardEl(), "pointerup", from.x + dx, from.y + dy, 10);
-    await rest();
-  };
 
   // Strings: drag a note's handle onto one pane of a two-pane tab.
   const dragHandle = async (fromKey: string, to: Element) => {
@@ -599,8 +605,35 @@ async function run() {
     () => !host.querySelector<HTMLButtonElement>(".board-cut")!.hidden,
     "picking a string offers Cut",
   );
-  host.querySelector<HTMLButtonElement>(".board-cut")!.click();
+  const cutButton = host.querySelector<HTMLButtonElement>(".board-cut")!;
+  const shown = () => getComputedStyle(cutButton).display !== "none";
+  check(shown(), "the Delete button is visible");
+  {
+    const away = emptySpot();
+    pointer(boardEl(), "pointerdown", away.x, away.y, 33);
+    pointer(boardEl(), "pointerup", away.x, away.y, 33);
+    await waitFor(() => !shown(), "tapping the board hides the Delete button");
+    yarn.dispatchEvent(
+      new PointerEvent("pointerdown", {
+        bubbles: true,
+        pointerId: 9,
+        clientX: box.left + box.width / 2,
+        clientY: box.top + box.height / 2,
+      }),
+    );
+    yarn.dispatchEvent(
+      new PointerEvent("pointerup", {
+        bubbles: true,
+        pointerId: 9,
+        clientX: box.left + box.width / 2,
+        clientY: box.top + box.height / 2,
+      }),
+    );
+    await waitFor(shown, "picking the string again shows Delete");
+  }
+  cutButton.click();
   await waitFor(() => saved.strings.length === 1, "Cut string removes it");
+  await waitFor(() => !shown(), "the Delete button goes away after a delete");
 
   // Send the note to the agent it is strung to.
   const noteEl = card(noteKey)!;
@@ -647,6 +680,23 @@ async function run() {
     () => saved.notes.length === 2,
     "a mouse double-click makes a note",
   );
+  (document.activeElement as HTMLElement | null)?.blur();
+  await settle(100);
+  {
+    // A double-click on a note edits it, rather than making another.
+    const all = [...host.querySelectorAll<HTMLElement>(".board-note")];
+    const newest = all[all.length - 1]!;
+    const c = centre(newest);
+    boardEl().dispatchEvent(
+      new MouseEvent("dblclick", { bubbles: true, clientX: c.x, clientY: c.y }),
+    );
+    await settle(100);
+    check(saved.notes.length === 2, "a double-click on a note makes no note");
+    check(
+      document.activeElement?.getAttribute("aria-label") === "Note text",
+      "a double-click on a note edits it",
+    );
+  }
   (document.activeElement as HTMLElement | null)?.blur();
   await settle(100);
   // The new note is selected and its swatches show their colours.

@@ -1642,6 +1642,23 @@ export default function BoardView({
     const a = endFor(from, m),
       b = endFor({ ...to, paneKey: to.paneKey ?? single }, m);
     if (!a || !b) return;
+    const same = (x: BoardEnd, y: BoardEnd) =>
+      "note" in x
+        ? "note" in y && x.note === y.note
+        : "anchor" in y &&
+          x.anchor.connection_id === y.anchor.connection_id &&
+          x.anchor.kind === y.anchor.kind &&
+          x.anchor.native_id === y.anchor.native_id;
+    const existing = latest.current.saved?.strings.find(
+      (string) =>
+        !string.detached &&
+        ((same(string.from, a) && same(string.to, b)) ||
+          (same(string.from, b) && same(string.to, a))),
+    );
+    if (existing) {
+      setToast({ text: "Those two are already strung together" });
+      return;
+    }
     void report(
       boardStore.patch([
         {
@@ -1757,6 +1774,15 @@ export default function BoardView({
           target.terminals.includes(t),
         )!;
         const tab = model.tabByKey.get(target.cardKey)!;
+        // Two strings to the same pane are one place to send to.
+        if (
+          out.some(
+            (o) =>
+              o.connectionId === pane.leaf.connectionId &&
+              o.paneId === pane.leaf.nativeId,
+          )
+        )
+          continue;
         out.push({
           // Two agents of the same kind would read the same; name the tab.
           label: `${paneName(pane)} in ${tab.label}`,
@@ -1999,10 +2025,28 @@ export default function BoardView({
         onDoubleClick={(event) => {
           // Phones fire dblclick after a double-tap too; touch has its own.
           if (lastPointerType.current !== "mouse") return;
-          const target = event.target as HTMLElement;
+          // The board holds pointer capture during a press, so the browser
+          // aims dblclick at the board itself; ask what is really under it.
+          const under = document.elementFromPoint(event.clientX, event.clientY);
+          const target = (under ?? event.target) as HTMLElement;
+          const card = target.closest<HTMLElement>(".board-card");
+          const key = card?.dataset.key;
+          if (key && isNoteKey(key)) {
+            setEditing(key.slice(NOTE_PREFIX.length));
+            return;
+          }
+          const tab = key ? latest.current.model.tabByKey.get(key) : undefined;
+          if (tab) {
+            openTab(
+              tab,
+              target.closest<HTMLElement>("[data-pane]")?.dataset.pane,
+            );
+            return;
+          }
           if (
+            card ||
             target.closest(
-              ".board-card, .board-controls, .board-zone-label, .board-notebar, .board-chooser, .board-cut, .board-toast",
+              ".board-controls, .board-zone-label, .board-notebar, .board-chooser, .board-cut, .board-toast, .board-trace, .board-banner, .board-tray",
             )
           )
             return;
@@ -2120,14 +2164,6 @@ export default function BoardView({
                   selectedKeys.has(tab.key) ? "board-selected" : "",
                   matches && !matches.has(tab.key) ? "board-dim" : "",
                 ].join(" ")}
-                onDoubleClick={(event) =>
-                  openTab(
-                    tab,
-                    (event.target as HTMLElement).closest<HTMLElement>(
-                      "[data-pane]",
-                    )?.dataset.pane,
-                  )
-                }
                 onKeyDown={(event) => {
                   if (event.key === "Enter") {
                     event.preventDefault();
@@ -2214,7 +2250,6 @@ export default function BoardView({
                 `board-note-${note.color}`,
                 noteSelected === note.id ? "board-selected" : "",
               ].join(" ")}
-              onDoubleClick={() => setEditing(note.id)}
               onKeyDown={(event) => {
                 if (editing === note.id) return;
                 if (event.key === "Enter") {
