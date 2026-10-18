@@ -76,10 +76,10 @@ export type TownRoomActions = {
   onMoveDesk(deskKey: string): void;
   /** Keyboard move: choose another desk for an agent (key M on its target). */
   onMoveAgent(agentKey: string): void;
-  /** A desk dragged onto another room of its host. */
-  onDropDesk(deskKey: string, roomKey: string): void;
-  /** An agent dragged onto another desk of its host. */
-  onDropAgent(agentKey: string, deskKey: string): void;
+  /** A desk dragged onto another room of its host; resolves true once moved. */
+  onDropDesk(deskKey: string, roomKey: string): Promise<boolean>;
+  /** An agent dragged onto another desk of its host; resolves true once moved. */
+  onDropAgent(agentKey: string, deskKey: string): Promise<boolean>;
 };
 
 /** Camera kept across Office visits within one page session. */
@@ -613,7 +613,11 @@ export function TownCanvas({
     const down = (event: PointerEvent) => {
       const renderer = rendererRef.current;
       if (!renderer) return;
-      host.setPointerCapture(event.pointerId);
+      try {
+        host.setPointerCapture(event.pointerId);
+      } catch {
+        // A pointer the browser no longer tracks cannot be captured.
+      }
       const point = local(event);
       pointers.set(event.pointerId, point);
       renderer.camera.stop();
@@ -667,6 +671,11 @@ export function TownCanvas({
       ghost.dataset.valid = "false";
       ghost.style.transform = `translate(${pressed.lx}px, ${pressed.ly}px)`;
       host.append(ghost);
+      const renderer = rendererRef.current;
+      if (renderer) {
+        const at = renderer.camera.toWorld(pressed.lx, pressed.ly);
+        renderer.beginDrag(drag.kind, drag.key, at.x, at.y);
+      }
     };
     const move = (event: PointerEvent) => {
       const renderer = rendererRef.current;
@@ -712,6 +721,8 @@ export function TownCanvas({
         ghost.textContent = target.label;
         ghost.dataset.valid = String(target.key !== null);
         ghost.style.transform = `translate(${point.x}px, ${point.y}px)`;
+        const at = renderer.camera.toWorld(point.x, point.y);
+        renderer.moveDrag(at.x, at.y, target.key);
         gesture.lx = point.x;
         gesture.ly = point.y;
         return;
@@ -759,12 +770,21 @@ export function TownCanvas({
       if (finished.drag) {
         ghost.remove();
         const { drag } = finished;
-        if (event.type !== "pointercancel" && drag.target?.key) {
-          if (drag.kind === "desk")
-            latest.current.roomActions.onDropDesk(drag.key, drag.target.key);
-          else
-            latest.current.roomActions.onDropAgent(drag.key, drag.target.key);
+        const targetKey = drag.target?.key;
+        if (event.type === "pointercancel" || !targetKey) {
+          renderer.endDrag("cancel");
+          return;
         }
+        // Wait at the target while Herdr moves it, then land or spring back.
+        renderer.endDrag("park");
+        const actions = latest.current.roomActions;
+        void (
+          drag.kind === "desk"
+            ? actions.onDropDesk(drag.key, targetKey)
+            : actions.onDropAgent(drag.key, targetKey)
+        )
+          .catch(() => false)
+          .then((moved) => rendererRef.current?.finishMove(moved));
         return;
       }
       if (finished.moved) {

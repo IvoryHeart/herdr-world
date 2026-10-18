@@ -686,22 +686,24 @@ export default function TownView({
     const desk = deskForKey(deskKey);
     const room = roomForKey(roomKey);
     const source = desk ? roomForKey(desk.roomKey) : null;
-    if (!desk || !room || movingKey) return;
+    if (!desk || !room || movingKey) return false;
     // Herdr closes a room when its last desk leaves; ask first.
     if (!allowCloseRoom && (source?.observedDeskCount ?? 2) <= 1) {
       setMoveConfirm({
         message: `“${desk.displayLabel}” is the last desk in “${source?.displayLabel}”. Moving it to “${room.displayLabel}” closes that room.`,
         run: () => void runDeskMove(deskKey, roomKey, true),
       });
-      return;
+      return false;
     }
     setMovingKey(desk.key);
     toast("ok", `Moving ${desk.displayLabel} to ${room.displayLabel}…`);
     try {
       const outcome = await requestDeskMove(desk, room, allowCloseRoom);
       reportMove(desk.displayLabel, outcome);
+      return outcome.status === "moved";
     } catch (cause) {
       toast("error", `${desk.displayLabel} not moved: ${String(cause)}`);
+      return false;
     } finally {
       setMovingKey(null);
     }
@@ -719,7 +721,7 @@ export default function TownView({
     const neighbour = target?.paneDevices[target.paneDevices.length - 1];
     const sourceDesk = device ? deskForKey(device.deskKey) : null;
     const sourceRoom = sourceDesk ? roomForKey(sourceDesk.roomKey) : null;
-    if (!agent || !device || !target || !neighbour || movingKey) return;
+    if (!agent || !device || !target || !neighbour || movingKey) return false;
     if (
       !allowCloseRoom &&
       (sourceDesk?.observedPaneCount ?? 2) <= 1 &&
@@ -729,7 +731,7 @@ export default function TownView({
         message: `${agent.displayLabel} is alone at the last desk in “${sourceRoom?.displayLabel}”. Moving it closes that room.`,
         run: () => void runAgentMove(agentKey, deskKey, true),
       });
-      return;
+      return false;
     }
     setMovingKey(agentKey);
     toast("ok", `Moving ${agent.displayLabel} to ${target.displayLabel}…`);
@@ -742,8 +744,10 @@ export default function TownView({
         allowCloseRoom,
       );
       reportMove(agent.displayLabel, outcome);
+      return outcome.status === "moved";
     } catch (cause) {
       toast("error", `${agent.displayLabel} not moved: ${String(cause)}`);
+      return false;
     } finally {
       setMovingKey(null);
     }
@@ -1243,10 +1247,9 @@ export default function TownView({
               right: 0,
             }}
             roomActions={{
-              onDropDesk: (deskKey, roomKey) =>
-                void runDeskMove(deskKey, roomKey),
+              onDropDesk: (deskKey, roomKey) => runDeskMove(deskKey, roomKey),
               onDropAgent: (agentKey, deskKey) =>
-                void runAgentMove(agentKey, deskKey),
+                runAgentMove(agentKey, deskKey),
               onMoveDesk: (deskKey) => {
                 setPeek(null);
                 setMoveFlow({ step: "room", deskKey });

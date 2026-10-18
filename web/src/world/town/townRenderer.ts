@@ -139,6 +139,14 @@ export type TownRendererHandle = {
   invalidate(): void;
   actorPosition(key: string): { x: number; y: number; seated: boolean } | null;
   roofAlpha(hostKey: string): number;
+  /** Lift a desk or agent under the pointer for a drag. */
+  beginDrag(kind: "desk" | "agent", key: string, x: number, y: number): void;
+  /** Follow the pointer (world point) and show where it would land. */
+  moveDrag(x: number, y: number, targetKey: string | null): void;
+  /** Spring back to its spot, or wait at the target while Herdr moves it. */
+  endDrag(mode: "cancel" | "park"): void;
+  /** The move finished: land with a puff, or spring back on failure. */
+  finishMove(moved: boolean): void;
   destroy(): void;
 };
 
@@ -293,7 +301,10 @@ export async function createTownRenderer(
   sceneLayer.sortableChildren = true;
   const fxLayer = new Graphics();
   const screenLayer = new Container();
-  world.addChild(groundLayer, sceneLayer, fxLayer);
+  // Drag effects sit above the scene and survive a scene rebuild.
+  const dragLayer = new Container();
+  const puffLayer = new Graphics();
+  world.addChild(groundLayer, sceneLayer, fxLayer, dragLayer, puffLayer);
   app.stage.addChild(world, screenLayer);
 
   let model: TownModel | null = null;
@@ -1164,6 +1175,7 @@ export async function createTownRenderer(
     updateActors(Math.max(deskBlend, townBlend(0.35, 0.6, camera.z)));
     updateBubbles();
     drawEffects();
+    const dragging = updateDrag(dt);
     app.renderer.render(app.stage);
     stats.level = level;
     stats.zoom = camera.z;
@@ -1186,7 +1198,8 @@ export async function createTownRenderer(
       roofsMoving ||
       actorsMoved ||
       camera.flying ||
-      materializing
+      materializing ||
+      dragging
     )
       frames?.request("state");
     else if (!camera.reducedMotion && !state.calm) frames?.request("motion");
@@ -1209,8 +1222,285 @@ export async function createTownRenderer(
     actors.sync(actorWorld, instant || camera.reducedMotion);
   };
 
+  /* ---------- drag and move effects ---------- */
+  type Puff = { x: number; y: number; vx: number; vy: number; life: number };
+  const puffs: Puff[] = [];
+  const quiet = () => camera.reducedMotion || state.calm;
+  const puffAt = (x: number, y: number, count: number) => {
+    if (quiet()) return;
+    for (let i = 0; i < count; i += 1) {
+      const angle = Math.PI * (0.9 + 1.2 * Math.random());
+      const speed = 18 + 34 * Math.random();
+      puffs.push({
+        x: x + (Math.random() - 0.5) * 24,
+        y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed * 0.5,
+        life: 0.45 + 0.3 * Math.random(),
+      });
+    }
+  };
+  type DragVisual = {
+    kind: "desk" | "agent";
+    key: string;
+    ghost: Container;
+    shadow: Graphics;
+    highlight: Graphics;
+    slot: Sprite | null;
+    home: { x: number; y: number };
+    x: number;
+    y: number;
+    tilt: number;
+    lastX: number;
+    target: { x: number; y: number; w: number; h: number } | null;
+    dimmed: Container | null;
+    phase:
+      | { name: "drag" }
+      | { name: "back"; t: number; x0: number; y0: number }
+      | { name: "park"; t: number; x0: number; y0: number }
+      | { name: "land"; t: number };
+  };
+  let drag: DragVisual | null = null;
+  const podOf = (deskKey: string) =>
+    buildings.flatMap((b) => b.pods).find((pod) => pod.deskKey === deskKey);
+  const deskWood = (deskKey: string) =>
+    TOWN_WOODS[townHash(deskKey) % TOWN_WOODS.length]!;
+  const clearDrag = () => {
+    if (!drag) return;
+    if (drag.dimmed && !drag.dimmed.destroyed) drag.dimmed.alpha = 1;
+    drag.ghost.destroy({ children: true, texture: true });
+    drag.shadow.destroy();
+    drag.highlight.destroy();
+    drag.slot?.destroy();
+    drag = null;
+  };
+  const beginDrag = (
+    kind: "desk" | "agent",
+    key: string,
+    x: number,
+    y: number,
+  ) => {
+    clearDrag();
+    if (!model || !layout) return;
+    const ghost = new Container();
+    let home = { x, y };
+    let dimmed: Container | null = null;
+    if (kind === "desk") {
+      const cell = layoutCells.get(key);
+      const pod = podOf(key);
+      if (cell) home = { x: (cell.x + 3) * T, y: cell.y * T + 30 };
+      let image: Sprite;
+      if (pod) {
+        // A snapshot of the desk as drawn, people and screens included.
+        image = new Sprite(app.renderer.generateTexture(pod.container));
+        pod.container.alpha = 0.25;
+        dimmed = pod.container;
+      } else {
+        const seats = cell?.seats ?? 4;
+        image = new Sprite(
+          textureOf(
+            (seats <= 2 ? sprites.tableSmall : sprites.table)[deskWood(key)]!,
+          ),
+        );
+      }
+      image.anchor.set(0.5);
+      ghost.addChild(image);
+    } else {
+      const actor = actors.actors.get(key);
+      const seat = model.agentSeats.get(key);
+      const cell = seat && layoutCells.get(seat.deskKey);
+      if (cell && seat) {
+        const geometry = townSeat(cell, seat.seat);
+        home = { x: geometry.cx, y: geometry.seatedY - 10 };
+      } else if (actor) home = { x: actor.x, y: actor.y - 10 };
+      const image = new Sprite(
+        textureOf(townCharacter(lookOf(key), "down", 0, "stand", false)),
+      );
+      image.anchor.set(0.5, 0.8);
+      ghost.addChild(image);
+    }
+    const shadow = new Graphics()
+      .ellipse(0, 0, kind === "desk" ? 30 : 8, kind === "desk" ? 6 : 3)
+      .fill({ color: 0x000000, alpha: 0.32 });
+    const highlight = new Graphics();
+    dragLayer.addChild(highlight, shadow, ghost);
+    drag = {
+      kind,
+      key,
+      ghost,
+      shadow,
+      highlight,
+      slot: null,
+      home,
+      x: home.x,
+      y: home.y,
+      tilt: 0,
+      lastX: x,
+      target: null,
+      dimmed,
+      phase: { name: "drag" },
+    };
+    puffAt(
+      home.x,
+      home.y + (kind === "desk" ? 24 : 8),
+      kind === "desk" ? 8 : 4,
+    );
+    moveDrag(x, y, null);
+  };
+  const moveDrag = (x: number, y: number, targetKey: string | null) => {
+    if (!drag || !layout || drag.phase.name !== "drag") return;
+    drag.tilt +=
+      (Math.max(-0.35, Math.min(0.35, (x - drag.lastX) * 0.03)) - drag.tilt) *
+      0.3;
+    drag.lastX = x;
+    drag.x = x;
+    drag.y = y - (drag.kind === "desk" ? 24 : 14);
+    drag.target = null;
+    drag.slot?.destroy();
+    drag.slot = null;
+    if (targetKey && drag.kind === "desk") {
+      // The next free spot of the target room, where the desk will land.
+      const room = layout.buildings
+        .flatMap((b) => b.rooms)
+        .find((candidate) => candidate.key === targetKey);
+      const cell = room?.cells.find((candidate) => !candidate.deskKey);
+      if (cell) {
+        drag.target = {
+          x: (cell.x + 1) * T - 3,
+          y: cell.y * T + 2,
+          w: 70,
+          h: 57,
+        };
+        const seats = model?.desks.get(drag.key)?.paneDevices.length ?? 4;
+        const slot = new Sprite(
+          textureOf(
+            (seats <= 2 ? sprites.tableSmall : sprites.table)[
+              deskWood(drag.key)
+            ]!,
+          ),
+        );
+        slot.alpha = 0.35;
+        slot.position.set(
+          (cell.x + 1) * T + (seats <= 2 ? 14 : -1),
+          cell.y * T + 17,
+        );
+        dragLayer.addChildAt(slot, 1);
+        drag.slot = slot;
+      }
+    } else if (targetKey && drag.kind === "agent") {
+      const cell = layoutCells.get(targetKey);
+      if (cell)
+        drag.target = {
+          x: (cell.x + 1) * T - 3,
+          y: cell.y * T + 2,
+          w: 70,
+          h: 57,
+        };
+    }
+    frames?.request("state");
+  };
+  const endDrag = (mode: "cancel" | "park") => {
+    if (!drag || drag.phase.name !== "drag") return;
+    if (mode === "park" && drag.target)
+      drag.phase = { name: "park", t: 0, x0: drag.x, y0: drag.y };
+    else drag.phase = { name: "back", t: 0, x0: drag.x, y0: drag.y };
+    frames?.request("state");
+  };
+  const finishMove = (moved: boolean) => {
+    if (!drag) return;
+    if (moved && drag.target) {
+      puffAt(
+        drag.target.x + drag.target.w / 2,
+        drag.target.y + drag.target.h - 4,
+        14,
+      );
+      drag.phase = { name: "land", t: 0 };
+    } else drag.phase = { name: "back", t: 0, x0: drag.x, y0: drag.y };
+    frames?.request("state");
+  };
+  /** Advance drag effects and puffs; true while anything still moves. */
+  const updateDrag = (dt: number) => {
+    puffLayer.clear();
+    for (let i = puffs.length - 1; i >= 0; i -= 1) {
+      const puff = puffs[i]!;
+      puff.life -= dt;
+      if (puff.life <= 0) {
+        puffs.splice(i, 1);
+        continue;
+      }
+      puff.x += puff.vx * dt;
+      puff.y += puff.vy * dt;
+      puff.vx *= 0.9;
+      puff.vy *= 0.9;
+      puffLayer
+        .circle(puff.x, puff.y, 2 + (0.8 - puff.life) * 6)
+        .fill({ color: 0xe8dcc4, alpha: Math.min(0.5, puff.life) });
+    }
+    if (!drag) return puffs.length > 0;
+    const fast = quiet() ? 20 : 1;
+    const ease = (t: number) => 1 - Math.pow(1 - Math.min(1, t), 3);
+    let x = drag.x;
+    let y = drag.y;
+    let tilt = drag.tilt;
+    let alpha = 1;
+    let scale = 1;
+    const phase = drag.phase;
+    if (phase.name === "back") {
+      phase.t += (dt / 0.28) * fast;
+      const k = ease(phase.t);
+      x = phase.x0 + (drag.home.x - phase.x0) * k;
+      y = phase.y0 + (drag.home.y - phase.y0) * k;
+      tilt = drag.tilt * (1 - k);
+      if (phase.t >= 1) {
+        clearDrag();
+        return puffs.length > 0;
+      }
+    } else if (phase.name === "park" && drag.target) {
+      phase.t += dt * fast;
+      const k = ease(phase.t / 0.35);
+      const tx = drag.target.x + drag.target.w / 2;
+      const ty = drag.target.y + drag.target.h / 2 - 8;
+      const bob = quiet() ? 0 : Math.sin(clock * 5) * 2;
+      x = phase.x0 + (tx - phase.x0) * k;
+      y = phase.y0 + (ty - phase.y0) * k + bob * k;
+      tilt = drag.tilt * (1 - k);
+      alpha = 1 - 0.3 * k;
+    } else if (phase.name === "land" && drag.target) {
+      phase.t += (dt / 0.35) * fast;
+      x = drag.target.x + drag.target.w / 2;
+      y = drag.target.y + drag.target.h / 2 - 8 * (1 - phase.t);
+      scale = 1 + 0.15 * Math.sin(Math.min(1, phase.t) * Math.PI);
+      alpha = Math.max(0, 1 - phase.t);
+      tilt = 0;
+      if (phase.t >= 1) {
+        clearDrag();
+        return puffs.length > 0;
+      }
+    }
+    drag.ghost.position.set(x, y);
+    drag.ghost.rotation = tilt;
+    drag.ghost.alpha = alpha;
+    drag.ghost.scale.set(scale);
+    drag.shadow.position.set(x, y + (drag.kind === "desk" ? 40 : 12));
+    drag.shadow.alpha = alpha;
+    drag.highlight.clear();
+    if (drag.target && phase.name !== "back") {
+      const pulse = 0.12 + 0.08 * Math.sin(clock * 4);
+      const r = drag.target;
+      drag.highlight
+        .rect(r.x, r.y, r.w, r.h)
+        .fill({ color: 0x7be08f, alpha: phase.name === "drag" ? 0.3 : pulse })
+        .stroke({ color: 0x7be08f, width: 1.5, alpha: 0.9 });
+    }
+    return true;
+  };
+
   let sceneKey = "";
   return {
+    beginDrag,
+    moveDrag,
+    endDrag,
+    finishMove,
     camera,
     get level() {
       return level;
@@ -1261,6 +1551,7 @@ export async function createTownRenderer(
     destroy() {
       if (disposed) return;
       disposed = true;
+      clearDrag();
       motion.removeEventListener("change", onMotion);
       frames?.dispose();
       clearScene();

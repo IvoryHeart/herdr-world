@@ -548,8 +548,11 @@
   z-index: 12;
   left: 0;
   top: 0;
-  margin: 14px 0 0 14px;
-  padding: 5px 9px;
+  /* A plaque under the pointer, as in the prototype; the desk itself is drawn
+     on the canvas. */
+  margin: 44px 0 0 0;
+  translate: -50% 0;
+  padding: 4px 9px;
   pointer-events: none;
   white-space: nowrap;
   font:
