@@ -1057,9 +1057,6 @@
 }
 
 /* New terminal or agent in a workspace; new workspace on a host. */
-.board-add {
-  margin-left: 4px;
-}
 .board-zone-add {
   display: grid;
   place-items: center;
@@ -1112,4 +1109,62 @@
 }
 .board-far .board-counts {
   font-size: 20px;
+}
+
+/* Note and card bars ride above their card (see paint), so a panel such as
+   the Inspector over the top of the board never covers them. */
+.board-bar-anchor {
+  position: absolute;
+  z-index: 6;
+  left: 0;
+  top: 0;
+  visibility: hidden;
+}
+.board-bar-anchor .board-notebar {
+  position: static;
+  transform: none;
+  flex-wrap: wrap;
+  max-width: min(560px, calc(100vw - 32px));
+}
+
+/* Workspace controls sit on the card's edge: a minimise chevron on the
+   top-left corner, and a round + (new terminal or agent) centred on the
+   right border. The string handle moves to the bottom edge to make room. */
+.board-workspace .board-fold {
+  position: absolute;
+  z-index: 1;
+  top: -12px;
+  left: -12px;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--board-card);
+  box-shadow: var(--board-shadow);
+}
+.board-workspace .board-fold.board-add {
+  top: 50%;
+  left: auto;
+  right: -14px;
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  margin: -14px 0 0;
+  padding: 0;
+  border-color: var(--board-accent);
+  color: var(--board-accent);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.board-workspace:hover .board-add,
+.board-workspace:focus-within .board-add,
+.board-workspace.board-selected .board-add {
+  opacity: 1;
+}
+.board-workspace .board-handle {
+  top: auto;
+  right: auto;
+  bottom: -9px;
+  left: 50%;
+  margin: 0 0 0 -8px;
 }

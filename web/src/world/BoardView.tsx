@@ -440,6 +440,9 @@ export default function BoardView({
   const farRef = useRef(false);
   const yarnEls = useRef(new Map<string, SVGPathElement[]>());
   const cutRef = useRef<HTMLButtonElement>(null);
+  /** The note or card bar, and the card it rides above. */
+  const barRef = useRef<HTMLDivElement>(null);
+  const barKey = useRef<string | null>(null);
   const tempYarn = useRef<SVGPathElement | null>(null);
   const loaded = useRef(false);
   const saveTimer = useRef(0);
@@ -1021,6 +1024,23 @@ export default function BoardView({
       tempYarn.current.remove();
       tempYarn.current = null;
     }
+    const bar = barRef.current;
+    const barCard = barKey.current ? cards.current.get(barKey.current) : null;
+    if (bar && barCard && bar.firstElementChild) {
+      const s = cam.current.s;
+      const h = (cardEls.current.get(barCard.key)?.offsetHeight ?? 80) * s;
+      const width = bar.offsetWidth,
+        height = bar.offsetHeight;
+      const board = boardRef.current;
+      const boardW = board?.clientWidth ?? 0;
+      const x = cam.current.x + barCard.x * s;
+      const top = cam.current.y + barCard.y * s - h / 2;
+      // Above the card, or below it when there is no room above.
+      const y = top - height - 12 >= 8 ? top - height - 12 : top + h + 12;
+      bar.style.left = `${Math.max(8, Math.min(boardW - width - 8, x - width / 2))}px`;
+      bar.style.top = `${y}px`;
+      bar.style.visibility = "visible";
+    } else if (bar) bar.style.visibility = "hidden";
     const cut = cutRef.current;
     if (cut) {
       cut.hidden = !cutAt;
@@ -2095,6 +2115,10 @@ export default function BoardView({
     [...selectedKeys].find((key) => model.tabByKey.has(key)) ??
     [...selectedKeys].find((key) => model.workspaceByKey.has(key)) ??
     null;
+  barKey.current = noteSelected ? NOTE_PREFIX + noteSelected : colorKey;
+  useEffect(() => {
+    invalidate("bar");
+  }, [noteSelected, colorKey]);
   const setCardColor = (key: string, color: CardColor | null) =>
     void report(boardStore.patch([{ op: "card.color", key, color }]));
 
@@ -2702,39 +2726,47 @@ export default function BoardView({
             })}
           </div>
         ) : null}
-        {!noteSelected && colorKey ? (
-          <CardBar
-            label={
-              model.tabByKey.get(colorKey)?.label ??
-              model.workspaceByKey.get(colorKey)?.label ??
-              ""
-            }
-            color={cardColors[colorKey] ?? null}
-            onColor={(color) => setCardColor(colorKey, color)}
-          />
-        ) : null}
-        {noteSelected && saved?.notes.find((n) => n.id === noteSelected) ? (
-          <NoteBar
-            note={saved.notes.find((n) => n.id === noteSelected)!}
-            targets={sendTargets(noteSelected)}
-            onSend={(target) =>
-              void send(saved.notes.find((n) => n.id === noteSelected)!, target)
-            }
-            onColor={(color) => {
-              const note = saved.notes.find((n) => n.id === noteSelected)!;
-              void saveNote(note, { color });
-            }}
-            onEdit={() => setEditing(noteSelected)}
-            onString={() => {
-              setStringFrom({ cardKey: NOTE_PREFIX + noteSelected });
-              setToast({ text: "Tap the card or pane to string the note to" });
-            }}
-            onDelete={() =>
-              deleteNote(saved.notes.find((n) => n.id === noteSelected)!)
-            }
-            onStart={() => setStartFor(noteSelected)}
-          />
-        ) : null}
+        {/* The bars ride above their card, clear of the Inspector. */}
+        <div ref={barRef} className="board-bar-anchor">
+          {!noteSelected && colorKey ? (
+            <CardBar
+              label={
+                model.tabByKey.get(colorKey)?.label ??
+                model.workspaceByKey.get(colorKey)?.label ??
+                ""
+              }
+              color={cardColors[colorKey] ?? null}
+              onColor={(color) => setCardColor(colorKey, color)}
+            />
+          ) : null}
+          {noteSelected && saved?.notes.find((n) => n.id === noteSelected) ? (
+            <NoteBar
+              note={saved.notes.find((n) => n.id === noteSelected)!}
+              targets={sendTargets(noteSelected)}
+              onSend={(target) =>
+                void send(
+                  saved.notes.find((n) => n.id === noteSelected)!,
+                  target,
+                )
+              }
+              onColor={(color) => {
+                const note = saved.notes.find((n) => n.id === noteSelected)!;
+                void saveNote(note, { color });
+              }}
+              onEdit={() => setEditing(noteSelected)}
+              onString={() => {
+                setStringFrom({ cardKey: NOTE_PREFIX + noteSelected });
+                setToast({
+                  text: "Tap the card or pane to string the note to",
+                });
+              }}
+              onDelete={() =>
+                deleteNote(saved.notes.find((n) => n.id === noteSelected)!)
+              }
+              onStart={() => setStartFor(noteSelected)}
+            />
+          ) : null}
+        </div>
         {chooser && model.tabByKey.get(chooser.tabKey) ? (
           <div
             className="board-chooser"

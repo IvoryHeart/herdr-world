@@ -1036,6 +1036,18 @@ async function run() {
       () => Boolean(host.querySelector('[aria-label="Colour of review"]')),
       "selecting a tab offers its colours",
     );
+    await settle(100);
+    {
+      const bar = host
+        .querySelector('[aria-label="Colour of review"]')!
+        .getBoundingClientRect();
+      const tab = card(tabKey)!.getBoundingClientRect();
+      check(
+        (bar.bottom <= tab.top + 1 && tab.top - bar.bottom < 40) ||
+          (bar.top >= tab.bottom - 1 && bar.top - tab.bottom < 40),
+        "the colour bar rides next to its card",
+      );
+    }
     const before = getComputedStyle(card(tabKey)!).backgroundColor;
     host
       .querySelector<HTMLButtonElement>(
