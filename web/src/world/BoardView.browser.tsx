@@ -1667,6 +1667,19 @@ async function run() {
       saved.notes.find((n) => n.id === id)!.text === "Their edit",
       "the other client's edit is not overwritten",
     );
+    // Switching to another view and back (Board unmounts) keeps the draft.
+    root.render(<div />);
+    await settle(50);
+    mount(2);
+    await waitFor(
+      () =>
+        Boolean(
+          host
+            .querySelector(".board-unsaved")
+            ?.textContent?.includes("My draft"),
+        ),
+      "an unresolved draft survives switching views",
+    );
     // A later notice does not take the draft away.
     host
       .querySelector<HTMLButtonElement>('[aria-label="Tidy the board"]')!

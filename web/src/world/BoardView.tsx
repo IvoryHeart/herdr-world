@@ -392,7 +392,10 @@ export default function BoardView({
    * A draft that could not be saved (the note changed or was deleted
    * elsewhere). It stays until the user saves or discards it.
    */
-  const [unsaved, setUnsaved] = useState<UnsavedDraft[]>([]);
+  const [unsaved, setUnsaved] = useState<UnsavedDraft[]>(readKeptDrafts);
+  // Kept drafts outlive this view: switching to Town and back, or reloading,
+  // must not lose text the user has not yet saved or discarded.
+  useEffect(() => writeKeptDrafts(unsaved), [unsaved]);
   /** Add a draft that could not be saved; one per note, newest text wins. */
   const keepDraft = (draft: Omit<UnsavedDraft, "key">) =>
     setUnsaved((list) => [
@@ -3297,6 +3300,40 @@ function NoteEditor({
       {started.text}
     </div>
   );
+}
+
+const KEPT_DRAFTS_KEY = "herdr-world.board.unsaved";
+/** Kept drafts for this page, so a remount (another view, then back) keeps them. */
+let keptDrafts: UnsavedDraft[] | null = null;
+function readKeptDrafts(): UnsavedDraft[] {
+  if (keptDrafts) return keptDrafts;
+  try {
+    const raw = JSON.parse(worldLocalStorage.getItem(KEPT_DRAFTS_KEY) ?? "[]");
+    keptDrafts = Array.isArray(raw)
+      ? raw.filter(
+          (d): d is UnsavedDraft =>
+            d &&
+            typeof d.key === "string" &&
+            typeof d.text === "string" &&
+            d.started &&
+            typeof d.started.id === "string",
+        )
+      : [];
+  } catch {
+    keptDrafts = [];
+  }
+  return keptDrafts;
+}
+function writeKeptDrafts(list: UnsavedDraft[]) {
+  // A save in flight is not kept: it must be retried after a remount.
+  keptDrafts = list.map((draft) => ({ ...draft, saving: undefined }));
+  try {
+    if (keptDrafts.length)
+      worldLocalStorage.setItem(KEPT_DRAFTS_KEY, JSON.stringify(keptDrafts));
+    else worldLocalStorage.removeItem(KEPT_DRAFTS_KEY);
+  } catch {
+    // Storage unavailable: the drafts still outlive view switches.
+  }
 }
 
 /** An edit that could not be saved, kept until saved or discarded. */
