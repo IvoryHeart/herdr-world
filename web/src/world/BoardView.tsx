@@ -352,6 +352,24 @@ function tabSummary(tab: BoardTab) {
     .join(", ");
 }
 
+/**
+ * Whether a card's key or click came from a control inside it (Fold, New,
+ * the more-panes button): that control acts, and the card does not.
+ */
+function fromNestedControl(event: {
+  target: EventTarget;
+  currentTarget: EventTarget;
+}) {
+  const control = (event.target as Element).closest?.(
+    "button, a[href], input, select, textarea",
+  );
+  return (
+    !!control &&
+    control !== event.currentTarget &&
+    (event.currentTarget as Element).contains(control)
+  );
+}
+
 export default function BoardView({
   world,
   toolbarPortal = null,
@@ -2927,7 +2945,8 @@ export default function BoardView({
                   // Keyboard and assistive activation arrive as a click with no
                   // pointer (detail 0); pointer taps are handled as gestures.
                   onClick={(event) => {
-                    if (event.detail === 0) selectCard(space.key, model);
+                    if (event.detail === 0 && !fromNestedControl(event))
+                      selectCard(space.key, model);
                   }}
                   style={tintStyle(cardColors[space.key])}
                   className={[
@@ -2940,6 +2959,7 @@ export default function BoardView({
                     matches && !matches.has(space.key) ? "board-dim" : "",
                   ].join(" ")}
                   onKeyDown={(event) => {
+                    if (fromNestedControl(event)) return;
                     if (event.key === "Enter" || event.key === " ") {
                       event.preventDefault();
                       selectCard(space.key, model);
@@ -3025,7 +3045,7 @@ export default function BoardView({
                   tabIndex={0}
                   aria-label={`${tab.label}, ${tabSummary(tab)}`}
                   onClick={(event) => {
-                    if (event.detail !== 0) return;
+                    if (event.detail !== 0 || fromNestedControl(event)) return;
                     const row = (
                       event.target as HTMLElement
                     ).closest<HTMLElement>("[data-pane]");
@@ -3043,6 +3063,7 @@ export default function BoardView({
                     matches && !matches.has(tab.key) ? "board-dim" : "",
                   ].join(" ")}
                   onKeyDown={(event) => {
+                    if (fromNestedControl(event)) return;
                     if (event.key === "Enter") {
                       event.preventDefault();
                       selectCard(tab.key, model);

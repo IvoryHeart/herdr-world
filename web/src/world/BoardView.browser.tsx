@@ -536,6 +536,55 @@ async function run() {
   host
     .querySelector<HTMLButtonElement>('.board-chooser [aria-label="Close"]')!
     .click();
+  // Buttons inside a card handle their own keyboard and assistive
+  // activation; the card is not selected instead (review).
+  {
+    const selectedBefore = selected.length;
+    const enter = new KeyboardEvent("keydown", {
+      key: "Enter",
+      bubbles: true,
+      cancelable: true,
+    });
+    more!.dispatchEvent(enter);
+    check(
+      !enter.defaultPrevented && selected.length === selectedBefore,
+      "Enter on + more is left to the button, not taken by the tab card",
+    );
+    more!.click(); // detail 0, as assistive technology activates
+    await waitFor(
+      () => host.querySelectorAll(".board-chooser .board-pane").length === 6,
+      "an assistive click on + more opens the chooser",
+    );
+    host
+      .querySelector<HTMLButtonElement>('.board-chooser [aria-label="Close"]')!
+      .click();
+    const ws = card("studio:w3")!;
+    const fold = ws.querySelector<HTMLButtonElement>(".board-fold")!;
+    const space = new KeyboardEvent("keydown", {
+      key: " ",
+      bubbles: true,
+      cancelable: true,
+    });
+    fold.dispatchEvent(space);
+    check(
+      !space.defaultPrevented,
+      "Space on Fold is left to the button, not taken by the workspace card",
+    );
+    fold.click();
+    await waitFor(
+      () => card("studio:w3")!.classList.contains("board-folded"),
+      "an assistive click on Fold folds the workspace",
+    );
+    check(
+      selected.length === selectedBefore,
+      "neither nested control selected its card",
+    );
+    card("studio:w3")!.querySelector<HTMLButtonElement>(".board-fold")!.click();
+    await waitFor(
+      () => !card("studio:w3")!.classList.contains("board-folded"),
+      "and opens it again",
+    );
+  }
   // A plain terminal looks like one and never pulses.
   const shell = card("studio:w1:t3")!;
   check(
