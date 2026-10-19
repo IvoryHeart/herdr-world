@@ -43,6 +43,8 @@ export type BoardAnchor = {
   kind: "workspace" | "tab" | "pane";
   native_id: string;
   witness: string[];
+  /** For a pane: the agent the string is for, recorded by the service. */
+  recipient?: string;
 };
 export type BoardEnd = { note: string } | { anchor: BoardAnchor };
 export type BoardNote = {

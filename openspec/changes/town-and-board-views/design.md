@@ -101,6 +101,27 @@ An alternative was keeping the trace in production behind a query switch. Reject
 
 **Order: retire first, then share.** Removing the retired views first means the shared module has exactly two consumers to fit, and Part A's deletions don't conflict with Part B's moves.
 
+### Board Send binds a note to its agent (#228, folded in by the owner)
+
+A pane outlives its agent: one agent can exit and another start in the same
+shell, keeping the pane and terminal IDs. Send used to check only the pane, the
+witnessed terminal and that some agent was present. The service now records a
+recipient for each pane end it sees strung or re-witnessed, read from Herdr:
+the agent kind, its reported session (hashed) and its foreground process group.
+Recording happens after the save returns, so saving never waits on a host; a
+string without a recipient (made before this change, or while its host was not
+ready) asks the user to confirm the agent at Send.
+
+Two recipients are the same agent when kinds match and sessions match, or, when
+either has no session, process groups match: an agent may report its session
+only after it starts, and a replacement in the same shell has a new process
+group. Herdr cannot hold a pane between a check and `agent.prompt`, so Send
+reads the agent before and after the prompt; a change after submission is
+reported as possibly delivered to another agent, never as sent. That window is
+Herdr's authority boundary, the same one the assistant's prompt action has.
+Clients cannot set or claim a recipient; a confirmed replacement becomes the
+string's recipient.
+
 ## Risks / Trade-offs
 
 - **Users who relied on Office's pixel scene or Graph's force layout lose them.**

@@ -14,6 +14,7 @@ import {
   BOARD_LIMITS,
   BoardConflictError,
   BoardStore,
+  clientBoardOps,
   moveFollowOps,
   reconcileOps,
   type BoardAnchor,
@@ -43,6 +44,72 @@ const anchor = (native_id: string): BoardAnchor => ({
 });
 
 describe("Board store", () => {
+  test("which agent a pane string is for is the service's to record (#228)", () => {
+    const store = new BoardStore(path);
+    // A client cannot claim a recipient, nor send the service's operation.
+    const ops = clientBoardOps([
+      { op: "note.put", note: note("n1") },
+      {
+        op: "string.put",
+        string: {
+          id: "s1",
+          from: { note: "n1" },
+          to: { anchor: { ...anchor("w1:p1"), recipient: "forged" } },
+        },
+      },
+    ]);
+    store.patch(ops);
+    expect(store.get().strings[0]?.to).toEqual({ anchor: anchor("w1:p1") });
+    expect(() =>
+      clientBoardOps([
+        {
+          op: "anchor.recipient",
+          string_id: "s1",
+          end: "to",
+          pane_id: "w1:p1",
+          terminal_id: "term_example_1",
+          recipient: "forged",
+        },
+      ]),
+    ).toThrow("unknown operation");
+    // The service's record applies only while the end names that pane and
+    // a witnessed terminal, and survives a restart.
+    const record = (pane_id: string, terminal_id: string) =>
+      store.patch([
+        {
+          op: "anchor.recipient",
+          string_id: "s1",
+          end: "to",
+          pane_id,
+          terminal_id,
+          recipient: `agent-in-${pane_id}-${terminal_id}`,
+        },
+      ]);
+    record("w1:p2", "term_example_1");
+    record("w1:p1", "term_other");
+    expect(store.get().strings[0]?.to).toEqual({ anchor: anchor("w1:p1") });
+    record("w1:p1", "term_example_1");
+    const recorded = {
+      anchor: {
+        ...anchor("w1:p1"),
+        recipient: "agent-in-w1:p1-term_example_1",
+      },
+    };
+    expect(new BoardStore(path).get().strings[0]?.to).toEqual(recorded);
+    // A new terminal holds a different agent: re-witnessing forgets it.
+    store.patch([
+      {
+        op: "anchor.witness",
+        string_id: "s1",
+        end: "to",
+        witness: ["term_after_restart"],
+      },
+    ]);
+    expect(store.get().strings[0]?.to).toEqual({
+      anchor: { ...anchor("w1:p1"), witness: ["term_after_restart"] },
+    });
+  });
+
   test("a new board is empty and nothing is written until it changes", () => {
     const store = new BoardStore(path);
     expect(store.get()).toMatchObject({

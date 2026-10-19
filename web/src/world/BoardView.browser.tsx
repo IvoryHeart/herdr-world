@@ -183,7 +183,10 @@ const sent: {
   text: string;
   stringId: string;
   rev: number;
+  confirm?: string;
 }[] = [];
+/** While set, the fake service says another agent now holds the pane. */
+let replacedBy: string | null = null;
 /** Pane IDs the fake service reports as closed ("not found"). */
 const closedPanes = new Set<string>();
 /** While set, anchor checks wait here until the test answers them. */
@@ -218,13 +221,24 @@ function mount(key: number, shown = world, selectedId: string | null = null) {
         onSelect={(id) => selected.push(id)}
         onOpenTerminal={(id) => opened.push(id)}
         store={store}
-        sendNote={async (target, note) => {
+        sendNote={async (target, note, confirm) => {
+          // As the service does: a replacement is sent to only once confirmed.
+          if (replacedBy && confirm !== replacedBy)
+            return {
+              status: "refused",
+              reason: "replaced",
+              message:
+                "reviewer is now in that pane, not the agent this note was strung to. Nothing was sent.",
+              recipient: replacedBy,
+              agent: "reviewer",
+            };
           sent.push({
             paneId: target.paneId,
             terminalId: target.terminalId,
             text: note.text,
             stringId: target.stringId,
             rev: note.rev,
+            ...(confirm ? { confirm } : {}),
           });
           return { status: "sent", agent: target.label };
         }}
@@ -759,6 +773,29 @@ async function run() {
       saved.notes.some((note) => note.rev === sent[0]!.rev),
     "the note goes to the strung pane, with its witnessed terminal, string and revision",
   );
+
+  // Another agent now holds that pane: Send names it and sends only on the
+  // user's choice (#228).
+  replacedBy = "recipient-reviewer";
+  [...host.querySelectorAll<HTMLButtonElement>(".board-notebar button")]
+    .find((b) => b.textContent?.startsWith("Send to"))!
+    .click();
+  const confirmButton = () =>
+    [...host.querySelectorAll<HTMLButtonElement>(".board-toast button")].find(
+      (b) => b.textContent === "Send to reviewer",
+    );
+  await waitFor(
+    () => Boolean(confirmButton()),
+    "a replaced agent is named, with a choice to send to it",
+  );
+  check(sent.length === 1, "nothing is sent to a replacement unasked");
+  confirmButton()!.click();
+  await waitFor(() => sent.length === 2, "the confirmed send goes out");
+  check(
+    sent[1]!.confirm === "recipient-reviewer",
+    "the send names the agent the user confirmed",
+  );
+  replacedBy = null;
 
   // A mouse double-click on empty board uses the browser's own double-click.
   const spot2 = emptySpot();

@@ -202,13 +202,12 @@ on your phone and desktop.
    to it; a tab with several panes asks which pane. Drop it on empty board for a
    new note strung to where you started. Click a string, then **Delete**, to
    remove it.
-7. A note strung to an agent's pane offers **Send to <agent>**. World checks the
-   current runtime, the witnessed pane/terminal IDs and that an agent is present,
-   then sends the note once. This does not prove it is the agent that was running
-   when you made the string: a replacement in the same terminal can receive it.
-   Inspect the current target before pressing **Send**; nothing is sent without
-   that action. This identity gap is tracked in
-   [issue #228](https://github.com/IvoryHeart/herdr-world/issues/228).
+7. A note strung to an agent's pane offers **Send to <agent>**. World remembers
+   which agent was in the pane when you made the string. Before sending, it checks
+   the current runtime, the pane and terminal, and that the same agent is still
+   there, then sends the note once. If another agent has taken over the pane,
+   even in the same terminal, nothing is sent: World names the new agent and
+   offers **Send to** it instead. Nothing is sent without your action.
    **Start an agent…** opens the same dialog: choose the workspace
    and the agent, optionally name the tab, and press **Start and send**; the
    note is sent once the agent is ready. (Starting a chosen agent kind

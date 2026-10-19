@@ -146,7 +146,15 @@ export type SendTarget = {
   /** The string that links the note to this pane; the service rechecks it. */
   stringId: string;
 };
-export type SendOutcome = { status: string; message?: string; agent?: string };
+export type SendOutcome = {
+  status: string;
+  message?: string;
+  agent?: string;
+  /** "replaced" or "unbound": another agent, or one Board never recorded. */
+  reason?: string;
+  /** With those reasons: confirm this agent to send to it instead. */
+  recipient?: string;
+};
 export type TabMoveOutcome = {
   status: string;
   reason?: string;
@@ -253,7 +261,11 @@ async function checkAnchorThroughService(host: BoardHost, anchor: BoardAnchor) {
     )) as { state: string };
 }
 /** The service sends the saved note's text, after rechecking note and string. */
-async function sendNoteThroughService(target: SendTarget, note: BoardNote) {
+async function sendNoteThroughService(
+  target: SendTarget,
+  note: BoardNote,
+  confirmRecipient?: string,
+) {
   const { bridge } = await import("../api");
   return (await bridge.connection(target.connectionId, target.generation).call(
     "board.send_note",
@@ -263,6 +275,7 @@ async function sendNoteThroughService(target: SendTarget, note: BoardNote) {
       note_id: note.id,
       note_rev: note.rev,
       string_id: target.stringId,
+      ...(confirmRecipient ? { confirm_recipient: confirmRecipient } : {}),
     },
     30_000,
   )) as SendOutcome;
@@ -363,7 +376,12 @@ export default function BoardView({
   /** Board's saved state; World's own service store by default. */
   store?: BoardDocumentStore;
   /** Send a note to an agent's pane; World's service by default. */
-  sendNote?: (target: SendTarget, note: BoardNote) => Promise<SendOutcome>;
+  sendNote?: (
+    target: SendTarget,
+    note: BoardNote,
+    /** The agent now in the pane, which the user confirmed sending to. */
+    confirmRecipient?: string,
+  ) => Promise<SendOutcome>;
   /** Move a tab to another workspace of its host; World's service by default. */
   moveTab?: (
     tab: BoardTab,
@@ -466,6 +484,8 @@ export default function BoardView({
     undo?: () => void;
     /** The undo button's label; Undo by default. */
     action?: string;
+    /** How long it stays; longer for a choice than for a notice. */
+    ms?: number;
   } | null>(null);
 
   const boardRef = useRef<HTMLDivElement>(null);
@@ -2104,7 +2124,7 @@ export default function BoardView({
     if (!toast) return;
     const timer = window.setTimeout(
       () => setToast(null),
-      toast.undo ? 5000 : 2400,
+      toast.ms ?? (toast.undo ? 5000 : 2400),
     );
     return () => window.clearTimeout(timer);
   }, [toast]);
@@ -2471,9 +2491,32 @@ export default function BoardView({
     }
     return out;
   };
-  const send = async (note: BoardNote, target: SendTarget) => {
+  const send = async (
+    note: BoardNote,
+    target: SendTarget,
+    confirmRecipient?: string,
+  ) => {
     try {
-      const outcome = await sendNote(target, note);
+      const outcome = await sendNote(target, note, confirmRecipient);
+      // Another agent is in the pane (or Board never recorded which one the
+      // note was for): send only if the user picks that agent.
+      if (
+        outcome.status === "refused" &&
+        (outcome.reason === "replaced" || outcome.reason === "unbound") &&
+        outcome.recipient
+      ) {
+        const recipient = outcome.recipient;
+        setToast({
+          text: outcome.message ?? "Another agent is in that pane.",
+          action: `Send to ${outcome.agent ?? "it"}`,
+          ms: 12_000,
+          undo: () => {
+            setToast(null);
+            void send(note, target, recipient);
+          },
+        });
+        return;
+      }
       setToast({
         text:
           outcome.status === "sent"

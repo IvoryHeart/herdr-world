@@ -56,11 +56,13 @@ released availability.
     status keeps its own colours.
   - Notes and strings are saved by the World service and shared across your
     devices. Strings attach to an exact pane, tab or workspace; a note strung to
-    a pane can be sent to its current agent only when you press Send. World checks
-    the runtime, witnessed pane/terminal IDs and agent presence, not continuity
-    of the original agent session. Inspect the recipient before sending; an
-    agent replaced within the same terminal can receive the note
-    ([issue #228](https://github.com/IvoryHeart/herdr-world/issues/228)).
+    a pane is sent to its agent only when you press Send. When you make the
+    string, World records which agent is in the pane (its Herdr session, or
+    its process when it reports none). Send checks the runtime, the witnessed
+    pane and terminal, and that agent. If another agent now holds the pane,
+    even in the same terminal, nothing is sent: World names the new agent and
+    sends to it only if you choose **Send to** it. If the agent changes while
+    the note is being sent, World says it may have reached another agent.
     A note can start a new agent in a chosen workspace.
   - Drag a tab onto another workspace of its host to move it (asks first).
   - After a Herdr restart, strings that cannot be confirmed ask Keep or Detach;

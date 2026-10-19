@@ -28,10 +28,8 @@ are optional because the merged PR history records their source.
   sticky note and drag a card's red dot to string a note to a workspace, tab or
   exact pane; click a string to cut it. Notes, strings and the board's layout
   are saved by the World service and appear on every device. A note strung to an
-  agent's pane can be sent once to its current occupant after World checks the
-  runtime, witnessed pane/terminal IDs and agent presence. Original agent-session
-  continuity is not checked; inspect the target before sending
-  ([issue #228](https://github.com/IvoryHeart/herdr-world/issues/228)). After Herdr
+  agent's pane can be sent once to that agent after World checks the runtime,
+  witnessed pane/terminal IDs and that the same agent is still there. After Herdr
   restarts, Board asks
   before trusting strings whose terminals changed; strings whose target closed
   wait in a Needs a home tray instead of attaching to the wrong card. A note can
@@ -52,6 +50,10 @@ are optional because the merged PR history records their source.
 
 - Board stays responsive on a large World: at 64 hosts and about 1,500 tabs,
   typed input had waited up to 20 seconds behind Board's rendering.
+- Board's Send goes only to the agent the note was strung to. If another agent
+  now holds the pane, even in the same terminal, nothing is sent: Board names it
+  and sends to it only when you choose to. A change during sending is reported
+  as possibly delivered elsewhere, never as sent.
 - Board keeps a tab and a workspace apart when they share a native ID, opens a
   card from the keyboard or assistive technology, shows search results, and
   marks the selected card for assistive technology.

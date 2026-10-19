@@ -12,6 +12,10 @@
 
 - [x] 2.1 Complete the MODIFIED deltas for every shared World surfaces requirement that lists Office, Tree or Graph (shared presentation, Actions, bounded composition, detail drawer, Town within the shell, Board view, creation, search), so the archived spec names only Town, Board, Desk and Spaces. Requirements whose scenarios named a retired view are restated under new names (REMOVED plus ADDED), because a MODIFIED block cannot drop scenarios.
 
+## 2b. Board Send recipient (#228)
+
+- [x] 2b.1 Record the agent a pane string is for (service-owned, read from Herdr after the save), compare it before and after Send's prompt, refuse a replacement with an explicit Send-to choice, and report a change during submission; regression tests for replacement in the same pane and terminal, around submission, unrecorded strings and process-group identity; spec delta, FEATURES, tutorial and changelog.
+
 ## 3. One interaction core (Part B)
 
 - [ ] 3.1 Move `boardGesture.ts` to `world/interaction/gesture.ts` with configurable thresholds and a touch hold-to-drag; port Board's gesture tests and add Town's cases (hold to drag, a quick swipe pans, a second finger turns a drag into a pinch, the mouse drags after 6 px, double tap).

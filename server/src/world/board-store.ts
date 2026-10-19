@@ -2,6 +2,7 @@ import { existsSync, readFileSync, renameSync } from "node:fs";
 import { join } from "node:path";
 import { dataRoot, replaceDataFile } from "../config/data-paths";
 import { worldEnv } from "../config/environment";
+import { RECIPIENT_MAX } from "./board-recipient";
 
 /**
  * Board's saved state: layout, notes and strings. One document for the World
@@ -21,6 +22,11 @@ export type BoardAnchor = {
   kind: BoardAnchorKind;
   native_id: string;
   witness: string[];
+  /**
+   * For a pane, the agent the string was made for (board-recipient.ts).
+   * Only the service sets it; absent until the service has read the pane.
+   */
+  recipient?: string;
 };
 export type BoardEnd = { note: string } | { anchor: BoardAnchor };
 
@@ -110,7 +116,44 @@ export type BoardOp =
       string_id: string;
       end: "from" | "to";
       witness: string[];
+    }
+  | {
+      /** Service only: record which agent a pane end is for. */
+      op: "anchor.recipient";
+      string_id: string;
+      end: "from" | "to";
+      /** Applies only while the end still names this pane and terminal. */
+      pane_id: string;
+      terminal_id: string;
+      recipient: string;
     };
+
+/**
+ * Operations as a browser may send them: which agent a string is for is the
+ * service's to record, so a client cannot set or claim it.
+ */
+export function clientBoardOps(ops: unknown): BoardOp[] {
+  if (!Array.isArray(ops)) fail("ops must be an array");
+  return ops.map((op) => {
+    if (!isObject(op)) fail("op must be an object");
+    if (op.op === "anchor.recipient") fail("unknown operation");
+    if (op.op !== "string.put" || !isObject(op.string)) return op as BoardOp;
+    const strip = (end: unknown) => {
+      if (!isObject(end) || !isObject(end.anchor)) return end;
+      const anchor = { ...end.anchor };
+      delete anchor.recipient;
+      return { ...end, anchor };
+    };
+    return {
+      ...op,
+      string: {
+        ...op.string,
+        from: strip(op.string.from),
+        to: strip(op.string.to),
+      },
+    } as BoardOp;
+  });
+}
 
 export const BOARD_LIMITS = Object.freeze({
   notes: 500,
@@ -223,6 +266,9 @@ function anchor(value: unknown): BoardAnchor {
     kind: value.kind as BoardAnchorKind,
     native_id: text(value.native_id, "anchor target", BOARD_LIMITS.key),
     witness,
+    ...(value.kind === "pane" && value.recipient !== undefined
+      ? { recipient: text(value.recipient, "anchor recipient", RECIPIENT_MAX) }
+      : {}),
   };
 }
 function end(value: unknown): BoardEnd {
@@ -458,6 +504,26 @@ function applyOp(next: BoardDocument, op: BoardOp, current: BoardDocument) {
       const witness = keys(op.witness, "witness");
       if (witness.length > BOARD_LIMITS.witness) fail("witness is too long");
       side.anchor.witness = witness;
+      // A new terminal holds a different agent; the service reads it again.
+      delete side.anchor.recipient;
+      return;
+    }
+    case "anchor.recipient": {
+      const target = next.strings.find((entry) => entry.id === op.string_id);
+      const side = target?.[op.end === "to" ? "to" : "from"];
+      if (
+        !side ||
+        !("anchor" in side) ||
+        side.anchor.kind !== "pane" ||
+        side.anchor.native_id !== op.pane_id ||
+        !side.anchor.witness.includes(op.terminal_id)
+      )
+        return;
+      side.anchor.recipient = text(
+        op.recipient,
+        "anchor recipient",
+        RECIPIENT_MAX,
+      );
       return;
     }
     default:

@@ -1287,6 +1287,73 @@ from a live host's label MAY open World's New workspace dialog.
 - **WHEN** a host's topology is cached after a failure
 - **THEN** its zone and cards are shown as stale and offer no actions
 
+### Requirement: Board notes and strings
+
+The user SHALL be able to create a note by double-click or double-tap on empty
+board or from a card, and edit, colour and delete it. Notes SHALL belong to the whole board. The user SHALL be able to
+string a note or card to another card by dragging from a card's handle or with
+String to…, and to cut a string from the string itself or from the panel.
+Dragging a handle onto empty board SHALL create a note strung to that card.
+Stringing to a tab with more than one pane SHALL ask which pane; a single-pane
+tab SHALL select its pane. A string to a tab or workspace SHALL be context only.
+
+A note strung to an agent's pane SHALL offer to send the note to that agent.
+The note text SHALL be delivered as a prompt to that exact pane only when the
+user chooses Send, and only after World revalidates that the string is
+attached on the current runtime generation and that the agent the note was
+strung to is present on that pane; otherwise Send SHALL be refused with its
+reason.
+
+When a note is strung to a pane, the World service SHALL record the agent then
+in that pane as the string's recipient: its kind, the agent session Herdr
+reports (if any) and its foreground process group. Only the service SHALL set a
+recipient; a re-witnessed anchor (after Herdr restarts) SHALL drop it until the
+service records it again. At Send the service SHALL compare the pane's agent
+with the recipient: they are the same agent when their kinds match and their
+sessions match, or, when either has no session, their process groups match.
+Another agent in the same pane and terminal, or a string whose recipient was
+never recorded, SHALL be refused with that agent named, and the note SHALL go
+to it only when the user confirms that agent; the confirmed agent becomes the
+string's recipient. Herdr cannot hold a pane between a check and the prompt, so
+the service SHALL read the pane's agent again after the prompt and report a
+change as possibly delivered to another agent, never as sent. A note SHALL offer to
+start a new agent in a chosen workspace, which creates a tab, starts the agent
+in it, waits within a bound for the agent to become interactive, then prompts
+it with the note and strings the note to it. A timeout SHALL be reported as
+uncertain without sending the note; a failure at any step SHALL be reported
+with what was created; no step SHALL be retried automatically. Agent replies or results MAY be
+shown on the note when they are reported; World SHALL NOT invent them.
+
+#### Scenario: Send a note
+
+- **WHEN** a note is strung to an agent's pane and the user chooses Send
+- **THEN** the agent in that pane receives the note text as a prompt, and nothing is sent to any other pane
+
+#### Scenario: Another agent in the same pane
+
+- **WHEN** a note was strung to agent A, A exits and agent B starts in the same shell, keeping the pane and terminal, and the user chooses Send
+- **THEN** nothing is sent; World says B is now in that pane and offers to send to B, and sends to B only if the user chooses that
+
+#### Scenario: The agent changes during Send
+
+- **WHEN** the pane's agent is replaced between the service's last check and the prompt
+- **THEN** World reports that the note may have reached another agent and does not report it as sent
+
+#### Scenario: String to a tab with two agents
+
+- **WHEN** the user drags a note's string onto a tab with two agent panes
+- **THEN** World asks which pane, and the string attaches to the chosen pane
+
+#### Scenario: A new agent is slow to start
+
+- **WHEN** the user starts an agent from a note and it is not interactive within the bound
+- **THEN** World reports that the agent may still be starting and that the note was not sent, and offers Send
+
+#### Scenario: Cut a string
+
+- **WHEN** the user selects a string and chooses Cut string
+- **THEN** the string is removed and the note and card stay where they are
+
 ## REMOVED Requirements
 
 ### Requirement: Pixel Office scene
