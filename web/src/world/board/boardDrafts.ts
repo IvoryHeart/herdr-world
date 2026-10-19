@@ -39,13 +39,18 @@ const isDraft = (value: unknown): value is KeptDraft => {
 export function createDraftStore(storage: DraftStorage | null) {
   /** Used when storage is unavailable, so drafts still outlive remounts. */
   let memory: KeptDraft[] = [];
+  /**
+   * True after a write failed (full or blocked storage that may still read):
+   * this tab's memory is then authoritative, and each change retries.
+   */
+  let unpersisted = false;
   /** Saves in flight in this tab; kept across remounts, never stored. */
   const saving = new Set<string>();
   const listeners = new Set<() => void>();
   let snapshot: readonly KeptDraft[] = [];
 
   const read = (): KeptDraft[] => {
-    if (!storage) return memory;
+    if (!storage || unpersisted) return memory;
     try {
       const raw = JSON.parse(storage.getItem(KEPT_DRAFTS_KEY) ?? "[]");
       return Array.isArray(raw) ? raw.filter(isDraft) : [];
@@ -59,8 +64,10 @@ export function createDraftStore(storage: DraftStorage | null) {
     try {
       if (list.length) storage.setItem(KEPT_DRAFTS_KEY, JSON.stringify(list));
       else storage.removeItem(KEPT_DRAFTS_KEY);
+      unpersisted = false;
     } catch {
-      // Storage unavailable: memory still holds them for this page.
+      // Full or blocked: memory holds them for this page until a write works.
+      unpersisted = true;
     }
   };
   const refresh = () => {

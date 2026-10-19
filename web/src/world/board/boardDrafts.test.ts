@@ -82,4 +82,42 @@ describe("Board kept drafts", () => {
     store.keep(draft("a", "n1"));
     expect(store.list().map((d) => d.key)).toEqual(["a"]);
   });
+
+  test("storage that reads but rejects writes keeps the drafts in memory, then persists once it can", () => {
+    let full = true;
+    const backing = memoryStorage();
+    const storage: DraftStorage = {
+      getItem: (key) => backing.getItem(key),
+      setItem: (key, value) => {
+        if (full) throw new Error("QuotaExceededError");
+        backing.setItem(key, value);
+      },
+      removeItem: (key) => backing.removeItem(key),
+    };
+    const store = createDraftStore(storage);
+    store.keep(draft("a", "n1"));
+    expect(store.list().map((d) => d.key)).toEqual(["a"]);
+    store.keep(draft("b", "n2"));
+    expect(store.list().map((d) => d.key)).toEqual(["a", "b"]);
+    // Space frees up: the next change writes everything kept so far.
+    full = false;
+    store.remove("a");
+    expect(
+      createDraftStore(storage)
+        .list()
+        .map((d) => d.key),
+    ).toEqual(["b"]);
+  });
+
+  test("blocked storage that reads as empty still keeps the drafts", () => {
+    const store = createDraftStore({
+      getItem: () => null,
+      setItem: () => {
+        throw new Error("SecurityError");
+      },
+      removeItem: () => {},
+    });
+    store.keep(draft("a", "n1"));
+    expect(store.list().map((d) => d.key)).toEqual(["a"]);
+  });
 });
