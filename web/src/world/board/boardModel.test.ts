@@ -1,9 +1,53 @@
 import { describe, expect, test } from "bun:test";
 import { fixtureHost, fixtureWorld } from "./boardFixture";
-import { mostUrgentStatus, projectBoard } from "./boardModel";
+import {
+  mostUrgentStatus,
+  prepareWorldBoard,
+  projectBoard,
+} from "./boardModel";
+import { worldObjectWithWatches } from "../worldObject";
 import { anchorFor, targetOf } from "./boardAnchors";
 
 describe("Board model", () => {
+  test("a prepared host is projected once, and unwatched hosts are reused", async () => {
+    const world = fixtureWorld([
+      fixtureHost("alpha", [
+        { label: "web", tabs: [{ label: "build", panes: [["working"]] }] },
+      ]),
+      fixtureHost("beta", [
+        { label: "web", tabs: [{ label: "build", panes: [["idle"]] }] },
+      ]),
+    ]);
+    let yields = 0;
+    await prepareWorldBoard(
+      world,
+      () => true,
+      async () => {
+        yields++;
+      },
+    );
+    expect(yields).toBeGreaterThanOrEqual(0);
+    const first = projectBoard(world);
+    // A watch overlay with no watches is the same World; a watch on one
+    // host copies only that host.
+    expect(worldObjectWithWatches(world, [])).toBe(world);
+    const beta = world.hosts[1]!;
+    const leaf = beta.spaces[0]!.children[0]!;
+    const watched = worldObjectWithWatches(world, [
+      {
+        connectionId: leaf.connectionId,
+        generation: leaf.generation,
+        terminalId: leaf.terminalId,
+      },
+    ]);
+    expect(watched.hosts[0]).toBe(world.hosts[0]);
+    expect(watched.hosts[1]).not.toBe(beta);
+    const second = projectBoard(watched);
+    expect(second.hosts[0]).toBe(first.hosts[0]);
+    expect(second.hosts[1]).not.toBe(first.hosts[1]);
+    expect(second.tabs[1]!.panes[0]!.leaf.watched).toBe(true);
+  });
+
   test("hosts, workspaces and tabs keep Herdr's order and qualified keys", () => {
     const board = projectBoard(
       fixtureWorld([

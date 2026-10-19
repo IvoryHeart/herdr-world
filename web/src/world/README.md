@@ -91,7 +91,11 @@ Typical boards measure cards synchronously and draw every card. Above 300 cards
 near the screen, and paint tells React when that set changes. Off-screen cards are
 not laid out, and the overview draws no tabs. Topology updates render at low
 priority, and a large board builds in a transition and opens in the overview, so
-both yield to input. Tab placement waits until the overview ends. Paint never reads
+both yield to input. The runtime store projects each host ahead of time, in
+slices (`prepareWorldBoard`), and the projection stays with the host object, so
+Board's render reuses it; the watch overlay keeps untouched hosts so that reuse
+survives. A large board's first placement runs in a task of its own, outside
+React's commit. Tab placement waits until the overview ends. Paint never reads
 layout mid-frame. Sizes come from a ResizeObserver, zones are measured before they
 are written, and Inspector anchors and the board's box come from geometry and a
 cache. Cards mount in their own container, so React appends them as one subtree.

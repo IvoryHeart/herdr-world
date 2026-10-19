@@ -5,6 +5,7 @@ import type {
   WorldObject,
   WorldSpaceObject,
 } from "../worldObject";
+import { yieldWorldTask } from "../worldObject";
 
 /**
  * Board's projection of World's bounded topology: hosts as zones, workspaces as
@@ -118,11 +119,25 @@ export const boardTabKey = (
 
 const hostKeyOf = (host: WorldHostObject) => host.connectionId;
 
-export function projectBoard(world: WorldObject): BoardModel {
-  const hosts: BoardHost[] = [];
+type HostProjection = {
+  host: BoardHost;
+  workspaces: BoardWorkspace[];
+  tabs: BoardTab[];
+};
+
+/**
+ * Each host's projection, kept with the host object: a filtered World reuses
+ * its hosts, and a large World is projected ahead of time, a few hosts per
+ * task, so Board never spends one long task projecting it.
+ */
+const projected = new WeakMap<WorldHostObject, HostProjection>();
+
+function projectHost(host: WorldHostObject): HostProjection {
+  const cached = projected.get(host);
+  if (cached) return cached;
   const workspaces: BoardWorkspace[] = [];
   const tabs: BoardTab[] = [];
-  for (const host of world.hosts) {
+  {
     const hostKey = hostKeyOf(host);
     const boardHost: BoardHost = {
       key: hostKey,
@@ -133,7 +148,6 @@ export function projectBoard(world: WorldObject): BoardModel {
       stale: host.stale,
       workspaceKeys: [],
     };
-    hosts.push(boardHost);
     const workspaceIds = new Set(host.spaces.map((space) => space.nativeId));
     for (const space of host.spaces) {
       const workspaceKey = boardKey(space.connectionId, space.nativeId);
@@ -154,11 +168,12 @@ export function projectBoard(world: WorldObject): BoardModel {
       const tabKeys: string[] = [];
       const statuses: WorldAgentStatus[] = [];
       const squares: BoardSquare[] = [];
-      const order = space.tabs.map((tab) => tab.tab_id);
+      const tabById = new Map(space.tabs.map((tab) => [tab.tab_id, tab]));
+      const order = [...tabById.keys()];
       for (const tabId of panesByTab.keys())
-        if (!order.includes(tabId)) order.push(tabId);
+        if (!tabById.has(tabId)) order.push(tabId);
       for (const tabId of order) {
-        const tab = space.tabs.find((candidate) => candidate.tab_id === tabId);
+        const tab = tabById.get(tabId);
         const panes = panesByTab.get(tabId) ?? [];
         const key = boardTabKey(space.connectionId, tabId, workspaceIds);
         tabKeys.push(key);
@@ -203,6 +218,39 @@ export function projectBoard(world: WorldObject): BoardModel {
         space,
       });
     }
+    const result = { host: boardHost, workspaces, tabs };
+    projected.set(host, result);
+    return result;
+  }
+}
+
+/** Project a World's hosts ahead of time, yielding between slices of work. */
+export async function prepareWorldBoard(
+  world: WorldObject,
+  isCurrent: () => boolean = () => true,
+  yieldTask: () => Promise<void> = yieldWorldTask,
+): Promise<void> {
+  let sliceStart = performance.now();
+  for (const host of world.hosts) {
+    if (!isCurrent()) return;
+    projectHost(host);
+    if (performance.now() - sliceStart > BOARD_PREPARATION_SLICE_MS) {
+      await yieldTask();
+      sliceStart = performance.now();
+    }
+  }
+}
+const BOARD_PREPARATION_SLICE_MS = 6;
+
+export function projectBoard(world: WorldObject): BoardModel {
+  const hosts: BoardHost[] = [];
+  const workspaces: BoardWorkspace[] = [];
+  const tabs: BoardTab[] = [];
+  for (const worldHost of world.hosts) {
+    const piece = projectHost(worldHost);
+    hosts.push(piece.host);
+    workspaces.push(...piece.workspaces);
+    tabs.push(...piece.tabs);
   }
   return {
     hosts,

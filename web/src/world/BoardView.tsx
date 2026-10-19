@@ -669,6 +669,19 @@ export default function BoardView({
   /* ---------- Model changes: measure, place new cards, keep the rest ---------- */
   useLayoutEffect(() => {
     large.current = model.workspaces.length + model.tabs.length > CULL_ABOVE;
+    // A large board shows nothing until paint picks the cards near the
+    // screen, so its placement runs in a task of its own rather than in
+    // React's commit, and input can be handled in between.
+    if (!large.current) {
+      placeModel();
+      return;
+    }
+    const task = window.setTimeout(placeModel, 0);
+    return () => window.clearTimeout(task);
+    // placeModel reads refs and this render's model.
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+  }, [model, sizeOf]);
+  function placeModel() {
     if (!farRef.current && !large.current)
       for (const [key, el] of cardEls.current) {
         const card = cards.current.get(key);
@@ -711,7 +724,7 @@ export default function BoardView({
       fit(true);
     }
     invalidate("change");
-  }, [model, sizeOf]);
+  }
 
   // Folding and the overview change what is visible without moving a card:
   // repaint so lines to hidden tabs go at once.

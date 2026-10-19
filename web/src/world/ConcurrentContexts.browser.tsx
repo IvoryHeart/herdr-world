@@ -19,7 +19,7 @@ import {
 } from "../store";
 import type { Pane, PaneLayout, Tab, Workspace } from "../types";
 import BoardView from "./BoardView";
-import { projectBoard } from "./board/boardModel";
+import { prepareWorldBoard, projectBoard } from "./board/boardModel";
 import {
   prepareWorldOffice,
   projectWorldOffice,
@@ -477,6 +477,7 @@ async function run() {
   });
   if (!prepared) throw new Error("dense world preparation retired");
   await prepareWorldOffice(prepared);
+  await prepareWorldBoard(prepared);
   const world = buildWorldObject(observed.connections);
   measurements.worldBuildMs = performance.now() - buildStart;
   const treeStart = performance.now();
@@ -542,6 +543,7 @@ async function run() {
   );
   if (!refreshedWorld) throw new Error("dense refresh retired");
   await prepareWorldOffice(refreshedWorld);
+  await prepareWorldBoard(refreshedWorld);
   denseRoot.render(
     <div data-dense-revision={2}>
       <BoardView
