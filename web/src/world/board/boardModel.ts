@@ -15,6 +15,8 @@ import type {
 
 export type BoardHost = {
   key: string;
+  /** World's ID for the host, shared with the other views' anchors. */
+  id: string;
   connectionId: string;
   /** The runtime generation the topology was read from. */
   generation: number;
@@ -109,6 +111,7 @@ export function projectBoard(world: WorldObject): BoardModel {
     const hostKey = hostKeyOf(host);
     const boardHost: BoardHost = {
       key: hostKey,
+      id: host.id,
       connectionId: host.connectionId,
       generation: host.generation,
       label: host.label,

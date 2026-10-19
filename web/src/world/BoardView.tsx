@@ -2516,8 +2516,15 @@ export default function BoardView({
           if (lastPointerType.current !== "mouse") return;
           // The board holds pointer capture during a press, so the browser
           // aims dblclick at the board itself; ask what is really under it.
-          const under = document.elementFromPoint(event.clientX, event.clientY);
-          const target = (under ?? event.target) as HTMLElement;
+          // A pointer double-click is retargeted to the board itself (it holds
+          // pointer capture), so ask what is under it; a keyboard, assistive
+          // or synthetic one names its element.
+          const own = event.target as HTMLElement;
+          const under =
+            own === event.currentTarget
+              ? document.elementFromPoint(event.clientX, event.clientY)
+              : null;
+          const target = (under ?? own) as HTMLElement;
           const card = target.closest<HTMLElement>(".board-card");
           const key = card?.dataset.key;
           if (key && isNoteKey(key)) {
@@ -2565,6 +2572,7 @@ export default function BoardView({
               <div
                 className="board-zone-label"
                 data-host={host.key}
+                data-world-node-anchor={host.id}
                 title="Drag to move the whole host"
               >
                 {host.label}
@@ -2592,9 +2600,15 @@ export default function BoardView({
                 key={space.key}
                 ref={ref(space.key)}
                 data-key={space.key}
+                data-world-node-anchor={space.space.id}
                 role="button"
                 tabIndex={0}
                 aria-label={`Workspace ${space.label}, ${space.tabKeys.length} tabs`}
+                // Keyboard and assistive activation arrive as a click with no
+                // pointer (detail 0); pointer taps are handled as gestures.
+                onClick={(event) => {
+                  if (event.detail === 0) selectCard(space.key, model);
+                }}
                 style={tintStyle(cardColors[space.key])}
                 className={[
                   "board-card board-workspace",
@@ -2675,9 +2689,19 @@ export default function BoardView({
                 key={tab.key}
                 ref={ref(tab.key)}
                 data-key={tab.key}
+                data-world-node-anchor={
+                  tab.panes.length === 1 ? tab.panes[0]!.leaf.id : undefined
+                }
                 role="button"
                 tabIndex={0}
                 aria-label={`${tab.label}, ${tabSummary(tab)}`}
+                onClick={(event) => {
+                  if (event.detail !== 0) return;
+                  const row = (
+                    event.target as HTMLElement
+                  ).closest<HTMLElement>("[data-pane]");
+                  selectCard(tab.key, model, row?.dataset.pane);
+                }}
                 style={tintStyle(tabColor(tab))}
                 className={[
                   "board-card board-tab",
@@ -2719,6 +2743,7 @@ export default function BoardView({
                       <div
                         key={row.key}
                         data-pane={row.key}
+                        data-world-node-anchor={row.leaf.id}
                         className={`board-pane${row.isAgent ? ` board-s-${row.status}` : " board-pane-shell"}${selectedId === row.leaf.id ? " board-pane-selected" : ""}`}
                         aria-label={`${paneName(row)}, ${row.isAgent ? STATUS_LABEL[row.status] : "shell"}`}
                       >
