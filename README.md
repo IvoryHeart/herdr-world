@@ -46,10 +46,13 @@ attention counts reflect those scenes; no agent activity is fabricated. Click a 
 The shared Inspector keeps Terminal, Files, Changes and Agent History alongside
 its captured workspace, whether opened from Town, Board or Desk. See the
 [tutorial's review exercise](./docs/TUTORIAL.md#daily) for the complete flow.
+The Files, Changes and History captures below show the Inspector over Board.
+They use a restored demo project, a sample working-tree diff and a genuine
+recorded Pi review.
 
 | Files | Changes | Agent History |
 | --- | --- | --- |
-| [![Shared Inspector file browser](./docs/images/herdr-world-desktop-files.png)](./docs/images/herdr-world-desktop-files.png) | [![Shared Inspector changed files and diff](./docs/images/herdr-world-desktop-changes.png)](./docs/images/herdr-world-desktop-changes.png) | [![Shared Inspector agent session history](./docs/images/herdr-world-desktop-history.png)](./docs/images/herdr-world-desktop-history.png) |
+| [![Board Inspector previewing the demo guide](./docs/images/herdr-world-desktop-files.png)](./docs/images/herdr-world-desktop-files.png) | [![Board Inspector showing the sample tag-filter diff](./docs/images/herdr-world-desktop-changes.png)](./docs/images/herdr-world-desktop-changes.png) | [![Board Inspector showing a recorded Pi review](./docs/images/herdr-world-desktop-history.png)](./docs/images/herdr-world-desktop-history.png) |
 
 ### Mobile
 
