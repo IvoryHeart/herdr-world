@@ -61,6 +61,12 @@ import { createFrameLoop, type FrameLoop } from "./board/boardScheduler";
 import { createTrace, traceRequested, TRACE_KEY } from "./board/boardTrace";
 import { BoardTraceOverlay } from "./board/BoardTraceOverlay";
 import {
+  KEPT_DRAFTS_KEY,
+  createDraftStore,
+  useKeptDrafts,
+  type KeptDraft,
+} from "./board/boardDrafts";
+import {
   cool,
   stepPhysics,
   warm,
@@ -392,16 +398,10 @@ export default function BoardView({
    * A draft that could not be saved (the note changed or was deleted
    * elsewhere). It stays until the user saves or discards it.
    */
-  const [unsaved, setUnsaved] = useState<UnsavedDraft[]>(readKeptDrafts);
-  // Kept drafts outlive this view: switching to Town and back, or reloading,
-  // must not lose text the user has not yet saved or discarded.
-  useEffect(() => writeKeptDrafts(unsaved), [unsaved]);
-  /** Add a draft that could not be saved; one per note, newest text wins. */
-  const keepDraft = (draft: Omit<UnsavedDraft, "key">) =>
-    setUnsaved((list) => [
-      ...list.filter((entry) => entry.started.id !== draft.started.id),
-      { ...draft, key: newId() },
-    ]);
+  const unsaved = useKeptDrafts(keptDraftStore);
+  /** Keep a draft that could not be saved; one per note. */
+  const keepDraft = (draft: Omit<KeptDraft, "key">) =>
+    keptDraftStore.keep({ ...draft, key: newId() });
   const [noteSelected, setNoteSelected] = useState<string | null>(null);
   const [picked, setPicked] = useState<string | null>(null);
   const [stringFrom, setStringFrom] = useState<StringEnd | null>(null);
@@ -1963,22 +1963,21 @@ export default function BoardView({
    * Save a kept draft over its note or as a new note. The draft stays until
    * the store confirms the write; a failure or another conflict stays on it.
    */
-  const recoverDraft = async (draft: UnsavedDraft, mode: "over" | "new") => {
-    const update = (patch: Partial<UnsavedDraft>) =>
-      setUnsaved((list) =>
-        list.map((d) => (d.key === draft.key ? { ...d, ...patch } : d)),
-      );
+  const recoverDraft = (draft: KeptDraft, mode: "over" | "new") => {
     const current = latest.current.saved?.notes.find(
       (n) => n.id === draft.started.id,
     );
     if (mode === "over" && !current) {
-      update({ reason: "deleted", error: "the note no longer exists" });
+      keptDraftStore.update(draft.key, {
+        reason: "deleted",
+        error: "the note no longer exists",
+      });
       return;
     }
-    update({ saving: true, error: undefined });
-    let problem: string | null;
-    try {
-      problem = await boardStore.patch([
+    // The outcome is recorded in the draft store, even if Board has been
+    // left by the time the write finishes.
+    void keptDraftStore.save(draft.key, () =>
+      boardStore.patch([
         mode === "over"
           ? {
               op: "note.put",
@@ -2001,12 +2000,8 @@ export default function BoardView({
                 y: draft.started.y + 40,
               },
             },
-      ]);
-    } catch (error) {
-      problem = String(error instanceof Error ? error.message : error);
-    }
-    if (problem) update({ saving: false, error: problem });
-    else setUnsaved((list) => list.filter((d) => d.key !== draft.key));
+      ]),
+    );
   };
   const deleteNote = (note: BoardNote) => {
     setNoteSelected(null);
@@ -2843,27 +2838,23 @@ export default function BoardView({
                 {saved?.notes.some((n) => n.id === draft.started.id) ? (
                   <button
                     type="button"
-                    disabled={draft.saving}
-                    onClick={() => void recoverDraft(draft, "over")}
+                    disabled={keptDraftStore.isSaving(draft.key)}
+                    onClick={() => recoverDraft(draft, "over")}
                   >
                     Keep mine
                   </button>
                 ) : null}
                 <button
                   type="button"
-                  disabled={draft.saving}
-                  onClick={() => void recoverDraft(draft, "new")}
+                  disabled={keptDraftStore.isSaving(draft.key)}
+                  onClick={() => recoverDraft(draft, "new")}
                 >
                   Save as a new note
                 </button>
                 <button
                   type="button"
-                  disabled={draft.saving}
-                  onClick={() =>
-                    setUnsaved((list) =>
-                      list.filter((d) => d.key !== draft.key),
-                    )
-                  }
+                  disabled={keptDraftStore.isSaving(draft.key)}
+                  onClick={() => keptDraftStore.remove(draft.key)}
                 >
                   Discard
                 </button>
@@ -3302,49 +3293,21 @@ function NoteEditor({
   );
 }
 
-const KEPT_DRAFTS_KEY = "herdr-world.board.unsaved";
-/** Kept drafts for this page, so a remount (another view, then back) keeps them. */
-let keptDrafts: UnsavedDraft[] | null = null;
-function readKeptDrafts(): UnsavedDraft[] {
-  if (keptDrafts) return keptDrafts;
-  try {
-    const raw = JSON.parse(worldLocalStorage.getItem(KEPT_DRAFTS_KEY) ?? "[]");
-    keptDrafts = Array.isArray(raw)
-      ? raw.filter(
-          (d): d is UnsavedDraft =>
-            d &&
-            typeof d.key === "string" &&
-            typeof d.text === "string" &&
-            d.started &&
-            typeof d.started.id === "string",
-        )
-      : [];
-  } catch {
-    keptDrafts = [];
-  }
-  return keptDrafts;
-}
-function writeKeptDrafts(list: UnsavedDraft[]) {
-  // A save in flight is not kept: it must be retried after a remount.
-  keptDrafts = list.map((draft) => ({ ...draft, saving: undefined }));
-  try {
-    if (keptDrafts.length)
-      worldLocalStorage.setItem(KEPT_DRAFTS_KEY, JSON.stringify(keptDrafts));
-    else worldLocalStorage.removeItem(KEPT_DRAFTS_KEY);
-  } catch {
-    // Storage unavailable: the drafts still outlive view switches.
-  }
-}
-
-/** An edit that could not be saved, kept until saved or discarded. */
-type UnsavedDraft = {
-  key: string;
-  started: BoardNote;
-  text: string;
-  reason: "changed" | "deleted";
-  saving?: boolean;
-  error?: string;
-};
+/** This page's kept drafts, shared with the browser's other World tabs. */
+const keptDraftStore = createDraftStore(
+  (() => {
+    try {
+      return worldLocalStorage;
+    } catch {
+      return null;
+    }
+  })(),
+);
+if (typeof window !== "undefined")
+  window.addEventListener("storage", (event) => {
+    if (!event.key || event.key.endsWith(KEPT_DRAFTS_KEY))
+      keptDraftStore.refresh();
+  });
 
 /** A note's first words, as the name of the tab it starts. */
 const noteTabName = (note: BoardNote) =>

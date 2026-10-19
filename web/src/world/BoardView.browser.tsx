@@ -156,13 +156,21 @@ function apply(ops: BoardOp[]) {
 }
 /** How many of the next board writes the fake service rejects. */
 let failingWrites = 0;
+/** While set, the next board write waits for the test to release it. */
+let holdNextWrite: ((release: () => void) => void) | null = null;
 const store = new BoardDocumentStore({
   call: async (method, params) =>
-    method !== "world.board.get" && failingWrites > 0 && failingWrites--
-      ? Promise.reject(new Error("write failed"))
-      : method === "world.board.get"
-        ? structuredClone(saved)
-        : apply((params as { ops: BoardOp[] }).ops),
+    method !== "world.board.get" && holdNextWrite
+      ? new Promise<void>((resolve) => {
+          const hold = holdNextWrite!;
+          holdNextWrite = null;
+          hold(resolve);
+        }).then(() => apply((params as { ops: BoardOp[] }).ops))
+      : method !== "world.board.get" && failingWrites > 0 && failingWrites--
+        ? Promise.reject(new Error("write failed"))
+        : method === "world.board.get"
+          ? structuredClone(saved)
+          : apply((params as { ops: BoardOp[] }).ops),
   onControl: () => () => {},
   onStatus: () => () => {},
 });
@@ -1770,7 +1778,17 @@ async function run() {
       !saved.notes.some((n) => n.text === "Typed before it vanished"),
       "no note was saved by the failed write",
     );
+    // The retry is still writing when the user leaves Board; it succeeds
+    // afterwards. Back on Board the draft is gone and there is one note.
+    let release!: () => void;
+    holdNextWrite = (go) => (release = go);
     saveNew();
+    await settle(50);
+    root.render(<div />);
+    await settle(50);
+    release();
+    await settle(100);
+    mount(2);
     await waitFor(
       () => saved.notes.some((n) => n.text === "Typed before it vanished"),
       "the kept draft can be saved as a new note",
@@ -1778,6 +1796,11 @@ async function run() {
     await waitFor(
       () => !host.querySelector(".board-unsaved"),
       "a saved draft leaves the panel",
+    );
+    check(
+      saved.notes.filter((n) => n.text === "Typed before it vanished")
+        .length === 1,
+      "the draft was saved once, though Board was left mid-save",
     );
   }
 
