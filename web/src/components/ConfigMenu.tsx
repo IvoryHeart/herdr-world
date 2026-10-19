@@ -349,7 +349,7 @@ export function ConfigMenu({
                     icon={<Activity size={15} />}
                     label="OTEL economy metrics"
                     className="config-menu-item-row"
-                    description="Connect Prometheus to the Office Economy board"
+                    description="Connect Prometheus to show cost on the Town board"
                     onClick={() => {
                       setOpen(false);
                       onOpenOfficeMetrics();

@@ -368,23 +368,11 @@ export function TownCanvas({
     const width = host.clientWidth || 1;
     const height = host.clientHeight || 1;
     const narrow = width < 640;
-    // Phones frame the first building below any floating notices.
-    let covered = 0;
-    if (narrow) {
-      const top = host.getBoundingClientRect().top;
-      for (const overlay of host
-        .closest(".world-office-shell")
-        ?.querySelectorAll<HTMLElement>(".world-completion-notices") ?? [])
-        covered = Math.max(
-          covered,
-          overlay.getBoundingClientRect().bottom - top,
-        );
-    }
     return {
       width,
       height,
       inset: {
-        top: narrow ? Math.max(12, Math.min(height / 3, covered + 8)) : 16,
+        top: narrow ? 12 : 16,
         right: narrow ? 12 : Math.max(72, latest.current.chrome.right),
         bottom: narrow ? 12 : 16,
         left: narrow ? 12 : Math.max(16, latest.current.chrome.left),
