@@ -30,6 +30,7 @@ const PixelOfficeView = lazyWithReload(
 );
 
 const TownView = lazyWithReload("world-town", () => import("./TownView"));
+const BoardView = lazyWithReload("world-board", () => import("./BoardView"));
 
 const ConnectedTreeView = lazyWithReload(
   "world-connected-tree",
@@ -217,6 +218,23 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
                         }
                         onOpenTerminal={openTerminalById}
                         onSelectedAnchorChange={setSelectedVisualAnchor}
+                      />
+                    </Suspense>
+                  ) : view === "board" ? (
+                    <Suspense
+                      fallback={
+                        <div className="world-view-loading">Loading Board…</div>
+                      }
+                    >
+                      <BoardView
+                        world={presentedWorld}
+                        toolbarPortal={viewToolbarPortal}
+                        selectedId={selectedId}
+                        conversationNodeIds={conversationNodeIds}
+                        onSelect={selectNode}
+                        onOpenTerminal={openTerminalById}
+                        onSelectedAnchorChange={setSelectedVisualAnchor}
+                        onNodeAnchorsChange={setVisualConversationAnchors}
                       />
                     </Suspense>
                   ) : view === "tree" ? (

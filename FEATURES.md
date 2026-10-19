@@ -37,6 +37,28 @@ A Web/PWA client for a running [Herdr](https://herdr.dev) server.
     only an explicit move changes Herdr's layout, always within one host.
   See the [Town exercise](./docs/TUTORIAL.md#town).
 
+- **Board** (`/board`) shows hosts as zones, workspaces as cards and tabs as
+  cards around their workspace, beside your notes. Cards are elastic while you
+  move them and settle within a second; workspaces fold into a count and open
+  into free space; Tidy (with Undo) rearranges a workspace or the board and
+  carries strung notes along. Zoomed out, workspaces show a square per pane.
+  - Tabs list each pane as a row; plain-shell tabs look like terminals; only a
+    working agent's tab (or the selected one) pulses (a ⋯ setting).
+  - **+** on a workspace opens New tab (Terminal, Claude or Codex, an optional
+    name, then Create; a note's Start an agent uses the same dialog); **+** on a host creates a workspace. Workspace cards count their
+    agents by status; workspaces and tabs take a colour the user picks, while
+    status keeps its own colours.
+  - Notes and strings are saved by the World service and shared across your
+    devices. Strings attach to an exact pane, tab or workspace; a note strung to
+    an agent can be sent to it, only when you press Send, after World checks the
+    pane still holds the same agent. A note can start a new agent in a chosen
+    workspace.
+  - Drag a tab onto another workspace of its host to move it (asks first).
+  - After a Herdr restart, strings that cannot be confirmed ask Keep or Detach;
+    strings whose target closed wait in Needs a home. Selecting a card opens
+    the shared Inspector. **⋯ → Event trace** records input for bug reports.
+  See the [Board exercise](./docs/TUTORIAL.md#board).
+
 - **Desk** organizes the filtered hosts' agents by what
   they need from you rather than where they run:
   - **Needs you** lists blocked agents, oldest first, with the question and choices
@@ -60,7 +82,7 @@ A Web/PWA client for a running [Herdr](https://herdr.dev) server.
     answer, review, or watch. Hosts outside the filter appear as summary chips.
 - **Spaces** is the focused operational workspace: terminals, files, changes,
   annotations, worktrees, and Agent History for one selected connection.
-- **Town**, **Office**, **Tree**, and **Graph** show the aggregate of local and SSH hosts.
+- **Town**, **Board**, **Office**, **Tree**, and **Graph** show the aggregate of local and SSH hosts.
   **Hosts** defaults to All hosts and persists an explicit host set independently
   of **Manage connections**. Filtering preserves open resources and terminals;
   removed saved identities are pruned, with an explained return to All hosts

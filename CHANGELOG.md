@@ -7,6 +7,28 @@ are optional because the merged PR history records their source.
 
 ## [Unreleased]
 
+### Added
+
+- Add Board, a pin board view next to Graph (in progress). Hosts are zones,
+  workspaces are cards and tabs sit around their workspace. Cards are springy
+  while you move them and settle within about a second; a workspace carries its
+  tabs, folds into a stack and opens into free space; Tidy works on a workspace
+  or the whole board and can be undone. Zooming out shows each workspace's tabs
+  as status squares (hollow for plain terminals). A tab with several panes lists
+  them as rows you can select or open on their own, and a tab of plain shells
+  looks like a small terminal. Tabs pulse in their most urgent agent's status
+  colour, which the view's ⋯ menu can turn off. Double-tap the board for a
+  sticky note and drag a card's red dot to string a note to a workspace, tab or
+  exact pane; click a string to cut it. Notes, strings and the board's layout
+  are saved by the World service and appear on every device. A note strung to an
+  agent's pane can be sent to that agent; World first checks the pane still
+  holds the same agent and sends it once. After Herdr restarts, Board asks
+  before trusting strings whose terminals changed; strings whose target closed
+  wait in a Needs a home tray instead of attaching to the wrong card. A note can
+  also start a new agent in a chosen workspace, which receives the note once
+  it is ready. Drag a tab onto another workspace to move it there (Board asks
+  first, with "Don't ask again"); strings follow the moved panes. On phones Board replaces Graph in the bottom navigation.
+
 ### Fixed
 
 - When a Town move finishes, the dragged table or agent fades or springs home
