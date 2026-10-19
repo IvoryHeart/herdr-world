@@ -82,7 +82,7 @@ only fills in cards it has not placed before.
 | Pointer gestures | [board/boardGesture.ts](board/boardGesture.ts) turns pointer events into press, pan, pinch, drag and taps. | [Gesture tests](board/boardGesture.test.ts) |
 | Inspector line anchors | [board/boardAnchors.ts](board/boardAnchors.ts) resolves an Inspector's node to a card, pane row or folded workspace. | [Anchor tests](board/boardAnchors.test.ts) |
 | Notes, strings and Send | [board/boardDrafts.ts](board/boardDrafts.ts) keeps unsent text; the service stores the board and sends notes in [board-store.ts](../../../server/src/world/board-store.ts), [board-send.ts](../../../server/src/world/board-send.ts) and [board-start.ts](../../../server/src/world/board-start.ts). | [Draft tests](board/boardDrafts.test.ts), [store](../../../server/src/world/board-store.test.ts), [send](../../../server/src/world/board-send.test.ts) and [start](../../../server/src/world/board-start.test.ts) tests |
-| Frames | [board/boardScheduler.ts](board/boardScheduler.ts) runs a frame per batch of invalidation reasons. | [Scheduler tests](board/boardScheduler.test.ts) |
+| Frames | [board/boardScheduler.ts](board/boardScheduler.ts) is Board's client of World's frame scheduler: a state frame per batch of invalidation reasons, motion frames while cards glide. | [Scheduler tests](board/boardScheduler.test.ts) |
 
 ### Board at scale
 
@@ -119,7 +119,7 @@ and the asset check's tests.
 ## Shared frames and acceptance budgets
 
 [worldFrameScheduler.ts](worldFrameScheduler.ts) shares one task/rAF queue across
-canvas clients, prioritizes state over motion, and yields after eight milliseconds
+Town's and Board's frames, prioritizes state over motion, and yields after eight milliseconds
 of client work. Hidden/offscreen clients retain pending work without painting;
 reduced motion excludes decorative requests. A shared terminal quiet signal stops
 decorative animation while typing. Per-node debug snapshots are published only

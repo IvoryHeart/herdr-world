@@ -1079,7 +1079,10 @@ export default function BoardView({
   // One loop per mount: a cleanup stops it for good, and React may mount a
   // component twice (development, remounts), so each mount makes its own.
   useEffect(() => {
+    const element = boardRef.current;
+    if (!element) return;
     const loop = createFrameLoop({
+      element,
       frame: (dt, reasons) => frameRef.current(dt, reasons),
       onError: (error, reasons) => {
         console.error("Board frame failed", error);
