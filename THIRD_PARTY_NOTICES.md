@@ -24,11 +24,13 @@ retained in [`LICENSES/HERDR-DROVR-MIT.txt`](LICENSES/HERDR-DROVR-MIT.txt).
 
 ## Claw-Empire character assets
 
-The character sprites under `web/public/world/characters` originate from
+The pixel character sprites embedded, downscaled, in the website film under
+`site/film` originate from
 [`GreenSheep01201/claw-empire`](https://github.com/GreenSheep01201/claw-empire)
 at commit `66a24ea7df2435ef897c48c147deb7ec572c01c2`, licensed under Apache-2.0,
 Copyright 2026 GreenSheep01201 (seowongil@gmail.com). The licence is retained in
-[`LICENSES/CLAW-EMPIRE-APACHE-2.0.txt`](LICENSES/CLAW-EMPIRE-APACHE-2.0.txt).
+[`LICENSES/CLAW-EMPIRE-APACHE-2.0.txt`](LICENSES/CLAW-EMPIRE-APACHE-2.0.txt). The
+application no longer ships them: they were drawn only by the retired Office view.
 
 ## Website film fonts
 

@@ -6,10 +6,10 @@ import { fileURLToPath, URL } from "node:url";
 const publicRoot = fileURLToPath(new URL("../server/public/", import.meta.url));
 // Town and Board are the visual views, each a lazy chunk with its own
 // renderer or layout code; Ranger, commit history and the diff worker add
-// bounded lazy assets. Retiring Office, Tree and Graph left 141 files and
-// 14.3 MiB, so the budgets keep a little headroom above that.
-const maxFileCount = 165;
-const maxTotalBytes = 14.5 * 1024 * 1024;
+// bounded lazy assets. Retiring Office, Tree and Graph (and Office's character
+// sprites) left 129 files and 13.0 MiB, so the budgets keep a little headroom.
+const maxFileCount = 150;
+const maxTotalBytes = 13.25 * 1024 * 1024;
 const maxInitialJsBytes = 660 * 1024;
 const maxInitialJsGzipBytes = 202 * 1024;
 const maxInitialCssBytes = 196 * 1024;
