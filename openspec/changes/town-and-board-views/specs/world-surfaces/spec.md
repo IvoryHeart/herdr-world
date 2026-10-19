@@ -49,10 +49,18 @@ changed or is moving, continuing motion SHALL pause while a terminal receives in
 reduced motion, views that are off screen or in a hidden document SHALL not draw, and a failing
 frame SHALL be reported without stopping later frames.
 
-Each view SHALL offer an event trace for diagnosis, off by default and enabled per view through
-`?debug=<view>` or the view's settings menu. The trace SHALL be a bounded, page-local record of
-input, gesture changes, effects, frame reasons and errors, and SHALL be exported only when the user
-copies it.
+Diagnostic instrumentation (the event trace, its overlay and renderer counters) SHALL exist only
+in development builds. A release build SHALL contain no instrumentation code, overlay, settings
+toggle or query switch. In a development build each view SHALL offer the event trace, off by
+default and enabled per view through `?debug=<view>` or the view's settings menu; the trace SHALL
+be a bounded, page-local record of input, gesture changes, effects, frame reasons and errors, and
+SHALL be exported only when the user copies it.
+
+#### Scenario: A release build has no instrumentation
+
+- **WHEN** a user opens a release build of World with `?debug=board`
+- **THEN** Board shows no trace overlay or Event trace setting, and the shipped scripts contain no
+  trace code
 
 #### Scenario: A quick swipe on a desk pans
 

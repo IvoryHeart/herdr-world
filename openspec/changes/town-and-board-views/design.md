@@ -82,7 +82,22 @@ Board's tests keep their fake clock by injecting the scheduler, as they do today
 
 An alternative was moving Board's loop into the scheduler module unchanged. Rejected: it would lose terminal-input pausing and the shared frame budget, which is the point.
 
-**Trace: one module, one overlay, a view label.** `boardTrace.ts` and `BoardTraceOverlay.tsx` move to `world/interaction/`. Each view names itself (`town` or `board`), so `?debug=town` and `?debug=board` select per view, and the ⋯ menu toggle sits in each view's menu. Records stay in a bounded ring, local to the page, and are never sent anywhere.
+**Development tools: one module, compiled out of release builds.** Board's trace and overlay, `officeDebug` and the renderer counters in `worldRendererDebug` become one `world/devtools/` module with three parts:
+
+- a bounded trace ring with view labels;
+- the overlay;
+- renderer counters.
+
+How it is switched:
+
+- **Build flag:** a Vite define `__HERDR_WORLD_DEVTOOLS__` is true for `vite --mode development` or when `HERDR_WORLD_BUILD_DEVTOOLS=1`, and false otherwise.
+- **Release builds:** the release and package scripts never set it.
+- **Views:** call `devtools()` only behind the flag. A release build therefore drops the module, the overlay, the menu toggle and the `?debug=` and `?officeDebug=` switches. Each call site costs a constant `false`.
+- **Selection:** in a development build, `?debug=town` and `?debug=board` select per view, and the ⋯ menu toggle sits in each view's menu.
+- **Privacy:** records stay in a bounded ring, local to the page, and are never sent anywhere.
+- **Bundle check:** asserts that release output contains no dev-tools strings.
+
+An alternative was keeping the trace in production behind a query switch. Rejected: the owner wants instrumentation to exist only for development. It also removes a diagnostic surface from the trusted single-user service.
 
 **Order: retire first, then share.** Removing the retired views first means the shared module has exactly two consumers to fit, and Part A's deletions don't conflict with Part B's moves.
 
@@ -120,7 +135,7 @@ An alternative was moving Board's loop into the scheduler module unchanged. Reje
    - Town on the shared gesture and trace.
 3. **Rollback:** revert the PR. No stored data changes shape. Saved Office settings that are dropped only cost the user re-choosing alignment, which no longer exists.
 
-## Open Questions
+## Decisions Confirmed
 
-- **Redirect targets.** `/tree` and `/graph` going to Board (and `/office` to Town) is this design's choice. The owner may prefer `/tree` to Spaces.
-- **Desk.** It remains as is. If Desk should also fold into Town's attention rail, that's a separate decision.
+- Owner, 2026-10-19: `/tree` and `/graph` open Board, `/office` opens Town, and Desk stays.
+- Owner, 2026-10-19: instrumentation exists only for development, not in production builds.

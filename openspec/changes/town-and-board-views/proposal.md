@@ -47,7 +47,10 @@ The owner asked for that shared module as a follow-up to Board. With only Town a
 
   Board then pauses during terminal typing, yields to ordinary tasks and stops off screen, like Town.
 
-- **Event trace:** a World-level trace with an overlay, available in both views through `?debug=town`, `?debug=board` and a ⋯ menu toggle. Copy trace produces a bug-report JSON that can be replayed as a gesture test.
+- **Development tools, out of production:** one World dev-tools module replaces the ad-hoc instruments: Board's event trace and overlay, `officeDebug` (`?officeDebug=1`) and the renderer counters in `worldRendererDebug`.
+  - **Release builds** exclude it entirely through a build-time flag, so the bundler strips the code and production has no trace, overlay or debug switches.
+  - **Development builds**, and builds made with the dev-tools flag (as on the shared test instance), offer it in both views through `?debug=town`, `?debug=board` and a ⋯ menu toggle.
+  - **Copy trace** produces a bug-report JSON that can be replayed as a gesture test.
 
 ## Capabilities
 
