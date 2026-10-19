@@ -16,7 +16,7 @@ are optional because the merged PR history records their source.
 
 ### Added
 
-- Add Board, a pin board view next to Graph (in progress). Hosts are zones,
+- Add Board, a pin board view. Hosts are zones,
   workspaces are cards and tabs sit around their workspace. Cards are springy
   while you move them and settle within about a second; a workspace carries its
   tabs, folds into a stack and opens into free space; Tidy works on a workspace
@@ -37,10 +37,24 @@ are optional because the merged PR history records their source.
   wait in a Needs a home tray instead of attaching to the wrong card. A note can
   also start a new agent in a chosen workspace, which receives the note once
   it is ready. Drag a tab onto another workspace to move it there (Board asks
-  first, with "Don't ask again"); strings follow the moved panes. On phones Board replaces Graph in the bottom navigation.
+  first, with "Don't ask again"); strings follow the moved panes. On phones Board is in the bottom navigation.
+
+### Removed
+
+- Retire the Office, Tree and Graph views. Town and Board replace them: old
+  `/office` addresses and saved Office views open Town, and `/graph` and `/tree`
+  open Board, replacing the history entry. The Inspector opening preference and
+  Town's calm motion keep their saved values; Office's room alignment and
+  long-title settings are gone. The optional Prometheus cost metrics now appear
+  on the Town board. The web build drops about 1.6 MiB.
 
 ### Fixed
 
+- Board stays responsive on a large World: at 64 hosts and about 1,500 tabs,
+  typed input had waited up to 20 seconds behind Board's rendering.
+- Board keeps a tab and a workspace apart when they share a native ID, opens a
+  card from the keyboard or assistive technology, shows search results, and
+  marks the selected card for assistive technology.
 - When a Town move finishes, the dragged table or agent fades or springs home
   from where it was waiting on the target, instead of jumping back to where it
   was dropped first.

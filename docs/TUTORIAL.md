@@ -95,9 +95,9 @@ Use the view switcher to move between these views without restarting work:
 | Desk | Find agents needing input, review finished turns and follow work in flight |
 | Spaces | Work in one workspace's terminal panes, files, changes and history |
 
-Office, Tree and Graph remain in current builds but are planned for retirement.
-The exercises below use Town, Board, Desk and Spaces. Board is available on current
-`main`; check the [latest release notes](https://github.com/IvoryHeart/herdr-world/releases/latest)
+Office, Tree and Graph have been retired; `/office` opens Town, and `/graph` and
+`/tree` open Board. The exercises below use Town, Board, Desk and Spaces. Board
+and the retirement are on current `main`; check the [latest release notes](https://github.com/IvoryHeart/herdr-world/releases/latest)
 for released availability.
 
 **Hosts** starts at **All hosts**. Choose a host set to reduce the overview;
@@ -240,7 +240,7 @@ not reports of completed agent work.
 ### Use Desk: answer, review and follow work
 
 <a id="desk"></a>
-<!-- Keep existing Graph exercise links useful during the view transition. -->
+<!-- Keep old Graph exercise links working after the Graph view was retired. -->
 <a id="graph"></a>
 
 Use Town for a spatial view and Board for your arrangement of cards and notes.

@@ -5,7 +5,7 @@
 - [x] 1.3 Delete the retired views and the modules only they reach (the 36 files the import analysis lists), their unit and browser tests and their browser shard entries; typecheck, lint and run the Town, Board, Desk and Spaces suites.
 - [x] 1.4 Settings: keep Inspector presentation and Town calm motion; remove room alignment, long-title and Office scroll settings and their menu items; keep the `officePreferences:v1` key so surviving choices stay; test the reads of older saved values.
 - [x] 1.5 Move `verification/coverage.json` areas that name retired code (renderer lifetime, layout tests) to their Town or Board owners, with no-contract-impact notes; run `verification:gate`.
-- [ ] 1.6 Update docs: the tutorial (remove the Office, Graph and Tree exercises; point to Town and Board), FEATURES, README, site screenshots and content tests, and the knowledge map. Add a CHANGELOG Removed entry naming the replacements; run `build:site`.
+- [x] 1.6 Update docs: the tutorial (remove the Office, Graph and Tree exercises; point to Town and Board), FEATURES, README, site screenshots and content tests, and the knowledge map. Add a CHANGELOG Removed entry naming the replacements; run `build:site`.
 - [x] 1.7 Lower the web asset budget to the new total with headroom.
 
 ## 2. Spec

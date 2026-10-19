@@ -74,7 +74,7 @@ test("browser lifecycle comparisons are opt-in and retain both revisions' eviden
   ]);
   expect(job.strategy?.matrix?.suite).toEqual([
     "HostsFilter.creation",
-    "SpatialGraphView.browser",
+    "BoardView",
     "useSpacesTabWindowArrangement.browser",
   ]);
   const comparison = job.steps.find(

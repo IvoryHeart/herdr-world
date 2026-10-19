@@ -5,9 +5,9 @@ A Web/PWA client for a running [Herdr](https://herdr.dev) server.
 
 ## Visual control plane
 
-Town, Board, Desk and Spaces are the retained view set. Office, Tree and Graph
-remain in current builds and are planned for retirement; they are no longer the
-recommended starting points. Board is available on current `main`; consult the
+Town, Board, Desk and Spaces are World's views. Office, Tree and Graph have been
+retired: `/office` opens Town, and `/graph` and `/tree` open Board. Both changes
+are on current `main`; consult the
 [release notes](https://github.com/IvoryHeart/herdr-world/releases/latest) for
 released availability.
 
@@ -139,12 +139,13 @@ released availability.
 - World runs as one application and one browser origin. No remote World/Roamgate
   service or browser bridge URL is required for an SSH host.
 
-### Legacy views and runtime boundaries
+### Retired views and runtime boundaries
 
-Office, Tree and Graph are still implemented for existing users while their
-retirement is planned. The contributor [source map](./web/src/world/README.md)
-retains their owners and tests. Office's optional metrics remain a legacy
-integration; Board's notes and strings do not depend on Prometheus.
+Office, Tree and Graph are retired. Bookmarks still work: `/office` opens Town,
+and `/graph` and `/tree` open Board. The Inspector opening preference and Town's
+calm motion keep their saved values; Office's room alignment and long-title
+settings are gone. The optional Prometheus cost metrics now appear on the Town
+board; Board's notes and strings do not depend on Prometheus.
 
 World admits simultaneous qualified local and SSH contexts. Runtime replacement
 retires only its own windows and pending work; whole-World disconnect or

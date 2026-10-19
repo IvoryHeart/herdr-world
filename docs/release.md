@@ -55,7 +55,7 @@ With GitHub CLI, use `gh run download RUN_ID -n preview-linux-x64` (substitute
 the desired platform).
 These previews have no GitHub release, npm version, Homebrew Formula, or update
 channel. Run the binary on its target OS and architecture with a test Herdr
-server, then exercise local/SSH connection selection, Office, Tree, Graph,
+server, then exercise local/SSH connection selection, Town, Board, Desk,
 Spaces, terminal and file flows, and the PWA where reachable. Retest the final
 RC from its published tag after its reviewed PR merges.
 

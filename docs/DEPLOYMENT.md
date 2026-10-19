@@ -214,14 +214,12 @@ herdr-world --socket-path /path/to/herdr.sock \
 herdr-world --ssh-host workbox
 ```
 
-## Optional Office metrics
+## Optional cost metrics
 
-Office is a legacy view planned for retirement. This integration remains available
-in current builds; it does not supply Board notes, strings or agent status.
-
-Office can populate its Economy board from a Prometheus-compatible HTTP API. Open
-**Office metrics** from the Office toolbar and save an HTTP or HTTPS base URL, or set
-the service startup default:
+The Town board can show token use and reported cost from a Prometheus-compatible
+HTTP API. It does not supply Board notes, strings or agent status. Open
+**OTEL economy metrics** from the settings menu and save an HTTP or HTTPS base URL,
+or set the service startup default:
 
 ```bash
 HERDR_WORLD_OTEL_PROMETHEUS_URL=http://127.0.0.1:9090 herdr-world
