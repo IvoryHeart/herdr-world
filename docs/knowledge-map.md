@@ -1,5 +1,9 @@
 # Current repository knowledge
 
+User-facing guidance focuses on Town, Board, Desk and Spaces. Office, Tree and
+Graph are planned for retirement but remain implemented; their source and tests
+below stay authoritative until that removal is delivered.
+
 Use this map to locate ownership, then read the relevant contract, source and focused
 test. For end-to-end module and data-flow navigation, use the
 [foundation source guide](foundation-guide.md); for visual and terminal tasks,

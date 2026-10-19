@@ -5,7 +5,13 @@ A Web/PWA client for a running [Herdr](https://herdr.dev) server.
 
 ## Visual control plane
 
-- **Town** is the default view (`/town`); Office remains available at `/office`.
+Town, Board, Desk and Spaces are the retained view set. Office, Tree and Graph
+remain in current builds and are planned for retirement; they are no longer the
+recommended starting points. Board is available on current `main`; consult the
+[release notes](https://github.com/IvoryHeart/herdr-world/releases/latest) for
+released availability.
+
+- **Town** is the default view (`/town`); the root URL opens it too.
   Each host is a building, each workspace a room, each tab a team table and each
   pane a seat. Plain terminals show prompts. Additional panes beyond the drawn
   seats remain available through the table's count and chooser.
@@ -30,8 +36,8 @@ A Web/PWA client for a running [Herdr](https://herdr.dev) server.
   - Drag a table onto another room of the same host, or an agent onto another
     table, to move it (hold, then drag on phones; **M** on a focused table or
     agent from the keyboard). The live panes move, agents keep running, a failed
-    move is rolled back, and moving a room's last table asks first because the
-    room closes. When a table closes, the tables after it close up.
+    move attempts rollback and reports partial or unknown results. Moving a
+    room's last table asks first because the room closes. When a table closes, the tables after it close up.
   - Cached failed-host buildings stay stale and non-actionable. Search and Hosts
     use the shared aggregate. Reception and lounge positions only show status;
     only an explicit move changes Herdr's layout, always within one host.
@@ -50,9 +56,12 @@ A Web/PWA client for a running [Herdr](https://herdr.dev) server.
     status keeps its own colours.
   - Notes and strings are saved by the World service and shared across your
     devices. Strings attach to an exact pane, tab or workspace; a note strung to
-    an agent can be sent to it, only when you press Send, after World checks the
-    pane still holds the same agent. A note can start a new agent in a chosen
-    workspace.
+    a pane can be sent to its current agent only when you press Send. World checks
+    the runtime, witnessed pane/terminal IDs and agent presence, not continuity
+    of the original agent session. Inspect the recipient before sending; an
+    agent replaced within the same terminal can receive the note
+    ([issue #228](https://github.com/IvoryHeart/herdr-world/issues/228)).
+    A note can start a new agent in a chosen workspace.
   - Drag a tab onto another workspace of its host to move it (asks first).
   - After a Herdr restart, strings that cannot be confirmed ask Keep or Detach;
     strings whose target closed wait in Needs a home. Selecting a card opens
@@ -82,7 +91,7 @@ A Web/PWA client for a running [Herdr](https://herdr.dev) server.
     answer, review, or watch. Hosts outside the filter appear as summary chips.
 - **Spaces** is the focused operational workspace: terminals, files, changes,
   annotations, worktrees, and Agent History for one selected connection.
-- **Town**, **Board**, **Office**, **Tree**, and **Graph** show the aggregate of local and SSH hosts.
+- **Town**, **Board** and **Desk** show the aggregate of local and SSH hosts.
   **Hosts** defaults to All hosts and persists an explicit host set independently
   of **Manage connections**. Filtering preserves open resources and terminals;
   removed saved identities are pruned, with an explained return to All hosts
@@ -92,9 +101,7 @@ A Web/PWA client for a running [Herdr](https://herdr.dev) server.
   destination; room creation inherits its room. Notifications outside the filter
   open a labelled Inspector with an explicit Reveal in Hosts action.
 - Search covers observed entities beyond renderer limits and pages matching results.
-  Tree and Graph distribute their 128-space bound across hosts fairly and retain
-  16 leaves per space, with priority for selected, focused, watched and attention
-  targets. Counts distinguish observations, rendering omissions and unavailable coverage.
+  Counts distinguish observations, rendering omissions and unavailable coverage.
 - Use **Arrange windows** in the shared shell to show the active terminal alone,
   cascade open windows, fit them in columns or rows, tile them in a grid, or
   restore their previous positions. Spaces arranges the focused workspace's
@@ -123,63 +130,33 @@ A Web/PWA client for a running [Herdr](https://herdr.dev) server.
 - A slow host does not hold back another host’s controls: World returns a
   complete host list within 20 seconds, marks unfinished host views stale, and
   refreshes them when their observations complete.
-- Office, Tree, and Graph share search in the application top bar; Graph adds Fit
-  and zoom there instead of consuming a second stage header.
-- The Roamgate-derived **Actions** command menu stays at the right of the top bar in
-  every view. In Office, Tree and Graph, it also captures the selected visual space, agent or
-  terminal for resource actions. It opens the target's existing Terminal, Files, Changes and
-  Agent History Inspector resources, or focuses that exact target before Go to
-  Spaces. Window arrangements remain available without a selected visual entity.
-  Its normal shell commands and shortcut remain available while a visual view is
-  active (`Cmd+K` on macOS, `Ctrl+Alt+K` elsewhere). A selection,
-  host, generation or observation change invalidates the open target; Actions
-  does not send terminal input, assign tasks or control agents.
-- Pin, Unpin and Pinned only are available in the shared **Actions**, leaving the
-  search field clear. The filtered aggregate summary is a muted top-bar indicator;
-  hover or assistive technology exposes its counts.
-- **Pin** a live agent or terminal in Office, Tree, or Graph to keep its exact
-  connection-qualified pane in visual triage. Pins are shared by browsers served
-  by this World process, survive page reload, and clear when the process restarts
-  or that runtime generation is replaced. **Pinned only** is a browser-local view
-  filter; workspace pins and Graph positions remain separate preferences.
+- The **Actions** command menu stays at the right of the top bar in every view
+  (`Cmd+K` on macOS, `Ctrl+Alt+K` elsewhere). Use it for workspace/tab creation,
+  window arrangements and the selected target's available resource actions.
+  Check the selected host and target before acting. A host, generation or
+  observation change invalidates an open target; Actions does not send input
+  or assign tasks to an agent.
 - World runs as one application and one browser origin. No remote World/Roamgate
   service or browser bridge URL is required for an SSH host.
 
-### Graph navigation
+### Legacy views and runtime boundaries
 
-Graph connects hosts to workspaces and their agents/terminals; edges represent
-containment. On desktop, drag the background to pan, scroll to zoom, or use
-**Zoom in**, **Zoom out** and **Fit** in the top bar. Drag nodes to save their
-positions in this browser; **Arrange graph** clears those positions and restarts
-the layout. Rotate controls turn the graph left or right. Expand/collapse host
-and workspace branches; search temporarily expands matching branches.
+Office, Tree and Graph are still implemented for existing users while their
+retirement is planned. The contributor [source map](./web/src/world/README.md)
+retains their owners and tests. Office's optional metrics remain a legacy
+integration; Board's notes and strings do not depend on Prometheus.
 
-Select a node to inspect it or double-click a live agent/terminal to open its
-terminal. The accompanying hierarchy provides keyboard-accessible selection and
-terminal controls, and becomes the main presentation on narrow screens. Stale
-nodes remain non-actionable. See the [Graph exercise](./docs/TUTORIAL.md#graph).
-
-### Foundation cutover boundaries
-
-The Roamgate-derived foundation restores the retained Pixi Office, connected Tree and
-spatial Graph over the same qualified WorldObject projection. Office includes its CEO
-room, receptions, boards, Agent Bar, rooms, room actions, completion cues and live
-floating or profile-docked terminal conversations. Optional Prometheus data reaches
-the Economy board through bounded World-service queries; Office and terminals remain
-independent of that provider.
-
-The foundation now admits simultaneous qualified local and SSH contexts. Runtime
-replacement retires only its own windows and pending work; whole-World disconnect
-or authentication loss retires all old leases. Unacknowledged input and mutations
-are never automatically replayed; refresh the exact target before retrying. Browser-federated bridge
-URLs, native Capacitor Android packaging and old visual preference keys are retired;
-the responsive installable PWA is the mobile client.
+World admits simultaneous qualified local and SSH contexts. Runtime replacement
+retires only its own windows and pending work; whole-World disconnect or
+authentication loss retires all old leases. Unacknowledged input and mutations
+are never automatically replayed; refresh the exact target before retrying.
+The responsive installable PWA is the mobile client.
 
 ### Session task summaries
 
 Agent harnesses can use `herdr-world task-summary` to publish a short, expiring,
 session-qualified description of current work for an exact local or fixed-policy SSH
-Herdr pane. Office, Tree, Graph and the Inspector show it only while the current
+Herdr pane. The Inspector shows it only while the current
 agent session matches the report. Herdr owns expiry; the command does not infer work,
 assign tasks, or provide a Clear operation.
 
@@ -654,5 +631,3 @@ mouse-aware apps with Option-drag (macOS) or Shift-drag (elsewhere).
 - Windows Herdr 0.9.1+ hosts over SSH from Linux/macOS World, with native terminal
   and workspace actions. Unix-only remote file and Git tools remain unavailable.
 - Optional private-network PIN login with independent session signing and recovery.
-- Mobile Office gives more space to the scene by removing the target row and
-  visible title-bar summary counts; search and semantic canvas controls stay available.

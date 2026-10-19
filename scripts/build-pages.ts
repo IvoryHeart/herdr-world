@@ -16,14 +16,10 @@ const assets = [
   ["docs/images/herdr-world-desktop-town.png", "herdr-world-desktop-town.png"],
   ["docs/images/herdr-world-mobile-town.png", "herdr-world-mobile-town.png"],
   [
-    "docs/images/herdr-world-desktop-office.png",
-    "herdr-world-desktop-office.png",
+    "docs/images/herdr-world-desktop-board.png",
+    "herdr-world-desktop-board.png",
   ],
-  ["docs/images/herdr-world-desktop-tree.png", "herdr-world-desktop-tree.png"],
-  [
-    "docs/images/herdr-world-desktop-graph.png",
-    "herdr-world-desktop-graph.png",
-  ],
+  ["docs/images/herdr-world-mobile-board.png", "herdr-world-mobile-board.png"],
   [
     "docs/images/herdr-world-desktop-spaces.png",
     "herdr-world-desktop-spaces.png",
@@ -40,11 +36,6 @@ const assets = [
     "docs/images/herdr-world-desktop-history.png",
     "herdr-world-desktop-history.png",
   ],
-  [
-    "docs/images/herdr-world-mobile-office.png",
-    "herdr-world-mobile-office.png",
-  ],
-  ["docs/images/herdr-world-mobile-tree.png", "herdr-world-mobile-tree.png"],
   [
     "docs/images/herdr-world-mobile-spaces.png",
     "herdr-world-mobile-spaces.png",

@@ -7,7 +7,7 @@ hosts, usernames, paths, sessions, and repository contents out of public assets.
 
 ## Prepare a reproducible scene
 
-1. Use the World release or branch being documented and a compatible Herdr runtime (Town captures use 0.9.3 / protocol 22).
+1. Use the World release or branch being documented and a compatible Herdr runtime (current Town/Board captures use 0.9.3 / protocol 22).
    Record their exact versions and source revisions with the untracked capture
    originals. See [development](development.md) for a source build.
 2. Create disposable demo repositories with synthetic project names, source,
@@ -34,22 +34,25 @@ PNG originals without adding fictional UI or agent conversations.
 
 | View | Shared file under `docs/images/` | Scene |
 | --- | --- | --- |
-| Desktop Town | `herdr-world-desktop-town.png` | Town source preview with disposable workspace rooms and terminal desks |
-| Desktop Office | `herdr-world-desktop-office.png` | Several rooms on one host, with agents sharing a desk |
-| Desktop Tree | `herdr-world-desktop-tree.png` | Connected hierarchy and Inspector |
-| Desktop Graph | `herdr-world-desktop-graph.png` | Readable relationships, fitted to viewport |
+| Desktop Town | `herdr-world-desktop-town.png` | Four disposable workspace rooms and live shell tables |
+| Desktop Board | `herdr-world-desktop-board.png` | The same workspaces as cards, terminal tabs and synthetic planning notes |
 | Desktop Spaces | `herdr-world-desktop-spaces.png` | Focused workspace and live terminal |
 | Desktop Files | `herdr-world-desktop-files.png` | Same agent's file resource |
 | Desktop Changes | `herdr-world-desktop-changes.png` | Same agent's changed files and readable diff |
 | Desktop History | `herdr-world-desktop-history.png` | Same agent's real session history |
-| Mobile Town | `herdr-world-mobile-town.png` | Town source preview at phone width |
-| Mobile Office | `herdr-world-mobile-office.png` | Office and usable touch controls |
-| Mobile Tree | `herdr-world-mobile-tree.png` | Hierarchy at phone width |
+| Mobile Town | `herdr-world-mobile-town.png` | Town at phone width |
+| Mobile Board | `herdr-world-mobile-board.png` | Readable close-up of one workspace, two shell tabs and a strung planning note |
 | Mobile Spaces | `herdr-world-mobile-spaces.png` | Focused terminal and mobile controls |
 
-Label source-preview captures separately from released features. The current Town
-captures use Herdr 0.9.3 with disposable projects and real shell panes; their empty
-attention counts reflect the runtime, with no fabricated agent activity. The Pages
+The current Town/Board captures follow main after the Board merge, using Herdr
+0.9.3 with disposable projects, real shell panes and synthetic planning notes.
+The mobile Board close-up uses a separate single-workspace scene with two tabs
+and a strung note, so its text remains readable at the native phone width.
+Their empty attention counts reflect the runtime; notes do not imply completed
+agent work. Label current-main captures in the README and tutorial; consult release
+notes for stable availability. Office, Tree and Graph images remain historical
+assets and are no longer part of the shared site set. Do not remove their source
+or verification coverage merely because the public gallery changes. The Pages
 release badge follows GitHub's latest stable release rather than a hardcoded version.
 
 Inspect every image for private data, clipped controls, stale host indicators,
