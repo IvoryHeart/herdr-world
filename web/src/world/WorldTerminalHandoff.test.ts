@@ -29,7 +29,7 @@ test.skipIf(!chrome)(
       port: 0,
       async fetch(request) {
         const path = new URL(request.url).pathname;
-        if (path === "/office") pageRequested.resolve();
+        if (path === "/town") pageRequested.resolve();
         if (
           path === "/api/connections/local/terminal-upload" &&
           request.method === "POST"

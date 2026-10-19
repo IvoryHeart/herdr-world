@@ -505,12 +505,13 @@ function agentTarget(label: string) {
   );
 }
 
-function graphTarget(label: string) {
+/** Board's card for a single-pane tab, found by its title. */
+function boardTarget(label: string) {
   return [
-    ...document.querySelectorAll<HTMLButtonElement>(
-      ".world-spatial-graph-select",
+    ...document.querySelectorAll<HTMLElement>(
+      ".board-tab[data-world-node-anchor]",
     ),
-  ].find((button) => button.querySelector("strong")?.textContent === label);
+  ].find((card) => card.querySelector(".board-label")?.textContent === label);
 }
 
 function terminalInput(scope: ParentNode = document) {
@@ -530,7 +531,7 @@ function sendKey(input: HTMLTextAreaElement) {
 }
 
 async function run() {
-  history.replaceState(null, "", "/office");
+  history.replaceState(null, "", "/town");
   document.body.style.margin = "0";
   initializeLayoutPreferences();
   initializeShortcutPreferences();
@@ -605,7 +606,7 @@ async function run() {
   flushSync(() => root.render(<WorldFoundationApp />));
 
   await until(
-    () => window.__HERDR_WORLD_RENDERER__?.ready === true,
+    () => window.__HERDR_TOWN_RENDERER__?.ready === true,
     "Office renderer",
   );
   await until(() => {
@@ -627,7 +628,7 @@ async function run() {
     );
   }, "browser-local Office creation controls with shared pending endpoint state");
   const pendingCreationSceneRenders =
-    window.__HERDR_WORLD_RENDERER__!.sceneRenders;
+    window.__HERDR_TOWN_RENDERER__!.sceneRenders;
   initialTerminalAttach.resolve();
   await until(
     () =>
@@ -637,7 +638,7 @@ async function run() {
         ?.disabled === false &&
       document.querySelector<HTMLButtonElement>(".tabbar-add")?.disabled ===
         false &&
-      window.__HERDR_WORLD_RENDERER__!.sceneRenders >
+      window.__HERDR_TOWN_RENDERER__!.sceneRenders >
         pendingCreationSceneRenders,
     "browser-local Office room, seat and tab-strip actions",
   );
@@ -1051,38 +1052,19 @@ async function run() {
       '[aria-label="Builder Inspector"] [aria-label="Close Inspector window"]',
     )
     ?.click();
-  viewSelect.value = "graph";
+  viewSelect.value = "board";
   viewSelect.dispatchEvent(new Event("change", { bubbles: true }));
-  await until(
-    () => document.querySelector(".world-spatial-graph-shell"),
-    "Graph in shared frame",
-  );
+  await until(() => document.querySelector(".board"), "Board in shared frame");
   check(
     document.querySelector(".sidebar") === sharedNavigator,
-    "Graph replaced the shared workspace navigator",
+    "Board replaced the shared workspace navigator",
   );
-  check(
-    getComputedStyle(
-      document.querySelector<HTMLElement>(".world-spatial-graph-outline")!,
-    ).display === "none",
-    "Graph retained a competing desktop hierarchy",
-  );
-  viewSelect.value = "tree";
-  viewSelect.dispatchEvent(new Event("change", { bubbles: true }));
-  await until(
-    () => document.querySelector(".world-connected-tree-shell"),
-    "Tree in shared frame",
-  );
-  check(
-    document.querySelector(".sidebar") === sharedNavigator,
-    "Tree replaced the shared workspace navigator",
-  );
-  viewSelect.value = "office";
+  viewSelect.value = "town";
   viewSelect.dispatchEvent(new Event("change", { bubbles: true }));
   await until(
     () =>
-      window.__HERDR_WORLD_RENDERER__?.ready === true && agentTarget("Builder"),
-    "Office after shared-frame navigation",
+      window.__HERDR_TOWN_RENDERER__?.ready === true && agentTarget("Builder"),
+    "Town after shared-frame navigation",
   );
   check(
     document.querySelector(".world-office-toolbar") === null,
@@ -1092,7 +1074,7 @@ async function run() {
   await until(
     () =>
       document.querySelector<HTMLSelectElement>(
-        'select[aria-label="Office Inspector opening"]',
+        'select[aria-label="Inspector opening"]',
       ),
     "Office settings in common menu",
   );
@@ -1105,21 +1087,13 @@ async function run() {
     "application menu shows the injected build version instead of the manifest placeholder",
   );
   const inspectorOpeningSelect = document.querySelector<HTMLSelectElement>(
-    'select[aria-label="Office Inspector opening"]',
+    'select[aria-label="Inspector opening"]',
   )!;
   check(
     inspectorOpeningSelect.value === "floating" &&
-      Boolean(
-        document.querySelector<HTMLSelectElement>(
-          'select[aria-label="Office room alignment"]',
-        ),
-      ) &&
-      Boolean(
-        document.querySelector<HTMLSelectElement>(
-          'select[aria-label="Office long room titles"]',
-        ),
-      ),
-    "Office controls were not menu-owned or did not default to Floating",
+      !document.querySelector('select[aria-label="Office room alignment"]') &&
+      !document.querySelector('select[aria-label="Office long room titles"]'),
+    "Inspector opening was not menu-owned, did not default to Floating, or Office-only settings remained",
   );
   toggleTopbarMenu();
   await until(
@@ -1356,7 +1330,7 @@ async function run() {
     "close shared navigator Inspector",
   );
   const officeSearch = document.querySelector<HTMLInputElement>(
-    'input[placeholder="Search Office"]',
+    'input[placeholder="Search Town"]',
   )!;
   enterSearch(officeSearch, "Local");
   officeSearch
@@ -1907,18 +1881,14 @@ async function run() {
       }),
     "desktop Inspector placements survived compact menu and shortcut",
   );
-  for (const visualView of ["tree", "graph", "office"] as const) {
+  for (const visualView of ["board", "town"] as const) {
     viewSelect.value = visualView;
     viewSelect.dispatchEvent(new Event("change", { bubbles: true }));
     await until(
       () =>
-        document.querySelector(
-          visualView === "tree"
-            ? ".world-connected-tree-shell"
-            : visualView === "graph"
-              ? ".world-spatial-graph-shell"
-              : "canvas[data-office-canvas='true']",
-        ) &&
+        (visualView === "board"
+          ? document.querySelector(".board")
+          : window.__HERDR_TOWN_RENDERER__?.ready === true) &&
         document.querySelectorAll('[role="dialog"][aria-label$=" Inspector"]')
           .length === 2,
       `arranged Inspector continuity in ${visualView}`,
@@ -2098,12 +2068,12 @@ async function run() {
   await until(
     () =>
       document.querySelector<HTMLSelectElement>(
-        'select[aria-label="Office Inspector opening"]',
+        'select[aria-label="Inspector opening"]',
       ),
     "reopened Office settings",
   );
   const dockedOpeningSelect = document.querySelector<HTMLSelectElement>(
-    'select[aria-label="Office Inspector opening"]',
+    'select[aria-label="Inspector opening"]',
   )!;
   dockedOpeningSelect.value = "docked";
   dockedOpeningSelect.dispatchEvent(new Event("change", { bubbles: true }));
@@ -2871,14 +2841,14 @@ async function run() {
     );
   }
 
-  viewSelect.value = "graph";
+  viewSelect.value = "board";
   viewSelect.dispatchEvent(new Event("change", { bubbles: true }));
   await until(
-    () => document.querySelector(".world-spatial-graph-shell"),
+    () => document.querySelector(".board"),
     "Graph replacement check",
   );
-  await until(() => graphTarget("Builder"), "Builder Graph target");
-  flushSync(() => graphTarget("Builder")!.click());
+  await until(() => boardTarget("Builder"), "Builder Graph target");
+  flushSync(() => boardTarget("Builder")!.click());
   await until(
     () =>
       document
@@ -2901,25 +2871,20 @@ async function run() {
       document.querySelectorAll(".world-intent-connector circle").length === 2,
     "Builder Graph Inspector connector",
   );
-  const graphBuilderNodeId = graphTarget("Builder")!.dataset.graphNodeAnchor!;
-  const graphBuilderPosition =
-    window.__HERDR_GRAPH_RENDERER__!.publishedNodes[graphBuilderNodeId]!;
-  const graphCanvasBounds = document
-    .querySelector<HTMLCanvasElement>("canvas[data-graph-canvas=true]")!
-    .getBoundingClientRect();
-  const graphConnectorSource = document.querySelector<SVGCircleElement>(
+  // Board anchors the line at the card's right edge, halfway down.
+  const boardBuilderCard = boardTarget("Builder")!.getBoundingClientRect();
+  const boardConnectorSource = document.querySelector<SVGCircleElement>(
     ".world-intent-connector circle",
   )!;
   check(
     Math.abs(
-      Number(graphConnectorSource.getAttribute("cx")) -
-        (graphCanvasBounds.left + graphBuilderPosition.screenX),
-    ) <= 2 &&
+      Number(boardConnectorSource.getAttribute("cx")) - boardBuilderCard.right,
+    ) <= 3 &&
       Math.abs(
-        Number(graphConnectorSource.getAttribute("cy")) -
-          (graphCanvasBounds.top + graphBuilderPosition.screenY),
-      ) <= 2,
-    "Graph Inspector connector did not start at the node centre",
+        Number(boardConnectorSource.getAttribute("cy")) -
+          (boardBuilderCard.top + boardBuilderCard.height / 2),
+      ) <= 3,
+    "Board Inspector connector did not start at the card's edge",
   );
   check(
     !document.querySelector('[role="dialog"][aria-label="Reviewer Inspector"]'),
@@ -2948,17 +2913,13 @@ async function run() {
     '[aria-label="Builder Inspector"]',
   )!;
   const treeEntryBounds = retainedBuilder.getBoundingClientRect();
-  viewSelect.value = "tree";
+  viewSelect.value = "town";
   viewSelect.dispatchEvent(new Event("change", { bubbles: true }));
   await until(
     () =>
-      document.querySelector(".world-connected-tree-shell") &&
+      window.__HERDR_TOWN_RENDERER__?.ready === true &&
       document.querySelector('[aria-label="Builder Inspector"]'),
-    "Tree shares the retained Inspector",
-  );
-  check(
-    !document.querySelector(".world-tree-inline-inspector"),
-    "Tree created a second presentation owner",
+    "Town shares the retained Inspector",
   );
   check(
     Math.abs(
@@ -2966,21 +2927,11 @@ async function run() {
     ) < 2,
     "view transition moved the Inspector",
   );
-  const selectTreeNode = (label: string) => {
-    const button = [
-      ...document.querySelectorAll<HTMLButtonElement>(
-        ".world-tree-outline-select, .world-connected-tree-card",
-      ),
-    ].find((candidate) =>
-      candidate.querySelector("strong")?.textContent?.includes(label),
-    );
-    check(Boolean(button), `Tree omitted ${label} selection`);
-    button?.click();
-  };
-  selectTreeNode("Reviewer");
+  await until(() => agentTarget("Reviewer"), "Reviewer Town target");
+  flushSync(() => agentTarget("Reviewer")!.click());
   await until(
     () => document.querySelector('[aria-label="Reviewer Inspector"]'),
-    "Tree opens the second managed Inspector",
+    "Town opens the second managed Inspector",
   );
   await arrangeWindows("Columns");
   const arrangedBuilder = retainedBuilder.getBoundingClientRect();
@@ -3009,22 +2960,19 @@ async function run() {
   laterWindow
     .querySelector<HTMLButtonElement>('[aria-label="Close Inspector window"]')!
     .click();
-  selectTreeNode("Builder");
+  flushSync(() => agentTarget("Builder")!.click());
   await until(
     () =>
       document.querySelector(
         '.world-managed-window.is-active[aria-label="Builder Inspector"]',
       ),
-    "Tree selects retained Builder",
+    "Town selects retained Builder",
   );
-  viewSelect.value = "graph";
+  viewSelect.value = "board";
   viewSelect.dispatchEvent(new Event("change", { bubbles: true }));
-  await until(
-    () => document.querySelector(".world-spatial-graph-shell"),
-    "Graph after Tree",
-  );
-  await until(() => graphTarget("Reviewer"), "Reviewer Graph target");
-  flushSync(() => graphTarget("Reviewer")!.click());
+  await until(() => document.querySelector(".board"), "Graph after Tree");
+  await until(() => boardTarget("Reviewer"), "Reviewer Graph target");
+  flushSync(() => boardTarget("Reviewer")!.click());
   await until(
     () =>
       document
@@ -3220,11 +3168,11 @@ async function run() {
       compactReviewerSlot!.getBoundingClientRect().height > 0,
     "compact Graph hid the World Inspector behind the Spaces session rule",
   );
-  viewSelect.value = "office";
+  viewSelect.value = "town";
   viewSelect.dispatchEvent(new Event("change", { bubbles: true }));
   await until(
     () =>
-      window.__HERDR_WORLD_RENDERER__?.ready === true &&
+      window.__HERDR_TOWN_RENDERER__?.ready === true &&
       document.querySelector(
         ".world-managed-window.is-active .workspace-inspector",
       ) === persistentReviewerInspector,
@@ -3482,11 +3430,11 @@ async function run() {
       ),
     "Spaces handoff did not reuse a live source or attach an absent source exactly once",
   );
-  viewSelect.value = "graph";
+  viewSelect.value = "board";
   viewSelect.dispatchEvent(new Event("change", { bubbles: true }));
   await until(
     () =>
-      document.querySelector(".world-spatial-graph-shell") &&
+      document.querySelector(".board") &&
       document
         .querySelector(
           ".world-managed-window.is-active .workspace-inspector-agent-identity",
@@ -3510,8 +3458,8 @@ async function run() {
     () => document.documentElement.dataset.layout === "desktop",
     "restored desktop layout",
   );
-  await until(() => graphTarget("Reviewer"), "Reviewer before retirement");
-  flushSync(() => graphTarget("Reviewer")!.click());
+  await until(() => boardTarget("Reviewer"), "Reviewer before retirement");
+  flushSync(() => boardTarget("Reviewer")!.click());
   await until(
     () =>
       document
@@ -3624,7 +3572,7 @@ async function run() {
         .get()
         .connections[0]?.snapshot?.panes.some(
           (pane) => pane.pane_id === siblingPane.pane_id,
-        ) && graphTarget("Builder Sibling"),
+        ) && boardTarget("Builder Sibling"),
     "aggregate observation and rendered graph admitted the new sibling",
   );
   siblingObservationGate = null;
@@ -3733,10 +3681,10 @@ async function run() {
     () => document.activeElement === siblingInput,
     "keyboard activated window focused selected sibling",
   );
-  viewSelect.value = "office";
+  viewSelect.value = "town";
   viewSelect.dispatchEvent(new Event("change", { bubbles: true }));
   await until(
-    () => window.__HERDR_WORLD_RENDERER__?.ready === true,
+    () => window.__HERDR_TOWN_RENDERER__?.ready === true,
     "Office split-pane input check",
   );
   splitBuilderWindow.focus();
@@ -3777,10 +3725,10 @@ async function run() {
     ).length === originalInputsBefore,
     "Office sibling input reached original pane",
   );
-  viewSelect.value = "graph";
+  viewSelect.value = "board";
   viewSelect.dispatchEvent(new Event("change", { bubbles: true }));
   await until(
-    () => document.querySelector(".world-spatial-graph-shell"),
+    () => document.querySelector(".board"),
     "Graph after Office split-pane check",
   );
   updateLayoutPreferences({ mode: "mobile" });
@@ -3915,22 +3863,22 @@ async function run() {
         .length === 2,
     "arranged Builder and Reviewer before opening a later Inspector",
   );
-  viewSelect.value = "office";
+  viewSelect.value = "town";
   viewSelect.dispatchEvent(new Event("change", { bubbles: true }));
   await until(
-    () => window.__HERDR_WORLD_RENDERER__?.ready === true,
+    () => window.__HERDR_TOWN_RENDERER__?.ready === true,
     "Office before later Inspector opening",
   );
   toggleTopbarMenu();
   await until(
     () =>
       document.querySelector<HTMLSelectElement>(
-        'select[aria-label="Office Inspector opening"]',
+        'select[aria-label="Inspector opening"]',
       ),
     "Office opening preference before Restore regression",
   );
   const laterOpeningSelect = document.querySelector<HTMLSelectElement>(
-    'select[aria-label="Office Inspector opening"]',
+    'select[aria-label="Inspector opening"]',
   )!;
   laterOpeningSelect.value = "floating";
   laterOpeningSelect.dispatchEvent(new Event("change", { bubbles: true }));
@@ -4283,7 +4231,7 @@ async function run() {
     "Open all changed a Herdr tab, pane, or session",
   );
 
-  viewSelect.value = "office";
+  viewSelect.value = "town";
   viewSelect.dispatchEvent(new Event("change", { bubbles: true }));
   updateLayoutPreferences({ mode: "mobile" });
   await until(
@@ -4298,17 +4246,17 @@ async function run() {
   await until(
     () =>
       document.querySelector<HTMLButtonElement>(
-        'button[aria-label="Back to Office"]',
+        'button[aria-label="Back to Town"]',
       ),
     "mobile Office has a visible return button outside the ellipsis menu",
   );
   const backToOffice = document.querySelector<HTMLButtonElement>(
-    'button[aria-label="Back to Office"]',
+    'button[aria-label="Back to Town"]',
   )!;
   check(
     backToOffice.getBoundingClientRect().width >= 44 &&
       backToOffice.getBoundingClientRect().height >= 44,
-    "Back to Office has a visible touch target while mobile controls are collapsed",
+    "Back to Town has a visible touch target while mobile controls are collapsed",
   );
   const mobileViewBounds = viewSelect.getBoundingClientRect();
   const mobileBackBounds = backToOffice.getBoundingClientRect();
@@ -4319,18 +4267,18 @@ async function run() {
       !document.querySelector(".world-mobile-nav"),
     "mobile Inspector screen shows Back at the left without scene switchers",
   );
-  viewSelect.value = "graph";
+  viewSelect.value = "board";
   viewSelect.dispatchEvent(new Event("change", { bubbles: true }));
   await until(
     () =>
-      document.querySelector('button[aria-label="Back to Graph"]') &&
-      document.querySelector(".world-spatial-graph-shell"),
+      document.querySelector('button[aria-label="Back to Board"]') &&
+      document.querySelector(".board"),
     "mobile view switcher changes scenes while retaining the Back action",
   );
-  viewSelect.value = "office";
+  viewSelect.value = "town";
   viewSelect.dispatchEvent(new Event("change", { bubbles: true }));
   await until(
-    () => document.querySelector('button[aria-label="Back to Office"]'),
+    () => document.querySelector('button[aria-label="Back to Town"]'),
     "mobile view switcher returns to Office before dismissing Inspectors",
   );
   // The on-screen Back returns to the view in one tap even with Composer
@@ -4352,7 +4300,7 @@ async function run() {
   const visiblePaneId = () => visiblePane()?.dataset.paneId;
   await until(
     () => terminalInput(visiblePane() ?? document.createElement("div")),
-    "visible Inspector terminal before Back to Office",
+    "visible Inspector terminal before Back to Town",
   );
   // Select the pane the way a tap does: panes and windows activate on
   // pointerdown, not on focus.
@@ -4379,7 +4327,7 @@ async function run() {
         'button[aria-label="Open terminal input"]',
       ),
     () =>
-      `visible Inspector pane ${visiblePaneId()} active before Back to Office`,
+      `visible Inspector pane ${visiblePaneId()} active before Back to Town`,
   );
   visibleInspector()!
     .querySelector<HTMLButtonElement>(
@@ -4388,26 +4336,26 @@ async function run() {
     .click();
   await until(
     () => !!visibleInspector()?.querySelector(".terminal-composer"),
-    "Composer opens in the visible Inspector before Back to Office",
+    "Composer opens in the visible Inspector before Back to Town",
   );
   backToOffice.click();
   await until(
     () => !document.querySelector(".workspace-inspector"),
-    "Back to Office dismisses all mobile Inspector presentations",
+    "Back to Town dismisses all mobile Inspector presentations",
   );
   check(
-    window.location.pathname === "/office" &&
+    window.location.pathname === "/town" &&
       !!document.querySelector(".world-office-shell"),
-    "Back to Office reveals the Office scene without changing route",
+    "Back to Town reveals the Office scene without changing route",
   );
   check(
     calls.filter(({ method }) =>
       ["tab.close", "pane.close", "terminal.kill"].includes(method),
     ).length === closeRpcBefore,
-    "Back to Office leaves Herdr tabs, panes and sessions running",
+    "Back to Town leaves Herdr tabs, panes and sessions running",
   );
   check(
-    !document.querySelector('button[aria-label="Back to Office"]'),
+    !document.querySelector('button[aria-label="Back to Town"]'),
     "return action disappears when no Inspector is open",
   );
   // The closed terminal leaves no history entry: one system Back leaves
@@ -4419,44 +4367,43 @@ async function run() {
       history.state !== null &&
       "herdrBack" in history.state
     ),
-    "Back to Office left a closed layer's history entry",
+    "Back to Town left a closed layer's history entry",
   );
   history.back();
   await until(
     () =>
-      window.location.pathname === "/graph" &&
-      document.querySelector(".world-spatial-graph-shell"),
-    "system Back after Back to Office reaches Graph in one press",
+      window.location.pathname === "/board" && document.querySelector(".board"),
+    "system Back after Back to Town reaches Graph in one press",
   );
   viewSelect.value = "spaces";
   viewSelect.dispatchEvent(new Event("change", { bubbles: true }));
   await until(
-    () => document.querySelector('button[aria-label="Back to Graph"]'),
-    "mobile Spaces offers Back to Graph",
+    () => document.querySelector('button[aria-label="Back to Board"]'),
+    "mobile Spaces offers Back to Board",
   );
   document
-    .querySelector<HTMLButtonElement>('button[aria-label="Back to Graph"]')!
+    .querySelector<HTMLButtonElement>('button[aria-label="Back to Board"]')!
     .click();
   await until(
-    () => window.location.pathname === "/graph",
-    "Back to Graph leaves Spaces",
+    () => window.location.pathname === "/board",
+    "Back to Board leaves Spaces",
   );
   history.back();
   await until(
-    () => window.location.pathname !== "/graph",
-    "system Back after Back to Graph moves on",
+    () => window.location.pathname !== "/board",
+    "system Back after Back to Board moves on",
   );
   check(
-    window.location.pathname === "/office",
-    `system Back after Back to Graph reached ${window.location.pathname}, not Office`,
+    window.location.pathname === "/town",
+    `system Back after Back to Board reached ${window.location.pathname}, not Office`,
   );
   // Spaces opened directly has no in-app route to return through; its Back
   // still closes an open menu first.
   viewSelect.value = "spaces";
   viewSelect.dispatchEvent(new Event("change", { bubbles: true }));
   await until(
-    () => document.querySelector('button[aria-label="Back to Office"]'),
-    "mobile Spaces offers Back to Office",
+    () => document.querySelector('button[aria-label="Back to Town"]'),
+    "mobile Spaces offers Back to Town",
   );
   history.replaceState({}, "", window.location.href);
   const spacesMore = () =>
@@ -4472,7 +4419,7 @@ async function run() {
   );
   await settle();
   document
-    .querySelector<HTMLButtonElement>('button[aria-label="Back to Office"]')!
+    .querySelector<HTMLButtonElement>('button[aria-label="Back to Town"]')!
     .click();
   await until(
     () => spacesMore()?.getAttribute("aria-expanded") === "false",
@@ -4483,10 +4430,10 @@ async function run() {
     `direct Spaces Back left for ${window.location.pathname} while More was open`,
   );
   document
-    .querySelector<HTMLButtonElement>('button[aria-label="Back to Office"]')!
+    .querySelector<HTMLButtonElement>('button[aria-label="Back to Town"]')!
     .click();
   await until(
-    () => window.location.pathname === "/office",
+    () => window.location.pathname === "/town",
     "direct Spaces Back replaces Spaces with Office",
   );
   updateLayoutPreferences({ mode: "desktop" });
@@ -4552,7 +4499,7 @@ async function run() {
   Object.getOwnPropertyDescriptor(
     HTMLSelectElement.prototype,
     "value",
-  )?.set?.call(officeViewSelect, "office");
+  )?.set?.call(officeViewSelect, "town");
   officeViewSelect?.dispatchEvent(new Event("change", { bubbles: true }));
   await settle();
 

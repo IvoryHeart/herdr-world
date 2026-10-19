@@ -480,7 +480,7 @@ async function run() {
   const rootViewSelect = document.querySelector<HTMLSelectElement>(
     '[aria-label="World view"]',
   )!;
-  rootViewSelect.value = "office";
+  rootViewSelect.value = "town";
   rootViewSelect.dispatchEvent(new Event("change", { bubbles: true }));
   await until(
     () =>
@@ -587,7 +587,7 @@ async function run() {
         .workspace_id === "a",
     "New room used another host or source workspace",
   );
-  for (const name of ["office", "desk", "tree", "graph"]) {
+  for (const name of ["town", "desk", "board"]) {
     view(name);
     await settle();
     const beforeTab = created;
@@ -641,13 +641,13 @@ async function run() {
       viewChangeCount + 1,
     "held creation dispatched before view change",
   );
-  view("tree");
+  view("board");
   await settle();
   heldMutation = null;
   viewGate.resolve();
   await createdInspector(viewChangeCount + 1);
   check(
-    location.pathname === "/tree",
+    location.pathname === "/board",
     "Pending creation lost the current visual view",
   );
   const supersededCount = created;
@@ -699,8 +699,8 @@ async function run() {
   );
   // Completion follows the current view in both directions, for both operations.
   for (const [from, to] of [
-    ["spaces", "office"],
-    ["office", "spaces"],
+    ["spaces", "town"],
+    ["town", "spaces"],
   ] as const) {
     for (const kind of ["tab", "workspace"] as const) {
       view(from);

@@ -8,9 +8,7 @@ import {
   Download,
   ExternalLink,
   Focus,
-  ALargeSmall,
   Activity,
-  LayoutDashboard,
   Keyboard,
   LogOut,
   Palette,
@@ -296,42 +294,18 @@ export function ConfigMenu({
                 )}
               </div>
               <div className="config-section config-section-tiles-3">
-                <div className="config-title">Office and Town</div>
-                <label className="config-preference-row">
-                  <span className="config-item-icon">
-                    <LayoutDashboard size={15} />
-                  </span>
-                  <span className="config-item-copy">
-                    <strong>Room alignment</strong>
-                    <span>Align rooms within each row</span>
-                  </span>
-                  <select
-                    className="config-preference-select"
-                    aria-label="Office room alignment"
-                    value={officePreferences.roomAlignment}
-                    onChange={(event) =>
-                      updateOfficePreferences({
-                        roomAlignment: event.target
-                          .value as OfficePreferences["roomAlignment"],
-                      })
-                    }
-                  >
-                    <option value="left">Left</option>
-                    <option value="center">Centre</option>
-                    <option value="right">Right</option>
-                  </select>
-                </label>
+                <div className="config-title">Views</div>
                 <label className="config-preference-row">
                   <span className="config-item-icon">
                     <Focus size={15} />
                   </span>
                   <span className="config-item-copy">
                     <strong>Inspector opening</strong>
-                    <span>Default for newly opened Office entities</span>
+                    <span>How a newly opened entity's Inspector appears</span>
                   </span>
                   <select
                     className="config-preference-select"
-                    aria-label="Office Inspector opening"
+                    aria-label="Inspector opening"
                     value={officePreferences.inspectorPresentation}
                     onChange={(event) =>
                       updateOfficePreferences({
@@ -342,29 +316,6 @@ export function ConfigMenu({
                   >
                     <option value="floating">Floating</option>
                     <option value="docked">Snap right</option>
-                  </select>
-                </label>
-                <label className="config-preference-row">
-                  <span className="config-item-icon">
-                    <ALargeSmall size={15} />
-                  </span>
-                  <span className="config-item-copy">
-                    <strong>Long room titles</strong>
-                    <span>Expand the room or shorten its label</span>
-                  </span>
-                  <select
-                    className="config-preference-select"
-                    aria-label="Office long room titles"
-                    value={officePreferences.longTitleMode}
-                    onChange={(event) =>
-                      updateOfficePreferences({
-                        longTitleMode: event.target
-                          .value as OfficePreferences["longTitleMode"],
-                      })
-                    }
-                  >
-                    <option value="expand">Expand room</option>
-                    <option value="compact">Ellipsis</option>
                   </select>
                 </label>
                 <div className="config-preference-row">

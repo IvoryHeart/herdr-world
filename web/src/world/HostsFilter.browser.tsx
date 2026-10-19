@@ -64,7 +64,7 @@ const downloadRequests: string[] = [];
 const operation =
   new URLSearchParams(location.search).get("operation") ?? "filters";
 const requestedView =
-  new URLSearchParams(location.search).get("view") ?? "tree";
+  new URLSearchParams(location.search).get("view") ?? "board";
 const coldHost =
   operation === "cold-host" ||
   operation === "navigator" ||
@@ -298,7 +298,7 @@ function anchors() {
   );
 }
 function visibleHost(id: string) {
-  return requestedView === "tree"
+  return requestedView === "board"
     ? anchors().has(worldObjectId(id, "host", id))
     : [
         ...document.querySelectorAll<HTMLElement>(
@@ -375,7 +375,7 @@ async function invokeCommand(key: string) {
   await frame();
 }
 function leaf(id: string) {
-  if (requestedView !== "tree")
+  if (requestedView !== "board")
     return document.querySelector<HTMLElement>(
       `[data-world-navigator-host="${id}"] .agent-row[data-pane-id="shared"]`,
     );
@@ -390,7 +390,7 @@ function leaf(id: string) {
 async function float(id: string) {
   const target = leaf(id);
   if (!target) throw new Error(`Missing admitted ${id} target`);
-  if (requestedView === "tree")
+  if (requestedView === "board")
     target.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
   else {
     target.click();
@@ -674,17 +674,14 @@ async function operationalScenario(unmount: () => void) {
     const room = () =>
       [
         ...document.querySelectorAll<HTMLButtonElement>(
-          requestedView === "office"
+          requestedView === "town"
             ? '.world-semantic-target[data-kind="room"]'
-            : requestedView === "graph"
-              ? "[data-graph-node-anchor]"
-              : "[data-world-node-anchor]",
+            : "[data-world-node-anchor]",
         ),
       ].find(
         (element) =>
-          (element.dataset.targetKey ??
-            element.dataset.graphNodeAnchor ??
-            element.dataset.worldNodeAnchor) === spaceId,
+          (element.dataset.targetKey ?? element.dataset.worldNodeAnchor) ===
+          spaceId,
       );
     const filesVisible = () =>
       [
@@ -2055,7 +2052,7 @@ async function run() {
   localStorage.clear();
   // The legacy operational preference must not become an overview filter.
   worldLocalStorage.setItem("worldSelectedConnection", "beta");
-  history.replaceState(null, "", "/tree");
+  history.replaceState(null, "", "/board");
   initializeLayoutPreferences();
   if (
     operation === "file-delete-retirement" ||
@@ -2540,9 +2537,8 @@ async function run() {
       return;
     }
     await waitFor(
-      () =>
-        !!document.querySelector('[aria-label="Connected World hierarchy"]'),
-      "Tree did not mount",
+      () => !!document.querySelector('[aria-label="Board controls"]'),
+      "Board did not mount",
     );
     await frame();
     if (operation === "filters") {
@@ -2578,14 +2574,14 @@ async function run() {
         app.removeAttribute("data-mobile-controls-compact");
       }
     }
-    if (requestedView !== "tree") {
+    if (requestedView !== "board") {
       const view = document.querySelector<HTMLSelectElement>(
         'select[aria-label="World view"]',
       )!;
       view.value = requestedView;
       view.dispatchEvent(new Event("change", { bubbles: true }));
       if (requestedView !== "spaces") {
-        const title = requestedView === "office" ? "Office" : "Graph";
+        const title = "Town";
         await waitFor(
           () => !!document.querySelector(`[aria-label="${title} controls"]`),
           `${title} did not mount`,
@@ -2798,7 +2794,7 @@ async function run() {
     });
     await worldRuntimeStore.refresh();
     const needle = worldObjectId("beta", "terminal", "shared-19");
-    for (const view of ["tree", "graph", "office"]) {
+    for (const view of ["board", "town"]) {
       const viewSelect = document.querySelector<HTMLSelectElement>(
         'select[aria-label="World view"]',
       )!;
@@ -2863,32 +2859,30 @@ async function run() {
           focusedBefore,
         `${title} did not select the qualified search result`,
       );
-      if (view !== "office")
+      if (view !== "town")
         await waitFor(
           () =>
             [
               ...document.querySelectorAll<HTMLElement>(
-                "[data-world-node-anchor], [data-graph-node-anchor]",
+                "[data-world-node-anchor]",
               ),
             ].some(
               (element) =>
-                (element.dataset.worldNodeAnchor ??
-                  element.dataset.graphNodeAnchor) === needle &&
+                element.dataset.worldNodeAnchor === needle &&
                 element.getAttribute("aria-pressed") === "true",
             ),
           `${title} did not reveal selected result`,
         );
       await frame();
-      if (view !== "office")
+      if (view !== "town")
         check(
           [
             ...document.querySelectorAll<HTMLElement>(
-              "[data-world-node-anchor], [data-graph-node-anchor]",
+              "[data-world-node-anchor]",
             ),
           ].some(
             (element) =>
-              (element.dataset.worldNodeAnchor ??
-                element.dataset.graphNodeAnchor) === needle &&
+              element.dataset.worldNodeAnchor === needle &&
               element.getAttribute("aria-pressed") === "true",
           ),
           `${title} selected omitted result was not revealed`,
@@ -2923,32 +2917,30 @@ async function run() {
           `${title} paging lost the later qualified match with colliding labels`,
         );
       laterResult.click();
-      if (view !== "office")
+      if (view !== "town")
         await waitFor(
           () =>
             [
               ...document.querySelectorAll<HTMLElement>(
-                "[data-world-node-anchor], [data-graph-node-anchor]",
+                "[data-world-node-anchor]",
               ),
             ].some(
               (element) =>
-                (element.dataset.worldNodeAnchor ??
-                  element.dataset.graphNodeAnchor) === later &&
+                element.dataset.worldNodeAnchor === later &&
                 element.getAttribute("aria-pressed") === "true",
             ),
           `${title} did not reveal paged result`,
         );
       await frame();
-      if (view !== "office")
+      if (view !== "town")
         check(
           [
             ...document.querySelectorAll<HTMLElement>(
-              "[data-world-node-anchor], [data-graph-node-anchor]",
+              "[data-world-node-anchor]",
             ),
           ].some(
             (element) =>
-              (element.dataset.worldNodeAnchor ??
-                element.dataset.graphNodeAnchor) === later &&
+              element.dataset.worldNodeAnchor === later &&
               element.getAttribute("aria-pressed") === "true",
           ),
           `${title} did not reveal the later paged match`,
@@ -2957,11 +2949,11 @@ async function run() {
     const viewSelect = document.querySelector<HTMLSelectElement>(
       'select[aria-label="World view"]',
     )!;
-    viewSelect.value = "tree";
+    viewSelect.value = "board";
     viewSelect.dispatchEvent(new Event("change", { bubbles: true }));
     await waitFor(
-      () => !!document.querySelector('[aria-label="Tree controls"]'),
-      "Tree did not return",
+      () => !!document.querySelector('[aria-label="Board controls"]'),
+      "Board did not return",
     );
     flushSync(() => root.unmount());
     const restoredState = store.get();

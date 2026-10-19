@@ -54,6 +54,7 @@ import {
   worldViewFromPath,
   worldPathNeedsCanonical,
   initialView,
+  parseWorldView,
 } from "./worldViewRouting";
 import {
   dispatchWorldInspectorRequest,
@@ -399,7 +400,9 @@ export default function WorldFoundationApp() {
                 <select
                   aria-label="World view"
                   value={view}
-                  onChange={(event) => setView(event.target.value as WorldView)}
+                  onChange={(event) =>
+                    setView(parseWorldView(event.target.value))
+                  }
                 >
                   {WORLD_VIEWS.map((candidate) => (
                     <option key={candidate} value={candidate}>

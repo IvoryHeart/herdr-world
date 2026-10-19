@@ -15,9 +15,7 @@ import {
   useStore,
 } from "../store";
 import type { Pane, Tab, Workspace } from "../types";
-import ConnectedTreeView from "./ConnectedTreeView";
-import SpatialGraphView from "./SpatialGraphView";
-import PixelOfficeView from "./PixelOfficeView";
+import BoardView from "./BoardView";
 import TownView from "./TownView";
 import { WorldRuntimeStore } from "./runtimeStore";
 import { buildWorldObject, type WorldObject } from "./worldObject";
@@ -299,12 +297,12 @@ Application.prototype.render = function () {
   const began = performance.now();
   if (traceEnabled)
     performance.mark("acceptance-office-paint-start", {
-      detail: { at: Date.now(), ready: window.__HERDR_WORLD_RENDERER__?.ready },
+      detail: { at: Date.now(), ready: window.__HERDR_TOWN_RENDERER__?.ready },
     });
   const result = applicationRender.call(this);
   if (traceEnabled)
     performance.mark("acceptance-office-paint-end", {
-      detail: { at: Date.now(), ready: window.__HERDR_WORLD_RENDERER__?.ready },
+      detail: { at: Date.now(), ready: window.__HERDR_TOWN_RENDERER__?.ready },
     });
   if (phase)
     phases["paint-" + phase] = Math.max(
@@ -640,25 +638,9 @@ async function run() {
       }
       const selectedId = world.leaves[0]?.id ?? null;
       let anchored = false;
-      if (view === "tree")
+      if (view === "board")
         root.render(
-          <ConnectedTreeView
-            world={world}
-            selectedId={selectedId}
-            conversationNodeIds={[]}
-            inlineInspectorNodeId={null}
-            onSelect={() => {}}
-            onOpenTerminal={async () => {}}
-            onSelectedAnchorChange={(anchor) => {
-              anchored = !!anchor;
-            }}
-            onNodeAnchorsChange={() => {}}
-            onInlineInspectorPortalChange={() => {}}
-          />,
-        );
-      if (view === "graph")
-        root.render(
-          <SpatialGraphView
+          <BoardView
             world={world}
             selectedId={selectedId}
             conversationNodeIds={selectedId ? [selectedId] : []}
@@ -668,20 +650,6 @@ async function run() {
               anchored = !!anchor;
             }}
             onNodeAnchorsChange={() => {}}
-          />,
-        );
-      if (view === "office")
-        root.render(
-          <PixelOfficeView
-            world={world}
-            selectedId={selectedId}
-            floatingTerminals={selectedId ? [{ nodeId: selectedId }] : []}
-            onSelect={async () => true}
-            onOpenTerminal={async () => {}}
-            onSelectedAnchorChange={(anchor) => {
-              anchored = !!anchor;
-            }}
-            onConversationNodeAnchorsChange={() => {}}
           />,
         );
       if (view === "town")
@@ -699,15 +667,12 @@ async function run() {
           />,
         );
       await frames(4);
-      if (view === "tree")
+      if (view === "board")
         await waitFor(
-          () =>
-            !!scene.querySelector(
-              '.world-connected-tree-shell[aria-busy="false"]',
-            ),
-          "Tree did not finish progressive mount",
+          () => !!scene.querySelector(".board-card"),
+          "Board did not render its cards",
         );
-      if (view === "office" || view === "town")
+      if (view === "town")
         await waitFor(
           () =>
             !!scene.querySelector(
@@ -715,32 +680,24 @@ async function run() {
             ),
           `${view} did not finish progressive controls`,
         );
-      if (view === "graph")
-        await waitFor(
-          () =>
-            !!scene.querySelector(
-              '.world-spatial-graph-shell[aria-busy="false"]',
-            ),
-          "Graph did not finish progressive mount",
-        );
       // Keep input and real pushes running throughout layout, canvas paints and
-      // a bounded graph simulation window, rather than stopping at first DOM.
+      // a bounded settling window, rather than stopping at first DOM.
       await new Promise((resolve) => setTimeout(resolve, 1000));
       await frames(4);
-      if (view === "office") {
-        const renderer = window.__HERDR_WORLD_RENDERER__;
+      if (view === "town") {
+        const renderer = window.__HERDR_TOWN_RENDERER__;
         if (new URL(location.href).searchParams.get("entry") === "animated") {
           check(
             (renderer?.frames ?? 0) > 0 || renderer?.interactionPaused === true,
-            "Working Office never animated during native typing",
+            "Working Town never animated during native typing",
           );
           check(
             (renderer?.animation.characters ?? 0) > 0,
-            "Working Office lost its animated characters",
+            "Working Town lost its animated characters",
           );
         }
-        phases["office-frames-" + stage] = renderer?.frames ?? 0;
-        phases["office-animated-nodes-" + stage] = renderer
+        phases["town-frames-" + stage] = renderer?.frames ?? 0;
+        phases["town-animated-nodes-" + stage] = renderer
           ? Object.values(renderer.animation).reduce(
               (sum, count) => sum + count,
               0,
@@ -759,15 +716,11 @@ async function run() {
       );
       phase = null;
       if (
-        (view === "office" &&
-          new URL(location.href).searchParams.get("entry") === "animated") ||
-        (view === "graph" && scene.querySelector("canvas[data-graph-canvas]"))
+        view === "town" &&
+        new URL(location.href).searchParams.get("entry") === "animated"
       ) {
         const renderedFrames = () =>
-          (view === "office"
-            ? window.__HERDR_WORLD_RENDERER__
-            : window.__HERDR_GRAPH_RENDERER__
-          )?.frames ?? 0;
+          window.__HERDR_TOWN_RENDERER__?.frames ?? 0;
         const beforeResume = renderedFrames();
         // Observe an actual resumed frame: a fixed number of browser rAFs can
         // precede Pixi's timer/rAF pair on a busy renderer. This wait starts only
