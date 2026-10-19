@@ -1032,7 +1032,11 @@ export default function BoardView({
     for (const [key, el] of cardEls.current) {
       const card = cards.current.get(key);
       if (card)
-        el.style.transform = `translate(${card.x}px, ${card.y}px) translate(-50%, -50%)`;
+        setStyle(
+          el,
+          "transform",
+          `translate(${card.x}px, ${card.y}px) translate(-50%, -50%)`,
+        );
     }
     const used = new Set<string>();
     if (!farRef.current)
@@ -1050,7 +1054,8 @@ export default function BoardView({
           paths.current.set(tab.key, path);
         }
         const my = (a.y + b.y) / 2;
-        path.setAttribute(
+        setAttr(
+          path,
           "d",
           `M${a.x},${a.y} C${a.x},${my} ${b.x},${my} ${b.x},${b.y}`,
         );
@@ -1091,9 +1096,13 @@ export default function BoardView({
       zone.hidden = x0 === Infinity;
       if (zone.hidden) continue;
       const pad = farRef.current ? 70 : 46;
-      zone.style.transform = `translate(${x0 - pad}px, ${y0 - pad - 10}px)`;
-      zone.style.width = `${x1 - x0 + pad * 2}px`;
-      zone.style.height = `${y1 - y0 + pad * 2 + 10}px`;
+      setStyle(
+        zone,
+        "transform",
+        `translate(${x0 - pad}px, ${y0 - pad - 10}px)`,
+      );
+      setStyle(zone, "width", `${x1 - x0 + pad * 2}px`);
+      setStyle(zone, "height", `${y1 - y0 + pad * 2 + 10}px`);
     }
   }
 
@@ -1197,8 +1206,8 @@ export default function BoardView({
         "class",
         `board-yarn${loose ? " board-yarn-loose" : ""}${latest.current.picked === string.id ? " board-yarn-picked" : ""}`,
       );
-      pair[0]!.setAttribute("d", curve.d);
-      pair[1]!.setAttribute("d", curve.d);
+      setAttr(pair[0]!, "d", curve.d);
+      setAttr(pair[1]!, "d", curve.d);
       if (latest.current.picked === string.id) cutAt = curve.mid;
     }
     for (const [id, pair] of yarnEls.current)
@@ -3508,6 +3517,30 @@ function workspaceCounts(space: BoardWorkspace) {
   return parts.join(" · ");
 }
 const NO_IDS: readonly string[] = [];
+/**
+ * The values paint last wrote, per element. A frame rewrites only what
+ * changed: rewriting every card's transform and every line's path on each
+ * frame made the browser restyle and repaint the whole board (hundreds of
+ * cards at a large World's scale) for every topology update.
+ */
+const written = new WeakMap<Element, Map<string, string>>();
+function changed(el: Element, name: string, value: string) {
+  let values = written.get(el);
+  if (!values) written.set(el, (values = new Map()));
+  if (values.get(name) === value) return false;
+  values.set(name, value);
+  return true;
+}
+function setStyle(
+  el: HTMLElement,
+  name: "transform" | "width" | "height",
+  value: string,
+) {
+  if (changed(el, `style:${name}`, value)) el.style[name] = value;
+}
+function setAttr(el: Element, name: string, value: string) {
+  if (changed(el, name, value)) el.setAttribute(name, value);
+}
 /** A saved layout, comparable regardless of key order or float noise. */
 function layoutSignature(layout: {
   anchors: Record<string, Point>;

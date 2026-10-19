@@ -130,7 +130,6 @@
   background: var(--board-card);
   box-shadow: var(--board-shadow);
   cursor: pointer;
-  will-change: transform;
   transition:
     opacity 0.25s,
     box-shadow 0.18s,
@@ -1249,4 +1248,11 @@
 }
 .board-unsaved-error {
   color: var(--s-blocked);
+}
+
+/* Only the card in the hand gets its own compositing layer. A layer per card
+   (will-change on every card) cost thousands of layers to commit each frame
+   at a large World's scale; the camera moves the whole board as one layer. */
+.board-card.board-lifted {
+  will-change: transform;
 }
