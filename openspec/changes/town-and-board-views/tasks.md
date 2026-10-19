@@ -1,16 +1,16 @@
 ## 1. Retire Graph, Tree and Office (Part A)
 
-- [ ] 1.1 Move the line-anchor types (`OfficeCanvasAnchor`, `OfficeCanvasAnchors`, `OfficeConversationAnchors`, `OfficeConversationAnchorTarget`) from `PixelOfficeCanvas.tsx` to `worldConnectorGeometry.ts` as `World*` names, and update every importer; typecheck.
-- [ ] 1.2 Remove Graph, Tree and Office from `worldViewRouting`, the view switcher, phone navigation and keyboard view shortcuts, and map `/office` to Town and `/graph` and `/tree` to Board (replacing the history entry), along with saved view values; test the routing.
-- [ ] 1.3 Delete the retired views and the modules only they reach (the 36 files the import analysis lists), their unit and browser tests and their browser shard entries; typecheck, lint and run the Town, Board, Desk and Spaces suites.
-- [ ] 1.4 Settings: keep Inspector presentation and Town calm motion; remove room alignment, long-title and Office scroll settings and their menu items; keep the `officePreferences:v1` key so surviving choices stay; test the reads of older saved values.
+- [x] 1.1 Move the line-anchor types (`OfficeCanvasAnchor`, `OfficeCanvasAnchors`, `OfficeConversationAnchors`, `OfficeConversationAnchorTarget`) from `PixelOfficeCanvas.tsx` to `worldConnectorGeometry.ts` as `World*` names, and update every importer; typecheck.
+- [x] 1.2 Remove Graph, Tree and Office from `worldViewRouting`, the view switcher, phone navigation and keyboard view shortcuts, and map `/office` to Town and `/graph` and `/tree` to Board (replacing the history entry), along with saved view values; test the routing.
+- [x] 1.3 Delete the retired views and the modules only they reach (the 36 files the import analysis lists), their unit and browser tests and their browser shard entries; typecheck, lint and run the Town, Board, Desk and Spaces suites.
+- [x] 1.4 Settings: keep Inspector presentation and Town calm motion; remove room alignment, long-title and Office scroll settings and their menu items; keep the `officePreferences:v1` key so surviving choices stay; test the reads of older saved values.
 - [ ] 1.5 Move `verification/coverage.json` areas that name retired code (renderer lifetime, layout tests) to their Town or Board owners, with no-contract-impact notes; run `verification:gate`.
 - [ ] 1.6 Update docs: the tutorial (remove the Office, Graph and Tree exercises; point to Town and Board), FEATURES, README, site screenshots and content tests, and the knowledge map. Add a CHANGELOG Removed entry naming the replacements; run `build:site`.
 - [ ] 1.7 Lower the web asset budget to the new total with headroom.
 
 ## 2. Spec
 
-- [ ] 2.1 Complete the MODIFIED deltas for every shared World surfaces requirement that lists Office, Tree or Graph (shared presentation, Actions, bounded composition, detail drawer, Town within the shell, Board view, creation, search), so the archived spec names only Town, Board, Desk and Spaces.
+- [x] 2.1 Complete the MODIFIED deltas for every shared World surfaces requirement that lists Office, Tree or Graph (shared presentation, Actions, bounded composition, detail drawer, Town within the shell, Board view, creation, search), so the archived spec names only Town, Board, Desk and Spaces. Requirements whose scenarios named a retired view are restated under new names (REMOVED plus ADDED), because a MODIFIED block cannot drop scenarios.
 
 ## 3. One interaction core (Part B)
 
