@@ -1367,7 +1367,27 @@ async function run() {
       x: tabAfter.x - tabBefore.x,
       y: tabAfter.y - tabBefore.y,
     };
-    check(Math.hypot(tabMoved.x, tabMoved.y) > 20, "tidy moved the strung tab");
+    check(
+      Math.hypot(tabMoved.x, tabMoved.y) > 20,
+      `tidy moved the strung tab (${JSON.stringify({
+        tabKey,
+        wsKey,
+        tabStart,
+        tabBefore,
+        tabAfter,
+        wsBefore,
+        wsAfter: at(wsKey),
+        far: boardEl().classList.contains("board-far"),
+        width: innerWidth,
+        saved: {
+          ws: saved.layout.offsets[wsKey],
+          tab: saved.layout.offsets[tabKey],
+          pinnedTab: saved.layout.pinned[tabKey],
+          pinnedWs: saved.layout.pinned[wsKey],
+        },
+        toast: host.querySelector(".board-toast")?.textContent ?? null,
+      })})`,
+    );
     check(
       Math.abs(noteAfter.x - noteBefore.x - tabMoved.x) < 3 &&
         Math.abs(noteAfter.y - noteBefore.y - tabMoved.y) < 3,
