@@ -1806,9 +1806,9 @@ async function operationalScenario(unmount: () => void) {
         "Out-of-filter notification has no explicit reveal action",
       );
     reveal.click();
-    await frame();
-    check(
-      visibleHost("beta"),
+    // Board renders topology changes at low priority, a few frames later.
+    await waitFor(
+      () => visibleHost("beta"),
       "Explicit reveal did not expand the filter to the qualified host",
     );
     return;
