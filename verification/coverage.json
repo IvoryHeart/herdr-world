@@ -1588,22 +1588,38 @@
       "existingTests": [
         "web/src/world/ProductionContexts.test.ts",
         "web/src/world/officeLayout.test.ts",
-        "scripts/pages-content.test.ts"
+        "scripts/pages-content.test.ts",
+        "web/src/world/board/boardPlacement.test.ts",
+        "web/src/world/board/boardGesture.test.ts",
+        "web/src/world/board/boardAnchors.test.ts",
+        "web/src/world/board/boardDrafts.test.ts",
+        "server/src/world/board-store.test.ts",
+        "server/src/world/board-send.test.ts",
+        "server/src/world/board-start.test.ts",
+        "web/src/world/BoardView.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/186",
       "technique": "alternative",
       "assessment": "actual rendering/search/counts/site and performance evidence; observation/authority modeled elsewhere",
       "status": "alternative-evidence",
-      "remaining": "Pixel/layout/performance/device outcomes require real rendering and supported browser/site checks; no model of every device or accessibility event schedule.",
+      "remaining": "Pixel/layout/performance/device outcomes require real rendering and supported browser/site checks; no model of every device or accessibility event schedule. Board: live Herdr restart and ID reuse are checked in throwaway sessions only; cross-tab storage interleaving relies on per-draft keys, not an executed schedule.",
       "requiredChecks": ["bun run check", "bun run verification:gate"],
-      "evidenceDecision": "Actual production-context/browser/layout and generated site-content tests exercise rendering, search projection and published content.",
+      "evidenceDecision": "Actual production-context/browser/layout and generated site-content tests exercise rendering, search projection and published content. Board (PR #215): placement, the gesture state machine, the board store, anchors and move-following are checked directly. Pure-function unit tests cover every anchor state, empty and partial witnesses, desk, pane and rolled-back move outcomes, conditional detach and kept-draft storage across tabs. Service tests cover Send revalidation against the saved board and start identity. Browser races at 1440 and 390 px cover late absence replies, two-client layout and draft conflicts. A model would restate these small pure rules, while real Herdr restart and ID reuse behaviour was verified only in throwaway sessions.",
       "partialEvidence": {
         "models": [],
         "contracts": ["verification/consumer-evidence.md"],
         "tests": [
           "web/src/world/ProductionContexts.test.ts",
           "web/src/world/officeLayout.test.ts",
-          "scripts/pages-content.test.ts"
+          "scripts/pages-content.test.ts",
+          "web/src/world/board/boardPlacement.test.ts",
+          "web/src/world/board/boardGesture.test.ts",
+          "web/src/world/board/boardAnchors.test.ts",
+          "web/src/world/board/boardDrafts.test.ts",
+          "server/src/world/board-store.test.ts",
+          "server/src/world/board-send.test.ts",
+          "server/src/world/board-start.test.ts",
+          "web/src/world/BoardView.test.ts"
         ],
         "checks": ["bun run check"],
         "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
