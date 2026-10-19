@@ -2828,6 +2828,13 @@ export default function BoardView({
                     ? "This note was deleted on another device before your edit was saved:"
                     : "This note changed on another device, so your edit was not saved:"}{" "}
                   <q>{draft.text}</q>
+                  {keptDraftStore.isStored(draft.key) ? null : (
+                    <small className="board-unsaved-error">
+                      {" "}
+                      This browser could not store it, so it is lost if you
+                      reload or close this tab: save it now or copy the text.
+                    </small>
+                  )}
                   {draft.error ? (
                     <small className="board-unsaved-error">
                       {" "}

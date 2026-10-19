@@ -107,6 +107,8 @@ export function createDraftStore(storage: DraftStorage | null) {
   return {
     list: () => snapshot,
     isSaving: (key: string) => saving.has(key),
+    /** False while a draft lives only in this tab's memory (lost on reload). */
+    isStored: (key: string) => Boolean(storage) && !pending.has(key),
     subscribe(listener: () => void) {
       listeners.add(listener);
       return () => listeners.delete(listener);

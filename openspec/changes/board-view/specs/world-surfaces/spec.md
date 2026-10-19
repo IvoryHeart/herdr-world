@@ -196,7 +196,8 @@ overwrite newer content; a note being edited SHALL keep its draft and the
 revision editing started from, and a draft that cannot be saved (the note
 changed or was deleted elsewhere) SHALL stay available, across view switches and
 reloads in that browser, until the user saves it over the note, saves it as a
-new note, or discards it. Authenticated World clients of the service MAY receive board content;
+new note, or discards it. When the browser cannot store it, Board SHALL say the
+draft lasts only in that tab. Authenticated World clients of the service MAY receive board content;
 note text SHALL go to Herdr or an agent only on the user's explicit Send.
 
 Strings SHALL be anchored to the connection profile and the Herdr workspace,

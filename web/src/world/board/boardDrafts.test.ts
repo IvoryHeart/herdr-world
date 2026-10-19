@@ -108,6 +108,20 @@ describe("Board kept drafts", () => {
     });
     store.keep(draft("a", "n1"));
     expect(keys(store)).toEqual(["a"]);
+    // The panel can tell the user it would not survive a reload.
+    expect(store.isStored("a")).toBe(false);
+  });
+
+  test("a draft says whether it is stored, and becomes stored once storage accepts it", () => {
+    const { storage, state } = sharedStorage();
+    const store = createDraftStore(storage);
+    state.full = true;
+    store.keep(draft("a", "n1"));
+    expect(store.isStored("a")).toBe(false);
+    state.full = false;
+    store.refresh();
+    expect(store.isStored("a")).toBe(true);
+    expect(keys(createDraftStore(storage))).toEqual(["a"]);
   });
 
   test("one draft per note: a newer draft for the same note replaces the older", () => {
