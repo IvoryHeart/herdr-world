@@ -121,9 +121,17 @@ function overlaps(a: TextRange, b: TextRange) {
   return a.start < b.end && a.end > b.start;
 }
 
-export type TerminalTouchLink =
+export type TerminalTouchLink = (
   | { kind: "url"; value: string }
-  | { kind: "file"; value: string };
+  | { kind: "file"; value: string }
+) & {
+  /**
+   * For a link found in the row's text: whether that text is still displayed.
+   * Such a link stays valid across repaints of other rows (an agent's
+   * spinner, say); a link Herdr identified is valid only for its frame.
+   */
+  displayed?: () => boolean;
+};
 
 export type TerminalResolvedLink = {
   /** Untrusted OSC8 target from the displayed cell, never its visible label. */
@@ -222,7 +230,11 @@ export function registerTerminalLinkProvider(
           range,
           hover: textHover,
           text: match.url,
-          target: { kind: "url", value: match.url },
+          target: {
+            kind: "url",
+            value: match.url,
+            displayed: isStillDisplayed,
+          },
           activate(event, raw) {
             event.preventDefault();
             if (!isStillDisplayed() || !terminalLinkModifierMatches(event))
@@ -320,7 +332,7 @@ export function registerTerminalLinkProvider(
           range: rangeFor(candidate)!,
           hover: textHover,
           text: candidate.path,
-          target: { kind: "file", value: path },
+          target: { kind: "file", value: path, displayed: isStillDisplayed },
           activate(event) {
             event.preventDefault();
             if (isStillDisplayed() && terminalLinkModifierMatches(event)) {
@@ -377,6 +389,21 @@ export function registerTerminalLinkProvider(
         else completeUrlColumns.add(col);
       }
       if (touch) {
+        // A complete visible URL under the finger needs no endpoint answer,
+        // so a repaint while waiting for one cannot withdraw it.
+        const local = links.find(
+          (link) =>
+            link.target.kind === "url" &&
+            link.range.start.y === bufferLineNumber &&
+            link.range.end.y === bufferLineNumber &&
+            completeUrlColumns.has(link.range.start.x - 1) &&
+            link.range.start.x <= touch.col + 1 &&
+            link.range.end.x >= touch.col + 1,
+        );
+        if (local) {
+          callback(textCurrent() ? [local] : undefined);
+          return;
+        }
         columns.clear();
         columns.add(touch.col);
       }
@@ -416,10 +443,19 @@ export function registerTerminalLinkProvider(
               const uri = link.uri ?? "";
               const path = terminalFileUriPath(uri);
               const url = sanitizeTerminalHttpUrl(uri);
+              // A URL shown as itself stays valid while its row shows the same
+              // text, like a URL found in the text; any other link Herdr names
+              // (a labelled OSC 8 link, a file) is valid only for its frame.
               const target: TerminalTouchLink | null = path
                 ? { kind: "file", value: path }
                 : url && url === uri
-                  ? { kind: "url", value: url }
+                  ? {
+                      kind: "url",
+                      value: url,
+                      ...(text.includes(url)
+                        ? { displayed: isStillDisplayed }
+                        : {}),
+                    }
                   : null;
               callback(
                 target
@@ -475,7 +511,15 @@ export function registerTerminalLinkProvider(
           const last = link.regions[link.regions.length - 1]!;
           accepted.push({
             text: link.url,
-            target: { kind: "url", value: link.url },
+            // Shown as itself, it stays valid while the row shows the same
+            // text (see the touch branch above).
+            target: {
+              kind: "url",
+              value: link.url,
+              ...(text.includes(link.url)
+                ? { displayed: isStillDisplayed }
+                : {}),
+            },
             hover,
             range: {
               start: {

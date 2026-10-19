@@ -50,6 +50,9 @@ are optional because the merged PR history records their source.
 
 - Board stays responsive on a large World: at 64 hosts and about 1,500 tabs,
   typed input had waited up to 20 seconds behind Board's rendering.
+- On a phone, long-pressing a link in a terminal offers **Open link** again
+  while an agent keeps repainting (its spinner withdrew it before it appeared),
+  and in Town, whose terminals open with the Composer up and refused selection.
 - Board's Send goes only to the agent the note was strung to. If another agent
   now holds the pane, even in the same terminal, nothing is sent: Board names it
   and sends to it only when you choose to. A change during sending is reported

@@ -437,6 +437,8 @@ export function TerminalView({
     null,
   );
   const touchLinkIntentRef = useRef(0);
+  /** The touch link offered or being resolved, checked when a frame arrives. */
+  const touchLinkRef = useRef<{ keep: () => boolean } | null>(null);
   const linkRevisionRef = useRef(0);
   const linkReadyRef = useRef(false);
   const [terminalLoading, setTerminalLoading] = useState(
@@ -994,6 +996,7 @@ export function TerminalView({
     let terminalEffectDisposed = false;
     const retireTouchLink = () => {
       touchLinkIntentRef.current++;
+      touchLinkRef.current = null;
       setTouchLink(null);
     };
     let latestLinkFrame: string | undefined;
@@ -1105,9 +1108,14 @@ export function TerminalView({
         }
       });
     });
-    const invalidateLinks = (redraw = true) => {
-      retireTouchLink();
+    const invalidateLinks = (redraw = true, frame = false) => {
       linkRevisionRef.current++;
+      // A new frame keeps a touch link (or one being resolved) that is still
+      // what the screen shows: agents repaint their spinners several times a
+      // second, which would otherwise withdraw Open link before it appears.
+      // Input, resizes, scrolling and retirement always withdraw it.
+      if (!frame || (touchLinkRef.current && !touchLinkRef.current.keep()))
+        retireTouchLink();
       // Missing native link identity still retires every action token. An
       // identical self-contained surface needs no DOM repaint unless a visible
       // link decoration must be invalidated.
@@ -1153,6 +1161,12 @@ export function TerminalView({
     termRef.current = term;
     setTermInstance(term);
     fitRef.current = fit;
+    // A frame is checked when it arrives, before xterm has written it; once
+    // written, a touch link whose row now shows other text is withdrawn.
+    term.onWriteParsed(() => {
+      if (touchLinkRef.current && !touchLinkRef.current.keep())
+        retireTouchLink();
+    });
     const linkProvider = registerTerminalLinkProvider(
       term,
       showFileLinkMenu,
@@ -1215,6 +1229,14 @@ export function TerminalView({
       connectionClient.isCurrent() &&
       !composerEditingRef.current &&
       !touchSelectionRef.current?.active &&
+      desiredTerminalRef.current === paneTerminalIdRef.current &&
+      store.get().status === "connected" &&
+      !store.get().connectionPaused;
+    // Selecting output (to copy it or open a link) sends nothing, so an open
+    // Composer, as Town's reply line leaves it, does not prevent it.
+    const acceptsSelection = () =>
+      !terminalEffectDisposed &&
+      connectionClient.isCurrent() &&
       desiredTerminalRef.current === paneTerminalIdRef.current &&
       store.get().status === "connected" &&
       !store.get().connectionPaused;
@@ -1329,7 +1351,10 @@ export function TerminalView({
       const text = b64toText(t.bytes);
       if (text === null) return;
       if (!t.link_frame || t.link_frame !== latestLinkFrame)
-        invalidateLinks(endpointPresentation.displayedFrame?.text !== text);
+        invalidateLinks(
+          endpointPresentation.displayedFrame?.text !== text,
+          true,
+        );
       linkReadyRef.current = true;
       latestEndpointText =
         typeof t.mouse_reporting === "boolean" ? text : undefined;
@@ -2435,7 +2460,7 @@ export function TerminalView({
       begin: (activate) => {
         // Even a long press on blank output must not open the keyboard.
         touchMoved = true;
-        if (!acceptsEndpointInput() || !isActivePaneRef.current) return;
+        if (!acceptsSelection() || !isActivePaneRef.current) return;
         closeTerminalInput();
         historySelection.reset();
         if (endpointPresentation.beginSelection(activate)) activate();
@@ -2443,13 +2468,22 @@ export function TerminalView({
       selected: ({ row, col }) => {
         const intent = touchLinkIntentRef.current;
         const state = linkState();
+        // Still this press: the selection is up and nothing withdrew it.
+        const pressed = () =>
+          touchSelection.active && intent === touchLinkIntentRef.current;
+        // A link found in the row's text holds while that text is displayed;
+        // one Herdr identified holds only for the frame it was found in.
+        const sameFrame = () => !!state && state === linkState();
+        let found: TerminalTouchLink | null = null;
         const current = () =>
-          !!state &&
-          state === linkState() &&
-          touchSelection.active &&
-          intent === touchLinkIntentRef.current;
-        void linkProvider.resolveTouch(row, col, current).then((target) => {
+          pressed() && (found?.displayed ? found.displayed() : sameFrame());
+        // While it resolves, a frame leaves it be; the check below decides.
+        const entry = { keep: () => (found ? current() : pressed()) };
+        touchLinkRef.current = entry;
+        void linkProvider.resolveTouch(row, col, pressed).then((target) => {
+          found = target;
           if (target && current()) setTouchLink({ ...target, current });
+          else if (touchLinkRef.current === entry) touchLinkRef.current = null;
         });
       },
       changed: () => {

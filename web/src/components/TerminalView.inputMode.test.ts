@@ -242,6 +242,7 @@ async function registerDomTests() {
       return disposable();
     }
     onRender = disposable;
+    onWriteParsed = disposable;
     onSelectionChange = disposable;
     onResize = disposable;
     loadAddon = noop;

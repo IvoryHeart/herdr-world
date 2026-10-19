@@ -424,7 +424,9 @@ Use its HTTPS URL: `127.0.0.1` on a phone means the phone, not the work computer
    that are awkward on a touch keyboard. Customize its two shortcut rows
    as needed.
 3. Open Changes to review the README diff. Mobile uses a unified diff layout;
-   long-press a file to open its actions menu.
+   long-press a file to open its actions menu. To open a link printed in a
+   terminal, long-press it and choose **Open link** (on a computer,
+   `Cmd`/`Ctrl`-click it).
 4. Adjust **Menu > Appearance > Text size** (80%-150%), then use the relevant
    platform entry below to install the PWA.
 

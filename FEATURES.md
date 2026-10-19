@@ -256,6 +256,11 @@ commit a search selection. Press K in the recent switcher to convert it to searc
   backslash paths are recognized too. On Herdr 0.9.1, wrapped terminal links
   resolve against visible rows; OSC 8 links retain their explicit destinations.
   Older Herdr versions keep local URL/path detection.
+- On a touch screen, long-press a link or path and choose **Open link** or
+  **File actions**. This works in every view's terminals, while an agent keeps
+  repainting its status line and while the Composer is open. A URL found in the
+  text stays offered while its row shows the same text; a labelled OSC 8 link
+  is withdrawn when a new frame arrives.
 
 ## Workspace Inspector
 
