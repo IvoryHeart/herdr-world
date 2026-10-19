@@ -4,9 +4,12 @@ import type { BoardNote } from "./boardDocument";
 /**
  * Note edits that could not be saved (the note changed or was deleted on
  * another device), kept until the user saves or discards them. They outlive
- * Board's mount, survive a reload, and are shared by this browser's tabs:
- * storage is the source of truth, every change merges by draft key, and
- * other tabs' changes arrive through the storage event.
+ * Board's mount, survive a reload, and are shared by this browser's tabs.
+ *
+ * Each draft has its own storage key, so tabs never write the same value
+ * (storage has no cross-tab locking). A change this tab could not store is
+ * held as pending, overlaid on what storage says (so other tabs' drafts
+ * still appear) and retried on every later change.
  */
 export type KeptDraft = {
   key: string;
@@ -14,15 +17,20 @@ export type KeptDraft = {
   text: string;
   reason: "changed" | "deleted";
   error?: string;
+  /** When it was kept, for a stable order across tabs. */
+  at?: number;
 };
 
 export type DraftStorage = {
+  readonly length: number;
+  key(index: number): string | null;
   getItem(key: string): string | null;
   setItem(key: string, value: string): void;
   removeItem(key: string): void;
 };
 
 export const KEPT_DRAFTS_KEY = "herdr-world.board.unsaved";
+const PREFIX = `${KEPT_DRAFTS_KEY}:`;
 
 const isDraft = (value: unknown): value is KeptDraft => {
   const d = value as KeptDraft | null;
@@ -37,49 +45,64 @@ const isDraft = (value: unknown): value is KeptDraft => {
 };
 
 export function createDraftStore(storage: DraftStorage | null) {
-  /** Used when storage is unavailable, so drafts still outlive remounts. */
-  let memory: KeptDraft[] = [];
-  /**
-   * True after a write failed (full or blocked storage that may still read):
-   * this tab's memory is then authoritative, and each change retries.
-   */
-  let unpersisted = false;
+  /** This tab's changes not yet stored: a draft, or null for a removal. */
+  const pending = new Map<string, KeptDraft | null>();
   /** Saves in flight in this tab; kept across remounts, never stored. */
   const saving = new Set<string>();
   const listeners = new Set<() => void>();
   let snapshot: readonly KeptDraft[] = [];
 
-  const read = (): KeptDraft[] => {
-    if (!storage || unpersisted) return memory;
+  const stored = (): Map<string, KeptDraft> => {
+    const out = new Map<string, KeptDraft>();
+    if (!storage) return out;
     try {
-      const raw = JSON.parse(storage.getItem(KEPT_DRAFTS_KEY) ?? "[]");
-      return Array.isArray(raw) ? raw.filter(isDraft) : [];
+      for (let i = 0; i < storage.length; i++) {
+        const name = storage.key(i);
+        if (!name?.startsWith(PREFIX)) continue;
+        try {
+          const draft = JSON.parse(storage.getItem(name) ?? "null");
+          if (isDraft(draft)) out.set(draft.key, draft);
+        } catch {
+          // One unreadable entry does not hide the others.
+        }
+      }
     } catch {
-      return memory;
+      // Storage unreadable: pending changes still show.
     }
+    return out;
   };
-  const write = (list: KeptDraft[]) => {
-    memory = list;
+  /** Storage overlaid with this tab's pending changes. */
+  const view = (): KeptDraft[] => {
+    const all = stored();
+    for (const [key, draft] of pending) {
+      if (draft) all.set(key, draft);
+      else all.delete(key);
+    }
+    return [...all.values()].sort((a, b) => (a.at ?? 0) - (b.at ?? 0));
+  };
+  /** Try to store every pending change; those that fail stay pending. */
+  const flush = () => {
     if (!storage) return;
-    try {
-      if (list.length) storage.setItem(KEPT_DRAFTS_KEY, JSON.stringify(list));
-      else storage.removeItem(KEPT_DRAFTS_KEY);
-      unpersisted = false;
-    } catch {
-      // Full or blocked: memory holds them for this page until a write works.
-      unpersisted = true;
+    for (const [key, draft] of [...pending]) {
+      try {
+        if (draft) storage.setItem(PREFIX + key, JSON.stringify(draft));
+        else storage.removeItem(PREFIX + key);
+        pending.delete(key);
+      } catch {
+        // Full or blocked: kept pending and retried on the next change.
+      }
     }
   };
   const refresh = () => {
-    snapshot = read();
+    snapshot = view();
     for (const listener of listeners) listener();
   };
-  /** Read, change and write in one step, so other tabs' drafts are kept. */
-  const change = (edit: (list: KeptDraft[]) => KeptDraft[]) => {
-    write(edit(read()));
+  const set = (key: string, draft: KeptDraft | null) => {
+    pending.set(key, draft);
+    flush();
     refresh();
   };
-  snapshot = read();
+  snapshot = view();
 
   return {
     list: () => snapshot,
@@ -88,22 +111,24 @@ export function createDraftStore(storage: DraftStorage | null) {
       listeners.add(listener);
       return () => listeners.delete(listener);
     },
-    /** Another tab changed storage. */
-    refresh,
+    /** Another tab changed storage: show it, with this tab's pending changes. */
+    refresh() {
+      flush();
+      refresh();
+    },
     /** Keep a draft; one per note, the newest text replacing an older one. */
     keep(draft: KeptDraft) {
-      change((list) => [
-        ...list.filter((d) => d.started.id !== draft.started.id),
-        draft,
-      ]);
+      for (const old of view())
+        if (old.started.id === draft.started.id && old.key !== draft.key)
+          pending.set(old.key, null);
+      set(draft.key, { ...draft, at: draft.at ?? Date.now() });
     },
     update(key: string, patch: Partial<Omit<KeptDraft, "key">>) {
-      change((list) =>
-        list.map((d) => (d.key === key ? { ...d, ...patch } : d)),
-      );
+      const current = view().find((d) => d.key === key);
+      if (current) set(key, { ...current, ...patch });
     },
     remove(key: string) {
-      change((list) => list.filter((d) => d.key !== key));
+      set(key, null);
     },
     /**
      * Run a save for a draft. Its outcome is recorded here, whether or not
@@ -113,9 +138,7 @@ export function createDraftStore(storage: DraftStorage | null) {
     async save(key: string, write: () => Promise<string | null>) {
       if (saving.has(key)) return;
       saving.add(key);
-      change((list) =>
-        list.map((d) => (d.key === key ? { ...d, error: undefined } : d)),
-      );
+      this.update(key, { error: undefined });
       let problem: string | null;
       try {
         problem = await write();

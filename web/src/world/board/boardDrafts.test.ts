@@ -5,51 +5,123 @@ import {
   type KeptDraft,
 } from "./boardDrafts";
 
-const memoryStorage = (): DraftStorage => {
+/** A shared backing store; `full` makes writes fail while reads still work. */
+function sharedStorage() {
   const map = new Map<string, string>();
-  return {
+  const state = { full: false };
+  const storage: DraftStorage = {
+    get length() {
+      return map.size;
+    },
+    key: (index) => [...map.keys()][index] ?? null,
     getItem: (key) => map.get(key) ?? null,
-    setItem: (key, value) => void map.set(key, value),
-    removeItem: (key) => void map.delete(key),
+    setItem: (key, value) => {
+      if (state.full) throw new Error("QuotaExceededError");
+      map.set(key, value);
+    },
+    removeItem: (key) => {
+      if (state.full) throw new Error("QuotaExceededError");
+      map.delete(key);
+    },
   };
-};
+  return { storage, state };
+}
 const draft = (key: string, noteId: string, text = "Draft"): KeptDraft => ({
   key,
   text,
   reason: "changed",
   started: { id: noteId, text: "Old", color: "yellow", x: 0, y: 0, rev: 1 },
 });
+const keys = (store: ReturnType<typeof createDraftStore>) =>
+  store
+    .list()
+    .map((d) => d.key)
+    .sort();
 
 describe("Board kept drafts", () => {
-  test("two tabs keep each other's drafts; reading never clears storage", () => {
-    const storage = memoryStorage();
-    const tabB = createDraftStore(storage); // initialised while empty
+  test("two tabs keep each other's drafts, even when both read before either writes", () => {
+    const { storage } = sharedStorage();
     const tabA = createDraftStore(storage);
+    const tabB = createDraftStore(storage);
+    // Neither has seen the other's write when it keeps its own draft.
     tabA.keep(draft("a", "n1"));
-    // Tab B mounting Board again only reads.
-    expect(
-      createDraftStore(storage)
-        .list()
-        .map((d) => d.key),
-    ).toEqual(["a"]);
     tabB.keep(draft("b", "n2"));
-    expect(
-      createDraftStore(storage)
-        .list()
-        .map((d) => d.key),
-    ).toEqual(["a", "b"]);
+    expect(keys(createDraftStore(storage))).toEqual(["a", "b"]);
     tabA.refresh(); // the storage event
-    expect(tabA.list().map((d) => d.key)).toEqual(["a", "b"]);
+    expect(keys(tabA)).toEqual(["a", "b"]);
     tabB.remove("a");
-    expect(
-      createDraftStore(storage)
-        .list()
-        .map((d) => d.key),
-    ).toEqual(["b"]);
+    expect(keys(createDraftStore(storage))).toEqual(["b"]);
+  });
+
+  test("a change one tab could not store is merged with other tabs' drafts when it can", () => {
+    const { storage, state } = sharedStorage();
+    const tabA = createDraftStore(storage);
+    const tabB = createDraftStore(storage);
+    state.full = true;
+    tabA.keep(draft("a", "n1"));
+    expect(keys(tabA)).toEqual(["a"]);
+    state.full = false;
+    tabB.keep(draft("b", "n2"));
+    tabA.refresh(); // B's change arrives, A's draft still shows
+    expect(keys(tabA)).toEqual(["a", "b"]);
+    tabA.update("a", { text: "Edited" });
+    // A's retry stored its draft without touching B's.
+    const fresh = createDraftStore(storage);
+    expect(keys(fresh)).toEqual(["a", "b"]);
+    expect(fresh.list().find((d) => d.key === "a")!.text).toBe("Edited");
+  });
+
+  test("a pending edit in one tab survives another tab's write and its own later retry", () => {
+    const { storage, state } = sharedStorage();
+    const tabA = createDraftStore(storage);
+    const tabB = createDraftStore(storage);
+    state.full = true;
+    tabB.keep(draft("b", "n2"));
+    state.full = false;
+    tabA.keep(draft("a", "n1"));
+    tabB.refresh();
+    tabB.update("b", { text: "B edited" });
+    expect(keys(createDraftStore(storage))).toEqual(["a", "b"]);
+  });
+
+  test("storage that reads but rejects writes keeps the drafts, then persists once it can", () => {
+    const { storage, state } = sharedStorage();
+    const store = createDraftStore(storage);
+    state.full = true;
+    store.keep(draft("a", "n1"));
+    store.keep(draft("b", "n2"));
+    expect(keys(store)).toEqual(["a", "b"]);
+    state.full = false;
+    store.remove("a");
+    expect(keys(createDraftStore(storage))).toEqual(["b"]);
+  });
+
+  test("blocked storage that reads as empty still keeps the drafts", () => {
+    const store = createDraftStore({
+      length: 0,
+      key: () => null,
+      getItem: () => null,
+      setItem: () => {
+        throw new Error("SecurityError");
+      },
+      removeItem: () => {},
+    });
+    store.keep(draft("a", "n1"));
+    expect(keys(store)).toEqual(["a"]);
+  });
+
+  test("one draft per note: a newer draft for the same note replaces the older", () => {
+    const { storage } = sharedStorage();
+    const store = createDraftStore(storage);
+    store.keep(draft("a", "n1", "first"));
+    store.keep(draft("a2", "n1", "second"));
+    expect(createDraftStore(storage).list()).toEqual([
+      expect.objectContaining({ key: "a2", text: "second" }),
+    ]);
   });
 
   test("a save finishing after Board unmounts still removes the draft; a failure keeps it", async () => {
-    const storage = memoryStorage();
+    const { storage } = sharedStorage();
     const store = createDraftStore(storage);
     store.keep(draft("a", "n1"));
     store.keep(draft("b", "n2"));
@@ -65,11 +137,7 @@ describe("Board kept drafts", () => {
     });
     finish(null);
     await pending;
-    expect(
-      createDraftStore(storage)
-        .list()
-        .map((d) => d.key),
-    ).toEqual(["b"]);
+    expect(keys(createDraftStore(storage))).toEqual(["b"]);
     await store.save("b", async () => "write failed");
     expect(store.list()).toEqual([
       expect.objectContaining({ key: "b", error: "write failed" }),
@@ -80,44 +148,6 @@ describe("Board kept drafts", () => {
   test("without storage, drafts still outlive remounts in this page", () => {
     const store = createDraftStore(null);
     store.keep(draft("a", "n1"));
-    expect(store.list().map((d) => d.key)).toEqual(["a"]);
-  });
-
-  test("storage that reads but rejects writes keeps the drafts in memory, then persists once it can", () => {
-    let full = true;
-    const backing = memoryStorage();
-    const storage: DraftStorage = {
-      getItem: (key) => backing.getItem(key),
-      setItem: (key, value) => {
-        if (full) throw new Error("QuotaExceededError");
-        backing.setItem(key, value);
-      },
-      removeItem: (key) => backing.removeItem(key),
-    };
-    const store = createDraftStore(storage);
-    store.keep(draft("a", "n1"));
-    expect(store.list().map((d) => d.key)).toEqual(["a"]);
-    store.keep(draft("b", "n2"));
-    expect(store.list().map((d) => d.key)).toEqual(["a", "b"]);
-    // Space frees up: the next change writes everything kept so far.
-    full = false;
-    store.remove("a");
-    expect(
-      createDraftStore(storage)
-        .list()
-        .map((d) => d.key),
-    ).toEqual(["b"]);
-  });
-
-  test("blocked storage that reads as empty still keeps the drafts", () => {
-    const store = createDraftStore({
-      getItem: () => null,
-      setItem: () => {
-        throw new Error("SecurityError");
-      },
-      removeItem: () => {},
-    });
-    store.keep(draft("a", "n1"));
-    expect(store.list().map((d) => d.key)).toEqual(["a"]);
+    expect(keys(store)).toEqual(["a"]);
   });
 });

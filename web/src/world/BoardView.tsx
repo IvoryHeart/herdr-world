@@ -3305,7 +3305,7 @@ const keptDraftStore = createDraftStore(
 );
 if (typeof window !== "undefined")
   window.addEventListener("storage", (event) => {
-    if (!event.key || event.key.endsWith(KEPT_DRAFTS_KEY))
+    if (!event.key || event.key.includes(KEPT_DRAFTS_KEY))
       keptDraftStore.refresh();
   });
 
