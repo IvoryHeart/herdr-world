@@ -1,5 +1,4 @@
 import {
-  Building2,
   Castle,
   LayoutDashboard,
   type LucideIcon,
@@ -14,9 +13,7 @@ const DESTINATIONS: readonly {
   label: string;
   Icon: LucideIcon;
 }[] = [
-  { view: "office", label: "Office", Icon: Building2 },
   { view: "town", label: "Town", Icon: Castle },
-  // Board takes Graph's place on phones, where Graph is only a list.
   { view: "board", label: "Board", Icon: StickyNote },
   { view: "desk", label: "Desk", Icon: LayoutDashboard },
   { view: "spaces", label: "Spaces", Icon: PanelsTopLeft },

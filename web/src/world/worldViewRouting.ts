@@ -1,47 +1,43 @@
-export type WorldView =
-  | "desk"
-  | "spaces"
-  | "office"
-  | "town"
-  | "board"
-  | "tree"
-  | "graph";
+export type WorldView = "desk" | "spaces" | "town" | "board";
 
 export const WORLD_VIEWS: readonly WorldView[] = [
-  "desk",
-  "office",
   "town",
   "board",
+  "desk",
   "spaces",
-  "tree",
-  "graph",
 ];
 
 export const WORLD_VIEW_PATHS: Record<WorldView, string> = {
   desk: "/desk",
   spaces: "/spaces",
-  office: "/office",
   town: "/town",
   board: "/board",
-  tree: "/tree",
-  graph: "/graph",
+};
+
+/**
+ * Retired views and where they now open: Office's successor is Town, and
+ * Graph and Tree showed the hierarchy Board now arranges.
+ */
+const RETIRED_VIEWS: Readonly<Record<string, WorldView>> = {
+  office: "town",
+  graph: "board",
+  tree: "board",
 };
 
 export function parseWorldView(value: unknown): WorldView {
-  return WORLD_VIEWS.includes(value as WorldView)
-    ? (value as WorldView)
-    : "town";
+  if (WORLD_VIEWS.includes(value as WorldView)) return value as WorldView;
+  return (typeof value === "string" && RETIRED_VIEWS[value]) || "town";
 }
 
 export function worldViewFromPath(pathname: string): WorldView {
-  if (pathname === "/desk") return "desk";
-  if (pathname === "/spaces") return "spaces";
-  if (pathname === "/tree") return "tree";
-  if (pathname === "/graph") return "graph";
-  if (pathname === "/office") return "office";
-  if (pathname === "/town") return "town";
-  if (pathname === "/board") return "board";
-  return "town";
+  const name = pathname.replace(/^\//, "");
+  if (WORLD_VIEWS.includes(name as WorldView)) return name as WorldView;
+  return RETIRED_VIEWS[name] ?? "town";
+}
+
+/** True when the address is not the canonical one for its view (root, retired or unknown). */
+export function worldPathNeedsCanonical(pathname: string) {
+  return pathname !== WORLD_VIEW_PATHS[worldViewFromPath(pathname)];
 }
 
 export function initialView() {

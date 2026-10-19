@@ -24,23 +24,8 @@ import { type WorldControlPlaneProps } from "./worldControlPlaneContract";
 import { useWorldInspectorController } from "./useWorldInspectorController";
 import { useWorldVisualActions } from "./useWorldVisualActions";
 
-const PixelOfficeView = lazyWithReload(
-  "world-pixel-office",
-  () => import("./PixelOfficeView"),
-);
-
 const TownView = lazyWithReload("world-town", () => import("./TownView"));
 const BoardView = lazyWithReload("world-board", () => import("./BoardView"));
-
-const ConnectedTreeView = lazyWithReload(
-  "world-connected-tree",
-  () => import("./ConnectedTreeView"),
-);
-
-const SpatialGraphView = lazyWithReload(
-  "world-spatial-graph",
-  () => import("./SpatialGraphView"),
-);
 
 const WorldIntentConnector = lazyWithReload(
   "world-intent-connector",
@@ -177,27 +162,6 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
                       onPreview={deskReadingPane ? previewTerminalById : null}
                       onCloseReading={closeDeskReading}
                     />
-                  ) : view === "office" ? (
-                    <Suspense
-                      fallback={
-                        <div className="world-view-loading">
-                          Loading Office…
-                        </div>
-                      }
-                    >
-                      <PixelOfficeView
-                        world={presentedWorld}
-                        toolbarPortal={viewToolbarPortal}
-                        selectedId={selectedId}
-                        onSelect={selectNode}
-                        floatingTerminals={inspectorConversations}
-                        onConversationNodeAnchorsChange={
-                          setVisualConversationAnchors
-                        }
-                        onOpenTerminal={openTerminalById}
-                        onSelectedAnchorChange={setSelectedVisualAnchor}
-                      />
-                    </Suspense>
                   ) : view === "town" ? (
                     <Suspense
                       fallback={
@@ -220,7 +184,7 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
                         onSelectedAnchorChange={setSelectedVisualAnchor}
                       />
                     </Suspense>
-                  ) : view === "board" ? (
+                  ) : (
                     <Suspense
                       fallback={
                         <div className="world-view-loading">Loading Board…</div>
@@ -237,36 +201,6 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
                         onNodeAnchorsChange={setVisualConversationAnchors}
                       />
                     </Suspense>
-                  ) : view === "tree" ? (
-                    <Suspense
-                      fallback={
-                        <div className="world-view-loading">Loading Tree…</div>
-                      }
-                    >
-                      <ConnectedTreeView
-                        world={presentedWorld}
-                        toolbarPortal={viewToolbarPortal}
-                        selectedId={selectedId}
-                        conversationNodeIds={conversationNodeIds}
-                        inlineInspectorNodeId={null}
-                        onSelect={selectNode}
-                        onOpenTerminal={openTerminalById}
-                        onInlineInspectorPortalChange={() => {}}
-                        onSelectedAnchorChange={setSelectedVisualAnchor}
-                        onNodeAnchorsChange={setVisualConversationAnchors}
-                      />
-                    </Suspense>
-                  ) : (
-                    <SpatialGraphView
-                      world={presentedWorld}
-                      toolbarPortal={viewToolbarPortal}
-                      selectedId={selectedId}
-                      conversationNodeIds={conversationNodeIds}
-                      onSelect={selectNode}
-                      onOpenTerminal={openTerminalById}
-                      onSelectedAnchorChange={setSelectedVisualAnchor}
-                      onNodeAnchorsChange={setVisualConversationAnchors}
-                    />
                   )}
                 </WorldViewErrorBoundary>
               </Suspense>

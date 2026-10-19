@@ -546,7 +546,7 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
     const node = world.nodeById.get(id);
     const nodeId = id;
     if (
-      (view === "office" || view === "town") &&
+      view === "town" &&
       officeInspectorPresentation === "floating" &&
       window.innerWidth > 720 &&
       document.documentElement.dataset.layout !== "mobile" &&
@@ -885,7 +885,7 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
         // On wide screens the Desk reads agents in the docked Inspector beside
         // its queue; phones keep the full-screen floating Inspector.
         (view === "desk" && deskReadingPane) ||
-        ((view === "office" || view === "town") &&
+        (view === "town" &&
           (officeInspectorPresentation === "docked" ||
             (existing &&
               worldInspectorWindowId(existing) ===

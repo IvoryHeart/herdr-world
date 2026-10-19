@@ -35,6 +35,7 @@ import {
 } from "./WorldFoundationApp";
 import { resolveTerminalWindowArrangement } from "./terminalWindowArrangement";
 import { buildWorldObject } from "./worldObject";
+import { worldPathNeedsCanonical } from "./worldViewRouting";
 import {
   reconcileWorldInspectorConversation,
   retainWorldInspectorConversations,
@@ -229,10 +230,11 @@ describe("World view preference", () => {
     ).toEqual({ left: 680, top: 0, width: 320, height: 420 });
   });
 
-  test("admits only canonical native views", () => {
-    expect(parseWorldView("office")).toBe("office");
-    expect(parseWorldView("tree")).toBe("tree");
-    expect(parseWorldView("graph")).toBe("graph");
+  test("admits only canonical native views; retired views map to their successors", () => {
+    expect(parseWorldView("office")).toBe("town");
+    expect(parseWorldView("tree")).toBe("board");
+    expect(parseWorldView("graph")).toBe("board");
+    expect(parseWorldView("board")).toBe("board");
     expect(parseWorldView("spaces")).toBe("spaces");
     expect(parseWorldView("desk")).toBe("desk");
     expect(parseWorldView("town")).toBe("town");
@@ -245,10 +247,18 @@ describe("World view preference", () => {
     expect(worldViewFromPath("/town")).toBe("town");
     expect(worldViewFromPath("/desk")).toBe("desk");
     expect(worldViewFromPath("/spaces")).toBe("spaces");
-    expect(worldViewFromPath("/office")).toBe("office");
-    expect(worldViewFromPath("/tree")).toBe("tree");
-    expect(worldViewFromPath("/graph")).toBe("graph");
+    expect(worldViewFromPath("/board")).toBe("board");
+    expect(worldViewFromPath("/office")).toBe("town");
+    expect(worldViewFromPath("/tree")).toBe("board");
+    expect(worldViewFromPath("/graph")).toBe("board");
     expect(worldViewFromPath("/other")).toBe("town");
+  });
+
+  test("the root, retired and unknown addresses are replaced by the canonical one", () => {
+    for (const path of ["/", "/office", "/graph", "/tree", "/other"])
+      expect(worldPathNeedsCanonical(path)).toBe(true);
+    for (const path of ["/town", "/board", "/desk", "/spaces"])
+      expect(worldPathNeedsCanonical(path)).toBe(false);
   });
 
   test("resolves each current top-tab owner independently of ambient focus with colliding IDs", () => {
