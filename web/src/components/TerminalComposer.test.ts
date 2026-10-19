@@ -301,7 +301,9 @@ test.each(["claude", "grok-build", "agy"])(
       expect(writeStorage).not.toHaveBeenCalled();
       expect(commands().props["aria-label"]).toBe("Commands");
       expect((commands().props.children as Element).type).toBe(SquareTerminal);
-      const textarea = nodes.get("terminal-composer-input")!;
+      const textarea = nodes.get(
+        "terminal-composer-input terminal-mobile-message",
+      )!;
       // Touch while editing: retain focus, and announce browse navigation too.
       textarea.focus();
       invoke(commands(), "onClick", { detail: 1 });
@@ -436,12 +438,18 @@ test.each(["claude", "grok-build", "agy"])(
       expect(onSubmit).not.toHaveBeenCalled();
       expect(onRunShortcut).not.toHaveBeenCalled();
 
-      // Native radio switches keep the draft/caret; Composer waits for input.
-      const changeMode = (next: TerminalInputMode, detail = 1) =>
-        invoke(find("value", next), "onChange", { nativeEvent: { detail } });
+      // Message editing and the explicit Direct button share the same draft.
+      const direct = () =>
+        find("aria-label", "Type directly into the terminal");
+      const changeMode = (next: TerminalInputMode) => {
+        if (next === "composer") {
+          textarea.focus();
+          invoke(editor(), "onClick");
+        } else invoke(direct(), "onClick");
+      };
       textarea.setSelectionRange(2, 5);
       // Hiding both shortcut rows preserves the draft, caret, and native focus.
-      expect(shortcutPanel().props.hidden).toBe(false);
+      expect(shortcutPanel().props.hidden).toBe(true);
       expect((shortcutToggle().props.children as React.ReactElement).type).toBe(
         Keyboard,
       );
@@ -451,6 +459,11 @@ test.each(["claude", "grok-build", "agy"])(
       const togglePointer = { preventDefault: mock(() => {}) };
       invoke(shortcutToggle(), "onMouseDown", togglePointer);
       expect(togglePointer.preventDefault).toHaveBeenCalledTimes(1);
+      invoke(shortcutToggle(), "onClick");
+      expect(shortcutPanel().props.hidden).toBe(false);
+      expect(elements.some((element) => element.props.role === "option")).toBe(
+        false,
+      );
       invoke(shortcutToggle(), "onClick");
       expect(shortcutToggle().props["aria-expanded"]).toBe(false);
       expect(shortcutPanel().props.hidden).toBe(true);
@@ -462,8 +475,8 @@ test.each(["claude", "grok-build", "agy"])(
       expect(onRunShortcut).not.toHaveBeenCalled();
       changeMode("direct");
       expect(modeChoices).toEqual(["direct"]);
-      expect(find("value", "direct").props.checked).toBe(true);
-      expect(editor().props.hidden).toBe(true);
+      expect(direct().props["aria-pressed"]).toBe(true);
+      expect(editor().props.hidden).toBeUndefined();
       expect(activeElement).toBe(directInput);
       expect(draft).toBe("new upload or edit");
       expect(shortcutPanel().props.hidden).toBe(true);
@@ -487,17 +500,15 @@ test.each(["claude", "grok-build", "agy"])(
         ),
       ).toHaveLength(shortcutRows.flat().filter((slot) => !slot).length);
       activeElement = {};
-      const composerRadioFocus = activeElement;
       changeMode("composer");
-      expect(activeElement).toBe(composerRadioFocus);
+      expect(activeElement).toBe(textarea);
       expect(textarea.selectionStart).toBe(2);
       expect(textarea.selectionEnd).toBe(5);
       expect(draft).toBe("new upload or edit");
-      // Keyboard navigation stays on the radio; native arrows need no custom keys.
+      // Activating the Direct button by keyboard is also an explicit handoff.
       activeElement = {};
-      const radioFocus = activeElement;
-      changeMode("direct", 0);
-      expect(activeElement).toBe(radioFocus);
+      changeMode("direct");
+      expect(activeElement).toBe(directInput);
       expect(
         elements.some(
           (element) =>
@@ -526,7 +537,7 @@ test.each(["claude", "grok-build", "agy"])(
       // An IME confirmation cannot switch modes or send terminal Enter.
       textarea.focus();
       invoke(editor(), "onCompositionStart");
-      expect(find("value", "direct").props.disabled).toBe(true);
+      expect(direct().props.disabled).toBe(true);
       expect(find("aria-label", "Send Enter").props.disabled).toBe(true);
       changeMode("direct");
       invoke(find("aria-label", "Send Enter"), "onClick");
@@ -539,7 +550,7 @@ test.each(["claude", "grok-build", "agy"])(
       expect(draft).toBe("new upload or edit");
       directDisabled = true;
       render();
-      expect(find("value", "direct").props.disabled).toBe(true);
+      expect(direct().props.disabled).toBe(true);
       changeMode("direct");
       expect(modeChoices).toEqual(choicesBeforeCommands);
       // Neither Composer nor an unavailable Direct mode forwards dock focus.

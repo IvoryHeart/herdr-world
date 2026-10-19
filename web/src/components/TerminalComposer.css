@@ -5,33 +5,28 @@
 /* Keep mobile styling in sync with the saved layout and URL override. */
 :where(html[data-layout="mobile"]) {
   .terminal-composer {
-    /* In-flow at the bottom of the column shell. The app shell owns the main
-       keyboard lift; only iOS gets a small additional form-accessory-bar gap. */
+    /* The global bottom bar owns safe-area and keyboard-accessory spacing. */
     position: relative;
-    /* Above the mobile capsule controls (z-index 72-74). */
-    z-index: 75;
-    margin-bottom: var(--keyboard-inset-composer-gap, 0px);
     display: flex;
     flex-direction: column;
     gap: 6px;
-    padding: 8px calc(8px + env(safe-area-inset-right, 0px))
-      calc(12px + env(safe-area-inset-bottom, 0px))
-      calc(8px + env(safe-area-inset-left, 0px));
-    border-top: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
-    background: color-mix(in srgb, var(--panel) 86%, transparent);
-    -webkit-backdrop-filter: blur(14px);
-    backdrop-filter: blur(14px);
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
   }
 
   .terminal-composer-input {
     width: 100%;
-    min-height: 38px;
-    max-height: 32dvh;
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: max(48px, calc(48px / var(--ui-scale, 1)));
+    max-height: min(160px, calc(var(--app-viewport-height, 100dvh) * 0.25));
     resize: none;
-    padding: 8px 10px;
+    padding: 12px 10px;
     border: 1px solid var(--border);
-    border-radius: 8px;
-    background: var(--panel-2);
+    border-radius: 24px;
+    background: color-mix(in srgb, var(--text-strong) 8%, var(--terminal-bg));
     color: var(--text-strong);
     font-size: 16px;
     line-height: 1.4;
@@ -48,85 +43,44 @@
   }
 
   .terminal-composer-toolbar {
+    order: 2;
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: 6px;
   }
 
-  .terminal-composer-mode {
+  .terminal-composer[data-reserved] {
+    visibility: hidden;
+  }
+
+  .terminal-composer:not([data-expanded]) .terminal-composer-input,
+  .terminal-composer:not([data-open]) .terminal-composer-input,
+  .terminal-composer[data-input-mode="direct"] .terminal-composer-input {
+    max-height: max(48px, calc(48px / var(--ui-scale, 1)));
+    overflow-y: hidden;
+  }
+
+  .terminal-composer > .terminal-mobile-input-bar {
+    order: 3;
+  }
+
+  .terminal-composer[data-expanded] > .terminal-mobile-input-bar {
+    padding-right: 0;
+  }
+
+  .terminal-composer[data-expanded] .terminal-mobile-direct {
+    display: none;
+  }
+
+  .terminal-composer-submit-actions {
     display: flex;
-    flex-shrink: 0;
+    flex: 1 1 auto;
     min-width: 0;
-    margin: 0 auto 0 0;
-    padding: 2px;
-    border: 1px solid var(--border);
-    border-radius: 9px;
-    background: var(--panel-2);
-  }
-
-  .terminal-composer-mode label {
-    position: relative;
-    cursor: pointer;
-  }
-
-  .terminal-composer-mode legend {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
-  }
-
-  .terminal-composer-mode input {
-    position: absolute;
-    opacity: 0;
-    width: 1px;
-    height: 1px;
-  }
-
-  .terminal-composer-mode span {
-    display: flex;
     align-items: center;
-    justify-content: center;
-    min-height: 24px;
-    padding: 0 8px;
-    border: 1px solid transparent;
-    border-radius: 6px;
-    color: var(--muted);
-    font-size: 11px;
-    font-weight: 600;
-    line-height: 15px;
-    touch-action: manipulation;
-  }
-
-  .terminal-composer-mode input:checked + span {
-    border-color: var(--accent);
-    background: var(--accent-soft);
-    color: var(--text-strong);
-  }
-
-  .terminal-composer-mode input:focus-visible + span {
-    outline: 2px solid var(--accent);
-    outline-offset: 2px;
-  }
-
-  .terminal-composer-mode input:disabled + span {
-    opacity: 0.45;
-    cursor: default;
-  }
-
-  .terminal-composer-direct {
-    color: var(--muted);
-    font-size: 12px;
-  }
-
-  .terminal-composer-actions {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
+    justify-content: flex-end;
     gap: 6px;
+    margin-left: auto;
   }
 
   .terminal-composer-hint {
@@ -140,7 +94,6 @@
     white-space: nowrap;
   }
 
-  .terminal-composer-actions button,
   .terminal-composer-toolbar button {
     height: 30px;
     display: inline-flex;
@@ -160,7 +113,6 @@
     -webkit-tap-highlight-color: transparent;
   }
 
-  .terminal-composer-actions button:disabled,
   .terminal-composer-toolbar button:disabled {
     opacity: 0.45;
   }
@@ -172,6 +124,10 @@
     width: 30px;
     padding: 0;
     flex: 0 0 auto;
+  }
+
+  .terminal-composer-close {
+    margin-left: auto;
   }
 
   .terminal-composer-submit {
@@ -190,23 +146,20 @@
     background: var(--accent-soft);
   }
 
-  .terminal-composer-actions button:active:not(:disabled),
   .terminal-composer-toolbar button:active:not(:disabled) {
     border-color: var(--accent);
     background: var(--accent-soft);
   }
 
   .terminal-composer-commands {
-    /* Float above the dock without resizing the draft or terminal. */
-    position: absolute;
-    bottom: calc(100% + 6px);
-    left: calc(8px + env(safe-area-inset-left, 0px));
-    right: calc(8px + env(safe-area-inset-right, 0px));
+    /* Grow upward inside the shared Message area, without a second dock. */
+    order: 1;
+    position: static;
     display: flex;
     flex-direction: column;
     gap: 6px;
     min-width: 0;
-    max-height: min(320px, calc(var(--app-viewport-height, 100dvh) * 0.4));
+    max-height: min(220px, calc(var(--app-viewport-height, 100dvh) * 0.2));
     overflow-y: auto;
     overscroll-behavior: contain;
     padding: 8px;
@@ -276,6 +229,7 @@
   }
 
   .terminal-composer-shortcuts {
+    order: 1;
     width: 100%;
     min-width: 0;
     display: grid;
@@ -348,4 +302,22 @@
       box-shadow: none;
     }
   }
+}
+
+:where(html[data-layout="mobile"]) .terminal-shell > .terminal-composer {
+  flex: 0 0 auto;
+  padding: 4px 8px calc(4px + env(safe-area-inset-bottom, 0px));
+  background: var(--terminal-bg);
+  margin-bottom: var(--keyboard-inset-composer-gap, 0px);
+}
+
+.town-composer .terminal-composer {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.town-composer .terminal-mobile-direct {
+  display: inline-flex;
 }

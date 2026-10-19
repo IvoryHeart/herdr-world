@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "source": "5ce1d8d620549226de76321303e7bffa911ae371",
+  "source": "8cc1685ec616de4acf3034db05c4af2368ca1b93",
   "changes": [
     {
       "commit": "447f7196b9a23979b026d6b79619836d3337cc06",
@@ -26,7 +26,7 @@
       ],
       "followUp": "docs/upstream-follow-ups.md#world-workflow-controls",
       "revisitWhen": "Every source sync; manually assess upstream action security fixes and required platform changes.",
-      "reviewedFor": "5ce1d8d620549226de76321303e7bffa911ae371"
+      "reviewedFor": "8cc1685ec616de4acf3034db05c4af2368ca1b93"
     },
     {
       "commit": "20cb447a808a1e09359cef4f4fb632a385d4485e",
@@ -410,6 +410,138 @@
       "followUp": null,
       "revisitWhen": null,
       "reviewedFor": "5ce1d8d620549226de76321303e7bffa911ae371"
+    },
+    {
+      "commit": "99ea4c280cda31d830e91f8f8862ad66ab9cc742",
+      "title": "Show where to find the login token on the login page (#441)",
+      "status": "adapted",
+      "reason": "Show only a safe home-relative command for World's generated token, World service QR command and World login documentation.",
+      "evidence": [
+        "server/src/config/auth-token.test.ts",
+        "server/src/http/login-page-pin.test.ts"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "8cc1685ec616de4acf3034db05c4af2368ca1b93"
+    },
+    {
+      "commit": "bbdc04407fe8e10f74094c992d68ae0c84b5ee02",
+      "title": "Raise the keyboard from Type in one tap (#436)",
+      "status": "adapted",
+      "reason": "Message and Direct gestures synchronously activate their editor while preserving qualified input and explicit Direct authorization.",
+      "evidence": [
+        "web/src/components/TerminalView.inputMode.test.ts",
+        "web/src/components/TerminalComposer.dom.test.ts"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "8cc1685ec616de4acf3034db05c4af2368ca1b93"
+    },
+    {
+      "commit": "ab0866f429e22adff2571be6e0a9f4b6cd9ccc11",
+      "title": "Close mobile layers with the phone's Back (#433)",
+      "status": "adapted",
+      "reason": "Retain World's mobile screen/panel/popup Back hierarchy and adopt upstream departure handling.",
+      "evidence": [
+        "web/src/systemBack.test.ts",
+        "web/src/world/WorldFoundationApp.test.ts"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "8cc1685ec616de4acf3034db05c4af2368ca1b93"
+    },
+    {
+      "commit": "99ef5d7cde1a2ba0cded7ead5c95155af749801b",
+      "title": "Unify mobile input and navigation (#438)",
+      "status": "adapted",
+      "reason": "Use the shared Message editor below each qualified terminal and retain World's shared top Tabs/More app bar and managed-window sheet. Preserve upload destination and React 18 touch geometry.",
+      "evidence": [
+        "web/src/components/MobileControls.tsx",
+        "web/src/components/MobileTabSheet.test.ts",
+        "web/src/components/TerminalComposer.uploads.test.ts",
+        "web/src/components/TerminalView.inputMode.test.ts"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "8cc1685ec616de4acf3034db05c4af2368ca1b93"
+    },
+    {
+      "commit": "515640a1f6972815d7390aa969db4a5481afaf8a",
+      "title": "Drag panes onto tabs to move them or break them into a new tab (#440)",
+      "status": "adapted",
+      "reason": "Adopt cross-tab pane placement and new-tab breakout using captured World clients and generation checks.",
+      "evidence": [
+        "web/src/components/PaneMoveMenu.test.ts",
+        "web/src/store.test.ts",
+        "web/src/browserNavigation.test.ts"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "8cc1685ec616de4acf3034db05c4af2368ca1b93"
+    },
+    {
+      "commit": "930a83652dc6408e83de312cd39d0ff26fcb4420",
+      "title": "Keep one Back guard per open mobile layer (#442)",
+      "status": "adapted",
+      "reason": "Use one guard per layer and departure-aware cleanup; retain World terminal-screen priority and explicit Back helpers.",
+      "evidence": [
+        "web/src/systemBack.test.ts",
+        "web/src/components/TerminalView.inputMode.test.ts"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "8cc1685ec616de4acf3034db05c4af2368ca1b93"
+    },
+    {
+      "commit": "7ba13d211561664f952c49ea52f5a3057f21cf2c",
+      "title": "Make tab strip overflow discoverable and navigable (#443)",
+      "status": "adapted",
+      "reason": "Adopt scroll/overflow discovery on World's operationally scoped tab strip.",
+      "evidence": [
+        "web/src/tabStripScroll.test.ts",
+        "web/src/components/TabBar.tsx"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "8cc1685ec616de4acf3034db05c4af2368ca1b93"
+    },
+    {
+      "commit": "d4ec8b1a02109bec6d1ebb0919c708539c7d3280",
+      "title": "Start when the user config directory is a symlink (#445)",
+      "status": "adapted",
+      "reason": "Follow user-owned config roots while rejecting links inside World state; never migrate another product's files.",
+      "evidence": ["server/src/config/data-paths.test.ts"],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "8cc1685ec616de4acf3034db05c4af2368ca1b93"
+    },
+    {
+      "commit": "a465941610bd6fd49a9f5f277b2ad78c50ff40c7",
+      "title": "Support repository comparison branches in Inspector (#446)",
+      "status": "adapted",
+      "reason": "Adopt recorded repository default and selected comparison branches; retain connection/runtime-owned caches and read-only Git inspection.",
+      "evidence": [
+        "server/src/workspace/diff-base.test.ts",
+        "web/src/components/DiffViewerPanel.test.ts",
+        "web/src/gitDiffSummaryStore.test.ts"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "8cc1685ec616de4acf3034db05c4af2368ca1b93"
+    },
+    {
+      "commit": "8cc1685ec616de4acf3034db05c4af2368ca1b93",
+      "title": "Release 0.8.6 (#447)",
+      "status": "adapted",
+      "reason": "Record exact upstream release ancestry while retaining World version, plugin identity and measured asset budgets.",
+      "evidence": [
+        "UPSTREAM.md",
+        "herdr-plugin.toml",
+        "scripts/check-web-assets.mjs"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "8cc1685ec616de4acf3034db05c4af2368ca1b93"
     }
   ]
 }

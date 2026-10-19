@@ -3032,6 +3032,71 @@ function swapPanePositions(
   );
 }
 
+export type PaneSide = "left" | "right" | "up" | "down";
+
+function movePaneTo(
+  paneId: string,
+  destination:
+    | { type: "new_tab"; workspace_id: string }
+    | {
+        type: "tab";
+        tab_id: string;
+        split: "right" | "down";
+        target_pane_id: string;
+      },
+  swapWithPaneId?: string,
+  client?: ConnectionClient,
+) {
+  if (client && !client.isCurrent()) return Promise.resolve(undefined);
+  const snapshot = client
+    ? connectionSnapshot(state, client.connectionId)
+    : state;
+  const navigation = snapshot.browserNavigation;
+  return action(
+    async (lease) => {
+      const result = await lease.client.call("pane.move", {
+        pane_id: paneId,
+        destination,
+        focus: snapshot.navigationMode !== "browser-local",
+      });
+      const moved = result?.move_result ?? result;
+      // A move can reissue the pane ID, so follow the one Herdr reports.
+      const movedPaneId =
+        typeof moved?.pane?.pane_id === "string" ? moved.pane.pane_id : paneId;
+      if (leaseIsCurrent(lease) && browserSelectionIsCurrent(navigation, lease))
+        adoptBrowserTarget(lease, { pane: moved?.pane });
+      if (swapWithPaneId && leaseIsCurrent(lease)) {
+        try {
+          await lease.client.call("pane.swap", {
+            source_pane_id: movedPaneId,
+            target_pane_id: swapWithPaneId,
+          });
+        } catch (error) {
+          // The move already landed, so report only the side that failed.
+          if (leaseIsCurrent(lease))
+            setForConnection(lease, {
+              notice: {
+                kind: "error",
+                message: "Pane moved to the other side",
+                detail: (error as Error).message,
+              },
+            });
+        }
+      }
+      return result;
+    },
+    {
+      client,
+      refresh: "immediate",
+      failureNotice: (error) => ({
+        kind: "error",
+        message: "Pane move failed",
+        detail: error.message,
+      }),
+    },
+  );
+}
+
 export const store = {
   beginTerminalAttachment(client: ConnectionClient, terminalId: string) {
     const attempt = ++terminalAttachmentAttempt;
@@ -4803,6 +4868,89 @@ export const store = {
     });
   },
 
+  /** Break a pane out into a new tab of its workspace (Herdr pane.move). */
+  movePaneToNewTab(paneId: string, client?: ConnectionClient) {
+    const snapshot = client
+      ? connectionSnapshot(state, client.connectionId)
+      : state;
+    const pane = snapshot.panes.find((pane) => pane.pane_id === paneId);
+    const siblings = snapshot.panes.filter(
+      (other) => other.tab_id === pane?.tab_id,
+    );
+    if (!pane || siblings.length < 2) return Promise.resolve();
+    return movePaneTo(
+      paneId,
+      {
+        type: "new_tab",
+        workspace_id: pane.workspace_id,
+      },
+      undefined,
+      client,
+    );
+  },
+
+  /**
+   * Move a pane beside the pane its destination tab would show: this browser's
+   * remembered pane in browser-local mode, otherwise Herdr's focused pane.
+   */
+  movePaneToTab(paneId: string, tabId: string, client?: ConnectionClient) {
+    const snapshot = client
+      ? connectionSnapshot(state, client.connectionId)
+      : state;
+    const panes = snapshot.panes.filter((pane) => pane.tab_id === tabId);
+    const remembered =
+      snapshot.navigationMode === "browser-local"
+        ? snapshot.browserNavigation.paneIds[tabId]
+        : undefined;
+    const anchor =
+      panes.find((pane) => pane.pane_id === remembered) ??
+      panes.find((pane) => pane.focused) ??
+      panes[0];
+    return anchor
+      ? store.movePaneBeside(paneId, anchor.pane_id, "right", client)
+      : Promise.resolve();
+  },
+
+  /**
+   * Place a pane on one side of a pane in another tab of the same workspace.
+   * Herdr only splits to the right or below, so left and up swap afterwards.
+   */
+  movePaneBeside(
+    sourcePaneId: string,
+    targetPaneId: string,
+    side: PaneSide,
+    client?: ConnectionClient,
+  ) {
+    const snapshot = client
+      ? connectionSnapshot(state, client.connectionId)
+      : state;
+    const source = snapshot.panes.find((pane) => pane.pane_id === sourcePaneId);
+    const target = snapshot.panes.find((pane) => pane.pane_id === targetPaneId);
+    if (
+      !source ||
+      !target ||
+      source.tab_id === target.tab_id ||
+      source.workspace_id !== target.workspace_id ||
+      !!paneCloseBlockReason(
+        sourcePaneId,
+        snapshot.panes,
+        tabPinsFor(snapshot.activeConnectionId),
+      )
+    )
+      return Promise.resolve();
+    return movePaneTo(
+      sourcePaneId,
+      {
+        type: "tab",
+        tab_id: target.tab_id,
+        split: side === "left" || side === "right" ? "right" : "down",
+        target_pane_id: targetPaneId,
+      },
+      side === "left" || side === "up" ? targetPaneId : undefined,
+      client,
+    );
+  },
+
   focusPaneDirection(
     paneId: string,
     direction: "left" | "right" | "up" | "down",
@@ -5065,6 +5213,12 @@ export function operationalStore(context: OperationalContext) {
   return {
     get: () => connectionSnapshot(state, context.connectionId),
     subscribe: store.subscribe,
+    movePaneToNewTab: (paneId: string) =>
+      store.movePaneToNewTab(paneId, client),
+    movePaneToTab: (paneId: string, tabId: string) =>
+      store.movePaneToTab(paneId, tabId, client),
+    movePaneBeside: (source: string, target: string, side: PaneSide) =>
+      store.movePaneBeside(source, target, side, client),
     moveTab: (tabId: string, insertIndex: number) =>
       store.moveTab(tabId, insertIndex, client),
     movePane: (paneId: string, direction: "left" | "right" | "up" | "down") =>

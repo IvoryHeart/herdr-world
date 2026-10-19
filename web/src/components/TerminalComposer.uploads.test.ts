@@ -156,15 +156,9 @@ async function registerDomTests() {
     };
     const setMode = async (next: TerminalInputMode) => {
       await act(async () => {
-        container
-          .querySelector<HTMLInputElement>(`input[value="${next}"]`)!
-          .dispatchEvent(
-            new browser.MouseEvent("click", {
-              bubbles: true,
-              cancelable: true,
-              detail: 1,
-            }) as unknown as MouseEvent,
-          );
+        mode = next;
+        render();
+        if (next === "direct") directInput.focus();
       });
     };
     const select = async (start: number, end = start) => {
@@ -218,6 +212,130 @@ async function registerDomTests() {
       directInput,
     };
   }
+
+  function expanded() {
+    return container
+      .querySelector(".terminal-composer")!
+      .hasAttribute("data-expanded");
+  }
+
+  function pointer(target: Element) {
+    target.dispatchEvent(
+      new browser.PointerEvent("pointerdown", {
+        bubbles: true,
+        cancelable: true,
+        pointerType: "touch",
+      }) as unknown as PointerEvent,
+    );
+  }
+
+  test("only focused multiline drafts expand, blur folds without losing caret, and refocus remeasures", async () => {
+    const h = await mount("one\ntwo", 2, 2);
+    expect(expanded()).toBe(false);
+    const editor = h.textarea();
+    await h.select(2);
+    expect(expanded()).toBe(true);
+    await act(async () => h.directInput.focus()); // native Tab focus transfer
+    expect(expanded()).toBe(false);
+    expect(h.textarea()).toBe(editor);
+    expect([editor.selectionStart, editor.selectionEnd]).toEqual([2, 2]);
+    expect(drafts.readTerminalComposerDraft(h.key)).toBe("one\ntwo");
+    await h.select(2);
+    expect(expanded()).toBe(true);
+    await h.edit("one", 2); // session latch, no width/height oscillation
+    expect(expanded()).toBe(true);
+    await act(async () => editor.blur());
+    expect(expanded()).toBe(false);
+    await h.select(2);
+    expect(expanded()).toBe(false);
+  });
+
+  test("visual soft wrapping expands once even when the wider editor fits one row", async () => {
+    const h = await mount("a visually wrapping draft", 3, 3);
+    const editor = h.textarea();
+    editor.style.lineHeight = "22px";
+    editor.style.padding = "12px";
+    let wrapped = true;
+    Object.defineProperty(editor, "scrollHeight", {
+      configurable: true,
+      get: () => (wrapped && !expanded() ? 68 : 46),
+    });
+    await h.select(3);
+    expect(expanded()).toBe(true);
+    await act(async () => editor.blur());
+    expect(expanded()).toBe(false);
+    wrapped = false;
+    await h.select(3);
+    expect(expanded()).toBe(false);
+  });
+
+  test("terminal pointer prevention ends editing but textarea gestures and composition stay native", async () => {
+    const h = await mount("one\ntwo", 2, 2);
+    await h.select(2);
+    await act(async () => {
+      h.textarea().dispatchEvent(
+        new browser.CompositionEvent("compositionstart", {
+          bubbles: true,
+        }) as unknown as Event,
+      );
+      pointer(h.textarea());
+    });
+    expect(document.activeElement).toBe(h.textarea());
+    expect(expanded()).toBe(true);
+    await act(async () => {
+      h.textarea().dispatchEvent(
+        new browser.CompositionEvent("compositionend", {
+          bubbles: true,
+        }) as unknown as Event,
+      );
+      h.directInput.addEventListener("pointerdown", (event) =>
+        event.preventDefault(),
+      );
+      pointer(h.directInput);
+    });
+    expect(document.activeElement).not.toBe(h.textarea());
+    expect(expanded()).toBe(false);
+    expect(h.textarea().value).toBe("one\ntwo");
+  });
+
+  test.each([
+    "Insert draft into the terminal",
+    "Send draft to the terminal",
+    "Add a file",
+    "Commands",
+  ])(
+    "%s survives touch blur before click without moving or unmounting its target",
+    async (label) => {
+      const h = await mount("one\ntwo", 2, 2, false, "codex");
+      await h.select(2);
+      const tool = container.querySelector<HTMLButtonElement>(
+        `[aria-label="${label}"]`,
+      )!;
+      let pickerClicks = 0;
+      container
+        .querySelector('input[type="file"]')!
+        .addEventListener("click", () => pickerClicks++);
+      await act(async () => {
+        pointer(tool);
+        h.textarea().blur(); // native touch focus/file picker transition
+      });
+      expect(expanded()).toBe(true); // keep the hit target's geometry until click
+      expect(tool.isConnected).toBe(true);
+      await act(async () => tool.click());
+      expect(expanded()).toBe(false);
+      expect(document.activeElement).not.toBe(h.textarea());
+      if (label.startsWith("Insert") || label.startsWith("Send")) {
+        expect(h.sent).toEqual(["one\ntwo"]);
+      } else {
+        expect(h.textarea().value).toBe("one\ntwo");
+        if (label === "Add a file") expect(pickerClicks).toBe(1);
+        else
+          expect(
+            container.querySelector(".terminal-composer-commands"),
+          ).not.toBeNull();
+      }
+    },
+  );
 
   test("dock actions and async completions leave the editor blurred", async () => {
     const h = await mount("left SELECT right", 5, 11, true);

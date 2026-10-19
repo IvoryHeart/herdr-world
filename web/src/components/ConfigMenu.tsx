@@ -1,5 +1,7 @@
+import { useCloseGlobalMenuForDialog } from "./useCloseGlobalMenuForDialog";
 import { lazyWithReload } from "../lazyWithReload";
 import type { ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import {
   Menu as MenuIcon,
@@ -94,6 +96,7 @@ export function ConfigMenu({
       ? s.bridgeStatus?.clients
       : null;
   const [open, setOpen] = useState(false);
+  useCloseGlobalMenuForDialog(open, setOpen);
   const [expanded, setExpanded] = useState(false);
   const [configurationTab, setConfigurationTab] =
     useState<ConfigurationTab | null>(null);
@@ -551,17 +554,24 @@ export function ConfigMenu({
           </div>
         ) : null}
       </div>
-      {configurationTab ? (
-        <Suspense
-          fallback={<ConfigurationLoadingDialog onClose={closeConfiguration} />}
-        >
-          <ConfigurationDialog
-            {...configuration}
-            initialTab={configurationTab}
-            onClose={closeConfiguration}
-          />
-        </Suspense>
-      ) : null}
+      {/* Escape both topbar120 and the transformed phone app context. This
+          includes loading and all Configuration detail dialogs. */}
+      {configurationTab
+        ? createPortal(
+            <Suspense
+              fallback={
+                <ConfigurationLoadingDialog onClose={closeConfiguration} />
+              }
+            >
+              <ConfigurationDialog
+                {...configuration}
+                initialTab={configurationTab}
+                onClose={closeConfiguration}
+              />
+            </Suspense>,
+            document.body,
+          )
+        : null}
     </>
   );
 }

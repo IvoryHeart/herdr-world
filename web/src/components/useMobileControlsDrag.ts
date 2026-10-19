@@ -20,7 +20,8 @@ const STACK_SELECTOR =
 const HEADER_SELECTOR = ".topbar, .main > .tabbar";
 /** Controls pinned to the top right of the terminal, clear of a right-edge stack. */
 const RIGHT_EDGE_SELECTOR = ".terminal-mobile-keys-toggle";
-const COMPOSER_SELECTOR = ".terminal-composer, .terminal-composer-commands";
+const COMPOSER_SELECTOR =
+  ".terminal-composer[data-open], .terminal-composer-commands";
 const GEOMETRY_SELECTOR = `${HEADER_SELECTOR}, ${RIGHT_EDGE_SELECTOR}, ${COMPOSER_SELECTOR}, .mobile-controls-stack`;
 const COMPACT_ATTRIBUTE = "data-mobile-controls-compact";
 const DRAG_THRESHOLD_PX = 8;
@@ -81,7 +82,7 @@ function measureAvailableArea(
   let maxBottom = viewportBottom - EDGE_GAP_PX - safeAreaBottom();
   // In compact layout the picker scrolls inside the dock and is clipped to it.
   const composerSelector = app.hasAttribute(COMPACT_ATTRIBUTE)
-    ? ".terminal-composer"
+    ? ".terminal-composer[data-open]"
     : COMPOSER_SELECTOR;
   for (const composer of app.querySelectorAll<HTMLElement>(composerSelector)) {
     const rect = visibleRect(composer);
@@ -287,17 +288,24 @@ export function useMobileControlsDrag({
       typeof MutationObserver === "undefined"
         ? null
         : new MutationObserver((records) => {
-            const geometryChanged = records.some((record) =>
-              [...record.addedNodes, ...record.removedNodes].some(
-                (node) =>
-                  node instanceof Element &&
-                  (node.matches(GEOMETRY_SELECTOR) ||
-                    node.querySelector(GEOMETRY_SELECTOR)),
-              ),
+            const geometryChanged = records.some(
+              (record) =>
+                record.type === "attributes" ||
+                [...record.addedNodes, ...record.removedNodes].some(
+                  (node) =>
+                    node instanceof Element &&
+                    (node.matches(GEOMETRY_SELECTOR) ||
+                      node.querySelector(GEOMETRY_SELECTOR)),
+                ),
             );
             if (geometryChanged) syncObserved();
           });
-    mutations?.observe(app, { childList: true, subtree: true });
+    mutations?.observe(app, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["data-open"],
+    });
     window.visualViewport?.addEventListener("resize", update);
     window.visualViewport?.addEventListener("scroll", update);
     window.addEventListener("resize", update);

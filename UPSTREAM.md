@@ -6,10 +6,10 @@ separately installed [`herdrdev/herdr`](https://github.com/herdrdev/herdr) runti
 
 Current synchronization points:
 
-- Roamgate source: v0.8.5, `5ce1d8d620549226de76321303e7bffa911ae371`
-  (16 October 2026). This integration records the exact head as a Git merge
-  parent, following `503a6f565e3432cee651a456bcc0d9800be52a37`.
-- Herdr compatibility: Herdr 0.9.4, terminal protocol 22. Windows SSH hosts
+- Roamgate source: v0.8.6, `8cc1685ec616de4acf3034db05c4af2368ca1b93`
+  (19 October 2026). This integration records the exact head as a Git merge
+  parent, following `5ce1d8d620549226de76321303e7bffa911ae371`.
+- Herdr compatibility: Herdr 0.9.5, terminal protocol 22. Windows SSH hosts
   additionally require a running Herdr 0.9.1+ session and Windows PowerShell.
 
 The integration adopts Ranger workspace chat, background and scheduled tasks,
@@ -41,6 +41,20 @@ when terminal cursors are hidden. The owner approved the 8-character password
 minimum; startup retains the recommendation for 15+ characters. The handoff demo
 is attributed as upstream UI, alongside World screenshots. Documentation and local
 checks retain World contracts, navigation, formatting and behavioral verification.
+
+The v0.8.6 refresh adds safe login-token discovery, symlinked user configuration
+roots, cross-tab pane dragging and breakout, scrollable overflowing tab strips,
+and repository-default or selected branch comparisons. Mobile Message input stays
+in flow below each qualified terminal, while World's shared top app bar keeps
+Tabs and More reachable across Town, Board and Spaces. Upload completion remains
+bound to the original draft or terminal; failed Direct insertion retains the path
+without replaying input. World retains its managed-window tab sheet and terminal
+screen Back layer; upstream's per-layer history guards and departure handling are
+adapted to those layers. React 18 requires synchronous tool-gesture state before
+native blur. Herdr setup now pins 0.9.5 with the official five-platform checksums;
+its protocol remains 22 and endpoint generation remains 1. Herdr's hotfixes belong
+to the external runtime, including its Codex integration migration; World does not
+install or restart a user's existing runtime during source integration.
 
 World retains its identity, local/SSH connection ownership, same-origin access,
 session-bound push revocation, aggregate visual views, isolated browser storage,

@@ -6,10 +6,10 @@ import {
 } from "../shortcutPreferences";
 import {
   CornerDownLeft,
-  CornerDownRight,
   Keyboard,
   Paperclip,
   SquareTerminal,
+  TextCursorInput,
   X,
 } from "lucide-react";
 import { type CSSProperties, useEffect, useId, useRef, useState } from "react";
@@ -27,6 +27,7 @@ import {
   finishTerminalComposerUpload,
   insertIntoTerminalComposerDraft,
   readTerminalComposerDraft,
+  retainTerminalComposerUploadPaths,
   readTerminalComposerSelection,
   subscribeTerminalComposerDraft,
   subscribeTerminalComposerSubmission,
@@ -72,15 +73,20 @@ let unsavedShortcutsOpen: boolean | undefined;
  * xterm's input channel; the native editor stays mounted to preserve its caret.
  *
  * Files arrive through clipboard paste, drop, or the file picker, upload once, and
- * land in the draft as plain paths at the caret; they reach the terminal only
- * through an explicit Insert or Send like any other text.
+ * land at the draft caret in Composer. Direct captures a guarded terminal
+ * insertion at the initiating gesture, without changing the draft or sending Enter.
  */
 export function TerminalComposer({
   draftKey,
+  paneId,
+  open = true,
+  accessoriesVisible = true,
+  reserved = false,
   mode,
   onModeChange,
   onFocusDirect,
   directDisabled,
+  directInputActive,
   agent,
   shortcutRows,
   onRunShortcut,
@@ -89,13 +95,20 @@ export function TerminalComposer({
   onSubmit,
   onUploadImage,
   onUploadFile,
+  onPreparePathInsertion,
   onError,
 }: {
   draftKey: string;
+  paneId?: string;
+  open?: boolean;
+  // Presentation only: secondary App surfaces keep the editor and input session.
+  accessoriesVisible?: boolean;
+  reserved?: boolean;
   mode: TerminalInputMode;
   onModeChange: (mode: TerminalInputMode, remember?: boolean) => void;
   onFocusDirect: () => void;
   directDisabled: boolean;
+  directInputActive?: boolean;
   agent?: string;
   shortcutRows: (MobileTerminalShortcut | null)[][];
   onRunShortcut: (shortcut: MobileTerminalShortcut) => void;
@@ -104,6 +117,7 @@ export function TerminalComposer({
   onSubmit: (text: string, submit: boolean) => Promise<void>;
   onUploadImage: (file: File) => Promise<string>;
   onUploadFile: (file: File) => Promise<string>;
+  onPreparePathInsertion?: () => (text: string) => Promise<void>;
   onError: (message: string) => void;
 }) {
   useShortcutPreferences();
@@ -115,6 +129,12 @@ export function TerminalComposer({
     terminalComposerUploadCount(draftKey),
   );
   const [composing, setComposing] = useState(false);
+  const [editorFocused, setEditorFocused] = useState(false);
+  // Latch expansion for this focus session: expanding changes the wrapping
+  // width, so deriving it continuously from scrollHeight would oscillate.
+  const [expanded, setExpanded] = useState(false);
+  const [toolPointerPending, setToolPointerPending] = useState(false);
+  const composerRef = useRef<HTMLDivElement | null>(null);
   const [shortcutsOpen, setShortcutsOpen] = useState(
     () =>
       unsavedShortcutsOpen ??
@@ -150,6 +170,8 @@ export function TerminalComposer({
       ? filterComposerCommands(commands, /^\/[^\s]*/.exec(text)?.[0] ?? "")
       : commands;
   const pickerOpen = pickerMode !== null && commands.length > 0;
+  const accessoriesOpen = open && accessoriesVisible;
+  const presentedPickerOpen = accessoriesOpen && pickerOpen;
   const selectedCommand = matches[activeCommand];
 
   // Agent metadata can arrive while editing. Reset only its command UI, not
@@ -161,11 +183,11 @@ export function TerminalComposer({
   }, [agent]);
 
   useEffect(() => {
-    if (pickerOpen)
+    if (presentedPickerOpen)
       commandListRef.current?.children[activeCommand]?.scrollIntoView({
         block: "nearest",
       });
-  }, [activeCommand, pickerOpen, text]);
+  }, [activeCommand, presentedPickerOpen, text]);
 
   // Async uploads or edits must not be discarded by a stale confirmation.
   useEffect(() => {
@@ -176,22 +198,64 @@ export function TerminalComposer({
   const composingRef = useRef(false);
 
   useEffect(() => {
-    const blurDismissedKeyboard = (event: PointerEvent) => {
+    if (open) return;
+    textareaRef.current?.blur();
+    setPickerMode(null);
+    setReplacement(null);
+  }, [open]);
+
+  useEffect(() => {
+    const blurOutsideEditor = (event: PointerEvent) => {
       const textarea = textareaRef.current;
-      // Dismissing a phone keyboard can leave its editor focused. Retire that
-      // focus before another touch can reopen it; an input tap stays native.
+      // xterm prevents native focus transfer on terminal touches. End editing
+      // explicitly in capture, but never for caret drags, scrolling, IME, or
+      // composer tools. Tools keep their DOM/geometry through blur and click;
+      // native file pickers may blur without an async completion refocusing.
+      const inside = composerRef.current?.contains(event.target as Node);
+      if (!inside) setToolPointerPending(false);
+      else if (event.target !== textarea)
+        flushSync(() => setToolPointerPending(true));
+      // Submit must not depend on keyboard geometry: an absent/stale signal
+      // would blur in capture, restore the header and move the release target.
+      const submitting =
+        event.target instanceof Element &&
+        event.target.closest(".terminal-composer-submit");
       if (
-        event.pointerType === "touch" &&
-        event.target !== textarea &&
-        !document.documentElement.classList.contains("keyboard-open") &&
-        document.activeElement === textarea
+        document.activeElement === textarea &&
+        (!inside ||
+          (event.pointerType === "touch" &&
+            event.target !== textarea &&
+            !submitting &&
+            !document.documentElement.classList.contains("keyboard-open")))
       )
         textarea?.blur();
     };
-    document.addEventListener("pointerdown", blurDismissedKeyboard, true);
-    return () =>
-      document.removeEventListener("pointerdown", blurDismissedKeyboard, true);
+    let releaseTimer: ReturnType<typeof setTimeout> | undefined;
+    const release = () => {
+      clearTimeout(releaseTimer);
+      setToolPointerPending(false);
+    };
+    // Native touch blur can precede click. Keep the row's geometry until the
+    // pending tool has received that click (including opening a file picker).
+    const pointerUp = () => {
+      releaseTimer = setTimeout(release, 500);
+    };
+    document.addEventListener("pointerdown", blurOutsideEditor, true);
+    document.addEventListener("click", release);
+    document.addEventListener("pointerup", pointerUp);
+    document.addEventListener("pointercancel", release);
+    return () => {
+      clearTimeout(releaseTimer);
+      document.removeEventListener("pointerdown", blurOutsideEditor, true);
+      document.removeEventListener("click", release);
+      document.removeEventListener("pointerup", pointerUp);
+      document.removeEventListener("pointercancel", release);
+    };
   }, []);
+
+  useEffect(() => {
+    if (!editorFocused && !toolPointerPending) setExpanded(false);
+  }, [editorFocused, toolPointerPending]);
 
   // Load the incoming pane's draft and subscribe to updates from async work
   // that may outlive an earlier composer mount for this pane.
@@ -211,13 +275,37 @@ export function TerminalComposer({
     return subscribeTerminalComposerUpload(draftKey, setUploadCount);
   }, [draftKey]);
 
-  // Autosize within the CSS max-height.
+  // Measure at the collapsed width first, including soft wraps. CSS caps the
+  // unfocused preview to one row; scrollHeight still reports its full content.
   useEffect(() => {
     const textarea = textareaRef.current;
     if (!textarea || mode !== "composer") return;
-    textarea.style.height = "0px";
-    textarea.style.height = `${textarea.scrollHeight}px`;
-  }, [text, mode]);
+    const measure = () => {
+      textarea.style.height = "0px";
+      const height = textarea.scrollHeight;
+      textarea.style.height = `${height}px`;
+      if (!editorFocused || !open || expanded) return;
+      const style = window.getComputedStyle(textarea);
+      const oneRow =
+        Number.parseFloat(style.lineHeight) +
+        Number.parseFloat(style.paddingTop) +
+        Number.parseFloat(style.paddingBottom);
+      if (/\r|\n/.test(text) || height > oneRow + 1) setExpanded(true);
+    };
+    measure();
+    // Keyboard/viewport rotation and UI scaling can introduce a soft wrap
+    // without changing the draft. Do not refocus or replace the editor.
+    if (typeof ResizeObserver === "undefined") return;
+    let measuredWidth = textarea.getBoundingClientRect().width;
+    const observer = new ResizeObserver(() => {
+      const width = textarea.getBoundingClientRect().width;
+      if (width === measuredWidth) return;
+      measuredWidth = width;
+      measure();
+    });
+    observer.observe(textarea);
+    return () => observer.disconnect();
+  }, [text, mode, open, editorFocused, expanded]);
 
   // Restore the shared selection after a programmatic insertion. The shared
   // value belongs to the draft key, so an upload started by an older mount can
@@ -254,33 +342,69 @@ export function TerminalComposer({
     );
   };
 
+  const preparePathInsertion = () =>
+    onPreparePathInsertion?.() ??
+    (async (path: string) => {
+      insertIntoTerminalComposerDraft(draftKey, path);
+    });
+  const prepareUpload = () => ({
+    key: draftKey,
+    upload: onUploadFile,
+    insert: preparePathInsertion(),
+  });
+  const pickerCleanupRef = useRef<(() => void) | null>(null);
+
   const uploadAndInsert = async (
     files: File[],
     upload: (file: File) => Promise<string>,
+    insert = preparePathInsertion(),
+    uploadDraftKey = draftKey,
   ) => {
     if (files.length === 0) return;
-    const uploadDraftKey = draftKey;
-    if (!beginTerminalComposerUpload(uploadDraftKey)) return;
+    if (
+      composingRef.current ||
+      terminalComposerSubmissionPending(uploadDraftKey) ||
+      !beginTerminalComposerUpload(uploadDraftKey)
+    )
+      return;
+    const paths: string[] = [];
     try {
-      const paths: string[] = [];
       for (const file of files) paths.push(await upload(file));
-      insertIntoTerminalComposerDraft(
-        uploadDraftKey,
-        terminalUploadedPathsText(paths),
-      );
+      if (composingRef.current)
+        throw new Error(
+          "Path insertion deferred during text composition; path retained in Message draft",
+        );
+      await insert(terminalUploadedPathsText(paths));
+      paths.length = 0;
     } catch (error) {
+      // Keep successful earlier files when a later upload fails. Delivery
+      // itself owns its fallback, so do not retry an uncertain PTY write.
+      if (paths.length) {
+        retainTerminalComposerUploadPaths(
+          uploadDraftKey,
+          terminalUploadedPathsText(paths),
+        );
+      }
       onError(error instanceof Error ? error.message : "File upload failed");
     } finally {
       finishTerminalComposerUpload(uploadDraftKey);
     }
   };
 
+  const pickFiles = (input: HTMLInputElement, context = prepareUpload()) => {
+    const files = Array.from(input.files ?? []);
+    input.value = "";
+    if (files.length > 0)
+      void uploadAndInsert(files, context.upload, context.insert, context.key);
+  };
+
   const submit = async (sendEnter: boolean) => {
     const draft = text;
     const submittedDraftKey = draftKey;
     if (
+      !accessoriesOpen ||
       !draft ||
-      uploadCount > 0 ||
+      terminalComposerUploadCount(submittedDraftKey) > 0 ||
       composingRef.current ||
       !beginTerminalComposerSubmission(submittedDraftKey)
     ) {
@@ -318,6 +442,151 @@ export function TerminalComposer({
     // Cancel the focus-taking mouse event, not pointerdown: WebKit can
     // suppress a touch's click entirely when pointerdown is cancelled.
     e.preventDefault();
+  };
+
+  // Only these two destructive actions need a touch release fallback. Native
+  // focus transfer can close the keyboard and move the button before click;
+  // cancelling pointerdown protects focus but some WebKit versions then omit
+  // click. Never send on down, and consume the later compatibility click even
+  // if the request has already completed (or failed and restored the draft).
+  const submitTouchRef = useRef<{
+    id: number;
+    button: HTMLButtonElement;
+    key: string;
+    x: number;
+    y: number;
+    bounds: DOMRect;
+    time: number;
+    cancelled: boolean;
+  } | null>(null);
+  const submitClickTouchRef = useRef<{
+    id: number;
+    button: HTMLButtonElement;
+    x: number;
+    y: number;
+  } | null>(null);
+  useEffect(() => {
+    const cancelAdditionalPointer = (event: PointerEvent) => {
+      const touch = submitTouchRef.current;
+      if (touch && event.pointerId !== touch.id) touch.cancelled = true;
+    };
+    document.addEventListener("pointerdown", cancelAdditionalPointer, true);
+    return () =>
+      document.removeEventListener(
+        "pointerdown",
+        cancelAdditionalPointer,
+        true,
+      );
+  }, []);
+  useEffect(() => {
+    // Invalidate even an away-and-back transition before the finger lifts.
+    submitTouchRef.current = null;
+  }, [draftKey, paneId, mode, open, accessoriesVisible]);
+  const submitPointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {
+    if (event.pointerType !== "touch") {
+      submitTouchRef.current = null;
+      submitClickTouchRef.current = null;
+      return;
+    }
+    event.preventDefault();
+    // A second finger cannot replace the first press with a fresh tap.
+    if (!event.isPrimary) {
+      cancelSubmitTouch();
+      return;
+    }
+    submitTouchRef.current = null;
+    submitClickTouchRef.current = {
+      id: event.pointerId,
+      button: event.currentTarget,
+      x: event.clientX,
+      y: event.clientY,
+    };
+    // Do not focus the textarea: a keyboard dismissed by Back stays dismissed.
+    if (
+      event.currentTarget.disabled ||
+      composingRef.current ||
+      terminalComposerUploadCount(draftKey) > 0 ||
+      terminalComposerSubmissionPending(draftKey)
+    )
+      return;
+    submitTouchRef.current = {
+      id: event.pointerId,
+      button: event.currentTarget,
+      key: draftKey,
+      x: event.clientX,
+      y: event.clientY,
+      bounds: event.currentTarget.getBoundingClientRect(),
+      time: event.timeStamp,
+      cancelled: false,
+    };
+  };
+  const submitPointerMove = (event: React.PointerEvent<HTMLButtonElement>) => {
+    const touch = submitTouchRef.current;
+    if (!touch || touch.id !== event.pointerId) return;
+    const { left, right, top, bottom } = touch.bounds;
+    // Latch cancellation: moving out and back is not a completed tap. Use the
+    // press-time bounds so a viewport resize alone is not mistaken for a drag.
+    if (
+      Math.hypot(event.clientX - touch.x, event.clientY - touch.y) > 10 ||
+      event.clientX < left ||
+      event.clientX > right ||
+      event.clientY < top ||
+      event.clientY > bottom
+    )
+      touch.cancelled = true;
+  };
+  const cancelSubmitTouch = () => {
+    if (submitTouchRef.current) submitTouchRef.current.cancelled = true;
+  };
+  const submitPointerUp = (
+    event: React.PointerEvent<HTMLButtonElement>,
+    sendEnter: boolean,
+  ) => {
+    const touch = submitTouchRef.current;
+    if (!touch || touch.id !== event.pointerId) return;
+    submitPointerMove(event);
+    if (submitClickTouchRef.current) {
+      submitClickTouchRef.current.x = event.clientX;
+      submitClickTouchRef.current.y = event.clientY;
+    }
+    submitTouchRef.current = null;
+    if (
+      touch.cancelled ||
+      event.timeStamp - touch.time >= 500 ||
+      touch.button !== event.currentTarget ||
+      touch.key !== draftKey ||
+      event.currentTarget.disabled ||
+      !accessoriesOpen ||
+      mode !== "composer"
+    )
+      return;
+    void submit(sendEnter);
+  };
+  const submitClick = (
+    event: React.MouseEvent<HTMLButtonElement>,
+    sendEnter: boolean,
+  ) => {
+    const touch = submitClickTouchRef.current;
+    const native = event.nativeEvent;
+    // Modern touch clicks carry their pointer identity. Older WebKit emits a
+    // MouseEvent instead; match its button and coordinates. A known touch ID
+    // is consumed even if layout retargets click to the other submit button.
+    // A fresh mouse/pen pointerdown clears the association.
+    const duplicate =
+      touch &&
+      (("pointerType" in native &&
+        native.pointerType === "touch" &&
+        "pointerId" in native &&
+        native.pointerId === touch.id) ||
+        (!("pointerType" in native) &&
+          touch.button === event.currentTarget &&
+          event.detail > 0 &&
+          Math.hypot(event.clientX - touch.x, event.clientY - touch.y) < 1));
+    if (duplicate) {
+      event.preventDefault();
+      return;
+    }
+    void submit(sendEnter);
   };
 
   const dismissCommands = () => {
@@ -378,7 +647,7 @@ export function TerminalComposer({
 
   const commandKeyDown = (e: React.KeyboardEvent) => {
     if (
-      !pickerOpen ||
+      !presentedPickerOpen ||
       e.nativeEvent.isComposing ||
       composingRef.current ||
       e.keyCode === 229
@@ -415,18 +684,36 @@ export function TerminalComposer({
   };
 
   const busy = submissionPending || uploadCount > 0;
+  useEffect(() => {
+    if (busy || composing) cancelSubmitTouch();
+  }, [busy, composing]);
   const submitDisabled = !text || busy || composing;
   const hasShortcuts = shortcutRows.some((row) =>
     row.some((shortcut) => shortcut !== null),
   );
   const shortcutColumns = Math.max(1, ...shortcutRows.map((row) => row.length));
+  const activateMessage = (remember: boolean) => {
+    if (composingRef.current) return;
+    flushSync(() => onModeChange("composer", remember));
+  };
 
   return (
     <>
       <div
+        ref={composerRef}
         className="terminal-composer"
+        data-expanded={
+          (expanded &&
+            (editorFocused || toolPointerPending) &&
+            accessoriesOpen &&
+            mode === "composer") ||
+          undefined
+        }
         data-input-mode={mode}
-        role="dialog"
+        data-pane-id={paneId}
+        data-open={open || undefined}
+        data-reserved={reserved || undefined}
+        role="group"
         aria-label="Terminal input"
         tabIndex={-1}
         onFocus={(event) => {
@@ -436,37 +723,39 @@ export function TerminalComposer({
           if (mode === "direct" && !directDisabled) onFocusDirect();
         }}
       >
-        <div className="terminal-composer-toolbar">
-          <fieldset className="terminal-composer-mode" aria-label="Input mode">
-            <legend>Input mode</legend>
-            {(["composer", "direct"] as const).map((nextMode) => (
-              <label key={nextMode}>
-                <input
-                  type="radio"
-                  name={`${pickerId}-input-mode`}
-                  value={nextMode}
-                  checked={mode === nextMode}
-                  disabled={
-                    composing || (nextMode === "direct" && directDisabled)
-                  }
-                  onChange={(e) => {
-                    if (
-                      composingRef.current ||
-                      (nextMode === "direct" && directDisabled)
-                    )
-                      return;
-                    const focusInput = (e.nativeEvent as MouseEvent).detail > 0;
-                    flushSync(() => {
-                      dismissCommands();
-                      onModeChange(nextMode, true);
-                    });
-                    if (focusInput && nextMode === "direct") onFocusDirect();
-                  }}
-                />
-                <span>{nextMode === "composer" ? "Composer" : "Direct"}</span>
-              </label>
-            ))}
-          </fieldset>
+        <div className="terminal-composer-toolbar" hidden={!accessoriesOpen}>
+          <button
+            type="button"
+            className="terminal-composer-attach"
+            title="Add a file"
+            aria-label="Add a file"
+            disabled={busy || composing}
+            onMouseDown={keepTextareaFocus}
+            onClick={() => {
+              if (composingRef.current) return;
+              const input = fileInputRef.current;
+              if (!input) return;
+              pickerCleanupRef.current?.();
+              const context = prepareUpload();
+              const cleanup = () => {
+                input.removeEventListener("change", selected);
+                input.removeEventListener("cancel", cleanup);
+                pickerCleanupRef.current = null;
+              };
+              // The native chooser can finish after React replaces this pane.
+              const selected = (event: Event) => {
+                event.stopPropagation();
+                cleanup();
+                pickFiles(input, context);
+              };
+              input.addEventListener("change", selected);
+              input.addEventListener("cancel", cleanup);
+              pickerCleanupRef.current = cleanup;
+              input.click();
+            }}
+          >
+            <Paperclip size={15} />
+          </button>
           {hasShortcuts ? (
             <button
               type="button"
@@ -481,11 +770,12 @@ export function TerminalComposer({
                   ? "Hide terminal shortcuts"
                   : "Show terminal shortcuts"
               }
-              aria-expanded={shortcutsOpen}
+              aria-expanded={accessoriesOpen && shortcutsOpen && !pickerOpen}
               aria-controls={`${pickerId}-shortcuts`}
               onMouseDown={keepTextareaFocus}
               onClick={() => {
-                const open = !shortcutsOpen;
+                const open = pickerOpen || !shortcutsOpen;
+                dismissCommands();
                 setShortcutsOpen(open);
                 try {
                   worldLocalStorage.setItem(
@@ -507,8 +797,10 @@ export function TerminalComposer({
             className="terminal-composer-commands-toggle"
             aria-label="Commands"
             ref={commandsButtonRef}
-            aria-expanded={pickerOpen}
-            aria-controls={pickerOpen && !replacement ? pickerId : undefined}
+            aria-expanded={presentedPickerOpen}
+            aria-controls={
+              presentedPickerOpen && !replacement ? pickerId : undefined
+            }
             disabled={commands.length === 0 || busy || composing}
             title={
               commands.length
@@ -528,6 +820,57 @@ export function TerminalComposer({
           >
             <SquareTerminal size={17} aria-hidden="true" />
           </button>
+          <div
+            className="terminal-composer-submit-actions"
+            hidden={mode !== "composer"}
+          >
+            <span className="terminal-composer-hint" role="status">
+              {uploadCount > 0
+                ? "Uploading file…"
+                : submissionPending
+                  ? "Sending…"
+                  : ""}
+            </span>
+            <button
+              type="button"
+              className="terminal-composer-submit"
+              title="Insert into the terminal without executing"
+              aria-label="Insert draft into the terminal"
+              disabled={submitDisabled}
+              onMouseDown={keepTextareaFocus}
+              onPointerDown={submitPointerDown}
+              onPointerMove={submitPointerMove}
+              onPointerCancel={cancelSubmitTouch}
+              onLostPointerCapture={cancelSubmitTouch}
+              onContextMenu={cancelSubmitTouch}
+              onPointerUp={(event) => submitPointerUp(event, false)}
+              onClick={(event) => submitClick(event, false)}
+            >
+              <TextCursorInput size={14} />
+              Insert
+            </button>
+            <button
+              type="button"
+              className="terminal-composer-submit is-primary"
+              title={shortcutTitle(
+                "Insert into the terminal and send Enter",
+                "composer.send",
+              )}
+              aria-label="Send draft to the terminal"
+              disabled={submitDisabled}
+              onMouseDown={keepTextareaFocus}
+              onPointerDown={submitPointerDown}
+              onPointerMove={submitPointerMove}
+              onPointerCancel={cancelSubmitTouch}
+              onLostPointerCapture={cancelSubmitTouch}
+              onContextMenu={cancelSubmitTouch}
+              onPointerUp={(event) => submitPointerUp(event, true)}
+              onClick={(event) => submitClick(event, true)}
+            >
+              <CornerDownLeft size={14} />
+              Send
+            </button>
+          </div>
           <button
             type="button"
             className="terminal-composer-close"
@@ -543,7 +886,7 @@ export function TerminalComposer({
           <div
             className="terminal-composer-shortcuts"
             id={`${pickerId}-shortcuts`}
-            hidden={!shortcutsOpen}
+            hidden={!accessoriesOpen || !shortcutsOpen || pickerOpen}
             style={
               {
                 "--mobile-shortcut-columns": shortcutColumns,
@@ -593,7 +936,7 @@ export function TerminalComposer({
             ))}
           </div>
         ) : null}
-        {pickerOpen ? (
+        {presentedPickerOpen ? (
           <section
             ref={commandPickerRef}
             className="terminal-composer-commands"
@@ -690,172 +1033,156 @@ export function TerminalComposer({
             )}
           </section>
         ) : null}
-        <textarea
-          ref={textareaRef}
-          className="terminal-composer-input"
-          hidden={mode !== "composer"}
-          value={text}
-          rows={1}
-          placeholder="Compose input for the terminal…"
-          autoComplete="off"
-          aria-label="Terminal input draft"
-          role="combobox"
-          aria-expanded={pickerOpen && !replacement}
-          aria-controls={pickerOpen && !replacement ? pickerId : undefined}
-          aria-autocomplete="list"
-          aria-activedescendant={
-            pickerOpen && !replacement && selectedCommand
-              ? `${pickerId}-${activeCommand}`
-              : undefined
-          }
-          onChange={(e) => updateText(e.currentTarget)}
-          onSelect={(e) => {
-            const textarea = e.currentTarget;
-            // Ignore hidden or not-yet-committed DOM selections. They belong
-            // to an older draft, not the caret advanced by an async insertion.
-            if (
-              mode !== "composer" ||
-              textarea.value !== readTerminalComposerDraft(draftKey)
-            )
-              return;
-            writeTerminalComposerSelection(
-              draftKey,
-              textarea.selectionStart,
-              textarea.selectionEnd,
-            );
-            if (
-              pickerMode === "inline" &&
-              composerCommandPrefix(
-                textarea.value,
+        <div className="terminal-mobile-input-bar">
+          <textarea
+            ref={textareaRef}
+            className="terminal-composer-input terminal-mobile-message"
+            value={text}
+            rows={1}
+            placeholder={
+              agent?.trim() ? `Message ${agent.trim()}…` : "Message…"
+            }
+            onFocus={() => {
+              setEditorFocused(true);
+              activateMessage(!open);
+            }}
+            onBlur={() => {
+              setEditorFocused(false);
+            }}
+            onClick={() => activateMessage(true)}
+            autoComplete="off"
+            aria-label="Terminal input draft"
+            role="combobox"
+            aria-expanded={presentedPickerOpen && !replacement}
+            aria-controls={
+              presentedPickerOpen && !replacement ? pickerId : undefined
+            }
+            aria-autocomplete="list"
+            aria-activedescendant={
+              presentedPickerOpen && !replacement && selectedCommand
+                ? `${pickerId}-${activeCommand}`
+                : undefined
+            }
+            onChange={(e) => updateText(e.currentTarget)}
+            onSelect={(e) => {
+              const textarea = e.currentTarget;
+              // Ignore hidden or not-yet-committed DOM selections. They belong
+              // to an older draft, not the caret advanced by an async insertion.
+              if (
+                mode !== "composer" ||
+                textarea.value !== readTerminalComposerDraft(draftKey)
+              )
+                return;
+              writeTerminalComposerSelection(
+                draftKey,
                 textarea.selectionStart,
                 textarea.selectionEnd,
-              ) === null
-            )
-              dismissCommands();
-          }}
-          onCompositionStart={() => {
-            composingRef.current = true;
-            setComposing(true);
-          }}
-          onCompositionEnd={() => {
-            composingRef.current = false;
-            setComposing(false);
-          }}
-          onPaste={(e) => {
-            const images = Array.from(e.clipboardData?.items ?? [])
-              .filter(
-                (item) =>
-                  item.kind === "file" && item.type.startsWith("image/"),
+              );
+              if (
+                pickerMode === "inline" &&
+                composerCommandPrefix(
+                  textarea.value,
+                  textarea.selectionStart,
+                  textarea.selectionEnd,
+                ) === null
               )
-              .map((item) => item.getAsFile())
-              .filter((file): file is File => file !== null);
-            // No image on the clipboard: let the native text paste proceed.
-            if (images.length === 0) return;
-            e.preventDefault();
-            void uploadAndInsert(images, onUploadImage);
-          }}
-          onDragOver={(e) => {
-            if (
-              !isWorkspacePathDrag(e.dataTransfer) &&
-              !isNativeFileDrag(e.dataTransfer)
-            )
-              return;
-            e.preventDefault();
-            e.dataTransfer.dropEffect = "copy";
-          }}
-          onDrop={(e) => {
-            if (isWorkspacePathDrag(e.dataTransfer)) {
+                dismissCommands();
+            }}
+            onCompositionStart={() => {
+              cancelSubmitTouch();
+              composingRef.current = true;
+              setComposing(true);
+            }}
+            onCompositionEnd={() => {
+              composingRef.current = false;
+              setComposing(false);
+            }}
+            onPaste={(e) => {
+              const images = Array.from(e.clipboardData?.items ?? [])
+                .filter((item) => item.kind === "file")
+                .map((item) => item.getAsFile())
+                .filter((file): file is File => file !== null);
+              // No image on the clipboard: let the native text paste proceed.
+              if (images.length === 0) return;
               e.preventDefault();
-              const path = workspacePathFromDrag(e.dataTransfer);
-              if (path) insertIntoTerminalComposerDraft(draftKey, path);
-              return;
-            }
-            if (!isNativeFileDrag(e.dataTransfer)) return;
-            e.preventDefault();
-            const files = filesFromTerminalDrop(e.dataTransfer);
-            if (files === "directory") {
-              onError("Drop files only; directories are not supported.");
-            } else if (files?.length) {
-              void uploadAndInsert(files, onUploadFile);
-            }
-          }}
-          onKeyDown={(e) => {
-            if (
-              e.nativeEvent.isComposing ||
-              composingRef.current ||
-              e.keyCode === 229
-            )
-              return;
-            if (shortcutMatches(e.nativeEvent, "composer.send")) {
+              void uploadAndInsert(images, (file) =>
+                file.type.startsWith("image/")
+                  ? onUploadImage(file)
+                  : onUploadFile(file),
+              );
+            }}
+            onDragOver={(e) => {
+              if (
+                !isWorkspacePathDrag(e.dataTransfer) &&
+                !isNativeFileDrag(e.dataTransfer)
+              )
+                return;
               e.preventDefault();
-              void submit(true);
-              return;
-            }
-            commandKeyDown(e);
-          }}
-        />
+              e.dataTransfer.dropEffect = "copy";
+            }}
+            onDrop={(e) => {
+              if (isWorkspacePathDrag(e.dataTransfer)) {
+                e.preventDefault();
+                const path = workspacePathFromDrag(e.dataTransfer);
+                if (
+                  path &&
+                  !composingRef.current &&
+                  !terminalComposerSubmissionPending(draftKey)
+                )
+                  void preparePathInsertion()(path);
+                return;
+              }
+              if (!isNativeFileDrag(e.dataTransfer)) return;
+              e.preventDefault();
+              const files = filesFromTerminalDrop(e.dataTransfer);
+              if (files === "directory") {
+                onError("Drop files only; directories are not supported.");
+              } else if (files?.length) {
+                void uploadAndInsert(files, onUploadFile);
+              }
+            }}
+            onKeyDown={(e) => {
+              if (
+                e.nativeEvent.isComposing ||
+                composingRef.current ||
+                e.keyCode === 229
+              )
+                return;
+              if (shortcutMatches(e.nativeEvent, "composer.send")) {
+                e.preventDefault();
+                void submit(true);
+                return;
+              }
+              commandKeyDown(e);
+            }}
+          />
+          <button
+            type="button"
+            className="terminal-mobile-direct"
+            aria-label="Type directly into the terminal"
+            title="Type directly into the terminal"
+            aria-pressed={directInputActive ?? (open && mode === "direct")}
+            disabled={directDisabled || composing}
+            onMouseDown={keepTextareaFocus}
+            onClick={() => {
+              if (composingRef.current || directDisabled) return;
+              flushSync(() => {
+                dismissCommands();
+                onModeChange("direct", true);
+              });
+              onFocusDirect();
+            }}
+          >
+            <SquareTerminal size={19} aria-hidden="true" />
+          </button>
+        </div>
         <input
           ref={fileInputRef}
           type="file"
           multiple
           hidden
-          onChange={(e) => {
-            const files = Array.from(e.target.files ?? []);
-            // Reset so picking the same file again still fires change.
-            e.target.value = "";
-            if (files.length > 0) void uploadAndInsert(files, onUploadFile);
-          }}
+          onChange={(e) => pickFiles(e.currentTarget)}
         />
-        <div className="terminal-composer-direct" hidden={mode !== "direct"}>
-          Tap the terminal to type directly. Your Composer draft is saved.
-        </div>
-        <div className="terminal-composer-actions" hidden={mode !== "composer"}>
-          <button
-            type="button"
-            className="terminal-composer-attach"
-            title="Add a file"
-            aria-label="Add a file"
-            disabled={busy}
-            onMouseDown={keepTextareaFocus}
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <Paperclip size={15} />
-          </button>
-          <span className="terminal-composer-hint">
-            {uploadCount > 0
-              ? "Uploading file…"
-              : submissionPending
-                ? "Sending…"
-                : ""}
-          </span>
-          <button
-            type="button"
-            className="terminal-composer-submit"
-            title="Insert into the terminal without executing"
-            aria-label="Insert draft into the terminal"
-            disabled={submitDisabled}
-            onMouseDown={keepTextareaFocus}
-            onClick={() => void submit(false)}
-          >
-            <CornerDownRight size={14} />
-            Insert
-          </button>
-          <button
-            type="button"
-            className="terminal-composer-submit is-primary"
-            title={shortcutTitle(
-              "Insert into the terminal and send Enter",
-              "composer.send",
-            )}
-            aria-label="Send draft to the terminal"
-            disabled={submitDisabled}
-            onMouseDown={keepTextareaFocus}
-            onClick={() => void submit(true)}
-          >
-            <CornerDownLeft size={14} />
-            Send
-          </button>
-        </div>
       </div>
     </>
   );

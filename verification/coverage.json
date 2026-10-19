@@ -321,7 +321,10 @@
       "existingTests": [
         "web/src/terminalComposer.test.ts",
         "web/src/terminalComposerCommands.test.ts",
-        "web/src/mobileTerminalShortcuts.test.ts"
+        "web/src/mobileTerminalShortcuts.test.ts",
+        "web/src/components/TerminalComposer.dom.test.ts",
+        "web/src/components/TerminalComposer.uploads.test.ts",
+        "web/src/components/TerminalView.inputMode.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/186",
       "technique": "alternative",
@@ -336,7 +339,10 @@
         "tests": [
           "web/src/terminalComposer.test.ts",
           "web/src/terminalComposerCommands.test.ts",
-          "web/src/mobileTerminalShortcuts.test.ts"
+          "web/src/mobileTerminalShortcuts.test.ts",
+          "web/src/components/TerminalComposer.dom.test.ts",
+          "web/src/components/TerminalComposer.uploads.test.ts",
+          "web/src/components/TerminalView.inputMode.test.ts"
         ],
         "checks": ["bun run check"],
         "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
@@ -784,7 +790,10 @@
         "web/src/tabLayout.test.ts",
         "web/src/visibleTabLayout.test.ts",
         "web/src/tabPins.test.ts",
-        "web/src/tabReorder.test.ts"
+        "web/src/tabReorder.test.ts",
+        "web/src/components/PaneMoveMenu.test.ts",
+        "web/src/store.test.ts",
+        "web/src/tabStripScroll.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/186",
       "technique": "alternative",
@@ -800,7 +809,10 @@
           "web/src/tabLayout.test.ts",
           "web/src/visibleTabLayout.test.ts",
           "web/src/tabPins.test.ts",
-          "web/src/tabReorder.test.ts"
+          "web/src/tabReorder.test.ts",
+          "web/src/components/PaneMoveMenu.test.ts",
+          "web/src/store.test.ts",
+          "web/src/tabStripScroll.test.ts"
         ],
         "checks": ["bun run check"],
         "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
@@ -1088,7 +1100,8 @@
         "server/src/http/auth-pin.test.ts",
         "server/src/http/browser-admission.test.ts",
         "server/src/config/auth-token.test.ts",
-        "server/src/config/server-config.test.ts"
+        "server/src/config/server-config.test.ts",
+        "server/src/http/login-page-pin.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/186",
       "technique": "alternative",
@@ -1103,7 +1116,9 @@
         "tests": [
           "server/src/http/auth.test.ts",
           "server/src/http/auth-pin.test.ts",
-          "server/src/http/browser-admission.test.ts"
+          "server/src/http/browser-admission.test.ts",
+          "server/src/config/auth-token.test.ts",
+          "server/src/http/login-page-pin.test.ts"
         ],
         "checks": ["bun run check"],
         "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
@@ -1201,7 +1216,11 @@
       "existingTests": [
         "server/src/workspace/git-actions.test.ts",
         "server/src/workspace/auto-sync.test.ts",
-        "server/src/workspace/git-snapshot.test.ts"
+        "server/src/workspace/git-snapshot.test.ts",
+        "server/src/workspace/diff-base.test.ts",
+        "server/src/workspace/files.test.ts",
+        "web/src/components/DiffViewerPanel.test.ts",
+        "web/src/gitDiffSummaryStore.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/186",
       "technique": "alternative",
@@ -1216,7 +1235,11 @@
         "tests": [
           "server/src/workspace/git-actions.test.ts",
           "server/src/workspace/auto-sync.test.ts",
-          "server/src/workspace/git-snapshot.test.ts"
+          "server/src/workspace/git-snapshot.test.ts",
+          "server/src/workspace/diff-base.test.ts",
+          "server/src/workspace/files.test.ts",
+          "web/src/components/DiffViewerPanel.test.ts",
+          "web/src/gitDiffSummaryStore.test.ts"
         ],
         "checks": ["bun run check"],
         "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
@@ -1322,7 +1345,8 @@
         "scripts/install-plugin.windows.test.ts",
         "scripts/plugin-native.test.ts",
         "server/src/config/plugin-command.test.ts",
-        "scripts/installer-upgrade.test.ts"
+        "scripts/installer-upgrade.test.ts",
+        "server/src/herdr/release.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/186",
       "technique": "alternative",
@@ -1344,7 +1368,8 @@
           "scripts/install-plugin.windows.test.ts",
           "scripts/plugin-native.test.ts",
           "server/src/config/plugin-command.test.ts",
-          "scripts/installer-upgrade.test.ts"
+          "scripts/installer-upgrade.test.ts",
+          "server/src/herdr/release.test.ts"
         ],
         "checks": ["bun run check"],
         "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."

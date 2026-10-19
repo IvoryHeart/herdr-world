@@ -370,6 +370,9 @@ re-anchoring marks a comment stale but retains its original quote.
 ### 2.5 Do not rush into bulk actions
 
 Diff Viewer separates staged, unstaged, untracked, and conflicted files.
+Choose **Against branch** to compare with the repository default or select another
+local or remote-tracking branch. World uses existing refs without fetching; the
+choice stays with this repository on this host.
 Context actions stage/unstage matching changes; **More Git actions** affects
 multiple files.
 
@@ -379,6 +382,10 @@ committing is not pushing.
 
 > **Discard Unstaged loses unstaged changes; Delete Untracked deletes files.**
 > Confirmation is not a backup. When uncertain, cancel and preserve files.
+
+To move a split pane to another tab in the same workspace, drag its handle onto
+that tab. Hover to reveal the destination panes, then drop on a pane edge. Drop
+on **+** to break the pane into a new tab.
 
 ## 3. Parallel work and mobile access
 
@@ -420,9 +427,10 @@ Use its HTTPS URL: `127.0.0.1` on a phone means the phone, not the work computer
 
 1. Open Herdr World in the mobile browser and select your practice project and
    agent pane. Authenticate first if your deployment requires login.
-2. Use the floating terminal panel for arrow keys, Ctrl, and other actions
-   that are awkward on a touch keyboard. Customize its two shortcut rows
-   as needed.
+2. Tap **Message** below the terminal to raise the keyboard and compose; use
+   **Direct** to type straight into the terminal. The input stays below the output.
+   Tabs and More live in the shared top app bar. Use the shortcut rows for arrow
+   keys, Ctrl and other actions that are awkward on a touch keyboard.
 3. Open Changes to review the README diff. Mobile uses a unified diff layout;
    long-press a file to open its actions menu. To open a link printed in a
    terminal, long-press it and choose **Open link** (on a computer,

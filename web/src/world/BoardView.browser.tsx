@@ -1411,6 +1411,7 @@ async function run() {
 
   // Tidy carries strung notes with their cards.
   {
+    const sectionStart = structuredClone(saved);
     const strungTo = saved.strings[0]!.to;
     const paneId = "anchor" in strungTo ? strungTo.anchor.native_id : "";
     const tabKey =
@@ -1427,12 +1428,14 @@ async function run() {
     const tabStart = at(tabKey)!;
     const wc = centre(ws.querySelector(".board-label")!);
     pointer(ws, "pointerdown", wc.x, wc.y, 31);
+    // On a narrow zoomed board the old 200px drag could land almost
+    // exactly on Tidy's target. Move farther so this exercises actual motion.
     for (let i = 1; i <= 8; i++) {
-      pointer(ws, "pointermove", wc.x + i * 25, wc.y + i * 10, 31);
+      pointer(ws, "pointermove", wc.x + i * 30, wc.y + i * 10, 31);
       await settle(16);
     }
     await settle(150);
-    pointer(ws, "pointerup", wc.x + 200, wc.y + 80, 31);
+    pointer(ws, "pointerup", wc.x + 240, wc.y + 80, 31);
     await rest();
     await settle(700);
     check(
@@ -1504,6 +1507,20 @@ async function run() {
       Math.hypot(noteUndone.x - noteBefore.x, noteUndone.y - noteBefore.y) < 3,
       "Undo puts the note back too",
     );
+    // This scenario deliberately moved the workspace away from its previous
+    // fixture placement. Restore that setup before the independent note-clearance
+    // scenario below, through the same service operations as another client.
+    apply([
+      { op: "layout.set", replace: true, ...sectionStart.layout },
+      ...sectionStart.notes.map((note) => ({
+        op: "note.put" as const,
+        note,
+        rev: saved.notes.find((current) => current.id === note.id)!.rev,
+      })),
+    ]);
+    await store.refresh();
+    await rest();
+    await still();
   }
 
   // Another client moves a workspace and folds it: the open board follows,

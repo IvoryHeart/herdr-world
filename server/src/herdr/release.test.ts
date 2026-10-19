@@ -196,7 +196,7 @@ describe("installVerifiedHerdr", () => {
     expect(commands[0].join(" ")).toContain("Expand-Archive");
     expect(result.installed).toBe(true);
     expect(result.binaryPath).toBe(
-      join(appDataDir, "herdr-world", "herdr", "0.9.4", "herdr.exe"),
+      join(appDataDir, "herdr-world", "herdr", "0.9.5", "herdr.exe"),
     );
     expect(await Bun.file(previous).text()).toBe("previous-herdr");
     expect(

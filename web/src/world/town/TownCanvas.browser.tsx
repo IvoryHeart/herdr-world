@@ -6,6 +6,9 @@ import type { Pane, Tab, Workspace } from "../../types";
 import type { WorldRuntimeConnection } from "../runtimeStore";
 import { buildWorldObject, type WorldObject } from "../worldObject";
 import TownView from "../TownView";
+import { TownComposer } from "./TownComposer";
+import "../../components/TerminalView.css";
+import "../../components/MobileControls.css";
 import { initializeLayoutPreferences } from "../../layoutPreferences";
 import { bridge, type ConnectionClient } from "../../api";
 import "../world.css";
@@ -359,6 +362,41 @@ async function run() {
   layoutShell.append(host);
   document.body.append(layoutShell);
   const base = topology(7);
+  if (!phone && mode === "test") {
+    const world = worldFor(base.connections);
+    const leaf = world.leaves.find((candidate) => candidate.kind === "agent")!;
+    const box = document.createElement("div");
+    box.style.cssText = "position:fixed;top:0;left:0;width:320px;z-index:1000";
+    document.body.append(box);
+    const composerRoot = createRoot(box);
+    composerRoot.render(
+      <TownComposer
+        leaf={leaf}
+        onClose={() => {}}
+        onSent={() => {}}
+        onError={() => {}}
+        onDirect={() => {}}
+      />,
+    );
+    await waitFor(
+      () => !!box.querySelector(".terminal-composer-input"),
+      "desktop Town composer mounts",
+    );
+    const editor = box.querySelector<HTMLTextAreaElement>(
+      ".terminal-composer-input",
+    )!;
+    const direct = box.querySelector<HTMLButtonElement>(
+      '[aria-label="Type directly into the terminal"]',
+    )!;
+    check(
+      editor.getBoundingClientRect().width > 0 &&
+        editor.getBoundingClientRect().height > 0 &&
+        direct.getBoundingClientRect().width > 0,
+      "desktop Town composer keeps its draft and Direct control visible with terminal CSS loaded",
+    );
+    composerRoot.unmount();
+    box.remove();
+  }
   const blocked = base.agentPanes.filter((_, index) => index % 23 === 4);
   for (const pane of blocked) pane.agent_status = "blocked";
   statusOf = (paneId) =>
@@ -677,9 +715,10 @@ async function run() {
       "chat should show the agent's messages and its question",
     );
     // Direct typing happens in the full terminal.
-    [...host.querySelectorAll<HTMLLabelElement>(".town-peek label")]
-      .find((label) => label.textContent?.trim() === "Direct")!
-      .querySelector("input")!
+    host
+      .querySelector<HTMLButtonElement>(
+        '.town-peek button[aria-label="Type directly into the terminal"]',
+      )!
       .click();
     await waitFor(
       () => opened.length === 1,

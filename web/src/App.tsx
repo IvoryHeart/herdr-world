@@ -4595,10 +4595,9 @@ export default function App({
               activateTerminalSurface();
               setTerminalComposerOpen(true);
             });
-            // Give the dock focus; Composer's editor opens the keyboard on tap.
-            document
-              .querySelector<HTMLElement>(".terminal-composer")
-              ?.focus({ preventScroll: true });
+            // This button is the typing gesture; focus the active editor while
+            // the browser may still raise its keyboard synchronously.
+            activeTerminalInput(document)?.focus({ preventScroll: true });
           }}
         >
           <Keyboard size={20} />

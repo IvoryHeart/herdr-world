@@ -443,13 +443,13 @@ async function run() {
     await until(
       () =>
         document.querySelector(
-          '.workspace-inspector button[aria-label="Open terminal input"]',
+          ".workspace-inspector textarea.terminal-composer-input",
         ),
       "Town opened the agent's terminal",
     );
     document
-      .querySelector<HTMLButtonElement>(
-        '.workspace-inspector button[aria-label="Open terminal input"]',
+      .querySelector<HTMLTextAreaElement>(
+        ".workspace-inspector textarea.terminal-composer-input",
       )!
       .click();
     await until(
@@ -458,7 +458,10 @@ async function run() {
     );
     history.back();
     await until(
-      () => !document.querySelector(".workspace-inspector .terminal-composer"),
+      () =>
+        !document.querySelector(
+          ".workspace-inspector .terminal-composer[data-open]",
+        ),
       "the first Back did not close Composer",
     );
     check(

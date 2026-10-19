@@ -138,3 +138,15 @@ Authoritative [agent guidance](../AGENTS.md#behavioral-verification) describes t
 implemented protected gate and completed final acceptance.
 
 Quint adoption is accepted and merged in PR #188; [archived completion](../openspec/changes/archive/2026-10-14-adopt-quint-behavioral-verification/tasks.md#accepted-completion-and-archival) records final reviews, owner approval, source-bound CI and the no-op spec synchronization. Current evidence remains maintained under `verification/` and `quint/`.
+
+Roamgate v0.8.6 comparisons use [branch selection](../server/src/workspace/diff-base.ts)
+and [its repository-ref tests](../server/src/workspace/diff-base.test.ts), with
+[qualified comparison caches](../web/src/components/DiffViewerPanel.test.ts).
+[Tab-strip scrolling](../web/src/components/useTabStripScroll.ts) uses
+[pure overflow geometry](../web/src/tabStripScroll.ts) and
+[geometry regressions](../web/src/tabStripScroll.test.ts). Cross-tab pane dragging
+lives in [PaneMoveMenu](../web/src/components/PaneMoveMenu.tsx), whose moves use
+[qualified operational commands](../web/src/store.ts) and
+[owner-retirement regressions](../web/src/store.test.ts). Mobile input remains in
+each terminal; [the shared World app bar](../web/src/components/MobileControls.tsx)
+continues to own Tabs and More.

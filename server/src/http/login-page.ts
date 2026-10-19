@@ -1,4 +1,15 @@
-export function renderLoginPage(pinEnabled: boolean): string {
+// World owns its login configuration and deployment guidance.
+const LOGIN_OPTIONS_URL =
+  "https://github.com/IvoryHeart/herdr-world/blob/main/docs/DEPLOYMENT.md#listener-and-authentication";
+
+function escapeHtml(text: string): string {
+  return text.replace(/[&<>"']/g, (char) => `&#${char.charCodeAt(0)};`);
+}
+
+export function renderLoginPage(
+  pinEnabled: boolean,
+  tokenCommand?: string,
+): string {
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -41,7 +52,23 @@ export function renderLoginPage(pinEnabled: boolean): string {
   .submit:disabled{opacity:.65;cursor:wait}
   .err{color:var(--error);font-size:13px;line-height:1.5;min-height:24px;margin:10px 0 6px}
   ${pinEnabled ? ".method{display:block;width:100%;min-height:44px;margin-top:12px;padding:8px;border:0;border-radius:7px;background:transparent;color:var(--accent);font-size:13px}.method:disabled{opacity:.65;cursor:wait}\n  " : ""}.note{margin-top:24px;text-align:center;font-size:12px}
-  footer{margin-top:24px;text-align:center;color:var(--muted);font-size:12px;line-height:1.6}
+  ${
+    tokenCommand
+      ? `.help{margin-top:8px;font-size:13px}
+  .help summary{width:fit-content;margin:0 auto;padding:12px 8px;border-radius:7px;color:var(--accent);cursor:pointer;list-style:none}
+  .help summary::-webkit-details-marker{display:none}
+  .help-body{margin-top:4px;padding:16px;border:1px solid var(--border);border-radius:12px;background:var(--input)}
+  .help-body p{font-size:13px;line-height:1.5}
+  .cmd{display:flex;align-items:center;gap:8px;margin:8px 0 14px;padding:4px 4px 4px 12px;border:1px solid var(--border);border-radius:8px;background:var(--panel)}
+  code{font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;overflow-wrap:anywhere}
+  .cmd code{flex:1;padding:6px 0;-webkit-user-select:all;user-select:all}
+  .copy{flex:none;min-width:56px;min-height:32px;padding:0 10px;border:0;border-radius:6px;background:transparent;color:var(--accent);font-size:12px;font-weight:600}
+  .copy:hover{background:var(--input)}
+  .options{margin-top:14px;padding-top:14px;border-top:1px solid var(--border)}
+  .options a{color:var(--accent);text-underline-offset:2px}
+  `
+      : ""
+  }footer{margin-top:24px;text-align:center;color:var(--muted);font-size:12px;line-height:1.6}
   @media(prefers-color-scheme:light){
     :root{background:#f5f5f3;color:#252629;color-scheme:light;--panel:#fff;--border:#dcdde0;
       --muted:#64666d;--input:#fafafa;--accent:#315fb4;--error:#b42332}
@@ -67,12 +94,25 @@ export function renderLoginPage(pinEnabled: boolean): string {
       <button class="submit" id="btn" type="submit">Log in</button>
     ${pinEnabled ? '  <button class="method" id="method" type="button" aria-controls="pw">Use password or token instead</button>\n    ' : ""}</form>
     <p class="note"${pinEnabled ? ' id="credential-note"' : ""}>${pinEnabled ? "Use the 6-12 digit PIN configured on your server." : "Use the password or token configured on your server."}</p>
-    <noscript><p class="err">Enable JavaScript to log in to Herdr World.</p></noscript>
+    ${
+      tokenCommand
+        ? `<details class="help" id="help"${pinEnabled ? " hidden" : ""}>
+      <summary>Where do I find my token?</summary>
+      <div class="help-body">
+        <p>On the computer running Herdr World, run this to print it:</p>
+        <div class="cmd"><code id="token-cmd">${escapeHtml(tokenCommand)}</code><button class="copy" id="copy" type="button" hidden>Copy</button></div>
+        <p>On a phone? For an installed Herdr World user service, run <code>herdr-world url --qr</code> on that computer and scan the code to log in. This uses the service configuration. For a foreground instance, keep using this instance's address and read its token on the host with the command above.</p>
+        <p class="options">Prefer a password or PIN you can remember? <a href="${LOGIN_OPTIONS_URL}" target="_blank" rel="noopener noreferrer">See login options</a></p>
+      </div>
+    </details>
+    `
+        : ""
+    }<noscript><p class="err">Enable JavaScript to log in to Herdr World.</p></noscript>
   </section>
   <footer>Your workspace, wherever you are.</footer>
 </main>
 <script>
-${pinEnabled ? PIN_LOGIN_SCRIPT : PASSWORD_LOGIN_SCRIPT}
+${pinEnabled ? PIN_LOGIN_SCRIPT : PASSWORD_LOGIN_SCRIPT}${tokenCommand ? COPY_COMMAND_SCRIPT : ""}
 </script>
 </body>
 </html>`;
@@ -108,7 +148,7 @@ const PASSWORD_LOGIN_SCRIPT = `  const form=document.getElementById('login'),pw=
 
 const PIN_LOGIN_SCRIPT = `
   const form=document.getElementById('login'),pw=document.getElementById('pw'),btn=document.getElementById('btn'),err=document.getElementById('err'),reveal=document.getElementById('reveal');
-  const method=document.getElementById('method'),label=document.getElementById('credential-label'),note=document.getElementById('credential-note');
+  const method=document.getElementById('method'),label=document.getElementById('credential-label'),note=document.getElementById('credential-note'),help=document.getElementById('help');
   let pinMode=true,submitting=false;
   const hideSecret=()=>{
     pw.type='password';
@@ -138,6 +178,7 @@ const PIN_LOGIN_SCRIPT = `
     label.textContent=pinMode?'PIN':'Password or token';
     note.textContent=pinMode?'Use the 6-12 digit PIN configured on your server.':'Use the password or token configured on your server.';
     method.textContent=pinMode?'Use password or token instead':'Use PIN instead';
+    if(help)help.hidden=pinMode;
     pw.focus();
   };
   reveal.onclick=()=>{
@@ -188,5 +229,19 @@ const PIN_LOGIN_SCRIPT = `
     }
   };
 `;
+
+// The clipboard needs a secure context, which a plain LAN URL is not.
+const COPY_COMMAND_SCRIPT = `
+  const copy=document.getElementById('copy');
+  if(globalThis.isSecureContext&&globalThis.navigator?.clipboard){
+    let copyTimer;
+    copy.hidden=false;
+    copy.onclick=async()=>{
+      try{await navigator.clipboard.writeText(document.getElementById('token-cmd').textContent);}catch{return;}
+      copy.textContent='Copied';
+      clearTimeout(copyTimer);
+      copyTimer=setTimeout(()=>{copy.textContent='Copy';},1500);
+    };
+  }`;
 
 export const LOGIN_HTML = renderLoginPage(false);

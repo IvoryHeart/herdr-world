@@ -48,6 +48,39 @@ export function defaultAuthTokenPath(
   return defaultDataFile("auth-token", homeDir, platform, appDataDir);
 }
 
+function pathUnder(path: string, root: string | undefined): string | null {
+  if (!root) return null;
+  // Keep the separator boundary check even when the root already ends in one.
+  const prefix = root.replace(/[\\/]+$/, "");
+  if (!path.startsWith(prefix)) return null;
+  const rest = path.slice(prefix.length);
+  return /^[\\/]/.test(rest) ? rest.slice(1) : null;
+}
+
+/**
+ * A host shell command that prints the generated token, for the login page.
+ * It names the file relative to the home or APPDATA directory so the
+ * unauthenticated page never reveals the account name.
+ */
+export function authTokenPrintCommand(
+  path: string,
+  homeDir = homedir(),
+  platform = process.platform,
+  appDataDir = process.env.APPDATA,
+): string | undefined {
+  if (platform === "win32") {
+    const inAppData = pathUnder(path, appDataDir);
+    const inHome = inAppData === null ? pathUnder(path, homeDir) : null;
+    const rest = inAppData ?? inHome;
+    if (rest === null || /["`$]/.test(rest)) return undefined;
+    const root = inAppData === null ? "$HOME" : "$env:APPDATA";
+    return `Get-Content "${root}\\${rest.replaceAll("/", "\\")}"`;
+  }
+  const rest = pathUnder(path, homeDir);
+  if (rest === null || !/^[\w./-]+$/.test(rest)) return undefined;
+  return `cat ~/${rest}`;
+}
+
 export function readAuthToken(path: string): string {
   const fd = openSync(path, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
   try {

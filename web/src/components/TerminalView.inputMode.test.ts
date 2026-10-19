@@ -67,6 +67,69 @@ async function registerDomTests() {
   const { act, createElement, StrictMode } = await import("react");
   const { createRoot } = await import("react-dom/client");
   const { flushSync } = await import("react-dom");
+  // Event-driven session history: happy-dom does not model traversal reliably.
+  const entries: { state: object | null; url: string }[] = [
+    { state: null, url: "/" },
+  ];
+  let historyIndex = 0;
+  const traversals: (() => void)[] = [];
+  const replaceLocation = browser.history.replaceState.bind(browser.history);
+  Object.defineProperty(browser, "history", {
+    value: {
+      get state() {
+        return entries[historyIndex]!.state;
+      },
+      pushState(state: object | null, _unused: string, url?: string) {
+        entries.splice(historyIndex + 1);
+        entries.push({ state, url: url ?? entries[historyIndex]!.url });
+        historyIndex++;
+        replaceLocation(state, "", entries[historyIndex]!.url);
+      },
+      replaceState(state: object | null, _unused: string, url?: string) {
+        entries[historyIndex] = {
+          state,
+          url: url ?? entries[historyIndex]!.url,
+        };
+        replaceLocation(state, "", entries[historyIndex]!.url);
+      },
+      forward() {
+        this.go(1);
+      },
+      go(delta: number) {
+        traversals.push(() => {
+          const next = historyIndex + delta;
+          if (next < 0 || next >= entries.length) return;
+          historyIndex = next;
+          const entry = entries[historyIndex]!;
+          replaceLocation(entry.state, "", entry.url);
+          browser.dispatchEvent(
+            new browser.PopStateEvent("popstate", { state: entry.state }),
+          );
+        });
+      },
+      back() {
+        traversals.push(() => {
+          if (historyIndex === 0) return;
+          const entry = entries[--historyIndex]!;
+          replaceLocation(entry.state, "", entry.url);
+          browser.dispatchEvent(
+            new browser.PopStateEvent("popstate", { state: entry.state }),
+          );
+        });
+      },
+    },
+  });
+  async function settleHistory() {
+    for (let turn = 0; turn < 8; turn++) {
+      await act(async () => {
+        await Promise.resolve();
+        for (const complete of traversals.splice(0)) complete();
+      });
+      if (!traversals.length) return;
+    }
+    throw new Error("history traversal loop");
+  }
+  let mobileLayout = true;
   const noop = () => {};
   const disposable = () => ({ dispose: noop });
   type Pane = {
@@ -115,6 +178,18 @@ async function registerDomTests() {
   const calls: { method: string; params: Record<string, unknown> }[] = [];
   const clients = new Map<string, object>();
   const terminalListeners = new Set<(push: TerminalPush) => void>();
+  const uploads: {
+    resolve: (path: string) => void;
+    reject: (error: Error) => void;
+  }[] = [];
+  const notices: { detail?: string; message: string }[] = [];
+  let failPathInput = false;
+  const upload = () =>
+    new Promise<string>((resolve, reject) => uploads.push({ resolve, reject }));
+  mock.module("../terminalImageUpload", () => ({
+    uploadTerminalImage: upload,
+    uploadTerminalFile: upload,
+  }));
   let scrollDisabledReason: string | null = null;
   const scrollReason = mock(() => scrollDisabledReason);
   const mockStore = {
@@ -122,7 +197,8 @@ async function registerDomTests() {
     getConnection: () => state,
     terminalScrollReason: scrollReason,
     setTerminalEndpoint: noop,
-    notify: noop,
+    notify: (notice: { detail?: string; message: string }) =>
+      notices.push(notice),
     clearNotice: noop,
     beginTerminalAttachment: () => 1,
     completeTerminalAttachment: noop,
@@ -154,6 +230,8 @@ async function registerDomTests() {
             acceptsServerGeneration: () => true,
             call: async (method: string, params: Record<string, unknown>) => {
               calls.push({ method, params });
+              if (method === "pane.send_input" && failPathInput)
+                throw new Error("uncertain write");
               return {};
             },
           });
@@ -169,8 +247,8 @@ async function registerDomTests() {
     },
   }));
   mock.module("../layoutPreferences", () => ({
-    isMobileLayout: () => true,
-    useLayoutPreferences: () => ({ mobile: true }),
+    isMobileLayout: () => mobileLayout,
+    useLayoutPreferences: () => ({ mobile: mobileLayout }),
     LAYOUT_CHANGE_EVENT: "test-layout-change",
   }));
   mock.module("./CreateWorkspaceDialog", () => ({
@@ -269,6 +347,8 @@ async function registerDomTests() {
   }
   mock.module("@xterm/xterm", () => ({ Terminal: FakeTerminal }));
   const { TerminalView } = await import("./TerminalView");
+  const { MobileBottomBarFixture } = await import("./MobileBottomBar.fixture");
+  const { useSystemBack } = await import("../systemBack");
   const { TERMINAL_INPUT_MODE_STORAGE_KEY } = await import(
     "../terminalInputMode"
   );
@@ -288,28 +368,48 @@ async function registerDomTests() {
   let root: Root | null = null;
   let container: HTMLDivElement;
   let open = false;
+  let visible = true;
+  let filesOpen = false;
+  let tabsOpen = false;
+  let moreOpen = false;
+  let inputTarget: HTMLDivElement | null = null;
+  let viewKey = "initial";
   let strict = false;
   let explicitPane: string | undefined;
   let terminalFontScale = 100;
   let mobileShortcuts: MobileTerminalShortcutRows = [[], []];
+  let showMobileKeys = false;
   beforeEach(() => {
     state = initialState();
     calls.length = 0;
     terminals.length = 0;
     clients.clear();
+    uploads.length = 0;
+    notices.length = 0;
+    failPathInput = false;
     terminalListeners.clear();
     scrollDisabledReason = null;
     scrollReason.mockClear();
     localStorage.clear();
     sessionStorage.clear();
     open = false;
+    visible = true;
+    mobileLayout = true;
+    filesOpen = false;
+    tabsOpen = false;
+    moreOpen = false;
+    inputTarget = null;
     strict = false;
+    viewKey = "initial";
     explicitPane = undefined;
     terminalFontScale = 100;
     mobileShortcuts = [[], []];
+    showMobileKeys = false;
   });
   afterEach(async () => {
+    document.documentElement.classList.remove("keyboard-open");
     if (root) await act(async () => root?.unmount());
+    await settleHistory();
     root = null;
     clearTerminalComposerDraft(draftKey);
     document.documentElement.classList.remove("keyboard-open");
@@ -324,22 +424,102 @@ async function registerDomTests() {
       else Reflect.deleteProperty(globalThis, key);
     }
   });
+  // Model App's mobile panels around the real TerminalView, which stays
+  // mounted when CSS hides the terminal surface behind Files.
+  function MobilePanels({
+    children,
+  }: {
+    children?: import("react").ReactNode;
+  }) {
+    useSystemBack(
+      tabsOpen,
+      () => {
+        tabsOpen = false;
+        render();
+      },
+      "popup",
+    );
+    useSystemBack(
+      moreOpen,
+      () => {
+        moreOpen = false;
+        render();
+      },
+      "popup",
+    );
+    useSystemBack(
+      filesOpen,
+      () => {
+        filesOpen = false;
+        visible = true;
+        render();
+      },
+      "panel",
+    );
+    return children;
+  }
+  function setInputTarget(element: HTMLDivElement | null) {
+    inputTarget = element;
+    if (element) render();
+  }
   function render() {
     const view = createElement(TerminalView, {
+      key: viewKey,
       paneId: explicitPane,
       terminalTheme: {},
       terminalFontFamily: "monospace",
       terminalFontScale,
-      showMobileKeys: false,
+      showMobileKeys,
       mobileShortcuts,
-      mobileSideShortcuts: [],
+      mobileSideShortcuts: showMobileKeys ? mobileShortcuts[0] : [],
+      visible,
+      mobileInputTarget: inputTarget,
+      onActivateTerminalSurface() {
+        visible = true;
+        filesOpen = false;
+        render();
+      },
       composerOpen: open,
       onComposerOpenChange(next: boolean) {
         open = next;
         render();
       },
     });
-    root!.render(strict ? createElement(StrictMode, null, view) : view);
+    // App replaces its mobile single-pane branch with a desktop split tree.
+    const layout = mobileLayout
+      ? view
+      : createElement(
+          "div",
+          { key: "split" },
+          view,
+          createElement(TerminalView, {
+            paneId: "pane-b",
+            terminalTheme: {},
+            terminalFontFamily: "monospace",
+            terminalFontScale,
+            showMobileKeys: false,
+            mobileShortcuts,
+            mobileSideShortcuts: [],
+            composerOpen: false,
+          }),
+        );
+    const bar = createElement(MobileBottomBarFixture, {
+      inputRef: setInputTarget,
+      tabCount: state.panes.length ? 1 : 0,
+      attention: true,
+      tabsOpen,
+      moreOpen,
+      onTabsOpenChange: (next: boolean) => {
+        tabsOpen = next;
+        render();
+      },
+      onMoreOpenChange: (next: boolean) => {
+        moreOpen = next;
+        render();
+      },
+    });
+    const panels = createElement(MobilePanels, null, layout, bar);
+    root!.render(strict ? createElement(StrictMode, null, panels) : panels);
   }
   async function mount(initiallyOpen = false, strictMode = false) {
     open = initiallyOpen;
@@ -351,24 +531,29 @@ async function registerDomTests() {
   }
   const currentTerminal = () => terminals[terminals.length - 1]!;
   const selectedMode = () =>
-    [
-      ...container.querySelectorAll<HTMLInputElement>('input[type="radio"]'),
-    ].find((input) => input.checked)?.value;
+    container.querySelector<HTMLElement>(".terminal-composer")?.dataset
+      .inputMode;
   const savedMode = () => localStorage.getItem(storageKey);
   async function click(selector: string) {
     const element = container.querySelector<HTMLElement>(selector);
     expect(element).not.toBeNull();
-    await act(async () =>
+    await act(async () => {
+      if (element?.tagName === "TEXTAREA") element.focus();
       element!.dispatchEvent(
         new browser.MouseEvent("click", {
           bubbles: true,
           cancelable: true,
           detail: 1,
         }) as unknown as MouseEvent,
-      ),
-    );
+      );
+    });
   }
-  const choose = (mode: TerminalInputMode) => click(`input[value="${mode}"]`);
+  const choose = (mode: TerminalInputMode) =>
+    click(
+      mode === "composer"
+        ? ".terminal-composer-input"
+        : ".terminal-mobile-direct",
+    );
   async function setOpen(next: boolean) {
     open = next;
     await act(async () => render());
@@ -389,8 +574,9 @@ async function registerDomTests() {
     ).toHaveLength(before);
   }
   async function typeGesture() {
-    // Match App's Type click: open+commit, then synchronously focus the dock
-    // root, whose handler routes Direct focus, all in one gesture.
+    // Match a tap that opens the dock: open+commit, then synchronously focus
+    // the dock root, whose handler routes Direct focus, and in Composer the
+    // draft, all in one gesture.
     await act(async () => {
       flushSync(() => {
         open = true;
@@ -399,6 +585,10 @@ async function registerDomTests() {
       const target = container.querySelector<HTMLElement>(".terminal-composer");
       expect(target).not.toBeNull();
       target!.focus({ preventScroll: true });
+      if (target!.dataset.inputMode === "composer")
+        target!
+          .querySelector<HTMLElement>(".terminal-composer-input")
+          ?.focus({ preventScroll: true });
       // Assert during the gesture, before act can flush any later work.
       if (
         selectedMode() === "direct" &&
@@ -410,6 +600,96 @@ async function registerDomTests() {
       }
     });
   }
+
+  async function back() {
+    browser.history.back();
+    await settleHistory();
+  }
+
+  test.each([false, true])(
+    "only a visible mounted Composer consumes Back (visible %s)",
+    async (surfaceVisible) => {
+      browser.history.pushState(null, "", "/previous");
+      browser.history.pushState(null, "", "/terminal");
+      visible = surfaceVisible;
+      await mount(true);
+      const term = currentTerminal();
+      expect(container.querySelector(".terminal-composer")).not.toBeNull();
+      await back();
+      expect(open).toBe(!surfaceVisible);
+      expect(browser.location.pathname).toBe(
+        surfaceVisible ? "/terminal" : "/previous",
+      );
+      expect(currentTerminal()).toBe(term);
+    },
+  );
+
+  test("multi-pane mobile to desktop replacement removes the Composer guard", async () => {
+    browser.history.pushState(null, "", "/previous");
+    browser.history.pushState(null, "", "/terminal");
+    await mount(true, true);
+    const mobileTerminal = currentTerminal();
+    await act(async () => {
+      mobileLayout = false;
+      render();
+    });
+    await settleHistory();
+    expect(currentTerminal()).not.toBe(mobileTerminal);
+    expect(browser.history.state).not.toHaveProperty("herdrBack");
+    expect(open).toBe(true);
+    await back();
+    expect(browser.location.pathname).toBe("/previous");
+    expect(open).toBe(true);
+  });
+
+  test.each([false, true])(
+    "Type, Files, Tabs, Back, Back restores Composer (hidden pane remount %s)",
+    async (remount) => {
+      browser.history.pushState(null, "", "/terminal");
+      writeTerminalComposerDraft(draftKey, "unsent draft");
+      await mount();
+      await typeGesture();
+      let term = currentTerminal();
+      await act(async () => {
+        visible = false;
+        filesOpen = true;
+        render();
+      });
+      if (remount) {
+        // A tab/pane replacement while Files covers the terminal must not
+        // re-register its still-open, but invisible Composer above Files.
+        await act(async () => {
+          viewKey = "replacement";
+          render();
+        });
+        expect(currentTerminal()).not.toBe(term);
+        term = currentTerminal();
+      }
+      await act(async () => {
+        tabsOpen = true;
+        render();
+      });
+      await back();
+      expect(tabsOpen).toBe(false);
+      expect(filesOpen).toBe(true);
+      expect(open).toBe(true);
+      await back();
+      expect(filesOpen).toBe(false);
+      expect(visible).toBe(true);
+      expect(open).toBe(true);
+      expect(currentTerminal()).toBe(term);
+      expect(
+        container.querySelector<HTMLTextAreaElement>(
+          '[aria-label="Terminal input draft"]',
+        )!.value,
+      ).toBe("unsent draft");
+      expect(readTerminalComposerDraft(draftKey)).toBe("unsent draft");
+      expect(selectedMode()).toBe("composer");
+      expectInputBlocked();
+      await back();
+      expect(open).toBe(false);
+    },
+  );
 
   test.each(["closed", "direct", "composer"] as const)(
     "terminal focus activates %s input after touch on a coarse-pointer desktop",
@@ -511,7 +791,7 @@ async function registerDomTests() {
 
   test("mobile terminal input opens the shared composer without enabling raw input", async () => {
     await mount();
-    await click('button[aria-label="Open terminal input"]');
+    await typeGesture();
     expect(container.querySelector(".terminal-composer")).not.toBeNull();
     expect(selectedMode()).toBe("composer");
     expect(
@@ -523,7 +803,9 @@ async function registerDomTests() {
     );
     expectInputBlocked();
     await click('button[aria-label="Close terminal input"]');
-    expect(container.querySelector(".terminal-composer")).toBeNull();
+    expect(
+      container.querySelector(".terminal-composer")?.hasAttribute("data-open"),
+    ).toBe(false);
     expectInputBlocked();
   });
 
@@ -532,7 +814,7 @@ async function registerDomTests() {
     await choose("direct");
     await setOpen(false);
     expectInputBlocked();
-    await click('button[aria-label="Open terminal input"]');
+    await typeGesture();
     expect(selectedMode()).toBe("direct");
     expect(document.activeElement).toBe(currentTerminal().textarea);
     expect(currentTerminal().options.disableStdin).toBe(false);
@@ -702,11 +984,14 @@ async function registerDomTests() {
 
   for (const mode of ["composer", "direct", "closed"] as const) {
     test.each([undefined, false, true])(
-      `${mode} terminal touch scroll preserves routing and keyboard state (mouse reporting %s)`,
+      `${mode} terminal touch scroll preserves routing; external composer touch ends editing (mouse reporting %s)`,
       async (mouseReporting) => {
         await mount();
         if (mode !== "closed") await typeGesture();
         if (mode === "direct") await choose("direct");
+        // Type's tap raised the keyboard in Composer's draft; App marks it.
+        if (mode === "composer")
+          document.documentElement.classList.add("keyboard-open");
         await frame(mouseReporting);
         const term = currentTerminal();
         term.modes.mouseTrackingMode = mouseReporting ? "drag" : "none";
@@ -738,7 +1023,10 @@ async function registerDomTests() {
           "terminal-a",
           mouseReporting,
         );
-        expect(document.activeElement).toBe(focused);
+        // External terminal pointerdown now explicitly retires Message focus,
+        // even though xterm prevents native focus transfer during touch scroll.
+        // Direct and closed routing/focus must remain unchanged.
+        expect(document.activeElement === focused).toBe(mode !== "composer");
         expect(term.focusCount).toBe(focusCount);
         expect(calls.some((call) => call.method === "terminal.input")).toBe(
           false,
@@ -854,7 +1142,7 @@ async function registerDomTests() {
     },
   );
 
-  test("Composer draft gestures remain native while terminal swipes and output preserve editing", async () => {
+  test("Composer draft gestures stay native; terminal swipes end focus without losing draft or caret", async () => {
     await mount();
     await typeGesture();
     await frame(false);
@@ -885,6 +1173,7 @@ async function registerDomTests() {
     expect(move.defaultPrevented).toBe(false);
     expect(end.defaultPrevented).toBe(false);
     expect(scrollCalls()).toEqual([]);
+    expect(document.activeElement === editor).toBe(true);
     swipe();
     const term = currentTerminal();
     const writesBeforeUpdate = term.writes.length;
@@ -893,7 +1182,7 @@ async function registerDomTests() {
     expect(term.writes).toHaveLength(writesBeforeUpdate + 1);
     expect(term.writes[term.writes.length - 1]).toBe("updated terminal output");
     expect(scrollCalls()).toHaveLength(1);
-    expect(document.activeElement).toBe(editor);
+    expect(document.activeElement === editor).toBe(false);
     expect(editor.value).toBe("draft line one\nline two\nline three");
     expect(readTerminalComposerDraft(draftKey)).toBe(editor.value);
     expect([
@@ -904,7 +1193,7 @@ async function registerDomTests() {
     expect(currentTerminal().focusCount).toBe(0);
     expectInputBlocked();
     expect(
-      container.querySelector<HTMLInputElement>('input[value="direct"]')!
+      container.querySelector<HTMLButtonElement>(".terminal-mobile-direct")!
         .disabled,
     ).toBe(true);
     act(() =>
@@ -915,7 +1204,7 @@ async function registerDomTests() {
       ),
     );
     expect(
-      container.querySelector<HTMLInputElement>('input[value="direct"]')!
+      container.querySelector<HTMLButtonElement>(".terminal-mobile-direct")!
         .disabled,
     ).toBe(false);
   });
@@ -1002,17 +1291,13 @@ async function registerDomTests() {
     },
   );
 
-  test("Type keeps Composer neutral until its native draft is explicitly focused", async () => {
+  test("Type focuses Composer's draft in one tap, and later work stays neutral", async () => {
     await mount();
     await typeGesture();
     expect(selectedMode()).toBe("composer");
-    expect(document.activeElement).toBe(
-      container.querySelector(".terminal-composer"),
-    );
     const editor = container.querySelector<HTMLTextAreaElement>(
       '[aria-label="Terminal input draft"]',
     )!;
-    act(() => editor.focus());
     expect(document.activeElement).toBe(editor);
     act(() => editor.blur());
     const focused = document.activeElement;
@@ -1028,6 +1313,372 @@ async function registerDomTests() {
     expect(currentTerminal().focusCount).toBe(0);
   });
 
+  test("Message is the single inline editor with ordered tools and an independent Direct button", async () => {
+    mobileShortcuts = [
+      [
+        {
+          id: "test-enter",
+          label: "Enter",
+          action: { key: "Enter", ctrl: false, alt: false, shift: false },
+        },
+      ],
+      [],
+    ];
+    await mount();
+    const editor = container.querySelector<HTMLTextAreaElement>(
+      ".terminal-composer-input",
+    )!;
+    expect(editor.placeholder).toBe("Message claude…");
+    expect(editor.closest(".mobile-bottom-bar")).not.toBeNull();
+    expect(
+      container.querySelector(".terminal-shell .terminal-composer"),
+    ).toBeNull();
+    expect(container.querySelector('input[type="radio"]')).toBeNull();
+    expect(container.querySelectorAll(".terminal-composer-input")).toHaveLength(
+      1,
+    );
+    await click(".terminal-mobile-message");
+    expect(selectedMode()).toBe("composer");
+    expect(savedMode()).toBe("composer");
+    expect(document.activeElement).toBe(editor);
+    const tools = [
+      ...container.querySelectorAll(".terminal-composer-toolbar > button"),
+    ].slice(0, 3);
+    expect(tools.map((button) => button.className)).toEqual([
+      "terminal-composer-attach",
+      "terminal-composer-shortcuts-toggle",
+      "terminal-composer-commands-toggle",
+    ]);
+    expectInputBlocked();
+    await click('[aria-label="Close terminal input"]');
+    await act(async () => writeTerminalComposerDraft(draftKey, "draft"));
+    expect(container.querySelector(".terminal-composer-input")).toBe(editor);
+    expect(editor.value).toBe("draft");
+    await click(".terminal-mobile-direct");
+    expect(selectedMode()).toBe("direct");
+    expect(savedMode()).toBe("direct");
+    expect(document.activeElement).toBe(currentTerminal().textarea);
+  });
+
+  test.each([false, true])(
+    "secondary surfaces preserve the %s toolbar intent, draft/caret and native focus",
+    async (initiallyOpen) => {
+      mobileShortcuts = [
+        [
+          {
+            id: "surface-escape",
+            label: "Esc",
+            action: { key: "Escape", ctrl: false, alt: false, shift: false },
+          },
+        ],
+        [],
+      ];
+      await mount(initiallyOpen);
+      await act(async () =>
+        writeTerminalComposerDraft(draftKey, "keep\nthis draft"),
+      );
+      const editor = container.querySelector<HTMLTextAreaElement>(
+        "textarea.terminal-composer-input",
+      )!;
+      editor.setSelectionRange(2, 7);
+      const toolbar = container.querySelector<HTMLElement>(
+        ".terminal-composer-toolbar",
+      )!;
+      const shortcuts = container.querySelector<HTMLElement>(
+        ".terminal-composer-shortcuts",
+      )!;
+      const shortcutsWereHidden = shortcuts.hidden;
+      const neutral = document.createElement("button");
+      document.body.append(neutral);
+      act(() => neutral.focus());
+      const focusCount = currentTerminal().focusCount;
+      await act(async () => {
+        visible = false;
+        filesOpen = true;
+        render();
+      });
+      expect(toolbar.hidden).toBe(true);
+      expect(shortcuts.hidden).toBe(true);
+      expect(container.querySelector(".terminal-composer-commands")).toBeNull();
+      expect(
+        container.querySelector(".terminal-composer[data-expanded]"),
+      ).toBeNull();
+      expect(container.querySelector(".terminal-mobile-keys")).toBeNull();
+      expect(
+        container.querySelector(".terminal-mobile-side-shortcuts"),
+      ).toBeNull();
+      expect(container.querySelector(".terminal-mobile-message")).toBe(editor);
+      expect(
+        container.querySelectorAll(".terminal-mobile-input-bar"),
+      ).toHaveLength(1);
+      expect(container.querySelector(".terminal-mobile-direct")).not.toBeNull();
+      expect(container.querySelector(".mobile-appbar-tabs")).not.toBeNull();
+      expect(container.querySelector(".mobile-appbar-more")).not.toBeNull();
+      expect(document.activeElement).toBe(neutral);
+      // Neither popup overrides the underlying secondary-surface presentation.
+      await click(".mobile-appbar-more");
+      expect(toolbar.hidden).toBe(true);
+      await click(".mobile-appbar-tabs");
+      expect(toolbar.hidden).toBe(true);
+      await back();
+      expect(filesOpen).toBe(true);
+      expect(open).toBe(initiallyOpen);
+      await back();
+      expect(filesOpen).toBe(false);
+      expect(open).toBe(initiallyOpen); // Back closes the page, not its background dock.
+      expect(toolbar.hidden).toBe(!initiallyOpen);
+      expect(shortcuts.hidden).toBe(shortcutsWereHidden);
+      expect(editor.value).toBe("keep\nthis draft");
+      expect([editor.selectionStart, editor.selectionEnd]).toEqual([2, 7]);
+      expect(readTerminalComposerDraft(draftKey)).toBe(editor.value);
+      expect(currentTerminal().focusCount).toBe(focusCount);
+      expect(document.activeElement).not.toBe(editor);
+      expectInputBlocked();
+      // More/Tabs in the terminal must NOT hide accessories.
+      for (const entry of [".mobile-appbar-more", ".mobile-appbar-tabs"]) {
+        await click(entry);
+        expect(toolbar.hidden).toBe(!initiallyOpen);
+        await back();
+      }
+    },
+  );
+
+  test("secondary presentation preserves hidden shortcuts and commands without exposing stale combobox ARIA", async () => {
+    mobileShortcuts = [
+      [
+        {
+          id: "surface-tab",
+          label: "Tab",
+          action: { key: "Tab", ctrl: false, alt: false, shift: false },
+        },
+      ],
+      [],
+    ];
+    await mount(true);
+    const toolbar = container.querySelector<HTMLElement>(
+      ".terminal-composer-toolbar",
+    )!;
+    const shortcuts = container.querySelector<HTMLElement>(
+      ".terminal-composer-shortcuts",
+    )!;
+    const editor = container.querySelector<HTMLTextAreaElement>(
+      ".terminal-composer-input",
+    )!;
+    // Explicitly turn shortcuts off; presentation must not overwrite that choice.
+    if (!shortcuts.hidden) await click(".terminal-composer-shortcuts-toggle");
+    await click(".terminal-composer-commands-toggle");
+    expect(editor.getAttribute("aria-expanded")).toBe("true");
+    expect(
+      container.querySelector(".terminal-composer-commands"),
+    ).not.toBeNull();
+    await act(async () => {
+      visible = false;
+      filesOpen = true;
+      render();
+    });
+    expect(toolbar.hidden).toBe(true);
+    expect(shortcuts.hidden).toBe(true);
+    expect(editor.getAttribute("aria-expanded")).toBe("false");
+    expect(editor.hasAttribute("aria-controls")).toBe(false);
+    expect(editor.hasAttribute("aria-activedescendant")).toBe(false);
+    expect(container.querySelector(".terminal-composer-commands")).toBeNull();
+    const draftBeforeKeys = editor.value;
+    for (const key of ["ArrowDown", "Tab", "Escape"]) {
+      const event = new browser.KeyboardEvent("keydown", {
+        key,
+        bubbles: true,
+        cancelable: true,
+      });
+      await act(async () =>
+        editor.dispatchEvent(event as unknown as KeyboardEvent),
+      );
+      expect(event.defaultPrevented).toBe(false);
+      expect(editor.value).toBe(draftBeforeKeys);
+    }
+    const focused = document.activeElement;
+    await back();
+    expect(document.activeElement).toBe(focused);
+    expect(editor.getAttribute("aria-expanded")).toBe("true");
+    expect(
+      container.querySelector(".terminal-composer-commands"),
+    ).not.toBeNull();
+    await click('[aria-label="Dismiss commands"]');
+    expect(shortcuts.hidden).toBe(true);
+    expect(
+      container
+        .querySelector(".terminal-composer-shortcuts-toggle")
+        ?.getAttribute("aria-expanded"),
+    ).toBe("false");
+    expectInputBlocked();
+  });
+
+  test("legacy floating shortcut controls never leak onto secondary surfaces", async () => {
+    showMobileKeys = true;
+    mobileShortcuts = [
+      [
+        {
+          id: "legacy-escape",
+          label: "Esc",
+          action: { key: "Escape", ctrl: false, alt: false, shift: false },
+        },
+      ],
+      [],
+    ];
+    await mount(false);
+    expect(container.querySelector(".terminal-mobile-keys")).not.toBeNull();
+    expect(
+      container.querySelector(".terminal-mobile-side-shortcuts"),
+    ).not.toBeNull();
+    await act(async () => {
+      visible = false;
+      filesOpen = true;
+      render();
+    });
+    expect(container.querySelector(".terminal-mobile-keys")).toBeNull();
+    expect(
+      container.querySelector(".terminal-mobile-side-shortcuts"),
+    ).toBeNull();
+    expect(open).toBe(false);
+    await back();
+    expect(container.querySelector(".terminal-mobile-keys")).not.toBeNull();
+    expect(
+      container.querySelector(".terminal-mobile-side-shortcuts"),
+    ).not.toBeNull();
+    expect(open).toBe(false);
+  });
+
+  test("returning from a secondary surface does not reauthorize or focus Direct", async () => {
+    await mount();
+    await click(".terminal-mobile-direct");
+    const term = currentTerminal();
+    const focusCount = term.focusCount;
+    act(() => term.textarea.blur());
+    await act(async () => {
+      visible = false;
+      filesOpen = true;
+      render();
+    });
+    expect(selectedMode()).toBe("direct");
+    await back();
+    expect(selectedMode()).toBe("direct");
+    expect(open).toBe(true);
+    expect(term.focusCount).toBe(focusCount);
+    expect(document.activeElement).not.toBe(term.textarea);
+    await act(async () => {
+      visible = false;
+      filesOpen = true;
+      render();
+    });
+    // An existing safety invalidation must still win over the hidden mode intent.
+    await act(async () => {
+      state.status = "disconnected";
+      render();
+    });
+    expect(selectedMode()).toBe("composer");
+    await act(async () => {
+      state.status = "connected";
+      render();
+    });
+    await back();
+    expect(selectedMode()).toBe("composer");
+    expect(term.focusCount).toBe(focusCount);
+    expect(document.activeElement).not.toBe(term.textarea);
+    expectInputBlocked();
+  });
+
+  test("persistent entries switch an open dock and synchronously reveal hidden input", async () => {
+    await mount();
+    await click(".terminal-mobile-direct");
+    expect(document.activeElement).toBe(currentTerminal().textarea);
+    await click(".terminal-mobile-message");
+    expect(selectedMode()).toBe("composer");
+    expectInputBlocked();
+    await act(async () => {
+      visible = false;
+      filesOpen = true;
+      render();
+    });
+    await click(".terminal-mobile-message");
+    expect(visible).toBe(true);
+    expect(filesOpen).toBe(false);
+    expect(document.activeElement).toBe(
+      container.querySelector('[aria-label="Terminal input draft"]'),
+    );
+    expectInputBlocked();
+    await click(".terminal-mobile-direct");
+    expect(selectedMode()).toBe("direct");
+    expect(document.activeElement).toBe(currentTerminal().textarea);
+    expect(
+      container.querySelectorAll(".terminal-mobile-input-bar"),
+    ).toHaveLength(1);
+  });
+
+  test("global navigation survives input, hidden views and pane replacement without opening stdin", async () => {
+    browser.history.pushState(null, "", "/terminal");
+    await mount();
+    const bar = container.querySelector(".mobile-bottom-bar");
+    expect(bar?.querySelector(".terminal-mobile-message")).not.toBeNull();
+    expect(
+      container.querySelector(".terminal-shell .terminal-mobile-input-bar"),
+    ).toBeNull();
+    await click(".terminal-mobile-message");
+    await click(".mobile-appbar-more");
+    expect(moreOpen).toBe(true);
+    await back();
+    expect(moreOpen).toBe(false);
+    expect(open).toBe(true);
+    expectInputBlocked();
+    await act(async () => {
+      visible = false;
+      filesOpen = true;
+      viewKey = "new-pane";
+      render();
+    });
+    expect(container.querySelector(".mobile-bottom-bar")).toBe(bar);
+    expect(bar?.querySelector(".terminal-mobile-input-bar")).not.toBeNull();
+    await click(".mobile-appbar-more");
+    await click(".mobile-appbar-tabs");
+    expect(moreOpen).toBe(false);
+    expect(tabsOpen).toBe(true);
+    await back();
+    expect(tabsOpen).toBe(false);
+    expect(filesOpen).toBe(true);
+    expect(open).toBe(true);
+    await back();
+    expect(filesOpen).toBe(false);
+    expect(open).toBe(true);
+    expectInputBlocked();
+  });
+
+  test("empty workspace keeps both navigation entries available", async () => {
+    await mount();
+    await act(async () => {
+      state.panes = [];
+      render();
+    });
+    const tabs = container.querySelector<HTMLButtonElement>(
+      ".mobile-appbar-tabs",
+    )!;
+    expect(tabs.disabled).toBe(false);
+    expect(tabs.querySelector(".mobile-appbar-count")?.textContent).toBe("0");
+    expect(container.querySelector(".terminal-mobile-input-bar")).toBeNull();
+    await click(".mobile-appbar-tabs");
+    expect(tabsOpen).toBe(true);
+    await click(".mobile-appbar-more");
+    expect(tabsOpen).toBe(false);
+    expect(moreOpen).toBe(true);
+    await act(async () => {
+      document.dispatchEvent(
+        new browser.KeyboardEvent("keydown", {
+          key: "Escape",
+          bubbles: true,
+          cancelable: true,
+        }) as unknown as KeyboardEvent,
+      );
+    });
+    expect(moreOpen).toBe(false);
+  });
+
   test("manual mode choices survive close and reopen without opening stdin", async () => {
     await mount();
     await setOpen(true);
@@ -1036,7 +1687,9 @@ async function registerDomTests() {
     expect(savedMode()).toBe("direct");
     expect(document.activeElement).toBe(currentTerminal().textarea);
     await click('[aria-label="Close terminal input"]');
-    expect(container.querySelector(".terminal-composer")).toBeNull();
+    expect(
+      container.querySelector(".terminal-composer")?.hasAttribute("data-open"),
+    ).toBe(false);
     expectInputBlocked();
     await setOpen(true);
     expect(selectedMode()).toBe("direct");
@@ -1218,7 +1871,9 @@ async function registerDomTests() {
         });
       if (change === "generation") await patch({ connectionGeneration: 2 });
       if (change === "attach epoch") await patch({ terminalAttachEpoch: 1 });
-      expect(selectedMode()).toBe("composer");
+      expect(selectedMode()).toBe(
+        change === "inactive split" ? undefined : "composer",
+      );
       expect(savedMode()).toBe("direct");
       expectInputBlocked();
       expect(currentTerminal().focusCount).toBe(
@@ -1288,5 +1943,225 @@ async function registerDomTests() {
     await patch({ status: "connected" });
     expect(selectedMode()).toBe("composer");
     expectInputBlocked();
+  });
+  async function pasteFile(
+    target: Element = currentTerminal().textarea,
+    count = 1,
+  ) {
+    await act(async () => {
+      const event = new browser.Event("paste", {
+        bubbles: true,
+        cancelable: true,
+      });
+      Object.defineProperty(event, "clipboardData", {
+        value: {
+          items: Array.from({ length: count }, () => ({
+            kind: "file",
+            type: "image/png",
+            getAsFile: () =>
+              new browser.File(["x"], "a.png", { type: "image/png" }),
+          })),
+          getData: () => "",
+        },
+      });
+      target.dispatchEvent(event as unknown as Event);
+    });
+  }
+  const pathCalls = () =>
+    calls.filter((call) => call.method === "pane.send_input");
+  test("desktop file paste keeps its existing terminal destination without a mobile mode choice", async () => {
+    mobileLayout = false;
+    const media = browser.matchMedia;
+    browser.matchMedia = ((query: string) => ({
+      ...media(query),
+      matches: false,
+    })) as typeof browser.matchMedia;
+    try {
+      await mount();
+      const target = container.querySelector<HTMLTextAreaElement>(
+        '.terminal-shell[data-pane-id="pane-a"] .xterm-helper-textarea',
+      )!;
+      act(() => target.focus());
+      await pasteFile(target);
+      expect(uploads).toHaveLength(1);
+      await act(async () => uploads[0].resolve("/tmp/desktop.png"));
+      expect(pathCalls()).toHaveLength(1);
+      expect(readTerminalComposerDraft(draftKey)).toBe("");
+      expect(notices).toHaveLength(0);
+    } finally {
+      browser.matchMedia = media;
+    }
+  });
+  test("Direct file paste inserts formatted paths without Enter and preserves draft/caret", async () => {
+    await mount();
+    await act(async () =>
+      writeTerminalComposerDraft(draftKey, "untouched draft"),
+    );
+    await choose("direct");
+    await pasteFile();
+    expect(uploads).toHaveLength(1);
+    await act(async () => uploads[0].resolve("'/tmp/a b.png'"));
+    expect(pathCalls()).toEqual([
+      {
+        method: "pane.send_input",
+        params: { pane_id: "pane-a", text: "'/tmp/a b.png' ", keys: [] },
+      },
+    ]);
+    expect(readTerminalComposerDraft(draftKey)).toBe("untouched draft");
+    expect(notices).toHaveLength(0);
+  });
+  for (const transition of [
+    "mode",
+    "pane",
+    "connection",
+    "hidden",
+    "unmount",
+    "ime",
+    "rpc",
+  ] as const) {
+    test(`Direct late upload after ${transition} retains the original path and reports failure`, async () => {
+      await mount();
+      await choose("direct");
+      await pasteFile();
+      if (transition === "mode") await choose("composer");
+      if (transition === "pane") {
+        await patch({ selectedPaneId: "pane-b" });
+        await patch({ selectedPaneId: "pane-a" });
+        await choose("direct");
+      }
+      if (transition === "connection") await patch({ connectionGeneration: 2 });
+      if (transition === "hidden") {
+        visible = false;
+        await act(async () => render());
+      }
+      if (transition === "unmount") {
+        await act(async () => root!.unmount());
+        root = null;
+      }
+      if (transition === "ime")
+        await act(async () =>
+          currentTerminal().textarea.dispatchEvent(
+            new browser.CompositionEvent("compositionstart", {
+              bubbles: true,
+            }) as unknown as Event,
+          ),
+        );
+      if (transition === "rpc") failPathInput = true;
+      await act(async () => uploads[0].resolve("/tmp/recover.png"));
+      expect(pathCalls()).toHaveLength(transition === "rpc" ? 1 : 0);
+      expect(readTerminalComposerDraft(draftKey)).toContain("/tmp/recover.png");
+      expect(
+        notices.some(
+          (notice) =>
+            notice.message === "Path insertion failed" &&
+            notice.detail?.includes("/tmp/recover.png"),
+        ),
+      ).toBe(true);
+    });
+  }
+  test("Composer terminal drop/paste delivery stays in the original draft", async () => {
+    await mount();
+    const editor = container.querySelector(".terminal-composer-input")!;
+    await pasteFile(editor);
+    await act(async () => uploads[0].resolve("/tmp/composer.png"));
+    expect(pathCalls()).toHaveLength(0);
+    expect(readTerminalComposerDraft(draftKey)).toContain("/tmp/composer.png");
+  });
+  test("Direct partial batch failure keeps successful earlier paths without input", async () => {
+    await mount();
+    await choose("direct");
+    await pasteFile(undefined, 2);
+    await act(async () => uploads[0].resolve("/tmp/first.png"));
+    await act(async () => uploads[1].reject(new Error("second upload failed")));
+    expect(pathCalls()).toHaveLength(0);
+    expect(readTerminalComposerDraft(draftKey)).toContain("/tmp/first.png");
+  });
+  async function pickFile(
+    input = container.querySelector<HTMLInputElement>('input[type="file"]')!,
+  ) {
+    Object.defineProperty(input, "files", {
+      configurable: true,
+      value: [new browser.File(["x"], "file.txt")],
+    });
+    await act(async () =>
+      input.dispatchEvent(
+        new browser.Event("change", { bubbles: true }) as unknown as Event,
+      ),
+    );
+  }
+  test("Direct picker binds the opening target, even after switching panes before selection", async () => {
+    await mount();
+    await choose("direct");
+    await click('[aria-label="Add a file"]');
+    const openedInput =
+      container.querySelector<HTMLInputElement>('input[type="file"]')!;
+    await patch({ selectedPaneId: "pane-b" });
+    await pickFile(openedInput);
+    expect(uploads).toHaveLength(1);
+    await act(async () => uploads[0].resolve("/tmp/picker.txt"));
+    expect(pathCalls()).toHaveLength(0);
+    expect(readTerminalComposerDraft(draftKey)).toContain("/tmp/picker.txt");
+    expect(
+      readTerminalComposerDraft(
+        terminalComposerDraftKey("connection-a", 1, "pane-b"),
+      ),
+    ).toBe("");
+    expect(
+      notices.some((notice) => notice.message === "Path insertion failed"),
+    ).toBe(true);
+  });
+  test("cancelled file picker does not retain a stale Direct destination", async () => {
+    await mount();
+    await choose("direct");
+    await click('[aria-label="Add a file"]');
+    const input =
+      container.querySelector<HTMLInputElement>('input[type="file"]')!;
+    await act(async () =>
+      input.dispatchEvent(new browser.Event("cancel") as unknown as Event),
+    );
+    await choose("composer");
+    await click('[aria-label="Add a file"]');
+    await pickFile();
+    await act(async () => uploads[0].resolve("/tmp/current.txt"));
+    expect(pathCalls()).toHaveLength(0);
+    expect(readTerminalComposerDraft(draftKey)).toContain("/tmp/current.txt");
+    expect(notices).toHaveLength(0);
+  });
+  test("returning from an initially hidden view uses the current upload destination", async () => {
+    visible = false;
+    await mount();
+    visible = true;
+    await act(async () => render());
+    await choose("direct");
+    await pasteFile();
+    await act(async () => uploads[0].resolve("/tmp/visible.png"));
+    expect(pathCalls()).toHaveLength(1);
+    expect(notices).toHaveLength(0);
+  });
+  test("Direct file picker and terminal file drop reuse no-Enter input", async () => {
+    await mount();
+    await choose("direct");
+    await click('[aria-label="Add a file"]');
+    await pickFile();
+    await act(async () => uploads[0].resolve("/tmp/picker.txt"));
+    const drop = new browser.Event("drop", { bubbles: true, cancelable: true });
+    Object.defineProperty(drop, "dataTransfer", {
+      value: {
+        types: ["Files"],
+        files: [new browser.File(["x"], "drop.txt")],
+        items: [],
+        getData: () => "",
+      },
+    });
+    await act(async () =>
+      currentTerminal().textarea.dispatchEvent(drop as unknown as Event),
+    );
+    expect(uploads).toHaveLength(2);
+    await act(async () => uploads[1].resolve("/tmp/drop.txt"));
+    expect(pathCalls().map((call) => call.params)).toEqual([
+      { pane_id: "pane-a", text: "/tmp/picker.txt ", keys: [] },
+      { pane_id: "pane-a", text: "/tmp/drop.txt ", keys: [] },
+    ]);
+    expect(readTerminalComposerDraft(draftKey)).toBe("");
   });
 }

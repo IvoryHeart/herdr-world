@@ -114,6 +114,56 @@ describe("upstream actions retain their World owner", () => {
     });
   });
 
+  test("cross-tab pane moves and breakout retain an inactive host and reject its replacement", async () => {
+    await withOwners(async (calls) => {
+      const snapshot = store.get();
+      const betaSession = snapshot.sessionsByConnectionId.beta!;
+      const source = betaSession.panes[0]!;
+      betaSession.panes = [
+        source,
+        { ...source, pane_id: "sibling" },
+        { ...source, pane_id: "destination", tab_id: "other-tab" },
+      ];
+      __storeTesting.replaceState({
+        ...snapshot,
+        sessionsByConnectionId: {
+          ...snapshot.sessionsByConnectionId,
+          beta: { ...betaSession },
+        },
+      });
+      const beta = operationalStore({
+        connectionId: "beta",
+        runtimeGeneration: 1,
+      });
+      await beta.movePaneBeside("same-pane", "destination", "left");
+      expect(
+        calls.filter(
+          (item) => item.method === "pane.move" || item.method === "pane.swap",
+        ),
+      ).toEqual([
+        { host: "beta", method: "pane.move" },
+        { host: "beta", method: "pane.swap" },
+      ]);
+      calls.length = 0;
+      await beta.movePaneToNewTab("same-pane");
+      expect(calls.filter((item) => item.method === "pane.move")).toEqual([
+        { host: "beta", method: "pane.move" },
+      ]);
+      calls.length = 0;
+      __storeTesting.replaceState({
+        ...store.get(),
+        connections: store
+          .get()
+          .connections.map((item) =>
+            item.id === "beta" ? { ...item, generation: 2 } : item,
+          ),
+      });
+      await beta.movePaneToTab("same-pane", "other-tab");
+      expect(calls).toEqual([]);
+      expect(store.get().activeConnectionId).toBe("alpha");
+    });
+  });
+
   test("a pin protects only its owning host's tab and last pane", async () => {
     await withOwners(async (calls) => {
       setTabPinned("beta", "same-tab", true);

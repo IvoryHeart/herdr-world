@@ -118,9 +118,9 @@ released availability.
   Window close dismisses presentation; native tab closure remains separate.
 - Mobile shows one active window and preserves desktop positions. The on-screen
   **Back** returns from a terminal to the visual view even with Composer open;
-  the phone's own Back closes Composer first, then the terminal. Its ellipsis,
-  Tabs controls remain floating; Tabs and Arrange sit together in the second row. Tabs also restores minimized
-  windows and retains native tab actions. The duplicate list icon and tab strip are hidden. The outer shell coordinates terminal sizing with the keyboard viewport.
+  the phone's own Back closes Composer first, then the terminal. Tabs and More stay in the shared top app bar; More exposes Arrange windows.
+  Tabs also restores minimized windows and retains native tab actions. The duplicate
+  list icon and mobile tab strip are hidden. The outer shell coordinates terminal sizing with the keyboard viewport.
 - A Spaces tab window shows that tab's Herdr split panes. An Inspector in a visual
   view also shows the selected tab's split panes in one window; selecting a sibling
   pane keeps the same Inspector and updates its pane-specific resources. When the
@@ -180,6 +180,9 @@ choice. Agent checkout has no Git mutation controls or Clear command.
 - Group linked Git worktrees under their repository. Pin workspaces/worktrees
   to the top and collapse groups; preferences stay in this browser.
 - Split panes right/down, resize boundaries, focus neighbors, zoom, or close.
+  Drag a pane handle onto another tab in the same workspace, onto a pane edge
+  in that tab, or onto **+** to break it into a new tab. Hover a tab to open its
+  panes before dropping. Overflowing desktop tab strips offer scroll controls.
 - Search workspace, worktree, file, tab, pane, and agent actions in the command
   menu (`Cmd+K` on macOS, `Ctrl+Alt+K` elsewhere). A workspace-relative or
   absolute path opens the file.
@@ -459,8 +462,11 @@ File operations and previews work locally and over SSH.
 
 - Browse a directory tree with staged, unstaged, untracked, conflicted, and
   branch-diff badges plus added/deleted counts.
-- Choose **Working tree**, **Against main**, or **Last step** (latest completed
+- Choose **Working tree**, **Against branch**, or **Last step** (latest completed
   agent-activity snapshot, including commits/untracked files; not proof of ownership).
+  Branch mode uses the repository's recorded default, then its configured default,
+  main or master. Select a local or remote-tracking branch already present on the
+  host; inspection never fetches. The choice is saved per repository and host.
 - Read files in repository order. Large, truncated, and `linguist-generated=true`
   diffs start collapsed and render on expansion.
 - Choose desktop side-by-side/unified views; mobile is unified. Wrapping saves
@@ -478,6 +484,12 @@ Git actions recheck status/content and reject stale menus instead of destroying
 newer work.
 
 ## Mobile and PWA
+
+The Message editor sits below each terminal in normal layout flow. Tap it to
+raise the keyboard and compose; Direct explicitly enables raw terminal input.
+Tabs and More stay in World's shared top app bar. If an upload finishes after its
+Direct destination retires, World keeps the path in the original Message draft
+and reports the failed insertion instead of sending it to another pane.
 
 - Responsive terminals, Inspector, and viewport/keyboard handling. **Menu →
   Appearance → Layout → Display mode** offers Automatic/Mobile/Desktop.

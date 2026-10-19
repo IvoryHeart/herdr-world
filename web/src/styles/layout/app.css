@@ -636,6 +636,10 @@
     --mobile-floating-controls-lift: 112px;
   }
 
+  .terminal-shell:has(.terminal-composer) {
+    flex-direction: column;
+  }
+
   .mobile-controls-toggle {
     position: relative;
     width: 32px;
@@ -757,12 +761,6 @@
     align-items: baseline;
     justify-content: center;
     gap: 6px;
-  }
-
-  /* With the composer open the shell stacks its children vertically, so the
-     terminal shrinks to make room instead of being covered by an overlay. */
-  .terminal-shell:has(.terminal-composer) {
-    flex-direction: column;
   }
 }
 
@@ -1057,9 +1055,12 @@ html:not([data-layout="mobile"])
     display: none;
   }
 
-  .body:is(.mobile-view-files, .mobile-view-changes, .mobile-view-history):not(
-      .has-workspace-surface-inspector
-    ) {
+  .body:is(
+      .mobile-view-files,
+      .mobile-view-changes,
+      .mobile-view-commits,
+      .mobile-view-history
+    ):not(.has-workspace-surface-inspector) {
     .workspace-terminal-surface {
       display: none;
     }

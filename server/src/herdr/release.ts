@@ -11,7 +11,7 @@ import { join } from "node:path";
  * Herdr release against Herdr World's supported protocol range
  * (server/src/bridge/protocol-compat.ts).
  */
-export const VERIFIED_HERDR_VERSION = "0.9.4";
+export const VERIFIED_HERDR_VERSION = "0.9.5";
 export const VERIFIED_HERDR_PROTOCOL = 22;
 
 export type HerdrReleaseTarget =
@@ -23,15 +23,15 @@ export type HerdrReleaseTarget =
 
 export const VERIFIED_HERDR_SHA256: Record<HerdrReleaseTarget, string> = {
   "linux-x86_64":
-    "493304fbefb0ed0ea0455f373b47f48d24e8774bc7974f4c916ad2e937675b23",
+    "14d9e8bc8b4a9e0118d77c32266f76d461f09b40342eb23752960bd89f59929d",
   "linux-aarch64":
-    "9511cb70982c1ef115f232058e7ed7cf9640aa5a2c0ca78934cefda3aeb093fd",
+    "17d7536f2da50859523680ef279dffcac8e4a235f4e46fe8da6c2ec44141897c",
   "macos-x86_64":
-    "2015ca1de3e93b84cdcccbfd94fbbd65dd56338cea4d3e57a8660e977a3bd700",
+    "5fb0a908ec7f6745e3e245738b06bfad56c46391c391ab3c0955fbead01f1369",
   "macos-aarch64":
-    "ea20bfff9cb8c83a996081c926e6ff9370de8e543baa859bca48d19175d895ff",
+    "fb77c2232a05a8035421382c894392f4174e4e38a18e48af3dd0290157c3a7e2",
   "windows-x86_64":
-    "0e4ccb5cd7b6ca464a69637cda66d3c93334ebc057c50c5878b8e89e1a20afee",
+    "d2c6c9c971c43a0bfdde8c692a9a1a7a45c3e4807cd01ae45662b4734fac1cbf",
 };
 
 export function resolveHerdrReleaseTarget(

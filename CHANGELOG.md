@@ -17,6 +17,14 @@ are optional because the merged PR history records their source.
   Office, Tree and Graph as retired views with redirects to Town and Board. Show
   a readable mobile Board close-up and describe Send's recipient identity checks.
 
+### Changed
+
+- Synchronize the Roamgate v0.8.6 source: add login-token help, symlinked user
+  config roots, pane dragging across tabs, tab-strip overflow controls, and
+  repository comparison branches. Keep World's qualified terminals, mobile app
+  bar and managed-window tabs. Update the optional Herdr setup target to 0.9.5
+  with verified release checksums; terminal protocol remains 22.
+
 ### Added
 
 - Add Board, a pin board view. Hosts are zones,

@@ -51,7 +51,7 @@ async function registerDomTest() {
     cancelAnimationFrame: browser.cancelAnimationFrame.bind(browser),
     IS_REACT_ACT_ENVIRONMENT: true,
   });
-  const { act, createElement } = await import("react");
+  const { act, createElement, StrictMode, useState } = await import("react");
   const { createRoot } = await import("react-dom/client");
   const { ThemedSelect } = await import("./ThemedSelect");
   afterAll(async () => browser.happyDOM.close());
@@ -111,6 +111,77 @@ async function registerDomTest() {
       );
     } finally {
       await act(async () => root.unmount());
+      container.remove();
+      await browser.happyDOM.whenAsyncComplete();
+    }
+  });
+
+  test("mobile Back closes the real select before its underlying panel in StrictMode", async () => {
+    const { updateLayoutPreferences } = await import("../layoutPreferences");
+    const { useSystemBack } = await import("../systemBack");
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    let panelCloses = 0;
+    function Panel() {
+      const [open, setOpen] = useState(true);
+      useSystemBack(
+        open,
+        () => {
+          panelCloses++;
+          setOpen(false);
+        },
+        "panel",
+      );
+      return open
+        ? createElement(ThemedSelect, {
+            value: "first",
+            options: [{ value: "first", label: "First" }],
+            onChange: () => {},
+            "aria-label": "Mobile select",
+          })
+        : null;
+    }
+    const back = async () => {
+      await act(async () => {
+        // A browser Back pops one guard (each open layer has its own) and
+        // lands on the entry below before firing popstate.
+        const state = browser.history.state as Record<string, unknown> | null;
+        const depth =
+          typeof state?.herdrBack === "number"
+            ? state.herdrBack
+            : state && "herdrBack" in state
+              ? 1
+              : 0;
+        const below = depth > 1 ? { ...state, herdrBack: depth - 1 } : null;
+        browser.history.replaceState(below, "");
+        browser.dispatchEvent(
+          new browser.PopStateEvent("popstate", { state: below }),
+        );
+      });
+      await act(async () => browser.happyDOM.whenAsyncComplete());
+    };
+    try {
+      await act(async () => updateLayoutPreferences({ mode: "mobile" }));
+      await act(async () =>
+        root.render(createElement(StrictMode, null, createElement(Panel))),
+      );
+      const trigger = container.querySelector<HTMLButtonElement>("button")!;
+      await click(trigger);
+      expect(document.querySelector(".themed-select-content")).not.toBeNull();
+      await back();
+      expect(document.querySelector(".themed-select-content")).toBeNull();
+      expect(panelCloses).toBe(0);
+      expect(document.activeElement).toBe(trigger);
+      expect(
+        browser.history.state && "herdrBack" in browser.history.state,
+      ).toBe(true);
+      await back();
+      expect(panelCloses).toBe(1);
+      expect(container.querySelector("button")).toBeNull();
+    } finally {
+      await act(async () => root.unmount());
+      await act(async () => updateLayoutPreferences({ mode: "desktop" }));
       container.remove();
       await browser.happyDOM.whenAsyncComplete();
     }
