@@ -12,27 +12,19 @@ import type { PublishedOfficeLayout } from "./officeLayout";
 import { officeDebug } from "../officeDebug";
 import type { OfficeCreationActionState } from "./officeRoomActions";
 
-export type OfficeCanvasAnchor = {
-  x: number;
-  y: number;
-  visible: boolean;
-  edge: "top" | "right" | "bottom" | "left" | null;
-};
-
-export type OfficeCanvasAnchors = {
-  agent: OfficeCanvasAnchor | null;
-  workbench: OfficeCanvasAnchor | null;
-};
-
-export type OfficeConversationAnchorTarget = {
-  id: string;
-  selectedKey: string | null;
-  targetKey: string;
-};
+export type {
+  WorldCanvasAnchor as OfficeCanvasAnchor,
+  WorldCanvasAnchors as OfficeCanvasAnchors,
+  WorldConversationAnchorTarget as OfficeConversationAnchorTarget,
+  WorldConversationAnchors as OfficeConversationAnchors,
+} from "./worldConnectorGeometry";
+import type {
+  WorldCanvasAnchor as OfficeCanvasAnchor,
+  WorldConversationAnchorTarget as OfficeConversationAnchorTarget,
+  WorldConversationAnchors as OfficeConversationAnchors,
+} from "./worldConnectorGeometry";
 
 export type { OfficeCanvasHover };
-
-export type OfficeConversationAnchors = Record<string, OfficeCanvasAnchors>;
 
 export function PixelOfficeCanvas({
   projection,

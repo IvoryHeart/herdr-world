@@ -17,12 +17,12 @@ import type {
   OfficeAgent,
 } from "../herdrOfficeProjection";
 import type {
-  OfficeCanvasAnchor,
-  OfficeCanvasAnchors,
-  OfficeCanvasHover,
-  OfficeConversationAnchors,
-  OfficeConversationAnchorTarget,
-} from "../PixelOfficeCanvas";
+  WorldCanvasAnchor,
+  WorldCanvasAnchors,
+  WorldCanvasHover,
+  WorldConversationAnchors,
+  WorldConversationAnchorTarget,
+} from "../worldConnectorGeometry";
 import {
   formatOfficeCost,
   formatOfficeModelNames,
@@ -120,13 +120,13 @@ export function TownCanvas({
   projection: HerdrOfficeProjection;
   selectedKey: string | null;
   completionSeenKeys: ReadonlySet<string>;
-  conversationTargets: readonly OfficeConversationAnchorTarget[];
+  conversationTargets: readonly WorldConversationAnchorTarget[];
   onSelect: (key: string) => void;
   onActivateAgent: (key: string) => void;
   onActivateRoom: (key: string) => void;
-  onHover?: (hover: OfficeCanvasHover | null) => void;
-  onAnchorChange?: (anchors: OfficeConversationAnchors | null) => void;
-  onSelectedAnchorChange?: (anchor: OfficeCanvasAnchor | null) => void;
+  onHover?: (hover: WorldCanvasHover | null) => void;
+  onAnchorChange?: (anchors: WorldConversationAnchors | null) => void;
+  onSelectedAnchorChange?: (anchor: WorldCanvasAnchor | null) => void;
   roomActions: TownRoomActions;
   selectedRoomKey: string | null;
 }) {
@@ -219,14 +219,14 @@ export function TownCanvas({
     const camera = renderer.camera;
     const toAnchor = (
       world: { x: number; y: number } | null,
-    ): OfficeCanvasAnchor | null => {
+    ): WorldCanvasAnchor | null => {
       if (!world) return null;
       const screen = camera.toScreen(world.x, world.y);
       const x = rect.left + screen.x;
       const y = rect.top + screen.y;
       const visible =
         x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
-      const edge: OfficeCanvasAnchor["edge"] = visible
+      const edge: WorldCanvasAnchor["edge"] = visible
         ? null
         : x < rect.left
           ? "left"
@@ -242,7 +242,7 @@ export function TownCanvas({
         edge,
       };
     };
-    const worldAnchor = (key: string | null): OfficeCanvasAnchors => {
+    const worldAnchor = (key: string | null): WorldCanvasAnchors => {
       if (!key) return { agent: null, workbench: null };
       const { model: m, layout: l } = latest.current;
       const position = renderer.actorPosition(key);
@@ -270,7 +270,7 @@ export function TownCanvas({
       return { agent: toAnchor(agent), workbench: toAnchor(workbench) };
     };
     if (report) {
-      const anchors: OfficeConversationAnchors = {};
+      const anchors: WorldConversationAnchors = {};
       for (const target of latest.current.conversationTargets)
         anchors[target.id] = worldAnchor(target.targetKey);
       report(anchors);

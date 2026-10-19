@@ -88,7 +88,7 @@ import {
   type Size,
 } from "./board/boardPlacement";
 import type { WorldAgentStatus, WorldObject } from "./worldObject";
-import type { OfficeCanvasAnchor } from "./PixelOfficeCanvas";
+import type { WorldCanvasAnchor } from "./worldConnectorGeometry";
 import { WorldViewToolbar } from "./WorldViewToolbar";
 import "./board/board.css";
 
@@ -369,10 +369,8 @@ export default function BoardView({
   /** Nodes with an open Inspector window, so World can draw their lines. */
   conversationNodeIds?: readonly string[];
   /** Where those nodes (and the selection) are on screen, for the lines. */
-  onNodeAnchorsChange?(
-    anchors: Record<string, OfficeCanvasAnchor> | null,
-  ): void;
-  onSelectedAnchorChange?(anchor: OfficeCanvasAnchor | null): void;
+  onNodeAnchorsChange?(anchors: Record<string, WorldCanvasAnchor> | null): void;
+  onSelectedAnchorChange?(anchor: WorldCanvasAnchor | null): void;
   /** Open a plain terminal tab in a workspace; World's store by default. */
   createTab?: (
     space: BoardWorkspace,
@@ -957,7 +955,7 @@ export default function BoardView({
       ...(props.selectedId ? [props.selectedId] : []),
       ...props.conversationNodeIds,
     ]);
-    const anchors: Record<string, OfficeCanvasAnchor> = {};
+    const anchors: Record<string, WorldCanvasAnchor> = {};
     const shown = (el: HTMLElement | null | undefined) =>
       el && el.offsetParent !== null ? el : null;
     for (const id of wanted) {
@@ -3489,7 +3487,7 @@ function layoutSignature(layout: {
   ].join("|");
 }
 /** A card's right edge as a line anchor, pinned to the board's edge when off screen. */
-function edgeAnchor(rect: DOMRect, clip: DOMRect): OfficeCanvasAnchor {
+function edgeAnchor(rect: DOMRect, clip: DOMRect): WorldCanvasAnchor {
   const visible =
     rect.right > clip.left &&
     rect.left < clip.right &&
