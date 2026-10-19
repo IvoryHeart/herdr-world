@@ -347,6 +347,12 @@
 .board-far .board-tab {
   opacity: 0;
   pointer-events: none;
+  /* Once faded, not painted at all: a large World zoomed out would otherwise
+     still rasterise every hidden tab. */
+  visibility: hidden;
+  transition:
+    opacity 0.25s,
+    visibility 0s linear 0.25s;
 }
 .board-far .board-fold {
   display: none;
@@ -1255,4 +1261,17 @@
    at a large World's scale; the camera moves the whole board as one layer. */
 .board-card.board-lifted {
   will-change: transform;
+}
+
+/* On a large board, paint shows a card once it is placed and on screen
+   (data-shown); until then, and while off screen or a tab in the overview,
+   it is not laid out. Notes are never hidden. */
+.board-culling .board-card:not(.board-note):not([data-shown="true"]) {
+  display: none;
+}
+
+.board-cards {
+  position: absolute;
+  left: 0;
+  top: 0;
 }

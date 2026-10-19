@@ -10,7 +10,9 @@ import {
 } from "lucide-react";
 import {
   lazy,
+  startTransition,
   Suspense,
+  useDeferredValue,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -391,7 +393,19 @@ export default function BoardView({
     anchor: BoardAnchor,
   ) => Promise<{ state: string }>;
 }) {
-  const model = useMemo(() => projectBoard(world), [world]);
+  // Topology updates render at low priority and in slices, so a large board
+  // never holds up typing in a terminal.
+  const shownWorld = useDeferredValue(world);
+  const fullModel = useMemo(() => projectBoard(shownWorld), [shownWorld]);
+  // A large board's first render is only the frame; its cards follow in a
+  // transition, which yields to input while it builds.
+  const [built, setBuilt] = useState(
+    () => fullModel.workspaces.length + fullModel.tabs.length <= CULL_ABOVE,
+  );
+  useEffect(() => {
+    if (!built) startTransition(() => setBuilt(true));
+  }, [built]);
+  const model = built ? fullModel : EMPTY_MODEL;
   const boardStore = useMemo(() => store ?? sharedBoardStore(), [store]);
   useEffect(() => {
     boardStore.start();
@@ -428,7 +442,15 @@ export default function BoardView({
   } | null>(null);
   /** Anchors already asked about this session: `string id:end`. */
   const checkedAnchors = useRef(new Set<string>());
-  const [far, setFar] = useState(false);
+  // A large board opens in the overview (where fitting it lands anyway), so
+  // the first render does not build every tab card only to hide them.
+  const startsFar = () =>
+    fullModel.workspaces.length + fullModel.tabs.length > CULL_ABOVE;
+  const [far, setFar] = useState(startsFar);
+  /** On a large board, the cards React renders (those near the screen). */
+  const [renderKeys, setRenderKeys] = useState<Set<string> | null>(null);
+  const renderKeysRef = useRef<Set<string> | null>(null);
+  const selectedKeysRef = useRef<ReadonlySet<string>>(new Set());
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
   const [query, setQuery] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
@@ -506,7 +528,7 @@ export default function BoardView({
     invalidate("physics");
   };
   const fitted = useRef(false);
-  const farRef = useRef(false);
+  const farRef = useRef(far);
   const yarnEls = useRef(new Map<string, SVGPathElement[]>());
   const cutRef = useRef<HTMLButtonElement>(null);
   /** The note or card bar, and the card it rides above. */
@@ -557,18 +579,77 @@ export default function BoardView({
 
   const kindOf = (key: string, m: BoardModel) =>
     m.workspaceByKey.has(key) ? "workspace" : "tab";
+  /**
+   * On a large board, sizes come from a ResizeObserver after the browser's
+   * own layout, never from reading the DOM mid-frame: each such read forced
+   * a full layout of the page.
+   */
+  const large = useRef(false);
+  const displayed = useRef(new Map<string, Size>());
+  const resizes = useRef<ResizeObserver | null>(null);
+  if (!resizes.current && typeof ResizeObserver !== "undefined")
+    resizes.current = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const el = entry.target as HTMLElement;
+        const key = el.dataset.key;
+        const box = entry.borderBoxSize?.[0];
+        if (!key || !box || !box.inlineSize) continue;
+        const size = { w: box.inlineSize, h: box.blockSize };
+        displayed.current.set(key, size);
+        const card = cards.current.get(key);
+        // Small boards measure synchronously (see the model effect).
+        if (card && large.current && !farRef.current) card.size = size;
+      }
+      if (large.current) invalidate("resize");
+    });
+  useEffect(() => () => resizes.current?.disconnect(), []);
+  /** A card's size as displayed now (overview sizes included). */
+  /** The board's rectangle; cached on a large board, refreshed on resize. */
+  const boardBox = useRef<DOMRect | null>(null);
+  const boardRect = () => {
+    const board = boardRef.current!;
+    if (!large.current) return board.getBoundingClientRect();
+    return (boardBox.current ??= board.getBoundingClientRect());
+  };
+  useEffect(() => {
+    const board = boardRef.current;
+    if (!board) return;
+    const reset = () => {
+      boardBox.current = null;
+      if (large.current) invalidate("board-moved");
+    };
+    const observer =
+      typeof ResizeObserver !== "undefined" ? new ResizeObserver(reset) : null;
+    observer?.observe(board);
+    window.addEventListener("resize", reset);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", reset);
+    };
+  }, []);
+  const shownSize = (key: string): Size | undefined =>
+    large.current
+      ? displayed.current.get(key)
+      : (() => {
+          const el = cardEls.current.get(key);
+          return el?.offsetWidth
+            ? { w: el.offsetWidth, h: el.offsetHeight }
+            : undefined;
+        })();
   // Placement uses each card's rendered size (new cards are already in the
   // DOM when placement runs); the overview's enlarged cards are never measured.
   const sizeOf = useCallback((key: string, kind: "workspace" | "tab"): Size => {
-    const el = cardEls.current.get(key);
-    if (el?.offsetWidth && !farRef.current)
-      return { w: el.offsetWidth, h: el.offsetHeight };
+    if (!farRef.current) {
+      const size = shownSize(key);
+      if (size) return size;
+    }
     return cards.current.get(key)?.size ?? DEFAULT_SIZE[kind];
   }, []);
 
   /* ---------- Model changes: measure, place new cards, keep the rest ---------- */
   useLayoutEffect(() => {
-    if (!farRef.current)
+    large.current = model.workspaces.length + model.tabs.length > CULL_ABOVE;
+    if (!farRef.current && !large.current)
       for (const [key, el] of cardEls.current) {
         const card = cards.current.get(key);
         if (card && el.offsetWidth)
@@ -577,6 +658,10 @@ export default function BoardView({
     layout.current = placeNew(model, layout.current, {
       phone: isPhone(),
       sizeOf,
+      // Tabs on a large board wait for the overview to end (see below).
+      skipTabs:
+        farRef.current &&
+        model.workspaces.length + model.tabs.length > CULL_ABOVE,
     });
     const at = positions(model, layout.current);
     for (const [key, point] of at) {
@@ -613,6 +698,32 @@ export default function BoardView({
   useEffect(() => {
     invalidate("change");
   }, [collapsed, far]);
+  // Leaving the overview on a large board: place the tabs it put off and
+  // show them where they belong.
+  useEffect(() => {
+    if (far) return;
+    const m = latest.current.model;
+    const pending = m.tabs.filter(
+      (tab) =>
+        !layout.current.offsets.has(tab.key) &&
+        !layout.current.pinned.has(tab.key),
+    );
+    if (!pending.length) return;
+    layout.current = placeNew(m, layout.current, { phone: isPhone(), sizeOf });
+    const at = positions(m, layout.current);
+    for (const tab of pending) {
+      const card = cards.current.get(tab.key),
+        point = at.get(tab.key);
+      if (!card || !point) continue;
+      card.x = point.x;
+      card.y = point.y;
+      card.home = point;
+    }
+    invalidate("tabs-placed");
+    scheduleSave();
+    // Placement reads refs; only leaving the overview starts it.
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+  }, [far]);
 
   /* ---------- Saved state: notes as free cards, layout loaded once ---------- */
   useLayoutEffect(() => {
@@ -817,9 +928,9 @@ export default function BoardView({
       x1 = -Infinity,
       y1 = -Infinity;
     for (const [key, card] of visibleCards()) {
-      const node = cardEls.current.get(key);
-      const w = farRef.current && node ? node.offsetWidth : card.size.w;
-      const h = farRef.current && node ? node.offsetHeight : card.size.h;
+      const shown = farRef.current ? shownSize(key) : undefined;
+      const w = shown?.w ?? card.size.w;
+      const h = shown?.h ?? card.size.h;
       x0 = Math.min(x0, card.x - w / 2);
       y0 = Math.min(y0, card.y - h / 2);
       x1 = Math.max(x1, card.x + w / 2);
@@ -959,19 +1070,38 @@ export default function BoardView({
     if (!props.onNodeAnchorsChange) return;
     const board = boardRef.current;
     if (!board) return;
-    const clip = board.getBoundingClientRect();
+    const clip = boardRect();
     const wanted = new Set([
       ...(props.selectedId ? [props.selectedId] : []),
       ...props.conversationNodeIds,
     ]);
     const anchors: Record<string, WorldCanvasAnchor> = {};
+    // A large board answers from geometry only: offsetParent forces a layout.
     const shown = (el: HTMLElement | null | undefined) =>
-      el && el.offsetParent !== null ? el : null;
+      !large.current && el && el.offsetParent !== null ? el : null;
+    // A card not in layout (culled off screen on a large board) is placed
+    // from its position and the camera, so its line still points at it.
+    const c = cam.current;
+    const fromCard = (key: string): DOMRect | null => {
+      const card = cards.current.get(key);
+      if (!card) return null;
+      const w = card.size.w * c.s,
+        h = card.size.h * c.s;
+      return new DOMRect(
+        clip.left + c.x + card.x * c.s - w / 2,
+        clip.top + c.y + card.y * c.s - h / 2,
+        w,
+        h,
+      );
+    };
     for (const id of wanted) {
       let el: HTMLElement | null = null;
+      let fallback: string | null = null;
       const space = m.workspaces.find((s) => s.space.id === id);
-      if (space) el = shown(cardEls.current.get(space.key));
-      else
+      if (space) {
+        el = shown(cardEls.current.get(space.key));
+        fallback = space.key;
+      } else
         for (const tab of m.tabs) {
           const pane = tab.panes.find((p) => p.leaf.id === id);
           if (!pane) continue;
@@ -988,9 +1118,17 @@ export default function BoardView({
             ) ??
             card ??
             shown(cardEls.current.get(tab.workspaceKey));
+          fallback = hidden ? tab.workspaceKey : tab.key;
           break;
         }
-      if (el) anchors[id] = edgeAnchor(el.getBoundingClientRect(), clip);
+      // A large board never reads the DOM here (it forces a layout).
+      const rect =
+        el && !large.current
+          ? el.getBoundingClientRect()
+          : fallback
+            ? fromCard(fallback)
+            : null;
+      if (rect) anchors[id] = edgeAnchor(rect, clip);
     }
     const signature = JSON.stringify(anchors, (_k, v) =>
       typeof v === "number" ? Math.round(v) : v,
@@ -1029,15 +1167,78 @@ export default function BoardView({
       farRef.current = nowFar;
       setFar(nowFar);
     }
+    // Only cards on screen (with a margin) are laid out and painted, and
+    // tabs not at all in the overview: a large World has far more cards than
+    // a screen shows, and drawing them all stalled the browser.
+    const culling = m.workspaces.length + m.tabs.length > CULL_ABOVE;
+    const box = culling ? boardRect() : null;
+    const viewW = box ? box.width : board.clientWidth,
+      viewH = box ? box.height : board.clientHeight,
+      margin = 240;
+    const shownNow: [HTMLElement, PhysicsCard][] = [];
+    // A large board renders (in React) only the cards near the screen; tell
+    // React when that set changes.
+    if (culling) {
+      const reach = 700;
+      const wanted = new Set<string>();
+      for (const [key, card] of cards.current) {
+        if (isNoteKey(key)) continue;
+        if (farRef.current && m.tabByKey.has(key)) continue;
+        const sx = c.x + card.x * c.s,
+          sy = c.y + card.y * c.s;
+        const hw = (card.size.w * c.s) / 2 + reach,
+          hh = (card.size.h * c.s) / 2 + reach;
+        if (
+          sx + hw >= 0 &&
+          sx - hw <= viewW &&
+          sy + hh >= 0 &&
+          sy - hh <= viewH
+        )
+          wanted.add(key);
+      }
+      if (held.current) wanted.add(held.current.key);
+      for (const key of selectedKeysRef.current) wanted.add(key);
+      const current = renderKeysRef.current;
+      if (
+        !current ||
+        current.size !== wanted.size ||
+        [...wanted].some((key) => !current.has(key))
+      ) {
+        renderKeysRef.current = wanted;
+        startTransition(() => setRenderKeys(wanted));
+      }
+    } else if (renderKeysRef.current) {
+      renderKeysRef.current = null;
+      startTransition(() => setRenderKeys(null));
+    }
     for (const [key, el] of cardEls.current) {
       const card = cards.current.get(key);
-      if (card)
-        setStyle(
-          el,
-          "transform",
-          `translate(${card.x}px, ${card.y}px) translate(-50%, -50%)`,
-        );
+      if (!card) continue;
+      const sx = c.x + card.x * c.s,
+        sy = c.y + card.y * c.s;
+      const hw = (card.size.w * c.s) / 2 + margin,
+        hh = (card.size.h * c.s) / 2 + margin;
+      const offscreen =
+        sx + hw < 0 || sx - hw > viewW || sy + hh < 0 || sy - hh > viewH;
+      const overviewTab = farRef.current && m.tabByKey.has(key);
+      const inHand = held.current?.key === key;
+      // Cards start hidden (CSS) until placed here, so the first frame never
+      // lays out every card of a large World.
+      const show = !((offscreen || overviewTab) && !inHand);
+      if (culling && setAttr(el, "data-shown", show ? "true" : "false") && show)
+        shownNow.push([el, card]);
+      setStyle(
+        el,
+        "transform",
+        `translate(${card.x}px, ${card.y}px) translate(-50%, -50%)`,
+      );
     }
+    // Cards that just appeared measure now, in one pass (one layout), so
+    // placement and lines use their real sizes.
+    if (!large.current)
+      for (const [el, card] of shownNow)
+        if (el.offsetWidth)
+          card.size = { w: el.offsetWidth, h: el.offsetHeight };
     const used = new Set<string>();
     if (!farRef.current)
       for (const tab of m.tabs) {
@@ -1067,6 +1268,9 @@ export default function BoardView({
         paths.current.delete(key);
       }
     paintStrings(svg, m);
+    // Measure every zone first, then write: reading a card's size after
+    // writing the previous zone forced a full layout per host.
+    const zones: [HTMLElement, number, number, number, number][] = [];
     for (const host of m.hosts) {
       const zone = zoneEls.current.get(host.key);
       if (!zone) continue;
@@ -1084,18 +1288,21 @@ export default function BoardView({
         for (const key of keys) {
           const card = cards.current.get(key);
           if (!card) continue;
-          const el = cardEls.current.get(key);
-          const w = farRef.current && el ? el.offsetWidth : card.size.w;
-          const h = farRef.current && el ? el.offsetHeight : card.size.h;
+          const shown = farRef.current ? shownSize(key) : undefined;
+          const w = shown?.w ?? card.size.w;
+          const h = shown?.h ?? card.size.h;
           x0 = Math.min(x0, card.x - w / 2);
           y0 = Math.min(y0, card.y - h / 2);
           x1 = Math.max(x1, card.x + w / 2);
           y1 = Math.max(y1, card.y + h / 2);
         }
       }
+      zones.push([zone, x0, y0, x1, y1]);
+    }
+    const pad = farRef.current ? 70 : 46;
+    for (const [zone, x0, y0, x1, y1] of zones) {
       zone.hidden = x0 === Infinity;
       if (zone.hidden) continue;
-      const pad = farRef.current ? 70 : 46;
       setStyle(
         zone,
         "transform",
@@ -2470,6 +2677,7 @@ export default function BoardView({
         keys.add(tab.key);
     return keys;
   }, [model, selectedId]);
+  selectedKeysRef.current = selectedKeys;
 
   /** Colours the user chose; a tab without its own takes its workspace's. */
   const cardColors = saved?.layout.colors ?? {};
@@ -2507,10 +2715,15 @@ export default function BoardView({
   );
 
   const ref = (key: string) => (el: HTMLElement | null) => {
-    if (el) cardEls.current.set(key, el);
-    else cardEls.current.delete(key);
+    const previous = cardEls.current.get(key);
+    if (previous && previous !== el) resizes.current?.unobserve(previous);
+    if (el) {
+      cardEls.current.set(key, el);
+      resizes.current?.observe(el);
+    } else cardEls.current.delete(key);
   };
 
+  const culling = model.workspaces.length + model.tabs.length > CULL_ABOVE;
   return (
     <>
       {toolbarPortal ? createPortal(toolbar, toolbarPortal) : toolbar}
@@ -2519,7 +2732,7 @@ export default function BoardView({
       <WorldSearchResults world={world} query={query} onSelect={onSelect} />
       <div
         ref={boardRef}
-        className={`board${far ? " board-far" : ""}${pulses ? "" : " board-no-pulse"}`}
+        className={`board${far ? " board-far" : ""}${pulses ? "" : " board-no-pulse"}${culling ? " board-culling" : ""}`}
         aria-label="Board of hosts, workspaces and tabs"
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
@@ -2613,205 +2826,226 @@ export default function BoardView({
             </div>
           ))}
           <svg ref={svgRef} className="board-wires" aria-hidden="true" />
-          {model.workspaces.map((space) => {
-            const folded = collapsed.has(space.key);
-            const attention = space.statuses[0] === "blocked";
-            return (
-              <div
-                key={space.key}
-                ref={ref(space.key)}
-                data-key={space.key}
-                data-world-node-anchor={space.space.id}
-                role="button"
-                aria-pressed={selectedKeys.has(space.key)}
-                tabIndex={0}
-                aria-label={`Workspace ${space.label}, ${space.tabKeys.length} tabs`}
-                // Keyboard and assistive activation arrive as a click with no
-                // pointer (detail 0); pointer taps are handled as gestures.
-                onClick={(event) => {
-                  if (event.detail === 0) selectCard(space.key, model);
-                }}
-                style={tintStyle(cardColors[space.key])}
-                className={[
-                  "board-card board-workspace",
-                  cardColors[space.key] ? "board-tinted" : "",
-                  folded ? "board-folded" : "",
-                  attention ? "board-attn" : "",
-                  space.stale ? "board-stale" : "",
-                  selectedKeys.has(space.key) ? "board-selected" : "",
-                  matches && !matches.has(space.key) ? "board-dim" : "",
-                ].join(" ")}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" || event.key === " ") {
-                    event.preventDefault();
-                    selectCard(space.key, model);
-                  }
-                }}
-              >
-                <div className="board-row">
-                  <span className="board-label">{space.label}</span>
-                  <button
-                    type="button"
-                    className="board-fold"
-                    aria-label={`${folded ? "Open" : "Fold"} ${space.label}`}
-                    onPointerDown={(event) => event.stopPropagation()}
-                    title={folded ? "Show the tabs" : "Fold the tabs away"}
-                    onClick={() => toggleFold(space)}
-                  >
-                    {folded ? (
-                      <>
-                        {space.tabKeys.length}
-                        <ChevronDown size={14} aria-hidden="true" />
-                      </>
-                    ) : (
-                      <ChevronUp size={14} aria-hidden="true" />
-                    )}
-                  </button>
-                  {space.actionable ? (
+          {/* Cards in their own container, new when a large board is built,
+              so React appends them as one subtree instead of placing each
+              among existing siblings (quadratic in cards). */}
+          <div className="board-cards" key={built ? "built" : "frame"}>
+            {(culling
+              ? renderKeys
+                ? model.workspaces.filter((space) => renderKeys.has(space.key))
+                : // Until paint says what is on screen, nothing.
+                  []
+              : model.workspaces
+            ).map((space) => {
+              const folded = collapsed.has(space.key);
+              const attention = space.statuses[0] === "blocked";
+              return (
+                <div
+                  key={space.key}
+                  ref={ref(space.key)}
+                  data-key={space.key}
+                  data-world-node-anchor={space.space.id}
+                  role="button"
+                  aria-pressed={selectedKeys.has(space.key)}
+                  tabIndex={0}
+                  aria-label={`Workspace ${space.label}, ${space.tabKeys.length} tabs`}
+                  // Keyboard and assistive activation arrive as a click with no
+                  // pointer (detail 0); pointer taps are handled as gestures.
+                  onClick={(event) => {
+                    if (event.detail === 0) selectCard(space.key, model);
+                  }}
+                  style={tintStyle(cardColors[space.key])}
+                  className={[
+                    "board-card board-workspace",
+                    cardColors[space.key] ? "board-tinted" : "",
+                    folded ? "board-folded" : "",
+                    attention ? "board-attn" : "",
+                    space.stale ? "board-stale" : "",
+                    selectedKeys.has(space.key) ? "board-selected" : "",
+                    matches && !matches.has(space.key) ? "board-dim" : "",
+                  ].join(" ")}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      selectCard(space.key, model);
+                    }
+                  }}
+                >
+                  <div className="board-row">
+                    <span className="board-label">{space.label}</span>
                     <button
                       type="button"
-                      className="board-fold board-add"
-                      aria-label={`New in ${space.label}`}
-                      title="New terminal or agent"
+                      className="board-fold"
+                      aria-label={`${folded ? "Open" : "Fold"} ${space.label}`}
                       onPointerDown={(event) => event.stopPropagation()}
-                      onClick={() => setAddTo(space.key)}
+                      title={folded ? "Show the tabs" : "Fold the tabs away"}
+                      onClick={() => toggleFold(space)}
                     >
-                      <Plus size={14} aria-hidden="true" />
+                      {folded ? (
+                        <>
+                          {space.tabKeys.length}
+                          <ChevronDown size={14} aria-hidden="true" />
+                        </>
+                      ) : (
+                        <ChevronUp size={14} aria-hidden="true" />
+                      )}
                     </button>
-                  ) : null}
-                </div>
-                <span
-                  className="board-handle"
-                  title="Drag to string this to a note or card"
-                />
-                <div className="board-counts">{workspaceCounts(space)}</div>
-                <div className="board-sum" aria-hidden="true">
-                  {space.squares.map((square, i) => (
-                    <span
-                      key={i}
-                      className={
-                        square.isAgent
-                          ? `board-s-${square.status}`
-                          : "board-sq-shell"
-                      }
-                    />
-                  ))}
-                </div>
-              </div>
-            );
-          })}
-          {model.tabs.map((tab) => {
-            if (collapsed.has(tab.workspaceKey)) return null;
-            const pane = primaryPane(tab);
-            const multi = tab.panes.length > 1;
-            const rows = rowsOf(tab, selectedId);
-            const hidden = tab.panes.length - rows.length;
-            return (
-              <div
-                key={tab.key}
-                ref={ref(tab.key)}
-                data-key={tab.key}
-                data-world-node-anchor={
-                  tab.panes.length === 1 ? tab.panes[0]!.leaf.id : undefined
-                }
-                role="button"
-                aria-pressed={selectedKeys.has(tab.key)}
-                tabIndex={0}
-                aria-label={`${tab.label}, ${tabSummary(tab)}`}
-                onClick={(event) => {
-                  if (event.detail !== 0) return;
-                  const row = (
-                    event.target as HTMLElement
-                  ).closest<HTMLElement>("[data-pane]");
-                  selectCard(tab.key, model, row?.dataset.pane);
-                }}
-                style={tintStyle(tabColor(tab))}
-                className={[
-                  "board-card board-tab",
-                  `board-s-${tab.status}`,
-                  tabColor(tab) ? "board-tinted" : "",
-                  tab.shellOnly ? "board-terminal" : "",
-                  multi ? "board-multi" : "",
-                  tab.stale ? "board-stale" : "",
-                  selectedKeys.has(tab.key) ? "board-selected" : "",
-                  matches && !matches.has(tab.key) ? "board-dim" : "",
-                ].join(" ")}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    event.preventDefault();
-                    selectCard(tab.key, model);
-                  }
-                }}
-              >
-                <div className="board-row">
-                  {tab.shellOnly ? (
-                    <span className="board-prompt" aria-hidden="true">
-                      &gt;_
-                    </span>
-                  ) : (
-                    <span className="board-dot" />
-                  )}
-                  <span className="board-label">{tab.label}</span>
-                  <span className="board-who">
-                    {multi
-                      ? `${tab.panes.length} panes`
-                      : pane
-                        ? paneName(pane)
-                        : ""}
-                  </span>
-                </div>
-                {multi ? (
-                  <div className="board-panes">
-                    {rows.map((row) => (
-                      <div
-                        key={row.key}
-                        data-pane={row.key}
-                        data-world-node-anchor={row.leaf.id}
-                        role="button"
-                        aria-pressed={selectedId === row.leaf.id}
-                        className={`board-pane${row.isAgent ? ` board-s-${row.status}` : " board-pane-shell"}${selectedId === row.leaf.id ? " board-pane-selected" : ""}`}
-                        aria-label={`${paneName(row)}, ${row.isAgent ? STATUS_LABEL[row.status] : "shell"}`}
-                      >
-                        {row.isAgent ? (
-                          <span className="board-dot" />
-                        ) : (
-                          <span className="board-prompt" aria-hidden="true">
-                            &gt;_
-                          </span>
-                        )}
-                        <span className="board-pane-name">{paneName(row)}</span>
-                        <span className="board-pane-state">
-                          {row.isAgent ? STATUS_LABEL[row.status] : "shell"}
-                        </span>
-                      </div>
-                    ))}
-                    {hidden > 0 ? (
+                    {space.actionable ? (
                       <button
                         type="button"
-                        className="board-more"
+                        className="board-fold board-add"
+                        aria-label={`New in ${space.label}`}
+                        title="New terminal or agent"
                         onPointerDown={(event) => event.stopPropagation()}
-                        onClick={() => setChooser({ tabKey: tab.key })}
+                        onClick={() => setAddTo(space.key)}
                       >
-                        +{hidden} more
+                        <Plus size={14} aria-hidden="true" />
                       </button>
                     ) : null}
                   </div>
-                ) : (
-                  <div className="board-line">
-                    {tab.shellOnly ? "$ " : ""}
-                    {pane
-                      ? paneLine(pane, tab.status)
-                      : STATUS_LABEL[tab.status]}
+                  <span
+                    className="board-handle"
+                    title="Drag to string this to a note or card"
+                  />
+                  <div className="board-counts">{workspaceCounts(space)}</div>
+                  <div className="board-sum" aria-hidden="true">
+                    {space.squares.map((square, i) => (
+                      <span
+                        key={i}
+                        className={
+                          square.isAgent
+                            ? `board-s-${square.status}`
+                            : "board-sq-shell"
+                        }
+                      />
+                    ))}
                   </div>
-                )}
-                <span className="board-badge" aria-hidden="true" />
-                <span
-                  className="board-handle"
-                  title="Drag to string this to a note or card"
-                />
-              </div>
-            );
-          })}
+                </div>
+              );
+            })}
+            {/* A large board in the overview draws no tabs at all (they are
+              hidden there), so React does not rebuild thousands of tab cards
+              on every topology update. */}
+            {(culling
+              ? far || !renderKeys
+                ? []
+                : model.tabs.filter((tab) => renderKeys.has(tab.key))
+              : model.tabs
+            ).map((tab) => {
+              if (collapsed.has(tab.workspaceKey)) return null;
+              const pane = primaryPane(tab);
+              const multi = tab.panes.length > 1;
+              const rows = rowsOf(tab, selectedId);
+              const hidden = tab.panes.length - rows.length;
+              return (
+                <div
+                  key={tab.key}
+                  ref={ref(tab.key)}
+                  data-key={tab.key}
+                  data-world-node-anchor={
+                    tab.panes.length === 1 ? tab.panes[0]!.leaf.id : undefined
+                  }
+                  role="button"
+                  aria-pressed={selectedKeys.has(tab.key)}
+                  tabIndex={0}
+                  aria-label={`${tab.label}, ${tabSummary(tab)}`}
+                  onClick={(event) => {
+                    if (event.detail !== 0) return;
+                    const row = (
+                      event.target as HTMLElement
+                    ).closest<HTMLElement>("[data-pane]");
+                    selectCard(tab.key, model, row?.dataset.pane);
+                  }}
+                  style={tintStyle(tabColor(tab))}
+                  className={[
+                    "board-card board-tab",
+                    `board-s-${tab.status}`,
+                    tabColor(tab) ? "board-tinted" : "",
+                    tab.shellOnly ? "board-terminal" : "",
+                    multi ? "board-multi" : "",
+                    tab.stale ? "board-stale" : "",
+                    selectedKeys.has(tab.key) ? "board-selected" : "",
+                    matches && !matches.has(tab.key) ? "board-dim" : "",
+                  ].join(" ")}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      selectCard(tab.key, model);
+                    }
+                  }}
+                >
+                  <div className="board-row">
+                    {tab.shellOnly ? (
+                      <span className="board-prompt" aria-hidden="true">
+                        &gt;_
+                      </span>
+                    ) : (
+                      <span className="board-dot" />
+                    )}
+                    <span className="board-label">{tab.label}</span>
+                    <span className="board-who">
+                      {multi
+                        ? `${tab.panes.length} panes`
+                        : pane
+                          ? paneName(pane)
+                          : ""}
+                    </span>
+                  </div>
+                  {multi ? (
+                    <div className="board-panes">
+                      {rows.map((row) => (
+                        <div
+                          key={row.key}
+                          data-pane={row.key}
+                          data-world-node-anchor={row.leaf.id}
+                          role="button"
+                          aria-pressed={selectedId === row.leaf.id}
+                          className={`board-pane${row.isAgent ? ` board-s-${row.status}` : " board-pane-shell"}${selectedId === row.leaf.id ? " board-pane-selected" : ""}`}
+                          aria-label={`${paneName(row)}, ${row.isAgent ? STATUS_LABEL[row.status] : "shell"}`}
+                        >
+                          {row.isAgent ? (
+                            <span className="board-dot" />
+                          ) : (
+                            <span className="board-prompt" aria-hidden="true">
+                              &gt;_
+                            </span>
+                          )}
+                          <span className="board-pane-name">
+                            {paneName(row)}
+                          </span>
+                          <span className="board-pane-state">
+                            {row.isAgent ? STATUS_LABEL[row.status] : "shell"}
+                          </span>
+                        </div>
+                      ))}
+                      {hidden > 0 ? (
+                        <button
+                          type="button"
+                          className="board-more"
+                          onPointerDown={(event) => event.stopPropagation()}
+                          onClick={() => setChooser({ tabKey: tab.key })}
+                        >
+                          +{hidden} more
+                        </button>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <div className="board-line">
+                      {tab.shellOnly ? "$ " : ""}
+                      {pane
+                        ? paneLine(pane, tab.status)
+                        : STATUS_LABEL[tab.status]}
+                    </div>
+                  )}
+                  <span className="board-badge" aria-hidden="true" />
+                  <span
+                    className="board-handle"
+                    title="Drag to string this to a note or card"
+                  />
+                </div>
+              );
+            })}
+          </div>
           {(saved?.notes ?? []).map((note) => (
             <div
               key={note.id}
@@ -3517,6 +3751,19 @@ function workspaceCounts(space: BoardWorkspace) {
   return parts.join(" · ");
 }
 const NO_IDS: readonly string[] = [];
+const EMPTY_MODEL = projectBoard({
+  hosts: [],
+  spaces: [],
+  leaves: [],
+  nodes: [],
+  nodeById: new Map(),
+} as unknown as WorldObject);
+/**
+ * Above this many workspace and tab cards, Board lays out only the cards on
+ * screen (and no tabs in the overview). Below it every card stays in layout,
+ * as a typical board needs for measuring and placing.
+ */
+const CULL_ABOVE = 300;
 /**
  * The values paint last wrote, per element. A frame rewrites only what
  * changed: rewriting every card's transform and every line's path on each
@@ -3539,7 +3786,9 @@ function setStyle(
   if (changed(el, `style:${name}`, value)) el.style[name] = value;
 }
 function setAttr(el: Element, name: string, value: string) {
-  if (changed(el, name, value)) el.setAttribute(name, value);
+  if (!changed(el, name, value)) return false;
+  el.setAttribute(name, value);
+  return true;
 }
 /** A saved layout, comparable regardless of key order or float noise. */
 function layoutSignature(layout: {
