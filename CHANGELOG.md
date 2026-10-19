@@ -9,6 +9,9 @@ are optional because the merged PR history records their source.
 
 ### Documentation
 
+- Refresh the shared Files, Changes and History screenshots with Board behind
+  the Inspector, and update their captions and capture provenance.
+
 - Focus the README, tutorial, feature guide and website on Town, Board, Desk and
   Spaces, with current Town/Board layouts and desktop/mobile captures. Identify
   Office, Tree and Graph as legacy views planned for retirement. Show a readable
