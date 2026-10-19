@@ -1322,9 +1322,12 @@ async function run() {
           el.querySelector(`[data-pane$=":${paneId}"]`) ||
           el.dataset.key === `studio:${paneId.split(":")[0]}:t1`,
       )?.dataset.key ?? "studio:w1:t1";
-    await bringIntoView(() => card("studio:w1")!);
-    const ws = card("studio:w1")!;
-    const wsBefore = at("studio:w1")!;
+    // Drag the strung tab's own workspace, so Tidy has to bring the tab back.
+    const wsKey = tabKey.split(":").slice(0, 2).join(":");
+    await bringIntoView(() => card(wsKey)!);
+    const ws = card(wsKey)!;
+    const wsBefore = at(wsKey)!;
+    const tabStart = at(tabKey)!;
     const wc = centre(ws.querySelector(".board-label")!);
     pointer(ws, "pointerdown", wc.x, wc.y, 31);
     for (let i = 1; i <= 8; i++) {
@@ -1336,11 +1339,9 @@ async function run() {
     await rest();
     await settle(700);
     check(
-      Math.hypot(
-        at("studio:w1")!.x - wsBefore.x,
-        at("studio:w1")!.y - wsBefore.y,
-      ) > 50,
-      "the workspace was dragged away from its tidy place",
+      Math.hypot(at(wsKey)!.x - wsBefore.x, at(wsKey)!.y - wsBefore.y) > 50 &&
+        Math.hypot(at(tabKey)!.x - tabStart.x, at(tabKey)!.y - tabStart.y) > 50,
+      "the strung tab's workspace was dragged away, carrying the tab",
     );
     const noteBefore = at(noteKey)!,
       tabBefore = at(tabKey)!;
