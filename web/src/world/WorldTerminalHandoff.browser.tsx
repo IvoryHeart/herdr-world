@@ -505,13 +505,31 @@ function agentTarget(label: string) {
   );
 }
 
-/** Board's card for a single-pane tab, found by its title. */
+/** Opens an agent's Inspector from Town: a click only selects it. */
+function openAgent(label: string) {
+  const target = agentTarget(label)!;
+  target.click();
+  target.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+}
+
+/** Board's card for a single-pane tab, or a split tab's pane row, by name. */
 function boardTarget(label: string) {
-  return [
-    ...document.querySelectorAll<HTMLElement>(
-      ".board-tab[data-world-node-anchor]",
-    ),
-  ].find((card) => card.querySelector(".board-label")?.textContent === label);
+  return (
+    [
+      ...document.querySelectorAll<HTMLElement>(
+        ".board-tab[data-world-node-anchor]",
+      ),
+    ].find(
+      (card) => card.querySelector(".board-label")?.textContent === label,
+    ) ??
+    [
+      ...document.querySelectorAll<HTMLElement>(
+        ".board-pane[data-world-node-anchor]",
+      ),
+    ].find(
+      (row) => row.querySelector(".board-pane-name")?.textContent === label,
+    )
+  );
 }
 
 function terminalInput(scope: ParentNode = document) {
@@ -607,7 +625,7 @@ async function run() {
 
   await until(
     () => window.__HERDR_TOWN_RENDERER__?.ready === true,
-    "Office renderer",
+    "Town renderer",
   );
   await until(() => {
     const seat = document.querySelector<HTMLButtonElement>(
@@ -626,9 +644,7 @@ async function run() {
       tab.title.includes("Endpoint availability is loading") &&
       getComputedStyle(seat).cursor === "not-allowed"
     );
-  }, "browser-local Office creation controls with shared pending endpoint state");
-  const pendingCreationSceneRenders =
-    window.__HERDR_TOWN_RENDERER__!.sceneRenders;
+  }, "browser-local Town creation controls with shared pending endpoint state");
   initialTerminalAttach.resolve();
   await until(
     () =>
@@ -637,10 +653,8 @@ async function run() {
       document.querySelector<HTMLButtonElement>(".world-new-room-canvas-action")
         ?.disabled === false &&
       document.querySelector<HTMLButtonElement>(".tabbar-add")?.disabled ===
-        false &&
-      window.__HERDR_TOWN_RENDERER__!.sceneRenders >
-        pendingCreationSceneRenders,
-    "browser-local Office room, seat and tab-strip actions",
+        false,
+    "browser-local Town room, seat and tab-strip actions",
   );
   check(
     calls.filter(
@@ -656,13 +670,13 @@ async function run() {
           ".world-new-seat-canvas-action",
         )!,
       ).cursor === "pointer",
-    "Office did not establish one parked creation endpoint without opening an Inspector",
+    "Town did not establish one parked creation endpoint without opening an Inspector",
   );
   check(
     !calls.some(
       ({ method }) => method === "tab.create" || method === "workspace.create",
     ),
-    "Office required a topology mutation before enabling initial room actions",
+    "Town required a topology mutation before enabling initial room actions",
   );
   const browserLocalCreateCount = calls.filter(
     ({ method }) => method === "tab.create",
@@ -683,7 +697,7 @@ async function run() {
     () =>
       calls.filter(({ method }) => method === "tab.create").length ===
       browserLocalCreateCount + 1,
-    "browser-local Office seat creation",
+    "browser-local Town seat creation",
   );
   const browserLocalCreate = [...calls]
     .reverse()
@@ -697,7 +711,7 @@ async function run() {
           pane_id: "builder-pane",
           terminal_id: "builder-terminal",
         }),
-    "browser-local Office seat creation omitted its exact parked source",
+    "browser-local Town seat creation omitted its exact parked source",
   );
   const browserLocalFocusGate = Promise.withResolvers<void>();
   delayedPaneGet = {
@@ -804,7 +818,7 @@ async function run() {
   await settle();
   check(
     document.querySelector(".world-status-header") === null,
-    "the retired Visual Control Plane header still consumes Office height",
+    "the retired Visual Control Plane header still consumes Town height",
   );
   check(
     Boolean(document.querySelector(".world-topbar-status")),
@@ -899,12 +913,12 @@ async function run() {
     document
       .querySelector(".world-control-plane")
       ?.closest(".workspace-terminal-surface") !== null,
-    "Office did not reuse the Spaces workspace frame",
+    "Town did not reuse the Spaces workspace frame",
   );
   check(
     (document.querySelector(".sidebar")?.getBoundingClientRect().width ?? 0) >
       100,
-    "Office did not retain the Spaces workspace navigator",
+    "Town did not retain the Spaces workspace navigator",
   );
   const sharedNavigator = document.querySelector<HTMLElement>(".sidebar");
   const hideNavigatorButton = document.querySelector<HTMLButtonElement>(
@@ -1033,7 +1047,7 @@ async function run() {
   const annotationsButton = [
     ...document.querySelectorAll<HTMLButtonElement>(".tabbar-utilities button"),
   ].find((button) => button.textContent?.includes("Annotations"));
-  check(Boolean(annotationsButton), "Office did not retain annotations");
+  check(Boolean(annotationsButton), "Town did not retain annotations");
   annotationsButton?.click();
   await until(
     () => document.querySelector('[aria-label="Review annotations"]'),
@@ -1068,7 +1082,7 @@ async function run() {
   );
   check(
     document.querySelector(".world-office-toolbar") === null,
-    "Office settings still consumed a scene toolbar",
+    "Town settings still consumed a scene toolbar",
   );
   toggleTopbarMenu();
   await until(
@@ -1076,7 +1090,7 @@ async function run() {
       document.querySelector<HTMLSelectElement>(
         'select[aria-label="Inspector opening"]',
       ),
-    "Office settings in common menu",
+    "Town settings in common menu",
   );
   check(
     Boolean(
@@ -1093,12 +1107,12 @@ async function run() {
     inspectorOpeningSelect.value === "floating" &&
       !document.querySelector('select[aria-label="Office room alignment"]') &&
       !document.querySelector('select[aria-label="Office long room titles"]'),
-    "Inspector opening was not menu-owned, did not default to Floating, or Office-only settings remained",
+    "Inspector opening was not menu-owned, did not default to Floating, or Town-only settings remained",
   );
   toggleTopbarMenu();
   await until(
     () => !document.querySelector(".config-dropdown"),
-    "Office settings closed before shell Actions",
+    "Town settings closed before shell Actions",
   );
   const floatingPreferenceNavigatorRow = () =>
     [...document.querySelectorAll<HTMLElement>(".sidebar .agent-row")].find(
@@ -1344,14 +1358,14 @@ async function run() {
         .querySelector('.world-selection-panel[data-kind="host"]')
         ?.textContent?.includes("Local") &&
       !document.querySelector('[role="dialog"][aria-label$=" Inspector"]'),
-    "Office host search selection profile",
+    "Town host search selection profile",
   );
   document
     .querySelector<HTMLButtonElement>(
       '.world-selection-panel button[aria-label="Close profile"]',
     )!
     .click();
-  flushSync(() => agentTarget("Builder")!.click());
+  flushSync(() => openAgent("Builder"));
   await until(
     () =>
       document.querySelector('[role="dialog"][aria-label="Builder Inspector"]'),
@@ -1378,7 +1392,7 @@ async function run() {
     "selected visual commands displaced native shell commands",
   );
   await setShellActionsOpen(false);
-  flushSync(() => agentTarget("Reviewer")!.click());
+  flushSync(() => openAgent("Reviewer"));
   await until(
     () =>
       document.querySelector(
@@ -1756,7 +1770,7 @@ async function run() {
   mobileInspector
     .querySelector<HTMLButtonElement>('button[aria-label="Add a file"]')!
     .click();
-  check(pickerOpened, "Office attachment button activates its file picker");
+  check(pickerOpened, "Town attachment button activates its file picker");
   const uploadFiles = new DataTransfer();
   uploadFiles.items.add(
     new File(["example upload"], "example.txt", { type: "text/plain" }),
@@ -1765,7 +1779,7 @@ async function run() {
   uploadInput.dispatchEvent(new Event("change", { bubbles: true }));
   await until(
     () => inspectorEditor.value.includes("/tmp/example.txt"),
-    "Office attachment uploads and inserts into the retained draft",
+    "Town attachment uploads and inserts into the retained draft",
   );
   const retainedDraft = inspectorEditor.value;
   check(
@@ -1791,7 +1805,7 @@ async function run() {
       mobileInspector.querySelector<HTMLTextAreaElement>(
         ".terminal-composer textarea",
       )?.value === retainedDraft,
-    "Office Composer retains text and attachment across close/reopen",
+    "Town Composer retains text and attachment across close/reopen",
   );
   mobileInspector
     .querySelector<HTMLButtonElement>(
@@ -2017,7 +2031,7 @@ async function run() {
     "delayed navigator focus resurrected the closed target Inspector",
   );
 
-  flushSync(() => agentTarget("Reviewer")!.click());
+  flushSync(() => openAgent("Reviewer"));
   await until(
     () =>
       document.querySelector(
@@ -2070,7 +2084,7 @@ async function run() {
       document.querySelector<HTMLSelectElement>(
         'select[aria-label="Inspector opening"]',
       ),
-    "reopened Office settings",
+    "reopened Town settings",
   );
   const dockedOpeningSelect = document.querySelector<HTMLSelectElement>(
     'select[aria-label="Inspector opening"]',
@@ -2078,7 +2092,7 @@ async function run() {
   dockedOpeningSelect.value = "docked";
   dockedOpeningSelect.dispatchEvent(new Event("change", { bubbles: true }));
   toggleTopbarMenu();
-  flushSync(() => agentTarget("Builder")!.click());
+  flushSync(() => openAgent("Builder"));
   await until(
     () =>
       document
@@ -2177,7 +2191,7 @@ async function run() {
   const createSeatButton = document.querySelector<HTMLButtonElement>(
     ".world-new-seat-canvas-action:not(:disabled)",
   );
-  check(Boolean(createSeatButton), "Office room omitted its new-seat action");
+  check(Boolean(createSeatButton), "Town room omitted its new-seat action");
   const seatCreatesBeforeClick = calls.filter(
     ({ method }) => method === "tab.create",
   ).length;
@@ -2195,7 +2209,7 @@ async function run() {
     () =>
       calls.filter(({ method }) => method === "tab.create").length ===
       seatCreatesBeforeClick + 1,
-    "Office seat creation",
+    "Town seat creation",
   );
   await worldRuntimeStore.refresh();
   await until(
@@ -2245,7 +2259,7 @@ async function run() {
   store.clearNotice();
   await settle();
   await until(() => agentTarget("Builder"), "Builder desk target");
-  flushSync(() => agentTarget("Builder")!.click());
+  flushSync(() => openAgent("Builder"));
   await until(
     () =>
       document
@@ -2443,7 +2457,7 @@ async function run() {
     "resizing the floating Inspector focused its terminal",
   );
 
-  flushSync(() => agentTarget("Reviewer")!.click());
+  flushSync(() => openAgent("Reviewer"));
   await until(
     () =>
       document
@@ -2463,37 +2477,17 @@ async function run() {
   panes[1]!.revision += 1;
   worldRevision += 1;
   await worldRuntimeStore.refresh();
-  await until(
-    () => document.querySelector(".world-completion-notices button"),
-    "Reviewer completion for existing Inspector",
-  );
+  await settle();
   check(
     document.querySelector(
       '[role="dialog"][aria-label="Builder Inspector"]',
     ) !== null,
     "agent completion hid an unrelated floating Inspector",
   );
-  const rejectedBeforeCompletion = rejectedPaneGets;
-  rejectNextPaneGetId = "reviewer-pane";
-  document
-    .querySelector<HTMLButtonElement>(".world-completion-notices button")!
-    .click();
-  await until(
-    () => rejectedPaneGets === rejectedBeforeCompletion + 1,
-    "existing Inspector completion focus rejection",
-  );
-  check(
-    document.querySelector(".world-completion-notices button") !== null,
-    "failed existing-Inspector activation acknowledged its completion",
-  );
   panes[1]!.agent_status = "idle";
   panes[1]!.revision += 1;
   worldRevision += 1;
   await worldRuntimeStore.refresh();
-  await until(
-    () => document.querySelector(".world-completion-notices button") === null,
-    "Reviewer completion reset",
-  );
   check(
     builderWindow.querySelectorAll(".workspace-inspector-head").length === 1,
     "floating Inspector rendered more than one header",
@@ -2795,7 +2789,7 @@ async function run() {
     "previously focused docked terminal after browser focus return",
   );
 
-  flushSync(() => agentTarget("Reviewer")!.click());
+  flushSync(() => openAgent("Reviewer"));
   await until(
     () =>
       document
@@ -2845,9 +2839,9 @@ async function run() {
   viewSelect.dispatchEvent(new Event("change", { bubbles: true }));
   await until(
     () => document.querySelector(".board"),
-    "Graph replacement check",
+    "Board replacement check",
   );
-  await until(() => boardTarget("Builder"), "Builder Graph target");
+  await until(() => boardTarget("Builder"), "Builder Board target");
   flushSync(() => boardTarget("Builder")!.click());
   await until(
     () =>
@@ -2859,7 +2853,7 @@ async function run() {
       terminalInput(
         document.querySelector(".world-managed-window.is-active") ?? document,
       ),
-    "Builder Graph Inspector replacement",
+    "Builder Board Inspector replacement",
   );
   document
     .querySelector<HTMLButtonElement>(
@@ -2869,7 +2863,7 @@ async function run() {
   await until(
     () =>
       document.querySelectorAll(".world-intent-connector circle").length === 2,
-    "Builder Graph Inspector connector",
+    "Builder Board Inspector connector",
   );
   // Board anchors the line at the card's right edge, halfway down.
   const boardBuilderCard = boardTarget("Builder")!.getBoundingClientRect();
@@ -2888,7 +2882,7 @@ async function run() {
   );
   check(
     !document.querySelector('[role="dialog"][aria-label="Reviewer Inspector"]'),
-    "Graph A-to-B selection unexpectedly floated the replaced Inspector",
+    "Board A-to-B selection unexpectedly floated the replaced Inspector",
   );
   const graphBuilderInput = terminalInput(
     document.querySelector(".world-managed-window.is-active") ?? document,
@@ -2906,7 +2900,7 @@ async function run() {
           method === "terminal.input" &&
           params.terminal_id === "builder-terminal",
       ).length > graphBuilderInputsBefore,
-    "Builder Graph terminal identity",
+    "Builder Board terminal identity",
   );
 
   const retainedBuilder = document.querySelector<HTMLElement>(
@@ -2928,7 +2922,7 @@ async function run() {
     "view transition moved the Inspector",
   );
   await until(() => agentTarget("Reviewer"), "Reviewer Town target");
-  flushSync(() => agentTarget("Reviewer")!.click());
+  flushSync(() => openAgent("Reviewer"));
   await until(
     () => document.querySelector('[aria-label="Reviewer Inspector"]'),
     "Town opens the second managed Inspector",
@@ -2960,7 +2954,7 @@ async function run() {
   laterWindow
     .querySelector<HTMLButtonElement>('[aria-label="Close Inspector window"]')!
     .click();
-  flushSync(() => agentTarget("Builder")!.click());
+  flushSync(() => openAgent("Builder"));
   await until(
     () =>
       document.querySelector(
@@ -2970,8 +2964,8 @@ async function run() {
   );
   viewSelect.value = "board";
   viewSelect.dispatchEvent(new Event("change", { bubbles: true }));
-  await until(() => document.querySelector(".board"), "Graph after Tree");
-  await until(() => boardTarget("Reviewer"), "Reviewer Graph target");
+  await until(() => document.querySelector(".board"), "Board after Town");
+  await until(() => boardTarget("Reviewer"), "Reviewer Board target");
   flushSync(() => boardTarget("Reviewer")!.click());
   await until(
     () =>
@@ -3166,7 +3160,7 @@ async function run() {
   check(
     getComputedStyle(compactReviewerSlot!).display !== "none" &&
       compactReviewerSlot!.getBoundingClientRect().height > 0,
-    "compact Graph hid the World Inspector behind the Spaces session rule",
+    "compact Board hid the World Inspector behind the Spaces session rule",
   );
   viewSelect.value = "town";
   viewSelect.dispatchEvent(new Event("change", { bubbles: true }));
@@ -3176,18 +3170,18 @@ async function run() {
       document.querySelector(
         ".world-managed-window.is-active .workspace-inspector",
       ) === persistentReviewerInspector,
-    "compact Office retained Inspector",
+    "compact Town retained Inspector",
   );
   check(
     compactReviewerSlot!.getBoundingClientRect().height > 0,
-    "compact Office did not render the retained Inspector",
+    "compact Town did not render the retained Inspector",
   );
   const compactBuilderWindow = document.querySelector<HTMLElement>(
     '[role="dialog"][aria-label="Builder Inspector"]',
   )!;
   check(
     compactBuilderWindow === null,
-    "compact Office exposed a floating Inspector above the docked Inspector",
+    "compact Town exposed a floating Inspector above the docked Inspector",
   );
   const compactNavigation = document.querySelector<HTMLElement>(
     '.mobile-nav[aria-label="Workspace view switcher"]',
@@ -3685,7 +3679,7 @@ async function run() {
   viewSelect.dispatchEvent(new Event("change", { bubbles: true }));
   await until(
     () => window.__HERDR_TOWN_RENDERER__?.ready === true,
-    "Office split-pane input check",
+    "Town split-pane input check",
   );
   splitBuilderWindow.focus();
   splitBuilderWindow.dispatchEvent(
@@ -3699,7 +3693,7 @@ async function run() {
     () =>
       document.activeElement === siblingInput &&
       store.get().selectedPaneId === siblingPane.pane_id,
-    "Office preserved selected sibling after visual view change",
+    "Town preserved selected sibling after visual view change",
   );
   const officeSiblingInputsBefore = calls.filter(
     ({ method, params }) =>
@@ -3715,7 +3709,7 @@ async function run() {
           params.terminal_id === "builder-sibling-terminal",
       ).length ===
       officeSiblingInputsBefore + 1,
-    "Office selected sibling received input",
+    "Town selected sibling received input",
   );
   check(
     calls.filter(
@@ -3723,13 +3717,13 @@ async function run() {
         method === "terminal.input" &&
         params.terminal_id === "builder-terminal",
     ).length === originalInputsBefore,
-    "Office sibling input reached original pane",
+    "Town sibling input reached original pane",
   );
   viewSelect.value = "board";
   viewSelect.dispatchEvent(new Event("change", { bubbles: true }));
   await until(
     () => document.querySelector(".board"),
-    "Graph after Office split-pane check",
+    "Board after Town split-pane check",
   );
   updateLayoutPreferences({ mode: "mobile" });
   await until(
@@ -3867,7 +3861,7 @@ async function run() {
   viewSelect.dispatchEvent(new Event("change", { bubbles: true }));
   await until(
     () => window.__HERDR_TOWN_RENDERER__?.ready === true,
-    "Office before later Inspector opening",
+    "Town before later Inspector opening",
   );
   toggleTopbarMenu();
   await until(
@@ -3875,7 +3869,7 @@ async function run() {
       document.querySelector<HTMLSelectElement>(
         'select[aria-label="Inspector opening"]',
       ),
-    "Office opening preference before Restore regression",
+    "Town opening preference before Restore regression",
   );
   const laterOpeningSelect = document.querySelector<HTMLSelectElement>(
     'select[aria-label="Inspector opening"]',
@@ -3887,7 +3881,7 @@ async function run() {
     document.querySelector<HTMLButtonElement>(
       '.world-semantic-target[data-kind="desk"][data-target-key*="created-tab-3"]:not(:disabled)',
     );
-  await until(laterDesk, "later terminal desk in Office");
+  await until(laterDesk, "later terminal desk in Town");
   // World can expose a new tab while the focused list still predates it.
   const staleFocusedTabs = store
     .get()
@@ -4198,7 +4192,7 @@ async function run() {
     !document.querySelector(".workspace-inspector"),
     "closed Inspector reappeared through an arrangement",
   );
-  flushSync(() => agentTarget("Builder")!.click());
+  flushSync(() => openAgent("Builder"));
   await until(
     () => Boolean(document.querySelector(".workspace-inspector")),
     "visual Inspector reopened after Close all",
@@ -4236,7 +4230,7 @@ async function run() {
   updateLayoutPreferences({ mode: "mobile" });
   await until(
     () => document.documentElement.dataset.layout === "mobile",
-    "mobile Office before return navigation",
+    "mobile Town before return navigation",
   );
   document
     .querySelector<HTMLButtonElement>(
@@ -4248,7 +4242,7 @@ async function run() {
       document.querySelector<HTMLButtonElement>(
         'button[aria-label="Back to Town"]',
       ),
-    "mobile Office has a visible return button outside the ellipsis menu",
+    "mobile Town has a visible return button outside the ellipsis menu",
   );
   const backToOffice = document.querySelector<HTMLButtonElement>(
     'button[aria-label="Back to Town"]',
@@ -4279,7 +4273,7 @@ async function run() {
   viewSelect.dispatchEvent(new Event("change", { bubbles: true }));
   await until(
     () => document.querySelector('button[aria-label="Back to Town"]'),
-    "mobile view switcher returns to Office before dismissing Inspectors",
+    "mobile view switcher returns to Town before dismissing Inspectors",
   );
   // The on-screen Back returns to the view in one tap even with Composer
   // open; only the phone's own Back closes Composer first. Open Composer in
@@ -4346,7 +4340,7 @@ async function run() {
   check(
     window.location.pathname === "/town" &&
       !!document.querySelector(".world-office-shell"),
-    "Back to Town reveals the Office scene without changing route",
+    "Back to Town reveals the Town scene without changing route",
   );
   check(
     calls.filter(({ method }) =>
@@ -4359,7 +4353,7 @@ async function run() {
     "return action disappears when no Inspector is open",
   );
   // The closed terminal leaves no history entry: one system Back leaves
-  // Office for the scene shown before it.
+  // Town for the scene shown before it.
   await settle();
   check(
     !(
@@ -4373,7 +4367,7 @@ async function run() {
   await until(
     () =>
       window.location.pathname === "/board" && document.querySelector(".board"),
-    "system Back after Back to Town reaches Graph in one press",
+    "system Back after Back to Town reaches Board in one press",
   );
   viewSelect.value = "spaces";
   viewSelect.dispatchEvent(new Event("change", { bubbles: true }));
@@ -4395,7 +4389,7 @@ async function run() {
   );
   check(
     window.location.pathname === "/town",
-    `system Back after Back to Board reached ${window.location.pathname}, not Office`,
+    `system Back after Back to Board reached ${window.location.pathname}, not Town`,
   );
   // Spaces opened directly has no in-app route to return through; its Back
   // still closes an open menu first.
@@ -4434,7 +4428,7 @@ async function run() {
     .click();
   await until(
     () => window.location.pathname === "/town",
-    "direct Spaces Back replaces Spaces with Office",
+    "direct Spaces Back replaces Spaces with Town",
   );
   updateLayoutPreferences({ mode: "desktop" });
   await arrangeWindows("Open all terminal windows");

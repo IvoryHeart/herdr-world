@@ -204,7 +204,7 @@ test.skipIf(!chrome)(
           "--no-first-run",
           "--no-default-browser-check",
           `--user-data-dir=${join(dir, "profile")}`,
-          `${server.url.href}office`,
+          `${server.url.href}town`,
         ],
         { stdout: "ignore", stderr: Bun.file(browserLog) },
       );

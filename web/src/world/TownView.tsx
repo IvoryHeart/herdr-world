@@ -1002,7 +1002,8 @@ export default function TownView({
   };
   useEffect(() => {
     const keydown = (event: KeyboardEvent) => {
-      const target = event.target as HTMLElement | null;
+      // A key sent to the document or window has no element target.
+      const target = event.target instanceof HTMLElement ? event.target : null;
       if (
         event.metaKey ||
         event.ctrlKey ||
