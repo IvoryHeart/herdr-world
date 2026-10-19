@@ -893,7 +893,10 @@ describe("terminal touch link lookup", () => {
     const hover = f.links(1);
     const touch = provider.resolveTouch(1, 6, () => true);
     completions[1]!(new Map([["docs/b.md", "/tmp/b.md"]]));
-    expect(await touch).toEqual({ kind: "file", value: "/tmp/b.md" });
+    const found = await touch;
+    expect(found).toMatchObject({ kind: "file", value: "/tmp/b.md" });
+    // A path found in the text stays valid while its row shows that text.
+    expect(found?.displayed?.()).toBe(true);
     completions[0]!(new Map([["docs/a.md", "/tmp/a.md"]]));
     expect((await hover)[0]?.text).toBe("docs/a.md");
   });
