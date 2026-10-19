@@ -826,9 +826,20 @@ async function run() {
   // Another agent now holds that pane: Send names it and sends only on the
   // user's choice (#228).
   replacedBy = "recipient-reviewer";
-  [...host.querySelectorAll<HTMLButtonElement>(".board-notebar button")]
-    .find((b) => b.textContent?.startsWith("Send to"))!
-    .click();
+  const sendButton = () =>
+    [...host.querySelectorAll<HTMLButtonElement>(".board-notebar button")].find(
+      (b) => b.textContent?.startsWith("Send to"),
+    );
+  if (!sendButton()) {
+    // The note bar follows the selected note; select it again if a slow
+    // runner has not redrawn it since the first send.
+    const again = card(noteKey)!;
+    const ac = centre(again);
+    pointer(again, "pointerdown", ac.x, ac.y, 12);
+    pointer(again, "pointerup", ac.x, ac.y, 12);
+  }
+  await waitFor(() => Boolean(sendButton()), "the note still offers Send");
+  sendButton()!.click();
   const confirmButton = () =>
     [...host.querySelectorAll<HTMLButtonElement>(".board-toast button")].find(
       (b) => b.textContent === "Send to reviewer",
