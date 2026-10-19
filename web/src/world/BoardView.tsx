@@ -1512,7 +1512,26 @@ export default function BoardView({
     if (isNoteKey(end.cardKey))
       return { note: end.cardKey.slice(NOTE_PREFIX.length) };
     const anchor = anchorFor(m, end.cardKey, end.paneKey);
-    return anchor ? { anchor } : null;
+    if (!anchor) return null;
+    // Tell the service which agent the user saw in the pane, so the string
+    // is bound to that agent and not to whoever holds the pane by the time
+    // the service looks.
+    const leaf =
+      anchor.kind === "pane"
+        ? m.tabByKey
+            .get(end.cardKey)
+            ?.panes.find((pane) => pane.leaf.nativeId === anchor.native_id)
+            ?.leaf
+        : undefined;
+    const raw = leaf?.pane as
+      | { agent?: unknown; agent_session?: unknown }
+      | undefined;
+    if (leaf?.kind === "agent" && typeof raw?.agent === "string")
+      anchor.observed = {
+        agent: raw.agent,
+        ...(raw.agent_session ? { session: raw.agent_session } : {}),
+      };
+    return { anchor };
   }
   /** The card and pane under a screen point, for a string's far end. */
   function endAt(x: number, y: number): StringEnd | null {

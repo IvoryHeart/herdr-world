@@ -105,12 +105,16 @@ An alternative was keeping the trace in production behind a query switch. Reject
 
 A pane outlives its agent: one agent can exit and another start in the same
 shell, keeping the pane and terminal IDs. Send used to check only the pane, the
-witnessed terminal and that some agent was present. The service now records a
-recipient for each pane end it sees strung or re-witnessed, read from Herdr:
-the agent kind, its reported session (hashed) and its foreground process group.
-Recording happens after the save returns, so saving never waits on a host; a
-string without a recipient (made before this change, or while its host was not
-ready) asks the user to confirm the agent at Send.
+witnessed terminal and that some agent was present. When a note is strung to
+a pane, the browser sends the agent it showed there (kind and Herdr session).
+After the save returns, the service reads the pane and records the recipient
+(kind, hashed session, foreground process group) only if it finds that same
+agent, so a replacement between the user's action and the read fails closed.
+A string without a recipient (no session shown, a replacement, a host not
+ready, a re-witness after Herdr restarts, or made before this change) asks the
+user to confirm the agent at Send. The service's record is qualified by the
+anchor's connection, pane and terminal, so a late answer cannot land on a
+string that has since moved to another host.
 
 Two recipients are the same agent when kinds match and sessions match, or, when
 either has no session, process groups match: an agent may report its session

@@ -1304,11 +1304,14 @@ attached on the current runtime generation and that the agent the note was
 strung to is present on that pane; otherwise Send SHALL be refused with its
 reason.
 
-When a note is strung to a pane, the World service SHALL record the agent then
-in that pane as the string's recipient: its kind, the agent session Herdr
-reports (if any) and its foreground process group. Only the service SHALL set a
-recipient; a re-witnessed anchor (after Herdr restarts) SHALL drop it until the
-service records it again. At Send the service SHALL compare the pane's agent
+When a note is strung to a pane, the browser SHALL tell the service which agent
+it showed there (its kind and Herdr session), and the service SHALL record that
+agent as the string's recipient (kind, hashed session and foreground process
+group) only if its own read of the pane finds the same kind and session. A
+string whose agent could not be confirmed that way (no session shown, a
+replacement before the read, no answer) SHALL stay unbound. Only the service
+SHALL set a recipient, qualified by the anchor's connection, pane and terminal;
+a re-witnessed anchor (after Herdr restarts) SHALL drop it. At Send the service SHALL compare the pane's agent
 with the recipient: they are the same agent when their kinds match and their
 sessions match, or, when either has no session, their process groups match.
 Another agent in the same pane and terminal, or a string whose recipient was

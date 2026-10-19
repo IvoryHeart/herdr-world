@@ -73,7 +73,14 @@ export function sameRecipient(a: unknown, b: unknown): boolean {
   return x.group !== undefined && x.group === y.group;
 }
 
-function sessionOf(value: unknown): string | undefined {
+/** What the browser showed in a pane when the user strung a note to it. */
+export type ObservedAgent = {
+  agent: string;
+  session?: { source?: unknown; kind?: unknown; value?: unknown };
+};
+
+/** A Herdr agent session, hashed as recipients store it. */
+export function sessionOf(value: unknown): string | undefined {
   if (!isRecord(value) || typeof value.value !== "string") return undefined;
   const id = value.value.trim();
   if (!id) return undefined;
@@ -123,31 +130,35 @@ export async function readPaneRecipient(
 }
 
 /**
- * The service's records of which agent each pane end strung (or
- * re-witnessed) by these operations is for. `read` asks the anchor's host on
- * its current runtime, or answers null when that host is not ready.
+ * The service's records of which agent each newly strung pane end is for.
+ * A recipient is recorded only when the agent `read` finds in the pane (on
+ * its host's current runtime) is the one the browser showed when the user
+ * made the string: the same kind and the same Herdr session. Anything else
+ * (no session to compare, a replacement in the meantime, no answer) leaves
+ * the string unbound, and Send asks the user which agent to send to.
  */
 export async function recipientOps(
   doc: BoardDocument,
   ops: readonly BoardOp[],
+  observed: ReadonlyMap<string, ObservedAgent>,
   read: (
     connectionId: string,
     paneId: string,
   ) => Promise<PaneRecipient | NoRecipient | null>,
 ): Promise<BoardOp[]> {
   const wanted: { string_id: string; end: "from" | "to" }[] = [];
-  for (const op of ops) {
+  for (const op of ops)
     if (op.op === "string.put")
       for (const end of ["from", "to"] as const) {
         const side = op.string[end];
         if ("anchor" in side && side.anchor.kind === "pane")
           wanted.push({ string_id: op.string.id, end });
       }
-    if (op.op === "anchor.witness")
-      wanted.push({ string_id: op.string_id, end: op.end });
-  }
   const recorded: BoardOp[] = [];
   for (const { string_id, end } of wanted) {
+    const seen = observed.get(`${string_id}:${end}`);
+    const seenSession = seen && sessionOf(seen.session);
+    if (!seen || !seenSession) continue;
     const side = doc.strings.find((entry) => entry.id === string_id)?.[end];
     if (!side || !("anchor" in side) || side.anchor.kind !== "pane") continue;
     const { anchor } = side;
@@ -163,11 +174,15 @@ export async function recipientOps(
       !anchor.witness.includes(found.terminal_id)
     )
       continue;
-    // The op itself checks the end still names this pane and terminal.
+    const now = decodeRecipient(found.token);
+    if (!now || now.agent !== seen.agent || now.session !== seenSession)
+      continue;
+    // The op itself checks the end still names this host, pane and terminal.
     recorded.push({
       op: "anchor.recipient",
       string_id,
       end,
+      connection_id: anchor.connection_id,
       pane_id: anchor.native_id,
       terminal_id: found.terminal_id,
       recipient: found.token,

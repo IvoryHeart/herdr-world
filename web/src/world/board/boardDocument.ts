@@ -45,6 +45,12 @@ export type BoardAnchor = {
   witness: string[];
   /** For a pane: the agent the string is for, recorded by the service. */
   recipient?: string;
+  /**
+   * Sent with a new pane string only, never stored: the agent this browser
+   * showed in the pane. The service records it as the string's recipient
+   * only if the pane still holds that agent.
+   */
+  observed?: { agent: string; session?: unknown };
 };
 export type BoardEnd = { note: string } | { anchor: BoardAnchor };
 export type BoardNote = {

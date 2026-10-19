@@ -19,6 +19,7 @@ import {
   reconcileOps,
   type BoardAnchor,
 } from "./board-store";
+import { encodeRecipient, recipientOps, sessionOf } from "./board-recipient";
 
 let root: string;
 let path: string;
@@ -47,39 +48,56 @@ describe("Board store", () => {
   test("which agent a pane string is for is the service's to record (#228)", () => {
     const store = new BoardStore(path);
     // A client cannot claim a recipient, nor send the service's operation.
-    const ops = clientBoardOps([
+    const { ops, observed } = clientBoardOps([
       { op: "note.put", note: note("n1") },
       {
         op: "string.put",
         string: {
           id: "s1",
           from: { note: "n1" },
-          to: { anchor: { ...anchor("w1:p1"), recipient: "forged" } },
+          to: {
+            anchor: {
+              ...anchor("w1:p1"),
+              recipient: "forged",
+              observed: { agent: "claude", session: { value: "seen" } },
+            },
+          },
         },
       },
     ]);
     store.patch(ops);
+    // What the browser showed is returned for this save, never stored.
     expect(store.get().strings[0]?.to).toEqual({ anchor: anchor("w1:p1") });
+    expect(observed.get("s1:to")).toEqual({
+      agent: "claude",
+      session: { value: "seen" },
+    });
     expect(() =>
       clientBoardOps([
         {
           op: "anchor.recipient",
           string_id: "s1",
           end: "to",
+          connection_id: "studio",
           pane_id: "w1:p1",
           terminal_id: "term_example_1",
           recipient: "forged",
         },
       ]),
     ).toThrow("unknown operation");
-    // The service's record applies only while the end names that pane and
-    // a witnessed terminal, and survives a restart.
-    const record = (pane_id: string, terminal_id: string) =>
+    // The service's record applies only while the end names that host, pane
+    // and a witnessed terminal, and survives a restart.
+    const record = (
+      pane_id: string,
+      terminal_id: string,
+      connection_id = "studio",
+    ) =>
       store.patch([
         {
           op: "anchor.recipient",
           string_id: "s1",
           end: "to",
+          connection_id,
           pane_id,
           terminal_id,
           recipient: `agent-in-${pane_id}-${terminal_id}`,
@@ -87,6 +105,7 @@ describe("Board store", () => {
       ]);
     record("w1:p2", "term_example_1");
     record("w1:p1", "term_other");
+    record("w1:p1", "term_example_1", "other-host");
     expect(store.get().strings[0]?.to).toEqual({ anchor: anchor("w1:p1") });
     record("w1:p1", "term_example_1");
     const recorded = {
@@ -107,6 +126,47 @@ describe("Board store", () => {
     ]);
     expect(store.get().strings[0]?.to).toEqual({
       anchor: { ...anchor("w1:p1"), witness: ["term_after_restart"] },
+    });
+  });
+
+  test("a late recipient read for one host never lands on another host's string (review P2)", async () => {
+    const store = new BoardStore(path);
+    const string = (connection_id: string) => ({
+      op: "string.put" as const,
+      string: {
+        id: "s1",
+        from: { note: "n1" },
+        to: { anchor: { ...anchor("w1:p1"), connection_id } },
+      },
+    });
+    store.patch([{ op: "note.put", note: note("n1") }, string("studio")]);
+    const session = { source: "hook", kind: "id", value: "session-a" };
+    let answer!: () => void;
+    const pending = recipientOps(
+      store.get(),
+      [string("studio")],
+      new Map([["s1:to", { agent: "claude", session }]]),
+      () =>
+        new Promise((resolve) => {
+          answer = () =>
+            resolve({
+              token: encodeRecipient({
+                agent: "claude",
+                session: sessionOf(session),
+                group: 10,
+              }),
+              label: "claude",
+              terminal_id: "term_example_1",
+            });
+        }),
+    );
+    // While studio's read is pending, the string moves to another host whose
+    // pane and terminal IDs happen to match.
+    store.patch([string("other-host")]);
+    answer();
+    store.patch(await pending);
+    expect(store.get().strings[0]?.to).toEqual({
+      anchor: { ...anchor("w1:p1"), connection_id: "other-host" },
     });
   });
 

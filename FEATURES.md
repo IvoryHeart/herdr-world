@@ -57,8 +57,8 @@ released availability.
   - Notes and strings are saved by the World service and shared across your
     devices. Strings attach to an exact pane, tab or workspace; a note strung to
     a pane is sent to its agent only when you press Send. When you make the
-    string, World records which agent is in the pane (its Herdr session, or
-    its process when it reports none). Send checks the runtime, the witnessed
+    string, World records the agent you saw in the pane, once it confirms that
+    agent (by its Herdr session) is still there; otherwise the first Send asks. Send checks the runtime, the witnessed
     pane and terminal, and that agent. If another agent now holds the pane,
     even in the same terminal, nothing is sent: World names the new agent and
     sends to it only if you choose **Send to** it. If the agent changes while

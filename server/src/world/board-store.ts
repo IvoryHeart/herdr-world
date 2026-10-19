@@ -2,7 +2,7 @@ import { existsSync, readFileSync, renameSync } from "node:fs";
 import { join } from "node:path";
 import { dataRoot, replaceDataFile } from "../config/data-paths";
 import { worldEnv } from "../config/environment";
-import { RECIPIENT_MAX } from "./board-recipient";
+import { RECIPIENT_MAX, type ObservedAgent } from "./board-recipient";
 
 /**
  * Board's saved state: layout, notes and strings. One document for the World
@@ -122,7 +122,8 @@ export type BoardOp =
       op: "anchor.recipient";
       string_id: string;
       end: "from" | "to";
-      /** Applies only while the end still names this pane and terminal. */
+      /** Applies only while the end still names this host, pane and terminal. */
+      connection_id: string;
       pane_id: string;
       terminal_id: string;
       recipient: string;
@@ -130,29 +131,49 @@ export type BoardOp =
 
 /**
  * Operations as a browser may send them: which agent a string is for is the
- * service's to record, so a client cannot set or claim it.
+ * service's to record, so a client cannot set or claim it. A pane anchor may
+ * carry what the browser showed in the pane (`observed`); it is taken out
+ * and returned for this save only, never stored.
  */
-export function clientBoardOps(ops: unknown): BoardOp[] {
+export function clientBoardOps(ops: unknown): {
+  ops: BoardOp[];
+  observed: Map<string, ObservedAgent>;
+} {
   if (!Array.isArray(ops)) fail("ops must be an array");
-  return ops.map((op) => {
+  const observed = new Map<string, ObservedAgent>();
+  const clean = ops.map((op) => {
     if (!isObject(op)) fail("op must be an object");
     if (op.op === "anchor.recipient") fail("unknown operation");
     if (op.op !== "string.put" || !isObject(op.string)) return op as BoardOp;
-    const strip = (end: unknown) => {
+    const string = op.string;
+    const strip = (end: unknown, side: "from" | "to") => {
       if (!isObject(end) || !isObject(end.anchor)) return end;
       const anchor = { ...end.anchor };
+      const seen = anchor.observed;
       delete anchor.recipient;
+      delete anchor.observed;
+      if (
+        typeof string.id === "string" &&
+        isObject(seen) &&
+        typeof seen.agent === "string" &&
+        seen.agent.length <= BOARD_LIMITS.key
+      )
+        observed.set(`${string.id}:${side}`, {
+          agent: seen.agent,
+          ...(isObject(seen.session) ? { session: seen.session } : {}),
+        });
       return { ...end, anchor };
     };
     return {
       ...op,
       string: {
-        ...op.string,
-        from: strip(op.string.from),
-        to: strip(op.string.to),
+        ...string,
+        from: strip(string.from, "from"),
+        to: strip(string.to, "to"),
       },
     } as BoardOp;
   });
+  return { ops: clean, observed };
 }
 
 export const BOARD_LIMITS = Object.freeze({
@@ -515,6 +536,7 @@ function applyOp(next: BoardDocument, op: BoardOp, current: BoardDocument) {
         !side ||
         !("anchor" in side) ||
         side.anchor.kind !== "pane" ||
+        side.anchor.connection_id !== op.connection_id ||
         side.anchor.native_id !== op.pane_id ||
         !side.anchor.witness.includes(op.terminal_id)
       )

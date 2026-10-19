@@ -131,7 +131,11 @@ import {
   BoardStore,
   type BoardOp,
 } from "./world/board-store";
-import { readPaneRecipient, recipientOps } from "./world/board-recipient";
+import {
+  readPaneRecipient,
+  recipientOps,
+  type ObservedAgent,
+} from "./world/board-recipient";
 import { linkedNoteText, sendNote } from "./world/board-send";
 import { checkAnchor } from "./world/board-anchor";
 import { startFromNote } from "./world/board-start";
@@ -485,14 +489,19 @@ function board() {
 }
 
 /**
- * Record which agent each newly strung (or re-witnessed) pane end is for, by
- * reading the pane on its host's current runtime. Saving never waits for
- * this; until it lands, Send asks the user to confirm the agent.
+ * Record which agent each newly strung pane end is for: the agent the
+ * browser showed, confirmed by reading the pane on its host's current
+ * runtime (see recipientOps). Saving never waits for this; a string left
+ * unbound makes Send ask the user which agent to send to.
  */
-async function bindBoardRecipients(ops: readonly BoardOp[]) {
+async function bindBoardRecipients(
+  ops: readonly BoardOp[],
+  observed: ReadonlyMap<string, ObservedAgent>,
+) {
   const recorded = await recipientOps(
     board().get(),
     ops,
+    observed,
     async (connectionId, paneId) => {
       const { runtime, isCurrent } = resolveReadyConnection(
         connectionManager,
@@ -1065,13 +1074,13 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
   }
   if (method === "world.board.patch") {
     try {
-      const ops = clientBoardOps(
+      const { ops, observed } = clientBoardOps(
         (params as { ops?: unknown } | undefined)?.ops,
       );
       const result = board().patch(ops);
       publishBoardChanged(result.revision);
       sendReply({ id, result: { document: result } }, "world-board-patch");
-      void bindBoardRecipients(ops).catch((error) =>
+      void bindBoardRecipients(ops, observed).catch((error) =>
         logger.warn("Board could not record a string's agent", {
           detail: String(error),
         }),
@@ -1438,6 +1447,7 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
                 op: "anchor.recipient",
                 string_id: String(p.string_id ?? ""),
                 end: linked.end,
+                connection_id: route.connectionId,
                 pane_id: String(p.pane_id ?? ""),
                 terminal_id: String(p.terminal_id ?? ""),
                 recipient: result.recipient,
