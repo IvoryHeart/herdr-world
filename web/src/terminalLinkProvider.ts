@@ -388,24 +388,106 @@ export function registerTerminalLinkProvider(
         if (!complete) columns.add(col);
         else completeUrlColumns.add(col);
       }
-      if (touch) {
-        // A complete visible URL under the finger needs no endpoint answer,
-        // so a repaint while waiting for one cannot withdraw it.
-        const local = links.find(
-          (link) =>
-            link.target.kind === "url" &&
-            link.range.start.y === bufferLineNumber &&
-            link.range.end.y === bufferLineNumber &&
-            completeUrlColumns.has(link.range.start.x - 1) &&
-            link.range.start.x <= touch.col + 1 &&
-            link.range.end.x >= touch.col + 1,
-        );
-        if (local) {
-          callback(textCurrent() ? [local] : undefined);
+      /**
+       * The pressed cell, asked of the endpoint first: an OSC 8 hyperlink
+       * there (or a rejected one) decides, valid only for its frame. A frame
+       * that lands during the lookup is asked again. Without a hyperlink, a
+       * URL or path in the row's text is offered, and stays valid while the
+       * row shows the same text, so an agent's repaints elsewhere do not
+       * withdraw it (#227).
+       */
+      const resolveTouchCell = async (press: {
+        col: number;
+        current: () => boolean;
+      }) => {
+        const covers = (link: TargetLink) =>
+          link.range.start.y <= bufferLineNumber &&
+          link.range.end.y >= bufferLineNumber &&
+          (link.range.start.y < bufferLineNumber ||
+            link.range.start.x <= press.col + 1) &&
+          (link.range.end.y > bufferLineNumber ||
+            link.range.end.x >= press.col + 1);
+        for (let attempt = 0; attempt < 3; attempt++) {
+          if (disposed || !press.current() || !isStillDisplayed()) break;
+          let link: TerminalResolvedLink | null;
+          try {
+            link = await upstream.resolve(row, press.col, true);
+          } catch (error) {
+            // A frame that landed during the lookup is asked again; any
+            // other failure offers nothing, never the text under a label.
+            if (/link frame changed/i.test(String(error))) continue;
+            break;
+          }
+          if (disposed || !press.current() || !isStillDisplayed()) break;
+          if (link && "uri" in link) {
+            const uri = link.uri ?? "";
+            const path = terminalFileUriPath(uri);
+            const url = sanitizeTerminalHttpUrl(uri);
+            const target: TerminalTouchLink | null = path
+              ? { kind: "file", value: path }
+              : url && url === uri
+                ? { kind: "url", value: url }
+                : null;
+            callback(
+              target
+                ? [
+                    {
+                      text: uri,
+                      target,
+                      range: {
+                        start: { x: press.col + 1, y: bufferLineNumber },
+                        end: { x: press.col + 1, y: bufferLineNumber },
+                      },
+                      activate() {},
+                    },
+                  ]
+                : undefined,
+            );
+            return;
+          }
+          if (
+            link?.url &&
+            sanitizeTerminalHttpUrl(link.url) === link.url &&
+            link.regions.some(
+              (r) =>
+                r.row === row &&
+                r.start_col <= press.col &&
+                r.end_col >= press.col,
+            )
+          ) {
+            callback([
+              {
+                text: link.url,
+                target: {
+                  kind: "url",
+                  value: link.url,
+                  displayed: isStillDisplayed,
+                },
+                range: {
+                  start: { x: press.col + 1, y: bufferLineNumber },
+                  end: { x: press.col + 1, y: bufferLineNumber },
+                },
+                activate() {},
+              },
+            ]);
+            return;
+          }
+          // No hyperlink and no endpoint URL: a link found in the text.
+          const local = links.find(
+            (candidate) =>
+              covers(candidate) &&
+              (candidate.target.kind === "file" ||
+                (candidate.range.start.y === bufferLineNumber &&
+                  completeUrlColumns.has(candidate.range.start.x - 1))),
+          );
+          callback(local && isStillDisplayed() ? [local] : undefined);
           return;
         }
-        columns.clear();
-        columns.add(touch.col);
+        callback(undefined);
+      };
+      if (touch) {
+        void resolveTouchCell(touch);
+        return;
       }
       // Preserve files and independently complete URLs across repaints, not
       // provisional URL fragments whose boundaries still need an upstream answer.
@@ -443,19 +525,10 @@ export function registerTerminalLinkProvider(
               const uri = link.uri ?? "";
               const path = terminalFileUriPath(uri);
               const url = sanitizeTerminalHttpUrl(uri);
-              // A URL shown as itself stays valid while its row shows the same
-              // text, like a URL found in the text; any other link Herdr names
-              // (a labelled OSC 8 link, a file) is valid only for its frame.
               const target: TerminalTouchLink | null = path
                 ? { kind: "file", value: path }
                 : url && url === uri
-                  ? {
-                      kind: "url",
-                      value: url,
-                      ...(text.includes(url)
-                        ? { displayed: isStillDisplayed }
-                        : {}),
-                    }
+                  ? { kind: "url", value: url }
                   : null;
               callback(
                 target
@@ -511,15 +584,7 @@ export function registerTerminalLinkProvider(
           const last = link.regions[link.regions.length - 1]!;
           accepted.push({
             text: link.url,
-            // Shown as itself, it stays valid while the row shows the same
-            // text (see the touch branch above).
-            target: {
-              kind: "url",
-              value: link.url,
-              ...(text.includes(link.url)
-                ? { displayed: isStillDisplayed }
-                : {}),
-            },
+            target: { kind: "url", value: link.url },
             hover,
             range: {
               start: {
