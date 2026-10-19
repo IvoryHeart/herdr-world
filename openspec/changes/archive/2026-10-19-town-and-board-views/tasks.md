@@ -25,4 +25,4 @@
 
 ## 4. Delivery
 
-- [ ] 4.1 Run the full delivery gate, open the PR with the decisions to review (redirect targets, removed settings) and archive the change after merge.
+- [x] 4.1 Run the full delivery gate, open the PR with the decisions to review (redirect targets, removed settings) and archive the change after merge.
