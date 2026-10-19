@@ -92,20 +92,19 @@ Use the view switcher to move between these views without restarting work:
 | --- | --- |
 | Town | Explore host buildings, workspace rooms and team tables; the default landing view |
 | Board | Pin notes beside hosts, workspaces and agents, string them together and send a note to an agent |
-| Office | See the same work as workspace rooms and agent desks |
 | Desk | Find agents needing input, review finished turns and follow work in flight |
-| Graph | Explore the same hosts, workspaces and agents as a spatial map |
 | Spaces | Work in one workspace's terminal panes, files, changes and history |
+
+Office, Tree and Graph remain in current builds but are planned for retirement.
+The exercises below use Town, Board, Desk and Spaces. Board is available on current
+`main`; check the [latest release notes](https://github.com/IvoryHeart/herdr-world/releases/latest)
+for released availability.
 
 **Hosts** starts at **All hosts**. Choose a host set to reduce the overview;
 use **Manage connections** to add or reconnect a local or SSH profile. Filtering
 changes what you see and does not disconnect hosts or retarget open terminals.
 
 ### Explore Town: find work that needs you
-
-Town is shown here from a source preview. Check the
-[latest release notes](https://github.com/IvoryHeart/herdr-world/releases/latest)
-for availability in the stable download.
 
 <a id="town"></a>
 
@@ -164,9 +163,9 @@ check the diff using chapter 2 before treating the work as complete.
 **You are done when:** you can find an agent on the expected host, read its peek,
 and open its terminal or Inspector without losing its workspace context.
 
-![Town source preview with four disposable workspaces and terminal desks](./images/herdr-world-desktop-town.png)
+![Town with four disposable workspace rooms and live terminal tables](./images/herdr-world-desktop-town.png)
 
-![Town source preview at phone width](./images/herdr-world-mobile-town.png)
+![Town at phone width](./images/herdr-world-mobile-town.png)
 
 ### Use Board: notes and strings for your agents
 
@@ -204,8 +203,13 @@ on your phone and desktop.
    new note strung to where you started. Click a string, then **Delete**, to
    remove it.
 7. A note strung to an agent's pane offers **Send to <agent>**. World checks the
-   pane still holds the same agent and sends the note once; nothing is ever sent
-   without **Send**. **Start an agent…** opens the same dialog: choose the workspace
+   current runtime, the witnessed pane/terminal IDs and that an agent is present,
+   then sends the note once. This does not prove it is the agent that was running
+   when you made the string: a replacement in the same terminal can receive it.
+   Inspect the current target before pressing **Send**; nothing is sent without
+   that action. This identity gap is tracked in
+   [issue #228](https://github.com/IvoryHeart/herdr-world/issues/228).
+   **Start an agent…** opens the same dialog: choose the workspace
    and the agent, optionally name the tab, and press **Start and send**; the
    note is sent once the agent is ready. (Starting a chosen agent kind
    currently opens a shell; see
@@ -221,43 +225,29 @@ string was made with, so it draws those strings dashed and asks once per host:
 the string; notes always stay. If Board misbehaves, **⋯ → Event trace** shows
 what it received; **Copy trace** gives you text to attach to a bug report.
 
-### Explore Graph: find an agent and open its terminal
+**You are done when:** you can find your workspace card, pin a note and string it
+to the intended workspace or pane. Read the target before using **Send**.
 
+![Board with four workspace cards, terminal tabs and planning notes](./images/herdr-world-desktop-board.png)
+
+![Board close-up of a workspace, terminal tabs and a strung planning note](./images/herdr-world-mobile-board.png)
+
+The Town and Board screenshots use real shell panes in disposable projects.
+The phone Board close-up focuses one workspace, its tabs and a strung note.
+Their empty agent counts are intentional; the notes are sample planning text,
+not reports of completed agent work.
+
+### Use Desk: answer, review and follow work
+
+<a id="desk"></a>
+<!-- Keep existing Graph exercise links useful during the view transition. -->
 <a id="graph"></a>
 
-1. Switch to **Graph**. Follow a host to its workspace and agent or terminal
-   nodes. These links show containment, not task dependencies or message traffic.
-2. Search for your workspace or agent in the top bar. Matching branches expand
-   while searching; clear the query to return to your saved collapsed branches.
-   Search results can include observed items omitted from the drawn map.
-3. On desktop, drag the background to pan, use the mouse wheel or **Zoom in** /
-   **Zoom out**, and choose **Fit** to bring the graph back into view. Drag a
-   node to position it; **Arrange graph** releases those saved positions and
-   lays out the graph again. **Rotate graph left/right** changes its orientation.
-4. Select your agent to inspect it; double-click a live agent or terminal node
-   to open its terminal. The hierarchy beside the canvas also provides selection,
-   expand/collapse and terminal controls. On narrow screens, use this hierarchy.
-5. In the Inspector, switch between **Terminal**, **Files**, **Changes** and
-   **Agent History**. Use **Actions** for the selected target's resource actions
-   or **Go to Spaces** to continue in its workspace.
-
-Graph positions and collapsed branches are saved in this browser. Moving a node
-changes only its presentation. Offline or stale hosts may retain their last
-observed topology, but their nodes cannot open live resources. Omission counts
-mean the drawing is bounded; they do not mean the other workspaces were deleted.
-
-![Graph showing hosts, workspaces and agent terminals](./images/herdr-world-desktop-graph.png)
-
-**You are done when:** you can find the same agent in Graph and Spaces and open
-its terminal on the expected host.
-
-### Use Office and Desk to follow the same work
-
-In **Office**, select an agent's desk to open its Inspector. Workspace rooms group
-work on each host. Use **Actions > New workspace** or **New tab** from a visual
-view; Office also offers **New room** and **New seat**. Confirm the destination
-host before creating anything. Creation needs a ready host and prepares the
-source terminal before opening the result in the current view.
+Use Town for a spatial view and Board for your arrangement of cards and notes.
+Desk offers the same agent work as a queue organized by attention rather than
+location. Use **Actions > New workspace** or **New tab** from a visual view;
+confirm the destination host. Creation needs a ready host and prepares the source
+terminal before opening the result in the current view.
 
 In **Desk**, start with **Needs you** for blocked agents, **To review** for
 finished turns and **In flight** for running work. Open a card to inspect the
@@ -266,11 +256,15 @@ using **Mark reviewed**; the mark is saved in this browser and does not commit
 files or certify success. **Agents** lists all agents in your Hosts filter;
 **Reviewed** lets you reopen a marked turn.
 
-Use **Actions > Pin** on a live agent or terminal in Office or Graph to
-keep that exact pane in visual triage. These pane pins are shared by browsers
-using the same World service, and clear when the service or host runtime
-restarts. **Pinned only** is a browser preference. Graph node positions and
-workspace pins are separate from these pane pins.
+On wide screens, selecting a Desk card opens a reading pane on the right and
+folds the lanes into one queue. Use **J** / **K** to preview neighboring agents,
+**Enter** to enter the terminal and **Esc** to close the pane. Phones open the
+Inspector full screen. Search with **/** across names, workspaces, requests and
+reports. **Mark reviewed** acknowledges a turn only after you have inspected it;
+it does not verify the work for you.
+
+**You are done when:** you can find the same agent in Town, Board or Desk and
+open its terminal on the expected host.
 
 On desktop, **Arrange windows** can tile or cascade open Inspectors; use **Open
 windows** to restore minimized ones. On mobile, one Inspector fills the screen:
@@ -457,8 +451,8 @@ Browsers share Herdr events and visual pane pins; fonts, review marks, drafts,
 workspace pins and shortcuts can remain browser-local.
 Connection controls can pause your browser or others.
 
-**Profiles are shared; each browser saves its own Hosts filter.** Town, Desk, Office,
-Tree, Graph, their counts, and search initially show all hosts and follow that filter.
+**Profiles are shared; each browser saves its own Hosts filter.** Town, Board, Desk,
+their counts, and search initially show all hosts and follow that filter.
 Changing the filter preserves open Inspectors and the owners of pending operations.
 Manage connections controls lifecycle separately; global creation confirms one
 destination. Editing a profile affects others' connection lists. There is no

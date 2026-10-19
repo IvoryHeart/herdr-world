@@ -7,6 +7,13 @@ are optional because the merged PR history records their source.
 
 ## [Unreleased]
 
+### Documentation
+
+- Focus the README, tutorial, feature guide and website on Town, Board, Desk and
+  Spaces, with current Town/Board layouts and desktop/mobile captures. Identify
+  Office, Tree and Graph as legacy views planned for retirement. Show a readable
+  mobile Board close-up and describe Send's current pane/terminal identity checks.
+
 ### Added
 
 - Add Board, a pin board view next to Graph (in progress). Hosts are zones,
@@ -21,8 +28,11 @@ are optional because the merged PR history records their source.
   sticky note and drag a card's red dot to string a note to a workspace, tab or
   exact pane; click a string to cut it. Notes, strings and the board's layout
   are saved by the World service and appear on every device. A note strung to an
-  agent's pane can be sent to that agent; World first checks the pane still
-  holds the same agent and sends it once. After Herdr restarts, Board asks
+  agent's pane can be sent once to its current occupant after World checks the
+  runtime, witnessed pane/terminal IDs and agent presence. Original agent-session
+  continuity is not checked; inspect the target before sending
+  ([issue #228](https://github.com/IvoryHeart/herdr-world/issues/228)). After Herdr
+  restarts, Board asks
   before trusting strings whose terminals changed; strings whose target closed
   wait in a Needs a home tray instead of attaching to the wrong card. A note can
   also start a new agent in a chosen workspace, which receives the note once
