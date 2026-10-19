@@ -242,6 +242,20 @@ describe("World view preference", () => {
     expect(parseWorldView(null)).toBe("town");
   });
 
+  test("inherited object names are unknown views, not prototypes (review)", () => {
+    for (const name of [
+      "constructor",
+      "toString",
+      "__proto__",
+      "hasOwnProperty",
+    ]) {
+      expect(parseWorldView(name)).toBe("town");
+      expect(worldViewFromPath(`/${name}`)).toBe("town");
+      expect(worldPathNeedsCanonical(`/${name}`)).toBe(true);
+    }
+    expect(worldPathNeedsCanonical("/town")).toBe(false);
+  });
+
   test("maps canonical paths without accepting arbitrary routes", () => {
     expect(worldViewFromPath("/")).toBe("town");
     expect(worldViewFromPath("/town")).toBe("town");

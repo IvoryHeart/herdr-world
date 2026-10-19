@@ -18,21 +18,28 @@ export const WORLD_VIEW_PATHS: Record<WorldView, string> = {
  * Retired views and where they now open: Office's successor is Town, and
  * Graph and Tree showed the hierarchy Board now arranges.
  */
-const RETIRED_VIEWS: Readonly<Record<string, WorldView>> = {
-  office: "town",
-  graph: "board",
-  tree: "board",
-};
+const RETIRED_VIEWS: ReadonlyMap<string, WorldView> = new Map([
+  ["office", "town"],
+  ["graph", "board"],
+  ["tree", "board"],
+]);
+
+/**
+ * A view name, a retired one's successor, or Town. A Map, not an object, so
+ * names like `constructor` or `__proto__` are unknown rather than inherited.
+ */
+function viewNamed(name: unknown): WorldView {
+  if (typeof name !== "string") return "town";
+  if (WORLD_VIEWS.includes(name as WorldView)) return name as WorldView;
+  return RETIRED_VIEWS.get(name) ?? "town";
+}
 
 export function parseWorldView(value: unknown): WorldView {
-  if (WORLD_VIEWS.includes(value as WorldView)) return value as WorldView;
-  return (typeof value === "string" && RETIRED_VIEWS[value]) || "town";
+  return viewNamed(value);
 }
 
 export function worldViewFromPath(pathname: string): WorldView {
-  const name = pathname.replace(/^\//, "");
-  if (WORLD_VIEWS.includes(name as WorldView)) return name as WorldView;
-  return RETIRED_VIEWS[name] ?? "town";
+  return viewNamed(pathname.replace(/^\//, ""));
 }
 
 /** True when the address is not the canonical one for its view (root, retired or unknown). */
