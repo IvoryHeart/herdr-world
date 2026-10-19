@@ -203,8 +203,13 @@ on your phone and desktop.
    new note strung to where you started. Click a string, then **Delete**, to
    remove it.
 7. A note strung to an agent's pane offers **Send to <agent>**. World checks the
-   pane still holds the same agent and sends the note once; nothing is ever sent
-   without **Send**. **Start an agent…** opens the same dialog: choose the workspace
+   current runtime, the witnessed pane/terminal IDs and that an agent is present,
+   then sends the note once. This does not prove it is the agent that was running
+   when you made the string: a replacement in the same terminal can receive it.
+   Inspect the current target before pressing **Send**; nothing is sent without
+   that action. This identity gap is tracked in
+   [issue #228](https://github.com/IvoryHeart/herdr-world/issues/228).
+   **Start an agent…** opens the same dialog: choose the workspace
    and the agent, optionally name the tab, and press **Start and send**; the
    note is sent once the agent is ready. (Starting a chosen agent kind
    currently opens a shell; see
@@ -225,9 +230,10 @@ to the intended workspace or pane. Read the target before using **Send**.
 
 ![Board with four workspace cards, terminal tabs and planning notes](./images/herdr-world-desktop-board.png)
 
-![Board at phone width with workspace cards and a planning note](./images/herdr-world-mobile-board.png)
+![Board close-up of a workspace, terminal tabs and a strung planning note](./images/herdr-world-mobile-board.png)
 
 The Town and Board screenshots use real shell panes in disposable projects.
+The phone Board close-up focuses one workspace, its tabs and a strung note.
 Their empty agent counts are intentional; the notes are sample planning text,
 not reports of completed agent work.
 

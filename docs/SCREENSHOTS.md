@@ -41,11 +41,13 @@ PNG originals without adding fictional UI or agent conversations.
 | Desktop Changes | `herdr-world-desktop-changes.png` | Same agent's changed files and readable diff |
 | Desktop History | `herdr-world-desktop-history.png` | Same agent's real session history |
 | Mobile Town | `herdr-world-mobile-town.png` | Town at phone width |
-| Mobile Board | `herdr-world-mobile-board.png` | Board cards and a planning note at phone width |
+| Mobile Board | `herdr-world-mobile-board.png` | Readable close-up of one workspace, two shell tabs and a strung planning note |
 | Mobile Spaces | `herdr-world-mobile-spaces.png` | Focused terminal and mobile controls |
 
 The current Town/Board captures follow main after the Board merge, using Herdr
 0.9.3 with disposable projects, real shell panes and synthetic planning notes.
+The mobile Board close-up uses a separate single-workspace scene with two tabs
+and a strung note, so its text remains readable at the native phone width.
 Their empty attention counts reflect the runtime; notes do not imply completed
 agent work. Label current-main captures in the README and tutorial; consult release
 notes for stable availability. Office, Tree and Graph images remain historical

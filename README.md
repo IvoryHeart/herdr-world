@@ -31,9 +31,10 @@ for released availability.
 
 ## Screenshots
 
-The Town and Board captures show current main with four disposable workspaces,
-real shell panes and synthetic notes. Empty attention counts reflect that scene;
-no agent activity is fabricated. Click a screenshot to open it at full resolution.
+The Town and desktop Board captures show current main with four disposable
+workspaces. Mobile Board focuses on one workspace, two terminal tabs and a strung
+planning note. These scenes use real shell panes and synthetic notes. Empty
+attention counts reflect those scenes; no agent activity is fabricated. Click a screenshot to open it at full resolution.
 
 ### Desktop
 
@@ -53,9 +54,11 @@ its captured workspace, whether opened from Town, Board or Desk. See the
 
 ### Mobile
 
-| Town | Board | Spaces |
-| --- | --- | --- |
-| [![Town at phone width](./docs/images/herdr-world-mobile-town.png)](./docs/images/herdr-world-mobile-town.png) | [![Board at phone width with workspace cards and a planning note](./docs/images/herdr-world-mobile-board.png)](./docs/images/herdr-world-mobile-board.png) | [![Spaces terminal and touch controls](./docs/images/herdr-world-mobile-spaces.png)](./docs/images/herdr-world-mobile-spaces.png) |
+[![Board close-up with a workspace, terminal tabs and a strung planning note](./docs/images/herdr-world-mobile-board.png)](./docs/images/herdr-world-mobile-board.png)
+
+| Town | Spaces |
+| --- | --- |
+| [![Town at phone width](./docs/images/herdr-world-mobile-town.png)](./docs/images/herdr-world-mobile-town.png) | [![Spaces terminal and touch controls](./docs/images/herdr-world-mobile-spaces.png)](./docs/images/herdr-world-mobile-spaces.png) |
 
 ## Quick start
 
