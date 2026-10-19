@@ -1,8 +1,26 @@
 import { describe, expect, test } from "bun:test";
 import {
   assertLazyGrammarAssets,
+  DEVTOOLS_MARKER,
+  devtoolsAssets,
   initialAssetFiles,
 } from "./check-web-assets.mjs";
+import { DEVTOOLS_MARKER as SOURCE_MARKER } from "../web/src/world/devtools/trace";
+
+describe("release web assets carry no development tools", () => {
+  test("an asset holding the devtools marker is named, others pass", () => {
+    expect(SOURCE_MARKER).toBe(DEVTOOLS_MARKER);
+    expect(
+      devtoolsAssets([
+        {
+          name: "assets/BoardView.js",
+          content: `x(${JSON.stringify(DEVTOOLS_MARKER)})`,
+        },
+        { name: "assets/TownView.js", content: "town()" },
+      ]),
+    ).toEqual(["assets/BoardView.js"]);
+  });
+});
 
 describe("initial web asset budget", () => {
   test("counts transitive eager JS/CSS once, without charging lazy features", () => {

@@ -1683,7 +1683,7 @@ async function run() {
     .find((b) => b.textContent?.includes("Event trace"))!
     .click();
   await waitFor(
-    () => Boolean(host.querySelector(".board-trace")),
+    () => Boolean(host.querySelector(".world-trace")),
     "Event trace opens the trace",
   );
   const tapAt = emptySpot();
@@ -1692,19 +1692,19 @@ async function run() {
   await waitFor(
     () =>
       Boolean(
-        host.querySelector(".board-trace")?.textContent?.includes("input"),
+        host.querySelector(".world-trace")?.textContent?.includes("input"),
       ),
     "the trace records input",
   );
   check(
-    host.querySelector(".board-trace-head")!.textContent!.includes("idle"),
+    host.querySelector(".world-trace-head")!.textContent!.includes("idle"),
     "the trace shows the gesture state",
   );
   host
     .querySelector<HTMLButtonElement>('[aria-label="Close the event trace"]')!
     .click();
   await waitFor(
-    () => !host.querySelector(".board-trace"),
+    () => !host.querySelector(".world-trace"),
     "closing turns the trace off",
   );
 

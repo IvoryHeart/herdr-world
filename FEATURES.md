@@ -67,7 +67,8 @@ released availability.
   - Drag a tab onto another workspace of its host to move it (asks first).
   - After a Herdr restart, strings that cannot be confirmed ask Keep or Detach;
     strings whose target closed wait in Needs a home. Selecting a card opens
-    the shared Inspector. **⋯ → Event trace** records input for bug reports.
+    the shared Inspector. Development builds add an event trace for bug reports
+    ([development tools](docs/development.md#development-tools)).
   See the [Board exercise](./docs/TUTORIAL.md#board).
 
 - **Desk** organizes the filtered hosts' agents by what

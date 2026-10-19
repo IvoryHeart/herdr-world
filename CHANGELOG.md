@@ -37,6 +37,13 @@ are optional because the merged PR history records their source.
   it is ready. Drag a tab onto another workspace to move it there (Board asks
   first, with "Don't ask again"); strings follow the moved panes. On phones Board is in the bottom navigation.
 
+### Changed
+
+- Board's event trace, and the renderer counters behind `?officeDebug=1`, are
+  now development-only tools: release builds contain none of them. Development
+  builds keep Board's trace, add one for Town (settings menu, `?debug=town`), and
+  replace `?officeDebug=1` with `?debug=town`.
+
 ### Removed
 
 - Retire the Office, Tree and Graph views. Town and Board replace them: old

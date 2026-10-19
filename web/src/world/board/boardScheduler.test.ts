@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test";
 import { createFrameLoop } from "./boardScheduler";
-import { createTrace, traceRequested } from "./boardTrace";
 
 /** A fake animation-frame clock: frames run only when the test flushes. */
 function fakeFrames() {
@@ -96,27 +95,5 @@ describe("Board frame loop", () => {
     loop.invalidate("start");
     frames.flush();
     expect(frames.pending()).toBe(1);
-  });
-});
-
-describe("Board trace", () => {
-  test("records only when enabled, keeps the newest entries, and exports them", () => {
-    let t = 0;
-    const trace = createTrace(3, () => (t += 5));
-    trace.record("ignored");
-    expect(trace.entries()).toEqual([]);
-    trace.enabled = true;
-    for (const kind of ["a", "b", "c", "d"]) trace.record(kind, { n: kind });
-    expect(trace.entries().map((e) => e.kind)).toEqual(["b", "c", "d"]);
-    expect(JSON.parse(trace.export({ view: "board" }))).toMatchObject({
-      version: 1,
-      context: { view: "board" },
-    });
-  });
-
-  test("tracing starts from the URL or a saved choice", () => {
-    expect(traceRequested("?debug=board", null)).toBe(true);
-    expect(traceRequested("", "on")).toBe(true);
-    expect(traceRequested("?debug=town", "off")).toBe(false);
   });
 });

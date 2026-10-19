@@ -82,7 +82,7 @@ only fills in cards it has not placed before.
 | Pointer gestures | [board/boardGesture.ts](board/boardGesture.ts) turns pointer events into press, pan, pinch, drag and taps. | [Gesture tests](board/boardGesture.test.ts) |
 | Inspector line anchors | [board/boardAnchors.ts](board/boardAnchors.ts) resolves an Inspector's node to a card, pane row or folded workspace. | [Anchor tests](board/boardAnchors.test.ts) |
 | Notes, strings and Send | [board/boardDrafts.ts](board/boardDrafts.ts) keeps unsent text; the service stores the board and sends notes in [board-store.ts](../../../server/src/world/board-store.ts), [board-send.ts](../../../server/src/world/board-send.ts) and [board-start.ts](../../../server/src/world/board-start.ts). | [Draft tests](board/boardDrafts.test.ts), [store](../../../server/src/world/board-store.test.ts), [send](../../../server/src/world/board-send.test.ts) and [start](../../../server/src/world/board-start.test.ts) tests |
-| Frames and the event trace | [board/boardScheduler.ts](board/boardScheduler.ts) runs a frame per batch of invalidation reasons; [board/boardTrace.ts](board/boardTrace.ts) and [BoardTraceOverlay.tsx](board/BoardTraceOverlay.tsx) record and show events with `?debug=board`. | [Scheduler tests](board/boardScheduler.test.ts) |
+| Frames | [board/boardScheduler.ts](board/boardScheduler.ts) runs a frame per batch of invalidation reasons. | [Scheduler tests](board/boardScheduler.test.ts) |
 
 ### Board at scale
 
@@ -101,6 +101,20 @@ are written, and Inspector anchors and the board's box come from geometry and a
 cache. Cards mount in their own container, so React appends them as one subtree.
 `ProductionContexts.board.test.ts` holds this path to the 200 ms p95 / 500 ms
 maximum input budget at 64 hosts.
+
+## Development tools
+
+Development builds only (`devtools/`). [devtools/flag.ts](devtools/flag.ts) is the
+one file a release build keeps: `DEVTOOLS` is false there, and Vite aliases
+[devtools/trace.ts](devtools/trace.ts) and
+[devtools/TraceOverlay.tsx](devtools/TraceOverlay.tsx) to the inert
+[devtools/release.ts](devtools/release.ts), so no trace, overlay, menu item or
+switch ships. [devtools/renderer.ts](devtools/renderer.ts) gates Town's renderer
+counters the same way. Each view's trace is a bounded, page-local ring: Board's is
+under its ⋯ menu, Town's under the common settings menu, and `?debug=board` or
+`?debug=town` starts one. `scripts/check-web-assets.mjs` fails a release build
+whose assets carry the devtools marker. Tests: [trace tests](devtools/trace.test.ts)
+and the asset check's tests.
 
 ## Shared frames and acceptance budgets
 

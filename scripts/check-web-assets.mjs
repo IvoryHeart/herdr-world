@@ -35,6 +35,18 @@ export function initialAssetFiles(
   return [...files];
 }
 
+/**
+ * World's development tools (web/src/world/devtools/) must not ship: release
+ * builds compile them out, and their marker string must appear in no asset.
+ * A deliberate HERDR_WORLD_BUILD_DEVTOOLS=1 build is exempt.
+ */
+export const DEVTOOLS_MARKER = "herdr-world-devtools";
+export function devtoolsAssets(files) {
+  return files
+    .filter(({ content }) => content.includes(DEVTOOLS_MARKER))
+    .map(({ name }) => name);
+}
+
 export function assertLazyGrammarAssets(manifest) {
   const grammarFiles = new Set(
     Object.entries(manifest)
@@ -128,6 +140,28 @@ async function checkAssets() {
     (exceeded ? process.stderr : process.stdout).write(message);
     if (exceeded) process.exitCode = 1;
   }
+  if (process.env.HERDR_WORLD_BUILD_DEVTOOLS !== "1") {
+    const shipped = devtoolsAssets(await textAssets(publicRoot));
+    if (shipped.length) {
+      process.stderr.write(
+        `web assets contain World development tools: ${shipped.join(", ")}\n`,
+      );
+      process.exitCode = 1;
+    } else process.stdout.write("web assets: no development tools\n");
+  }
+}
+
+/** Every text asset (scripts, styles, pages) under the public root. */
+async function textAssets(root, prefix = "") {
+  const out = [];
+  for (const entry of await readdir(root, { withFileTypes: true })) {
+    const path = `${root}/${entry.name}`;
+    const name = `${prefix}${entry.name}`;
+    if (entry.isDirectory()) out.push(...(await textAssets(path, `${name}/`)));
+    else if (/\.(m?js|css|html)$/.test(entry.name))
+      out.push({ name, content: await readFile(path, "utf8") });
+  }
+  return out;
 }
 
 if (import.meta.main) await checkAssets();

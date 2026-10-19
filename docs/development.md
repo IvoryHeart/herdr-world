@@ -17,6 +17,18 @@ Open <http://localhost:5173>. Vite proxies API and WebSocket traffic to the Worl
 service at <http://127.0.0.1:8788>. To use explicit Herdr sockets or SSH, pass service
 options after the workspace command or configure a profile in the UI.
 
+## Development tools
+
+World's event traces and renderer counters exist only in development builds:
+`bun run dev:web`, or a production-style build with
+`HERDR_WORLD_BUILD_DEVTOOLS=1 bun run build:web`. In such a build, Board's
+**⋯ → Event trace** and Town's **Town event trace** switch in the settings menu
+(or `?debug=board` / `?debug=town` in the URL) record a bounded, page-local trace
+of input and effects; **Copy trace** puts it on the clipboard for a bug report.
+Nothing is sent anywhere. Release and package builds never set the flag, and the
+web asset check fails a release build that carries any of it. See the
+[World component routes](../web/src/world/README.md#development-tools).
+
 ## Verification
 
 ```bash

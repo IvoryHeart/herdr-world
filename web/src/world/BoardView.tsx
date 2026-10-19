@@ -60,8 +60,9 @@ import {
   type GestureTarget,
 } from "./board/boardGesture";
 import { createFrameLoop, type FrameLoop } from "./board/boardScheduler";
-import { createTrace, traceRequested, TRACE_KEY } from "./board/boardTrace";
-import { BoardTraceOverlay } from "./board/BoardTraceOverlay";
+import { DEVTOOLS, NO_TRACE } from "./devtools/flag";
+import { openTrace, rememberTrace } from "./devtools/trace";
+import { TraceOverlay } from "./devtools/TraceOverlay";
 import {
   KEPT_DRAFTS_KEY,
   createDraftStore,
@@ -536,27 +537,13 @@ export default function BoardView({
   } | null>(null);
   const gesture = useRef(initialGesture());
   const pinchStart = useRef<{ cam: Camera; mid: Point } | null>(null);
-  const trace = useMemo(() => {
-    const created = createTrace();
-    let stored: string | null = null;
-    try {
-      stored = worldLocalStorage.getItem(TRACE_KEY);
-    } catch {
-      // Storage unavailable: only the URL can turn tracing on.
-    }
-    created.enabled = traceRequested(window.location.search, stored);
-    return created;
-  }, []);
+  // The event trace exists only in development builds (devtools/flag.ts).
+  const trace = useMemo(() => (DEVTOOLS ? openTrace("board") : NO_TRACE), []);
   useEffect(() => setTracing(trace.enabled), [trace]);
   const setTrace = (on: boolean) => {
-    trace.enabled = on;
-    if (!on) trace.clear();
+    if (!DEVTOOLS) return;
+    rememberTrace("board", trace, on);
     setTracing(on);
-    try {
-      worldLocalStorage.setItem(TRACE_KEY, on ? "on" : "off");
-    } catch {
-      // Storage unavailable: the choice lasts for this page.
-    }
   };
   // Anything that changes what is on screen asks for a frame.
   const loopRef = useRef<FrameLoop | null>(null);
@@ -3598,20 +3585,23 @@ export default function BoardView({
                 >
                   Status pulses <span className="board-switch" />
                 </button>
-                <button
-                  type="button"
-                  role="menuitemcheckbox"
-                  aria-checked={tracing}
-                  onClick={() => setTrace(!tracing)}
-                >
-                  Event trace <span className="board-switch" />
-                </button>
+                {DEVTOOLS ? (
+                  <button
+                    type="button"
+                    role="menuitemcheckbox"
+                    aria-checked={tracing}
+                    onClick={() => setTrace(!tracing)}
+                  >
+                    Event trace <span className="board-switch" />
+                  </button>
+                ) : null}
               </div>
             ) : null}
           </div>
         </div>
-        {tracing ? (
-          <BoardTraceOverlay
+        {DEVTOOLS && tracing ? (
+          <TraceOverlay
+            view="board"
             trace={trace}
             status={() => ({
               mode: gesture.current.mode.name,

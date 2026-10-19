@@ -21,7 +21,7 @@ import {
   worldMotionPreference,
   type WorldFrames,
 } from "../worldFrameScheduler";
-import { worldRendererCountersEnabled } from "../worldRendererDebug";
+import { worldRendererCountersEnabled } from "../devtools/renderer";
 import { TownActors, townActorWorld, type TownActor } from "./townActors";
 import {
   stepTownDrag,
