@@ -118,7 +118,7 @@ to the next required action; a view attribute alone does not prove it is ready.
 
 For browser startup or rendering timeouts, dispatch CI with
 `browser_diagnostics=true` and an immutable `diagnostics_baseline` commit. The
-optional lifecycle jobs compare HostsFilter creation, Spatial Graph and Spaces
+optional lifecycle jobs compare HostsFilter creation, Board and Spaces
 arrangement on the baseline and dispatched revision, alternating which runs
 first on each runner. Both checkouts install their own pinned dependencies, and
 both revisions run even if the first fails. Each browser records Chrome stderr,
@@ -160,10 +160,10 @@ resource and mutation work through the qualified focused-runtime path.
 See [architecture](ARCHITECTURE.md), [deployment](DEPLOYMENT.md) and the
 [knowledge map](knowledge-map.md).
 
-The optional Office Economy provider is service-owned. For local testing, set
-`HERDR_WORLD_OTEL_PROMETHEUS_URL` on `dev:server` or use the Office metrics dialog;
+The optional cost metrics provider is service-owned. For local testing, set
+`HERDR_WORLD_OTEL_PROMETHEUS_URL` on `dev:server` or use the cost metrics dialog;
 do not add browser-to-Prometheus requests. The provider intentionally accepts only a
-base URL and fixed queries. See [deployment](DEPLOYMENT.md#optional-office-metrics).
+base URL and fixed queries. See [deployment](DEPLOYMENT.md#optional-cost-metrics).
 
 ## Harness task summaries
 

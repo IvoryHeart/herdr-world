@@ -167,11 +167,20 @@ export async function replayBrowserPreparation(
           pause.release();
           if (!["object", "admission"].includes(expected.stage))
             await completed();
-          else await arrive(state.op === "project" ? "object" : "office");
+          else if (state.op === "project") await arrive("object");
+          else {
+            // Office's final yield, then Board's: both prepare without
+            // publishing, so the model's admission stage is the last of them.
+            await arrive("office");
+            const office = paused!;
+            paused = undefined;
+            office.release();
+            await arrive("board");
+          }
           break;
         }
         case "admit": {
-          assert(paused?.stage === "office");
+          assert(paused?.stage === "board");
           const requestOrdinal = issued;
           const expectedQualification =
             previous.captured === previous.epoch

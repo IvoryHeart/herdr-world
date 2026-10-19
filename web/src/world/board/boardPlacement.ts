@@ -70,6 +70,51 @@ export const overlaps = (a: Rect, b: Rect, margin = GAP) =>
   a.y1 > b.y0 - margin;
 
 /**
+ * Placed rectangles bucketed into a grid, so asking whether a spot is free
+ * looks only at nearby cards: a large World has thousands of cards, and
+ * checking every one for every candidate spot made placement quadratic.
+ */
+export class RectIndex {
+  private readonly cells = new Map<string, Rect[]>();
+  private static readonly SIZE = 320;
+  static from(rects: readonly Rect[]) {
+    const index = new RectIndex();
+    for (const rect of rects) index.add(rect);
+    return index;
+  }
+  private keys(rect: Rect, margin: number) {
+    const size = RectIndex.SIZE;
+    const out: string[] = [];
+    for (
+      let cx = Math.floor((rect.x0 - margin) / size);
+      cx <= Math.floor((rect.x1 + margin) / size);
+      cx++
+    )
+      for (
+        let cy = Math.floor((rect.y0 - margin) / size);
+        cy <= Math.floor((rect.y1 + margin) / size);
+        cy++
+      )
+        out.push(`${cx},${cy}`);
+    return out;
+  }
+  add(rect: Rect) {
+    for (const key of this.keys(rect, 0)) {
+      const list = this.cells.get(key);
+      if (list) list.push(rect);
+      else this.cells.set(key, [rect]);
+    }
+  }
+  /** Whether a rectangle overlaps any indexed one (with the usual gap). */
+  hits(rect: Rect, margin = GAP) {
+    for (const key of this.keys(rect, margin))
+      for (const other of this.cells.get(key) ?? [])
+        if (overlaps(rect, other, margin)) return true;
+    return false;
+  }
+}
+
+/**
  * Free spots on rings around a centre, wider than tall because cards are wide.
  * Angles are visited in a spread order so a few cards end up evenly around;
  * each item takes the first spot that clears every taken rectangle.
@@ -77,10 +122,13 @@ export const overlaps = (a: Rect, b: Rect, margin = GAP) =>
 export function freeSpots(
   center: Point,
   items: readonly { key: string; size: Size }[],
-  taken: Rect[],
+  taken: readonly Rect[] | RectIndex,
   firstRing = RING.first,
 ): Map<string, Point> {
-  const occupied = taken.slice();
+  const index = taken instanceof RectIndex ? taken : RectIndex.from(taken);
+  // This call's own spots; the caller's index is left as it was.
+  const own = new RectIndex();
+  const blocked = (rect: Rect) => index.hits(rect) || own.hits(rect);
   const spots = new Map<string, Point>();
   for (const item of items) {
     let spot: Point | null = null;
@@ -100,18 +148,16 @@ export function freeSpots(
           x: center.x + Math.cos(angle) * r * RING.wide,
           y: center.y + Math.sin(angle) * r * RING.tall,
         };
-        if (!occupied.some((rect) => overlaps(rectAt(item.size, at), rect)))
-          spot = at;
+        if (!blocked(rectAt(item.size, at))) spot = at;
       }
     }
     // Past every ring: go straight down until clear.
     for (let y = center.y; !spot; y += item.size.h + GAP) {
       const at = { x: center.x, y };
-      if (!occupied.some((rect) => overlaps(rectAt(item.size, at), rect)))
-        spot = at;
+      if (!blocked(rectAt(item.size, at))) spot = at;
     }
     spots.set(item.key, spot);
-    occupied.push(rectAt(item.size, spot));
+    own.add(rectAt(item.size, spot));
   }
   return spots;
 }
@@ -158,15 +204,22 @@ export function positions(model: BoardModel, layout: BoardLayout) {
 export function placeNew(
   model: BoardModel,
   previous: BoardLayout,
-  options: { phone?: boolean; sizeOf?: SizeOf } = {},
+  options: {
+    phone?: boolean;
+    sizeOf?: SizeOf;
+    /** Leave new tabs unplaced (a large board's overview shows none). */
+    skipTabs?: boolean;
+  } = {},
 ): BoardLayout {
   const sizeOf = options.sizeOf ?? defaultSizeOf;
   const layout = cloneLayout(previous);
-  let cursor = 0;
+  // The hosts already on the board end here; new hosts go after them, one
+  // after another (measured once: per new host it was quadratic in hosts).
+  let cursor = model.hosts.some((host) => !layout.anchors.has(host.key))
+    ? hostExtent(model, layout, sizeOf, options.phone ?? false)
+    : 0;
   for (const host of model.hosts) {
     if (layout.anchors.has(host.key)) continue;
-    const extent = hostExtent(model, layout, sizeOf, options.phone ?? false);
-    cursor = Math.max(cursor, extent);
     layout.anchors.set(
       host.key,
       options.phone ? { x: 0, y: cursor } : { x: cursor, y: 0 },
@@ -187,24 +240,29 @@ export function placeNew(
           `${Math.round(offset.x / cell.x)},${Math.round(offset.y / cell.y)}`,
         );
     }
+    // The next free cell is searched from where the last one was found, so a
+    // host with many workspaces is placed in one pass, not quadratically.
+    let index = 0;
     for (const key of host.workspaceKeys) {
       if (layout.offsets.has(key) || layout.pinned.has(key)) continue;
-      for (let index = 0; ; index++) {
+      for (; ; index++) {
         const col = index % GRID_COLS,
           row = Math.floor(index / GRID_COLS);
         if (used.has(`${col},${row}`)) continue;
         used.add(`${col},${row}`);
         layout.offsets.set(key, { x: col * cell.x, y: row * cell.y });
+        index++;
         break;
       }
     }
   }
+  if (options.skipTabs) return layout;
   const at = positions(model, layout);
-  const taken: Rect[] = [];
+  const taken = new RectIndex();
   for (const [key, point] of at) {
     const placed = layout.offsets.has(key) || layout.pinned.has(key);
     if (!placed) continue;
-    taken.push(
+    taken.add(
       rectAt(
         sizeOf(key, model.workspaceByKey.has(key) ? "workspace" : "tab"),
         point,
@@ -222,7 +280,7 @@ export function placeNew(
     for (const { key, size } of fresh) {
       const spot = spots.get(key)!;
       layout.offsets.set(key, { x: spot.x - center.x, y: spot.y - center.y });
-      taken.push(rectAt(size, spot));
+      taken.add(rectAt(size, spot));
     }
   }
   return layout;

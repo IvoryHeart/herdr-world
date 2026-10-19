@@ -79,8 +79,12 @@ export function targetOf(
     };
   }
   if (anchor.kind === "tab") {
-    const tab = model.tabByKey.get(key);
-    return tab ? { cardKey: key, terminals: terminalsOf(tab.panes) } : null;
+    // A tab whose ID matches a workspace's has a qualified key.
+    const tabKey = model.workspaceByKey.has(key)
+      ? boardKey(anchor.connection_id, `tab:${anchor.native_id}`)
+      : key;
+    const tab = model.tabByKey.get(tabKey);
+    return tab ? { cardKey: tabKey, terminals: terminalsOf(tab.panes) } : null;
   }
   let owner: BoardTab | undefined;
   let pane: BoardPane | undefined;

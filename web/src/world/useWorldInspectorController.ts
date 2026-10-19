@@ -16,7 +16,7 @@ import {
 } from "../workspaceResource";
 import { worldRuntimeStore, type WorldRuntimePriority } from "./runtimeStore";
 import { buildWorldObject, type WorldObjectNode } from "./worldObject";
-import type { OfficeCanvasAnchor } from "./PixelOfficeCanvas";
+import type { WorldCanvasAnchor } from "./worldConnectorGeometry";
 import type { WorldConnectorTargetBounds } from "./worldConnectorGeometry";
 import {
   reconcileWorldInspectorConversation,
@@ -93,9 +93,9 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
   >({});
   const [intentOpening, setIntentOpening] = useState(false);
   const [intentError, setIntentError] = useState<string | null>(null);
-  const [, setSelectedVisualAnchor] = useState<OfficeCanvasAnchor | null>(null);
+  const [, setSelectedVisualAnchor] = useState<WorldCanvasAnchor | null>(null);
   const [visualConversationAnchors, setVisualConversationAnchors] =
-    useState<Record<string, OfficeCanvasAnchor> | null>(null);
+    useState<Record<string, WorldCanvasAnchor> | null>(null);
   const [floatingWindowAnchors, setFloatingWindowAnchors] = useState<
     Record<string, WorldConnectorTargetBounds | null>
   >({});
@@ -546,7 +546,7 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
     const node = world.nodeById.get(id);
     const nodeId = id;
     if (
-      (view === "office" || view === "town") &&
+      view === "town" &&
       officeInspectorPresentation === "floating" &&
       window.innerWidth > 720 &&
       document.documentElement.dataset.layout !== "mobile" &&
@@ -885,7 +885,7 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
         // On wide screens the Desk reads agents in the docked Inspector beside
         // its queue; phones keep the full-screen floating Inspector.
         (view === "desk" && deskReadingPane) ||
-        ((view === "office" || view === "town") &&
+        (view === "town" &&
           (officeInspectorPresentation === "docked" ||
             (existing &&
               worldInspectorWindowId(existing) ===

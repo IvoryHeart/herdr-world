@@ -6,6 +6,7 @@ import {
   type ConnectionStatus,
 } from "../api";
 import type { Pane, Tab, Workspace } from "../types";
+import { prepareWorldBoard } from "./board/boardModel";
 import { prepareWorldOffice } from "./herdrOfficeProjection";
 import { prepareWorldObject, yieldWorldTask } from "./worldObject";
 
@@ -384,7 +385,7 @@ export class WorldRuntimeStore {
   constructor(
     private readonly client: WorldRuntimeClient,
     private readonly preparationYield: (
-      stage: "decode" | "object" | "office",
+      stage: "decode" | "object" | "office" | "board",
     ) => Promise<void> = yieldWorldTask,
   ) {}
 
@@ -549,6 +550,9 @@ export class WorldRuntimeStore {
         if (!world) return;
         await prepareWorldOffice(world, current, () =>
           this.preparationYield("office"),
+        );
+        await prepareWorldBoard(world, current, () =>
+          this.preparationYield("board"),
         );
         if (!current()) return;
         let changed = false;

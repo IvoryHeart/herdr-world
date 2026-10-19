@@ -5,9 +5,9 @@ A Web/PWA client for a running [Herdr](https://herdr.dev) server.
 
 ## Visual control plane
 
-Town, Board, Desk and Spaces are the retained view set. Office, Tree and Graph
-remain in current builds and are planned for retirement; they are no longer the
-recommended starting points. Board is available on current `main`; consult the
+Town, Board, Desk and Spaces are World's views. Office, Tree and Graph have been
+retired: `/office` opens Town, and `/graph` and `/tree` open Board. Both changes
+are on current `main`; consult the
 [release notes](https://github.com/IvoryHeart/herdr-world/releases/latest) for
 released availability.
 
@@ -56,11 +56,13 @@ released availability.
     status keeps its own colours.
   - Notes and strings are saved by the World service and shared across your
     devices. Strings attach to an exact pane, tab or workspace; a note strung to
-    a pane can be sent to its current agent only when you press Send. World checks
-    the runtime, witnessed pane/terminal IDs and agent presence, not continuity
-    of the original agent session. Inspect the recipient before sending; an
-    agent replaced within the same terminal can receive the note
-    ([issue #228](https://github.com/IvoryHeart/herdr-world/issues/228)).
+    a pane is sent to its agent only when you press Send. When you make the
+    string, World records the agent you saw in the pane, once it confirms that
+    agent (by its Herdr session) is still there; otherwise the first Send asks. Send checks the runtime, the witnessed
+    pane and terminal, and that agent. If another agent now holds the pane,
+    even in the same terminal, nothing is sent: World names the new agent and
+    sends to it only if you choose **Send to** it. If the agent changes while
+    the note is being sent, World says it may have reached another agent.
     A note can start a new agent in a chosen workspace.
   - Drag a tab onto another workspace of its host to move it (asks first).
   - After a Herdr restart, strings that cannot be confirmed ask Keep or Detach;
@@ -139,12 +141,13 @@ released availability.
 - World runs as one application and one browser origin. No remote World/Roamgate
   service or browser bridge URL is required for an SSH host.
 
-### Legacy views and runtime boundaries
+### Retired views and runtime boundaries
 
-Office, Tree and Graph are still implemented for existing users while their
-retirement is planned. The contributor [source map](./web/src/world/README.md)
-retains their owners and tests. Office's optional metrics remain a legacy
-integration; Board's notes and strings do not depend on Prometheus.
+Office, Tree and Graph are retired. Bookmarks still work: `/office` opens Town,
+and `/graph` and `/tree` open Board. The Inspector opening preference and Town's
+calm motion keep their saved values; Office's room alignment and long-title
+settings are gone. The optional Prometheus cost metrics now appear on the Town
+board; Board's notes and strings do not depend on Prometheus.
 
 World admits simultaneous qualified local and SSH contexts. Runtime replacement
 retires only its own windows and pending work; whole-World disconnect or
@@ -253,6 +256,11 @@ commit a search selection. Press K in the recent switcher to convert it to searc
   backslash paths are recognized too. On Herdr 0.9.1, wrapped terminal links
   resolve against visible rows; OSC 8 links retain their explicit destinations.
   Older Herdr versions keep local URL/path detection.
+- On a touch screen, long-press a link or path and choose **Open link** or
+  **File actions**. This works in every view's terminals, while an agent keeps
+  repainting its status line and while the Composer is open. A URL found in the
+  text stays offered while its row shows the same text; a labelled OSC 8 link
+  is withdrawn when a new frame arrives.
 
 ## Workspace Inspector
 

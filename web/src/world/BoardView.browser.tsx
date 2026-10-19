@@ -183,7 +183,10 @@ const sent: {
   text: string;
   stringId: string;
   rev: number;
+  confirm?: string;
 }[] = [];
+/** While set, the fake service says another agent now holds the pane. */
+let replacedBy: string | null = null;
 /** Pane IDs the fake service reports as closed ("not found"). */
 const closedPanes = new Set<string>();
 /** While set, anchor checks wait here until the test answers them. */
@@ -218,13 +221,24 @@ function mount(key: number, shown = world, selectedId: string | null = null) {
         onSelect={(id) => selected.push(id)}
         onOpenTerminal={(id) => opened.push(id)}
         store={store}
-        sendNote={async (target, note) => {
+        sendNote={async (target, note, confirm) => {
+          // As the service does: a replacement is sent to only once confirmed.
+          if (replacedBy && confirm !== replacedBy)
+            return {
+              status: "refused",
+              reason: "replaced",
+              message:
+                "reviewer is now in that pane, not the agent this note was strung to. Nothing was sent.",
+              recipient: replacedBy,
+              agent: "reviewer",
+            };
           sent.push({
             paneId: target.paneId,
             terminalId: target.terminalId,
             text: note.text,
             stringId: target.stringId,
             rev: note.rev,
+            ...(confirm ? { confirm } : {}),
           });
           return { status: "sent", agent: target.label };
         }}
@@ -522,6 +536,55 @@ async function run() {
   host
     .querySelector<HTMLButtonElement>('.board-chooser [aria-label="Close"]')!
     .click();
+  // Buttons inside a card handle their own keyboard and assistive
+  // activation; the card is not selected instead (review).
+  {
+    const selectedBefore = selected.length;
+    const enter = new KeyboardEvent("keydown", {
+      key: "Enter",
+      bubbles: true,
+      cancelable: true,
+    });
+    more!.dispatchEvent(enter);
+    check(
+      !enter.defaultPrevented && selected.length === selectedBefore,
+      "Enter on + more is left to the button, not taken by the tab card",
+    );
+    more!.click(); // detail 0, as assistive technology activates
+    await waitFor(
+      () => host.querySelectorAll(".board-chooser .board-pane").length === 6,
+      "an assistive click on + more opens the chooser",
+    );
+    host
+      .querySelector<HTMLButtonElement>('.board-chooser [aria-label="Close"]')!
+      .click();
+    const ws = card("studio:w3")!;
+    const fold = ws.querySelector<HTMLButtonElement>(".board-fold")!;
+    const space = new KeyboardEvent("keydown", {
+      key: " ",
+      bubbles: true,
+      cancelable: true,
+    });
+    fold.dispatchEvent(space);
+    check(
+      !space.defaultPrevented,
+      "Space on Fold is left to the button, not taken by the workspace card",
+    );
+    fold.click();
+    await waitFor(
+      () => card("studio:w3")!.classList.contains("board-folded"),
+      "an assistive click on Fold folds the workspace",
+    );
+    check(
+      selected.length === selectedBefore,
+      "neither nested control selected its card",
+    );
+    card("studio:w3")!.querySelector<HTMLButtonElement>(".board-fold")!.click();
+    await waitFor(
+      () => !card("studio:w3")!.classList.contains("board-folded"),
+      "and opens it again",
+    );
+  }
   // A plain terminal looks like one and never pulses.
   const shell = card("studio:w1:t3")!;
   check(
@@ -759,6 +822,40 @@ async function run() {
       saved.notes.some((note) => note.rev === sent[0]!.rev),
     "the note goes to the strung pane, with its witnessed terminal, string and revision",
   );
+
+  // Another agent now holds that pane: Send names it and sends only on the
+  // user's choice (#228).
+  replacedBy = "recipient-reviewer";
+  const sendButton = () =>
+    [...host.querySelectorAll<HTMLButtonElement>(".board-notebar button")].find(
+      (b) => b.textContent?.startsWith("Send to"),
+    );
+  if (!sendButton()) {
+    // The note bar follows the selected note; select it again if a slow
+    // runner has not redrawn it since the first send.
+    const again = card(noteKey)!;
+    const ac = centre(again);
+    pointer(again, "pointerdown", ac.x, ac.y, 12);
+    pointer(again, "pointerup", ac.x, ac.y, 12);
+  }
+  await waitFor(() => Boolean(sendButton()), "the note still offers Send");
+  sendButton()!.click();
+  const confirmButton = () =>
+    [...host.querySelectorAll<HTMLButtonElement>(".board-toast button")].find(
+      (b) => b.textContent === "Send to reviewer",
+    );
+  await waitFor(
+    () => Boolean(confirmButton()),
+    "a replaced agent is named, with a choice to send to it",
+  );
+  check(sent.length === 1, "nothing is sent to a replacement unasked");
+  confirmButton()!.click();
+  await waitFor(() => sent.length === 2, "the confirmed send goes out");
+  check(
+    sent[1]!.confirm === "recipient-reviewer",
+    "the send names the agent the user confirmed",
+  );
+  replacedBy = null;
 
   // A mouse double-click on empty board uses the browser's own double-click.
   const spot2 = emptySpot();

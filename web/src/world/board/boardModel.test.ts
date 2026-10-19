@@ -1,8 +1,53 @@
 import { describe, expect, test } from "bun:test";
 import { fixtureHost, fixtureWorld } from "./boardFixture";
-import { mostUrgentStatus, projectBoard } from "./boardModel";
+import {
+  mostUrgentStatus,
+  prepareWorldBoard,
+  projectBoard,
+} from "./boardModel";
+import { worldObjectWithWatches } from "../worldObject";
+import { anchorFor, targetOf } from "./boardAnchors";
 
 describe("Board model", () => {
+  test("a prepared host is projected once, and unwatched hosts are reused", async () => {
+    const world = fixtureWorld([
+      fixtureHost("alpha", [
+        { label: "web", tabs: [{ label: "build", panes: [["working"]] }] },
+      ]),
+      fixtureHost("beta", [
+        { label: "web", tabs: [{ label: "build", panes: [["idle"]] }] },
+      ]),
+    ]);
+    let yields = 0;
+    await prepareWorldBoard(
+      world,
+      () => true,
+      async () => {
+        yields++;
+      },
+    );
+    expect(yields).toBeGreaterThanOrEqual(0);
+    const first = projectBoard(world);
+    // A watch overlay with no watches is the same World; a watch on one
+    // host copies only that host.
+    expect(worldObjectWithWatches(world, [])).toBe(world);
+    const beta = world.hosts[1]!;
+    const leaf = beta.spaces[0]!.children[0]!;
+    const watched = worldObjectWithWatches(world, [
+      {
+        connectionId: leaf.connectionId,
+        generation: leaf.generation,
+        terminalId: leaf.terminalId,
+      },
+    ]);
+    expect(watched.hosts[0]).toBe(world.hosts[0]);
+    expect(watched.hosts[1]).not.toBe(beta);
+    const second = projectBoard(watched);
+    expect(second.hosts[0]).toBe(first.hosts[0]);
+    expect(second.hosts[1]).not.toBe(first.hosts[1]);
+    expect(second.tabs[1]!.panes[0]!.leaf.watched).toBe(true);
+  });
+
   test("hosts, workspaces and tabs keep Herdr's order and qualified keys", () => {
     const board = projectBoard(
       fixtureWorld([
@@ -60,6 +105,41 @@ describe("Board model", () => {
       "idle",
     ]);
     expect(mostUrgentStatus(["idle", "unknown", "done"])).toBe("unknown");
+  });
+
+  test("a tab with the same ID as its workspace (older Herdr) gets its own card key", () => {
+    const host = fixtureHost("beta", [
+      {
+        label: "shared",
+        tabs: [{ label: "Synthetic tab", panes: [["idle"]] }],
+      },
+    ]);
+    // Older Herdr: workspace, tab and pane can all be called "shared".
+    const space = host.spaces[0]!;
+    const legacy = {
+      ...host,
+      spaces: [
+        {
+          ...space,
+          nativeId: "shared",
+          tabs: space.tabs.map((tab) => ({ ...tab, tab_id: "shared" })),
+          children: space.children.map((leaf) => ({
+            ...leaf,
+            workspaceId: "shared",
+            tabId: "shared",
+          })),
+        },
+      ],
+    };
+    const board = projectBoard(fixtureWorld([legacy]));
+    const workspaceKey = board.workspaces[0]!.key;
+    const tabKey = board.tabs[0]!.key;
+    expect(tabKey).not.toBe(workspaceKey);
+    expect(board.workspaceByKey.has(tabKey)).toBe(false);
+    // A string to that tab still finds its card.
+    const anchor = anchorFor(board, tabKey)!;
+    expect(anchor).toMatchObject({ kind: "tab", native_id: "shared" });
+    expect(targetOf(board, anchor)?.cardKey).toBe(tabKey);
   });
 
   test("every admitted tab is a card, even with no admitted pane", () => {

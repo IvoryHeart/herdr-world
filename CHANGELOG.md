@@ -16,7 +16,7 @@ are optional because the merged PR history records their source.
 
 ### Added
 
-- Add Board, a pin board view next to Graph (in progress). Hosts are zones,
+- Add Board, a pin board view. Hosts are zones,
   workspaces are cards and tabs sit around their workspace. Cards are springy
   while you move them and settle within about a second; a workspace carries its
   tabs, folds into a stack and opens into free space; Tidy works on a workspace
@@ -28,19 +28,38 @@ are optional because the merged PR history records their source.
   sticky note and drag a card's red dot to string a note to a workspace, tab or
   exact pane; click a string to cut it. Notes, strings and the board's layout
   are saved by the World service and appear on every device. A note strung to an
-  agent's pane can be sent once to its current occupant after World checks the
-  runtime, witnessed pane/terminal IDs and agent presence. Original agent-session
-  continuity is not checked; inspect the target before sending
-  ([issue #228](https://github.com/IvoryHeart/herdr-world/issues/228)). After Herdr
+  agent's pane can be sent once to that agent after World checks the runtime,
+  witnessed pane/terminal IDs and that the same agent is still there. After Herdr
   restarts, Board asks
   before trusting strings whose terminals changed; strings whose target closed
   wait in a Needs a home tray instead of attaching to the wrong card. A note can
   also start a new agent in a chosen workspace, which receives the note once
   it is ready. Drag a tab onto another workspace to move it there (Board asks
-  first, with "Don't ask again"); strings follow the moved panes. On phones Board replaces Graph in the bottom navigation.
+  first, with "Don't ask again"); strings follow the moved panes. On phones Board is in the bottom navigation.
+
+### Removed
+
+- Retire the Office, Tree and Graph views. Town and Board replace them: old
+  `/office` addresses and saved Office views open Town, and `/graph` and `/tree`
+  open Board, replacing the history entry. The Inspector opening preference and
+  Town's calm motion keep their saved values; Office's room alignment and
+  long-title settings are gone. The optional Prometheus cost metrics now appear
+  on the Town board. The web build drops about 1.6 MiB.
 
 ### Fixed
 
+- Board stays responsive on a large World: at 64 hosts and about 1,500 tabs,
+  typed input had waited up to 20 seconds behind Board's rendering.
+- On a phone, long-pressing a link in a terminal offers **Open link** again
+  while an agent keeps repainting (its spinner withdrew it before it appeared),
+  and in Town, whose terminals open with the Composer up and refused selection.
+- Board's Send goes only to the agent the note was strung to. If another agent
+  now holds the pane, even in the same terminal, nothing is sent: Board names it
+  and sends to it only when you choose to. A change during sending is reported
+  as possibly delivered elsewhere, never as sent.
+- Board keeps a tab and a workspace apart when they share a native ID, opens a
+  card from the keyboard or assistive technology, shows search results, and
+  marks the selected card for assistive technology.
 - When a Town move finishes, the dragged table or agent fades or springs home
   from where it was waiting on the target, instead of jumping back to where it
   was dropped first.

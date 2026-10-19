@@ -1,3 +1,5 @@
+/* Shared visual-view stage, canvas callouts, semantic targets and room
+   actions (used by Town), and the optional cost metrics dialog. */
 .world-office-shell {
   min-width: min-content;
   width: max(100%, 980px);
@@ -90,44 +92,7 @@
   overflow: hidden;
   background: #080812;
 }
-.world-completion-notices {
-  position: absolute;
-  z-index: 20;
-  top: 12px;
-  right: 12px;
-  width: min(320px, calc(100% - 24px));
-  max-height: min(40%, 320px);
-  display: grid;
-  gap: 5px;
-  overflow: auto;
-  pointer-events: none;
-}
-.world-completion-notices button,
-.world-completion-notices > span {
-  display: grid;
-  gap: 2px;
-  padding: 7px 9px;
-  border: 1px solid color-mix(in srgb, #f0c878 58%, #394758);
-  border-radius: 6px;
-  color: var(--text, #edf2f7);
-  background: color-mix(in srgb, var(--bg, #0e1116) 92%, #f0c878);
-  box-shadow: 0 6px 18px rgb(0 0 0 / 28%);
-  text-align: left;
-  pointer-events: auto;
-}
-.world-completion-notices button:disabled {
-  opacity: 0.72;
-}
-.world-completion-notices strong {
-  font-size: 10px;
-}
-.world-completion-notices span {
-  overflow: hidden;
-  color: var(--muted, #9da7b4);
-  font-size: 9px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
+
 .world-canvas-callout {
   position: fixed;
   z-index: 32;
@@ -195,26 +160,7 @@
   touch-action: pan-x pan-y;
   scrollbar-color: #353554 #0a0a14;
 }
-.world-canvas-shell,
-.world-canvas-host {
-  position: relative;
-  width: 100%;
-  min-width: 1000px;
-  min-height: 100%;
-}
-.world-canvas-host canvas {
-  position: sticky;
-  top: 0;
-  left: 0;
-  display: block;
-  max-width: none;
-}
-.world-room-actions-overlay {
-  position: absolute;
-  z-index: 9;
-  inset: 0;
-  pointer-events: none;
-}
+
 .world-semantic-targets-overlay {
   position: absolute;
   z-index: 8;
@@ -237,14 +183,7 @@
   outline-offset: -3px;
   background: color-mix(in srgb, #f2d78f 12%, transparent);
 }
-.world-room-actions {
-  position: absolute;
-  display: block;
-  pointer-events: none;
-}
-.world-room-actions-stale {
-  visibility: hidden;
-}
+
 .world-room-overlay-action {
   position: absolute;
   width: 20px;

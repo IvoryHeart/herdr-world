@@ -99,8 +99,7 @@ export function useWorldInspectorWindows({
         label: `${conversation.label} · ${conversation.hostLabel}`,
         initialSnap:
           view === "desk" ||
-          ((view === "office" || view === "town") &&
-            officeInspectorPresentation === "docked")
+          (view === "town" && officeInspectorPresentation === "docked")
             ? ("right" as const)
             : undefined,
         initialGeometry: readFloatingTerminalGeometry(

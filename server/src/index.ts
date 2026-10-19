@@ -78,6 +78,7 @@ import {
   createConnectionReplyPublisher,
   createLegacyRoutingLogger,
   isBridgeGlobalMethod,
+  resolveReadyConnection,
   serializeConnectionEnvelope,
   serializeHerdrEventEnvelope,
   validateConnectionGeneration,
@@ -123,11 +124,18 @@ import { DOWNLOAD_TIMEOUT_MS } from "./workspace/file-constants";
 import { WorldSnapshotService } from "./world/snapshot";
 import { WorldWatchlistRegistry } from "./world/watchlist";
 import {
+  clientBoardOps,
   moveFollowOps,
   reconcileOps,
   BoardConflictError,
   BoardStore,
+  type BoardOp,
 } from "./world/board-store";
+import {
+  readPaneRecipient,
+  recipientOps,
+  type ObservedAgent,
+} from "./world/board-recipient";
 import { linkedNoteText, sendNote } from "./world/board-send";
 import { checkAnchor } from "./world/board-anchor";
 import { startFromNote } from "./world/board-start";
@@ -478,6 +486,35 @@ function board() {
     log: (message) => console.warn(message),
   });
   return boardStore;
+}
+
+/**
+ * Record which agent each newly strung pane end is for: the agent the
+ * browser showed, confirmed by reading the pane on its host's current
+ * runtime (see recipientOps). Saving never waits for this; a string left
+ * unbound makes Send ask the user which agent to send to.
+ */
+async function bindBoardRecipients(
+  ops: readonly BoardOp[],
+  observed: ReadonlyMap<string, ObservedAgent>,
+) {
+  const recorded = await recipientOps(
+    board().get(),
+    ops,
+    observed,
+    async (connectionId, paneId) => {
+      const { runtime, isCurrent } = resolveReadyConnection(
+        connectionManager,
+        connectionId,
+      );
+      const read = await readPaneRecipient(
+        (rpc, rpcParams) => runtime.herdr.call(rpc, rpcParams, 10_000),
+        paneId,
+      );
+      return isCurrent() ? read : null;
+    },
+  );
+  if (recorded.length) publishBoardChanged(board().patch(recorded).revision);
 }
 
 function publishBoardChanged(revision: number) {
@@ -1037,10 +1074,17 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
   }
   if (method === "world.board.patch") {
     try {
-      const ops = (params as { ops?: unknown } | undefined)?.ops;
-      const result = board().patch(ops as never);
+      const { ops, observed } = clientBoardOps(
+        (params as { ops?: unknown } | undefined)?.ops,
+      );
+      const result = board().patch(ops);
       publishBoardChanged(result.revision);
       sendReply({ id, result: { document: result } }, "world-board-patch");
+      void bindBoardRecipients(ops, observed).catch((error) =>
+        logger.warn("Board could not record a string's agent", {
+          detail: String(error),
+        }),
+      );
     } catch (error) {
       if (error instanceof BoardConflictError)
         sendReply(
@@ -1384,10 +1428,37 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
                 pane_id: String(p.pane_id ?? ""),
                 terminal_id: String(p.terminal_id ?? ""),
                 text: linked.text,
+                recipient: linked.recipient,
+                confirm_recipient:
+                  typeof p.confirm_recipient === "string"
+                    ? p.confirm_recipient
+                    : undefined,
                 isCurrent: requestIsCurrent,
               },
             )
           : linked;
+      // A confirmed replacement (or a newer token for the same agent)
+      // becomes the string's recipient.
+      if ("text" in linked && result.status === "sent" && result.recipient)
+        try {
+          publishBoardChanged(
+            board().patch([
+              {
+                op: "anchor.recipient",
+                string_id: String(p.string_id ?? ""),
+                end: linked.end,
+                connection_id: route.connectionId,
+                pane_id: String(p.pane_id ?? ""),
+                terminal_id: String(p.terminal_id ?? ""),
+                recipient: result.recipient,
+              },
+            ]).revision,
+          );
+        } catch (error) {
+          logger.warn("Board could not record a string's agent", {
+            detail: String(error),
+          });
+        }
       sendReply({ id, result }, method);
     } catch (error) {
       sendError(`${method}-error`, error);

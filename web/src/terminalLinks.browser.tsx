@@ -13,6 +13,7 @@ import {
 import { TerminalView } from "./components/TerminalView";
 import type { TerminalResolvedLink } from "./terminalLinkProvider";
 import { TERMINAL_LONG_PRESS_MS } from "./terminalTouchSelection";
+import { requestTerminalComposer } from "./world/terminalComposerRequest";
 import "./styles/tokens.css";
 import "./styles/base.css";
 import "./styles/layout/app.css";
@@ -425,6 +426,85 @@ async function runTouch() {
   if (viewportSmoke) return;
   render(100);
   await settle();
+
+  // An agent repaints its spinner several times a second. A URL shown in the
+  // text keeps Open link while its own row is unchanged (#227).
+  {
+    target = null;
+    const url = "https://example.com/docs";
+    const rows = (tick: number) => [
+      "",
+      `see ${url} now`,
+      "",
+      ` working ${tick}`,
+    ];
+    await frame(rows(0));
+    await press(1, 8);
+    for (let tick = 1; tick <= 4; tick++) {
+      pushFrame(rows(tick), `spinner-${tick}`);
+      await settle();
+    }
+    await until(() => !!action("Open link"), "Open link survives repaints");
+    await tap(action("Open link")!);
+    check(opened.slice(-1)[0], url, "the repainted row's URL opens");
+    await done();
+    // A labelled link Herdr names is valid only for its frame.
+    target = { uri: "https://example.org/hidden", url: null, regions: [] };
+    const labelled = (tick: number) => [
+      "",
+      `\x1b]8;;https://example.org/hidden\x1b\\https://label.example\x1b]8;;\x1b\\`,
+      "",
+      ` working ${tick}`,
+    ];
+    await frame(labelled(0));
+    await press(1, 10);
+    await until(() => !!action("Open link"), "labelled link offered");
+    pushFrame(labelled(1), "spinner-labelled");
+    await settle();
+    await until(
+      () => !action("Open link"),
+      "a new frame withdraws a labelled link",
+    );
+    await done();
+    target = null;
+  }
+
+  // Town opens a terminal with its Composer up; selecting output (and its
+  // links) still works, since it sends nothing (#227).
+  {
+    const url = "https://example.com/composer";
+    const state = store.get();
+    requestTerminalComposer({
+      connectionId: state.activeConnectionId!,
+      generation: state.connectionGeneration,
+      paneId: "pane",
+    });
+    await until(
+      () => !!document.querySelector(".terminal-composer"),
+      "the Composer opens",
+    );
+    // Opening it resizes the terminal; Herdr then repaints, as here.
+    await settle();
+    await frame(["", `see ${url} now`]);
+    await done();
+    await until(
+      () => !document.querySelector(".terminal-selection-handle"),
+      "no selection before the press",
+    );
+    const inputs = calls.filter((c) => c.method === "terminal.input").length;
+    await press(1, 8);
+    await until(() => !!action("Open link"), "Open link with the Composer up");
+    await tap(action("Open link")!);
+    check(opened.slice(-1)[0], url, "the link opens with the Composer up");
+    check(
+      calls.filter((c) => c.method === "terminal.input").length,
+      inputs,
+      "selecting with the Composer up sends nothing",
+    );
+    await done();
+    render(100);
+    await settle();
+  }
   // Explicit frame targets work even without the optional plain-link resolver.
   endpoint.methods.splice(endpoint.methods.indexOf("pane.link.resolve"), 1);
   for (const uri of [
@@ -597,10 +677,18 @@ async function runTouch() {
       regions: [{ row: 1, start_col: 0, end_col: 23 }],
     });
     await settle();
+    // A touch selection holds the displayed frame. A URL found in the text
+    // stays valid while its row still shows it (#227), so after a frame the
+    // late answer is offered only if the held screen still shows that URL,
+    // and it opens exactly that URL.
+    const rowShows = term.buffer.active
+      .getLine(term.buffer.active.viewportY + 1)
+      ?.translateToString(true)
+      .includes("https://example.org/test");
     check(
       !!action("Open link"),
-      kind === "normal release",
-      `late result after ${kind}`,
+      kind === "normal release" || (kind === "frame" && rowShows === true),
+      `late result after ${kind} (row shows the URL: ${rowShows})`,
     );
     if (!["resize", "navigation", "reconnect"].includes(kind))
       check(
@@ -608,6 +696,14 @@ async function runTouch() {
         true,
         "copy/comment retained",
       );
+    if (kind === "frame" && action("Open link")) {
+      await tap(action("Open link")!);
+      check(
+        opened.slice(-1)[0],
+        "https://example.org/test",
+        "a late answer opens only the URL the row shows",
+      );
+    }
     held = null;
     await done();
     if (kind === "navigation" || kind === "reconnect") {

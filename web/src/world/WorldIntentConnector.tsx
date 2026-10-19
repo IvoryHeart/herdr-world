@@ -1,4 +1,4 @@
-import type { OfficeCanvasAnchor } from "./PixelOfficeCanvas";
+import type { WorldCanvasAnchor } from "./worldConnectorGeometry";
 import {
   type WorldConnectorTargetBounds,
   worldConnectorPath,
@@ -9,7 +9,7 @@ export default function WorldIntentConnector({
   source,
   target,
 }: {
-  source: OfficeCanvasAnchor;
+  source: WorldCanvasAnchor;
   target: WorldConnectorTargetBounds;
 }) {
   const targetPoint = worldConnectorTargetPoint(target);
