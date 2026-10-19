@@ -4,14 +4,12 @@ import process from "node:process";
 import { fileURLToPath, URL } from "node:url";
 
 const publicRoot = fileURLToPath(new URL("../server/public/", import.meta.url));
-// The retained Pixel Office and spatial Graph add lazy renderer/environment
-// entry points. Keep total bytes and eager JS constrained while allowing the
-// shared visual-view ownership wiring in the shell.
-const maxFileCount = 190;
-// Ranger, commit history and the diff worker add bounded lazy assets, and the
-// lazy Board view (about 52 KB minified) adds its own chunk. Keep the startup
-// and file-count budgets unchanged.
-const maxTotalBytes = 14.75 * 1024 * 1024;
+// Town and Board are the visual views, each a lazy chunk with its own
+// renderer or layout code; Ranger, commit history and the diff worker add
+// bounded lazy assets. Retiring Office, Tree and Graph (and Office's character
+// sprites) left 129 files and 13.0 MiB, so the budgets keep a little headroom.
+const maxFileCount = 150;
+const maxTotalBytes = 13.25 * 1024 * 1024;
 const maxInitialJsBytes = 660 * 1024;
 const maxInitialJsGzipBytes = 202 * 1024;
 const maxInitialCssBytes = 196 * 1024;

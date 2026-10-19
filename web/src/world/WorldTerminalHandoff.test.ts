@@ -29,7 +29,7 @@ test.skipIf(!chrome)(
       port: 0,
       async fetch(request) {
         const path = new URL(request.url).pathname;
-        if (path === "/office") pageRequested.resolve();
+        if (path === "/town") pageRequested.resolve();
         if (
           path === "/api/connections/local/terminal-upload" &&
           request.method === "POST"
@@ -204,7 +204,7 @@ test.skipIf(!chrome)(
           "--no-first-run",
           "--no-default-browser-check",
           `--user-data-dir=${join(dir, "profile")}`,
-          `${server.url.href}office`,
+          `${server.url.href}town`,
         ],
         { stdout: "ignore", stderr: Bun.file(browserLog) },
       );

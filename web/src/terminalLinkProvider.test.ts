@@ -893,7 +893,10 @@ describe("terminal touch link lookup", () => {
     const hover = f.links(1);
     const touch = provider.resolveTouch(1, 6, () => true);
     completions[1]!(new Map([["docs/b.md", "/tmp/b.md"]]));
-    expect(await touch).toEqual({ kind: "file", value: "/tmp/b.md" });
+    const found = await touch;
+    expect(found).toMatchObject({ kind: "file", value: "/tmp/b.md" });
+    // A path found in the text stays valid while its row shows that text.
+    expect(found?.displayed?.()).toBe(true);
     completions[0]!(new Map([["docs/a.md", "/tmp/a.md"]]));
     expect((await hover)[0]?.text).toBe("docs/a.md");
   });
@@ -934,6 +937,58 @@ describe("terminal touch link lookup", () => {
       expect(cells).toEqual([[0, 10]]);
     },
   );
+
+  test("an OSC 8 target under a URL-shaped label wins, even with text around it (#227 review)", async () => {
+    const f = fixture(["Open https://label.example now"], 40);
+    Object.assign(f.term.buffer.active, { viewportY: 0 });
+    const asked: number[] = [];
+    const answer = (uri: string | null) =>
+      registerTerminalLinkProvider(f.term, undefined, undefined, () => false, {
+        state: () => 1,
+        resolve: async (_row, col) => {
+          asked.push(col);
+          return { regions: [], url: null, uri };
+        },
+      });
+    expect(
+      await answer("https://destination.example/actual").resolveTouch(
+        0,
+        10,
+        () => true,
+      ),
+    ).toEqual({ kind: "url", value: "https://destination.example/actual" });
+    expect(asked).toEqual([10]);
+    // A rejected native target offers nothing, not the label's text.
+    expect(
+      await answer("javascript:alert(1)").resolveTouch(0, 10, () => true),
+    ).toBeNull();
+  });
+
+  test("a frame during the lookup is asked again, and a plain URL keeps its row check", async () => {
+    const f = fixture(["Open https://plain.example/docs now"], 40);
+    Object.assign(f.term.buffer.active, { viewportY: 0 });
+    let calls = 0;
+    const provider = registerTerminalLinkProvider(
+      f.term,
+      undefined,
+      undefined,
+      () => false,
+      {
+        state: () => calls,
+        resolve: async () => {
+          if (calls++ === 0) throw new Error("Terminal link frame changed");
+          return { regions: [], url: null };
+        },
+      },
+    );
+    const found = await provider.resolveTouch(0, 10, () => true);
+    expect(calls).toBe(2);
+    expect(found).toMatchObject({
+      kind: "url",
+      value: "https://plain.example/docs",
+    });
+    expect(found?.displayed?.()).toBe(true);
+  });
 
   test("selection edits and failed endpoint reads cannot revive a label target", async () => {
     const f = fixture(["https://label.example"], 40);

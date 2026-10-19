@@ -18,8 +18,8 @@ import {
   store,
 } from "../store";
 import type { Pane, PaneLayout, Tab, Workspace } from "../types";
-import ConnectedTreeView from "./ConnectedTreeView";
-import { projectWorldGraph } from "./graph/graphProjection";
+import BoardView from "./BoardView";
+import { prepareWorldBoard, projectBoard } from "./board/boardModel";
 import {
   prepareWorldOffice,
   projectWorldOffice,
@@ -65,7 +65,7 @@ const measurements = {
     { slices: number; maxCount: number; maxMs: number; connectionId?: string }
   >,
   treeProjectionMs: 0,
-  graphProjectionMs: 0,
+  boardProjectionMs: 0,
   officeProjectionMs: 0,
 };
 let stressPhase: string | null = null;
@@ -477,23 +477,23 @@ async function run() {
   });
   if (!prepared) throw new Error("dense world preparation retired");
   await prepareWorldOffice(prepared);
+  await prepareWorldBoard(prepared);
   const world = buildWorldObject(observed.connections);
   measurements.worldBuildMs = performance.now() - buildStart;
   const treeStart = performance.now();
   const tree = projectWorldTree(world);
   measurements.treeProjectionMs = performance.now() - treeStart;
   await yieldWorldTask();
-  const graphStart = performance.now();
-  const graph = projectWorldGraph(world);
-  measurements.graphProjectionMs = performance.now() - graphStart;
+  const boardStart = performance.now();
+  const board = projectBoard(world);
+  measurements.boardProjectionMs = performance.now() - boardStart;
   await yieldWorldTask();
   const officeStart = performance.now();
   projectWorldOffice(world, Date.now());
   measurements.officeProjectionMs = performance.now() - officeStart;
   check(world.hosts.length === 64, "dense transport lost catalogue roots");
   check(
-    tree.hosts.length === 64 &&
-      graph.nodes.filter((node) => node.kind === "host").length === 64,
+    tree.hosts.length === 64 && board.hosts.length === 64,
     "dense projection lost qualified host roots",
   );
   measurements.projectionMs = performance.now() - projectionStart;
@@ -506,14 +506,11 @@ async function run() {
   const renderStart = performance.now();
   denseRoot.render(
     <div data-dense-revision={1}>
-      <ConnectedTreeView
+      <BoardView
         world={world}
         selectedId={null}
-        conversationNodeIds={[]}
-        inlineInspectorNodeId={null}
         onSelect={() => {}}
         onOpenTerminal={() => {}}
-        onInlineInspectorPortalChange={() => {}}
         onSelectedAnchorChange={() => {}}
         onNodeAnchorsChange={() => {}}
       />
@@ -521,7 +518,7 @@ async function run() {
   );
   await waitForDom(
     () =>
-      !!scene.querySelector('.world-connected-tree-shell[aria-busy="false"]') &&
+      !!scene.querySelector(".board-card") &&
       !!scene.querySelector("[data-world-node-anchor]"),
   );
   measurements.renderMs = performance.now() - renderStart;
@@ -546,16 +543,14 @@ async function run() {
   );
   if (!refreshedWorld) throw new Error("dense refresh retired");
   await prepareWorldOffice(refreshedWorld);
+  await prepareWorldBoard(refreshedWorld);
   denseRoot.render(
     <div data-dense-revision={2}>
-      <ConnectedTreeView
+      <BoardView
         world={refreshedWorld}
         selectedId={null}
-        conversationNodeIds={[]}
-        inlineInspectorNodeId={null}
         onSelect={() => {}}
         onOpenTerminal={() => {}}
-        onInlineInspectorPortalChange={() => {}}
         onSelectedAnchorChange={() => {}}
         onNodeAnchorsChange={() => {}}
       />
@@ -563,10 +558,7 @@ async function run() {
   );
   await yieldWorldTask();
   await waitForDom(
-    () =>
-      !!scene.querySelector(
-        '[data-dense-revision="2"] .world-connected-tree-shell[aria-busy="false"]',
-      ),
+    () => !!scene.querySelector('[data-dense-revision="2"] .board-card'),
   );
   await finishStress();
   const attachesBeforeFocus = calls.filter(

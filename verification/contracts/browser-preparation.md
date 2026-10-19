@@ -33,8 +33,11 @@ need: the test must interrupt decoding without timer races and prevent admission
 
 `reply` resolves a real two-owner, non-null, empty-but-valid snapshot and pauses at
 the first decode yield. `project` releases it and pauses during actual object
-construction. `prepareOffice` releases construction and pauses at office's final
-yield, immediately before owner revalidation/publication. Repeated yields within
+construction. `prepareOffice` releases construction, continues through office's
+final yield and pauses at Board's final preparation yield (each host's Board
+projection is prepared in slices), immediately before owner
+revalidation/publication. Both yields prepare without publishing, so the
+model's admission stage is the later one. Repeated yields within
 one stage continue; the first yield is independently driven. `admit` resumes and
 awaits the owning refresh task. Disconnect uses the real status callback; retirement
 updates the real Bridge runtime catalogue from captured generation 1 to ready

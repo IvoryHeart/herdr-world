@@ -31,7 +31,7 @@ Spaces keeps one focused qualified workspace; visual Inspectors retain independe
 operational contexts across ready connections. The bridge-global
 `world.snapshot` path reads bounded topology from every ready runtime. The browser
 qualifies that data by connection and generation into one WorldObject used by Town,
-Desk, Office, Tree, and Graph. Aggregate observation is never mutation authority: opening a terminal,
+Board, Desk and the common navigator. Aggregate observation is never mutation authority: opening a terminal,
 Files, Changes, or Agent History revalidates the captured owning runtime without
 changing another context. The browser sends bounded deduplicated open-context host
 hints (or visible hosts when no contexts are open) in the global snapshot request.
@@ -76,18 +76,17 @@ The production-transport browser fixture exercises all 64 profile roots with a
 40,629,895-byte dense snapshot, two qualified terminals and 320 full terminal
 repaints per second. Independently timed trusted input continues through receipt,
 parsing, preparation, rendering and a refresh with three stalled observations at
-the default 20-second response deadline. Tree, Graph and Office are checked at
-1440px and 390px against engineering budgets of p95 intended-input-to-acknowledgement
-below 200ms and maximum below 500ms. Intended-to-sent drift and sent-to-ACK delay are
+the default 20-second response deadline. Town and Board are checked at 1440px and
+390px against engineering budgets of p95 intended-input-to-acknowledgement below
+150ms and maximum below 450ms for Town, and below 200ms and 500ms for Board. Intended-to-sent drift and sent-to-ACK delay are
 reported separately. Passing local samples do not replace the exact-head CI gate;
 prior CI exceeded these budgets. Atomic work and perceptible tails remain. This is
 synthetic transport and rendering acceptance, not a live network latency guarantee.
 
-Tree and Graph reuse unchanged semantic branches during progressive mounting.
-Graph caches draw order and conservatively culls offscreen nodes and edges while
-retaining full geometry and crossing links. Office paints the current and adjacent
-viewports, independently of distant room heights; complete rosters still support
-search and reveal. Identical terminal surfaces retire unqualified link actions
+Town keeps DOM cards and targets only for buildings near the screen and bakes each
+building the first time it is visible. A Board with more than 300 cards renders
+only the cards near the screen and opens in the overview. Complete rosters still
+support search and reveal. Identical terminal surfaces retire unqualified link actions
 without repainting unchanged rows unless a link decoration needs invalidation.
 
 Terminal input failures publish a bounded notice for the captured original owner,
@@ -95,14 +94,12 @@ including after retirement. Ambiguous input is never replayed. The user must ref
 and verify that exact terminal before deciding whether to retry.
 
 Dense browser observations decode each owner and prepare qualified host models,
-Office rooms and complete semantic rosters in cooperative background tasks before
+Town rooms and complete semantic rosters in cooperative background tasks before
 publishing. Cached roster indices let bounded scene changes update presentation
 flags without reconstructing discarded rooms or losing full-observation search.
 Transport and runtime identities are checked
 again after preparation; a retired host becomes non-actionable without discarding
-healthy siblings. Tree mounts its active responsive layout in fair batches, retaining
-open resource ancestry immediately and showing pending presentation explicitly.
-Graph and Office scene controls likewise admit bounded batches. Canvas animation
+healthy siblings. Town admits its accessible scene targets in bounded batches. Canvas animation
 leaves ordinary socket tasks turns between paints; overview work cannot replace a
 captured operational owner.
 Streaming terminal output preserves keyboard focus in another mounted terminal.
@@ -110,7 +107,7 @@ Self-contained native repaints retain the newest frame per animation turn; legac
 incremental output remains ordered and complete. Both paths recheck the captured
 owner before presentation, including when a frame was queued before retirement.
 
-Office observability is optional and separate from Herdr runtime authority. The World
+Cost observability is optional and separate from Herdr runtime authority. The World
 service validates one credential-free Prometheus base URL, issues only fixed bounded
 24-hour token and reported-cost queries, and returns a bounded same-origin snapshot to
 the browser. Provider responses cannot add topology or target actions. No provider, a
@@ -298,9 +295,9 @@ same-ID runtime replacement clears only that connection's cached sessions before
 resource IDs can be reused. World transport loss or authentication failure retires
 all old clients. Ambiguous input or mutations are not queued or replayed.
 
-The runtime store retains every managed host. Hosts filters Office, Tree, Graph,
+The runtime store retains every managed host. Hosts filters Town, Board, Desk,
 the navigator, counts and search without changing lifecycle or open contexts.
-Tree and Graph share fair 128-space admission and 16 leaves per space, preserving
+The navigator shares fair 128-space admission and 16 leaves per space, preserving
 priority ancestry; paged search uses full admitted observations. Offline roots and
 exact stale/unknown/omitted coverage remain visible. Outside-filter Inspectors retain
 their owned commands and labels, with connectors only to visible exact anchors.

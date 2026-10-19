@@ -30,10 +30,10 @@ web/src/main.tsx -> WorldFoundationApp -> mounted Spaces App
 
 The [service entry](../server/src/index.ts) dispatches service and harness commands
 before starting the listener. It composes authentication, profile management, Web
-Push, optional Office metrics, World snapshots and per-connection runtimes. The
+Push, optional cost metrics, World snapshots and per-connection runtimes. The
 [browser entry](../web/src/main.tsx) initializes preferences and mounts the World
 shell; [WorldFoundationApp](../web/src/world/WorldFoundationApp.tsx) keeps the
-[Spaces application](../web/src/App.tsx) mounted while Office, Tree or Graph is
+[Spaces application](../web/src/App.tsx) mounted while Town, Board or Desk is
 visible. Build and development commands are in the [root](../package.json),
 [server](../server/package.json) and [web](../web/package.json) manifests.
 
@@ -44,8 +44,8 @@ presents views and Inspectors; [observation](../web/src/world/useWorldObservatio
 [creation completion](../web/src/world/useWorldCreatedTerminal.ts) and
 [visual Actions](../web/src/world/useWorldVisualActions.tsx) own separate behaviors.
 They share existing connection/session admission and store interfaces.
-[Office renderer lifetime](../web/src/world/officeRenderer.ts) composes focused
-region drawing modules. The [component routes](../web/src/world/README.md#shell-and-source-ownership)
+[Town's renderer](../web/src/world/town/townRenderer.ts) owns Town's drawing
+lifetime; Board draws DOM cards from [BoardView](../web/src/world/BoardView.tsx). The [component routes](../web/src/world/README.md#shell-and-source-ownership)
 identify each owner and its regression evidence. Shared styles load through the
 ordered [World style manifest](../web/src/world/world.css).
 
@@ -77,12 +77,12 @@ The browser never talks directly to Herdr sockets or a remote World bridge.
 | Area | Owner and responsibility | Focused evidence |
 | --- | --- | --- |
 | Transport and focused runtime | [api](../web/src/api.ts) owns the one World WebSocket and qualified connection clients; [store](../web/src/store.ts) retains independently addressable connection sessions and captured operational contexts with their own topology and control state; [useConnectionClient](../web/src/useConnectionClient.ts) captures a component's connection lease. | [API tests](../web/src/api.test.ts), [store tests](../web/src/store.test.ts), [lease tests](../web/src/useConnectionClient.test.ts) |
-| Aggregate model and views | [runtimeStore](../web/src/world/runtimeStore.ts) admits bounded all-host snapshots; [worldObject](../web/src/world/worldObject.ts) builds qualified nodes; [WorldFoundationApp](../web/src/world/WorldFoundationApp.tsx) applies the persisted Hosts filter to the aggregate for Office, Tree and Graph. Context-bound selectors and commands in the existing store admit independent connections; the filter never supplies mutation authority. | [Runtime tests](../web/src/world/runtimeStore.test.ts), [model tests](../web/src/world/worldObject.test.ts), [shell tests](../web/src/world/WorldFoundationApp.test.ts) |
+| Aggregate model and views | [runtimeStore](../web/src/world/runtimeStore.ts) admits bounded all-host snapshots; [worldObject](../web/src/world/worldObject.ts) builds qualified nodes; [WorldFoundationApp](../web/src/world/WorldFoundationApp.tsx) applies the persisted Hosts filter to the aggregate for Town, Board and Desk. Context-bound selectors and commands in the existing store admit independent connections; the filter never supplies mutation authority. | [Runtime tests](../web/src/world/runtimeStore.test.ts), [model tests](../web/src/world/worldObject.test.ts), [shell tests](../web/src/world/WorldFoundationApp.test.ts) |
 | Terminal UI | [TerminalView](../web/src/components/TerminalView.tsx), [terminalConnection](../web/src/terminalConnection.ts), [terminalEndpointPresentation](../web/src/terminalEndpointPresentation.ts) and [TabTerminalPaneLayout](../web/src/TabTerminalPaneLayout.tsx) handle attachment, frames, input and split-pane presentation. | [Presentation tests](../web/src/terminalEndpointPresentation.test.ts), [layout tests](../web/src/visibleTabLayout.test.ts), [browser terminal suite](../package.json) |
 | Workspace and Inspector resources | [workspaceResource](../web/src/workspaceResource.ts) scopes Inspector context; [fileExplorerResources](../web/src/components/fileExplorerResources.ts) and [DiffViewerPanel](../web/src/components/DiffViewerPanel.tsx) own file/diff caches and UI. | [Resource tests](../web/src/workspaceResource.test.ts), [Explorer tests](../web/src/components/FileExplorerDialog.test.ts), [diff tests](../web/src/components/DiffViewerPanel.test.ts) |
 | Browser-local behavior | [browserNavigation](../web/src/browserNavigation.ts) projects local tab/pane choices; [browserStorage](../web/src/browserStorage.ts) namespaces World preferences; [layoutPreferences](../web/src/layoutPreferences.ts), [shortcutPreferences](../web/src/shortcutPreferences.ts) and [appearance](../web/src/appearance.ts) validate preferences. | [Navigation tests](../web/src/browserNavigation.test.ts), [storage tests](../web/src/browserStorage.test.ts), [preference tests](../web/src/workspacePreferences.test.ts) |
 | Alerts and background delivery | [taskNotifications](../web/src/taskNotifications.ts), [taskPush](../web/src/taskPush.ts) and the [service worker](../web/public/task-notifications-sw.js) render local or pushed task notices and route qualified targets back to the app. | [Task tests](../web/src/taskNotifications.test.ts), [push browser tests](../web/src/taskPush.browser.tsx) |
-| Visual presentations | [PixelOfficeView](../web/src/world/PixelOfficeView.tsx), [ConnectedTreeView](../web/src/world/ConnectedTreeView.tsx), [SpatialGraphView](../web/src/world/SpatialGraphView.tsx), [GraphCanvas](../web/src/world/graph/GraphCanvas.tsx), [graph projection](../web/src/world/graph/graphProjection.ts) and [world.css](../web/src/world/world.css) own view-specific presentation. Use the [component routes](../web/src/world/README.md) to pick the owner for a concrete task. | [Office tests](../web/src/world/PixelOfficeCanvas.test.ts), [Tree tests](../web/src/world/ConnectedTreeView.test.ts), [Graph tests](../web/src/world/graph/GraphCanvas.test.ts) |
+| Visual presentations | [TownView](../web/src/world/TownView.tsx) with [TownCanvas](../web/src/world/town/TownCanvas.tsx), [BoardView](../web/src/world/BoardView.tsx) with its [model](../web/src/world/board/boardModel.ts), [DeskView](../web/src/world/DeskView.tsx) and [world.css](../web/src/world/world.css) own view-specific presentation. Use the [component routes](../web/src/world/README.md) to pick the owner for a concrete task. | [Town tests](../web/src/world/town/TownCanvas.test.ts), [Board tests](../web/src/world/BoardView.test.ts), [Desk tests](../web/src/world/DeskView.test.ts) |
 
 `web/src/components/` contains reusable and feature-specific dialogs, menus and
 panes. `web/src/world/` contains the World shell and visual projections. Root

@@ -84,7 +84,7 @@ export function OfficeObservabilityDialog({
         className="modal compact-modal world-observability-dialog"
         role="dialog"
         aria-modal="true"
-        aria-label="Office metrics settings"
+        aria-label="Cost metrics settings"
         onSubmit={(event) => {
           event.preventDefault();
           void update(endpoint.trim() || null);
@@ -92,17 +92,14 @@ export function OfficeObservabilityDialog({
         onMouseDown={(event) => event.stopPropagation()}
       >
         <div className="modal-head">
-          <h2>Office metrics</h2>
-          <CloseButton
-            onClick={onClose}
-            label="Close Office metrics settings"
-          />
+          <h2>Cost metrics</h2>
+          <CloseButton onClick={onClose} label="Close cost metrics settings" />
         </div>
 
         <p className="world-observability-help">
-          Optionally connect Prometheus to the Economy board. The World service
-          performs bounded queries; the browser never contacts Prometheus, and
-          Office topology and terminals work without it.
+          Optionally connect Prometheus to show cost on the Town board. The
+          World service performs bounded queries; the browser never contacts
+          Prometheus, and Town, Board and terminals work without it.
         </p>
 
         <label className="form-field">

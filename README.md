@@ -24,9 +24,8 @@ retain their owning host when the filter changes. Use **Actions → New workspac
 or **New tab** and confirm the destination; Town's **New room** and Board's **+**
 controls offer the same qualified creation flows.
 
-Office, Tree and Graph remain in current builds but are planned for retirement.
-This guide focuses on Town, Board, Desk and Spaces. Board is available on current
-`main`; check the [latest release notes](https://github.com/IvoryHeart/herdr-world/releases/latest)
+Office, Tree and Graph have been retired: old `/office` addresses open Town, and
+`/graph` and `/tree` open Board. Board and the retirement are on current `main`; check the [latest release notes](https://github.com/IvoryHeart/herdr-world/releases/latest)
 for released availability.
 
 ## Screenshots

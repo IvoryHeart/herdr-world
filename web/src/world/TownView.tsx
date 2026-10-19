@@ -59,10 +59,10 @@ import {
 } from "./town/TownRail";
 import { useNow } from "./handoffs";
 import type {
-  OfficeCanvasAnchor,
-  OfficeCanvasHover,
-  OfficeConversationAnchors,
-} from "./PixelOfficeCanvas";
+  WorldCanvasAnchor,
+  WorldCanvasHover,
+  WorldConversationAnchors,
+} from "./worldConnectorGeometry";
 import { OfficeCanvasCallout } from "./OfficeCanvasCallout";
 export { OfficeObservabilityDialog } from "./OfficeObservabilityDialog";
 import {
@@ -143,10 +143,10 @@ export default function TownView({
   selectedId: string | null;
   onSelect(id: string, signal?: AbortSignal): void | Promise<boolean>;
   onOpenTerminal(id: string, signal?: AbortSignal): Promise<void>;
-  onSelectedAnchorChange?: (anchor: OfficeCanvasAnchor | null) => void;
+  onSelectedAnchorChange?: (anchor: WorldCanvasAnchor | null) => void;
   floatingTerminals: readonly { nodeId: string }[];
   onConversationNodeAnchorsChange?(
-    anchors: Record<string, OfficeCanvasAnchor> | null,
+    anchors: Record<string, WorldCanvasAnchor> | null,
   ): void;
 }) {
   const projectOffice = useMemo(
@@ -174,7 +174,7 @@ export default function TownView({
   const [completionSeen, setCompletionSeen] = useState(() =>
     readCompletionSeen(worldLocalStorage),
   );
-  const [sceneHover, setSceneHover] = useState<OfficeCanvasHover | null>(null);
+  const [sceneHover, setSceneHover] = useState<WorldCanvasHover | null>(null);
   const [observability, setObservability] = useState<OfficeObservability>(
     EMPTY_OFFICE_OBSERVABILITY,
   );
@@ -1002,7 +1002,8 @@ export default function TownView({
   };
   useEffect(() => {
     const keydown = (event: KeyboardEvent) => {
-      const target = event.target as HTMLElement | null;
+      // A key sent to the document or window has no element target.
+      const target = event.target instanceof HTMLElement ? event.target : null;
       if (
         event.metaKey ||
         event.ctrlKey ||
@@ -1232,7 +1233,7 @@ export default function TownView({
               }
             }}
             onSelectedAnchorChange={onSelectedAnchorChange}
-            onAnchorChange={(anchors: OfficeConversationAnchors | null) => {
+            onAnchorChange={(anchors: WorldConversationAnchors | null) => {
               onConversationNodeAnchorsChange?.(
                 anchors
                   ? Object.fromEntries(

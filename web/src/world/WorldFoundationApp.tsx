@@ -52,7 +52,9 @@ import {
   WORLD_VIEWS,
   WORLD_VIEW_PATHS,
   worldViewFromPath,
+  worldPathNeedsCanonical,
   initialView,
+  parseWorldView,
 } from "./worldViewRouting";
 import {
   dispatchWorldInspectorRequest,
@@ -67,7 +69,7 @@ import { EMPTY_VISUAL_ACTION_EXTENSION } from "./worldControlPlaneContract";
 export const OfficeObservabilityDialog = lazyWithReload(
   "world-observability",
   () =>
-    import("./PixelOfficeView").then((module) => ({
+    import("./OfficeObservabilityDialog").then((module) => ({
       default: module.OfficeObservabilityDialog,
     })),
 );
@@ -222,7 +224,9 @@ export default function WorldFoundationApp() {
   }, []);
 
   useEffect(() => {
-    if (window.location.pathname === "/") {
+    // The root, retired views (/office, /graph, /tree) and unknown paths
+    // show their view's canonical address; Back does not return to them.
+    if (worldPathNeedsCanonical(window.location.pathname)) {
       const url = new URL(window.location.href);
       url.pathname = WORLD_VIEW_PATHS[view];
       window.history.replaceState(window.history.state, "", url);
@@ -396,7 +400,9 @@ export default function WorldFoundationApp() {
                 <select
                   aria-label="World view"
                   value={view}
-                  onChange={(event) => setView(event.target.value as WorldView)}
+                  onChange={(event) =>
+                    setView(parseWorldView(event.target.value))
+                  }
                 >
                   {WORLD_VIEWS.map((candidate) => (
                     <option key={candidate} value={candidate}>

@@ -95,9 +95,9 @@ Use the view switcher to move between these views without restarting work:
 | Desk | Find agents needing input, review finished turns and follow work in flight |
 | Spaces | Work in one workspace's terminal panes, files, changes and history |
 
-Office, Tree and Graph remain in current builds but are planned for retirement.
-The exercises below use Town, Board, Desk and Spaces. Board is available on current
-`main`; check the [latest release notes](https://github.com/IvoryHeart/herdr-world/releases/latest)
+Office, Tree and Graph have been retired; `/office` opens Town, and `/graph` and
+`/tree` open Board. The exercises below use Town, Board, Desk and Spaces. Board
+and the retirement are on current `main`; check the [latest release notes](https://github.com/IvoryHeart/herdr-world/releases/latest)
 for released availability.
 
 **Hosts** starts at **All hosts**. Choose a host set to reduce the overview;
@@ -202,13 +202,12 @@ on your phone and desktop.
    to it; a tab with several panes asks which pane. Drop it on empty board for a
    new note strung to where you started. Click a string, then **Delete**, to
    remove it.
-7. A note strung to an agent's pane offers **Send to <agent>**. World checks the
-   current runtime, the witnessed pane/terminal IDs and that an agent is present,
-   then sends the note once. This does not prove it is the agent that was running
-   when you made the string: a replacement in the same terminal can receive it.
-   Inspect the current target before pressing **Send**; nothing is sent without
-   that action. This identity gap is tracked in
-   [issue #228](https://github.com/IvoryHeart/herdr-world/issues/228).
+7. A note strung to an agent's pane offers **Send to <agent>**. World remembers
+   which agent was in the pane when you made the string. Before sending, it checks
+   the current runtime, the pane and terminal, and that the same agent is still
+   there, then sends the note once. If another agent has taken over the pane,
+   even in the same terminal, nothing is sent: World names the new agent and
+   offers **Send to** it instead. Nothing is sent without your action.
    **Start an agent…** opens the same dialog: choose the workspace
    and the agent, optionally name the tab, and press **Start and send**; the
    note is sent once the agent is ready. (Starting a chosen agent kind
@@ -240,7 +239,7 @@ not reports of completed agent work.
 ### Use Desk: answer, review and follow work
 
 <a id="desk"></a>
-<!-- Keep existing Graph exercise links useful during the view transition. -->
+<!-- Keep old Graph exercise links working after the Graph view was retired. -->
 <a id="graph"></a>
 
 Use Town for a spatial view and Board for your arrangement of cards and notes.
@@ -425,7 +424,9 @@ Use its HTTPS URL: `127.0.0.1` on a phone means the phone, not the work computer
    that are awkward on a touch keyboard. Customize its two shortcut rows
    as needed.
 3. Open Changes to review the README diff. Mobile uses a unified diff layout;
-   long-press a file to open its actions menu.
+   long-press a file to open its actions menu. To open a link printed in a
+   terminal, long-press it and choose **Open link** (on a computer,
+   `Cmd`/`Ctrl`-click it).
 4. Adjust **Menu > Appearance > Text size** (80%-150%), then use the relevant
    platform entry below to install the PWA.
 
