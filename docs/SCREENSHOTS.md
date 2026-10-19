@@ -50,10 +50,12 @@ The mobile Board close-up uses a separate single-workspace scene with two tabs
 and a strung note, so its text remains readable at the native phone width.
 Their empty attention counts reflect the runtime; notes do not imply completed
 agent work. Label current-main captures in the README and tutorial; consult release
-notes for stable availability. Office, Tree and Graph images remain historical
-assets and are no longer part of the shared site set. Do not remove their source
-or verification coverage merely because the public gallery changes. The Pages
-release badge follows GitHub's latest stable release rather than a hardcoded version.
+notes for stable availability. Office, Tree and Graph have been retired from the
+application. Their images remain historical assets outside the shared site set;
+old `/office` addresses open Town, and `/graph` and `/tree` open Board. Their
+view implementations and dedicated tests have been removed, while the shared
+model modules used by Town remain. The Pages release badge follows GitHub's
+latest stable release rather than a hardcoded version.
 
 The Files, Changes and History captures use Board behind the same Inspector.
 They follow main at `4f8a079f` with Herdr 0.9.3 / protocol 22. The disposable

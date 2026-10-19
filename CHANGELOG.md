@@ -14,8 +14,8 @@ are optional because the merged PR history records their source.
 
 - Focus the README, tutorial, feature guide and website on Town, Board, Desk and
   Spaces, with current Town/Board layouts and desktop/mobile captures. Identify
-  Office, Tree and Graph as legacy views planned for retirement. Show a readable
-  mobile Board close-up and describe Send's current pane/terminal identity checks.
+  Office, Tree and Graph as retired views with redirects to Town and Board. Show
+  a readable mobile Board close-up and describe Send's recipient identity checks.
 
 ### Added
 
