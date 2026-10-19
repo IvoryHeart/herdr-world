@@ -93,7 +93,9 @@ test.skipIf(!chrome).each([[1440], [390]])(
           );
         }),
         "Board browser check",
-        40_000,
+        // The check walks the whole board (notes, strings, moves, drafts,
+        // sync); slow CI runners need headroom over a local ~20 s run.
+        90_000,
       );
       expect(failures).toEqual([]);
     } finally {
@@ -105,5 +107,5 @@ test.skipIf(!chrome).each([[1440], [390]])(
       await rm(dir, { recursive: true, force: true });
     }
   },
-  55_000 + BROWSER_STARTUP_TIMEOUT_MS,
+  105_000 + BROWSER_STARTUP_TIMEOUT_MS,
 );

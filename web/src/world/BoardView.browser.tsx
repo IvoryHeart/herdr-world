@@ -569,7 +569,8 @@ async function run() {
   host
     .querySelector<HTMLButtonElement>('[aria-label="Tidy the board"]')!
     .click();
-  await rest();
+  // The Undo notice shows at once and lasts a few seconds; look before
+  // waiting for the cards to settle, which takes longer on a slow runner.
   await waitFor(
     () =>
       Boolean(
@@ -1244,7 +1245,17 @@ async function run() {
     } catch {
       // Storage unavailable in this browser: the dialog shows anyway.
     }
-    await bringIntoView(() => card("studio:w2")!);
+    // Both workspaces on screen: fit everything, then come in close enough
+    // for tabs to show again.
+    host
+      .querySelector<HTMLButtonElement>('[aria-label="Fit everything"]')!
+      .click();
+    await rest();
+    for (let i = 0; i < 12 && boardEl().classList.contains("board-far"); i++) {
+      host.querySelector<HTMLButtonElement>('[aria-label="Zoom in"]')!.click();
+      await settle(40);
+    }
+    await rest();
     const moving = card("studio:w2:t2")!;
     const target = card("studio:w1")!;
     const from = centre(moving.querySelector(".board-label")!),
@@ -1313,6 +1324,7 @@ async function run() {
       )?.dataset.key ?? "studio:w1:t1";
     await bringIntoView(() => card("studio:w1")!);
     const ws = card("studio:w1")!;
+    const wsBefore = at("studio:w1")!;
     const wc = centre(ws.querySelector(".board-label")!);
     pointer(ws, "pointerdown", wc.x, wc.y, 31);
     for (let i = 1; i <= 8; i++) {
@@ -1323,13 +1335,31 @@ async function run() {
     pointer(ws, "pointerup", wc.x + 200, wc.y + 80, 31);
     await rest();
     await settle(700);
+    check(
+      Math.hypot(
+        at("studio:w1")!.x - wsBefore.x,
+        at("studio:w1")!.y - wsBefore.y,
+      ) > 50,
+      "the workspace was dragged away from its tidy place",
+    );
     const noteBefore = at(noteKey)!,
       tabBefore = at(tabKey)!;
     host
       .querySelector<HTMLButtonElement>('[aria-label="Tidy the board"]')!
       .click();
+    // Wait for the cards themselves to come to rest, not a fixed time: slow
+    // runners finish the tween later.
+    const still = async () => {
+      for (let i = 0; i < 60; i++) {
+        const a = [at(noteKey)!, at(tabKey)!];
+        await settle(100);
+        const b = [at(noteKey)!, at(tabKey)!];
+        if (a.every((p, k) => Math.hypot(p.x - b[k]!.x, p.y - b[k]!.y) < 0.5))
+          return;
+      }
+    };
     await rest();
-    await settle(300);
+    await still();
     const noteAfter = at(noteKey)!,
       tabAfter = at(tabKey)!;
     const tabMoved = {
@@ -1350,7 +1380,7 @@ async function run() {
       .find((b) => b.textContent === "Undo")!
       .click();
     await rest();
-    await settle(300);
+    await still();
     const noteUndone = at(noteKey)!;
     check(
       Math.hypot(noteUndone.x - noteBefore.x, noteUndone.y - noteBefore.y) < 3,

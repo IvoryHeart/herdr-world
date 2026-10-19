@@ -1694,7 +1694,14 @@ export default function BoardView({
     ).matches;
     for (const [key, to] of positions(m, layout.current)) {
       const card = cards.current.get(key);
-      if (!card || Math.hypot(card.x - to.x, card.y - to.y) < 1) continue;
+      if (!card) continue;
+      if (Math.hypot(card.x - to.x, card.y - to.y) < 1) {
+        // Already there, but maybe on its way elsewhere (Undo during a
+        // Tidy): stop that journey, or the card would end up where the
+        // layout no longer says.
+        tweens.current.delete(key);
+        continue;
+      }
       card.vx = card.vy = 0;
       card.gliding = false;
       if (reduce) {
@@ -1841,6 +1848,7 @@ export default function BoardView({
     invalidate("notes-follow");
     void report(boardStore.patch(ops));
   };
+  const tidyFit = useRef(0);
   const runTidy = () => {
     const before = cloneLayout(layout.current);
     const workspaceKey = selectedWorkspace();
@@ -1851,13 +1859,17 @@ export default function BoardView({
     });
     travelToLayout(model);
     const notesWere = arrangeNotes(before, layout.current);
-    if (!workspaceKey) window.setTimeout(() => fit(false), 400);
+    window.clearTimeout(tidyFit.current);
+    if (!workspaceKey)
+      tidyFit.current = window.setTimeout(() => fit(false), 400);
     const label = workspaceKey
       ? model.workspaceByKey.get(workspaceKey)?.label
       : null;
     setToast({
       text: label ? `Tidied “${label}”` : "Tidied the board",
       undo: () => {
+        // A quick Undo cancels Tidy's camera fit too.
+        window.clearTimeout(tidyFit.current);
         layout.current = before;
         travelToLayout(latest.current.model);
         placeNotes(notesWere);
