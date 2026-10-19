@@ -76,7 +76,7 @@ describe("Board gestures", () => {
         down(2, 52, 51, empty, touch),
         up(2, 52, 51, 200),
       ]).types,
-    ).toEqual(["tap", "tap", "doubleTap"]);
+    ).toEqual(["tap", "doubleTap"]);
     // A mouse double-click uses the browser's own dblclick.
     expect(
       run([down(1, 50, 50), up(1, 50, 50), down(1, 50, 50), up(1, 50, 50)])
@@ -163,6 +163,8 @@ describe("Board gestures", () => {
   test("a second finger turns any drag into a pinch, and lifting one pans", () => {
     const { types, effects, state } = run([
       down(1, 100, 100, card, { type: "touch" }),
+      // Touch holds still before a card lifts.
+      { type: "hold", id: 1, time: (clock += 350) },
       move(1, 120, 100),
       down(2, 200, 100, empty, { primary: false, type: "touch" }),
       move(2, 300, 100),
@@ -172,6 +174,7 @@ describe("Board gestures", () => {
     // The lift carries the position; the second finger settles the card.
     expect(types).toEqual([
       "liftCard",
+      "moveCard",
       "settleCard",
       "pinchStart",
       "pinch",

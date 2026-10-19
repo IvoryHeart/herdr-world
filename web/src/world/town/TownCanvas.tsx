@@ -9,6 +9,18 @@ import {
 } from "react";
 import type { TownMoveResult } from "./townMoves";
 import { townDragFor, townDropTarget, type TownDrag } from "./townDrag";
+import {
+  initialGesture,
+  stepGesture,
+  waitsForHold,
+  type GestureEffect,
+  type GestureEvent,
+} from "../interaction/gesture";
+import {
+  TOWN_GESTURES,
+  TOWN_HOLD_MS,
+  type TownGestureTarget,
+} from "./townGesture";
 import { EllipsisVertical } from "lucide-react";
 import { useMobileControls } from "../../components/MobileControls";
 import { Pencil, Plus, Trash2 } from "lucide-react";
@@ -30,7 +42,7 @@ import {
   type OfficeObservability,
 } from "../officeObservability";
 import type { TownLevel } from "./townCamera";
-import { townHitKey, townHitTest, type TownHit } from "./townHitTest";
+import { townHitKey, townHitTest } from "./townHitTest";
 import {
   layoutTown,
   TOWN_FACADE,
@@ -539,24 +551,12 @@ export function TownCanvas({
   useEffect(() => {
     const host = hostRef.current;
     if (!host) return;
-    const pointers = new Map<number, { x: number; y: number }>();
-    let gesture: null | {
-      id: number;
-      sx: number;
-      sy: number;
-      lx: number;
-      ly: number;
-      lt: number;
-      vx: number;
-      vy: number;
-      moved: boolean;
-      hit: TownHit | null;
-      /** What a drag from this press would carry: a desk or an agent. */
-      candidate?: TownDrag;
-      /** Touch: a press held still on a desk or agent becomes a drag. */
-      hold?: number;
-      drag?: TownDrag;
-    } = null;
+    // Pointer input runs through World's shared gesture machine; Town hit
+    // tests the canvas and applies what it decides.
+    let gesture = initialGesture<TownGestureTarget>();
+    let holdTimer = 0;
+    /** The desk or agent being carried, and where it would land. */
+    let carrying: TownDrag | null = null;
     const ghost = document.createElement("div");
     ghost.className = "town-drag-ghost";
     ghost.setAttribute("aria-hidden", "true");
@@ -564,12 +564,6 @@ export function TownCanvas({
       distance: number;
       z: number;
       world: { x: number; y: number };
-    } = null;
-    let lastTap: null | {
-      t: number;
-      x: number;
-      y: number;
-      key: string | null;
     } = null;
     const local = (event: { clientX: number; clientY: number }) => {
       const rect = host.getBoundingClientRect();
@@ -599,222 +593,29 @@ export function TownCanvas({
         world.y,
       );
     };
-    const down = (event: PointerEvent) => {
-      const renderer = rendererRef.current;
-      if (!renderer) return;
-      try {
-        host.setPointerCapture(event.pointerId);
-      } catch {
-        // A pointer the browser no longer tracks cannot be captured.
-      }
-      const point = local(event);
-      pointers.set(event.pointerId, point);
-      renderer.camera.stop();
-      if (pointers.size === 2) {
-        // A second finger turns the gesture into a pinch: drop any drag.
-        if (gesture) window.clearTimeout(gesture.hold);
-        if (gesture?.drag) {
-          ghost.remove();
-          renderer.endDrag("cancel");
-        }
-        gesture = null;
-        const [a, b] = [...pointers.values()];
-        pinch = {
-          distance: Math.hypot(a!.x - b!.x, a!.y - b!.y),
-          z: renderer.camera.z,
-          world: renderer.camera.toWorld((a!.x + b!.x) / 2, (a!.y + b!.y) / 2),
-        };
-        return;
-      }
-      gesture = {
-        id: event.pointerId,
-        sx: point.x,
-        sy: point.y,
-        lx: point.x,
-        ly: point.y,
-        lt: performance.now(),
-        vx: 0,
-        vy: 0,
-        moved: false,
-        hit: hitAt(point.x, point.y),
-      };
-      const drag = townDragFor(
-        gesture.hit,
-        latest.current.model,
-        renderer.level,
-      );
-      if (drag) {
-        const pressed = gesture;
-        pressed.candidate = drag;
-        // A mouse drags at once; touch holds still first, so a quick swipe
-        // still pans the map.
-        if (event.pointerType !== "mouse")
-          pressed.hold = window.setTimeout(() => {
-            if (gesture !== pressed || pressed.moved) return;
-            startDrag(pressed, drag);
-            navigator.vibrate?.(12);
-          }, 350);
-      }
-    };
-    const startDrag = (
-      pressed: NonNullable<typeof gesture>,
-      drag: TownDrag,
-    ) => {
-      pressed.drag = drag;
+    const startDrag = (drag: TownDrag, at: { x: number; y: number }) => {
+      carrying = drag;
       latest.current.onHover?.(null);
       ghost.textContent = drag.label;
       ghost.dataset.valid = "false";
-      ghost.style.transform = `translate(${pressed.lx}px, ${pressed.ly}px)`;
+      ghost.style.transform = `translate(${at.x}px, ${at.y}px)`;
       host.append(ghost);
       const renderer = rendererRef.current;
       if (renderer) {
-        const at = renderer.camera.toWorld(pressed.lx, pressed.ly);
-        renderer.beginDrag(drag.kind, drag.key, at.x, at.y);
+        const world = renderer.camera.toWorld(at.x, at.y);
+        renderer.beginDrag(drag.kind, drag.key, world.x, world.y);
       }
     };
-    const move = (event: PointerEvent) => {
-      const renderer = rendererRef.current;
-      if (!renderer) return;
-      const point = local(event);
-      if (pointers.has(event.pointerId)) pointers.set(event.pointerId, point);
-      if (pinch && pointers.size === 2) {
-        const [a, b] = [...pointers.values()];
-        const distance = Math.hypot(a!.x - b!.x, a!.y - b!.y);
-        const mx = (a!.x + b!.x) / 2;
-        const my = (a!.y + b!.y) / 2;
-        const camera = renderer.camera;
-        const z = camera.clampZoom((pinch.z * distance) / pinch.distance);
-        camera.setZoom(z, mx, my);
-        camera.x = pinch.world.x - (mx - camera.viewport.width / 2) / z;
-        camera.y = pinch.world.y - (my - camera.viewport.height / 2) / z;
-        renderer.invalidate();
-        return;
-      }
-      if (!gesture) {
-        if (event.pointerType !== "mouse") return;
-        const hit = hitAt(point.x, point.y);
-        const key =
-          hit?.kind === "building" ? `building:${hit.key}` : townHitKey(hit);
-        if (key !== latest.current.hover) setHover(key);
-        host.style.cursor = hit && hit.kind !== "building" ? "pointer" : "";
-        const hoverKey = townHitKey(hit);
-        latest.current.onHover?.(
-          hoverKey
-            ? { key: hoverKey, clientX: event.clientX, clientY: event.clientY }
-            : null,
-        );
-        return;
-      }
-      if (event.pointerId !== gesture.id) return;
-      if (gesture.drag) {
-        const target = townDropTarget(
-          gesture.drag,
-          hitAt(point.x, point.y),
-          latest.current.model,
-        );
-        gesture.drag.target = target;
-        ghost.textContent = target.label;
-        ghost.dataset.valid = String(target.key !== null);
-        ghost.style.transform = `translate(${point.x}px, ${point.y}px)`;
-        const at = renderer.camera.toWorld(point.x, point.y);
-        renderer.moveDrag(at.x, at.y, target.key);
-        gesture.lx = point.x;
-        gesture.ly = point.y;
-        return;
-      }
-      const dx = point.x - gesture.lx;
-      const dy = point.y - gesture.ly;
-      if (
-        !gesture.moved &&
-        Math.hypot(point.x - gesture.sx, point.y - gesture.sy) > 6
-      ) {
-        window.clearTimeout(gesture.hold);
-        if (event.pointerType === "mouse" && gesture.candidate) {
-          gesture.lx = point.x;
-          gesture.ly = point.y;
-          startDrag(gesture, gesture.candidate);
-          return;
-        }
-        gesture.moved = true;
-        latest.current.onHover?.(null);
-      }
-      if (gesture.moved) {
-        renderer.camera.panBy(dx, dy);
-        const now = performance.now();
-        const elapsed = Math.max(1, now - gesture.lt);
-        gesture.vx = gesture.vx * 0.65 + (dx / elapsed) * 1000 * 0.35;
-        gesture.vy = gesture.vy * 0.65 + (dy / elapsed) * 1000 * 0.35;
-        gesture.lt = now;
-        renderer.invalidate();
-      }
-      gesture.lx = point.x;
-      gesture.ly = point.y;
+    const endDrag = () => {
+      ghost.remove();
+      const drag = carrying;
+      carrying = null;
+      return drag;
     };
-    const up = (event: PointerEvent) => {
+    const tap = (target: TownGestureTarget) => {
       const renderer = rendererRef.current;
-      pointers.delete(event.pointerId);
-      if (pinch) {
-        if (pointers.size < 2) pinch = null;
-        gesture = null;
-        return;
-      }
-      if (!renderer || !gesture || event.pointerId !== gesture.id) return;
-      const finished = gesture;
-      gesture = null;
-      window.clearTimeout(finished.hold);
-      if (finished.drag) {
-        ghost.remove();
-        const { drag } = finished;
-        const targetKey = drag.target?.key;
-        if (event.type === "pointercancel" || !targetKey) {
-          renderer.endDrag("cancel");
-          return;
-        }
-        // Wait at the target while Herdr moves it, then land or spring back.
-        renderer.endDrag("park");
-        const actions = latest.current.roomActions;
-        void (
-          drag.kind === "desk"
-            ? actions.onDropDesk(drag.key, targetKey)
-            : actions.onDropAgent(drag.key, targetKey)
-        )
-          .catch((): TownMoveResult => "uncertain")
-          .then((result) => rendererRef.current?.finishMove(result));
-        return;
-      }
-      if (finished.moved) {
-        if (performance.now() - finished.lt < 80)
-          renderer.camera.release(finished.vx, finished.vy);
-        renderer.invalidate();
-        return;
-      }
-      if (event.type === "pointercancel") return;
-      const point = local(event);
-      const hit = finished.hit;
-      const key = townHitKey(hit);
-      const now = performance.now();
-      const double =
-        lastTap &&
-        now - lastTap.t < 320 &&
-        Math.hypot(lastTap.x - point.x, lastTap.y - point.y) < 30;
-      if (double) {
-        lastTap = null;
-        if (
-          hit &&
-          (hit.kind === "agent" ||
-            hit.kind === "desk" ||
-            hit.kind === "pane") &&
-          key
-        ) {
-          latest.current.onActivateAgent(key);
-        } else {
-          renderer.camera.zoomAt(2, point.x, point.y);
-          renderer.invalidate();
-        }
-        return;
-      }
-      lastTap = { t: now, x: point.x, y: point.y, key };
-      if (!hit) return;
+      const hit = target.hit;
+      if (!renderer || !hit) return;
       if (hit.kind === "building") {
         const building = latest.current.layout.buildings.find(
           (b) => b.hostKey === hit.key,
@@ -831,10 +632,194 @@ export function TownCanvas({
           zoomToRoom(renderer, latest.current.layout, roomKey);
         return;
       }
+      const key = townHitKey(hit);
       if (key) latest.current.onSelect(key);
     };
+    /** Carry out what the gesture machine decided. */
+    const apply = (effect: GestureEffect<TownGestureTarget>) => {
+      const renderer = rendererRef.current;
+      if (!renderer) return;
+      switch (effect.type) {
+        case "stopCamera":
+          renderer.camera.stop();
+          return;
+        case "panBy":
+          latest.current.onHover?.(null);
+          renderer.camera.panBy(effect.dx, effect.dy);
+          renderer.invalidate();
+          return;
+        case "fling":
+          renderer.camera.release(effect.vx, effect.vy);
+          renderer.invalidate();
+          return;
+        case "pinchStart":
+          pinch = {
+            distance: effect.distance,
+            z: renderer.camera.z,
+            world: renderer.camera.toWorld(effect.mid.x, effect.mid.y),
+          };
+          return;
+        case "pinch": {
+          if (!pinch) return;
+          const camera = renderer.camera;
+          const z = camera.clampZoom(pinch.z * effect.scale);
+          camera.setZoom(z, effect.mid.x, effect.mid.y);
+          camera.x =
+            pinch.world.x - (effect.mid.x - camera.viewport.width / 2) / z;
+          camera.y =
+            pinch.world.y - (effect.mid.y - camera.viewport.height / 2) / z;
+          renderer.invalidate();
+          return;
+        }
+        case "liftCard":
+          if (!effect.target.drag) return;
+          startDrag(effect.target.drag, effect.at);
+          if (effect.held) navigator.vibrate?.(12);
+          return;
+        case "moveCard": {
+          if (!carrying) return;
+          const target = townDropTarget(
+            carrying,
+            hitAt(effect.at.x, effect.at.y),
+            latest.current.model,
+          );
+          carrying.target = target;
+          ghost.textContent = target.label;
+          ghost.dataset.valid = String(target.key !== null);
+          ghost.style.transform = `translate(${effect.at.x}px, ${effect.at.y}px)`;
+          const at = renderer.camera.toWorld(effect.at.x, effect.at.y);
+          renderer.moveDrag(at.x, at.y, target.key);
+          return;
+        }
+        case "dropCard": {
+          const drag = endDrag();
+          const targetKey = drag?.target?.key;
+          if (!drag || !targetKey) {
+            renderer.endDrag("cancel");
+            return;
+          }
+          // Wait at the target while Herdr moves it, then land or spring back.
+          renderer.endDrag("park");
+          const actions = latest.current.roomActions;
+          void (
+            drag.kind === "desk"
+              ? actions.onDropDesk(drag.key, targetKey)
+              : actions.onDropAgent(drag.key, targetKey)
+          )
+            .catch((): TownMoveResult => "uncertain")
+            .then((result) => rendererRef.current?.finishMove(result));
+          return;
+        }
+        case "settleCard":
+          if (endDrag()) renderer.endDrag("cancel");
+          return;
+        case "tap":
+          tap(effect.target);
+          return;
+        case "doubleTap": {
+          const hit = effect.target.hit;
+          const key = townHitKey(hit);
+          if (
+            hit &&
+            (hit.kind === "agent" ||
+              hit.kind === "desk" ||
+              hit.kind === "pane") &&
+            key
+          )
+            latest.current.onActivateAgent(key);
+          else {
+            renderer.camera.zoomAt(2, effect.at.x, effect.at.y);
+            renderer.invalidate();
+          }
+          return;
+        }
+        default:
+          // Lines, groups and picks are Board's; Town has none.
+          return;
+      }
+    };
+    const feed = (event: GestureEvent<TownGestureTarget>) => {
+      const result = stepGesture(gesture, event, TOWN_GESTURES);
+      gesture = result.state;
+      if (gesture.mode.name !== "pinching") pinch = null;
+      for (const effect of result.effects) apply(effect);
+    };
+    const down = (event: PointerEvent) => {
+      const renderer = rendererRef.current;
+      if (!renderer) return;
+      try {
+        host.setPointerCapture(event.pointerId);
+      } catch {
+        // A pointer the browser no longer tracks cannot be captured.
+      }
+      const point = local(event);
+      const hit = hitAt(point.x, point.y);
+      const target: TownGestureTarget = {
+        hit,
+        drag: townDragFor(hit, latest.current.model, renderer.level),
+      };
+      feed({
+        type: "down",
+        id: event.pointerId,
+        at: point,
+        time: performance.now(),
+        target,
+        primary: event.isPrimary,
+        pointerType: event.pointerType,
+      });
+      // Touch: a desk or agent held still lifts; the machine ignores a hold
+      // that comes after the finger moved or lifted.
+      window.clearTimeout(holdTimer);
+      if (waitsForHold(TOWN_GESTURES, target, event.pointerType)) {
+        const id = event.pointerId;
+        holdTimer = window.setTimeout(
+          () => feed({ type: "hold", id, time: performance.now() }),
+          TOWN_HOLD_MS,
+        );
+      }
+    };
+    const move = (event: PointerEvent) => {
+      const renderer = rendererRef.current;
+      if (!renderer) return;
+      const point = local(event);
+      if (gesture.pointers.has(event.pointerId)) {
+        feed({
+          type: "move",
+          id: event.pointerId,
+          at: point,
+          time: performance.now(),
+        });
+        return;
+      }
+      // No press: a mouse hovering shows what is under it.
+      if (event.pointerType !== "mouse" || gesture.pointers.size) return;
+      const hit = hitAt(point.x, point.y);
+      const key =
+        hit?.kind === "building" ? `building:${hit.key}` : townHitKey(hit);
+      if (key !== latest.current.hover) setHover(key);
+      host.style.cursor = hit && hit.kind !== "building" ? "pointer" : "";
+      const hoverKey = townHitKey(hit);
+      latest.current.onHover?.(
+        hoverKey
+          ? { key: hoverKey, clientX: event.clientX, clientY: event.clientY }
+          : null,
+      );
+    };
+    const up = (event: PointerEvent) => {
+      window.clearTimeout(holdTimer);
+      if (!gesture.pointers.has(event.pointerId)) return;
+      if (event.type === "pointercancel")
+        feed({ type: "cancel", id: event.pointerId });
+      else
+        feed({
+          type: "up",
+          id: event.pointerId,
+          at: local(event),
+          time: performance.now(),
+        });
+    };
     const leave = () => {
-      if (!gesture) {
+      if (!gesture.pointers.size) {
         setHover(null);
         latest.current.onHover?.(null);
       }
@@ -858,7 +843,7 @@ export function TownCanvas({
     host.addEventListener("pointerleave", leave);
     host.addEventListener("wheel", wheel, { passive: false });
     return () => {
-      if (gesture) window.clearTimeout(gesture.hold);
+      window.clearTimeout(holdTimer);
       ghost.remove();
       host.removeEventListener("pointerdown", down);
       host.removeEventListener("pointermove", move);

@@ -213,7 +213,8 @@ on your phone and desktop.
    note is sent once the agent is ready. (Starting a chosen agent kind
    currently opens a shell; see
    [issue 219](https://github.com/IvoryHeart/herdr-world/issues/219).)
-8. Drag a tab onto another workspace of the same host to move it there. Board
+8. Drag a tab onto another workspace of the same host to move it there (on a
+   phone, hold the tab still for a moment first; a quick swipe pans). Board
    asks first, with **Don't ask again**, and always asks before moving a
    workspace's last tab, which closes that workspace. Strings follow the move.
 

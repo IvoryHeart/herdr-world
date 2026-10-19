@@ -53,8 +53,10 @@ import {
   type BoardWorkspace,
 } from "./board/boardModel";
 import {
+  HOLD_MS,
   initialGesture,
   stepGesture,
+  waitsForHold,
   type GestureEffect,
   type GestureEvent,
   type GestureTarget,
@@ -536,6 +538,8 @@ export default function BoardView({
     over: StringEnd | null;
   } | null>(null);
   const gesture = useRef(initialGesture());
+  const holdTimer = useRef(0);
+  useEffect(() => () => window.clearTimeout(holdTimer.current), []);
   const pinchStart = useRef<{ cam: Camera; mid: Point } | null>(null);
   // The event trace exists only in development builds (devtools/flag.ts).
   const trace = useMemo(() => (DEVTOOLS ? openTrace("board") : NO_TRACE), []);
@@ -1622,6 +1626,16 @@ export default function BoardView({
       primary: event.isPrimary,
       pointerType: event.pointerType,
     });
+    // Touch: a card held still lifts; the machine ignores a hold that came
+    // too late (the finger moved or lifted first).
+    window.clearTimeout(holdTimer.current);
+    if (waitsForHold(target, event.pointerType)) {
+      const id = event.pointerId;
+      holdTimer.current = window.setTimeout(
+        () => feed({ type: "hold", id, time: performance.now() }),
+        HOLD_MS,
+      );
+    }
   };
   const onPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (!gesture.current.pointers.has(event.pointerId)) return;
@@ -1633,6 +1647,7 @@ export default function BoardView({
     });
   };
   const onPointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
+    window.clearTimeout(holdTimer.current);
     if (!gesture.current.pointers.has(event.pointerId)) return;
     feed({
       type: "up",
@@ -1642,6 +1657,7 @@ export default function BoardView({
     });
   };
   const onPointerCancel = (event: ReactPointerEvent<HTMLDivElement>) => {
+    window.clearTimeout(holdTimer.current);
     if (!gesture.current.pointers.has(event.pointerId)) return;
     feed({ type: "cancel", id: event.pointerId });
   };
@@ -1699,6 +1715,7 @@ export default function BoardView({
         tweens.current.delete(effect.key);
         card.gliding = false;
         cardEls.current.get(effect.key)?.classList.add("board-lifted");
+        if (effect.held) navigator.vibrate?.(12);
         moveHeld(effect.at);
         return;
       }
@@ -1716,6 +1733,7 @@ export default function BoardView({
         tap(effect.target);
         return;
       case "doubleTap":
+        boardRef.current?.classList.remove("board-panning");
         void createNote(toWorld(effect.at.x, effect.at.y));
         return;
       case "startString":
