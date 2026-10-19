@@ -236,17 +236,12 @@ describe("Pages references", () => {
     );
     const screenshotPattern = /herdr-world-(?:desktop|mobile)-[a-z-]+\.png/g;
     const screenshots = [...new Set(readme.match(screenshotPattern))].sort();
-    expect(screenshots).toHaveLength(12);
+    expect(screenshots).toHaveLength(9);
     expect([...new Set(build.match(screenshotPattern))].sort()).toEqual(
       screenshots,
     );
     expect([...new Set(site.match(screenshotPattern))].sort()).toEqual(
-      screenshots.filter(
-        (screenshot) =>
-          screenshot !== "herdr-world-desktop-spaces.png" &&
-          screenshot !== "herdr-world-mobile-tree.png" &&
-          screenshot !== "herdr-world-desktop-tree.png",
-      ),
+      screenshots,
     );
     for (const source of [site, tutorial, build]) {
       expect(source).not.toMatch(/herdr-studio-(?:desktop|mobile)-/);

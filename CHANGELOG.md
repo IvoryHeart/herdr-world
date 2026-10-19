@@ -7,6 +7,12 @@ are optional because the merged PR history records their source.
 
 ## [Unreleased]
 
+### Documentation
+
+- Focus the README, tutorial, feature guide and website on Town, Board, Desk and
+  Spaces, with current Town/Board layouts and desktop/mobile captures. Identify
+  Office, Tree and Graph as legacy views planned for retirement.
+
 ### Added
 
 - Add Board, a pin board view next to Graph (in progress). Hosts are zones,
