@@ -89,6 +89,7 @@ import {
 } from "./board/boardPlacement";
 import type { WorldAgentStatus, WorldObject } from "./worldObject";
 import type { WorldCanvasAnchor } from "./worldConnectorGeometry";
+import { WorldSearchResults } from "./WorldSearchResults";
 import { WorldViewToolbar } from "./WorldViewToolbar";
 import "./board/board.css";
 
@@ -287,8 +288,16 @@ function primaryPane(tab: BoardTab) {
 
 /** A tab card draws up to four pane rows; the rest are in the chooser. */
 const MAX_ROWS = 4;
-function rowsOf(tab: BoardTab): BoardPane[] {
+function rowsOf(tab: BoardTab, selectedId: string | null = null): BoardPane[] {
   if (tab.panes.length <= MAX_ROWS) return tab.panes;
+  const shown = rowsByUrgency(tab);
+  // A selected pane (from search, say) is always one of the rows shown.
+  const selected = tab.panes.find((pane) => pane.leaf.id === selectedId);
+  if (selected && !shown.includes(selected))
+    return [...shown.slice(0, shown.length - 1), selected];
+  return shown;
+}
+function rowsByUrgency(tab: BoardTab): BoardPane[] {
   // With more panes than rows, show the ones that need attention first.
   return tab.panes
     .slice()
@@ -2496,6 +2505,9 @@ export default function BoardView({
   return (
     <>
       {toolbarPortal ? createPortal(toolbar, toolbarPortal) : toolbar}
+      {/* Search covers everything observed, including what the board leaves
+          out, as in the other views. */}
+      <WorldSearchResults world={world} query={query} onSelect={onSelect} />
       <div
         ref={boardRef}
         className={`board${far ? " board-far" : ""}${pulses ? "" : " board-no-pulse"}`}
@@ -2602,6 +2614,7 @@ export default function BoardView({
                 data-key={space.key}
                 data-world-node-anchor={space.space.id}
                 role="button"
+                aria-pressed={selectedKeys.has(space.key)}
                 tabIndex={0}
                 aria-label={`Workspace ${space.label}, ${space.tabKeys.length} tabs`}
                 // Keyboard and assistive activation arrive as a click with no
@@ -2682,7 +2695,7 @@ export default function BoardView({
             if (collapsed.has(tab.workspaceKey)) return null;
             const pane = primaryPane(tab);
             const multi = tab.panes.length > 1;
-            const rows = rowsOf(tab);
+            const rows = rowsOf(tab, selectedId);
             const hidden = tab.panes.length - rows.length;
             return (
               <div
@@ -2693,6 +2706,7 @@ export default function BoardView({
                   tab.panes.length === 1 ? tab.panes[0]!.leaf.id : undefined
                 }
                 role="button"
+                aria-pressed={selectedKeys.has(tab.key)}
                 tabIndex={0}
                 aria-label={`${tab.label}, ${tabSummary(tab)}`}
                 onClick={(event) => {
@@ -2744,6 +2758,8 @@ export default function BoardView({
                         key={row.key}
                         data-pane={row.key}
                         data-world-node-anchor={row.leaf.id}
+                        role="button"
+                        aria-pressed={selectedId === row.leaf.id}
                         className={`board-pane${row.isAgent ? ` board-s-${row.status}` : " board-pane-shell"}${selectedId === row.leaf.id ? " board-pane-selected" : ""}`}
                         aria-label={`${paneName(row)}, ${row.isAgent ? STATUS_LABEL[row.status] : "shell"}`}
                       >

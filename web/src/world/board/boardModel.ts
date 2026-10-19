@@ -101,6 +101,21 @@ export function mostUrgentStatus(statuses: readonly WorldAgentStatus[]) {
 export const boardKey = (connectionId: string, nativeId: string) =>
   `${connectionId}:${nativeId}`;
 
+/**
+ * A tab's card key. Current Herdr IDs never collide (`w1` and `w1:t1`), so a
+ * tab keeps the plain key and saved arrangements stay valid; older Herdr can
+ * give a tab the same ID as its workspace, and then the tab's key is
+ * qualified so the two cards stay distinct.
+ */
+export const boardTabKey = (
+  connectionId: string,
+  tabId: string,
+  workspaceIds: ReadonlySet<string>,
+) =>
+  workspaceIds.has(tabId)
+    ? boardKey(connectionId, `tab:${tabId}`)
+    : boardKey(connectionId, tabId);
+
 const hostKeyOf = (host: WorldHostObject) => host.connectionId;
 
 export function projectBoard(world: WorldObject): BoardModel {
@@ -119,6 +134,7 @@ export function projectBoard(world: WorldObject): BoardModel {
       workspaceKeys: [],
     };
     hosts.push(boardHost);
+    const workspaceIds = new Set(host.spaces.map((space) => space.nativeId));
     for (const space of host.spaces) {
       const workspaceKey = boardKey(space.connectionId, space.nativeId);
       boardHost.workspaceKeys.push(workspaceKey);
@@ -144,7 +160,7 @@ export function projectBoard(world: WorldObject): BoardModel {
       for (const tabId of order) {
         const tab = space.tabs.find((candidate) => candidate.tab_id === tabId);
         const panes = panesByTab.get(tabId) ?? [];
-        const key = boardKey(space.connectionId, tabId);
+        const key = boardTabKey(space.connectionId, tabId, workspaceIds);
         tabKeys.push(key);
         // Shells never colour a tab: their status says nothing about work.
         const paneStatuses = panes

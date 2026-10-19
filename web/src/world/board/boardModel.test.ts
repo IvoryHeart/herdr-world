@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { fixtureHost, fixtureWorld } from "./boardFixture";
 import { mostUrgentStatus, projectBoard } from "./boardModel";
+import { anchorFor, targetOf } from "./boardAnchors";
 
 describe("Board model", () => {
   test("hosts, workspaces and tabs keep Herdr's order and qualified keys", () => {
@@ -60,6 +61,41 @@ describe("Board model", () => {
       "idle",
     ]);
     expect(mostUrgentStatus(["idle", "unknown", "done"])).toBe("unknown");
+  });
+
+  test("a tab with the same ID as its workspace (older Herdr) gets its own card key", () => {
+    const host = fixtureHost("beta", [
+      {
+        label: "shared",
+        tabs: [{ label: "Synthetic tab", panes: [["idle"]] }],
+      },
+    ]);
+    // Older Herdr: workspace, tab and pane can all be called "shared".
+    const space = host.spaces[0]!;
+    const legacy = {
+      ...host,
+      spaces: [
+        {
+          ...space,
+          nativeId: "shared",
+          tabs: space.tabs.map((tab) => ({ ...tab, tab_id: "shared" })),
+          children: space.children.map((leaf) => ({
+            ...leaf,
+            workspaceId: "shared",
+            tabId: "shared",
+          })),
+        },
+      ],
+    };
+    const board = projectBoard(fixtureWorld([legacy]));
+    const workspaceKey = board.workspaces[0]!.key;
+    const tabKey = board.tabs[0]!.key;
+    expect(tabKey).not.toBe(workspaceKey);
+    expect(board.workspaceByKey.has(tabKey)).toBe(false);
+    // A string to that tab still finds its card.
+    const anchor = anchorFor(board, tabKey)!;
+    expect(anchor).toMatchObject({ kind: "tab", native_id: "shared" });
+    expect(targetOf(board, anchor)?.cardKey).toBe(tabKey);
   });
 
   test("every admitted tab is a card, even with no admitted pane", () => {
