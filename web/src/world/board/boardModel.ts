@@ -239,6 +239,8 @@ export async function prepareWorldBoard(
       sliceStart = performance.now();
     }
   }
+  // As Town's preparation does: one final yield before the World publishes.
+  await yieldTask();
 }
 const BOARD_PREPARATION_SLICE_MS = 6;
 
