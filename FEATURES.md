@@ -276,6 +276,9 @@ sidebar's visibility unchanged. Workspace rows show the latest PR/MR status whil
 keeping workspace names visible; Inspector commit navigation preserves focus and
 refreshes Files after changes.
 
+- Activating a desktop terminal preserves a docked Inspector. After prefilling
+  review feedback, **Go to agent** closes it and reveals the destination terminal;
+  mobile or expanded Inspectors also close on terminal activation.
 - Dock right/bottom, resize, or expand without unmounting the terminal. Header
   controls restore/close; Esc dismisses transient UI, not the Inspector.
 - Tab switches keep it open. Workspace switches restore the target checkout's

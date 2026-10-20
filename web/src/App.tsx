@@ -2264,6 +2264,11 @@ export default function App({
       .panes.find((candidate) => candidate.pane_id === deliveredPaneId);
     if (!pane || pane.workspace_id !== annotationWorkspace?.workspace_id)
       return;
+    // Explicit destination navigation reveals the terminal even when ordinary
+    // desktop terminal activation preserves the docked Inspector.
+    updateInspectorState((current) =>
+      current ? { ...current, open: false } : current,
+    );
     activateTerminalSurface();
     void store.focusQualifiedTarget({
       connectionId: annotationClient.connectionId,
@@ -2276,6 +2281,7 @@ export default function App({
     annotationWorkspace?.workspace_id,
     annotationClient,
     deliveredPaneId,
+    updateInspectorState,
   ]);
   const openFileExplorer = useCallback(
     (workspaceId?: string, focusInspector = true) =>
