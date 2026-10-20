@@ -2,7 +2,7 @@ id = "ivoryheart.herdr-world"
 name = "Herdr World"
 version = "0.2.6"
 min_herdr_version = "0.9.0"
-description = "A visual IDE for AI agents. Manage your attention via office, mindmap, graph, journeys, files and changes."
+description = "A visual IDE for AI agents. Focus your attention with office, mindmaps and boards. Chat with agents, review files and changes. Play with your agents"
 platforms = ["linux", "macos", "windows"]
 
 # System installers verify the matching World release without external Bun.
