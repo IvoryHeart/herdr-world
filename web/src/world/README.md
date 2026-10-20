@@ -158,8 +158,19 @@ and `performance.now` then move only when the fixture advances the clock, in
 transitions and animations are off, and checks read end states. `settle(ms)`
 becomes `clock.advance(ms)` and `waitFor` becomes `clock.until`. Physics, tweens,
 holds and double-tap gaps then behave the same on any runner.
-[BoardView.browser.tsx](BoardView.browser.tsx) runs this way: about 20 s of test
-time per width, in about a second, and it passes under full CPU load.
+[BoardView.browser.tsx](BoardView.browser.tsx) runs this way, as 18 independent
+scenarios: before each, `fresh()` unmounts the board, drains its pending work,
+resets the fake service and storage, creates a new client document store (a
+store refuses an older revision, so a reused one would keep the last scenario's
+notes), forgets kept note drafts (they live for the page, beyond any one Board),
+and mounts a new board; it then checks the board starts from the empty document
+with no kept drafts. A scenario that needs
+a strung note seeds one (`seedStrungNote`) and sets the view it checks, rather
+than relying on what an earlier scenario left behind. A failure is reported under
+its scenario's name and does not stop the rest, and a requested scenario name
+that does not exist is reported. `BOARD_SCENARIO="<name>[|<name>…]" bun test
+web/src/world/BoardView.test.ts` runs only those. The whole suite takes about 4 s
+and passes under full CPU load.
 
 A fixture that awaits the app itself (store refreshes, commands with deadlines)
 uses the **running** clock instead: frames follow one another as fast as the page

@@ -3761,6 +3761,18 @@ if (typeof window !== "undefined")
       keptDraftStore.refresh();
   });
 
+/**
+ * Tests only: the kept-draft store lives for the page, beyond any one Board.
+ * A browser fixture that starts each scenario on a fresh board forgets every
+ * kept draft here, as a new page would.
+ */
+export const __boardDraftsTesting = {
+  clear() {
+    for (const draft of keptDraftStore.list()) keptDraftStore.remove(draft.key);
+  },
+  count: () => keptDraftStore.list().length,
+};
+
 /** A note's first words, as the name of the tab it starts. */
 const noteTabName = (note: BoardNote) =>
   note.text.trim().split(/\s+/).slice(0, 3).join(" ").slice(0, 40) || "note";
