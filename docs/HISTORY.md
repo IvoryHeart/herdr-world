@@ -53,7 +53,8 @@ before navigation.
 **Link Codex session** accepts a full UUID, resolves its readable metadata on the
 selected runtime, and previews directory, path and update time before confirmation.
 Local and Unix SSH lookup searches active and archived Codex sessions using that
-runtime's Codex home; remote lookup never falls back to a local transcript.
+runtime's Codex home using shell/file utilities, without requiring Python 3;
+remote lookup never falls back to a local transcript.
 Windows SSH History remains unsupported. Preview tokens expire after five minutes,
 are single-use, and bind the pane's terminal, foreground process/group, existing
 session and transcript identity. Confirmation rechecks these witnesses and the

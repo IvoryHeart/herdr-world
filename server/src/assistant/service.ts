@@ -467,6 +467,7 @@ export function createAssistantService(options: {
   let entryScope = "";
   let requests: string[] = [];
   let pendingRequest: string | undefined;
+  let chatRevision = 0;
   let invalidSavedState = false;
   let migrateSavedState = false;
   let disposed = false;
@@ -1231,6 +1232,7 @@ export function createAssistantService(options: {
       preparedActions.clear();
       state.error = null;
     });
+    chatRevision++;
     publish(true);
   }
 
@@ -1407,6 +1409,8 @@ export function createAssistantService(options: {
     requestId: string,
     mode: "steer" | "queue",
   ) {
+    const sessionId = state.session_id;
+    const revision = chatRevision;
     const text = string(params.text, "message", 20_000);
     const mentions = params.mentions ?? [];
     if (!isAssistantMentions(mentions, text))
@@ -1431,6 +1435,18 @@ export function createAssistantService(options: {
       assertScopeAllowed(scope);
     } else scope = refs(params.scope, true);
     if (disposed) throw new Error("Ranger unavailable");
+    if (state.session_id !== sessionId || chatRevision !== revision)
+      throw new Error(
+        "The active Ranger chat changed. Select it again before sending.",
+      );
+    // Scope discovery can overlap retries, turn completion and queue draining.
+    // Recheck at the synchronous persistence boundary, including already-admitted IDs.
+    if (
+      requests.includes(requestId) ||
+      pendingRequest === requestId ||
+      queue.some((item) => item.id === requestId)
+    )
+      return;
     checkSelection({ ...selection, instance_id: state.instance_id });
     if (queue.length >= ASSISTANT_MAX_QUEUED)
       throw new Error(
@@ -3123,6 +3139,7 @@ export function createAssistantService(options: {
               preparedActions.clear();
               state.error = null;
             });
+            chatRevision++;
             publish(true);
             break;
           case "select_session":

@@ -1,5 +1,12 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, mkdir, realpath, rm, writeFile } from "node:fs/promises";
+import {
+  mkdtemp,
+  mkdir,
+  realpath,
+  rm,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -97,15 +104,21 @@ describe("Codex transcript lookup", () => {
   });
 
   test("executes the SSH lookup script with quoted paths and rejects invalid IDs before SSH", async () => {
-    const { path } = await setup();
+    const { root, path } = await setup();
+    const bin = join(root, "bin");
+    await mkdir(bin);
+    for (const command of ["bash", "find", "stat", "base64", "tr"])
+      await symlink(Bun.which(command)!, join(bin, command));
     let calls = 0;
     const files = createAgentSessionFileAccess({
       sshHost: "fixture",
       shQuote,
       async runBinaryProcessWithTimeout(argv) {
         calls++;
-        const proc = Bun.spawn(["sh", "-c", argv.at(-1)!], {
-          env: { ...process.env },
+        // Model a Unix SSH host with shell/file utilities but no Python.
+        const command = argv.at(-1)!.replace(/^bash -lc /, "bash -c ");
+        const proc = Bun.spawn(["/bin/sh", "-c", command], {
+          env: { ...process.env, PATH: bin },
           stdout: "pipe",
           stderr: "pipe",
         });
@@ -125,7 +138,14 @@ describe("Codex transcript lookup", () => {
       "complete",
     );
     expect(calls).toBe(2);
+    const archive = join(root, "archived_sessions");
+    await mkdir(archive);
+    const archived = join(archive, `rollout-${id}.jsonl`);
+    await writeFile(archived, "{}\n");
+    await expect(files.findCodexSessionById(id)).rejects.toThrow("Multiple");
     await rm(path);
+    expect((await files.findCodexSessionById(id))?.path).toBe(archived);
+    await rm(archived);
     expect(await files.findCodexSessionById(id)).toBeNull();
   });
 

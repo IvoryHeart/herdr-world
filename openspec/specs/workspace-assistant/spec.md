@@ -109,3 +109,15 @@ task previews SHALL block automatic follow-up admission.
 #### Scenario: Stale browser sends while Ranger is busy
 - **WHEN** a busy send carries an outdated expected model selection
 - **THEN** it is rejected before entering the queue
+
+#### Scenario: Chat changes during queued scope capture
+
+- **WHEN** a busy send is awaiting scope discovery or capture and its originating
+  chat is left, including leaving and returning before capture completes
+- **THEN** admission is rejected without persisting or sending that message
+
+#### Scenario: Concurrent retries during queued scope capture
+
+- **WHEN** two busy sends with the same request ID finish asynchronous scope capture
+- **THEN** at most one queue entry is persisted or admitted as a turn, and published
+  and persisted queues retain unique IDs

@@ -19,6 +19,10 @@ are optional because the merged PR history records their source.
 
 ### Changed
 
+- Reject pending Ranger follow-ups after their chat changes and deduplicate
+  concurrent queue retries after scope capture. Remote Codex History and session
+  linking no longer require Python 3 on Unix SSH hosts.
+
 - Refresh Roamgate source through `1a81c5da` after v0.8.7: add History chat and
   shared conversation minimaps, workspace PR/MR status, Inspector refresh and
   commit navigation, explicit Codex session linking and remote transcript lookup,

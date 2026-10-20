@@ -169,26 +169,30 @@ printf '%s\\t%s\\t%s\\t%s\\t%s\\n' "$size" "$mtime" "$path64" "$identity" "$chan
     statFile,
     async findCodexSessionById(id) {
       validateCodexSessionId(id);
-      const script = `
-import os, sys
-from pathlib import Path
-root = Path(os.path.expanduser(os.environ.get("CODEX_HOME") or "~/.codex"))
-matches = []
-for directory in ("sessions", "archived_sessions"):
-    matches.extend((root / directory).glob("**/*-" + sys.argv[1] + ".jsonl"))
-matches = [path for path in matches if path.is_file()]
-if len(matches) > 1:
-    sys.exit("Multiple transcripts match this Codex session ID.")
-if matches:
-    print(matches[0].resolve())
+      const command = `
+set -eu
+id=${args.shQuote(id)}
+root="\${CODEX_HOME:-$HOME/.codex}"
+case "$root" in
+  "~") root="$HOME" ;;
+  "~/"*) root="$HOME/\${root:2}" ;;
+esac
+[ -d "$root" ] || exit 0
+root="$(cd -P "$root" && pwd)"
+match=""
+for directory in "$root/sessions" "$root/archived_sessions"; do
+  [ -d "$directory" ] || continue
+  while IFS= read -r -d '' candidate; do
+    if [ -n "$match" ]; then
+      printf '%s\\n' 'Multiple transcripts match this Codex session ID.' >&2
+      exit 1
+    fi
+    match="$candidate"
+  done < <(find "$directory" -type f -name "*-$id.jsonl" -print0)
+done
+[ -z "$match" ] || printf '%s\\n' "$match"
 `;
-      const path = (
-        await runRemote(
-          `python3 -c ${args.shQuote(script)} ${args.shQuote(id)}`,
-        )
-      )
-        .toString("utf8")
-        .trim();
+      const path = (await runRemote(command)).toString("utf8").trim();
       return path ? statFile(path) : null;
     },
     async readText(path) {

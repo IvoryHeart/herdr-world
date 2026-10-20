@@ -6854,3 +6854,113 @@ test("a steer that needs a workspace the turn did not admit waits as a follow-up
   ]);
   gate.resolve();
 });
+
+test.each(["new", "select", "leave-and-return"])(
+  "pending queue admission rejects a departed chat: %s",
+  async (transition) => {
+    const turn = Promise.withResolvers<void>();
+    const captured = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    let hold = false;
+    const f = setup({
+      run: async () => {
+        if (hold) await turn.promise;
+        return [];
+      },
+    });
+    await f.service.handle("configure", configured);
+    await f.service.handle("send", { text: "Saved chat", request_id: "saved" });
+    await until(() => !f.service.peek().running);
+    const saved = f.service.peek().session_id;
+    await f.service.handle("new_session", {});
+    const origin = f.service.peek().session_id;
+    hold = true;
+    await f.service.handle("send", { text: "Running", request_id: "running" });
+    f.context.captureScope = async () => {
+      captured.resolve();
+      await release.promise;
+      return [workspace];
+    };
+    const pending = f.rawHandle("send", {
+      text: "Old follow-up",
+      request_id: "departed",
+      session_id: origin,
+      when_busy: "queue",
+    });
+    // Attach a handler before releasing asynchronous work to avoid an unhandled rejection.
+    const result = pending.then(
+      () => null,
+      (error: Error) => error,
+    );
+    try {
+      await captured.promise;
+      turn.resolve();
+      await until(() => !f.service.peek().running);
+      if (transition === "new") await f.service.handle("new_session", {});
+      else {
+        await f.service.handle("select_session", { session_id: saved });
+        if (transition === "leave-and-return")
+          await f.service.handle("select_session", { session_id: origin });
+      }
+      release.resolve();
+      const error = await result;
+      expect(error?.message).toContain("chat changed");
+      expect(f.service.peek().queue).toHaveLength(0);
+      expect(
+        f.service.peek().messages.some((item) => item.text === "Old follow-up"),
+      ).toBe(false);
+    } finally {
+      turn.resolve();
+      release.resolve();
+      await result;
+    }
+  },
+);
+
+test("concurrent omitted-scope retries persist one queue identity", async () => {
+  const turn = Promise.withResolvers<void>();
+  const captures = Promise.withResolvers<void>();
+  const release = Promise.withResolvers<void>();
+  const f = setup({
+    run: async () => {
+      await turn.promise;
+      return [];
+    },
+  });
+  await f.service.handle("configure", configured);
+  await f.service.handle("send", { text: "Running", request_id: "running" });
+  let count = 0;
+  f.context.captureScope = async () => {
+    if (++count === 2) captures.resolve();
+    await release.promise;
+    return [workspace];
+  };
+  const params = {
+    text: "Only once",
+    request_id: "same-retry",
+    when_busy: "queue",
+  };
+  const pending = Promise.all([
+    f.rawHandle("send", params),
+    f.rawHandle("send", params),
+  ]);
+  try {
+    await captures.promise;
+    release.resolve();
+    await pending;
+    expect(f.service.peek().queue?.map((item) => item.id)).toEqual([
+      "same-retry",
+    ]);
+    const persisted = JSON.parse(
+      readFileSync(join(f.directory, "state.json"), "utf8"),
+    );
+    expect(persisted.queue.map((item: { id: string }) => item.id)).toEqual([
+      "same-retry",
+    ]);
+    expect(isAssistantSnapshot(f.service.peek())).toBe(true);
+  } finally {
+    release.resolve();
+    turn.resolve();
+    await pending;
+  }
+});
