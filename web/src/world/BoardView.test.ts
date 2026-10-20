@@ -86,7 +86,8 @@ test.skipIf(!chrome).each([
           "--no-first-run",
           "--no-default-browser-check",
           `--user-data-dir=${join(dir, "profile")}`,
-          `${server.url.href}?mode=test`,
+          // BOARD_SCENARIO="<name>[|<name>…]" runs those scenarios alone, for diagnosis.
+          `${server.url.href}?mode=test${Bun.env.BOARD_SCENARIO ? `&scenario=${encodeURIComponent(Bun.env.BOARD_SCENARIO)}` : ""}`,
         ],
         { stdout: "ignore", stderr: Bun.file(browserLog) },
       );
