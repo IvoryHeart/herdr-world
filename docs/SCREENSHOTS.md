@@ -49,8 +49,9 @@ The current Town/Board captures follow main after the Board merge, using Herdr
 The mobile Board close-up uses a separate single-workspace scene with two tabs
 and a strung note, so its text remains readable at the native phone width.
 Their empty attention counts reflect the runtime; notes do not imply completed
-agent work. Label current-main captures in the README and tutorial; consult release
-notes for stable availability. Office, Tree and Graph have been retired from the
+agent work. The README and tutorial identify these layouts with releases
+0.2.5–0.2.6; retain the exact capture revisions as provenance rather than claiming
+the images were recaptured for each release. Office, Tree and Graph have been retired from the
 application. Their images remain historical assets outside the shared site set;
 old `/office` addresses open Town, and `/graph` and `/tree` open Board. Their
 view implementations and dedicated tests have been removed, while the shared

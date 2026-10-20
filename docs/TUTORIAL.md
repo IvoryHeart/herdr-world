@@ -97,8 +97,7 @@ Use the view switcher to move between these views without restarting work:
 
 Office, Tree and Graph have been retired; `/office` opens Town, and `/graph` and
 `/tree` open Board. The exercises below use Town, Board, Desk and Spaces. Board
-and the retirement are on current `main`; check the [latest release notes](https://github.com/IvoryHeart/herdr-world/releases/latest)
-for released availability.
+and these redirects are included in [0.2.6](./releases/v0.2.6.md).
 
 **Hosts** starts at **All hosts**. Choose a host set to reduce the overview;
 use **Manage connections** to add or reconnect a local or SSH profile. Filtering
@@ -190,6 +189,9 @@ on your phone and desktop.
    bottom right. Zoomed out, each workspace shows a square per pane (hollow for
    shells); tap a workspace there to zoom in on it.
 3. Drag a workspace and its tabs follow; cards settle within about a second.
+   On a phone, hold a card still before dragging; a quick swipe pans. Add a
+   second finger to switch from dragging to pinch zoom without committing a move.
+   Settling pauses while you type in an open terminal.
    The chevron on a workspace's top-left corner folds its tabs behind a count, and tapping the count opens
    them into free space. The sparkle button tidies the selected workspace, or
    the whole board, and offers **Undo**; notes strung to cards move with them,

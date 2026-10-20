@@ -7,6 +7,8 @@ are optional because the merged PR history records their source.
 
 ## [Unreleased]
 
+## [0.2.6] - 2026-10-20
+
 ### Documentation
 
 - Refresh the shared Files, Changes and History screenshots with Board behind
