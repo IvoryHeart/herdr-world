@@ -32,6 +32,10 @@ import { connectionStorageKey } from "../connectionStorage";
 import { downloadFileFromUrl } from "../downloadFile";
 import { lazyWithReload } from "../lazyWithReload";
 import {
+  lastStepCompletionKey,
+  subscribeLastStepCompletion,
+} from "../lastStepCompletionStore";
+import {
   refreshGitDiffSummary,
   useGitDiffSummaryState,
 } from "../gitDiffSummaryStore";
@@ -417,6 +421,7 @@ function FileExplorerContent({
   const [loadingPaths, setLoadingPaths] = useState<Set<string>>(
     () => new Set(),
   );
+  const directoryRequests = useRef(new Map<string, symbol>());
   const [uploadingPaths, setUploadingPaths] = useState<Set<string>>(
     () => new Set(),
   );
@@ -562,10 +567,20 @@ function FileExplorerContent({
     longPressTimer.current = null;
   };
 
-  const loadDirectory = async (path: string, force = false) => {
+  const loadDirectory = async (
+    path: string,
+    force = false,
+    signal?: AbortSignal,
+  ) => {
     if (!workspace?.workspace_id || !connectionClient.isCurrent()) return;
     const requestContext = runtimeContext;
     if (!force && children[path]) return;
+    const request = Symbol();
+    directoryRequests.current.set(path, request);
+    const requestIsCurrent = () =>
+      !signal?.aborted &&
+      directoryRequests.current.get(path) === request &&
+      runtimeContextIsCurrent(requestContext);
     setLoadingPaths((current) => new Set(current).add(path));
     updateCache({ error: null });
     try {
@@ -574,12 +589,7 @@ function FileExplorerContent({
         path,
         show_hidden: showHidden,
       })) as FileExplorerList;
-      if (
-        !connectionClient.isCurrent() ||
-        runtimeContextRef.current !== requestContext
-      ) {
-        return;
-      }
+      if (!requestIsCurrent()) return;
       setCache((current) => {
         const next = {
           ...current,
@@ -598,22 +608,19 @@ function FileExplorerContent({
         return next;
       });
     } catch (e) {
-      if (
-        connectionClient.isCurrent() &&
-        runtimeContextRef.current === requestContext
-      ) {
+      if (requestIsCurrent()) {
         updateCache({ error: (e as Error).message });
       }
     } finally {
-      if (
-        connectionClient.isCurrent() &&
-        runtimeContextRef.current === requestContext
-      ) {
+      if (requestIsCurrent()) {
         setLoadingPaths((current) => {
           const next = new Set(current);
           next.delete(path);
           return next;
         });
+      }
+      if (directoryRequests.current.get(path) === request) {
+        directoryRequests.current.delete(path);
       }
     }
   };
@@ -786,7 +793,7 @@ function FileExplorerContent({
     ) {
       return;
     }
-    let cancelled = false;
+    const controller = new AbortController();
     const workspaceId = workspace.workspace_id;
     const entryName = activePath.split("/").filter(Boolean).pop() ?? activePath;
     setPreviewEntry((current) =>
@@ -819,7 +826,7 @@ function FileExplorerContent({
         { expanded: nextExpanded },
         cacheResourceKey,
       );
-      if (!cancelled) {
+      if (!controller.signal.aborted) {
         setCache((current) => ({
           ...current,
           expanded: new Set(nextExpanded),
@@ -827,7 +834,7 @@ function FileExplorerContent({
       }
 
       for (const path of parentPaths) {
-        if (cancelled || !connectionClient.isCurrent()) return;
+        if (controller.signal.aborted || !connectionClient.isCurrent()) return;
         latest = readExplorerCache(
           connectionClient,
           workspaceId,
@@ -835,67 +842,16 @@ function FileExplorerContent({
           cacheResourceKey,
         );
         if (latest.children[path]) continue;
-        setLoadingPaths((current) => new Set(current).add(path));
-        try {
-          const list = (await connectionClient.call("file.list", {
-            workspace_id: workspaceId,
-            path,
-            show_hidden: showHidden,
-          })) as FileExplorerList;
-          if (!connectionClient.isCurrent() || cancelled) return;
-          latest = readExplorerCache(
-            connectionClient,
-            workspaceId,
-            showHidden,
-            cacheResourceKey,
-          );
-          const expandedWithPath = new Set(latest.expanded);
-          for (const parentPath of parentPaths)
-            expandedWithPath.add(parentPath);
-          writeExplorerCache(
-            connectionClient,
-            workspaceId,
-            showHidden,
-            {
-              rootInfo: list,
-              children: { ...latest.children, [path]: list.entries },
-              expanded: expandedWithPath,
-              error: null,
-            },
-            cacheResourceKey,
-          );
-          if (!cancelled) {
-            setCache((current) => ({
-              ...current,
-              rootInfo: list,
-              children: { ...current.children, [path]: list.entries },
-              expanded: new Set(expandedWithPath),
-              error: null,
-            }));
-          }
-        } catch (e) {
-          if (!cancelled && connectionClient.isCurrent()) {
-            setCache((current) => ({
-              ...current,
-              error: (e as Error).message,
-            }));
-          }
-        } finally {
-          if (!cancelled && connectionClient.isCurrent()) {
-            setLoadingPaths((current) => {
-              const next = new Set(current);
-              next.delete(path);
-              return next;
-            });
-          }
-        }
+        await loadDirectory(path, true, controller.signal);
       }
     };
 
     void expandActivePath();
     return () => {
-      cancelled = true;
+      controller.abort();
     };
+    // Rehydrate only when the active path or explorer scope changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     activePath,
     cacheResourceKey,
@@ -1627,6 +1583,15 @@ function FileExplorerContent({
     for (const path of paths) void loadDirectory(path, true);
     void loadGitStatus(true);
   };
+
+  const refreshAfterStep = useEffectEvent(refreshFiles);
+  useEffect(() => {
+    if (!open || !cacheWorkspaceId) return;
+    return subscribeLastStepCompletion(
+      lastStepCompletionKey(connectionClient.connectionId, cacheWorkspaceId),
+      refreshAfterStep,
+    );
+  }, [open, connectionClient, cacheWorkspaceId]);
 
   const handleEntryPointerDown = (
     event: ReactPointerEvent<HTMLElement>,
