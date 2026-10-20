@@ -2,15 +2,15 @@ import { useEffect, useRef } from "react";
 import { useLayoutPreferences } from "./layoutPreferences";
 
 /**
- * How a layer stacks for the phone's Back: a screen (a terminal) sits below
- * a panel (Composer, workspace list), which sits below a popup (menu, sheet).
- * Back closes the highest open layer; equal levels close newest first.
+ * Phone Back closes popups, then nested navigation, then panels and terminal screens.
+ * Equal levels close newest first.
  */
-export type SystemBackLevel = "screen" | "panel" | "popup";
+export type SystemBackLevel = "screen" | "panel" | "navigation" | "popup";
 const LEVELS: Record<SystemBackLevel, number> = {
   screen: 0,
   panel: 1,
-  popup: 2,
+  navigation: 2,
+  popup: 3,
 };
 
 type Layer = { level: number; order: number; close: () => void };

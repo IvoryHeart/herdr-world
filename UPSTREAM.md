@@ -6,8 +6,8 @@ separately installed [`herdrdev/herdr`](https://github.com/herdrdev/herdr) runti
 
 Current synchronization points:
 
-- Roamgate source: main after v0.8.6, `57327a0dcac58c116662a26a7d1ea78d4ecf772b`
-  (20 October 2026; nine unreleased commits after v0.8.6). This integration records
+- Roamgate source: main after v0.8.7, `1a81c5daa49fe49e55a5eafbe88e5d8ce94a4376`
+  (20 October 2026; five unreleased commits after v0.8.7). This integration records
   the exact head as a Git merge
   parent, following `5ce1d8d620549226de76321303e7bffa911ae371`.
 - Herdr compatibility: Herdr 0.9.5, terminal protocol 22. Windows SSH hosts
@@ -100,3 +100,15 @@ controls. Waiting questions retain their selected World runtime generation; a
 replacement holds the queue instead of retargeting. Compatible typebox, xterm,
 Radix and lint updates are adopted. React remains 18 and the Roamgate-only CodeQL
 workflow remains excluded under World policy; both dispositions require owner review.
+
+The v0.8.7 and following main refresh adds History Chat/Timeline views with a
+shared Ranger/History conversation minimap, latest workspace PR/MR status,
+Inspector refresh and commit navigation, manual Codex session linking and
+remote Codex transcript lookup, composer command-picker styling and mobile toast
+banners. World retains React 18 callback freshness, qualified resource clients,
+its measured terminal focus guard and its screen/panel/navigation/popup Back
+ordering. Codex links require preview and confirmation against the captured
+runtime and foreground process; the external runtime does not offer an atomic
+process-and-link operation. World release versions and asset budgets remain
+independent of Roamgate's release bookkeeping. Herdr 0.9.5 remains the latest
+compatible setup target checked for this refresh.

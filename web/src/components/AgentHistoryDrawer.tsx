@@ -7,29 +7,52 @@ import {
   type CSSProperties,
   type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
-  type RefObject,
 } from "react";
-import { Copy, Download, Eye, Info, RefreshCw, X } from "lucide-react";
+import {
+  Copy,
+  Download,
+  Eye,
+  Info,
+  MessagesSquare,
+  RefreshCw,
+  X,
+} from "lucide-react";
 import { useStoreSelector } from "../store";
 import { copyTextWithFeedback } from "../copyText";
-import { useConnectionClient } from "../useConnectionClient";
+import {
+  connectionClientScopeKey,
+  useConnectionClient,
+} from "../useConnectionClient";
 import type { Pane } from "../types";
 import {
   DEFAULT_INSPECTOR_NAVIGATION_RATIO,
   inspectorNavigationRatioAtPosition,
 } from "../workspaceResource";
 import { formatUiDateTime, formatUiRelativeTime } from "../uiLocale";
-import { shortId } from "../utils";
+import { prefersReducedMotion, shortId } from "../utils";
 import { AgentIcon } from "./AgentIcon";
+import { CodexSessionLink } from "./CodexSessionLink";
 import { AgentMessageContent } from "./AgentMessageContent";
 import { AgentMessageDialog } from "./AgentMessageDialog";
 import { AgentHistoryCard } from "./AgentHistoryCard";
+import { AgentHistoryChat } from "./AgentHistoryChat";
 import { AgentHistoryFilters } from "./AgentHistoryFilters";
+import { ConversationMinimap } from "./ConversationMinimap";
+import {
+  groupHistoryChatItems,
+  searchHistoryChatEntries,
+  readAgentHistoryView,
+  writeAgentHistoryView,
+  type AgentHistoryView,
+} from "./agentHistoryView";
 import {
   ALL_HISTORY_FILTERS,
   historyEntryLabel,
   mergeAgentHistory,
+  isToolContentPending,
   selectHistoryEntries,
+  toolOverlayMatches,
+  type ToolTextOverlay,
   type HistoryFilters,
   type AgentHistory,
   type AgentHistoryResponse,
@@ -60,316 +83,6 @@ function formatRelativeTime(timestamp: string) {
   return formatUiRelativeTime(Math.round(seconds / 86400), "day");
 }
 
-type MessageMinimapVisibleRange = { start: number; end: number };
-
-function minimapPrefersReducedMotion() {
-  return (
-    window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false
-  );
-}
-
-// The minimap keeps its bars in a uniform-width flex row, so a pointer
-// position maps to a message index from the strip geometry alone.
-function AgentHistoryMinimap({
-  entries,
-  visibleRange,
-  indicatorRef,
-  onSelect,
-}: {
-  entries: { message: AgentHistoryEntry; sequence: number }[];
-  visibleRange: MessageMinimapVisibleRange | null;
-  indicatorRef: RefObject<HTMLDivElement>;
-  onSelect: (sequence: number) => void;
-}) {
-  const stripRef = useRef<HTMLDivElement>(null);
-  const interactingRef = useRef(false);
-  const visibleRangeRef = useRef<MessageMinimapVisibleRange | null>(null);
-  visibleRangeRef.current = visibleRange;
-
-  // With more messages than the strip can fit, the bars overflow and the
-  // strip scrolls horizontally; glide the strip only when the raised wave
-  // actually leaves the strip's viewport, so scrolling the timeline does
-  // not restart a smooth-scroll animation on every frame. Suppressed while
-  // the user is interacting so the strip never moves under their finger.
-  const centerWave = useCallback(() => {
-    const strip = stripRef.current;
-    const range = visibleRangeRef.current;
-    if (!strip || !range || interactingRef.current) return;
-    if (strip.scrollWidth <= strip.clientWidth) return;
-    const startBar = strip.children[range.start - 1];
-    const endBar = strip.children[range.end - 1];
-    if (!(startBar instanceof HTMLElement) || !(endBar instanceof HTMLElement))
-      return;
-    const stripRect = strip.getBoundingClientRect();
-    const waveLeft =
-      startBar.getBoundingClientRect().left - stripRect.left + strip.scrollLeft;
-    const waveRight =
-      endBar.getBoundingClientRect().right - stripRect.left + strip.scrollLeft;
-    if (
-      waveLeft >= strip.scrollLeft &&
-      waveRight <= strip.scrollLeft + strip.clientWidth
-    ) {
-      return;
-    }
-    const target = Math.max(
-      0,
-      Math.min(
-        strip.scrollWidth - strip.clientWidth,
-        (waveLeft + waveRight - strip.clientWidth) / 2,
-      ),
-    );
-    strip.scrollTo({
-      left: target,
-      behavior: minimapPrefersReducedMotion() ? "auto" : "smooth",
-    });
-  }, []);
-
-  useEffect(() => {
-    centerWave();
-  }, [centerWave, visibleRange]);
-
-  // The thumb is the strip's own horizontal scrollbar: it tracks the strip's
-  // scroll position whether the strip was panned directly or moved by
-  // centerWave following the timeline.
-  const updateThumb = useCallback(() => {
-    const thumb = indicatorRef.current;
-    const track = thumb?.parentElement;
-    const strip = stripRef.current;
-    if (!thumb || !track || !strip) return;
-    const max = strip.scrollWidth - strip.clientWidth;
-    if (max <= 1) {
-      thumb.style.display = "none";
-      return;
-    }
-    const trackWidth = track.clientWidth;
-    if (trackWidth <= 0) {
-      thumb.style.display = "none";
-      return;
-    }
-    // Clamp to the track: below a 12px track the minimum width would
-    // otherwise exceed it, inverting the travel direction.
-    const thumbWidth = Math.min(
-      trackWidth,
-      Math.max((strip.clientWidth / strip.scrollWidth) * trackWidth, 12),
-    );
-    thumb.style.display = "block";
-    thumb.style.width = `${thumbWidth}px`;
-    thumb.style.transform = `translateX(${(strip.scrollLeft / max) * (trackWidth - thumbWidth)}px)`;
-  }, [indicatorRef]);
-
-  useEffect(() => {
-    const strip = stripRef.current;
-    if (!strip) return;
-    updateThumb();
-    strip.addEventListener("scroll", updateThumb, { passive: true });
-    const observer = new ResizeObserver(updateThumb);
-    observer.observe(strip);
-    return () => {
-      strip.removeEventListener("scroll", updateThumb);
-      observer.disconnect();
-    };
-  }, [updateThumb, entries.length]);
-
-  // Bars are memoized so scrolling never re-diffs hundreds of divs; the
-  // raised wave flips is-in-view imperatively instead.
-  const bars = useMemo(
-    () =>
-      entries.map(({ message, sequence }) => (
-        <div
-          key={message.id}
-          className={`agent-history-minimap-bar is-${message.role}`}
-          title={`#${sequence} ${historyEntryLabel(message)}`}
-        />
-      )),
-    [entries],
-  );
-
-  useEffect(() => {
-    const strip = stripRef.current;
-    if (!strip) return;
-    const start = (visibleRange?.start ?? 1) - 1;
-    const end = (visibleRange?.end ?? 0) - 1;
-    for (let i = 0; i < strip.children.length; i++) {
-      strip.children[i].classList.toggle("is-in-view", i >= start && i <= end);
-    }
-  }, [visibleRange, bars]);
-
-  const sequenceAtClientX = useCallback(
-    (clientX: number) => {
-      const strip = stripRef.current;
-      const firstBar = strip?.firstElementChild;
-      if (!strip || !(firstBar instanceof HTMLElement)) return null;
-      const count = entries.length;
-      if (count === 0) return null;
-      // Derive the stride (bar width + gap) from the first two bars'
-      // geometry so the mapping stays correct whatever gap the CSS uses.
-      const firstLeft = firstBar.getBoundingClientRect().left;
-      const secondBar = firstBar.nextElementSibling;
-      const stride =
-        secondBar instanceof HTMLElement
-          ? secondBar.getBoundingClientRect().left - firstLeft
-          : firstBar.offsetWidth;
-      if (stride <= 0) return null;
-      const stripRect = strip.getBoundingClientRect();
-      const barsLeft = firstLeft - stripRect.left + strip.scrollLeft;
-      const contentX = clientX - stripRect.left + strip.scrollLeft - barsLeft;
-      const index = Math.max(
-        0,
-        Math.min(count - 1, Math.floor(contentX / stride)),
-      );
-      return entries[index]?.sequence ?? null;
-    },
-    [entries],
-  );
-
-  // Horizontal gestures pan the strip itself; the timeline and wave stay
-  // put. Only a tap (no dragging) jumps the timeline to that message.
-  const panRef = useRef<{
-    pointerId: number;
-    startX: number;
-    startY: number;
-    startScrollLeft: number;
-    panning: boolean;
-  } | null>(null);
-  const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
-    // Only the primary pointer's primary button starts an interaction:
-    // right/middle clicks must not jump, and a second touch must not
-    // overwrite the tracked finger.
-    if (event.button !== 0 || !event.isPrimary) return;
-    panRef.current = {
-      pointerId: event.pointerId,
-      startX: event.clientX,
-      startY: event.clientY,
-      startScrollLeft: stripRef.current?.scrollLeft ?? 0,
-      panning: false,
-    };
-    // From press to release the strip must not move under the pointer, so a
-    // tap selects the bar that was actually pressed.
-    interactingRef.current = true;
-    // Capture from the press so a release off the strip still delivers
-    // pointerup; otherwise the interaction state would wedge until the
-    // pointer re-enters. Touch gets implicit capture already; pen devices
-    // are not necessarily direct-manipulation devices, so capture them too.
-    if (event.pointerType !== "touch") {
-      event.currentTarget.setPointerCapture(event.pointerId);
-    }
-  };
-  const handlePointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
-    const pan = panRef.current;
-    if (!pan || pan.pointerId !== event.pointerId) return;
-    // Belt-and-suspenders cleanup for exotic capture loss: if a mouse move
-    // arrives with no buttons down, the press is over, so drop the state
-    // instead of turning the move into a ghost pan. Mouse only: some touch
-    // stacks report buttons = 0 mid-drag, and touch cleanup already arrives
-    // via pointercancel.
-    if (event.pointerType === "mouse" && event.buttons === 0) {
-      panRef.current = null;
-      interactingRef.current = false;
-      return;
-    }
-    const dx = event.clientX - pan.startX;
-    const dy = event.clientY - pan.startY;
-    if (!pan.panning) {
-      if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return;
-      pan.panning = true;
-    }
-    // Touch pans natively (touch-action allows it) and cancels this handler;
-    // a mouse cannot pan a scrollable by dragging, so move the strip
-    // manually (captured since pointerdown).
-    if (event.pointerType === "mouse") {
-      const strip = stripRef.current;
-      if (strip) strip.scrollLeft = pan.startScrollLeft - dx;
-    }
-  };
-  const handlePointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
-    const pan = panRef.current;
-    if (pan && pan.pointerId !== event.pointerId) return;
-    panRef.current = null;
-    interactingRef.current = false;
-    if (!pan || pan.panning) return;
-    const sequence = sequenceAtClientX(event.clientX);
-    if (sequence !== null) onSelect(sequence);
-    centerWave();
-  };
-  const handlePointerCancel = () => {
-    panRef.current = null;
-    interactingRef.current = false;
-  };
-  // The strip is a single slider-like control: one tab stop, with arrow-key
-  // navigation across messages. The bars themselves stay non-focusable.
-  const handleKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
-    const count = entries.length;
-    if (count === 0) return;
-    const range = visibleRangeRef.current;
-    const current = range?.start ?? 1;
-    const span = range ? range.end - range.start + 1 : 1;
-    let next: number;
-    switch (event.key) {
-      case "ArrowLeft":
-      case "ArrowDown":
-        next = current - 1;
-        break;
-      case "ArrowRight":
-      case "ArrowUp":
-        next = current + 1;
-        break;
-      case "PageUp":
-        next = current - span;
-        break;
-      case "PageDown":
-        next = current + span;
-        break;
-      case "Home":
-        next = 1;
-        break;
-      case "End":
-        next = count;
-        break;
-      default:
-        return;
-    }
-    event.preventDefault();
-    onSelect(Math.max(1, Math.min(count, next)));
-  };
-
-  const currentSequence = visibleRange?.start ?? 1;
-  const currentEntry = entries[currentSequence - 1];
-  const currentValueText = currentEntry
-    ? `#${currentSequence} ${historyEntryLabel(currentEntry.message)}`
-    : undefined;
-
-  return (
-    <div className="agent-history-minimap-wrap">
-      <div
-        ref={stripRef}
-        className="agent-history-minimap"
-        role="slider"
-        tabIndex={0}
-        aria-label="Jump to message"
-        aria-orientation="horizontal"
-        aria-valuemin={1}
-        aria-valuemax={entries.length}
-        aria-valuenow={currentSequence}
-        aria-valuetext={currentValueText}
-        onKeyDown={handleKeyDown}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerCancel={handlePointerCancel}
-      >
-        {bars}
-      </div>
-      <div className="agent-history-minimap-scrollbar" aria-hidden="true">
-        <div
-          ref={indicatorRef}
-          className="agent-history-minimap-scrollbar-thumb"
-          style={{ display: "none" }}
-        />
-      </div>
-    </div>
-  );
-}
-
 export function AgentHistoryDrawer({
   pane,
   open,
@@ -396,13 +109,15 @@ export function AgentHistoryDrawer({
     tool: false,
   });
   const [toolEntryTexts, setToolEntryTexts] = useState<
-    ReadonlyMap<string, { text: string; bytes: number }>
+    ReadonlyMap<string, ToolTextOverlay>
   >(() => new Map());
   const [toolEntryLoading, setToolEntryLoading] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
   const [session, setSession] = useState<AgentSessionSummary | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [view, setView] = useState<AgentHistoryView>(readAgentHistoryView);
+  const chatView = view === "chat";
   const [previewPane, setPreviewPane] = useState<Pane | null>(null);
   const [previewSummary, setPreviewSummary] =
     useState<AgentSessionSummary | null>(null);
@@ -415,8 +130,6 @@ export function AgentHistoryDrawer({
   const [highlightedSequence, setHighlightedSequence] = useState<number | null>(
     null,
   );
-  const [visibleRange, setVisibleRange] =
-    useState<MessageMinimapVisibleRange | null>(null);
   // Wide layout: the list sits in a resizable master column and the selected
   // entry opens in an inline detail panel instead of the modal dialog.
   const [wideListRatio, setWideListRatio] = useState(
@@ -425,9 +138,7 @@ export function AgentHistoryDrawer({
   const [wideSelectedId, setWideSelectedId] = useState<string | null>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
-  const minimapIndicatorRef = useRef<HTMLDivElement>(null);
   const wideSplitRef = useRef<HTMLDivElement>(null);
-  const visibleRangeKeyRef = useRef("");
   const highlightTimerRef = useRef<number | null>(null);
   const loadSeqRef = useRef(0);
   const previewSeqRef = useRef(0);
@@ -478,16 +189,15 @@ export function AgentHistoryDrawer({
           setHistory(merged);
           if (merged) {
             // Drop on-demand texts for entries that left the window or whose
-            // content changed under the same id (byte-length mismatch).
+            // content changed under the same id (hash or byte-length mismatch).
             setToolEntryTexts((current) => {
               if (current.size === 0) return current;
-              const kept = new Map<string, { text: string; bytes: number }>();
+              const kept = new Map<string, ToolTextOverlay>();
               for (const message of merged.messages) {
                 const overlay = current.get(message.id);
                 if (
                   overlay !== undefined &&
-                  (message.text_bytes === undefined ||
-                    overlay.bytes === message.text_bytes)
+                  toolOverlayMatches(overlay, message)
                 ) {
                   kept.set(message.id, overlay);
                 }
@@ -552,8 +262,6 @@ export function AgentHistoryDrawer({
       highlightTimerRef.current = null;
     }
     setHighlightedSequence(null);
-    visibleRangeKeyRef.current = "";
-    setVisibleRange(null);
     setWideSelectedId(null);
     setWideListRatio(DEFAULT_INSPECTOR_NAVIGATION_RATIO);
     setHistory(null);
@@ -595,12 +303,16 @@ export function AgentHistoryDrawer({
           if (!connectionClient.isCurrent() || paneIdRef.current !== paneId)
             return;
           toolEntryFailedRef.current.delete(entry.id);
-          const text = (result as { text?: unknown }).text;
+          const { text, text_hash } = result as {
+            text?: unknown;
+            text_hash?: unknown;
+          };
           const value = typeof text === "string" ? text : "";
           setToolEntryTexts((current) =>
             new Map(current).set(entry.id, {
               text: value,
               bytes: new TextEncoder().encode(value).length,
+              hash: typeof text_hash === "string" ? text_hash : undefined,
             }),
           );
         })
@@ -629,12 +341,11 @@ export function AgentHistoryDrawer({
   );
 
   const messages = useMemo(() => history?.messages ?? [], [history?.messages]);
-  // Substitute fetched tool payloads only while their byte lengths still match.
+  // Substitute fetched tool payloads only while they still match the entry.
   const hydrateEntry = useCallback(
     (entry: AgentHistoryEntry): AgentHistoryEntry => {
       const overlay = toolEntryTexts.get(entry.id);
-      return overlay !== undefined &&
-        (entry.text_bytes === undefined || overlay.bytes === entry.text_bytes)
+      return overlay !== undefined && toolOverlayMatches(overlay, entry)
         ? { ...entry, text: overlay.text }
         : entry;
     },
@@ -644,14 +355,30 @@ export function AgentHistoryDrawer({
     () => (toolEntryTexts.size === 0 ? messages : messages.map(hydrateEntry)),
     [messages, toolEntryTexts, hydrateEntry],
   );
-  const { visible: visibleMessages, counts } = useMemo(
+  const timelineSelection = useMemo(
     () => selectHistoryEntries(hydratedMessages, filters, query),
     [hydratedMessages, filters, query],
   );
-  const wideSelectedEntry = wide
+  // The chat view has no type filter: it shows every entry, with tool entries
+  // collapsed into blocks between the conversation bubbles. Its search keeps
+  // a tool call and its result together.
+  const chatEntries = useMemo(
+    () => (chatView ? searchHistoryChatEntries(hydratedMessages, query) : null),
+    [chatView, hydratedMessages, query],
+  );
+  const visibleMessages = chatEntries ?? timelineSelection.visible;
+  const counts = timelineSelection.counts;
+  const chatItems = useMemo(
+    () => (chatView ? groupHistoryChatItems(visibleMessages) : []),
+    [chatView, visibleMessages],
+  );
+  // The chat view reads full messages in the modal dialog at any width; only
+  // the wide timeline uses the inline master-detail reader.
+  const masterDetail = wide && !chatView;
+  const wideSelectedEntry = masterDetail
     ? (visibleMessages.find((entry) => entry.id === wideSelectedId) ?? null)
     : null;
-  const activeMessage = wide
+  const activeMessage = masterDetail
     ? !detailsOpen
       ? wideSelectedEntry
       : null
@@ -665,16 +392,14 @@ export function AgentHistoryDrawer({
     if (
       !open ||
       !activeMessage ||
-      activeMessage.role !== "tool" ||
-      activeMessage.text.length > 0 ||
-      (activeMessage.text_bytes ?? 0) === 0 ||
+      !isToolContentPending(activeMessage) ||
       toolEntryLoading.has(activeMessage.id) ||
       toolEntryFailedRef.current.has(activeMessage.id)
     ) {
       return;
     }
     const overlay = toolEntryTexts.get(activeMessage.id);
-    if (overlay !== undefined && overlay.bytes === activeMessage.text_bytes)
+    if (overlay !== undefined && toolOverlayMatches(overlay, activeMessage))
       return;
     loadToolEntry(activeMessage);
   }, [activeMessage, open, toolEntryTexts, toolEntryLoading, loadToolEntry]);
@@ -762,8 +487,12 @@ export function AgentHistoryDrawer({
     setQuery(nextQuery);
     setExpandedMessage((entry) =>
       entry &&
-      selectHistoryEntries([hydrateEntry(entry)], next, nextQuery).visible
-        .length
+      (chatView
+        ? searchHistoryChatEntries(hydratedMessages, nextQuery).some(
+            (item) => item.id === entry.id,
+          )
+        : selectHistoryEntries([hydrateEntry(entry)], next, nextQuery).visible
+            .length)
         ? entry
         : null,
     );
@@ -772,130 +501,30 @@ export function AgentHistoryDrawer({
       highlightTimerRef.current = null;
     }
     setHighlightedSequence(null);
-    visibleRangeKeyRef.current = "";
-    setVisibleRange(null);
-    if (contentRef.current) contentRef.current.scrollTop = 0;
+    // The chat jumps back to its newest message itself (followKey).
+    if (!chatView && contentRef.current) contentRef.current.scrollTop = 0;
   };
-
-  // Track which messages the timeline viewport contains so the minimap can
-  // raise their bars as a moving "wave" while scrolling. Geometry-based
-  // instead of IntersectionObserver: it updates every scroll frame and does
-  // not depend on observer delivery timing, which mobile browsers throttle
-  // aggressively during momentum scrolling.
-  useEffect(() => {
-    const root = contentRef.current;
-    const timeline = timelineRef.current;
-    if (detailsOpen || !root || !timeline) {
-      visibleRangeKeyRef.current = "";
-      setVisibleRange(null);
-      return;
-    }
-    const publish = (range: MessageMinimapVisibleRange | null) => {
-      const key = range ? `${range.start}:${range.end}` : "";
-      // Scrolling crosses card boundaries constantly; skip no-op publishes so
-      // the drawer only re-renders when the visible range actually changes.
-      if (key === visibleRangeKeyRef.current) return;
-      visibleRangeKeyRef.current = key;
-      setVisibleRange(range);
-    };
-    let frame = 0;
-    const recompute = () => {
-      frame = 0;
-      const rootRect = root.getBoundingClientRect();
-      // A hidden container (e.g. the inspector showing another view) has an
-      // empty rect; skip the scan so background scrolls stay O(1) here.
-      if (rootRect.width === 0 || rootRect.height === 0) {
-        publish(null);
-        return;
-      }
-      // Clip the viewport rect to the visible screen as well. Normally the
-      // content container clips the timeline itself, but if an ancestor ends
-      // up being the scroller (mobile viewport quirks) the container's rect
-      // spans every card and would mark all bars in-view.
-      const viewTop = Math.max(rootRect.top, 0);
-      const viewBottom = Math.min(rootRect.bottom, window.innerHeight);
-      const cards = timeline.children;
-      const count = cards.length;
-      // Seed the scan near the expected first visible card (scroll fraction
-      // × count) instead of scanning from the top, then back up to the true
-      // boundary. Heights vary so the seed is approximate, but the walk is
-      // bounded by the estimation error instead of the full history, which
-      // matters for long sessions and for frames with a dirty layout (each
-      // rect read can otherwise force a layout of the whole timeline).
-      let start = 0;
-      if (count > 0 && root.scrollHeight > 0) {
-        const scrollViewTop = root.scrollTop + (viewTop - rootRect.top);
-        start = Math.min(
-          count - 1,
-          Math.max(0, Math.floor((scrollViewTop / root.scrollHeight) * count)),
-        );
-        while (start > 0) {
-          const prev = cards[start - 1].getBoundingClientRect();
-          if (prev.bottom <= viewTop) break;
-          start--;
-        }
-      }
-      let min = Infinity;
-      let max = -Infinity;
-      for (let i = start; i < count; i++) {
-        const card = cards[i];
-        const rect = card.getBoundingClientRect();
-        // Cards stack vertically in DOM order, so once one starts below the
-        // viewport every later card is below it too.
-        if (rect.top >= viewBottom) break;
-        if (rect.bottom <= viewTop) continue;
-        const sequence = Number((card as HTMLElement).dataset.sequence);
-        if (!Number.isFinite(sequence)) continue;
-        min = Math.min(min, sequence);
-        max = Math.max(max, sequence);
-      }
-      publish(min <= max ? { start: min, end: max } : null);
-    };
-    const schedule = () => {
-      if (frame === 0) frame = window.requestAnimationFrame(recompute);
-    };
-    schedule();
-    const resizeObserver = new ResizeObserver(schedule);
-    resizeObserver.observe(root);
-    // Scroll events do not bubble, but capture listeners on window fire for
-    // scrolls on any descendant, so this covers the content container and
-    // any ancestor that ends up scrolling instead. Filter out scrolls that
-    // cannot move the timeline so unrelated views never wake this up.
-    const onScroll = (event: Event) => {
-      const target = event.target;
-      if (
-        target === document ||
-        (target instanceof Node &&
-          (root.contains(target) || target.contains(root)))
-      ) {
-        schedule();
-      }
-    };
-    window.addEventListener("scroll", onScroll, {
-      passive: true,
-      capture: true,
-    });
-    window.addEventListener("resize", schedule);
-    return () => {
-      if (frame !== 0) window.cancelAnimationFrame(frame);
-      resizeObserver.disconnect();
-      window.removeEventListener("scroll", onScroll, true);
-      window.removeEventListener("resize", schedule);
-    };
-  }, [detailsOpen, visibleMessages, wide]);
 
   // Stable identity so the message dialog's focus effect only re-runs when the
   // message itself changes, not on every drawer re-render.
   const closeExpandedMessage = useCallback(() => setExpandedMessage(null), []);
 
   const usage = tokenUsage(session);
+  // Minimap entries: every visible timeline card, or every chat bubble (tool
+  // chip rows are not indexed).
   const messageEntries = useMemo(
     () =>
-      visibleMessages.map((message, index) => ({
-        message,
-        sequence: index + 1,
-      })),
-    [visibleMessages],
+      chatView
+        ? chatItems.flatMap((item) =>
+            item.type === "message"
+              ? [{ message: item.entry, sequence: item.sequence }]
+              : [],
+          )
+        : visibleMessages.map((message, index) => ({
+            message,
+            sequence: index + 1,
+          })),
+    [chatItems, chatView, visibleMessages],
   );
 
   const scrollToMessage = useCallback(
@@ -904,18 +533,18 @@ export function AgentHistoryDrawer({
         `[data-sequence="${sequence}"]`,
       );
       if (!(card instanceof HTMLElement)) return;
-      if (wide) {
+      if (masterDetail) {
         // Master-detail: the minimap selects the entry in the detail panel
         // and scrolls its row into view instead of flashing a highlight.
         const message = messageEntries[sequence - 1]?.message;
         if (message) setWideSelectedId(message.id);
         card.scrollIntoView({
-          behavior: minimapPrefersReducedMotion() ? "auto" : "smooth",
+          behavior: prefersReducedMotion() ? "auto" : "smooth",
           block: "nearest",
         });
         return;
       }
-      const reduceMotion = minimapPrefersReducedMotion();
+      const reduceMotion = prefersReducedMotion();
       card.scrollIntoView({
         behavior: reduceMotion ? "auto" : "smooth",
         block: "start",
@@ -929,7 +558,21 @@ export function AgentHistoryDrawer({
         setHighlightedSequence(null);
       }, 1200);
     },
-    [messageEntries, wide],
+    [masterDetail, messageEntries],
+  );
+  const minimapEntries = useMemo(
+    () =>
+      messageEntries.map(({ message }) => ({
+        id: message.id,
+        role: message.role,
+        label: historyEntryLabel(message),
+        text: message.text,
+      })),
+    [messageEntries],
+  );
+  const selectMinimapEntry = useCallback(
+    (index: number) => scrollToMessage(index + 1),
+    [scrollToMessage],
   );
 
   const updateWideRatioFromPointer = useCallback(
@@ -1014,20 +657,21 @@ export function AgentHistoryDrawer({
     </>
   ) : null;
 
+  const historySearch = (
+    <div className="agent-history-search">
+      <input
+        type="search"
+        aria-label="Search history messages"
+        placeholder="Search loaded messages"
+        title="Search loaded message text. Tool content is searchable after loading it."
+        value={query}
+        onChange={(event) => changeFilters(filters, event.currentTarget.value)}
+      />
+    </div>
+  );
   const historyFilters = (
     <>
-      <div className="agent-history-search">
-        <input
-          type="search"
-          aria-label="Search history messages"
-          placeholder="Search loaded messages"
-          title="Search loaded message text. Tool content is searchable after loading it."
-          value={query}
-          onChange={(event) =>
-            changeFilters(filters, event.currentTarget.value)
-          }
-        />
-      </div>
+      {historySearch}
       <AgentHistoryFilters
         filters={filters}
         counts={counts}
@@ -1040,13 +684,18 @@ export function AgentHistoryDrawer({
       />
     </>
   );
-  const historyMinimap =
-    messageEntries.length > 1 ? (
-      <AgentHistoryMinimap
-        entries={messageEntries}
-        visibleRange={visibleRange}
-        indicatorRef={minimapIndicatorRef}
-        onSelect={scrollToMessage}
+  // The timeline keeps a flat strip above its cards; the chat view gets the
+  // side rail beside its bubbles.
+  const historyMinimap = (orientation: "auto" | "horizontal") =>
+    minimapEntries.length > 1 ? (
+      <ConversationMinimap
+        entries={minimapEntries}
+        scrollerRef={contentRef}
+        itemsRef={timelineRef}
+        orientation={orientation}
+        label="Jump to message"
+        className={orientation === "horizontal" ? "agent-history-minimap" : ""}
+        onSelect={selectMinimapEntry}
       />
     ) : null;
   const historyCards = (
@@ -1067,37 +716,77 @@ export function AgentHistoryDrawer({
       ))}
     </div>
   );
-  const historyTimeline = (
-    <div className="agent-history-content" ref={contentRef}>
-      {loading && messages.length === 0 ? (
-        <div className="agent-history-state">
-          <span className="terminal-loading-dot" />
-          Loading messages
-        </div>
-      ) : messageEntries.length === 0 ? (
-        <div className="agent-history-state">
-          {messages.length > 0 ? (
-            <>
-              {query.trim()
+  const historyEmptyState =
+    loading && messages.length === 0 ? (
+      <div className="agent-history-state">
+        <span className="terminal-loading-dot" />
+        Loading messages
+      </div>
+    ) : visibleMessages.length === 0 ? (
+      <div className="agent-history-state">
+        {messages.length > 0 ? (
+          <>
+            {chatView
+              ? "No entries match the search."
+              : query.trim()
                 ? "No entries match the search and selected message types."
                 : "No entries match the selected message types."}
-              <button
-                type="button"
-                className="secondary-btn"
-                onClick={() => changeFilters(ALL_HISTORY_FILTERS, "")}
-              >
-                {query.trim() ? "Reset filters" : "Show all types"}
-              </button>
-            </>
-          ) : (
-            "No history entries were found in this session."
-          )}
+            <button
+              type="button"
+              className="secondary-btn"
+              onClick={() =>
+                // The chat view only clears its search; the timeline's
+                // hidden type filters keep their state.
+                changeFilters(chatView ? filters : ALL_HISTORY_FILTERS, "")
+              }
+            >
+              {chatView
+                ? "Clear search"
+                : query.trim()
+                  ? "Reset filters"
+                  : "Show all types"}
+            </button>
+          </>
+        ) : (
+          "No history entries were found in this session."
+        )}
+      </div>
+    ) : null;
+  const historyTimeline = (
+    <div className="agent-history-content" ref={contentRef}>
+      {historyEmptyState ?? historyCards}
+    </div>
+  );
+  const historyChat = (
+    <div
+      className="agent-history-messages"
+      role="region"
+      aria-label="History messages"
+    >
+      {historySearch}
+      {historyEmptyState ?? (
+        <div className="agent-history-chat-frame">
+          <AgentHistoryChat
+            items={chatItems}
+            listRef={contentRef}
+            contentRef={timelineRef}
+            highlightedSequence={highlightedSequence}
+            followKey={query}
+            toolLoading={toolEntryLoading}
+            onLoadTool={loadToolEntry}
+            onOpen={setExpandedMessage}
+          />
+          {historyMinimap("auto")}
         </div>
-      ) : (
-        historyCards
       )}
     </div>
   );
+  const changeView = (next: AgentHistoryView) => {
+    setView(next);
+    writeAgentHistoryView(next);
+    setDetailsOpen(false);
+    setExpandedMessage(null);
+  };
 
   // Wide layout: master-detail. The left column is a resizable list of
   // compact entries; the right column reads the selected entry in full.
@@ -1115,7 +804,7 @@ export function AgentHistoryDrawer({
     >
       <div className="agent-history-wide-list">
         {historyFilters}
-        {historyMinimap}
+        {historyMinimap("horizontal")}
         {historyTimeline}
       </div>
       <div
@@ -1186,12 +875,12 @@ export function AgentHistoryDrawer({
                 {messages.length > 0 ? (
                   <span
                     className="agent-history-count"
-                    aria-label={`${messageEntries.length} of ${messages.length} history entries`}
+                    aria-label={`${visibleMessages.length} of ${messages.length} history entries`}
                     title="Most recent 200 messages with their tool entries"
                   >
-                    {messageEntries.length === messages.length
+                    {visibleMessages.length === messages.length
                       ? messages.length
-                      : `${messageEntries.length}/${messages.length}`}
+                      : `${visibleMessages.length}/${messages.length}`}
                   </span>
                 ) : null}
               </strong>
@@ -1207,6 +896,21 @@ export function AgentHistoryDrawer({
             {pane.agent_status}
           </span>
           <div className="agent-history-actions">
+            <button
+              type="button"
+              className="agent-history-icon"
+              aria-label="Chat view"
+              aria-pressed={chatView && !detailsOpen}
+              title={
+                chatView && !detailsOpen ? "Show as timeline" : "Show as chat"
+              }
+              onClick={() =>
+                changeView(chatView && !detailsOpen ? "timeline" : "chat")
+              }
+              disabled={!hasSessionData}
+            >
+              <MessagesSquare size={14} />
+            </button>
             <button
               type="button"
               className="agent-history-icon"
@@ -1243,6 +947,18 @@ export function AgentHistoryDrawer({
           </div>
         </div>
 
+        {pane.agent === "codex" ? (
+          <CodexSessionLink
+            key={connectionClientScopeKey(
+              connectionClient,
+              pane.pane_id,
+              pane.terminal_id,
+            )}
+            paneId={pane.pane_id}
+            client={connectionClient}
+            onLinked={loadHistory}
+          />
+        ) : null}
         {unavailable ? (
           <div className="agent-history-unavailable" role="status">
             <strong>Session unavailable</strong>
@@ -1274,7 +990,9 @@ export function AgentHistoryDrawer({
           <>
             {error ? <div className="agent-history-error">{error}</div> : null}
             {!detailsOpen ? (
-              wide ? (
+              chatView ? (
+                historyChat
+              ) : wide ? (
                 wideMessagesPanel
               ) : (
                 <div
@@ -1283,7 +1001,7 @@ export function AgentHistoryDrawer({
                   aria-label="History messages"
                 >
                   {historyFilters}
-                  {historyMinimap}
+                  {historyMinimap("horizontal")}
                   {historyTimeline}
                 </div>
               )
@@ -1363,7 +1081,9 @@ export function AgentHistoryDrawer({
       </aside>
       <AgentMessageDialog
         message={
-          !wide && expandedMessage ? hydrateEntry(expandedMessage) : null
+          !masterDetail && expandedMessage
+            ? hydrateEntry(expandedMessage)
+            : null
         }
         onClose={closeExpandedMessage}
       />

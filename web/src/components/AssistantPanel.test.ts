@@ -835,7 +835,7 @@ if (process.env.HERDR_WORLD_ASSISTANT_ACTION_DOM_TEST !== "1") {
     const list = () =>
       container.querySelector<HTMLDivElement>(".assistant-panel-list")!;
     const wave = () =>
-      container.querySelector<HTMLDivElement>(".assistant-conversation-wave")!;
+      container.querySelector<HTMLDivElement>(".conversation-minimap-track")!;
     const listHeight = () =>
       wave()?.getAttribute("aria-orientation") === "horizontal" ? 168 : 200;
     const layout = () => {
@@ -930,9 +930,9 @@ if (process.env.HERDR_WORLD_ASSISTANT_ACTION_DOM_TEST !== "1") {
     const visible = () =>
       Array.from(
         container.querySelectorAll<HTMLElement>(
-          ".assistant-conversation-mark.is-visible",
+          ".conversation-minimap-mark.is-visible",
         ),
-        (mark) => mark.dataset.messageId,
+        (mark) => mark.dataset.entryId,
       );
     const stream = async () => {
       clientState.snapshot = {
@@ -1008,7 +1008,7 @@ if (process.env.HERDR_WORLD_ASSISTANT_ACTION_DOM_TEST !== "1") {
       await resize(600);
       expect(wave().getAttribute("aria-orientation")).toBe("horizontal");
       expect(
-        container.querySelector(".assistant-conversation-map.is-horizontal"),
+        container.querySelector(".conversation-minimap.is-horizontal"),
       ).not.toBeNull();
       expect(position).toBe(scrollHeight() - listHeight());
       await resize(601);
@@ -1030,11 +1030,12 @@ if (process.env.HERDR_WORLD_ASSISTANT_ACTION_DOM_TEST !== "1") {
       expect(
         container.querySelector("[role='tooltip']")?.textContent,
       ).toContain("third");
+      // The flat strip centers its preview instead of tracking the mark.
       expect(
         container
           .querySelector<HTMLElement>("[role='tooltip']")
           ?.style.getPropertyValue("--preview-position"),
-      ).toBe("62.5%");
+      ).toBe("");
       await React.act(async () =>
         wave().dispatchEvent(
           new browser.MouseEvent("click", {
@@ -1101,6 +1102,11 @@ if (process.env.HERDR_WORLD_ASSISTANT_ACTION_DOM_TEST !== "1") {
       expect(
         container.querySelector("[role='tooltip']")?.textContent,
       ).toContain("Message 40");
+      expect(
+        container
+          .querySelector<HTMLElement>("[role='tooltip']")
+          ?.style.getPropertyValue("--preview-position"),
+      ).toBe("50.625%");
       clientState.snapshot = {
         ...clientState.snapshot,
         messages: [
@@ -1132,7 +1138,7 @@ if (process.env.HERDR_WORLD_ASSISTANT_ACTION_DOM_TEST !== "1") {
       expect(visible()).toContain("message-40");
       expect(
         container.querySelector(
-          ".assistant-conversation-mark[data-message-id='message-0']",
+          ".conversation-minimap-mark[data-entry-id='message-0']",
         ),
       ).toBeNull();
 
@@ -2621,6 +2627,7 @@ test("assistant uses saved workspace permissions, guards IME sends, and hides wi
     spyOn(React, "useLayoutEffect").mockImplementation(() => {}),
     spyOn(React, "useId").mockReturnValue("mention-picker"),
     spyOn(React, "useMemo").mockImplementation((create) => create()),
+    spyOn(React, "useCallback").mockImplementation((callback) => callback),
   ];
   function visit(node: React.ReactNode) {
     React.Children.forEach(node, (child) => {

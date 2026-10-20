@@ -19,6 +19,11 @@ are optional because the merged PR history records their source.
 
 ### Changed
 
+- Refresh Roamgate source through `1a81c5da` after v0.8.7: add History chat and
+  shared conversation minimaps, workspace PR/MR status, Inspector refresh and
+  commit navigation, explicit Codex session linking and remote transcript lookup,
+  and mobile notification banners. Retain World runtime ownership and navigation.
+
 - Refresh Roamgate source through main `57327a0d` after v0.8.6: add Ranger
   Steer/Queue messages, collapsible model reasoning and selection-safe terminal
   repaint focus, plus clearer Message/Direct switching and shortcut visibility.

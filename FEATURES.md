@@ -272,7 +272,9 @@ commit a search selection. Press K in the recent switcher to convert it to searc
 Open Files, Changes, or Agent History with the TabBar Inspector button,
 `Cmd+Shift+B` on macOS, or workspace/agent context menus. The header identifies repository,
 branch/worktree, and checkout path. Inspector and Annotations leave the primary
-sidebar's visibility unchanged.
+sidebar's visibility unchanged. Workspace rows show the latest PR/MR status while
+keeping workspace names visible; Inspector commit navigation preserves focus and
+refreshes Files after changes.
 
 - Dock right/bottom, resize, or expand without unmounting the terminal. Header
   controls restore/close; Esc dismisses transient UI, not the Inspector.
@@ -300,6 +302,12 @@ See [resource ownership](docs/ARCHITECTURE.md#workspace-resource-ownership).
 - See Herdr-recognized identity and working/blocked/done/idle status in the tree,
   pane switcher, command menu, and Agent panel. Focus panes there or through
   browser completion notifications.
+- Switch Agent History between **Chat** and **Timeline**. Chat pairs tool calls
+  with results and shares Ranger's conversation minimap; Timeline keeps individual
+  records available. Use **Link Codex session** to preview a full conversation UUID
+  and confirm its association with the foreground Codex pane. This replaces the
+  existing link for all viewers. Codex lookup searches active and archived records
+  on the selected local/Unix SSH runtime; Windows SSH history remains unavailable.
 - Open Agent History with independent User/Agent/Tool filters (User/Agent enabled,
   Tool hidden initially), a message minimap, and on-demand tool details. The recent window
   counts 200 conversation entries, not associated tools; exports remain complete.

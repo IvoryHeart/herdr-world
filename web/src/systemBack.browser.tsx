@@ -18,10 +18,11 @@ const check = (condition: boolean, message: string) => {
 };
 const settle = () => new Promise((resolve) => setTimeout(resolve, 80));
 
-type Name = "terminal" | "composer" | "menu";
+type Name = "terminal" | "composer" | "navigation" | "menu";
 const levels: Record<Name, SystemBackLevel> = {
   terminal: "screen",
   composer: "panel",
+  navigation: "navigation",
   menu: "popup",
 };
 let open = new Set<Name>();
@@ -48,7 +49,9 @@ function show(names: Name[]) {
     root.render(
       <>
         <Layer name="terminal">
-          <Layer name="composer" />
+          <Layer name="composer">
+            <Layer name="navigation" />
+          </Layer>
         </Layer>
         <Layer name="menu" />
       </>,
@@ -78,6 +81,28 @@ async function run() {
   initializeLayoutPreferences();
   updateLayoutPreferences({ mode: "mobile" });
   root = createRoot(document.body.appendChild(document.createElement("div")));
+
+  {
+    const label = "Inspector navigation below transient menus";
+    await start();
+    show(["terminal", "composer", "navigation", "menu"]);
+    await settle();
+    for (const name of [
+      "menu",
+      "navigation",
+      "composer",
+      "terminal",
+    ] as const) {
+      await userBack();
+      check(
+        closed[closed.length - 1] === name && !open.has(name),
+        `${label}: expected ${name}, closed ${closed.join()}`,
+      );
+    }
+    check(at() === "/office" && !guarded(), `${label}: terminal route lost`);
+    await userBack();
+    check(at() === "/graph", `${label}: route required another Back`);
+  }
 
   {
     const label = "layers closed together";

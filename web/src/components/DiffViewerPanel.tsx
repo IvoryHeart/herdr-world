@@ -65,6 +65,7 @@ import {
 import { keyboardContextMenuPoint, treeKeyboardAction } from "./treeKeyboard";
 import { ActionsMenu } from "./ActionsMenu";
 import { ConfirmDialog } from "./ModalDialogs";
+import { ThemedSelect } from "./ThemedSelect";
 import "./DiffViewerPanel.css";
 
 export type ActiveDiffSelection = {
@@ -2121,22 +2122,24 @@ export const DiffViewerPanel = forwardRef<
       {diffScope === "branch-main" ? (
         <label className="diff-base-selector">
           <span>Compare against</span>
-          <select
+          <ThemedSelect
             aria-label="Comparison branch"
             value={baseBranch}
-            onChange={(event) => setBaseBranch(event.target.value)}
-          >
-            <option value="">
-              {resolvedBase && !baseBranch
-                ? `Automatic (${comparisonBranchLabel(resolvedBase)})`
-                : "Automatic"}
-            </option>
-            {baseBranches.map((branch) => (
-              <option key={branch} value={branch}>
-                {comparisonBranchLabel(branch)}
-              </option>
-            ))}
-          </select>
+            onChange={setBaseBranch}
+            options={[
+              {
+                value: "",
+                label:
+                  resolvedBase && !baseBranch
+                    ? `Automatic (${comparisonBranchLabel(resolvedBase)})`
+                    : "Automatic",
+              },
+              ...baseBranches.map((branch) => ({
+                value: branch,
+                label: comparisonBranchLabel(branch),
+              })),
+            ]}
+          />
         </label>
       ) : null}
 

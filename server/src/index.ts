@@ -302,6 +302,8 @@ const IMPORTANT_RPC_METHODS = new Set([
   "agent_session.get",
   "agent_turn.get",
   "agent_checkout.get",
+  "agent_session.link_preview",
+  "agent_session.link",
   "file.read",
   "git.diff_file",
   "git.commit_file",
@@ -1585,6 +1587,20 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
       sendReply({ id, result }, "agent-checkout-get");
     } catch (e) {
       sendError("agent-checkout-get-error", e);
+    }
+    return;
+  }
+  if (
+    method === "agent_session.link_preview" ||
+    method === "agent_session.link"
+  ) {
+    try {
+      const result = await (method === "agent_session.link_preview"
+        ? connection.agentSessions.previewLink(params ?? {})
+        : connection.agentSessions.link(params ?? {}, requestIsCurrent));
+      sendReply({ id, result }, method);
+    } catch (e) {
+      sendError("agent-session-link-error", e);
     }
     return;
   }

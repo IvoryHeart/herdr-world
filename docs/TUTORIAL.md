@@ -322,16 +322,24 @@ Watch Herdr's recognized status: `working` suggests activity, `blocked` needs
 attention, and `done`/`idle` suggest when to return. **Status is not verification:**
 `done` does not mean tests passed. Available states depend on agent integration.
 
-Open Agent History to find the explanation. Session Inspector offers Timeline,
+Open Agent History to find the explanation. Session Inspector offers Chat and Timeline,
 ATIF (a normalized trajectory), and raw transcript; original export preserves
 the source record. Use the [shortcut reference](../FEATURES.md#keyboard-shortcuts)
-for History, Files, and Changes on your platform.
+for History, Files, and Changes on your platform. Switch **Chat / Timeline** to
+read the conversation or inspect individual records. The conversation minimap
+jumps between loaded messages; it does not load older transcript pages.
+
+If Codex history is missing, expand **Link Codex session**, enter the full
+conversation UUID currently open in that pane and choose **Check session**.
+Review the directory, timestamp and transcript path, then **Confirm session link**.
+Keep Codex in the foreground and repeat the preview if the pane or session changes.
+The link replaces the pane's existing session association for all viewers.
 
 **You are done when:** you found the explanation, not just the last terminal line.
 
 > Inspection supports Codex, Claude, Kimi, Grok Build, Pi, and Antigravity CLI with readable records.
 > Follow missing-metadata integration hints. SSH reads Herdr-reported paths and
-> Pi ID lookups remotely; other local ID/directory fallbacks may miss remote
+> Codex and Pi ID lookups remotely; other local ID/directory fallbacks may miss remote
 > transcripts. See [session inspection](../FEATURES.md#agent-awareness-and-session-inspection).
 
 ### 2.3 Read the file, then the diff

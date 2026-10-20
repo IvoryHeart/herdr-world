@@ -96,3 +96,15 @@ trusted control PR updates the applicable artifact pins, checks upstream advisor
 and runs workflow, delivery and platform publication checks. Revisit on the next
 source sync, an artifact-action advisory or a publication throttling failure.
 The release-note assessment is not a universal vulnerability audit or owner approval.
+
+## Assessment for source 1a81c5da (20 October 2026)
+
+The nine commits after 57327a0d contain no workflow/action updates or React
+version changes. The action-release assessment above still applies; no new
+security fix or platform requirement in this range changes the retained control
+divergence. World main's newer delivery controls are merged unchanged. React 18
+remains required by World policy: the new History ref types and Files callbacks
+are adapted to 18, and qualified focus/browser regressions remain required.
+The release-only v0.8.7 version and upstream asset-budget bump are adapted to
+World's own release lifecycle and existing enforced budgets. These outstanding
+workflow and React divergences remain proposals for owner approval.

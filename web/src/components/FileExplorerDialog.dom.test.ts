@@ -19,6 +19,7 @@ import {
 } from "../../../server/src/workspace/local-files";
 import { bridge, type ConnectionClient } from "../api";
 import { __storeTesting, store } from "../store";
+import { publishLastStepCompletion } from "../lastStepCompletionStore";
 import { WORKSPACE_PATH_DRAG_TYPE } from "../workspacePathDrag";
 import { requestFilePreview } from "./fileExplorerResources";
 
@@ -75,6 +76,12 @@ if (process.env.ROAMGATE_FILE_EXPLORER_DOM_TEST !== "1") {
     let activeMoves = 0;
     let peakMoves = 0;
     let mkdirDelay: Promise<void> | undefined;
+    let holdListings = false;
+    const heldListings: Array<{
+      snapshot: Promise<unknown>;
+      resolve: (value: unknown) => void;
+      reject: (reason: Error) => void;
+    }> = [];
     const calls: Array<{ method: string; params: Record<string, unknown> }> =
       [];
     const client: ConnectionClient = {
@@ -116,7 +123,16 @@ if (process.env.ROAMGATE_FILE_EXPLORER_DOM_TEST !== "1") {
             ),
           "git.diff_summary": async () => ({ entries: [], counts: {} }),
         };
-        const task = handlers[method]!(params);
+        let task = handlers[method]!(params);
+        if (method === "file.list" && holdListings) {
+          const response = Promise.withResolvers<unknown>();
+          heldListings.push({
+            snapshot: task,
+            resolve: response.resolve,
+            reject: response.reject,
+          });
+          task = response.promise;
+        }
         if (method === "file.move")
           peakMoves = Math.max(peakMoves, ++activeMoves);
         pending.add(task);
@@ -144,6 +160,24 @@ if (process.env.ROAMGATE_FILE_EXPLORER_DOM_TEST !== "1") {
       });
       await act(async () => {
         while (pending.size) await Promise.allSettled([...pending]);
+      });
+    }
+    async function holdStepListings() {
+      const start = heldListings.length;
+      holdListings = true;
+      try {
+        await act(async () => publishLastStepCompletion("local", "w1"));
+      } finally {
+        holdListings = false;
+      }
+      const listings = heldListings.slice(start);
+      expect(listings.length).toBeGreaterThan(1);
+      await Promise.all(listings.map((listing) => listing.snapshot));
+      return listings;
+    }
+    async function releaseListings(listings: typeof heldListings) {
+      await act(async () => {
+        for (const listing of listings) listing.resolve(await listing.snapshot);
       });
     }
     async function setFolderName(name: string) {
@@ -496,6 +530,88 @@ if (process.env.ROAMGATE_FILE_EXPLORER_DOM_TEST !== "1") {
       expect(selected()).toEqual(["a.txt"]);
       await update(() => click(row("c.txt"), { shiftKey: true }));
       expect(selected()).toEqual(["a.txt", "c.txt"]);
+      await writeFile(join(directory, "step.txt"), "new root file");
+      await writeFile(join(directory, "target/step.txt"), "new nested file");
+      await rm(join(directory, "target/b.txt"));
+      const callsBeforeStep = calls.length;
+      await update(() => {
+        publishLastStepCompletion("other-connection", "w1");
+        publishLastStepCompletion("local", "other-workspace");
+      });
+      expect(calls).toHaveLength(callsBeforeStep);
+      await update(() => publishLastStepCompletion("local", "w1"));
+      expect(row("step.txt")).toBeDefined();
+      expect(row("target/step.txt")).toBeDefined();
+      expect(
+        container.querySelector("[data-file-path='target/b.txt']"),
+      ).toBeNull();
+      expect(selected()).toEqual(["a.txt", "c.txt"]);
+      expect(
+        calls
+          .slice(callsBeforeStep)
+          .some((call) => call.method === "git.diff_summary"),
+      ).toBe(true);
+      const earlierListings = await holdStepListings();
+      await writeFile(join(directory, "newer-step.txt"), "new root file");
+      await writeFile(
+        join(directory, "target/newer-step.txt"),
+        "new nested file",
+      );
+      await rm(join(directory, "step.txt"));
+      const newerListings = await holdStepListings();
+      await releaseListings(newerListings);
+      expect(row("newer-step.txt")).toBeDefined();
+      expect(row("target/newer-step.txt")).toBeDefined();
+      await releaseListings(earlierListings);
+      expect(row("newer-step.txt")).toBeDefined();
+      expect(row("target/newer-step.txt")).toBeDefined();
+      expect(container.querySelector("[data-file-path='step.txt']")).toBeNull();
+      expect(selected()).toEqual(["a.txt", "c.txt"]);
+
+      const failingListings = await holdStepListings();
+      const pendingListings = await holdStepListings();
+      await act(async () => {
+        for (const listing of failingListings)
+          listing.reject(new Error("Superseded listing failed"));
+      });
+      expect(container.textContent).not.toContain("Superseded listing failed");
+      expect(row("target").querySelector(".row-spinner")).not.toBeNull();
+      await releaseListings(pendingListings);
+      expect(row("target").querySelector(".row-spinner")).toBeNull();
+
+      await createLocalDirectory(directory, "target", "hydrating");
+      await writeFile(join(directory, "target/hydrating/active.txt"), "active");
+      const hydrationStart = heldListings.length;
+      holdListings = true;
+      try {
+        await act(async () => {
+          root.render(
+            createElement(FileExplorerPanel, {
+              open: true,
+              workspaceId: "w1",
+              activePath: "target/hydrating/active.txt",
+              onClose: () => {},
+            }),
+          );
+        });
+      } finally {
+        holdListings = false;
+      }
+      const hydrationListings = heldListings.slice(hydrationStart);
+      expect(hydrationListings).toHaveLength(1);
+      await Promise.all(hydrationListings.map((listing) => listing.snapshot));
+      await writeFile(join(directory, "target/hydrating/new.txt"), "new");
+      await rm(join(directory, "target/hydrating/active.txt"));
+      const refreshedHydration = await holdStepListings();
+      await releaseListings(refreshedHydration);
+      expect(row("target/hydrating/new.txt")).toBeDefined();
+      await releaseListings(hydrationListings);
+      expect(row("target/hydrating/new.txt")).toBeDefined();
+      expect(
+        container.querySelector(
+          "[data-file-path='target/hydrating/active.txt']",
+        ),
+      ).toBeNull();
       await update(() => {
         transfer = dragStart("a.txt");
       });
@@ -522,6 +638,11 @@ if (process.env.ROAMGATE_FILE_EXPLORER_DOM_TEST !== "1") {
       await update(() => {
         drag(row("target"), "drop", transfer);
       });
+      const callsAfterSwitch = calls.length;
+      await update(() => publishLastStepCompletion("local", "w1"));
+      expect(calls).toHaveLength(callsAfterSwitch);
+      await update(() => publishLastStepCompletion("local", "w2"));
+      expect(calls.length).toBeGreaterThan(callsAfterSwitch);
       expect(calls.filter((call) => call.method === "file.move")).toHaveLength(
         movesBeforeSwitch,
       );

@@ -905,14 +905,18 @@
       "properties": "Atomic publication and session identity; old reports cannot overwrite newer state",
       "existingTests": [
         "server/src/agent/session-history.test.ts",
+        "server/src/agent/codex-session-link.test.ts",
+        "server/src/agent/codex-session.test.ts",
+        "web/src/components/AgentHistoryChat.test.ts",
+        "web/src/components/ConversationMinimap.test.ts",
         "server/src/agent/checkout-context.test.ts",
         "server/src/herdr/task-summary.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/182",
       "technique": "alternative",
-      "assessment": "direct report/session parsing/publication fixtures; runtime admission delegated to qualified-operation",
+      "assessment": "direct report/session parsing/publication and one-shot Codex preview/confirmation fixtures; runtime admission delegated to qualified-operation",
       "status": "shared-model",
-      "remaining": "Session identity is a distinct consumer guard; parsing all external formats is direct fixture evidence, not a manager guarantee.",
+      "remaining": "The external runtime cannot atomically compare the foreground process and report a link; preview/confirmation tests do not claim to close that final RPC race. Session identity is a distinct consumer guard; parsing all external formats is direct fixture evidence, not a manager guarantee.",
       "requiredChecks": ["bun run check", "bun run verification:gate"],
       "partialEvidence": {
         "models": ["quint/runtime-leases.qnt"],
@@ -922,6 +926,10 @@
         ],
         "tests": [
           "server/src/agent/session-history.test.ts",
+          "server/src/agent/codex-session-link.test.ts",
+          "server/src/agent/codex-session.test.ts",
+          "web/src/components/AgentHistoryChat.test.ts",
+          "web/src/components/ConversationMinimap.test.ts",
           "server/src/agent/checkout-context.test.ts",
           "server/src/herdr/task-summary.test.ts"
         ],
