@@ -28,9 +28,14 @@ const unavailableObservability = {
   totalUsage: 0,
 };
 
-test.skipIf(!chrome).each([[1440], [390]])(
-  "Board renders, settles, folds, tidies and zooms at %ipx",
-  async (width) => {
+test.skipIf(!chrome).each([
+  [1440, ""],
+  [390, ""],
+  // Reduced motion: moves land at once, and still reach their places.
+  [1440, " with reduced motion"],
+])(
+  "Board renders, settles, folds, tidies and zooms at %ipx%s",
+  async (width, motion) => {
     const dir = await mkdtemp(join(tmpdir(), "board-test-"));
     const assets = new Map<string, Blob>();
     const result = Promise.withResolvers<unknown>();
@@ -73,6 +78,7 @@ test.skipIf(!chrome).each([[1440], [390]])(
           chrome!,
           "--headless=new",
           `--window-size=${width},900`,
+          ...(motion ? ["--force-prefers-reduced-motion"] : []),
           "--enable-webgl",
           "--use-angle=swiftshader",
           "--enable-unsafe-swiftshader",

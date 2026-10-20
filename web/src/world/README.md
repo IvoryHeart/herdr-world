@@ -33,6 +33,7 @@ Office view (`herdrOfficeProjection.ts`, `officeRoomActions.ts`,
 | Needs-you rail and peek | [TownRail.tsx](town/TownRail.tsx) and [TownPeek.tsx](town/TownPeek.tsx); [townChat.ts](town/townChat.ts) reads pane screens and sends one-tap answers through each pane's own connection and generation; [terminalComposerRequest.ts](terminalComposerRequest.ts) asks the pane's terminal to open its composer. | [Town browser fixture](town/TownCanvas.browser.tsx) |
 | Herdr-to-Town data | [herdrOfficeProjection.ts](herdrOfficeProjection.ts) projects qualified topology and pane devices with `TOWN_PRESENTATION_BOUNDS`; [townModel.ts](town/townModel.ts) indexes presented rooms, desks, seats and per-room counts. | [Projection tests](herdrOfficeProjection.test.ts) |
 | Town placement | [townLayout.ts](town/townLayout.ts) places buildings, rooms, desk cells, lounge and reception from native order, keeping desks in place while a scene is live. | [Layout tests](town/townLayout.test.ts) |
+| Pointer input | `TownCanvas` hit-tests the canvas and feeds World's shared gesture machine; [townGesture.ts](town/townGesture.ts) holds Town's targets (a hit, and the desk or agent a drag would carry) and thresholds. | [Shared cases](interaction/gesture.test.ts), [Town browser test](town/TownCanvas.test.ts) |
 | Camera and zoom levels | [townCamera.ts](town/townCamera.ts) owns pan, zoom about a point, flights and the town/overview/room/desk thresholds. | [Camera tests](town/townCamera.test.ts) |
 | Agent locations and movement | [townActors.ts](town/townActors.ts) seats, queues and walks agents (presentation only) with per-building pathfinding. | [Actor tests](town/townActors.test.ts) |
 | Pixi drawing and art | [townRenderer.ts](town/townRenderer.ts) owns renderer lifetime and per-frame updates; [townPaint.ts](town/townPaint.ts) bakes ground, interiors, façades and roofs; [townSprites.ts](town/townSprites.ts) holds the generated pixel art. See [world asset provenance](../../../docs/world-assets.md). | [Town browser test](town/TownCanvas.test.ts) |
@@ -79,10 +80,10 @@ only fills in cards it has not placed before.
 | View composition, cards, selection and keyboard | [BoardView.tsx](BoardView.tsx) owns the cards, toolbar, notes, strings and the frame's paint; [board/board.css](board/board.css) styles `.board-*`. | [Board browser test](BoardView.test.ts) |
 | Herdr-to-Board data | `projectBoard` in [board/boardModel.ts](board/boardModel.ts) builds hosts, workspaces, tabs and pane rows with qualified keys (`boardTabKey` qualifies a tab whose ID collides with a workspace ID). | [Model tests](board/boardModel.test.ts) |
 | Placement and Tidy | `placeNew` and `freeSpots` in [board/boardPlacement.ts](board/boardPlacement.ts) place new cards around their parents through a spatial index; [board/boardPhysics.ts](board/boardPhysics.ts) settles overlaps. | [Placement tests](board/boardPlacement.test.ts), [physics tests](board/boardPhysics.test.ts) |
-| Pointer gestures | [board/boardGesture.ts](board/boardGesture.ts) turns pointer events into press, pan, pinch, drag and taps. | [Gesture tests](board/boardGesture.test.ts) |
+| Pointer gestures | World's shared machine in [interaction/gesture.ts](interaction/gesture.ts) turns pointer events into press, pan and fling, pinch, drag (a touch hold lifts; a mouse drags past 6 px), lines, taps and double taps. Board's targets and thresholds are in [board/boardGesture.ts](board/boardGesture.ts). | [Shared cases (Town's config)](interaction/gesture.test.ts), [Board cases](board/boardGesture.test.ts) |
 | Inspector line anchors | [board/boardAnchors.ts](board/boardAnchors.ts) resolves an Inspector's node to a card, pane row or folded workspace. | [Anchor tests](board/boardAnchors.test.ts) |
 | Notes, strings and Send | [board/boardDrafts.ts](board/boardDrafts.ts) keeps unsent text; the service stores the board and sends notes in [board-store.ts](../../../server/src/world/board-store.ts), [board-send.ts](../../../server/src/world/board-send.ts) and [board-start.ts](../../../server/src/world/board-start.ts). | [Draft tests](board/boardDrafts.test.ts), [store](../../../server/src/world/board-store.test.ts), [send](../../../server/src/world/board-send.test.ts) and [start](../../../server/src/world/board-start.test.ts) tests |
-| Frames and the event trace | [board/boardScheduler.ts](board/boardScheduler.ts) runs a frame per batch of invalidation reasons; [board/boardTrace.ts](board/boardTrace.ts) and [BoardTraceOverlay.tsx](board/BoardTraceOverlay.tsx) record and show events with `?debug=board`. | [Scheduler tests](board/boardScheduler.test.ts) |
+| Frames | [board/boardScheduler.ts](board/boardScheduler.ts) is Board's client of World's frame scheduler: a state frame per batch of invalidation reasons, motion frames while cards glide. | [Scheduler tests](board/boardScheduler.test.ts) |
 
 ### Board at scale
 
@@ -102,10 +103,28 @@ cache. Cards mount in their own container, so React appends them as one subtree.
 `ProductionContexts.board.test.ts` holds this path to the 200 ms p95 / 500 ms
 maximum input budget at 64 hosts.
 
+## Development tools
+
+Development builds only (`devtools/`). [devtools/flag.ts](devtools/flag.ts) is the
+one file a release build keeps: `DEVTOOLS` is false there, and Vite aliases
+[devtools/trace.ts](devtools/trace.ts) and
+[devtools/TraceOverlay.tsx](devtools/TraceOverlay.tsx) to the inert
+[devtools/release.ts](devtools/release.ts), so no trace, overlay, menu item or
+switch ships. Views record only under `if (DEVTOOLS)`, so their recording code
+drops out too; gesture steps go through `traceGesture` in the trace module.
+[devtools/renderer.ts](devtools/renderer.ts) gates Town's renderer counters the
+same way. Each view's trace is a bounded, page-local ring of input, gesture
+transitions, effects, frames with the reasons they were drawn, and errors:
+Board's is under its ⋯ menu, Town's under the common settings menu, and
+`?debug=board` or `?debug=town` starts one. `scripts/check-web-assets.mjs` fails a
+release build whose assets carry the devtools marker or any trace call with a
+literal kind (`.record("…"`). Tests: [trace tests](devtools/trace.test.ts)
+and the asset check's tests.
+
 ## Shared frames and acceptance budgets
 
 [worldFrameScheduler.ts](worldFrameScheduler.ts) shares one task/rAF queue across
-canvas clients, prioritizes state over motion, and yields after eight milliseconds
+Town's and Board's frames, prioritizes state over motion, and yields after eight milliseconds
 of client work. Hidden/offscreen clients retain pending work without painting;
 reduced motion excludes decorative requests. A shared terminal quiet signal stops
 decorative animation while typing. Per-node debug snapshots are published only

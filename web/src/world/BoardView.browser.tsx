@@ -355,6 +355,12 @@ async function rest(limit = 600) {
   let still = 0;
   for (let i = 0; i < limit; i++) {
     await frame();
+    // Board says when it has nothing left to draw: its frames on World's
+    // shared scheduler can skip vsyncs, so stillness alone is not rest.
+    if (host.querySelector<HTMLElement>(".board")?.dataset.moving === "true") {
+      still = 0;
+      continue;
+    }
     // Cards and the camera both: a flight is not rest.
     const now =
       [...host.querySelectorAll<HTMLElement>(".board-card")]
@@ -1585,10 +1591,15 @@ async function run() {
       const others = [
         ...host.querySelectorAll<HTMLElement>(".board-card:not(.board-note)"),
       ]
-        .filter(
-          (el) =>
-            el.offsetParent !== null && getComputedStyle(el).display !== "none",
-        )
+        // Cards the overview hides (its tabs) are not under anything.
+        .filter((el) => {
+          const style = getComputedStyle(el);
+          return (
+            el.offsetParent !== null &&
+            style.display !== "none" &&
+            style.visibility !== "hidden"
+          );
+        })
         .map((el) => el.getBoundingClientRect());
       return notes.some((n) =>
         others.some(
@@ -1683,7 +1694,7 @@ async function run() {
     .find((b) => b.textContent?.includes("Event trace"))!
     .click();
   await waitFor(
-    () => Boolean(host.querySelector(".board-trace")),
+    () => Boolean(host.querySelector(".world-trace")),
     "Event trace opens the trace",
   );
   const tapAt = emptySpot();
@@ -1692,19 +1703,19 @@ async function run() {
   await waitFor(
     () =>
       Boolean(
-        host.querySelector(".board-trace")?.textContent?.includes("input"),
+        host.querySelector(".world-trace")?.textContent?.includes("input"),
       ),
     "the trace records input",
   );
   check(
-    host.querySelector(".board-trace-head")!.textContent!.includes("idle"),
+    host.querySelector(".world-trace-head")!.textContent!.includes("idle"),
     "the trace shows the gesture state",
   );
   host
     .querySelector<HTMLButtonElement>('[aria-label="Close the event trace"]')!
     .click();
   await waitFor(
-    () => !host.querySelector(".board-trace"),
+    () => !host.querySelector(".world-trace"),
     "closing turns the trace off",
   );
 

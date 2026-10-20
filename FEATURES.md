@@ -45,7 +45,8 @@ released availability.
 
 - **Board** (`/board`) shows hosts as zones, workspaces as cards and tabs as
   cards around their workspace, beside your notes. Cards are elastic while you
-  move them and settle within a second; workspaces fold into a count and open
+  move them (on phones, hold a card still before dragging it; a quick swipe
+  pans the board, as in Town) and settle within a second; workspaces fold into a count and open
   into free space; Tidy (with Undo) rearranges a workspace or the board and
   carries strung notes along. Zoomed out, workspaces show a square per pane.
   - Tabs list each pane as a row; plain-shell tabs look like terminals; only a
@@ -67,7 +68,8 @@ released availability.
   - Drag a tab onto another workspace of its host to move it (asks first).
   - After a Herdr restart, strings that cannot be confirmed ask Keep or Detach;
     strings whose target closed wait in Needs a home. Selecting a card opens
-    the shared Inspector. **⋯ → Event trace** records input for bug reports.
+    the shared Inspector. Development builds add an event trace for bug reports
+    ([development tools](docs/development.md#development-tools)).
   See the [Board exercise](./docs/TUTORIAL.md#board).
 
 - **Desk** organizes the filtered hosts' agents by what

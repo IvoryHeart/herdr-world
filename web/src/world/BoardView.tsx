@@ -53,15 +53,19 @@ import {
   type BoardWorkspace,
 } from "./board/boardModel";
 import {
+  HOLD_MS,
   initialGesture,
   stepGesture,
+  waitsForHold,
   type GestureEffect,
   type GestureEvent,
   type GestureTarget,
 } from "./board/boardGesture";
 import { createFrameLoop, type FrameLoop } from "./board/boardScheduler";
-import { createTrace, traceRequested, TRACE_KEY } from "./board/boardTrace";
-import { BoardTraceOverlay } from "./board/BoardTraceOverlay";
+import { worldMotionPreference } from "./worldFrameScheduler";
+import { DEVTOOLS, NO_TRACE } from "./devtools/flag";
+import { openTrace, rememberTrace, traceGesture } from "./devtools/trace";
+import { TraceOverlay } from "./devtools/TraceOverlay";
 import {
   KEPT_DRAFTS_KEY,
   createDraftStore,
@@ -535,32 +539,28 @@ export default function BoardView({
     over: StringEnd | null;
   } | null>(null);
   const gesture = useRef(initialGesture());
+  const holdTimer = useRef(0);
+  /** A host zone's place before its label drag, for a cancelled drag. */
+  const hostStart = useRef<{ key: string; anchor?: Point } | null>(null);
+  useEffect(() => () => window.clearTimeout(holdTimer.current), []);
   const pinchStart = useRef<{ cam: Camera; mid: Point } | null>(null);
-  const trace = useMemo(() => {
-    const created = createTrace();
-    let stored: string | null = null;
-    try {
-      stored = worldLocalStorage.getItem(TRACE_KEY);
-    } catch {
-      // Storage unavailable: only the URL can turn tracing on.
-    }
-    created.enabled = traceRequested(window.location.search, stored);
-    return created;
-  }, []);
+  // The event trace exists only in development builds (devtools/flag.ts).
+  const trace = useMemo(() => (DEVTOOLS ? openTrace("board") : NO_TRACE), []);
   useEffect(() => setTracing(trace.enabled), [trace]);
   const setTrace = (on: boolean) => {
-    trace.enabled = on;
-    if (!on) trace.clear();
+    if (!DEVTOOLS) return;
+    rememberTrace("board", trace, on);
     setTracing(on);
-    try {
-      worldLocalStorage.setItem(TRACE_KEY, on ? "on" : "off");
-    } catch {
-      // Storage unavailable: the choice lasts for this page.
-    }
   };
   // Anything that changes what is on screen asks for a frame.
   const loopRef = useRef<FrameLoop | null>(null);
-  const invalidate = (reason: string) => loopRef.current?.invalidate(reason);
+  // data-moving says whether the board still has work to draw: true from a
+  // request until a frame finds nothing moving (tests wait on it).
+  const invalidate = (reason: string) => {
+    const board = boardRef.current;
+    if (board && board.dataset.moving !== "true") board.dataset.moving = "true";
+    loopRef.current?.invalidate(reason);
+  };
   const warmUp = () => {
     warm(physics.current);
     invalidate("physics");
@@ -1015,11 +1015,17 @@ export default function BoardView({
   const frame = (dt: number, reasons: ReadonlySet<string>) => {
     const m = latest.current.model;
     const holdingKey = held.current?.key ?? null;
-    if (trace.enabled && [...reasons].some((reason) => reason !== "animate"))
+    if (
+      DEVTOOLS &&
+      trace.enabled &&
+      [...reasons].some((reason) => reason !== "animate")
+    )
       trace.record("frame", [...reasons]);
+    // Reduced motion: moves land at once rather than animate.
+    const still = worldMotionPreference().matches;
     for (const [key, tw] of tweens.current) {
       const card = cards.current.get(key);
-      tw.t += dt;
+      tw.t = still ? TWEEN_SECONDS : tw.t + dt;
       const k = 1 - Math.pow(1 - Math.min(1, tw.t / TWEEN_SECONDS), 3);
       if (card) {
         card.x = tw.fx + (tw.tx - tw.fx) * k;
@@ -1038,17 +1044,27 @@ export default function BoardView({
           holdingKey === key;
         return card;
       });
-      for (const key of [
-        ...stepPhysics(list, physics.current, dt / 2),
-        ...stepPhysics(list, physics.current, dt / 2),
-      ])
-        keepWhereItIs(key, m);
-      if (cool(list, physics.current, dt, Boolean(holdingKey)))
-        for (const card of list) if (!card.fixed) keepWhereItIs(card.key, m);
+      // Fixed steps of at most 1/30 s: a late frame (a busy page, World's
+      // shared frame budget) covers the time that passed, and the springs
+      // stay stable.
+      const steps = Math.max(1, Math.ceil(dt * 30 - 1e-6));
+      for (let i = 0; i < steps && physics.current.heat > 0; i++) {
+        const step = dt / steps;
+        for (const key of [
+          ...stepPhysics(list, physics.current, step / 2),
+          ...stepPhysics(list, physics.current, step / 2),
+        ])
+          keepWhereItIs(key, m);
+        if (cool(list, physics.current, step, Boolean(holdingKey)))
+          for (const card of list) if (!card.fixed) keepWhereItIs(card.key, m);
+      }
       gliding = list.some((card) => card.gliding);
     }
     const goal = camGoal.current;
-    if (goal) {
+    if (goal && still) {
+      cam.current = goal;
+      camGoal.current = null;
+    } else if (goal) {
       const k = 1 - Math.pow(0.0015, dt);
       const c = cam.current;
       cam.current = {
@@ -1064,6 +1080,7 @@ export default function BoardView({
         camGoal.current = null;
       }
     }
+    if (still) panVelocity.current = null;
     const pv = panVelocity.current;
     if (pv) {
       cam.current = {
@@ -1092,15 +1109,24 @@ export default function BoardView({
   // One loop per mount: a cleanup stops it for good, and React may mount a
   // component twice (development, remounts), so each mount makes its own.
   useEffect(() => {
+    const element = boardRef.current;
+    if (!element) return;
     const loop = createFrameLoop({
-      frame: (dt, reasons) => frameRef.current(dt, reasons),
+      element,
+      frame: (dt, reasons) => {
+        const moving = frameRef.current(dt, reasons);
+        const next = String(moving);
+        if (element.dataset.moving !== next) element.dataset.moving = next;
+        return moving;
+      },
       onError: (error, reasons) => {
         console.error("Board frame failed", error);
-        trace.record("error", {
-          where: "frame",
-          reasons: [...reasons],
-          message: String(error),
-        });
+        if (DEVTOOLS)
+          trace.record("error", {
+            where: "frame",
+            reasons: [...reasons],
+            message: String(error),
+          });
       },
     });
     loopRef.current = loop;
@@ -1588,25 +1614,18 @@ export default function BoardView({
     return { kind: "empty" };
   }
   /** Frequent effects are left out of the trace to keep it readable. */
-  const QUIET = new Set([
-    "panBy",
-    "moveCard",
-    "moveString",
-    "pinch",
-    "moveHost",
-    "stopCamera",
-  ]);
   function feed(event: GestureEvent) {
     const before = gesture.current.mode.name;
     const result = stepGesture(gesture.current, event);
     gesture.current = result.state;
-    if (trace.enabled) {
-      if (event.type !== "move") trace.record("input", event);
-      if (result.state.mode.name !== before)
-        trace.record("gesture", `${before} → ${result.state.mode.name}`);
-      for (const effect of result.effects)
-        if (!QUIET.has(effect.type)) trace.record("effect", effect);
-    }
+    if (DEVTOOLS)
+      traceGesture(
+        trace,
+        before,
+        result.state.mode.name,
+        event,
+        result.effects,
+      );
     for (const effect of result.effects) apply(effect);
   }
   const atOf = (event: ReactPointerEvent) => ({
@@ -1632,6 +1651,16 @@ export default function BoardView({
       primary: event.isPrimary,
       pointerType: event.pointerType,
     });
+    // Touch: a card held still lifts; the machine ignores a hold that came
+    // too late (the finger moved or lifted first).
+    window.clearTimeout(holdTimer.current);
+    if (waitsForHold(target, event.pointerType)) {
+      const id = event.pointerId;
+      holdTimer.current = window.setTimeout(
+        () => feed({ type: "hold", id, time: performance.now() }),
+        HOLD_MS,
+      );
+    }
   };
   const onPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (!gesture.current.pointers.has(event.pointerId)) return;
@@ -1643,6 +1672,7 @@ export default function BoardView({
     });
   };
   const onPointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
+    window.clearTimeout(holdTimer.current);
     if (!gesture.current.pointers.has(event.pointerId)) return;
     feed({
       type: "up",
@@ -1652,6 +1682,7 @@ export default function BoardView({
     });
   };
   const onPointerCancel = (event: ReactPointerEvent<HTMLDivElement>) => {
+    window.clearTimeout(holdTimer.current);
     if (!gesture.current.pointers.has(event.pointerId)) return;
     feed({ type: "cancel", id: event.pointerId });
   };
@@ -1709,6 +1740,7 @@ export default function BoardView({
         tweens.current.delete(effect.key);
         card.gliding = false;
         cardEls.current.get(effect.key)?.classList.add("board-lifted");
+        if (effect.held) navigator.vibrate?.(12);
         moveHeld(effect.at);
         return;
       }
@@ -1726,6 +1758,7 @@ export default function BoardView({
         tap(effect.target);
         return;
       case "doubleTap":
+        boardRef.current?.classList.remove("board-panning");
         void createNote(toWorld(effect.at.x, effect.at.y));
         return;
       case "startString":
@@ -1786,6 +1819,12 @@ export default function BoardView({
           x: 0,
           y: 0,
         };
+        // Remember where the zone was, in case the drag is cancelled.
+        if (hostStart.current?.key !== effect.key)
+          hostStart.current = {
+            key: effect.key,
+            anchor: layout.current.anchors.get(effect.key),
+          };
         layout.current.anchors.set(effect.key, {
           x: anchor.x + effect.dx / cam.current.s,
           y: anchor.y + effect.dy / cam.current.s,
@@ -1794,9 +1833,22 @@ export default function BoardView({
         return;
       }
       case "dropHost":
+        hostStart.current = null;
         warmUp();
         scheduleSave();
         return;
+      case "cancelHost": {
+        // Cancelled (lost pointer, a second finger): put the zone back.
+        const start = hostStart.current;
+        hostStart.current = null;
+        if (start?.key === effect.key) {
+          if (start.anchor)
+            layout.current.anchors.set(effect.key, start.anchor);
+          else layout.current.anchors.delete(effect.key);
+          warmUp();
+        }
+        return;
+      }
       case "pickString":
         setPicked(effect.id);
         return;
@@ -2182,7 +2234,7 @@ export default function BoardView({
   const report = async (pending: Promise<string | null>) => {
     const problem = await pending;
     if (problem) {
-      trace.record("save", { problem });
+      if (DEVTOOLS) trace.record("save", { problem });
       setToast({ text: problem });
     }
   };
@@ -2246,7 +2298,7 @@ export default function BoardView({
       },
     ]);
     if (!problem) return;
-    trace.record("save", { problem });
+    if (DEVTOOLS) trace.record("save", { problem });
     const exists = latest.current.saved?.notes.some((n) => n.id === started.id);
     keepDraft({ started, text, reason: exists ? "changed" : "deleted" });
   };
@@ -3598,20 +3650,23 @@ export default function BoardView({
                 >
                   Status pulses <span className="board-switch" />
                 </button>
-                <button
-                  type="button"
-                  role="menuitemcheckbox"
-                  aria-checked={tracing}
-                  onClick={() => setTrace(!tracing)}
-                >
-                  Event trace <span className="board-switch" />
-                </button>
+                {DEVTOOLS ? (
+                  <button
+                    type="button"
+                    role="menuitemcheckbox"
+                    aria-checked={tracing}
+                    onClick={() => setTrace(!tracing)}
+                  >
+                    Event trace <span className="board-switch" />
+                  </button>
+                ) : null}
               </div>
             ) : null}
           </div>
         </div>
-        {tracing ? (
-          <BoardTraceOverlay
+        {DEVTOOLS && tracing ? (
+          <TraceOverlay
+            view="board"
             trace={trace}
             status={() => ({
               mode: gesture.current.mode.name,

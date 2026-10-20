@@ -6,6 +6,7 @@ import type { Pane, Tab, Workspace } from "../../types";
 import type { WorldRuntimeConnection } from "../runtimeStore";
 import { buildWorldObject, type WorldObject } from "../worldObject";
 import TownView from "../TownView";
+import { requestTrace } from "../devtools/trace";
 import { initializeLayoutPreferences } from "../../layoutPreferences";
 import { bridge, type ConnectionClient } from "../../api";
 import "../world.css";
@@ -871,6 +872,12 @@ async function run() {
     );
   });
   if (heldDesk) {
+    // Record it in Town's event trace, as the settings menu would turn it on.
+    requestTrace("town", true);
+    await waitFor(
+      () => host.querySelector('[aria-label="Town event trace"]') !== null,
+      "the Town event trace did not open",
+    );
     const box = heldDesk.getBoundingClientRect();
     const touch = (type: string, id: number, x: number, y: number) =>
       canvasHost.dispatchEvent(
@@ -902,6 +909,46 @@ async function run() {
     touch("pointerup", 22, box.left + 4, box.top + 4);
     touch("pointerup", 21, box.left + box.width / 2, box.top + box.height / 2);
     check(moves.length === 1, "a cancelled drag must not move anything");
+    // The exported trace holds the gesture (input, transitions, effects) and
+    // the frames it asked for, with their reasons, once they are drawn.
+    const drawn = window.__HERDR_TOWN_RENDERER__?.frames ?? 0;
+    await waitFor(
+      () => (window.__HERDR_TOWN_RENDERER__?.frames ?? 0) >= drawn + 2,
+      "Town drew no frame after the gesture",
+    );
+    let exported = "";
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText: async (text: string) => {
+          exported = text;
+        },
+      },
+    });
+    [
+      ...host.querySelectorAll<HTMLButtonElement>(
+        '[aria-label="Town event trace"] button',
+      ),
+    ]
+      .find((button) => button.textContent === "Copy trace")!
+      .click();
+    await waitFor(() => exported !== "", "the Town trace did not export");
+    check(
+      ["pressing → card", "liftCard", "settleCard", "pinchStart"].every(
+        (text) => exported.includes(text),
+      ),
+      `Town's trace export holds the hold, lift and pinch (${exported.slice(0, 300)})`,
+    );
+    const frames = (
+      JSON.parse(exported) as {
+        entries: { kind: string; detail?: { reasons?: string[] } }[];
+      }
+    ).entries.filter((entry) => entry.kind === "frame");
+    check(
+      frames.some((entry) => entry.detail?.reasons?.includes("drag")),
+      `Town's trace export holds a frame and its reason (${JSON.stringify(frames.slice(-6))})`,
+    );
+    requestTrace("town", false);
   }
 
   // Town shows no move icons; moving is by drag, hold or the keyboard.

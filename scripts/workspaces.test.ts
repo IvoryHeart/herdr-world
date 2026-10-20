@@ -45,7 +45,14 @@ test("development bridge and Vite proxies stay off the production port", async (
   );
   expect(scripts.start).toBe("bun run src/index.ts");
 
-  const { default: config } = await import("../web/vite.config");
+  const { default: configFor } = await import("../web/vite.config");
+  // The config depends on the mode (development tools are dev-only).
+  const config = await configFor({
+    mode: "development",
+    command: "serve",
+    isPreview: false,
+    isSsrBuild: false,
+  });
   for (const path of ["/api", "/ws", "/login"]) {
     expect(config.server?.proxy?.[path]).toMatchObject({
       target: "http://127.0.0.1:8788",

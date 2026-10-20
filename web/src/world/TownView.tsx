@@ -24,6 +24,9 @@ import {
   uploadTerminalImage,
 } from "../terminalImageUpload";
 import { WorldSearchResults } from "./WorldSearchResults";
+import { DEVTOOLS, NO_TRACE } from "./devtools/flag";
+import { openTrace, rememberTrace, TRACE_TOGGLE_EVENT } from "./devtools/trace";
+import { TraceOverlay } from "./devtools/TraceOverlay";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { worldLocalStorage } from "../browserStorage";
@@ -464,6 +467,7 @@ export default function TownView({
     }
   };
   const selectOfficeKey = (key: string) => {
+    if (DEVTOOLS) trace.record("select", { key });
     const device = office.paneRoster.find(
       ({ device }) => device.key === key,
     )?.device;
@@ -596,14 +600,39 @@ export default function TownView({
   type Toast = { id: number; kind: "ok" | "error"; text: string };
   const [toasts, setToasts] = useState<Toast[]>([]);
   const toastId = useRef(0);
-  const toast = useCallback((kind: Toast["kind"], text: string) => {
-    const id = ++toastId.current;
-    setToasts((current) => [...current.slice(-2), { id, kind, text }]);
-    window.setTimeout(
-      () => setToasts((current) => current.filter((item) => item.id !== id)),
-      kind === "error" ? 6_000 : 2_600,
-    );
-  }, []);
+  // The event trace exists only in development builds (devtools/flag.ts).
+  const trace = useMemo(() => (DEVTOOLS ? openTrace("town") : NO_TRACE), []);
+  const [tracing, setTracing] = useState(trace.enabled);
+  const setTrace = (on: boolean) => {
+    if (!DEVTOOLS) return;
+    rememberTrace("town", trace, on);
+    setTracing(on);
+  };
+  // Town's settings live in the common menu, which asks for the trace.
+  useEffect(() => {
+    if (!DEVTOOLS) return;
+    const toggle = (event: Event) => {
+      const detail = (event as CustomEvent<{ view: string; on: boolean }>)
+        .detail;
+      if (detail?.view !== "town") return;
+      rememberTrace("town", trace, detail.on);
+      setTracing(detail.on);
+    };
+    window.addEventListener(TRACE_TOGGLE_EVENT, toggle);
+    return () => window.removeEventListener(TRACE_TOGGLE_EVENT, toggle);
+  }, [trace]);
+  const toast = useCallback(
+    (kind: Toast["kind"], text: string) => {
+      if (DEVTOOLS) trace.record("toast", { kind, text });
+      const id = ++toastId.current;
+      setToasts((current) => [...current.slice(-2), { id, kind, text }]);
+      window.setTimeout(
+        () => setToasts((current) => current.filter((item) => item.id !== id)),
+        kind === "error" ? 6_000 : 2_600,
+      );
+    },
+    [trace],
+  );
 
   // A finished agent announces itself once; the rail keeps it until inspected.
   const announced = useRef<Set<string> | null>(null);
@@ -681,6 +710,7 @@ export default function TownView({
     outcome: TownMoveOutcome,
     sourceTab: string,
   ) => {
+    if (DEVTOOLS) trace.record("move", { label, status: outcome.status });
     toast(
       outcome.status === "moved" ? "ok" : "error",
       townMoveNotice(label, outcome, sourceTab),
@@ -978,6 +1008,7 @@ export default function TownView({
   const nextCall = (currentKey: string | null) =>
     nextTownCall(calls, currentKey);
   const openPeek = (key: string, anchor: { x: number; y: number } | null) => {
+    if (DEVTOOLS) trace.record("peek", { key });
     window.clearTimeout(peekTimer.current);
     setPeek({ key, anchor: sheetMode() ? null : anchor, pinned: true });
   };
@@ -1066,6 +1097,14 @@ export default function TownView({
           lastPointer.current = { x: event.clientX, y: event.clientY };
         }}
       >
+        {DEVTOOLS && tracing ? (
+          <TraceOverlay
+            view="town"
+            trace={trace}
+            status={() => ({ mode: peek ? "peek" : "idle", pointers: 0 })}
+            onClose={() => setTrace(false)}
+          />
+        ) : null}
         <TownRail
           collapsed={railCollapsed}
           onCollapsedChange={setRailCollapsed}
@@ -1212,6 +1251,7 @@ export default function TownView({
         </div>
         <div className="town-stage">
           <TownCanvas
+            trace={trace}
             projection={office}
             selectedKey={townSelectedKey}
             completionSeenKeys={completionSeenKeys}
