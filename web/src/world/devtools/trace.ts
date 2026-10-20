@@ -11,6 +11,7 @@
  */
 
 import { worldLocalStorage } from "../../browserStorage";
+import type { GestureEffect, GestureEvent } from "../interaction/gesture";
 import type { TraceEntry, ViewTrace } from "./flag";
 
 export type TracedView = "board" | "town";
@@ -112,4 +113,40 @@ export function requestTrace(view: TracedView, on: boolean) {
   window.dispatchEvent(
     new CustomEvent(TRACE_TOGGLE_EVENT, { detail: { view, on } }),
   );
+}
+
+/** Continuous gesture effects a trace leaves out: one per pointer move. */
+const QUIET_EFFECTS = new Set([
+  "panBy",
+  "moveCard",
+  "moveString",
+  "pinch",
+  "moveHost",
+  "stopCamera",
+]);
+
+/**
+ * Record one step of a view's gesture machine: its input (not every move),
+ * a mode transition, and its effects other than the continuous ones, so a
+ * failed gesture can be replayed. A view whose targets are live objects
+ * passes describe() to record a summary of each target instead.
+ */
+export function traceGesture<T>(
+  trace: ViewTrace,
+  before: string,
+  after: string,
+  event: GestureEvent<T>,
+  effects: readonly GestureEffect<T>[],
+  describe?: (target: T) => unknown,
+) {
+  if (!trace.enabled) return;
+  const summary = (value: object) =>
+    describe && "target" in value
+      ? { ...value, target: describe(value.target as T) }
+      : value;
+  if (event.type !== "move") trace.record("input", summary(event));
+  if (after !== before) trace.record("gesture", `${before} → ${after}`);
+  for (const effect of effects)
+    if (!QUIET_EFFECTS.has(effect.type))
+      trace.record("effect", summary(effect));
 }

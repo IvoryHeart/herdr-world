@@ -20,6 +20,20 @@ describe("release web assets carry no development tools", () => {
       ]),
     ).toEqual(["assets/BoardView.js"]);
   });
+
+  test("a view's trace call outside the trace module is named too (review)", () => {
+    expect(
+      devtoolsAssets([
+        {
+          name: "assets/TownView.js",
+          content: "e.type!==`move`&&i.record(`input`,e)",
+        },
+        { name: "assets/Quoted.js", content: 'k.record("select",{key:e})' },
+        // A method of that name called without a literal kind is not one.
+        { name: "assets/Other.js", content: "store.record(entry)" },
+      ]),
+    ).toEqual(["assets/TownView.js", "assets/Quoted.js"]);
+  });
 });
 
 describe("initial web asset budget", () => {

@@ -24,7 +24,8 @@ World's event traces and renderer counters exist only in development builds:
 `HERDR_WORLD_BUILD_DEVTOOLS=1 bun run build:web`. In such a build, Board's
 **⋯ → Event trace** and Town's **Town event trace** switch in the settings menu
 (or `?debug=board` / `?debug=town` in the URL) record a bounded, page-local trace
-of input and effects; **Copy trace** puts it on the clipboard for a bug report.
+of input, gestures, effects, frames and errors; **Copy trace** puts it on the
+clipboard for a bug report.
 Nothing is sent anywhere. Release and package builds never set the flag, and the
 web asset check fails a release build that carries any of it. See the
 [World component routes](../web/src/world/README.md#development-tools).

@@ -21,10 +21,8 @@ import {
   TOWN_HOLD_MS,
   type TownGestureTarget,
 } from "./townGesture";
-import { NO_TRACE, type ViewTrace } from "../devtools/flag";
-
-/** Continuous effects the trace leaves out, as Board's does. */
-const QUIET_EFFECTS = new Set(["panBy", "pinch", "moveCard", "stopCamera"]);
+import { DEVTOOLS, NO_TRACE, type ViewTrace } from "../devtools/flag";
+import { traceGesture } from "../devtools/trace";
 import { EllipsisVertical } from "lucide-react";
 import { useMobileControls } from "../../components/MobileControls";
 import { Pencil, Plus, Trash2 } from "lucide-react";
@@ -433,7 +431,7 @@ export function TownCanvas({
       );
     if (!animate) record();
     else homePose.current = null;
-    renderer.invalidate();
+    renderer.invalidate("home");
   };
   const homePose = useRef<{ x: number; y: number; z: number } | null>(null);
   const atHome = (renderer: TownRendererHandle) => {
@@ -473,11 +471,14 @@ export function TownCanvas({
       host,
       (camera, level) => onFrameRef.current(camera, level),
       abort.signal,
-      (error) =>
-        traceRef.current.record("error", {
-          where: "frame",
-          message: String(error),
-        }),
+      DEVTOOLS
+        ? (error) =>
+            traceRef.current.record("error", {
+              where: "frame",
+              message: String(error),
+            })
+        : undefined,
+      DEVTOOLS ? (frame) => traceRef.current.record("frame", frame) : undefined,
     )
       .then(async (renderer) => {
         // Building the scene is its own task, after the renderer's setup.
@@ -501,15 +502,16 @@ export function TownCanvas({
             renderer.camera.viewport.height / 2,
           );
         } else frameHome(renderer, l, false);
-        renderer.invalidate();
+        renderer.invalidate("ready");
         setReady(true);
       })
       .catch((error: unknown) => {
         if (disposed) return;
-        traceRef.current.record("error", {
-          where: "renderer",
-          message: String(error),
-        });
+        if (DEVTOOLS)
+          traceRef.current.record("error", {
+            where: "renderer",
+            message: String(error),
+          });
         if (window.__HERDR_TOWN_RENDERER__)
           window.__HERDR_TOWN_RENDERER__.lastError =
             error instanceof Error
@@ -664,11 +666,11 @@ export function TownCanvas({
         case "panBy":
           latest.current.onHover?.(null);
           renderer.camera.panBy(effect.dx, effect.dy);
-          renderer.invalidate();
+          renderer.invalidate("pan");
           return;
         case "fling":
           renderer.camera.release(effect.vx, effect.vy);
-          renderer.invalidate();
+          renderer.invalidate("fling");
           return;
         case "pinchStart":
           pinch = {
@@ -686,7 +688,7 @@ export function TownCanvas({
             pinch.world.x - (effect.mid.x - camera.viewport.width / 2) / z;
           camera.y =
             pinch.world.y - (effect.mid.y - camera.viewport.height / 2) / z;
-          renderer.invalidate();
+          renderer.invalidate("pinch");
           return;
         }
         case "liftCard":
@@ -747,7 +749,7 @@ export function TownCanvas({
             latest.current.onActivateAgent(key);
           else {
             renderer.camera.zoomAt(2, effect.at.x, effect.at.y);
-            renderer.invalidate();
+            renderer.invalidate("zoom");
           }
           return;
         }
@@ -760,33 +762,20 @@ export function TownCanvas({
       const before = gesture.mode.name;
       const result = stepGesture(gesture, event, TOWN_GESTURES);
       gesture = result.state;
-      const trace = traceRef.current;
-      if (trace.enabled) {
-        // As Board records: input (not every move), transitions and effects
-        // other than the continuous ones, so a failed gesture can be replayed.
-        if (event.type !== "move")
-          trace.record(
-            "input",
-            event.type === "down"
-              ? {
-                  ...event,
-                  target: {
-                    hit: event.target.hit?.kind ?? null,
-                    key: TOWN_GESTURES.key(event.target),
-                    drag: Boolean(event.target.drag),
-                  },
-                }
-              : event,
-          );
-        if (gesture.mode.name !== before)
-          trace.record("gesture", `${before} → ${gesture.mode.name}`);
-        for (const effect of result.effects)
-          if (!QUIET_EFFECTS.has(effect.type))
-            trace.record(
-              "effect",
-              "target" in effect ? { ...effect, target: undefined } : effect,
-            );
-      }
+      // Town's targets are live hits and drags: trace a summary of each.
+      if (DEVTOOLS)
+        traceGesture(
+          traceRef.current,
+          before,
+          gesture.mode.name,
+          event,
+          result.effects,
+          (target) => ({
+            hit: target.hit?.kind ?? null,
+            key: TOWN_GESTURES.key(target),
+            drag: Boolean(target.drag),
+          }),
+        );
       if (gesture.mode.name !== "pinching") pinch = null;
       for (const effect of result.effects) apply(effect);
     };
@@ -880,7 +869,7 @@ export function TownCanvas({
         point.x,
         point.y,
       );
-      renderer.invalidate();
+      renderer.invalidate("wheel");
     };
     host.addEventListener("pointerdown", down);
     host.addEventListener("pointermove", move);
@@ -919,7 +908,7 @@ export function TownCanvas({
       );
     else return;
     event.preventDefault();
-    renderer.invalidate();
+    renderer.invalidate("keyboard");
   };
 
   const zoomBy = (factor: number) => {
@@ -930,7 +919,7 @@ export function TownCanvas({
       renderer.camera.viewport.width / 2,
       renderer.camera.viewport.height / 2,
     );
-    renderer.invalidate();
+    renderer.invalidate("zoom");
   };
 
   /**
@@ -1046,7 +1035,7 @@ export function TownCanvas({
       return;
     }
     steps[next]!.go(steps[next]!.z);
-    renderer.invalidate();
+    renderer.invalidate("zoom-step");
   };
 
   const focusTarget = (target: TownTarget) => {
@@ -1072,7 +1061,7 @@ export function TownCanvas({
         z,
         0.4,
       );
-      renderer.invalidate();
+      renderer.invalidate("focus");
     }
   };
 
@@ -1148,7 +1137,7 @@ export function TownCanvas({
               (l.height * T) / 2,
               renderer.camera.limits.all,
             );
-            renderer.invalidate();
+            renderer.invalidate("fit");
           }}
         >
           ALL
@@ -1193,7 +1182,7 @@ function zoomToRoom(
   const camera = renderer.camera;
   const z = roomZoom(camera, room);
   camera.flyTo((room.x + room.w / 2) * T, (room.y + room.h / 2) * T, z, 0.6);
-  renderer.invalidate();
+  renderer.invalidate("room");
 }
 
 function zoomToBuilding(
@@ -1211,7 +1200,7 @@ function zoomToBuilding(
     z,
     0.8,
   );
-  renderer.invalidate();
+  renderer.invalidate("building");
 }
 
 type TownCameraHandle = TownRendererHandle["camera"];

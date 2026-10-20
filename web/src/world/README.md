@@ -110,11 +110,15 @@ one file a release build keeps: `DEVTOOLS` is false there, and Vite aliases
 [devtools/trace.ts](devtools/trace.ts) and
 [devtools/TraceOverlay.tsx](devtools/TraceOverlay.tsx) to the inert
 [devtools/release.ts](devtools/release.ts), so no trace, overlay, menu item or
-switch ships. [devtools/renderer.ts](devtools/renderer.ts) gates Town's renderer
-counters the same way. Each view's trace is a bounded, page-local ring: Board's is
-under its ⋯ menu, Town's under the common settings menu, and `?debug=board` or
-`?debug=town` starts one. `scripts/check-web-assets.mjs` fails a release build
-whose assets carry the devtools marker. Tests: [trace tests](devtools/trace.test.ts)
+switch ships. Views record only under `if (DEVTOOLS)`, so their recording code
+drops out too; gesture steps go through `traceGesture` in the trace module.
+[devtools/renderer.ts](devtools/renderer.ts) gates Town's renderer counters the
+same way. Each view's trace is a bounded, page-local ring of input, gesture
+transitions, effects, frames with the reasons they were drawn, and errors:
+Board's is under its ⋯ menu, Town's under the common settings menu, and
+`?debug=board` or `?debug=town` starts one. `scripts/check-web-assets.mjs` fails a
+release build whose assets carry the devtools marker or any trace call with a
+literal kind (`.record("…"`). Tests: [trace tests](devtools/trace.test.ts)
 and the asset check's tests.
 
 ## Shared frames and acceptance budgets

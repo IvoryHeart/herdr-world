@@ -467,7 +467,7 @@ export default function TownView({
     }
   };
   const selectOfficeKey = (key: string) => {
-    trace.record("select", { key });
+    if (DEVTOOLS) trace.record("select", { key });
     const device = office.paneRoster.find(
       ({ device }) => device.key === key,
     )?.device;
@@ -623,7 +623,7 @@ export default function TownView({
   }, [trace]);
   const toast = useCallback(
     (kind: Toast["kind"], text: string) => {
-      trace.record("toast", { kind, text });
+      if (DEVTOOLS) trace.record("toast", { kind, text });
       const id = ++toastId.current;
       setToasts((current) => [...current.slice(-2), { id, kind, text }]);
       window.setTimeout(
@@ -710,7 +710,7 @@ export default function TownView({
     outcome: TownMoveOutcome,
     sourceTab: string,
   ) => {
-    trace.record("move", { label, status: outcome.status });
+    if (DEVTOOLS) trace.record("move", { label, status: outcome.status });
     toast(
       outcome.status === "moved" ? "ok" : "error",
       townMoveNotice(label, outcome, sourceTab),
@@ -1008,7 +1008,7 @@ export default function TownView({
   const nextCall = (currentKey: string | null) =>
     nextTownCall(calls, currentKey);
   const openPeek = (key: string, anchor: { x: number; y: number } | null) => {
-    trace.record("peek", { key });
+    if (DEVTOOLS) trace.record("peek", { key });
     window.clearTimeout(peekTimer.current);
     setPeek({ key, anchor: sheetMode() ? null : anchor, pinned: true });
   };

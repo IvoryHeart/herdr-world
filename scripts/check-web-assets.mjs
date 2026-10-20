@@ -41,9 +41,18 @@ export function initialAssetFiles(
  * A deliberate HERDR_WORLD_BUILD_DEVTOOLS=1 build is exempt.
  */
 export const DEVTOOLS_MARKER = "herdr-world-devtools";
+/**
+ * A view's trace call with a literal kind (`trace.record("input", …)`): the
+ * recording paths views keep outside the marked trace module, which a
+ * release build drops through their DEVTOOLS guards.
+ */
+const TRACE_CALL = /\.record\(\s*["'`]/;
 export function devtoolsAssets(files) {
   return files
-    .filter(({ content }) => content.includes(DEVTOOLS_MARKER))
+    .filter(
+      ({ content }) =>
+        content.includes(DEVTOOLS_MARKER) || TRACE_CALL.test(content),
+    )
     .map(({ name }) => name);
 }
 

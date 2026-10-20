@@ -64,7 +64,7 @@ import {
 import { createFrameLoop, type FrameLoop } from "./board/boardScheduler";
 import { worldMotionPreference } from "./worldFrameScheduler";
 import { DEVTOOLS, NO_TRACE } from "./devtools/flag";
-import { openTrace, rememberTrace } from "./devtools/trace";
+import { openTrace, rememberTrace, traceGesture } from "./devtools/trace";
 import { TraceOverlay } from "./devtools/TraceOverlay";
 import {
   KEPT_DRAFTS_KEY,
@@ -1015,7 +1015,11 @@ export default function BoardView({
   const frame = (dt: number, reasons: ReadonlySet<string>) => {
     const m = latest.current.model;
     const holdingKey = held.current?.key ?? null;
-    if (trace.enabled && [...reasons].some((reason) => reason !== "animate"))
+    if (
+      DEVTOOLS &&
+      trace.enabled &&
+      [...reasons].some((reason) => reason !== "animate")
+    )
       trace.record("frame", [...reasons]);
     // Reduced motion: moves land at once rather than animate.
     const still = worldMotionPreference().matches;
@@ -1117,11 +1121,12 @@ export default function BoardView({
       },
       onError: (error, reasons) => {
         console.error("Board frame failed", error);
-        trace.record("error", {
-          where: "frame",
-          reasons: [...reasons],
-          message: String(error),
-        });
+        if (DEVTOOLS)
+          trace.record("error", {
+            where: "frame",
+            reasons: [...reasons],
+            message: String(error),
+          });
       },
     });
     loopRef.current = loop;
@@ -1609,25 +1614,18 @@ export default function BoardView({
     return { kind: "empty" };
   }
   /** Frequent effects are left out of the trace to keep it readable. */
-  const QUIET = new Set([
-    "panBy",
-    "moveCard",
-    "moveString",
-    "pinch",
-    "moveHost",
-    "stopCamera",
-  ]);
   function feed(event: GestureEvent) {
     const before = gesture.current.mode.name;
     const result = stepGesture(gesture.current, event);
     gesture.current = result.state;
-    if (trace.enabled) {
-      if (event.type !== "move") trace.record("input", event);
-      if (result.state.mode.name !== before)
-        trace.record("gesture", `${before} → ${result.state.mode.name}`);
-      for (const effect of result.effects)
-        if (!QUIET.has(effect.type)) trace.record("effect", effect);
-    }
+    if (DEVTOOLS)
+      traceGesture(
+        trace,
+        before,
+        result.state.mode.name,
+        event,
+        result.effects,
+      );
     for (const effect of result.effects) apply(effect);
   }
   const atOf = (event: ReactPointerEvent) => ({
@@ -2236,7 +2234,7 @@ export default function BoardView({
   const report = async (pending: Promise<string | null>) => {
     const problem = await pending;
     if (problem) {
-      trace.record("save", { problem });
+      if (DEVTOOLS) trace.record("save", { problem });
       setToast({ text: problem });
     }
   };
@@ -2300,7 +2298,7 @@ export default function BoardView({
       },
     ]);
     if (!problem) return;
-    trace.record("save", { problem });
+    if (DEVTOOLS) trace.record("save", { problem });
     const exists = latest.current.saved?.notes.some((n) => n.id === started.id);
     keepDraft({ started, text, reason: exists ? "changed" : "deleted" });
   };

@@ -19,3 +19,4 @@ export const rememberTrace: (
 export const traceRemembered: (view: TracedView) => boolean = () => false;
 export const requestTrace: (view: TracedView, on: boolean) => void = () => {};
 export const TraceOverlay: (props: unknown) => null = () => null;
+export const traceGesture: (...args: unknown[]) => void = () => {};
