@@ -6,8 +6,9 @@ separately installed [`herdrdev/herdr`](https://github.com/herdrdev/herdr) runti
 
 Current synchronization points:
 
-- Roamgate source: v0.8.6, `8cc1685ec616de4acf3034db05c4af2368ca1b93`
-  (19 October 2026). This integration records the exact head as a Git merge
+- Roamgate source: main after v0.8.6, `57327a0dcac58c116662a26a7d1ea78d4ecf772b`
+  (20 October 2026; nine unreleased commits after v0.8.6). This integration records
+  the exact head as a Git merge
   parent, following `5ce1d8d620549226de76321303e7bffa911ae371`.
 - Herdr compatibility: Herdr 0.9.5, terminal protocol 22. Windows SSH hosts
   additionally require a running Herdr 0.9.1+ session and Windows PowerShell.
@@ -92,3 +93,10 @@ Use these terms consistently:
 Each World release records the exact Roamgate synchronization point. Required MIT
 attribution is retained in [LICENSE](LICENSE) and
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+The post-v0.8.6 main refresh adds Ranger Steer/Queue messages, bounded collapsible
+model reasoning, selection-preserving output focus and clearer Composer mode/shortcut
+controls. Waiting questions retain their selected World runtime generation; a
+replacement holds the queue instead of retargeting. Compatible typebox, xterm,
+Radix and lint updates are adopted. React remains 18 and the Roamgate-only CodeQL
+workflow remains excluded under World policy; both dispositions require owner review.

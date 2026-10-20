@@ -44,7 +44,8 @@ this item no longer carries an outstanding deferral.
 ## World workflow controls
 
 Status: intentional divergence, proposed for owner review. Source: Roamgate
-75f61e36 (#401), v0.8.3/v0.8.4 source range.
+75f61e36 (#401), v0.8.3/v0.8.4 source range; also 2388b914 (#454), whose
+Roamgate-only CodeQL workflow has no World counterpart.
 Owner: repository owner and independent delivery reviewer.
 
 World retains its own workflows and pinned actions; automated source publication
@@ -54,3 +55,16 @@ updates only through a trusted human-reviewed control change with existing
 workflow, platform and delivery checks. Retaining control ownership does not mean
 upstream security updates may be silently ignored. Record any follow-up PR and
 rationale here; retain this standing entry while the divergence applies.
+
+## React 18 compatibility
+
+Status: intentional divergence proposed for owner review. Source: Roamgate
+e030b2e2 (#453), post-v0.8.6 main.
+Owner: repository owner and independent delivery reviewer.
+
+World retains React 18 under its current adoption policy. The upstream React 19.3.1
+patch cannot be applied as an 18.x update. Revisit every source sync, relevant React
+security advisory, or owner-approved major migration. Acceptance requires an
+explicit policy decision and passing React DOM/browser evidence for focus, native
+blur, IME, qualified editor drafts and independent runtime ownership. Keep this
+entry until a compatible migration or security backport is reviewed and delivered.

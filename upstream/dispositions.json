@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "source": "8cc1685ec616de4acf3034db05c4af2368ca1b93",
+  "source": "57327a0dcac58c116662a26a7d1ea78d4ecf772b",
   "changes": [
     {
       "commit": "447f7196b9a23979b026d6b79619836d3337cc06",
@@ -26,7 +26,7 @@
       ],
       "followUp": "docs/upstream-follow-ups.md#world-workflow-controls",
       "revisitWhen": "Every source sync; manually assess upstream action security fixes and required platform changes.",
-      "reviewedFor": "8cc1685ec616de4acf3034db05c4af2368ca1b93"
+      "reviewedFor": "57327a0dcac58c116662a26a7d1ea78d4ecf772b"
     },
     {
       "commit": "20cb447a808a1e09359cef4f4fb632a385d4485e",
@@ -422,7 +422,7 @@
       ],
       "followUp": null,
       "revisitWhen": null,
-      "reviewedFor": "8cc1685ec616de4acf3034db05c4af2368ca1b93"
+      "reviewedFor": "57327a0dcac58c116662a26a7d1ea78d4ecf772b"
     },
     {
       "commit": "bbdc04407fe8e10f74094c992d68ae0c84b5ee02",
@@ -435,7 +435,7 @@
       ],
       "followUp": null,
       "revisitWhen": null,
-      "reviewedFor": "8cc1685ec616de4acf3034db05c4af2368ca1b93"
+      "reviewedFor": "57327a0dcac58c116662a26a7d1ea78d4ecf772b"
     },
     {
       "commit": "ab0866f429e22adff2571be6e0a9f4b6cd9ccc11",
@@ -448,7 +448,7 @@
       ],
       "followUp": null,
       "revisitWhen": null,
-      "reviewedFor": "8cc1685ec616de4acf3034db05c4af2368ca1b93"
+      "reviewedFor": "57327a0dcac58c116662a26a7d1ea78d4ecf772b"
     },
     {
       "commit": "99ef5d7cde1a2ba0cded7ead5c95155af749801b",
@@ -463,7 +463,7 @@
       ],
       "followUp": null,
       "revisitWhen": null,
-      "reviewedFor": "8cc1685ec616de4acf3034db05c4af2368ca1b93"
+      "reviewedFor": "57327a0dcac58c116662a26a7d1ea78d4ecf772b"
     },
     {
       "commit": "515640a1f6972815d7390aa969db4a5481afaf8a",
@@ -477,7 +477,7 @@
       ],
       "followUp": null,
       "revisitWhen": null,
-      "reviewedFor": "8cc1685ec616de4acf3034db05c4af2368ca1b93"
+      "reviewedFor": "57327a0dcac58c116662a26a7d1ea78d4ecf772b"
     },
     {
       "commit": "930a83652dc6408e83de312cd39d0ff26fcb4420",
@@ -490,7 +490,7 @@
       ],
       "followUp": null,
       "revisitWhen": null,
-      "reviewedFor": "8cc1685ec616de4acf3034db05c4af2368ca1b93"
+      "reviewedFor": "57327a0dcac58c116662a26a7d1ea78d4ecf772b"
     },
     {
       "commit": "7ba13d211561664f952c49ea52f5a3057f21cf2c",
@@ -503,7 +503,7 @@
       ],
       "followUp": null,
       "revisitWhen": null,
-      "reviewedFor": "8cc1685ec616de4acf3034db05c4af2368ca1b93"
+      "reviewedFor": "57327a0dcac58c116662a26a7d1ea78d4ecf772b"
     },
     {
       "commit": "d4ec8b1a02109bec6d1ebb0919c708539c7d3280",
@@ -513,7 +513,7 @@
       "evidence": ["server/src/config/data-paths.test.ts"],
       "followUp": null,
       "revisitWhen": null,
-      "reviewedFor": "8cc1685ec616de4acf3034db05c4af2368ca1b93"
+      "reviewedFor": "57327a0dcac58c116662a26a7d1ea78d4ecf772b"
     },
     {
       "commit": "a465941610bd6fd49a9f5f277b2ad78c50ff40c7",
@@ -527,7 +527,7 @@
       ],
       "followUp": null,
       "revisitWhen": null,
-      "reviewedFor": "8cc1685ec616de4acf3034db05c4af2368ca1b93"
+      "reviewedFor": "57327a0dcac58c116662a26a7d1ea78d4ecf772b"
     },
     {
       "commit": "8cc1685ec616de4acf3034db05c4af2368ca1b93",
@@ -541,7 +541,114 @@
       ],
       "followUp": null,
       "revisitWhen": null,
-      "reviewedFor": "8cc1685ec616de4acf3034db05c4af2368ca1b93"
+      "reviewedFor": "57327a0dcac58c116662a26a7d1ea78d4ecf772b"
+    },
+    {
+      "commit": "4c591c8d852765df0a8629eab6f95746af9e78ae",
+      "title": "chore(deps): bump oxlint to 1.88.0 (#449)",
+      "status": "adopted",
+      "reason": "Adopt compatible oxlint 1.88.0 tooling.",
+      "evidence": ["package.json", "bun.lock"],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "57327a0dcac58c116662a26a7d1ea78d4ecf772b"
+    },
+    {
+      "commit": "2388b914daa17e1c3bad69583d984721fe221613",
+      "title": "chore(deps): update CodeQL actions to 4.39.0 (#454)",
+      "status": "divergent",
+      "reason": "Retain World-owned workflow controls; the upstream-only CodeQL workflow does not exist in World. Its action update requires separate trusted control review.",
+      "evidence": ["docs/upstream-follow-ups.md#world-workflow-controls"],
+      "followUp": "docs/upstream-follow-ups.md#world-workflow-controls",
+      "revisitWhen": "Every source sync and relevant action security or platform change.",
+      "reviewedFor": "57327a0dcac58c116662a26a7d1ea78d4ecf772b"
+    },
+    {
+      "commit": "3d95be35d72b7498c2e66fbf2b68b3c2b8c395da",
+      "title": "chore(deps): bump typebox to 1.3.37 (#451)",
+      "status": "adopted",
+      "reason": "Adopt compatible typebox 1.3.37.",
+      "evidence": ["server/package.json", "bun.lock"],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "57327a0dcac58c116662a26a7d1ea78d4ecf772b"
+    },
+    {
+      "commit": "e030b2e2e795a3839b64fafe1911853061dee0c2",
+      "title": "chore(deps): update React and ReactDOM to 19.3.1 (#453)",
+      "status": "divergent",
+      "reason": "Retain React 18 under World policy; the React 19.3.1 patch requires an owner-approved major migration.",
+      "evidence": [
+        "web/package.json",
+        "docs/upstream-follow-ups.md#react-18-compatibility"
+      ],
+      "followUp": "docs/upstream-follow-ups.md#react-18-compatibility",
+      "revisitWhen": "Every source sync, React security advisory, or owner-approved major migration.",
+      "reviewedFor": "57327a0dcac58c116662a26a7d1ea78d4ecf772b"
+    },
+    {
+      "commit": "25e85076e122dcbf83d5f475ee67c65749750c45",
+      "title": "chore(deps): update xterm core and fit with IME compatibility (#452)",
+      "status": "adapted",
+      "reason": "Upgrade xterm core/fit with IME compatibility while preserving World-qualified endpoint input.",
+      "evidence": [
+        "web/package.json",
+        "web/src/terminalComposition.ts",
+        "web/src/components/TerminalView.inputMode.test.ts"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "57327a0dcac58c116662a26a7d1ea78d4ecf772b"
+    },
+    {
+      "commit": "7d668d4143454cc564b0c5278a398b45938e1473",
+      "title": "chore(deps): update Radix popover and deduplicate primitives (#450)",
+      "status": "adopted",
+      "reason": "Upgrade compatible Radix popover and deduplicate primitives with React 18 retained.",
+      "evidence": ["web/package.json", "bun.lock"],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "57327a0dcac58c116662a26a7d1ea78d4ecf772b"
+    },
+    {
+      "commit": "2b5d883c96f5ccc4a0abcd160e2029c9cba10e1a",
+      "title": "Improve Composer input-mode switching and shortcut visibility (#455)",
+      "status": "adapted",
+      "reason": "Adopt Composer mode and shortcut visibility improvements with World navigation, qualified input and React 18 synchronous native-blur handling.",
+      "evidence": [
+        "web/src/components/TerminalComposer.tsx",
+        "web/src/components/TerminalView.inputMode.test.ts"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "57327a0dcac58c116662a26a7d1ea78d4ecf772b"
+    },
+    {
+      "commit": "9dcac5c2e7d09073950fc447e1bb17e501102f25",
+      "title": "Keep Ranger text selection and show model reasoning (#456)",
+      "status": "adapted",
+      "reason": "Add bounded model reasoning and preserve Ranger text selection without stealing focus across World runtime owners.",
+      "evidence": [
+        "server/src/assistant/pi-driver.test.ts",
+        "web/src/components/AssistantThinking.test.tsx",
+        "web/src/terminalFocus.test.ts"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "57327a0dcac58c116662a26a7d1ea78d4ecf772b"
+    },
+    {
+      "commit": "57327a0dcac58c116662a26a7d1ea78d4ecf772b",
+      "title": "Add Ranger steer and queue for messages sent while it answers (#457)",
+      "status": "adapted",
+      "reason": "Add ordered Steer/Queue admission and recovery while retaining World runtime generations, task cancellation authority and original-scope ownership.",
+      "evidence": [
+        "server/src/assistant/service.test.ts",
+        "openspec/specs/workspace-assistant/spec.md"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "57327a0dcac58c116662a26a7d1ea78d4ecf772b"
     }
   ]
 }

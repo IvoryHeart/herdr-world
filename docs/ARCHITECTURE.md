@@ -436,3 +436,16 @@ original recovery targets. Updates/resumes verify the model and workspace/agent
 identities; local pause/cancel/delete recheck permissions even if the old runtime
 or model is gone. A deletion requires committed cancellation and drains private
 run resources. Confirmation never upgrades a previously manual task implicitly.
+
+## Ranger busy-turn admission
+
+The service admits at most eight waiting messages. Steers enter the current turn
+after its tool round and retain that turn's captured scope; a wider scope or a
+different runtime generation becomes a follow-up. Follow-ups are admitted in FIFO
+order after the answer and pending previews finish. Their private persisted scope
+retains connection, workspace and runtime generation, so replacement rejects
+admission rather than silently recapturing a different runtime. Stop, failure,
+restart and chat changes hold the queue until explicit user continuation. Queue
+removal, steering and admission share one serialized worker; request IDs prevent
+duplicate delivery. Saved model reasoning is bounded to 16,000 characters and
+64 steps, dropping oldest reasoning first.

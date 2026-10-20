@@ -150,3 +150,11 @@ lives in [PaneMoveMenu](../web/src/components/PaneMoveMenu.tsx), whose moves use
 [owner-retirement regressions](../web/src/store.test.ts). Mobile input remains in
 each terminal; [the shared World app bar](../web/src/components/MobileControls.tsx)
 continues to own Tabs and More.
+
+Ranger busy-turn admission, held queue recovery and captured-generation tests live
+in [the service](../server/src/assistant/service.ts) and
+[its regressions](../server/src/assistant/service.test.ts).
+[Queue controls](../web/src/components/AssistantQueue.tsx) and
+[bounded Thinking display](../web/src/components/AssistantThinking.tsx) share the
+[workspace-assistant contract](../openspec/specs/workspace-assistant/spec.md);
+[the tutorial](TUTORIAL.md#ranger-steer-or-queue-a-message) describes their use.

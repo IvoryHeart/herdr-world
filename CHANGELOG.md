@@ -19,6 +19,11 @@ are optional because the merged PR history records their source.
 
 ### Changed
 
+- Refresh Roamgate source through main `57327a0d` after v0.8.6: add Ranger
+  Steer/Queue messages, collapsible model reasoning and selection-safe terminal
+  repaint focus, plus clearer Message/Direct switching and shortcut visibility.
+  Queued questions retain their selected runtime and hold on replacement.
+
 - Synchronize the Roamgate v0.8.6 source: add login-token help, symlinked user
   config roots, pane dragging across tabs, tab-strip overflow controls, and
   repository comparison branches. Keep World's qualified terminals, mobile app

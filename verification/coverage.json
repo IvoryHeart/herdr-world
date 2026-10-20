@@ -948,9 +948,9 @@
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/182",
       "technique": "ranger-authority",
-      "assessment": "turn authority, cancellation and crash/recovery under explicit storage assumptions",
+      "assessment": "turn authority, cancellation and crash/recovery under explicit storage assumptions; direct FIFO/steer/held-queue integration and captured-generation persistence evidence",
       "status": "shared-model",
-      "remaining": "actual task scheduler/SDK admission, cancellation, interrupted-run recovery and platform storage tests remain required consumer evidence.",
+      "remaining": "Actual task scheduler/SDK admission, cancellation, interrupted-run recovery and platform storage remain required consumer evidence. Busy-message queue ordering and steering use direct service/driver regressions; the maintained model does not claim queue or SDK scheduling coverage.",
       "requiredChecks": ["bun run check", "bun run verification:gate"],
       "partialEvidence": {
         "models": ["quint/ranger-recovery.qnt"],
@@ -990,7 +990,7 @@
       "technique": "ranger-authority",
       "assessment": "task run/stop/pause/recovery; timezone and DST behavior remains direct calendar evidence",
       "status": "shared-model",
-      "remaining": "actual task scheduler/SDK admission, cancellation, interrupted-run recovery and platform storage tests remain required consumer evidence.",
+      "remaining": "Actual task scheduler/SDK admission, cancellation, interrupted-run recovery and platform storage remain required consumer evidence. Busy-message queue ordering and steering use direct service/driver regressions; the maintained model does not claim queue or SDK scheduling coverage.",
       "requiredChecks": ["bun run check", "bun run verification:gate"],
       "partialEvidence": {
         "models": ["quint/ranger-recovery.qnt"],
@@ -1029,7 +1029,7 @@
       "technique": "ranger-authority",
       "assessment": "dispatch-time permission/revision/identity revalidation and manual confirmation",
       "status": "modeled",
-      "remaining": "actual task scheduler/SDK admission, cancellation, interrupted-run recovery and platform storage tests remain required consumer evidence.",
+      "remaining": "Actual task scheduler/SDK admission, cancellation, interrupted-run recovery and platform storage remain required consumer evidence. Busy-message queue ordering and steering use direct service/driver regressions; the maintained model does not claim queue or SDK scheduling coverage.",
       "requiredChecks": ["bun run check", "bun run verification:gate"],
       "partialEvidence": {
         "models": ["quint/ranger-authority.qnt"],

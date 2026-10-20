@@ -870,3 +870,20 @@ your installed version's help.
 The Pages build renders this canonical Markdown; do not duplicate its body in HTML.
 Review affected chapters when installation flags, feature limits, or upstream
 networking commands change.
+
+## Ranger: steer or queue a message
+
+1. Open **Ranger**, configure a model and explicitly allow the workspaces it may read.
+2. Ask a question. While it answers, press Enter or **Steer** to adjust the current
+   turn after its next step. Use Alt+Enter (**Option+Enter** on macOS) or **Queue**
+   to wait until that answer finishes.
+3. Edit or remove waiting messages above the editor. Up to eight may wait. A
+   message that needs a different workspace scope waits for its own turn.
+4. After **Stop**, a failure, restart or chat switch, choose **Send next** when
+   ready to continue. If a selected runtime was replaced, remove the stale queued
+   message and resend it with a refreshed workspace selection.
+5. Expand **Thinking** above a reply when the model provides reasoning. Selecting
+   text there or in the answer stays intact while terminal output updates.
+
+Workspace reads and actions still use explicit permissions and captured ownership;
+steering does not enable high-permission mode or send a prompt to another agent.

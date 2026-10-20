@@ -79,3 +79,25 @@ Task deletion SHALL require prior cancellation and drain its private run resourc
 #### Scenario: Pane occupant changes before close
 - **WHEN** a close preview's captured pane layout or occupant changes before dispatch
 - **THEN** Ranger rejects the close instead of acting on the replacement
+
+### Requirement: Ordered messages during a running turn
+World SHALL admit at most eight pending Ranger messages, deduplicate request IDs,
+and process steering, removal and follow-up admission in queue order. A steer
+SHALL remain within the running turn's captured scope and runtime generation;
+unavailable or wider steering SHALL become a follow-up. Follow-ups SHALL retain
+their selected runtime generations through persistence and SHALL NOT recapture
+a replacement runtime automatically. Stop, failure, restart or chat switching
+SHALL hold waiting messages until explicit user continuation. Pending action or
+task previews SHALL block automatic follow-up admission.
+
+#### Scenario: Runtime replaced while a question waits
+- **WHEN** the runtime selected by a queued question is replaced before admission
+- **THEN** the queue is held with a scope error and the replacement receives no turn
+
+#### Scenario: Steer targets a different runtime generation
+- **WHEN** a steering message names a generation other than the running turn's
+- **THEN** it waits as a follow-up and does not enter that running turn
+
+#### Scenario: Stop with waiting questions
+- **WHEN** the user stops Ranger with pending questions
+- **THEN** waiting questions remain held across restart until explicit continuation

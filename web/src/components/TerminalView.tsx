@@ -7,7 +7,10 @@ import {
   takeTerminalComposerRequest,
   terminalComposerRequestKey,
 } from "../world/terminalComposerRequest";
-import { type TerminalInputMode } from "./TerminalComposer";
+import {
+  readTerminalComposerShortcutsOpen,
+  type TerminalInputMode,
+} from "./TerminalComposer";
 import {
   filesFromTerminalDrop,
   isNativeFileDrag,
@@ -122,8 +125,10 @@ import {
 } from "../terminalFileLinks";
 import {
   terminalFocusBlockedByOverlay,
+  terminalOutputFocusBlockedBySelection,
   terminalPointerShouldBlurInput,
   terminalTouchInputAction,
+  watchTerminalOverlayPointer,
 } from "../terminalFocus";
 import { TerminalHistorySelection } from "../terminalHistorySelection";
 import { uploadTerminalImage } from "../terminalImageUpload";
@@ -476,6 +481,9 @@ export function TerminalView({
     TerminalTouchSelection["handles"]
   >([]);
   const [mobileKeysOpen, setMobileKeysOpen] = useState(false);
+  const [composerShortcutsOpen, setComposerShortcutsOpen] = useState(
+    readTerminalComposerShortcutsOpen,
+  );
   const [localComposerOpen, setLocalComposerOpen] = useState(false);
   const [closePaneRequested, setClosePaneRequested] = useState(false);
   const [localAgentHistoryOpen, setLocalAgentHistoryOpen] = useState(false);
@@ -584,6 +592,7 @@ export function TerminalView({
   composerModeRef.current = composerMode;
   const composerEditingRef = useRef(false);
   composerEditingRef.current = composerOpen && composerMode === "composer";
+  const pendingExplicitModeRef = useRef<TerminalInputMode | null>(null);
   const closeTerminalInput = useCallback((blurInput = true) => {
     inputActiveRef.current = false;
     setInputActive(false);
@@ -644,11 +653,18 @@ export function TerminalView({
     // is a safety reset, not another request to restore the preference.
     previousComposerOpenRef.current =
       composerOpen && (previousComposerOpenRef.current || !!termInstance);
-    if (!opening || directDisabled) return;
+    if (!opening || directDisabled) {
+      if (!composerOpen) pendingExplicitModeRef.current = null;
+      return;
+    }
+    const explicitMode = pendingExplicitModeRef.current;
+    if (previousComposerOpenRef.current) {
+      pendingExplicitModeRef.current = null;
+    }
     // Restore only on opening, after the safety effects retire the old input
     // session. Reconnects and pane changes must not activate Direct input or
     // overwrite the saved choice. Only a fresh input gesture may enable stdin.
-    const mode = readTerminalInputMode();
+    const mode = explicitMode ?? readTerminalInputMode();
     setComposerMode(mode);
     composerModeRef.current = mode;
     composerEditingRef.current = mode === "composer";
@@ -835,8 +851,10 @@ export function TerminalView({
   };
   const preparePathInsertionRef = useRef(preparePathInsertion);
   preparePathInsertionRef.current = preparePathInsertion;
+  // Output frames must not clear text the user is selecting in an overlay;
+  // activating a pane always reclaims keyboard focus.
   const focusTerminalSoon = useCallback(
-    (preserveOtherTerminal = false) => {
+    (reason?: "output") => {
       if (
         !isActivePaneRef.current ||
         composerEditingRef.current ||
@@ -870,7 +888,7 @@ export function TerminalView({
           )
             return;
           if (
-            preserveOtherTerminal &&
+            reason === "output" &&
             activeIsTerminalInput &&
             !container?.contains(activeElement)
           )
@@ -880,6 +898,11 @@ export function TerminalView({
           // Streaming frames must not steal focus from an open popover, dialog,
           // or menu: moving focus out of an overlay dismisses it.
           if (terminalFocusBlockedByOverlay(activeElement, document)) return;
+          if (
+            reason === "output" &&
+            terminalOutputFocusBlockedBySelection(document)
+          )
+            return;
           term.focus();
         }, 0);
       });
@@ -943,6 +966,7 @@ export function TerminalView({
   useEffect(() => {
     if (isActivePane) focusTerminalSoon();
   }, [focusTerminalSoon, isActivePane]);
+  useEffect(() => watchTerminalOverlayPointer(document), []);
   useEffect(() => {
     const rememberTerminalFocus = () => {
       restoreFocusOnForegroundRef.current =
@@ -1509,7 +1533,7 @@ export function TerminalView({
           });
         });
       }
-      focusTerminalSoon(true);
+      focusTerminalSoon("output");
     };
     const off = bridge.onTerminal((frame) => {
       if (
@@ -3014,7 +3038,9 @@ export function TerminalView({
       if (
         composerModeRef.current === "direct" &&
         e.target instanceof Element &&
-        e.target.closest(".terminal-composer")
+        e.target.closest(
+          ".terminal-composer, .terminal-mobile-keys, .terminal-mobile-side-shortcuts",
+        )
       )
         return;
       if (
@@ -3567,6 +3593,11 @@ export function TerminalView({
     1,
     ...mobileShortcuts.map((row) => row.length),
   );
+  const composerShortcutsVisible =
+    composerOpen && visible && hasMobileShortcuts && composerShortcutsOpen;
+  useLayoutEffect(() => {
+    if (composerShortcutsVisible) setMobileKeysOpen(false);
+  }, [composerShortcutsVisible]);
 
   if (!pane) {
     return (
@@ -3639,11 +3670,14 @@ export function TerminalView({
       mode={composerMode}
       onModeChange={(mode, remember) => {
         if (!connectionClient.isCurrent() || !isActivePaneRef.current) return;
+        if (remember) rememberTerminalInputMode(mode);
+        if (!composerOpen) pendingExplicitModeRef.current = mode;
         onActivateTerminalSurface?.();
+        composerModeRef.current = mode;
+        composerEditingRef.current = mode === "composer";
         closeTerminalInput();
         setComposerMode(mode);
         setComposerOpen(true);
-        if (remember) rememberTerminalInputMode(mode);
       }}
       onFocusDirect={focusTerminalInput}
       directDisabled={directDisabled}
@@ -3651,6 +3685,7 @@ export function TerminalView({
       shortcutRows={mobileShortcuts}
       onRunShortcut={runMobileShortcut}
       shortcutDisabledReason={mobileShortcutReason}
+      onShortcutsVisibleChange={setComposerShortcutsOpen}
       onClose={() => setComposerOpen(false)}
       onSubmit={submitTerminalComposer}
       onPreparePathInsertion={() => preparePathInsertion(true)}
@@ -4059,6 +4094,7 @@ export function TerminalView({
                     }
                     aria-label={`Run ${option?.label ?? shortcut.label}`}
                     onPointerDown={preventShortcutFocus}
+                    onMouseDown={(event) => event.preventDefault()}
                     onClick={() => runMobileShortcut(shortcut)}
                     key={shortcut.id}
                   >
@@ -4071,7 +4107,7 @@ export function TerminalView({
         </div>
         {visible &&
         touchHandles.length === 0 &&
-        !composerOpen &&
+        !composerShortcutsVisible &&
         showMobileKeys &&
         hasMobileShortcuts ? (
           <div
@@ -4090,6 +4126,7 @@ export function TerminalView({
               }
               aria-expanded={mobileKeysOpen}
               onPointerDown={preventShortcutFocus}
+              onMouseDown={(event) => event.preventDefault()}
               onClick={() => setMobileKeysOpen((value) => !value)}
             >
               <Grid2X2 size={17} />
@@ -4132,6 +4169,7 @@ export function TerminalView({
                           }
                           aria-label={`Send ${option?.label ?? shortcut.label}`}
                           onPointerDown={preventShortcutFocus}
+                          onMouseDown={(event) => event.preventDefault()}
                           onClick={() => runMobileShortcut(shortcut)}
                           key={shortcut.id}
                         >

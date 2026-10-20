@@ -636,6 +636,12 @@ mouse-aware apps with Option-drag (macOS) or Shift-drag (elsewhere).
 - Ranger reads explicitly permitted workspaces across local and SSH connections,
   chats with a configured model, and proposes actions for manual confirmation.
   An explicit high-permission mode can execute supported operations automatically.
+- While Ranger answers, **Steer** or Enter adds a message after its current step;
+  **Queue** or Alt+Enter (Option+Enter on macOS) waits for the next answer. Up to
+  eight waiting messages can be edited or removed. Stop, failure or a chat switch
+  holds them until **Send next**. A replaced runtime requires a refreshed scope.
+- When the model provides reasoning, a collapsible **Thinking** section shows it
+  above its reply. Selecting Ranger text is preserved while terminals repaint.
 - Background tasks run once, at intervals or daily, with separate conversations
   and optional monitoring alerts. Saved schedules retain endpoint and workspace
   identity; interactive requests capture their runtime generation.

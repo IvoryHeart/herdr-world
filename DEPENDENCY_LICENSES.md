@@ -2325,7 +2325,7 @@ Sources:
 
 Sources:
 
-- `@xterm/xterm@6.1.0-beta.304` — `LICENSE`
+- `@xterm/xterm@6.1.0-beta.315` — `LICENSE`
 
     Copyright (c) 2017-2019, The xterm.js authors (https://github.com/xtermjs/xterm.js)
     Copyright (c) 2014-2016, SourceLair Private Company (https://www.sourcelair.com)
@@ -4089,7 +4089,7 @@ Sources:
 Sources:
 
 - `@oxc-project/types@0.152.0` — `LICENSE`
-- `oxlint@1.87.0` — `LICENSE`
+- `oxlint@1.88.0` — `LICENSE`
 
     MIT License
 
@@ -4657,35 +4657,35 @@ Sources:
 Sources:
 
 - `@radix-ui/primitive@1.1.4` — `LICENSE`
-- `@radix-ui/primitive@1.1.7` — `LICENSE`
-- `@radix-ui/react-arrow@1.1.16` — `LICENSE`
+- `@radix-ui/primitive@1.2.0` — `LICENSE`
+- `@radix-ui/react-arrow@1.1.17` — `LICENSE`
 - `@radix-ui/react-compose-refs@1.1.3` — `LICENSE`
 - `@radix-ui/react-compose-refs@1.1.5` — `LICENSE`
 - `@radix-ui/react-context@1.1.4` — `LICENSE`
-- `@radix-ui/react-context@1.2.2` — `LICENSE`
+- `@radix-ui/react-context@1.3.0` — `LICENSE`
 - `@radix-ui/react-dialog@1.1.17` — `LICENSE`
 - `@radix-ui/react-dismissable-layer@1.1.13` — `LICENSE`
-- `@radix-ui/react-dismissable-layer@1.1.20` — `LICENSE`
+- `@radix-ui/react-dismissable-layer@1.2.1` — `LICENSE`
 - `@radix-ui/react-focus-guards@1.1.4` — `LICENSE`
-- `@radix-ui/react-focus-guards@1.1.6` — `LICENSE`
+- `@radix-ui/react-focus-guards@1.2.0` — `LICENSE`
 - `@radix-ui/react-focus-scope@1.1.10` — `LICENSE`
-- `@radix-ui/react-focus-scope@1.2.0` — `LICENSE`
+- `@radix-ui/react-focus-scope@1.3.1` — `LICENSE`
 - `@radix-ui/react-id@1.1.2` — `LICENSE`
 - `@radix-ui/react-id@1.1.4` — `LICENSE`
-- `@radix-ui/react-popover@1.2.0` — `LICENSE`
-- `@radix-ui/react-popper@1.3.8` — `LICENSE`
+- `@radix-ui/react-popover@1.3.1` — `LICENSE`
+- `@radix-ui/react-popper@1.4.0` — `LICENSE`
 - `@radix-ui/react-portal@1.1.12` — `LICENSE`
-- `@radix-ui/react-portal@1.1.18` — `LICENSE`
+- `@radix-ui/react-portal@1.2.0` — `LICENSE`
 - `@radix-ui/react-presence@1.1.11` — `LICENSE`
 - `@radix-ui/react-presence@1.1.6` — `LICENSE`
-- `@radix-ui/react-primitive@2.1.11` — `LICENSE`
 - `@radix-ui/react-primitive@2.1.6` — `LICENSE`
+- `@radix-ui/react-primitive@2.2.0` — `LICENSE`
 - `@radix-ui/react-slot@1.3.0` — `LICENSE`
-- `@radix-ui/react-slot@1.4.0` — `LICENSE`
+- `@radix-ui/react-slot@1.5.0` — `LICENSE`
 - `@radix-ui/react-use-callback-ref@1.1.2` — `LICENSE`
-- `@radix-ui/react-use-callback-ref@1.1.4` — `LICENSE`
+- `@radix-ui/react-use-callback-ref@1.1.5` — `LICENSE`
 - `@radix-ui/react-use-controllable-state@1.2.3` — `LICENSE`
-- `@radix-ui/react-use-controllable-state@1.2.6` — `LICENSE`
+- `@radix-ui/react-use-controllable-state@1.3.0` — `LICENSE`
 - `@radix-ui/react-use-effect-event@0.0.3` — `LICENSE`
 - `@radix-ui/react-use-effect-event@0.0.5` — `LICENSE`
 - `@radix-ui/react-use-escape-keydown@1.1.2` — `LICENSE`
@@ -6900,7 +6900,7 @@ Sources:
 
 Sources:
 
-- `@xterm/addon-fit@0.12.0-beta.301` — `LICENSE`
+- `@xterm/addon-fit@0.12.0-beta.311` — `LICENSE`
 
     Copyright (c) 2019, The xterm.js authors (https://github.com/xtermjs/xterm.js)
 
@@ -8585,7 +8585,7 @@ Sources:
 Sources:
 
 - `typebox@1.3.27` — `license`
-- `typebox@1.3.34` — `license`
+- `typebox@1.3.37` — `license`
 
     TypeBox
 
