@@ -142,7 +142,8 @@ with `taskset -c <cpu-a>,<cpu-b>` after checking the CPU/core mapping: separate
 cores and sibling logical CPUs measure different contention conditions. Run cases
 sequentially and report every run; affinity is a stress proxy, not a model of CI
 hardware. On CI these suites run in the dedicated **World latency budgets** job,
-alone and one case at a time after the runner goes quiet; locally the delivery
+alone and one case at a time after the runner goes quiet, with one retry for a
+failed case; locally the delivery
 gate runs them in its quiet lane. For timing investigation, set `WORLD_TRACE_PREFIX` to a private
 temporary path; `WORLD_TIMINGS_ONLY=1` keeps acknowledgement/phase and Long
 Animation Frame evidence without the overhead of a full Chrome trace.

@@ -45,7 +45,9 @@ jobs:
 
     # Suites with wall-clock budgets (input latency, frame counts) on a runner
     # of their own: nothing else runs, it waits for the machine to go quiet
-    # after setup, and it runs one case at a time.
+    # after setup, and it runs one case at a time. A case that fails is run
+    # once more (owner decision, #230): a hosted runner still produces the
+    # odd slow event, and the worst-event budgets are judged on one run.
     world-latency:
         name: World latency budgets
         runs-on: ubuntu-latest
@@ -65,7 +67,7 @@ jobs:
               env:
                   WORLD_TRACE_PREFIX: .agents/delivery/world-production
                   WORLD_TIMINGS_ONLY: "1"
-              run: bun run test:world --shard=latency --parallel=1 --max-concurrency=1
+              run: bun run test:world --shard=latency --parallel=1 --max-concurrency=1 --retry=1
             - name: Upload World latency results and timings
               if: always()
               uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
