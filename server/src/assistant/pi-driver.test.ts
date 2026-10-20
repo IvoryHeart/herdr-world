@@ -413,6 +413,124 @@ test("live replies report visible reasoning per model call and omit redacted rea
   }
 });
 
+test("a steer joins the running turn after its tool round and splits later output", async () => {
+  const f = await durableFixture((index) =>
+    modelReply(
+      index,
+      index === 1
+        ? [
+            ...text("Checking."),
+            ...toolUse(
+              "workspace_status",
+              "status",
+              { connection_id: "local", workspace_id: "workspace" },
+              1,
+            ),
+            ...finish("tool_use"),
+          ]
+        : [...text("Adjusted"), ...finish("end_turn")],
+    ),
+  );
+  const events: string[] = [];
+  const reading = Promise.withResolvers<void>();
+  const release = Promise.withResolvers<void>();
+  try {
+    const driver = f.createDriver();
+    const run = driver.run(
+      f.input({
+        read: async () => {
+          reading.resolve();
+          await release.promise;
+          return { text: "Running" };
+        },
+        replace: (value) => events.push(`text:${value}`),
+        tool: (_id, _name, status) => events.push(`tool:${status}`),
+        steered: (requestId, value) =>
+          events.push(`steered:${requestId}:${value}`),
+      }),
+    );
+    await reading.promise;
+    await driver.steer!({
+      text: "Use the other branch.",
+      requestId: "steer-1",
+    });
+    // A retried steer reuses its identity instead of sending twice.
+    await driver.steer!({
+      text: "Use the other branch.",
+      requestId: "steer-1",
+    });
+    release.resolve();
+    await run;
+    expect(f.requests).toHaveLength(2);
+    const messages = JSON.stringify(f.requests[1]!.messages);
+    expect(messages.split("Use the other branch.")).toHaveLength(2);
+    const steered = events.indexOf("steered:steer-1:Use the other branch.");
+    expect(steered).toBeGreaterThan(events.indexOf("tool:completed"));
+    expect(events.slice(0, steered)).toContain("text:Checking.");
+    expect(events.slice(steered + 1)).toContain("text:Adjusted");
+    expect(events.slice(steered + 1)).not.toContain("text:Checking.");
+    expect(events.filter((event) => event.startsWith("steered:"))).toHaveLength(
+      1,
+    );
+    await expect(
+      driver.steer!({ text: "Too late", requestId: "steer-2" }),
+    ).rejects.toThrow("Ranger is not running");
+  } finally {
+    release.resolve();
+    await f.cleanup();
+  }
+});
+
+test("a steer that misses the answer stops its own run instead of joining the turn", async () => {
+  // The missed steer's run asks for a tool straight away.
+  const f = await durableFixture((index) =>
+    index === 1
+      ? modelReply(index, [...text("Answered"), ...finish("end_turn")])
+      : index === 2
+        ? modelReply(index, [
+            ...toolUse(
+              "workspace_status",
+              "stray",
+              { connection_id: "local", workspace_id: "workspace" },
+              0,
+            ),
+            ...finish("tool_use"),
+          ])
+        : hangingReply(index),
+  );
+  const reads: unknown[] = [];
+  try {
+    const entries = await f.createDriver().run(f.input());
+    const events: string[] = [];
+    // Recovery resubmits a steer saved for the turn after Pi already answered
+    // it, the same placement race as a steer sent just as the turn settles.
+    await f.createDriver().run(
+      f.input({
+        entries,
+        recover: true,
+        steers: [{ requestId: "late", text: "Late steer" }],
+        read: async (...args) => {
+          reads.push(args);
+          return { text: "Running" };
+        },
+        replace: (value) => events.push(`text:${value}`),
+        steered: (requestId) => events.push(`steered:${requestId}`),
+      }),
+    );
+    expect(events).not.toContain("steered:late");
+    expect(events.at(-1)).toBe("text:Answered");
+    // Whether the driver stops that run before or after it asks for a tool,
+    // the tool never runs outside the turn.
+    expect(reads).toEqual([]);
+    // Pi placed it in a run of its own, which the driver stopped.
+    expect(JSON.stringify(durableEntries(f.directory, entries))).toContain(
+      "Late steer",
+    );
+  } finally {
+    await f.cleanup();
+  }
+});
+
 test("a failed model call keeps the reasoning already streamed", async () => {
   const f = await durableFixture((index) =>
     modelReply(index, [

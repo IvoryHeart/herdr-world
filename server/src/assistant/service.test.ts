@@ -5815,3 +5815,466 @@ test.each([
     }
   },
 );
+
+test("queued follow-ups wait for the answer and are admitted in order", async () => {
+  const gate = Promise.withResolvers<void>();
+  const prompts: string[] = [];
+  const f = setup({
+    run: async (input) => {
+      prompts.push(input.text);
+      if (prompts.length === 1) await gate.promise;
+      input.message(`Answer ${prompts.length}`);
+      return [{ persisted: true }];
+    },
+  });
+  await f.service.handle("configure", { config: configured });
+  await f.service.handle("send", { text: "First", request_id: "first" });
+  await f.service.handle("send", {
+    text: "Second",
+    request_id: "second",
+    when_busy: "queue",
+  });
+  // A retried request is not queued twice.
+  await f.service.handle("send", {
+    text: "Second",
+    request_id: "second",
+    when_busy: "queue",
+  });
+  await f.service.handle("send", {
+    text: "Third",
+    request_id: "third",
+    when_busy: "queue",
+  });
+  expect(f.service.peek().queue).toMatchObject([
+    { id: "second", mode: "follow_up", text: "Second" },
+    { id: "third", mode: "follow_up", text: "Third" },
+  ]);
+  expect(isAssistantSnapshot(f.service.peek())).toBe(true);
+  await expect(
+    f.service.handle("send", { text: "Busy", request_id: "busy" }),
+  ).rejects.toThrow("Ranger is busy");
+  gate.resolve();
+  await until(
+    () => !f.service.peek().running && f.service.peek().messages.length === 6,
+  );
+  expect(f.service.peek().queue).toEqual([]);
+  // Draining between turns never reports the queue as held.
+  expect(f.snapshots.some((snapshot) => snapshot.queue_held)).toBe(false);
+  expect(f.service.peek().messages.map((message) => message.text)).toEqual([
+    "First",
+    "Answer 1",
+    "Second",
+    "Answer 2",
+    "Third",
+    "Answer 3",
+  ]);
+  expect(prompts[1]).toContain("User message:\nSecond");
+  expect(prompts[1]).toContain("Authorized workspace scope");
+});
+
+test("a steer joins the running turn and its reply follows it", async () => {
+  const gate = Promise.withResolvers<void>();
+  const steers: { text: string; requestId: string }[] = [];
+  let steered: ((id: string | undefined, text: string) => void) | undefined;
+  const f = setup({
+    run: async (input) => {
+      expect(input.steers).toBeUndefined();
+      steered = input.steered;
+      input.message("Before");
+      await gate.promise;
+      input.steered?.("steer", steers[0]!.text);
+      input.tool("after", "workspace_status", "completed");
+      input.message("After");
+      return [{ persisted: true }];
+    },
+    steer: async (value) => {
+      steers.push(value);
+    },
+  });
+  await f.service.handle("configure", { config: configured });
+  await f.service.handle("send", { text: "First", request_id: "first" });
+  await until(() => !!steered);
+  await f.service.handle("send", {
+    text: "Use the other branch",
+    request_id: "steer",
+    when_busy: "steer",
+  });
+  await until(() => steers.length === 1);
+  expect(steers[0]!.requestId).toBe("steer");
+  expect(steers[0]!.text).toContain("Steering message from the user");
+  expect(steers[0]!.text).toContain("User message:\nUse the other branch");
+  expect(f.service.peek().queue).toMatchObject([
+    { id: "steer", mode: "steer" },
+  ]);
+  await expect(
+    f.service.handle("queue.remove", { id: "steer" }),
+  ).rejects.toThrow("already steering");
+  const saved = JSON.parse(
+    readFileSync(join(f.directory, "state.json"), "utf8"),
+  );
+  expect(saved.active_run.steers).toMatchObject([{ request_id: "steer" }]);
+  gate.resolve();
+  await until(() => !f.service.peek().running);
+  const messages = f.service.peek().messages;
+  expect(messages.map((message) => [message.role, message.text])).toEqual([
+    ["user", "First"],
+    ["assistant", "Before"],
+    ["user", "Use the other branch"],
+    ["assistant", "After"],
+  ]);
+  expect(messages[1]!.tools).toEqual([]);
+  expect(messages[3]!.tools).toMatchObject([{ id: "after" }]);
+  expect(f.service.peek().queue).toEqual([]);
+  // The placed steer is a sent request now, never queued again.
+  await f.service.handle("send", {
+    text: "Use the other branch",
+    request_id: "steer",
+  });
+  expect(f.service.peek().messages).toHaveLength(4);
+});
+
+test("stopping holds unsent messages, keeps them across restarts and resumes on request", async () => {
+  const prompts: string[] = [];
+  const f = setup({
+    run: async (input) => {
+      prompts.push(input.text);
+      if (prompts.length === 1)
+        await new Promise((resolve) =>
+          input.signal.addEventListener("abort", resolve, { once: true }),
+        );
+      else input.message("Resumed");
+      return [{ persisted: true }];
+    },
+    steer: async () => {
+      throw new Error("Ranger finished this turn");
+    },
+  });
+  await f.service.handle("configure", { config: configured });
+  await f.service.handle("send", { text: "First", request_id: "first" });
+  await until(() => prompts.length === 1);
+  await f.service.handle("send", {
+    text: "Late steer",
+    request_id: "late",
+    when_busy: "steer",
+  });
+  await until(() => f.service.peek().queue?.[0]?.mode === "follow_up");
+  await f.service.handle("send", {
+    text: "Drop me",
+    request_id: "drop",
+    when_busy: "queue",
+  });
+  await f.service.handle("stop", {});
+  await until(() => !f.service.peek().running);
+  await flushTasks();
+  expect(prompts).toHaveLength(1);
+  expect(f.service.peek().queue?.map((item) => item.id)).toEqual([
+    "late",
+    "drop",
+  ]);
+  expect(f.service.peek().queue_held).toBe(true);
+  await f.service.handle("queue.remove", { id: "drop" });
+  await f.service.dispose();
+  const restored = createAssistantService({
+    directory: f.directory,
+    context: f.context,
+    driver: f.driver,
+    publish: () => {},
+  });
+  services.push(restored);
+  expect((await restored.snapshot()).queue).toMatchObject([
+    { id: "late", mode: "follow_up", text: "Late steer" },
+  ]);
+  await flushTasks();
+  expect(prompts).toHaveLength(1);
+  await restored.handle("queue.resume", {});
+  await until(() => !restored.peek().running);
+  expect(prompts[1]).toContain("User message:\nLate steer");
+  expect(restored.peek().queue).toEqual([]);
+  expect(restored.peek().messages.at(-1)!.text).toBe("Resumed");
+});
+
+test("a queued follow-up waits while an action preview needs review", async () => {
+  const gate = Promise.withResolvers<void>();
+  const prompts: string[] = [];
+  const f = setup({
+    run: async (input) => {
+      prompts.push(input.text);
+      if (prompts.length === 1) {
+        await input.propose!(
+          "create_tab",
+          { connection_id: "local", workspace_id: "ws", cwd: "/repo" },
+          input.signal,
+        );
+        await gate.promise;
+      }
+      input.message("Done");
+      return [{ persisted: true }];
+    },
+  });
+  f.context.prepareAction = async () =>
+    permissionAction(async () => ({ status: "succeeded", detail: "Created" }));
+  await f.service.handle("configure", { config: configured });
+  await f.service.handle("send", { text: "Make a tab", request_id: "tab" });
+  await f.service.handle("send", {
+    text: "Then report",
+    request_id: "next",
+    when_busy: "queue",
+  });
+  gate.resolve();
+  await until(() => !f.service.peek().running);
+  await flushTasks();
+  expect(prompts).toHaveLength(1);
+  const action = f.service.peek().messages.at(-1)!.actions![0]!;
+  expect(action.status).toBe("pending");
+  await f.service.handle("action.confirm", { action_id: action.id });
+  await until(() => prompts.length === 2 && !f.service.peek().running);
+  expect(prompts[1]).toContain("User message:\nThen report");
+});
+
+test("a queued follow-up is retried when its blocking preview is cancelled as unavailable", async () => {
+  const gate = Promise.withResolvers<void>();
+  const prompts: string[] = [];
+  const f = setup({
+    run: async (input) => {
+      prompts.push(input.text);
+      if (prompts.length === 1) {
+        await input.propose!(
+          "create_tab",
+          { connection_id: "local", workspace_id: "ws", cwd: "/repo" },
+          input.signal,
+        );
+        await gate.promise;
+      }
+      input.message("Done");
+      return [{ persisted: true }];
+    },
+  });
+  f.context.prepareAction = async () =>
+    permissionAction(async () => ({ status: "succeeded", detail: "Created" }));
+  await f.service.handle("configure", { config: configured });
+  await f.service.handle("send", { text: "Make a tab", request_id: "tab" });
+  await f.service.handle("send", {
+    text: "Then report",
+    request_id: "next",
+    when_busy: "queue",
+  });
+  gate.resolve();
+  await until(() => !f.service.peek().running);
+  await flushTasks();
+  expect(prompts).toHaveLength(1);
+  const action = f.service.peek().messages.at(-1)!.actions![0]!;
+  // The target workspace is gone when the preview is confirmed.
+  f.context.catalog = async () => ({
+    workspaces: [],
+    errors: [],
+    complete_connection_ids: ["local"],
+  });
+  await f.service.handle("action.confirm", { action_id: action.id });
+  expect(
+    f.service.peek().messages.flatMap((message) => message.actions ?? [])[0]!
+      .status,
+  ).toBe("cancelled");
+  // Nothing awaits review now, so the queue tries the follow-up at once; it
+  // is held with a reason because its own scope is gone too.
+  await until(() => !!f.service.peek().error?.includes("queued message"));
+  expect(prompts).toHaveLength(1);
+  expect(f.service.peek().queue).toMatchObject([{ id: "next" }]);
+});
+
+test("saving settings that cancel a blocking preview sends the waiting follow-up", async () => {
+  const gate = Promise.withResolvers<void>();
+  const prompts: string[] = [];
+  const f = setup({
+    run: async (input) => {
+      prompts.push(input.text);
+      if (prompts.length === 1) {
+        await input.propose!(
+          "create_tab",
+          { connection_id: "local", workspace_id: "ws", cwd: "/repo" },
+          input.signal,
+        );
+        await gate.promise;
+      }
+      input.message("Done");
+      return [{ persisted: true }];
+    },
+  });
+  f.context.prepareAction = async () =>
+    permissionAction(async () => ({ status: "succeeded", detail: "Created" }));
+  await f.service.handle("configure", { config: configured });
+  await f.service.handle("send", { text: "Make a tab", request_id: "tab" });
+  await f.service.handle("send", {
+    text: "Then report",
+    request_id: "next",
+    when_busy: "queue",
+  });
+  gate.resolve();
+  await until(() => !f.service.peek().running);
+  await flushTasks();
+  expect(prompts).toHaveLength(1);
+  await f.service.handle("configure", { config: configured });
+  expect(
+    f.service.peek().messages.flatMap((message) => message.actions ?? [])[0]!
+      .status,
+  ).toBe("cancelled");
+  await until(() => prompts.length === 2 && !f.service.peek().running);
+  expect(prompts[1]).toContain("User message:\nThen report");
+});
+
+test("a follow-up cannot be removed once its admission has started", async () => {
+  const gate = Promise.withResolvers<void>();
+  const admitting = Promise.withResolvers<void>();
+  const prompts: string[] = [];
+  const f = setup({
+    run: async (input) => {
+      prompts.push(input.text);
+      if (prompts.length === 1) await gate.promise;
+      input.message("Done");
+      return [{ persisted: true }];
+    },
+  });
+  const capture = f.context.captureScope;
+  const release = Promise.withResolvers<void>();
+  f.context.captureScope = async (...args) => {
+    if (prompts.length === 1) {
+      admitting.resolve();
+      await release.promise;
+    }
+    return capture(...args);
+  };
+  await f.service.handle("configure", { config: configured });
+  await f.service.handle("send", { text: "First", request_id: "first" });
+  await f.service.handle("send", {
+    text: "Second",
+    request_id: "second",
+    when_busy: "queue",
+  });
+  gate.resolve();
+  await admitting.promise;
+  // Removal waits behind the send in the queue's worker, then finds it gone.
+  const removal = f.service.handle("queue.remove", { id: "second" });
+  release.resolve();
+  await expect(removal).rejects.toThrow("already sent");
+  await until(() => prompts.length === 2 && !f.service.peek().running);
+  expect(prompts[1]).toContain("User message:\nSecond");
+  expect(f.service.peek().queue).toEqual([]);
+});
+
+test("concurrent steers reach the turn in queue order, and follow a missed one", async () => {
+  const gate = Promise.withResolvers<void>();
+  const binding = Promise.withResolvers<void>();
+  const release = Promise.withResolvers<void>();
+  const steered: string[] = [];
+  let failBinding = false;
+  let started = false;
+  const f = setup({
+    run: async (input) => {
+      started = true;
+      await gate.promise;
+      input.message("Done");
+      return [{ persisted: true }];
+    },
+    steer: async ({ requestId }) => {
+      steered.push(requestId);
+    },
+  });
+  f.context.bindMentions = async (_captured, targets) => {
+    binding.resolve();
+    await release.promise;
+    if (failBinding) throw new Error("Unavailable");
+    return targets;
+  };
+  await f.service.handle("configure", { config: configured });
+  await f.service.handle("send", { text: "First", request_id: "first" });
+  await until(() => started);
+  // The earlier steer is slow to bind its mention; the later one waits.
+  const slow = f.service.handle("send", {
+    text: "Check @Codex now",
+    mentions: [agentMarker],
+    request_id: "mentioned",
+    when_busy: "steer",
+  });
+  await binding.promise;
+  const quick = f.service.handle("send", {
+    text: "Then the tests",
+    request_id: "plain",
+    when_busy: "steer",
+  });
+  await flushTasks();
+  expect(steered).toEqual([]);
+  release.resolve();
+  await Promise.all([slow, quick]);
+  expect(steered).toEqual(["mentioned", "plain"]);
+  gate.resolve();
+  await until(() => !f.service.peek().running);
+
+  // A steer that cannot bind its mention misses the turn; a later steer
+  // follows it into the queue rather than overtaking it.
+  const second = Promise.withResolvers<void>();
+  started = false;
+  f.driver.run = async (input) => {
+    started = true;
+    await second.promise;
+    input.message("Done");
+    return [{ persisted: true }];
+  };
+  failBinding = true;
+  await f.service.handle("send", { text: "Again", request_id: "again" });
+  await until(() => started);
+  await f.service.handle("send", {
+    text: "Check @Codex now",
+    mentions: [agentMarker],
+    request_id: "unbound",
+    when_busy: "steer",
+  });
+  await f.service.handle("send", {
+    text: "Then the tests",
+    request_id: "after",
+    when_busy: "steer",
+  });
+  expect(steered).toEqual(["mentioned", "plain"]);
+  expect(f.service.peek().queue).toMatchObject([
+    { id: "unbound", mode: "follow_up" },
+    { id: "after", mode: "follow_up" },
+  ]);
+  second.resolve();
+});
+
+test("a steer that needs a workspace the turn did not admit waits as a follow-up", async () => {
+  const gate = Promise.withResolvers<void>();
+  const steered: string[] = [];
+  let started = false;
+  const f = setup({
+    run: async (input) => {
+      started = true;
+      await gate.promise;
+      input.message("Done");
+      return [{ persisted: true }];
+    },
+    steer: async ({ requestId }) => {
+      steered.push(requestId);
+    },
+  });
+  await f.service.handle("configure", { config: configured });
+  await f.service.handle("send", { text: "First", request_id: "first" });
+  await until(() => started);
+  const admitted = { connection_id: "local", workspace_id: "ws" };
+  await f.service.handle("send", {
+    text: "Same scope",
+    scope: [admitted],
+    request_id: "same",
+    when_busy: "steer",
+  });
+  await f.service.handle("send", {
+    text: "Also check the new workspace",
+    scope: [admitted, { connection_id: "local", workspace_id: "new" }],
+    request_id: "wider",
+    when_busy: "steer",
+  });
+  expect(steered).toEqual(["same"]);
+  expect(f.service.peek().queue).toMatchObject([
+    { id: "same", mode: "steer" },
+    { id: "wider", mode: "follow_up" },
+  ]);
+  gate.resolve();
+});

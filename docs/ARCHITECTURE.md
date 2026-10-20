@@ -215,6 +215,18 @@ state; sends are never replayed.
   dispatch, one action runs at a time, and failed or uncertain actions are never
   retried. Pane/agent closes are refused in multi-pane worktree-root workspaces
   because Herdr cannot prevent an implicit group close.
+- **Busy turns:** a `send` with `when_busy` is accepted while a turn runs
+  (at most 8 waiting messages). `steer` goes to Pi's inbox and joins the turn
+  after its current tool round, within the turn's admitted scope; its output
+  starts a new reply after the steer. `queue` waits in the snapshot `queue`
+  until the turn answers, then is admitted like a new question. A follow-up
+  also waits while an action or task preview awaits review. Steers that miss
+  the turn, or need a workspace it did not admit, become follow-ups, and later
+  steers of that turn follow them. Stop, a failed turn, or a chat switch holds
+  the queue (`queue_held`) until `queue.resume` or the next send;
+  `queue.remove` drops a follow-up. One worker runs steering, removal and
+  sending in queue order, and a single check after every published change or
+  request decides when the next follow-up goes.
 - **Persistence:** conversations and execution checkpoints live in the assistant
   directory; one bridge process must own it. After a restart, a turn resumes
   only after its endpoints, Herdr boot IDs, and workspaces are re-verified.
