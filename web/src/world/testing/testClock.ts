@@ -203,6 +203,8 @@ export function installTestClock(
     (stepping ??= frameStep().finally(() => {
       stepping = null;
     }));
+  /** The time of the last step whose timers and frames have all run. */
+  let settled = now;
   const frameStep = async () => {
     now += FRAME_MS;
     await runTimers();
@@ -216,6 +218,7 @@ export function installTestClock(
     // A commit can schedule an effect that schedules more work.
     await turn();
     await runTimers();
+    settled = now;
   };
 
   // The running clock's one driver, for the page's life: frame after frame
@@ -237,10 +240,16 @@ export function installTestClock(
       }
     })();
   /** One frame of progress: driven here, or waited for on the running clock. */
+  /**
+   * One completed step: its timers and frame callbacks have all run. On the
+   * running clock that is the driver's next step to finish, not merely its
+   * start, so an advance never returns, and a deadline never expires, with
+   * work due at that time still pending.
+   */
   const progress = async () => {
     if (!running) return step();
-    const from = now;
-    while (now === from) {
+    const from = settled;
+    while (settled === from) {
       // At rest (now, or since the last look), nothing will move time: an
       // advance or a deadline moves it.
       if (idle) return step();
@@ -254,16 +263,16 @@ export function installTestClock(
       return this.advance(2 * FRAME_MS);
     },
     async advance(ms) {
-      const end = now + ms;
+      const end = settled + ms;
       // Zero-delay timers first, as a real task turn would run them.
       if (!running) await runTimers();
-      while (now < end) await progress();
+      while (settled < end) await progress();
     },
     async until(done, message, limit = 10_000) {
-      const end = now + limit;
+      const end = settled + limit;
       if (!running) await runTimers();
       while (!done()) {
-        if (now >= end) throw new Error(message);
+        if (settled >= end) throw new Error(message);
         await progress();
       }
     },

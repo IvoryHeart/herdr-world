@@ -102,6 +102,50 @@ describe("test clock", () => {
     }
   });
 
+  test("on the running clock, a frame wait returns only after its frames have drawn (review)", async () => {
+    const target = {} as ClockTarget;
+    const clock = installTestClock(target, { now: () => 0 }, { running: true });
+    // A timer keeps the driver busy, so frame() waits on its steps.
+    const interval = target.setInterval(() => {}, 1);
+    const seen: string[] = [];
+    target.requestAnimationFrame(() => {
+      seen.push("first");
+      target.requestAnimationFrame(() => seen.push("second"));
+    });
+    await clock.frame();
+    expect(seen).toEqual(["first", "second"]);
+    // A deadline at the same time as the work does not expire before it.
+    const later: string[] = [];
+    target.requestAnimationFrame(() => {
+      later.push("first");
+      target.requestAnimationFrame(() => later.push("second"));
+    });
+    await clock.until(() => later.length === 2, "deadline", 32);
+    target.clearInterval(interval);
+  });
+
+  test("on the running clock, an advance returns only after every callback due by then (review)", async () => {
+    const target = {} as ClockTarget;
+    const time = { now: () => 0 };
+    const clock = installTestClock(target, time, { running: true });
+    const events: number[] = [];
+    target.setTimeout(() => {
+      for (let i = 0; i < 20; i++) target.setTimeout(() => events.push(i), 16);
+      target.requestAnimationFrame(() => {});
+    }, 1);
+    await Promise.resolve();
+    await Promise.resolve();
+    // They fall due at 32 ms: the advance ends on the step that runs them.
+    await clock.advance(32);
+    expect(events).toHaveLength(20);
+    const more: number[] = [];
+    target.setTimeout(() => {
+      for (let i = 0; i < 20; i++) target.setTimeout(() => more.push(i), 16);
+    }, 1);
+    await clock.until(() => more.includes(19), "last due timer", 32);
+    expect(more).toHaveLength(20);
+  });
+
   test("scheduler.postTask runs on test time, with its delay", async () => {
     const target = {
       scheduler: { postTask: () => Promise.reject(new Error("real")) },
