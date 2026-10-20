@@ -25,6 +25,20 @@ export const worldBrowserShards = [
 ].map((shard) => shard.map((name) => `web/src/world/${name}.test.ts`));
 
 export const worldBrowserSuites = worldBrowserShards.flat();
+
+/**
+ * Suites that assert wall-clock budgets (input latency, frame counts). They
+ * fail when other work competes for the CPU, so the local gate runs them on
+ * their own after everything else.
+ */
+export const worldTimedSuites = [
+  "ProductionContexts",
+  "ProductionContexts.board",
+  "ProductionContexts.town",
+  "ProductionContexts.animated",
+  "ConcurrentContexts",
+  "WorldTerminalHandoff",
+].map((name) => `web/src/world/${name}.test.ts`);
 export const worldBrowserIgnorePattern = `{${worldBrowserSuites
   .map((path) => `**/${path.slice("web/src/".length)}`)
   .join(",")}}`;
@@ -60,13 +74,15 @@ export async function assertWorldBrowserInventory(root = process.cwd()) {
   const nonexistent = worldBrowserSuites.filter(
     (path) => !actual.includes(path),
   );
+  const untracked = worldTimedSuites.filter((path) => !expected.has(path));
   if (
     expected.size !== worldBrowserSuites.length ||
     missing.length ||
-    nonexistent.length
+    nonexistent.length ||
+    untracked.length
   ) {
     throw new Error(
-      `World browser inventory mismatch: unassigned=${missing.join(",")}; missing=${nonexistent.join(",")}; duplicate=${expected.size !== worldBrowserSuites.length}`,
+      `World browser inventory mismatch: unassigned=${missing.join(",")}; missing=${nonexistent.join(",")}; duplicate=${expected.size !== worldBrowserSuites.length}; timed-unknown=${untracked.join(",")}`,
     );
   }
 }

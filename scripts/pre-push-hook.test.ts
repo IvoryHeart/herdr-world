@@ -12,7 +12,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-test("pre-push runs the full check and blocks a failed check", () => {
+test("pre-push checks what changed and blocks a failed check", () => {
   const root = mkdtempSync(join(tmpdir(), "pre-push-hook-"));
   const argsPath = join(root, "bun-args");
   const envPath = join(root, "bun-env");
@@ -47,17 +47,18 @@ test("pre-push runs the full check and blocks a failed check", () => {
     expect(success.status).toBe(0);
     expect(success.stdout).toBe("");
     expect(success.stderr).toMatch(
-      /pre-push: bun run check:delivery passed in \d+s/,
+      /pre-push: bun run check:changed passed in \d+s/,
     );
     expect(readdirSync(deliveryDir)).toEqual(["pre-push.tsv"]);
-    expect(readFileSync(reportPath, "utf8")).toMatch(/\t0\t\d+\tfull\n$/);
-    expect(readFileSync(argsPath, "utf8")).toBe("run check:delivery\n");
+    expect(readFileSync(reportPath, "utf8")).toMatch(/\t0\t\d+\tchanged\n$/);
+    // No pushed ref to compare with: the gate compares with main itself.
+    expect(readFileSync(argsPath, "utf8")).toBe("run check:changed\n");
     expect(readFileSync(envPath, "utf8")).toBe("||\n");
 
     const failure = run(37);
     expect(failure.status).toBe(37);
     expect(failure.stderr).toMatch(
-      /pre-push: bun run check:delivery failed \(exit 37, \d+s\)/,
+      /pre-push: bun run check:changed failed \(exit 37, \d+s\)/,
     );
     expect(failure.stderr).toContain("(fail) synthetic browser regression");
     const logPath = failure.stderr.match(/Full log: (.+)\n/)?.[1];
@@ -65,14 +66,14 @@ test("pre-push runs the full check and blocks a failed check", () => {
     expect(readFileSync(logPath!, "utf8")).toContain(
       "synthetic early diagnostic and stack",
     );
-    expect(readFileSync(reportPath, "utf8")).toMatch(/\t37\t\d+\tfull\n$/);
-    expect(readFileSync(argsPath, "utf8")).toBe("run check:delivery\n");
+    expect(readFileSync(reportPath, "utf8")).toMatch(/\t37\t\d+\tchanged\n$/);
+    expect(readFileSync(argsPath, "utf8")).toBe("run check:changed\n");
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
 });
 
-test("pre-push uses the docs gate only after a successful full gate covers all code", () => {
+test("pre-push compares with the pushed branch, and uses the docs gate only after a code gate", () => {
   const root = mkdtempSync(join(tmpdir(), "pre-push-docs-"));
   const hook = fileURLToPath(new URL("../.githooks/pre-push", import.meta.url));
   const argsPath = join(root, "bun-args");
@@ -91,7 +92,12 @@ test("pre-push uses the docs gate only after a successful full gate covers all c
       '#!/bin/sh\nprintf "%s\\n" "$*" > "$HOOK_ARGS_FILE"\nexit "$HOOK_EXIT_CODE"\n',
       { mode: 0o755 },
     );
-    const run = (local: string, remote: string, exitCode = 0) =>
+    const run = (
+      local: string,
+      remote: string,
+      exitCode = 0,
+      extra: Record<string, string> = {},
+    ) =>
       spawnSync("sh", [hook], {
         cwd: root,
         input: `refs/heads/example ${local} refs/heads/example ${remote}\n`,
@@ -101,11 +107,13 @@ test("pre-push uses the docs gate only after a successful full gate covers all c
           PATH: `${root}:${process.env.PATH ?? ""}`,
           HOOK_ARGS_FILE: argsPath,
           HOOK_EXIT_CODE: String(exitCode),
+          ...extra,
         },
       });
 
+    // A new branch: no remote commit to compare with.
     expect(run(base, "0".repeat(40)).status).toBe(0);
-    expect(readFileSync(argsPath, "utf8")).toBe("run check:delivery\n");
+    expect(readFileSync(argsPath, "utf8")).toBe("run check:changed\n");
     mkdirSync(join(root, "docs"));
     writeFileSync(join(root, "docs", "guide.md"), "updated\n");
     git("add", "docs/guide.md");
@@ -130,13 +138,24 @@ test("pre-push uses the docs gate only after a successful full gate covers all c
         `synthetic\t${base}\t0\t0\tfull\n`,
       );
       expect(run(git("rev-parse", "HEAD"), docs).status).toBe(0);
-      expect(readFileSync(argsPath, "utf8")).toBe("run check:delivery\n");
+      expect(readFileSync(argsPath, "utf8")).toBe(
+        `run check:changed --base=${docs}\n`,
+      );
     }
     writeFileSync(join(root, "code.ts"), "export const value = 1;\n");
     git("add", "code.ts");
     git("commit", "-qm", "code");
-    expect(run(git("rev-parse", "HEAD"), docs).status).toBe(0);
+    const code = git("rev-parse", "HEAD");
+    expect(run(code, docs).status).toBe(0);
+    expect(readFileSync(argsPath, "utf8")).toBe(
+      `run check:changed --base=${docs}\n`,
+    );
+    // The owner's override runs the full gate here too.
+    expect(run(code, docs, 0, { HERDR_WORLD_PREPUSH: "full" }).status).toBe(0);
     expect(readFileSync(argsPath, "utf8")).toBe("run check:delivery\n");
+    // A remote commit that is not an ancestor gives no base.
+    expect(run(code, "f".repeat(40)).status).toBe(0);
+    expect(readFileSync(argsPath, "utf8")).toBe("run check:changed\n");
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
