@@ -160,22 +160,29 @@ function apply(ops: BoardOp[]) {
 let failingWrites = 0;
 /** While set, the next board write waits for the test to release it. */
 let holdNextWrite: ((release: () => void) => void) | null = null;
-const store = new BoardDocumentStore({
-  call: async (method, params) =>
-    method !== "world.board.get" && holdNextWrite
-      ? new Promise<void>((resolve) => {
-          const hold = holdNextWrite!;
-          holdNextWrite = null;
-          hold(resolve);
-        }).then(() => apply((params as { ops: BoardOp[] }).ops))
-      : method !== "world.board.get" && failingWrites > 0 && failingWrites--
-        ? Promise.reject(new Error("write failed"))
-        : method === "world.board.get"
-          ? structuredClone(saved)
-          : apply((params as { ops: BoardOp[] }).ops),
-  onControl: () => () => {},
-  onStatus: () => () => {},
-});
+/**
+ * The browser's board store over the fake service. Each scenario gets a new
+ * one: a store keeps its document and refuses an older revision, so reusing
+ * it would carry the last scenario's notes into the next.
+ */
+const newStore = () =>
+  new BoardDocumentStore({
+    call: async (method, params) =>
+      method !== "world.board.get" && holdNextWrite
+        ? new Promise<void>((resolve) => {
+            const hold = holdNextWrite!;
+            holdNextWrite = null;
+            hold(resolve);
+          }).then(() => apply((params as { ops: BoardOp[] }).ops))
+        : method !== "world.board.get" && failingWrites > 0 && failingWrites--
+          ? Promise.reject(new Error("write failed"))
+          : method === "world.board.get"
+            ? structuredClone(saved)
+            : apply((params as { ops: BoardOp[] }).ops),
+    onControl: () => () => {},
+    onStatus: () => () => {},
+  });
+let store = newStore();
 
 const selected: string[] = [];
 const opened: string[] = [];
@@ -447,7 +454,17 @@ async function fresh() {
   } catch {
     // Storage unavailable: nothing was kept either.
   }
+  store = newStore();
   await store.refresh();
+  // The new board starts from the empty document, whatever came before.
+  const start = store.get().document;
+  check(
+    start?.revision === 0 &&
+      start.notes.length === 0 &&
+      start.strings.length === 0 &&
+      Object.keys(start.layout.anchors).length === 0,
+    `a scenario's board starts from the empty document (revision ${start?.revision}, ${start?.notes.length} notes, ${start?.strings.length} strings)`,
+  );
   mount(++mountKey);
   await waitFor(
     () => host.querySelectorAll(".board-tab").length === 13,
