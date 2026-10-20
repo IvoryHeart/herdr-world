@@ -167,6 +167,36 @@ test("CI exposes the protected delivery gate and runs the complete repository ch
   expect(workflow.jobs.validate).toBeUndefined();
 });
 
+test("latency budgets run alone in a dedicated, quiet job that gates delivery", () => {
+  const latency = worldWorkflow.jobs["world-latency"];
+  expect(latency?.needs).toBeUndefined();
+  expect(latency?.if).toBeUndefined();
+  expect(latency?.strategy).toBeUndefined();
+  expect(latency?.["continue-on-error"] ?? false).toBe(false);
+  for (const step of latency?.steps ?? [])
+    expect(step["continue-on-error"] ?? false).toBe(false);
+  const runs = (latency?.steps ?? []).flatMap((step) =>
+    step.run ? [step.run] : [],
+  );
+  // Quiet first, then only the latency group, one case at a time, with one
+  // retry for a failed case (#230); the shards never retry.
+  expect(runs).toEqual([
+    "bun install --frozen-lockfile",
+    "bun scripts/wait-for-quiet.ts",
+    "bun run test:world --shard=latency --parallel=1 --max-concurrency=1 --retry=1",
+  ]);
+  expect(JSON.stringify(worldWorkflow.jobs["world-browser"])).not.toContain(
+    "--retry",
+  );
+  expect(
+    latency?.steps.find((step) =>
+      step.uses?.startsWith("actions/upload-artifact@"),
+    ),
+  ).toMatchObject({ if: "always()" });
+  // Delivery depends on the whole World workflow, which includes this job.
+  expect(workflow.jobs.delivery?.needs).toContain("world-browser");
+});
+
 test("all eight World browser shards run independently and retain failure evidence", () => {
   expect(workflow.jobs["world-browser"]).toMatchObject({
     needs: "validation-scope",

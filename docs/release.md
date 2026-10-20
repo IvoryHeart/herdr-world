@@ -136,9 +136,10 @@ are checked again during the RC release workflow.
    path can be used after confirming its token has the required access.
 4. The Release workflow revalidates metadata and repository tests with one file
    worker and at most two concurrent cases. Its World browser tests use the same
-   [eight-shard workflow](../.github/workflows/world-browser.yml) as PR CI, with one
-   file worker and one case per runner. Every shard and repository validation must
-   pass before any platform package builds. Prepare Release validates its generated
+   [World browser workflow](../.github/workflows/world-browser.yml) as PR CI: eight
+   shards and the quiet latency-budget job, each with one file worker and one case
+   per runner. Every shard, the latency job and repository validation must pass
+   before any platform package builds. Prepare Release validates its generated
    working tree in one checkout with one file worker and retains the complete World
    suite; its World cases run one at a time.
    Release then builds all six platform archives,

@@ -31,23 +31,38 @@ assets required by server typechecks and process tests.
 | Types | `bun run typecheck:quick` checks root scripts, web, and server without rebuilding assets or validating production bundles. |
 | Lint | `bun run lint` runs Oxlint across the repository. |
 | Related tests | `bun run test <path>` or `bun run test:quick` (includes integration tests and excludes the dedicated browser suite). |
-| Browser regressions | `bun run test:browser`; requires Chrome/Chromium or `CHROME_BIN`, otherwise tests skip. |
+| Browser regressions | `bun run test:browser` runs every Chrome-driven test and World browser suite; requires Chrome/Chromium or `CHROME_BIN`. |
 | Completed candidate | Stage intended files, run `bun run format:staged` once, restage and inspect the diff. The command rejects staged files with unstaged edits; docs-only candidates are a safe no-op. |
-| Branch push | The installed pre-push hook runs `bun run check` for code; a Markdown-only follow-up to a successful full gate runs `bun run check:docs`. CI checks the PR head with the applicable gate. |
+| Branch push | The installed pre-push hook runs `bun run check:changed` for code: static checks plus the tests the change affects. A Markdown-only follow-up to a passed code gate runs `bun run check:docs`. CI runs the full gate on the PR head. |
+| Full local gate | `bun run check:delivery` runs every check, in parallel lanes; `HERDR_WORLD_PREPUSH=full git push` makes the hook run it. |
 
 Run `bun run install-hooks` once per clone to point Git at the tracked
 `.githooks/` directory. Its `pre-commit` hook checks formatting and lint without
 writing files, and its `pre-push` hook runs the applicable check. Use focused checks
-only for a specific question while developing. For a branch push, the hook's
-`bun run check` is the final full check for code changes. The hook uses
-`bun run check:docs` only if its local report proves a successful full gate on
-an ancestor and every change since then is ordinary Markdown documentation. Behavioral
-contracts, OpenSpec, tooling and agent/contributor policy receive the full gate
-even when only Markdown changes. CI runs documentation
+only for a specific question while developing. For a code push, the hook runs
+`bun run check:changed` against the remote branch (or `origin/main` for a new
+branch). It always runs formatting, lint, type checks, the build, the site and
+OpenSpec validation. It then runs the unit tests that import or read a changed
+file, the World browser suites nearest to each changed file, and behavioral
+verification when a change touches its models, adapters, contracts or a
+`verification/coverage.json` owner. A deleted file runs the tests that still
+import or name it. Toolchain, lockfile, configuration and gate changes, code that
+no test, build or verification model reaches, and pushes of anything but the
+worktree's HEAD (another branch, several refs) get the full gate. CI's full gate
+stays the authority: the scoped gate trades local completeness for speed, so a
+broad acceptance suite may first fail on CI. The hook uses `bun run check:docs`
+only if its local report proves a passed code gate on an ancestor and every
+change since then is ordinary Markdown documentation. Behavioral contracts,
+OpenSpec, tooling and agent/contributor policy receive the code gate even when
+only Markdown changes. CI runs documentation
 checks for ordinary Markdown-only PR diffs, and reuses an exact-head successful full
 result for PR-description edits; missing proof falls back to the full check.
-The three required CI job names remain the same. Run a full check separately
-only when there is no push or the hook is unavailable. After a failed push check,
+The three required CI job names remain the same. `bun run check:delivery` runs
+the full gate locally: static checks first (later lanes read the build), then
+behavioral verification alongside unit tests and the untimed World browser
+suites, then Chrome-driven tests and the wall-clock-budget suites once the CPU is
+quieter. Lane logs are kept in `.agents/delivery/lanes/`. One gate runs at a time
+per machine; a second waits. After a failed push check,
 use the failing stage and focused checks to diagnose the issue. Do not run
 `bun run format` for a scoped change. The pre-push hook records each gate's
 status, elapsed seconds and gate name in the ignored
@@ -83,9 +98,11 @@ the complete required run. The canonical command uses two isolated case workers
 by default, as configured in `tools/quint/execution.json`, and requires complete
 source-consistent aggregate evidence. The Behavioral verification
 workflow runs all models without labels or path exclusions and is a protected
-Delivery checks dependency. Pre-push runs `bun run check:delivery`, preserving all
-repository checks and requiring `verification:gate`, including the diagnostic
-control. Linux CI additionally enforces the aggregate resource envelope described
+Delivery checks dependency. CI's Delivery checks run every repository check
+and the full `verification:gate`, including the diagnostic control. Pre-push runs
+`bun run check:changed`, which runs the full `verification:gate` (never `--case`)
+when a change touches verification inputs or a contract owner, and leaves the
+rest to CI; `bun run check:delivery` runs everything locally. Linux CI additionally enforces the aggregate resource envelope described
 in [behavioral evidence](verification/README.md#candidate-commands-and-promotion).
 Independent acceptance is recorded in [promotion decisions](verification/promotion-review.md);
 Final implementation/gate/resource acceptance is recorded in [review 5517420140](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5517420140); owner-approved PR #188 merged as `481ca1e8`. Mandatory consumers and excluded claims remain binding.
