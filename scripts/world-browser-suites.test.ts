@@ -8,13 +8,17 @@ import {
   worldBrowserIgnorePattern,
   worldBrowserShards,
   worldBrowserSuites,
+  worldTimedSuites,
 } from "./world-browser-suites";
 
-test("eight shards partition the complete World browser inventory without omissions or duplicates", async () => {
+test("eight shards and the latency group partition the complete World browser inventory without omissions or duplicates", async () => {
   await assertWorldBrowserInventory();
-  const selected = worldBrowserShards.flatMap((_, index) =>
-    selectWorldBrowserShard(`${index + 1}/8`),
-  );
+  const selected = [
+    ...worldBrowserShards.flatMap((_, index) =>
+      selectWorldBrowserShard(`${index + 1}/8`),
+    ),
+    ...selectWorldBrowserShard("latency"),
+  ];
   expect(selected).toEqual(worldBrowserSuites);
   expect(new Set(selected).size).toBe(selected.length);
   expect(selectWorldBrowserShard()).toEqual(worldBrowserSuites);
@@ -26,6 +30,12 @@ test("eight shards partition the complete World browser inventory without omissi
     "server/src/workspace/html-preview.browser.test.ts",
   ])
     expect(ignore.match(path)).toBe(false);
+});
+
+test("suites with wall-clock budgets run only in the latency group", () => {
+  expect(selectWorldBrowserShard("latency")).toEqual(worldTimedSuites);
+  for (const shard of worldBrowserShards)
+    for (const path of shard) expect(worldTimedSuites).not.toContain(path);
 });
 
 test("invalid shard requests fail instead of silently skipping tests", () => {

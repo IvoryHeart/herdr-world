@@ -18,7 +18,9 @@ if (
   args.some((arg) => arg.startsWith("--shard") && arg !== shardArg) ||
   (shardArg && !shard)
 ) {
-  throw new Error("Use --shard=i/8 to select a World browser shard");
+  throw new Error(
+    "Use --shard=i/8 or --shard=latency to select World browser suites",
+  );
 }
 if (named.length && shard)
   throw new Error("Name World browser suites or a shard, not both");
