@@ -145,6 +145,21 @@ hardware. For timing investigation, set `WORLD_TRACE_PREFIX` to a private
 temporary path; `WORLD_TIMINGS_ONLY=1` keeps acknowledgement/phase and Long
 Animation Frame evidence without the overhead of a full Chrome trace.
 
+## Browser fixtures on test time
+
+A fixture whose checks are about behaviour, not latency, runs on test time:
+it imports [testing/installTestClock.ts](testing/installTestClock.ts) first, so
+React's scheduler captures the fake timers. The page's timers, animation frames
+and `performance.now` then move only when the fixture advances the clock, in
+16 ms frames, each followed by real task turns for React and promises. CSS
+transitions and animations are off, and checks read end states. `settle(ms)`
+becomes `clock.advance(ms)` and `waitFor` becomes `clock.until`. Physics, tweens,
+holds and double-tap gaps then behave the same on any runner.
+[BoardView.browser.tsx](BoardView.browser.tsx) runs this way: about 20 s of test
+time per width, in about a second, and it passes under full CPU load. The
+latency-budget suites above stay on real time, because real time is what they
+measure.
+
 ## Inspector and windows
 
 | Task | Open these owners | Focused evidence |
