@@ -761,7 +761,8 @@
       "evidence": [
         "server/src/agent/codex-session-link.test.ts",
         "server/src/agent/codex-session.test.ts",
-        "server/src/connections/runtime.test.ts"
+        "server/src/connections/runtime.test.ts",
+        "server/src/connections/session-link-routing.test.ts"
       ],
       "followUp": null,
       "revisitWhen": null,
@@ -774,7 +775,8 @@
       "reason": "Adopt responsive mobile toast banners within the existing same-origin World app.",
       "evidence": [
         "web/src/components/Toast.tsx",
-        "web/src/styles/layout/toast.css"
+        "web/src/styles/layout/toast.css",
+        "web/src/components/Toast.test.ts"
       ],
       "followUp": null,
       "revisitWhen": null,

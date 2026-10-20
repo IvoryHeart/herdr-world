@@ -87,6 +87,7 @@ import {
 } from "./connections/protocol";
 import {
   type ConnectionRpcRequest,
+  dispatchAgentSessionLink,
   isConnectionRpcEnvelope,
   resolveRpcRoute,
 } from "./connections/rpc-routing";
@@ -1595,9 +1596,11 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
     method === "agent_session.link"
   ) {
     try {
-      const result = await (method === "agent_session.link_preview"
-        ? connection.agentSessions.previewLink(params ?? {})
-        : connection.agentSessions.link(params ?? {}, requestIsCurrent));
+      const result = await dispatchAgentSessionLink(
+        route,
+        method,
+        params ?? {},
+      );
       sendReply({ id, result }, method);
     } catch (e) {
       sendError("agent-session-link-error", e);
