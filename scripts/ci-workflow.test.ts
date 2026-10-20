@@ -178,12 +178,16 @@ test("latency budgets run alone in a dedicated, quiet job that gates delivery", 
   const runs = (latency?.steps ?? []).flatMap((step) =>
     step.run ? [step.run] : [],
   );
-  // Quiet first, then only the latency group, one case at a time.
+  // Quiet first, then only the latency group, one case at a time, with one
+  // retry for a failed case (#230); the shards never retry.
   expect(runs).toEqual([
     "bun install --frozen-lockfile",
     "bun scripts/wait-for-quiet.ts",
-    "bun run test:world --shard=latency --parallel=1 --max-concurrency=1",
+    "bun run test:world --shard=latency --parallel=1 --max-concurrency=1 --retry=1",
   ]);
+  expect(JSON.stringify(worldWorkflow.jobs["world-browser"])).not.toContain(
+    "--retry",
+  );
   expect(
     latency?.steps.find((step) =>
       step.uses?.startsWith("actions/upload-artifact@"),

@@ -83,7 +83,9 @@ ninth, **World latency budgets**. That job runs only the suites that assert
 wall-clock budgets (production contexts, concurrent contexts, terminal handoff):
 it waits until the runner is quiet after setup (`scripts/wait-for-quiet.ts`:
 three consecutive seconds at least 90% idle, at most 60 s) and then runs them one
-case at a time. The [shard inventory](../scripts/world-browser-suites.ts)
+case at a time. A failed case runs once more (`--retry=1`): a hosted runner still
+produces the odd slow event, and the worst-event budgets are judged on one run.
+The eight shards never retry. The [shard inventory](../scripts/world-browser-suites.ts)
 includes all World browser suites, split between the eight shards and the
 `latency` group; inventory checks reject missing or duplicate assignments. The
 required Delivery checks status succeeds only when repository validation, every
