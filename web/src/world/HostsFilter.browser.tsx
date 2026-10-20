@@ -1768,7 +1768,12 @@ async function operationalScenario(unmount: () => void) {
   }
   if (operation === "notifications") {
     writeHostsFilter(["alpha"]);
-    await frame();
+    // Board renders topology changes at low priority, a few frames later:
+    // the filter must be in effect before the notification can change it.
+    await waitFor(
+      () => !visibleHost("beta"),
+      "The Hosts filter did not hide the other host",
+    );
     window.dispatchEvent(
       new CustomEvent(TASK_NOTIFICATION_ACTIVATE_EVENT, {
         detail: {
@@ -1792,6 +1797,9 @@ async function operationalScenario(unmount: () => void) {
         ),
       "A qualified out-of-filter notification did not open its own labelled Inspector",
     );
+    // A filter change would also show only a few frames later: give a wrong
+    // one time to appear before checking that none did.
+    for (let i = 0; i < 10; i++) await frame();
     check(
       !visibleHost("beta"),
       "Notification silently changed the Hosts filter",
