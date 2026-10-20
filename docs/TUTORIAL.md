@@ -213,7 +213,8 @@ on your phone and desktop.
    note is sent once the agent is ready. (Starting a chosen agent kind
    currently opens a shell; see
    [issue 219](https://github.com/IvoryHeart/herdr-world/issues/219).)
-8. Drag a tab onto another workspace of the same host to move it there. Board
+8. Drag a tab onto another workspace of the same host to move it there (on a
+   phone, hold the tab still for a moment first; a quick swipe pans). Board
    asks first, with **Don't ask again**, and always asks before moving a
    workspace's last tab, which closes that workspace. Strings follow the move.
 
@@ -221,8 +222,8 @@ After Herdr restarts, Board cannot prove that a workspace or agent is the one a
 string was made with, so it draws those strings dashed and asks once per host:
 **Keep** or **Detach**. A string whose target closed waits in **Needs a home**
 (the red count in the controls), where you can re-attach its note or discard
-the string; notes always stay. If Board misbehaves, **⋯ → Event trace** shows
-what it received; **Copy trace** gives you text to attach to a bug report.
+the string; notes always stay. If Board misbehaves, describe the steps that led
+there in a bug report.
 
 **You are done when:** you can find your workspace card, pin a note and string it
 to the intended workspace or pane. Read the target before using **Send**.

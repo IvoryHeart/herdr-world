@@ -21,6 +21,7 @@ import {
   Settings,
   Wifi,
   Wind,
+  Bug,
 } from "lucide-react";
 import { APP_VERSION } from "../version";
 import { worldLocalStorage } from "../browserStorage";
@@ -44,6 +45,8 @@ import { ConfigurationLoadingDialog } from "./ConfigurationLoadingDialog";
 import { HerdrSetupCard } from "./HerdrSetupCard";
 import { MobileSheetHandle } from "./MobileSheetHandle";
 import "./ConfigMenu.css";
+import { DEVTOOLS } from "../world/devtools/flag";
+import { requestTrace, traceRemembered } from "../world/devtools/trace";
 
 const ConfigurationDialog = lazyWithReload("configuration", () =>
   import("./ConfigurationDialog").then((module) => ({
@@ -97,6 +100,10 @@ export function ConfigMenu({
       : null;
   const [open, setOpen] = useState(false);
   useCloseGlobalMenuForDialog(open, setOpen);
+  // Town's event trace (development builds only; see world/devtools).
+  const [townTrace, setTownTrace] = useState(() =>
+    DEVTOOLS ? traceRemembered("town") : false,
+  );
   const [expanded, setExpanded] = useState(false);
   const [configurationTab, setConfigurationTab] =
     useState<ConfigurationTab | null>(null);
@@ -347,6 +354,32 @@ export function ConfigMenu({
                     <span />
                   </button>
                 </div>
+                {DEVTOOLS ? (
+                  <div className="config-preference-row">
+                    <span className="config-item-icon">
+                      <Bug size={15} />
+                    </span>
+                    <div className="config-item-copy">
+                      <strong>Town event trace</strong>
+                      <span>Development builds: record Town's input</span>
+                    </div>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-label="Town event trace"
+                      aria-checked={townTrace}
+                      className={
+                        "settings-switch" + (townTrace ? " is-on" : "")
+                      }
+                      onClick={() => {
+                        requestTrace("town", !townTrace);
+                        setTownTrace(!townTrace);
+                      }}
+                    >
+                      <span />
+                    </button>
+                  </div>
+                ) : null}
                 {onOpenOfficeMetrics ? (
                   <ConfigMenuItem
                     icon={<Activity size={15} />}

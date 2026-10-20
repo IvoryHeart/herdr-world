@@ -48,6 +48,19 @@ are optional because the merged PR history records their source.
   it is ready. Drag a tab onto another workspace to move it there (Board asks
   first, with "Don't ask again"); strings follow the moved panes. On phones Board is in the bottom navigation.
 
+### Changed
+
+- Town and Board read touch and mouse input through one shared gesture
+  machine. On phones, Board now asks you to hold a card still before dragging
+  it, as Town does for tables and agents, so a quick swipe across a card pans.
+  A second finger always turns a drag into a pinch without dropping it. Board's
+  frames pause their settling while you type in a terminal.
+
+- Board's event trace, and the renderer counters behind `?officeDebug=1`, are
+  now development-only tools: release builds contain none of them. Development
+  builds keep Board's trace, add one for Town (settings menu, `?debug=town`), and
+  replace `?officeDebug=1` with `?debug=town`.
+
 ### Removed
 
 - Retire the Office, Tree and Graph views. Town and Board replace them: old

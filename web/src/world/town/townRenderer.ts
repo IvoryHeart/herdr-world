@@ -21,7 +21,16 @@ import {
   worldMotionPreference,
   type WorldFrames,
 } from "../worldFrameScheduler";
-import { worldRendererCountersEnabled } from "../worldRendererDebug";
+import { worldRendererCountersEnabled } from "../devtools/renderer";
+import { DEVTOOLS } from "../devtools/flag";
+
+/** Why Town drew a frame and what it asked for next (development trace). */
+export type TownFrameTrace = {
+  reasons: string[];
+  next: "state" | "motion" | null;
+  /** What keeps a state frame coming: the camera, actors, a drag… */
+  causes: string[];
+};
 import { TownActors, townActorWorld, type TownActor } from "./townActors";
 import {
   stepTownDrag,
@@ -141,8 +150,8 @@ export type TownRendererHandle = {
   setScene(model: TownModel, layout: TownLayout, state: TownSceneState): void;
   setState(state: TownSceneState): void;
   setViewport(viewport: TownViewport): void;
-  /** Ask for a redraw after camera input. */
-  invalidate(): void;
+  /** Ask for a redraw after camera input; the reason is traced. */
+  invalidate(reason?: string): void;
   actorPosition(key: string): { x: number; y: number; seated: boolean } | null;
   roofAlpha(hostKey: string): number;
   /** Lift a desk or agent under the pointer for a drag. */
@@ -242,6 +251,10 @@ export async function createTownRenderer(
   element: HTMLElement,
   onFrame: (camera: TownCamera, level: TownLevel) => void,
   signal?: AbortSignal,
+  /** A frame that threw; later frames still run. */
+  onError?: (error: unknown) => void,
+  /** Development builds: each frame's reasons, when they change. */
+  onTrace?: (frame: TownFrameTrace) => void,
 ): Promise<TownRendererHandle> {
   if (window.__HERDR_WORLD_FORCE_RENDERER_FAILURE__)
     throw new Error("renderer unavailable");
@@ -1158,7 +1171,27 @@ export async function createTownRenderer(
   };
 
   let frames: WorldFrames | null = null;
+  // An error in one frame is reported and never stops later frames (nor,
+  // through the shared scheduler, other views' frames).
+  // A state frame and, in development builds, why it was wanted.
+  const frameReasons = new Set<string>();
+  let lastTraced = "";
+  const request = (reason: string) => {
+    if (DEVTOOLS && onTrace) frameReasons.add(reason);
+    frames?.request("state");
+  };
   const draw = (now: number) => {
+    const why = DEVTOOLS && onTrace ? [...frameReasons] : [];
+    if (DEVTOOLS) frameReasons.clear();
+    try {
+      drawFrame(now, why);
+    } catch (error) {
+      stats.lastError =
+        error instanceof Error ? error.message.slice(0, 160) : "frame failed";
+      onError?.(error);
+    }
+  };
+  const drawFrame = (now: number, why: string[]) => {
     if (disposed || !layout || !model) return;
     const dt = last ? Math.min(0.05, (now - last) / 1000) : 1 / 60;
     last = now;
@@ -1200,16 +1233,38 @@ export async function createTownRenderer(
     };
     onFrame(camera, level);
     if (!stats.ready) stats.ready = true;
-    if (
+    const moving =
       cameraMoved ||
       roofsMoving ||
       actorsMoved ||
       camera.flying ||
       materializing ||
-      dragging
-    )
-      frames?.request("state");
-    else if (!camera.reducedMotion && !state.calm) frames?.request("motion");
+      dragging;
+    const next = moving
+      ? "state"
+      : !camera.reducedMotion && !state.calm
+        ? "motion"
+        : null;
+    if (next) frames?.request(next);
+    if (DEVTOOLS && onTrace) {
+      const causes = Object.entries({
+        camera: cameraMoved,
+        roofs: roofsMoving,
+        actors: actorsMoved,
+        flight: camera.flying,
+        materialize: materializing,
+        drag: dragging,
+      })
+        .filter(([, on]) => on)
+        .map(([name]) => name);
+      // Each requested frame, and each change in what keeps frames coming;
+      // not every frame of a steady animation.
+      const signature = `${next}:${causes.join(",")}`;
+      if (why.length || signature !== lastTraced) {
+        lastTraced = signature;
+        onTrace({ reasons: why, next, causes });
+      }
+    }
   };
   frames = registerWorldFrames(element, draw, (paused) => {
     stats.interactionPaused = paused;
@@ -1218,7 +1273,7 @@ export async function createTownRenderer(
   const onMotion = (event: MediaQueryListEvent) => {
     camera.reducedMotion = event.matches;
     stats.reducedMotion = event.matches;
-    frames?.request("state");
+    request("motion-preference");
   };
   motion.addEventListener("change", onMotion);
 
@@ -1408,7 +1463,7 @@ export async function createTownRenderer(
           h: 57,
         };
     }
-    frames?.request("state");
+    request("drag");
   };
   const endDrag = (mode: "cancel" | "park") => {
     if (!drag || drag.phase.name !== "drag") return;
@@ -1416,7 +1471,7 @@ export async function createTownRenderer(
       drag,
       mode === "park" && drag.target ? "park" : "back",
     );
-    frames?.request("state");
+    request("drag-end");
   };
   const finishMove = (result: TownMoveResult) => {
     if (!drag) return;
@@ -1424,7 +1479,7 @@ export async function createTownRenderer(
     // it was dropped and the refreshed scene shows where the panes are.
     if (result === "uncertain") {
       drag.phase = townDragPhase(drag, "fade");
-      frames?.request("state");
+      request("drag-uncertain");
       return;
     }
     if (result === "moved" && drag.target) {
@@ -1435,7 +1490,7 @@ export async function createTownRenderer(
       );
       drag.phase = { name: "land", t: 0 };
     } else drag.phase = townDragPhase(drag, "back");
-    frames?.request("state");
+    request("drag-result");
   };
   /** Advance drag effects and puffs; true while anything still moves. */
   const updateDrag = (dt: number) => {
@@ -1506,12 +1561,12 @@ export async function createTownRenderer(
       }
       syncActors(first);
       dimDirty = true;
-      frames?.request("state");
+      request("scene");
     },
     setState(nextState) {
       state = nextState;
       camera.calm = nextState.calm;
-      frames?.request("state");
+      request("scene-state");
     },
     setViewport(viewport) {
       app.renderer.resize(
@@ -1520,10 +1575,10 @@ export async function createTownRenderer(
       );
       camera.viewport = viewport;
       if (layout) camera.configure(layout, viewport);
-      frames?.request("state");
+      request("viewport");
     },
-    invalidate() {
-      frames?.request("state");
+    invalidate(reason = "input") {
+      request(reason);
     },
     actorPosition(key) {
       const actor: TownActor | undefined = actors.actors.get(key);

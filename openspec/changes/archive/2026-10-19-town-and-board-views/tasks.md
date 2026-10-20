@@ -18,11 +18,11 @@
 
 ## 3. One interaction core (Part B)
 
-- [ ] 3.1 Move `boardGesture.ts` to `world/interaction/gesture.ts` with configurable thresholds and a touch hold-to-drag; port Board's gesture tests and add Town's cases (hold to drag, a quick swipe pans, a second finger turns a drag into a pinch, the mouse drags after 6 px, double tap).
-- [ ] 3.2 Fold Board's trace and overlay, `officeDebug` and `worldRendererDebug` into one `world/devtools/` module behind the `__HERDR_WORLD_DEVTOOLS__` build flag (on for development mode or `HERDR_WORLD_BUILD_DEVTOOLS=1`, off for release); label the trace per view (`?debug=town`, `?debug=board`, a ⋯ menu toggle in development builds); add a release-bundle check that no dev-tools code ships.
-- [ ] 3.3 Make Board's frame loop an adapter over `registerWorldFrames` (reasons, keep-going while moving as motion frames, per-frame error isolation); verify settling, drag and the pause during terminal typing.
-- [ ] 3.4 Move Town's pointer handling in `TownCanvas.tsx` onto the shared machine; run the Town browser suite and a real-input touch run at phone size.
+- [x] 3.1 Move `boardGesture.ts` to `world/interaction/gesture.ts` with configurable thresholds and a touch hold-to-drag; port Board's gesture tests and add Town's cases (hold to drag, a quick swipe pans, a second finger turns a drag into a pinch, the mouse drags after 6 px, double tap).
+- [x] 3.2 Fold Board's trace and overlay, `officeDebug` and `worldRendererDebug` into one `world/devtools/` module behind the `__HERDR_WORLD_DEVTOOLS__` build flag (on for development mode or `HERDR_WORLD_BUILD_DEVTOOLS=1`, off for release); label the trace per view (`?debug=town`, `?debug=board`, a ⋯ menu toggle in development builds); add a release-bundle check that no dev-tools code ships.
+- [x] 3.3 Make Board's frame loop an adapter over `registerWorldFrames` (reasons, keep-going while moving as motion frames, per-frame error isolation); verify settling, drag and the pause during terminal typing.
+- [x] 3.4 Move Town's pointer handling in `TownCanvas.tsx` onto the shared machine; run the Town browser suite and a real-input touch run at phone size.
 
 ## 4. Delivery
 
-- [ ] 4.1 Run the full delivery gate, open the PR with the decisions to review (redirect targets, removed settings) and archive the change after merge.
+- [x] 4.1 Run the full delivery gate, open the PR with the decisions to review (redirect targets, removed settings) and archive the change after merge.

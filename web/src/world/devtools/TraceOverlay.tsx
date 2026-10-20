@@ -1,17 +1,21 @@
 import { useState, useSyncExternalStore } from "react";
-import type { BoardTrace, TraceEntry } from "./boardTrace";
+import type { TraceEntry, ViewTrace } from "./flag";
+import type { TracedView } from "./trace";
+import { TRACE_STYLES } from "./traceStyles";
 
 /**
- * The event trace on screen: the current gesture, the pointers down, and the
- * newest entries. Copy trace puts the whole ring on the clipboard for a bug
- * report; it can be replayed as a test.
+ * A view's event trace on screen: the current gesture, the pointers down,
+ * and the newest entries. Copy trace puts the whole ring on the clipboard for
+ * a bug report; it can be replayed as a test. Development builds only.
  */
-export function BoardTraceOverlay({
+export function TraceOverlay({
+  view,
   trace,
   status,
   onClose,
 }: {
-  trace: BoardTrace;
+  view: TracedView;
+  trace: ViewTrace;
   /** The gesture machine's state, read when the trace changes. */
   status: () => { mode: string; pointers: number };
   onClose(): void;
@@ -29,7 +33,7 @@ export function BoardTraceOverlay({
   const now = status();
   const copy = async () => {
     const text = trace.export({
-      view: "board",
+      view,
       userAgent: navigator.userAgent,
       viewport: { width: innerWidth, height: innerHeight },
       gesture: now,
@@ -44,8 +48,13 @@ export function BoardTraceOverlay({
   };
   void count;
   return (
-    <div className="board-trace" role="log" aria-label="Board event trace">
-      <div className="board-trace-head">
+    <div
+      className="world-trace"
+      role="log"
+      aria-label={`${view === "board" ? "Board" : "Town"} event trace`}
+    >
+      <style>{TRACE_STYLES}</style>
+      <div className="world-trace-head">
         <strong>Event trace</strong>
         <span>
           {now.mode} · {now.pointers} down
@@ -67,7 +76,7 @@ export function BoardTraceOverlay({
       {copied && copied !== "Copied" ? (
         <textarea
           readOnly
-          className="board-trace-copy"
+          className="world-trace-copy"
           value={copied}
           onFocus={(event) => event.currentTarget.select()}
         />
@@ -75,14 +84,14 @@ export function BoardTraceOverlay({
       <ol>
         {entries.map((entry, i) => (
           <li key={`${entry.t}-${i}`}>
-            <span className="board-trace-t">{entry.t}</span>
-            <span className="board-trace-kind">{entry.kind}</span>
-            <span className="board-trace-detail">{describe(entry)}</span>
+            <span className="world-trace-t">{entry.t}</span>
+            <span className="world-trace-kind">{entry.kind}</span>
+            <span className="world-trace-detail">{describe(entry)}</span>
           </li>
         ))}
       </ol>
       {copied === "Copied" ? (
-        <p className="board-trace-note">Copied to the clipboard.</p>
+        <p className="world-trace-note">Copied to the clipboard.</p>
       ) : null}
     </div>
   );

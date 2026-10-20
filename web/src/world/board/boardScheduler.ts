@@ -1,40 +1,62 @@
 /**
- * Board's frame loop. Anything that changes what is on screen calls
- * invalidate(reason); a frame runs on the next animation frame with the
- * reasons collected since the last one. The loop keeps going while the frame
- * says something is still moving, and stops otherwise, so a still board costs
- * nothing. An error in one frame is reported and never stops later frames.
+ * Board's frame loop, as a client of World's shared frame scheduler
+ * (worldFrameScheduler.ts). Anything that changes what is on screen calls
+ * invalidate(reason), which asks for a state frame; the frame runs with the
+ * reasons collected since the last one. While the frame says something is
+ * still moving (gliding cards, a settling camera), the loop asks for motion
+ * frames, which the scheduler pauses while the user types in a terminal; a
+ * drag keeps invalidating, so it never pauses. Under reduced motion, work that
+ * must finish (cards reaching their places) continues as state frames. The
+ * scheduler skips a board that is off screen or in a hidden document, and
+ * shares one frame budget with Town. An error in one frame is reported and
+ * never stops later frames. A still board costs nothing.
  */
+
+import { registerWorldFrames } from "../worldFrameScheduler";
 
 export type FrameLoop = {
   invalidate(reason: string): void;
-  /** True while a frame is scheduled. */
+  /** True while a frame is requested. */
   running(): boolean;
   stop(): void;
 };
 
+/** The part of registerWorldFrames the loop uses; tests pass a fake. */
+export type FrameRegistrar = (
+  element: Element,
+  draw: (now: number) => void,
+) => {
+  request(kind?: "state" | "motion"): void;
+  dispose(): void;
+  /** True under reduced motion, when the scheduler runs no motion frames. */
+  readonly reducedMotion?: boolean;
+};
+
 export type FrameLoopOptions = {
+  /** The board, so the scheduler can skip it while it is off screen. */
+  element: Element;
   /** Draw one frame; return true while something is still moving. */
   frame(dt: number, reasons: ReadonlySet<string>): boolean;
   onError(error: unknown, reasons: ReadonlySet<string>): void;
-  request?: (callback: (time: number) => void) => number;
-  cancel?: (handle: number) => void;
-  now?: () => number;
+  register?: FrameRegistrar;
 };
 
-const MAX_DT = 1 / 30;
+/**
+ * The longest step one frame advances: a late frame (a busy page, World's
+ * shared frame budget) still covers the time that passed, up to a limit, so
+ * Board settles in real time. Its physics steps in parts of at most 1/30 s.
+ */
+const MAX_DT = 0.1;
 
 export function createFrameLoop(options: FrameLoopOptions): FrameLoop {
-  const request = options.request ?? ((cb) => requestAnimationFrame(cb));
-  const cancel = options.cancel ?? ((handle) => cancelAnimationFrame(handle));
-  const now = options.now ?? (() => performance.now());
-  let handle: number | null = null;
+  const register = options.register ?? registerWorldFrames;
   let last: number | null = null;
   let reasons = new Set<string>();
+  let requested = false;
   let stopped = false;
 
-  const run = (time: number) => {
-    handle = null;
+  const draw = (time: number) => {
+    requested = false;
     if (stopped) return;
     const dt =
       last === null
@@ -49,23 +71,31 @@ export function createFrameLoop(options: FrameLoopOptions): FrameLoop {
     } catch (error) {
       options.onError(error, current);
     }
-    if (moving || reasons.size) schedule();
+    // New reasons arrived during the frame: they are state. Otherwise keep
+    // going as motion, which the scheduler may hold back. Under reduced
+    // motion it never runs motion frames, yet cards must still reach the
+    // places they were given (Board snaps what it can; see BoardView), so the
+    // rest of the work continues as state.
+    if (reasons.size) ask("state");
+    else if (moving) ask(frames.reducedMotion ? "state" : "motion");
     else last = null;
   };
-  const schedule = () => {
-    if (handle === null && !stopped) handle = request(run);
+  const frames = register(options.element, draw);
+  const ask = (kind: "state" | "motion") => {
+    if (stopped) return;
+    requested = true;
+    frames.request(kind);
   };
   return {
     invalidate(reason) {
       reasons.add(reason);
-      schedule();
+      ask("state");
     },
-    running: () => handle !== null,
+    running: () => requested,
     stop() {
       stopped = true;
-      if (handle !== null) cancel(handle);
-      handle = null;
-      void now;
+      requested = false;
+      frames.dispose();
     },
   };
 }
