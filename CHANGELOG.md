@@ -59,6 +59,8 @@ are optional because the merged PR history records their source.
 
 ### Fixed
 
+- Successful uploads from the desktop Message editor stay in its draft without
+  reporting an input failure; uploads from desktop terminal output still use Direct.
 - Board stays responsive on a large World: at 64 hosts and about 1,500 tabs,
   typed input had waited up to 20 seconds behind Board's rendering.
 - On a phone, long-pressing a link in a terminal offers **Open link** again

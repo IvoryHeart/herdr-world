@@ -1992,6 +1992,20 @@ async function registerDomTests() {
       browser.matchMedia = media;
     }
   });
+  test("desktop Message image paste inserts into its draft without a failure notice or terminal input", async () => {
+    mobileLayout = false;
+    await mount(true);
+    const editor = container.querySelector<HTMLTextAreaElement>(
+      ".terminal-composer-input",
+    )!;
+    await pasteFile(editor);
+    expect(uploads).toHaveLength(1);
+    await act(async () => uploads[0].resolve("/tmp/message.png"));
+    expect(notices).toHaveLength(0);
+    expect(pathCalls()).toHaveLength(0);
+    expect(readTerminalComposerDraft(draftKey).trim()).toBe("/tmp/message.png");
+    expect(editor.value).toBe(readTerminalComposerDraft(draftKey));
+  });
   test("Direct file paste inserts formatted paths without Enter and preserves draft/caret", async () => {
     await mount();
     await act(async () =>

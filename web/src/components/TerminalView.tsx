@@ -779,7 +779,7 @@ export function TerminalView({
       unsubscribe();
     };
   }, []);
-  const preparePathInsertion = () => {
+  const preparePathInsertion = (fromComposer = false) => {
     const destinationPaneId = paneIdRef.current;
     const terminalId = paneTerminalIdRef.current;
     const state = store.get();
@@ -788,7 +788,9 @@ export function TerminalView({
       state.connectionGeneration,
       destinationPaneId ?? "",
     );
-    const mode = isMobileLayout() ? composerModeRef.current : "direct";
+    // Desktop terminal output stays Direct; the shared editor owns its mode.
+    const mode =
+      fromComposer || isMobileLayout() ? composerModeRef.current : "direct";
     const epoch = pathInsertionEpochRef.current;
     return async (text: string) => {
       if (!text) return;
@@ -3651,7 +3653,7 @@ export function TerminalView({
       shortcutDisabledReason={mobileShortcutReason}
       onClose={() => setComposerOpen(false)}
       onSubmit={submitTerminalComposer}
-      onPreparePathInsertion={preparePathInsertion}
+      onPreparePathInsertion={() => preparePathInsertion(true)}
       onUploadImage={uploadComposerImage}
       onUploadFile={uploadComposerFile}
       onError={notifyComposerError}
