@@ -111,9 +111,11 @@ multi-step handoffs and review repairs. Use
 `bun run build:site` for site changes.
 
 Run `bun run install-hooks` once per clone. The pre-commit hook checks format and
-lint, and the pre-push hook checks the candidate. Code changes get the full
-`bun run check`; a Markdown-only follow-up may use `bun run check:docs` after
-this worktree has a successful full gate on an ancestor. Worktrees share the
+lint, and the pre-push hook checks the candidate. Code changes get
+`bun run check:changed` (static checks and the affected tests; CI runs the full
+gate), and `HERDR_WORLD_PREPUSH=full` runs `bun run check:delivery` instead. A
+Markdown-only follow-up may use `bun run check:docs` after this worktree has a
+passed code gate on an ancestor. Worktrees share the
 same Git hook configuration.
 
 Batch independent read-only inspections in one tool turn. Keep `rg` results and

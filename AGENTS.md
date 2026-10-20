@@ -52,8 +52,9 @@ implementation. Update relevant contracts, adapters, consumer tests and evidence
 Mechanical edits require a no-contract-impact explanation, not a new model.
 Run complete required verification for model/contract/adapter/tooling/consumer
 changes; focused `--case` checks do not replace it. Bounded contracts and consumer
-mappings have independent promotion acceptance. Pre-push runs `check:delivery`,
-and behavioral verification is a required protected `Delivery checks` dependency.
+mappings have independent promotion acceptance. Pre-push runs `check:changed`
+(the full verification gate when verification inputs or contract owners change);
+behavioral verification is a required protected `Delivery checks` dependency.
 Final implementation/gate/resource acceptance is recorded in [review 5517420140](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5517420140); owner-approved PR #188 merged as `481ca1e8`. Mandatory consumers and excluded claims remain binding.
 See `verification/README.md` and CONTRIBUTING.md for current boundaries.
 
@@ -108,9 +109,11 @@ bun install --frozen-lockfile
 
 Use focused tests and type checks when they answer a specific question. The
 pre-commit hook checks formatting and lint without writing files; the pre-push
-hook runs `bun run check:delivery` for code changes, including the unfiltered
-verification gate and diagnostic control. A Markdown-only follow-up uses
-`bun run check:docs` only when a successful full gate already covers its code.
+hook runs `bun run check:changed` for code changes: static checks, the affected
+unit tests and nearest World browser suites, and the unfiltered verification
+gate when its inputs change. CI runs the full gate; `bun run check:delivery` runs
+it locally in parallel lanes. A Markdown-only follow-up uses `bun run check:docs`
+only when a passed code gate already covers its code.
 CI runs documentation checks for Markdown-only PR diffs and full checks for code
 changes. Browser tests require Chrome/Chromium or `CHROME_BIN`:
 
@@ -150,7 +153,8 @@ Every byte of tool output enters your context and stays until compaction.
 Large outputs are the primary driver of context bloat and token cost.
 
 - **Bound check output.** `bun run check` runs 8 stages and produces ~600K
-  chars. Pipe through `tail -80` and read the exit code. On failure, run only
+  chars. Pipe through `tail -80` and read the exit code. `check:delivery` and
+  `check:changed` keep each lane's log in `.agents/delivery/lanes/`. On failure, run only
   the failing stage (`tsc --noEmit 2>&1 | head -50`, `oxlint . 2>&1 | head -50`)
   to get actionable errors.
 - **Do not dump full typecheck.** `tsc --noEmit` on this repo produces 200K+

@@ -13,15 +13,27 @@ report_file="$artifact_dir/pre-push.tsv"
 head_sha=$(git rev-parse --verify HEAD 2>/dev/null || printf 'unborn')
 recorded_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 started_at=$(date +%s)
-gate=full
+gate=changed
+base=
 
-# A Markdown-only follow-up can use the docs gate if this worktree already
-# passed the full gate on an ancestor. Uncertain or multi-ref pushes run in full.
-if read -r local_ref local_sha remote_ref remote_sha && ! read -r extra_line; then
-  case "$local_ref" in
-    refs/heads/*)
+# Code pushes check what changed since the remote branch (or since main for a
+# new branch); CI runs the full gate. HERDR_WORLD_PREPUSH=full runs it here.
+# The scoped gate reads this worktree, so a push of anything but its HEAD
+# (another branch, several refs) runs the full gate. A Markdown-only
+# follow-up can use the docs gate if this worktree already passed a code gate
+# on an ancestor.
+if read -r local_ref local_sha remote_ref remote_sha; then
+  if read -r extra_line || [ "$local_sha" != "$head_sha" ]; then
+    gate=full
+  fi
+  case "$gate:$local_ref" in
+    changed:refs/heads/*)
+      if [ "$local_sha" = "$head_sha" ] &&
+        git merge-base --is-ancestor "$remote_sha" "$head_sha" 2>/dev/null; then
+        base=$remote_sha
+      fi
       if [ "$local_sha" = "$head_sha" ] && [ -f "$report_file" ]; then
-        full_sha=$(awk -F '\t' '$3 == "0" && ($5 == "" || $5 == "full") { sha=$2 } END { print sha }' "$report_file")
+        full_sha=$(awk -F '\t' '$3 == "0" && ($5 == "" || $5 == "full" || $5 == "changed") { sha=$2 } END { print sha }' "$report_file")
         if [ -n "$full_sha" ] &&
           git merge-base --is-ancestor "$remote_sha" "$head_sha" 2>/dev/null &&
           git merge-base --is-ancestor "$full_sha" "$head_sha" 2>/dev/null &&
@@ -34,13 +46,22 @@ if read -r local_ref local_sha remote_ref remote_sha && ! read -r extra_line; th
   esac
 fi
 
+if [ "${HERDR_WORLD_PREPUSH:-}" = full ]; then
+  gate=full
+fi
 if [ "$gate" = docs ]; then
   check_command=check:docs
-else
+elif [ "$gate" = full ]; then
   check_command=check:delivery
+else
+  check_command=check:changed
+fi
+set -- run "$check_command"
+if [ "$gate" = changed ] && [ -n "$base" ]; then
+  set -- "$@" "--base=$base"
 fi
 
-if bun run "$check_command" >"$log_file" 2>&1; then
+if bun "$@" >"$log_file" 2>&1; then
   ended_at=$(date +%s)
   elapsed=$((ended_at - started_at))
   printf '%s\t%s\t0\t%s\t%s\n' "$recorded_at" "$head_sha" "$elapsed" "$gate" >> "$report_file"

@@ -5,9 +5,13 @@ import { buildWorldBrowserBundle } from "../web/src/world/testing/browserBundles
 import {
   assertWorldBrowserInventory,
   selectWorldBrowserShard,
+  worldBrowserSuites,
 } from "./world-browser-suites";
 
-const args = process.argv.slice(2);
+// Suites named on the command line replace the shard selection.
+const allArgs = process.argv.slice(2);
+const named = allArgs.filter((arg) => worldBrowserSuites.includes(arg));
+const args = allArgs.filter((arg) => !named.includes(arg));
 const shardArg = args.find((arg) => arg.startsWith("--shard="));
 const shard = shardArg?.slice("--shard=".length);
 if (
@@ -16,7 +20,9 @@ if (
 ) {
   throw new Error("Use --shard=i/8 to select a World browser shard");
 }
-const files = selectWorldBrowserShard(shard);
+if (named.length && shard)
+  throw new Error("Name World browser suites or a shard, not both");
+const files = named.length ? named : selectWorldBrowserShard(shard);
 const testArgs = args.filter((arg) => arg !== shardArg);
 await assertWorldBrowserInventory();
 const chrome =
@@ -32,7 +38,9 @@ if (!chrome || !Bun.which(chrome))
   );
 
 const directory = await mkdtemp(join(tmpdir(), "world-browser-run-"));
-const label = shard ? `shard-${shard.replace("/", "-of-")}` : "local";
+const label = shard
+  ? `shard-${shard.replace("/", "-of-")}`
+  : (Bun.env.HERDR_WORLD_TEST_LABEL ?? "local");
 await mkdir(".agents/delivery", { recursive: true });
 try {
   const began = performance.now();
