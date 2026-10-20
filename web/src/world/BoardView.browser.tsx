@@ -2,7 +2,7 @@
 import { clock } from "./testing/installTestClock";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import BoardView from "./BoardView";
+import BoardView, { __boardDraftsTesting } from "./BoardView";
 import {
   BoardDocumentStore,
   type BoardDocument,
@@ -440,6 +440,9 @@ async function fresh() {
   // finished, so nothing it does lands in the next scenario's document.
   root.render(<></>);
   await settle(2000);
+  // Kept drafts live for the page, beyond any one Board: a scenario that
+  // failed after keeping one must not show it to the next.
+  __boardDraftsTesting.clear();
   saved = emptyDocument();
   failingWrites = 0;
   holdNextWrite = null;
@@ -471,6 +474,10 @@ async function fresh() {
     "a fresh board did not render every tab",
   );
   await rest();
+  check(
+    __boardDraftsTesting.count() === 0 && !host.querySelector(".board-unsaved"),
+    "a scenario's board starts with no kept drafts",
+  );
 }
 
 /**
@@ -2401,30 +2408,26 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
 
 /**
  * Every scenario, or `?scenario=<name>[|<name>…]` alone, in order; one
- * failing does not stop the rest.
+ * failing does not stop the rest, and a name no scenario has is reported.
  */
 async function run() {
   const only = params.get("scenario")?.split("|");
   const chosen = scenarios.filter(([name]) => !only || only.includes(name));
-  let finished = 0;
-  let thrown = 0;
+  for (const name of only ?? [])
+    check(
+      scenarios.some(([known]) => known === name),
+      `no scenario is named "${name}"`,
+    );
   for (const [name, scenario] of chosen) {
     current = name;
     try {
       await fresh();
       await scenario();
-      finished++;
     } catch (error) {
       failures.push(`${name}: ${String(error)}`);
-      thrown++;
     }
   }
   current = "";
-  // Every chosen scenario ran to its end, or reported why it stopped.
-  check(
-    chosen.length > 0 && finished + thrown === chosen.length,
-    `${finished} of ${chosen.length} scenarios finished`,
-  );
 }
 
 if (mode === "test")

@@ -162,11 +162,13 @@ holds and double-tap gaps then behave the same on any runner.
 scenarios: before each, `fresh()` unmounts the board, drains its pending work,
 resets the fake service and storage, creates a new client document store (a
 store refuses an older revision, so a reused one would keep the last scenario's
-notes), checks that it starts from the empty document, and mounts a new board. A scenario that needs
+notes), forgets kept note drafts (they live for the page, beyond any one Board),
+and mounts a new board; it then checks the board starts from the empty document
+with no kept drafts. A scenario that needs
 a strung note seeds one (`seedStrungNote`) and sets the view it checks, rather
 than relying on what an earlier scenario left behind. A failure is reported under
-its scenario's name and does not stop the rest, and the run checks that every
-scenario finished. `BOARD_SCENARIO="<name>[|<name>…]" bun test
+its scenario's name and does not stop the rest, and a requested scenario name
+that does not exist is reported. `BOARD_SCENARIO="<name>[|<name>…]" bun test
 web/src/world/BoardView.test.ts` runs only those. The whole suite takes about 4 s
 and passes under full CPU load.
 
