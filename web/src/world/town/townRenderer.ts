@@ -242,6 +242,8 @@ export async function createTownRenderer(
   element: HTMLElement,
   onFrame: (camera: TownCamera, level: TownLevel) => void,
   signal?: AbortSignal,
+  /** A frame that threw; later frames still run. */
+  onError?: (error: unknown) => void,
 ): Promise<TownRendererHandle> {
   if (window.__HERDR_WORLD_FORCE_RENDERER_FAILURE__)
     throw new Error("renderer unavailable");
@@ -1158,7 +1160,18 @@ export async function createTownRenderer(
   };
 
   let frames: WorldFrames | null = null;
+  // An error in one frame is reported and never stops later frames (nor,
+  // through the shared scheduler, other views' frames).
   const draw = (now: number) => {
+    try {
+      drawFrame(now);
+    } catch (error) {
+      stats.lastError =
+        error instanceof Error ? error.message.slice(0, 160) : "frame failed";
+      onError?.(error);
+    }
+  };
+  const drawFrame = (now: number) => {
     if (disposed || !layout || !model) return;
     const dt = last ? Math.min(0.05, (now - last) / 1000) : 1 / 60;
     last = now;

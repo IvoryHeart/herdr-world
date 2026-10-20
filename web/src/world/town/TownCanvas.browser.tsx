@@ -6,6 +6,7 @@ import type { Pane, Tab, Workspace } from "../../types";
 import type { WorldRuntimeConnection } from "../runtimeStore";
 import { buildWorldObject, type WorldObject } from "../worldObject";
 import TownView from "../TownView";
+import { requestTrace } from "../devtools/trace";
 import { initializeLayoutPreferences } from "../../layoutPreferences";
 import { bridge, type ConnectionClient } from "../../api";
 import "../world.css";
@@ -871,6 +872,12 @@ async function run() {
     );
   });
   if (heldDesk) {
+    // Record it in Town's event trace, as the settings menu would turn it on.
+    requestTrace("town", true);
+    await waitFor(
+      () => host.querySelector('[aria-label="Town event trace"]') !== null,
+      "the Town event trace did not open",
+    );
     const box = heldDesk.getBoundingClientRect();
     const touch = (type: string, id: number, x: number, y: number) =>
       canvasHost.dispatchEvent(
@@ -902,6 +909,17 @@ async function run() {
     touch("pointerup", 22, box.left + 4, box.top + 4);
     touch("pointerup", 21, box.left + box.width / 2, box.top + box.height / 2);
     check(moves.length === 1, "a cancelled drag must not move anything");
+    // The trace holds the gesture: its input, transitions and effects.
+    const traced =
+      host.querySelector('[aria-label="Town event trace"]')?.textContent ?? "";
+    check(
+      traced.includes("pressing → card") &&
+        traced.includes("liftCard") &&
+        traced.includes("settleCard") &&
+        traced.includes("pinchStart"),
+      `Town's trace recorded the hold, lift and pinch (${traced.slice(0, 300)})`,
+    );
+    requestTrace("town", false);
   }
 
   // Town shows no move icons; moving is by drag, hold or the keyboard.

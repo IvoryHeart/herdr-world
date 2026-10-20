@@ -21,6 +21,10 @@ import {
   TOWN_HOLD_MS,
   type TownGestureTarget,
 } from "./townGesture";
+import { NO_TRACE, type ViewTrace } from "../devtools/flag";
+
+/** Continuous effects the trace leaves out, as Board's does. */
+const QUIET_EFFECTS = new Set(["panBy", "pinch", "moveCard", "stopCamera"]);
 import { EllipsisVertical } from "lucide-react";
 import { useMobileControls } from "../../components/MobileControls";
 import { Pencil, Plus, Trash2 } from "lucide-react";
@@ -124,8 +128,11 @@ export function TownCanvas({
   observability,
   calm = false,
   chrome = NO_CHROME,
+  trace = NO_TRACE,
 }: {
   observability: OfficeObservability;
+  /** Town's event trace (development builds only; see world/devtools). */
+  trace?: ViewTrace;
   calm?: boolean;
   /** Screen pixels covered by panels on wide screens (rail, chat dock). */
   chrome?: { left: number; right: number };
@@ -143,6 +150,8 @@ export function TownCanvas({
   selectedRoomKey: string | null;
 }) {
   const shellRef = useRef<HTMLDivElement | null>(null);
+  const traceRef = useRef(trace);
+  traceRef.current = trace;
   const hostRef = useRef<HTMLDivElement | null>(null);
   const worldRef = useRef<HTMLDivElement | null>(null);
   const rendererRef = useRef<TownRendererHandle | null>(null);
@@ -464,6 +473,11 @@ export function TownCanvas({
       host,
       (camera, level) => onFrameRef.current(camera, level),
       abort.signal,
+      (error) =>
+        traceRef.current.record("error", {
+          where: "frame",
+          message: String(error),
+        }),
     )
       .then(async (renderer) => {
         // Building the scene is its own task, after the renderer's setup.
@@ -492,6 +506,10 @@ export function TownCanvas({
       })
       .catch((error: unknown) => {
         if (disposed) return;
+        traceRef.current.record("error", {
+          where: "renderer",
+          message: String(error),
+        });
         if (window.__HERDR_TOWN_RENDERER__)
           window.__HERDR_TOWN_RENDERER__.lastError =
             error instanceof Error
@@ -739,8 +757,36 @@ export function TownCanvas({
       }
     };
     const feed = (event: GestureEvent<TownGestureTarget>) => {
+      const before = gesture.mode.name;
       const result = stepGesture(gesture, event, TOWN_GESTURES);
       gesture = result.state;
+      const trace = traceRef.current;
+      if (trace.enabled) {
+        // As Board records: input (not every move), transitions and effects
+        // other than the continuous ones, so a failed gesture can be replayed.
+        if (event.type !== "move")
+          trace.record(
+            "input",
+            event.type === "down"
+              ? {
+                  ...event,
+                  target: {
+                    hit: event.target.hit?.kind ?? null,
+                    key: TOWN_GESTURES.key(event.target),
+                    drag: Boolean(event.target.drag),
+                  },
+                }
+              : event,
+          );
+        if (gesture.mode.name !== before)
+          trace.record("gesture", `${before} → ${gesture.mode.name}`);
+        for (const effect of result.effects)
+          if (!QUIET_EFFECTS.has(effect.type))
+            trace.record(
+              "effect",
+              "target" in effect ? { ...effect, target: undefined } : effect,
+            );
+      }
       if (gesture.mode.name !== "pinching") pinch = null;
       for (const effect of result.effects) apply(effect);
     };

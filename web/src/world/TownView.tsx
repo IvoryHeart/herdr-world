@@ -1251,6 +1251,7 @@ export default function TownView({
         </div>
         <div className="town-stage">
           <TownCanvas
+            trace={trace}
             projection={office}
             selectedKey={townSelectedKey}
             completionSeenKeys={completionSeenKeys}
