@@ -2,7 +2,7 @@
   "name": "herdr-world",
   "private": true,
   "version": "0.0.0",
-  "description": "Herdr World: Visualize and control your agents in Office and Graph across multiple hosts.",
+  "description": "A visual IDE for AI agents. Focus your attention with office, mindmaps and boards. Chat with agents, review files and changes. Play with your agents.",
   "license": "MIT",
   "author": "IvoryHeart",
   "homepage": "https://herdr.world/",

@@ -47,7 +47,7 @@ digest="$(shasum -a 256 "$archive" | awk '{ print $1 }')"
 formula="$asset_dir/herdr-world-preview.rb"
 cat > "$formula" <<EOF
 class HerdrWorldPreview < Formula
-  desc "Visualize and control your agents in Office and Graph across multiple hosts"
+  desc "Visual IDE for AI agents with office, mindmaps and boards"
   homepage "https://herdr.world/"
   version "$version"
   url "$archive_url"
