@@ -262,14 +262,17 @@ export function installTestClock(
     frame() {
       return this.advance(2 * FRAME_MS);
     },
+    // Durations count from the time of the call (`now`, which runs a step
+    // ahead of `settled` during one) and are over once a step that reached
+    // them has finished.
     async advance(ms) {
-      const end = settled + ms;
+      const end = now + ms;
       // Zero-delay timers first, as a real task turn would run them.
       if (!running) await runTimers();
       while (settled < end) await progress();
     },
     async until(done, message, limit = 10_000) {
-      const end = settled + limit;
+      const end = now + limit;
       if (!running) await runTimers();
       while (!done()) {
         if (settled >= end) throw new Error(message);

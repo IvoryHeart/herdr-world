@@ -146,6 +146,44 @@ describe("test clock", () => {
     expect(more).toHaveLength(20);
   });
 
+  test("a wait started during a step counts from then, not from the last finished step (review)", async () => {
+    // advance: twenty timers due exactly at its end all run before it returns.
+    {
+      const target = {} as ClockTarget;
+      const clock = installTestClock(
+        target,
+        { now: () => 0 },
+        { running: true },
+      );
+      const events: number[] = [];
+      target.setTimeout(() => {}, 1);
+      await Promise.resolve();
+      await Promise.resolve(); // a step is under way
+      for (let i = 0; i < 20; i++) target.setTimeout(() => events.push(i), 16);
+      await clock.advance(16);
+      expect(events).toHaveLength(20);
+    }
+    // until: a timer due exactly at its deadline is not a false timeout.
+    {
+      const target = {} as ClockTarget;
+      const clock = installTestClock(
+        target,
+        { now: () => 0 },
+        { running: true },
+      );
+      const interval = target.setInterval(() => {}, 1);
+      await Promise.resolve();
+      await Promise.resolve();
+      let done = false;
+      target.setTimeout(() => {
+        done = true;
+      }, 16);
+      await clock.until(() => done, "deadline", 16);
+      expect(done).toBe(true);
+      target.clearInterval(interval);
+    }
+  });
+
   test("scheduler.postTask runs on test time, with its delay", async () => {
     const target = {
       scheduler: { postTask: () => Promise.reject(new Error("real")) },
