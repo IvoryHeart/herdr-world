@@ -45,8 +45,10 @@ branch). It always runs formatting, lint, type checks, the build, the site and
 OpenSpec validation. It then runs the unit tests that import or read a changed
 file, the World browser suites nearest to each changed file, and behavioral
 verification when a change touches its models, adapters, contracts or a
-`verification/coverage.json` owner. Toolchain, lockfile, configuration and gate
-changes, and files no check is known to read, get the full gate. CI's full gate
+`verification/coverage.json` owner. A deleted file runs the tests that still
+import or name it. Toolchain, lockfile, configuration and gate changes, code that
+no test, build or verification model reaches, and pushes of anything but the
+worktree's HEAD (another branch, several refs) get the full gate. CI's full gate
 stays the authority: the scoped gate trades local completeness for speed, so a
 broad acceptance suite may first fail on CI. The hook uses `bun run check:docs`
 only if its local report proves a passed code gate on an ancestor and every

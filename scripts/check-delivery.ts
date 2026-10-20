@@ -50,9 +50,9 @@ function scope(): Affected & { why: string } {
   const from = base || mergeBase();
   if (!from)
     return { full: true, reason: "no base", why: "no base to compare" };
-  const { tracked, changed } = gitChanges(root, from);
+  const { tracked, changed, deleted } = gitChanges(root, from);
   const result = affected(
-    buildGraph(root, tracked),
+    buildGraph(root, tracked, deleted),
     changed,
     worldBrowserSuites,
     coverageOwners(root),

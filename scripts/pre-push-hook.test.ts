@@ -156,6 +156,23 @@ test("pre-push compares with the pushed branch, and uses the docs gate only afte
     // A remote commit that is not an ancestor gives no base.
     expect(run(code, "f".repeat(40)).status).toBe(0);
     expect(readFileSync(argsPath, "utf8")).toBe("run check:changed\n");
+    // Pushing a ref other than this worktree's HEAD, or several refs, runs
+    // the full gate: the scoped gate reads only this worktree (review).
+    expect(run(base, docs).status).toBe(0);
+    expect(readFileSync(argsPath, "utf8")).toBe("run check:delivery\n");
+    const several = spawnSync("sh", [hook], {
+      cwd: root,
+      input: `refs/heads/example ${code} refs/heads/example ${docs}\nrefs/heads/other ${base} refs/heads/other ${"0".repeat(40)}\n`,
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        PATH: `${root}:${process.env.PATH ?? ""}`,
+        HOOK_ARGS_FILE: argsPath,
+        HOOK_EXIT_CODE: "0",
+      },
+    });
+    expect(several.status).toBe(0);
+    expect(readFileSync(argsPath, "utf8")).toBe("run check:delivery\n");
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

@@ -18,11 +18,16 @@ base=
 
 # Code pushes check what changed since the remote branch (or since main for a
 # new branch); CI runs the full gate. HERDR_WORLD_PREPUSH=full runs it here.
-# A Markdown-only follow-up can use the docs gate if this worktree already
-# passed a code gate on an ancestor. Multi-ref pushes compare against main.
-if read -r local_ref local_sha remote_ref remote_sha && ! read -r extra_line; then
-  case "$local_ref" in
-    refs/heads/*)
+# The scoped gate reads this worktree, so a push of anything but its HEAD
+# (another branch, several refs) runs the full gate. A Markdown-only
+# follow-up can use the docs gate if this worktree already passed a code gate
+# on an ancestor.
+if read -r local_ref local_sha remote_ref remote_sha; then
+  if read -r extra_line || [ "$local_sha" != "$head_sha" ]; then
+    gate=full
+  fi
+  case "$gate:$local_ref" in
+    changed:refs/heads/*)
       if [ "$local_sha" = "$head_sha" ] &&
         git merge-base --is-ancestor "$remote_sha" "$head_sha" 2>/dev/null; then
         base=$remote_sha

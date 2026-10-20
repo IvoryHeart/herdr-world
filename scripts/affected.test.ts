@@ -15,13 +15,25 @@ const files: Record<string, string> = {
   "web/src/world/Board.test.ts":
     'const entry = join(import.meta.dir, "Board.browser.tsx");\n',
   "web/src/world/App.tsx": 'import "./Board";\nimport "./Town";\n',
-  "web/src/world/Town.tsx": "export {};\n",
   "web/src/world/App.browser.tsx": 'import "./App";\n',
   "web/src/world/testing/bundles.ts":
     'export type Entry = "App" | "Board";\nexport const build = (e: Entry) => e;\n',
   "web/src/world/App.test.ts":
     'import { build } from "./testing/bundles";\nbuild("App");\n',
-  "quint/adapter.ts": 'import "../web/src/world/Town";\n',
+  "quint/adapter.ts":
+    'import "../web/src/world/Town";\nimport "../server/src/model";\n',
+  "server/src/model.ts": "export const model = 1;\n",
+  "scripts/orphan.ts": "export const value = 1;\n",
+  "scripts/data.test.ts": 'readFileSync("fixtures/expected.json");\n',
+  "fixtures/expected.json": "{}\n",
+  "web/src/links.browser.tsx": 'import "./world/Town";\n',
+  "web/src/uiScale.test.ts": 'const cases = [[390, "links"]];\n',
+  "web/src/world/world.css": '@import "./world-responsive.css";\n',
+  "web/src/world/world-responsive.css": "a {}\n",
+  "web/src/world/Town.tsx": 'import "./world.css";\nexport {};\n',
+  "web/src/world/release.ts": "export {};\n",
+  "web/vite.config.ts":
+    'alias: new URL("./src/world/release.ts", import.meta.url);\n',
   "scripts/release.test.ts": 'readFileSync("CHANGELOG.md");\nread("ci.yml");\n',
   ".github/workflows/ci.yml": "on: push\n",
   "CHANGELOG.md": "# Changes\n",
@@ -99,6 +111,68 @@ describe("scoped pre-push selection", () => {
     // "index.html" names two files; no test names either by path.
     expect(run(["docs/guide.md", "site/index.html"])).toMatchObject({
       full: true,
+    });
+  });
+
+  test("code no check reaches runs the full gate (review)", () => {
+    expect(run(["scripts/orphan.ts"])).toMatchObject({ full: true });
+    // A verification change elsewhere in the push does not cover it.
+    expect(run(["scripts/orphan.ts", "quint/adapter.ts"])).toMatchObject({
+      full: true,
+    });
+    // Code only verification's adapters reach is covered by verification.
+    expect(run(["server/src/model.ts"])).toEqual({
+      full: false,
+      unit: [],
+      browser: [],
+      verification: true,
+    });
+  });
+
+  test("a deleted file runs the tests that still name or import it (review)", () => {
+    const tracked = Object.keys(files).filter(
+      (path) => path !== "fixtures/expected.json" && path !== "web/src/util.ts",
+    );
+    const after = buildGraph(root, tracked, [
+      "fixtures/expected.json",
+      "web/src/util.ts",
+    ]);
+    expect(affected(after, ["fixtures/expected.json"], suites)).toMatchObject({
+      full: false,
+      unit: ["scripts/data.test.ts"],
+    });
+    expect(affected(after, ["web/src/util.ts"], suites)).toMatchObject({
+      full: false,
+      unit: ["web/src/util.test.ts"],
+      browser: ["web/src/world/Board.test.ts"],
+    });
+    // Deleting a file nothing refers to any more needs no test.
+    const orphanGone = buildGraph(
+      root,
+      Object.keys(files).filter((path) => path !== "scripts/orphan.ts"),
+      ["scripts/orphan.ts"],
+    );
+    expect(affected(orphanGone, ["scripts/orphan.ts"], suites)).toMatchObject({
+      full: false,
+      unit: [],
+    });
+  });
+
+  test("fixtures by lower-case name, CSS imports and build aliases count", () => {
+    expect(run(["web/src/links.browser.tsx"])).toMatchObject({
+      unit: ["web/src/uiScale.test.ts"],
+    });
+    // world-responsive.css ← world.css ← Town ← App ← App.test.
+    expect(run(["web/src/world/world-responsive.css"])).toMatchObject({
+      full: false,
+      browser: ["web/src/world/App.test.ts"],
+    });
+    // Reached only by the build's release alias, which always runs.
+    expect(run(["web/src/world/release.ts"])).toEqual({
+      full: false,
+      unit: [],
+      browser: [],
+      verification: false,
     });
   });
 

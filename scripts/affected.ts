@@ -12,6 +12,8 @@ import { dirname, join, normalize } from "node:path";
 
 const CODE = /\.(?:m?[jt]sx?)$/;
 export const TEST = /\.test\.(?:m?[jt]sx?)$/;
+/** Files whose references the always-run static lane (the build) exercises. */
+const BUILT = new Set(["web/vite.config.ts"]);
 /** A test that drives Chrome, as World's browser inventory recognises one. */
 export const CHROME = /CHROME_BIN|--headless/;
 const RESOLVE = ["", ".ts", ".tsx", ".js", ".mjs", "/index.ts", "/index.tsx"];
@@ -55,8 +57,10 @@ export type Affected =
 export type Graph = {
   /** file → files it imports, bundles or names */
   deps: Map<string, Set<string>>;
-  /** every tracked file */
+  /** every tracked file, and every file the change deleted */
   files: Set<string>;
+  /** files the change deleted: still resolvable, so their consumers are found */
+  gone: Set<string>;
 };
 
 /** Every relative import, bundled fixture or named data file a file refers to. */
@@ -78,8 +82,9 @@ export function references(
     }
     return false;
   };
+  // Imports, CSS @import, and new URL("./x", import.meta.url) (Vite aliases).
   for (const match of text.matchAll(
-    /(?:from\s*|import\s*\(?\s*|require\s*\(\s*)["'`](\.{1,2}\/[^"'`]+)["'`]/g,
+    /(?:from\s*|import\s*\(?\s*|require\s*\(\s*|@import\s+(?:url\(\s*)?|new URL\(\s*)["'`](\.{1,2}\/[^"'`]+)["'`]/g,
   ))
     add(join(dir, match[1]!));
   if (TEST.test(path) || path.includes("/testing/")) {
@@ -88,8 +93,9 @@ export function references(
     const values = text.replace(/^\s*(?:export\s+)?type\s[^;]*;/gm, "");
     for (const match of values.matchAll(/["'`]([\w./@-]+)["'`]/g)) {
       const literal = match[1]!;
-      // A bare name ("HostsFilter") is a fixture to bundle, never a module.
-      const bare = /^[A-Z][\w.]*$/.test(literal);
+      // A bare name ("HostsFilter", "terminalLinks") is a fixture to bundle,
+      // never a module.
+      const bare = /^[A-Za-z][\w.]*$/.test(literal);
       if (!bare && (add(join(dir, literal)) || add(literal))) continue;
       if (bare) {
         if (
@@ -108,8 +114,13 @@ export function references(
   return out;
 }
 
-export function buildGraph(root: string, tracked: readonly string[]): Graph {
-  const files = new Set(tracked);
+export function buildGraph(
+  root: string,
+  tracked: readonly string[],
+  deleted: readonly string[] = [],
+): Graph {
+  const gone = new Set(deleted.filter((path) => !tracked.includes(path)));
+  const files = new Set([...tracked, ...gone]);
   const byBasename = new Map<string, string[]>();
   for (const file of files) {
     const name = file.split("/").pop()!;
@@ -117,7 +128,7 @@ export function buildGraph(root: string, tracked: readonly string[]): Graph {
   }
   const deps = new Map<string, Set<string>>();
   for (const path of files) {
-    if (!CODE.test(path)) continue;
+    if (!(CODE.test(path) || path.endsWith(".css")) || gone.has(path)) continue;
     deps.set(
       path,
       references(
@@ -128,7 +139,7 @@ export function buildGraph(root: string, tracked: readonly string[]): Graph {
       ),
     );
   }
-  return { deps, files };
+  return { deps, files, gone };
 }
 
 /** Who refers to each file. */
@@ -186,19 +197,37 @@ export function affected(
   const suites = new Set(browserSuites);
   const unit = new Set<string>();
   const browser = new Set<string>();
-  for (const path of changed.filter((file) => graph.files.has(file))) {
+  for (const path of changed) {
+    if (!graph.files.has(path))
+      return { full: true, reason: `${path} is not a tracked file` };
     const reach = distances(reverse, path);
-    const used = graph.deps.has(path) || reach.size > 1;
-    if (!used && !INERT.some((rule) => rule.test(path)) && !verification)
-      return { full: true, reason: `no check is known to read ${path}` };
     let nearest = Infinity;
+    let tested = false;
     for (const [file, distance] of reach) {
-      if (!TEST.test(file)) continue;
+      if (!TEST.test(file) || graph.gone.has(file)) continue;
+      tested = true;
       if (!suites.has(file)) unit.add(file);
       else nearest = Math.min(nearest, distance);
     }
     for (const [file, distance] of reach)
       if (suites.has(file) && distance === nearest) browser.add(file);
+    if (tested) continue;
+    // The build, which always runs, uses it (a release alias, say).
+    if ([...reach.keys()].some((file) => BUILT.has(file))) continue;
+    // Code no test reaches is covered only by verification, when its
+    // adapters reach it or it is one of verification's own inputs.
+    const modeled =
+      owns(path) ||
+      VERIFICATION.some((rule) => rule.test(path)) ||
+      [...reach.keys()].some((file) => file.startsWith("quint/"));
+    if (modeled) {
+      verification = true;
+      continue;
+    }
+    // A deleted file nothing still refers to cannot break anything left.
+    if (graph.gone.has(path) && reach.size === 1) continue;
+    if (INERT.some((rule) => rule.test(path))) continue;
+    return { full: true, reason: `no check is known to cover ${path}` };
   }
   return {
     full: false,
@@ -234,22 +263,29 @@ export function gitChanges(root: string, base: string, head = "HEAD") {
     return result.stdout.toString().split("\n").filter(Boolean);
   };
   const tracked = git("ls-files");
+  // Renames count as a deletion and an addition, so both sides are checked.
   const changed = new Set([
     ...git("diff", "--name-only", "--no-renames", base, head),
     ...(head === "HEAD"
       ? git("diff", "--name-only", "--no-renames", "HEAD")
       : []),
   ]);
-  return { tracked, changed: [...changed].sort() };
+  const present = new Set(tracked);
+  const sorted = [...changed].sort();
+  return {
+    tracked,
+    changed: sorted,
+    deleted: sorted.filter((path) => !present.has(path)),
+  };
 }
 
 if (import.meta.main) {
   const { worldBrowserSuites } = await import("./world-browser-suites");
   const root = process.cwd();
   const base = process.argv[2] ?? "origin/main";
-  const { tracked, changed } = gitChanges(root, base, process.argv[3]);
+  const { tracked, changed, deleted } = gitChanges(root, base, process.argv[3]);
   const result = affected(
-    buildGraph(root, tracked),
+    buildGraph(root, tracked, deleted),
     changed,
     worldBrowserSuites,
     coverageOwners(root),
