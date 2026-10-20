@@ -24,6 +24,7 @@ import type {
   AssistantTaskNotification,
   AssistantNotificationReceipt,
   AssistantQueuedMessage,
+  AssistantChatSelection,
   AssistantToolActivity,
   AssistantWorkspace,
   AssistantWorkspaceRef,
@@ -122,6 +123,7 @@ type SavedSteer = {
 /** The scope stays on the bridge so a follow-up is admitted as it was sent. */
 type QueuedMessage = AssistantQueuedMessage & {
   scope?: AssistantWorkspaceRef[];
+  selection?: Omit<AssistantChatSelection, "instance_id">;
 };
 const MAX_STEERS = 8;
 
@@ -147,6 +149,24 @@ function savedSteers(value: unknown): SavedSteer[] {
   });
 }
 
+function queuedSelection(value: unknown): QueuedMessage["selection"] {
+  if (value === undefined) return undefined;
+  if (!value || typeof value !== "object" || Array.isArray(value))
+    throw new Error("Invalid queued model selection");
+  const selection = value as Record<string, unknown>;
+  if (!["assistant", "pi"].includes(String(selection.credential_source)))
+    throw new Error("Invalid queued credential source");
+  const checked = config({ ...selection, allowed_workspaces: [] });
+  return {
+    provider: checked.provider,
+    model: checked.model,
+    credential_source: checked.credential_source,
+    ...(checked.thinking_level
+      ? { thinking_level: checked.thinking_level }
+      : {}),
+  };
+}
+
 function savedQueue(value: unknown): QueuedMessage[] {
   if (value === undefined) return [];
   if (!isAssistantQueue(value)) throw new Error("Invalid saved queue");
@@ -155,6 +175,7 @@ function savedQueue(value: unknown): QueuedMessage[] {
     return {
       ...item,
       ...(scope === undefined ? {} : { scope: refs(scope, true) }),
+      selection: queuedSelection((item as QueuedMessage).selection),
     };
   });
 }
@@ -661,8 +682,8 @@ export function createAssistantService(options: {
       entryScope = restored.entry_scope;
       requests = restored.requests;
       queue = restored.queue;
-      // A recovered turn drains the queue when it answers; otherwise wait.
-      queueHeld = queue.length > 0 && saved.active_run === undefined;
+      // Recovery may finish the admitted turn, but never releases waiting questions.
+      queueHeld = queue.length > 0;
       if (saved.active_run !== undefined) {
         const pending = saved.active_run;
         const turnConfig = config(pending.config);
@@ -1356,11 +1377,16 @@ export function createAssistantService(options: {
 
   async function sendQueued(item: QueuedMessage) {
     try {
+      if (!item.scope || !item.selection)
+        throw new Error(
+          "The queued selection is unavailable. Remove and resend the message.",
+        );
       await send(
         {
           text: item.text,
           request_id: item.id,
           session_id: state.session_id,
+          expected: { ...item.selection, instance_id: state.instance_id },
           ...(item.mentions?.length ? { mentions: item.mentions } : {}),
           ...(item.scope ? { scope: item.scope } : {}),
         },
@@ -1387,8 +1413,25 @@ export function createAssistantService(options: {
       throw new Error(
         "Invalid Ranger mentions. Select the referenced objects again.",
       );
-    const scope =
-      params.scope === undefined ? undefined : refs(params.scope, true);
+    const selection = queuedSelection(state.config)!;
+    let scope: AssistantWorkspaceRef[];
+    if (params.scope === undefined) {
+      const inventory = await workspaceCatalog();
+      if (allWorkspaces() && inventory.truncated)
+        throw new Error("The workspace catalog is incomplete.");
+      const requested = effectiveScope();
+      assertScopeAllowed(requested);
+      scope = (await context.captureScope(requested)).map(
+        ({ connection_id, workspace_id, runtime_generation }) => ({
+          connection_id,
+          workspace_id,
+          runtime_generation,
+        }),
+      );
+      assertScopeAllowed(scope);
+    } else scope = refs(params.scope, true);
+    if (disposed) throw new Error("Ranger unavailable");
+    checkSelection({ ...selection, instance_id: state.instance_id });
     if (queue.length >= ASSISTANT_MAX_QUEUED)
       throw new Error(
         `Ranger already has ${ASSISTANT_MAX_QUEUED} waiting messages. Wait for one to send.`,
@@ -1409,7 +1452,8 @@ export function createAssistantService(options: {
       text,
       ...(mentions.length ? { mentions: structuredClone(mentions) } : {}),
       sent_at: new Date().toISOString(),
-      ...(scope ? { scope } : {}),
+      scope,
+      selection,
     };
     saveChange(() => {
       queue.push(item);
@@ -1516,10 +1560,10 @@ export function createAssistantService(options: {
       ((whenBusy !== "steer" && whenBusy !== "queue") || options.taskRun)
     )
       throw new Error("Invalid Ranger busy mode");
+    if (params.expected !== undefined) checkSelection(params.expected);
     if (whenBusy && state.running && !queued)
       return enqueue(params, requestId, whenBusy);
     idle();
-    if (params.expected !== undefined) checkSelection(params.expected);
     const text = string(
       params.text,
       "message",

@@ -22,7 +22,8 @@
       "reason": "Retain World-owned workflow controls and action pins; upstream workflow edits require a separate trusted human-reviewed integration.",
       "evidence": [
         ".github/workflows/release.yml",
-        "docs/upstream-follow-ups.md#world-workflow-controls"
+        "docs/upstream-follow-ups.md#world-workflow-controls",
+        "docs/upstream-follow-ups.md#assessment-for-source-57327a0d-20-october-2026"
       ],
       "followUp": "docs/upstream-follow-ups.md#world-workflow-controls",
       "revisitWhen": "Every source sync; manually assess upstream action security fixes and required platform changes.",
@@ -558,7 +559,10 @@
       "title": "chore(deps): update CodeQL actions to 4.39.0 (#454)",
       "status": "divergent",
       "reason": "Retain World-owned workflow controls; the upstream-only CodeQL workflow does not exist in World. Its action update requires separate trusted control review.",
-      "evidence": ["docs/upstream-follow-ups.md#world-workflow-controls"],
+      "evidence": [
+        "docs/upstream-follow-ups.md#world-workflow-controls",
+        "docs/upstream-follow-ups.md#assessment-for-source-57327a0d-20-october-2026"
+      ],
       "followUp": "docs/upstream-follow-ups.md#world-workflow-controls",
       "revisitWhen": "Every source sync and relevant action security or platform change.",
       "reviewedFor": "57327a0dcac58c116662a26a7d1ea78d4ecf772b"
@@ -614,10 +618,11 @@
       "commit": "2b5d883c96f5ccc4a0abcd160e2029c9cba10e1a",
       "title": "Improve Composer input-mode switching and shortcut visibility (#455)",
       "status": "adapted",
-      "reason": "Adopt Composer mode and shortcut visibility improvements with World navigation, qualified input and React 18 synchronous native-blur handling.",
+      "reason": "Adopt mode/shortcut improvements with World-qualified input and React 18 native-blur handling. World top app-bar and 44/48px controls replace upstream footer styling and footer-only assertions; real World handoff/browser and input-mode DOM regressions cover the adaptation.",
       "evidence": [
         "web/src/components/TerminalComposer.tsx",
-        "web/src/components/TerminalView.inputMode.test.ts"
+        "web/src/components/TerminalView.inputMode.test.ts",
+        "web/src/world/WorldTerminalHandoff.test.ts"
       ],
       "followUp": null,
       "revisitWhen": null,

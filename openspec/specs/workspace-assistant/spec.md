@@ -84,8 +84,8 @@ Task deletion SHALL require prior cancellation and drain its private run resourc
 World SHALL admit at most eight pending Ranger messages, deduplicate request IDs,
 and process steering, removal and follow-up admission in queue order. A steer
 SHALL remain within the running turn's captured scope and runtime generation;
-unavailable or wider steering SHALL become a follow-up. Follow-ups SHALL retain
-their selected runtime generations through persistence and SHALL NOT recapture
+unavailable or wider steering SHALL become a follow-up. Follow-ups SHALL capture omitted scopes at enqueue time and retain
+their selected runtime generations and model/effort selection through persistence and SHALL NOT recapture
 a replacement runtime automatically. Stop, failure, restart or chat switching
 SHALL hold waiting messages until explicit user continuation. Pending action or
 task previews SHALL block automatic follow-up admission.
@@ -101,3 +101,11 @@ task previews SHALL block automatic follow-up admission.
 #### Scenario: Stop with waiting questions
 - **WHEN** the user stops Ranger with pending questions
 - **THEN** waiting questions remain held across restart until explicit continuation
+
+#### Scenario: Model changes while a question waits
+- **WHEN** a queued question's provider, model, credential source or effort differs from the current selection
+- **THEN** admission is held until the original selection is restored or the user resends the message
+
+#### Scenario: Stale browser sends while Ranger is busy
+- **WHEN** a busy send carries an outdated expected model selection
+- **THEN** it is rejected before entering the queue

@@ -443,7 +443,8 @@ The service admits at most eight waiting messages. Steers enter the current turn
 after its tool round and retain that turn's captured scope; a wider scope or a
 different runtime generation becomes a follow-up. Follow-ups are admitted in FIFO
 order after the answer and pending previews finish. Their private persisted scope
-retains connection, workspace and runtime generation, so replacement rejects
+retains connection, workspace, runtime generation and model/effort selection; omitted
+scopes are captured before enqueue is acknowledged, so replacement rejects
 admission rather than silently recapturing a different runtime. Stop, failure,
 restart and chat changes hold the queue until explicit user continuation. Queue
 removal, steering and admission share one serialized worker; request IDs prevent

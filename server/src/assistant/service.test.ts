@@ -6253,6 +6253,145 @@ test("a steer cannot join a turn admitted for a different runtime generation", a
   expect(steer).not.toHaveBeenCalled();
 });
 
+test("an omitted queued scope is captured before acknowledgement", async () => {
+  const gate = Promise.withResolvers<void>();
+  const f = setup({
+    run: async () => {
+      await gate.promise;
+      return [];
+    },
+  });
+  await f.service.handle("configure", configured);
+  await f.service.handle("send", { text: "First", request_id: "first" });
+  try {
+    await f.rawHandle("send", {
+      text: "Later",
+      request_id: "later",
+      when_busy: "queue",
+    });
+    const saved = JSON.parse(
+      readFileSync(join(f.directory, "state.json"), "utf8"),
+    );
+    expect(saved.queue[0].scope).toEqual(browserScope);
+  } finally {
+    gate.resolve();
+  }
+});
+
+test("busy admission rejects a stale browser model selection", async () => {
+  const gate = Promise.withResolvers<void>();
+  const f = setup({
+    run: async () => {
+      await gate.promise;
+      return [];
+    },
+  });
+  await f.service.handle("configure", configured);
+  await f.service.handle("send", { text: "First", request_id: "first" });
+  try {
+    await expect(
+      f.service.handle("send", {
+        text: "Stale",
+        request_id: "stale",
+        when_busy: "queue",
+        expected: { ...chatSelection(f.service.peek()), model: "other" },
+      }),
+    ).rejects.toThrow("model or thinking effort changed");
+    expect(f.service.peek().queue).toEqual([]);
+  } finally {
+    gate.resolve();
+  }
+});
+
+test("queued messages retain their model selection after Stop and a model change", async () => {
+  let runs = 0;
+  const f = setup({
+    ...thinkingDriver(),
+    run: async (input) => {
+      if (++runs === 1)
+        await new Promise<void>((resolve) =>
+          input.signal.addEventListener("abort", () => resolve(), {
+            once: true,
+          }),
+        );
+      return [];
+    },
+  });
+  await f.service.handle("configure", configured);
+  await f.service.handle("send", { text: "First", request_id: "first" });
+  await f.service.handle("send", {
+    text: "Later",
+    request_id: "later",
+    when_busy: "queue",
+  });
+  await f.service.handle("stop", {});
+  await f.service.handle("configure_chat", {
+    provider: "test",
+    model: "fast",
+    thinking_level: null,
+    expected: chatSelection(f.service.peek()),
+  });
+  await expect(f.service.handle("queue.resume", {})).rejects.toThrow(
+    "model or thinking effort changed",
+  );
+  expect(runs).toBe(1);
+  expect(f.service.peek().queue_held).toBe(true);
+});
+
+test("recovering an active turn does not release its restored queue", async () => {
+  const closed = Promise.withResolvers<void>();
+  const f = setup({
+    run: async (input) => {
+      input.checkpoint?.([{ type: "ranger-durable", id: "context" }]);
+      await closed.promise;
+      return input.entries;
+    },
+    dispose: async () => {
+      closed.resolve();
+    },
+  });
+  const targets = [
+    {
+      connection_id: "local",
+      workspace_id: "ws",
+      endpoint_fingerprint: "a".repeat(64),
+      workspace_identity: "b".repeat(64),
+      herdr_boot_id: "same-herdr",
+    },
+  ];
+  f.context.recoveryScope = async () => targets;
+  f.context.restoreScope = async () => [workspace];
+  await f.service.handle("configure", configured);
+  await f.service.handle("send", { text: "First", request_id: "first" });
+  await f.service.handle("send", {
+    text: "Later",
+    request_id: "later",
+    when_busy: "queue",
+  });
+  await f.service.dispose();
+  let runs = 0;
+  const restored = createAssistantService({
+    directory: f.directory,
+    context: f.context,
+    driver: {
+      ...f.driver,
+      run: async (input) => {
+        runs++;
+        input.message("Recovered");
+        return [];
+      },
+    },
+    publish: () => {},
+  });
+  services.push(restored);
+  await restored.resume();
+  await until(() => !restored.peek().running);
+  await flushTasks();
+  expect(runs).toBe(1);
+  expect(restored.peek().queue_held).toBe(true);
+  expect(restored.peek().queue).toMatchObject([{ id: "later" }]);
+});
+
 test("queued follow-ups wait for the answer and are admitted in order", async () => {
   const gate = Promise.withResolvers<void>();
   const prompts: string[] = [];
