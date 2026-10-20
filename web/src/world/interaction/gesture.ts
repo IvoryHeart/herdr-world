@@ -92,6 +92,8 @@ export type GestureEffect<T> =
   | { type: "cancelString" }
   | { type: "moveHost"; key: string; dx: number; dy: number }
   | { type: "dropHost"; key: string }
+  /** A group drag ended without a drop: put it back, save nothing. */
+  | { type: "cancelHost"; key: string }
   | { type: "pickString"; id: string };
 
 type Sample = { x: number; y: number; t: number };
@@ -167,7 +169,7 @@ const keep = (hist: Sample[], sample: Sample) => [...hist.slice(-7), sample];
 function abandon<T>(mode: Mode<T>): GestureEffect<T>[] {
   if (mode.name === "card") return [{ type: "settleCard", key: mode.key }];
   if (mode.name === "string") return [{ type: "cancelString" }];
-  if (mode.name === "host") return [{ type: "dropHost", key: mode.key }];
+  if (mode.name === "host") return [{ type: "cancelHost", key: mode.key }];
   return [];
 }
 
@@ -201,8 +203,9 @@ export function stepGesture<T>(
 
   if (event.type === "down") {
     const role = config.role(event.target);
-    // A string's hit line is picked, not dragged.
-    if (role === "pick") {
+    // A string's hit line is picked, not dragged, but only as a gesture's
+    // first pointer: a second finger on one joins the gesture as a pinch.
+    if (role === "pick" && (event.primary || pointers.size === 0)) {
       effects.push({ type: "pickString", id: config.key(event.target) });
       return done();
     }
@@ -405,7 +408,11 @@ export function stepGesture<T>(
       });
     mode = { name: "idle" };
   } else if (mode.name === "host" && mode.id === event.id) {
-    effects.push({ type: "dropHost", key: mode.key });
+    effects.push(
+      cancelled || !at
+        ? { type: "cancelHost", key: mode.key }
+        : { type: "dropHost", key: mode.key },
+    );
     mode = { name: "idle" };
   }
   return done();

@@ -62,6 +62,7 @@ import {
   type GestureTarget,
 } from "./board/boardGesture";
 import { createFrameLoop, type FrameLoop } from "./board/boardScheduler";
+import { worldMotionPreference } from "./worldFrameScheduler";
 import { DEVTOOLS, NO_TRACE } from "./devtools/flag";
 import { openTrace, rememberTrace } from "./devtools/trace";
 import { TraceOverlay } from "./devtools/TraceOverlay";
@@ -539,6 +540,8 @@ export default function BoardView({
   } | null>(null);
   const gesture = useRef(initialGesture());
   const holdTimer = useRef(0);
+  /** A host zone's place before its label drag, for a cancelled drag. */
+  const hostStart = useRef<{ key: string; anchor?: Point } | null>(null);
   useEffect(() => () => window.clearTimeout(holdTimer.current), []);
   const pinchStart = useRef<{ cam: Camera; mid: Point } | null>(null);
   // The event trace exists only in development builds (devtools/flag.ts).
@@ -1008,9 +1011,11 @@ export default function BoardView({
     const holdingKey = held.current?.key ?? null;
     if (trace.enabled && [...reasons].some((reason) => reason !== "animate"))
       trace.record("frame", [...reasons]);
+    // Reduced motion: moves land at once rather than animate.
+    const still = worldMotionPreference().matches;
     for (const [key, tw] of tweens.current) {
       const card = cards.current.get(key);
-      tw.t += dt;
+      tw.t = still ? TWEEN_SECONDS : tw.t + dt;
       const k = 1 - Math.pow(1 - Math.min(1, tw.t / TWEEN_SECONDS), 3);
       if (card) {
         card.x = tw.fx + (tw.tx - tw.fx) * k;
@@ -1039,7 +1044,10 @@ export default function BoardView({
       gliding = list.some((card) => card.gliding);
     }
     const goal = camGoal.current;
-    if (goal) {
+    if (goal && still) {
+      cam.current = goal;
+      camGoal.current = null;
+    } else if (goal) {
       const k = 1 - Math.pow(0.0015, dt);
       const c = cam.current;
       cam.current = {
@@ -1055,6 +1063,7 @@ export default function BoardView({
         camGoal.current = null;
       }
     }
+    if (still) panVelocity.current = null;
     const pv = panVelocity.current;
     if (pv) {
       cam.current = {
@@ -1794,6 +1803,12 @@ export default function BoardView({
           x: 0,
           y: 0,
         };
+        // Remember where the zone was, in case the drag is cancelled.
+        if (hostStart.current?.key !== effect.key)
+          hostStart.current = {
+            key: effect.key,
+            anchor: layout.current.anchors.get(effect.key),
+          };
         layout.current.anchors.set(effect.key, {
           x: anchor.x + effect.dx / cam.current.s,
           y: anchor.y + effect.dy / cam.current.s,
@@ -1802,9 +1817,22 @@ export default function BoardView({
         return;
       }
       case "dropHost":
+        hostStart.current = null;
         warmUp();
         scheduleSave();
         return;
+      case "cancelHost": {
+        // Cancelled (lost pointer, a second finger): put the zone back.
+        const start = hostStart.current;
+        hostStart.current = null;
+        if (start?.key === effect.key) {
+          if (start.anchor)
+            layout.current.anchors.set(effect.key, start.anchor);
+          else layout.current.anchors.delete(effect.key);
+          warmUp();
+        }
+        return;
+      }
       case "pickString":
         setPicked(effect.id);
         return;

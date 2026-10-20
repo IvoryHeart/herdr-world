@@ -13,6 +13,8 @@ function fakeScheduler() {
   let time = 0;
   const scheduler = {
     typing: false,
+    /** Reduced motion: motion frames never run. */
+    reduced: false,
     kinds: [] as string[],
     register: ((_element, d) => {
       draw = d;
@@ -26,12 +28,16 @@ function fakeScheduler() {
           disposed = true;
           pending = null;
         },
+        get reducedMotion() {
+          return scheduler.reduced;
+        },
       };
     }) as FrameRegistrar,
     /** Run the pending frame, if the scheduler would; returns whether it ran. */
     flush() {
       if (!pending || !draw) return false;
-      if (pending === "motion" && scheduler.typing) return false;
+      if (pending === "motion" && (scheduler.typing || scheduler.reduced))
+        return false;
       pending = null;
       time += 16;
       draw(time);
@@ -104,6 +110,24 @@ describe("Board frame loop on World's scheduler", () => {
     frames.typing = false;
     expect(frames.flush()).toBe(true);
     expect(ran).toBe(4);
+  });
+
+  test("under reduced motion, remaining work finishes as state frames (review)", () => {
+    const frames = fakeScheduler();
+    frames.reduced = true;
+    let moving = 3;
+    const loop = createFrameLoop({
+      element,
+      frame: () => --moving > 0,
+      onError: () => {},
+      register: frames.register,
+    });
+    loop.invalidate("tidy");
+    let count = 0;
+    while (frames.flush()) count++;
+    // Motion frames would never run; the work still reaches its end.
+    expect(count).toBe(3);
+    expect(frames.kinds).toEqual(["state", "state", "state"]);
   });
 
   test("an error in one frame is reported and later frames still run", () => {

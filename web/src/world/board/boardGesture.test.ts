@@ -186,6 +186,45 @@ describe("Board gestures", () => {
     expect(state.mode.name).toBe("panning");
   });
 
+  test("a second finger on a string still turns a card drag into a pinch (review)", () => {
+    const strung: GestureTarget = { kind: "string", id: "s1" };
+    const { types, state } = run([
+      down(1, 100, 100, card, { type: "touch" }),
+      { type: "hold", id: 1, time: (clock += 350) },
+      move(1, 120, 100),
+      down(2, 200, 100, strung, { primary: false, type: "touch" }),
+      move(2, 260, 100),
+      up(1, 120, 100),
+    ]);
+    expect(types).not.toContain("pickString");
+    expect(types).not.toContain("dropCard");
+    expect(types).toEqual(
+      expect.arrayContaining(["settleCard", "pinchStart", "pinch"]),
+    );
+    expect(state.pointers.size).toBe(1);
+    // A string as a gesture's first pointer is still picked.
+    expect(run([down(1, 0, 0, strung)]).types).toEqual(["pickString"]);
+  });
+
+  test("a host-label drag that is cancelled or pinched is put back, not dropped (review)", () => {
+    const host: GestureTarget = { kind: "host", key: "studio" };
+    expect(
+      run([down(1, 0, 0, host), move(1, 30, 0), { type: "cancel", id: 1 }])
+        .types,
+    ).toEqual(["moveHost", "cancelHost"]);
+    const pinched = run([
+      down(1, 0, 0, host, { type: "touch" }),
+      move(1, 30, 0),
+      down(2, 100, 0, empty, { primary: false, type: "touch" }),
+    ]).types;
+    expect(pinched).toEqual(["moveHost", "cancelHost", "pinchStart"]);
+    expect(pinched).not.toContain("dropHost");
+    // A real release still drops it.
+    expect(
+      run([down(1, 0, 0, host), move(1, 30, 0), up(1, 30, 0)]).types,
+    ).toEqual(["moveHost", "dropHost"]);
+  });
+
   test("a finger whose lift was never seen does not break the next pinch", () => {
     // Finger 40 never lifts; the next gesture starts with a primary finger.
     const { types, effects } = run([

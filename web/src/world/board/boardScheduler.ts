@@ -4,8 +4,9 @@
  * invalidate(reason), which asks for a state frame; the frame runs with the
  * reasons collected since the last one. While the frame says something is
  * still moving (gliding cards, a settling camera), the loop asks for motion
- * frames, which the scheduler pauses while the user types in a terminal and
- * under reduced motion; a drag keeps invalidating, so it never pauses. The
+ * frames, which the scheduler pauses while the user types in a terminal; a
+ * drag keeps invalidating, so it never pauses. Under reduced motion, work that
+ * must finish (cards reaching their places) continues as state frames. The
  * scheduler skips a board that is off screen or in a hidden document, and
  * shares one frame budget with Town. An error in one frame is reported and
  * never stops later frames. A still board costs nothing.
@@ -27,6 +28,8 @@ export type FrameRegistrar = (
 ) => {
   request(kind?: "state" | "motion"): void;
   dispose(): void;
+  /** True under reduced motion, when the scheduler runs no motion frames. */
+  readonly reducedMotion?: boolean;
 };
 
 export type FrameLoopOptions = {
@@ -64,9 +67,12 @@ export function createFrameLoop(options: FrameLoopOptions): FrameLoop {
       options.onError(error, current);
     }
     // New reasons arrived during the frame: they are state. Otherwise keep
-    // going only as motion, which the scheduler may hold back.
+    // going as motion, which the scheduler may hold back. Under reduced
+    // motion it never runs motion frames, yet cards must still reach the
+    // places they were given (Board snaps what it can; see BoardView), so the
+    // rest of the work continues as state.
     if (reasons.size) ask("state");
-    else if (moving) ask("motion");
+    else if (moving) ask(frames.reducedMotion ? "state" : "motion");
     else last = null;
   };
   const frames = register(options.element, draw);
