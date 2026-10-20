@@ -41,7 +41,12 @@ export type FrameLoopOptions = {
   register?: FrameRegistrar;
 };
 
-const MAX_DT = 1 / 30;
+/**
+ * The longest step one frame advances: a late frame (a busy page, World's
+ * shared frame budget) still covers the time that passed, up to a limit, so
+ * Board settles in real time. Its physics steps in parts of at most 1/30 s.
+ */
+const MAX_DT = 0.1;
 
 export function createFrameLoop(options: FrameLoopOptions): FrameLoop {
   const register = options.register ?? registerWorldFrames;

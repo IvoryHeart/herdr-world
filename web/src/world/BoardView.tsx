@@ -554,7 +554,13 @@ export default function BoardView({
   };
   // Anything that changes what is on screen asks for a frame.
   const loopRef = useRef<FrameLoop | null>(null);
-  const invalidate = (reason: string) => loopRef.current?.invalidate(reason);
+  // data-moving says whether the board still has work to draw: true from a
+  // request until a frame finds nothing moving (tests wait on it).
+  const invalidate = (reason: string) => {
+    const board = boardRef.current;
+    if (board && board.dataset.moving !== "true") board.dataset.moving = "true";
+    loopRef.current?.invalidate(reason);
+  };
   const warmUp = () => {
     warm(physics.current);
     invalidate("physics");
@@ -1034,13 +1040,20 @@ export default function BoardView({
           holdingKey === key;
         return card;
       });
-      for (const key of [
-        ...stepPhysics(list, physics.current, dt / 2),
-        ...stepPhysics(list, physics.current, dt / 2),
-      ])
-        keepWhereItIs(key, m);
-      if (cool(list, physics.current, dt, Boolean(holdingKey)))
-        for (const card of list) if (!card.fixed) keepWhereItIs(card.key, m);
+      // Fixed steps of at most 1/30 s: a late frame (a busy page, World's
+      // shared frame budget) covers the time that passed, and the springs
+      // stay stable.
+      const steps = Math.max(1, Math.ceil(dt * 30 - 1e-6));
+      for (let i = 0; i < steps && physics.current.heat > 0; i++) {
+        const step = dt / steps;
+        for (const key of [
+          ...stepPhysics(list, physics.current, step / 2),
+          ...stepPhysics(list, physics.current, step / 2),
+        ])
+          keepWhereItIs(key, m);
+        if (cool(list, physics.current, step, Boolean(holdingKey)))
+          for (const card of list) if (!card.fixed) keepWhereItIs(card.key, m);
+      }
       gliding = list.some((card) => card.gliding);
     }
     const goal = camGoal.current;
@@ -1096,7 +1109,12 @@ export default function BoardView({
     if (!element) return;
     const loop = createFrameLoop({
       element,
-      frame: (dt, reasons) => frameRef.current(dt, reasons),
+      frame: (dt, reasons) => {
+        const moving = frameRef.current(dt, reasons);
+        const next = String(moving);
+        if (element.dataset.moving !== next) element.dataset.moving = next;
+        return moving;
+      },
       onError: (error, reasons) => {
         console.error("Board frame failed", error);
         trace.record("error", {

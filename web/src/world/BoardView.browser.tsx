@@ -355,6 +355,12 @@ async function rest(limit = 600) {
   let still = 0;
   for (let i = 0; i < limit; i++) {
     await frame();
+    // Board says when it has nothing left to draw: its frames on World's
+    // shared scheduler can skip vsyncs, so stillness alone is not rest.
+    if (host.querySelector<HTMLElement>(".board")?.dataset.moving === "true") {
+      still = 0;
+      continue;
+    }
     // Cards and the camera both: a flight is not rest.
     const now =
       [...host.querySelectorAll<HTMLElement>(".board-card")]
@@ -1585,10 +1591,15 @@ async function run() {
       const others = [
         ...host.querySelectorAll<HTMLElement>(".board-card:not(.board-note)"),
       ]
-        .filter(
-          (el) =>
-            el.offsetParent !== null && getComputedStyle(el).display !== "none",
-        )
+        // Cards the overview hides (its tabs) are not under anything.
+        .filter((el) => {
+          const style = getComputedStyle(el);
+          return (
+            el.offsetParent !== null &&
+            style.display !== "none" &&
+            style.visibility !== "hidden"
+          );
+        })
         .map((el) => el.getBoundingClientRect());
       return notes.some((n) =>
         others.some(
