@@ -1,3 +1,5 @@
+// First: the page runs on test time (see testing/testClock.ts).
+import { clock } from "./testing/installHostsFilterClock";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { bridge, type ConnectionClient } from "../api";
@@ -261,35 +263,22 @@ function snapshot() {
     })),
   };
 }
-function waitFor(condition: () => boolean, message: string, timeoutMs = 3000) {
-  if (condition()) return Promise.resolve();
-  return new Promise<void>((resolve, reject) => {
-    const observer = new MutationObserver(() => {
-      if (condition()) {
-        clearTimeout(timeout);
-        observer.disconnect();
-        resolve();
-      }
-    });
-    const timeout = setTimeout(() => {
-      observer.disconnect();
-      reject(
-        new Error(
-          `${message}; notice=${JSON.stringify(store.get().notice)}; error=${store.get().error}; recentDispatches=${JSON.stringify(dispatches.slice(-3))}; ${document.body.textContent?.slice(-500)}`,
-        ),
-      );
-    }, timeoutMs);
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true,
-      attributes: true,
-    });
-  });
+/** Advance test time until the condition holds, for at most `timeoutMs`. */
+async function waitFor(
+  condition: () => boolean,
+  message: string,
+  timeoutMs = 3000,
+) {
+  try {
+    await clock.until(condition, message, timeoutMs);
+  } catch {
+    throw new Error(
+      `${message}; notice=${JSON.stringify(store.get().notice)}; error=${store.get().error}; recentDispatches=${JSON.stringify(dispatches.slice(-3))}; ${document.body.textContent?.slice(-500)}`,
+    );
+  }
 }
-const frame = () =>
-  new Promise<void>((resolve) =>
-    requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
-  );
+/** Two frames of test time. */
+const frame = () => clock.frame();
 function anchors() {
   return new Set(
     [...document.querySelectorAll<HTMLElement>("[data-world-node-anchor]")].map(
@@ -458,17 +447,22 @@ async function operationalScenario(unmount: () => void) {
         });
       });
     else if (operation === "pending-inspector-delayed") observeWorkspace();
-    const result = await Promise.race([
-      pending,
-      new Promise<string>((resolve) =>
-        setTimeout(
-          () => resolve("pending"),
-          operation === "pending-inspector-timeout"
-            ? WORKSPACE_INSPECTOR_ADMISSION_TIMEOUT_MS + 2000
-            : 1000,
-        ),
-      ),
-    ]);
+    // Test time passes until the admission settles, or the limit does.
+    let settled: boolean | null = null;
+    void pending.then((value) => {
+      settled = value;
+    });
+    await clock
+      .until(
+        () => settled !== null,
+        "admission still pending",
+        operation === "pending-inspector-timeout"
+          ? WORKSPACE_INSPECTOR_ADMISSION_TIMEOUT_MS + 2000
+          : 1000,
+      )
+      .catch(() => {});
+    const result: boolean | "pending" =
+      (settled as boolean | null) ?? "pending";
     check(
       result === (operation === "pending-inspector-delayed"),
       "pending Inspector admission did not settle with its expected outcome",
@@ -1391,13 +1385,13 @@ async function operationalScenario(unmount: () => void) {
       }
 
       if (operation === "worktree-resource-cold") {
-        await new Promise((resolve) => setTimeout(resolve, 10_500));
+        await clock.advance(10_500);
         check(
           !closed &&
             !!document.querySelector(".lifecycle-operation.is-running"),
           "cold-host admission gave up before its observation budget",
         );
-        await new Promise((resolve) => setTimeout(resolve, 7500));
+        await clock.advance(7500);
         coldObservation.resolve(snapshot());
         await waitFor(
           () =>
@@ -2505,7 +2499,7 @@ async function run() {
   flushSync(() => root.render(<WorldFoundationApp />));
   try {
     if (admissionScenario) {
-      await new Promise((resolve) => setTimeout(resolve, 150));
+      await clock.advance(150);
       check(
         worldLocalStorage.getItem("worldHostsFilter.v1") === '["beta"]',
         "unadmitted empty catalogue erased saved beta",
