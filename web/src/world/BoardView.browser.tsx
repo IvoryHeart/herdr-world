@@ -1,3 +1,5 @@
+// First: the page runs on test time (see testing/testClock.ts).
+import { clock } from "./testing/installTestClock";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import BoardView from "./BoardView";
@@ -35,14 +37,11 @@ const failures: string[] = [];
 const check = (condition: boolean, message: string) => {
   if (!condition) failures.push(message);
 };
-const settle = (ms = 50) => new Promise((resolve) => setTimeout(resolve, ms));
-async function waitFor(condition: () => boolean, message: string, tries = 200) {
-  for (let i = 0; i < tries; i++) {
-    if (condition()) return;
-    await settle();
-  }
-  throw new Error(message);
-}
+/** Let `ms` of test time pass: timers fire and frames draw. */
+const settle = (ms = 50) => clock.advance(ms);
+/** Advance test time until the condition holds (at most tries × 50 ms). */
+const waitFor = (condition: () => boolean, message: string, tries = 200) =>
+  clock.until(condition, message, tries * 50);
 
 type Status = "working" | "blocked" | "done" | "idle" | "unknown";
 /** "shell" is a plain terminal pane (Herdr reports it as idle). */
@@ -350,7 +349,7 @@ const centre = (el: Element) => {
  * (slower frames) does not change the result.
  */
 async function rest(limit = 600) {
-  const frame = () => new Promise((resolve) => requestAnimationFrame(resolve));
+  const frame = () => clock.advance(16);
   let before = "";
   let still = 0;
   for (let i = 0; i < limit; i++) {
