@@ -103,7 +103,7 @@ writeFileSync(
       name: "@ivoryheart/herdr-world",
       version,
       description:
-        "Herdr World: Visualize and control your agents in Office and Graph across multiple hosts.",
+        "A visual IDE for AI agents. Focus your attention with office, mindmaps and boards. Chat with agents, review files and changes. Play with your agents.",
       license: "MIT",
       repository,
       homepage: "https://herdr.world/",
