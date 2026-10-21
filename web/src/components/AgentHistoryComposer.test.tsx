@@ -1,9 +1,12 @@
-import { expect, mock, test } from "bun:test";
+import { expect, jest, mock, test } from "bun:test";
 import * as React from "react";
 import {
+  activateTerminalComposerDraftScope,
   readTerminalComposerDraft,
   terminalComposerDraftKey,
+  terminalComposerUploadCount,
   writeTerminalComposerDraft,
+  writeTerminalComposerSelection,
 } from "../terminalComposer";
 import { AgentHistoryComposer } from "./AgentHistoryComposer";
 
@@ -54,6 +57,9 @@ if (process.env.ROAMGATE_HISTORY_COMPOSER_DOM_TEST !== "1") {
       if (fail) throw new Error("pane closed");
     });
     const error = mock<(message: string) => void>(() => {});
+    const upload = mock<(file: File) => Promise<string>>(
+      async (file) => `/tmp/${file.name}`,
+    );
     let stateSeq = 0;
     const render = (status: string, sameState = false) =>
       React.act(async () =>
@@ -64,6 +70,7 @@ if (process.env.ROAMGATE_HISTORY_COMPOSER_DOM_TEST !== "1") {
             status={status}
             stateSeq={sameState ? stateSeq : ++stateSeq}
             onSend={send}
+            onUploadImage={upload}
             onError={error}
           />,
         ),
@@ -277,6 +284,212 @@ if (process.env.ROAMGATE_HISTORY_COMPOSER_DOM_TEST !== "1") {
       expect(send.mock.calls[5]?.[0]).toBe("tapped anyway");
       await compatibilityClick("Send");
       expect(send).toHaveBeenCalledTimes(6);
+
+      // Text paste stays native; image paste uploads without sending and uses
+      // the completion-time caret even when the user edits during the upload.
+      await render("idle");
+      const paste = async (files: File[], itemsOnly = false) => {
+        const event = new window.Event("paste", {
+          bubbles: true,
+          cancelable: true,
+        });
+        Object.defineProperty(event, "clipboardData", {
+          value: {
+            files: itemsOnly ? [] : files,
+            items: files.map((file) => ({ getAsFile: () => file })),
+          },
+        });
+        await React.act(async () => input().dispatchEvent(event));
+        return event;
+      };
+      const image = new File(["image"], "photo.png", { type: "image/png" });
+      expect((await paste([])).defaultPrevented).toBe(false);
+      expect(upload).not.toHaveBeenCalled();
+      let finishUpload!: (path: string) => void;
+      upload.mockImplementationOnce(
+        () =>
+          new Promise<string>((resolve) => {
+            finishUpload = resolve;
+          }),
+      );
+      await fill("look here");
+      expect((await paste([image], true)).defaultPrevented).toBe(true);
+      expect(upload.mock.calls[0]?.[0]).toBe(image);
+      expect(terminalComposerUploadCount(draftKey)).toBe(1);
+      expect(button("Uploading...").disabled).toBe(true);
+      await key("Enter");
+      expect(send).toHaveBeenCalledTimes(6);
+      await fill("look here please");
+      writeTerminalComposerSelection(draftKey, 5, 9);
+      await React.act(async () => finishUpload("/tmp/photo.png"));
+      expect(input().value).toBe("look /tmp/photo.png  please");
+      expect(input().selectionStart).toBe("look /tmp/photo.png ".length);
+      expect(terminalComposerUploadCount(draftKey)).toBe(0);
+      await key("Enter");
+      expect(send.mock.calls[6]?.[0]).toBe("look /tmp/photo.png  please");
+
+      // Phones also have an image chooser, independent of clipboard support.
+      coarsePointer = true;
+      await render("idle");
+      const picker =
+        container.querySelector<HTMLInputElement>('input[type="file"]')!;
+      expect(picker.accept).toBe("image/*");
+      expect(picker.multiple).toBe(true);
+      const pickerClick = mock(() => {});
+      picker.addEventListener("click", pickerClick);
+      await React.act(async () => {
+        container
+          .querySelector<HTMLButtonElement>('[aria-label="Add images"]')!
+          .click();
+      });
+      expect(pickerClick).toHaveBeenCalledTimes(1);
+      const chooseImages = (files: File[]) =>
+        React.act(async () => {
+          Object.defineProperty(picker, "files", {
+            value: files,
+            configurable: true,
+          });
+          picker.dispatchEvent(new window.Event("change", { bubbles: true }));
+        });
+      await chooseImages([image]);
+      expect(input().value).toBe("/tmp/photo.png  ");
+      expect(picker.value).toBe("");
+      expect(send).toHaveBeenCalledTimes(7);
+
+      // Native pickers can return images without MIME metadata. Let the
+      // existing image uploader apply its fallback instead of rejecting them.
+      await fill("");
+      const untypedImage = new File(["image"], "camera.png");
+      await chooseImages([untypedImage]);
+      expect(upload.mock.calls[upload.mock.calls.length - 1]?.[0]).toBe(
+        untypedImage,
+      );
+      expect(input().value).toBe("/tmp/camera.png  ");
+      const uploadedCount = upload.mock.calls.length;
+      await chooseImages([
+        new File(["text"], "notes.txt", { type: "text/plain" }),
+      ]);
+      expect(upload.mock.calls.length).toBe(uploadedCount);
+      expect(error.mock.calls[error.mock.calls.length - 1]?.[0]).toBe(
+        "Choose an image to attach.",
+      );
+      expect(input().value).toBe("/tmp/camera.png  ");
+      expect(terminalComposerUploadCount(draftKey)).toBe(0);
+
+      // Partial failure keeps successful paths and unlocks sending.
+      await fill("review");
+      upload.mockImplementationOnce(async () => "/tmp/first.png");
+      upload.mockImplementationOnce(async () => {
+        throw new Error("Image too large");
+      });
+      await paste([image, image]);
+      expect(input().value).toBe("review /tmp/first.png  ");
+      expect(error.mock.calls[error.mock.calls.length - 1]?.[0]).toBe(
+        "Image too large",
+      );
+      expect(terminalComposerUploadCount(draftKey)).toBe(0);
+
+      // A successful upload or a partial failure must leave IME preedit text
+      // and its caret untouched until the final native input event commits it.
+      const composition = (type: string) =>
+        input().dispatchEvent(
+          new browser.CompositionEvent(type, {
+            bubbles: true,
+          }) as unknown as Event,
+        );
+      jest.useFakeTimers();
+      try {
+        for (const partialFailure of [false, true]) {
+          await fill("look ");
+          upload.mockImplementationOnce(
+            () =>
+              new Promise<string>((resolve) => {
+                finishUpload = resolve;
+              }),
+          );
+          if (partialFailure)
+            upload.mockImplementationOnce(async () => {
+              throw new Error("Second image failed");
+            });
+          await paste(partialFailure ? [image, image] : [image]);
+          await React.act(async () => {
+            composition("compositionstart");
+          });
+          await fill("look ni");
+          const caret = input().selectionStart;
+          const errorsBefore = error.mock.calls.length;
+          await React.act(async () => finishUpload("/tmp/ime.png"));
+          expect(input().value).toBe("look ni");
+          expect(input().selectionStart).toBe(caret);
+          expect(readTerminalComposerDraft(draftKey)).toBe("look ni");
+          expect(terminalComposerUploadCount(draftKey)).toBe(1);
+          expect(error.mock.calls.length).toBe(
+            errorsBefore + Number(partialFailure),
+          );
+          await React.act(async () => {
+            composition("compositionend");
+          });
+          // Some browsers deliver the committed input after compositionend.
+          await fill("look \u4f60");
+          await React.act(async () => {
+            jest.advanceTimersByTime(0);
+          });
+          expect(input().value).toBe("look \u4f60 /tmp/ime.png  ");
+          expect(terminalComposerUploadCount(draftKey)).toBe(0);
+        }
+
+        // Closing History must release deferred work, including a network
+        // response that arrives only after the composing editor unmounts.
+        for (const finishBeforeUnmount of [true, false]) {
+          await fill("keep ");
+          upload.mockImplementationOnce(
+            () =>
+              new Promise<string>((resolve) => {
+                finishUpload = resolve;
+              }),
+          );
+          await paste([image]);
+          await React.act(async () => {
+            composition("compositionstart");
+          });
+          if (finishBeforeUnmount)
+            await React.act(async () => finishUpload("/tmp/closed.png"));
+          await React.act(async () => root.render(null));
+          if (!finishBeforeUnmount)
+            await React.act(async () => finishUpload("/tmp/closed.png"));
+          expect(readTerminalComposerDraft(draftKey)).toBe(
+            "keep /tmp/closed.png  ",
+          );
+          expect(terminalComposerUploadCount(draftKey)).toBe(0);
+          await render("idle");
+        }
+      } finally {
+        jest.useRealTimers();
+      }
+
+      // An in-flight upload can finish after leaving History. Its path belongs
+      // to the original pane, including when the connection is retired.
+      upload.mockImplementationOnce(
+        () =>
+          new Promise<string>((resolve) => {
+            finishUpload = resolve;
+          }),
+      );
+      await paste([image]);
+      const otherKey = terminalComposerDraftKey("other", 2, "pane-two");
+      await React.act(async () => {
+        activateTerminalComposerDraftScope("other", 2);
+        writeTerminalComposerDraft(otherKey, "new connection draft");
+        finishUpload("/tmp/old-pane.png");
+      });
+      expect(readTerminalComposerDraft(otherKey)).toBe("new connection draft");
+      expect(readTerminalComposerDraft(draftKey)).toContain(
+        "/tmp/old-pane.png",
+      );
+      expect(error.mock.calls[error.mock.calls.length - 1]?.[0]).toContain(
+        "Connection or pane changed",
+      );
+      expect(terminalComposerUploadCount(draftKey)).toBe(0);
     } finally {
       await React.act(async () => root.unmount());
       for (const [key, descriptor] of originals) {
@@ -284,5 +497,5 @@ if (process.env.ROAMGATE_HISTORY_COMPOSER_DOM_TEST !== "1") {
         else delete (globalThis as Record<string, unknown>)[key];
       }
     }
-  });
+  }, 10_000);
 }
