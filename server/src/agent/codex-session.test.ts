@@ -154,7 +154,7 @@ describe("Codex transcript lookup", () => {
       agent: { agent: "codex" },
     }));
     expect(result.status).toBe("missing_session");
-    expect(result.detail).toContain("not linked");
+    expect(result.detail).toContain("isn't linked");
     expect(result.command).toBeUndefined();
   });
 });

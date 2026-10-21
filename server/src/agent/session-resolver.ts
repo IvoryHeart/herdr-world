@@ -114,6 +114,68 @@ async function findCodexSession(
   return file;
 }
 
+const CODEX_TITLE_ID =
+  /(?<![0-9a-f-])([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-(?:[0-9a-f]{12}(?![0-9a-f-])|[0-9a-f]{5,11}(?:\.\.\.|\u2026)))/gi;
+
+/**
+ * UUID-shaped tokens in a Codex pane title. Codex truncates each title item to
+ * 32 characters, so its `thread-id` item shows 29 ID characters and "...":
+ * `truncated` marks those. A full UUID may be a thread or, say, a project name.
+ */
+export function codexIdsFromTitle(title: string) {
+  return [...title.matchAll(CODEX_TITLE_ID)].map(([, token]) => {
+    const truncated = /(?:\.\.\.|\u2026)$/.test(token);
+    return {
+      prefix: token.replace(/(?:\.\.\.|\u2026)$/, "").toLowerCase(),
+      truncated,
+    };
+  });
+}
+
+type CodexTitleThread =
+  | { kind: "none" }
+  | { kind: "pending" }
+  | { kind: "ambiguous" }
+  | { kind: "found"; file: SessionFile; id: string };
+
+/**
+ * Codex 0.157+ hosts threads in a shared daemon, so hooks cannot say which
+ * pane shows which thread. With Thread ID in `tui.terminal_title`, the pane's
+ * own front end names its thread. Accept only an ID that matches exactly one
+ * transcript; uncached, so a later colliding transcript is never missed.
+ */
+async function codexThreadFromTitle(
+  title: string,
+  files: AgentSessionFileAccess,
+): Promise<CodexTitleThread> {
+  const ids = codexIdsFromTitle(title);
+  // Codex truncates its thread item today, so a truncated ID is the thread;
+  // full UUIDs are candidates only when no truncated ID is present.
+  const truncated = ids.filter((id) => id.truncated);
+  const candidates = truncated.length ? truncated : ids;
+  const found = new Map<string, SessionFile>();
+  for (const { prefix } of candidates) {
+    const file = await files.findCodexSessionByPrefix(prefix);
+    if (file === "ambiguous") return { kind: "ambiguous" };
+    if (file) found.set(file.path, file);
+  }
+  if (found.size > 1) return { kind: "ambiguous" };
+  const [file] = found.values();
+  if (file) {
+    const id = CODEX_FULL_ID.exec(basename(file.path))?.[0];
+    return id
+      ? { kind: "found", file, id: id.toLowerCase() }
+      : { kind: "ambiguous" };
+  }
+  // A thread ID without a transcript is a thread with no messages yet. A bare
+  // UUID in another title item lands here too: hiding a report beats showing
+  // a stale one.
+  return candidates.length ? { kind: "pending" } : { kind: "none" };
+}
+
+const CODEX_FULL_ID =
+  /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?=\.jsonl$)/i;
+
 async function findClaudeSession(
   id: string,
   context: AgentSessionResolverContext,
@@ -288,6 +350,36 @@ export async function resolveAgentSessionInfo(
   };
   let resolvedSession = session;
   let file: SessionFile | null = null;
+  if (agent === "codex") {
+    const title = await codexThreadFromTitle(
+      stringValue(agentInfo?.terminal_title),
+      files,
+    );
+    if (title.kind === "found") {
+      // The title follows thread switches; a Herdr report may be stale.
+      file = title.file;
+      resolvedSession = {
+        source: "codex-title",
+        agent: "codex",
+        kind: "id",
+        value: title.id,
+      };
+    } else if (title.kind !== "none") {
+      // Never let a possibly stale report stand in for the shown thread.
+      return {
+        ...base,
+        status: "missing_file",
+        detail:
+          title.kind === "pending"
+            ? "This Codex conversation has no saved messages yet."
+            : "More than one Codex transcript matches this pane's title.",
+        updated_at: new Date(0).toISOString(),
+        path: "",
+        session: null,
+        file: null,
+      };
+    }
+  }
   if (agent === "grok" && !resolvedSession) {
     const descriptor = await findGrokSessionForCwd(cwd);
     if (descriptor) {
@@ -343,7 +435,7 @@ export async function resolveAgentSessionInfo(
                 ? `No local Antigravity session was found for ${cwd}. Start Antigravity in this directory, then refresh Session Inspect.`
                 : "Herdr did not report a working directory for this Antigravity pane."
               : agent === "codex"
-                ? "This pane is not linked to a Codex session. An installed integration may still fail to report the session when Codex uses a shared background server. Link the current session by ID, or check the integration on the agent's machine."
+                ? "This pane isn't linked to a Codex session. In Codex, run /title and add Thread ID, or link the session by ID."
                 : "Herdr has not received an agent session id for this pane. Install the Herdr integration for this agent and start a new agent session.",
       command:
         agent === "grok" || agent === "muse" || agent === "codex"

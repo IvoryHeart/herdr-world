@@ -31,6 +31,10 @@ are optional because the merged PR history records their source.
 
 ### Fixed
 
+- History shows Codex 0.157+ conversations again. With Thread ID added to the
+  Codex title (`/title`), History reads which conversation a pane shows from its
+  title, follows thread switches, and shows nothing rather than guess.
+
 - Successful uploads from the desktop Message editor stay in its draft without
   reporting an input failure; uploads from desktop terminal output still use Direct.
 
