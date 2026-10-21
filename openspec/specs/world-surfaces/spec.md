@@ -300,6 +300,70 @@ SHALL not steal keyboard focus for terminal input.
   visual focus handoff
 - **THEN** World rejects the obsolete target and does not send input to a fallback pane, window or host
 
+### Requirement: Coordinated window presentation
+
+World SHALL use consistent window controls and placement rules for Inspectors and
+arranged Spaces terminal windows. Opening or focusing a window SHALL preserve all
+other window placements. Focus order SHALL be independent of layout order.
+Minimize SHALL retain an accessible window-switcher entry and its restore state.
+Window close SHALL dismiss presentation without ending a Herdr tab or session.
+Maximize SHALL fill the usable work area and Restore SHALL return to the previous
+placement. A retired runtime SHALL retire only its own windows.
+
+#### Scenario: Open and focus after snapping
+
+- **WHEN** a user snaps A, opens B, focuses A and then snaps B to the same region
+- **THEN** A retains its placement, B overlaps it in that region and focus only
+  determines which window is on top
+
+#### Scenario: Minimize, maximize and restore
+
+- **WHEN** an arranged window is maximized, minimized and restored from the switcher
+- **THEN** its placement and resource selection remain recoverable without a
+  duplicate terminal attachment or a change to another window
+
+#### Scenario: Dismiss a Spaces presentation
+
+- **WHEN** the user closes an arranged Spaces window
+- **THEN** its Herdr tab and session remain open and explicit tab selection can
+  present it again
+
+### Requirement: Shared window work area
+
+Windows SHALL use the measured work area outside persistent shell controls.
+Desktop windows SHALL support accessible movement and resizing from all edges and
+corners, and snapping SHALL preview its destination. Explicit arrangements SHALL
+retain stable participants and expose shared tile dividers where applicable.
+Compact presentation SHALL show one active window while preserving desktop state.
+On phones, a terminal screen's app bar SHALL carry Back, the terminal's identity,
+Tabs and the overflow menu; the tab strip SHALL be hidden, and tab and window
+switching SHALL stay in that bar. The composer SHALL reserve its own content space.
+Terminal fitting SHALL use its visible content box and preserve qualified ownership.
+
+#### Scenario: Resize an arranged pair
+
+- **WHEN** the user moves a shared divider in a tiled pair
+- **THEN** the adjacent windows resize together within their usable minima and
+  unrelated windows keep their placement
+
+#### Scenario: Open the keyboard and return to desktop
+
+- **WHEN** an arranged desktop workspace becomes compact and the user opens the keyboard
+- **THEN** its active terminal fits above the keyboard and visible controls, and
+  returning to desktop restores the previous desktop window placements
+
+#### Scenario: Preserve the Roamgate foundation
+
+- **WHEN** a window changes placement, view or presentation
+- **THEN** its terminal protocol, pane layout and workspace resource operations
+  retain their existing connection and runtime generation without a duplicate owner
+
+#### Scenario: Use the phone tab list
+
+- **WHEN** the user opens Tabs from a terminal screen's app bar on a phone
+- **THEN** the list preserves native tab creation and closure, restores minimized
+  windows, and includes retained windows from other hosts or workspaces
+
 ### Requirement: Focus determines terminal window stacking
 
 When a terminal window receives focus, World SHALL raise it above every other visible terminal window, regardless of window presentation or arrangement. Subsequent focus SHALL update the stacking order so the most recently focused window is on top.
