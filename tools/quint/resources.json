@@ -1,5 +1,5 @@
 {
   "memoryMaxBytes": 4294967296,
-  "cpuQuotaPercent": 300,
+  "cpuQuotaPercent": 200,
   "timeoutMs": 930000
 }
