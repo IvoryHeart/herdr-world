@@ -7,6 +7,14 @@ are optional because the merged PR history records their source.
 
 ## [Unreleased]
 
+### Fixed
+
+- Board's New tab dialog, and its other dialogs, now open above open terminal
+  windows instead of behind them.
+- A terminal created while another terminal is selected now opens. A snapshot
+  taken while Herdr was still creating the tab no longer cancels the opening with
+  "Tab created, but Inspector focus failed". This was most noticeable on phones.
+
 ## [0.2.6] - 2026-10-20
 
 ### Documentation
