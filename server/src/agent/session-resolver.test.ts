@@ -214,16 +214,24 @@ describe("Codex thread from the pane title", () => {
     expect(resolved.path).toContain(threadB);
   });
 
-  test("a UUID in another title item does not hide Herdr's report", async () => {
-    const project = "1b4e28ba-2fa1-11d2-883f-0016d3cca427";
+  test("a UUID joined to another title item does not hide Herdr's report", async () => {
     await codexHome([threadA]);
-    for (const title of [
-      `scratch-${project} | Working`,
-      `${project} | Working`,
-    ]) {
+    const resolved = await resolveTitle(
+      "scratch-1b4e28ba-2fa1-11d2-883f-0016d3cca427 | Working",
+      herdrReport(threadA),
+    );
+    expect(resolved.status).toBe("ok");
+    expect(resolved.session?.source).toBe("herdr:codex");
+  });
+
+  test("an unmatched full thread ID never falls back to a stale report", async () => {
+    const fresh = "019f2222-3333-7444-8555-666677778888";
+    await codexHome([threadA]);
+    // A bare UUID could also be a project name; failing closed is the safe side.
+    for (const title of [`${fresh} | project`, `${fresh}`]) {
       const resolved = await resolveTitle(title, herdrReport(threadA));
-      expect(resolved.status).toBe("ok");
-      expect(resolved.session?.source).toBe("herdr:codex");
+      expect(resolved.status).toBe("missing_file");
+      expect(resolved.file).toBeNull();
     }
   });
 

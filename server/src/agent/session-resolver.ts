@@ -149,8 +149,8 @@ async function codexThreadFromTitle(
   files: AgentSessionFileAccess,
 ): Promise<CodexTitleThread> {
   const ids = codexIdsFromTitle(title);
-  // Codex always truncates its thread item, so a truncated ID is the thread;
-  // full UUIDs count only when no truncated ID is present.
+  // Codex truncates its thread item today, so a truncated ID is the thread;
+  // full UUIDs are candidates only when no truncated ID is present.
   const truncated = ids.filter((id) => id.truncated);
   const candidates = truncated.length ? truncated : ids;
   const found = new Map<string, SessionFile>();
@@ -167,8 +167,10 @@ async function codexThreadFromTitle(
       ? { kind: "found", file, id: id.toLowerCase() }
       : { kind: "ambiguous" };
   }
-  // A truncated thread ID without a transcript is a thread with no messages.
-  return truncated.length ? { kind: "pending" } : { kind: "none" };
+  // A thread ID without a transcript is a thread with no messages yet. A bare
+  // UUID in another title item lands here too: hiding a report beats showing
+  // a stale one.
+  return candidates.length ? { kind: "pending" } : { kind: "none" };
 }
 
 const CODEX_FULL_ID =
