@@ -26,7 +26,7 @@
 - [x] 4.1 Run the focused desktop/mobile creation matrix across all four visual views and Spaces with delayed attachments, reconnects, empty hosts, stale hosts, unsupported methods and ownership-enforcing dispatch; verify exact destinations and cleanup with no duplicate mutation or terminal owner.
 - [x] 4.2 Run existing concurrent-context, terminal-handoff and affected Office input-performance regressions; verify the established responsiveness budgets and unchanged qualified resource/terminal behavior.
 - [x] 4.3 Update the Unreleased changelog, README/default-view guidance, relevant knowledge routes and current specs at accepted implementation delivery; validate the delta and ensure synchronization of completed changes cannot restore the old Desk default.
-- [ ] 4.4 Complete staged formatting, privacy/diff inspection, independent review and the repository delivery gate on the implementation branch, then open a ready PR without merging; retain gate/review evidence in the PR.
+- [x] 4.4 Complete staged formatting, privacy/diff inspection, independent review and the repository delivery gate on the implementation branch, then open a ready PR without merging; retain gate/review evidence in the PR.
 
 Delivery note: task 4.4's final gate and ready-PR handoff are recorded in the
 implementation PR. It remains unchecked in the candidate commit because those
