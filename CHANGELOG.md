@@ -7,15 +7,7 @@ are optional because the merged PR history records their source.
 
 ## [Unreleased]
 
-### Fixed
-
-- Board's New tab dialog, and its other dialogs, now open above open terminal
-  windows instead of behind them.
-- A terminal created while another terminal is selected now opens. A snapshot
-  taken while Herdr was still creating the tab no longer cancels the opening with
-  "Tab created, but Inspector focus failed". This was most noticeable on phones.
-
-## [0.2.6] - 2026-10-20
+## [0.2.6] - 2026-10-21
 
 ### Documentation
 
@@ -77,6 +69,11 @@ are optional because the merged PR history records their source.
 
 ### Fixed
 
+- Board's New tab dialog, and its other dialogs, now open above open terminal
+  windows instead of behind them.
+- A terminal created while another terminal is selected now opens. A snapshot
+  taken while Herdr was still creating the tab no longer cancels the opening with
+  "Tab created, but Inspector focus failed". This was most noticeable on phones.
 - Board stays responsive on a large World: at 64 hosts and about 1,500 tabs,
   typed input had waited up to 20 seconds behind Board's rendering.
 - On a phone, long-pressing a link in a terminal offers **Open link** again
