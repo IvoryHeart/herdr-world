@@ -19,7 +19,7 @@ if (
   (shardArg && !shard)
 ) {
   throw new Error(
-    "Use --shard=i/8 or --shard=latency to select World browser suites",
+    "Use --shard=i/6 or --shard=latency to select World browser suites",
   );
 }
 if (named.length && shard)

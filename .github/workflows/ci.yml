@@ -183,14 +183,6 @@ jobs:
               with:
                   bun-version: "1.4.3"
                   no-cache: true
-            - name: Require Windows plugin evidence
-              env:
-                  WINDOWS_PLUGIN_RESULT: ${{ needs.plugin-windows.result }}
-              run: test "$WINDOWS_PLUGIN_RESULT" = success
-            - name: Require installer upgrade evidence
-              env:
-                  INSTALLER_RESULT: ${{ needs.installer-upgrade.result }}
-              run: test "$INSTALLER_RESULT" = success
             - name: Determine validation scope
               run: echo "Validation mode is $VALIDATION_MODE"
               env:
@@ -203,6 +195,8 @@ jobs:
                   VALIDATION_RESULT: ${{ needs.validation.result }}
                   WORLD_RESULT: ${{ needs.world-browser.result }}
                   BEHAVIORAL_RESULT: ${{ needs.behavioral.result }}
+                  WINDOWS_PLUGIN_RESULT: ${{ needs.plugin-windows.result }}
+                  INSTALLER_RESULT: ${{ needs.installer-upgrade.result }}
               run: bun scripts/ci-delivery-result.ts
             - name: Verify documentation or reused results
               if: needs.validation-scope.outputs.mode != 'full'
@@ -212,9 +206,15 @@ jobs:
                   VALIDATION_RESULT: ${{ needs.validation.result }}
                   WORLD_RESULT: ${{ needs.world-browser.result }}
                   BEHAVIORAL_RESULT: ${{ needs.behavioral.result }}
+                  WINDOWS_PLUGIN_RESULT: ${{ needs.plugin-windows.result }}
+                  INSTALLER_RESULT: ${{ needs.installer-upgrade.result }}
               run: bun scripts/ci-delivery-result.ts
 
+    # Packaging jobs need code changes: Markdown and exact-head reuse cannot
+    # change what they install.
     installer-upgrade:
+        needs: validation-scope
+        if: needs.validation-scope.outputs.mode == 'full'
         uses: ./.github/workflows/installer-upgrade.yml
 
     launchd:
@@ -300,6 +300,8 @@ jobs:
 
     plugin-windows:
         name: Windows Bun-free plugin installation
+        needs: validation-scope
+        if: needs.validation-scope.outputs.mode == 'full'
         runs-on: windows-latest
         timeout-minutes: 20
         steps:

@@ -197,7 +197,7 @@ test("latency budgets run alone in a dedicated, quiet job that gates delivery", 
   expect(workflow.jobs.delivery?.needs).toContain("world-browser");
 });
 
-test("all eight World browser shards run independently and retain failure evidence", () => {
+test("all World browser shards and the web browser suites run independently and retain failure evidence", () => {
   expect(workflow.jobs["world-browser"]).toMatchObject({
     needs: "validation-scope",
     if: "needs.validation-scope.outputs.mode == 'full'",
@@ -216,12 +216,12 @@ test("all eight World browser shards run independently and retain failure eviden
     worldBrowserShards.map((_, index) => index + 1),
   );
   expect(world?.strategy?.["fail-fast"]).toBe(false);
-  expect(world?.strategy?.["max-parallel"]).toBe(8);
+  expect(world?.strategy?.["max-parallel"]).toBe(worldBrowserShards.length);
   expect(
     world?.steps.find(
       (step) =>
         step.run ===
-        "bun run test:world --shard=${{ matrix.shard }}/8 --parallel=1 --max-concurrency=1",
+        "bun run test:world --shard=${{ matrix.shard }}/6 --parallel=1 --max-concurrency=1",
     ),
   ).toMatchObject({
     env: {
@@ -241,6 +241,23 @@ test("all eight World browser shards run independently and retain failure eviden
       ),
     },
   });
+  const web = worldWorkflow.jobs["web-browser"];
+  expect(web?.needs).toBeUndefined();
+  expect(web?.if).toBeUndefined();
+  expect(web?.strategy).toBeUndefined();
+  for (const step of web?.steps ?? [])
+    expect(step["continue-on-error"] ?? false).toBe(false);
+  expect(
+    web?.steps.find((step) => step.run?.includes("--web-browser")),
+  ).toMatchObject({
+    run: "mkdir -p .agents/delivery && bun run test --web-browser --reporter=junit --reporter-outfile=.agents/delivery/web-browser.xml",
+    env: { HERDR_TEST_PARALLEL: "1", HERDR_TEST_MAX_CONCURRENCY: "2" },
+  });
+  expect(
+    web?.steps.find((step) =>
+      step.uses?.startsWith("actions/upload-artifact@"),
+    ),
+  ).toMatchObject({ if: "always()" });
 });
 
 test("labeled release PRs offer six downloadable previews without publishing", () => {
@@ -387,11 +404,16 @@ test("CI checks native plugin compatibility on Windows and both macOS architectu
   const windows = workflow.jobs["plugin-windows"];
   expect(windows["runs-on"]).toBe("windows-latest");
   expect(workflow.jobs.delivery.needs).toContain("plugin-windows");
-  expect(
-    workflow.jobs.delivery.steps.find(
-      (step) => step.name === "Require Windows plugin evidence",
-    )?.run,
-  ).toBe('test "$WINDOWS_PLUGIN_RESULT" = success');
+  expect(windows).toMatchObject({
+    needs: "validation-scope",
+    if: "needs.validation-scope.outputs.mode == 'full'",
+  });
+  for (const step of workflow.jobs.delivery.steps.filter(
+    (step) => step.run === "bun scripts/ci-delivery-result.ts",
+  ))
+    expect(step.env?.WINDOWS_PLUGIN_RESULT).toBe(
+      "${{ needs.plugin-windows.result }}",
+    );
   expect(
     windows.steps.some((step) =>
       step.run?.includes(

@@ -1,0 +1,14 @@
+# Workflows pin actions by commit SHA; this keeps those pins current with one
+# grouped pull request a week. Package updates stay manual: a changed
+# dependency graph also needs `bun run notices:generate`.
+version: 2
+updates:
+    - package-ecosystem: github-actions
+      directory: /
+      schedule:
+          interval: weekly
+      groups:
+          actions:
+              patterns: ["*"]
+      commit-message:
+          prefix: ci

@@ -38,8 +38,9 @@ bun test <path>               # focused Bun test
 bun run test:quick            # non-Chromium suite
 CHROME_BIN=/path/to/chromium bun run test:browser
 bun run test:world            # all World browser acceptance suites
-bun run test:world --shard=1/8 # reproduce one CI shard, one browser at a time
+bun run test:world --shard=1/6 # reproduce one CI shard, one browser at a time
 bun run test:world --shard=latency # the latency-budget suites, as CI's quiet job runs them
+bun run test --web-browser    # Chrome-driven suites outside World, as CI's web job runs them
 bun run build:site            # landing page/tutorial
 bun run check                 # complete PR candidate
 ```
@@ -78,29 +79,31 @@ those paths are unaffected, including shards with one file worker.
 PR CI and Release run the remaining repository checks with one file worker and up
 to two concurrent cases, preserving the upstream test configuration. Both call the
 [shared World browser workflow](../.github/workflows/world-browser.yml), which runs
-eight separate runners, each with one file worker and one active case, and a
-ninth, **World latency budgets**. That job runs only the suites that assert
+six separate runners, each with one file worker and one active case,
+**Web browser tests** and **World latency budgets**. That job runs only the suites that assert
 wall-clock budgets (production contexts, concurrent contexts, terminal handoff):
 it waits until the runner is quiet after setup (`scripts/wait-for-quiet.ts`:
 three consecutive seconds at least 90% idle, at most 60 s) and then runs them one
 case at a time. A failed case runs once more (`--retry=1`): a hosted runner still
 produces the odd slow event, and the worst-event budgets are judged on one run.
-The eight shards never retry. The [shard inventory](../scripts/world-browser-suites.ts)
-includes all World browser suites, split between the eight shards and the
+The shards never retry. The [shard inventory](../scripts/world-browser-suites.ts)
+includes all World browser suites, split between the six shards and the
 `latency` group; inventory checks reject missing or duplicate assignments. The
 required Delivery checks status succeeds only when repository validation, every
-World shard and the latency job pass. Markdown-only and exact-head reuse keep their existing shorter paths.
-Release packaging requires repository validation, all eight shards and the
-latency job to pass.
+World shard, the web browser job and the latency job pass. Markdown-only and exact-head reuse keep their existing shorter paths.
+Release packaging requires repository validation, all six shards, the web
+browser job and the latency job to pass. **Web browser tests** runs the
+Chrome-driven suites outside World (`webBrowserSuites` in the same inventory) one
+file at a time; an inventory check rejects an unlisted one.
 Prepare Release validates its generated working tree in one checkout with one file
 worker; it retains the complete World suite, with one active World case at a time.
 
 Each World run writes JUnit results and per-file timings under `.agents/delivery/`.
 CI uploads them as `world-browser-N-attempt-M` and `world-latency-attempt-M`
-artifacts, including on test failure. Compare
+artifacts, and the web job's JUnit results as `web-browser-attempt-M`,, including on test failure. Compare
 the slowest shard and total delivery time before changing the shard assignment or
-concurrency. The first eight-shard grouping is provisional, rather than a claim of
-a measured two-to-three-minute delivery time. Keep all scenario combinations, dense
+concurrency. The slowest file bounds the slowest shard, so add shards only when
+the slowest shard holds more than one long file. Keep all scenario combinations, dense
 fixtures, real deadline checks and input-latency budgets when rebalancing.
 
 Production responsiveness cases also save `world-production-*-inputs.json` in
@@ -163,7 +166,8 @@ Use `diagnostics_mode=stderr` for a control run that captures Chrome logs withou
 adding a debugging port or attaching the lifecycle observer.
 
 `HERDR_TEST_EXCLUDE_WORLD_BROWSER=1` is for the CI repository-validation job, which
-is gated together with the separate World shards. Do not use it as a complete local
+is gated together with the separate World shards and web browser job; it leaves out
+every suite those jobs run. Do not use it as a complete local
 check. The existing `test:browser` selection covers upstream and selected World
 files; use `test:world` for the complete World browser matrix.
 

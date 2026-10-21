@@ -5,10 +5,12 @@ release change directly to `main`.
 
 ## Pre-merge installer upgrades
 
-Every CI run calls `.github/workflows/installer-upgrade.yml`, and Delivery checks
-requires the entire native matrix: Linux x64/ARM64, macOS Intel/Apple Silicon, and
+Every CI run with code changes calls `.github/workflows/installer-upgrade.yml`, and
+Delivery checks requires the entire native matrix: Linux x64/ARM64, macOS Intel/Apple Silicon, and
 Windows x64/ARM64 on standard hosted runners. The workflow can also be dispatched
 manually against a selected ref. It publishes no release, tag, npm package or Formula.
+Markdown-only and exact-head reuse runs skip it and the Windows plugin check, as they
+skip repository validation; Delivery checks then requires both to be skipped.
 
 One planning job freezes the current latest stable World release tag and its source
 SHA. Each runner builds the proposed merge revision with `scripts/package-release.sh`
@@ -138,9 +140,9 @@ are checked again during the RC release workflow.
    path can be used after confirming its token has the required access.
 4. The Release workflow revalidates metadata and repository tests with one file
    worker and at most two concurrent cases. Its World browser tests use the same
-   [World browser workflow](../.github/workflows/world-browser.yml) as PR CI: eight
-   shards and the quiet latency-budget job, each with one file worker and one case
-   per runner. Every shard, the latency job and repository validation must pass
+   [World browser workflow](../.github/workflows/world-browser.yml) as PR CI: six
+   shards, the web browser job and the quiet latency-budget job, each with one file
+   worker per runner. Every shard, the web and latency jobs and repository validation must pass
    before any platform package builds. Prepare Release validates its generated
    working tree in one checkout with one file worker and retains the complete World
    suite; its World cases run one at a time.
