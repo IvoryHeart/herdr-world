@@ -37,6 +37,9 @@ function fixture(agent = "pi") {
     async readDownloadBody() {
       return text;
     },
+    async findCodexSessions() {
+      return [];
+    },
     async findPiSessionById() {
       return file;
     },

@@ -96,18 +96,37 @@ async function resolveCachedSessionPath(
   return path;
 }
 
+const CODEX_THREAD_ID =
+  /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+// Codex truncates each title item to 32 characters: 29 of the ID plus "...".
+const CODEX_TITLE_THREAD =
+  /([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-(?:[0-9a-f]{12}(?![0-9a-f])|[0-9a-f]{5,11}(?:\.\.\.|\u2026)))/i;
+
+/**
+ * Codex 0.157+ hosts threads in a shared daemon, so its hooks cannot tell
+ * Herdr which pane shows a thread. With `thread-id` in `tui.terminal_title`,
+ * the pane's own front end writes the thread it shows into its title.
+ */
+export function codexThreadFromTitle(title: string) {
+  const match = CODEX_TITLE_THREAD.exec(title)?.[1];
+  return match?.replace(/(?:\.\.\.|\u2026)$/, "").toLowerCase() ?? "";
+}
+
 async function findCodexSession(
   id: string,
+  files: AgentSessionFileAccess,
   context: AgentSessionResolverContext,
+  unique = false,
 ) {
-  return resolveCachedSessionPath(context, `codex:${id}`, async () => {
-    const root = join(homedir(), ".codex", "sessions");
-    const files = await walkFiles(
-      root,
-      (path) => path.endsWith(".jsonl") && basename(path).includes(id),
-    );
-    return newestFile(files);
-  });
+  const find = async () => {
+    const matches = await files.findCodexSessions(id);
+    if (unique) return matches.length === 1 ? matches[0] : null;
+    return files.remote ? (matches[0] ?? null) : newestFile(matches);
+  };
+  // The path cache checks existence locally, so only local paths use it.
+  return files.remote
+    ? find()
+    : resolveCachedSessionPath(context, `codex:${id}`, find);
 }
 
 async function findClaudeSession(
@@ -199,7 +218,14 @@ async function sessionFileFor(
     return files.findPiSessionById(session.value);
   }
   let path: string | null = null;
-  if (agent === "codex") path = await findCodexSession(session.value, context);
+  if (agent === "codex") {
+    path = await findCodexSession(
+      session.value,
+      files,
+      context,
+      session.source === "codex-title",
+    );
+  }
   if (agent === "claude")
     path = await findClaudeSession(session.value, context);
   if (agent === "kimi") path = await findKimiSession(session.value, context);
@@ -284,6 +310,22 @@ export async function resolveAgentSessionInfo(
   };
   let resolvedSession = session;
   let file: SessionFile | null = null;
+  const titleThread =
+    agent === "codex"
+      ? codexThreadFromTitle(stringValue(agentInfo?.terminal_title))
+      : "";
+  // The title follows thread switches; a Herdr report may be stale or missing.
+  if (
+    titleThread &&
+    !resolvedSession?.value.toLowerCase().startsWith(titleThread)
+  ) {
+    resolvedSession = {
+      source: "codex-title",
+      agent: "codex",
+      kind: "id",
+      value: titleThread,
+    };
+  }
   if (agent === "grok" && !resolvedSession) {
     const descriptor = await findGrokSessionForCwd(cwd);
     if (descriptor) {
@@ -339,10 +381,10 @@ export async function resolveAgentSessionInfo(
                 ? `No local Antigravity session was found for ${cwd}. Start Antigravity in this directory, then refresh Session Inspect.`
                 : "Herdr did not report a working directory for this Antigravity pane."
               : agent === "codex"
-                ? "Herdr has no Codex session for this pane. Codex 0.157 and later don't report one yet; on older versions, install the integration and start a new session."
+                ? "Codex isn't saying which conversation this pane shows. In Codex, run /title and add Thread ID."
                 : "Herdr has no session for this pane. Install the integration, then start a new session.",
       command:
-        agent === "grok" || agent === "muse"
+        agent === "grok" || agent === "muse" || agent === "codex"
           ? undefined
           : integrationInstallCommand(agent),
       updated_at: new Date(0).toISOString(),
@@ -353,11 +395,18 @@ export async function resolveAgentSessionInfo(
   }
 
   file ??= await sessionFileFor(agent, resolvedSession, cwd, files, context);
+  if (file && resolvedSession.source === "codex-title") {
+    const id = CODEX_THREAD_ID.exec(basename(file.path))?.[0];
+    if (id) resolvedSession = { ...resolvedSession, value: id.toLowerCase() };
+  }
   if (!file) {
     return {
       ...base,
       status: "missing_file",
-      detail: `Could not find the ${agent} session transcript for ${resolvedSession.value}.`,
+      detail:
+        resolvedSession.source === "codex-title"
+          ? "This Codex conversation has no saved messages yet."
+          : `Could not find the ${agent} session transcript for ${resolvedSession.value}.`,
       updated_at: new Date(0).toISOString(),
       path: "",
       session: resolvedSession,

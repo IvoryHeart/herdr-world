@@ -332,9 +332,11 @@ for History, Files, and Changes on your platform.
 **You are done when:** you found the explanation, not just the last terminal line.
 
 > Inspection supports Codex, Claude, Kimi, Grok Build, Pi, and Antigravity CLI with readable records.
-> Follow missing-metadata integration hints. SSH reads Herdr-reported paths and
-> Pi ID lookups remotely; other local ID/directory fallbacks may miss remote
-> transcripts. See [session inspection](../FEATURES.md#agent-awareness-and-session-inspection).
+> Follow missing-metadata integration hints. For Codex 0.157 and later, run
+> `/title` in Codex and add Thread ID so History knows which conversation a pane
+> shows. SSH reads Herdr-reported paths and Pi and Codex ID lookups remotely;
+> other local ID/directory fallbacks may miss remote transcripts. See
+> [session inspection](../FEATURES.md#agent-awareness-and-session-inspection).
 
 ### 2.3 Read the file, then the diff
 

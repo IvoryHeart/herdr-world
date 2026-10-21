@@ -1,4 +1,6 @@
-import { stat } from "node:fs/promises";
+import { readdir, stat } from "node:fs/promises";
+import { homedir } from "node:os";
+import { basename, join } from "node:path";
 import { sshCommandArgv } from "../bridge/ssh-command";
 import type { SessionFile } from "./session-types";
 
@@ -16,7 +18,29 @@ export type AgentSessionFileAccess = {
   readPrefix(path: string, byteLimit: number): Promise<Uint8Array>;
   readDownloadBody(path: string): Promise<BodyInit>;
   findPiSessionById(id: string): Promise<SessionFile | null>;
+  /** Up to two Codex rollout paths whose name contains `fragment`. */
+  findCodexSessions(fragment: string): Promise<string[]>;
 };
+
+/** Two results are enough to tell a unique match from an ambiguous one. */
+const CODEX_MATCH_LIMIT = 2;
+
+async function findLocalCodexSessions(fragment: string) {
+  const codexHome = process.env.CODEX_HOME?.trim() || join(homedir(), ".codex");
+  const root = join(codexHome, "sessions");
+  let names: string[];
+  try {
+    names = await readdir(root, { recursive: true });
+  } catch {
+    return [];
+  }
+  return names
+    .filter(
+      (name) => name.endsWith(".jsonl") && basename(name).includes(fragment),
+    )
+    .slice(0, CODEX_MATCH_LIMIT)
+    .map((name) => join(root, name));
+}
 
 async function localSessionFile(path: string): Promise<SessionFile | null> {
   try {
@@ -49,6 +73,7 @@ export const localAgentSessionFiles: AgentSessionFileAccess = {
   async findPiSessionById() {
     return null;
   },
+  findCodexSessions: findLocalCodexSessions,
 };
 
 function parseRemoteFileMetadata(stdout: string): SessionFile | null {
@@ -138,6 +163,23 @@ printf '%s\\t%s\\t%s\\t%s\\t%s\\n' "$size" "$mtime" "$path64" "$identity" "$chan
     async readDownloadBody(path) {
       const bytes = await runRemote(`set -eu\ncat ${args.shQuote(path)}`);
       return Uint8Array.from(bytes).buffer;
+    },
+    async findCodexSessions(fragment) {
+      const output = await runRemote(`
+set -eu
+fragment=${args.shQuote(fragment)}
+root="\${CODEX_HOME:-$HOME/.codex}/sessions"
+[ -d "$root" ] || exit 0
+find "$root" -type f -name "*$fragment*.jsonl" | head -n ${CODEX_MATCH_LIMIT} | while IFS= read -r path; do
+  printf '%s' "$path" | base64 | tr -d '\\n'
+  printf '\\n'
+done
+`);
+      return output
+        .toString("utf8")
+        .split("\n")
+        .filter(Boolean)
+        .map((line) => Buffer.from(line, "base64").toString("utf8"));
     },
     async findPiSessionById(id) {
       const command = `

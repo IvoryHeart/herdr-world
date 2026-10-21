@@ -9,8 +9,11 @@ are optional because the merged PR history records their source.
 
 ### Fixed
 
-- History no longer tells Codex 0.157+ users to install an integration they
-  already have. It says Codex doesn't report a session for the pane yet.
+- History shows Codex 0.157+ conversations again. With Thread ID added to the
+  Codex title (`/title`), History reads which conversation a pane shows from its
+  title, follows thread switches, and shows nothing rather than guess. Without
+  it, History says how to turn it on instead of asking for an integration that
+  is already installed. Codex IDs on SSH hosts are now looked up on that host.
 
 ## [0.2.6] - 2026-10-21
 
