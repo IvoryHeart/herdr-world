@@ -63,8 +63,10 @@ export const browserWorkflowIgnorePattern = ignorePattern([
   ...webBrowserSuites,
 ]);
 
+// Repository-relative paths: a `**/` prefix would also skip an ordinary test
+// that shares a registered suite's name in another directory.
 function ignorePattern(paths: string[]) {
-  return `{${paths.map((path) => `**/${path.replace(/^(web|server)\/src\//, "")}`).join(",")}}`;
+  return `{${paths.join(",")}}`;
 }
 
 const browserSource = (source: string) =>

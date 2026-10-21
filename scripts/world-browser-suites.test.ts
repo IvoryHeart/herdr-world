@@ -110,6 +110,46 @@ test("repository validation leaves out every suite the browser workflow runs, an
     expect(ignore.match(path)).toBe(false);
 });
 
+test("Bun skips only the registered path, not an ordinary test with the same name elsewhere", async () => {
+  const root = await mkdtemp(join(tmpdir(), "browser-exclusion-"));
+  try {
+    const passing =
+      'import { test } from "bun:test"; test("retained", () => {});';
+    const excluded =
+      'import { test } from "bun:test"; test("excluded", () => { throw new Error("browser suite ran in validation"); });';
+    for (const path of [
+      "web/src/uiScale.test.ts",
+      "server/src/workspace/html-preview.browser.test.ts",
+      "web/src/world/HostsFilter.test.ts",
+    ])
+      await Bun.write(join(root, path), excluded);
+    for (const path of [
+      "web/src/components/uiScale.test.ts",
+      "server/src/html-preview.browser.test.ts",
+      "web/src/HostsFilter.test.ts",
+    ])
+      await Bun.write(join(root, path), passing);
+    const child = Bun.spawn(
+      [
+        process.execPath,
+        "test",
+        `--path-ignore-patterns=${browserWorkflowIgnorePattern}`,
+      ],
+      { cwd: root, stdout: "pipe", stderr: "pipe" },
+    );
+    const [code, stdout, stderr] = await Promise.all([
+      child.exited,
+      new Response(child.stdout).text(),
+      new Response(child.stderr).text(),
+    ]);
+    expect(code).toBe(0);
+    expect(stdout + stderr).toContain("3 pass");
+    expect(stdout + stderr).not.toContain("browser suite ran in validation");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("an unassigned web browser suite fails inventory validation", async () => {
   const root = await mkdtemp(join(tmpdir(), "web-inventory-"));
   try {

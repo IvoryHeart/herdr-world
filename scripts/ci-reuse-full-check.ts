@@ -52,7 +52,10 @@ export async function canReuseFullCheck(
   return false;
 }
 
-/** Evidence contracts and execution policy must receive the full candidate gate. */
+/**
+ * Evidence contracts, execution policy and packaged notices must receive the
+ * full candidate gate.
+ */
 export function isDocumentationPath(path: string): boolean {
   return (
     path.endsWith(".md") &&
@@ -64,7 +67,15 @@ export function isDocumentationPath(path: string): boolean {
       ".agents/",
       ".github/",
     ].some((prefix) => path.startsWith(prefix)) &&
-    !["AGENTS.md", "CONTRIBUTING.md"].includes(path)
+    ![
+      "AGENTS.md",
+      "CONTRIBUTING.md",
+      // Copied into every release package by scripts/package-release.sh.
+      "THIRD_PARTY_NOTICES.md",
+      "DEPENDENCY_NOTICES.md",
+      "DEPENDENCY_LICENSES.md",
+      "UPSTREAM.md",
+    ].includes(path)
   );
 }
 

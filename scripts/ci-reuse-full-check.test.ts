@@ -101,7 +101,7 @@ test("documentation scope follows the PR diff and includes nested Markdown", () 
   }
 });
 
-test("behavioral contracts and agent policy cannot take the Markdown shortcut", () => {
+test("behavioral contracts, agent policy and packaged notices cannot take the Markdown shortcut", () => {
   for (const path of [
     "verification/contracts/runtime-leases.md",
     "quint/README.md",
@@ -111,6 +111,10 @@ test("behavioral contracts and agent policy cannot take the Markdown shortcut", 
     "AGENTS.md",
     ".agents/skills/candidate-delivery/SKILL.md",
     "CONTRIBUTING.md",
+    "THIRD_PARTY_NOTICES.md",
+    "DEPENDENCY_NOTICES.md",
+    "DEPENDENCY_LICENSES.md",
+    "UPSTREAM.md",
   ])
     expect(isDocumentationPath(path)).toBe(false);
   for (const path of ["README.md", "docs/guide.md", "CHANGELOG.md"])

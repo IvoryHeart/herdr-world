@@ -1,7 +1,8 @@
 /**
  * `packaging` holds the Windows plugin and installer upgrade results. They run
- * for full validation only: Markdown and exact-head reuse cannot change what
- * they install.
+ * for full validation only. Docs mode admits only Markdown that no package
+ * contains, and exact-head reuse already passed them, so neither can change
+ * what they install.
  */
 export function assertDeliveryResults(
   mode: string | undefined,

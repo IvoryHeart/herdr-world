@@ -210,8 +210,8 @@ jobs:
                   INSTALLER_RESULT: ${{ needs.installer-upgrade.result }}
               run: bun scripts/ci-delivery-result.ts
 
-    # Packaging jobs need code changes: Markdown and exact-head reuse cannot
-    # change what they install.
+    # Packaging jobs run for full validation only: docs mode admits only
+    # Markdown that no package contains, and exact-head reuse already passed them.
     installer-upgrade:
         needs: validation-scope
         if: needs.validation-scope.outputs.mode == 'full'

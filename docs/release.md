@@ -9,8 +9,9 @@ Every CI run with code changes calls `.github/workflows/installer-upgrade.yml`, 
 Delivery checks requires the entire native matrix: Linux x64/ARM64, macOS Intel/Apple Silicon, and
 Windows x64/ARM64 on standard hosted runners. The workflow can also be dispatched
 manually against a selected ref. It publishes no release, tag, npm package or Formula.
-Markdown-only and exact-head reuse runs skip it and the Windows plugin check, as they
-skip repository validation; Delivery checks then requires both to be skipped.
+Documentation-only runs (Markdown outside the packaged notices, which run
+`check:docs`) and exact-head reuse runs skip it and the Windows plugin check;
+Delivery checks then requires both to be skipped.
 
 One planning job freezes the current latest stable World release tag and its source
 SHA. Each runner builds the proposed merge revision with `scripts/package-release.sh`

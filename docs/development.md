@@ -100,7 +100,7 @@ worker; it retains the complete World suite, with one active World case at a tim
 
 Each World run writes JUnit results and per-file timings under `.agents/delivery/`.
 CI uploads them as `world-browser-N-attempt-M` and `world-latency-attempt-M`
-artifacts, and the web job's JUnit results as `web-browser-attempt-M`,, including on test failure. Compare
+artifacts, and the web job's JUnit results as `web-browser-attempt-M`, including on test failure. Compare
 the slowest shard and total delivery time before changing the shard assignment or
 concurrency. The slowest file bounds the slowest shard, so add shards only when
 the slowest shard holds more than one long file. Keep all scenario combinations, dense
