@@ -7,6 +7,11 @@ are optional because the merged PR history records their source.
 
 ## [Unreleased]
 
+### Fixed
+
+- History no longer tells Codex 0.157+ users to install an integration they
+  already have. It says Codex doesn't report a session for the pane yet.
+
 ## [0.2.6] - 2026-10-21
 
 ### Documentation

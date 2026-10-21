@@ -238,6 +238,17 @@ describe("Pi agent sessions", () => {
     expect(result.command).toBe("herdr integration install pi");
   });
 
+  test("names the Codex version gap when Codex has no session", async () => {
+    const result = await readAgentMessageHistory(
+      { pane_id: "p1", agent: "codex" },
+      async () => ({ agent: { agent: "codex" } }),
+    );
+
+    expect(result.status).toBe("missing_session");
+    expect(result.detail).toContain("Codex 0.157 and later");
+    expect(result.command).toBe("herdr integration install codex");
+  });
+
   test("binds Herdr and file access inside each runtime handler bundle", async () => {
     const record = (id: string, text: string) =>
       [
