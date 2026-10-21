@@ -1636,7 +1636,7 @@
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/186",
       "technique": "alternative",
-      "assessment": "actual rendering/search/counts/site and performance evidence; observation/authority modeled elsewhere",
+      "assessment": "actual rendering/search/counts/site and performance evidence, including controlled React 18/19 production-profiling comparison; observation/authority modeled elsewhere",
       "status": "alternative-evidence",
       "remaining": "Pixel/layout/performance/device outcomes require real rendering and supported browser/site checks; no model of every device or accessibility event schedule. Board: live Herdr restart and ID reuse are checked in throwaway sessions only; cross-tab storage interleaving relies on per-draft keys, not an executed schedule.",
       "requiredChecks": ["bun run check", "bun run verification:gate"],

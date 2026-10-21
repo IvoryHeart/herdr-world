@@ -5,7 +5,8 @@ Confirm that the candidate retains the recorded upstream merge ancestry and
 adapts upstream behavior to World's immutable connection IDs and generations,
 same-origin browser, isolated storage, identity and distribution boundaries.
 Read UPSTREAM.md on the base revision for explicit exclusions; check them against
-the diff, including React 18, retained browser tests and World service ownership.
+the diff, including the recorded React compatibility decisions, retained browser tests
+and World service ownership.
 
 Review code and requirement fidelity even though CI passed. Successful CI is
 necessary but cannot establish semantic compatibility. Assess changed contracts

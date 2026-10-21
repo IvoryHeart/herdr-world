@@ -582,15 +582,18 @@
     {
       "commit": "e030b2e2e795a3839b64fafe1911853061dee0c2",
       "title": "chore(deps): update React and ReactDOM to 19.3.1 (#453)",
-      "status": "divergent",
-      "reason": "Retain React 18 under World policy; the React 19.3.1 patch requires an owner-approved major migration.",
+      "status": "adapted",
+      "reason": "Adopt React/React DOM 19.3.1 with matching types after controlled current-World latency and input reassessment; retain callback freshness and qualified runtime ownership. Owner policy approval remains required.",
       "evidence": [
         "web/package.json",
-        "docs/upstream-follow-ups.md#react-18-compatibility",
-        "docs/upstream-follow-ups.md#assessment-for-source-1a81c5da-20-october-2026"
+        "docs/react-version-reassessment.md",
+        "web/src/components/TerminalView.inputMode.test.ts",
+        "web/src/world/ProductionContexts.board.test.ts",
+        "web/src/world/ProductionContexts.town.test.ts",
+        "web/src/world/ProductionContexts.animated.test.ts"
       ],
-      "followUp": "docs/upstream-follow-ups.md#react-18-compatibility",
-      "revisitWhen": "Every source sync, React security advisory, or owner-approved major migration.",
+      "followUp": null,
+      "revisitWhen": null,
       "reviewedFor": "1a81c5daa49fe49e55a5eafbe88e5d8ce94a4376"
     },
     {

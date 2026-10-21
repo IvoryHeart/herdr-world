@@ -6,11 +6,13 @@ new feature deferral into standing policy. Protected human approval accepts new
 or changed deferrals/divergences, including resolving an outstanding item.
 
 Existing boundaries retain World identity, immutable connection/generation ownership,
-one-origin service architecture, isolated state, React 18 and browser evidence.
+one-origin service architecture, isolated state, the React major recorded in UPSTREAM.md and browser evidence.
 World owns its service, packaging, release and agent tooling. This is a compatibility
 constraint, not a blanket rejection of improvements in those areas. Compatible
 adaptation is preferred; a feature requiring a migration is deferred explicitly.
-Changes to this policy and the tracked follow-up backlog require human approval.
+Changing the recorded React major requires explicit review of input, focus and
+responsiveness evidence. Changes to this policy and the tracked follow-up backlog
+require human approval.
 
 ## Dispositions and authority
 

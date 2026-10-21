@@ -405,8 +405,8 @@ export function AgentHistoryChat({
   onOpen,
 }: {
   items: HistoryChatItem[];
-  listRef: RefObject<HTMLDivElement>;
-  contentRef: RefObject<HTMLDivElement>;
+  listRef: RefObject<HTMLDivElement | null>;
+  contentRef: RefObject<HTMLDivElement | null>;
   highlightedSequence?: number | null;
   // Changing this (e.g. a new search) jumps back to the newest message.
   followKey?: string;

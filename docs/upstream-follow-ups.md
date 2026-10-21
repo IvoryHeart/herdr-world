@@ -58,16 +58,19 @@ rationale here; retain this standing entry while the divergence applies.
 
 ## React 18 compatibility
 
-Status: intentional divergence proposed for owner review. Source: Roamgate
-e030b2e2 (#453), post-v0.8.6 main.
+Status: resolution proposed for owner approval on the React reassessment branch.
+Source: Roamgate e030b2e2 (#453), post-v0.8.6 main.
 Owner: repository owner and independent delivery reviewer.
 
-World retains React 18 under its current adoption policy. The upstream React 19.3.1
-patch cannot be applied as an 18.x update. Revisit every source sync, relevant React
-security advisory, or owner-approved major migration. Acceptance requires an
-explicit policy decision and passing React DOM/browser evidence for focus, native
-blur, IME, qualified editor drafts and independent runtime ownership. Keep this
-entry until a compatible migration or security backport is reviewed and delivered.
+The [21 October reassessment](react-version-reassessment.md) compares 18.3.1 and
+19.3.1 on the same current application: all 36 dense browser cases pass, with
+similar p95 latency and no reproduction of the old stall. The candidate adopts
+19.3.1 with matching type packages and explicit nullable ref annotations, retaining
+World callback freshness and qualified editor ownership. This is a proposal,
+not a claim of owner acceptance; full delivery and independent policy approval
+remain required. This section and the source-target assessments below preserve
+the historical React 18 decision. Revisit future React majors, relevant security
+advisories or a reproduced input/focus/responsiveness regression.
 
 ## Assessment for source 57327a0d (20 October 2026)
 

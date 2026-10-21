@@ -9,6 +9,10 @@ are optional because the merged PR history records their source.
 
 ### Changed
 
+- Align React and React DOM with upstream 19.3.1 after a controlled current-World
+  performance and input reassessment. Preserve callback freshness and runtime
+  ownership; add explicit nullable ref types and a reproducible benchmark command.
+
 - Reject pending Ranger follow-ups after their chat changes and deduplicate
   concurrent queue retries after scope capture. Remote Codex History and session
   linking no longer require Python 3 on Unix SSH hosts.

@@ -14,7 +14,7 @@ identity, storage isolation, packaging and existing browser evidence.
 
 UPSTREAM.md records deliberate exclusions. Preserve them unless the owner has
 authorized a different decision; a conflict-free upstream change can still violate
-them. In particular retain React 18, World browser tests and downstream service
+them. In particular retain the recorded React major, World browser tests and downstream service
 ownership. Preserve attribution. Use synthetic examples in tracked material.
 Retain the existing .github and .codex controls: automated publication refuses
 changes to these paths before candidate workflows could run. If integrating an

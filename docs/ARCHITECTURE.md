@@ -460,5 +460,5 @@ tokens and transcript lookup live inside the isolated runtime, including Unix SS
 file access. A token binds the pane occupant and transcript identity, is consumed
 once, and rechecks runtime authority before the reporting RPC. Herdr does not
 provide an atomic process-and-link operation; see [History limits](HISTORY.md#chat-and-explicit-codex-links).
-World retains React 18 callback freshness and screen/panel/navigation/popup Back
+World retains callback freshness and screen/panel/navigation/popup Back
 priority, with navigation between Inspector details below transient menus.

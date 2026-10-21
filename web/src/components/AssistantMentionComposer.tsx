@@ -41,7 +41,7 @@ export function AssistantMentionComposer({
   workspaces: AssistantWorkspace[];
   currentWorkspace?: AssistantWorkspaceRef;
   draftKey: string;
-  inputRef: RefObject<HTMLTextAreaElement>;
+  inputRef: RefObject<HTMLTextAreaElement | null>;
   mobile: boolean;
   onChange: (
     text: string,

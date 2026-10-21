@@ -12,12 +12,22 @@ export type WorldBrowserBundle = {
 export async function buildWorldBrowserBundle(
   entry: WorldBrowserEntry,
   root: string,
+  options: { reactProfiling?: boolean } = {},
 ): Promise<WorldBrowserBundle> {
   const directory = join(root, entry);
   const build = await Bun.build({
     entrypoints: [join(import.meta.dir, "..", `${entry}.browser.tsx`)],
     outdir: directory,
     target: "browser",
+    ...(options.reactProfiling
+      ? {
+          // The dense fixture uses Profiler callbacks to prove mounted updates.
+          // Use each React version's production profiling build for A/B runs.
+          define: { "process.env.NODE_ENV": JSON.stringify("production") },
+          alias: { "react-dom/client": "react-dom/profiling" },
+          minify: true,
+        }
+      : {}),
     plugins: [
       {
         name: "world-raw-svg",
