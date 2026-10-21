@@ -9,6 +9,7 @@ type Step = {
 };
 type Job = {
   uses?: string;
+  "runs-on"?: string;
   needs?: string | string[];
   if?: string;
   env?: Record<string, string>;
@@ -100,4 +101,22 @@ test("Prepare Release validates the generated working tree before opening its PR
   expect(prepare).toBeGreaterThan(-1);
   expect(validate).toBeGreaterThan(prepare);
   expect(publish).toBeGreaterThan(validate);
+});
+
+test("release packages and labeled previews share one verification and image", () => {
+  const release = readWorkflow("release.yml").jobs.package!;
+  const preview = readWorkflow("ci.yml").jobs["release-preview"]!;
+  const verification = (job: Job) =>
+    job.steps?.find((step) =>
+      step.run?.startsWith("scripts/verify-release-package.sh "),
+    );
+  expect(verification(release)?.run).toBe(
+    'scripts/verify-release-package.sh "${GITHUB_REF_NAME#v}" "${{ matrix.platform }}"',
+  );
+  expect(verification(preview)?.run).toBe(
+    'scripts/verify-release-package.sh "0.0.0-rc.$GITHUB_RUN_NUMBER" "${{ matrix.platform }}"',
+  );
+  // A floating image label changed file(1) between two releases (#247).
+  expect(release["runs-on"]).toMatch(/^ubuntu-\d+\.\d+$/);
+  expect(preview["runs-on"]).toBe(release["runs-on"]);
 });

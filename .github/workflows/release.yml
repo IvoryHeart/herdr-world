@@ -84,7 +84,8 @@ jobs:
           - darwin-arm64
           - windows-x64
           - windows-arm64
-    runs-on: ubuntu-latest
+    # Keep in step with CI's release-preview job, which verifies the same packages.
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -101,66 +102,7 @@ jobs:
           HERDR_WORLD_BUILD_VERSION="$version" bun run package:${{ matrix.platform }}
       - name: Verify release package
         shell: bash
-        run: |
-          version="${GITHUB_REF_NAME#v}"
-          platform="${{ matrix.platform }}"
-          package_dir="herdr-world-$platform"
-          versioned_archive="herdr-world-v$version-$platform.tar.xz"
-          latest_archive="herdr-world-$platform.tar.xz"
-
-          for archive in "$versioned_archive" "$latest_archive"; do
-            test -f "dist/$archive"
-            test -f "dist/$archive.sha256"
-            if command -v sha256sum >/dev/null 2>&1; then
-              (cd dist && sha256sum -c "$archive.sha256")
-            else
-              (cd dist && shasum -a 256 -c "$archive.sha256")
-            fi
-          done
-
-          manifest="dist/herdr-world-$platform.update.json"
-          test -f "$manifest"
-          if command -v sha256sum >/dev/null 2>&1; then
-            archive_digest="$(sha256sum "dist/$latest_archive" | awk '{ print $1 }')"
-          else
-            archive_digest="$(shasum -a 256 "dist/$latest_archive" | awk '{ print $1 }')"
-          fi
-          expected_manifest="{\"schema\":1,\"name\":\"herdr-world\",\"version\":\"$version\",\"platform\":\"$platform\",\"archive\":\"$latest_archive\",\"sha256\":\"$archive_digest\"}"
-          grep -Fx "$expected_manifest" "$manifest"
-
-          extract_dir="$RUNNER_TEMP/herdr-world-release"
-          mkdir -p "$extract_dir"
-          tar -xJf "dist/$versioned_archive" -C "$extract_dir"
-          grep -Fx "herdr-world $version $platform" "$extract_dir/$package_dir/VERSION"
-          for legal in LICENSE THIRD_PARTY_NOTICES.md DEPENDENCY_NOTICES.md DEPENDENCY_LICENSES.md UPSTREAM.md; do
-            test -f "$extract_dir/$package_dir/$legal"
-          done
-          test -f "$extract_dir/$package_dir/LICENSES/CLAW-EMPIRE-APACHE-2.0.txt"
-          binary_name="herdr-world"
-          case "$platform" in
-            windows-*) binary_name="herdr-world.exe" ;;
-          esac
-          binary="$extract_dir/$package_dir/$binary_name"
-          case "$platform" in
-            linux-x64)
-              test "$("$binary" --version)" = "herdr-world $version"
-              ;;
-            linux-arm64)
-              file "$binary" | grep -Eq 'ELF 64-bit.*ARM aarch64'
-              ;;
-            darwin-x64)
-              file "$binary" | grep -Eq 'Mach-O 64-bit.*x86_64'
-              ;;
-            darwin-arm64)
-              file "$binary" | grep -Eq 'Mach-O 64-bit.*arm64'
-              ;;
-            windows-x64)
-              file "$binary" | grep -Eq 'PE32\+ executable.*x86-64.*MS Windows'
-              ;;
-            windows-arm64)
-              file "$binary" | grep -Eq 'PE32\+ executable.*Aarch64.*MS Windows'
-              ;;
-          esac
+        run: scripts/verify-release-package.sh "${GITHUB_REF_NAME#v}" "${{ matrix.platform }}"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: herdr-world-${{ matrix.platform }}
