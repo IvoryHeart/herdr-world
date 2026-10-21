@@ -5,107 +5,63 @@
 </p>
 
 A **visual control plane** for [Herdr](https://herdr.dev). Connect local and SSH
-hosts, see their agents together in Desk, Office, Tree or Graph, and use independently
+hosts, see their agents together in Town, Board or Desk, and use independently
 qualified terminals, files, changes and agent history on desktop or mobile.
 **Requires a running Herdr server.**
 
+## Choose your layout
+
+- **Town** is the default: host buildings contain workspace rooms, team tables
+  and terminal seats. Find waiting agents at reception, read their peek and reply.
+- **Board** puts workspace and tab cards beside your notes. Arrange cards, string
+  a note to an exact pane and explicitly send it when ready.
+- **Desk** groups agents into Needs you, To review and In flight, with a reading
+  pane for terminal, files, changes and history.
+- **Spaces** focuses one workspace's terminal panes and repository tools.
+
+Town, Board and Desk share the **Hosts** filter. Open terminals and Inspectors
+retain their owning host when the filter changes. Use **Actions → New workspace**
+or **New tab** and confirm the destination; Town's **New room** and Board's **+**
+controls offer the same qualified creation flows.
+
+Office, Tree and Graph have been retired: old `/office` addresses open Town, and
+`/graph` and `/tree` open Board. Board and these redirects are included in
+[0.2.6](./docs/releases/v0.2.6.md).
+
 ## Screenshots
+
+The Town and desktop Board captures show the layouts introduced in 0.2.5–0.2.6
+with four disposable workspaces. Mobile Board focuses on one workspace, two
+terminal tabs and a strung
+planning note. These scenes use real shell panes and synthetic notes. Empty
+attention counts reflect those scenes; no agent activity is fabricated. Click a screenshot to open it at full resolution.
 
 ### Desktop
 
-[![Office view showing the selected Herdr host and its agents][desktop-office]][desktop-office]
+| Town: buildings, rooms and team tables | Board: workspace cards, tabs and notes |
+| --- | --- |
+| [![Town with four workspace rooms and live terminal tables](./docs/images/herdr-world-desktop-town.png)](./docs/images/herdr-world-desktop-town.png) | [![Board with four workspace cards, terminal tabs and planning notes](./docs/images/herdr-world-desktop-board.png)](./docs/images/herdr-world-desktop-board.png) |
 
-Office is the default view and groups agent work by host. Desk supports agent
-triage across filtered hosts. Tree and Graph show the same filtered aggregate,
-while Spaces keeps one qualified workspace's terminal and repository workflow
-one click away. Hosts defaults to All hosts; filtering changes visibility while
-open Inspectors and pending operations keep their captured owners. Use Actions →
-New workspace or New tab in any visual view; Office also provides New room and
-New seat controls. Creation prepares its source terminal and opens the result in
-the current view, including for another ready host and rooms with eight displayed desks.
+[![Spaces with a focused workspace and live terminal](./docs/images/herdr-world-desktop-spaces.png)](./docs/images/herdr-world-desktop-spaces.png)
 
-<!-- markdownlint-disable MD033 -->
+The shared Inspector keeps Terminal, Files, Changes and Agent History alongside
+its captured workspace, whether opened from Town, Board or Desk. See the
+[tutorial's review exercise](./docs/TUTORIAL.md#daily) for the complete flow.
+The Files, Changes and History captures below show the Inspector over Board.
+They use a restored demo project, a sample working-tree diff and a genuine
+recorded Pi review.
 
-<table width="100%">
-  <thead>
-    <tr>
-      <th width="33.33%" align="center">Tree</th>
-      <th width="33.33%" align="center">Graph</th>
-      <th width="33.33%" align="center">Spaces</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td width="33.33%" align="center" valign="top">
-        <a href="./docs/images/herdr-world-desktop-tree.png"><img src="./docs/images/herdr-world-desktop-tree.png" alt="Tree view of hosts, spaces, and agents" width="100%" /></a>
-      </td>
-      <td width="33.33%" align="center" valign="top">
-        <a href="./docs/images/herdr-world-desktop-graph.png"><img src="./docs/images/herdr-world-desktop-graph.png" alt="Graph view of hosts, spaces, and agents" width="100%" /></a>
-      </td>
-      <td width="33.33%" align="center" valign="top">
-        <a href="./docs/images/herdr-world-desktop-spaces.png"><img src="./docs/images/herdr-world-desktop-spaces.png" alt="Spaces terminal workspace" width="100%" /></a>
-      </td>
-    </tr>
-  </tbody>
-</table>
-
-The same Inspector can move with an agent while preserving its exact terminal
-and repository context. Files, changes, and agent history stay alongside the
-agent's workspace.
-
-<table width="100%">
-  <thead>
-    <tr>
-      <th width="33.33%" align="center">Files</th>
-      <th width="33.33%" align="center">Changes</th>
-      <th width="33.33%" align="center">Agent history</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td width="33.33%" align="center" valign="top">
-        <a href="./docs/images/herdr-world-desktop-files.png"><img src="./docs/images/herdr-world-desktop-files.png" alt="Office Inspector browsing files for the selected agent" width="100%" /></a>
-      </td>
-      <td width="33.33%" align="center" valign="top">
-        <a href="./docs/images/herdr-world-desktop-changes.png"><img src="./docs/images/herdr-world-desktop-changes.png" alt="Office Inspector reviewing changed files and a code diff" width="100%" /></a>
-      </td>
-      <td width="33.33%" align="center" valign="top">
-        <a href="./docs/images/herdr-world-desktop-history.png"><img src="./docs/images/herdr-world-desktop-history.png" alt="Office Inspector showing the selected agent's session history" width="100%" /></a>
-      </td>
-    </tr>
-  </tbody>
-</table>
+| Files | Changes | Agent History |
+| --- | --- | --- |
+| [![Board Inspector previewing the demo guide](./docs/images/herdr-world-desktop-files.png)](./docs/images/herdr-world-desktop-files.png) | [![Board Inspector showing the sample tag-filter diff](./docs/images/herdr-world-desktop-changes.png)](./docs/images/herdr-world-desktop-changes.png) | [![Board Inspector showing a recorded Pi review](./docs/images/herdr-world-desktop-history.png)](./docs/images/herdr-world-desktop-history.png) |
 
 ### Mobile
 
-<table width="100%">
-  <thead>
-    <tr>
-      <th width="33.33%" align="center">Office</th>
-      <th width="33.33%" align="center">Tree</th>
-      <th width="33.33%" align="center">Spaces</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td width="33.33%" align="center" valign="top">
-        <a href="./docs/images/herdr-world-mobile-office.png"><img src="./docs/images/herdr-world-mobile-office.png" alt="Mobile Office view" width="100%" /></a>
-      </td>
-      <td width="33.33%" align="center" valign="top">
-        <a href="./docs/images/herdr-world-mobile-tree.png"><img src="./docs/images/herdr-world-mobile-tree.png" alt="Mobile Tree view" width="100%" /></a>
-      </td>
-      <td width="33.33%" align="center" valign="top">
-        <a href="./docs/images/herdr-world-mobile-spaces.png"><img src="./docs/images/herdr-world-mobile-spaces.png" alt="Mobile Spaces terminal" width="100%" /></a>
-      </td>
-    </tr>
-  </tbody>
-</table>
+[![Board close-up with a workspace, terminal tabs and a strung planning note](./docs/images/herdr-world-mobile-board.png)](./docs/images/herdr-world-mobile-board.png)
 
-<!-- markdownlint-enable MD033 -->
-
-Click any screenshot to open the full-resolution image.
-
-[desktop-office]: ./docs/images/herdr-world-desktop-office.png
+| Town | Spaces |
+| --- | --- |
+| [![Town at phone width](./docs/images/herdr-world-mobile-town.png)](./docs/images/herdr-world-mobile-town.png) | [![Spaces terminal and touch controls](./docs/images/herdr-world-mobile-spaces.png)](./docs/images/herdr-world-mobile-spaces.png) |
 
 ## Quick start
 
@@ -131,19 +87,12 @@ Click any screenshot to open the full-resolution image.
 
 Use Manage connections to add local sockets or an SSH destination. One World
 service owns every connection and the browser stays on that World origin. Hosts
-filters Office, Tree, Graph, the navigator, counts and search; it never connects
-or disconnects a profile. Terminals and Inspectors on different ready hosts can
+filters Town, Board, Desk, the navigator, counts and search; it never
+connects or disconnects a profile. Terminals and Inspectors on different ready hosts can
 operate together. Global creation visibly confirms one destination host.
 
 See [deployment](./docs/DEPLOYMENT.md) for checksums, profiles, authentication,
 updates, and services.
-
-### Upstream handoff demo
-
-The [Roamgate foundation demo](./docs/images/roamgate-handoff.mp4) shows a Herdr
-workspace moving from computer to phone. It shows upstream Roamgate UI; the
-World screenshots above show this project’s multi-host views.
-[Animated fallback](./docs/images/roamgate-handoff.gif).
 
 ## Install as a PWA
 
@@ -160,7 +109,9 @@ The process must stay running and reachable. **PWA mode is not offline access.**
 
 - [Website](https://herdr.world/) and
   [hands-on tutorial](https://herdr.world/tutorial/)
-  ([Markdown](./docs/TUTORIAL.md)): local work, mobile, and private remote access.
+  ([Markdown](./docs/TUTORIAL.md)): [Town](./docs/TUTORIAL.md#town),
+  [Board](./docs/TUTORIAL.md#board), [Desk](./docs/TUTORIAL.md#desk), terminal/file review, mobile,
+  and private remote access.
 - [Features and shortcuts](./FEATURES.md)
 - [Deployment](./docs/DEPLOYMENT.md): installation, configuration, services, builds.
 - [Architecture](./docs/ARCHITECTURE.md): system contracts.
@@ -173,7 +124,7 @@ The process must stay running and reachable. **PWA mode is not offline access.**
 
 ## Development
 
-Use Bun 1.4.1 or newer and a running Herdr server:
+Use Bun 1.4.3 or newer and a running Herdr server:
 
 ```bash
 bun install --frozen-lockfile

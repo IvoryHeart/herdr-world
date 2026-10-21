@@ -1,8 +1,40 @@
 import { describe, expect, test } from "bun:test";
 import {
   assertLazyGrammarAssets,
+  DEVTOOLS_MARKER,
+  devtoolsAssets,
   initialAssetFiles,
 } from "./check-web-assets.mjs";
+import { DEVTOOLS_MARKER as SOURCE_MARKER } from "../web/src/world/devtools/trace";
+
+describe("release web assets carry no development tools", () => {
+  test("an asset holding the devtools marker is named, others pass", () => {
+    expect(SOURCE_MARKER).toBe(DEVTOOLS_MARKER);
+    expect(
+      devtoolsAssets([
+        {
+          name: "assets/BoardView.js",
+          content: `x(${JSON.stringify(DEVTOOLS_MARKER)})`,
+        },
+        { name: "assets/TownView.js", content: "town()" },
+      ]),
+    ).toEqual(["assets/BoardView.js"]);
+  });
+
+  test("a view's trace call outside the trace module is named too (review)", () => {
+    expect(
+      devtoolsAssets([
+        {
+          name: "assets/TownView.js",
+          content: "e.type!==`move`&&i.record(`input`,e)",
+        },
+        { name: "assets/Quoted.js", content: 'k.record("select",{key:e})' },
+        // A method of that name called without a literal kind is not one.
+        { name: "assets/Other.js", content: "store.record(entry)" },
+      ]),
+    ).toEqual(["assets/TownView.js", "assets/Quoted.js"]);
+  });
+});
 
 describe("initial web asset budget", () => {
   test("counts transitive eager JS/CSS once, without charging lazy features", () => {

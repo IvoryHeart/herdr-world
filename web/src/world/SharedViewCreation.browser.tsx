@@ -60,6 +60,9 @@ let heldAttachment: { terminalId: string; promise: Promise<void> } | null =
   null;
 let zoomedTabId: string | null = null;
 let lastCreated: Pane | null = null;
+// The service's fallback while Herdr changed during a snapshot: the cached
+// topology, stale and not actionable, on a host that is still ready.
+let staleObservation = false;
 function addTab(host: string, workspaceId: string, id: string) {
   const r = runtime.get(host)!;
   const number =
@@ -109,6 +112,8 @@ function addWorkspace(host: string, id: string, count = 1) {
 addWorkspace("alpha", "a");
 addWorkspace("alpha", "b", 8);
 addWorkspace("beta", "a");
+// One agent, so Town has an agent card to open a terminal from.
+runtime.get("beta")!.panes[0]!.agent = "claude";
 function workspaces(host: string) {
   const r = runtime.get(host)!;
   return r.workspaces.map((workspace) => ({
@@ -154,8 +159,8 @@ function worldSnapshot() {
       state: "ready",
       generation: 7,
       snapshot_generation: 7,
-      stale: false,
-      actionable: true,
+      stale: staleObservation,
+      actionable: !staleObservation,
       snapshot: {
         workspaces: workspaces(host),
         tabs: runtime.get(host)!.tabs,
@@ -408,17 +413,84 @@ async function run() {
     document.body.appendChild(document.createElement("div")),
   );
   root.render(<WorldFoundationApp />);
+  // The root opens Town; this case exercises Office's creation controls.
+  await until(
+    () =>
+      document.querySelector<HTMLSelectElement>('[aria-label="World view"]')
+        ?.value === "town",
+    "Root did not default to Town",
+  );
+  // On the phone, a terminal opened from a Town agent's card takes two
+  // Backs to leave: the first closes Composer, the second returns to Town.
+  if (window.innerWidth < 640) {
+    const townPath = window.location.pathname;
+    await until(
+      () =>
+        document.querySelector(
+          '.town-view-shell .world-semantic-target[data-kind="agent"]',
+        ),
+      "Town agent target",
+    );
+    document
+      .querySelector<HTMLButtonElement>(
+        '.town-view-shell .world-semantic-target[data-kind="agent"]',
+      )!
+      .click();
+    await until(
+      () => document.querySelector(".town-peek-foot"),
+      "Town agent card",
+    );
+    [...document.querySelectorAll<HTMLButtonElement>(".town-peek-foot button")]
+      .find((button) => button.textContent === "Terminal")!
+      .click();
+    await until(
+      () =>
+        document.querySelector(
+          '.workspace-inspector button[aria-label="Open terminal input"]',
+        ),
+      "Town opened the agent's terminal",
+    );
+    document
+      .querySelector<HTMLButtonElement>(
+        '.workspace-inspector button[aria-label="Open terminal input"]',
+      )!
+      .click();
+    await until(
+      () => document.querySelector(".workspace-inspector .terminal-composer"),
+      "Composer opened in the terminal",
+    );
+    history.back();
+    await until(
+      () => !document.querySelector(".workspace-inspector .terminal-composer"),
+      "the first Back did not close Composer",
+    );
+    check(
+      !!document.querySelector(".workspace-inspector"),
+      "the first Back closed the terminal too",
+    );
+    history.back();
+    await until(
+      () => !document.querySelector(".workspace-inspector"),
+      "the second Back did not return to Town",
+    );
+    await settle();
+    check(
+      window.location.pathname === townPath &&
+        !!document.querySelector(".town-view-shell"),
+      `the second Back left Town for ${window.location.pathname}`,
+    );
+  }
+  const rootViewSelect = document.querySelector<HTMLSelectElement>(
+    '[aria-label="World view"]',
+  )!;
+  rootViewSelect.value = "town";
+  rootViewSelect.dispatchEvent(new Event("change", { bubbles: true }));
   await until(
     () =>
       document.querySelector(
-        '.world-new-seat-canvas-action[aria-label*="alpha b"]',
+        '.world-office-shell .world-new-seat-canvas-action[aria-label*="alpha b"]',
       ),
     "second room control",
-  );
-  check(
-    document.querySelector<HTMLSelectElement>('[aria-label="World view"]')
-      ?.value === "office",
-    "Root did not default to Office",
   );
   check(
     !document.querySelector(".workspace-inspector"),
@@ -518,7 +590,7 @@ async function run() {
         .workspace_id === "a",
     "New room used another host or source workspace",
   );
-  for (const name of ["office", "desk", "tree", "graph"]) {
+  for (const name of ["town", "desk", "board"]) {
     view(name);
     await settle();
     const beforeTab = created;
@@ -572,14 +644,40 @@ async function run() {
       viewChangeCount + 1,
     "held creation dispatched before view change",
   );
-  view("tree");
+  view("board");
   await settle();
   heldMutation = null;
   viewGate.resolve();
   await createdInspector(viewChangeCount + 1);
   check(
-    location.pathname === "/tree",
+    location.pathname === "/board",
     "Pending creation lost the current visual view",
+  );
+  // A snapshot taken while Herdr creates the tab is briefly stale. That is not
+  // a newer selection, so the new terminal still opens once it is observed.
+  const staleCount = created;
+  const staleGate = Promise.withResolvers<void>();
+  heldMutation = staleGate.promise;
+  await action("New tab");
+  await until(
+    () =>
+      calls.filter(
+        (call) =>
+          call.method === "tab.create" || call.method === "workspace.create",
+      ).length ===
+      staleCount + 1,
+    "held creation before a stale observation",
+  );
+  staleObservation = true;
+  await worldRuntimeStore.refresh();
+  await settle();
+  staleObservation = false;
+  heldMutation = null;
+  staleGate.resolve();
+  await createdInspector(staleCount + 1);
+  check(
+    !store.get().notice?.detail?.includes("superseded"),
+    "A stale observation superseded the created terminal's focus",
   );
   const supersededCount = created;
   const supersededGate = Promise.withResolvers<void>();
@@ -630,8 +728,8 @@ async function run() {
   );
   // Completion follows the current view in both directions, for both operations.
   for (const [from, to] of [
-    ["spaces", "office"],
-    ["office", "spaces"],
+    ["spaces", "town"],
+    ["town", "spaces"],
   ] as const) {
     for (const kind of ["tab", "workspace"] as const) {
       view(from);

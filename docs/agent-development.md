@@ -41,6 +41,14 @@ bun run spec:check
 
 When implementation changes a current contract, source map or operational procedure,
 update the affected spec, knowledge-map row, foundation guide or runbook in the same PR.
+Every significant change also updates the relevant current user or contributor
+guides in the same PR: tutorial/features for changed controls or steps, README
+for first-run behavior, and deployment/packaging for operational changes. Name
+these updates in the handoff, or explain why existing guidance stays accurate.
+A changelog entry alone does not cover usage instructions. Follow
+[documentation maintenance](../AGENTS.md#documentation-maintenance), including
+the site build for tutorial changes.
+
 New foundation modules need an owner and focused evidence in the guide. Leave
 machine- and user-specific data untracked and use synthetic examples in tests.
 
@@ -103,9 +111,11 @@ multi-step handoffs and review repairs. Use
 `bun run build:site` for site changes.
 
 Run `bun run install-hooks` once per clone. The pre-commit hook checks format and
-lint, and the pre-push hook checks the candidate. Code changes get the full
-`bun run check`; a Markdown-only follow-up may use `bun run check:docs` after
-this worktree has a successful full gate on an ancestor. Worktrees share the
+lint, and the pre-push hook checks the candidate. Code changes get
+`bun run check:changed` (static checks and the affected tests; CI runs the full
+gate), and `HERDR_WORLD_PREPUSH=full` runs `bun run check:delivery` instead. A
+Markdown-only follow-up may use `bun run check:docs` after this worktree has a
+passed code gate on an ancestor. Worktrees share the
 same Git hook configuration.
 
 Batch independent read-only inspections in one tool turn. Keep `rg` results and

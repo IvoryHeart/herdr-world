@@ -1,4 +1,5 @@
-import { stat } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { stat, writeFile } from "node:fs/promises";
 import { dirname, join, posix, relative, resolve } from "node:path";
 
 const repositoryRoot = "https://github.com/IvoryHeart/herdr-world/blob/main/";
@@ -80,6 +81,32 @@ export async function renderTutorial(markdown: string): Promise<TutorialPage> {
     .text();
 
   return { content, navigation: `<ol>${navigation.join("")}</ol>` };
+}
+
+/** Give changed CSS/JS a new cache key without invalidating unchanged assets. */
+export async function versionSiteAssets(directory: string): Promise<void> {
+  const root = resolve(directory);
+  for await (const page of new Bun.Glob("**/*.html").scan(root)) {
+    const absolute = join(root, page);
+    let html = await Bun.file(absolute).text();
+    for (const reference of localPageReferences(html)) {
+      const [location, fragment] = reference.split("#", 2);
+      const [pathname, query] = location.split("?", 2);
+      if (!/\.(css|js)$/.test(pathname)) continue;
+      const target = resolve(dirname(absolute), decodeURIComponent(pathname));
+      if (relative(root, target).startsWith(".."))
+        throw new Error(`Site reference escapes output: ${reference}`);
+      const digest = createHash("sha256")
+        .update(Buffer.from(await Bun.file(target).arrayBuffer()))
+        .digest("hex")
+        .slice(0, 12);
+      const parameters = new URLSearchParams(query);
+      parameters.set("v", digest);
+      const versioned = `${pathname}?${parameters}${fragment ? `#${fragment}` : ""}`;
+      html = html.replaceAll(`="${reference}"`, `="${versioned}"`);
+    }
+    await writeFile(absolute, html);
+  }
 }
 
 /** Return page-relative assets and links, including srcset candidates. */

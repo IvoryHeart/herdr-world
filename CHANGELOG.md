@@ -13,6 +13,143 @@ are optional because the merged PR history records their source.
   current until approval, followed by publication of its exact merged revision,
   immutable-tag retries and carried-forward known issues.
 
+## [0.2.6] - 2026-10-21
+
+### Documentation
+
+- Refresh the shared Files, Changes and History screenshots with Board behind
+  the Inspector, and update their captions and capture provenance.
+
+- Focus the README, tutorial, feature guide and website on Town, Board, Desk and
+  Spaces, with current Town/Board layouts and desktop/mobile captures. Identify
+  Office, Tree and Graph as retired views with redirects to Town and Board. Show
+  a readable mobile Board close-up and describe Send's recipient identity checks.
+
+### Added
+
+- Add Board, a pin board view. Hosts are zones,
+  workspaces are cards and tabs sit around their workspace. Cards are springy
+  while you move them and settle within about a second; a workspace carries its
+  tabs, folds into a stack and opens into free space; Tidy works on a workspace
+  or the whole board and can be undone. Zooming out shows each workspace's tabs
+  as status squares (hollow for plain terminals). A tab with several panes lists
+  them as rows you can select or open on their own, and a tab of plain shells
+  looks like a small terminal. Tabs pulse in their most urgent agent's status
+  colour, which the view's ⋯ menu can turn off. Double-tap the board for a
+  sticky note and drag a card's red dot to string a note to a workspace, tab or
+  exact pane; click a string to cut it. Notes, strings and the board's layout
+  are saved by the World service and appear on every device. A note strung to an
+  agent's pane can be sent once to that agent after World checks the runtime,
+  witnessed pane/terminal IDs and that the same agent is still there. After Herdr
+  restarts, Board asks
+  before trusting strings whose terminals changed; strings whose target closed
+  wait in a Needs a home tray instead of attaching to the wrong card. A note
+  offers Start an agent in a chosen workspace; choosing Claude or Codex currently
+  opens a shell rather than launching the selected agent
+  ([issue #219](https://github.com/IvoryHeart/herdr-world/issues/219)). Drag a tab
+  onto another workspace to move it there (Board asks first, with "Don't ask
+  again"); strings follow the moved panes. On phones Board is in the bottom
+  navigation.
+
+### Changed
+
+- Town and Board read touch and mouse input through one shared gesture
+  machine. On phones, Board now asks you to hold a card still before dragging
+  it, as Town does for tables and agents, so a quick swipe across a card pans.
+  A second finger always turns a drag into a pinch without dropping it. Board's
+  frames pause their settling while you type in a terminal.
+
+- Board's event trace, and the renderer counters behind `?officeDebug=1`, are
+  now development-only tools: release builds contain none of them. Development
+  builds keep Board's trace, add one for Town (settings menu, `?debug=town`), and
+  replace `?officeDebug=1` with `?debug=town`.
+
+### Removed
+
+- Retire the Office, Tree and Graph views. Town and Board replace them: old
+  `/office` addresses and saved Office views open Town, and `/graph` and `/tree`
+  open Board, replacing the history entry. The Inspector opening preference and
+  Town's calm motion keep their saved values; Office's room alignment and
+  long-title settings are gone. The optional Prometheus cost metrics now appear
+  on the Town board. The web build drops about 1.6 MiB.
+
+### Fixed
+
+- Board's New tab dialog, and its other dialogs, now open above open terminal
+  windows instead of behind them.
+- A terminal created while another terminal is selected now opens. A snapshot
+  taken while Herdr was still creating the tab no longer cancels the opening with
+  "Tab created, but Inspector focus failed". This was most noticeable on phones.
+- Board stays responsive on a large World: at 64 hosts and about 1,500 tabs,
+  typed input had waited up to 20 seconds behind Board's rendering.
+- On a phone, long-pressing a link in a terminal offers **Open link** again
+  while an agent keeps repainting (its spinner withdrew it before it appeared),
+  and in Town, whose terminals open with the Composer up and refused selection.
+- Board's Send goes only to the agent the note was strung to. If another agent
+  now holds the pane, even in the same terminal, nothing is sent: Board names it
+  and sends to it only when you choose to. A change during sending is reported
+  as possibly delivered elsewhere, never as sent.
+- Board keeps a tab and a workspace apart when they share a native ID, opens a
+  card from the keyboard or assistive technology, shows search results, and
+  marks the selected card for assistive technology.
+- When a Town move finishes, the dragged table or agent fades or springs home
+  from where it was waiting on the target, instead of jumping back to where it
+  was dropped first.
+
+## [0.2.5] - 2026-10-18
+
+### Added
+
+- Add Town, a new view next to Office. Each host is a building along a road,
+  each workspace a room on a carpet and each tab a team table with one seat per
+  pane (a solo desk for one pane, a small face-to-face table for two), with up
+  to 19 desks per room. Plain terminals show a green prompt instead of an
+  agent's laptop. A desk with more panes than seats shows how many more and
+  lists every pane on tap. Agents that need you walk to their host's
+  reception and queue oldest first. Finished agents join them with their work
+  left on the desk until you open their terminal or mark it reviewed, then take
+  a break in the lounge with idle agents. Speech bubbles show questions,
+  finished work and typing, and desks and seats carry their tab, agent and
+  terminal names.
+- Town lists agents that need you in a needs-you rail (a bottom tray on phones).
+  Hover or tap an agent for a peek with its recent messages (from its session
+  history, or its screen when it has none), its question in a
+  highlighted box, one-tap answers and a reply line with 📎 attachments. On phones the reply line
+  opens World's composer (keys, attachments, Insert and Send) right in the
+  peek; Inspector opens the agent's files, changes and history. Answers and finished agents show short notices.
+- Town's + and − buttons, centred on the right edge (with the More menu on
+  phones), step between the whole town, one building, one room and
+  one desk. Tap a room to zoom in; very large towns open at roof level. Phones stack the
+  buildings in one column. A Town calm motion setting reduces ambient motion.
+- Move Town desks and agents: drag a desk onto another room of the same host,
+  or an agent onto another desk (hold, then drag on phones; press M on a
+  focused desk or agent from the keyboard). The live panes move, so agents keep
+  running; a failed move is rolled back, and moving a room's last desk asks
+  first because the room closes.
+
+### Changed
+
+- Refresh the tutorial and feature guide for Town, Office, Desk and Graph,
+  including Town replies and mobile navigation. Require relevant documentation
+  updates alongside significant changes. Add desktop/mobile Town source-preview
+  screenshots to Pages and show the latest stable release with an updating badge.
+- Town is now the default World view: the World root, unknown routes and
+  invalid view values open Town. Office stays one tap away at `/office`.
+- On phones, the on-screen Back in a terminal returns to the view at once,
+  even with the Composer open; the phone's own Back still closes the Composer
+  first.
+
+### Fixed
+
+- Town closes up a room when a desk closes, instead of leaving an empty gap.
+- Remove the upstream demo from the public website, clarify Town copy, and keep
+  release details together. Stop featuring Tree in the website showcase.
+  Version built CSS and JavaScript URLs to prevent
+  older cached assets from breaking a newly deployed page.
+- The phone's Back closes open layers one at a time (Composer, then the
+  terminal) instead of leaving the page on the second press in Chrome, which
+  skips history entries a page adds without a tap.
+
 ## [0.2.4] - 2026-10-16
 
 ### Fixed

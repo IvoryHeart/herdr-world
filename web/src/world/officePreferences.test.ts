@@ -6,25 +6,30 @@ import {
   writeOfficePreferences,
 } from "./officePreferences";
 
-describe("Office preferences", () => {
-  test("admits only known layout choices and bounded scroll positions", () => {
+describe("View preferences", () => {
+  test("keeps a choice saved before Office was retired and ignores Office-only fields", () => {
     const storage = memoryStorage(
       JSON.stringify({
-        roomAlignment: "sideways",
+        roomAlignment: "center",
         longTitleMode: "compact",
-        inspectorPresentation: "stacked",
-        scrollLeft: -4,
-        scrollTop: 9_000_000,
+        inspectorPresentation: "docked",
+        scrollLeft: 40,
+        scrollTop: 90,
+        townCalm: true,
       }),
     );
-
     expect(readOfficePreferences(storage)).toEqual({
-      roomAlignment: "left",
-      longTitleMode: "compact",
-      inspectorPresentation: "floating",
-      scrollLeft: 0,
-      scrollTop: 1_000_000,
+      inspectorPresentation: "docked",
+      townCalm: true,
     });
+  });
+
+  test("admits only known choices", () => {
+    expect(
+      readOfficePreferences(
+        memoryStorage(JSON.stringify({ inspectorPresentation: "stacked" })),
+      ),
+    ).toEqual(DEFAULT_OFFICE_PREFERENCES);
   });
 
   test("fails closed to defaults when browser storage is malformed", () => {
@@ -41,24 +46,17 @@ describe("Office preferences", () => {
     ).toEqual(DEFAULT_OFFICE_PREFERENCES);
   });
 
-  test("writes only a normalized World-owned preference record", () => {
+  test("writes only the surviving fields, dropping Office-only ones", () => {
     const storage = memoryStorage(null);
     writeOfficePreferences(storage, {
-      roomAlignment: "right",
-      longTitleMode: "expand",
       inspectorPresentation: "floating",
-      scrollLeft: 12.4,
-      scrollTop: Number.POSITIVE_INFINITY,
+      townCalm: false,
     });
-
     expect(storage.value).toEqual({
       key: OFFICE_PREFERENCES_KEY,
       value: JSON.stringify({
-        roomAlignment: "right",
-        longTitleMode: "expand",
         inspectorPresentation: "floating",
-        scrollLeft: 12,
-        scrollTop: 0,
+        townCalm: false,
       }),
     });
   });

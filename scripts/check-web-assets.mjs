@@ -4,13 +4,12 @@ import process from "node:process";
 import { fileURLToPath, URL } from "node:url";
 
 const publicRoot = fileURLToPath(new URL("../server/public/", import.meta.url));
-// The retained Pixel Office and spatial Graph add lazy renderer/environment
-// entry points. Keep total bytes and eager JS constrained while allowing the
-// shared visual-view ownership wiring in the shell.
-const maxFileCount = 190;
-// Ranger, commit history and the diff worker add bounded lazy assets. Keep the
-// startup and file-count budgets unchanged.
-const maxTotalBytes = 14.5 * 1024 * 1024;
+// Town and Board are the visual views, each a lazy chunk with its own
+// renderer or layout code; Ranger, commit history and the diff worker add
+// bounded lazy assets. Retiring Office, Tree and Graph (and Office's character
+// sprites) left 129 files and 13.0 MiB, so the budgets keep a little headroom.
+const maxFileCount = 150;
+const maxTotalBytes = 13.25 * 1024 * 1024;
 const maxInitialJsBytes = 660 * 1024;
 const maxInitialJsGzipBytes = 202 * 1024;
 const maxInitialCssBytes = 196 * 1024;
@@ -34,6 +33,27 @@ export function initialAssetFiles(
   }
   for (const entry of entries) visit(entry);
   return [...files];
+}
+
+/**
+ * World's development tools (web/src/world/devtools/) must not ship: release
+ * builds compile them out, and their marker string must appear in no asset.
+ * A deliberate HERDR_WORLD_BUILD_DEVTOOLS=1 build is exempt.
+ */
+export const DEVTOOLS_MARKER = "herdr-world-devtools";
+/**
+ * A view's trace call with a literal kind (`trace.record("input", …)`): the
+ * recording paths views keep outside the marked trace module, which a
+ * release build drops through their DEVTOOLS guards.
+ */
+const TRACE_CALL = /\.record\(\s*["'`]/;
+export function devtoolsAssets(files) {
+  return files
+    .filter(
+      ({ content }) =>
+        content.includes(DEVTOOLS_MARKER) || TRACE_CALL.test(content),
+    )
+    .map(({ name }) => name);
 }
 
 export function assertLazyGrammarAssets(manifest) {
@@ -129,6 +149,28 @@ async function checkAssets() {
     (exceeded ? process.stderr : process.stdout).write(message);
     if (exceeded) process.exitCode = 1;
   }
+  if (process.env.HERDR_WORLD_BUILD_DEVTOOLS !== "1") {
+    const shipped = devtoolsAssets(await textAssets(publicRoot));
+    if (shipped.length) {
+      process.stderr.write(
+        `web assets contain World development tools: ${shipped.join(", ")}\n`,
+      );
+      process.exitCode = 1;
+    } else process.stdout.write("web assets: no development tools\n");
+  }
+}
+
+/** Every text asset (scripts, styles, pages) under the public root. */
+async function textAssets(root, prefix = "") {
+  const out = [];
+  for (const entry of await readdir(root, { withFileTypes: true })) {
+    const path = `${root}/${entry.name}`;
+    const name = `${prefix}${entry.name}`;
+    if (entry.isDirectory()) out.push(...(await textAssets(path, `${name}/`)));
+    else if (/\.(m?js|css|html)$/.test(entry.name))
+      out.push({ name, content: await readFile(path, "utf8") });
+  }
+  return out;
 }
 
 if (import.meta.main) await checkAssets();

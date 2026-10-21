@@ -5,7 +5,77 @@ A Web/PWA client for a running [Herdr](https://herdr.dev) server.
 
 ## Visual control plane
 
-- **Desk** is the default view. It organizes the filtered hosts' agents by what
+Town, Board, Desk and Spaces are World's views. Office, Tree and Graph have been
+retired: `/office` opens Town, and `/graph` and `/tree` open Board. Board and
+these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
+
+- **Town** is the default view (`/town`); the root URL opens it too.
+  Each host is a building, each workspace a room, each tab a team table and each
+  pane a seat. Plain terminals show prompts. Additional panes beyond the drawn
+  seats remain available through the table's count and chooser.
+  - Blocked agents queue at reception oldest first. Finished agents wait there
+    until you open their terminal or mark that completion reviewed, then join
+    idle agents in the lounge. Movement only represents state.
+  - Hover or tap an agent for a peek: recent session messages (screen text when
+    history is unavailable), a question when recognized, supported answer buttons,
+    a reply line and file attachments. Answers send the offered key to that pane;
+    reply **Send** submits text. On phones, the reply line opens World's Composer
+    inside the peek, with keys, attachments, Insert and Send.
+  - **Inspector** opens files, changes and history; **Terminal** opens the live
+    pane. **Next** cycles other waiting agents, then finished agents if none wait.
+    The needs-you list becomes a bottom tray on phones and hides when no agent
+    is blocked. Review marks acknowledge a specific completion in this browser,
+    without certifying its correctness.
+  - **+**, **−** and **ALL** navigate between town, building, room and desk
+    detail. Drag to pan; focused arrow keys pan too. Tap a room to zoom in.
+    Phones stack buildings vertically; large towns can initially show roofs.
+    **Town calm motion** reduces ambient animation. Room actions support
+    workspace/tab creation and room management on the captured host.
+  - Drag a table onto another room of the same host, or an agent onto another
+    table, to move it (hold, then drag on phones; **M** on a focused table or
+    agent from the keyboard). The live panes move, agents keep running, a failed
+    move attempts rollback and reports partial or unknown results. Moving a
+    room's last table asks first because the room closes. When a table closes, the tables after it close up.
+  - Cached failed-host buildings stay stale and non-actionable. Search and Hosts
+    use the shared aggregate. Reception and lounge positions only show status;
+    only an explicit move changes Herdr's layout, always within one host.
+  See the [Town exercise](./docs/TUTORIAL.md#town).
+
+- **Board** (`/board`) shows hosts as zones, workspaces as cards and tabs as
+  cards around their workspace, beside your notes. Cards are elastic while you
+  move them (on phones, hold a card still before dragging it; a quick swipe
+  pans the board, as in Town) and settle within a second; workspaces fold into a count and open
+  into free space; Tidy (with Undo) rearranges a workspace or the board and
+  carries strung notes along. Zoomed out, workspaces show a square per pane.
+  - Tabs list each pane as a row; plain-shell tabs look like terminals; only a
+    working agent's tab (or the selected one) pulses (a ⋯ setting).
+  - **+** on a workspace opens New tab (Terminal, Claude or Codex, an optional
+    name, then Create; a note's Start an agent uses the same dialog); **+** on a host creates a workspace. Workspace cards count their
+    agents by status; workspaces and tabs take a colour the user picks, while
+    status keeps its own colours.
+  - Notes and strings are saved by the World service and shared across your
+    devices. Strings attach to an exact pane, tab or workspace; a note strung to
+    a pane is sent to its agent only when you press Send. When you make the
+    string, World records the agent you saw in the pane, once it confirms that
+    agent (by its Herdr session) is still there; otherwise the first Send asks. Send checks the runtime, the witnessed
+    pane and terminal, and that agent. If another agent now holds the pane,
+    even in the same terminal, nothing is sent: World names the new agent and
+    sends to it only if you choose **Send to** it. If the agent changes while
+    the note is being sent, World says it may have reached another agent.
+    A note offers **Start an agent** in a chosen workspace, but choosing Claude
+    or Codex currently opens a shell rather than launching that agent
+    ([issue #219](https://github.com/IvoryHeart/herdr-world/issues/219)).
+  - Drag a tab onto another workspace of its host to move it (asks first).
+    On phones, hold a card still before dragging; adding a second finger switches
+    to pinch zoom without committing a move. Settling pauses while you type in
+    an open terminal.
+  - After a Herdr restart, strings that cannot be confirmed ask Keep or Detach;
+    strings whose target closed wait in Needs a home. Selecting a card opens
+    the shared Inspector. Development builds add an event trace for bug reports
+    ([development tools](docs/development.md#development-tools)).
+  See the [Board exercise](./docs/TUTORIAL.md#board).
+
+- **Desk** organizes the filtered hosts' agents by what
   they need from you rather than where they run:
   - **Needs you** lists blocked agents, oldest first, with the question and choices
     read from the agent's screen.
@@ -28,7 +98,7 @@ A Web/PWA client for a running [Herdr](https://herdr.dev) server.
     answer, review, or watch. Hosts outside the filter appear as summary chips.
 - **Spaces** is the focused operational workspace: terminals, files, changes,
   annotations, worktrees, and Agent History for one selected connection.
-- **Office**, **Tree**, and **Graph** show the aggregate of local and SSH hosts.
+- **Town**, **Board** and **Desk** show the aggregate of local and SSH hosts.
   **Hosts** defaults to All hosts and persists an explicit host set independently
   of **Manage connections**. Filtering preserves open resources and terminals;
   removed saved identities are pruned, with an explained return to All hosts
@@ -38,9 +108,7 @@ A Web/PWA client for a running [Herdr](https://herdr.dev) server.
   destination; room creation inherits its room. Notifications outside the filter
   open a labelled Inspector with an explicit Reveal in Hosts action.
 - Search covers observed entities beyond renderer limits and pages matching results.
-  Tree and Graph distribute their 128-space bound across hosts fairly and retain
-  16 leaves per space, with priority for selected, focused, watched and attention
-  targets. Counts distinguish observations, rendering omissions and unavailable coverage.
+  Counts distinguish observations, rendering omissions and unavailable coverage.
 - Use **Arrange windows** in the shared shell to show the active terminal alone,
   cascade open windows, fit them in columns or rows, tile them in a grid, or
   restore their previous positions. Spaces arranges the focused workspace's
@@ -53,7 +121,9 @@ A Web/PWA client for a running [Herdr](https://herdr.dev) server.
   placements; snapping into an occupied region overlaps without rearranging it.
   Tiled windows share resizable dividers. **Open windows** restores minimized windows.
   Window close dismisses presentation; native tab closure remains separate.
-- Mobile shows one active window and preserves desktop positions. Its ellipsis,
+- Mobile shows one active window and preserves desktop positions. The on-screen
+  **Back** returns from a terminal to the visual view even with Composer open;
+  the phone's own Back closes Composer first, then the terminal. Its ellipsis,
   Tabs controls remain floating; Tabs and Arrange sit together in the second row. Tabs also restores minimized
   windows and retains native tab actions. The duplicate list icon and tab strip are hidden. The outer shell coordinates terminal sizing with the keyboard viewport.
 - A Spaces tab window shows that tab's Herdr split panes. An Inspector in a visual
@@ -67,49 +137,34 @@ A Web/PWA client for a running [Herdr](https://herdr.dev) server.
 - A slow host does not hold back another host’s controls: World returns a
   complete host list within 20 seconds, marks unfinished host views stale, and
   refreshes them when their observations complete.
-- Office, Tree, and Graph share search in the application top bar; Graph adds Fit
-  and zoom there instead of consuming a second stage header.
-- The Roamgate-derived **Actions** command menu stays at the right of the top bar in
-  every view. In Office, Tree and Graph, it also captures the selected visual space, agent or
-  terminal for resource actions. It opens the target's existing Terminal, Files, Changes and
-  Agent History Inspector resources, or focuses that exact target before Go to
-  Spaces. Window arrangements remain available without a selected visual entity.
-  Its normal shell commands and shortcut remain available while a visual view is
-  active (`Cmd+K` on macOS, `Ctrl+Alt+K` elsewhere). A selection,
-  host, generation or observation change invalidates the open target; Actions
-  does not send terminal input, assign tasks or control agents.
-- Pin, Unpin and Pinned only are available in the shared **Actions**, leaving the
-  search field clear. The filtered aggregate summary is a muted top-bar indicator;
-  hover or assistive technology exposes its counts.
-- **Pin** a live agent or terminal in Office, Tree, or Graph to keep its exact
-  connection-qualified pane in visual triage. Pins are shared by browsers served
-  by this World process, survive page reload, and clear when the process restarts
-  or that runtime generation is replaced. **Pinned only** is a browser-local view
-  filter; workspace pins and Graph positions remain separate preferences.
+- The **Actions** command menu stays at the right of the top bar in every view
+  (`Cmd+K` on macOS, `Ctrl+Alt+K` elsewhere). Use it for workspace/tab creation,
+  window arrangements and the selected target's available resource actions.
+  Check the selected host and target before acting. A host, generation or
+  observation change invalidates an open target; Actions does not send input
+  or assign tasks to an agent.
 - World runs as one application and one browser origin. No remote World/Roamgate
   service or browser bridge URL is required for an SSH host.
 
-### Foundation cutover boundaries
+### Retired views and runtime boundaries
 
-The Roamgate-derived foundation restores the retained Pixi Office, connected Tree and
-spatial Graph over the same qualified WorldObject projection. Office includes its CEO
-room, receptions, boards, Agent Bar, rooms, room actions, completion cues and live
-floating or profile-docked terminal conversations. Optional Prometheus data reaches
-the Economy board through bounded World-service queries; Office and terminals remain
-independent of that provider.
+Office, Tree and Graph are retired. Bookmarks still work: `/office` opens Town,
+and `/graph` and `/tree` open Board. The Inspector opening preference and Town's
+calm motion keep their saved values; Office's room alignment and long-title
+settings are gone. The optional Prometheus cost metrics now appear on the Town
+board; Board's notes and strings do not depend on Prometheus.
 
-The foundation now admits simultaneous qualified local and SSH contexts. Runtime
-replacement retires only its own windows and pending work; whole-World disconnect
-or authentication loss retires all old leases. Unacknowledged input and mutations
-are never automatically replayed; refresh the exact target before retrying. Browser-federated bridge
-URLs, native Capacitor Android packaging and old visual preference keys are retired;
-the responsive installable PWA is the mobile client.
+World admits simultaneous qualified local and SSH contexts. Runtime replacement
+retires only its own windows and pending work; whole-World disconnect or
+authentication loss retires all old leases. Unacknowledged input and mutations
+are never automatically replayed; refresh the exact target before retrying.
+The responsive installable PWA is the mobile client.
 
 ### Session task summaries
 
 Agent harnesses can use `herdr-world task-summary` to publish a short, expiring,
 session-qualified description of current work for an exact local or fixed-policy SSH
-Herdr pane. Office, Tree, Graph and the Inspector show it only while the current
+Herdr pane. The Inspector shows it only while the current
 agent session matches the report. Herdr owns expiry; the command does not infer work,
 assign tasks, or provide a Clear operation.
 
@@ -206,6 +261,11 @@ commit a search selection. Press K in the recent switcher to convert it to searc
   backslash paths are recognized too. On Herdr 0.9.1, wrapped terminal links
   resolve against visible rows; OSC 8 links retain their explicit destinations.
   Older Herdr versions keep local URL/path detection.
+- On a touch screen, long-press a link or path and choose **Open link** or
+  **File actions**. This works in every view's terminals, while an agent keeps
+  repainting its status line and while the Composer is open. A URL found in the
+  text stays offered while its row shows the same text; a labelled OSC 8 link
+  is withdrawn when a new frame arrives.
 
 ## Workspace Inspector
 
@@ -584,5 +644,3 @@ mouse-aware apps with Option-drag (macOS) or Shift-drag (elsewhere).
 - Windows Herdr 0.9.1+ hosts over SSH from Linux/macOS World, with native terminal
   and workspace actions. Unix-only remote file and Git tools remain unavailable.
 - Optional private-network PIN login with independent session signing and recovery.
-- Mobile Office gives more space to the scene by removing the target row and
-  visible title-bar summary counts; search and semantic canvas controls stay available.

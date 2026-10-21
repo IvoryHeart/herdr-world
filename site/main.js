@@ -73,8 +73,9 @@ const heroImage = heroCarousel?.querySelector("[data-hero-image]");
 const heroLink = heroCarousel?.querySelector("[data-hero-link]");
 const heroLabel = heroCarousel?.querySelector("[data-hero-label]");
 const heroPosition = heroCarousel?.querySelector("[data-hero-position]");
-const officeSrcset = heroSource?.getAttribute("srcset") ?? "";
-const officeSizes = heroSource?.getAttribute("sizes") ?? "";
+const initialHeroSrcset = heroSource?.getAttribute("srcset") ?? "";
+const initialHeroSizes = heroSource?.getAttribute("sizes") ?? "";
+const initialHeroType = heroSource?.getAttribute("type") ?? "image/png";
 let heroIndex = 0;
 let heroVisible = false;
 
@@ -87,9 +88,9 @@ const showHeroSlide = (index) => {
 
   heroIndex = nextIndex;
   if (heroSource instanceof HTMLSourceElement) {
-    heroSource.type = nextIndex === 0 ? "image/avif" : "image/png";
-    heroSource.srcset = nextIndex === 0 ? officeSrcset : image;
-    if (nextIndex === 0) heroSource.sizes = officeSizes;
+    heroSource.type = nextIndex === 0 ? initialHeroType : "image/png";
+    heroSource.srcset = nextIndex === 0 ? initialHeroSrcset : image;
+    if (nextIndex === 0) heroSource.sizes = initialHeroSizes;
     else heroSource.removeAttribute("sizes");
   }
   heroImage.src = image;

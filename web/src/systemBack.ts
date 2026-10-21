@@ -60,8 +60,16 @@ export function useSystemBack(
 }
 
 const GUARD = "herdrBack";
+// Pairs guards with the page entry below them, so a leftover guard reached by
+// Forward can continue Forward instead of returning to that page.
+const BASE = "herdrBackBase";
 const layers = new Set<Layer>();
 let openings = 0;
+let bases = 0;
+let previousState: unknown;
+// Set while continuing Forward past a leftover guard; if Forward could not
+// move, the next Back also skips the paired page entry, which looks the same.
+let forwardBase: string | undefined;
 // Whether a layer closed since the last reconcile other than by unmounting.
 let closedOnScreen = false;
 let reconcileScheduled = false;
@@ -71,6 +79,25 @@ let backPending = false;
 
 function isGuard(state: unknown) {
   return typeof state === "object" && state !== null && GUARD in state;
+}
+
+/**
+ * How many guard entries sit above the page's own entry. Each open layer has
+ * one, pushed when it opens, so the user's Back consumes one guard per layer
+ * and never has to push another: browsers skip history entries a page adds
+ * without a user gesture (Chrome's back-button intervention), and a guard
+ * re-pushed while handling Back would make the next Back skip the page.
+ */
+function baseId(state: unknown): string | undefined {
+  if (typeof state !== "object" || state === null || !(BASE in state)) return;
+  const value = (state as Record<string, unknown>)[BASE];
+  return typeof value === "string" ? value : undefined;
+}
+
+function guardDepth(state: unknown) {
+  if (!isGuard(state)) return 0;
+  const depth = (state as Record<string, unknown>)[GUARD];
+  return typeof depth === "number" && depth > 0 ? depth : 1;
 }
 
 // Effects of one React commit run together; reconcile once after all of them,
@@ -84,52 +111,103 @@ function scheduleReconcile() {
 function reconcile() {
   reconcileScheduled = false;
   if (backPending) return;
-  const guarded = isGuard(window.history.state);
-  if (layers.size > 0 && !guarded) {
-    const base: unknown = window.history.state;
-    window.history.pushState(
-      { ...(typeof base === "object" && base ? base : {}), [GUARD]: true },
-      "",
-    );
-  } else if (layers.size === 0 && guarded && closedOnScreen) {
+  const depth = guardDepth(window.history.state);
+  if (layers.size > 0) forwardBase = undefined;
+  if (layers.size > depth) {
+    const state: unknown = window.history.state;
+    let base: Record<string, unknown>;
+    if (depth === 0) {
+      base = {
+        ...(typeof state === "object" && state ? state : {}),
+        [BASE]: `${Date.now()}:${++bases}`,
+      };
+      window.history.replaceState(base, "");
+    } else base = { ...(state as Record<string, unknown>) };
+    for (let next = depth + 1; next <= layers.size; next += 1)
+      window.history.pushState({ ...base, [GUARD]: next }, "");
+    previousState = window.history.state;
+  } else if (layers.size < depth && closedOnScreen) {
+    // Layers closed on screen take their guards with them.
     backPending = true;
-    window.history.back();
+    window.history.go(layers.size - depth);
   }
   closedOnScreen = false;
 }
 
-if (typeof window !== "undefined")
+if (typeof window !== "undefined") {
+  previousState = window.history.state;
   window.addEventListener("popstate", (event) => {
+    const from = previousState;
+    previousState = event.state;
     if (backPending) {
       backPending = false;
       reconcile();
       return;
     }
-    // Forward onto a guard, or Back with nothing open: settle the entry.
-    if (isGuard(event.state) || layers.size === 0) {
+    // Direction within one guard run: a higher guard of the same pair means
+    // Forward; anything else (a lower entry, or arriving from a route above
+    // the run) means Back.
+    const id = baseId(event.state);
+    const depth = guardDepth(event.state);
+    const samePair = id !== undefined && baseId(from) === id;
+    const forward = samePair && depth > guardDepth(from);
+    if (forwardBase !== id) forwardBase = undefined;
+    if (layers.size === 0) {
+      if (forward && depth > 0) {
+        // Continue Forward past the leftover guards, toward any route above.
+        forwardBase = id;
+        window.history.forward();
+        return;
+      }
+      if (forwardBase !== undefined && samePair) {
+        // Forward ended inside the run and the user went Back: skip the rest
+        // of the run and its page, which all look alike, in one press.
+        forwardBase = undefined;
+        backPending = true;
+        window.history.go(-(depth + 1));
+        return;
+      }
+      forwardBase = undefined;
+      // A leftover guard reached going Back returns to its page.
+      if (depth > 0) {
+        backPending = true;
+        window.history.go(-depth);
+      }
+      return;
+    }
+    forwardBase = undefined;
+    if (layers.size <= depth) {
+      // Forward onto a guard: nothing to close.
       scheduleReconcile();
       return;
     }
-    let top: Layer | undefined;
-    for (const layer of layers)
-      if (
-        !top ||
-        layer.level > top.level ||
-        (layer.level === top.level && layer.order > top.order)
-      )
-        top = layer;
-    // The user's Back already removed the guard: nothing to undo.
-    layers.delete(top!);
-    top!.close();
+    // The user's Back consumed guards: close as many top layers.
+    while (layers.size > depth) {
+      let top: Layer | undefined;
+      for (const layer of layers)
+        if (
+          !top ||
+          layer.level > top.level ||
+          (layer.level === top.level && layer.order > top.order)
+        )
+          top = layer;
+      layers.delete(top!);
+      top!.close();
+    }
     scheduleReconcile();
   });
+}
 
 /**
  * Takes the same step as the phone's Back while layers are open: closes the
  * topmost one through history. Returns false when there is nothing to close.
  */
 export function stepBack(): boolean {
-  if (layers.size === 0 || backPending || !isGuard(window.history.state))
+  if (
+    layers.size === 0 ||
+    backPending ||
+    guardDepth(window.history.state) === 0
+  )
     return false;
   window.history.back();
   return true;
@@ -143,5 +221,8 @@ export function pushRoute(state: Record<string, unknown>, url: URL) {
   if (isGuard(window.history.state))
     window.history.replaceState(state, "", url);
   else window.history.pushState(state, "", url);
+  previousState = window.history.state;
+  // A route replaces any leftover guard the user had moved Forward onto.
+  forwardBase = undefined;
   scheduleReconcile();
 }

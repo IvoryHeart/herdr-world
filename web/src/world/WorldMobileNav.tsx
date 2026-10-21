@@ -1,9 +1,9 @@
 import {
-  Building2,
+  Castle,
   LayoutDashboard,
   type LucideIcon,
-  Network,
   PanelsTopLeft,
+  StickyNote,
 } from "lucide-react";
 import type { WorldView } from "./worldViewRouting";
 import "./WorldMobileNav.css";
@@ -13,8 +13,8 @@ const DESTINATIONS: readonly {
   label: string;
   Icon: LucideIcon;
 }[] = [
-  { view: "office", label: "Office", Icon: Building2 },
-  { view: "graph", label: "Graph", Icon: Network },
+  { view: "town", label: "Town", Icon: Castle },
+  { view: "board", label: "Board", Icon: StickyNote },
   { view: "desk", label: "Desk", Icon: LayoutDashboard },
   { view: "spaces", label: "Spaces", Icon: PanelsTopLeft },
 ];

@@ -15,7 +15,7 @@ export function renderHomebrewFormula(
   const formulaClass = candidate ? "HerdrWorldRc" : "HerdrWorld";
   const conflict = candidate ? "herdr-world" : "herdr-world-rc";
   return `class ${formulaClass} < Formula
-  desc "Visualize and control your agents in Office and Graph across multiple hosts"
+  desc "Visual IDE for AI agents with office, mindmaps and boards"
   homepage "https://herdr.world/"
   version "${version}"
 

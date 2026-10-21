@@ -17,6 +17,19 @@ Open <http://localhost:5173>. Vite proxies API and WebSocket traffic to the Worl
 service at <http://127.0.0.1:8788>. To use explicit Herdr sockets or SSH, pass service
 options after the workspace command or configure a profile in the UI.
 
+## Development tools
+
+World's event traces and renderer counters exist only in development builds:
+`bun run dev:web`, or a production-style build with
+`HERDR_WORLD_BUILD_DEVTOOLS=1 bun run build:web`. In such a build, Board's
+**⋯ → Event trace** and Town's **Town event trace** switch in the settings menu
+(or `?debug=board` / `?debug=town` in the URL) record a bounded, page-local trace
+of input, gestures, effects, frames and errors; **Copy trace** puts it on the
+clipboard for a bug report.
+Nothing is sent anywhere. Release and package builds never set the flag, and the
+web asset check fails a release build that carries any of it. See the
+[World component routes](../web/src/world/README.md#development-tools).
+
 ## Verification
 
 ```bash
@@ -26,6 +39,7 @@ bun run test:quick            # non-Chromium suite
 CHROME_BIN=/path/to/chromium bun run test:browser
 bun run test:world            # all World browser acceptance suites
 bun run test:world --shard=1/8 # reproduce one CI shard, one browser at a time
+bun run test:world --shard=latency # the latency-budget suites, as CI's quiet job runs them
 bun run build:site            # landing page/tutorial
 bun run check                 # complete PR candidate
 ```
@@ -64,17 +78,26 @@ those paths are unaffected, including shards with one file worker.
 PR CI and Release run the remaining repository checks with one file worker and up
 to two concurrent cases, preserving the upstream test configuration. Both call the
 [shared World browser workflow](../.github/workflows/world-browser.yml), which runs
-eight separate runners, each with one file worker and one active case.
-The [shard inventory](../scripts/world-browser-suites.ts) includes all World browser
-suites; inventory checks reject missing or duplicate assignments. The required
-Delivery checks status succeeds only when repository validation and every World
-shard pass. Markdown-only and exact-head reuse keep their existing shorter paths.
-Release packaging requires repository validation and all eight shards to pass.
+eight separate runners, each with one file worker and one active case, and a
+ninth, **World latency budgets**. That job runs only the suites that assert
+wall-clock budgets (production contexts, concurrent contexts, terminal handoff):
+it waits until the runner is quiet after setup (`scripts/wait-for-quiet.ts`:
+three consecutive seconds at least 90% idle, at most 60 s) and then runs them one
+case at a time. A failed case runs once more (`--retry=1`): a hosted runner still
+produces the odd slow event, and the worst-event budgets are judged on one run.
+The eight shards never retry. The [shard inventory](../scripts/world-browser-suites.ts)
+includes all World browser suites, split between the eight shards and the
+`latency` group; inventory checks reject missing or duplicate assignments. The
+required Delivery checks status succeeds only when repository validation, every
+World shard and the latency job pass. Markdown-only and exact-head reuse keep their existing shorter paths.
+Release packaging requires repository validation, all eight shards and the
+latency job to pass.
 Prepare Release validates its generated working tree in one checkout with one file
 worker; it retains the complete World suite, with one active World case at a time.
 
 Each World run writes JUnit results and per-file timings under `.agents/delivery/`.
-CI uploads them as `world-browser-N-attempt-M` artifacts, including on test failure. Compare
+CI uploads them as `world-browser-N-attempt-M` and `world-latency-attempt-M`
+artifacts, including on test failure. Compare
 the slowest shard and total delivery time before changing the shard assignment or
 concurrency. The first eight-shard grouping is provisional, rather than a claim of
 a measured two-to-three-minute delivery time. Keep all scenario combinations, dense
@@ -118,7 +141,7 @@ to the next required action; a view attribute alone does not prove it is ready.
 
 For browser startup or rendering timeouts, dispatch CI with
 `browser_diagnostics=true` and an immutable `diagnostics_baseline` commit. The
-optional lifecycle jobs compare HostsFilter creation, Spatial Graph and Spaces
+optional lifecycle jobs compare HostsFilter creation, Board and Spaces
 arrangement on the baseline and dispatched revision, alternating which runs
 first on each runner. Both checkouts install their own pinned dependencies, and
 both revisions run even if the first fails. Each browser records Chrome stderr,
@@ -160,10 +183,10 @@ resource and mutation work through the qualified focused-runtime path.
 See [architecture](ARCHITECTURE.md), [deployment](DEPLOYMENT.md) and the
 [knowledge map](knowledge-map.md).
 
-The optional Office Economy provider is service-owned. For local testing, set
-`HERDR_WORLD_OTEL_PROMETHEUS_URL` on `dev:server` or use the Office metrics dialog;
+The optional cost metrics provider is service-owned. For local testing, set
+`HERDR_WORLD_OTEL_PROMETHEUS_URL` on `dev:server` or use the cost metrics dialog;
 do not add browser-to-Prometheus requests. The provider intentionally accepts only a
-base URL and fixed queries. See [deployment](DEPLOYMENT.md#optional-office-metrics).
+base URL and fixed queries. See [deployment](DEPLOYMENT.md#optional-cost-metrics).
 
 ## Harness task summaries
 

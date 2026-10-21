@@ -1,3 +1,5 @@
+// First: the page runs on test time (see testing/testClock.ts).
+import { clock } from "./testing/installHostsFilterClock";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { bridge, type ConnectionClient } from "../api";
@@ -64,7 +66,7 @@ const downloadRequests: string[] = [];
 const operation =
   new URLSearchParams(location.search).get("operation") ?? "filters";
 const requestedView =
-  new URLSearchParams(location.search).get("view") ?? "tree";
+  new URLSearchParams(location.search).get("view") ?? "board";
 const coldHost =
   operation === "cold-host" ||
   operation === "navigator" ||
@@ -261,35 +263,22 @@ function snapshot() {
     })),
   };
 }
-function waitFor(condition: () => boolean, message: string, timeoutMs = 3000) {
-  if (condition()) return Promise.resolve();
-  return new Promise<void>((resolve, reject) => {
-    const observer = new MutationObserver(() => {
-      if (condition()) {
-        clearTimeout(timeout);
-        observer.disconnect();
-        resolve();
-      }
-    });
-    const timeout = setTimeout(() => {
-      observer.disconnect();
-      reject(
-        new Error(
-          `${message}; notice=${JSON.stringify(store.get().notice)}; error=${store.get().error}; recentDispatches=${JSON.stringify(dispatches.slice(-3))}; ${document.body.textContent?.slice(-500)}`,
-        ),
-      );
-    }, timeoutMs);
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true,
-      attributes: true,
-    });
-  });
+/** Advance test time until the condition holds, for at most `timeoutMs`. */
+async function waitFor(
+  condition: () => boolean,
+  message: string,
+  timeoutMs = 3000,
+) {
+  try {
+    await clock.until(condition, message, timeoutMs);
+  } catch {
+    throw new Error(
+      `${message}; notice=${JSON.stringify(store.get().notice)}; error=${store.get().error}; recentDispatches=${JSON.stringify(dispatches.slice(-3))}; ${document.body.textContent?.slice(-500)}`,
+    );
+  }
 }
-const frame = () =>
-  new Promise<void>((resolve) =>
-    requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
-  );
+/** Two frames of test time. */
+const frame = () => clock.frame();
 function anchors() {
   return new Set(
     [...document.querySelectorAll<HTMLElement>("[data-world-node-anchor]")].map(
@@ -298,7 +287,7 @@ function anchors() {
   );
 }
 function visibleHost(id: string) {
-  return requestedView === "tree"
+  return requestedView === "board"
     ? anchors().has(worldObjectId(id, "host", id))
     : [
         ...document.querySelectorAll<HTMLElement>(
@@ -375,7 +364,7 @@ async function invokeCommand(key: string) {
   await frame();
 }
 function leaf(id: string) {
-  if (requestedView !== "tree")
+  if (requestedView !== "board")
     return document.querySelector<HTMLElement>(
       `[data-world-navigator-host="${id}"] .agent-row[data-pane-id="shared"]`,
     );
@@ -390,7 +379,7 @@ function leaf(id: string) {
 async function float(id: string) {
   const target = leaf(id);
   if (!target) throw new Error(`Missing admitted ${id} target`);
-  if (requestedView === "tree")
+  if (requestedView === "board")
     target.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
   else {
     target.click();
@@ -458,17 +447,22 @@ async function operationalScenario(unmount: () => void) {
         });
       });
     else if (operation === "pending-inspector-delayed") observeWorkspace();
-    const result = await Promise.race([
-      pending,
-      new Promise<string>((resolve) =>
-        setTimeout(
-          () => resolve("pending"),
-          operation === "pending-inspector-timeout"
-            ? WORKSPACE_INSPECTOR_ADMISSION_TIMEOUT_MS + 2000
-            : 1000,
-        ),
-      ),
-    ]);
+    // Test time passes until the admission settles, or the limit does.
+    let settled: boolean | null = null;
+    void pending.then((value) => {
+      settled = value;
+    });
+    await clock
+      .until(
+        () => settled !== null,
+        "admission still pending",
+        operation === "pending-inspector-timeout"
+          ? WORKSPACE_INSPECTOR_ADMISSION_TIMEOUT_MS + 2000
+          : 1000,
+      )
+      .catch(() => {});
+    const result: boolean | "pending" =
+      (settled as boolean | null) ?? "pending";
     check(
       result === (operation === "pending-inspector-delayed"),
       "pending Inspector admission did not settle with its expected outcome",
@@ -674,17 +668,14 @@ async function operationalScenario(unmount: () => void) {
     const room = () =>
       [
         ...document.querySelectorAll<HTMLButtonElement>(
-          requestedView === "office"
+          requestedView === "town"
             ? '.world-semantic-target[data-kind="room"]'
-            : requestedView === "graph"
-              ? "[data-graph-node-anchor]"
-              : "[data-world-node-anchor]",
+            : "[data-world-node-anchor]",
         ),
       ].find(
         (element) =>
-          (element.dataset.targetKey ??
-            element.dataset.graphNodeAnchor ??
-            element.dataset.worldNodeAnchor) === spaceId,
+          (element.dataset.targetKey ?? element.dataset.worldNodeAnchor) ===
+          spaceId,
       );
     const filesVisible = () =>
       [
@@ -1394,13 +1385,13 @@ async function operationalScenario(unmount: () => void) {
       }
 
       if (operation === "worktree-resource-cold") {
-        await new Promise((resolve) => setTimeout(resolve, 10_500));
+        await clock.advance(10_500);
         check(
           !closed &&
             !!document.querySelector(".lifecycle-operation.is-running"),
           "cold-host admission gave up before its observation budget",
         );
-        await new Promise((resolve) => setTimeout(resolve, 7500));
+        await clock.advance(7500);
         coldObservation.resolve(snapshot());
         await waitFor(
           () =>
@@ -1771,7 +1762,12 @@ async function operationalScenario(unmount: () => void) {
   }
   if (operation === "notifications") {
     writeHostsFilter(["alpha"]);
-    await frame();
+    // Board renders topology changes at low priority, a few frames later:
+    // the filter must be in effect before the notification can change it.
+    await waitFor(
+      () => !visibleHost("beta"),
+      "The Hosts filter did not hide the other host",
+    );
     window.dispatchEvent(
       new CustomEvent(TASK_NOTIFICATION_ACTIVATE_EVENT, {
         detail: {
@@ -1795,6 +1791,9 @@ async function operationalScenario(unmount: () => void) {
         ),
       "A qualified out-of-filter notification did not open its own labelled Inspector",
     );
+    // A filter change would also show only a few frames later: give a wrong
+    // one time to appear before checking that none did.
+    for (let i = 0; i < 10; i++) await frame();
     check(
       !visibleHost("beta"),
       "Notification silently changed the Hosts filter",
@@ -1809,9 +1808,9 @@ async function operationalScenario(unmount: () => void) {
         "Out-of-filter notification has no explicit reveal action",
       );
     reveal.click();
-    await frame();
-    check(
-      visibleHost("beta"),
+    // Board renders topology changes at low priority, a few frames later.
+    await waitFor(
+      () => visibleHost("beta"),
       "Explicit reveal did not expand the filter to the qualified host",
     );
     return;
@@ -2055,7 +2054,7 @@ async function run() {
   localStorage.clear();
   // The legacy operational preference must not become an overview filter.
   worldLocalStorage.setItem("worldSelectedConnection", "beta");
-  history.replaceState(null, "", "/tree");
+  history.replaceState(null, "", "/board");
   initializeLayoutPreferences();
   if (
     operation === "file-delete-retirement" ||
@@ -2508,7 +2507,7 @@ async function run() {
   flushSync(() => root.render(<WorldFoundationApp />));
   try {
     if (admissionScenario) {
-      await new Promise((resolve) => setTimeout(resolve, 150));
+      await clock.advance(150);
       check(
         worldLocalStorage.getItem("worldHostsFilter.v1") === '["beta"]',
         "unadmitted empty catalogue erased saved beta",
@@ -2540,9 +2539,8 @@ async function run() {
       return;
     }
     await waitFor(
-      () =>
-        !!document.querySelector('[aria-label="Connected World hierarchy"]'),
-      "Tree did not mount",
+      () => !!document.querySelector('[aria-label="Board controls"]'),
+      "Board did not mount",
     );
     await frame();
     if (operation === "filters") {
@@ -2578,14 +2576,14 @@ async function run() {
         app.removeAttribute("data-mobile-controls-compact");
       }
     }
-    if (requestedView !== "tree") {
+    if (requestedView !== "board") {
       const view = document.querySelector<HTMLSelectElement>(
         'select[aria-label="World view"]',
       )!;
       view.value = requestedView;
       view.dispatchEvent(new Event("change", { bubbles: true }));
       if (requestedView !== "spaces") {
-        const title = requestedView === "office" ? "Office" : "Graph";
+        const title = "Town";
         await waitFor(
           () => !!document.querySelector(`[aria-label="${title} controls"]`),
           `${title} did not mount`,
@@ -2798,7 +2796,7 @@ async function run() {
     });
     await worldRuntimeStore.refresh();
     const needle = worldObjectId("beta", "terminal", "shared-19");
-    for (const view of ["tree", "graph", "office"]) {
+    for (const view of ["board", "town"]) {
       const viewSelect = document.querySelector<HTMLSelectElement>(
         'select[aria-label="World view"]',
       )!;
@@ -2809,13 +2807,17 @@ async function run() {
         () => !!document.querySelector(`[aria-label="${title} controls"]`),
         `${title} controls did not mount`,
       );
-      await frame();
-      check(
-        document
-          .querySelector(".world-topbar-status")
-          ?.getAttribute("aria-label")
-          ?.includes("40 observed agents") ?? false,
+      // The status follows the mounted view's presented world; wait for it
+      // rather than sampling a single frame on a loaded runner.
+      await waitFor(
+        () =>
+          document
+            .querySelector(".world-topbar-status")
+            ?.getAttribute("aria-label")
+            ?.includes("40 observed agents") ?? false,
         `${title} counts do not share the beta filter`,
+      ).catch(() =>
+        check(false, `${title} counts do not share the beta filter`),
       );
       check(
         document.querySelectorAll(
@@ -2859,32 +2861,30 @@ async function run() {
           focusedBefore,
         `${title} did not select the qualified search result`,
       );
-      if (view !== "office")
+      if (view !== "town")
         await waitFor(
           () =>
             [
               ...document.querySelectorAll<HTMLElement>(
-                "[data-world-node-anchor], [data-graph-node-anchor]",
+                "[data-world-node-anchor]",
               ),
             ].some(
               (element) =>
-                (element.dataset.worldNodeAnchor ??
-                  element.dataset.graphNodeAnchor) === needle &&
+                element.dataset.worldNodeAnchor === needle &&
                 element.getAttribute("aria-pressed") === "true",
             ),
           `${title} did not reveal selected result`,
         );
       await frame();
-      if (view !== "office")
+      if (view !== "town")
         check(
           [
             ...document.querySelectorAll<HTMLElement>(
-              "[data-world-node-anchor], [data-graph-node-anchor]",
+              "[data-world-node-anchor]",
             ),
           ].some(
             (element) =>
-              (element.dataset.worldNodeAnchor ??
-                element.dataset.graphNodeAnchor) === needle &&
+              element.dataset.worldNodeAnchor === needle &&
               element.getAttribute("aria-pressed") === "true",
           ),
           `${title} selected omitted result was not revealed`,
@@ -2919,32 +2919,30 @@ async function run() {
           `${title} paging lost the later qualified match with colliding labels`,
         );
       laterResult.click();
-      if (view !== "office")
+      if (view !== "town")
         await waitFor(
           () =>
             [
               ...document.querySelectorAll<HTMLElement>(
-                "[data-world-node-anchor], [data-graph-node-anchor]",
+                "[data-world-node-anchor]",
               ),
             ].some(
               (element) =>
-                (element.dataset.worldNodeAnchor ??
-                  element.dataset.graphNodeAnchor) === later &&
+                element.dataset.worldNodeAnchor === later &&
                 element.getAttribute("aria-pressed") === "true",
             ),
           `${title} did not reveal paged result`,
         );
       await frame();
-      if (view !== "office")
+      if (view !== "town")
         check(
           [
             ...document.querySelectorAll<HTMLElement>(
-              "[data-world-node-anchor], [data-graph-node-anchor]",
+              "[data-world-node-anchor]",
             ),
           ].some(
             (element) =>
-              (element.dataset.worldNodeAnchor ??
-                element.dataset.graphNodeAnchor) === later &&
+              element.dataset.worldNodeAnchor === later &&
               element.getAttribute("aria-pressed") === "true",
           ),
           `${title} did not reveal the later paged match`,
@@ -2953,11 +2951,11 @@ async function run() {
     const viewSelect = document.querySelector<HTMLSelectElement>(
       'select[aria-label="World view"]',
     )!;
-    viewSelect.value = "tree";
+    viewSelect.value = "board";
     viewSelect.dispatchEvent(new Event("change", { bubbles: true }));
     await waitFor(
-      () => !!document.querySelector('[aria-label="Tree controls"]'),
-      "Tree did not return",
+      () => !!document.querySelector('[aria-label="Board controls"]'),
+      "Board did not return",
     );
     flushSync(() => root.unmount());
     const restoredState = store.get();

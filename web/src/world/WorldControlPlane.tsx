@@ -24,20 +24,8 @@ import { type WorldControlPlaneProps } from "./worldControlPlaneContract";
 import { useWorldInspectorController } from "./useWorldInspectorController";
 import { useWorldVisualActions } from "./useWorldVisualActions";
 
-const PixelOfficeView = lazyWithReload(
-  "world-pixel-office",
-  () => import("./PixelOfficeView"),
-);
-
-const ConnectedTreeView = lazyWithReload(
-  "world-connected-tree",
-  () => import("./ConnectedTreeView"),
-);
-
-const SpatialGraphView = lazyWithReload(
-  "world-spatial-graph",
-  () => import("./SpatialGraphView"),
-);
+const TownView = lazyWithReload("world-town", () => import("./TownView"));
+const BoardView = lazyWithReload("world-board", () => import("./BoardView"));
 
 const WorldIntentConnector = lazyWithReload(
   "world-intent-connector",
@@ -103,6 +91,7 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
     focusFloatingInspector,
     retireInspectors,
     showSelectionProfile,
+    applySelection,
   } = controller;
   const {
     workspaceCreationOpen,
@@ -173,16 +162,17 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
                       onPreview={deskReadingPane ? previewTerminalById : null}
                       onCloseReading={closeDeskReading}
                     />
-                  ) : view === "office" ? (
+                  ) : view === "town" ? (
                     <Suspense
                       fallback={
-                        <div className="world-view-loading">
-                          Loading Office…
-                        </div>
+                        <div className="world-view-loading">Loading Town…</div>
                       }
                     >
-                      <PixelOfficeView
+                      <TownView
                         world={presentedWorld}
+                        onOpenInspectorView={(id, view) =>
+                          void applySelection(id, view)
+                        }
                         toolbarPortal={viewToolbarPortal}
                         selectedId={selectedId}
                         onSelect={selectNode}
@@ -194,36 +184,23 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
                         onSelectedAnchorChange={setSelectedVisualAnchor}
                       />
                     </Suspense>
-                  ) : view === "tree" ? (
+                  ) : (
                     <Suspense
                       fallback={
-                        <div className="world-view-loading">Loading Tree…</div>
+                        <div className="world-view-loading">Loading Board…</div>
                       }
                     >
-                      <ConnectedTreeView
+                      <BoardView
                         world={presentedWorld}
                         toolbarPortal={viewToolbarPortal}
                         selectedId={selectedId}
                         conversationNodeIds={conversationNodeIds}
-                        inlineInspectorNodeId={null}
                         onSelect={selectNode}
                         onOpenTerminal={openTerminalById}
-                        onInlineInspectorPortalChange={() => {}}
                         onSelectedAnchorChange={setSelectedVisualAnchor}
                         onNodeAnchorsChange={setVisualConversationAnchors}
                       />
                     </Suspense>
-                  ) : (
-                    <SpatialGraphView
-                      world={presentedWorld}
-                      toolbarPortal={viewToolbarPortal}
-                      selectedId={selectedId}
-                      conversationNodeIds={conversationNodeIds}
-                      onSelect={selectNode}
-                      onOpenTerminal={openTerminalById}
-                      onSelectedAnchorChange={setSelectedVisualAnchor}
-                      onNodeAnchorsChange={setVisualConversationAnchors}
-                    />
                   )}
                 </WorldViewErrorBoundary>
               </Suspense>

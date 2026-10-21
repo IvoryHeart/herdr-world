@@ -49,7 +49,9 @@ published RC on the owner's existing installation before promoting a stable rele
 
 Add the `release-preview` label to a release preparation PR. Its CI run first
 checks the branch, then builds six downloadable `preview-<platform>` artifacts
-and a `preview-npm` artifact assembled from those same archives.
+and a `preview-npm` artifact assembled from those same archives. Each archive passes
+the same package verification as Release, on the same pinned runner image, so a
+packaging check that would fail after tagging fails on the release PR instead.
 For a pre-merge Homebrew installation on macOS, CI also bundles both Mac archives,
 checksums and a local Formula installer as `preview-homebrew`.
 Each native artifact contains a `.tar.xz` archive and `.sha256` file for that exact PR
@@ -60,7 +62,7 @@ With GitHub CLI, use `gh run download RUN_ID -n preview-linux-x64` (substitute
 the desired platform).
 These previews have no GitHub release, npm version, Homebrew Formula, or update
 channel. Run the binary on its target OS and architecture with a test Herdr
-server, then exercise local/SSH connection selection, Office, Tree, Graph,
+server, then exercise local/SSH connection selection, Town, Board, Desk,
 Spaces, terminal and file flows, and the PWA where reachable. Retest the final
 RC from its published tag after its reviewed PR merges.
 
@@ -143,9 +145,10 @@ are checked again during the RC release workflow.
    Release run for it.
 4. The Release workflow revalidates metadata and repository tests with one file
    worker and at most two concurrent cases. Its World browser tests use the same
-   [eight-shard workflow](../.github/workflows/world-browser.yml) as PR CI, with one
-   file worker and one case per runner. Every shard and repository validation must
-   pass before any platform package builds. Prepare Release validates its generated
+   [World browser workflow](../.github/workflows/world-browser.yml) as PR CI: eight
+   shards and the quiet latency-budget job, each with one file worker and one case
+   per runner. Every shard, the latency job and repository validation must pass
+   before any platform package builds. Prepare Release validates its generated
    working tree in one checkout with one file worker and retains the complete World
    suite; its World cases run one at a time.
    Release then builds all six platform archives,
@@ -187,14 +190,18 @@ access and PR permissions in GitHub settings. Workflow changes cannot grant toke
 permissions. A failed downstream publish can be rerun for the same
 tag: npm skips byte-identical versions and rejects changed content.
 
-Do not retag a release or build final artifacts from an unreviewed worktree. If a
-published RC artifact is wrong, prepare `X.Y.Z-rc.(N+1)` on a new reviewed release
-commit. Prepare the stable `X.Y.Z` only after testing the candidate across the
+Do not move a tag that has published anything, or build final artifacts from an
+unreviewed worktree. If a published RC artifact is wrong, prepare `X.Y.Z-rc.(N+1)` on
+a new reviewed release commit. Prepare the stable `X.Y.Z` only after testing the candidate across the
 supported platforms.
 
-Rerunning a failed tag workflow uses the code and workflow from that tag. A fix
-merged to `main` therefore needs a new reviewed release commit and tag before
-Release can use it; retrying the old tag does not pick up the new validation policy.
+Rerunning a failed tag workflow uses the code and workflow from that tag, so
+retrying it does not pick up a fix merged to `main`. When Release failed before
+publishing anything, reuse the version rather than skipping it: confirm no GitHub
+release exists for the tag and npm has neither the launcher nor any platform
+package at that version, delete the tag, merge the reviewed fix, then tag the same
+version on the new merge commit as in step 3. Once any asset or package has
+published, prepare a new version instead.
 
 Pages deployment runs from `main` and requires a working installer on the
 published stable Latest release. Candidates do not deploy the replacement site.

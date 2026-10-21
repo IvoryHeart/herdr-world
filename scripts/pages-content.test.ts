@@ -8,6 +8,7 @@ import {
   localPageReferences,
   renderTutorial,
   verifySiteReferences,
+  versionSiteAssets,
 } from "./pages-content";
 
 const temporaryDirectories: string[] = [];
@@ -97,7 +98,54 @@ describe("tutorial Markdown", () => {
   });
 });
 
+describe("Pages asset versions", () => {
+  test("a changed stylesheet gets a new URL across pages while unchanged scripts keep theirs", async () => {
+    const directory = await fixture({
+      "index.html":
+        '<link href="styles.css"><script src="main.js"></script><img src="image.png">',
+      "tutorial/index.html":
+        '<link href="../styles.css"><script src="../main.js"></script>',
+      "styles.css": ".release { display: block }",
+      "main.js": 'console.log("ready")',
+      "image.png": "image",
+    });
+    await versionSiteAssets(directory);
+    const first = await Bun.file(join(directory, "index.html")).text();
+    const css = first.match(/styles\.css\?v=([a-f0-9]{12})/)!;
+    const js = first.match(/main\.js\?v=([a-f0-9]{12})/)!;
+    expect(css).not.toBeNull();
+    expect(js).not.toBeNull();
+    expect(
+      await Bun.file(join(directory, "tutorial/index.html")).text(),
+    ).toContain(`../${css[0]}`);
+    await writeFile(
+      join(directory, "styles.css"),
+      ".release { display: flex }",
+    );
+    await versionSiteAssets(directory);
+    const second = await Bun.file(join(directory, "index.html")).text();
+    expect(second).not.toContain(css[0]);
+    expect(second).toContain(js[0]);
+    expect(second).toContain('src="image.png"');
+    await verifySiteReferences(directory);
+  });
+});
+
 describe("Pages references", () => {
+  test("the public landing page presents World without the upstream demo or preview caveats", async () => {
+    const site = await Bun.file(
+      new URL("../site/index.html", import.meta.url),
+    ).text();
+    const build = await Bun.file(
+      new URL("./build-pages.ts", import.meta.url),
+    ).text();
+    expect(site).not.toMatch(
+      /roamgate-handoff|upstream-demo-title|source preview|Town preview/i,
+    );
+    expect(build).not.toContain("roamgate-handoff");
+    expect(site).toContain("Know who needs you next.");
+    expect(site).not.toContain('id="tab-tree"');
+  });
   test("agent logos illustrate product examples, not a hero support list", async () => {
     const html = await Bun.file(
       new URL("../site/index.html", import.meta.url),
@@ -188,14 +236,12 @@ describe("Pages references", () => {
     );
     const screenshotPattern = /herdr-world-(?:desktop|mobile)-[a-z-]+\.png/g;
     const screenshots = [...new Set(readme.match(screenshotPattern))].sort();
-    expect(screenshots).toHaveLength(10);
+    expect(screenshots).toHaveLength(9);
     expect([...new Set(build.match(screenshotPattern))].sort()).toEqual(
       screenshots,
     );
     expect([...new Set(site.match(screenshotPattern))].sort()).toEqual(
-      screenshots.filter(
-        (screenshot) => screenshot !== "herdr-world-desktop-spaces.png",
-      ),
+      screenshots,
     );
     for (const source of [site, tutorial, build]) {
       expect(source).not.toMatch(/herdr-studio-(?:desktop|mobile)-/);

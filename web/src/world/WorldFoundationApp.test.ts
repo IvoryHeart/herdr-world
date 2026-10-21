@@ -18,7 +18,6 @@ import {
   selectedHostStatusLabel,
   shouldRecordVisualInspectorGeometry,
   retainWorldFloatingTerminals,
-  shouldCloseWorldInspector,
   upsertWorldFloatingTerminal,
   worldIntentInitialView,
   worldIntentViews,
@@ -35,6 +34,7 @@ import {
 } from "./WorldFoundationApp";
 import { resolveTerminalWindowArrangement } from "./terminalWindowArrangement";
 import { buildWorldObject } from "./worldObject";
+import { worldPathNeedsCanonical } from "./worldViewRouting";
 import {
   reconcileWorldInspectorConversation,
   retainWorldInspectorConversations,
@@ -229,24 +229,49 @@ describe("World view preference", () => {
     ).toEqual({ left: 680, top: 0, width: 320, height: 420 });
   });
 
-  test("admits only canonical native views", () => {
-    expect(parseWorldView("office")).toBe("office");
-    expect(parseWorldView("tree")).toBe("tree");
-    expect(parseWorldView("graph")).toBe("graph");
+  test("admits only canonical native views; retired views map to their successors", () => {
+    expect(parseWorldView("office")).toBe("town");
+    expect(parseWorldView("tree")).toBe("board");
+    expect(parseWorldView("graph")).toBe("board");
+    expect(parseWorldView("board")).toBe("board");
     expect(parseWorldView("spaces")).toBe("spaces");
     expect(parseWorldView("desk")).toBe("desk");
-    expect(parseWorldView("legacy-world")).toBe("office");
-    expect(parseWorldView(null)).toBe("office");
+    expect(parseWorldView("town")).toBe("town");
+    expect(parseWorldView("legacy-world")).toBe("town");
+    expect(parseWorldView(null)).toBe("town");
+  });
+
+  test("inherited object names are unknown views, not prototypes (review)", () => {
+    for (const name of [
+      "constructor",
+      "toString",
+      "__proto__",
+      "hasOwnProperty",
+    ]) {
+      expect(parseWorldView(name)).toBe("town");
+      expect(worldViewFromPath(`/${name}`)).toBe("town");
+      expect(worldPathNeedsCanonical(`/${name}`)).toBe(true);
+    }
+    expect(worldPathNeedsCanonical("/town")).toBe(false);
   });
 
   test("maps canonical paths without accepting arbitrary routes", () => {
-    expect(worldViewFromPath("/")).toBe("office");
+    expect(worldViewFromPath("/")).toBe("town");
+    expect(worldViewFromPath("/town")).toBe("town");
     expect(worldViewFromPath("/desk")).toBe("desk");
     expect(worldViewFromPath("/spaces")).toBe("spaces");
-    expect(worldViewFromPath("/office")).toBe("office");
-    expect(worldViewFromPath("/tree")).toBe("tree");
-    expect(worldViewFromPath("/graph")).toBe("graph");
-    expect(worldViewFromPath("/other")).toBe("office");
+    expect(worldViewFromPath("/board")).toBe("board");
+    expect(worldViewFromPath("/office")).toBe("town");
+    expect(worldViewFromPath("/tree")).toBe("board");
+    expect(worldViewFromPath("/graph")).toBe("board");
+    expect(worldViewFromPath("/other")).toBe("town");
+  });
+
+  test("the root, retired and unknown addresses are replaced by the canonical one", () => {
+    for (const path of ["/", "/office", "/graph", "/tree", "/other"])
+      expect(worldPathNeedsCanonical(path)).toBe(true);
+    for (const path of ["/town", "/board", "/desk", "/spaces"])
+      expect(worldPathNeedsCanonical(path)).toBe(false);
   });
 
   test("resolves each current top-tab owner independently of ambient focus with colliding IDs", () => {
@@ -544,42 +569,6 @@ describe("World view preference", () => {
     expect(
       selectedHostStatusLabel({ label: "Local", hostState: "active" }),
     ).toBe("Local · Active");
-  });
-
-  test("retains current Inspectors when selection moves to another host", () => {
-    const active = buildWorldObject(
-      [
-        {
-          connectionId: "host-a",
-          label: "Host A",
-          source: "saved-profile",
-          isDefault: true,
-          state: "ready",
-          generation: 1,
-          snapshotGeneration: 1,
-          stale: false,
-          actionable: true,
-          snapshot: { workspaces: [], tabs: [], panes: [], agents: [] },
-        },
-        {
-          connectionId: "host-b",
-          label: "Host B",
-          source: "saved-profile",
-          isDefault: false,
-          state: "ready",
-          generation: 2,
-          snapshotGeneration: 2,
-          stale: false,
-          actionable: true,
-          snapshot: { workspaces: [], tabs: [], panes: [], agents: [] },
-        },
-      ],
-      "host-a",
-    );
-
-    expect(shouldCloseWorldInspector(active.hosts[0])).toBe(false);
-    expect(shouldCloseWorldInspector(active.hosts[1])).toBe(false);
-    expect(shouldCloseWorldInspector(null)).toBe(false);
   });
 
   test("keeps a selected entity on its observed generation after reconnect", () => {

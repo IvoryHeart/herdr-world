@@ -1,7 +1,30 @@
-import type {
-  OfficeCanvasAnchor,
-  OfficeCanvasAnchors,
-} from "./PixelOfficeCanvas";
+/** Where a spatial view shows a node, for the line from its Inspector window. */
+export type WorldCanvasAnchor = {
+  x: number;
+  y: number;
+  visible: boolean;
+  edge: "top" | "right" | "bottom" | "left" | null;
+};
+
+export type WorldCanvasAnchors = {
+  agent: WorldCanvasAnchor | null;
+  workbench: WorldCanvasAnchor | null;
+};
+
+export type WorldConversationAnchorTarget = {
+  id: string;
+  selectedKey: string | null;
+  targetKey: string;
+};
+
+export type WorldConversationAnchors = Record<string, WorldCanvasAnchors>;
+
+/** A hovered node and where the pointer is, for a callout. */
+export type WorldCanvasHover = {
+  key: string;
+  clientX: number;
+  clientY: number;
+};
 
 export type WorldConnectorTargetBounds = {
   left: number;
@@ -11,8 +34,8 @@ export type WorldConnectorTargetBounds = {
 };
 
 export function preferredOfficeConnectorAnchor(
-  anchors: OfficeCanvasAnchors,
-): OfficeCanvasAnchor | null {
+  anchors: WorldCanvasAnchors,
+): WorldCanvasAnchor | null {
   return anchors.agent ?? anchors.workbench ?? null;
 }
 
@@ -24,7 +47,7 @@ export function worldConnectorTargetPoint(bounds: WorldConnectorTargetBounds) {
 }
 
 export function worldConnectorPath(
-  source: Pick<OfficeCanvasAnchor, "x" | "y">,
+  source: Pick<WorldCanvasAnchor, "x" | "y">,
   target: { x: number; y: number },
 ) {
   const deltaX = target.x - source.x;

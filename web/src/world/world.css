@@ -4,7 +4,5 @@
 @import "./world-stage.css";
 @import "./world-inspector.css";
 @import "./world-terminal.css";
-@import "./world-office.css";
-@import "./world-tree.css";
-@import "./world-graph.css";
+@import "./world-views.css";
 @import "./world-responsive.css";

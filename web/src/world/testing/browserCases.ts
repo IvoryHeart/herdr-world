@@ -7,10 +7,12 @@ export const hostFilterCases = [
       "pending-inspector-delayed",
     ].map((operation) => ({ width, operation, view: "spaces" })),
     { width, operation: "spaces-navigator", view: "spaces" },
-    { width, operation: "bare-navigator", view: "office" },
+    { width, operation: "bare-navigator", view: "town" },
   ]),
   ...[1440, 390].flatMap((width) =>
-    ["tree", "graph", "office"].map((view) => ({
+    // Town's room tap only zooms (it never opens an Inspector), so the
+    // workspace-to-Files check runs through Board.
+    ["board"].map((view) => ({
       width,
       operation: "room",
       view,
@@ -52,7 +54,7 @@ export const hostFilterCases = [
       "worktree-resource-validation-failure",
       "worktree-resource-cold",
       "worktree-resource-timeout",
-    ].map((operation) => ({ width, operation, view: "tree" })),
+    ].map((operation) => ({ width, operation, view: "board" })),
   ),
   ...[
     "open-all",
@@ -60,9 +62,9 @@ export const hostFilterCases = [
     "arrangement-focus",
     "arrangement-retirement",
     "close-all",
-  ].map((operation) => ({ width: 1440, operation, view: "tree" })),
+  ].map((operation) => ({ width: 1440, operation, view: "board" })),
   ...[1440, 390].flatMap((width) =>
-    ["graph", "office"].flatMap((view) =>
+    ["town"].flatMap((view) =>
       [
         "actions",
         "cold-host",
@@ -80,7 +82,7 @@ export const hostFilterCases = [
       ].map((operation) => ({ width, operation, view })),
     ),
   ),
-  ...["graph", "office", "tree"].flatMap((view) =>
+  ...["town", "board"].flatMap((view) =>
     ["open-all", "filtered-open-all", "compact-arrangement", "close-all"].map(
       (operation) => ({ width: 390, operation, view }),
     ),
@@ -152,9 +154,8 @@ export function hostFilterGroup({
 
 export const productionContextGroups = [
   "uncertain",
-  "tree",
-  "graph",
-  "office",
+  "board",
+  "town",
   "animated",
 ] as const;
 export type ProductionContextGroup = (typeof productionContextGroups)[number];
@@ -162,10 +163,9 @@ export const productionContextCases = [
   { view: "uncertain", entry: "typing" },
   { view: "uncertain", entry: "fallback" },
   { view: "uncertain", entry: "popup" },
-  { view: "tree", entry: "" },
-  { view: "graph", entry: "" },
-  { view: "office", entry: "" },
-  { view: "office", entry: "animated" },
+  { view: "board", entry: "" },
+  { view: "town", entry: "" },
+  { view: "town", entry: "animated" },
 ].flatMap((item) => [1440, 390].map((width) => ({ ...item, width })));
 export function productionContextGroup({
   view,

@@ -39,7 +39,7 @@ jobs:
             fail-fast: false
             max-parallel: 3
             matrix:
-                suite: [HostsFilter.creation, SpatialGraphView.browser, useSpacesTabWindowArrangement.browser]
+                suite: [HostsFilter.creation, BoardView, useSpacesTabWindowArrangement.browser]
                 order: [baseline-first, candidate-first]
         steps:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -317,7 +317,8 @@ jobs:
         name: Downloadable preview (${{ matrix.platform }})
         if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'release-preview')
         needs: delivery
-        runs-on: ubuntu-latest
+        # Keep in step with Release's package job so previews predict its checks.
+        runs-on: ubuntu-26.04
         timeout-minutes: 30
         strategy:
             fail-fast: false
@@ -343,6 +344,9 @@ jobs:
               shell: bash
               run: |
                   HERDR_WORLD_BUILD_VERSION="0.0.0-rc.$GITHUB_RUN_NUMBER" bun run package:${{ matrix.platform }}
+            - name: Verify branch preview archive
+              shell: bash
+              run: scripts/verify-release-package.sh "0.0.0-rc.$GITHUB_RUN_NUMBER" "${{ matrix.platform }}"
             - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
               with:
                   name: preview-${{ matrix.platform }}

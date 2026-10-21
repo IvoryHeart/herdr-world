@@ -6,16 +6,16 @@
     <meta name="theme-color" content="#080b12" />
     <meta
       name="description"
-      content="Visualize Herdr agent work in Office and Graph. Connect local and SSH hosts, browse their agents together, and open host-owned terminals, files, and history."
+      content="Visualize Herdr agent work in Town, Board, Desk and Spaces. Connect local and SSH hosts, browse their agents together, and open host-owned terminals, files, and history."
     />
     <meta property="og:type" content="website" />
     <meta
       property="og:title"
-      content="Herdr.World - View agent work in Office and Graph"
+      content="Herdr.World - View agent work in Town, Board, Desk and Spaces"
     />
     <meta
       property="og:description"
-      content="Visualize Herdr agent work in Office and Graph across local and SSH hosts."
+      content="Visualize Herdr agent work in Town, Board, Desk and Spaces across local and SSH hosts."
     />
     <meta
       property="og:url"
@@ -29,16 +29,16 @@
     <meta property="og:image:height" content="630" />
     <meta
       property="og:image:alt"
-      content="Herdr.World - View agent work in Office and Graph"
+      content="Herdr.World - View agent work in Town, Board, Desk and Spaces"
     />
     <meta name="twitter:card" content="summary_large_image" />
     <meta
       name="twitter:title"
-      content="Herdr.World - View agent work in Office and Graph"
+      content="Herdr.World - View agent work in Town, Board, Desk and Spaces"
     />
     <meta
       name="twitter:description"
-      content="Visualize agent work in Office and Graph across local and SSH Herdr hosts."
+      content="Visualize agent work in Town, Board, Desk and Spaces across local and SSH Herdr hosts."
     />
     <meta
       name="twitter:image"
@@ -49,7 +49,7 @@
     <link rel="icon" type="image/png" sizes="48x48" href="./assets/herdr-world-icon-48.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="./assets/herdr-world-icon-180.png" />
     <link rel="stylesheet" href="./styles.css" />
-    <title>Herdr.World - View agent work in Office and Graph</title>
+    <title>Herdr.World - View agent work in Town, Board, Desk and Spaces</title>
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
@@ -57,7 +57,7 @@
         "name": "Herdr.World",
         "applicationCategory": "DeveloperApplication",
         "operatingSystem": "macOS, Linux, Windows",
-        "description": "Visualize Herdr agent work in Office and Graph across local and SSH hosts.",
+        "description": "Visualize Herdr agent work in Town, Board, Desk and Spaces across local and SSH hosts.",
         "url": "https://herdr.world/",
         "downloadUrl": "https://github.com/IvoryHeart/herdr-world/releases/latest",
         "license": "https://opensource.org/license/mit"
@@ -148,7 +148,7 @@
               >Herdr</a
             >
             keeps the terminals alive. Herdr.World observes local and SSH hosts
-            together in Office, Tree and Graph. Hosts filters the overview while
+            together in Town, Board and Desk, with Spaces for focused terminal work. Hosts filters the overview while
             terminals, files, changes and history retain their owning host.
           </p>
           <div class="hero-actions">
@@ -160,6 +160,12 @@
             </a>
             <a class="button button-secondary" href="./tutorial/">
               Start the tutorial
+            </a>
+          </div>
+          <div class="hero-release">
+            <a class="hero-release-link" href="https://github.com/IvoryHeart/herdr-world/releases/latest">
+              <img src="https://img.shields.io/github/v/release/IvoryHeart/herdr-world?label=Latest%20stable&amp;color=7aa2f7&amp;labelColor=101521" alt="Latest stable Herdr World release" width="126" height="20" />
+              <span>Release notes &rarr;</span>
             </a>
           </div>
           <div class="platform-line">
@@ -186,7 +192,7 @@
               <span class="traffic traffic-red" aria-hidden="true"></span>
               <span class="traffic traffic-yellow" aria-hidden="true"></span>
               <span class="traffic traffic-green" aria-hidden="true"></span>
-              <div class="window-title" data-hero-label>Office</div>
+              <div class="window-title" data-hero-label>Town</div>
               <div class="hero-carousel-controls" role="group" aria-label="Product screenshots">
                 <button type="button" data-hero-previous aria-label="Previous screenshot">&#8592;</button>
                 <span data-hero-position>01 / 06</span>
@@ -194,24 +200,21 @@
               </div>
             </div>
             <a
-              href="./assets/herdr-world-desktop-office.png"
-              aria-label="Open the Herdr.World Office screenshot"
+              href="./assets/herdr-world-desktop-town.png"
+              aria-label="Open the Herdr.World Town screenshot"
               data-hero-link
             >
               <picture>
                 <source
                   data-hero-source
-                  type="image/avif"
-                  srcset="
-                    ./assets/herdr-world-hero-720.avif   720w,
-                    ./assets/herdr-world-hero-1200.avif 1200w
-                  "
+                  type="image/png"
+                  srcset="./assets/herdr-world-desktop-town.png 1440w"
                   sizes="(max-width: 620px) calc(100vw - 8px), (max-width: 1240px) calc(100vw - 48px), 1180px"
                 />
                 <img
                   data-hero-image
-                  src="./assets/herdr-world-desktop-office.png"
-                  alt="Herdr.World Office showing six agents across four workspaces on one host"
+                  src="./assets/herdr-world-desktop-town.png"
+                  alt="Herdr.World Town showing four demo workspace rooms and terminal desks"
                   width="1440"
                   height="900"
                   loading="lazy"
@@ -256,15 +259,38 @@
         </div>
       </section>
 
-      <section class="section shell" aria-labelledby="upstream-demo-title">
-        <h2 id="upstream-demo-title">Computer-to-phone handoff</h2>
-        <p>This Roamgate foundation demo shows a shared Herdr workspace across devices.
-          It shows upstream Roamgate UI; World’s multi-host views are pictured above.</p>
-        <video width="1920" height="1200" style="width: 100%; height: auto" controls loop muted playsinline
-          preload="none" poster="./assets/roamgate-handoff.webp" aria-label="Roamgate foundation computer-to-phone demo">
-          <source src="./assets/roamgate-handoff.mp4" type="video/mp4" />
-          <a href="./assets/roamgate-handoff.gif">Watch the animated demo</a>
-        </video>
+      <section class="section shell" aria-labelledby="town-guide-title">
+        <div class="section-heading">
+          <div>
+            <p class="kicker">Meet Town</p>
+            <h2 id="town-guide-title">Know who needs you next.</h2>
+          </div>
+          <p>Town brings your agents into one place. Working agents stay at their
+            desks; agents waiting for your input gather at reception.</p>
+        </div>
+        <div class="town-next">
+          <p>Select an agent to read its latest messages, answer a question or
+            send a reply. Open its terminal, files, changes or history when you
+            need the full context. Zoom from the whole town to a single desk.</p>
+          <a class="button button-secondary" href="./tutorial/#town">Explore Town &rarr;</a>
+        </div>
+      </section>
+
+      <section class="section shell" aria-labelledby="board-guide-title">
+        <div class="section-heading">
+          <div>
+            <p class="kicker">Meet Board</p>
+            <h2 id="board-guide-title">Put your notes beside the work.</h2>
+          </div>
+          <p>Hosts are zones, workspaces are cards and tabs sit around them.
+            Keep your own notes alongside the live layout.</p>
+        </div>
+        <div class="town-next">
+          <p>Drag cards, fold a workspace or tidy its layout. String a note to a
+            workspace, tab or exact agent pane; send it only when ready. Use Desk
+            for an attention queue and Spaces for focused terminal work.</p>
+          <a class="button button-secondary" href="./tutorial/#board">Explore Board &rarr;</a>
+        </div>
       </section>
 
       <section class="section shell install-section" id="install">
@@ -372,7 +398,7 @@
               <span class="feature-number">01</span>
               <h3>The whole herd, one glance.</h3>
               <p>
-                Browse workspaces, tabs, panes, and worktrees in one tree. Agent
+                Browse workspaces, tabs, panes, and worktrees in one place. Agent
                 status shows who is working, idle, done, or waiting for you.
               </p>
               <a
@@ -499,50 +525,50 @@
               <button
                 type="button"
                 role="tab"
-                id="tab-office"
+                id="tab-town"
                 aria-controls="showcase-panel"
                 aria-selected="true"
                 tabindex="0"
                 data-showcase-tab
-                data-image="./assets/herdr-world-desktop-office.png"
-                data-alt="Herdr.World Office showing spaces and agents"
-                data-label="Office"
-                data-title="See agent work across hosts at a glance."
-                data-copy="Scan local and SSH hosts together, filter the overview, and keep host-owned terminals open while you work."
+                data-image="./assets/herdr-world-desktop-town.png"
+                data-alt="Town showing four demo workspace rooms and terminal desks"
+                data-label="Town"
+                data-title="Explore the town, then open the exact pane."
+                data-copy="Find agents waiting at reception, read their latest messages and open the exact terminal, files or changes."
               >
-                <span>01</span> Office
+                <span>01</span> Town
               </button>
               <button
                 type="button"
                 role="tab"
-                id="tab-tree"
+                id="tab-board"
                 aria-controls="showcase-panel"
                 aria-selected="false"
                 tabindex="-1"
                 data-showcase-tab
-                data-image="./assets/herdr-world-desktop-tree.png"
-                data-alt="Herdr.World Tree showing qualified spaces and agents"
-                data-label="Tree"
-                data-title="Trace every agent back to its runtime."
-                data-copy="Search and collapse qualified spaces and agents across observed hosts, with each runtime and resource kept distinct."
+                data-image="./assets/herdr-world-desktop-board.png"
+                data-alt="Board with workspace cards, terminal tabs and planning notes"
+                data-label="Board"
+                data-title="Put your notes beside the work."
+                data-copy="Arrange workspace and tab cards, pin notes and string a note to its exact target. Send it to an agent only when you choose."
               >
-                <span>02</span> Tree
+                <span>02</span> Board
               </button>
               <button
                 type="button"
                 role="tab"
-                id="tab-graph"
+                id="tab-spaces"
                 aria-controls="showcase-panel"
                 aria-selected="false"
                 tabindex="-1"
                 data-showcase-tab
-                data-image="./assets/herdr-world-desktop-graph.png"
-                data-alt="Herdr.World Graph showing qualified spaces and agents"
-                data-label="Graph"
-                data-title="Follow runtime relationships visually."
-                data-copy="Move from a machine to a workspace to the exact agent or terminal, then hand off into its live Spaces context."
+                data-image="./assets/herdr-world-desktop-spaces.png"
+                data-alt="Spaces with a focused workspace and live terminal"
+                data-label="Spaces"
+                data-title="Focus on one workspace."
+                data-copy="Work in live terminal panes, browse files, review changes and read agent history on the workspace’s owning host."
               >
-                <span>03</span> Graph
+                <span>03</span> Spaces
               </button>
               <button
                 type="button"
@@ -553,7 +579,7 @@
                 tabindex="-1"
                 data-showcase-tab
                 data-image="./assets/herdr-world-desktop-files.png"
-                data-alt="Herdr.World Inspector browsing files for the selected agent"
+                data-alt="Board Inspector previewing the Lantern Notes demo guide"
                 data-label="Files"
                 data-title="Inspect the repository without leaving the agent."
                 data-copy="Browse the selected workspace and keep its terminal, changes, and agent identity in one movable Inspector."
@@ -569,10 +595,10 @@
                 tabindex="-1"
                 data-showcase-tab
                 data-image="./assets/herdr-world-desktop-changes.png"
-                data-alt="Herdr.World Inspector showing changed files and a code diff"
+                data-alt="Board Inspector showing the sample tag-filter working-tree diff"
                 data-label="Changes"
-                data-title="Review the agent's changes in context."
-                data-copy="See changed files and inspect a diff beside the selected agent's workspace."
+                data-title="Review changes in their workspace context."
+                data-copy="See changed files and inspect a diff beside the selected workspace. This capture shows a sample tag-filter diff in the demo project."
               >
                 <span>05</span> Changes
               </button>
@@ -585,10 +611,10 @@
                 tabindex="-1"
                 data-showcase-tab
                 data-image="./assets/herdr-world-desktop-history.png"
-                data-alt="Herdr.World Inspector showing agent session history"
+                data-alt="Board Inspector showing a recorded Pi review"
                 data-label="History"
                 data-title="Review what the agent actually did."
-                data-copy="Read the selected agent's session record beside its Office context, then return to the same live terminal."
+                data-copy="Read the selected agent's session record beside its workspace context, then return to the same live terminal."
               >
                 <span>06</span> History
               </button>
@@ -598,24 +624,24 @@
               class="showcase-panel"
               id="showcase-panel"
               role="tabpanel"
-              aria-labelledby="tab-office"
+              aria-labelledby="tab-town"
               tabindex="0"
               data-showcase-panel
             >
               <div class="showcase-window">
                 <div class="showcase-topline">
                   <span><i></i><i></i><i></i></span>
-                  <strong data-showcase-label>Office</strong>
+                  <strong data-showcase-label>Town</strong>
                   <em>Local / Connected</em>
                 </div>
                 <a
-                  href="./assets/herdr-world-desktop-office.png"
+                  href="./assets/herdr-world-desktop-town.png"
                   aria-label="Open the current Herdr.World product screenshot"
                   data-showcase-link
                 >
                   <img
-                    src="./assets/herdr-world-desktop-office.png"
-                    alt="Herdr.World Office showing spaces and agents"
+                    src="./assets/herdr-world-desktop-town.png"
+                    alt="Town showing demo workspace rooms and terminal desks"
                     width="1440"
                     height="900"
                     loading="lazy"
@@ -626,12 +652,11 @@
               </div>
               <div class="showcase-caption" aria-live="polite">
                 <h3 data-showcase-title>
-                  See agent work across hosts at a glance.
+                  Explore the town, then open the exact pane.
                 </h3>
                 <p data-showcase-copy>
-                  Keep local and SSH hosts observed in the background, then scan
-                  qualified spaces and recognized agents across hosts without
-                  losing the terminal workflow underneath.
+                  Find agents waiting at reception, read their latest messages
+                  and open the exact terminal, files or changes.
                 </p>
               </div>
             </div>
@@ -731,10 +756,10 @@
           >
             <figure class="phone phone-left">
               <div class="phone-speaker"></div>
-              <a href="./assets/herdr-world-mobile-office.png">
+              <a href="./assets/herdr-world-mobile-board.png">
                 <img
-                  src="./assets/herdr-world-mobile-office.png"
-                  alt="Herdr.World Office view on mobile"
+                  src="./assets/herdr-world-mobile-board.png"
+                  alt="Board close-up of a workspace, terminal tabs and a strung planning note"
                   width="390"
                   height="844"
                   loading="lazy"
@@ -744,10 +769,10 @@
             </figure>
             <figure class="phone phone-center">
               <div class="phone-speaker"></div>
-              <a href="./assets/herdr-world-mobile-tree.png">
+              <a href="./assets/herdr-world-mobile-town.png">
                 <img
-                  src="./assets/herdr-world-mobile-tree.png"
-                  alt="Herdr.World Tree view on mobile"
+                  src="./assets/herdr-world-mobile-town.png"
+                  alt="Herdr.World Town on mobile"
                   width="390"
                   height="844"
                   loading="lazy"

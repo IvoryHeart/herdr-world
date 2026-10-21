@@ -13,13 +13,24 @@ under the MIT License, Copyright (c) 2026 Arthur. The retained MIT terms are in
 [LICENSE](LICENSE).
 Roamgate is source lineage, not a separately installed World dependency.
 
+## herdr-drovr
+
+Town's desk move replays a tab's split layout in the order used by
+[`AVGVSTVS96/herdr-drovr`](https://github.com/AVGVSTVS96/herdr-drovr)
+(`server/src/world/desk-move.ts`): the first pane opens a new tab, then each
+split's second region is carved out of the pane filling it. herdr-drovr is
+licensed under the MIT License, Copyright (c) 2026 Bassim Shahidy. The licence is
+retained in [`LICENSES/HERDR-DROVR-MIT.txt`](LICENSES/HERDR-DROVR-MIT.txt).
+
 ## Claw-Empire character assets
 
-The character sprites under `web/public/world/characters` originate from
+The pixel character sprites embedded, downscaled, in the website film under
+`site/film` originate from
 [`GreenSheep01201/claw-empire`](https://github.com/GreenSheep01201/claw-empire)
 at commit `66a24ea7df2435ef897c48c147deb7ec572c01c2`, licensed under Apache-2.0,
 Copyright 2026 GreenSheep01201 (seowongil@gmail.com). The licence is retained in
-[`LICENSES/CLAW-EMPIRE-APACHE-2.0.txt`](LICENSES/CLAW-EMPIRE-APACHE-2.0.txt).
+[`LICENSES/CLAW-EMPIRE-APACHE-2.0.txt`](LICENSES/CLAW-EMPIRE-APACHE-2.0.txt). The
+application no longer ships them: they were drawn only by the retired Office view.
 
 ## Website film fonts
 

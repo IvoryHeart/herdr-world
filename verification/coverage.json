@@ -672,14 +672,14 @@
       "properties": "Relevant ancestry reserved; bounded unique output; ordinary hosts receive round-robin capacity",
       "existingTests": [
         "web/src/world/treeProjection.test.ts",
-        "web/src/world/graph/graphProjection.test.ts",
+        "web/src/world/board/boardModel.test.ts",
         "quint/replay.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/188",
       "technique": "space-admission",
       "assessment": "complete fixed-domain sweep exists; other layouts and relevance classification use projection regressions",
       "status": "shared-model",
-      "remaining": "Finite three-host allocation does not prove arbitrary tree/graph projections or all capacity domains; projection integration remains necessary.",
+      "remaining": "Finite three-host allocation does not prove arbitrary tree or Board projections or all capacity domains; projection integration remains necessary.",
       "requiredChecks": ["bun run check", "bun run verification:gate"],
       "partialEvidence": {
         "models": ["quint/space-admission.qnt"],
@@ -689,13 +689,13 @@
         ],
         "tests": [
           "web/src/world/treeProjection.test.ts",
-          "web/src/world/graph/graphProjection.test.ts",
+          "web/src/world/board/boardModel.test.ts",
           "quint/replay.test.ts"
         ],
         "checks": ["bun run check", "bun run verification:check"],
         "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
       },
-      "evidenceDecision": "Real allocation is compared with the independent exhaustive finite allocator across 5,103 configurations and six asymmetric host orders. Tree/graph tests retain ancestor reservations and projection capacity.",
+      "evidenceDecision": "Real allocation is compared with the independent exhaustive finite allocator across 5,103 configurations and six asymmetric host orders. Tree and Board projection tests retain ancestor reservations and projection capacity.",
       "promotion": {
         "decision": "accepted",
         "review": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",
@@ -1429,12 +1429,11 @@
     {
       "id": "Q39",
       "area": "Renderer and lazy-module lifetime",
-      "owner": "web/src/world/officeRenderer.ts",
+      "owner": "web/src/world/town/townRenderer.ts",
       "requirement": "openspec/specs/world-surfaces/spec.md",
       "properties": "Unmount disposes one renderer; late initialization cannot resurrect it; reload attempts stay bounded",
       "existingTests": [
-        "web/src/world/officeRendererResources.test.ts",
-        "web/src/world/PixelOfficeCanvas.test.ts",
+        "web/src/world/town/TownCanvas.test.ts",
         "web/src/lazyWithReload.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/186",
@@ -1443,13 +1442,12 @@
       "status": "alternative-evidence",
       "remaining": "GPU/browser/URL behavior requires the actual implementation; arbitrary device/driver failure schedules are excluded.",
       "requiredChecks": ["bun run check", "bun run verification:gate"],
-      "evidenceDecision": "Real rendering-resource and browser/lazy-module tests exercise graphics destruction, shared texture ownership and reload/lifetime behavior.",
+      "evidenceDecision": "The Town renderer browser test (StrictMode double mount leaves one renderer and canvas; unmount leaves none) and the lazy-module tests exercise graphics destruction and reload/lifetime behavior.",
       "partialEvidence": {
         "models": [],
         "contracts": ["verification/consumer-evidence.md"],
         "tests": [
-          "web/src/world/officeRendererResources.test.ts",
-          "web/src/world/PixelOfficeCanvas.test.ts",
+          "web/src/world/town/TownCanvas.test.ts",
           "web/src/lazyWithReload.test.ts"
         ],
         "checks": ["bun run check"],
@@ -1504,6 +1502,7 @@
       "properties": "Publication follows verified merged commit; artifact matrix complete; duplicate jobs cannot publish conflicting versions",
       "existingTests": [
         "scripts/release-validation.test.ts",
+        "scripts/check-binary-format.test.ts",
         "scripts/ci-workflow.test.ts",
         "scripts/prepare-release.test.ts",
         "scripts/daily-release.test.ts",
@@ -1589,23 +1588,41 @@
       "properties": "Deterministic geometry/counts; renderer lifetime; bounded metric/cache work",
       "existingTests": [
         "web/src/world/ProductionContexts.test.ts",
-        "web/src/world/officeLayout.test.ts",
-        "scripts/pages-content.test.ts"
+        "web/src/world/town/townLayout.test.ts",
+        "scripts/pages-content.test.ts",
+        "web/src/world/board/boardPlacement.test.ts",
+        "web/src/world/board/boardGesture.test.ts",
+        "web/src/world/interaction/gesture.test.ts",
+        "web/src/world/board/boardAnchors.test.ts",
+        "web/src/world/board/boardDrafts.test.ts",
+        "server/src/world/board-store.test.ts",
+        "server/src/world/board-send.test.ts",
+        "server/src/world/board-start.test.ts",
+        "web/src/world/BoardView.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/186",
       "technique": "alternative",
       "assessment": "actual rendering/search/counts/site and performance evidence; observation/authority modeled elsewhere",
       "status": "alternative-evidence",
-      "remaining": "Pixel/layout/performance/device outcomes require real rendering and supported browser/site checks; no model of every device or accessibility event schedule.",
+      "remaining": "Pixel/layout/performance/device outcomes require real rendering and supported browser/site checks; no model of every device or accessibility event schedule. Board: live Herdr restart and ID reuse are checked in throwaway sessions only; cross-tab storage interleaving relies on per-draft keys, not an executed schedule.",
       "requiredChecks": ["bun run check", "bun run verification:gate"],
-      "evidenceDecision": "Actual production-context/browser/layout and generated site-content tests exercise rendering, search projection and published content.",
+      "evidenceDecision": "Actual production-context/browser/layout and generated site-content tests exercise rendering, search projection and published content. Board (PR #215): placement, the gesture state machine, the board store, anchors and move-following are checked directly. Pure-function unit tests cover every anchor state, empty and partial witnesses, desk, pane and rolled-back move outcomes, conditional detach and kept-draft storage across tabs. Service tests cover Send revalidation against the saved board and start identity. Browser races at 1440 and 390 px cover late absence replies, two-client layout and draft conflicts. A model would restate these small pure rules, while real Herdr restart and ID reuse behaviour was verified only in throwaway sessions.",
       "partialEvidence": {
         "models": [],
         "contracts": ["verification/consumer-evidence.md"],
         "tests": [
           "web/src/world/ProductionContexts.test.ts",
-          "web/src/world/officeLayout.test.ts",
-          "scripts/pages-content.test.ts"
+          "web/src/world/town/townLayout.test.ts",
+          "scripts/pages-content.test.ts",
+          "web/src/world/board/boardPlacement.test.ts",
+          "web/src/world/board/boardGesture.test.ts",
+          "web/src/world/interaction/gesture.test.ts",
+          "web/src/world/board/boardAnchors.test.ts",
+          "web/src/world/board/boardDrafts.test.ts",
+          "server/src/world/board-store.test.ts",
+          "server/src/world/board-send.test.ts",
+          "server/src/world/board-start.test.ts",
+          "web/src/world/BoardView.test.ts"
         ],
         "checks": ["bun run check"],
         "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."

@@ -47,10 +47,14 @@ older World or Roamgate installation.
 
 ### Open your first workspace: about 5 minutes
 
-1. Start Herdr with a trusted project open. See [herdr.dev](https://herdr.dev)
-   for setup; Herdr World does not start it.
+1. If Herdr is already installed, start it with a trusted project open. See
+   [herdr.dev](https://herdr.dev) for setup. If it is not installed, complete the
+   **standalone World installation in step 2 first**, then run
+   `herdr-world herdr setup` to install and start Herdr before step 3.
 2. [Install Herdr World](./DEPLOYMENT.md#install-a-release). Standalone needs no Bun;
-   Windows uses the matching x64/ARM64 archive and `herdr-world.exe`. Alternatively,
+   Windows supports npm (`npm install --global @ivoryheart/herdr-world`,
+   Node.js 22.14.0 or newer) or the matching x64/ARM64 archive and
+   `herdr-world.exe`. Alternatively,
    follow the [plugin setup](./DEPLOYMENT.md#herdr-plugin).
 3. Start it on that computer:
 
@@ -65,7 +69,8 @@ older World or Roamgate installation.
    to `PATH`; skip the standalone command.
 
 4. Open the printed URL (including any token) on **the same computer**. Standalone
-   defaults to `http://127.0.0.1:8787`. Select a workspace and idle shell pane;
+   defaults to `http://127.0.0.1:8787` and opens **Town**. Use the view
+   switcher to open **Spaces**, select a workspace and idle shell pane, then
    run `pwd` (`Get-Location` in PowerShell).
 
 **You are done when:** terminal input shows your project directory. Get this
@@ -78,6 +83,197 @@ working before configuring remote access.
 ![Spaces showing synthetic workspaces, recognized agent states, and a live terminal](./images/herdr-world-desktop-spaces.png)
 
 *Find the project and active pane. Screenshot menu positions can differ by release.*
+
+### Choose a view for the task
+
+Use the view switcher to move between these views without restarting work:
+
+| View | Use it for |
+| --- | --- |
+| Town | Explore host buildings, workspace rooms and team tables; the default landing view |
+| Board | Pin notes beside hosts, workspaces and agents, string them together and send a note to an agent |
+| Desk | Find agents needing input, review finished turns and follow work in flight |
+| Spaces | Work in one workspace's terminal panes, files, changes and history |
+
+Office, Tree and Graph have been retired; `/office` opens Town, and `/graph` and
+`/tree` open Board. The exercises below use Town, Board, Desk and Spaces. Board
+and these redirects are included in [0.2.6](./releases/v0.2.6.md).
+
+**Hosts** starts at **All hosts**. Choose a host set to reduce the overview;
+use **Manage connections** to add or reconnect a local or SSH profile. Filtering
+changes what you see and does not disconnect hosts or retarget open terminals.
+
+### Explore Town: find work that needs you
+
+<a id="town"></a>
+
+1. Open **Town** from the view switcher, or return to the World root URL. Each
+   host is a building, each workspace a room, each tab a table and each pane a
+   seat. Plain terminal panes show a prompt rather than an agent character.
+2. Use **+** and **−** to move between town, building, room and desk detail;
+   **ALL** shows the whole town. Drag the background to pan, or use arrow keys
+   when the scene has focus. Tap a room to zoom in. Large towns may initially
+   show roofs; zoom in to see room summaries and desks. Phones stack buildings
+   vertically.
+3. Look at reception for blocked agents waiting for input, oldest first. Finished
+   agents also wait there until you open their terminal or mark that completion
+   reviewed, then join idle agents in the lounge. These locations visualize
+   status; they do not move the underlying pane or change its host.
+4. Hover or tap an agent to open its **peek**. The **NEEDS YOU** list provides
+   another route to waiting agents and becomes a bottom tray on phones; it hides
+   when no agent is blocked. The peek shows recent session messages, falling back
+   to terminal screen text when history is unavailable, and highlights a question
+   when one can be identified.
+5. Read the question before using an answer button: it sends the offered key to
+   that live pane. When no supported choices appear, use the reply line or
+   **Terminal**. Desktop replies send from the peek; on phones the reply line
+   opens World's **Composer** inside the peek, with keys, attachments, **Insert**
+   and **Send**. **Insert** prepares input; **Send** submits it.
+6. Use the paperclip to attach files to the reply. Uploads go to the selected
+   pane's host; review the message and attached paths before sending. Choose
+   **Inspector** for files, changes and history, or **Terminal** for direct work.
+   **Next** cycles waiting agents, then finished agents when no other agent is
+   waiting.
+7. To move a table to another room, zoom in until you see tables, then drag it
+   with the mouse, or hold it for a moment on a phone and then drag. Drop it on
+   another room of the same building; the plaque under your pointer says where
+   it will land, or why it cannot. To move one agent, drag it onto another
+   table instead. From the keyboard, focus a table or agent and press **M** to
+   choose a destination. The live panes move, so agents keep running. If a move
+   fails part-way, Town tries to move the panes back, and its notice says what
+   happened: back in the original room (the table's pane layout may differ),
+   only partly moved, or locations unknown. Unless the notice says the table is
+   back, check both rooms before you carry on. Moving a room's last table
+   closes that room, so Town asks first.
+
+A table with more panes than drawn seats shows the count and offers a chooser
+for every pane. When a table closes, the tables after it close up so the room
+keeps no gap. **New room** creates a workspace; room actions also create tabs
+and manage the room. Check the destination host before creation. Stale buildings
+remain visible but cannot accept operations. Use search and the Hosts filter to
+narrow the work you are following. The **Town calm motion** setting reduces
+ambient animation.
+
+**Mark reviewed** acknowledges that completion in this browser. Opening a finished
+agent's terminal also clears its reception stop; neither action proves the result
+is correct. A later completion can need review again. Read the explanation and
+check the diff using chapter 2 before treating the work as complete.
+
+**You are done when:** you can find an agent on the expected host, read its peek,
+and open its terminal or Inspector without losing its workspace context.
+
+![Town with four disposable workspace rooms and live terminal tables](./images/herdr-world-desktop-town.png)
+
+![Town at phone width](./images/herdr-world-mobile-town.png)
+
+### Use Board: notes and strings for your agents
+
+<a id="board"></a>
+
+Board shows the same hosts, workspaces and tabs as cards on a pin board, beside
+your own notes. Notes are saved by the World service, so the same board appears
+on your phone and desktop.
+
+1. Choose **Board** from the view switcher (on a phone it is in the bottom bar).
+   Each host is a dashed zone, each workspace a card, and each tab a card around
+   its workspace. A tab with several panes lists them as rows; a tab of plain
+   shells looks like a small terminal. A working agent's tab pulses (as does the
+   selected tab); idle, finished and waiting tabs stay still, and the **⋯** menu
+   turns the pulses off. Each workspace card counts its agents by status.
+   The round **+** on a workspace's right edge (shown on hover or selection)
+   opens **New tab**: choose a Terminal, Claude or Codex, optionally name the
+   tab, and press **Create**; **+** beside a host's name creates a workspace. Select a workspace or
+   tab to give it a colour of your own (a tab takes its workspace's colour
+   unless it has one); status keeps its own colours.
+2. Scroll or pinch to zoom, drag empty board to pan, or use the controls at the
+   bottom right. Zoomed out, each workspace shows a square per pane (hollow for
+   shells); tap a workspace there to zoom in on it.
+3. Drag a workspace and its tabs follow; cards settle within about a second.
+   On a phone, hold a card still before dragging; a quick swipe pans. Add a
+   second finger to switch from dragging to pinch zoom without committing a move.
+   Settling pauses while you type in an open terminal.
+   The chevron on a workspace's top-left corner folds its tabs behind a count, and tapping the count opens
+   them into free space. The sparkle button tidies the selected workspace, or
+   the whole board, and offers **Undo**; notes strung to cards move with them,
+   and notes left on a card move to free space.
+4. Tap a workspace, tab or pane row to open its Inspector with Terminal, Files,
+   Changes and Agent History; a line joins each Inspector window to its card. Double-click a tab to open its terminal.
+5. Double-click (or double-tap) empty board to pin a note and type; double-click
+   a note to edit it. Tap a note for its bar: colour, **Edit**, **String to…**, **Delete** (or press Delete).
+6. Drag a card's red dot onto a pane row, a tab or a workspace to string a note
+   to it; a tab with several panes asks which pane. Drop it on empty board for a
+   new note strung to where you started. Click a string, then **Delete**, to
+   remove it.
+7. A note strung to an agent's pane offers **Send to <agent>**. World remembers
+   which agent was in the pane when you made the string. Before sending, it checks
+   the current runtime, the pane and terminal, and that the same agent is still
+   there, then sends the note once. If another agent has taken over the pane,
+   even in the same terminal, nothing is sent: World names the new agent and
+   offers **Send to** it instead. Nothing is sent without your action.
+   **Start an agent…** opens the same dialog: choose the workspace
+   and the agent, optionally name the tab, and press **Start and send**; the
+   note is sent once the agent is ready. (Starting a chosen agent kind
+   currently opens a shell; see
+   [issue 219](https://github.com/IvoryHeart/herdr-world/issues/219).)
+8. Drag a tab onto another workspace of the same host to move it there (on a
+   phone, hold the tab still for a moment first; a quick swipe pans). Board
+   asks first, with **Don't ask again**, and always asks before moving a
+   workspace's last tab, which closes that workspace. Strings follow the move.
+
+After Herdr restarts, Board cannot prove that a workspace or agent is the one a
+string was made with, so it draws those strings dashed and asks once per host:
+**Keep** or **Detach**. A string whose target closed waits in **Needs a home**
+(the red count in the controls), where you can re-attach its note or discard
+the string; notes always stay. If Board misbehaves, describe the steps that led
+there in a bug report.
+
+**You are done when:** you can find your workspace card, pin a note and string it
+to the intended workspace or pane. Read the target before using **Send**.
+
+![Board with four workspace cards, terminal tabs and planning notes](./images/herdr-world-desktop-board.png)
+
+![Board close-up of a workspace, terminal tabs and a strung planning note](./images/herdr-world-mobile-board.png)
+
+The Town and Board screenshots use real shell panes in disposable projects.
+The phone Board close-up focuses one workspace, its tabs and a strung note.
+Their empty agent counts are intentional; the notes are sample planning text,
+not reports of completed agent work.
+
+### Use Desk: answer, review and follow work
+
+<a id="desk"></a>
+<!-- Keep old Graph exercise links working after the Graph view was retired. -->
+<a id="graph"></a>
+
+Use Town for a spatial view and Board for your arrangement of cards and notes.
+Desk offers the same agent work as a queue organized by attention rather than
+location. Use **Actions > New workspace** or **New tab** from a visual view;
+confirm the destination host. Creation needs a ready host and prepares the source
+terminal before opening the result in the current view.
+
+In **Desk**, start with **Needs you** for blocked agents, **To review** for
+finished turns and **In flight** for running work. Open a card to inspect the
+terminal, files, changes or history. Read the result and verify the diff before
+using **Mark reviewed**; the mark is saved in this browser and does not commit
+files or certify success. **Agents** lists all agents in your Hosts filter;
+**Reviewed** lets you reopen a marked turn.
+
+On wide screens, selecting a Desk card opens a reading pane on the right and
+folds the lanes into one queue. Use **J** / **K** to preview neighboring agents,
+**Enter** to enter the terminal and **Esc** to close the pane. Phones open the
+Inspector full screen. Search with **/** across names, workspaces, requests and
+reports. **Mark reviewed** acknowledges a turn only after you have inspected it;
+it does not verify the work for you.
+
+**You are done when:** you can find the same agent in Town, Board or Desk and
+open its terminal on the expected host.
+
+On desktop, **Arrange windows** can tile or cascade open Inspectors; use **Open
+windows** to restore minimized ones. On mobile, one Inspector fills the screen:
+use the on-screen **Back** to return straight to the visual view, including
+when Composer is open. The phone's own Back closes Composer first, then the
+terminal on the next press. Use the ellipsis controls for additional navigation.
+Closing an Inspector leaves the terminal session running.
 
 ### Learn this one hierarchy
 
@@ -231,7 +427,9 @@ Use its HTTPS URL: `127.0.0.1` on a phone means the phone, not the work computer
    that are awkward on a touch keyboard. Customize its two shortcut rows
    as needed.
 3. Open Changes to review the README diff. Mobile uses a unified diff layout;
-   long-press a file to open its actions menu.
+   long-press a file to open its actions menu. To open a link printed in a
+   terminal, long-press it and choose **Open link** (on a computer,
+   `Cmd`/`Ctrl`-click it).
 4. Adjust **Menu > Appearance > Text size** (80%-150%), then use the relevant
    platform entry below to install the PWA.
 
@@ -253,11 +451,12 @@ as reliable alerts.
 
 ### 3.3 Multiple browsers are not separate permission roles
 
-Browsers share Herdr events, not all fonts, drafts, pins, or shortcuts.
+Browsers share Herdr events and visual pane pins; fonts, review marks, drafts,
+workspace pins and shortcuts can remain browser-local.
 Connection controls can pause your browser or others.
 
-**Profiles are shared; each browser saves its own Hosts filter.** Office, Tree,
-Graph, their counts, and search initially show all hosts and follow that filter.
+**Profiles are shared; each browser saves its own Hosts filter.** Town, Board, Desk,
+their counts, and search initially show all hosts and follow that filter.
 Changing the filter preserves open Inspectors and the owners of pending operations.
 Manage connections controls lifecycle separately; global creation confirms one
 destination. Editing a profile affects others' connection lists. There is no

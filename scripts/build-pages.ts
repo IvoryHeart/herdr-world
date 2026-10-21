@@ -1,7 +1,11 @@
 import { cp, copyFile, mkdir, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { renderTutorial, verifySiteReferences } from "./pages-content";
+import {
+  renderTutorial,
+  verifySiteReferences,
+  versionSiteAssets,
+} from "./pages-content";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const sourceDirectory = join(root, "site");
@@ -9,18 +13,13 @@ const outputDirectory = join(root, ".pages-dist");
 const assetDirectory = join(outputDirectory, "assets");
 
 const assets = [
-  ["docs/images/roamgate-handoff.gif", "roamgate-handoff.gif"],
-  ["docs/images/roamgate-handoff.mp4", "roamgate-handoff.mp4"],
-  ["docs/images/roamgate-handoff.webp", "roamgate-handoff.webp"],
+  ["docs/images/herdr-world-desktop-town.png", "herdr-world-desktop-town.png"],
+  ["docs/images/herdr-world-mobile-town.png", "herdr-world-mobile-town.png"],
   [
-    "docs/images/herdr-world-desktop-office.png",
-    "herdr-world-desktop-office.png",
+    "docs/images/herdr-world-desktop-board.png",
+    "herdr-world-desktop-board.png",
   ],
-  ["docs/images/herdr-world-desktop-tree.png", "herdr-world-desktop-tree.png"],
-  [
-    "docs/images/herdr-world-desktop-graph.png",
-    "herdr-world-desktop-graph.png",
-  ],
+  ["docs/images/herdr-world-mobile-board.png", "herdr-world-mobile-board.png"],
   [
     "docs/images/herdr-world-desktop-spaces.png",
     "herdr-world-desktop-spaces.png",
@@ -37,11 +36,6 @@ const assets = [
     "docs/images/herdr-world-desktop-history.png",
     "herdr-world-desktop-history.png",
   ],
-  [
-    "docs/images/herdr-world-mobile-office.png",
-    "herdr-world-mobile-office.png",
-  ],
-  ["docs/images/herdr-world-mobile-tree.png", "herdr-world-mobile-tree.png"],
   [
     "docs/images/herdr-world-mobile-spaces.png",
     "herdr-world-mobile-spaces.png",
@@ -96,6 +90,7 @@ if (!build.success) {
 }
 
 await writeFile(join(outputDirectory, ".nojekyll"), "");
+await versionSiteAssets(outputDirectory);
 await verifySiteReferences(outputDirectory);
 
 const size = await Array.fromAsync(

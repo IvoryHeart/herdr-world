@@ -1180,19 +1180,45 @@ export function worldObjectWithWatches(
       JSON.stringify([connectionId, generation, terminalId]),
     ),
   );
-  const hosts = world.hosts.map((host) => ({
-    ...host,
-    spaces: host.spaces.map((space) => ({
-      ...space,
-      children: space.children.map((leaf) =>
-        keys.has(
-          JSON.stringify([leaf.connectionId, leaf.generation, leaf.terminalId]),
+  // Hosts and spaces without a watched leaf are reused as they are, so work
+  // prepared for them (Town rooms, Board hosts) still applies.
+  let changed = false;
+  const hosts = world.hosts.map((host) => {
+    let hostChanged = false;
+    const spaces = host.spaces.map((space) => {
+      if (
+        !space.children.some((leaf) =>
+          keys.has(
+            JSON.stringify([
+              leaf.connectionId,
+              leaf.generation,
+              leaf.terminalId,
+            ]),
+          ),
         )
-          ? { ...leaf, watched: true }
-          : leaf,
-      ),
-    })),
-  }));
+      )
+        return space;
+      hostChanged = true;
+      return {
+        ...space,
+        children: space.children.map((leaf) =>
+          keys.has(
+            JSON.stringify([
+              leaf.connectionId,
+              leaf.generation,
+              leaf.terminalId,
+            ]),
+          )
+            ? { ...leaf, watched: true }
+            : leaf,
+        ),
+      };
+    });
+    if (!hostChanged) return host;
+    changed = true;
+    return { ...host, spaces };
+  });
+  if (!changed) return world;
   const spaces = hosts.flatMap((host) => host.spaces);
   const leaves = spaces.flatMap((space) => space.children);
   const nodes: WorldObjectNode[] = hosts.flatMap((host) => [

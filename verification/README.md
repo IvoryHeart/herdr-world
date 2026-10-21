@@ -92,10 +92,13 @@ and complete model/replay/sensitivity execution 6m46s. These are observed wall
 times, not peak-memory or all-platform measurements.
 No supplemental exploration substitutes for real consumer/platform/browser checks.
 
-Local pre-push runs `bun run check:delivery`: all existing repository checks followed
-by `verification:gate` (locked setup, types/notices, unfiltered models and the
-required diagnostic control). CI calls the same maintained behavioral workflow as
-a protected Delivery checks dependency alongside repository and World browser jobs.
+CI calls the maintained behavioral workflow as a protected Delivery checks
+dependency alongside repository and World browser jobs; it is the authority.
+Local pre-push runs `bun run check:changed`, which runs the complete
+`verification:gate` (locked setup, types/notices, unfiltered models and the
+required diagnostic control) when a change touches `verification/`, `quint/`,
+`tools/quint/` or a `coverage.json` owner, and otherwise leaves verification to
+CI. `bun run check:delivery` runs every repository check and the gate locally.
 Model, adapter, contract, tooling and consumer changes cannot use the documentation
 shortcut. Ordinary docs still require behavioral CI; metadata-only exact-head reuse
 requires a prior successful full Delivery checks result that includes this dependency.

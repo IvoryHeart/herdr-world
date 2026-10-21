@@ -1,4 +1,8 @@
 import { runPluginCommand } from "./config/plugin-command";
+import { createMoveQueue, moveDesk, movePane } from "./world/desk-move";
+
+/** Town moves run one at a time per connection (see world/desk-move). */
+const townMoveQueues = new Map<string, ReturnType<typeof createMoveQueue>>();
 import { unixOnlyMessage } from "./connections/unix-only";
 import { inspectWorkspacePath } from "./workspace/path";
 import { createWorkspaceWorktree } from "./worktree/create";
@@ -74,6 +78,7 @@ import {
   createConnectionReplyPublisher,
   createLegacyRoutingLogger,
   isBridgeGlobalMethod,
+  resolveReadyConnection,
   serializeConnectionEnvelope,
   serializeHerdrEventEnvelope,
   validateConnectionGeneration,
@@ -118,6 +123,22 @@ import { rpcLogLevel } from "./utils/rpc-logging";
 import { DOWNLOAD_TIMEOUT_MS } from "./workspace/file-constants";
 import { WorldSnapshotService } from "./world/snapshot";
 import { WorldWatchlistRegistry } from "./world/watchlist";
+import {
+  clientBoardOps,
+  moveFollowOps,
+  reconcileOps,
+  BoardConflictError,
+  BoardStore,
+  type BoardOp,
+} from "./world/board-store";
+import {
+  readPaneRecipient,
+  recipientOps,
+  type ObservedAgent,
+} from "./world/board-recipient";
+import { linkedNoteText, sendNote } from "./world/board-send";
+import { checkAnchor } from "./world/board-anchor";
+import { startFromNote } from "./world/board-start";
 import {
   createOfficeObservabilityHttpHandler,
   resolveOfficeObservabilityBootstrap,
@@ -458,6 +479,50 @@ const connectionFailureReporters = new Map<string, RecoveryReporter>();
 const readyConnectionGenerations = new Map<string, number>();
 let worldSnapshots: WorldSnapshotService<LegacyConnectionRuntime> | null = null;
 const worldWatchlist = new WorldWatchlistRegistry();
+let boardStore: BoardStore | null = null;
+/** Opened on first use, so a World without Board never touches the file. */
+function board() {
+  boardStore ??= new BoardStore(undefined, {
+    log: (message) => console.warn(message),
+  });
+  return boardStore;
+}
+
+/**
+ * Record which agent each newly strung pane end is for: the agent the
+ * browser showed, confirmed by reading the pane on its host's current
+ * runtime (see recipientOps). Saving never waits for this; a string left
+ * unbound makes Send ask the user which agent to send to.
+ */
+async function bindBoardRecipients(
+  ops: readonly BoardOp[],
+  observed: ReadonlyMap<string, ObservedAgent>,
+) {
+  const recorded = await recipientOps(
+    board().get(),
+    ops,
+    observed,
+    async (connectionId, paneId) => {
+      const { runtime, isCurrent } = resolveReadyConnection(
+        connectionManager,
+        connectionId,
+      );
+      const read = await readPaneRecipient(
+        (rpc, rpcParams) => runtime.herdr.call(rpc, rpcParams, 10_000),
+        paneId,
+      );
+      return isCurrent() ? read : null;
+    },
+  );
+  if (recorded.length) publishBoardChanged(board().patch(recorded).revision);
+}
+
+function publishBoardChanged(revision: number) {
+  const line = JSON.stringify({
+    control: { type: "world_board_changed", revision },
+  });
+  for (const ws of clients) safeSend(ws, line, "world-board");
+}
 
 function publishWatchlistChanged(revision: number) {
   const line = JSON.stringify({
@@ -999,6 +1064,37 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
     }
     return;
   }
+  if (method === "world.board.get") {
+    try {
+      sendReply({ id, result: board().get() }, "world-board-get");
+    } catch (error) {
+      sendError("world-board-get-error", error);
+    }
+    return;
+  }
+  if (method === "world.board.patch") {
+    try {
+      const { ops, observed } = clientBoardOps(
+        (params as { ops?: unknown } | undefined)?.ops,
+      );
+      const result = board().patch(ops);
+      publishBoardChanged(result.revision);
+      sendReply({ id, result: { document: result } }, "world-board-patch");
+      void bindBoardRecipients(ops, observed).catch((error) =>
+        logger.warn("Board could not record a string's agent", {
+          detail: String(error),
+        }),
+      );
+    } catch (error) {
+      if (error instanceof BoardConflictError)
+        sendReply(
+          { id, result: { conflict: error.message, document: error.document } },
+          "world-board-patch",
+        );
+      else sendError("world-board-patch-error", error);
+    }
+    return;
+  }
   if (method === "world.watchlist.list") {
     sendReply({ id, result: worldWatchlist.list() }, "world-watchlist-list");
     return;
@@ -1254,6 +1350,176 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
           }
         },
       );
+      sendReply({ id, result }, method);
+    } catch (error) {
+      sendError(`${method}-error`, error);
+    }
+    return;
+  }
+
+  // Town desk and agent moves: several confirmed pane moves on this exact
+  // connection and runtime generation, with rollback (see world/desk-move).
+  if (method === "board.start_agent") {
+    try {
+      const p = (params ?? {}) as Record<string, unknown>;
+      const result = await startFromNote(
+        (rpc, rpcParams) => herdr.call(rpc, rpcParams, 70_000),
+        {
+          workspace_id: String(p.workspace_id ?? ""),
+          kind: String(p.kind ?? ""),
+          name: String(p.name ?? "").slice(0, 64) || "note",
+          text: String(p.text ?? ""),
+          isCurrent: requestIsCurrent,
+        },
+      );
+      sendReply({ id, result }, method);
+    } catch (error) {
+      sendError(`${method}-error`, error);
+    } finally {
+      // Starting an agent in a new tab need not raise a Herdr event after
+      // the tab appears, so the World views would keep showing a shell.
+      if (route.scope === "connection" && route.isCurrent())
+        publishWorldInvalidation(route.connectionId, route.generation);
+    }
+    return;
+  }
+  if (method === "board.check_anchor") {
+    try {
+      const p = (params ?? {}) as Record<string, unknown>;
+      const result = await checkAnchor(
+        (rpc, rpcParams) => herdr.call(rpc, rpcParams, 10_000),
+        {
+          kind: p.kind as "workspace" | "tab" | "pane",
+          native_id: String(p.native_id ?? ""),
+          isCurrent: requestIsCurrent,
+        },
+      );
+      sendReply({ id, result }, method);
+    } catch (error) {
+      sendError(`${method}-error`, error);
+    }
+    return;
+  }
+  if (method === "board.send_note") {
+    try {
+      const p = (params ?? {}) as Record<string, unknown>;
+      // Send what the saved board says, not the caller's copy: the string
+      // and note must still be the ones the user saw.
+      const linked =
+        route.scope === "connection"
+          ? linkedNoteText(board().get(), {
+              connection_id: route.connectionId,
+              pane_id: String(p.pane_id ?? ""),
+              terminal_id: String(p.terminal_id ?? ""),
+              note_id: String(p.note_id ?? ""),
+              string_id: String(p.string_id ?? ""),
+              note_rev: Number(p.note_rev),
+            })
+          : ({
+              status: "refused",
+              reason: "changed",
+              message: "No host was named; nothing was sent.",
+            } as const);
+      const result =
+        "text" in linked
+          ? await sendNote(
+              (rpc, rpcParams) => herdr.call(rpc, rpcParams, 15_000),
+              {
+                pane_id: String(p.pane_id ?? ""),
+                terminal_id: String(p.terminal_id ?? ""),
+                text: linked.text,
+                recipient: linked.recipient,
+                confirm_recipient:
+                  typeof p.confirm_recipient === "string"
+                    ? p.confirm_recipient
+                    : undefined,
+                isCurrent: requestIsCurrent,
+              },
+            )
+          : linked;
+      // A confirmed replacement (or a newer token for the same agent)
+      // becomes the string's recipient.
+      if ("text" in linked && result.status === "sent" && result.recipient)
+        try {
+          publishBoardChanged(
+            board().patch([
+              {
+                op: "anchor.recipient",
+                string_id: String(p.string_id ?? ""),
+                end: linked.end,
+                connection_id: route.connectionId,
+                pane_id: String(p.pane_id ?? ""),
+                terminal_id: String(p.terminal_id ?? ""),
+                recipient: result.recipient,
+              },
+            ]).revision,
+          );
+        } catch (error) {
+          logger.warn("Board could not record a string's agent", {
+            detail: String(error),
+          });
+        }
+      sendReply({ id, result }, method);
+    } catch (error) {
+      sendError(`${method}-error`, error);
+    }
+    return;
+  }
+  if (method === "town.move_desk" || method === "town.move_pane") {
+    const call = (rpc: string, rpcParams: Record<string, unknown>) =>
+      herdr.call(rpc, rpcParams, 15_000);
+    // One move at a time per connection: each re-reads the topology (and the
+    // last-desk check) only once the previous move has finished.
+    let queue = townMoveQueues.get(route.connectionId);
+    if (!queue) {
+      queue = createMoveQueue();
+      townMoveQueues.set(route.connectionId, queue);
+    }
+    try {
+      const p = params ?? {};
+      const result = await queue(() =>
+        method === "town.move_desk"
+          ? moveDesk(call, {
+              tab_id: String(p.tab_id ?? ""),
+              workspace_id: String(p.workspace_id ?? ""),
+              allow_close_room: p.allow_close_room === true,
+              isCurrent: requestIsCurrent,
+            })
+          : movePane(call, {
+              pane_id: String(p.pane_id ?? ""),
+              tab_id: String(p.tab_id ?? ""),
+              allow_close_room: p.allow_close_room === true,
+              isCurrent: requestIsCurrent,
+            }),
+      );
+      // Board's strings follow the move whichever view or client made it.
+      if (
+        (result.status === "moved" || result.status === "failed") &&
+        route.scope === "connection"
+      ) {
+        try {
+          // A failed move may have left (or put back) panes under new IDs:
+          // reconcile from what it positively observed.
+          const ops =
+            result.status === "moved"
+              ? moveFollowOps(
+                  board().get(),
+                  route.connectionId,
+                  method === "town.move_desk" ? String(p.tab_id ?? "") : null,
+                  result,
+                )
+              : reconcileOps(
+                  board().get(),
+                  route.connectionId,
+                  result.topology ?? [],
+                );
+          if (ops.length) publishBoardChanged(board().patch(ops).revision);
+        } catch (error) {
+          logger.warn("Board strings did not follow a move", {
+            detail: String(error),
+          });
+        }
+      }
       sendReply({ id, result }, method);
     } catch (error) {
       sendError(`${method}-error`, error);

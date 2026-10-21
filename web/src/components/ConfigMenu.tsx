@@ -8,9 +8,7 @@ import {
   Download,
   ExternalLink,
   Focus,
-  ALargeSmall,
   Activity,
-  LayoutDashboard,
   Keyboard,
   LogOut,
   Palette,
@@ -20,6 +18,8 @@ import {
   Server,
   Settings,
   Wifi,
+  Wind,
+  Bug,
 } from "lucide-react";
 import { APP_VERSION } from "../version";
 import { worldLocalStorage } from "../browserStorage";
@@ -43,6 +43,8 @@ import { ConfigurationLoadingDialog } from "./ConfigurationLoadingDialog";
 import { HerdrSetupCard } from "./HerdrSetupCard";
 import { MobileSheetHandle } from "./MobileSheetHandle";
 import "./ConfigMenu.css";
+import { DEVTOOLS } from "../world/devtools/flag";
+import { requestTrace, traceRemembered } from "../world/devtools/trace";
 
 const ConfigurationDialog = lazyWithReload("configuration", () =>
   import("./ConfigurationDialog").then((module) => ({
@@ -95,6 +97,10 @@ export function ConfigMenu({
       ? s.bridgeStatus?.clients
       : null;
   const [open, setOpen] = useState(false);
+  // Town's event trace (development builds only; see world/devtools).
+  const [townTrace, setTownTrace] = useState(() =>
+    DEVTOOLS ? traceRemembered("town") : false,
+  );
   const [expanded, setExpanded] = useState(false);
   const [configurationTab, setConfigurationTab] =
     useState<ConfigurationTab | null>(null);
@@ -295,42 +301,18 @@ export function ConfigMenu({
                 )}
               </div>
               <div className="config-section config-section-tiles-3">
-                <div className="config-title">Office</div>
-                <label className="config-preference-row">
-                  <span className="config-item-icon">
-                    <LayoutDashboard size={15} />
-                  </span>
-                  <span className="config-item-copy">
-                    <strong>Room alignment</strong>
-                    <span>Align rooms within each row</span>
-                  </span>
-                  <select
-                    className="config-preference-select"
-                    aria-label="Office room alignment"
-                    value={officePreferences.roomAlignment}
-                    onChange={(event) =>
-                      updateOfficePreferences({
-                        roomAlignment: event.target
-                          .value as OfficePreferences["roomAlignment"],
-                      })
-                    }
-                  >
-                    <option value="left">Left</option>
-                    <option value="center">Centre</option>
-                    <option value="right">Right</option>
-                  </select>
-                </label>
+                <div className="config-title">Views</div>
                 <label className="config-preference-row">
                   <span className="config-item-icon">
                     <Focus size={15} />
                   </span>
                   <span className="config-item-copy">
                     <strong>Inspector opening</strong>
-                    <span>Default for newly opened Office entities</span>
+                    <span>How a newly opened entity's Inspector appears</span>
                   </span>
                   <select
                     className="config-preference-select"
-                    aria-label="Office Inspector opening"
+                    aria-label="Inspector opening"
                     value={officePreferences.inspectorPresentation}
                     onChange={(event) =>
                       updateOfficePreferences({
@@ -343,35 +325,64 @@ export function ConfigMenu({
                     <option value="docked">Snap right</option>
                   </select>
                 </label>
-                <label className="config-preference-row">
+                <div className="config-preference-row">
                   <span className="config-item-icon">
-                    <ALargeSmall size={15} />
+                    <Wind size={15} />
                   </span>
-                  <span className="config-item-copy">
-                    <strong>Long room titles</strong>
-                    <span>Expand the room or shorten its label</span>
-                  </span>
-                  <select
-                    className="config-preference-select"
-                    aria-label="Office long room titles"
-                    value={officePreferences.longTitleMode}
-                    onChange={(event) =>
+                  <div className="config-item-copy">
+                    <strong>Town calm motion</strong>
+                    <span>Less ambient motion and shorter camera moves</span>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-label="Town calm motion"
+                    aria-checked={officePreferences.townCalm}
+                    className={
+                      "settings-switch" +
+                      (officePreferences.townCalm ? " is-on" : "")
+                    }
+                    onClick={() =>
                       updateOfficePreferences({
-                        longTitleMode: event.target
-                          .value as OfficePreferences["longTitleMode"],
+                        townCalm: !officePreferences.townCalm,
                       })
                     }
                   >
-                    <option value="expand">Expand room</option>
-                    <option value="compact">Ellipsis</option>
-                  </select>
-                </label>
+                    <span />
+                  </button>
+                </div>
+                {DEVTOOLS ? (
+                  <div className="config-preference-row">
+                    <span className="config-item-icon">
+                      <Bug size={15} />
+                    </span>
+                    <div className="config-item-copy">
+                      <strong>Town event trace</strong>
+                      <span>Development builds: record Town's input</span>
+                    </div>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-label="Town event trace"
+                      aria-checked={townTrace}
+                      className={
+                        "settings-switch" + (townTrace ? " is-on" : "")
+                      }
+                      onClick={() => {
+                        requestTrace("town", !townTrace);
+                        setTownTrace(!townTrace);
+                      }}
+                    >
+                      <span />
+                    </button>
+                  </div>
+                ) : null}
                 {onOpenOfficeMetrics ? (
                   <ConfigMenuItem
                     icon={<Activity size={15} />}
                     label="OTEL economy metrics"
                     className="config-menu-item-row"
-                    description="Connect Prometheus to the Office Economy board"
+                    description="Connect Prometheus to show cost on the Town board"
                     onClick={() => {
                       setOpen(false);
                       onOpenOfficeMetrics();

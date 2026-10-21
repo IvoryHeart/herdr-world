@@ -173,7 +173,7 @@ sessions, explicit sockets, and SSH targets must be started by their operator.
 ## Local and SSH connections
 
 Open Manage connections to add, test, connect, disconnect, edit, or remove
-profiles. Profiles are shared by authenticated browsers. Office, Tree, Graph,
+profiles. Profiles are shared by authenticated browsers. Town, Board, Desk,
 counts, and search aggregate the observed hosts; Hosts filters that overview.
 Each terminal and Inspector retains its own connection and runtime generation.
 Changing the filter or focusing another host leaves unrelated contexts open and
@@ -214,11 +214,12 @@ herdr-world --socket-path /path/to/herdr.sock \
 herdr-world --ssh-host workbox
 ```
 
-## Optional Office metrics
+## Optional cost metrics
 
-Office can populate its Economy board from a Prometheus-compatible HTTP API. Open
-**Office metrics** from the Office toolbar and save an HTTP or HTTPS base URL, or set
-the service startup default:
+The Town board can show token use and reported cost from a Prometheus-compatible
+HTTP API. It does not supply Board notes, strings or agent status. Open
+**OTEL economy metrics** from the settings menu and save an HTTP or HTTPS base URL,
+or set the service startup default:
 
 ```bash
 HERDR_WORLD_OTEL_PROMETHEUS_URL=http://127.0.0.1:9090 herdr-world
