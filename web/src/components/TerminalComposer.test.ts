@@ -124,6 +124,10 @@ test.each(["claude", "grok-build", "agy"])(
       spyOn(React, "useEffect").mockImplementation((run, deps) => {
         nextEffects.push({ run, deps });
       }),
+      // Stable across renders like React's, via the ref slots above.
+      spyOn(React, "useCallback").mockImplementation(
+        (callback) => React.useRef(callback).current,
+      ),
       spyOn(ReactDOM, "flushSync").mockImplementation((callback) => {
         const result = callback?.();
         render();
@@ -581,7 +585,8 @@ test.each(["claude", "grok-build", "agy"])(
       expect(draft).toBe("");
       changeMode("direct");
       rejectSubmission(new Error("Disconnected"));
-      await Promise.resolve();
+      // Let the rejected submission settle through the shared submit helper.
+      await new Promise((resolve) => setTimeout(resolve, 0));
       render();
       expect(draft).toBe("new upload or edit");
       expect(activeElement).toBe(directInput);
