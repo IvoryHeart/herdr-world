@@ -80,7 +80,8 @@
 }
 
 .connection-switcher-popover {
-  z-index: 5000;
+  /* Global menu portal: above app chrome, below dialog portals (5000). */
+  z-index: 140;
   width: min(380px, calc(100vw - 24px));
   max-height: calc(
     var(--radix-popover-content-available-height, calc(100dvh - 24px)) /

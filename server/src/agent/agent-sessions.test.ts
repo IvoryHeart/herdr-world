@@ -102,10 +102,13 @@ function remotePiFiles(text: string): AgentSessionFileAccess {
     async readDownloadBody() {
       return bytes;
     },
-    async findCodexSessions() {
-      return [];
+    async findCodexSessionByPrefix() {
+      return null;
     },
     async findPiSessionById() {
+      return null;
+    },
+    async findCodexSessionById() {
       return null;
     },
   };

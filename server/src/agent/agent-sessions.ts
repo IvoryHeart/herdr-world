@@ -1,6 +1,7 @@
 import { basename } from "node:path";
 import { randomUUID } from "node:crypto";
 import { enrichAgentActivity } from "./agent-activity";
+import { createCodexSessionLinker } from "./codex-session-link";
 import type { HerdrCall, SessionFile } from "./session-types";
 import {
   createAgentSessionResolverContext,
@@ -17,7 +18,11 @@ import {
   readSessionProjection,
   type SessionProjectionCache,
 } from "./session-projection-cache";
-import { HISTORY_WINDOW_LIMIT, redactHistoryUpdate } from "./session-history";
+import {
+  HISTORY_WINDOW_LIMIT,
+  historyTextHash,
+  redactHistoryUpdate,
+} from "./session-history";
 import { taskSummarySessionFingerprint } from "../herdr/task-summary";
 import { FULL_REPORT_CHARS, latestTurnReceipt } from "./turn-receipt";
 
@@ -29,7 +34,10 @@ export function createAgentSessionHandlers(args: {
 }) {
   const resolverContext = createAgentSessionResolverContext();
   const cache = createSessionProjectionCache(args.files);
+  const linker = createCodexSessionLinker(args.herdrCall, args.files);
   return {
+    previewLink: linker.preview,
+    link: linker.link,
     listWithActivity: async (params: Record<string, unknown>) =>
       enrichAgentActivity(
         await args.herdrCall("agent.list", params),
@@ -96,7 +104,11 @@ export function createAgentSessionHandlers(args: {
           "That history entry is no longer available; refresh the history and try again",
         );
       }
-      return { entry_id: entry.id, text: entry.text };
+      return {
+        entry_id: entry.id,
+        text: entry.text,
+        text_hash: historyTextHash(entry.text),
+      };
     },
     readTurn: async (params: Record<string, unknown>) => {
       // The caller names the agent session it is showing. The receipt is only

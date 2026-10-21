@@ -2,8 +2,10 @@ import {
   ChevronDown,
   ChevronLeft,
   Compass,
+  CornerDownRight,
   ExternalLink,
   History,
+  ListPlus,
   LoaderCircle,
   Maximize2,
   Minimize2,
@@ -20,7 +22,9 @@ import {
 import {
   type CSSProperties,
   Fragment,
+  useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -34,6 +38,7 @@ import {
   type AssistantMessage,
   type AssistantMentionTarget,
   type AssistantModelConnection,
+  type AssistantQueuedMessage,
   type AssistantSnapshot,
   type AssistantSource,
   type AssistantThinkingLevel,
@@ -44,6 +49,7 @@ import { bridge } from "../api";
 import type { RangerTaskNotificationTarget } from "../taskNotifications";
 import {
   assistantActionExecuting,
+  assistantQueueSupported,
   callAssistant,
   getAssistantMentions,
   parseAssistantContext,
@@ -69,11 +75,17 @@ import {
   thinkingLabels,
   thinkingOptions,
 } from "../assistantModels";
-import { AssistantConversationMap } from "./AssistantConversationMap";
 import { AssistantTasks, TaskProposalCard } from "./AssistantTasks";
 import { AssistantMentionComposer } from "./AssistantMentionComposer";
+import { AssistantThinking } from "./AssistantThinking";
+import { ConversationMinimap } from "./ConversationMinimap";
+import { AssistantQueue } from "./AssistantQueue";
 import { assistantMentionKey } from "../assistantMentions";
+import { detectShortcutPlatform } from "../shortcutBindings";
 import "./AssistantPanel.css";
+
+const altEnter =
+  detectShortcutPlatform() === "mac" ? "Option+Enter" : "Alt+Enter";
 
 function workspaceKey(workspace: AssistantWorkspaceRef) {
   return JSON.stringify([workspace.connection_id, workspace.workspace_id]);
@@ -175,6 +187,8 @@ const activityLabels = new Map([
   ["workspace_diff", "Workspace changes"],
   ["workspace_terminal", "Terminal output"],
   ["workspace_history", "Agent history"],
+  ["list_ranger_tasks", "Ranger tasks"],
+  ["send_user_notification", "Notification"],
 ]);
 
 export function AssistantMessageActivity({
@@ -973,6 +987,37 @@ export function AssistantPanel({
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const followingOutput = useRef(true);
+  const minimapEntries = useMemo(
+    () =>
+      (snapshot?.messages ?? []).map((message) => ({
+        id: message.id,
+        role: message.role,
+        label: message.role === "user" ? "You" : "Ranger",
+        text: message.text,
+      })),
+    [snapshot?.messages],
+  );
+  const pinMinimapLayout = useCallback(() => {
+    if (followingOutput.current && listRef.current)
+      listRef.current.scrollTop = listRef.current.scrollHeight;
+  }, []);
+  const jumpToMinimapEntry = useCallback((index: number) => {
+    const list = listRef.current;
+    const sequence = String(index + 1);
+    const section = Array.from(list?.children ?? []).find(
+      (child): child is HTMLElement =>
+        child instanceof HTMLElement && child.dataset.sequence === sequence,
+    );
+    if (!list || !section) return;
+    followingOutput.current = false;
+    // Jump only this scroll container, in CSS pixels even when the UI is
+    // zoomed. An immediate jump also avoids re-enabling stream following
+    // mid-animation.
+    const viewport = list.getBoundingClientRect();
+    const scale = list.offsetHeight ? viewport.height / list.offsetHeight : 1;
+    list.scrollTop +=
+      (section.getBoundingClientRect().top - viewport.top) / (scale || 1) - 12;
+  }, []);
   const composing = useRef(false);
   const pendingAction = useRef(false);
   const contextSequence = useRef(0);
@@ -1071,14 +1116,21 @@ export function AssistantPanel({
     snapshot?.auth?.status === "waiting" ||
     snapshot?.auth?.status === "working";
   const executing = assistantActionExecuting(snapshot);
-  const headerStatus = !connected
-    ? "Reconnecting"
+  const [headerStatus, headerTone] = !connected
+    ? ["Reconnecting", "warning"]
     : executing
-      ? "Executing action"
+      ? ["Executing action", "busy"]
       : snapshot?.running
-        ? "Working"
-        : "Idle";
+        ? ["Working", "busy"]
+        : ["Idle", "idle"];
+  const modelLabel =
+    snapshot?.models.find(
+      (model) =>
+        model.provider === snapshot.config.provider &&
+        model.id === snapshot.config.model,
+    )?.label ?? snapshot?.config.model;
   const operationBusy = busy || executing;
+  const queueSupported = assistantQueueSupported(snapshot);
   const completedActions = (snapshot?.messages ?? [])
     .flatMap((message) => message.actions ?? [])
     .filter((action) => !["pending", "executing"].includes(action.status))
@@ -1251,13 +1303,19 @@ export function AssistantPanel({
     }
   };
 
-  const submit = async () => {
+  /** While Ranger answers, Enter steers the turn and Alt+Enter queues. */
+  const submit = async (queueMessage = false) => {
+    const whenBusy = snapshot?.running
+      ? queueMessage
+        ? ("queue" as const)
+        : ("steer" as const)
+      : undefined;
     if (
       pendingAction.current ||
       !connected ||
       !ready ||
       authPending ||
-      snapshot?.running ||
+      (snapshot?.running && !queueSupported) ||
       executing ||
       !state.draft.trim() ||
       !scope.length ||
@@ -1295,8 +1353,13 @@ export function AssistantPanel({
         throw new Error(truncatedScopeMessage);
       const scope = authorizedScope(available.workspaces, current?.config);
       if (!scope.length) throw new Error(unavailableScopeMessage);
-      if (state.draftMentions?.length)
-        await sendAssistant(state.draft, scope, state.draftMentions);
+      if (state.draftMentions?.length || whenBusy)
+        await sendAssistant(
+          state.draft,
+          scope,
+          state.draftMentions ?? [],
+          whenBusy,
+        );
       else await sendAssistant(state.draft, scope);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
@@ -1304,6 +1367,21 @@ export function AssistantPanel({
       pendingAction.current = false;
       setBusy(false);
     }
+  };
+
+  const editQueued = async (item: AssistantQueuedMessage) => {
+    if (!(await run("queue.remove", { id: item.id }))) return;
+    const { draft, draftMentions } = readAssistantState();
+    const prefix = draft.trim() ? `${draft.trimEnd()}\n\n` : "";
+    setAssistantDraft(`${prefix}${item.text}`, [
+      ...(prefix ? (draftMentions ?? []) : []),
+      ...(item.mentions ?? []).map((mention) => ({
+        ...mention,
+        start: mention.start + prefix.length,
+        end: mention.end + prefix.length,
+      })),
+    ]);
+    inputRef.current?.focus({ preventScroll: true });
   };
 
   const openMention = async (target: AssistantMentionTarget) => {
@@ -1424,6 +1502,16 @@ export function AssistantPanel({
           !confirmApproval
         ) {
           event.preventDefault();
+          // Escape first dismisses a text selection in the panel.
+          const selection = document.getSelection();
+          if (
+            selection &&
+            !selection.isCollapsed &&
+            event.currentTarget.contains(selection.anchorNode)
+          ) {
+            selection.removeAllRanges();
+            return;
+          }
           if (showSettings && modelEditor) {
             if (!operationBusy) closeModelEditor();
           } else if (!showSettings && view === "chat" && historyOpen) {
@@ -1522,7 +1610,11 @@ export function AssistantPanel({
                 </button>
               ))}
             </nav>
-            <span role="status" title={headerStatus}>
+            <span
+              role="status"
+              title={headerStatus}
+              className={`assistant-panel-status is-${headerTone}`}
+            >
               {headerStatus}
             </span>
           </div>
@@ -2238,14 +2330,14 @@ export function AssistantPanel({
                 <span
                   title={`${snapshot.config.provider} / ${snapshot.config.model}`}
                 >
-                  {snapshot.config.model}
+                  {modelLabel}
                 </span>
               </div>
             ) : (
               <span
                 title={`${snapshot.config.provider} / ${snapshot.config.model}`}
               >
-                {snapshot.config.model}
+                {modelLabel}
               </span>
             )}
             {historySupported ? (
@@ -2323,10 +2415,11 @@ export function AssistantPanel({
                   </span>
                 </div>
               ) : (
-                snapshot.messages.map((message) => (
+                snapshot.messages.map((message, index) => (
                   <section
                     key={message.id}
                     data-message-id={message.id}
+                    data-sequence={index + 1}
                     className={`assistant-message is-${message.role}`}
                     aria-label={`${message.role === "user" ? "You" : "Ranger"} message`}
                   >
@@ -2338,6 +2431,18 @@ export function AssistantPanel({
                         {formatUiDateTime(message.sent_at)}
                       </time>
                     </div>
+                    {message.role === "assistant" &&
+                    message.thinking?.length ? (
+                      <AssistantThinking
+                        message={message}
+                        active={
+                          !message.text &&
+                          snapshot.running &&
+                          message ===
+                            snapshot.messages[snapshot.messages.length - 1]
+                        }
+                      />
+                    ) : null}
                     {message.role === "assistant" ? (
                       message.text ? (
                         <MarkdownPreview
@@ -2346,13 +2451,16 @@ export function AssistantPanel({
                           breaks
                           imageUrlResolver={() => null}
                         />
+                      ) : snapshot.running &&
+                        message ===
+                          snapshot.messages[snapshot.messages.length - 1] ? (
+                        // The open reasoning block already reports progress.
+                        message.thinking?.length ? null : (
+                          <span className="assistant-hint">Working...</span>
+                        )
                       ) : (
                         <span className="assistant-hint">
-                          {snapshot.running &&
-                          message ===
-                            snapshot.messages[snapshot.messages.length - 1]
-                            ? "Working..."
-                            : "No response text was received."}
+                          No response text was received.
                         </span>
                       )
                     ) : (
@@ -2404,18 +2512,16 @@ export function AssistantPanel({
               )}
             </div>
             {snapshot.messages.length ? (
-              <AssistantConversationMap
+              <ConversationMinimap
                 key={snapshot.session_id ?? snapshot.instance_id}
-                messages={snapshot.messages}
-                listRef={listRef}
-                mobile={mobile}
-                onLayout={() => {
-                  if (followingOutput.current && listRef.current)
-                    listRef.current.scrollTop = listRef.current.scrollHeight;
-                }}
-                onNavigate={() => {
-                  followingOutput.current = false;
-                }}
+                entries={minimapEntries}
+                scrollerRef={listRef}
+                itemsRef={listRef}
+                orientation={mobile ? "horizontal" : "auto"}
+                label="Ranger conversation navigation"
+                emptyText="No response text yet"
+                onLayout={pinMinimapLayout}
+                onSelect={jumpToMinimapEntry}
               />
             ) : null}
           </div>
@@ -2426,6 +2532,27 @@ export function AssistantPanel({
               void submit();
             }}
           >
+            <AssistantQueue
+              queue={snapshot.queue ?? []}
+              running={snapshot.running}
+              held={snapshot.queue_held === true}
+              reviewing={snapshot.messages.some(
+                (message) =>
+                  message.actions?.some(
+                    (action) => action.status === "pending",
+                  ) ||
+                  message.task_proposals?.some(
+                    (proposal) => proposal.status === "pending",
+                  ),
+              )}
+              disabled={operationBusy || !connected}
+              onEdit={(item) => void editQueued(item)}
+              onRemove={(item) => void run("queue.remove", { id: item.id })}
+              onResume={() => {
+                followingOutput.current = true;
+                void run("queue.resume");
+              }}
+            />
             <AssistantMentionComposer
               value={state.draft}
               mentions={state.draftMentions ?? []}
@@ -2442,7 +2569,7 @@ export function AssistantPanel({
               inputRef={inputRef}
               mobile={mobile}
               onChange={setAssistantDraft}
-              onSubmit={() => void submit()}
+              onSubmit={(options) => void submit(options?.queue)}
               onCompositionChange={(value) => {
                 composing.current = value;
               }}
@@ -2505,10 +2632,8 @@ export function AssistantPanel({
                         id="ranger-high-permission-description"
                       >
                         {highPermission && !allWorkspacesAllowed
-                          ? "High permission currently applies only to your selected workspaces. Enable all-workspace access below to include every current and future workspace."
-                          : "Automatically allow every current and future workspace and skip action and schedule confirmations."}{" "}
-                        New or edited tasks keep this mode; started operations
-                        may finish.
+                          ? "Applies only to your selected workspaces."
+                          : "Skip confirmations and allow every workspace."}
                       </p>
                     </div>
                     <button
@@ -2563,16 +2688,49 @@ export function AssistantPanel({
                   mobile ? (event) => event.preventDefault() : undefined
                 }
               >
+                {snapshot.running && queueSupported ? (
+                  <>
+                    <button
+                      type="button"
+                      aria-label="Queue"
+                      title={`Queue: send after Ranger finishes (${altEnter})`}
+                      disabled={
+                        operationBusy ||
+                        !connected ||
+                        !state.draft.trim() ||
+                        !scope.length
+                      }
+                      onClick={() => void submit(true)}
+                    >
+                      <ListPlus size={13} />
+                      Queue
+                    </button>
+                    <button
+                      type="submit"
+                      aria-label="Steer"
+                      title="Steer: join the current answer after its next step (Enter)"
+                      disabled={
+                        operationBusy ||
+                        !connected ||
+                        !state.draft.trim() ||
+                        !scope.length
+                      }
+                    >
+                      <CornerDownRight size={13} />
+                      Steer
+                    </button>
+                  </>
+                ) : null}
                 {snapshot.running ? (
                   <button
                     type="button"
                     aria-label="Stop"
-                    title="Stop the model response; confirmed actions continue"
+                    title="Stop the model response; confirmed actions continue and waiting messages are kept"
                     disabled={busy || !connected}
                     onClick={() => void run("stop")}
                   >
-                    <Square size={mobile ? 16 : 13} />
-                    {!mobile ? " Stop" : null}
+                    <Square size={13} />
+                    Stop
                   </button>
                 ) : (
                   <button
@@ -2588,8 +2746,8 @@ export function AssistantPanel({
                       !scope.length
                     }
                   >
-                    <Send size={mobile ? 16 : 13} />
-                    {!mobile ? " Send" : null}
+                    <Send size={13} />
+                    Send
                   </button>
                 )}
               </div>

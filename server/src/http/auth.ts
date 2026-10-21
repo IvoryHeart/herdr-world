@@ -48,6 +48,8 @@ export function createAuthHandlers(args: {
   sessionSecret: string;
   pin?: string;
   urlLoginToken?: string;
+  /** Host command that prints the generated token, shown on the login page. */
+  tokenCommand?: string;
   secureCookies?: boolean;
 }) {
   const authRequired = args.authRequired ?? true;
@@ -366,7 +368,7 @@ export function createAuthHandlers(args: {
         headers: { location: "/", "cache-control": "no-store" },
       });
     }
-    return new Response(renderLoginPage(Boolean(args.pin)), {
+    return new Response(renderLoginPage(Boolean(args.pin), args.tokenCommand), {
       headers: {
         "content-type": "text/html; charset=utf-8",
         "cache-control": "no-store",

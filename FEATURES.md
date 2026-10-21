@@ -123,9 +123,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   Window close dismisses presentation; native tab closure remains separate.
 - Mobile shows one active window and preserves desktop positions. The on-screen
   **Back** returns from a terminal to the visual view even with Composer open;
-  the phone's own Back closes Composer first, then the terminal. Its ellipsis,
-  Tabs controls remain floating; Tabs and Arrange sit together in the second row. Tabs also restores minimized
-  windows and retains native tab actions. The duplicate list icon and tab strip are hidden. The outer shell coordinates terminal sizing with the keyboard viewport.
+  the phone's own Back closes Composer first, then the terminal. Tabs and More stay in the shared top app bar; More exposes Arrange windows.
+  Tabs also restores minimized windows and retains native tab actions. The duplicate
+  list icon and mobile tab strip are hidden. The outer shell coordinates terminal sizing with the keyboard viewport.
 - A Spaces tab window shows that tab's Herdr split panes. An Inspector in a visual
   view also shows the selected tab's split panes in one window; selecting a sibling
   pane keeps the same Inspector and updates its pane-specific resources. When the
@@ -185,6 +185,9 @@ choice. Agent checkout has no Git mutation controls or Clear command.
 - Group linked Git worktrees under their repository. Pin workspaces/worktrees
   to the top and collapse groups; preferences stay in this browser.
 - Split panes right/down, resize boundaries, focus neighbors, zoom, or close.
+  Drag a pane handle onto another tab in the same workspace, onto a pane edge
+  in that tab, or onto **+** to break it into a new tab. Hover a tab to open its
+  panes before dropping. Overflowing desktop tab strips offer scroll controls.
 - Search workspace, worktree, file, tab, pane, and agent actions in the command
   menu (`Cmd+K` on macOS, `Ctrl+Alt+K` elsewhere). A workspace-relative or
   absolute path opens the file.
@@ -272,8 +275,13 @@ commit a search selection. Press K in the recent switcher to convert it to searc
 Open Files, Changes, or Agent History with the TabBar Inspector button,
 `Cmd+Shift+B` on macOS, or workspace/agent context menus. The header identifies repository,
 branch/worktree, and checkout path. Inspector and Annotations leave the primary
-sidebar's visibility unchanged.
+sidebar's visibility unchanged. Workspace rows show the latest PR/MR status while
+keeping workspace names visible; Inspector commit navigation preserves focus and
+refreshes Files after changes.
 
+- Activating a desktop terminal preserves a docked Inspector. After prefilling
+  review feedback, **Go to agent** closes it and reveals the destination terminal;
+  mobile or expanded Inspectors also close on terminal activation.
 - Dock right/bottom, resize, or expand without unmounting the terminal. Header
   controls restore/close; Esc dismisses transient UI, not the Inspector.
 - Tab switches keep it open. Workspace switches restore the target checkout's
@@ -300,6 +308,12 @@ See [resource ownership](docs/ARCHITECTURE.md#workspace-resource-ownership).
 - See Herdr-recognized identity and working/blocked/done/idle status in the tree,
   pane switcher, command menu, and Agent panel. Focus panes there or through
   browser completion notifications.
+- Switch Agent History between **Chat** and **Timeline**. Chat pairs tool calls
+  with results and shares Ranger's conversation minimap; Timeline keeps individual
+  records available. Use **Link Codex session** to preview a full conversation UUID
+  and confirm its association with the foreground Codex pane. This replaces the
+  existing link for all viewers. Codex lookup searches active and archived records
+  on the selected local/Unix SSH runtime; Windows SSH history remains unavailable.
 - Open Agent History with independent User/Agent/Tool filters (User/Agent enabled,
   Tool hidden initially), a message minimap, and on-demand tool details. The recent window
   counts 200 conversation entries, not associated tools; exports remain complete.
@@ -468,8 +482,11 @@ File operations and previews work locally and over SSH.
 
 - Browse a directory tree with staged, unstaged, untracked, conflicted, and
   branch-diff badges plus added/deleted counts.
-- Choose **Working tree**, **Against main**, or **Last step** (latest completed
+- Choose **Working tree**, **Against branch**, or **Last step** (latest completed
   agent-activity snapshot, including commits/untracked files; not proof of ownership).
+  Branch mode uses the repository's recorded default, then its configured default,
+  main or master. Select a local or remote-tracking branch already present on the
+  host; inspection never fetches. The choice is saved per repository and host.
 - Read files in repository order. Large, truncated, and `linguist-generated=true`
   diffs start collapsed and render on expansion.
 - Choose desktop side-by-side/unified views; mobile is unified. Wrapping saves
@@ -487,6 +504,12 @@ Git actions recheck status/content and reject stale menus instead of destroying
 newer work.
 
 ## Mobile and PWA
+
+The Message editor sits below each terminal in normal layout flow. Tap it to
+raise the keyboard and compose; Direct explicitly enables raw terminal input.
+Tabs and More stay in World's shared top app bar. If an upload finishes after its
+Direct destination retires, World keeps the path in the original Message draft
+and reports the failed insertion instead of sending it to another pane.
 
 - Responsive terminals, Inspector, and viewport/keyboard handling. **Menu →
   Appearance → Layout → Display mode** offers Automatic/Mobile/Desktop.
@@ -631,6 +654,12 @@ mouse-aware apps with Option-drag (macOS) or Shift-drag (elsewhere).
 - Ranger reads explicitly permitted workspaces across local and SSH connections,
   chats with a configured model, and proposes actions for manual confirmation.
   An explicit high-permission mode can execute supported operations automatically.
+- While Ranger answers, **Steer** or Enter adds a message after its current step;
+  **Queue** or Alt+Enter (Option+Enter on macOS) waits for the next answer. Up to
+  eight waiting messages can be edited or removed. Stop, failure or a chat switch
+  holds them until **Send next**. A replaced runtime requires a refreshed scope.
+- When the model provides reasoning, a collapsible **Thinking** section shows it
+  above its reply. Selecting Ranger text is preserved while terminals repaint.
 - Background tasks run once, at intervals or daily, with separate conversations
   and optional monitoring alerts. Saved schedules retain endpoint and workspace
   identity; interactive requests capture their runtime generation.

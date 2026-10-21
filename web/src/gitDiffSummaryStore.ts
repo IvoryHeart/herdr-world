@@ -35,6 +35,7 @@ export function gitDiffSummaryKey(
   workspaceId: string,
   mode: GitDiffSummaryMode,
   resourceKey = workspaceId,
+  baseBranch?: string,
 ) {
   return connectionClientScopeKey(
     client,
@@ -42,6 +43,7 @@ export function gitDiffSummaryKey(
     resourceKey,
     workspaceId,
     mode,
+    mode === "branch-main" ? (baseBranch ?? "automatic") : "automatic",
   );
 }
 
@@ -95,8 +97,15 @@ export function retireGitDiffSummary(
   workspaceId: string,
   mode: GitDiffSummaryMode,
   resourceKey = workspaceId,
+  baseBranch?: string,
 ) {
-  const key = gitDiffSummaryKey(client, workspaceId, mode, resourceKey);
+  const key = gitDiffSummaryKey(
+    client,
+    workspaceId,
+    mode,
+    resourceKey,
+    baseBranch,
+  );
   states.delete(key);
   requests.delete(key);
   trailingRequests.delete(key);
@@ -147,9 +156,10 @@ export function useGitDiffSummaryState(
   workspaceId: string | undefined,
   mode: GitDiffSummaryMode,
   resourceKey = workspaceId,
+  baseBranch?: string,
 ) {
   const key = workspaceId
-    ? gitDiffSummaryKey(client, workspaceId, mode, resourceKey)
+    ? gitDiffSummaryKey(client, workspaceId, mode, resourceKey, baseBranch)
     : null;
   return useSyncExternalStore(
     (listener) => subscribeGitDiffSummary(key, listener),
@@ -163,9 +173,16 @@ export function refreshGitDiffSummary(
   workspaceId: string,
   mode: GitDiffSummaryMode,
   resourceKey = workspaceId,
-  options: { afterCurrent?: boolean } = {},
+  options: { afterCurrent?: boolean; baseBranch?: string } = {},
 ): Promise<GitDiffSummary> {
-  const key = gitDiffSummaryKey(client, workspaceId, mode, resourceKey);
+  const baseBranch = mode === "branch-main" ? options.baseBranch : undefined;
+  const key = gitDiffSummaryKey(
+    client,
+    workspaceId,
+    mode,
+    resourceKey,
+    baseBranch,
+  );
   const running = requests.get(key);
   if (running && options.afterCurrent) {
     const queued = trailingRequests.get(key);
@@ -181,7 +198,9 @@ export function refreshGitDiffSummary(
             "connection changed before queued diff summary request",
           );
         }
-        return refreshGitDiffSummary(client, workspaceId, mode, resourceKey);
+        return refreshGitDiffSummary(client, workspaceId, mode, resourceKey, {
+          baseBranch,
+        });
       })
       .finally(() => {
         if (trailingRequests.get(key) === trailing) {
@@ -201,6 +220,7 @@ export function refreshGitDiffSummary(
     client.call("git.diff_summary", {
       workspace_id: workspaceId,
       mode,
+      ...(baseBranch ? { base_branch: baseBranch } : {}),
     }) as Promise<GitDiffSummary>
   )
     .then((summary) => {

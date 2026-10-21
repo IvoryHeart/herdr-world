@@ -86,7 +86,8 @@ async function uploadTerminalPayload(
   }
 
   const data: unknown = await res.json();
-  if (!client.isCurrent()) throw new Error("connection changed during upload");
+  // Return successful paths even if navigation retired the client while the
+  // response was in flight. The caller must guard delivery and retain failures.
   if (data === null || typeof data !== "object" || Array.isArray(data)) {
     throw new Error("upload response was not an object");
   }

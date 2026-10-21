@@ -156,6 +156,49 @@
   color: var(--accent);
 }
 
+/* A divider and dot keep the run state from reading as a third view tab. */
+.assistant-panel-head .assistant-panel-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding-left: 8px;
+  border-left: 1px solid var(--border-soft);
+  white-space: nowrap;
+}
+
+.assistant-panel-status::before {
+  content: "";
+  flex: 0 0 auto;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.6;
+}
+
+.assistant-panel-head .assistant-panel-status.is-busy {
+  color: var(--accent);
+}
+
+.assistant-panel-status.is-busy::before {
+  opacity: 1;
+  animation: assistant-status-pulse 1.4s ease-in-out infinite;
+}
+
+.assistant-panel-head .assistant-panel-status.is-warning {
+  color: var(--warning-text);
+}
+
+.assistant-panel-status.is-warning::before {
+  opacity: 1;
+}
+
+@keyframes assistant-status-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
 .assistant-panel-list {
   flex: 1 1 0;
   min-height: 0;
@@ -180,36 +223,48 @@
   gap: 18px;
 }
 
-.assistant-conversation:has(> .assistant-conversation-map)
-  > .assistant-panel-list {
+.assistant-conversation:has(> .conversation-minimap) > .assistant-panel-list {
   padding-right: 52px;
 }
 
 .assistant-panel.is-floating:not(.is-maximized):not(.is-mobile)
-  .assistant-conversation:has(> .assistant-conversation-map:not(.is-horizontal))
+  .assistant-conversation:has(> .conversation-minimap:not(.is-horizontal))
   > .assistant-panel-list {
   padding-right: 36px;
 }
 
 .assistant-panel.is-maximized
-  .assistant-conversation:has(> .assistant-conversation-map)
+  .assistant-conversation:has(> .conversation-minimap)
   > .assistant-panel-list {
   padding-inline: max(52px, calc((100% - 960px) / 2));
 }
 
+.assistant-panel.is-floating:not(.is-maximized):not(.is-mobile)
+  .conversation-minimap:not(.is-horizontal) {
+  width: 20px;
+  padding: 24px 2px;
+}
+
+.assistant-panel.is-floating:not(.is-maximized):not(.is-mobile)
+  .conversation-minimap:not(.is-horizontal)
+  .conversation-minimap-frame {
+  height: min(100%, calc(var(--entry-count) * 6px));
+  max-height: 240px;
+}
+
 .assistant-panel
-  .assistant-conversation:has(> .assistant-conversation-map.is-horizontal) {
+  .assistant-conversation:has(> .conversation-minimap.is-horizontal) {
   flex-direction: column;
   overflow: visible;
 }
 
 .assistant-panel
-  .assistant-conversation:has(> .assistant-conversation-map.is-horizontal)
+  .assistant-conversation:has(> .conversation-minimap.is-horizontal)
   > .assistant-panel-list {
   padding-inline: 12px;
 }
 
-.assistant-panel:has(.assistant-conversation-map.is-horizontal)
+.assistant-panel:has(.conversation-minimap.is-horizontal)
   > .assistant-panel-footer {
   /* Keep input above the map when a short viewport exhausts chat space. */
   position: relative;
@@ -1276,7 +1331,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .assistant-spinner {
+  .assistant-spinner,
+  .assistant-panel-status.is-busy::before {
     animation: none;
   }
 }
@@ -1336,10 +1392,16 @@
   padding-bottom: max(10px, env(safe-area-inset-bottom, 0px));
 }
 
-.assistant-panel.is-mobile .assistant-compose-actions > button {
-  width: 44px;
-  min-width: 44px;
-  padding: 0;
+/* The composer keeps the desktop panel's compact controls on phones. */
+.assistant-panel.is-mobile
+  .assistant-panel-footer
+  .assistant-compose-options
+  button,
+.assistant-panel.is-mobile
+  .assistant-panel-footer
+  .assistant-queue-head
+  button {
+  min-height: 30px;
 }
 
 .assistant-panel.is-mobile textarea,

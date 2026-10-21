@@ -9,9 +9,10 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, sep } from "node:path";
 import {
   assertValidAuthPassword,
+  authTokenPrintCommand,
   isShortAuthPassword,
   defaultAuthTokenPath,
   loadOrCreateAuthToken,
@@ -76,6 +77,143 @@ describe("generated authentication token", () => {
     expect(defaultAuthTokenPath(home, "win32", appData)).toBe(
       join(appData, "herdr-world", "auth-token"),
     );
+  });
+
+  test("prints the token without revealing the account name", () => {
+    const home = join("C:", "Users", "tester");
+    const appData = join(home, "AppData", "Roaming");
+    expect(
+      authTokenPrintCommand(
+        join(appData, "herdr-world", "auth-token"),
+        home,
+        "win32",
+        appData,
+      ),
+    ).toBe('Get-Content "$env:APPDATA\\herdr-world\\auth-token"');
+    expect(
+      authTokenPrintCommand(
+        join(home, ".config", "herdr-world", "auth-token"),
+        home,
+        "win32",
+        undefined,
+      ),
+    ).toBe('Get-Content "$HOME\\.config\\herdr-world\\auth-token"');
+    expect(
+      authTokenPrintCommand(
+        "/home/tester/.config/herdr-world/auth-token",
+        "/home/tester",
+        "linux",
+      ),
+    ).toBe("cat ~/.config/herdr-world/auth-token");
+    expect(
+      authTokenPrintCommand(
+        "/Users/tester/.config/herdr-world/auth-token",
+        "/Users/tester",
+        "darwin",
+      ),
+    ).toBe("cat ~/.config/herdr-world/auth-token");
+  });
+
+  test("prints the default token command with trailing HOME separators", () => {
+    const home = tempHome();
+    for (const suffix of [sep, sep.repeat(2)]) {
+      const homeWithSeparator = home + suffix;
+      const path = defaultAuthTokenPath(
+        homeWithSeparator,
+        process.platform,
+        join(home, "AppData", "Roaming"),
+      );
+      expect(
+        authTokenPrintCommand(path, homeWithSeparator, process.platform, ""),
+      ).toBe(
+        process.platform === "win32"
+          ? 'Get-Content "$HOME\\AppData\\Roaming\\herdr-world\\auth-token"'
+          : "cat ~/.config/herdr-world/auth-token",
+      );
+    }
+  });
+
+  test("handles filesystem-root HOME without losing the boundary", () => {
+    expect(
+      authTokenPrintCommand("/.config/herdr-world/auth-token", "/", "linux"),
+    ).toBe("cat ~/.config/herdr-world/auth-token");
+    expect(
+      authTokenPrintCommand("relative/auth-token", "/", "linux"),
+    ).toBeUndefined();
+  });
+
+  // These are command-string tests, not execution in a Windows shell.
+  test("prints Windows commands with trailing APPDATA or HOME separators", () => {
+    const home = "C:\\Users\\tester";
+    const appData = `${home}\\AppData\\Roaming`;
+    for (const suffix of ["\\", "\\\\", "/"]) {
+      expect(
+        authTokenPrintCommand(
+          `${appData}\\herdr-world\\auth-token`,
+          home,
+          "win32",
+          appData + suffix,
+        ),
+      ).toBe('Get-Content "$env:APPDATA\\herdr-world\\auth-token"');
+      expect(
+        authTokenPrintCommand(
+          `${home}\\.config\\herdr-world\\auth-token`,
+          home + suffix,
+          "win32",
+          "",
+        ),
+      ).toBe('Get-Content "$HOME\\.config\\herdr-world\\auth-token"');
+      expect(
+        authTokenPrintCommand(
+          `${appData}Extra\\auth-token`,
+          "C:\\OtherUser",
+          "win32",
+          appData + suffix,
+        ),
+      ).toBeUndefined();
+    }
+  });
+
+  test("keeps adjacent prefixes and unsafe shell paths omitted", () => {
+    expect(
+      authTokenPrintCommand(
+        "/home/tester-other/auth-token",
+        "/home/tester/",
+        "linux",
+      ),
+    ).toBeUndefined();
+    for (const name of ["token name", "token;echo", "token$HOME"]) {
+      expect(
+        authTokenPrintCommand(`/home/tester/${name}`, "/home/tester/", "linux"),
+      ).toBeUndefined();
+    }
+    for (const name of ['token"', "token`", "token$HOME"]) {
+      expect(
+        authTokenPrintCommand(
+          `C:\\Users\\tester\\${name}`,
+          "C:\\Users\\tester\\",
+          "win32",
+          "",
+        ),
+      ).toBeUndefined();
+    }
+  });
+
+  test("omits the token command outside the home directory", () => {
+    expect(
+      authTokenPrintCommand(
+        "/srv/herdr-world/auth-token",
+        "/home/tester",
+        "linux",
+      ),
+    ).toBeUndefined();
+    expect(
+      authTokenPrintCommand(
+        "/home/testerx/auth-token",
+        "/home/tester",
+        "linux",
+      ),
+    ).toBeUndefined();
   });
 
   test("creates a persistent random token with private permissions", () => {

@@ -147,7 +147,7 @@ export function createLegacyConnectionRuntime(args: {
     remotePlatform,
     "Agent history",
     createAgentSessionHandlers({
-      herdrCall: (method, params) => herdr.call(method, params),
+      herdrCall: (...args) => herdr.call(...args),
       files: agentSessionFiles,
     }),
   );
@@ -356,18 +356,23 @@ export function createLegacyConnectionRuntime(args: {
       });
     },
     completeWorkspaceStep: async (workspaceId) => {
-      const published = await lastStepBaselines.completeWorkspace(workspaceId);
-      if (!published || disposed) return;
-      args.onEvent(
-        {
-          event: "workspace.last_step_completed",
-          data: {
-            type: "workspace.last_step_completed",
-            workspace_id: workspaceId,
-          },
-        },
-        identity,
-      );
+      try {
+        await lastStepBaselines.completeWorkspace(workspaceId);
+      } finally {
+        // File refresh depends on step completion, not Git snapshot availability.
+        if (!disposed) {
+          args.onEvent(
+            {
+              event: "workspace.last_step_completed",
+              data: {
+                type: "workspace.last_step_completed",
+                workspace_id: workspaceId,
+              },
+            },
+            identity,
+          );
+        }
+      }
     },
     onCaptureError: (error, workspaceId) =>
       logger.warn("last-step baseline failed", {

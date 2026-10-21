@@ -13,7 +13,15 @@
 }
 
 .terminal-view:has(.xterm-helper-textarea:focus),
-.terminal-shell:has(.terminal-composer-input:focus) .terminal-view {
+.terminal-shell:has(.terminal-composer-input:focus) .terminal-view,
+.app:has(.mobile-bottom-bar .terminal-composer-input:focus)
+  :is(
+    .pane-layout-cell.is-active,
+    .pane-switcher-layout,
+    .workspace-terminal-surface
+  )
+  > .terminal-shell
+  .terminal-view {
   border-color: var(--accent);
   outline: 2px solid var(--accent-soft);
   outline-offset: -2px;
@@ -145,9 +153,7 @@
 
 /* Keep mobile styling in sync with the saved layout and URL override. */
 :where(html[data-layout="mobile"]) {
-  .keyboard-open .terminal-mobile-keys,
   .keyboard-open .terminal-mobile-side-shortcuts,
-  .app:has(.terminal-composer-input:focus) .terminal-mobile-keys,
   .app:has(.terminal-composer-input:focus) .terminal-mobile-side-shortcuts {
     visibility: hidden;
     opacity: 0;
@@ -393,9 +399,8 @@
     padding: 5px 0 calc(6px + env(safe-area-inset-bottom, 0px)) 6px;
   }
 
-  /* The composer already carries the bottom safe-area padding, so the
-     terminal above it drops the extra inset that otherwise reads as a gap. */
-  .terminal-shell:has(.terminal-composer) .terminal-view .xterm {
+  /* The global input bar owns the bottom safe area. */
+  .terminal-view .xterm {
     padding-bottom: 6px;
   }
 
@@ -446,6 +451,59 @@
 @media (any-pointer: coarse) {
   .terminal-mobile-input-actions {
     display: flex;
+  }
+}
+
+.terminal-mobile-input-bar {
+  display: flex;
+}
+
+/* Phones: a messaging-style input bar in flow below the output, so it never
+   covers terminal text. */
+:where(html[data-layout="mobile"]) {
+  .terminal-mobile-input-bar {
+    display: flex;
+    flex: 0 0 auto;
+    gap: 4px;
+    min-width: 0;
+    align-items: center;
+    padding-right: calc(2 * max(44px, calc(44px / var(--ui-scale, 1))) + 4px);
+    background: var(--terminal-bg);
+  }
+
+  /* Hidden for a touch selection, still holding its height. */
+  .terminal-mobile-input-bar[data-reserved] {
+    visibility: hidden;
+  }
+
+  .terminal-mobile-input-bar button {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    min-width: max(44px, calc(44px / var(--ui-scale, 1)));
+    min-height: max(44px, calc(44px / var(--ui-scale, 1)));
+    padding: 0;
+    color: var(--text-strong);
+    border: 0;
+    border-radius: 22px;
+    background: transparent;
+    touch-action: manipulation;
+  }
+
+  .terminal-mobile-input-bar .terminal-mobile-message {
+    flex: 1 1 auto;
+    min-width: max(48px, calc(48px / var(--ui-scale, 1)));
+    padding: 12px 8px;
+    border: 1px solid transparent;
+    border-radius: 24px;
+    background: color-mix(in srgb, var(--text-strong) 8%, var(--terminal-bg));
+    color: var(--muted);
+    font-size: 16px;
+  }
+
+  .terminal-mobile-input-bar button:disabled {
+    opacity: 0.5;
   }
 }
 
@@ -516,4 +574,11 @@
   pointer-events: none;
   stroke: var(--accent);
   stroke-width: 2px;
+}
+
+:where(html[data-layout="mobile"])
+  .terminal-shell
+  > .terminal-composer
+  .terminal-mobile-input-bar {
+  padding-right: 0;
 }

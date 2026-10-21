@@ -6,10 +6,11 @@ separately installed [`herdrdev/herdr`](https://github.com/herdrdev/herdr) runti
 
 Current synchronization points:
 
-- Roamgate source: v0.8.5, `5ce1d8d620549226de76321303e7bffa911ae371`
-  (16 October 2026). This integration records the exact head as a Git merge
-  parent, following `503a6f565e3432cee651a456bcc0d9800be52a37`.
-- Herdr compatibility: Herdr 0.9.4, terminal protocol 22. Windows SSH hosts
+- Roamgate source: main after v0.8.7, `1a81c5daa49fe49e55a5eafbe88e5d8ce94a4376`
+  (20 October 2026; five unreleased commits after v0.8.7). This integration records
+  the exact head as a Git merge
+  parent, following `5ce1d8d620549226de76321303e7bffa911ae371`.
+- Herdr compatibility: Herdr 0.9.5, terminal protocol 22. Windows SSH hosts
   additionally require a running Herdr 0.9.1+ session and Windows PowerShell.
 
 The integration adopts Ranger workspace chat, background and scheduled tasks,
@@ -41,6 +42,20 @@ when terminal cursors are hidden. The owner approved the 8-character password
 minimum; startup retains the recommendation for 15+ characters. The handoff demo
 is attributed as upstream UI, alongside World screenshots. Documentation and local
 checks retain World contracts, navigation, formatting and behavioral verification.
+
+The v0.8.6 refresh adds safe login-token discovery, symlinked user configuration
+roots, cross-tab pane dragging and breakout, scrollable overflowing tab strips,
+and repository-default or selected branch comparisons. Mobile Message input stays
+in flow below each qualified terminal, while World's shared top app bar keeps
+Tabs and More reachable across Town, Board and Spaces. Upload completion remains
+bound to the original draft or terminal; failed Direct insertion retains the path
+without replaying input. World retains its managed-window tab sheet and terminal
+screen Back layer; upstream's per-layer history guards and departure handling are
+adapted to those layers. React 18 requires synchronous tool-gesture state before
+native blur. Herdr setup now pins 0.9.5 with the official five-platform checksums;
+its protocol remains 22 and endpoint generation remains 1. Herdr's hotfixes belong
+to the external runtime, including its Codex integration migration; World does not
+install or restart a user's existing runtime during source integration.
 
 World retains its identity, local/SSH connection ownership, same-origin access,
 session-bound push revocation, aggregate visual views, isolated browser storage,
@@ -78,3 +93,22 @@ Use these terms consistently:
 Each World release records the exact Roamgate synchronization point. Required MIT
 attribution is retained in [LICENSE](LICENSE) and
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+The post-v0.8.6 main refresh adds Ranger Steer/Queue messages, bounded collapsible
+model reasoning, selection-preserving output focus and clearer Composer mode/shortcut
+controls. Waiting questions retain their selected World runtime generation; a
+replacement holds the queue instead of retargeting. Compatible typebox, xterm,
+Radix and lint updates are adopted. React remains 18 and the Roamgate-only CodeQL
+workflow remains excluded under World policy; both dispositions require owner review.
+
+The v0.8.7 and following main refresh adds History Chat/Timeline views with a
+shared Ranger/History conversation minimap, latest workspace PR/MR status,
+Inspector refresh and commit navigation, manual Codex session linking and
+remote Codex transcript lookup, composer command-picker styling and mobile toast
+banners. World retains React 18 callback freshness, qualified resource clients,
+its measured terminal focus guard and its screen/panel/navigation/popup Back
+ordering. Codex links require preview and confirmation against the captured
+runtime and foreground process; the external runtime does not offer an atomic
+process-and-link operation. World release versions and asset budgets remain
+independent of Roamgate's release bookkeeping. Herdr 0.9.5 remains the latest
+compatible setup target checked for this refresh.

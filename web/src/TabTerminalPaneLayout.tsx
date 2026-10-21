@@ -473,6 +473,7 @@ export function TabTerminalPaneLayout({
           >
             <TerminalView
               paneId={pane.pane_id}
+              visible={shown}
               terminalTheme={terminalTheme}
               terminalFontFamily={terminalFontFamily}
               terminalFontScale={terminalFontScale}

@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { localAgentSessionFiles } from "./session-file-access";
 import {
-  codexThreadFromTitle,
+  codexIdsFromTitle,
   createAgentSessionResolverContext,
   resolveAgentSession,
 } from "./session-resolver";
@@ -74,27 +74,34 @@ describe("Codex thread from the pane title", () => {
   const threadA = "019f0000-1111-7222-8333-444455556666";
   const threadB = "019f0000-1111-7222-8333-444455559999";
   const truncated = (id: string) => `${id.slice(0, 29)}...`;
+  let home = "";
 
   afterEach(() => {
     if (originalCodexHome === undefined) delete process.env.CODEX_HOME;
     else process.env.CODEX_HOME = originalCodexHome;
   });
 
-  async function codexHome(ids: string[]) {
-    const root = await mkdtemp(join(tmpdir(), "herdr-gui-codex-title-"));
-    tempDirectories.push(root);
-    process.env.CODEX_HOME = root;
-    const day = join(root, "sessions", "2026", "10", "21");
+  async function addRollout(id: string, directory = "sessions") {
+    const day = join(home, directory, "2026", "10", "21");
     await mkdir(day, { recursive: true });
-    for (const id of ids) {
-      await writeFile(
-        join(day, `rollout-2026-10-21T10-00-00-${id}.jsonl`),
-        "{}\n",
-      );
-    }
+    await writeFile(
+      join(day, `rollout-2026-10-21T10-00-00-${id}.jsonl`),
+      "{}\n",
+    );
   }
 
-  function resolveTitle(title: string, session?: Record<string, unknown>) {
+  async function codexHome(ids: string[]) {
+    home = await mkdtemp(join(tmpdir(), "herdr-gui-codex-title-"));
+    tempDirectories.push(home);
+    process.env.CODEX_HOME = home;
+    for (const id of ids) await addRollout(id);
+  }
+
+  function resolveTitle(
+    title: string,
+    session?: Record<string, unknown>,
+    context = createAgentSessionResolverContext(),
+  ) {
     return resolveAgentSession(
       { pane_id: "p1" },
       async () => ({
@@ -106,22 +113,34 @@ describe("Codex thread from the pane title", () => {
         },
       }),
       localAgentSessionFiles,
-      createAgentSessionResolverContext(),
+      context,
     );
   }
 
-  test("reads full and truncated thread IDs, and nothing else", () => {
-    expect(codexThreadFromTitle(`${threadA} | project`)).toBe(threadA);
-    expect(codexThreadFromTitle(`⠋ ${truncated(threadA)} | project`)).toBe(
-      threadA.slice(0, 29),
-    );
-    expect(codexThreadFromTitle(`${threadA.slice(0, 29)}… | project`)).toBe(
-      threadA.slice(0, 29),
-    );
-    expect(codexThreadFromTitle(threadA.toUpperCase())).toBe(threadA);
+  const herdrReport = (value: string) => ({
+    source: "herdr:codex",
+    agent: "codex",
+    kind: "id",
+    value,
+  });
+
+  test("finds full and truncated IDs anywhere in the title", () => {
+    expect(codexIdsFromTitle(`⠋ ${truncated(threadA)} | project`)).toEqual([
+      { prefix: threadA.slice(0, 29), truncated: true },
+    ]);
+    expect(codexIdsFromTitle(`${threadA.slice(0, 29)}\u2026`)).toEqual([
+      { prefix: threadA.slice(0, 29), truncated: true },
+    ]);
+    // An ID joined to other text, such as a project name, is not a token.
+    expect(
+      codexIdsFromTitle(`scratch-${threadB} | ${truncated(threadA)}`),
+    ).toEqual([{ prefix: threadA.slice(0, 29), truncated: true }]);
+    expect(codexIdsFromTitle(threadA.toUpperCase())).toEqual([
+      { prefix: threadA, truncated: false },
+    ]);
     // A partial ID without Codex's ellipsis is not a thread reference.
-    expect(codexThreadFromTitle(threadA.slice(0, 29))).toBe("");
-    expect(codexThreadFromTitle("Fix the login bug | project")).toBe("");
+    expect(codexIdsFromTitle(threadA.slice(0, 29))).toEqual([]);
+    expect(codexIdsFromTitle("Fix the login bug | project")).toEqual([]);
   });
 
   test("resolves a truncated title to its one transcript", async () => {
@@ -135,16 +154,50 @@ describe("Codex thread from the pane title", () => {
     expect(resolved.path).toContain(threadA);
   });
 
+  test("finds archived transcripts too", async () => {
+    await codexHome([]);
+    await addRollout(threadA, "archived_sessions");
+    const resolved = await resolveTitle(truncated(threadA));
+    expect(resolved.status).toBe("ok");
+    expect(resolved.path).toContain("archived_sessions");
+  });
+
   test("shows nothing when the title prefix is ambiguous", async () => {
     await codexHome([threadA, threadB]);
     const resolved = await resolveTitle(truncated(threadA));
     expect(resolved.status).toBe("missing_file");
+    expect(resolved.detail).toContain("More than one");
     expect(resolved.file).toBeNull();
   });
 
-  test("a new thread without a transcript yet has no messages", async () => {
-    await codexHome([]);
-    const resolved = await resolveTitle(truncated(threadA));
+  test("rechecks uniqueness after a cached match", async () => {
+    await codexHome([threadA]);
+    const context = createAgentSessionResolverContext();
+    expect(
+      (await resolveTitle(truncated(threadA), undefined, context)).status,
+    ).toBe("ok");
+    await addRollout(threadB);
+    const again = await resolveTitle(truncated(threadA), undefined, context);
+    expect(again.status).toBe("missing_file");
+    expect(again.file).toBeNull();
+  });
+
+  test("an ambiguous title never falls back to a matching Herdr report", async () => {
+    await codexHome([threadA, threadB]);
+    const resolved = await resolveTitle(
+      truncated(threadA),
+      herdrReport(threadB),
+    );
+    expect(resolved.status).toBe("missing_file");
+    expect(resolved.file).toBeNull();
+  });
+
+  test("a new thread without a transcript does not show the old one", async () => {
+    await codexHome(["019f1111-2222-7333-8444-555566667777"]);
+    const resolved = await resolveTitle(
+      truncated(threadA),
+      herdrReport("019f1111-2222-7333-8444-555566667777"),
+    );
     expect(resolved.status).toBe("missing_file");
     expect(resolved.detail).toBe(
       "This Codex conversation has no saved messages yet.",
@@ -152,18 +205,38 @@ describe("Codex thread from the pane title", () => {
   });
 
   test("the title wins over a stale Herdr session after a switch", async () => {
-    await codexHome([threadA, threadB]);
-    const resolved = await resolveTitle(threadB, {
-      source: "herdr:codex",
-      agent: "codex",
-      kind: "id",
-      value: threadA,
-    });
+    await codexHome(["019f1111-2222-7333-8444-555566667777", threadB]);
+    const resolved = await resolveTitle(
+      truncated(threadB),
+      herdrReport("019f1111-2222-7333-8444-555566667777"),
+    );
     expect(resolved.status).toBe("ok");
     expect(resolved.path).toContain(threadB);
   });
 
-  test("without a title ID, says how to turn it on", async () => {
+  test("a UUID in another title item does not hide Herdr's report", async () => {
+    const project = "1b4e28ba-2fa1-11d2-883f-0016d3cca427";
+    await codexHome([threadA]);
+    for (const title of [
+      `scratch-${project} | Working`,
+      `${project} | Working`,
+    ]) {
+      const resolved = await resolveTitle(title, herdrReport(threadA));
+      expect(resolved.status).toBe("ok");
+      expect(resolved.session?.source).toBe("herdr:codex");
+    }
+  });
+
+  test("the truncated thread item wins over a full UUID elsewhere", async () => {
+    await codexHome([threadA, "019f1111-2222-7333-8444-555566667777"]);
+    const resolved = await resolveTitle(
+      `019f1111-2222-7333-8444-555566667777 | ${truncated(threadA)}`,
+    );
+    expect(resolved.status).toBe("ok");
+    expect(resolved.path).toContain(threadA);
+  });
+
+  test("without a title ID or report, says how to turn it on", async () => {
     await codexHome([threadA]);
     const resolved = await resolveTitle("project");
     expect(resolved.status).toBe("missing_session");
@@ -183,12 +256,9 @@ describe("Codex thread from the pane title", () => {
       {
         ...localAgentSessionFiles,
         remote: true,
-        async findCodexSessions(fragment) {
-          searched.push(fragment);
-          return [remotePath];
-        },
-        async statFile(path) {
-          return { path, mtimeMs: 1 };
+        async findCodexSessionByPrefix(prefix: string) {
+          searched.push(prefix);
+          return { path: remotePath, mtimeMs: 1 };
         },
       },
       createAgentSessionResolverContext(),

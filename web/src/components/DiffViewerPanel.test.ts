@@ -4,12 +4,61 @@ import { act, createElement, createRef } from "react";
 import { createRoot } from "react-dom/client";
 import { bridge, type ConnectionClient } from "../api";
 import { store } from "../store";
-import type { GitDiffEntry, GitDiffFile } from "../types";
+import { worldLocalStorage } from "../browserStorage";
+import { publishLastStepCompletion } from "../lastStepCompletionStore";
 import {
+  gitDiffSummaryKey,
+  readGitDiffSummary,
+  refreshGitDiffSummary,
+} from "../gitDiffSummaryStore";
+import type { GitDiffEntry, GitDiffFile } from "../types";
+import type {
+  ActiveDiffSelection,
+  DiffViewerPanelHandle,
+} from "./DiffViewerPanel";
+
+const testBrowser =
+  process.env.HERDR_WORLD_DIFF_PANEL_DOM_TEST === "1"
+    ? new Window({ url: "http://localhost" })
+    : null;
+const originals = new Map<string, PropertyDescriptor | undefined>();
+if (testBrowser) {
+  const browser = testBrowser;
+  for (const [key, value] of Object.entries({
+    window: browser,
+    document: browser.document,
+    navigator: browser.navigator,
+    HTMLElement: browser.HTMLElement,
+    HTMLInputElement: browser.HTMLInputElement,
+    Element: browser.Element,
+    Node: browser.Node,
+    NodeFilter: browser.NodeFilter,
+    CustomEvent: browser.CustomEvent,
+    MutationObserver: browser.MutationObserver,
+    ResizeObserver: browser.ResizeObserver,
+    getComputedStyle: browser.getComputedStyle.bind(browser),
+    requestAnimationFrame: browser.requestAnimationFrame.bind(browser),
+    cancelAnimationFrame: browser.cancelAnimationFrame.bind(browser),
+    localStorage: browser.localStorage,
+    IS_REACT_ACT_ENVIRONMENT: true,
+  })) {
+    originals.set(key, Object.getOwnPropertyDescriptor(globalThis, key));
+    Object.defineProperty(globalThis, key, {
+      value,
+      writable: true,
+      configurable: true,
+    });
+  }
+}
+
+const {
   DiffViewerPanel,
   beginDiffFileSelection,
   buildActiveDiffSelection,
   clearDiffViewerResourceCache,
+  comparisonBranchStorageKey,
+  comparisonBranchLabel,
+  comparisonResourceKey,
   diffCacheKey,
   diffRuntimeContextKey,
   diffSelectionStorageKey,
@@ -18,9 +67,7 @@ import {
   mergeResolvedDiffFile,
   prefetchDiffFilesInBatches,
   prefetchDiffViewerWorkspace,
-  type ActiveDiffSelection,
-  type DiffViewerPanelHandle,
-} from "./DiffViewerPanel";
+} = await import("./DiffViewerPanel");
 
 if (process.env.HERDR_WORLD_DIFF_PANEL_DOM_TEST !== "1") {
   test("diff panel refresh regressions in an isolated runtime", async () => {
@@ -48,25 +95,7 @@ if (process.env.HERDR_WORLD_DIFF_PANEL_DOM_TEST !== "1") {
   }, 15_000);
 } else {
   test("refresh retains bounded display while reloading and retires replaced or removed patches", async () => {
-    const browser = new Window({ url: "http://localhost" });
-    const originals = new Map<string, PropertyDescriptor | undefined>();
-    for (const [key, value] of Object.entries({
-      window: browser,
-      document: browser.document,
-      navigator: browser.navigator,
-      HTMLElement: browser.HTMLElement,
-      Element: browser.Element,
-      Node: browser.Node,
-      localStorage: browser.localStorage,
-      IS_REACT_ACT_ENVIRONMENT: true,
-    })) {
-      originals.set(key, Object.getOwnPropertyDescriptor(globalThis, key));
-      Object.defineProperty(globalThis, key, {
-        value,
-        writable: true,
-        configurable: true,
-      });
-    }
+    const browser = testBrowser!;
     const entry = {
       path: "same.ts",
       kind: "unstaged" as const,
@@ -74,7 +103,12 @@ if (process.env.HERDR_WORLD_DIFF_PANEL_DOM_TEST !== "1") {
     };
     const pending: Array<(file: GitDiffFile) => void> = [];
     const rejectPending: Array<(error: Error) => void> = [];
-    const requested: Array<{ path: string; automatic: boolean }> = [];
+    const requested: Array<{
+      path: string;
+      automatic: boolean;
+      base?: string;
+    }> = [];
+    const summaryBases: unknown[] = [];
     let summaryEntries: GitDiffEntry[] = [entry];
     let summaryCalls = 0;
     let failSummary = false;
@@ -87,10 +121,17 @@ if (process.env.HERDR_WORLD_DIFF_PANEL_DOM_TEST !== "1") {
       call: async (method, params) => {
         if (method === "git.diff_summary") {
           summaryCalls += 1;
+          summaryBases.push(params?.base_branch);
           if (failSummary) throw new Error("summary refresh failed");
           return {
             workspace_id: "workspace",
             root: "/repo",
+            ...(params?.mode === "branch-main"
+              ? {
+                  base: params?.base_branch ?? "refs/heads/develop",
+                  base_branches: ["refs/heads/develop", "refs/heads/release"],
+                }
+              : {}),
             entries: summaryEntries.map((entry) => ({
               ...entry,
               ...(params?.mode === "branch-main" ? { kind: "branch" } : {}),
@@ -110,6 +151,7 @@ if (process.env.HERDR_WORLD_DIFF_PANEL_DOM_TEST !== "1") {
         requested.push({
           path: String(params?.path),
           automatic: params?.automatic === true,
+          base: params?.base_branch as string | undefined,
         });
         return new Promise<GitDiffFile>((resolve, reject) => {
           pending.push(resolve);
@@ -160,11 +202,13 @@ if (process.env.HERDR_WORLD_DIFF_PANEL_DOM_TEST !== "1") {
       diff,
       truncated: false,
     });
+    let resourceKey = "workspace";
     const render = () =>
       root.render(
         createElement(DiffViewerPanel, {
           ref,
           workspaceId: "workspace",
+          resourceKey,
           onSelectionChange: (next) => {
             selection = next;
           },
@@ -420,12 +464,92 @@ if (process.env.HERDR_WORLD_DIFF_PANEL_DOM_TEST !== "1") {
       expect(highlightedName()).toBe("early.ts");
       await act(async () =>
         container
-          .querySelector<HTMLButtonElement>('[aria-label="Against main"]')!
+          .querySelector<HTMLButtonElement>('[aria-label="Against branch"]')!
           .click(),
       );
       expect(selected()?.files).toEqual({});
       expect(selected()?.file).toBeNull();
       expect(highlightedName()).toBe("same.ts");
+      expect(
+        container.querySelector('[aria-label="Against develop"]'),
+      ).not.toBeNull();
+      const branchEntry = { ...entry, kind: "branch" as const };
+      await act(async () => ref.current!.selectEntry(branchEntry));
+      const oldBaseRequest = requested.length - 1;
+      expect(requested[oldBaseRequest].base).toBe("refs/heads/develop");
+      await act(async () => {
+        const picker = container.querySelector<HTMLButtonElement>(
+          '[aria-label="Comparison branch"]',
+        )!;
+        picker.click();
+      });
+      await act(async () => {
+        document
+          .querySelector<HTMLElement>(
+            '[cmdk-item][data-value="refs/heads/release"]',
+          )!
+          .click();
+      });
+      expect(summaryBases[summaryBases.length - 1]).toBe("refs/heads/release");
+      expect(
+        container.querySelector('[aria-label="Against release"]'),
+      ).not.toBeNull();
+      expect(selected()?.files).toEqual({});
+      await act(async () =>
+        pending[oldBaseRequest]({ ...file("stale-base"), kind: "branch" }),
+      );
+      expect(selected()?.files).toEqual({});
+      await act(async () => ref.current!.selectEntry(branchEntry));
+      expect(requested[requested.length - 1]?.base).toBe("refs/heads/release");
+      await act(async () =>
+        pending[pending.length - 1]({
+          ...file("release-patch"),
+          kind: "branch",
+        }),
+      );
+      expect(selected()?.file?.diff).toBe("release-patch");
+      expect(
+        worldLocalStorage.getItem(
+          comparisonBranchStorageKey(client.connectionId, "workspace"),
+        ),
+      ).toBe("refs/heads/release");
+      resourceKey = "another-repository";
+      await act(async () => render());
+      expect(
+        container
+          .querySelector('[aria-label="Working tree"]')
+          ?.getAttribute("aria-pressed"),
+      ).toBe("true");
+      expect(
+        container.querySelector('[aria-label="Comparison branch"]'),
+      ).toBeNull();
+      resourceKey = "workspace";
+      await act(async () => render());
+      expect(
+        container.querySelector<HTMLButtonElement>(
+          '[aria-label="Comparison branch"]',
+        )?.textContent,
+      ).toBe("release");
+      expect(summaryBases[summaryBases.length - 1]).toBe("refs/heads/release");
+      await act(async () => {
+        await refreshGitDiffSummary(
+          client,
+          "workspace",
+          "last-step",
+          "workspace",
+        );
+      });
+      const lastStepKey = gitDiffSummaryKey(
+        client,
+        "workspace",
+        "last-step",
+        "workspace",
+      );
+      expect(readGitDiffSummary(lastStepKey).summary).not.toBeNull();
+      await act(async () =>
+        publishLastStepCompletion(client.connectionId, "workspace"),
+      );
+      expect(readGitDiffSummary(lastStepKey).summary).toBeNull();
     } finally {
       for (const resolve of pending) resolve(file("cleanup"));
       await act(async () => root.unmount());
@@ -456,6 +580,23 @@ describe("connection-scoped diff identity", () => {
     );
     expect(diffCacheKey(alpha, "same-workspace", "working")).not.toBe(
       diffCacheKey(replacementAlpha, "same-workspace", "working"),
+    );
+  });
+  test("comparison preferences and caches are isolated by repository and branch", () => {
+    expect(comparisonBranchStorageKey("a", "repo-a")).not.toBe(
+      comparisonBranchStorageKey("a", "repo-b"),
+    );
+    expect(comparisonBranchStorageKey("a", "repo-a")).not.toBe(
+      comparisonBranchStorageKey("b", "repo-a"),
+    );
+    expect(comparisonResourceKey("repo-a", "refs/heads/main")).not.toBe(
+      comparisonResourceKey("repo-a", "refs/heads/release"),
+    );
+    expect(comparisonBranchLabel("refs/remotes/origin/develop")).toBe(
+      "origin/develop",
+    );
+    expect(comparisonBranchLabel("refs/heads/release/next")).toBe(
+      "release/next",
     );
   });
   test("isolates identical workspace IDs in memory and persistence", () => {

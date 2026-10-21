@@ -26,7 +26,11 @@ profile is disconnected or removed.
 
 ## Herdr compatibility
 
-The current release is compatible with Herdr 0.9.0 and terminal protocol 22.
+The current setup target is Herdr 0.9.5, terminal protocol 22 and endpoint
+generation 1. World also supports Herdr 0.9.0+ on protocol 22. Setup verifies
+the pinned platform checksum before installation. Herdr 0.9.5 is a hotfix release;
+its Codex status now comes from screen detection. Run `herdr integration install
+codex` on that host to refresh an older integration when upgrading Herdr.
 World also retains the verified legacy codecs for protocols 14-20. Protocol 21
 and future protocols are rejected; use a World release explicitly supporting
 the server rather than downgrading a running Herdr server.
@@ -327,7 +331,13 @@ service keeps its configured port when a new version is installed.
 Every listener requires login, including localhost. World creates a persistent
 login token unless `HERDR_WORLD_PASSWORD` is set to a password containing
 8–1024 characters; 15 or more are recommended beyond a trusted private network.
-Startup warns for shorter configured passwords. Repeated failed login attempts receive a cooldown. A token URL establishes
+Startup warns for shorter configured passwords. On generated-token logins,
+**Where do I find my token?** shows a home-relative command to run on the World
+host. It never exposes the token or account name. For a managed user service,
+`herdr-world url --qr` prints its login QR; foreground instances use their own
+printed URL and token. A symlinked user configuration root (for example `.config`)
+is supported, while links inside World's own state directory remain rejected.
+ Repeated failed login attempts receive a cooldown. A token URL establishes
 an HttpOnly session and removes the token from the address bar. Privileged browser HTTP
 and WebSocket admission automatically requires the browser Origin authority to equal
 the request Host authority; loopback listeners also reject non-loopback Host

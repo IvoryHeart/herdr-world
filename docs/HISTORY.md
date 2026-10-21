@@ -42,6 +42,27 @@ overlapping requests. Cards cap default DOM content at 4,000 characters; full
 tool details open as escaped text. Names/call IDs associate results without
 moving them from their transcript positions.
 
+## Chat and explicit Codex links
+
+Chat presents conversations with paired tool calls/results and the same minimap
+as Ranger. Timeline retains individual records and filters. Both use the bounded
+History window; the minimap does not fetch older records. Inspector navigation
+closes before Composer panels and terminal screens, while transient menus close
+before navigation.
+
+**Link Codex session** accepts a full UUID, resolves its readable metadata on the
+selected runtime, and previews directory, path and update time before confirmation.
+Local and Unix SSH lookup searches active and archived Codex sessions using that
+runtime's Codex home using shell/file utilities, without requiring Python 3;
+remote lookup never falls back to a local transcript.
+Windows SSH History remains unsupported. Preview tokens expire after five minutes,
+are single-use, and bind the pane's terminal, foreground process/group, existing
+session and transcript identity. Confirmation rechecks these witnesses and the
+captured runtime before reporting the link, then verifies Herdr retained it.
+The external runtime has no atomic process-and-link guard: a process change during
+the final RPC cannot be excluded. Keep the intended Codex conversation open and
+refresh/re-preview after a change; linking replaces the association for all viewers.
+
 ## Message filters
 
 The Session header offers counts, details, transcript preview, raw export, and

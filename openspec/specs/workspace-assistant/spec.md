@@ -79,3 +79,45 @@ Task deletion SHALL require prior cancellation and drain its private run resourc
 #### Scenario: Pane occupant changes before close
 - **WHEN** a close preview's captured pane layout or occupant changes before dispatch
 - **THEN** Ranger rejects the close instead of acting on the replacement
+
+### Requirement: Ordered messages during a running turn
+World SHALL admit at most eight pending Ranger messages, deduplicate request IDs,
+and process steering, removal and follow-up admission in queue order. A steer
+SHALL remain within the running turn's captured scope and runtime generation;
+unavailable or wider steering SHALL become a follow-up. Follow-ups SHALL capture omitted scopes at enqueue time and retain
+their selected runtime generations and model/effort selection through persistence and SHALL NOT recapture
+a replacement runtime automatically. Stop, failure, restart or chat switching
+SHALL hold waiting messages until explicit user continuation. Pending action or
+task previews SHALL block automatic follow-up admission.
+
+#### Scenario: Runtime replaced while a question waits
+- **WHEN** the runtime selected by a queued question is replaced before admission
+- **THEN** the queue is held with a scope error and the replacement receives no turn
+
+#### Scenario: Steer targets a different runtime generation
+- **WHEN** a steering message names a generation other than the running turn's
+- **THEN** it waits as a follow-up and does not enter that running turn
+
+#### Scenario: Stop with waiting questions
+- **WHEN** the user stops Ranger with pending questions
+- **THEN** waiting questions remain held across restart until explicit continuation
+
+#### Scenario: Model changes while a question waits
+- **WHEN** a queued question's provider, model, credential source or effort differs from the current selection
+- **THEN** admission is held until the original selection is restored or the user resends the message
+
+#### Scenario: Stale browser sends while Ranger is busy
+- **WHEN** a busy send carries an outdated expected model selection
+- **THEN** it is rejected before entering the queue
+
+#### Scenario: Chat changes during queued scope capture
+
+- **WHEN** a busy send is awaiting scope discovery or capture and its originating
+  chat is left, including leaving and returning before capture completes
+- **THEN** admission is rejected without persisting or sending that message
+
+#### Scenario: Concurrent retries during queued scope capture
+
+- **WHEN** two busy sends with the same request ID finish asynchronous scope capture
+- **THEN** at most one queue entry is persisted or admitted as a turn, and published
+  and persisted queues retain unique IDs

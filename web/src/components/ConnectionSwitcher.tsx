@@ -1,3 +1,4 @@
+import { useCloseGlobalMenuForDialog } from "./useCloseGlobalMenuForDialog";
 import {
   Check,
   ChevronDown,
@@ -1138,6 +1139,7 @@ export function ConnectionSwitcher() {
     shallowEqual,
   );
   const [open, setOpen] = useState(false);
+  useCloseGlobalMenuForDialog(open, setOpen);
   const [manageOpen, setManageOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -1283,6 +1285,13 @@ export function ConnectionSwitcher() {
               window.requestAnimationFrame(focusInitialMenuItem);
             }}
             onCloseAutoFocus={(event) => {
+              // A dialog owns focus, including dialogs inside the mobile app.
+              if (document.querySelector(".modal-backdrop:not([hidden])")) {
+                openingManager.current = false;
+                menuExitFocus.current = null;
+                event.preventDefault();
+                return;
+              }
               if (openingManager.current) {
                 openingManager.current = false;
                 event.preventDefault();

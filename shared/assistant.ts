@@ -3,6 +3,8 @@ export const ASSISTANT_MAX_MENTIONS = 32;
 export const ASSISTANT_MAX_CUSTOM_MODELS = 100;
 export const ASSISTANT_MAX_TOOL_ARGUMENTS = 8_000;
 export const ASSISTANT_MAX_TOOL_OUTPUT = 16_000;
+export const ASSISTANT_MAX_THINKING = 16_000;
+export const ASSISTANT_MAX_THINKING_STEPS = 64;
 export const ASSISTANT_MAX_TOOL_DETAILS = 128_000;
 
 export type AssistantWorkspaceRef = {
@@ -190,6 +192,16 @@ export type AssistantMessage = {
   id: string;
   role: "user" | "assistant";
   text: string;
+  /**
+   * Model reasoning shown with an assistant reply, one entry per model call
+   * that shared reasoning, oldest first. Steps are numbered in this order;
+   * older reasoning is dropped first to fit the size limit.
+   */
+  thinking?: string[];
+  /** Earlier steps dropped entirely, so the first entry is step N + 1. */
+  thinking_skipped?: number;
+  /** Set when earlier reasoning was dropped or cut to fit the size limit. */
+  thinking_truncated?: true;
   mentions?: AssistantMention[];
   sent_at: string;
   tools: AssistantToolActivity[];
@@ -319,6 +331,21 @@ export type AssistantAuthState = {
   };
 };
 
+export const ASSISTANT_MAX_QUEUED = 8;
+
+/**
+ * A message sent while Ranger was answering. A steer joins the current turn
+ * after its next tool round; a follow-up waits for the answer and then starts
+ * the next turn. A steer that misses the turn becomes a follow-up.
+ */
+export type AssistantQueuedMessage = {
+  id: string;
+  mode: "steer" | "follow_up";
+  text: string;
+  mentions?: AssistantMention[];
+  sent_at: string;
+};
+
 export type AssistantSessionSummary = {
   id: string;
   title: string;
@@ -355,6 +382,10 @@ export type AssistantSnapshot = {
     };
   }[];
   messages: AssistantMessage[];
+  /** Messages waiting for the running turn, oldest first. */
+  queue?: AssistantQueuedMessage[];
+  /** After Stop, a failure or a chat switch, the queue waits for the user. */
+  queue_held?: true;
   running: boolean;
   error: string | null;
   auth: AssistantAuthState | null;
@@ -689,6 +720,16 @@ export function isAssistantMessage(value: unknown): value is AssistantMessage {
     text(value.id) &&
     (value.role === "user" || value.role === "assistant") &&
     text(value.text) &&
+    (value.thinking === undefined ||
+      (Array.isArray(value.thinking) &&
+        value.thinking.length <= ASSISTANT_MAX_THINKING_STEPS &&
+        value.thinking.every(text) &&
+        value.thinking.join("").length <= ASSISTANT_MAX_THINKING)) &&
+    (value.thinking_skipped === undefined ||
+      (Number.isSafeInteger(value.thinking_skipped) &&
+        Number(value.thinking_skipped) >= 0)) &&
+    (value.thinking_truncated === undefined ||
+      value.thinking_truncated === true) &&
     (value.mentions === undefined ||
       isAssistantMentions(value.mentions, value.text)) &&
     text(value.sent_at) &&
@@ -731,6 +772,30 @@ export function isAssistantMessage(value: unknown): value is AssistantMessage {
       (Array.isArray(value.task_proposals) &&
         value.task_proposals.length <= 8 &&
         value.task_proposals.every(taskProposal)))
+  );
+}
+
+export function isAssistantQueue(
+  value: unknown,
+): value is AssistantQueuedMessage[] {
+  return (
+    Array.isArray(value) &&
+    value.length <= ASSISTANT_MAX_QUEUED &&
+    value.every(
+      (item) =>
+        record(item) &&
+        text(item.id) &&
+        item.id.length > 0 &&
+        item.id.length <= 500 &&
+        (item.mode === "steer" || item.mode === "follow_up") &&
+        text(item.text) &&
+        item.text.length > 0 &&
+        item.text.length <= 20_000 &&
+        (item.mentions === undefined ||
+          isAssistantMentions(item.mentions, item.text)) &&
+        timestamp(item.sent_at),
+    ) &&
+    new Set(value.map((item) => item.id)).size === value.length
   );
 }
 
@@ -837,7 +902,9 @@ export function isAssistantSnapshot(
         new Set(value.tasks.map((task) => task.id)).size !==
           value.tasks.length)) ||
     !Array.isArray(value.messages) ||
-    !value.messages.every(isAssistantMessage)
+    !value.messages.every(isAssistantMessage) ||
+    (value.queue !== undefined && !isAssistantQueue(value.queue)) ||
+    (value.queue_held !== undefined && value.queue_held !== true)
   )
     return false;
   if (value.auth === null) return true;

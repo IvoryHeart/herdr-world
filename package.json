@@ -91,7 +91,7 @@
     "bun-types": "1.4.3",
     "typescript": "^7.0.2",
     "@fission-ai/openspec": "1.12.0",
-    "oxlint": "1.87.0",
+    "oxlint": "1.88.0",
     "@types/jsdom": "^30.0.0",
     "@types/proper-lockfile": "4.1.4",
     "happy-dom": "^20.14.6",

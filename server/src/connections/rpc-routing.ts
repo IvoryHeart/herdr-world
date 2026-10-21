@@ -1,3 +1,5 @@
+import type { LegacyConnectionRuntime } from "./runtime";
+import { CONNECTION_CHANGED_DURING_REQUEST } from "./protocol";
 import {
   isBridgeGlobalMethod,
   type LegacyRoutingLogger,
@@ -74,4 +76,19 @@ export function resolveRpcRoute<Runtime>(args: {
     scope: "connection",
     ...resolved,
   };
+}
+
+/** Keep the session mutation on the same captured route as its preview. */
+export function dispatchAgentSessionLink(
+  route: Extract<
+    ResolvedRpcRoute<Pick<LegacyConnectionRuntime, "agentSessions">>,
+    { scope: "connection" }
+  >,
+  method: "agent_session.link_preview" | "agent_session.link",
+  params: Record<string, unknown>,
+) {
+  if (!route.isCurrent()) throw new Error(CONNECTION_CHANGED_DURING_REQUEST);
+  return method === "agent_session.link_preview"
+    ? route.runtime.agentSessions.previewLink(params)
+    : route.runtime.agentSessions.link(params, route.isCurrent);
 }

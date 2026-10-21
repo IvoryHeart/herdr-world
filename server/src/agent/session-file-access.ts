@@ -1,6 +1,6 @@
-import { readdir, stat } from "node:fs/promises";
+import { stat } from "node:fs/promises";
 import { homedir } from "node:os";
-import { basename, join } from "node:path";
+import { basename, join, resolve } from "node:path";
 import { sshCommandArgv } from "../bridge/ssh-command";
 import type { SessionFile } from "./session-types";
 
@@ -18,28 +18,80 @@ export type AgentSessionFileAccess = {
   readPrefix(path: string, byteLimit: number): Promise<Uint8Array>;
   readDownloadBody(path: string): Promise<BodyInit>;
   findPiSessionById(id: string): Promise<SessionFile | null>;
-  /** Up to two Codex rollout paths whose name contains `fragment`. */
-  findCodexSessions(fragment: string): Promise<string[]>;
+  findCodexSessionById(id: string): Promise<SessionFile | null>;
+  /** The one transcript whose ID starts with `prefix`, if exactly one does. */
+  findCodexSessionByPrefix(
+    prefix: string,
+  ): Promise<SessionFile | "ambiguous" | null>;
 };
 
-/** Two results are enough to tell a unique match from an ambiguous one. */
-const CODEX_MATCH_LIMIT = 2;
+const CODEX_ID_PREFIX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{5,12}$/;
 
-async function findLocalCodexSessions(fragment: string) {
-  const codexHome = process.env.CODEX_HOME?.trim() || join(homedir(), ".codex");
-  const root = join(codexHome, "sessions");
-  let names: string[];
-  try {
-    names = await readdir(root, { recursive: true });
-  } catch {
-    return [];
+function validateCodexSessionPrefix(prefix: string) {
+  if (!CODEX_ID_PREFIX.test(prefix)) {
+    throw new Error("Expected a Codex session ID prefix.");
   }
-  return names
-    .filter(
-      (name) => name.endsWith(".jsonl") && basename(name).includes(fragment),
-    )
-    .slice(0, CODEX_MATCH_LIMIT)
-    .map((name) => join(root, name));
+}
+
+export function validateCodexSessionId(id: string) {
+  if (!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(id)) {
+    throw new Error("Enter a complete Codex session ID.");
+  }
+}
+
+export function codexHome() {
+  const configured = process.env.CODEX_HOME?.trim();
+  if (!configured) return join(homedir(), ".codex");
+  if (configured === "~") return homedir();
+  return configured.startsWith("~/")
+    ? join(homedir(), configured.slice(2))
+    : resolve(configured);
+}
+
+async function findLocalCodexSessionByPrefix(prefix: string) {
+  validateCodexSessionPrefix(prefix);
+  const matches = new Set<string>();
+  for (const directory of ["sessions", "archived_sessions"]) {
+    const root = join(codexHome(), directory);
+    try {
+      for await (const path of new Bun.Glob(`**/*-${prefix}*.jsonl`).scan({
+        cwd: root,
+        absolute: true,
+        onlyFiles: true,
+      })) {
+        matches.add(path);
+        if (matches.size > 1) return "ambiguous";
+      }
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    }
+  }
+  const [only] = matches;
+  return only ? localSessionFile(only) : null;
+}
+
+async function findLocalCodexSession(id: string) {
+  validateCodexSessionId(id);
+  let found: string | null = null;
+  for (const directory of ["sessions", "archived_sessions"]) {
+    const root = join(codexHome(), directory);
+    try {
+      for await (const path of new Bun.Glob("**/*.jsonl").scan({
+        cwd: root,
+        absolute: true,
+        onlyFiles: true,
+      })) {
+        if (!basename(path).endsWith(`-${id}.jsonl`)) continue;
+        if (found)
+          throw new Error("Multiple transcripts match this Codex session ID.");
+        found = path;
+      }
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    }
+  }
+  return found ? localSessionFile(found) : null;
 }
 
 async function localSessionFile(path: string): Promise<SessionFile | null> {
@@ -73,7 +125,8 @@ export const localAgentSessionFiles: AgentSessionFileAccess = {
   async findPiSessionById() {
     return null;
   },
-  findCodexSessions: findLocalCodexSessions,
+  findCodexSessionById: findLocalCodexSession,
+  findCodexSessionByPrefix: findLocalCodexSessionByPrefix,
 };
 
 function parseRemoteFileMetadata(stdout: string): SessionFile | null {
@@ -150,6 +203,61 @@ printf '%s\\t%s\\t%s\\t%s\\t%s\\n' "$size" "$mtime" "$path64" "$identity" "$chan
   return {
     remote: true,
     statFile,
+    async findCodexSessionById(id) {
+      validateCodexSessionId(id);
+      const command = `
+set -eu
+id=${args.shQuote(id)}
+root="\${CODEX_HOME:-$HOME/.codex}"
+case "$root" in
+  "~") root="$HOME" ;;
+  "~/"*) root="$HOME/\${root:2}" ;;
+esac
+[ -d "$root" ] || exit 0
+root="$(cd -P "$root" && pwd)"
+match=""
+for directory in "$root/sessions" "$root/archived_sessions"; do
+  [ -d "$directory" ] || continue
+  while IFS= read -r -d '' candidate; do
+    if [ -n "$match" ]; then
+      printf '%s\\n' 'Multiple transcripts match this Codex session ID.' >&2
+      exit 1
+    fi
+    match="$candidate"
+  done < <(find "$directory" -type f -name "*-$id.jsonl" -print0)
+done
+[ -z "$match" ] || printf '%s\\n' "$match"
+`;
+      const path = (await runRemote(command)).toString("utf8").trim();
+      return path ? statFile(path) : null;
+    },
+    async findCodexSessionByPrefix(prefix) {
+      validateCodexSessionPrefix(prefix);
+      const command = `
+set -eu
+prefix=${args.shQuote(prefix)}
+root="\${CODEX_HOME:-$HOME/.codex}"
+case "$root" in
+  "~") root="$HOME" ;;
+  "~/"*) root="$HOME/\${root:2}" ;;
+esac
+[ -d "$root" ] || exit 0
+root="$(cd -P "$root" && pwd)"
+match=""
+for directory in "$root/sessions" "$root/archived_sessions"; do
+  [ -d "$directory" ] || continue
+  while IFS= read -r -d '' candidate; do
+    # Paths are absolute, so this marker cannot be one.
+    if [ -n "$match" ]; then printf 'ambiguous\\n'; exit 0; fi
+    match="$candidate"
+  done < <(find "$directory" -type f -name "*-$prefix*.jsonl" -print0)
+done
+[ -z "$match" ] || printf '%s\\n' "$match"
+`;
+      const path = (await runRemote(command)).toString("utf8").trim();
+      if (path === "ambiguous") return "ambiguous";
+      return path ? statFile(path) : null;
+    },
     async readText(path) {
       return (await runRemote(`set -eu\ncat ${args.shQuote(path)}`)).toString(
         "utf8",
@@ -163,23 +271,6 @@ printf '%s\\t%s\\t%s\\t%s\\t%s\\n' "$size" "$mtime" "$path64" "$identity" "$chan
     async readDownloadBody(path) {
       const bytes = await runRemote(`set -eu\ncat ${args.shQuote(path)}`);
       return Uint8Array.from(bytes).buffer;
-    },
-    async findCodexSessions(fragment) {
-      const output = await runRemote(`
-set -eu
-fragment=${args.shQuote(fragment)}
-root="\${CODEX_HOME:-$HOME/.codex}/sessions"
-[ -d "$root" ] || exit 0
-find "$root" -type f -name "*$fragment*.jsonl" | head -n ${CODEX_MATCH_LIMIT} | while IFS= read -r path; do
-  printf '%s' "$path" | base64 | tr -d '\\n'
-  printf '\\n'
-done
-`);
-      return output
-        .toString("utf8")
-        .split("\n")
-        .filter(Boolean)
-        .map((line) => Buffer.from(line, "base64").toString("utf8"));
     },
     async findPiSessionById(id) {
       const command = `

@@ -3,6 +3,8 @@ import { worldLocalStorage } from "../browserStorage";
 import { shallowEqual, useOperationalStore, useStoreSelector } from "../store";
 import type { GitStatusSummary, Pane, Tab, Workspace } from "../types";
 import { projectBrowserNavigation } from "../browserNavigation";
+import type { PullRequestSummary } from "../../../shared/pullRequest";
+import { useWorkspacePullRequests } from "../useWorktreePullRequests";
 import { shortId } from "../utils";
 import {
   terminalComposerCloseWarning,
@@ -18,6 +20,10 @@ import {
   ChevronDown,
   ChevronRight,
   GitBranch,
+  GitMerge,
+  GitPullRequest,
+  GitPullRequestClosed,
+  GitPullRequestDraft,
   Layers,
   Pin,
   Plus,
@@ -40,6 +46,7 @@ import {
 import {
   showWorkspaceBranchBadge,
   workspaceDisplayName,
+  workspacePullRequest,
 } from "../workspaceTreeBadges";
 import { pruneClosedWorkspacePreferenceKeys } from "../workspacePreferences";
 import { connectionStorageKey } from "../connectionStorage";
@@ -196,6 +203,31 @@ function GitStatusBadges({
   );
 }
 
+function PullRequestBadge({
+  review,
+}: {
+  review: NonNullable<ReturnType<typeof workspacePullRequest>>;
+}) {
+  const Icon = {
+    open: GitPullRequest,
+    draft: GitPullRequestDraft,
+    merged: GitMerge,
+    closed: GitPullRequestClosed,
+  }[review.state];
+  return (
+    <span
+      className="git-badge workspace-review"
+      data-state={review.state}
+      title={review.title}
+      aria-label={review.title}
+      role="img"
+    >
+      <Icon size={12} aria-hidden="true" />
+      {review.id}
+    </span>
+  );
+}
+
 export function WorkspaceTree({
   agentsFirst = false,
   focusOnSelect = true,
@@ -254,6 +286,10 @@ export function WorkspaceTree({
     : session;
   const store = useOperationalStore();
   const connectionClient = useConnectionClient();
+  const reviews = useWorkspacePullRequests(
+    connectionClient,
+    s.status === "connected" ? s.workspaces : [],
+  );
   const agentOrderStorageKey = connectionStorageKey(
     s.activeConnectionId,
     AGENT_ORDER_STORAGE_KEY,
@@ -676,6 +712,7 @@ export function WorkspaceTree({
           <WorkspaceRow
             key={w.workspace_id}
             w={w}
+            reviews={reviews}
             depth={0}
             childrenByParent={childrenByParent}
             agentsByWorkspace={
@@ -851,6 +888,7 @@ export function WorkspaceTree({
       {agentsFirst ? workspacePanel : agentsPanel}
       <ContextMenu
         state={menu}
+        reviewStatus={menu ? reviews[menu.workspace.workspace_id] : undefined}
         pinnedWorkspaceKeys={pinnedWorkspaceSet}
         onPinnedChange={updatePinnedWorkspace}
         onBrowseFiles={onBrowseFiles}
@@ -948,6 +986,7 @@ function workspaceSubtreeContainsActiveItem(
 
 function WorkspaceRow({
   w,
+  reviews,
   depth,
   childrenByParent,
   agentsByWorkspace,
@@ -965,6 +1004,7 @@ function WorkspaceRow({
   workspaceDrag,
 }: {
   w: Workspace;
+  reviews: Record<string, PullRequestSummary>;
   depth: number;
   childrenByParent: Map<string, Workspace[]>;
   agentsByWorkspace: ReadonlyMap<string, Pane[]>;
@@ -983,6 +1023,7 @@ function WorkspaceRow({
 }) {
   const store = useOperationalStore();
   const children = childrenByParent.get(w.workspace_id) ?? [];
+  const review = workspacePullRequest(reviews[w.workspace_id]);
   const agents = agentsByWorkspace.get(w.workspace_id) ?? [];
   const tabCount = tabCountsByWorkspace.get(w.workspace_id) ?? 0;
   const tabCountVisible = alwaysShowTabCount || tabCount > 1;
@@ -1217,10 +1258,13 @@ function WorkspaceRow({
           <span className="row-spinner" aria-label="Loading workspace" />
         ) : null}
         {w.worktree ? (
-          <GitStatusBadges
-            status={w.worktree.git_status}
-            showBranch={showWorkspaceBranchBadge(w)}
-          />
+          <>
+            {review ? <PullRequestBadge review={review} /> : null}
+            <GitStatusBadges
+              status={w.worktree.git_status}
+              showBranch={!review && showWorkspaceBranchBadge(w)}
+            />
+          </>
         ) : null}
       </div>
       {!collapsed ? (
@@ -1243,6 +1287,7 @@ function WorkspaceRow({
             <WorkspaceRow
               key={child.workspace_id}
               w={child}
+              reviews={reviews}
               depth={depth + 1}
               childrenByParent={childrenByParent}
               agentsByWorkspace={agentsByWorkspace}

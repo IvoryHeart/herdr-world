@@ -15,6 +15,85 @@ async function withTempDir<T>(fn: (dir: string) => Promise<T>) {
 }
 
 describe("workspace file handlers", () => {
+  test("commit history reports a non-Git workspace without inventing an empty history", async () => {
+    const processes: string[][] = [];
+    const diagnostic =
+      "fatal: not a git repository (or any of the parent directories): .git";
+    const handlers = createFileHandlers({
+      herdr: {
+        call: async (method: string) => {
+          if (method === "workspace.get")
+            return { workspace: { cwd: "/preview" } };
+          if (method === "pane.list")
+            return {
+              panes: [
+                { workspace_id: "w1", focused: true, cwd: "/preview" },
+                { workspace_id: "other", cwd: "/unrelated-repo" },
+              ],
+            };
+          throw new Error(`unexpected call ${method}`);
+        },
+      } as any,
+      sshHost: () => undefined,
+      shQuote,
+      runProcessWithCodeTimeout: async (argv) => {
+        processes.push(argv);
+        return { code: 128, stdout: "", stderr: diagnostic };
+      },
+    });
+    await expect(
+      handlers.readGitCommits({ workspace_id: "w1" }),
+    ).rejects.toThrow(diagnostic);
+    expect(processes).toEqual([
+      ["git", "-C", "/preview", "rev-parse", "--show-toplevel"],
+    ]);
+  });
+
+  test("commit history uses the workspace checkout and renders an unborn HEAD as empty", async () => {
+    const processes: string[][] = [];
+    const handlers = createFileHandlers({
+      herdr: {
+        call: async (method: string) => {
+          if (method === "workspace.get")
+            return {
+              workspace: {
+                worktree: { checkout_path: "/checkout" },
+                cwd: "/preview",
+              },
+            };
+          throw new Error(`unexpected call ${method}`);
+        },
+      } as any,
+      sshHost: () => undefined,
+      shQuote,
+      runProcessWithCodeTimeout: async (argv) => {
+        processes.push(argv);
+        return processes.length === 1
+          ? { code: 0, stdout: "/checkout\n", stderr: "" }
+          : { code: 1, stdout: "", stderr: "" };
+      },
+    });
+    await expect(
+      handlers.readGitCommits({ workspace_id: "w1" }),
+    ).resolves.toEqual({
+      head: null,
+      commits: [],
+      has_more: false,
+      shallow: false,
+    });
+    expect(processes).toHaveLength(2);
+    expect(processes[0]).toEqual([
+      "git",
+      "-C",
+      "/checkout",
+      "rev-parse",
+      "--show-toplevel",
+    ]);
+    expect(processes[1]?.at(-1)).toContain(
+      "git -C '/checkout' rev-parse -q --verify 'HEAD^{commit}'",
+    );
+  });
+
   test("PR/MR reads accept only available worktrees listed for the source repository, locally and over SSH", async () => {
     for (const host of [undefined, "user@server"]) {
       const processes: string[][] = [];

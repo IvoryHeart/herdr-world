@@ -59,8 +59,9 @@ for (const scale of [1, 1.25, 1.5]) {
       removeAttribute: (key: string) => attributes.delete(key),
       hasAttribute: (key: string) => attributes.has(key),
       querySelectorAll: (selector: string) =>
-        selector === ".terminal-composer, .terminal-composer-commands" ||
-        selector === ".terminal-composer"
+        selector ===
+          ".terminal-composer[data-open], .terminal-composer-commands" ||
+        selector === ".terminal-composer[data-open]"
           ? []
           : selector.includes("mobile-terminal-controls")
             ? [element]

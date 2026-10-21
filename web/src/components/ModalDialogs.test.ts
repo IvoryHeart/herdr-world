@@ -69,14 +69,15 @@ async function registerDomTests() {
     "./ModalDialogs"
   );
   const { CreateWorkspaceDialog } = await import("./CreateWorkspaceDialog");
+  const { CodexSessionLink } = await import("./CodexSessionLink");
   const luckyNames = await import("../luckyName");
   const { ShortcutCheatSheet } = await import("./ShortcutCheatSheet");
   const { WorktreeOpenDialog } = await import("./WorktreeOpenDialog");
   const { WorktreeLifecycleDialog } = await import("./WorktreeLifecycleDialog");
-  const { useWorktreePullRequests } = await import(
+  const { useWorktreePullRequests, useWorkspacePullRequests } = await import(
     "../useWorktreePullRequests"
   );
-  const { bridge } = await import("../api");
+  const { Bridge, bridge } = await import("../api");
   const { __storeTesting, store } = await import("../store");
   const { WorkspaceTree } = await import("./WorkspaceTree");
   let listCalls = 0;
@@ -132,6 +133,116 @@ async function registerDomTests() {
   afterAll(async () => {
     connection.mockRestore();
     await browser.happyDOM.close();
+  });
+
+  test("Codex session preview and confirmation wait for slow backend replies", async () => {
+    const previousSocket = globalThis.WebSocket;
+    const previousLocation = Object.getOwnPropertyDescriptor(
+      globalThis,
+      "location",
+    );
+    class SessionSocket {
+      static instance: SessionSocket;
+      static OPEN = 1;
+      readyState = 1;
+      bufferedAmount = 0;
+      onmessage: ((event: { data: string }) => void) | null = null;
+      requests: Record<string, unknown>[] = [];
+      constructor() {
+        SessionSocket.instance = this;
+      }
+      receive(message: Record<string, unknown>) {
+        this.onmessage?.({ data: JSON.stringify(message) });
+      }
+      send(raw: string) {
+        const request = JSON.parse(raw);
+        if (request.method === "bridge.ping")
+          this.receive({ id: request.id, result: {} });
+        else this.requests.push(request);
+      }
+      close() {}
+    }
+    globalThis.WebSocket = SessionSocket as unknown as typeof WebSocket;
+    Object.defineProperty(globalThis, "location", {
+      configurable: true,
+      value: browser.location,
+    });
+    const sessionBridge = new Bridge();
+    const sessionId = "00000000-0000-4000-8000-000000000001";
+    let linked = 0;
+    jest.useFakeTimers();
+    try {
+      sessionBridge.connect();
+      const socket = SessionSocket.instance;
+      socket.receive({
+        hello: true,
+        bridge_protocol_version: 2,
+        default_connection_id: "remote",
+        capabilities: { connection_id: true, connection_scoped_http: true },
+      });
+      const container = document.createElement("div");
+      document.body.append(container);
+      root = createRoot(container);
+      await act(async () =>
+        root!.render(
+          h(CodexSessionLink, {
+            paneId: "p1",
+            client: sessionBridge.connection(),
+            onLinked: () => linked++,
+          }),
+        ),
+      );
+      const input = container.querySelector("input")!;
+      await act(async () => {
+        Object.getOwnPropertyDescriptor(
+          HTMLInputElement.prototype,
+          "value",
+        )!.set!.call(input, sessionId);
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+      const form = container.querySelector("form")!;
+      for (const method of [
+        "agent_session.link_preview",
+        "agent_session.link",
+      ]) {
+        await act(async () => {
+          form.dispatchEvent(
+            new Event("submit", { bubbles: true, cancelable: true }),
+          );
+        });
+        const request = socket.requests[socket.requests.length - 1]!;
+        expect(request.method).toBe(method);
+        await act(async () => jest.advanceTimersByTime(70_000));
+        expect(form.getAttribute("aria-busy")).toBe("true");
+        expect(container.textContent).not.toContain("timeout:");
+        expect(linked).toBe(0);
+        await act(async () => {
+          socket.receive({
+            id: request.id,
+            connection_id: request.connection_id,
+            result: {
+              token: "confirmation",
+              session_id: sessionId,
+              cwd: "/repo",
+              path: "/remote/rollout.jsonl",
+              updated_at: "2026-10-20T00:00:00Z",
+            },
+          });
+        });
+        expect(form.getAttribute("aria-busy")).toBe("false");
+      }
+      expect(linked).toBe(1);
+      expect(container.textContent).toContain("Session linked.");
+    } finally {
+      await act(async () => root?.unmount());
+      root = null;
+      sessionBridge.disconnect();
+      jest.useRealTimers();
+      globalThis.WebSocket = previousSocket;
+      if (previousLocation)
+        Object.defineProperty(globalThis, "location", previousLocation);
+      else Reflect.deleteProperty(globalThis, "location");
+    }
   });
 
   type Callbacks = {
@@ -426,6 +537,278 @@ async function registerDomTests() {
     },
   };
 
+  const sidebarWorkspace: Workspace = {
+    workspace_id: "review-workspace",
+    number: 1,
+    label: "topic-0",
+    focused: true,
+    pane_count: 0,
+    tab_count: 0,
+    agent_status: "unknown",
+    worktree: {
+      repo_key: "repo",
+      repo_name: "Repo",
+      repo_root: "/repo",
+      checkout_path: "/repo/topic-0",
+      is_linked_worktree: true,
+      git_status: {
+        branch: "topic-0",
+        ahead: 2,
+        behind: 0,
+        staged: 1,
+        unstaged: 0,
+        untracked: 0,
+        conflicted: 0,
+        dirty: true,
+      },
+    },
+  };
+
+  test("sidebar preserves workspace names beside PR/MR badges and opens the selected request", async () => {
+    const previousState = store.get();
+    let status = mergedStatus;
+    const call = spyOn(client, "call").mockImplementation(
+      async (method, params) => {
+        expect(method).toBe("git.pull_request");
+        expect(params?.summary).toBe(true);
+        return status;
+      },
+    );
+    const open = spyOn(window, "open").mockReturnValue(null);
+    const container = document.createElement("div");
+    document.body.append(container);
+    root = createRoot(container);
+    let revision = 0;
+    const render = async (workspace = sidebarWorkspace) =>
+      act(async () => {
+        __storeTesting.replaceState({
+          ...previousState,
+          status: "connected",
+          workspaces: [
+            {
+              ...workspace,
+              worktree: {
+                ...workspace.worktree!,
+                repo_key: `repo-${revision++}`,
+              },
+            },
+          ],
+          tabs: [],
+          panes: [],
+        });
+        root!.render(h(WorkspaceTree));
+      });
+    const openMenu = () =>
+      act(async () => {
+        container.querySelector(".tree-row")!.dispatchEvent(
+          new MouseEvent("contextmenu", {
+            bubbles: true,
+            clientX: 10,
+            clientY: 10,
+          }),
+        );
+      });
+    const requestAction = () =>
+      Array.from(container.querySelectorAll("button")).find((button) =>
+        /Open (PR on GitHub|MR on GitLab)/.test(button.textContent ?? ""),
+      );
+    try {
+      for (const provider of ["github", "gitlab"] as const) {
+        for (const [state, draft, label, icon] of [
+          ["open", false, "Open", "git-pull-request"],
+          ["opened", true, "Draft", "git-pull-request-draft"],
+          ["merged", true, "Merged", "git-merge"],
+          ["closed", true, "Closed without merge", "git-pull-request-closed"],
+        ] as const) {
+          const github = provider === "github";
+          const url = github
+            ? "https://github.com/a/r/pull/1"
+            : "https://git.example.com/a/r/-/merge_requests/1";
+          status = {
+            ...mergedStatus,
+            provider,
+            request: { ...mergedStatus.request!, state, draft, url },
+          };
+          await render();
+          expect(container.querySelector(".ws-label")?.textContent).toBe(
+            "topic-0",
+          );
+          expect(
+            container.querySelector(".ws-label .workspace-review"),
+          ).toBeNull();
+          const badge = container.querySelector(
+            ".tree-row > .workspace-review",
+          )!;
+          expect(badge.textContent).toBe(github ? "#1" : "!1");
+          expect(badge.getAttribute("aria-label")).toContain(label);
+          expect(badge.getAttribute("title")).toContain("Merged feature");
+          expect(badge.querySelector(`.lucide-${icon}`)).not.toBeNull();
+          expect(container.querySelector(".git-branch")).toBeNull();
+          expect(container.querySelector(".git-dirty")?.textContent).toBe("Δ1");
+          expect(container.querySelector(".git-ahead")?.textContent).toBe("↑2");
+          await openMenu();
+          expect(requestAction()?.textContent).toBe(
+            github ? "Open PR on GitHub" : "Open MR on GitLab",
+          );
+          await act(async () => requestAction()!.click());
+          expect(open).toHaveBeenLastCalledWith(
+            url,
+            "_blank",
+            "noopener,noreferrer",
+          );
+        }
+      }
+      await render({
+        ...sidebarWorkspace,
+        label: "My review",
+        worktree: { ...sidebarWorkspace.worktree!, is_linked_worktree: false },
+      });
+      expect(container.querySelector(".ws-label")?.textContent).toBe(
+        "My review",
+      );
+      expect(
+        container.querySelector(".tree-row > .workspace-review")?.textContent,
+      ).toBe("!1");
+      for (const state of [
+        "select_remote",
+        "select_match",
+        "unsupported",
+        "missing_cli",
+        "unauthenticated",
+        "no_match",
+        "detached",
+        "error",
+      ] as const) {
+        status = { ...mergedStatus, state };
+        await render();
+        expect(container.querySelector(".workspace-review")).toBeNull();
+        expect(container.querySelector(".ws-label")?.textContent).toBe(
+          "topic-0",
+        );
+        await openMenu();
+        expect(requestAction()).toBeUndefined();
+      }
+      for (const partial of [
+        { request: undefined },
+        { provider: undefined },
+        { request: { ...mergedStatus.request!, state: "unknown" } },
+      ]) {
+        status = { ...mergedStatus, ...partial };
+        await render({ ...sidebarWorkspace, label: "My review" });
+        expect(container.querySelector(".workspace-review")).toBeNull();
+        expect(container.querySelector(".git-branch")?.textContent).toBe(
+          "topic-0",
+        );
+      }
+    } finally {
+      await act(async () => root!.unmount());
+      root = null;
+      call.mockRestore();
+      open.mockRestore();
+      __storeTesting.replaceState(previousState);
+    }
+  });
+
+  test("sidebar reviews poll after completion, ignore ordinary metadata updates, and clear stale associations", async () => {
+    let calls = 0;
+    let pending: Array<(status: PullRequestStatus) => void> = [];
+    const reviewClient = {
+      ...client,
+      call: async (_method: string, params?: Record<string, unknown>) => {
+        expect(params?.latest).toBe(true);
+        expect(params?.summary).toBe(true);
+        calls++;
+        return new Promise<PullRequestStatus>((resolve) =>
+          pending.push(resolve),
+        );
+      },
+    };
+    function Reviews({
+      workspaces,
+      client,
+    }: {
+      workspaces: Workspace[];
+      client: ConnectionClient;
+    }) {
+      return h(
+        "pre",
+        null,
+        JSON.stringify(useWorkspacePullRequests(client, workspaces)),
+      );
+    }
+    const container = document.createElement("div");
+    document.body.append(container);
+    root = createRoot(container);
+    const render = (workspace = sidebarWorkspace, client = reviewClient) =>
+      act(async () =>
+        root!.render(h(Reviews, { workspaces: [workspace], client })),
+      );
+    const settle = () =>
+      act(async () => {
+        const replies = pending;
+        pending = [];
+        replies.forEach((resolve) => resolve(mergedStatus));
+      });
+    jest.useFakeTimers();
+    try {
+      await render();
+      expect(calls).toBe(1);
+      await act(async () => jest.advanceTimersByTime(120_000));
+      expect(calls).toBe(1);
+      await settle();
+      expect(container.textContent).toContain("merged");
+      await render({
+        ...sidebarWorkspace,
+        label: "Renamed",
+        worktree: {
+          ...sidebarWorkspace.worktree!,
+          git_status: {
+            ...sidebarWorkspace.worktree!.git_status!,
+            unstaged: 4,
+          },
+        },
+      });
+      expect(calls).toBe(1);
+      await act(async () => jest.advanceTimersByTime(60_000));
+      expect(calls).toBe(2);
+      const changedBranch = {
+        ...sidebarWorkspace,
+        worktree: {
+          ...sidebarWorkspace.worktree!,
+          git_status: {
+            ...sidebarWorkspace.worktree!.git_status!,
+            branch: "other",
+          },
+        },
+      };
+      await render(changedBranch);
+      expect(container.textContent).toBe("{}");
+      await settle();
+      expect(container.textContent).toBe("{}");
+      expect(calls).toBe(3);
+      await settle();
+      expect(container.textContent).toContain("merged");
+      await render({
+        ...changedBranch,
+        worktree: { ...changedBranch.worktree, repo_key: "other-repo" },
+      });
+      expect(container.textContent).toBe("{}");
+      await render(sidebarWorkspace, { ...reviewClient, generation: 2 });
+      await settle();
+      expect(container.textContent).toBe("{}");
+      await render({ ...sidebarWorkspace, worktree: undefined });
+      await settle();
+      expect(container.textContent).toBe("{}");
+      const lastCalls = calls;
+      await act(async () => jest.advanceTimersByTime(120_000));
+      expect(calls).toBe(lastCalls);
+    } finally {
+      await act(async () => root!.unmount());
+      root = null;
+      jest.useRealTimers();
+    }
+  });
+
   test("worktree reviews bound concurrency, keep ordinary list polling local, and discard obsolete replies", async () => {
     const pending: Array<(value: PullRequestStatus) => void> = [];
     let calls = 0;
@@ -436,6 +819,7 @@ async function registerDomTests() {
       call: async (method, params, timeout) => {
         expect(method).toBe("git.pull_request");
         expect(params?.summary).toBe(true);
+        expect(params?.latest).toBeUndefined();
         expect(timeout).toBe(65_000);
         calls += 1;
         return new Promise((resolve) => pending.push(resolve));

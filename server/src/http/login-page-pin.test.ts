@@ -3,7 +3,11 @@ import { createContext, runInContext } from "node:vm";
 import { type HTMLButtonElement, Window } from "happy-dom";
 import { LOGIN_HTML, renderLoginPage } from "./login-page";
 
-function loginPage(pinEnabled = true) {
+function loginPage(
+  pinEnabled = true,
+  tokenCommand?: string,
+  globals: Record<string, unknown> = {},
+) {
   const window = new Window({
     settings: {
       disableJavaScriptEvaluation: true,
@@ -12,17 +16,18 @@ function loginPage(pinEnabled = true) {
     },
   });
   const document = window.document;
-  document.write(renderLoginPage(pinEnabled));
+  document.write(renderLoginPage(pinEnabled, tokenCommand));
   const calls: { url: string; init: RequestInit }[] = [];
   const responses: (() => Promise<Response>)[] = [];
   const location = {
-    hash: "#roamgate-task=example-target",
+    hash: "#herdr-world-task=example-target",
     replacements: [] as string[],
     replace(value: string) {
       this.replacements.push(value);
     },
   };
   const context = createContext({
+    ...globals,
     document,
     location,
     fetch: (url: string, init: RequestInit) => {
@@ -154,7 +159,7 @@ describe("optional PIN login page", () => {
         },
       ]);
       expect(page.location.replacements).toEqual([
-        "/#roamgate-task=example-target",
+        "/#herdr-world-task=example-target",
       ]);
       await page.submit();
       page.forceSwitch();
@@ -285,7 +290,7 @@ describe("optional PIN login page", () => {
         },
       });
       expect(page.location.replacements).toEqual([
-        "/#roamgate-task=example-target",
+        "/#herdr-world-task=example-target",
       ]);
     },
   );
@@ -361,5 +366,88 @@ describe("optional PIN login page", () => {
       "/api/login/pin",
     ]);
     expect(page.location.replacements).toHaveLength(1);
+  });
+});
+
+describe("login page token help", () => {
+  test("only token logins explain where to find the token", () => {
+    const command = 'Get-Content "$env:APPDATA\\herdr-world\\auth-token"';
+    expect(LOGIN_HTML).not.toContain("token-cmd");
+    for (const pinEnabled of [false, true]) {
+      const page = loginPage(pinEnabled, command);
+      expect(page.document.querySelector("#token-cmd")?.textContent).toBe(
+        command,
+      );
+      const help = page.document.querySelector("details")!;
+      expect(help.open).toBe(false);
+      expect(help.querySelector("a")?.getAttribute("href")).toEndWith(
+        "docs/DEPLOYMENT.md#listener-and-authentication",
+      );
+      expect(help.hidden).toBe(pinEnabled);
+      if (pinEnabled) {
+        page.forceSwitch();
+        expect(help.hidden).toBe(false);
+        page.forceSwitch();
+        expect(help.hidden).toBe(true);
+      }
+    }
+  });
+
+  test.each([false, true])(
+    "phone help distinguishes the user service from foreground instances (PIN: %s)",
+    (pinEnabled) => {
+      const page = loginPage(
+        pinEnabled,
+        "cat ~/.config/herdr-world/auth-token",
+      );
+      if (pinEnabled) page.forceSwitch();
+      const help = page.document.querySelector("#help")!;
+      expect(help.hasAttribute("hidden")).toBe(false);
+      const phoneHelp = [...help.querySelectorAll("p")].find((p) =>
+        p.textContent.includes("On a phone?"),
+      )!;
+      expect(phoneHelp.querySelector("code")?.textContent).toBe(
+        "herdr-world url --qr",
+      );
+      expect(phoneHelp.textContent).toContain(
+        "For an installed Herdr World user service",
+      );
+      expect(phoneHelp.textContent).toContain("uses the service configuration");
+      expect(phoneHelp.textContent).toContain(
+        "For a foreground instance, keep using this instance's address",
+      );
+      expect(phoneHelp.textContent).toContain(
+        "read its token on the host with the command above",
+      );
+    },
+  );
+
+  test("escapes the command", () => {
+    const html = renderLoginPage(false, 'cat ~/<b>&"x"');
+    expect(html).toContain("cat ~/&#60;b&#62;&#38;&#34;x&#34;");
+    expect(html).not.toContain("<b>");
+  });
+
+  test("copies the command only in a secure context", async () => {
+    expect(
+      loginPage(
+        false,
+        "cat ~/.config/herdr-world/auth-token",
+      ).document.querySelector<HTMLButtonElement>("#copy")?.hidden,
+    ).toBe(true);
+    const copied: string[] = [];
+    const page = loginPage(false, "cat ~/.config/herdr-world/auth-token", {
+      isSecureContext: true,
+      navigator: {
+        clipboard: { writeText: async (text: string) => copied.push(text) },
+      },
+      setTimeout,
+      clearTimeout,
+    });
+    const copy = page.document.querySelector<HTMLButtonElement>("#copy")!;
+    expect(copy.hidden).toBe(false);
+    await (copy.onclick as unknown as () => Promise<void>)();
+    expect(copied).toEqual(["cat ~/.config/herdr-world/auth-token"]);
+    expect(copy.textContent).toBe("Copied");
   });
 });
