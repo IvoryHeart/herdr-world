@@ -102,6 +102,9 @@ function remotePiFiles(text: string): AgentSessionFileAccess {
     async readDownloadBody() {
       return bytes;
     },
+    async findCodexSessionByPrefix() {
+      return null;
+    },
     async findPiSessionById() {
       return null;
     },
@@ -239,6 +242,17 @@ describe("Pi agent sessions", () => {
 
     expect(result.status).toBe("missing_session");
     expect(result.command).toBe("herdr integration install pi");
+  });
+
+  test("explains how to identify a Codex pane's conversation", async () => {
+    const result = await readAgentMessageHistory(
+      { pane_id: "p1", agent: "codex" },
+      async () => ({ agent: { agent: "codex" } }),
+    );
+
+    expect(result.status).toBe("missing_session");
+    expect(result.detail).toContain("/title");
+    expect(result.command).toBeUndefined();
   });
 
   test("binds Herdr and file access inside each runtime handler bundle", async () => {

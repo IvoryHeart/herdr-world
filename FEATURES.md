@@ -337,7 +337,11 @@ See [resource ownership](docs/ARCHITECTURE.md#workspace-resource-ownership).
 
 Supported providers: **Codex, Claude, Kimi, Grok Build, Pi, Antigravity CLI**, with a readable
 session record. Missing Herdr integration metadata shows the integration command.
-With `--ssh-host`, Herdr-reported paths and Pi ID lookup read remotely. Other
+Codex 0.157 and later run conversations in a shared background service, so
+Herdr's hook cannot say which pane shows which one. Run `/title` in Codex and
+add Thread ID: History then reads the conversation from the pane's title, and
+shows nothing rather than guess when the title does not identify exactly one.
+With `--ssh-host`, Herdr-reported paths and Pi and Codex ID lookups read remotely. Other
 ID/directory fallbacks (including Grok Build and Antigravity CLI discovery) remain local and need
 locally accessible transcripts.
 
