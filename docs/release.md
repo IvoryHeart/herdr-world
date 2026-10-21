@@ -160,7 +160,14 @@ are checked again during the RC release workflow.
    followed by `@ivoryheart/herdr-world`. RCs use GitHub prerelease status,
    npm's `next` tag and the `herdr-world-rc` Formula. Stable releases become GitHub
    Latest, use npm's `latest` tag and update the `herdr-world` Formula. The workflow
-   opens a ready PR in `IvoryHeart/homebrew-tap`; merge it after independent review.
+   waits for npm publication and both macOS Homebrew installation checks, then
+   opens or reuses the generated Formula PR in `IvoryHeart/homebrew-tap` and
+   merges its exact checked head. This narrow tap update is authorized to merge
+   automatically; independent review of the release PR remains required. The
+   helper rejects extra files, symlinks, different formulas, foreign PR identities
+   and changed heads, respects tap protections, and verifies the merged content.
+   A queued or blocked tap PR is not complete publication; resolve the blocker
+   and retry the same release job. An already matching tap is a successful no-op.
 5. Verify the installer, npm installation with optional dependencies, Homebrew
    installation after the tap PR merges, and Herdr plugin download/start/status/url
    flow against the published assets. For stable releases, also verify the project-site
@@ -181,8 +188,8 @@ publisher with direct publish permission for all six names and the existing
 `@ivoryheart/herdr-world` package. The release workflow then uses GitHub Actions
 OIDC without an npm token. The platform names are
 `@ivoryheart/herdr-world-{linux,darwin,windows}-{x64,arm64}`.
-The existing `HOMEBREW_TAP_TOKEN` must have permission to push a branch and open a PR
-in `IvoryHeart/homebrew-tap`. A fine-grained token needs repository access with
+The existing `HOMEBREW_TAP_TOKEN` must have permission to push a branch, open and
+merge a PR in `IvoryHeart/homebrew-tap`. A fine-grained token needs repository access with
 Contents and Pull requests permissions set to Read and write. A successful branch
 push does not prove PR creation access: if `createPullRequest` reports
 `Resource not accessible by personal access token`, correct that token's repository
@@ -205,11 +212,11 @@ published, prepare a new version instead.
 
 Pages deployment runs from `main` and requires a working installer on the
 published stable Latest release. Candidates do not deploy the replacement site.
-After GitHub assets and npm packages publish and the Homebrew PR opens, the stable
+After GitHub assets and npm packages publish and the Homebrew PR merges, the stable
 Release workflow dispatches **Deploy Pages** on `main`. Its HTTPS installer guard
 remains mandatory; it then builds the shared screenshots, tutorial, metadata,
-and World brand assets. The Homebrew tap PR still needs independent review and
-merge before that channel is ready.
+and World brand assets. A successful Homebrew publication job means the tap
+contains the exact verified Formula; there is no second manual merge step.
 
 A main-branch site push before stable publication can fail the installer guard;
 this leaves the existing public site untouched. After stable publication, verify

@@ -53,9 +53,21 @@ from the final reviewed immutable release tag.
 #### Scenario: Cross-platform release candidate
 - **WHEN** a reviewed `vX.Y.Z-rc.N` tag is published
 - **THEN** all six desktop archives and downstream packages use that exact version,
-  GitHub marks it as a prerelease, npm publishes it under `next`, a reviewed
-  Homebrew PR proposes the separate RC Formula, and the stable Latest channels
+  GitHub marks it as a prerelease, npm publishes it under `next`, an automatically merged
+  Homebrew PR updates the separate RC Formula, and the stable Latest channels
   remain unchanged
+
+#### Scenario: Verified Homebrew publication
+- **WHEN** published release archives are verified, npm publication succeeds and both
+  macOS Homebrew installation checks pass
+- **THEN** automation opens or reuses a PR in the owned tap changing only the generated
+  stable or RC Formula, verifies its repository, source branch, target main and exact head,
+  and merges only that checked head under normal tap protections
+- **AND** it verifies the merged Formula matches the release artifact; changed heads,
+  extra files, symlinks, blocked or queued merges and different formulas cannot count as
+  successful publication; an already matching tap is a successful retry without a duplicate PR
+- **AND** only the generated tap update is authorized for automatic merge; independent
+  human review and merge of the release PR remain required
 
 ### Requirement: Downstream lineage
 Each World release SHALL identify its exact Roamgate synchronization point and distinguish derived

@@ -11,7 +11,9 @@ are optional because the merged PR history records their source.
 
 - Daily patch-release preparation through one rolling human-reviewed PR that stays
   current until approval, followed by publication of its exact merged revision,
-  immutable-tag retries and carried-forward known issues.
+  immutable-tag retries and carried-forward known issues. Automatically open and
+  merge the exact generated Homebrew Formula after npm publication and both
+  macOS install checks; human approval remains required for the release PR.
 
 ## [0.2.6] - 2026-10-21
 

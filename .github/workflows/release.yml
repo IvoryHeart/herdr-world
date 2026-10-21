@@ -281,8 +281,8 @@ jobs:
         run: node scripts/publish-npm-release.mjs "${GITHUB_REF_NAME#v}" npm-packages
 
   homebrew-pr:
-    name: Propose Homebrew Formula update
-    needs: [homebrew-smoke, homebrew-formula]
+    name: Publish Homebrew Formula
+    needs: [npm-publish, homebrew-smoke, homebrew-formula]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -292,7 +292,7 @@ jobs:
         with:
           name: homebrew-formula
           path: formula
-      - name: Open tap pull request
+      - name: Open and merge verified tap pull request
         env:
           GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
         shell: bash

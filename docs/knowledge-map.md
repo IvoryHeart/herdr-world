@@ -66,7 +66,10 @@ runner settings. [PR CI](../.github/workflows/ci.yml) and
 [World browser workflow](../.github/workflows/world-browser.yml).
 [Daily patch releases](daily-releases.md) use [the release planner](../scripts/daily-release.ts)
 and [Git/API regressions](../scripts/daily-release.test.ts) to preserve reviewed
-patch identity, immutable tags and bounded publication retries.
+patch identity, immutable tags and bounded publication retries. The
+[Homebrew publisher](../scripts/open-homebrew-pr.sh) and its
+[Git/API regressions](../scripts/open-homebrew-pr.test.ts) cover Formula-only,
+exact-head automatic tap merges after npm publication and install checks.
 [Prepare Release](../.github/workflows/prepare-release.yml) validates generated
 files in its own checkout. Start with [CI workflow tests](../scripts/ci-workflow.test.ts)
 and [release validation tests](../scripts/release-validation.test.ts) when changing

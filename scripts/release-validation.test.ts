@@ -120,3 +120,16 @@ test("release packages and labeled previews share one verification and image", (
   expect(release["runs-on"]).toMatch(/^ubuntu-\d+\.\d+$/);
   expect(preview["runs-on"]).toBe(release["runs-on"]);
 });
+
+test("Homebrew publishes only after npm and both install checks, before Pages", () => {
+  const workflow = readWorkflow("release.yml");
+  expect(workflow.jobs["homebrew-pr"]!.needs).toEqual([
+    "npm-publish",
+    "homebrew-smoke",
+    "homebrew-formula",
+  ]);
+  expect(workflow.jobs["homebrew-pr"]!["continue-on-error"] ?? false).toBe(
+    false,
+  );
+  expect(workflow.jobs["deploy-pages"]!.needs).toContain("homebrew-pr");
+});

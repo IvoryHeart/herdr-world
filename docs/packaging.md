@@ -43,9 +43,10 @@ The same verified archives feed six public npm platform packages and the
 `@ivoryheart/herdr-world` launcher. npm selects one binary through optional
 dependencies and runs no install script; Node.js 22.14.0 or newer is required for
 the launcher. The Release workflow also generates a checksum-pinned Homebrew
-Formula for macOS and Linux and opens a reviewable PR in
-`IvoryHeart/homebrew-tap` after the GitHub assets are published. Windows uses npm
-or the standalone archive; Homebrew does not manage Windows.
+Formula for macOS and Linux. After npm publication and both macOS install checks,
+it opens or reuses a Formula-only PR in `IvoryHeart/homebrew-tap`, merges its exact
+checked head under normal tap protections, and verifies the merged Formula.
+Windows uses npm or the standalone archive; Homebrew does not manage Windows.
 Candidates publish to npm's `next` tag and the separate `herdr-world-rc` Formula.
 
 The responsive Web/PWA is the supported mobile artifact. This foundation does not
