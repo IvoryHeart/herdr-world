@@ -216,6 +216,7 @@ export interface GitDiffSummary {
   root: string;
   mode?: "working" | "branch-main" | "last-step";
   base?: string;
+  base_branches?: string[];
   baseline_available?: boolean;
   snapshot_id?: string;
   entries: GitDiffEntry[];

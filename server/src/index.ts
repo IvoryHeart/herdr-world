@@ -11,6 +11,7 @@ import { sendWorldSnapshotReply } from "./bridge/world-snapshot-reply";
 import { WorldSnapshotAdmission } from "./bridge/world-snapshot-admission";
 import { loadOrCreateSessionSecret } from "./config/session-secret";
 import {
+  authTokenPrintCommand,
   isShortAuthPassword,
   RECOMMENDED_PASSWORD_LENGTH,
 } from "./config/auth-token";
@@ -86,6 +87,7 @@ import {
 } from "./connections/protocol";
 import {
   type ConnectionRpcRequest,
+  dispatchAgentSessionLink,
   isConnectionRpcEnvelope,
   resolveRpcRoute,
 } from "./connections/rpc-routing";
@@ -269,6 +271,9 @@ const {
   pin: config.pin,
   sessionSecret,
   urlLoginToken: config.generatedAuthToken,
+  tokenCommand:
+    config.generatedAuthTokenPath &&
+    authTokenPrintCommand(config.generatedAuthTokenPath),
   secureCookies: Boolean(config.tls),
 });
 
@@ -298,6 +303,8 @@ const IMPORTANT_RPC_METHODS = new Set([
   "agent_session.get",
   "agent_turn.get",
   "agent_checkout.get",
+  "agent_session.link_preview",
+  "agent_session.link",
   "file.read",
   "git.diff_file",
   "git.commit_file",
@@ -1581,6 +1588,22 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
       sendReply({ id, result }, "agent-checkout-get");
     } catch (e) {
       sendError("agent-checkout-get-error", e);
+    }
+    return;
+  }
+  if (
+    method === "agent_session.link_preview" ||
+    method === "agent_session.link"
+  ) {
+    try {
+      const result = await dispatchAgentSessionLink(
+        route,
+        method,
+        params ?? {},
+      );
+      sendReply({ id, result }, method);
+    } catch (e) {
+      sendError("agent-session-link-error", e);
     }
     return;
   }

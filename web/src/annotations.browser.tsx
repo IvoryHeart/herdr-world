@@ -1070,7 +1070,7 @@ export async function checkAnnotationUX(
             visible(selector) &&
               Math.abs(rect.right - before.right) <= 1 &&
               Math.abs(rect.bottom - before.bottom) <= 1,
-            `${theme}: Annotations must preserve the floating capsule position: ${selector}`,
+            `${theme}: Annotations must preserve the floating capsule position: ${selector}; visible=${visible(selector)} before=${before.right},${before.bottom} after=${rect.right},${rect.bottom}; html=${document.documentElement.className}; active=${document.activeElement?.className}`,
           );
         });
         check(

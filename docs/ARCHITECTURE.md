@@ -436,3 +436,29 @@ original recovery targets. Updates/resumes verify the model and workspace/agent
 identities; local pause/cancel/delete recheck permissions even if the old runtime
 or model is gone. A deletion requires committed cancellation and drains private
 run resources. Confirmation never upgrades a previously manual task implicitly.
+
+## Ranger busy-turn admission
+
+The service admits at most eight waiting messages. Steers enter the current turn
+after its tool round and retain that turn's captured scope; a wider scope or a
+different runtime generation becomes a follow-up. Follow-ups are admitted in FIFO
+order after the answer and pending previews finish. Their private persisted scope
+retains connection, workspace, runtime generation and model/effort selection; omitted
+scopes are captured before enqueue is acknowledged, so replacement rejects
+admission rather than silently recapturing a different runtime. Stop, failure,
+restart and chat changes hold the queue until explicit user continuation. Queue
+removal, steering and admission share one serialized worker; request IDs prevent
+duplicate delivery. Saved model reasoning is bounded to 16,000 characters and
+64 steps, dropping oldest reasoning first.
+
+## Explicit session linking and History presentation
+
+History Chat/Timeline and Ranger share a conversation minimap over loaded entries.
+The Inspector keeps its captured connection client and resource lease. Manual
+Codex linking is dispatched through that runtime's Agent History handlers; preview
+tokens and transcript lookup live inside the isolated runtime, including Unix SSH
+file access. A token binds the pane occupant and transcript identity, is consumed
+once, and rechecks runtime authority before the reporting RPC. Herdr does not
+provide an atomic process-and-link operation; see [History limits](HISTORY.md#chat-and-explicit-codex-links).
+World retains React 18 callback freshness and screen/panel/navigation/popup Back
+priority, with navigation between Inspector details below transient menus.

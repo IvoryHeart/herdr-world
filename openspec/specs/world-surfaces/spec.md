@@ -2491,3 +2491,31 @@ terminal opened from Town remains the same presentation after switching views.
 - **WHEN** the user is in Town on a phone
 - **THEN** the shell's bottom navigation remains available to switch to Board, Desk or Spaces,
   and the Town tray sits above it
+
+### Requirement: Qualified History presentation and explicit Codex linking
+
+History SHALL offer Chat and Timeline over the same bounded loaded transcript.
+Chat SHALL pair tool calls with their results and offer a conversation minimap
+without implying older records have been fetched. Switching presentation SHALL
+retain the selected runtime and pane lease.
+
+A manual Codex session link SHALL require a full session UUID, readable metadata
+from the selected runtime, a preview and explicit confirmation. The one-shot
+preview SHALL expire after five minutes and bind the pane terminal, foreground
+process/group, existing session and transcript identity. Confirmation SHALL reject
+changed witnesses or runtime authority before reporting the link, then verify
+Herdr retained it. Remote lookup SHALL NOT fall back to local transcripts.
+The external runtime does not offer an atomic process-and-link operation; this
+contract does not exclude a process change during the final report RPC.
+
+#### Scenario: A pane changes after preview
+
+- **WHEN** the captured runtime, terminal, foreground Codex process, existing
+  session or transcript identity changes before confirmation
+- **THEN** the link is refused and a fresh preview is required
+
+#### Scenario: Nested Inspector navigation and transient UI
+
+- **WHEN** terminal screen, Composer panel, Inspector navigation and a menu are open
+- **THEN** successive system Back actions close menu, navigation, panel and screen
+  before returning to the prior route

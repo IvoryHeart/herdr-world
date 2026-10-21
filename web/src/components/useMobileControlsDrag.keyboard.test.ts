@@ -566,7 +566,7 @@ async function registerDomTests() {
     ).toBe(false);
   });
 
-  test("compact row pan preserves editing focus until an actual navigation click", async () => {
+  test("outside compact row pan retires editing focus without losing the draft or caret", async () => {
     scale = 1.5;
     await mount();
     composerOpen = true;
@@ -580,7 +580,10 @@ async function registerDomTests() {
     const button = container.querySelector<HTMLButtonElement>(
       ".mobile-workspace-tools button",
     )!;
-    await act(async () => input.focus());
+    await act(async () => {
+      input.focus();
+      input.setSelectionRange(2, 8);
+    });
     const mouse = new browser.MouseEvent("mousedown", {
       bubbles: true,
       cancelable: true,
@@ -608,12 +611,17 @@ async function registerDomTests() {
       );
     });
     expect(mouse.defaultPrevented).toBe(true);
-    expect(document.activeElement).toBe(input);
+    // The unified editor ends editing on outside pointerdown, before any
+    // legacy row gesture; preventing mousedown must not reopen the keyboard.
+    expect(document.activeElement === input).toBe(false);
     expect(compact()).toBe(true);
     expect(input.value).toBe("unfinished draft");
+    expect([input.selectionStart, input.selectionEnd]).toEqual([2, 8]);
+    expect(drafts.readTerminalComposerDraft(draftKey)).toBe("unfinished draft");
     await act(async () => button.click());
-    expect(document.activeElement).not.toBe(input);
+    expect(document.activeElement === input).toBe(false);
     expect(input.value).toBe("unfinished draft");
+    expect([input.selectionStart, input.selectionEnd]).toEqual([2, 8]);
   });
 
   test("forced mobile layout is honored independently of media-query width", async () => {
@@ -643,7 +651,7 @@ async function registerDomTests() {
     expect(saves).toEqual([]);
   });
 
-  test("collapse and drag preserve active draft, selection, and composition; dismissed-keyboard touch still retires focus", async () => {
+  test("collapse and outside drag preserve draft, selection, and the IME lock without reopening the keyboard", async () => {
     scale = 1;
     await mount();
     composerOpen = true;
@@ -679,11 +687,26 @@ async function registerDomTests() {
       )!.disabled,
     ).toBe(true);
     await pointer("pointerdown", 350, 300);
+    expect(document.activeElement === input).toBe(false);
     await pointer("pointermove", 30, 300);
     await pointer("pointerup", 30, 300);
-    expect(document.activeElement).toBe(input);
+    expect(document.activeElement === input).toBe(false);
     expect(input.value).toBe("unfinished draft");
     expect([input.selectionStart, input.selectionEnd]).toEqual([2, 8]);
+    expect(drafts.readTerminalComposerDraft(draftKey)).toBe("unfinished draft");
+    const send = container.querySelector<HTMLButtonElement>(
+      '[aria-label="Send draft to the terminal"]',
+    )!;
+    expect(send.disabled).toBe(true);
+    await act(async () => {
+      input.focus();
+      input.dispatchEvent(
+        new browser.CompositionEvent("compositionend", {
+          bubbles: true,
+        }) as unknown as CompositionEvent,
+      );
+    });
+    expect(send.disabled).toBe(false);
     document.documentElement.classList.remove("keyboard-open");
     await act(async () =>
       toggle().dispatchEvent(

@@ -97,6 +97,7 @@ import {
 import { AgentIcon } from "./components/AgentIcon";
 import { agentStateKind, paneHasAgentHistory } from "./components/agentSession";
 import { CloseButton } from "./components/CloseButton";
+import { Toast } from "./components/Toast";
 import { focusIfUnchanged } from "./components/dialogFocus";
 import { CommandCombobox } from "./components/CommandCombobox";
 import { measuredFixedPositionScale } from "./fixedPositionScale";
@@ -1742,7 +1743,9 @@ export default function App({
   );
   const activateTerminalSurface = useCallback(() => {
     updateInspectorState((current) =>
-      current ? { ...current, open: false } : current,
+      current && (mobile || current.expanded)
+        ? { ...current, open: false }
+        : current,
     );
     setAnnotationsOpen(false);
     setMobileView("session");
@@ -2261,6 +2264,11 @@ export default function App({
       .panes.find((candidate) => candidate.pane_id === deliveredPaneId);
     if (!pane || pane.workspace_id !== annotationWorkspace?.workspace_id)
       return;
+    // Explicit destination navigation reveals the terminal even when ordinary
+    // desktop terminal activation preserves the docked Inspector.
+    updateInspectorState((current) =>
+      current ? { ...current, open: false } : current,
+    );
     activateTerminalSurface();
     void store.focusQualifiedTarget({
       connectionId: annotationClient.connectionId,
@@ -2273,6 +2281,7 @@ export default function App({
     annotationWorkspace?.workspace_id,
     annotationClient,
     deliveredPaneId,
+    updateInspectorState,
   ]);
   const openFileExplorer = useCallback(
     (workspaceId?: string, focusInspector = true) =>
@@ -4595,10 +4604,9 @@ export default function App({
               activateTerminalSurface();
               setTerminalComposerOpen(true);
             });
-            // Give the dock focus; Composer's editor opens the keyboard on tap.
-            document
-              .querySelector<HTMLElement>(".terminal-composer")
-              ?.focus({ preventScroll: true });
+            // This button is the typing gesture; focus the active editor while
+            // the browser may still raise its keyboard synchronously.
+            activeTerminalInput(document)?.focus({ preventScroll: true });
           }}
         >
           <Keyboard size={20} />
@@ -4613,11 +4621,14 @@ export default function App({
         ? createPortal(
             <div className="toast-viewport" aria-live="polite">
               {s.updateInfo?.update_available ? (
-                <div
+                <Toast
                   className={`toast toast-info ${
                     s.updateInstalling ? "toast-loading" : ""
                   }`}
                   role="status"
+                  onDismiss={() => store.dismissUpdate()}
+                  notificationKey={s.updateInfo.latest_version}
+                  dismissDisabled={s.updateInstalling}
                 >
                   <ToastMark kind="info" loading={s.updateInstalling} />
                   <div className="toast-content">
@@ -4661,14 +4672,21 @@ export default function App({
                     onClick={() => store.dismissUpdate()}
                     disabled={s.updateInstalling}
                   />
-                </div>
+                </Toast>
               ) : null}
               {s.notice ? (
-                <div
+                <Toast
                   className={`toast toast-${s.notice.kind} ${
                     s.notice.loading ? "toast-loading" : ""
                   }`}
                   role={s.notice.kind === "error" ? "alert" : "status"}
+                  notificationKey={s.notice.id}
+                  onDismiss={() => {
+                    // Swipes dismiss after their exit animation; keep any
+                    // newer notice that replaced this one meanwhile.
+                    if (store.get().notice?.id === s.notice?.id)
+                      store.clearNotice();
+                  }}
                 >
                   <ToastMark kind={s.notice.kind} loading={s.notice.loading} />
                   <div className="toast-content">
@@ -4694,7 +4712,7 @@ export default function App({
                     label="Dismiss notification"
                     onClick={() => store.clearNotice()}
                   />
-                </div>
+                </Toast>
               ) : null}
             </div>,
             document.body,

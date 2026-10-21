@@ -167,6 +167,7 @@
       "properties": "Captured host/generation remains the dispatch owner; no fallback after explicit rejection",
       "existingTests": [
         "server/src/connections/protocol.test.ts",
+        "server/src/connections/session-link-routing.test.ts",
         "server/src/connections/http-routing.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/145",
@@ -183,6 +184,7 @@
         ],
         "tests": [
           "server/src/connections/protocol.test.ts",
+          "server/src/connections/session-link-routing.test.ts",
           "server/src/connections/http-routing.test.ts"
         ],
         "checks": ["bun run check", "bun run verification:check"],
@@ -321,7 +323,10 @@
       "existingTests": [
         "web/src/terminalComposer.test.ts",
         "web/src/terminalComposerCommands.test.ts",
-        "web/src/mobileTerminalShortcuts.test.ts"
+        "web/src/mobileTerminalShortcuts.test.ts",
+        "web/src/components/TerminalComposer.dom.test.ts",
+        "web/src/components/TerminalComposer.uploads.test.ts",
+        "web/src/components/TerminalView.inputMode.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/186",
       "technique": "alternative",
@@ -336,7 +341,10 @@
         "tests": [
           "web/src/terminalComposer.test.ts",
           "web/src/terminalComposerCommands.test.ts",
-          "web/src/mobileTerminalShortcuts.test.ts"
+          "web/src/mobileTerminalShortcuts.test.ts",
+          "web/src/components/TerminalComposer.dom.test.ts",
+          "web/src/components/TerminalComposer.uploads.test.ts",
+          "web/src/components/TerminalView.inputMode.test.ts"
         ],
         "checks": ["bun run check"],
         "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
@@ -784,7 +792,10 @@
         "web/src/tabLayout.test.ts",
         "web/src/visibleTabLayout.test.ts",
         "web/src/tabPins.test.ts",
-        "web/src/tabReorder.test.ts"
+        "web/src/tabReorder.test.ts",
+        "web/src/components/PaneMoveMenu.test.ts",
+        "web/src/store.test.ts",
+        "web/src/tabStripScroll.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/186",
       "technique": "alternative",
@@ -800,7 +811,10 @@
           "web/src/tabLayout.test.ts",
           "web/src/visibleTabLayout.test.ts",
           "web/src/tabPins.test.ts",
-          "web/src/tabReorder.test.ts"
+          "web/src/tabReorder.test.ts",
+          "web/src/components/PaneMoveMenu.test.ts",
+          "web/src/store.test.ts",
+          "web/src/tabStripScroll.test.ts"
         ],
         "checks": ["bun run check"],
         "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
@@ -893,14 +907,19 @@
       "properties": "Atomic publication and session identity; old reports cannot overwrite newer state",
       "existingTests": [
         "server/src/agent/session-history.test.ts",
+        "server/src/agent/codex-session-link.test.ts",
+        "server/src/connections/session-link-routing.test.ts",
+        "server/src/agent/codex-session.test.ts",
+        "web/src/components/AgentHistoryChat.test.ts",
+        "web/src/components/ConversationMinimap.test.ts",
         "server/src/agent/checkout-context.test.ts",
         "server/src/herdr/task-summary.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/182",
       "technique": "alternative",
-      "assessment": "direct report/session parsing/publication fixtures; runtime admission delegated to qualified-operation",
+      "assessment": "direct report/session parsing/publication, Python-free remote Codex lookup, and one-shot preview/confirmation fixtures; runtime admission delegated to qualified-operation",
       "status": "shared-model",
-      "remaining": "Session identity is a distinct consumer guard; parsing all external formats is direct fixture evidence, not a manager guarantee.",
+      "remaining": "The external runtime cannot atomically compare the foreground process and report a link; preview/confirmation tests do not claim to close that final RPC race. Session identity is a distinct consumer guard; parsing all external formats is direct fixture evidence, not a manager guarantee.",
       "requiredChecks": ["bun run check", "bun run verification:gate"],
       "partialEvidence": {
         "models": ["quint/runtime-leases.qnt"],
@@ -910,6 +929,11 @@
         ],
         "tests": [
           "server/src/agent/session-history.test.ts",
+          "server/src/agent/codex-session-link.test.ts",
+          "server/src/connections/session-link-routing.test.ts",
+          "server/src/agent/codex-session.test.ts",
+          "web/src/components/AgentHistoryChat.test.ts",
+          "web/src/components/ConversationMinimap.test.ts",
           "server/src/agent/checkout-context.test.ts",
           "server/src/herdr/task-summary.test.ts"
         ],
@@ -936,9 +960,9 @@
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/182",
       "technique": "ranger-authority",
-      "assessment": "turn authority, cancellation and crash/recovery under explicit storage assumptions",
+      "assessment": "turn authority, cancellation and crash/recovery under explicit storage assumptions; direct FIFO/steer/held-queue integration, chat-transition and concurrent-retry admission regressions, and captured-generation persistence evidence",
       "status": "shared-model",
-      "remaining": "actual task scheduler/SDK admission, cancellation, interrupted-run recovery and platform storage tests remain required consumer evidence.",
+      "remaining": "Actual task scheduler/SDK admission, cancellation, interrupted-run recovery and platform storage remain required consumer evidence. Busy-message queue ordering and steering use direct service/driver regressions; the maintained model does not claim queue or SDK scheduling coverage.",
       "requiredChecks": ["bun run check", "bun run verification:gate"],
       "partialEvidence": {
         "models": ["quint/ranger-recovery.qnt"],
@@ -978,7 +1002,7 @@
       "technique": "ranger-authority",
       "assessment": "task run/stop/pause/recovery; timezone and DST behavior remains direct calendar evidence",
       "status": "shared-model",
-      "remaining": "actual task scheduler/SDK admission, cancellation, interrupted-run recovery and platform storage tests remain required consumer evidence.",
+      "remaining": "Actual task scheduler/SDK admission, cancellation, interrupted-run recovery and platform storage remain required consumer evidence. Busy-message queue ordering and steering use direct service/driver regressions; the maintained model does not claim queue or SDK scheduling coverage.",
       "requiredChecks": ["bun run check", "bun run verification:gate"],
       "partialEvidence": {
         "models": ["quint/ranger-recovery.qnt"],
@@ -1017,7 +1041,7 @@
       "technique": "ranger-authority",
       "assessment": "dispatch-time permission/revision/identity revalidation and manual confirmation",
       "status": "modeled",
-      "remaining": "actual task scheduler/SDK admission, cancellation, interrupted-run recovery and platform storage tests remain required consumer evidence.",
+      "remaining": "Actual task scheduler/SDK admission, cancellation, interrupted-run recovery and platform storage remain required consumer evidence. Busy-message queue ordering and steering use direct service/driver regressions; the maintained model does not claim queue or SDK scheduling coverage.",
       "requiredChecks": ["bun run check", "bun run verification:gate"],
       "partialEvidence": {
         "models": ["quint/ranger-authority.qnt"],
@@ -1088,7 +1112,8 @@
         "server/src/http/auth-pin.test.ts",
         "server/src/http/browser-admission.test.ts",
         "server/src/config/auth-token.test.ts",
-        "server/src/config/server-config.test.ts"
+        "server/src/config/server-config.test.ts",
+        "server/src/http/login-page-pin.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/186",
       "technique": "alternative",
@@ -1103,7 +1128,9 @@
         "tests": [
           "server/src/http/auth.test.ts",
           "server/src/http/auth-pin.test.ts",
-          "server/src/http/browser-admission.test.ts"
+          "server/src/http/browser-admission.test.ts",
+          "server/src/config/auth-token.test.ts",
+          "server/src/http/login-page-pin.test.ts"
         ],
         "checks": ["bun run check"],
         "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
@@ -1201,7 +1228,11 @@
       "existingTests": [
         "server/src/workspace/git-actions.test.ts",
         "server/src/workspace/auto-sync.test.ts",
-        "server/src/workspace/git-snapshot.test.ts"
+        "server/src/workspace/git-snapshot.test.ts",
+        "server/src/workspace/diff-base.test.ts",
+        "server/src/workspace/files.test.ts",
+        "web/src/components/DiffViewerPanel.test.ts",
+        "web/src/gitDiffSummaryStore.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/186",
       "technique": "alternative",
@@ -1216,7 +1247,11 @@
         "tests": [
           "server/src/workspace/git-actions.test.ts",
           "server/src/workspace/auto-sync.test.ts",
-          "server/src/workspace/git-snapshot.test.ts"
+          "server/src/workspace/git-snapshot.test.ts",
+          "server/src/workspace/diff-base.test.ts",
+          "server/src/workspace/files.test.ts",
+          "web/src/components/DiffViewerPanel.test.ts",
+          "web/src/gitDiffSummaryStore.test.ts"
         ],
         "checks": ["bun run check"],
         "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
@@ -1322,7 +1357,8 @@
         "scripts/install-plugin.windows.test.ts",
         "scripts/plugin-native.test.ts",
         "server/src/config/plugin-command.test.ts",
-        "scripts/installer-upgrade.test.ts"
+        "scripts/installer-upgrade.test.ts",
+        "server/src/herdr/release.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/186",
       "technique": "alternative",
@@ -1344,7 +1380,8 @@
           "scripts/install-plugin.windows.test.ts",
           "scripts/plugin-native.test.ts",
           "server/src/config/plugin-command.test.ts",
-          "scripts/installer-upgrade.test.ts"
+          "scripts/installer-upgrade.test.ts",
+          "server/src/herdr/release.test.ts"
         ],
         "checks": ["bun run check"],
         "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."

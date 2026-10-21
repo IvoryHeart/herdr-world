@@ -1721,13 +1721,14 @@ async function run() {
     mobileHeader.getBoundingClientRect().height === 0,
     "mobile terminal title and resource bars consume no terminal height",
   );
-  const mobileInput = mobileInspector.querySelector<HTMLButtonElement>(
-    'button[aria-label="Open terminal input"]',
+  const mobileInput = mobileInspector.querySelector<HTMLTextAreaElement>(
+    "textarea.terminal-composer-input",
   );
   check(
     !!mobileInput,
     "mobile Inspector offers the shared terminal input panel",
   );
+  mobileInput?.focus({ preventScroll: true });
   mobileInput?.click();
   await until(
     () => !!mobileInspector.querySelector(".terminal-composer"),
@@ -1735,10 +1736,10 @@ async function run() {
   );
   check(
     !!mobileInspector.querySelector(
-      '.terminal-composer input[value="composer"]',
+      ".terminal-composer textarea.terminal-composer-input",
     ) &&
       !!mobileInspector.querySelector(
-        '.terminal-composer input[value="direct"]',
+        '.terminal-composer button[aria-label="Type directly into the terminal"]',
       ) &&
       !!mobileInspector.querySelector(".terminal-composer textarea"),
     "mobile Inspector panel includes Composer, Direct and the draft editor",
@@ -1792,13 +1793,11 @@ async function run() {
     )
     ?.click();
   await until(
-    () => !mobileInspector.querySelector(".terminal-composer"),
+    () => !mobileInspector.querySelector(".terminal-composer[data-open]"),
     "mobile Inspector input closes without losing its terminal",
   );
   mobileInspector
-    .querySelector<HTMLButtonElement>(
-      'button[aria-label="Open terminal input"]',
-    )!
+    .querySelector<HTMLTextAreaElement>("textarea.terminal-composer-input")!
     .click();
   await until(
     () =>
@@ -3292,7 +3291,7 @@ async function run() {
     () =>
       persistentReviewerInspector?.getAttribute("data-view") === "terminal" &&
       persistentReviewerInspector.querySelector(
-        'button[aria-label="Open terminal input"]',
+        "textarea.terminal-composer-input",
       ),
     "compact Inspector Terminal view",
   );
@@ -3301,8 +3300,8 @@ async function run() {
     "compact World Inspector Terminal navigation was not active",
   );
   const compactKeyboardButton =
-    persistentReviewerInspector!.querySelector<HTMLButtonElement>(
-      'button[aria-label="Open terminal input"]',
+    persistentReviewerInspector!.querySelector<HTMLTextAreaElement>(
+      "textarea.terminal-composer-input",
     )!;
   const compactShortcutButton =
     persistentReviewerInspector!.querySelector<HTMLButtonElement>(
@@ -3331,6 +3330,7 @@ async function run() {
         compactShortcutButton.contains(compactShortcutHitTarget)),
     "compact World Inspector omitted its device keyboard or terminal shortcuts",
   );
+  compactKeyboardButton.focus({ preventScroll: true });
   compactKeyboardButton.click();
   // On phones the Message bar raises the keyboard in Composer's editor.
   await until(
@@ -3366,7 +3366,7 @@ async function run() {
         .querySelector(".workspace-surface-owner")
         ?.classList.contains("is-inactive") &&
       document.querySelector(
-        '.workspace-terminal-surface button[aria-label="Open terminal input"]',
+        ".workspace-terminal-surface textarea.terminal-composer-input",
       ),
     "Spaces handoff",
   );
@@ -4317,16 +4317,12 @@ async function run() {
     () =>
       !!visiblePaneId() &&
       store.get().selectedPaneId === visiblePaneId() &&
-      !!visibleInspector()?.querySelector(
-        'button[aria-label="Open terminal input"]',
-      ),
+      !!visibleInspector()?.querySelector("textarea.terminal-composer-input"),
     () =>
       `visible Inspector pane ${visiblePaneId()} active before Back to Town`,
   );
   visibleInspector()!
-    .querySelector<HTMLButtonElement>(
-      'button[aria-label="Open terminal input"]',
-    )!
+    .querySelector<HTMLTextAreaElement>("textarea.terminal-composer-input")!
     .click();
   await until(
     () => !!visibleInspector()?.querySelector(".terminal-composer"),

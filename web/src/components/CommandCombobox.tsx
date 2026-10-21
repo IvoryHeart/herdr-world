@@ -1,4 +1,5 @@
 import { useCreationProgress } from "../creationRequests";
+import { useCloseGlobalMenuForDialog } from "./useCloseGlobalMenuForDialog";
 import {
   ArrowDown,
   ArrowLeft,
@@ -301,6 +302,7 @@ function OwnedCommandCombobox({
   const [open, setOpen] = useState(false);
   const [capturedExtension, setCapturedExtension] =
     useState<CommandExtension | null>(null);
+  useCloseGlobalMenuForDialog(open, setOpen);
   const [search, setSearch] = useState("");
   const [selectedActionValue, setSelectedActionValue] = useState("");
   const [selectedActionSearch, setSelectedActionSearch] = useState("");
@@ -1224,6 +1226,10 @@ function OwnedCommandCombobox({
         <PopoverContent
           className="command-popover"
           align="end"
+          onCloseAutoFocus={(event) => {
+            if (document.querySelector(".modal-backdrop:not([hidden])"))
+              event.preventDefault();
+          }}
           onKeyDownCapture={(event) => {
             if (!operationalShortcutsEnabled) return;
             runCommandNumberShortcut(

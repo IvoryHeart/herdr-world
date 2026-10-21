@@ -40,6 +40,9 @@ function fixture(agent = "pi") {
     async findPiSessionById() {
       return file;
     },
+    async findCodexSessionById() {
+      return file;
+    },
   };
   const herdrCall = async () => ({
     agent: { agent, agent_session: { kind: "path", value: path } },
@@ -271,6 +274,9 @@ describe("session projection cache and history revisions", () => {
       entry_id: first.entries[0].id,
     });
     expect(fetched.text).toContain("longer");
+    // The fetched payload's hash matches the redacted entry it belongs to.
+    expect(next.upserts[0].text_hash).toBe(fetched.text_hash);
+    expect(next.upserts[0].text_hash).not.toBe(first.entries[0].text_hash);
   });
 
   test("readEntry rejects unknown or evicted history entries", async () => {

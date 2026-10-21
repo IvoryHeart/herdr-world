@@ -118,8 +118,8 @@ async function run() {
       `${context}: history count must share the title`,
     );
     check(
-      actions.querySelectorAll("button").length === 4,
-      `${context}: details, transcript, export and refresh must share the header`,
+      actions.querySelectorAll("button").length === 5,
+      `${context}: Chat/Timeline, details, transcript, export and refresh must share the header`,
     );
     for (const button of actions.querySelectorAll("button")) {
       const bounds = button.getBoundingClientRect();
@@ -195,6 +195,26 @@ async function run() {
       i++
     )
       await settle();
+    const viewToggle = container.querySelector<HTMLButtonElement>(
+      '[aria-label="Chat view"]',
+    )!;
+    check(
+      viewToggle.getAttribute("aria-pressed") === "true" &&
+        !!container.querySelector(".agent-history-chat"),
+      "History must initially show Chat with its labeled view switch",
+    );
+    // Exercise Chat at the same narrow desktop width before retaining the
+    // Timeline card, filter, selection and keyboard regressions below.
+    container.style.width = "640px";
+    await settle();
+    check(container.scrollWidth <= 640, "Chat must fit the narrow Inspector");
+    viewToggle.click();
+    await settle();
+    check(
+      viewToggle.getAttribute("aria-pressed") === "false" &&
+        !!container.querySelector(".agent-history-card"),
+      "Timeline switch must expose the individual message records",
+    );
     for (const theme of ["dark", "light"]) {
       document.documentElement.dataset.theme = theme;
       for (const width of [1000, 640]) {

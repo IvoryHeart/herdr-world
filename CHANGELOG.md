@@ -7,6 +7,33 @@ are optional because the merged PR history records their source.
 
 ## [Unreleased]
 
+### Changed
+
+- Reject pending Ranger follow-ups after their chat changes and deduplicate
+  concurrent queue retries after scope capture. Remote Codex History and session
+  linking no longer require Python 3 on Unix SSH hosts.
+
+- Refresh Roamgate source through `1a81c5da` after v0.8.7: add History chat and
+  shared conversation minimaps, workspace PR/MR status, Inspector refresh and
+  commit navigation, explicit Codex session linking and remote transcript lookup,
+  and mobile notification banners. Retain World runtime ownership and navigation.
+
+- Refresh Roamgate source through main `57327a0d` after v0.8.6: add Ranger
+  Steer/Queue messages, collapsible model reasoning and selection-safe terminal
+  repaint focus, plus clearer Message/Direct switching and shortcut visibility.
+  Queued questions retain their selected runtime and hold on replacement.
+
+- Synchronize the Roamgate v0.8.6 source: add login-token help, symlinked user
+  config roots, pane dragging across tabs, tab-strip overflow controls, and
+  repository comparison branches. Keep World's qualified terminals, mobile app
+  bar and managed-window tabs. Update the optional Herdr setup target to 0.9.5
+  with verified release checksums; terminal protocol remains 22.
+
+### Fixed
+
+- Successful uploads from the desktop Message editor stay in its draft without
+  reporting an input failure; uploads from desktop terminal output still use Direct.
+
 ## [0.2.6] - 2026-10-21
 
 ### Documentation

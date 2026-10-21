@@ -11,6 +11,7 @@ import { prepareTerminalPasteText } from "./terminalPaste";
 const drafts = new Map<string, string>();
 const selections = new Map<string, { start: number; end: number }>();
 const retiredDraftKeys = new Set<string>();
+const recoveredUploadKeys = new Set<string>();
 let activeDraftScopePrefixes: ReadonlySet<string> | null = null;
 type TerminalComposerDraftListener = (text: string) => void;
 type TerminalComposerSubmissionListener = (pending: boolean) => void;
@@ -48,7 +49,7 @@ function terminalComposerDraftScopePrefix(
   return `${JSON.stringify([connectionId, connectionGeneration]).slice(0, -1)},`;
 }
 
-function terminalComposerDraftKeyIsActive(key: string): boolean {
+export function terminalComposerDraftKeyIsActive(key: string): boolean {
   return (
     !retiredDraftKeys.has(key) &&
     (activeDraftScopePrefixes === null ||
@@ -105,6 +106,7 @@ export function writeTerminalComposerDraft(key: string, text: string): void {
 }
 
 export function clearTerminalComposerDraft(key: string): void {
+  recoveredUploadKeys.delete(key);
   selections.delete(key);
   if (!drafts.delete(key)) return;
   notifyTerminalComposerDraft(key, "");
@@ -215,7 +217,8 @@ export function activateTerminalComposerDraftScope(
     ),
   ]);
   for (const key of drafts.keys()) {
-    if (!terminalComposerDraftKeyIsActive(key)) clearTerminalComposerDraft(key);
+    if (!terminalComposerDraftKeyIsActive(key) && !recoveredUploadKeys.has(key))
+      clearTerminalComposerDraft(key);
   }
   for (const key of selections.keys()) {
     if (!terminalComposerDraftKeyIsActive(key)) selections.delete(key);
@@ -249,6 +252,27 @@ export function insertIntoTerminalComposerDraft(
   selections.set(key, { start: next.caret, end: next.caret });
   writeTerminalComposerDraft(key, next.text);
   return next;
+}
+
+/** Recovery only: uploaded paths must survive even a retired connection/pane.
+ * Never reactivates the key or permits input/submission to that old target.
+ */
+export function retainTerminalComposerUploadPaths(
+  key: string,
+  paths: string,
+): void {
+  recoveredUploadKeys.add(key);
+  const current = readTerminalComposerDraft(key);
+  const selection = readTerminalComposerSelection(key);
+  const next = terminalComposerInsertAtCaret(
+    current,
+    selection?.start ?? current.length,
+    selection?.end ?? current.length,
+    paths,
+  );
+  selections.set(key, { start: next.caret, end: next.caret });
+  drafts.set(key, next.text);
+  notifyTerminalComposerDraft(key, next.text);
 }
 
 /** Test hook: number of retained drafts. */

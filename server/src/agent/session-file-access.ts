@@ -1,4 +1,6 @@
 import { stat } from "node:fs/promises";
+import { homedir } from "node:os";
+import { basename, join, resolve } from "node:path";
 import { sshCommandArgv } from "../bridge/ssh-command";
 import type { SessionFile } from "./session-types";
 
@@ -16,7 +18,46 @@ export type AgentSessionFileAccess = {
   readPrefix(path: string, byteLimit: number): Promise<Uint8Array>;
   readDownloadBody(path: string): Promise<BodyInit>;
   findPiSessionById(id: string): Promise<SessionFile | null>;
+  findCodexSessionById(id: string): Promise<SessionFile | null>;
 };
+
+export function validateCodexSessionId(id: string) {
+  if (!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(id)) {
+    throw new Error("Enter a complete Codex session ID.");
+  }
+}
+
+export function codexHome() {
+  const configured = process.env.CODEX_HOME?.trim();
+  if (!configured) return join(homedir(), ".codex");
+  if (configured === "~") return homedir();
+  return configured.startsWith("~/")
+    ? join(homedir(), configured.slice(2))
+    : resolve(configured);
+}
+
+async function findLocalCodexSession(id: string) {
+  validateCodexSessionId(id);
+  let found: string | null = null;
+  for (const directory of ["sessions", "archived_sessions"]) {
+    const root = join(codexHome(), directory);
+    try {
+      for await (const path of new Bun.Glob("**/*.jsonl").scan({
+        cwd: root,
+        absolute: true,
+        onlyFiles: true,
+      })) {
+        if (!basename(path).endsWith(`-${id}.jsonl`)) continue;
+        if (found)
+          throw new Error("Multiple transcripts match this Codex session ID.");
+        found = path;
+      }
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    }
+  }
+  return found ? localSessionFile(found) : null;
+}
 
 async function localSessionFile(path: string): Promise<SessionFile | null> {
   try {
@@ -49,6 +90,7 @@ export const localAgentSessionFiles: AgentSessionFileAccess = {
   async findPiSessionById() {
     return null;
   },
+  findCodexSessionById: findLocalCodexSession,
 };
 
 function parseRemoteFileMetadata(stdout: string): SessionFile | null {
@@ -125,6 +167,34 @@ printf '%s\\t%s\\t%s\\t%s\\t%s\\n' "$size" "$mtime" "$path64" "$identity" "$chan
   return {
     remote: true,
     statFile,
+    async findCodexSessionById(id) {
+      validateCodexSessionId(id);
+      const command = `
+set -eu
+id=${args.shQuote(id)}
+root="\${CODEX_HOME:-$HOME/.codex}"
+case "$root" in
+  "~") root="$HOME" ;;
+  "~/"*) root="$HOME/\${root:2}" ;;
+esac
+[ -d "$root" ] || exit 0
+root="$(cd -P "$root" && pwd)"
+match=""
+for directory in "$root/sessions" "$root/archived_sessions"; do
+  [ -d "$directory" ] || continue
+  while IFS= read -r -d '' candidate; do
+    if [ -n "$match" ]; then
+      printf '%s\\n' 'Multiple transcripts match this Codex session ID.' >&2
+      exit 1
+    fi
+    match="$candidate"
+  done < <(find "$directory" -type f -name "*-$id.jsonl" -print0)
+done
+[ -z "$match" ] || printf '%s\\n' "$match"
+`;
+      const path = (await runRemote(command)).toString("utf8").trim();
+      return path ? statFile(path) : null;
+    },
     async readText(path) {
       return (await runRemote(`set -eu\ncat ${args.shQuote(path)}`)).toString(
         "utf8",

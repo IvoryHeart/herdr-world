@@ -14,6 +14,8 @@ const RADIX_POPPER_CONTENT_WRAPPER = "[data-radix-popper-content-wrapper]";
 
 type FocusableLike = Pick<Element, "closest">;
 type DocumentLike = Pick<Document, "querySelector">;
+type SelectionDocumentLike = Pick<Document, "getSelection">;
+type PointerTarget = Pick<Document, "addEventListener" | "removeEventListener">;
 
 export function terminalTouchInputAction(
   started: boolean,
@@ -53,4 +55,78 @@ export function terminalTouchShouldDismissInput(
   inputActive: boolean,
 ): boolean {
   return started && !moved && inputActive;
+}
+
+function selectionNodeInOverlay(node: Node | null | undefined): boolean {
+  let element = node?.nodeType === 1 ? (node as Element) : node?.parentElement;
+  while (element) {
+    if (element.closest(TERMINAL_FOCUS_OVERLAY_SELECTOR)) return true;
+    const root = element.getRootNode();
+    element = "host" in root ? (root as ShadowRoot).host : null;
+  }
+  return false;
+}
+
+/**
+ * Focusing xterm clears the document selection, and non-editable overlay text
+ * never holds focus. Output-driven refocusing therefore waits while the user
+ * is pressing in an overlay or has text selected there. Intentional focus
+ * changes, such as activating a pane, do not consult this.
+ */
+export function terminalOutputFocusBlockedBySelection(
+  doc: SelectionDocumentLike,
+  pointerDownInOverlay = overlayPointerDown,
+): boolean {
+  if (pointerDownInOverlay) return true;
+  const selection = doc.getSelection();
+  if (!selection) return false;
+  if (
+    !selection.isCollapsed &&
+    [selection.anchorNode, selection.focusNode].some(selectionNodeInOverlay)
+  )
+    return true;
+  // Diff text lives in shadow roots; composed ranges expose its host boundary.
+  return (
+    selection
+      .getComposedRanges?.()
+      .some(
+        (range) =>
+          (range.startContainer !== range.endContainer ||
+            range.startOffset !== range.endOffset) &&
+          [range.startContainer, range.endContainer].some(
+            selectionNodeInOverlay,
+          ),
+      ) ?? false
+  );
+}
+
+let overlayPointerDown = false;
+let overlayPointerWatchers = 0;
+const onOverlayPointerDown = (event: Event) => {
+  const target = event.target as Partial<FocusableLike> | null;
+  overlayPointerDown = Boolean(
+    target?.closest?.(TERMINAL_FOCUS_OVERLAY_SELECTOR),
+  );
+};
+const onOverlayPointerEnd = () => {
+  overlayPointerDown = false;
+};
+
+/** Tracks presses in overlays once for every mounted terminal. */
+export function watchTerminalOverlayPointer(target: PointerTarget) {
+  if (overlayPointerWatchers++ === 0) {
+    target.addEventListener("pointerdown", onOverlayPointerDown, true);
+    target.addEventListener("pointerup", onOverlayPointerEnd, true);
+    target.addEventListener("pointercancel", onOverlayPointerEnd, true);
+  }
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    if (--overlayPointerWatchers > 0) return;
+    target.removeEventListener("pointerdown", onOverlayPointerDown, true);
+    target.removeEventListener("pointerup", onOverlayPointerEnd, true);
+    target.removeEventListener("pointercancel", onOverlayPointerEnd, true);
+    overlayPointerDown = false;
+  };
 }

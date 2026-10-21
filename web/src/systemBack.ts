@@ -2,15 +2,15 @@ import { useEffect, useRef } from "react";
 import { useLayoutPreferences } from "./layoutPreferences";
 
 /**
- * How a layer stacks for the phone's Back: a screen (a terminal) sits below
- * a panel (Composer, workspace list), which sits below a popup (menu, sheet).
- * Back closes the highest open layer; equal levels close newest first.
+ * Phone Back closes popups, then nested navigation, then panels and terminal screens.
+ * Equal levels close newest first.
  */
-export type SystemBackLevel = "screen" | "panel" | "popup";
+export type SystemBackLevel = "screen" | "panel" | "navigation" | "popup";
 const LEVELS: Record<SystemBackLevel, number> = {
   screen: 0,
   panel: 1,
-  popup: 2,
+  navigation: 2,
+  popup: 3,
 };
 
 type Layer = { level: number; order: number; close: () => void };
@@ -32,6 +32,12 @@ export function useSystemBack(
   const closeRef = useRef(close);
   closeRef.current = close;
   const active = mobile && open;
+  useEffect(() => {
+    if (!mobile) {
+      closedOnScreen = true;
+      scheduleReconcile();
+    }
+  }, [mobile]);
   // Declared first so its cleanup runs first: unmounting the app is not the
   // user closing a layer, and must not move history on its own.
   const unmounting = useRef(false);
@@ -72,6 +78,7 @@ let previousState: unknown;
 let forwardBase: string | undefined;
 // Whether a layer closed since the last reconcile other than by unmounting.
 let closedOnScreen = false;
+let leaving = false;
 let reconcileScheduled = false;
 // history.back() is asynchronous; until our own Back lands, the current entry
 // is stale and a popstate is ours, not the user's.
@@ -110,7 +117,7 @@ function scheduleReconcile() {
 
 function reconcile() {
   reconcileScheduled = false;
-  if (backPending) return;
+  if (backPending || leaving) return;
   const depth = guardDepth(window.history.state);
   if (layers.size > 0) forwardBase = undefined;
   if (layers.size > depth) {
@@ -136,6 +143,18 @@ function reconcile() {
 
 if (typeof window !== "undefined") {
   previousState = window.history.state;
+  if (isGuard(previousState)) {
+    closedOnScreen = true;
+    scheduleReconcile();
+  }
+  window.addEventListener("pagehide", () => {
+    leaving = true;
+  });
+  window.addEventListener("pageshow", () => {
+    leaving = false;
+    closedOnScreen = true;
+    scheduleReconcile();
+  });
   window.addEventListener("popstate", (event) => {
     const from = previousState;
     previousState = event.state;

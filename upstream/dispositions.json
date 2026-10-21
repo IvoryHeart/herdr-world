@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "source": "5ce1d8d620549226de76321303e7bffa911ae371",
+  "source": "1a81c5daa49fe49e55a5eafbe88e5d8ce94a4376",
   "changes": [
     {
       "commit": "447f7196b9a23979b026d6b79619836d3337cc06",
@@ -22,11 +22,13 @@
       "reason": "Retain World-owned workflow controls and action pins; upstream workflow edits require a separate trusted human-reviewed integration.",
       "evidence": [
         ".github/workflows/release.yml",
-        "docs/upstream-follow-ups.md#world-workflow-controls"
+        "docs/upstream-follow-ups.md#world-workflow-controls",
+        "docs/upstream-follow-ups.md#assessment-for-source-57327a0d-20-october-2026",
+        "docs/upstream-follow-ups.md#assessment-for-source-1a81c5da-20-october-2026"
       ],
       "followUp": "docs/upstream-follow-ups.md#world-workflow-controls",
       "revisitWhen": "Every source sync; manually assess upstream action security fixes and required platform changes.",
-      "reviewedFor": "5ce1d8d620549226de76321303e7bffa911ae371"
+      "reviewedFor": "1a81c5daa49fe49e55a5eafbe88e5d8ce94a4376"
     },
     {
       "commit": "20cb447a808a1e09359cef4f4fb632a385d4485e",
@@ -410,6 +412,376 @@
       "followUp": null,
       "revisitWhen": null,
       "reviewedFor": "5ce1d8d620549226de76321303e7bffa911ae371"
+    },
+    {
+      "commit": "99ea4c280cda31d830e91f8f8862ad66ab9cc742",
+      "title": "Show where to find the login token on the login page (#441)",
+      "status": "adapted",
+      "reason": "Show only a safe home-relative command for World's generated token, World service QR command and World login documentation.",
+      "evidence": [
+        "server/src/config/auth-token.test.ts",
+        "server/src/http/login-page-pin.test.ts"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "1a81c5daa49fe49e55a5eafbe88e5d8ce94a4376"
+    },
+    {
+      "commit": "bbdc04407fe8e10f74094c992d68ae0c84b5ee02",
+      "title": "Raise the keyboard from Type in one tap (#436)",
+      "status": "adapted",
+      "reason": "Message and Direct gestures synchronously activate their editor while preserving qualified input and explicit Direct authorization.",
+      "evidence": [
+        "web/src/components/TerminalView.inputMode.test.ts",
+        "web/src/components/TerminalComposer.dom.test.ts"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "1a81c5daa49fe49e55a5eafbe88e5d8ce94a4376"
+    },
+    {
+      "commit": "ab0866f429e22adff2571be6e0a9f4b6cd9ccc11",
+      "title": "Close mobile layers with the phone's Back (#433)",
+      "status": "adapted",
+      "reason": "Retain World's mobile screen/panel/popup Back hierarchy and adopt upstream departure handling.",
+      "evidence": [
+        "web/src/systemBack.test.ts",
+        "web/src/world/WorldFoundationApp.test.ts"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "1a81c5daa49fe49e55a5eafbe88e5d8ce94a4376"
+    },
+    {
+      "commit": "99ef5d7cde1a2ba0cded7ead5c95155af749801b",
+      "title": "Unify mobile input and navigation (#438)",
+      "status": "adapted",
+      "reason": "Use the shared Message editor below each qualified terminal and retain World's shared top Tabs/More app bar and managed-window sheet. Preserve upload destination and React 18 touch geometry.",
+      "evidence": [
+        "web/src/components/MobileControls.tsx",
+        "web/src/components/MobileTabSheet.test.ts",
+        "web/src/components/TerminalComposer.uploads.test.ts",
+        "web/src/components/TerminalView.inputMode.test.ts"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "1a81c5daa49fe49e55a5eafbe88e5d8ce94a4376"
+    },
+    {
+      "commit": "515640a1f6972815d7390aa969db4a5481afaf8a",
+      "title": "Drag panes onto tabs to move them or break them into a new tab (#440)",
+      "status": "adapted",
+      "reason": "Adopt cross-tab pane placement and new-tab breakout using captured World clients and generation checks.",
+      "evidence": [
+        "web/src/components/PaneMoveMenu.test.ts",
+        "web/src/store.test.ts",
+        "web/src/browserNavigation.test.ts"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "1a81c5daa49fe49e55a5eafbe88e5d8ce94a4376"
+    },
+    {
+      "commit": "930a83652dc6408e83de312cd39d0ff26fcb4420",
+      "title": "Keep one Back guard per open mobile layer (#442)",
+      "status": "adapted",
+      "reason": "Use one guard per layer and departure-aware cleanup; retain World terminal-screen priority and explicit Back helpers.",
+      "evidence": [
+        "web/src/systemBack.test.ts",
+        "web/src/components/TerminalView.inputMode.test.ts"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "1a81c5daa49fe49e55a5eafbe88e5d8ce94a4376"
+    },
+    {
+      "commit": "7ba13d211561664f952c49ea52f5a3057f21cf2c",
+      "title": "Make tab strip overflow discoverable and navigable (#443)",
+      "status": "adapted",
+      "reason": "Adopt scroll/overflow discovery on World's operationally scoped tab strip.",
+      "evidence": [
+        "web/src/tabStripScroll.test.ts",
+        "web/src/components/TabBar.tsx"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "1a81c5daa49fe49e55a5eafbe88e5d8ce94a4376"
+    },
+    {
+      "commit": "d4ec8b1a02109bec6d1ebb0919c708539c7d3280",
+      "title": "Start when the user config directory is a symlink (#445)",
+      "status": "adapted",
+      "reason": "Follow user-owned config roots while rejecting links inside World state; never migrate another product's files.",
+      "evidence": ["server/src/config/data-paths.test.ts"],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "1a81c5daa49fe49e55a5eafbe88e5d8ce94a4376"
+    },
+    {
+      "commit": "a465941610bd6fd49a9f5f277b2ad78c50ff40c7",
+      "title": "Support repository comparison branches in Inspector (#446)",
+      "status": "adapted",
+      "reason": "Adopt recorded repository default and selected comparison branches; retain connection/runtime-owned caches and read-only Git inspection.",
+      "evidence": [
+        "server/src/workspace/diff-base.test.ts",
+        "web/src/components/DiffViewerPanel.test.ts",
+        "web/src/gitDiffSummaryStore.test.ts"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "1a81c5daa49fe49e55a5eafbe88e5d8ce94a4376"
+    },
+    {
+      "commit": "8cc1685ec616de4acf3034db05c4af2368ca1b93",
+      "title": "Release 0.8.6 (#447)",
+      "status": "adapted",
+      "reason": "Record exact upstream release ancestry while retaining World version, plugin identity and measured asset budgets.",
+      "evidence": [
+        "UPSTREAM.md",
+        "herdr-plugin.toml",
+        "scripts/check-web-assets.mjs"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "1a81c5daa49fe49e55a5eafbe88e5d8ce94a4376"
+    },
+    {
+      "commit": "4c591c8d852765df0a8629eab6f95746af9e78ae",
+      "title": "chore(deps): bump oxlint to 1.88.0 (#449)",
+      "status": "adopted",
+      "reason": "Adopt compatible oxlint 1.88.0 tooling.",
+      "evidence": ["package.json", "bun.lock"],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "1a81c5daa49fe49e55a5eafbe88e5d8ce94a4376"
+    },
+    {
+      "commit": "2388b914daa17e1c3bad69583d984721fe221613",
+      "title": "chore(deps): update CodeQL actions to 4.39.0 (#454)",
+      "status": "divergent",
+      "reason": "Retain World-owned workflow controls; the upstream-only CodeQL workflow does not exist in World. Its action update requires separate trusted control review.",
+      "evidence": [
+        "docs/upstream-follow-ups.md#world-workflow-controls",
+        "docs/upstream-follow-ups.md#assessment-for-source-57327a0d-20-october-2026",
+        "docs/upstream-follow-ups.md#assessment-for-source-1a81c5da-20-october-2026"
+      ],
+      "followUp": "docs/upstream-follow-ups.md#world-workflow-controls",
+      "revisitWhen": "Every source sync and relevant action security or platform change.",
+      "reviewedFor": "1a81c5daa49fe49e55a5eafbe88e5d8ce94a4376"
+    },
+    {
+      "commit": "3d95be35d72b7498c2e66fbf2b68b3c2b8c395da",
+      "title": "chore(deps): bump typebox to 1.3.37 (#451)",
+      "status": "adopted",
+      "reason": "Adopt compatible typebox 1.3.37.",
+      "evidence": ["server/package.json", "bun.lock"],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "1a81c5daa49fe49e55a5eafbe88e5d8ce94a4376"
+    },
+    {
+      "commit": "e030b2e2e795a3839b64fafe1911853061dee0c2",
+      "title": "chore(deps): update React and ReactDOM to 19.3.1 (#453)",
+      "status": "divergent",
+      "reason": "Retain React 18 under World policy; the React 19.3.1 patch requires an owner-approved major migration.",
+      "evidence": [
+        "web/package.json",
+        "docs/upstream-follow-ups.md#react-18-compatibility",
+        "docs/upstream-follow-ups.md#assessment-for-source-1a81c5da-20-october-2026"
+      ],
+      "followUp": "docs/upstream-follow-ups.md#react-18-compatibility",
+      "revisitWhen": "Every source sync, React security advisory, or owner-approved major migration.",
+      "reviewedFor": "1a81c5daa49fe49e55a5eafbe88e5d8ce94a4376"
+    },
+    {
+      "commit": "25e85076e122dcbf83d5f475ee67c65749750c45",
+      "title": "chore(deps): update xterm core and fit with IME compatibility (#452)",
+      "status": "adapted",
+      "reason": "Upgrade xterm core/fit with IME compatibility while preserving World-qualified endpoint input.",
+      "evidence": [
+        "web/package.json",
+        "web/src/terminalComposition.ts",
+        "web/src/components/TerminalView.inputMode.test.ts"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "1a81c5daa49fe49e55a5eafbe88e5d8ce94a4376"
+    },
+    {
+      "commit": "7d668d4143454cc564b0c5278a398b45938e1473",
+      "title": "chore(deps): update Radix popover and deduplicate primitives (#450)",
+      "status": "adopted",
+      "reason": "Upgrade compatible Radix popover and deduplicate primitives with React 18 retained.",
+      "evidence": ["web/package.json", "bun.lock"],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "1a81c5daa49fe49e55a5eafbe88e5d8ce94a4376"
+    },
+    {
+      "commit": "2b5d883c96f5ccc4a0abcd160e2029c9cba10e1a",
+      "title": "Improve Composer input-mode switching and shortcut visibility (#455)",
+      "status": "adapted",
+      "reason": "Adopt mode/shortcut improvements with World-qualified input and React 18 native-blur handling. World top app-bar and 44/48px controls replace upstream footer styling and footer-only assertions; real World handoff/browser and input-mode DOM regressions cover the adaptation.",
+      "evidence": [
+        "web/src/components/TerminalComposer.tsx",
+        "web/src/components/TerminalView.inputMode.test.ts",
+        "web/src/world/WorldTerminalHandoff.test.ts"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "1a81c5daa49fe49e55a5eafbe88e5d8ce94a4376"
+    },
+    {
+      "commit": "9dcac5c2e7d09073950fc447e1bb17e501102f25",
+      "title": "Keep Ranger text selection and show model reasoning (#456)",
+      "status": "adapted",
+      "reason": "Add bounded model reasoning and preserve Ranger text selection without stealing focus across World runtime owners.",
+      "evidence": [
+        "server/src/assistant/pi-driver.test.ts",
+        "web/src/components/AssistantThinking.test.tsx",
+        "web/src/terminalFocus.test.ts"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "1a81c5daa49fe49e55a5eafbe88e5d8ce94a4376"
+    },
+    {
+      "commit": "57327a0dcac58c116662a26a7d1ea78d4ecf772b",
+      "title": "Add Ranger steer and queue for messages sent while it answers (#457)",
+      "status": "adapted",
+      "reason": "Add ordered Steer/Queue admission and recovery while retaining World runtime generations, task cancellation authority and original-scope ownership.",
+      "evidence": [
+        "server/src/assistant/service.test.ts",
+        "openspec/specs/workspace-assistant/spec.md"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "1a81c5daa49fe49e55a5eafbe88e5d8ce94a4376"
+    },
+    {
+      "commit": "56a81d124f8d296987f4b9506d77113a72dd6fb2",
+      "title": "Add chat view to the inspector's agent history (#459)",
+      "status": "adapted",
+      "reason": "Adopt History Chat/Timeline with World-qualified Inspector clients and React 18 refs.",
+      "evidence": [
+        "web/src/components/AgentHistoryChat.test.ts",
+        "web/src/components/agentHistoryView.test.ts"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "1a81c5daa49fe49e55a5eafbe88e5d8ce94a4376"
+    },
+    {
+      "commit": "eaa26c81f6fa4398a4b77db9632441af9d3de8e5",
+      "title": "Show latest PR and MR status in the workspace sidebar (#460)",
+      "status": "adapted",
+      "reason": "Adopt latest workspace PR/MR summaries while retaining World operational stores, qualified clients and bounded polling.",
+      "evidence": [
+        "server/src/workspace/pull-request.test.ts",
+        "web/src/useWorktreePullRequests.ts"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "1a81c5daa49fe49e55a5eafbe88e5d8ce94a4376"
+    },
+    {
+      "commit": "29dc9dc465809e52ca63794089446333bd1136c1",
+      "title": "Refresh Inspector files and keep workspace names beside PR/MR badges (#461)",
+      "status": "adapted",
+      "reason": "Adopt Inspector Files refresh and readable workspace names with World callback freshness.",
+      "evidence": [
+        "web/src/components/FileExplorerDialog.dom.test.ts",
+        "web/src/components/WorkspaceTree.tsx"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "1a81c5daa49fe49e55a5eafbe88e5d8ce94a4376"
+    },
+    {
+      "commit": "246de156db9cdeea9c59e7f40e74aac3b25ffb0c",
+      "title": "Release 0.8.7 (#462)",
+      "status": "adapted",
+      "reason": "Retain World release identity and existing enforced asset budgets while recording the exact v0.8.7 source; no dependency graph change.",
+      "evidence": [
+        "package.json",
+        "web/package.json",
+        "server/package.json",
+        "scripts/check-web-assets.mjs",
+        "UPSTREAM.md"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "1a81c5daa49fe49e55a5eafbe88e5d8ce94a4376"
+    },
+    {
+      "commit": "52239cb63ce233edeac49c8137a8b94aaf854af9",
+      "title": "Improve Inspector commit navigation and preserve focus (#463)",
+      "status": "adapted",
+      "reason": "Adopt Inspector commit navigation and resizing, adapted to World screen/panel/navigation/popup Back ordering and retained focus ownership.",
+      "evidence": [
+        "web/src/components/GitCommitHistory.test.ts",
+        "web/src/components/DiffViewerPanel.test.ts",
+        "web/src/filePreviewNavigation.test.ts",
+        "web/src/systemBack.browser.tsx"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "1a81c5daa49fe49e55a5eafbe88e5d8ce94a4376"
+    },
+    {
+      "commit": "f9f95806e4046b635b65a7bc1a68ddb916503071",
+      "title": "Unify the Ranger and History conversation minimaps, with a side rail in History chat (#464)",
+      "status": "adopted",
+      "reason": "Share the Ranger and History conversation minimap over the bounded loaded messages.",
+      "evidence": [
+        "web/src/components/ConversationMinimap.test.ts",
+        "web/src/components/AgentHistoryChat.test.ts"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "1a81c5daa49fe49e55a5eafbe88e5d8ce94a4376"
+    },
+    {
+      "commit": "e03b1793a3ab6c8b11d130e33146eec149a0df95",
+      "title": "Match composer command picker to the app's popover style (#465)",
+      "status": "adopted",
+      "reason": "Adopt composer command-picker styling without changing World Message/Direct routing.",
+      "evidence": [
+        "web/src/components/TerminalComposer.tsx",
+        "web/src/components/TerminalView.inputMode.test.ts"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "1a81c5daa49fe49e55a5eafbe88e5d8ce94a4376"
+    },
+    {
+      "commit": "569006cf4f5ea70819aafaaa018546fda2328ad0",
+      "title": "Add manual Codex session linking and remote transcript lookup (#467)",
+      "status": "adapted",
+      "reason": "Adopt explicit Codex UUID preview/confirmation and Unix SSH transcript lookup through captured World runtime handlers; retain Windows SSH history limitations and final-RPC race boundary.",
+      "evidence": [
+        "server/src/agent/codex-session-link.test.ts",
+        "server/src/agent/codex-session.test.ts",
+        "server/src/connections/runtime.test.ts",
+        "server/src/connections/session-link-routing.test.ts"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "1a81c5daa49fe49e55a5eafbe88e5d8ce94a4376"
+    },
+    {
+      "commit": "1a81c5daa49fe49e55a5eafbe88e5d8ce94a4376",
+      "title": "Polish mobile toasts as native-style banners (#466)",
+      "status": "adopted",
+      "reason": "Adopt responsive mobile toast banners within the existing same-origin World app.",
+      "evidence": [
+        "web/src/components/Toast.tsx",
+        "web/src/styles/layout/toast.css",
+        "web/src/components/Toast.test.ts"
+      ],
+      "followUp": null,
+      "revisitWhen": null,
+      "reviewedFor": "1a81c5daa49fe49e55a5eafbe88e5d8ce94a4376"
     }
   ]
 }

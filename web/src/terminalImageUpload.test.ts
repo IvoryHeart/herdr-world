@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import type { ConnectionClient } from "./api";
-import { uploadTerminalImage } from "./terminalImageUpload";
+import { uploadTerminalFile, uploadTerminalImage } from "./terminalImageUpload";
 
 const originalFetch = globalThis.fetch;
 const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
@@ -45,7 +45,7 @@ describe("terminal image upload responses", () => {
     await expect(uploadTerminalImage(client, image)).rejects.toThrow();
   });
 
-  test("runtime retirement during delayed JSON decoding rejects the uploaded path", async () => {
+  test("runtime retirement during delayed JSON decoding returns the qualified path for caller recovery", async () => {
     let current = true;
     const body = Promise.withResolvers<unknown>();
     const decoding = Promise.withResolvers<void>();
@@ -70,7 +70,7 @@ describe("terminal image upload responses", () => {
     await decoding.promise;
     current = false;
     body.resolve({ path: "/synthetic/retired.png" });
-    await expect(pending).rejects.toThrow("connection changed during upload");
+    await expect(pending).resolves.toBe("/synthetic/retired.png");
   });
   test("returns a validated path", async () => {
     globalThis.fetch = (async () =>
@@ -138,5 +138,69 @@ describe("terminal image upload responses", () => {
     await expect(uploadTerminalImage(client, image)).rejects.toThrow(
       "upload response did not include a path",
     );
+  });
+});
+
+describe("native file upload connection lifetime", () => {
+  test("does not upload through an already stale client", async () => {
+    let fetched = false;
+    globalThis.fetch = (async () => {
+      fetched = true;
+      return Response.json({ text: "/tmp/file.txt" });
+    }) as unknown as typeof fetch;
+    await expect(
+      uploadTerminalFile({ ...client, isCurrent: () => false }, image),
+    ).rejects.toThrow("connection changed during upload");
+    expect(fetched).toBe(false);
+  });
+
+  test.each([200, 409])(
+    "retains successful paths but rejects stale failures (HTTP %s)",
+    async (status) => {
+      let current = true;
+      globalThis.fetch = (async () => {
+        current = false;
+        return Response.json(
+          status === 200
+            ? { text: "/tmp/old-host.txt" }
+            : { error: "old error" },
+          {
+            status,
+            headers: {
+              "X-Herdr-Connection-Id": "conn-a",
+              "X-Herdr-Connection-Generation": "3",
+            },
+          },
+        );
+      }) as unknown as typeof fetch;
+      const result = uploadTerminalFile(
+        { ...client, isCurrent: () => current },
+        image,
+      );
+      if (status === 200)
+        await expect(result).resolves.toBe("/tmp/old-host.txt");
+      else
+        await expect(result).rejects.toThrow(
+          "connection changed during upload",
+        );
+    },
+  );
+
+  test("returns a successful path for caller recovery if connection changes while decoding", async () => {
+    let current = true;
+    globalThis.fetch = (async () => ({
+      ok: true,
+      headers: new Headers({
+        "X-Herdr-Connection-Id": "conn-a",
+        "X-Herdr-Connection-Generation": "3",
+      }),
+      json: async () => {
+        current = false;
+        return { text: "/tmp/old-host.txt" };
+      },
+    })) as unknown as typeof fetch;
+    await expect(
+      uploadTerminalFile({ ...client, isCurrent: () => current }, image),
+    ).resolves.toBe("/tmp/old-host.txt");
   });
 });

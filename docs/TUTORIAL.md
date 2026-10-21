@@ -324,16 +324,24 @@ Watch Herdr's recognized status: `working` suggests activity, `blocked` needs
 attention, and `done`/`idle` suggest when to return. **Status is not verification:**
 `done` does not mean tests passed. Available states depend on agent integration.
 
-Open Agent History to find the explanation. Session Inspector offers Timeline,
+Open Agent History to find the explanation. Session Inspector offers Chat and Timeline,
 ATIF (a normalized trajectory), and raw transcript; original export preserves
 the source record. Use the [shortcut reference](../FEATURES.md#keyboard-shortcuts)
-for History, Files, and Changes on your platform.
+for History, Files, and Changes on your platform. Switch **Chat / Timeline** to
+read the conversation or inspect individual records. The conversation minimap
+jumps between loaded messages; it does not load older transcript pages.
+
+If Codex history is missing, expand **Link Codex session**, enter the full
+conversation UUID currently open in that pane and choose **Check session**.
+Review the directory, timestamp and transcript path, then **Confirm session link**.
+Keep Codex in the foreground and repeat the preview if the pane or session changes.
+The link replaces the pane's existing session association for all viewers.
 
 **You are done when:** you found the explanation, not just the last terminal line.
 
 > Inspection supports Codex, Claude, Kimi, Grok Build, Pi, and Antigravity CLI with readable records.
 > Follow missing-metadata integration hints. SSH reads Herdr-reported paths and
-> Pi ID lookups remotely; other local ID/directory fallbacks may miss remote
+> Codex and Pi ID lookups remotely; other local ID/directory fallbacks may miss remote
 > transcripts. See [session inspection](../FEATURES.md#agent-awareness-and-session-inspection).
 
 ### 2.3 Read the file, then the diff
@@ -373,6 +381,9 @@ re-anchoring marks a comment stale but retains its original quote.
 ### 2.5 Do not rush into bulk actions
 
 Diff Viewer separates staged, unstaged, untracked, and conflicted files.
+Choose **Against branch** to compare with the repository default or select another
+local or remote-tracking branch. World uses existing refs without fetching; the
+choice stays with this repository on this host.
 Context actions stage/unstage matching changes; **More Git actions** affects
 multiple files.
 
@@ -382,6 +393,28 @@ committing is not pushing.
 
 > **Discard Unstaged loses unstaged changes; Delete Untracked deletes files.**
 > Confirmation is not a backup. When uncertain, cancel and preserve files.
+
+To move a split pane to another tab in the same workspace, drag its handle onto
+that tab. Hover to reveal the destination panes, then drop on a pane edge. Drop
+on **+** to break the pane into a new tab.
+
+### Ranger: steer or queue a message
+
+1. Open **Ranger**, configure a model and explicitly allow the workspaces it may read.
+2. Ask a question. While it answers, press Enter or **Steer** to adjust the current
+   turn after its next step. Use Alt+Enter (**Option+Enter** on macOS) or **Queue**
+   to wait until that answer finishes.
+3. Edit or remove waiting messages above the editor. Up to eight may wait. A
+   message that needs a different workspace scope waits for its own turn.
+4. After **Stop**, a failure, restart or chat switch, choose **Send next** when
+   ready to continue. If a selected runtime was replaced, remove the stale queued
+   message and resend it with a refreshed workspace selection. A changed model or
+   thinking effort also holds the message; restore the original selection or resend.
+5. Expand **Thinking** above a reply when the model provides reasoning. Selecting
+   text there or in the answer stays intact while terminal output updates.
+
+Workspace reads and actions still use explicit permissions and captured ownership;
+steering does not enable high-permission mode or send a prompt to another agent.
 
 ## 3. Parallel work and mobile access
 
@@ -423,9 +456,10 @@ Use its HTTPS URL: `127.0.0.1` on a phone means the phone, not the work computer
 
 1. Open Herdr World in the mobile browser and select your practice project and
    agent pane. Authenticate first if your deployment requires login.
-2. Use the floating terminal panel for arrow keys, Ctrl, and other actions
-   that are awkward on a touch keyboard. Customize its two shortcut rows
-   as needed.
+2. Tap **Message** below the terminal to raise the keyboard and compose; use
+   **Direct** to type straight into the terminal. The input stays below the output.
+   Tabs and More live in the shared top app bar. Use the shortcut rows for arrow
+   keys, Ctrl and other actions that are awkward on a touch keyboard.
 3. Open Changes to review the README diff. Mobile uses a unified diff layout;
    long-press a file to open its actions menu. To open a link printed in a
    terminal, long-press it and choose **Open link** (on a computer,

@@ -1,5 +1,7 @@
 import { Check, ChevronDown } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useLayoutPreferences } from "../layoutPreferences";
+import { useSystemBack } from "../systemBack";
 import { cn } from "../utils";
 import {
   Command,
@@ -58,11 +60,14 @@ export function ThemedSelect({
   const [highlighted, setHighlighted] = useState(value);
   const selected = useRef(false);
   const listRef = useRef<HTMLDivElement>(null);
+  const { mobile } = useLayoutPreferences();
+  useSystemBack(open && !disabled, () => setOpen(false), "popup");
   useEffect(() => {
+    if (mobile) return;
     const close = () => setOpen(false);
     window.addEventListener("popstate", close);
     return () => window.removeEventListener("popstate", close);
-  }, []);
+  }, [mobile]);
   useEffect(() => {
     if (disabled) setOpen(false);
   }, [disabled]);

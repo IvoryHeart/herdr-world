@@ -76,9 +76,7 @@ export function TownComposer({
         )}
         agent={leaf.pane.agent}
         mode="composer"
-        onModeChange={(mode) => {
-          if (mode === "direct") onDirect();
-        }}
+        onModeChange={() => {}}
         onFocusDirect={onDirect}
         directDisabled={false}
         shortcutRows={rows}
