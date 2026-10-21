@@ -67,7 +67,9 @@ runner settings. [PR CI](../.github/workflows/ci.yml) and
 [Prepare Release](../.github/workflows/prepare-release.yml) validates generated
 files in its own checkout. Start with [CI workflow tests](../scripts/ci-workflow.test.ts)
 and [release validation tests](../scripts/release-validation.test.ts) when changing
-concurrency, shard coverage or publication dependencies.
+concurrency, shard coverage or publication dependencies. Release and labeled PR
+previews share [package verification](../scripts/verify-release-package.sh) and its
+[executable header check](../scripts/check-binary-format.ts).
 For first-case browser timeouts, use the opt-in lifecycle comparison described in
 [development verification](development.md#verification), the
 [diagnostic adapter](../scripts/browser-diagnostics.ts) and its

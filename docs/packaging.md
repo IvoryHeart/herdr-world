@@ -33,8 +33,11 @@ Each archive must contain:
 
 Inspect the archive and validate its checksum before publication. Never commit
 archives, extracted package directories or compiled binaries. GitHub's Release
-workflow builds every supported target and validates the executable format; the native
-Linux x64 binary is also executed to verify its version.
+workflow builds every supported target and runs
+[`scripts/verify-release-package.sh`](../scripts/verify-release-package.sh) on each
+archive. It checks the executable header's format and native machine ID rather than
+`file` output, whose wording changes between versions; the native Linux x64 binary is
+also executed to verify its version.
 
 The same verified archives feed six public npm platform packages and the
 `@ivoryheart/herdr-world` launcher. npm selects one binary through optional

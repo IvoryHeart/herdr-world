@@ -1539,6 +1539,7 @@
       "properties": "Publication follows verified merged commit; artifact matrix complete; duplicate jobs cannot publish conflicting versions",
       "existingTests": [
         "scripts/release-validation.test.ts",
+        "scripts/check-binary-format.test.ts",
         "scripts/ci-workflow.test.ts",
         "scripts/prepare-release.test.ts",
         "scripts/upstream-sync.test.ts",
