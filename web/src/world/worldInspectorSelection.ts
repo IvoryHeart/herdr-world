@@ -198,10 +198,6 @@ export function selectedHostStatusLabel(
     : "No host selected";
 }
 
-export function shouldCloseWorldInspector(node: WorldObjectNode | null) {
-  return node !== null && !node.actionable;
-}
-
 function hostStateLabel(state: WorldObjectNode["hostState"]) {
   switch (state) {
     case "active":

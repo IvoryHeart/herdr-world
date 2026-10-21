@@ -590,7 +590,6 @@ export { worldSnapshotPriorityForNode } from "./worldInspectorSelection";
 export { hasValidSelectedConnection } from "./worldInspectorSelection";
 export { chooseWorldSelectedConnection } from "./worldInspectorSelection";
 export { selectedHostStatusLabel } from "./worldInspectorSelection";
-export { shouldCloseWorldInspector } from "./worldInspectorSelection";
 export { dispatchWorldInspectorRequest } from "./worldInspectorSelection";
 export { focusWorldNode } from "./worldInspectorSelection";
 export { activateWorldNodeHost } from "./worldInspectorSelection";
