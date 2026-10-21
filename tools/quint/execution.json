@@ -1,5 +1,5 @@
 {
-  "workers": 2,
+  "workers": 3,
   "workerTimeoutMs": 900000,
   "runTimeoutMs": 900000,
   "workerGraceMs": 10000

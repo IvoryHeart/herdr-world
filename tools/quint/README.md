@@ -45,7 +45,7 @@ The verified JAR is launched directly. These bounded implementations and consume
 with the configured bounds; this is execution evidence for this toolchain, not a
 guarantee for other environments or total peak-memory measurement. Final gate/resource approval remains a separate review checkpoint in `verification/`.
 
-The canonical command uses `execution.json`'s bounded case pool (two workers by
+The canonical command uses `execution.json`'s bounded case pool (three workers by
 default), with isolated case processes and private checkers. Its aggregate manifest
 requires all 11 focused worker results against one current source/tool identity.
 Failure/cancellation stops queue admission and drains peers; focused results do
@@ -53,7 +53,7 @@ not substitute for this aggregate. Worker count is CPU-capped and recorded with
 case timings/resource observations. Retain conservative concurrency for the
 JVM-backed phases; per-case max RSS is not a combined-memory measurement.
 
-Linux required CI uses `resources.json` to enforce a 4 GiB no-swap cgroup and two
+Linux required CI uses `resources.json` to enforce a 4 GiB no-swap cgroup and three
 CPUs of quota over the complete pool and descendants. Its actual aggregate peak,
 OOM events and canonical manifest link are retained. A 64 MiB OOM control verifies
 enforcement; actual cancellation must reject success and drain its descendants. Local `verification:resources` requires a systemd user manager;

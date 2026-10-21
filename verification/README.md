@@ -106,7 +106,7 @@ Failure, missing evidence and cancellation block delivery. No existing integrati
 browser, scheduler, persistence or supported-platform check is replaced.
 
 Linux CI executes the canonical check in an isolated cgroup with hard 4 GiB memory,
-zero swap and two CPUs of quota. The service subtree's `memory.peak`, enforced
+zero swap and three CPUs of quota. The service subtree's `memory.peak`, enforced
 limits and OOM events are retained, bound to the canonical manifest. An actual
 64 MiB over-budget control must be OOM-killed and an actual cancellation control
 must drain its worker and descendant before the complete run is accepted.
@@ -160,7 +160,7 @@ regressions preserve the corrected startup and cleanup boundary.
 
 The canonical gate schedules the 11 independent cases in a bounded process pool,
 starting longer allocation/preparation cases first. `tools/quint/execution.json`
-defaults to two workers, capped by available CPUs. This follows the repository's
+defaults to three workers, capped by available CPUs. This follows the repository's
 parallel test-file approach while accounting for JVM-backed checker work. Each
 case owns a fresh process, private checker endpoint, generated models, replay
 workers and artifact directory; shared fixture/module state stays within a case.
@@ -185,6 +185,13 @@ Manifests record actual workers, wall/case times and reported case-process max R
 The latter is not simultaneous total memory. Where available, the Linux cgroup
 lifetime peak is recorded separately and includes other job/setup processes.
 All configured JVM/Node caps and finite/consumer evidence limits remain unchanged.
+
+On 2026-10-21 the pool moved from two workers and two CPUs of quota to three of
+each. A hosted CI run measured 293 seconds with two workers; its longest case
+(space-admission, about 198 seconds) bounds the pool, and the other ten cases
+(about 385 seconds together) fit beside it on two more workers. A fourth worker
+cannot finish sooner. The hosted Linux runner has four CPUs, and two workers
+peaked at about 1.36 GB, so the 4 GiB memory limit is unchanged.
 
 The first complete constrained local run measured 1,149,575,168 bytes of aggregate
 peak memory (approximately 1.07 GiB), with zero OOM kills under the hard 4 GiB limit.
