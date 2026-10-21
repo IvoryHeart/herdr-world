@@ -328,6 +328,23 @@ async function createdInspector(count: number) {
     `created Inspector ${count}`,
   );
 }
+async function submitWorkspace() {
+  const button = () =>
+    document.querySelector<HTMLButtonElement>(
+      '[role="dialog"][aria-label="Create workspace"] button[type="submit"]',
+    );
+  // Host selection is not the dialog's full readiness boundary: name
+  // suggestions also disable Create. Exercise the same action as the user.
+  await until(
+    () => button() && !button()!.disabled,
+    "workspace Create readiness",
+  );
+  check(
+    !button()!.disabled,
+    "Create must be enabled before workspace submission",
+  );
+  button()!.click();
+}
 async function action(title: string) {
   const trigger = [
     ...document.querySelectorAll<HTMLButtonElement>("button"),
@@ -578,11 +595,7 @@ async function run() {
       )?.value === "beta",
     "New room retains selected host",
   );
-  document
-    .querySelector<HTMLFormElement>(
-      '[role="dialog"][aria-label="Create workspace"]',
-    )!
-    .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+  await submitWorkspace();
   await createdInspector(3);
   const roomCreate = [...calls]
     .reverse()
@@ -623,11 +636,7 @@ async function run() {
       destination.value === "beta",
       `${name} workspace destination lost selected host`,
     );
-    document
-      .querySelector<HTMLFormElement>(
-        '[role="dialog"][aria-label="Create workspace"]',
-      )!
-      .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    await submitWorkspace();
     await createdInspector(count + 1);
     check(
       location.pathname === `/${name}`,

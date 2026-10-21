@@ -99,7 +99,14 @@ History, Toast, Back and terminal selection/focus. Quick types pass after ref
 annotations. The production web build passes existing unchanged budgets: 130
 assets, 13.2 MiB total, 386.1 KiB initial JS (118.3 KiB gzip), 28.3 KiB initial CSS;
 no development tools ship. Dependency notices/licenses are regenerated.
-Final delivery and independent review results belong in the PR handoff.
+The first full delivery attempt passed static checks, unit tests and unfiltered
+behavioral verification, but exposed a browser fixture readiness assumption:
+SharedViewCreation dispatched a synthetic submit while Create was disabled for
+name generation. An added diagnostic reproduced that at both widths. The fixture
+now waits for the enabled Create button and clicks it, preserving every exact
+source, creation-count and Inspector ownership assertion. Both widths pass under
+both React 18 and 19; no production creation behavior changed. Final delivery and
+independent approval results belong in the PR handoff.
 
 ## Reproduction and limits
 
