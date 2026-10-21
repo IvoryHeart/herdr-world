@@ -43,11 +43,29 @@ retain all existing assertions and budgets: Town p95 <150ms and max <450ms;
 Board p95 <200ms and max <500ms. All 36 cases passed, acknowledging 6,608 input
 keys on 18 and 6,636 on 19 without routing/acknowledgement failures.
 
-For comparable mounted-update counters the benchmark explicitly uses each
-version's **production profiling renderer**, with production React, minification
-and identical fixture code. This includes profiling overhead and is not a direct
-measurement of the shipped Vite bundle or a runtime/network SLA. The ordinary
-fixture/gate remains unchanged; the production Vite build is checked separately.
+The measurements use **ordinary production React DOM**, production React,
+minification and identical fixture code. Existing anchor, mounted-update, input,
+terminal-frame and renderer assertions remain intact. React's production Profiler
+is disabled, so no React commit-duration measurement is claimed. This is the
+synthetic transport fixture, not a direct measurement of the shipped Vite bundle
+or a runtime/network SLA; the Vite production build is checked separately.
+
+An independent review caught a build-mode labeling error: the initial runner
+requested a profiling alias through an option the bundler ignored. Its raw JSON
+therefore says `production-profiling`, but it actually loaded ordinary production
+renderers. The corrected builder records and verifies the loaded React DOM modules
+and rejects development/profiling modules. Rebuilding both versions with the
+corrected options produced byte-identical benchmark JavaScript, so the measured
+results still apply to ordinary production. Original observations are preserved;
+none were relabeled or replaced. Verified module names:
+
+- 18: `react-dom.production.min.js`
+- 19: `react-dom-client.production.js`, `react-dom.production.js`
+
+SHA-256 of the benchmark JS, identical before/after correcting the runner:
+
+- 18: `d0104412eb66ab0120ccd1ae6f88d7d5a7df03480974250432489244691a743a`
+- 19: `70b4a28376a2c6470ef4b2d2b722f4bacc8180f5300b93a53ad8c7c5705336e3`
 
 Values below are milliseconds: median of each case's three run-level p95s, and
 worst acknowledgement delay observed across those runs. These are descriptive
@@ -92,12 +110,12 @@ bun install --frozen-lockfile
 CHROME_BIN=/path/to/chrome bun scripts/benchmark-react.ts .agents/react-benchmark/sample
 ```
 
-The command uses the existing six dense tests, creates temporary profiling assets,
+The command uses the existing six dense tests, creates temporary production assets,
 and records `run.log` and `results.json` in the output directory. It verifies React
 and React DOM match and that all six cases yielded measurements; it does not edit
 dependencies. To repeat the comparison, use the base revision's manifest/lockfile
 for 18 and the candidate's for 19, retaining the candidate benchmark tool and
-profiling build option on both. Restore dependencies with the frozen lockfile at
+production build option on both. Restore dependencies with the frozen lockfile at
 each switch. Run three trials per version in the order above. Raw local runs live
 under `.agents/react-benchmark/18-{a,b,c}` and `19-{a,b,c}`; they are ignored and
 contain only synthetic fixture observations.

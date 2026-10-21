@@ -14,8 +14,8 @@ if (react !== reactDom) throw new Error("React and React DOM versions differ");
 const root = await mkdtemp(join(tmpdir(), "world-react-benchmark-"));
 await mkdir(output, { recursive: true });
 try {
-  await buildWorldBrowserBundle("ProductionContexts", root, {
-    reactProfiling: true,
+  const bundle = await buildWorldBrowserBundle("ProductionContexts", root, {
+    production: true,
   });
   const child = Bun.spawn(
     [
@@ -55,7 +55,8 @@ try {
   const result = {
     react,
     reactDom,
-    mode: "production-profiling",
+    mode: "production",
+    rendererModules: bundle.reactDomModules,
     exitCode,
     cases,
   };

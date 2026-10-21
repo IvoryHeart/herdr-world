@@ -1,3 +1,4 @@
+import type { BunPlugin } from "bun";
 import { readdir } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 
@@ -5,6 +6,7 @@ export type WorldBrowserEntry = "HostsFilter" | "ProductionContexts";
 export type WorldBrowserBundle = {
   directory: string;
   assets: Map<string, Blob>;
+  reactDomModules?: string[];
 };
 
 // Only immutable JS/CSS is shared. Profiles, RPC state and result gates belong
@@ -12,23 +14,31 @@ export type WorldBrowserBundle = {
 export async function buildWorldBrowserBundle(
   entry: WorldBrowserEntry,
   root: string,
-  options: { reactProfiling?: boolean } = {},
+  options: { production?: boolean } = {},
 ): Promise<WorldBrowserBundle> {
   const directory = join(root, entry);
+  const reactDomModules = new Set<string>();
+  const verifyReactProduction: BunPlugin = {
+    name: "verify-react-production-renderer",
+    setup(builder) {
+      builder.onLoad({ filter: /[/\\]react-dom[/\\]cjs[/\\]/ }, (args) => {
+        reactDomModules.add(basename(args.path));
+        return undefined;
+      });
+    },
+  };
   const build = await Bun.build({
     entrypoints: [join(import.meta.dir, "..", `${entry}.browser.tsx`)],
     outdir: directory,
     target: "browser",
-    ...(options.reactProfiling
+    ...(options.production
       ? {
-          // The dense fixture uses Profiler callbacks to prove mounted updates.
-          // Use each React version's production profiling build for A/B runs.
           define: { "process.env.NODE_ENV": JSON.stringify("production") },
-          alias: { "react-dom/client": "react-dom/profiling" },
           minify: true,
         }
       : {}),
     plugins: [
+      ...(options.production ? [verifyReactProduction] : []),
       {
         name: "world-raw-svg",
         setup(builder) {
@@ -51,6 +61,14 @@ export async function buildWorldBrowserBundle(
     ],
   });
   if (!build.success) throw new Error(build.logs.join("\n"));
+  if (
+    options.production &&
+    (![...reactDomModules].some((name) => name.includes("production")) ||
+      [...reactDomModules].some((name) => /development|profiling/.test(name)))
+  )
+    throw new Error(
+      "Benchmark did not load the ordinary production React DOM renderer",
+    );
   const assets = new Map<string, Blob>();
   for (const output of build.outputs) {
     // Bun can already have written an output to this path. Rewriting a
@@ -63,7 +81,7 @@ export async function buildWorldBrowserBundle(
     join(directory, "index.html"),
     `<link rel="stylesheet" href="/${entry}.browser.css"><script type="module" src="/${entry}.browser.js"></script>`,
   );
-  return { directory, assets };
+  return { directory, assets, reactDomModules: [...reactDomModules].sort() };
 }
 
 export async function readWorldBrowserBundle(

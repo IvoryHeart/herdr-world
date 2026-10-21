@@ -236,6 +236,6 @@ before any metadata request because delayed cleanup could erase a newer report.
 Use the [controlled comparison and reproduction steps](react-version-reassessment.md)
 when revisiting React major compatibility. `bun scripts/benchmark-react.ts <output>`
 compares one installed runtime against the six existing dense Board/Town cases
-using production profiling assets, without changing normal browser checks or
+using production assets with verified renderer modules, without changing normal browser checks or
 budgets. Run versions sequentially from frozen lockfiles on otherwise identical
 application code; keep editor/focus and full delivery checks mandatory.
