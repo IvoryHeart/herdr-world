@@ -1,4 +1,4 @@
-// React detects DOM event support at module initialization. Isolated DOM
+// React 18 detects DOM event support at module initialization. Isolated DOM
 // tests preload this environment before components import react-dom portals.
 import { Window } from "happy-dom";
 const browser = new Window({ url: "http://localhost" });

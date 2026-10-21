@@ -200,9 +200,10 @@ are reproduced in `DEPENDENCY_LICENSES.md`.
 | @types/jsdom | 30.0.0 | MIT |
 | @types/mdast | 4.0.4 | MIT |
 | @types/node | 26.4.0 | MIT |
+| @types/prop-types | 15.7.15 | MIT |
 | @types/proper-lockfile | 4.1.4 | MIT |
-| @types/react-dom | 19.3.0 | MIT |
-| @types/react | 19.3.0 | MIT |
+| @types/react-dom | 18.3.7 | MIT |
+| @types/react | 18.3.31 | MIT |
 | @types/retry | 0.12.0 | MIT |
 | @types/retry | 0.12.5 | MIT |
 | @types/tough-cookie | 4.0.5 | MIT |
@@ -320,6 +321,7 @@ are reproduced in `DEPENDENCY_LICENSES.md`.
 | jiti | 2.7.0 | MIT |
 | js-base64 | 3.9.2 | BSD-3-Clause |
 | js-binary-schema-parser | 2.0.3 | MIT |
+| js-tokens | 4.0.0 | MIT |
 | jsdom | 30.1.2 | MIT |
 | json-bigint | 1.0.0 | MIT |
 | json-schema-to-ts | 3.1.1 | MIT |
@@ -328,6 +330,7 @@ are reproduced in `DEPENDENCY_LICENSES.md`.
 | lightningcss | 1.33.0 | MPL-2.0 |
 | log-symbols | 7.0.1 | MIT |
 | long | 5.3.2 | Apache-2.0 |
+| loose-envify | 1.4.0 | MIT |
 | lru_map | 0.4.1 | MIT |
 | lru-cache | 11.5.3 | BlueOak-1.0.0 |
 | lucide-react | 1.52.0 | ISC |
@@ -376,11 +379,11 @@ are reproduced in `DEPENDENCY_LICENSES.md`.
 | qrcode-generator | 2.0.4 | MIT |
 | queue-microtask | 1.2.3 | MIT |
 | quickjs-wasi | 3.6.2 | MIT |
-| react-dom | 19.3.1 | MIT |
+| react-dom | 18.3.1 | MIT |
 | react-remove-scroll-bar | 2.3.8 | MIT |
 | react-remove-scroll | 2.7.2 | MIT |
 | react-style-singleton | 2.2.3 | MIT |
-| react | 19.3.1 | MIT |
+| react | 18.3.1 | MIT |
 | regex-recursion | 6.0.2 | MIT |
 | regex-utilities | 2.3.0 | MIT |
 | regex | 6.1.0 | MIT |
@@ -394,7 +397,7 @@ are reproduced in `DEPENDENCY_LICENSES.md`.
 | safe-buffer | 5.2.1 | MIT |
 | safer-buffer | 2.1.2 | MIT |
 | saxes | 6.0.0 | ISC |
-| scheduler | 0.28.0 | MIT |
+| scheduler | 0.23.2 | MIT |
 | semver | 7.8.5 | ISC |
 | shebang-command | 2.0.0 | MIT |
 | shebang-regex | 3.0.0 | MIT |

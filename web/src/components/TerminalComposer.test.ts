@@ -164,7 +164,10 @@ test.each(["claude", "grok-build", "agy"])(
       React.Children.forEach(node, (child) => {
         if (!React.isValidElement<Record<string, unknown>>(child)) return;
         elements.push(child);
-        const ref = child.props.ref as React.RefObject<unknown> | undefined;
+        const ref =
+          (child as typeof child & { ref?: React.MutableRefObject<unknown> })
+            .ref ??
+          (child.props.ref as React.MutableRefObject<unknown> | undefined);
         if (ref && typeof ref === "object") {
           const key = String(
             child.props.className ??

@@ -71,11 +71,12 @@ commit; [adoption policy](docs/upstream-policy.md) requires human approval of ne
 or changed exceptions and reconsideration of outstanding work each source sync.
 Upstream's legacy service migration
 and browser-test removal are excluded; World already checks macOS listener
-conflicts before installing a service. React and React DOM use 19.3.1 with
-matching 19.x type packages. The [21 October reassessment](docs/react-version-reassessment.md)
-did not reproduce the historical input stall on the current World code; measured
-18/19 latency is similar. This branch proposes removing the React 18 divergence
-subject to independent owner approval. World callback freshness remains intact.
+conflicts before installing a service. React and React DOM remain on 18.3.1:
+the [21 October reassessment](docs/react-version-reassessment.md) finds comparable
+ordinary production latency, but reproduces multi-second input stalls in the
+required development-built consumers under 19.3.1. Profiling implicates changed-prop
+diagnostics over large World props. Retain 18 pending a supported remedy and full
+acceptance in both modes; callback freshness remains adapted.
 
 Future source refreshes should merge from the recorded upstream head, resolve
 World-specific conflicts explicitly, and update this record and the changelog.
@@ -100,15 +101,14 @@ The post-v0.8.6 main refresh adds Ranger Steer/Queue messages, bounded collapsib
 model reasoning, selection-preserving output focus and clearer Composer mode/shortcut
 controls. Waiting questions retain their selected World runtime generation; a
 replacement holds the queue instead of retargeting. Compatible typebox, xterm,
-Radix and lint updates are adopted. The Roamgate-only CodeQL workflow remains
-excluded under World policy and requires owner review. The React 18 divergence
-recorded during that sync is superseded by the reassessment proposed above.
+Radix and lint updates are adopted. React remains 18 and the Roamgate-only CodeQL
+workflow remains excluded under World policy; both dispositions require owner review.
 
 The v0.8.7 and following main refresh adds History Chat/Timeline views with a
 shared Ranger/History conversation minimap, latest workspace PR/MR status,
 Inspector refresh and commit navigation, manual Codex session linking and
 remote Codex transcript lookup, composer command-picker styling and mobile toast
-banners. World retains its callback freshness helper, qualified resource clients,
+banners. World retains React 18 callback freshness, qualified resource clients,
 its measured terminal focus guard and its screen/panel/navigation/popup Back
 ordering. Codex links require preview and confirmation against the captured
 runtime and foreground process; the external runtime does not offer an atomic
