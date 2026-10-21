@@ -25,13 +25,14 @@ or **New tab** and confirm the destination; Town's **New room** and Board's **+*
 controls offer the same qualified creation flows.
 
 Office, Tree and Graph have been retired: old `/office` addresses open Town, and
-`/graph` and `/tree` open Board. Board and the retirement are on current `main`; check the [latest release notes](https://github.com/IvoryHeart/herdr-world/releases/latest)
-for released availability.
+`/graph` and `/tree` open Board. Board and these redirects are included in
+[0.2.6](./docs/releases/v0.2.6.md).
 
 ## Screenshots
 
-The Town and desktop Board captures show current main with four disposable
-workspaces. Mobile Board focuses on one workspace, two terminal tabs and a strung
+The Town and desktop Board captures show the layouts introduced in 0.2.5–0.2.6
+with four disposable workspaces. Mobile Board focuses on one workspace, two
+terminal tabs and a strung
 planning note. These scenes use real shell panes and synthetic notes. Empty
 attention counts reflect those scenes; no agent activity is fabricated. Click a screenshot to open it at full resolution.
 

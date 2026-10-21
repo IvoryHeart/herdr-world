@@ -18,7 +18,6 @@ import {
   selectedHostStatusLabel,
   shouldRecordVisualInspectorGeometry,
   retainWorldFloatingTerminals,
-  shouldCloseWorldInspector,
   upsertWorldFloatingTerminal,
   worldIntentInitialView,
   worldIntentViews,
@@ -570,42 +569,6 @@ describe("World view preference", () => {
     expect(
       selectedHostStatusLabel({ label: "Local", hostState: "active" }),
     ).toBe("Local · Active");
-  });
-
-  test("retains current Inspectors when selection moves to another host", () => {
-    const active = buildWorldObject(
-      [
-        {
-          connectionId: "host-a",
-          label: "Host A",
-          source: "saved-profile",
-          isDefault: true,
-          state: "ready",
-          generation: 1,
-          snapshotGeneration: 1,
-          stale: false,
-          actionable: true,
-          snapshot: { workspaces: [], tabs: [], panes: [], agents: [] },
-        },
-        {
-          connectionId: "host-b",
-          label: "Host B",
-          source: "saved-profile",
-          isDefault: false,
-          state: "ready",
-          generation: 2,
-          snapshotGeneration: 2,
-          stale: false,
-          actionable: true,
-          snapshot: { workspaces: [], tabs: [], panes: [], agents: [] },
-        },
-      ],
-      "host-a",
-    );
-
-    expect(shouldCloseWorldInspector(active.hosts[0])).toBe(false);
-    expect(shouldCloseWorldInspector(active.hosts[1])).toBe(false);
-    expect(shouldCloseWorldInspector(null)).toBe(false);
   });
 
   test("keeps a selected entity on its observed generation after reconnect", () => {

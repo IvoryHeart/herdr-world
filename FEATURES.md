@@ -6,10 +6,8 @@ A Web/PWA client for a running [Herdr](https://herdr.dev) server.
 ## Visual control plane
 
 Town, Board, Desk and Spaces are World's views. Office, Tree and Graph have been
-retired: `/office` opens Town, and `/graph` and `/tree` open Board. Both changes
-are on current `main`; consult the
-[release notes](https://github.com/IvoryHeart/herdr-world/releases/latest) for
-released availability.
+retired: `/office` opens Town, and `/graph` and `/tree` open Board. Board and
+these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
 
 - **Town** is the default view (`/town`); the root URL opens it too.
   Each host is a building, each workspace a room, each tab a team table and each
@@ -64,8 +62,13 @@ released availability.
     even in the same terminal, nothing is sent: World names the new agent and
     sends to it only if you choose **Send to** it. If the agent changes while
     the note is being sent, World says it may have reached another agent.
-    A note can start a new agent in a chosen workspace.
+    A note offers **Start an agent** in a chosen workspace, but choosing Claude
+    or Codex currently opens a shell rather than launching that agent
+    ([issue #219](https://github.com/IvoryHeart/herdr-world/issues/219)).
   - Drag a tab onto another workspace of its host to move it (asks first).
+    On phones, hold a card still before dragging; adding a second finger switches
+    to pinch zoom without committing a move. Settling pauses while you type in
+    an open terminal.
   - After a Herdr restart, strings that cannot be confirmed ask Keep or Detach;
     strings whose target closed wait in Needs a home. Selecting a card opens
     the shared Inspector. Development builds add an event trace for bug reports

@@ -36,7 +36,6 @@ import {
   worldIntentInitialView,
   snapshotPriorityForConversation,
   snapshotPriorityForSurface,
-  shouldCloseWorldInspector,
   focusWorldNode,
   reconcileObservedInspectors,
 } from "./worldInspectorSelection";
@@ -1020,11 +1019,12 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
         owner.state === "ready" &&
         owner.generation === selected.generation,
     );
+  // Only a host that disconnects or restarts cancels opening. A snapshot taken
+  // while Herdr changes (a tab being created, for example) is briefly stale and
+  // not actionable; treating that as new intent would cancel the new tab's
+  // terminal opening, and admission already waits for an actionable snapshot.
   useEffect(() => {
-    if (
-      selected &&
-      (!selectedLeaseCurrent || shouldCloseWorldInspector(selected))
-    ) {
+    if (selected && !selectedLeaseCurrent) {
       intentRequestRef.current += 1;
       setIntentOpening(false);
     }

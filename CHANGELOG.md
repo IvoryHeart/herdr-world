@@ -7,16 +7,6 @@ are optional because the merged PR history records their source.
 
 ## [Unreleased]
 
-### Documentation
-
-- Refresh the shared Files, Changes and History screenshots with Board behind
-  the Inspector, and update their captions and capture provenance.
-
-- Focus the README, tutorial, feature guide and website on Town, Board, Desk and
-  Spaces, with current Town/Board layouts and desktop/mobile captures. Identify
-  Office, Tree and Graph as retired views with redirects to Town and Board. Show
-  a readable mobile Board close-up and describe Send's recipient identity checks.
-
 ### Changed
 
 - Reject pending Ranger follow-ups after their chat changes and deduplicate
@@ -39,6 +29,23 @@ are optional because the merged PR history records their source.
   bar and managed-window tabs. Update the optional Herdr setup target to 0.9.5
   with verified release checksums; terminal protocol remains 22.
 
+### Fixed
+
+- Successful uploads from the desktop Message editor stay in its draft without
+  reporting an input failure; uploads from desktop terminal output still use Direct.
+
+## [0.2.6] - 2026-10-21
+
+### Documentation
+
+- Refresh the shared Files, Changes and History screenshots with Board behind
+  the Inspector, and update their captions and capture provenance.
+
+- Focus the README, tutorial, feature guide and website on Town, Board, Desk and
+  Spaces, with current Town/Board layouts and desktop/mobile captures. Identify
+  Office, Tree and Graph as retired views with redirects to Town and Board. Show
+  a readable mobile Board close-up and describe Send's recipient identity checks.
+
 ### Added
 
 - Add Board, a pin board view. Hosts are zones,
@@ -57,10 +64,13 @@ are optional because the merged PR history records their source.
   witnessed pane/terminal IDs and that the same agent is still there. After Herdr
   restarts, Board asks
   before trusting strings whose terminals changed; strings whose target closed
-  wait in a Needs a home tray instead of attaching to the wrong card. A note can
-  also start a new agent in a chosen workspace, which receives the note once
-  it is ready. Drag a tab onto another workspace to move it there (Board asks
-  first, with "Don't ask again"); strings follow the moved panes. On phones Board is in the bottom navigation.
+  wait in a Needs a home tray instead of attaching to the wrong card. A note
+  offers Start an agent in a chosen workspace; choosing Claude or Codex currently
+  opens a shell rather than launching the selected agent
+  ([issue #219](https://github.com/IvoryHeart/herdr-world/issues/219)). Drag a tab
+  onto another workspace to move it there (Board asks first, with "Don't ask
+  again"); strings follow the moved panes. On phones Board is in the bottom
+  navigation.
 
 ### Changed
 
@@ -86,8 +96,11 @@ are optional because the merged PR history records their source.
 
 ### Fixed
 
-- Successful uploads from the desktop Message editor stay in its draft without
-  reporting an input failure; uploads from desktop terminal output still use Direct.
+- Board's New tab dialog, and its other dialogs, now open above open terminal
+  windows instead of behind them.
+- A terminal created while another terminal is selected now opens. A snapshot
+  taken while Herdr was still creating the tab no longer cancels the opening with
+  "Tab created, but Inspector focus failed". This was most noticeable on phones.
 - Board stays responsive on a large World: at 64 hosts and about 1,500 tabs,
   typed input had waited up to 20 seconds behind Board's rendering.
 - On a phone, long-pressing a link in a terminal offers **Open link** again
