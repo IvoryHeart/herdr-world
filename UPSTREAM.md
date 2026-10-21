@@ -72,8 +72,11 @@ or changed exceptions and reconsideration of outstanding work each source sync.
 Upstream's legacy service migration
 and browser-test removal are excluded; World already checks macOS listener
 conflicts before installing a service. React and React DOM remain on 18.3.1:
-upstream's React 19 upgrade stalls terminal input during World's dense topology
-refresh. Dialog callback freshness is adapted without that dependency upgrade.
+the [21 October reassessment](docs/react-version-reassessment.md) finds comparable
+ordinary production latency, but reproduces multi-second input stalls in the
+required development-built consumers under 19.3.1. Profiling implicates changed-prop
+diagnostics over large World props. Retain 18 pending a supported remedy and full
+acceptance in both modes; callback freshness remains adapted.
 
 Future source refreshes should merge from the recorded upstream head, resolve
 World-specific conflicts explicitly, and update this record and the changelog.

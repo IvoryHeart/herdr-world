@@ -9,6 +9,10 @@ are optional because the merged PR history records their source.
 
 ### Changed
 
+- Reassess the React 18 pin with reproducible production/development browser
+  evidence. Retain 18.3.1: React 19 has comparable production latency but fails the
+  current development-mode input budgets. Make creation tests wait for readiness.
+
 - Reject pending Ranger follow-ups after their chat changes and deduplicate
   concurrent queue retries after scope capture. Remote Codex History and session
   linking no longer require Python 3 on Unix SSH hosts.

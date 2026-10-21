@@ -62,12 +62,21 @@ Status: intentional divergence proposed for owner review. Source: Roamgate
 e030b2e2 (#453), post-v0.8.6 main.
 Owner: repository owner and independent delivery reviewer.
 
-World retains React 18 under its current adoption policy. The upstream React 19.3.1
-patch cannot be applied as an 18.x update. Revisit every source sync, relevant React
-security advisory, or owner-approved major migration. Acceptance requires an
-explicit policy decision and passing React DOM/browser evidence for focus, native
-blur, IME, qualified editor drafts and independent runtime ownership. Keep this
-entry until a compatible migration or security backport is reviewed and delivered.
+The [21 October reassessment](react-version-reassessment.md) retains 18.3.1.
+Ordinary production comparison passes on both 18.3.1 and 19.3.1, but React 19's
+required development-built consumers reproduce multi-second input stalls.
+A same-workload profile finds changed-prop diagnostics as a major hotspot.
+The prior blanket production-stall rationale is superseded by this build-mode
+distinction; a production-only comparison is insufficient for full acceptance.
+
+Owner: repository owner and independent delivery reviewer. Revisit a relevant
+upstream diagnostic/performance fix, React security advisory or supported World
+prop-representation remedy. Acceptance requires the unchanged full delivery gate,
+both production/development latency evidence, focus/native blur/IME/editor drafts
+and independent runtime ownership. Investigate bounding large-prop diagnostics
+through supported mechanisms; do not suppress development checks, patch dependency
+internals or relax input budgets merely to accept 19. Keep the divergence until
+that evidence and the owner's migration decision are accepted.
 
 ## Assessment for source 57327a0d (20 October 2026)
 
