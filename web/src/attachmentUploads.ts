@@ -123,7 +123,15 @@ export async function startAttachmentUploads(
     );
     if (same?.status === "uploading") continue;
     if (same) {
-      patch(scope, same.id, { file, task });
+      // Queued from now: neither Retry nor another pick may run it again
+      // while it waits for the files ahead of it.
+      patch(scope, same.id, {
+        file,
+        task,
+        status: "uploading",
+        loaded: 0,
+        error: null,
+      });
       added.push(same.id);
       continue;
     }
@@ -149,6 +157,7 @@ export async function startAttachmentUploads(
 
 export function retryAttachmentUpload(scope: string, id: string) {
   const job = jobs.get(scope)?.find((candidate) => candidate.id === id);
+  // run marks it uploading before it yields, so a second Retry is refused.
   if (job?.status === "failed") void run(scope, id);
 }
 
