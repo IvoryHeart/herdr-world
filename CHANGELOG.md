@@ -21,6 +21,11 @@ are optional because the merged PR history records their source.
 
 ### Changed
 
+- Town tables follow Herdr's tab order, so moving a tab in Spaces or Herdr
+  moves its table. Drag a table onto another in its room (or press **M**) to
+  reorder it: Town sends Herdr's `tab.move` the way Spaces does and shows the
+  order Herdr reports. World now listens for Herdr's `tab.moved` event, so a
+  reorder made anywhere updates every view.
 - Give every terminal one colour, shown as its tab in Spaces, its table in
   Town and its card in Board. Tabs start with a stable default; a colour chosen
   from the Spaces tab menu, a Town peek or Board is saved by the World service

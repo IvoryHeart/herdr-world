@@ -46,6 +46,23 @@ describe("Pixel Office projection", () => {
       expected,
     );
   });
+  test("desks follow Herdr's tab list order, not tab numbers", () => {
+    // After tab.move Herdr lists tabs in their new order; numbers stay.
+    const world = buildWorldObject([
+      connection(
+        "alpha",
+        [tab("third", 3), tab("first", 1), tab("second", 2)],
+        [],
+      ),
+    ]);
+    const desks = projectWorldOffice(world, 1).rooms[0]!.desks;
+    expect(desks.map((desk) => desk.tabRef.nativeId)).toEqual([
+      "third",
+      "first",
+      "second",
+    ]);
+    expect(desks.map((desk) => desk.order)).toEqual([0, 1, 2]);
+  });
   test("selection overlays reuse topology without changing admission or roster order", async () => {
     const tabs = Array.from({ length: 3 }, (_, index) =>
       tab(`tab-${index}`, index + 1),

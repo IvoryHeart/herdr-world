@@ -2,10 +2,9 @@
  * Pure Office town layout.
  *
  * Hosts become buildings, workspaces become rooms on carpets and tabs become
- * team tables in desk cells. Placement follows Herdr's native order and keeps
- * existing desks in their cells while a scene is live: the placement memory
- * records each desk's grid coordinate, and every room capacity step contains
- * the previous one, so growth never moves a desk.
+ * team tables in desk cells. Desk slots follow Herdr's tab order. The
+ * placement memory keeps each room's size while a scene is live, and every
+ * room capacity step contains the previous one.
  */
 
 export const TOWN_TILE = 16;
@@ -157,10 +156,10 @@ export function townTierFor(desks: number, minimumTier = 0) {
 }
 
 /**
- * Assign desks to grid coordinates. Remembered desks keep their coordinate
- * and new desks take the first free coordinate in row-major order. When a
- * desk closes, the desks after it close up in their existing order, so a
- * room never keeps a gap; desks before it stay where they are.
+ * Assign desks to grid coordinates. Desk slots follow Herdr's tab order: the
+ * i-th tab takes the i-th cell in reading order, so a reorder in Herdr, Spaces
+ * or Town moves desks, and a closed desk leaves no gap. The room only grows
+ * while a scene is live, so its walls never jump when a desk closes.
  */
 function placeRoomDesks(
   deskKeys: readonly string[],
@@ -170,46 +169,10 @@ function placeRoomDesks(
   const [cols, rows] = TOWN_ROOM_TIERS[tier]!;
   const capacity = Math.min(cols * rows - 1, TOWN_MAX_RENDERED_DESKS);
   const cells = new Map<string, { col: number; row: number }>();
-  const used = new Set<string>();
-  const current = new Set(deskKeys);
-  if (previous) {
-    const kept = [...previous.cells].filter(
-      ([key, at]) => current.has(key) && at.col < cols && at.row < rows,
-    );
-    if (kept.length < previous.cells.size) {
-      // A desk closed: renumber the remaining ones in reading order, which
-      // leaves every desk before the gap in place.
-      kept.sort(([, a], [, b]) => a.row - b.row || a.col - b.col);
-      kept.forEach(([key], index) => {
-        const at = { col: index % cols, row: Math.floor(index / cols) };
-        cells.set(key, at);
-        used.add(`${at.col},${at.row}`);
-      });
-    } else
-      for (const [key, at] of kept) {
-        cells.set(key, at);
-        used.add(`${at.col},${at.row}`);
-      }
-  }
-  const overflow: string[] = [];
-  for (const key of deskKeys) {
-    if (cells.has(key)) continue;
-    if (cells.size >= capacity) {
-      overflow.push(key);
-      continue;
-    }
-    let placed = false;
-    for (let row = 0; row < rows && !placed; row += 1)
-      for (let col = 0; col < cols && !placed; col += 1) {
-        const id = `${col},${row}`;
-        if (used.has(id)) continue;
-        used.add(id);
-        cells.set(key, { col, row });
-        placed = true;
-      }
-    if (!placed) overflow.push(key);
-  }
-  return { memory: { tier, cells }, overflow };
+  deskKeys.slice(0, capacity).forEach((key, index) => {
+    cells.set(key, { col: index % cols, row: Math.floor(index / cols) });
+  });
+  return { memory: { tier, cells }, overflow: deskKeys.slice(capacity) };
 }
 
 function mulberry32(seed: number) {

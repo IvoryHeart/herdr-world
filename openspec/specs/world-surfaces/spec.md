@@ -1103,16 +1103,20 @@ supplies it.
 ### Requirement: Stable Town placement
 
 Town SHALL derive room order from Herdr's native workspace order and desk order
-from native tab order within each host. A room's capacity SHALL step through a
+from Herdr's tab list order within each workspace, which Herdr keeps when a tab
+moves (a tab's number is not its position). Desk slot i of a room SHALL be the
+room's i-th drawn tab, in reading order, so a reorder in Herdr, Spaces or Town
+moves desks. A room's capacity SHALL step through a
 bounded set of grid sizes that always leaves at least one free desk spot. While a
 scene is live, a topology change SHALL NOT reorder rooms or move a desk to
-another room: a new tab SHALL take the first free spot of its room without
-moving other desks, and a closed tab SHALL leave no gap: the desks after it in
-reading order SHALL close up in their existing order while the desks before it
-keep their spots. A room that reaches a new capacity step MAY shift later rooms
-and rows of the same building without reordering rooms, and SHALL keep its size
-step when desks close. Placement SHALL be
-re-derived from native order when the scene is rebuilt. Desktop SHALL lay out
+another room: a tab Herdr adds last SHALL take the first free spot of its room
+without moving other desks, and a closed tab SHALL leave no gap: the desks after
+it in reading order SHALL close up in their existing order while the desks
+before it keep their spots. A room that reaches a new capacity step MAY shift
+later rooms and rows of the same building without reordering rooms, and its
+desks MAY reflow to the step's columns; it SHALL keep its size step when desks
+close. Room placement SHALL be re-derived from native order when the scene is
+rebuilt. Desktop SHALL lay out
 buildings in one row; phones SHALL stack buildings in one vertical column.
 
 #### Scenario: A tab is created while the user watches
@@ -1131,7 +1135,14 @@ buildings in one row; phones SHALL stack buildings in one vertical column.
 
 - **WHEN** a room's last free spot is taken
 - **THEN** the room grows to the next capacity step with a free spot, rooms keep
-  their order, and desks keep their room
+  their order, and desks keep their room and their order
+
+#### Scenario: Tabs are reordered outside Town
+
+- **WHEN** the user moves a tab to the front of its workspace in Spaces or in
+  Herdr
+- **THEN** that tab's desk takes its room's first slot and the desks before its
+  old slot shift one slot on, once Herdr reports the new order
 
 ### Requirement: Town zoom levels
 
@@ -1355,6 +1366,25 @@ panes back into the original tab using their current IDs and report the outcome.
 It SHALL NOT retry an uncertain step, and if rollback fails it SHALL report the
 actual resulting topology.
 
+Town SHALL let the user reorder a desk within its room the same ways: dropping
+it on another desk of its room puts it in that desk's slot, as a tab dragged
+onto another in Spaces, and dropping it on the room's free spot puts it last of
+the drawn desks, so in a room with more tabs than it draws the desk takes the
+last drawn desk's place and stays in view. Only a seated agent stands for its
+desk's slot; a drop on an agent in the lounge, at reception or walking SHALL
+NOT reorder. The keyboard list SHALL offer the same places before other rooms. A reorder SHALL read the
+workspace's tab order from Herdr and send one Herdr `tab.move` through the same
+browser path as Spaces' tab strip, qualified by the desk's connection ID and
+runtime generation. Town SHALL NOT keep an order of its own: desks SHALL move
+when Herdr's new order is observed, and a refused reorder SHALL leave every desk
+in place and say why; on a Herdr without `tab.move`, Town SHALL say so in plain
+words before sending anything. The World service SHALL subscribe to Herdr's
+`tab.moved` event where Herdr supports `tab.move`, so a reorder made anywhere
+refreshes every view; when it cannot yet tell whether Herdr does, it SHALL retry
+the subscription rather than subscribe without `tab.moved`. Agents keep their desk across a reorder: a seated agent moves with
+its desk, an agent walking to it or sitting down walks to the new slot, and agents at reception
+or in the lounge return to the same desk.
+
 An agent move SHALL be a single confirmed pane move into the target tab. The
 service SHALL read the destination tab's complete layout, including panes Town
 does not draw, and join the pane next to its last pane, splitting across the
@@ -1409,6 +1439,13 @@ and target spots; the final placement SHALL follow confirmed Herdr topology.
 - **WHEN** the user drops the only desk of a room onto another room of the same host
 - **THEN** Town asks to confirm that the room will close, and moves the desk only
   after the user confirms
+
+#### Scenario: Reorder a desk in its room
+
+- **WHEN** the user drags the room's first desk onto its third desk
+- **THEN** World sends one `tab.move` for that tab on the desk's own connection
+  and runtime generation, and after Herdr reports the new order the desk sits in
+  the third slot and the second and third desks sit one slot earlier
 
 #### Scenario: Move an agent to another desk
 
