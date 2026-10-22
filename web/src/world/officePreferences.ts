@@ -21,7 +21,8 @@ export type OfficePreferences = {
 };
 
 export const DEFAULT_OFFICE_PREFERENCES: OfficePreferences = Object.freeze({
-  inspectorPresentation: "floating",
+  // Town's chat docks right by default (owner decision, 2026-10-22).
+  inspectorPresentation: "docked",
   townCalm: false,
   townOpens: "chat",
   townMaster: "firstmate",

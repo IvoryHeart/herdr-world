@@ -508,8 +508,8 @@ function agentTarget(label: string) {
 /** Opens an agent's Inspector from Town: a click only selects it. */
 /**
  * Open an agent's terminal from Town as a user does: activating the agent
- * opens its chat window, and Open terminal in the chat's header opens the
- * terminal (Town's default is chat; the terminal is one tap away).
+ * opens its window on Chat, and the window's Terminal view shows the
+ * terminal.
  */
 async function openAgent(label: string) {
   const target = agentTarget(label)!;
@@ -517,12 +517,29 @@ async function openAgent(label: string) {
     target.click();
     target.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
   });
-  const openTerminal = () =>
-    document.querySelector<HTMLButtonElement>(
-      `[aria-label="${label} chat window"] .town-peek-terminal`,
-    );
-  await until(openTerminal, `${label} chat window`);
-  flushSync(() => openTerminal()!.click());
+  const window = `[role="dialog"][aria-label="${label} Inspector"]`;
+  // The window opens on Chat first, even when it was already open.
+  await until(
+    () =>
+      document.querySelector(
+        `${window} .workspace-inspector[data-view="history"]`,
+      ),
+    `${label} window on Chat`,
+  );
+  flushSync(() =>
+    document
+      .querySelector<HTMLButtonElement>(
+        `${window} [role="tab"][aria-label="Terminal"]`,
+      )!
+      .click(),
+  );
+  await until(
+    () =>
+      document.querySelector(
+        `${window} .workspace-inspector[data-view="terminal"]`,
+      ),
+    `${label} window's Terminal view`,
+  );
 }
 
 /** Board's card for a single-pane tab, or a split tab's pane row, by name. */
@@ -1117,11 +1134,21 @@ async function run() {
     'select[aria-label="Inspector opening"]',
   )!;
   check(
-    inspectorOpeningSelect.value === "floating" &&
+    inspectorOpeningSelect.value === "docked" &&
       !document.querySelector('select[aria-label="Office room alignment"]') &&
       !document.querySelector('select[aria-label="Office long room titles"]'),
-    "Inspector opening was not menu-owned, did not default to Floating, or Town-only settings remained",
+    "Inspector opening was not menu-owned, did not default to Snap right, or Town-only settings remained",
   );
+  // The floating cases below choose Floating, as a user does.
+  flushSync(() => {
+    Object.getOwnPropertyDescriptor(
+      HTMLSelectElement.prototype,
+      "value",
+    )!.set!.call(inspectorOpeningSelect, "floating");
+    inspectorOpeningSelect.dispatchEvent(
+      new Event("change", { bubbles: true }),
+    );
+  });
   toggleTopbarMenu();
   await until(
     () => !document.querySelector(".config-dropdown"),
@@ -1727,6 +1754,46 @@ async function run() {
   const mobileInspector = [
     ...document.querySelectorAll<HTMLElement>(".workspace-inspector"),
   ].find((inspector) => inspector.getBoundingClientRect().width > 0)!;
+  // On a phone, the Chat view shows one composer, Chat's own: no terminal
+  // key bar and no terminal composer (those belong to the Terminal view).
+  const shown = (element: Element) => element.getClientRects().length > 0;
+  document
+    .querySelector<HTMLButtonElement>(
+      '.mobile-nav[aria-label="Workspace view switcher"] button[aria-label="Show agent message history"]',
+    )
+    ?.click();
+  await until(
+    () => mobileInspector.getAttribute("data-view") === "history",
+    "phone window Chat view",
+  );
+  await settle();
+  check(
+    ![...document.querySelectorAll(".terminal-composer")].some(shown) &&
+      ![
+        ...document.querySelectorAll(
+          ".terminal-composer-shortcuts, .mobile-terminal-shortcuts",
+        ),
+      ].some(shown),
+    "the phone Chat view shows a terminal composer or key bar",
+  );
+  check(
+    [
+      ...document.querySelectorAll(
+        ".agent-chat-composer textarea, textarea.terminal-composer-input",
+      ),
+    ].filter(shown).length <= 1,
+    "the phone Chat view shows more than one composer",
+  );
+  document
+    .querySelector<HTMLButtonElement>(
+      '.mobile-nav[aria-label="Workspace view switcher"] button[aria-label="Show terminal session"]',
+    )
+    ?.click();
+  await until(
+    () => mobileInspector.getAttribute("data-view") === "terminal",
+    "phone window back on Terminal",
+  );
+  await settle();
   const mobileHeader = mobileInspector.querySelector<HTMLElement>(
     ".workspace-inspector-head",
   )!;
@@ -2548,7 +2615,7 @@ async function run() {
   );
 
   builderWindow
-    .querySelector<HTMLButtonElement>('[role="tab"]:nth-of-type(2)')!
+    .querySelector<HTMLButtonElement>('[role="tab"][aria-label="Files"]')!
     .click();
   await until(
     () =>
@@ -2618,7 +2685,7 @@ async function run() {
     );
   }
   reviewerFloatingWindow
-    .querySelector<HTMLButtonElement>('[role="tab"]:first-of-type')!
+    .querySelector<HTMLButtonElement>('[role="tab"][aria-label="Terminal"]')!
     .click();
   await until(
     () =>
@@ -2628,7 +2695,7 @@ async function run() {
     "Reviewer Terminal after file handoff",
   );
   const builderTerminalTab = builderWindow.querySelector<HTMLButtonElement>(
-    '[role="tab"]:first-of-type',
+    '[role="tab"][aria-label="Terminal"]',
   )!;
   builderTerminalTab.dispatchEvent(
     new PointerEvent("pointerdown", {
@@ -2644,7 +2711,7 @@ async function run() {
     "background Builder Inspector control focus",
   );
   const builderFilesTab = builderWindow.querySelector<HTMLButtonElement>(
-    '[role="tab"]:nth-of-type(2)',
+    '[role="tab"][aria-label="Files"]',
   )!;
   builderFilesTab.dispatchEvent(
     new PointerEvent("pointerdown", {
@@ -2751,7 +2818,7 @@ async function run() {
   );
 
   inspector!
-    .querySelector<HTMLButtonElement>('[role="tab"]:first-of-type')!
+    .querySelector<HTMLButtonElement>('[role="tab"][aria-label="Terminal"]')!
     .click();
   await until(
     () =>
@@ -3223,7 +3290,7 @@ async function run() {
   // skip returning to the explorer on a slow renderer.
   const compactFilesBack = () =>
     persistentReviewerInspector?.querySelector<HTMLButtonElement>(
-      'button[aria-label="Files"]',
+      'button[aria-label="Files"]:not([role="tab"])',
     );
   await until(compactFilesBack, "compact Files retained-file back action");
   compactFilesBack()!.click();
@@ -3482,7 +3549,7 @@ async function run() {
     ".world-managed-window.is-active .workspace-inspector",
   )!;
   reviewerInspector
-    .querySelector<HTMLButtonElement>('[role="tab"]:nth-of-type(2)')!
+    .querySelector<HTMLButtonElement>('[role="tab"][aria-label="Files"]')!
     .click();
   await until(
     () => reviewerInspector.getAttribute("data-view") === "files",
@@ -3994,6 +4061,9 @@ async function run() {
           ".workspace-inspector-head button",
         ),
       ].flatMap((button) => {
+        // In the narrowest window the inactive views are hidden on purpose;
+        // they are under ⋯ (checked below).
+        if (button.getClientRects().length === 0) return [];
         const control = button.getBoundingClientRect();
         const reachable =
           control.width > 0 &&
@@ -4036,6 +4106,26 @@ async function run() {
     () => `three Inspectors in narrow Columns: ${narrowLayoutDiagnostic()}`,
   );
   await settle();
+  // Every view stays one tap away: as a tab, or under the narrowest
+  // window's ⋯ More views.
+  check(
+    [
+      ...document.querySelectorAll<HTMLElement>(
+        '[role="dialog"][aria-label$=" Inspector"]',
+      ),
+    ].every(
+      (window) =>
+        [
+          ...window.querySelectorAll<HTMLElement>(
+            '.workspace-inspector-tabs [role="tab"]',
+          ),
+        ].every((tab) => tab.getClientRects().length > 0) ||
+        (window
+          .querySelector<HTMLElement>(".workspace-inspector-tabs-more")
+          ?.getClientRects().length ?? 0) > 0,
+    ),
+    "a narrow Inspector hid views without offering More views",
+  );
   check(
     clippedVisualControls().length === 0,
     `narrow Columns clipped Inspector controls: ${JSON.stringify(clippedVisualControls())}`,

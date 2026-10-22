@@ -1266,19 +1266,18 @@ when it is waiting), answer options only when the pane's latest lines present a
 numbered menu or a yes/no prompt, and actions to reply, open the Inspector, open
 the terminal from the peek's header and go to the next waiting agent. Tapping an
 agent, or the table of an agent away at reception or in the lounge, SHALL open
-what the Town opens preference names: the agent's peek (Chat, the default) or
-its terminal; it SHALL NOT open an Inspector, and tapping a room SHALL only zoom
-to it. A pinned peek SHALL be a chat window in World's shared window frame,
-moved, resized, snapped, minimised and maximised as the Inspector window is.
-On a wide screen it SHALL dock on the right by default and MAY be undocked;
-activating an agent or its table SHALL open its chat; opening an agent SHALL
-show a minimised chat window again. The Town master's chat, named by a
-setting, SHALL be docked from the start on wide screens, sharing the right edge
-with an agent's chat. On a phone the chat window SHALL dock at the bottom and
-be moved and resized by touch: a grip on its top edge sets its height, settling
-at a third, half or full; its name moves it; a double tap fills the screen or
-returns it. Each window's dock, floating size and position SHALL be kept per
-device as the Inspector's are. A hover peek SHALL stay a card beside its agent. A table SHALL stand for its agent that needs the user (waiting, then
+what the Town opens preference names: the agent's one window, World's
+Inspector, on its Chat view (the default), or its terminal; tapping a room SHALL
+only zoom to it. Activating an agent or its table, the needs-you list, N and
+Next SHALL open the same window on Chat; no separate peek chat window SHALL
+exist, and the peek card SHALL only preview an agent on hover. In Town the
+Inspector SHALL dock right by default and keep the dock each window was left
+with. Its top selector SHALL list Chat, Terminal, Changes and Files (Commits
+last) and follow the window's own width: labelled from 640px, icons below, and
+below 360px the active view with the others under ⋯. On a phone the Chat view
+SHALL show one composer and no terminal key bar. The Town master's chat, named
+by a setting, SHALL open docked on Chat once per visit on wide screens without
+focusing its pane. A table SHALL stand for its agent that needs the user (waiting, then
 finished) before the agent seated there. An agent opened this way, with either
 preference, SHALL walk back to its desk and stay there until its status
 changes, after which its status places it again; the tap SHALL NOT mark its
@@ -1312,28 +1311,12 @@ Opening the terminal from a peek SHALL follow the Inspector presentation prefere
 - **WHEN** the peeked pane closes or its runtime generation retires before the reply is sent
 - **THEN** World rejects the reply and does not redirect it to another pane, tab or host
 
-#### Scenario: Move and resize the chat window
-
-- **WHEN** on a wide screen the user opens an agent's peek
-- **THEN** it is in World's shared window frame, docked right, with the
-  Inspector window's snap, minimise, maximise and close controls
-- **WHEN** the user undocks it, drags it by the agent's name, resizes it from
-  an edge, closes it and opens an agent again
-- **THEN** it reopens at the position and size it was left with
-
-#### Scenario: Resize the chat on a phone
-
-- **WHEN** on a phone the user opens an agent's chat and drags the grip on its
-  top edge up near the top
-- **THEN** the chat, docked at the bottom, settles at the full height; dragged
-  down near a third it settles at a third, and it reopens at that height
-
 #### Scenario: Tap the table of an agent waiting at reception
 
 - **WHEN** Town opens Chat and the user taps the table of an agent that is
   waiting at reception
-- **THEN** that agent's peek opens, the agent walks back to its desk, and no
-  terminal opens
+- **THEN** that agent's window opens on Chat, the agent walks back to its desk,
+  and no terminal or peek card opens
 
 #### Scenario: Town opens Terminal
 

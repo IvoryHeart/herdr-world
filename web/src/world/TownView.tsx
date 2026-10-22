@@ -15,10 +15,7 @@ import {
 import { isMobileLayout, useLayoutPreferences } from "../layoutPreferences";
 import { useSystemBack } from "../systemBack";
 import { useTownFinished, withTownFinished } from "./town/townFinished";
-import {
-  insertIntoTerminalComposerDraft,
-  terminalComposerDraftKey,
-} from "../terminalComposer";
+import { terminalComposerDraftKey } from "../terminalComposer";
 import { terminalUploadedPathsText } from "../terminalFileDrop";
 import {
   uploadTerminalFile,
@@ -57,7 +54,6 @@ import {
   useTownScreen,
 } from "./town/townChat";
 import { requestTerminalComposer } from "./terminalComposerRequest";
-import { TownComposer } from "./town/TownComposer";
 import { TownChooser } from "./town/TownChooser";
 import { TownPeek, townStatusText } from "./town/TownPeek";
 import {
@@ -106,71 +102,10 @@ import {
 } from "./completionSeenState";
 import { preferredOfficeConnectorAnchor } from "./worldConnectorGeometry";
 import { officeCreationInputsEqual } from "./officeCreationInputs";
-import {
-  readFloatingTerminalGeometry,
-  writeFloatingTerminalGeometry,
-} from "./floatingTerminalPreferences";
-import {
-  useWindowManager,
-  useWindowWorkArea,
-} from "./windows/useWindowManager";
-import {
-  fitWindow,
-  type SnapTarget,
-  type WindowInput,
-} from "./windows/windowManager";
-import type { ManagedWindowControls } from "./windows/WindowControls";
-import type { FloatingTerminalGeometry } from "./floatingTerminalGeometry";
-import { WindowSurface } from "./windows/WindowSurface";
-import { WindowFrame } from "./windows/WindowFrame";
 
 /** A keyed index of a list, built the first time it is read. */
-/** The one chat window Town shows its pinned peek in. */
-const TOWN_CHAT_WINDOW_ID = "town-chat";
-/** The Town master's chat window, docked from the start. */
-const TOWN_MASTER_WINDOW_ID = "town-master";
-const ignoreLayer = () => {};
-
-/** Where each chat window was left: docked, full or floating. */
-type TownChatDock = SnapTarget | "full" | "float";
-const TOWN_CHAT_DOCK_KEY = "townChatDock:v1";
-const CHAT_DOCKS = new Set([
-  "left",
-  "right",
-  "top",
-  "bottom",
-  "top-left",
-  "top-right",
-  "bottom-left",
-  "bottom-right",
-  "full",
-  "float",
-]);
-
-function readTownChatDock(): Readonly<Record<string, TownChatDock>> {
-  try {
-    const value: unknown = JSON.parse(
-      worldLocalStorage.getItem(TOWN_CHAT_DOCK_KEY) ?? "{}",
-    );
-    if (!value || typeof value !== "object" || Array.isArray(value)) return {};
-    return Object.fromEntries(
-      Object.entries(value).filter(
-        (entry): entry is [string, TownChatDock] =>
-          typeof entry[1] === "string" && CHAT_DOCKS.has(entry[1]),
-      ),
-    );
-  } catch {
-    return {};
-  }
-}
-
-function writeTownChatDock(docks: Readonly<Record<string, TownChatDock>>) {
-  try {
-    worldLocalStorage.setItem(TOWN_CHAT_DOCK_KEY, JSON.stringify(docks));
-  } catch {
-    // A presentation preference must never prevent chatting.
-  }
-}
+/** Town masters whose chat has been docked in this page visit. */
+const dockedTownMasters = new Set<string>();
 
 function lazyIndex<T>(items: readonly T[], keyOf: (item: T) => string) {
   let index: Map<string, T> | null = null;
@@ -206,10 +141,14 @@ export default function TownView({
   onConversationNodeAnchorsChange,
   onOpenInspectorView,
 }: {
-  /** Open World's Inspector on a view (files, changes, history) for a node. */
+  /**
+   * Open World's Inspector on a view (files, changes, history = Chat) for a
+   * node. `focus` false opens it without focusing the node's pane.
+   */
   onOpenInspectorView?: (
     id: string,
     view: "files" | "changes" | "history",
+    focus?: boolean,
   ) => void;
   world: WorldObject;
   toolbarPortal?: Element | null;
@@ -611,16 +550,6 @@ export default function TownView({
   const now = useNow(5_000);
   const [railCollapsed, setRailCollapsed] = useState(readTownRailCollapsed);
   const [width, setWidth] = useState(() => window.innerWidth);
-  const [shell, setShell] = useState<HTMLDivElement | null>(null);
-  // The chat window's layer sits 8px inside the Town, as World's windows do.
-  const shellArea = useWindowWorkArea(shell);
-  const chatStage = useMemo(
-    () => ({
-      width: Math.max(0, shellArea.width - 16),
-      height: Math.max(0, shellArea.height - 16),
-    }),
-    [shellArea.width, shellArea.height],
-  );
   useEffect(() => {
     const resize = () => setWidth(window.innerWidth);
     window.addEventListener("resize", resize);
@@ -784,12 +713,9 @@ export default function TownView({
     anchor: { x: number; y: number } | null;
     pinned: boolean;
     /** Showing World's composer for this agent. */
-    chat?: boolean;
   } | null>(null);
   const holdPeek = useRef(false);
   const peekTimer = useRef<number | undefined>(undefined);
-  const sheetMode = () =>
-    window.innerWidth < 640 || window.matchMedia("(hover: none)").matches;
   const schedulePeek = (next: typeof peek, delay: number) => {
     window.clearTimeout(peekTimer.current);
     peekTimer.current = window.setTimeout(() => setPeek(next), delay);
@@ -1036,30 +962,14 @@ export default function TownView({
       setChooser(key);
       return;
     }
-    // An agent's chat is its default: on the phone the peek grows World's
-    // composer, and on a wide screen the agent's chat window opens. A pane
-    // without an agent opens its terminal.
+    // An agent opens its window on Chat; a pane without an agent opens its
+    // terminal.
     const mobile = isMobileLayout();
     const agentKey = agentByKey.has(key)
       ? key
       : (deviceByKey.get(key)?.device.agentKey ?? deskAgentKey(key));
-    if (!mobile && agentKey && agentByKey.has(agentKey)) {
+    if (agentKey && agentByKey.has(agentKey)) {
       openChat(agentKey);
-      return;
-    }
-    if (mobile && agentKey && agentByKey.has(agentKey)) {
-      window.clearTimeout(peekTimer.current);
-      summon(agentKey);
-      setPeek((current) => ({
-        key: agentKey,
-        anchor: sheetMode()
-          ? null
-          : current?.key === agentKey
-            ? current.anchor
-            : lastPointer.current,
-        pinned: true,
-        chat: true,
-      }));
       return;
     }
     // Otherwise open the pane's terminal, with its composer on the phone layout.
@@ -1091,11 +1001,6 @@ export default function TownView({
     },
     "panel",
   );
-  useSystemBack(
-    Boolean(peek?.chat),
-    () => setPeek((current) => (current ? { ...current, chat: false } : null)),
-    "popup",
-  );
   useSystemBack(chooser !== null, () => setChooser(null), "popup");
   useSystemBack(moveFlow !== null, () => setMoveFlow(null), "popup");
   const peekEntry = peek ? agentByKey.get(peek.key) : undefined;
@@ -1116,7 +1021,7 @@ export default function TownView({
   const peekScreen = useTownScreen(
     peekLeaf,
     Boolean(peekAgent) && peekBlocked,
-    peek?.chat ? 1_200 : 2_000,
+    2_000,
   );
   const peekConversation = useTownConversation(peekLeaf, Boolean(peekAgent));
   const peekCanReply =
@@ -1150,29 +1055,20 @@ export default function TownView({
       return false;
     }
   };
-  /**
-   * Where a pane's attachments are kept. On the phone layout they belong to
-   * the pane's composer draft, which opens in the peek, so the composer shows
-   * their chips. On desktop they belong to the peek's own reply line: the
-   * hidden terminal composer must not take their paths.
-   */
-  const uploadScopeOf = (leaf: NonNullable<ReturnType<typeof townLeaf>>) => {
-    const draftKey = terminalComposerDraftKey(
+  /** Where a pane's attachments from its hover card are kept. */
+  const uploadScopeOf = (leaf: NonNullable<ReturnType<typeof townLeaf>>) =>
+    `town-peek\u0000${terminalComposerDraftKey(
       leaf.connectionId,
       leaf.generation,
       leaf.pane.pane_id,
-    );
-    return isMobileLayout() ? draftKey : `town-peek\u0000${draftKey}`;
-  };
+    )}`;
   /**
-   * Upload files for a pane as World's composer does, one chip per file. On
-   * the phone layout each path goes into the composer's shared draft, which
-   * outlives any one composer. On desktop it is kept for the pane's peek,
-   * which takes it into its reply line whenever it is open.
+   * Upload files for a pane from its hover card, as World's composer does,
+   * one chip per file. Each path is kept for the pane's card, which takes it
+   * into its reply line whenever it is shown.
    */
   const attach = (
     leaf: ReturnType<typeof townLeaf>,
-    agentKey: string,
     files: File[],
     image: boolean,
   ) => {
@@ -1181,67 +1077,60 @@ export default function TownView({
       toast("error", "This agent's host changed; refresh before attaching.");
       return;
     }
-    const mobile = isMobileLayout();
-    if (mobile) openReply(agentKey);
-    const draftKey = terminalComposerDraftKey(
-      leaf.connectionId,
-      leaf.generation,
-      leaf.pane.pane_id,
-    );
     void startAttachmentUploads(
       uploadScopeOf(leaf),
       files,
-      async (file, onProgress) => {
-        const text = terminalUploadedPathsText([
+      async (file, onProgress) =>
+        terminalUploadedPathsText([
           await (image ? uploadTerminalImage : uploadTerminalFile)(
             client,
             file,
             onProgress,
           ),
-        ]);
-        if (!mobile) return text;
-        insertIntoTerminalComposerDraft(draftKey, text);
-      },
+        ]),
     );
   };
   const nextCall = (currentKey: string | null) =>
     nextTownCall(calls, currentKey);
-  const openPeek = (key: string, anchor: { x: number; y: number } | null) => {
-    if (DEVTOOLS) trace.record("peek", { key });
-    window.clearTimeout(peekTimer.current);
-    // The Town master's chat has its own docked window.
-    if (key === masterAgent?.key) {
-      openChat(key);
-      return;
-    }
-    summon(key);
-    // Opening an agent shows the chat window again if it was minimised.
-    revealChat.current();
-    setPeek({ key, anchor: sheetMode() ? null : anchor, pinned: true });
-  };
   /**
-   * Open an agent's chat: its window, docked right by default (the master's
-   * own docked window for the Town master), or on the phone the chat with
-   * its composer. The agent walks back to its desk and a minimised window
-   * shows again. Every way into an agent's chat comes through here.
+   * Open an agent's chat: its one window, World's Inspector, on the Chat
+   * view, docked right by default. The agent walks back to its desk. Every
+   * way into an agent from Town comes through here; a hover card is only a
+   * preview. `focus` false opens it without focusing the agent's pane.
    */
-  const openChat = (agentKey: string) => {
-    if (!agentByKey.has(agentKey)) return;
-    if (agentKey === masterAgent?.key) {
-      window.clearTimeout(peekTimer.current);
-      summon(agentKey);
-      setMasterClosed(false);
-      revealChat.current(TOWN_MASTER_WINDOW_ID);
-      return;
-    }
-    if (isMobileLayout()) {
-      openReply(agentKey);
-      return;
-    }
-    openPeek(agentKey, null);
+  const openChat = (agentKey: string, focus = true) => {
+    const agent = agentByKey.get(agentKey)?.agent;
+    if (!agent) return;
+    if (DEVTOOLS) trace.record("peek", { key: agentKey });
+    window.clearTimeout(peekTimer.current);
+    holdPeek.current = false;
+    setPeek(null);
+    summon(agentKey);
+    if (onOpenInspectorView)
+      onOpenInspectorView(agent.nodeId, "history", focus);
+    else void onSelect(agent.nodeId);
   };
+  // The Town master's (FirstMate's) chat is docked from the start on wide
+  // screens, once per visit: closed, it stays closed until opened again.
+  const masterName = preferences.townMaster.trim().toLowerCase();
+  const masterAgent = masterName
+    ? office.roster.find(
+        ({ agent }) => agent.displayLabel.toLowerCase() === masterName,
+      )?.agent
+    : undefined;
+  useEffect(() => {
+    if (
+      !masterAgent ||
+      layoutPreferences.mobile ||
+      dockedTownMasters.has(masterAgent.key)
+    )
+      return;
+    dockedTownMasters.add(masterAgent.key);
+    openChat(masterAgent.key, false);
+    // openChat reads the current roster; the master opens once per key.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [masterAgent?.key, layoutPreferences.mobile]);
   const lastPointer = useRef<{ x: number; y: number } | null>(null);
-  const revealChat = useRef<(id?: string) => void>(() => {});
   /**
    * The agent a table stands for: one that needs you (waiting, then
    * finished) even while it is away at reception, else the one seated there.
@@ -1283,7 +1172,7 @@ export default function TownView({
         setPeek(null);
         summon(agentKey);
         openOfficeTerminal(agentKey, false);
-      } else openPeek(agentKey, lastPointer.current);
+      } else openChat(agentKey);
       return;
     }
     if (deviceByKey.has(key) || desk) {
@@ -1310,7 +1199,7 @@ export default function TownView({
         const next = nextCall(null);
         if (!next) return;
         event.preventDefault();
-        openPeek(next.agent.key, null);
+        openChat(next.agent.key);
       }
     };
     window.addEventListener("keydown", keydown);
@@ -1335,329 +1224,6 @@ export default function TownView({
     };
   };
   const townSelectedKey = peek?.key ?? selectedKey;
-  /* ---------- Chat windows ---------- */
-  // Town's chats are windows in World's shared frame, as the Inspector is:
-  // moved, resized, snapped, minimised and maximised the same way. A pinned
-  // peek opens the agent's chat window; the Town master's (FirstMate's) chat
-  // is docked from the start on wide screens. They dock right by default and
-  // can be undocked; a phone docks the chat at the bottom, with a grip for its
-  // height. Where each one was left is kept per device. Hover peeks stay
-  // cards beside their agent.
-  const phoneChat = layoutPreferences.mobile || width < 640;
-  const masterName = preferences.townMaster.trim().toLowerCase();
-  const masterAgent =
-    phoneChat || !masterName
-      ? undefined
-      : office.roster.find(
-          ({ agent }) => agent.displayLabel.toLowerCase() === masterName,
-        )?.agent;
-  const [masterClosed, setMasterClosed] = useState(false);
-  const masterOpen = Boolean(masterAgent) && !masterClosed;
-  const masterLeaf = townLeaf(world, masterAgent?.nodeId);
-  const masterBlocked = masterAgent?.semanticStatus === "blocked";
-  const masterScreen = useTownScreen(masterLeaf, masterOpen && masterBlocked);
-  const masterConversation = useTownConversation(masterLeaf, masterOpen);
-  const masterCanReply =
-    Boolean(masterLeaf) && !!masterAgent?.canOpenInSpaces && !masterAgent.stale;
-  const masterChoices = masterBlocked
-    ? townChoices(townScreenLines(masterScreen, 12))
-    : [];
-  const masterQuestion = masterBlocked
-    ? townQuestion(
-        townScreenLines(masterScreen),
-        masterChoices.length > 0 && masterCanReply,
-      ).question
-    : [];
-  const chatWindow =
-    Boolean(peek?.pinned && peekAgent) && peekAgent?.key !== masterAgent?.key;
-  const bothDocked = masterOpen && chatWindow;
-  const [chatDock, setChatDock] = useState(readTownChatDock);
-  /** Saved per device: a phone keeps its own place for each window. */
-  const chatPlaceId = (id: string) => (phoneChat ? `${id}:phone` : id);
-  const dockOf = (id: string): TownChatDock =>
-    chatDock[chatPlaceId(id)] ?? (phoneChat ? "bottom" : "right");
-  const saveDock = (id: string, dock: TownChatDock) =>
-    setChatDock((current) => {
-      if (current[chatPlaceId(id)] === dock) return current;
-      const next = { ...current, [chatPlaceId(id)]: dock };
-      writeTownChatDock(next);
-      return next;
-    });
-  /** Docked right with the master's window, the two share the right edge. */
-  const dockedSnap = (id: string, dock: TownChatDock): SnapTarget | null =>
-    dock === "float" || dock === "full"
-      ? null
-      : dock === "right" && bothDocked
-        ? id === TOWN_MASTER_WINDOW_ID
-          ? "top-right"
-          : "bottom-right"
-        : dock;
-  const chatWindowInputs = useMemo(() => {
-    const input = (id: string, label: string): WindowInput => {
-      const snap = dockedSnap(id, dockOf(id));
-      return {
-        id,
-        label,
-        initialSnap: snap ?? undefined,
-        initialGeometry: readFloatingTerminalGeometry(
-          worldLocalStorage,
-          chatPlaceId(id),
-          phoneChat
-            ? {
-                left: 0,
-                top: Math.round(chatStage.height / 2),
-                width: chatStage.width,
-                height: Math.round(chatStage.height / 2),
-              }
-            : {
-                left: Math.max(0, chatStage.width - 436),
-                top: 0,
-                width: Math.min(420, chatStage.width),
-                height: Math.min(560, chatStage.height),
-              },
-          chatStage,
-          undefined,
-          fitWindow,
-        ),
-      };
-    };
-    return [
-      ...(masterOpen ? [input(TOWN_MASTER_WINDOW_ID, "FirstMate chat")] : []),
-      ...(chatWindow ? [input(TOWN_CHAT_WINDOW_ID, "Chat")] : []),
-    ];
-    // The inputs only matter when a window is created; its dock is read then.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [masterOpen, chatWindow, chatStage, phoneChat]);
-  const chatWindows = useWindowManager(
-    chatWindowInputs,
-    chatStage,
-    phoneChat ? "town-chat:phone" : "town-chat",
-  );
-  revealChat.current = (id = TOWN_CHAT_WINDOW_ID) =>
-    chatWindows.dispatch({ type: "focus", id });
-  // A window left full is full again when it opens; two windows docked right
-  // share the edge, and one alone takes all of it.
-  const shownChats = useRef(new Set<string>());
-  useEffect(() => {
-    const { windows } = chatWindows.state;
-    for (const id of Object.keys(windows)) {
-      const entry = windows[id]!;
-      if (!shownChats.current.has(id)) {
-        shownChats.current.add(id);
-        if (dockOf(id) === "full" && !entry.maximized)
-          chatWindows.dispatch({ type: "maximize", id });
-      }
-      const snap = dockOf(id) === "right" ? dockedSnap(id, "right") : null;
-      if (
-        snap &&
-        entry.placement.kind === "snap" &&
-        entry.placement.target !== snap
-      )
-        chatWindows.dispatch({ type: "snap", id, target: snap });
-    }
-    for (const id of shownChats.current)
-      if (!windows[id]) shownChats.current.delete(id);
-    // dockOf and dockedSnap read the saved docks and bothDocked.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chatWindows.state, bothDocked]);
-  /** A phone's chat docked at the bottom settles at ⅓, ½ or full height. */
-  const settleChatHeight = (rect: FloatingTerminalGeometry) => {
-    if (!phoneChat) return rect;
-    const bottom = chatStage.height;
-    if (Math.abs(rect.top + rect.height - bottom) > 8) return rect;
-    const stop = [bottom / 3, bottom / 2, bottom].find(
-      (height) => Math.abs(rect.height - height) < 32,
-    );
-    return stop === undefined
-      ? rect
-      : { ...rect, top: Math.round(bottom - stop), height: Math.round(stop) };
-  };
-  const chatHandlers = (id: string) => {
-    const entry = chatWindows.state.windows[id];
-    const toggleFull = () => {
-      if (!entry) return;
-      saveDock(
-        id,
-        entry.maximized
-          ? entry.placement.kind === "snap"
-            ? wideDock(entry.placement.target)
-            : "float"
-          : "full",
-      );
-      chatWindows.dispatch({ type: "maximize", id });
-    };
-    const wideDock = (target: SnapTarget): TownChatDock =>
-      !phoneChat &&
-      (target === "right" ||
-        target === "top-right" ||
-        target === "bottom-right")
-        ? "right"
-        : target;
-    return {
-      entry,
-      toggleFull,
-      place: (rect: FloatingTerminalGeometry) => {
-        const settled = settleChatHeight(rect);
-        writeFloatingTerminalGeometry(
-          worldLocalStorage,
-          chatPlaceId(id),
-          settled,
-        );
-        saveDock(id, "float");
-        chatWindows.dispatch({ type: "place", id, rect: settled });
-      },
-      snap: (target: SnapTarget) => {
-        saveDock(id, wideDock(target));
-        chatWindows.dispatch({ type: "snap", id, target });
-      },
-      controls: (onClose: () => void): ManagedWindowControls | null =>
-        entry
-          ? {
-              maximized: entry.maximized,
-              // A phone's header keeps minimise and close; dragging docks it
-              // and a double tap fills the screen.
-              compact: phoneChat,
-              onMinimize: () => chatWindows.dispatch({ type: "minimize", id }),
-              onMaximize: toggleFull,
-              onClose,
-              onSnap: (target) => {
-                saveDock(id, wideDock(target));
-                chatWindows.dispatch({ type: "snap", id, target });
-              },
-              onFloat: () => {
-                saveDock(id, "float");
-                chatWindows.dispatch({ type: "float", id });
-              },
-            }
-          : null,
-    };
-  };
-  const closePeekChat = () => {
-    holdPeek.current = false;
-    setPeek(null);
-  };
-
-  /** The pinned or hovered peek's card, inside its window when given one. */
-  const peekCard = (handlers: ReturnType<typeof chatHandlers> | null) =>
-    peekAgent ? (
-      <TownPeek
-        // One card per agent session: late upload or reply results of
-        // another agent never land in this one.
-        key={peekLeaf ? townPaneIdentity(peekLeaf) : peekAgent.key}
-        agent={peekAgent}
-        where={whereOf(peekAgent.key)}
-        conversation={peekConversation}
-        question={peekQuestion}
-        choices={peekChoices}
-        canReply={peekCanReply}
-        // In its window the peek fills the frame; only a hover card sits
-        // beside its agent.
-        anchor={handlers ? null : peek!.anchor}
-        pinned={peek!.pinned}
-        onReply={(text, submit) =>
-          reply(peekLeaf, peekAgent.displayLabel, text, submit)
-        }
-        inlineReply={!layoutPreferences.mobile}
-        deskColor={peekDeskColor(peekAgent.key)}
-        onReviewed={() => {
-          markCompletionSeen(peekAgent);
-          toast("ok", `${peekAgent.displayLabel}'s work reviewed`);
-        }}
-        onAttach={(files, image) =>
-          attach(peekLeaf, peekAgent.key, files, image)
-        }
-        uploadScope={peekLeaf ? uploadScopeOf(peekLeaf) : null}
-        onChat={() => openChat(peekAgent.key)}
-        onTerminal={() => {
-          setPeek(null);
-          openOfficeTerminal(peekAgent.key);
-        }}
-        onInspector={() => {
-          setPeek(null);
-          if (onOpenInspectorView)
-            onOpenInspectorView(peekAgent.nodeId, "files");
-          else void onSelect(peekAgent.nodeId);
-        }}
-        onNext={
-          nextCall(peekAgent.key)
-            ? () => openChat(nextCall(peekAgent.key)!.agent.key)
-            : null
-        }
-        onClose={closePeekChat}
-        composer={
-          peek!.chat && peekLeaf ? (
-            <TownComposer
-              leaf={peekLeaf}
-              onDirect={() => {
-                setPeek(null);
-                openOfficeTerminal(peekAgent.key);
-              }}
-              onClose={() =>
-                setPeek((current) =>
-                  current ? { ...current, chat: false } : current,
-                )
-              }
-              onSent={(submitted) =>
-                toast(
-                  "ok",
-                  submitted
-                    ? `Sent to ${peekAgent.displayLabel}`
-                    : `Inserted for ${peekAgent.displayLabel}`,
-                )
-              }
-              onError={(message) => toast("error", message)}
-            />
-          ) : null
-        }
-        onHold={(hold) => {
-          holdPeek.current = hold;
-          if (hold) window.clearTimeout(peekTimer.current);
-          else if (!peek?.pinned) schedulePeek(null, 320);
-        }}
-        windowControls={handlers?.controls(closePeekChat) ?? null}
-        onToggleFull={handlers?.toggleFull}
-        grip={phoneChat && handlers !== null}
-      />
-    ) : null;
-  /** The Town master's chat, docked from the start on wide screens. */
-  const masterCard = (
-    agent: OfficeAgent,
-    handlers: ReturnType<typeof chatHandlers>,
-  ) => (
-    <TownPeek
-      key={masterLeaf ? townPaneIdentity(masterLeaf) : agent.key}
-      agent={agent}
-      where={whereOf(agent.key)}
-      conversation={masterConversation}
-      question={masterQuestion}
-      choices={masterChoices}
-      canReply={masterCanReply}
-      anchor={null}
-      pinned
-      onReply={(text, submit) =>
-        reply(masterLeaf, agent.displayLabel, text, submit)
-      }
-      inlineReply
-      deskColor={peekDeskColor(agent.key)}
-      onReviewed={() => {
-        markCompletionSeen(agent);
-        toast("ok", `${agent.displayLabel}'s work reviewed`);
-      }}
-      onAttach={(files, image) => attach(masterLeaf, agent.key, files, image)}
-      uploadScope={masterLeaf ? uploadScopeOf(masterLeaf) : null}
-      onChat={() => openChat(agent.key)}
-      onTerminal={() => openOfficeTerminal(agent.key)}
-      onInspector={() => {
-        if (onOpenInspectorView) onOpenInspectorView(agent.nodeId, "files");
-        else void onSelect(agent.nodeId);
-      }}
-      onNext={null}
-      onClose={() => setMasterClosed(true)}
-      onHold={() => {}}
-      windowControls={handlers.controls(() => setMasterClosed(true))}
-      onToggleFull={handlers.toggleFull}
-    />
-  );
 
   if (!world.hosts.length) {
     return (
@@ -1693,7 +1259,6 @@ export default function TownView({
       {toolbarPortal ? createPortal(toolbar, toolbarPortal) : toolbar}
       <WorldSearchResults world={world} query={query} onSelect={onSelect} />
       <div
-        ref={setShell}
         className={`world-office-shell world-stage-shell town-view-shell`}
         onPointerDownCapture={(event) => {
           lastPointer.current = { x: event.clientX, y: event.clientY };
@@ -1721,7 +1286,7 @@ export default function TownView({
                 })
               : hoverAgent(null)
           }
-          onOpen={(key) => openPeek(key, null)}
+          onOpen={(key) => openChat(key)}
         />
         {moveFlow ? (
           <TownChooser
@@ -1757,61 +1322,64 @@ export default function TownView({
                 detail: agent ? townStatusText(agent) : "terminal",
                 onChoose: () => {
                   setChooser(null);
-                  if (agent) openPeek(agent.key, null);
+                  if (agent) openChat(agent.key);
                   else openReply(device.key);
                 },
               };
             })}
           />
         ) : null}
-        {chatWindow || masterOpen ? (
-          <WindowSurface
-            state={chatWindows.state}
-            dispatch={chatWindows.dispatch}
-            stage={chatStage}
-            compact={false}
-            onLayer={ignoreLayer}
-            bounds={chatStage}
-            className="town-chat-surface"
-          >
-            {({ entry, geometry, stage, workArea, zIndex, active }) => {
-              const master = entry.id === TOWN_MASTER_WINDOW_ID;
-              const agent = master ? masterAgent : peekAgent;
-              if (!agent) return null;
-              const handlers = chatHandlers(entry.id);
-              return (
-                <WindowFrame
-                  key={entry.id}
-                  id={entry.id}
-                  label={`${agent.displayLabel} chat window`}
-                  geometry={geometry}
-                  restoreGeometry={
-                    entry.maximized || entry.placement.kind !== "floating"
-                      ? entry.floating
-                      : undefined
-                  }
-                  stage={stage}
-                  workArea={workArea}
-                  active={active}
-                  compact={false}
-                  zIndex={zIndex}
-                  className={`town-chat-window${phoneChat ? " is-phone" : ""}`}
-                  onRaise={() =>
-                    chatWindows.dispatch({ type: "raise", id: entry.id })
-                  }
-                  onPlace={handlers.place}
-                  onSnap={handlers.snap}
-                  onMaximize={handlers.toggleFull}
-                >
-                  {master && masterAgent
-                    ? masterCard(masterAgent, handlers)
-                    : peekCard(handlers)}
-                </WindowFrame>
-              );
+        {peekAgent ? (
+          <TownPeek
+            // One card per agent session: late upload or reply results of
+            // another agent never land in this one.
+            key={peekLeaf ? townPaneIdentity(peekLeaf) : peekAgent.key}
+            agent={peekAgent}
+            where={whereOf(peekAgent.key)}
+            conversation={peekConversation}
+            question={peekQuestion}
+            choices={peekChoices}
+            canReply={peekCanReply}
+            anchor={peek!.anchor}
+            pinned={peek!.pinned}
+            onReply={(text, submit) =>
+              reply(peekLeaf, peekAgent.displayLabel, text, submit)
+            }
+            inlineReply={!layoutPreferences.mobile}
+            deskColor={peekDeskColor(peekAgent.key)}
+            onReviewed={() => {
+              markCompletionSeen(peekAgent);
+              toast("ok", `${peekAgent.displayLabel}'s work reviewed`);
             }}
-          </WindowSurface>
+            onAttach={(files, image) => attach(peekLeaf, files, image)}
+            uploadScope={peekLeaf ? uploadScopeOf(peekLeaf) : null}
+            onChat={() => openReply(peekAgent.key)}
+            onTerminal={() => {
+              setPeek(null);
+              openOfficeTerminal(peekAgent.key);
+            }}
+            onInspector={() => {
+              setPeek(null);
+              if (onOpenInspectorView)
+                onOpenInspectorView(peekAgent.nodeId, "files");
+              else void onSelect(peekAgent.nodeId);
+            }}
+            onNext={
+              nextCall(peekAgent.key)
+                ? () => openChat(nextCall(peekAgent.key)!.agent.key)
+                : null
+            }
+            onClose={() => {
+              holdPeek.current = false;
+              setPeek(null);
+            }}
+            onHold={(hold) => {
+              holdPeek.current = hold;
+              if (hold) window.clearTimeout(peekTimer.current);
+              else if (!peek?.pinned) schedulePeek(null, 320);
+            }}
+          />
         ) : null}
-        {peekAgent && !peek?.pinned ? peekCard(null) : null}
         <div className="town-toasts" role="status" aria-live="polite">
           {toasts.map((item) => (
             <div key={item.id} className={`town-toast town-toast-${item.kind}`}>

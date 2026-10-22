@@ -1,5 +1,6 @@
 import {
   floatingTerminalGeometryId,
+  writeFloatingTerminalDock,
   writeFloatingTerminalGeometry,
 } from "./floatingTerminalPreferences";
 import { WindowSurface } from "./windows/WindowSurface";
@@ -188,8 +189,8 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
                     >
                       <TownView
                         world={presentedWorld}
-                        onOpenInspectorView={(id, view) =>
-                          void applySelection(id, view)
+                        onOpenInspectorView={(id, view, focus = true) =>
+                          void applySelection(id, view, focus)
                         }
                         toolbarPortal={viewToolbarPortal}
                         selectedId={selectedId}
@@ -342,11 +343,21 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
                       floatingTerminalGeometryId(conversation),
                       rect,
                     );
+                    writeFloatingTerminalDock(
+                      worldLocalStorage,
+                      floatingTerminalGeometryId(conversation),
+                      "float",
+                    );
                     windowCommand({ type: "place", id: entry.id, rect });
                   }}
-                  onSnap={(target) =>
-                    windowCommand({ type: "snap", id: entry.id, target })
-                  }
+                  onSnap={(target) => {
+                    writeFloatingTerminalDock(
+                      worldLocalStorage,
+                      floatingTerminalGeometryId(conversation),
+                      target,
+                    );
+                    windowCommand({ type: "snap", id: entry.id, target });
+                  }}
                   onMaximize={() =>
                     windowCommand({ type: "maximize", id: entry.id })
                   }
@@ -456,17 +467,29 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
                   id: worldInspectorWindowId(conversation),
                 }),
               onClose: () => closeInspector(conversation),
-              onSnap: (target) =>
+              onSnap: (target) => {
+                writeFloatingTerminalDock(
+                  worldLocalStorage,
+                  floatingTerminalGeometryId(conversation),
+                  target,
+                );
                 windowCommand({
                   type: "snap",
                   id: worldInspectorWindowId(conversation),
                   target,
-                }),
-              onFloat: () =>
+                });
+              },
+              onFloat: () => {
+                writeFloatingTerminalDock(
+                  worldLocalStorage,
+                  floatingTerminalGeometryId(conversation),
+                  "float",
+                );
                 windowCommand({
                   type: "float",
                   id: worldInspectorWindowId(conversation),
-                }),
+                });
+              },
               color: inspectorColor(conversation),
             }}
             terminalColor={inspectorColor(conversation)}

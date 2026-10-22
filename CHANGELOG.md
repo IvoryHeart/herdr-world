@@ -21,6 +21,18 @@ are optional because the merged PR history records their source.
 
 ### Changed
 
+- Each agent has one window. Tapping an agent or its table in Town (or
+  activating it, the needs-you list, **N** and **Next**) opens its Inspector on
+  **Chat**, the existing Chat view with the full conversation, **Jump to
+  latest** and its composer, instead of a separate peek chat window; a hover
+  card stays as a preview. Town's Inspector docks right by default (**Inspector
+  opening** now defaults to Snap right) and keeps the dock each window was left
+  with. The top selector puts Chat first and follows the window's own width:
+  labelled, then icons, then the active view with the others under ⋯. The Town
+  master's chat (**Menu → Town master**, `firstmate` by default) opens docked
+  on wide screens. On a phone the Chat view no longer shows the terminal key
+  bar.
+
 - Show a terminal's colour as a swatch beside its name in the terminal's
   header on desktop and phones, and offer the same picker under **Colour** in
   the terminal window's menu and in the Town peek's header. All pickers are
@@ -38,14 +50,6 @@ are optional because the merged PR history records their source.
   agent brings it back to its desk until its status changes. **Menu → Town
   opens** chooses Chat (the default) or Terminal for these taps; neither marks
   finished work reviewed.
-- An opened Town peek is a chat window in World's shared window frame, moved,
-  resized, snapped, minimised and maximised like the Inspector's. It docks on
-  the right by default and can be undocked; activating an agent or its table
-  opens it. The Town master's chat (**Menu → Town master**, `firstmate` by
-  default) is docked from the start. On a phone the chat docks at the bottom
-  and is moved and resized by touch: a grip sets its height (a third, half or
-  full), its name moves it, and a double tap fills the screen. Each window's
-  place is kept per device.
 - Town tables follow Herdr's tab order, so moving a tab in Spaces or Herdr
   moves its table. Drag a table onto another in its room (or press **M**) to
   reorder it: Town sends Herdr's `tab.move` the way Spaces does and shows the
