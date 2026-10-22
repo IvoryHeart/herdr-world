@@ -202,7 +202,8 @@ async function run() {
     check(
       sent?.params.text === "Run the tests" &&
         sent.params.session_fingerprint === "a".repeat(64) &&
-        sent.params.pane_id === "p",
+        sent.params.pane_id === "p" &&
+        JSON.stringify(sent.params.baseline) === JSON.stringify(["u1", "u2"]),
       "Enter must send the draft with the session it was written for",
     );
     check(textarea.value === "", "A sent draft must clear");
@@ -218,17 +219,30 @@ async function run() {
           sent_at: sentAt,
           state: "pending",
           expected: "claude session shown",
+          fingerprint: "a".repeat(64),
+        },
+        {
+          id: "d0",
+          text: "Meant for another conversation",
+          sent_at: sentAt,
+          state: "pending",
+          expected: "claude session earlier",
+          fingerprint: "b".repeat(64),
         },
       ],
     };
     push();
     await settle();
-    const pendingBubble = container.querySelector('[data-delivery="pending"]');
+    const pendingBubbles = container.querySelectorAll(
+      '[data-delivery="pending"]',
+    );
+    const pendingBubble = pendingBubbles[0];
     check(
-      pendingBubble?.textContent?.includes("Run the tests") === true &&
+      pendingBubbles.length === 1 &&
+        pendingBubble?.textContent?.includes("Run the tests") === true &&
         pendingBubble.textContent.includes("not yet seen") &&
         !/delivered/i.test(container.textContent ?? ""),
-      "A pending send must say it is not yet seen, never delivered",
+      "A pending send must show only in its own conversation, and say it is not yet seen, never delivered",
     );
 
     // A send that reached another session is reported loudly, by name.
@@ -241,19 +255,44 @@ async function run() {
           sent_at: sentAt,
           state: "misdelivered",
           expected: "claude session shown",
+          fingerprint: "a".repeat(64),
           delivered_to: "claude session other",
+          evidence: "transcript",
+        },
+        {
+          id: "d2",
+          text: "Earlier message",
+          sent_at: sentAt,
+          state: "unverified",
+          expected: "claude session shown",
+          fingerprint: "a".repeat(64),
+          detail:
+            "Chat did not see it in claude session shown within 15 minutes.",
         },
       ],
     };
     push();
     await settle();
-    const alert = container.querySelector(".agent-chat-misdelivered");
+    const alert = container.querySelector(
+      '.agent-chat-misdelivered[role="alert"]',
+    );
+    const sendButton = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Send"]',
+    );
+    type("Next");
+    await settle();
     check(
-      alert?.getAttribute("role") === "alert" &&
-        alert.textContent?.includes("claude session other") === true &&
+      alert?.textContent?.includes("claude session other") === true &&
         alert.textContent.includes("claude session shown") &&
-        !container.querySelector('[data-delivery="pending"]'),
-      "A misdelivered send must name the session that got it",
+        !container.querySelector('[data-delivery="pending"]') &&
+        sendButton?.disabled === true,
+      "A misdelivered send must name the session that got it and pause Send",
+    );
+    const unverified = container.querySelector(".is-unverified");
+    check(
+      unverified?.textContent?.includes("can no longer check") === true &&
+        unverified.textContent.includes("Earlier message"),
+      "A send Chat cannot check any more must say so",
     );
     [...container.querySelectorAll<HTMLButtonElement>("button")]
       .find((button) => button.textContent === "Dismiss")

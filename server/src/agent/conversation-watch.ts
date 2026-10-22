@@ -3,15 +3,17 @@ import { watch } from "node:fs";
 export type ConversationIdentity = {
   /** Changes whenever what Chat shows could change. */
   key: string;
-  /** A transcript on this machine to watch between Herdr events. */
-  path: string | null;
+  /**
+   * Transcripts on this machine to watch between Herdr events: the one shown
+   * and any that can still settle a message Chat sent.
+   */
+  paths: string[];
 };
 
 type Watched = {
   owners: Set<object>;
   key: string | null;
-  path: string | null;
-  stopFile: (() => void) | null;
+  files: Map<string, () => void>;
   timer: ReturnType<typeof setTimeout> | null;
   checking: boolean;
   again: boolean;
@@ -58,18 +60,25 @@ export function createConversationWatcher(args: {
       try {
         identity = await args.identity(paneId);
       } catch (error) {
-        identity = { key: `error:${String(error)}`, path: pane.path };
+        identity = {
+          key: `error:${String(error)}`,
+          paths: [...pane.files.keys()],
+        };
       }
       if (panes.get(paneId) !== pane) return;
       const changed = pane.key !== null && pane.key !== identity.key;
       pane.key = identity.key;
-      if (identity.path !== pane.path) {
-        pane.stopFile?.();
-        pane.path = identity.path;
-        pane.stopFile = identity.path
-          ? watchFile(identity.path, () => schedule(paneId))
-          : null;
-      }
+      for (const [path, stop] of pane.files)
+        if (!identity.paths.includes(path)) {
+          stop();
+          pane.files.delete(path);
+        }
+      for (const path of identity.paths)
+        if (!pane.files.has(path))
+          pane.files.set(
+            path,
+            watchFile(path, () => schedule(paneId)),
+          );
       if (changed) args.notify(paneId, pane.owners);
     } finally {
       pane.checking = false;
@@ -90,7 +99,7 @@ export function createConversationWatcher(args: {
   };
 
   const drop = (paneId: string, pane: Watched) => {
-    pane.stopFile?.();
+    for (const stop of pane.files.values()) stop();
     if (pane.timer) clearTimeout(pane.timer);
     panes.delete(paneId);
   };
@@ -102,8 +111,7 @@ export function createConversationWatcher(args: {
         pane = {
           owners: new Set(),
           key: null,
-          path: null,
-          stopFile: null,
+          files: new Map(),
           timer: null,
           checking: false,
           again: false,

@@ -13,6 +13,11 @@ type RunBinaryProcessWithTimeout = (
 
 export type AgentSessionFileAccess = {
   remote: boolean;
+  /**
+   * The transcript host's clock minus this service's, within
+   * `uncertaintyMs`. Absent for this machine, whose clock is ours.
+   */
+  clockOffset?(): Promise<{ offsetMs: number; uncertaintyMs: number }>;
   statFile(path: string): Promise<SessionFile | null>;
   readText(path: string): Promise<string>;
   readPrefix(path: string, byteLimit: number): Promise<Uint8Array>;
@@ -203,6 +208,19 @@ printf '%s\\t%s\\t%s\\t%s\\t%s\\n' "$size" "$mtime" "$path64" "$identity" "$chan
   return {
     remote: true,
     statFile,
+    async clockOffset() {
+      const before = Date.now();
+      const seconds = Number((await runRemote("date +%s")).toString().trim());
+      const after = Date.now();
+      if (!Number.isFinite(seconds))
+        throw new Error("The SSH host did not report its time.");
+      // `date +%s` truncates to the second: the host's time was within
+      // [seconds, seconds + 1) at some point during the round trip.
+      return {
+        offsetMs: seconds * 1000 + 500 - (before + after) / 2,
+        uncertaintyMs: (after - before) / 2 + 500,
+      };
+    },
     async findCodexSessionById(id) {
       validateCodexSessionId(id);
       const command = `

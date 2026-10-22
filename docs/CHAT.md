@@ -11,10 +11,14 @@ view that you open on purpose.
 - Sends with Herdr's `agent prompt`, and only to a conversation that Herdr ties
   to the pane (see [Binding](#binding)). Herdr refuses a blocked agent; answer
   its question first.
-- Never calls a message delivered on Herdr's word alone. A sent message shows
-  as "Sent; not yet seen in this conversation" until it appears in the shown
-  session's transcript. If it reached another session, Chat says so in a red
-  notice that names both sessions (see [Delivery](#delivery)).
+- Never calls a message delivered. A sent message shows as "Sent; not yet seen
+  in this conversation" until it appears in the transcript of the session it
+  was sent to. When there is evidence it went to another session, a red notice
+  names both sessions and pauses Send until you dismiss it; when Chat can no
+  longer check, it says so (see [Delivery](#delivery)).
+- Does not send commands: text that starts with `/`, or for Claude Code with
+  `!` or `#`, is refused with a pointer to the Terminal, because a command can
+  switch the session and is not recorded as something you said.
 - Refreshes when the service says the conversation changed (see
   [Refresh](#refresh)). The browser has no timer. **Refresh** rereads on demand.
 - Keeps the last good conversation when a read fails, for example while the
@@ -38,7 +42,7 @@ projection cache as History ([History synchronization](HISTORY.md)).
 | --- | --- | --- |
 | `agent_conversation.get` | `pane_id` | A conversation |
 | `agent_conversation.latest` | `pane_id`, or `pane_ids`, or nothing for every agent | A conversation without `messages`, or `{ conversations }` |
-| `agent_conversation.send` | `pane_id`, `text`, `session_fingerprint` | `{ status: "sent", delivery }` or `{ status: "refused", reason, message }` |
+| `agent_conversation.send` | `pane_id`, `text`, `session_fingerprint`, optional `baseline` (IDs of the user messages Chat showed) | `{ status: "sent", delivery }` or `{ status: "refused", reason, message }` |
 | `agent_conversation.dismiss` | `pane_id`, `delivery_id` | `{ dismissed }`; forgets a delivery notice |
 | `agent_conversation.watch` / `.unwatch` | `pane_id` | `{ ok: true }`; see [Refresh](#refresh) |
 
@@ -90,28 +94,58 @@ the thread just found, nothing is sent.
 
 ### Delivery
 
-Herdr's `agent.prompt` takes only a pane and text. Herdr 0.9.3 accepts and
-ignores any other field, including an expected session, revision or state
-sequence (checked against a live server), so World cannot make the prompt
-conditional. A session switch after Chat's last check and before Herdr
-handles the prompt still delivers the text to the new session
+Herdr's `agent.prompt` takes only a pane, text and wait options. Herdr ignores
+any other field, including an expected session, revision or state sequence:
+its request schema has no such field and does not reject unknown ones, at
+0.9.3, 0.9.5 and on `master`, and a live 0.9.3 server delivered prompts that
+carried them. So World cannot make the prompt conditional. A session switch
+after Chat's last check and before Herdr handles the prompt still delivers the
+text to the new session
 ([herdrdev/herdr#4764](https://github.com/herdrdev/herdr/issues/4764)).
-World cannot prevent that; it detects it:
+World cannot prevent that; it detects it and says what it knows.
 
-1. Herdr's reply to the prompt describes the pane as Herdr submitted the
-   text. If that session is not the one Chat showed, the message is marked
-   `misdelivered` at once, naming the session that got it.
-2. Otherwise the message is `pending`. Each read of the pane compares it with
-   new user messages: when the shown session's transcript has it, the notice
-   goes and the transcript message stands; when another session's transcript
-   (the pane's session changed) has it, it becomes `misdelivered`. An
-   identical message from before the send never counts, and each transcript
-   message settles one send.
+Each send leaves a receipt for the pane, bound to the session it was sent to:
 
-Every conversation read carries these as `deliveries`. A misdelivery stays
-until the user dismisses it. A pending message that never appears stays
-pending; Chat never claims it arrived. An older Herdr whose reply does not
-describe the session leaves the decision to the transcripts.
+| State | Meaning | Shown |
+| --- | --- | --- |
+| `pending` | Not yet seen in the session it was sent to | Only in that session's conversation, as "Sent; not yet seen", with **Stop checking** |
+| `misdelivered` | Evidence of a switch after the send | A red notice naming both sessions; Send is paused until it is dismissed |
+| `unverified` | Chat can no longer check | A notice saying why, with **Dismiss** |
+
+A receipt is settled, and removed, when the transcript of the session it was
+sent to has a user message with the same text (trimmed) that Chat did not show
+before the send and that the transcript timestamps after the send. A message
+from before the send never settles it, even if it is written late, and each
+transcript message settles one send.
+
+A misdelivery needs evidence of a switch after the send:
+
+- Herdr's prompt reply names another identified session. Herdr captures that
+  snapshot when it queues the text, so it shows the pane had switched before
+  the text was queued; Chat says Herdr had switched the pane, not that the
+  text certainly arrived there. A reply that names no session, or a Codex
+  title that does not resolve, proves nothing and leaves the receipt pending.
+- Or the pane moved to another session, and the text is the first thing said
+  in that session after the send, within 10 seconds of it. The same words
+  typed there later, or already there, are not evidence. Chat keeps checking
+  every session the pane showed while the receipt was pending, so a switch
+  through two sessions is still caught.
+
+Times are compared on the transcript host's clock. For an SSH host the
+service measures that clock's offset with `date +%s` (to within the round
+trip and one second) when it sends, at most every ten minutes.
+
+After the pane moves to another session, Chat keeps checking the receipt in
+its own session's transcript, and watches that file on this machine. A receipt
+becomes `unverified` when that transcript cannot be read, or when it is not
+seen within 15 minutes; a harness that records no timestamps therefore always
+ends there. Over SSH a transcript is read again only on Herdr events and
+**Refresh**, so a late write is seen then. Up to 20 receipts are kept per pane;
+then Chat refuses to send until you dismiss some, rather than drop one.
+
+Over SSH, a send uses the user messages Chat showed (`baseline`) instead of
+reading the transcript again; on this machine it rereads it and refuses with
+the read's own reason if that fails.
 
 ### Unavailable reasons
 

@@ -52,7 +52,10 @@ export type Conversation = {
   } | null;
   messages: ConversationMessage[];
   latest: ConversationMessage | null;
-  /** Sends not yet seen in this conversation, or that went elsewhere. */
+  /**
+   * Sends not yet seen in this conversation, sends with evidence they went
+   * elsewhere, and sends Chat can no longer check.
+   */
   deliveries?: ConversationDelivery[];
 };
 
@@ -60,9 +63,12 @@ export type ConversationDelivery = {
   id: string;
   text: string;
   sent_at: string;
-  state: "pending" | "misdelivered";
+  state: "pending" | "misdelivered" | "unverified";
   expected: string;
+  fingerprint: string;
   delivered_to?: string;
+  evidence?: "herdr" | "transcript";
+  detail?: string;
 };
 
 type SendResult =
@@ -244,7 +250,15 @@ export function AgentChat({
 
   const send = useCallback(async () => {
     const text = draft.trim();
-    if (!text || sending || !conversation?.session_fingerprint) return;
+    if (
+      !text ||
+      sending ||
+      !conversation?.session_fingerprint ||
+      conversation.deliveries?.some(
+        (delivery) => delivery.state === "misdelivered",
+      )
+    )
+      return;
     setSending(true);
     setNotice("");
     try {
@@ -252,6 +266,10 @@ export function AgentChat({
         pane_id: pane.pane_id,
         text,
         session_fingerprint: conversation.session_fingerprint,
+        // What Chat showed: a send checks for the message after these.
+        baseline: conversation.messages
+          .filter((message) => message.role === "user")
+          .map((message) => message.id),
       })) as SendResult;
       if (result.status === "sent") {
         setDraft("");
@@ -304,9 +322,16 @@ export function AgentChat({
   const status = conversation?.agent_status ?? pane.agent_status;
   const unavailable = conversation?.unavailable;
   const deliveries = conversation?.deliveries ?? [];
-  const pending = deliveries.filter((delivery) => delivery.state === "pending");
+  const pending = deliveries.filter(
+    (delivery) =>
+      delivery.state === "pending" &&
+      delivery.fingerprint === conversation?.session_fingerprint,
+  );
   const misdelivered = deliveries.filter(
     (delivery) => delivery.state === "misdelivered",
+  );
+  const unverified = deliveries.filter(
+    (delivery) => delivery.state === "unverified",
   );
   const canSend =
     conversation?.status === "ok" && !!conversation.session_fingerprint;
@@ -337,11 +362,43 @@ export function AgentChat({
       </div>
       {misdelivered.map((delivery) => (
         <div key={delivery.id} className="agent-chat-misdelivered" role="alert">
-          <strong>Your message went to a different session.</strong>
+          {delivery.evidence === "herdr" ? (
+            <>
+              <strong>
+                Your message may have gone to a different session.
+              </strong>
+              <span>
+                Herdr had switched this pane to {delivery.delivered_to} when it
+                took “{preview(delivery.text)}”, which you sent to{" "}
+                {delivery.expected}. Check that session; Send is paused until
+                you dismiss this.
+              </span>
+            </>
+          ) : (
+            <>
+              <strong>Your message went to a different session.</strong>
+              <span>
+                “{preview(delivery.text)}” appeared in {delivery.delivered_to},
+                not in {delivery.expected} where you sent it. Check that
+                session; Send is paused until you dismiss this.
+              </span>
+            </>
+          )}
+          <button type="button" onClick={() => dismiss(delivery.id)}>
+            Dismiss
+          </button>
+        </div>
+      ))}
+      {unverified.map((delivery) => (
+        <div
+          key={delivery.id}
+          className="agent-chat-misdelivered is-unverified"
+          role="status"
+        >
+          <strong>Chat can no longer check this.</strong>
           <span>
-            “{preview(delivery.text)}” reached {delivery.delivered_to}, not{" "}
-            {delivery.expected} shown here. Check that session before sending
-            again.
+            You sent “{preview(delivery.text)}” to {delivery.expected}.{" "}
+            {delivery.detail} Look in the Terminal to see where it went.
           </span>
           <button type="button" onClick={() => dismiss(delivery.id)}>
             Dismiss
@@ -426,7 +483,14 @@ export function AgentChat({
                   <p>{delivery.text}</p>
                 </div>
                 <div className="agent-chat-meta">
-                  Sent; not yet seen in this conversation
+                  Sent; not yet seen in this conversation{" "}
+                  <button
+                    type="button"
+                    className="agent-chat-pending-dismiss"
+                    onClick={() => dismiss(delivery.id)}
+                  >
+                    Stop checking
+                  </button>
                 </div>
               </article>
             ))}
@@ -480,9 +544,13 @@ export function AgentChat({
             />
             <button
               type="submit"
-              disabled={sending || !draft.trim()}
+              disabled={sending || !draft.trim() || misdelivered.length > 0}
               aria-label="Send"
-              title="Send (Enter)"
+              title={
+                misdelivered.length > 0
+                  ? "Dismiss the notice about the other session first"
+                  : "Send (Enter)"
+              }
             >
               <Send size={14} />
             </button>

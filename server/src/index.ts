@@ -1690,6 +1690,13 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
                     typeof p.session_fingerprint === "string"
                       ? p.session_fingerprint
                       : "",
+                  ...(Array.isArray(p.baseline)
+                    ? {
+                        baseline: p.baseline.filter(
+                          (id): id is string => typeof id === "string",
+                        ),
+                      }
+                    : {}),
                 })
               : paneId
                 ? await source.latest({ pane_id: paneId })

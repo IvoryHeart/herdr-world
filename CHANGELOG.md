@@ -53,9 +53,11 @@ are optional because the merged PR history records their source.
 
 - Chat no longer reports a message as sent to the conversation it shows when
   Herdr delivered it to another session. Herdr's prompt cannot be made
-  conditional, so Chat shows a sent message as not yet seen until the shown
-  transcript has it, and names the other session in a red notice when the
-  prompt reply or a transcript shows the message went there.
+  conditional, so Chat shows a sent message as not yet seen until its own
+  session's transcript has it after the send. A red notice names the other
+  session, and pauses Send, only on evidence of a switch after the send, and
+  Chat says when it can no longer check. Chat refuses commands it cannot
+  check (`/`, and Claude Code's `!` and `#`).
 
 - History and Chat no longer show Codex repository instructions and environment
   blocks, Claude Code local-command caveats, task notifications, compaction

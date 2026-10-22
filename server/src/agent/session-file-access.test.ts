@@ -77,4 +77,21 @@ describe("agent session file access", () => {
     expect(await files.statFile(remotePath)).toBeNull();
     expect(await files.findPiSessionById("missing")).toBeNull();
   });
+
+  test("measures the SSH host's clock to within the round trip", async () => {
+    const hostSeconds = Math.floor((Date.now() - 90_000) / 1000);
+    const files = createAgentSessionFileAccess({
+      sshHost: "operator@example.com",
+      shQuote: quote,
+      async runBinaryProcessWithTimeout(argv) {
+        expect(argv.at(-1)).toContain("date +%s");
+        return { code: 0, stdout: Buffer.from(`${hostSeconds}\n`), stderr: "" };
+      },
+    });
+    const clock = await files.clockOffset!();
+    expect(Math.abs(clock.offsetMs + 90_000)).toBeLessThanOrEqual(
+      clock.uncertaintyMs + 1000,
+    );
+    expect(clock.uncertaintyMs).toBeGreaterThanOrEqual(500);
+  });
 });

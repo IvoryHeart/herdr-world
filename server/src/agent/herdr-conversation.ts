@@ -11,7 +11,11 @@ import {
   type ConversationSource,
   type ConversationUnavailableReason,
 } from "./conversation";
-import { createDeliveryLedger } from "./conversation-delivery";
+import {
+  createDeliveryLedger,
+  type DeliveryClock,
+  type DeliveryView,
+} from "./conversation-delivery";
 import { codexHome, type AgentSessionFileAccess } from "./session-file-access";
 import type { SessionProjectionCache } from "./session-projection-cache";
 import {
@@ -21,7 +25,7 @@ import {
   resolveAgentSessionInfo,
   type AgentSessionResolverContext,
 } from "./session-resolver";
-import type { HerdrCall } from "./session-types";
+import type { AgentSessionResolved, HerdrCall } from "./session-types";
 import { isRecord, normalizeAgentName, stringValue } from "./session-utils";
 
 export const CODEX_DAEMON_ISSUE =
@@ -126,6 +130,29 @@ export function createHerdrConversationSource(args: {
   onCodexSessionsChanged?: () => void;
 }): ConversationSource & { dispose(): void } {
   const deliveries = createDeliveryLedger();
+  // Sessions this pane has shown, so a sent message can still be checked in
+  // its own transcript after the pane moves on, and in the ones it moved to.
+  const sessions = new Map<
+    string,
+    { resolved: AgentSessionResolved; label: string }
+  >();
+  const remember = (
+    fingerprint: string,
+    resolved: AgentSessionResolved,
+    label: string,
+  ) => {
+    sessions.delete(fingerprint);
+    sessions.set(fingerprint, { resolved, label });
+    if (sessions.size > 64) sessions.delete(sessions.keys().next().value!);
+  };
+  // An SSH host's clock is measured, and measured again after ten minutes.
+  let measured: { clock: DeliveryClock; at: number } | null = null;
+  const clock = async (): Promise<DeliveryClock> => {
+    if (!args.files.clockOffset) return { offsetMs: 0, uncertaintyMs: 0 };
+    if (!measured || Date.now() - measured.at > 10 * 60_000)
+      measured = { clock: await args.files.clockOffset(), at: Date.now() };
+    return measured.clock;
+  };
   // Change detection may reuse a remembered Codex title match only while
   // every Codex session root is watched: any created or removed transcript
   // can change which transcripts a title prefix matches, so it forgets them
@@ -294,11 +321,7 @@ export function createHerdrConversationSource(args: {
     };
   };
 
-  const read = async ({
-    pane_id,
-  }: {
-    pane_id: string;
-  }): Promise<Conversation> => {
+  const readShown = async (pane_id: string): Promise<Conversation> => {
     const step = await resolve(pane_id);
     if (!("resolved" in step)) return step;
     const { base, resolved } = step;
@@ -320,14 +343,14 @@ export function createHerdrConversationSource(args: {
     try {
       const projection = await args.cache.get(resolved);
       const messages = conversationMessages(projection.entries);
-      deliveries.evaluate(pane_id, {
-        fingerprint: base.session_fingerprint,
-        label: base.session_label ?? "a session Herdr does not identify",
-        messages,
-      });
+      if (base.session_fingerprint)
+        remember(
+          base.session_fingerprint,
+          resolved,
+          base.session_label ?? "a session Herdr does not identify",
+        );
       return {
         ...base,
-        deliveries: deliveries.list(pane_id),
         status: "ok",
         unavailable: null,
         updated_at: new Date(projection.file.mtimeMs).toISOString(),
@@ -342,6 +365,64 @@ export function createHerdrConversationSource(args: {
         `Could not read the ${resolved.agent} transcript: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
+  };
+
+  /**
+   * Settle this pane's sent messages against the conversation it shows and
+   * the transcripts of the sessions they were sent to or seen in since.
+   */
+  const settle = async (paneId: string, shown: Conversation) => {
+    const current = shown.session_fingerprint;
+    const views: DeliveryView[] =
+      current && shown.status === "ok"
+        ? [
+            {
+              fingerprint: current,
+              label: shown.session_label ?? "a session Herdr does not identify",
+              messages: shown.messages,
+            },
+          ]
+        : [];
+    for (const fingerprint of deliveries.watching(paneId)) {
+      if (fingerprint === current) continue;
+      const session = sessions.get(fingerprint);
+      if (!session) {
+        views.push({ fingerprint, label: "", messages: null });
+        continue;
+      }
+      try {
+        const projection = await args.cache.get(session.resolved);
+        views.push({
+          fingerprint,
+          label: session.label,
+          messages: conversationMessages(projection.entries),
+        });
+      } catch {
+        // Unreadable for now; the check window still ends it.
+      }
+    }
+    deliveries.evaluate(paneId, current, views);
+  };
+
+  const read = async ({
+    pane_id,
+  }: {
+    pane_id: string;
+  }): Promise<Conversation> => {
+    const shown = await readShown(pane_id);
+    await settle(pane_id, shown);
+    // A pending message belongs to the conversation it was sent to; the
+    // other states are notices for the pane.
+    return {
+      ...shown,
+      deliveries: deliveries
+        .list(pane_id)
+        .filter(
+          (delivery) =>
+            delivery.state !== "pending" ||
+            delivery.fingerprint === shown.session_fingerprint,
+        ),
+    };
   };
 
   const latest = async (target: { pane_id: string }) =>
@@ -365,10 +446,22 @@ export function createHerdrConversationSource(args: {
       if (!("resolved" in step))
         return {
           key: JSON.stringify([step.agent, step.unavailable.reason]),
-          path: null,
+          paths: [],
         };
       const { base, resolved } = step;
       const file = resolved.file;
+      // Transcripts on this machine that can still settle a sent message.
+      const others = args.files.remote
+        ? []
+        : [...deliveries.watching(pane_id)]
+            .filter((fingerprint) => fingerprint !== base.session_fingerprint)
+            .map((fingerprint) => sessions.get(fingerprint)?.resolved.file)
+            .filter((other): other is NonNullable<typeof other> => !!other);
+      const otherStats = await Promise.all(
+        others.map((other) =>
+          args.files.statFile(other.path).catch(() => null),
+        ),
+      );
       return {
         key: JSON.stringify([
           base.agent_status,
@@ -380,8 +473,12 @@ export function createHerdrConversationSource(args: {
           file?.mtimeMs ?? null,
           file?.size ?? null,
           file?.changeToken ?? null,
+          otherStats.map((stat) => [stat?.mtimeMs, stat?.size]),
         ]),
-        path: file && !args.files.remote ? file.path : null,
+        paths: [
+          ...(file && !args.files.remote ? [file.path] : []),
+          ...others.map((other) => other.path),
+        ],
       };
     },
     latestAll: async (paneIds) => {
@@ -431,7 +528,7 @@ export function createHerdrConversationSource(args: {
       );
       return results.map(withoutMessages);
     },
-    send: async ({ pane_id, text, session_fingerprint }) => {
+    send: async ({ pane_id, text, session_fingerprint, baseline }) => {
       if (!text.trim())
         return {
           status: "refused",
@@ -444,25 +541,59 @@ export function createHerdrConversationSource(args: {
           reason: "unavailable",
           message: "Chat cannot send on a Windows host yet.",
         };
-      // What Chat showed: the baseline a delivery is confirmed against.
-      const shown = await read({ pane_id });
-      if (
-        shown.session_fingerprint &&
-        shown.session_fingerprint !== session_fingerprint
-      )
+      // A command can switch the session by design and is not recorded as
+      // something the user said, so Chat could never settle it.
+      if (text.trimStart().startsWith("/"))
         return {
           status: "refused",
-          reason: "changed",
+          reason: "command",
           message:
-            "The conversation in this pane changed. Nothing was sent; check it and send again.",
+            "Chat does not send commands that start with “/”, because it cannot check where they went. Nothing was sent; use the Terminal tab.",
         };
-      if (shown.status !== "ok" || !shown.session_fingerprint)
+      if (deliveries.full(pane_id))
         return {
           status: "refused",
-          reason: "unavailable",
+          reason: "unsettled",
           message:
-            "Herdr has not tied one conversation to this pane, so nothing was sent. Use the Terminal tab.",
+            "Chat is still checking earlier messages from this pane. Nothing was sent; dismiss the notices you have read, or use the Terminal tab.",
         };
+      const notBound =
+        "Herdr has not tied one conversation to this pane, so nothing was sent. Use the Terminal tab.";
+      const changed = {
+        status: "refused",
+        reason: "changed",
+        message:
+          "The conversation in this pane changed. Nothing was sent; check it and send again.",
+      } as const;
+      // What Chat showed is the baseline a delivery is checked against. Over
+      // SSH the browser's own read is used rather than reading again.
+      let shown: Conversation | null = null;
+      if (!(args.files.remote && baseline)) {
+        shown = await read({ pane_id });
+        if (
+          shown.session_fingerprint &&
+          shown.session_fingerprint !== session_fingerprint
+        )
+          return changed;
+        if (shown.status !== "ok")
+          return {
+            status: "refused",
+            reason: "unavailable",
+            message: `${shown.unavailable.detail} Nothing was sent.`,
+          };
+        if (!shown.session_fingerprint)
+          return {
+            status: "refused",
+            reason: "unavailable",
+            message: notBound,
+          };
+      }
+      const shownIds =
+        shown?.messages
+          .filter((message) => message.role === "user")
+          .map((message) => message.id) ?? baseline!;
+      // Times in the transcripts are compared on their host's clock.
+      const transcriptClock = await clock();
       // Read the pane immediately before prompting, with no other await in
       // between. Herdr's prompt takes no expected session (#4764), so a
       // switch after this reply and before the prompt lands is still
@@ -485,20 +616,18 @@ export function createHerdrConversationSource(args: {
           ? paneBinding(agent, info, args.context, verified)
           : null;
       if (!bound?.fingerprint)
+        return { status: "refused", reason: "unavailable", message: notBound };
+      if (bound.fingerprint !== session_fingerprint) return changed;
+      // Claude Code runs “!” as a shell command and “#” as a memory note.
+      if (agent === "claude" && /^[!#]/.test(text.trimStart()))
         return {
           status: "refused",
-          reason: "unavailable",
+          reason: "command",
           message:
-            "Herdr has not tied one conversation to this pane, so nothing was sent. Use the Terminal tab.",
-        };
-      if (bound.fingerprint !== session_fingerprint)
-        return {
-          status: "refused",
-          reason: "changed",
-          message:
-            "The conversation in this pane changed. Nothing was sent; check it and send again.",
+            "Claude Code treats text that starts with “!” or “#” as a command, which Chat cannot check. Nothing was sent; use the Terminal tab.",
         };
       let result: unknown;
+      const startedAt = Date.now();
       try {
         result = await args.herdrCall("agent.prompt", {
           target: pane_id,
@@ -515,37 +644,34 @@ export function createHerdrConversationSource(args: {
           };
         throw error;
       }
+      const endedAt = Date.now();
       const sent =
         isRecord(result) && isRecord(result.agent) ? result.agent : null;
       if (sent?.pane_id !== pane_id)
         throw new Error(
           "Herdr did not confirm the prompt; check the agent before sending again.",
         );
-      // Herdr 0.9 replies with the pane as it submitted the text. If that is
-      // not the session Chat showed, the text went to the one it names. A
-      // reply that does not describe the session settles nothing; the
-      // transcripts still do.
+      // Herdr 0.9 replies with the pane as it was when it queued the text.
+      // An identified session other than the one checked is evidence of a
+      // switch after Chat's check. A reply without an identified session
+      // proves nothing either way; the transcripts decide.
       const sentAgent = normalizeAgentName(stringValue(sent.agent));
-      const describes = "agent_session" in sent || "terminal_title" in sent;
-      const landed = describes
-        ? paneBinding(sentAgent, sent, args.context, verified)
-        : bound;
+      const landed = paneBinding(sentAgent, sent, args.context, verified);
       const delivery = deliveries.record(pane_id, {
         text,
         fingerprint: bound.fingerprint,
         expected:
-          shown.session_label ?? sessionLabel(agent, info!, args.context),
-        baseline: shown.messages,
-        ...(landed?.fingerprint === bound.fingerprint
-          ? {}
-          : {
-              delivered_to: sessionLabel(
-                sentAgent,
-                sent,
-                args.context,
-                verified,
-              ),
-            }),
+          shown?.session_label ??
+          sessionLabel(agent, info!, args.context, verified),
+        baseline: shownIds,
+        clock: transcriptClock,
+        startedAt,
+        endedAt,
+        ...(landed?.fingerprint && landed.fingerprint !== bound.fingerprint
+          ? {
+              switchedTo: sessionLabel(sentAgent, sent, args.context, verified),
+            }
+          : {}),
       });
       return { status: "sent", delivery };
     },
