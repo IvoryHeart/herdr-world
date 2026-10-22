@@ -82,7 +82,16 @@ waiting lane prints `waiting for <worktree> <lane> (pid, since)`. Slots are
 `flock(2)` locks under `$XDG_RUNTIME_DIR/herdr-world-checks` (or the temporary
 directory), released by the kernel when their holder exits however it exits, so a
 crashed gate never leaves a stale lock. A process holds one slot at a time, and its
-children run inside it, so gates cannot deadlock. CI does not queue. After a failed push check,
+children run inside it, so gates cannot deadlock. CI does not queue.
+
+Test Chrome renders WebGL with SwiftShader, the software renderer that CI's pixel
+and visual comparisons are calibrated against. Locally, `HERDR_WORLD_TEST_GPU=1`
+switches the World browser suites to hardware ANGLE over Vulkan (with Mesa's RADV,
+for example), which cuts their CPU use sharply. The Town suite went from 180–217
+CPU-seconds to about 19. Each run probes the GPU once with a headless Chrome. If
+WebGL is missing or software-rendered there, the run logs one line and falls back
+to SwiftShader. CI always uses SwiftShader and stays authoritative: GPU output can
+differ slightly, so pixel comparisons that fail only in GPU mode are advisory. After a failed push check,
 use the failing stage and focused checks to diagnose the issue. Do not run
 `bun run format` for a scoped change. The pre-push hook records each gate's
 status, elapsed seconds and gate name in the ignored

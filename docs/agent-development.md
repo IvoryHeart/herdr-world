@@ -124,6 +124,12 @@ and one behavioral verification at a time, two light lanes. A queued gate prints
 `[queue] <lane> waiting for <worktree> <lane> (pid, since)`. Do not bypass the
 hook because a gate is queued; the wait is shorter than the contention it avoids.
 
+On a machine with a usable GPU, set `HERDR_WORLD_TEST_GPU=1` (for example in the
+shell that runs `git push`) so World browser suites render WebGL on the GPU instead
+of SwiftShader; each suite then uses a fraction of the CPU. A failed GPU probe falls
+back to SwiftShader with one `[gpu]` log line. CI never uses the GPU, so treat a
+pixel difference that appears only in GPU mode as advisory and confirm with CI.
+
 Batch independent read-only inspections in one tool turn. Keep `rg` results and
 source excerpts bounded, then read more only when needed. The pre-push hook writes
 one ignored `.agents/delivery/pre-push.tsv` row per gate with UTC timestamp,
