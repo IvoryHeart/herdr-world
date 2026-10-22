@@ -52,9 +52,12 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     tab in Spaces or Herdr moves its table. Drag a table onto another table in
     its room to put it in that place, or onto the room's free spot to put it
     last of the tables shown (**M** lists the same places). Rooms extend as
-    tabs open (eight tables wide, then row by row, up to 127 tables); a room
-    with more hides idle tables first, never ones that need you, are working
-    or are new. Town asks Herdr to move the tab and
+    tabs open, up to 127 tables: wide screens show three columns of rooms up
+    to eight tables wide, portrait and half-width screens two columns up to
+    six, and phones one column up to four, growing downward. A growing room
+    moves only the rooms below it, and never while you hold the town. A room
+    with more than 127 tabs keeps its three newest and busiest tables and
+    hides idle ones first. Town asks Herdr to move the tab and
     shows the new order when Herdr reports it; agents stay with their table.
   - Cached failed-host buildings stay stale and non-actionable. Search and Hosts
     use the shared aggregate. Reception and lounge positions only show status;

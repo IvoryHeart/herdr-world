@@ -29,14 +29,18 @@ const unavailableObservability = {
 };
 
 test.skipIf(!chrome).each([
-  [1440, "typical"],
-  [390, "typical"],
-  [1440, "max"],
-  [1440, "extended"],
-  [390, "extended"],
+  [1440, 900, "typical"],
+  [390, 900, "typical"],
+  [1440, 900, "max"],
+  // Extended rooms (100, 50 and 24 desks) on a phone, half-width, wide and
+  // portrait screens: the town's shape follows the container.
+  [390, 844, "extended"],
+  [960, 1080, "extended"],
+  [1440, 900, "extended"],
+  [1080, 1920, "extended"],
 ])(
-  "the Office town renders, queues blocked agents and zooms into rooms at %ipx (%s)",
-  async (width, scale) => {
+  "the Office town renders, queues blocked agents and zooms into rooms at %ipx by %ipx (%s)",
+  async (width, height, scale) => {
     const dir = await mkdtemp(join(tmpdir(), "office-town-test-"));
     const assets = new Map<string, Blob>();
     const result = Promise.withResolvers<unknown>();
@@ -78,7 +82,7 @@ test.skipIf(!chrome).each([
         [
           chrome!,
           "--headless=new",
-          `--window-size=${width},900`,
+          `--window-size=${width},${height}`,
           "--enable-webgl",
           "--use-angle=swiftshader",
           "--enable-unsafe-swiftshader",
@@ -99,7 +103,8 @@ test.skipIf(!chrome).each([
           );
         }),
         "Office town browser check",
-        40_000,
+        // Extended towns at large windows paint far more pixels in software.
+        scale === "extended" ? 80_000 : 40_000,
       );
       expect(failures).toEqual([]);
     } finally {
@@ -111,5 +116,5 @@ test.skipIf(!chrome).each([
       await rm(dir, { recursive: true, force: true });
     }
   },
-  55_000 + BROWSER_STARTUP_TIMEOUT_MS,
+  95_000 + BROWSER_STARTUP_TIMEOUT_MS,
 );

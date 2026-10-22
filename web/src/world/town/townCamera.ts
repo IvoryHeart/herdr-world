@@ -83,6 +83,9 @@ export function townRoomFocus(
   viewport: TownViewport,
   z: number,
 ) {
+  // The world point for the centre of the usable area (flyTo and jumpTo
+  // place it there, minding the chrome), so the room's top-left corner lands
+  // at the usable area's top-left when the room does not fit.
   const { width, height, inset } = viewport;
   const left = room.x * TOWN_TILE - 20;
   const top = room.y * TOWN_TILE - 24;
@@ -91,14 +94,11 @@ export function townRoomFocus(
   const usableWidth = (width - inset.left - inset.right) / z;
   const usableHeight = (height - inset.top - inset.bottom) / z;
   return {
-    x:
-      roomWidth <= usableWidth
-        ? left + roomWidth / 2
-        : left + (width / 2 - inset.left) / z,
+    x: roomWidth <= usableWidth ? left + roomWidth / 2 : left + usableWidth / 2,
     y:
       roomHeight <= usableHeight
         ? top + roomHeight / 2
-        : top + (height / 2 - inset.top) / z,
+        : top + usableHeight / 2,
   };
 }
 

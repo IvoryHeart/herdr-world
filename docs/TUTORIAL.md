@@ -162,9 +162,12 @@ changes what you see and does not disconnect hosts or retarget open terminals.
    To change the order, drag a table onto another table in the same room: it
    takes that table's place, and the tables in between shift along. Drop it on
    the room's free spot to put it last of the tables shown. A room grows as
-   tabs open, eight tables wide and then row by row, and shows up to 127
-   tables; only a room with more keeps some idle tables hidden behind its
-   count. Town moves the tab in Herdr, so Spaces
+   tabs open and shows up to 127 tables: up to eight tables wide on a wide
+   screen, six on a portrait or half-width screen and four on a phone, then
+   row by row. Rooms sit in columns that suit your screen (one on a phone),
+   and a growing room pushes down only the rooms below it, once you let go of
+   the town. Only a room with more than 127 tabs keeps some idle tables
+   hidden behind its count. Town moves the tab in Herdr, so Spaces
    shows the new order too, and moving a tab in Spaces moves its table. The
    tables move once Herdr reports the new order, and agents stay with their
    table.

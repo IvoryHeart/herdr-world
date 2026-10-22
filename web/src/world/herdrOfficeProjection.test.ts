@@ -611,6 +611,18 @@ describe("Pixel Office projection", () => {
     expect(ids).not.toContain("tab-2");
     expect(ids).not.toContain("tab-14");
     expect(ids).toContain("tab-15");
+
+    // Even when every older desk is busy, the newest tabs keep a desk: here
+    // 127 working tabs and three new idle ones.
+    const busy = shown(limit + 3, (tabs) =>
+      tabs.map((entry, index) =>
+        pane(entry.tab_id, index < limit ? "working" : "idle", `a${index}`),
+      ),
+    );
+    const kept = busy.desks.map((desk) => desk.tabRef.nativeId);
+    for (const index of [limit, limit + 1, limit + 2])
+      expect(kept).toContain(`tab-${index}`);
+    expect(busy.omittedDeskCount).toBe(3);
   });
 
   test("keeps mixed-status shared tabs truthful beyond the eight-desk scene bound", () => {
@@ -622,13 +634,12 @@ describe("Pixel Office projection", () => {
       ...pane("tab-0", "unknown", "unknown", 2),
       focused: true,
     };
-    // Busier desks keep their places, so tab-8's unknown agent has none.
-    const busy = tabs
-      .slice(1, 8)
-      .map((entry, index) =>
-        pane(entry.tab_id, "working", `busy ${index}`, 10 + index),
-      );
-    const outside = pane("tab-8", "unknown", "outside", 3);
+    // Busier and newer desks keep their places, so tab-5's unknown agent
+    // has none.
+    const busy = [1, 2, 3, 4, 6, 7, 8].map((index, n) =>
+      pane(`tab-${index}`, "working", `busy ${n}`, 10 + n),
+    );
+    const outside = pane("tab-5", "unknown", "outside", 3);
     const office = projectWorldOffice(
       buildWorldObject(
         [connection("local", tabs, [unknown, working, outside, ...busy])],

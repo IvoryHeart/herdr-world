@@ -1180,9 +1180,11 @@ function boundedWithPriority<T>(
 
 /**
  * A room's desks within its bound, in tab order. When a room has more, the
- * selected desk stays, then desks whose agents need the user, are working or
- * are unknown, then finished ones; idle and empty desks are hidden first, and
- * among equals the newest tabs (Herdr appends new tabs) stay.
+ * selected desk and the newest tabs (Herdr appends new tabs) always stay, then
+ * desks whose agents need the user, are working or are unknown, then finished
+ * ones; idle and empty desks are hidden first, and among equals newer tabs
+ * stay. With more busy desks than the bound, the oldest of them are hidden
+ * too; every hidden desk is counted on its room (`omittedDeskCount`).
  */
 function boundedDesks(
   desks: readonly OfficeDesk[],
@@ -1200,17 +1202,25 @@ function boundedDesks(
     const rank = DESK_STATUS_RANK[agent.semanticStatus];
     need.set(agent.deskKey, Math.min(need.get(agent.deskKey) ?? 9, rank));
   }
-  const rank = (desk: OfficeDesk) =>
-    selected(desk) ? -1 : (need.get(desk.key) ?? DESK_STATUS_RANK.idle);
+  const newest = desks.length - NEWEST_DESKS_KEPT;
+  const rank = (desk: OfficeDesk, index: number) =>
+    selected(desk)
+      ? -2
+      : index >= newest
+        ? -1
+        : (need.get(desk.key) ?? DESK_STATUS_RANK.idle);
   const admitted = new Set(
     desks
-      .map((desk, index) => ({ desk, index, rank: rank(desk) }))
+      .map((desk, index) => ({ desk, index, rank: rank(desk, index) }))
       .sort((left, right) => left.rank - right.rank || right.index - left.index)
       .slice(0, limit)
       .map(({ desk }) => desk),
   );
   return desks.filter((desk) => admitted.has(desk));
 }
+
+/** Past the bound, this many newest tabs always keep a desk. */
+const NEWEST_DESKS_KEPT = 3;
 
 const DESK_STATUS_RANK: Record<WorldAgentStatus, number> = {
   blocked: 0,

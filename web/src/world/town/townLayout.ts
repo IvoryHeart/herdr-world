@@ -10,40 +10,86 @@
 export const TOWN_TILE = 16;
 
 /**
- * Capacity steps as [columns, rows]; each step contains the previous one. A
- * room grows square until it is eight desks wide, then extends downward, so
- * agents that spawn agents never run out of desks at real scale.
- */
-export const TOWN_ROOM_TIERS: readonly (readonly [number, number])[] = [
-  [2, 1],
-  [2, 2],
-  [3, 2],
-  [3, 3],
-  [4, 3],
-  [4, 4],
-  [5, 4],
-  [5, 5],
-  [6, 5],
-  [6, 6],
-  [7, 6],
-  [7, 7],
-  [8, 7],
-  ...Array.from({ length: 9 }, (_, i) => [8, 8 + i] as const),
-];
-
-/**
  * One cell is always kept free, so this many desks render per room. The Town
  * projection admits the same number (TOWN_PRESENTATION_BOUNDS), keeping the
- * busiest and newest desks when a room has more.
+ * selected, newest and busiest desks when a room has more.
  */
 export const TOWN_MAX_RENDERED_DESKS = 8 * 16 - 1;
 
+/**
+ * Capacity steps as [columns, rows] for rooms at most `maxCols` desks wide;
+ * each step contains the previous one. A room grows square until it is that
+ * wide, then extends downward, until it holds every drawn desk and its free
+ * spot, so agents that spawn agents never run out of desks at real scale.
+ */
+export function townRoomTiers(
+  maxCols: number,
+): readonly (readonly [number, number])[] {
+  const cached = tierCache.get(maxCols);
+  if (cached) return cached;
+  const tiers: (readonly [number, number])[] = [[2, 1]];
+  let [cols, rows] = [2, 1];
+  while (cols * rows < TOWN_MAX_RENDERED_DESKS + 1) {
+    if (rows < cols || cols >= maxCols) rows += 1;
+    else cols += 1;
+    tiers.push([cols, rows]);
+  }
+  tierCache.set(maxCols, tiers);
+  return tiers;
+}
+const tierCache = new Map<number, readonly (readonly [number, number])[]>();
+
+/** The wide shape's steps: eight desks wide, then downward. */
+export const TOWN_ROOM_TIERS = townRoomTiers(8);
+
+/**
+ * How the town fits its container: how many columns of rooms a building has,
+ * how wide a room may grow before it extends downward, and whether buildings
+ * stand side by side on one street (`wide`) or stack (`narrow`).
+ */
+export type TownShape = {
+  formFactor: TownFormFactor;
+  roomColumns: number;
+  deskColumns: number;
+};
+
+export const TOWN_SHAPES = {
+  /** Phones: one column of rooms, four desks wide, buildings stacked. */
+  phone: { formFactor: "narrow", roomColumns: 1, deskColumns: 4 },
+  /** Portrait monitors and half-width windows: two columns, stacked. */
+  portrait: { formFactor: "narrow", roomColumns: 2, deskColumns: 6 },
+  /** Mid-width landscape windows: buildings on one street, two columns. */
+  medium: { formFactor: "wide", roomColumns: 2, deskColumns: 6 },
+  /** Wide screens: three columns of rooms up to eight desks wide. */
+  wide: { formFactor: "wide", roomColumns: 3, deskColumns: 8 },
+} as const satisfies Record<string, TownShape>;
+
+/** The shape for a container of this size in CSS pixels. */
+export function townShapeFor(width: number, height: number): TownShape {
+  if (width < 640) return TOWN_SHAPES.phone;
+  if (height > width * 1.05) return TOWN_SHAPES.portrait;
+  if (width < 1200) return TOWN_SHAPES.medium;
+  return TOWN_SHAPES.wide;
+}
+
+const shapeOf = (shape: TownFormFactor | TownShape): TownShape =>
+  typeof shape === "string"
+    ? shape === "narrow"
+      ? TOWN_SHAPES.phone
+      : TOWN_SHAPES.wide
+    : shape;
+
+/** A shape's identity: placement memory is kept per shape. */
+export const townShapeKey = (shape: TownShape) =>
+  `${shape.formFactor}:${shape.roomColumns}:${shape.deskColumns}`;
+
 const CELL = 5; // tiles per desk cell: aisle column plus a four-tile table
-const ROOMS_PER_ROW = 3;
 const LOUNGE = { x: 2, y: 2, w: 12, h: 6 } as const;
 const ROOM_TOP = 9;
 const LOBBY_HEIGHT = 7;
 const MIN_BUILDING_WIDTH = 38;
+/** A phone's one-column building: the lounge, counter and queue still fit. */
+const MIN_PHONE_BUILDING_WIDTH = 26;
 const MARGIN = 3;
 const ROAD_GAP = 5;
 export const TOWN_FACADE = 2;
@@ -117,6 +163,8 @@ export type TownTree = TownPoint & { variant: number; seed: number };
 
 export type TownLayout = {
   formFactor: TownFormFactor;
+  /** The container shape the town was laid out for. */
+  shape: TownShape;
   /** Size in tiles. */
   width: number;
   height: number;
@@ -154,18 +202,21 @@ export type TownInput = {
 type RoomMemory = {
   tier: number;
   cells: Map<string, { col: number; row: number }>;
+  /** The building column the room keeps while the scene is live. */
+  column?: number;
 };
 
 /** Placement memory carried between layouts of one live scene. */
 export type TownPlacementMemory = Map<string, RoomMemory>;
 
-export function townTierFor(desks: number, minimumTier = 0) {
+export function townTierFor(
+  desks: number,
+  minimumTier = 0,
+  tiers = TOWN_ROOM_TIERS,
+) {
   const need = Math.min(desks + 1, TOWN_MAX_RENDERED_DESKS + 1);
-  let tier = Math.max(0, minimumTier);
-  while (
-    tier < TOWN_ROOM_TIERS.length - 1 &&
-    TOWN_ROOM_TIERS[tier]![0] * TOWN_ROOM_TIERS[tier]![1] < need
-  )
+  let tier = Math.min(Math.max(0, minimumTier), tiers.length - 1);
+  while (tier < tiers.length - 1 && tiers[tier]![0] * tiers[tier]![1] < need)
     tier += 1;
   return tier;
 }
@@ -179,9 +230,10 @@ export function townTierFor(desks: number, minimumTier = 0) {
 function placeRoomDesks(
   deskKeys: readonly string[],
   previous: RoomMemory | undefined,
+  tiers: readonly (readonly [number, number])[],
 ): { memory: RoomMemory; overflow: string[] } {
-  const tier = townTierFor(deskKeys.length, previous?.tier ?? 0);
-  const [cols, rows] = TOWN_ROOM_TIERS[tier]!;
+  const tier = townTierFor(deskKeys.length, previous?.tier ?? 0, tiers);
+  const [cols, rows] = tiers[tier]!;
   const capacity = Math.min(cols * rows - 1, TOWN_MAX_RENDERED_DESKS);
   const cells = new Map<string, { col: number; row: number }>();
   deskKeys.slice(0, capacity).forEach((key, index) => {
@@ -213,14 +265,17 @@ function draftBuilding(
   rooms: readonly TownInputRoom[],
   memory: TownPlacementMemory,
   nextMemory: TownPlacementMemory,
+  shape: TownShape,
 ): DraftBuilding {
+  const tiers = townRoomTiers(shape.deskColumns);
   const placed = rooms.map((room) => {
     const { memory: roomMemory, overflow } = placeRoomDesks(
       room.deskKeys,
       memory.get(room.key),
+      tiers,
     );
     nextMemory.set(room.key, roomMemory);
-    const [cols, rows] = TOWN_ROOM_TIERS[roomMemory.tier]!;
+    const [cols, rows] = tiers[roomMemory.tier]!;
     return {
       key: room.key,
       hostKey,
@@ -234,23 +289,46 @@ function draftBuilding(
       ry: 0,
     };
   });
-  let y = ROOM_TOP;
-  let w = 0;
-  for (let i = 0; i < placed.length; i += ROOMS_PER_ROW) {
-    const row = placed.slice(i, i + ROOMS_PER_ROW);
-    let x = 2;
-    let tallest = 0;
-    for (const room of row) {
+  // Rooms stack in columns, in workspace order. Each room keeps the column it
+  // was given while the scene is live (a new one joins the shortest), so a
+  // room that grows moves only the rooms below it in its own column.
+  const columnCount = Math.max(1, Math.min(shape.roomColumns, placed.length));
+  const columns: (typeof placed)[] = Array.from(
+    { length: columnCount },
+    () => [],
+  );
+  const heights = new Array<number>(columnCount).fill(0);
+  for (const room of placed) {
+    const kept = memory.get(room.key)?.column;
+    const column =
+      kept !== undefined && kept < columnCount
+        ? kept
+        : heights.indexOf(Math.min(...heights));
+    columns[column]!.push(room);
+    heights[column]! += room.h + 2;
+    nextMemory.get(room.key)!.column = column;
+  }
+  let x = 2;
+  let bottom = ROOM_TOP;
+  for (const column of columns) {
+    let y = ROOM_TOP;
+    let widest = 0;
+    for (const room of column) {
       room.rx = x;
       room.ry = y;
-      x += room.w + 2;
-      tallest = Math.max(tallest, room.h);
+      y += room.h + 2;
+      widest = Math.max(widest, room.w);
     }
-    w = Math.max(w, x);
-    y += tallest + 2;
+    bottom = Math.max(bottom, y);
+    if (column.length) x += widest + 2;
   }
-  w = Math.max(w, MIN_BUILDING_WIDTH);
-  const lobbyY = y;
+  const w = Math.max(
+    x,
+    shape.formFactor === "narrow" && shape.roomColumns === 1
+      ? MIN_PHONE_BUILDING_WIDTH
+      : MIN_BUILDING_WIDTH,
+  );
+  const lobbyY = bottom;
   const doorX = Math.floor(w / 2);
   return {
     hostKey,
@@ -269,9 +347,11 @@ function draftBuilding(
 /** Lay out the whole town; returns the layout and the memory for the next pass. */
 export function layoutTown(
   input: TownInput,
-  formFactor: TownFormFactor,
+  shapeOrFormFactor: TownShape | TownFormFactor,
   memory: TownPlacementMemory = new Map(),
 ): { layout: TownLayout; memory: TownPlacementMemory } {
+  const shape = shapeOf(shapeOrFormFactor);
+  const formFactor = shape.formFactor;
   const nextMemory: TownPlacementMemory = new Map();
   const hosts = [...input.hosts].sort(
     (a, b) => a.displayOrder - b.displayOrder || a.key.localeCompare(b.key),
@@ -284,6 +364,7 @@ export function layoutTown(
         .sort((a, b) => a.order - b.order || a.key.localeCompare(b.key)),
       memory,
       nextMemory,
+      shape,
     ),
   );
   const seatsOf = new Map<string, number>();
@@ -554,6 +635,7 @@ export function layoutTown(
   return {
     layout: {
       formFactor,
+      shape,
       width,
       height,
       ground,
@@ -627,4 +709,61 @@ export function townSeat(cell: TownCell, seat: number) {
     /** Feet position while seated. */
     seatedY: top ? Y + 12 : Y + 60,
   };
+}
+
+/**
+ * Where rooms and buildings stand, ignoring which desk sits where: two
+ * layouts with the same key differ only inside rooms.
+ */
+export function townGeometryKey(layout: TownLayout): string {
+  return layout.buildings
+    .map(
+      (b) =>
+        `${b.hostKey}@${b.x},${b.y},${b.w},${b.h}:${b.rooms.map((r) => `${r.key}@${r.x},${r.y},${r.w},${r.h}`).join("|")}`,
+    )
+    .join(";");
+}
+
+/**
+ * How far (in world pixels) the room nearest world point `at` moved between
+ * two layouts, so the camera can follow it and what the user watches stays
+ * put when the town reflows. Zero when that room is gone.
+ */
+export function townReflowShift(
+  previous: TownLayout,
+  next: TownLayout,
+  at: TownPoint,
+): TownPoint {
+  let nearest: TownRoom | null = null;
+  let best = Infinity;
+  for (const building of previous.buildings)
+    for (const room of building.rooms) {
+      const distance = Math.hypot(
+        Math.max(
+          room.x * TOWN_TILE - at.x,
+          0,
+          at.x - (room.x + room.w) * TOWN_TILE,
+        ),
+        Math.max(
+          room.y * TOWN_TILE - at.y,
+          0,
+          at.y - (room.y + room.h) * TOWN_TILE,
+        ),
+      );
+      if (distance < best) {
+        best = distance;
+        nearest = room;
+      }
+    }
+  const moved = nearest
+    ? next.buildings
+        .flatMap((b) => b.rooms)
+        .find((room) => room.key === nearest!.key)
+    : undefined;
+  return nearest && moved
+    ? {
+        x: (moved.x - nearest.x) * TOWN_TILE,
+        y: (moved.y - nearest.y) * TOWN_TILE,
+      }
+    : { x: 0, y: 0 };
 }
