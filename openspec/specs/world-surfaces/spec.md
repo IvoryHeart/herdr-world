@@ -1107,7 +1107,14 @@ from Herdr's tab list order within each workspace, which Herdr keeps when a tab
 moves (a tab's number is not its position). Desk slot i of a room SHALL be the
 room's i-th drawn tab, in reading order, so a reorder in Herdr, Spaces or Town
 moves desks. A room's capacity SHALL step through a
-bounded set of grid sizes that always leaves at least one free desk spot. While a
+bounded set of grid sizes that always leaves at least one free desk spot: a room
+grows square until it is eight desks wide and then extends downward, up to 127
+drawn desks, and its building grows around it, so a room of real size shows
+every desk. Only a room with more tabs than that SHALL leave desks undrawn, and
+it SHALL hide idle and empty desks first, keeping the selected desk, desks
+whose agents need the user, are working or are unknown, and then the newest
+tabs. Zooming into a room taller or wider than the view SHALL open at its first
+desks. While a
 scene is live, a topology change SHALL NOT reorder rooms or move a desk to
 another room: a tab Herdr adds last SHALL take the first free spot of its room
 without moving other desks, and a closed tab SHALL leave no gap: the desks after
@@ -1136,6 +1143,12 @@ buildings in one row; phones SHALL stack buildings in one vertical column.
 - **WHEN** a room's last free spot is taken
 - **THEN** the room grows to the next capacity step with a free spot, rooms keep
   their order, and desks keep their room and their order
+
+#### Scenario: Agents fill a room past its old size
+
+- **WHEN** a room has 24, 50 or 100 tabs
+- **THEN** the room extends and draws a desk for every tab, the newest included,
+  on desktop and on a phone
 
 #### Scenario: Tabs are reordered outside Town
 

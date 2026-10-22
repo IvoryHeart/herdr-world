@@ -9,7 +9,11 @@
 
 export const TOWN_TILE = 16;
 
-/** Capacity steps as [columns, rows]; each step contains the previous one. */
+/**
+ * Capacity steps as [columns, rows]; each step contains the previous one. A
+ * room grows square until it is eight desks wide, then extends downward, so
+ * agents that spawn agents never run out of desks at real scale.
+ */
 export const TOWN_ROOM_TIERS: readonly (readonly [number, number])[] = [
   [2, 1],
   [2, 2],
@@ -18,10 +22,21 @@ export const TOWN_ROOM_TIERS: readonly (readonly [number, number])[] = [
   [4, 3],
   [4, 4],
   [5, 4],
+  [5, 5],
+  [6, 5],
+  [6, 6],
+  [7, 6],
+  [7, 7],
+  [8, 7],
+  ...Array.from({ length: 9 }, (_, i) => [8, 8 + i] as const),
 ];
 
-/** One cell is always kept free, so this many desks render per room. */
-export const TOWN_MAX_RENDERED_DESKS = 5 * 4 - 1;
+/**
+ * One cell is always kept free, so this many desks render per room. The Town
+ * projection admits the same number (TOWN_PRESENTATION_BOUNDS), keeping the
+ * busiest and newest desks when a room has more.
+ */
+export const TOWN_MAX_RENDERED_DESKS = 8 * 16 - 1;
 
 const CELL = 5; // tiles per desk cell: aisle column plus a four-tile table
 const ROOMS_PER_ROW = 3;

@@ -150,8 +150,13 @@ function topology(seed: number): Topology {
     const panes: Pane[] = [];
     roomNames.forEach((roomName, roomIndex) => {
       const workspaceId = `${host.id}-${roomName}`;
-      const deskCount =
-        scale === "max"
+      // Extended rooms: agents spawning agents fill the first rooms far past
+      // the owner's 2026-10-17 estimate of 11-15 desks.
+      const extended =
+        scale === "extended" && host === HOSTS[0] ? [100, 50][roomIndex] : 0;
+      const deskCount = extended
+        ? extended
+        : scale === "max"
           ? 11 + Math.floor(r() * 5)
           : 3 + Math.floor(r() * r() * 13);
       let paneTotal = 0;
@@ -1450,6 +1455,54 @@ async function run() {
     diagnostics.lastError === null,
     `renderer error: ${diagnostics.lastError}`,
   );
+
+  if (scale === "extended") {
+    // Rooms extend: every tab has a desk, the newest included, and zooming
+    // into the 100-desk room opens at its first desks.
+    const tabs = base.connections.flatMap((c) => c.snapshot?.tabs ?? []);
+    check(
+      diagnostics.desks === tabs.length,
+      `an extended town drew ${diagnostics.desks} of ${tabs.length} desks`,
+    );
+    const roomCard = [
+      ...host.querySelectorAll<HTMLButtonElement>(".town-room-card"),
+    ].find((card) => card.textContent?.includes("orbit"));
+    check(roomCard !== undefined, "the 100-desk room has no card");
+    roomCard?.click();
+    const first = () =>
+      [
+        ...host.querySelectorAll<HTMLElement>(
+          '.world-semantic-target[data-kind="desk"]',
+        ),
+      ].find(
+        (target) =>
+          JSON.parse(target.dataset.targetKey!)[2] === "local-orbit-tab-0",
+      );
+    await waitFor(() => {
+      const box = first()?.getBoundingClientRect();
+      return (
+        !!box &&
+        box.width > 0 &&
+        box.top >= 0 &&
+        box.left >= 0 &&
+        box.bottom <= window.innerHeight &&
+        box.right <= window.innerWidth
+      );
+    }, "zooming into the 100-desk room did not show its first desk");
+    const newest = [
+      ...host.querySelectorAll<HTMLElement>(
+        '.world-semantic-target[data-kind="desk"]',
+      ),
+    ].some(
+      (target) =>
+        JSON.parse(target.dataset.targetKey!)[2] === "local-orbit-tab-99",
+    );
+    check(newest, "the 100-desk room's newest desk has no target");
+    check(
+      diagnostics.lastError === null,
+      `renderer error at scale: ${diagnostics.lastError}`,
+    );
+  }
 
   // StrictMode mounts twice; exactly one renderer and canvas must survive.
   check(

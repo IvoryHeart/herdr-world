@@ -32,6 +32,8 @@ test.skipIf(!chrome).each([
   [1440, "typical"],
   [390, "typical"],
   [1440, "max"],
+  [1440, "extended"],
+  [390, "extended"],
 ])(
   "the Office town renders, queues blocked agents and zooms into rooms at %ipx (%s)",
   async (width, scale) => {

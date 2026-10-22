@@ -11,6 +11,9 @@ import {
   type TownLayout,
 } from "./townLayout";
 
+/** Tiles per desk cell, as townLayout draws them. */
+const CELL_TILES = 5;
+
 const desks = (room: string, count: number) =>
   Array.from({ length: count }, (_, index) => `${room}/tab-${index}`);
 
@@ -217,6 +220,49 @@ test("desks beyond the rendered bound stay reachable as overflow", () => {
   );
   expect(room.cells.some((c) => !c.deskKey)).toBe(true);
   expect(room.overflowDeskKeys.length).toBe(4);
+});
+
+test("rooms extend to show every desk of real rooms, wide and narrow", () => {
+  for (const formFactor of ["wide", "narrow"] as const)
+    for (const count of [24, 50, 100, TOWN_MAX_RENDERED_DESKS]) {
+      const { layout } = layoutTown(town({ a: [count, 6, 3] }), formFactor);
+      const building = layout.buildings[0]!;
+      const room = building.rooms[0]!;
+      expect(room.overflowDeskKeys).toEqual([]);
+      // Every desk has a cell, in tab order, with a free spot left over.
+      expect(room.cells.filter((c) => c.deskKey).map((c) => c.deskKey)).toEqual(
+        desks("a/room-0", count),
+      );
+      expect(room.cells.some((c) => !c.deskKey)).toBe(true);
+      // The building grows around its rooms, which never overlap, and the
+      // town around its buildings.
+      for (const placed of building.rooms) {
+        expect(placed.x).toBeGreaterThanOrEqual(building.x);
+        expect(placed.y).toBeGreaterThanOrEqual(building.y);
+        expect(placed.x + placed.w).toBeLessThanOrEqual(
+          building.x + building.w,
+        );
+        expect(placed.y + placed.h).toBeLessThanOrEqual(building.lobbyY);
+        for (const cell of placed.cells) {
+          expect(cell.x + CELL_TILES).toBeLessThanOrEqual(placed.x + placed.w);
+          expect(cell.y + CELL_TILES).toBeLessThanOrEqual(placed.y + placed.h);
+        }
+        for (const other of building.rooms)
+          if (other !== placed) expect(overlaps(placed, other)).toBe(false);
+      }
+      expect(layout.width).toBeGreaterThanOrEqual(building.x + building.w);
+      expect(layout.height).toBeGreaterThanOrEqual(building.y + building.h);
+    }
+});
+
+test("a room grows square to eight desks wide, then extends downward", () => {
+  expect(TOWN_ROOM_TIERS[townTierFor(19)]).toEqual([5, 4]);
+  expect(TOWN_ROOM_TIERS[townTierFor(24)]).toEqual([5, 5]);
+  expect(TOWN_ROOM_TIERS[townTierFor(50)]).toEqual([8, 7]);
+  expect(TOWN_ROOM_TIERS[townTierFor(100)]).toEqual([8, 13]);
+  expect(TOWN_ROOM_TIERS[townTierFor(TOWN_MAX_RENDERED_DESKS)]).toEqual([
+    8, 16,
+  ]);
 });
 
 test("reception queue and lounge spots sit on walkable building floor", () => {

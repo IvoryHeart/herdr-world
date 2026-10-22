@@ -43,7 +43,7 @@ import {
   formatOfficeUsage,
   type OfficeObservability,
 } from "../officeObservability";
-import type { TownLevel } from "./townCamera";
+import { townRoomFocus, type TownLevel } from "./townCamera";
 import { townHitKey, townHitTest } from "./townHitTest";
 import {
   layoutTown,
@@ -1225,7 +1225,8 @@ function zoomToRoom(
   if (!room) return;
   const camera = renderer.camera;
   const z = roomZoom(camera, room);
-  camera.flyTo((room.x + room.w / 2) * T, (room.y + room.h / 2) * T, z, 0.6);
+  const focus = townRoomFocus(room, camera.viewport, z);
+  camera.flyTo(focus.x, focus.y, z, 0.6);
   renderer.invalidate("room");
 }
 

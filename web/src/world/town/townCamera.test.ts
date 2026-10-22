@@ -1,5 +1,10 @@
 import { expect, test } from "bun:test";
-import { TownCamera, townLevel, townZoomLimits } from "./townCamera";
+import {
+  TownCamera,
+  townLevel,
+  townRoomFocus,
+  townZoomLimits,
+} from "./townCamera";
 import { layoutTown } from "./townLayout";
 
 const input = {
@@ -116,4 +121,26 @@ test("a town with too many rooms for cards opens at roof level", () => {
   expect(townLevel(limits.card, limits)).toBe("room");
   expect(limits.roof).toBeLessThan(limits.card);
   expect(limits.min).toBeLessThan(limits.home);
+});
+
+test("a room that fits is centred; an extended room opens at its first desks", () => {
+  const view = {
+    width: 390,
+    height: 800,
+    inset: { top: 60, right: 0, bottom: 100, left: 0 },
+  };
+  const small = { x: 10, y: 10, w: 16, h: 11 };
+  expect(townRoomFocus(small, view, 1)).toEqual({
+    x: (10 + 8) * 16,
+    y: (10 + 5.5) * 16,
+  });
+  // 8 desks wide and 16 deep: neither fits at this zoom, so the room's
+  // top-left corner sits at the usable view's top-left.
+  const tall = { x: 10, y: 10, w: 41, h: 81 };
+  const z = 0.9;
+  const focus = townRoomFocus(tall, view, z);
+  expect(focus.x - view.width / 2 / z).toBeCloseTo(10 * 16 - 20);
+  expect(focus.y - (view.height / 2 - view.inset.top) / z).toBeCloseTo(
+    10 * 16 - 24,
+  );
 });
