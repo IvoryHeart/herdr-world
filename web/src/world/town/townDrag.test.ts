@@ -110,9 +110,28 @@ test("a desk dropped in its own room is reordered, as a tab in Spaces", () => {
     reorder: true,
   });
   expect(townDropTarget(drag, { kind: "room", key: "r1" }, m).key).toBeNull();
-  // Already last, and no hidden desks after it: nothing to do.
+  // Already last: nothing to do.
   const lastDrag = townDragFor({ kind: "desk", key: "d2" }, m, "room")!;
   expect(townDropTarget(lastDrag, cell, m).key).toBeNull();
+  // With hidden desks, the free spot is the last drawn desk's place, so the
+  // desk stays in view; the last drawn desk itself stays put.
   (m.rooms.get("r1") as { omittedDeskCount: number }).omittedDeskCount = 3;
-  expect(townDropTarget(lastDrag, cell, m).key).toBe("r1");
+  expect(townDropTarget(drag, cell, m)).toMatchObject({
+    key: "d2",
+    reorder: true,
+  });
+  expect(townDropTarget(lastDrag, cell, m).key).toBeNull();
+});
+
+test("a standing agent does not stand for its desk's slot", () => {
+  const m = model();
+  const drag = townDragFor({ kind: "desk", key: "d2" }, m, "room")!;
+  // ag sits at d1: a seated hit is d1's slot, a lounge or queue hit is not.
+  expect(townDropTarget(drag, { kind: "agent", key: "ag" }, m)).toMatchObject({
+    key: "d1",
+    reorder: true,
+  });
+  expect(
+    townDropTarget(drag, { kind: "agent", key: "ag", standing: true }, m).key,
+  ).toBeNull();
 });

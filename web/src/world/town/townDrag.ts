@@ -86,7 +86,9 @@ export function townDropTarget(
           ? hit.key
           : hit?.kind === "pane"
             ? hit.deskKey
-            : hit?.kind === "agent"
+            : // Only a seated agent marks its desk's slot; one in the lounge,
+              // the queue or walking is not where its desk is drawn.
+              hit?.kind === "agent" && !hit.standing
               ? model.agentSeats.get(hit.key)?.deskKey
               : undefined;
       const onto = ontoKey ? model.desks.get(ontoKey) : undefined;
@@ -96,13 +98,22 @@ export function townDropTarget(
           label: `Put ${name} in ${onto.displayLabel}’s place`,
           reorder: true,
         };
-      const last = room.desks[room.desks.length - 1]?.key === drag.key;
-      if (hit?.kind === "cell" && !(last && room.omittedDeskCount === 0))
-        return {
-          key: room.key,
-          label: `Put ${name} last in ${room.displayLabel}`,
-          reorder: true,
-        };
+      // The free spot is the room's last drawn slot. In a room with more
+      // tabs than it draws, that is the last drawn desk's place, so the desk
+      // stays in view instead of joining the hidden ones.
+      const lastDrawn = room.desks[room.desks.length - 1]?.key;
+      if (hit?.kind === "cell" && lastDrawn && lastDrawn !== drag.key)
+        return room.omittedDeskCount > 0
+          ? {
+              key: lastDrawn,
+              label: `Put ${name} last of the desks shown in ${room.displayLabel}`,
+              reorder: true,
+            }
+          : {
+              key: room.key,
+              label: `Put ${name} last in ${room.displayLabel}`,
+              reorder: true,
+            };
       return {
         key: null,
         label: `${drag.label}: drop on a desk to reorder`,

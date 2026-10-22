@@ -1368,17 +1368,21 @@ actual resulting topology.
 
 Town SHALL let the user reorder a desk within its room the same ways: dropping
 it on another desk of its room puts it in that desk's slot, as a tab dragged
-onto another in Spaces, and dropping it on the room's free spot puts it after
-every tab of the workspace, including tabs beyond the drawn desks. The keyboard
-list SHALL offer the same places before other rooms. A reorder SHALL read the
+onto another in Spaces, and dropping it on the room's free spot puts it last of
+the drawn desks, so in a room with more tabs than it draws the desk takes the
+last drawn desk's place and stays in view. Only a seated agent stands for its
+desk's slot; a drop on an agent in the lounge, at reception or walking SHALL
+NOT reorder. The keyboard list SHALL offer the same places before other rooms. A reorder SHALL read the
 workspace's tab order from Herdr and send one Herdr `tab.move` through the same
 browser path as Spaces' tab strip, qualified by the desk's connection ID and
 runtime generation. Town SHALL NOT keep an order of its own: desks SHALL move
 when Herdr's new order is observed, and a refused reorder SHALL leave every desk
-in place and say why. The World service SHALL subscribe to Herdr's `tab.moved`
-event where Herdr supports `tab.move`, so a reorder made anywhere refreshes
-every view. Agents keep their desk across a reorder: a seated agent moves with
-its desk, an agent walking to it walks to the new slot, and agents at reception
+in place and say why; on a Herdr without `tab.move`, Town SHALL say so in plain
+words before sending anything. The World service SHALL subscribe to Herdr's
+`tab.moved` event where Herdr supports `tab.move`, so a reorder made anywhere
+refreshes every view; when it cannot yet tell whether Herdr does, it SHALL retry
+the subscription rather than subscribe without `tab.moved`. Agents keep their desk across a reorder: a seated agent moves with
+its desk, an agent walking to it or sitting down walks to the new slot, and agents at reception
 or in the lounge return to the same desk.
 
 An agent move SHALL be a single confirmed pane move into the target tab. The

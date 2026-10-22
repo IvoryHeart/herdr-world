@@ -184,3 +184,27 @@ test("an agent walking back to a desk that moved walks to its new place", () => 
   expect(actor.mode).toBe("seat");
   expect([actor.x, actor.y]).toEqual([geometry.cx, geometry.seatedY]);
 });
+
+test("an agent sitting down at a desk that moved gets up and sits at its new place", () => {
+  const actors = new TownActors();
+  actors.sync(world({ a: "working" }).actorWorld, false);
+  actors.sync(world({ a: "blocked" }).actorWorld, false);
+  settle(actors);
+  actors.sync(world({ a: "working" }).actorWorld, false);
+  for (let i = 0; i < 2000 && actors.actors.get("a")!.mode !== "tween"; i += 1)
+    actors.step(1 / 60);
+  // Past the stand-up tween: now the sit-down one at the desk.
+  for (let i = 0; i < 2000; i += 1) {
+    const actor = actors.actors.get("a")!;
+    if (actor.mode === "tween" && actor.tween?.next === "seat") break;
+    actors.step(1 / 60);
+  }
+  expect(actors.actors.get("a")!.tween?.next).toBe("seat");
+  const moved = world({ a: "working" }, 4, [1, 0, 2, 3]);
+  actors.sync(moved.actorWorld, false);
+  settle(actors);
+  const actor = actors.actors.get("a")!;
+  const geometry = townSeat(moved.actorWorld.cells.get("room/desk-0")!, 0);
+  expect(actor.mode).toBe("seat");
+  expect([actor.x, actor.y]).toEqual([geometry.cx, geometry.seatedY]);
+});

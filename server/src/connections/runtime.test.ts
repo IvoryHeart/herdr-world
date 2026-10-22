@@ -347,6 +347,48 @@ test("Herdr without tab.move is not asked for tab.moved, which it would refuse",
   }
 });
 
+test("a failed tab.move probe retries instead of dropping tab.moved", async () => {
+  const runtime = createLegacyConnectionRuntime({
+    config: {
+      socketPath: "/tmp/unused-probe-retry-control.sock",
+      clientSocketPath: "/tmp/unused-probe-retry-client.sock",
+      hasExplicitSocketPath: true,
+      hasExplicitClientSocketPath: true,
+    },
+    safeSend: () => true,
+    clientLabel: () => "test",
+    markRpcError: () => undefined,
+    onEvent: () => undefined,
+  });
+  runtime.workspaceAutoSync.start = () => undefined;
+  let pings = 0;
+  runtime.herdr.call = async (method) => {
+    if (method !== "ping") return { panes: [] };
+    pings += 1;
+    if (pings === 1) throw new Error("socket briefly unavailable");
+    return { protocol: 22 };
+  };
+  const subscribed: string[][] = [];
+  runtime.herdr.subscribe = (types) => {
+    subscribed.push(types.map(String));
+    return {
+      ready: new Promise<void>(() => undefined),
+      closed: new Promise<void>(() => undefined),
+      close: () => undefined,
+    };
+  };
+  try {
+    runtime.startBackground();
+    const deadline = Date.now() + 5000;
+    while (subscribed.length < 1 && Date.now() < deadline) await Bun.sleep(5);
+    expect(pings).toBeGreaterThanOrEqual(2);
+    expect(subscribed).toHaveLength(1);
+    expect(subscribed[0]).toContain("tab.moved");
+  } finally {
+    await runtime.stop();
+  }
+});
+
 test("herdr notification source relays SemanticNotification and silences the status tracker", async () => {
   const { BinReader, BinWriter, encodeFrame } = await import(
     "../bridge/bincode"

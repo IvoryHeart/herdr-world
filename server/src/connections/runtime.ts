@@ -22,6 +22,7 @@ import {
 } from "../bridge/endpoint-client";
 import {
   assertSupportedHerdrProtocol,
+  HerdrCompatibilityError,
   isTerminalHelloProtocol,
 } from "../bridge/protocol-compat";
 import { worldEnv } from "../config/environment";
@@ -595,12 +596,17 @@ export function createLegacyConnectionRuntime(args: {
   });
   const subscriptionLoop = createEventSubscriptionLoop({
     // Herdr refuses a subscription that names an event it does not know, so
-    // tab order events are asked for only where tab.move exists.
+    // tab order events are asked for only where tab.move exists. A failed
+    // probe fails this attempt and the loop retries; only a Herdr this build
+    // does not support is subscribed without them.
     subscribe: () =>
       deferredSubscription(
         terminalBridge
           .tabMoveSupported()
-          .catch(() => false)
+          .catch((error) => {
+            if (error instanceof HerdrCompatibilityError) return false;
+            throw error;
+          })
           .then((tabMove) =>
             herdr.subscribe(
               tabMove ? [...DEFAULT_EVENTS, "tab.moved"] : DEFAULT_EVENTS,

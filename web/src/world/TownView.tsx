@@ -843,6 +843,7 @@ export default function TownView({
       // Within its room a desk takes another desk's slot, as in a drag.
       const home = desk ? roomForKey(desk.roomKey) : null;
       const slots = home?.desks ?? [];
+      const lastDrawn = slots[slots.length - 1];
       const reorder = (ontoKey: string | null) => () => {
         setMoveFlow(null);
         void runDeskReorder(flow.deskKey, ontoKey);
@@ -856,13 +857,19 @@ export default function TownView({
             detail: `Desk ${slots.indexOf(other) + 1} in ${home?.displayLabel}`,
             onChoose: reorder(other.key),
           })),
-        ...(slots[slots.length - 1]?.key !== desk?.key || home?.omittedDeskCount
+        // Last means last of the drawn desks: in a room with hidden desks
+        // that is the last drawn desk's place, so the desk stays in view.
+        ...(lastDrawn && lastDrawn.key !== desk?.key
           ? [
               {
                 key: `${flow.deskKey}:last`,
                 label: "Last",
-                detail: `After every desk in ${home?.displayLabel}`,
-                onChoose: reorder(null),
+                detail: home?.omittedDeskCount
+                  ? `Last of the desks shown in ${home.displayLabel}`
+                  : `After every desk in ${home?.displayLabel}`,
+                onChoose: reorder(
+                  home?.omittedDeskCount ? lastDrawn.key : null,
+                ),
               },
             ]
           : []),

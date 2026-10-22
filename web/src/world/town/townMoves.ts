@@ -109,6 +109,12 @@ export async function requestDeskMove(
   );
 }
 
+const TAB_MOVE_UNSUPPORTED: TownMoveOutcome = {
+  status: "refused",
+  reason: "tab_move_unsupported",
+  message: "This host's Herdr cannot reorder tabs. Herdr 0.7.2 or later can.",
+};
+
 /**
  * Herdr's tab.move index that puts `tabId` into `ontoId`'s slot of a room's
  * tab order (or last when `ontoId` is null): null when it is already there,
@@ -150,9 +156,16 @@ export async function requestDeskReorder(
     connectionId: desk.tabRef.connectionId,
     runtimeGeneration: desk.tabRef.generation,
   };
+  const operations = operationalStore(owner);
+  const observed = operations.get();
+  if (observed.lastRefresh > 0 && !observed.tabMoveSupported)
+    return TAB_MOVE_UNSUPPORTED;
   const listed = (await bridge
     .connection(owner.connectionId, owner.runtimeGeneration)
-    .call("tab.list", {})) as { tabs?: Tab[] } | undefined;
+    .call("tab.list", {})) as
+    | { tabs?: Tab[]; tab_move_supported?: boolean }
+    | undefined;
+  if (listed?.tab_move_supported === false) return TAB_MOVE_UNSUPPORTED;
   const tabs = listed?.tabs ?? [];
   const tabId = desk.tabRef.nativeId;
   const workspaceId = tabs.find((tab) => tab.tab_id === tabId)?.workspace_id;
@@ -170,7 +183,6 @@ export async function requestDeskReorder(
     };
   if (insertIndex === null)
     return { status: "moved", tab_id: tabId, workspace_id: workspaceId };
-  const operations = operationalStore(owner);
   const result = await operations.moveTab(tabId, insertIndex);
   if (result !== undefined)
     return { status: "moved", tab_id: tabId, workspace_id: workspaceId };

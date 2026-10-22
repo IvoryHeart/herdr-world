@@ -11,7 +11,8 @@ import {
 import type { TownModel } from "./townModel";
 
 export type TownHit =
-  | { kind: "agent"; key: string }
+  /** `standing` when the agent was hit away from its seat (lounge, queue, walking). */
+  | { kind: "agent"; key: string; standing?: true }
   | { kind: "pane"; key: string; deskKey: string }
   | { kind: "desk"; key: string }
   | { kind: "cell"; roomKey: string; cellIndex: number }
@@ -71,7 +72,7 @@ export function townHitTest(
         y >= actor.y - 22 * S - pad &&
         y <= actor.y + 3 + pad
       )
-        return { kind: "agent", key: actor.key };
+        return { kind: "agent", key: actor.key, standing: true };
   }
   const detailed = context.level === "desk";
   for (const room of building.rooms)
