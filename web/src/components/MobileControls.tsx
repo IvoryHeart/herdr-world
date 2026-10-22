@@ -3,6 +3,8 @@ import { ChevronDown, EllipsisVertical, SquareStack } from "lucide-react";
 import { useStoreSelector } from "../store";
 import type { Pane, Tab } from "../types";
 import { agentStateKind, type AgentStateKind } from "./agentSession";
+import { ColorSwatchButton } from "./ColorSwatch";
+import type { TabColorControl, TabColorOwner } from "./TabBar";
 import "./MobileControls.css";
 
 /**
@@ -23,6 +25,8 @@ export type MobileControls = {
   toggleMore: () => void;
   workspacesOpen: boolean;
   toggleWorkspaces: () => void;
+  /** Optional terminal colours, chosen from a swatch beside the title. */
+  tabColors?: TabColorControl;
 };
 
 type MobileTerminalIdentity = {
@@ -30,6 +34,8 @@ type MobileTerminalIdentity = {
   agent: string;
   place: string;
   status: AgentStateKind;
+  tab?: Tab;
+  owner: TabColorOwner;
 };
 
 function createStore<T>() {
@@ -84,6 +90,7 @@ export function usePublishMobileControls(controls: MobileControls | null) {
         controls.workspacesOpen,
       ].join("|")
     : "";
+  const tabColors = controls?.tabColors;
   useLayoutEffect(() => {
     const live = latest.current;
     controlsStore.set(
@@ -96,7 +103,7 @@ export function usePublishMobileControls(controls: MobileControls | null) {
           }
         : null,
     );
-  }, [key]);
+  }, [key, tabColors]);
   useLayoutEffect(() => () => controlsStore.set(null), []);
 }
 
@@ -113,8 +120,15 @@ export function MobileTerminalIdentity({
   active: boolean;
   element: HTMLElement | null;
 }) {
-  const place = useStoreSelector((state) =>
-    pane ? tabName(state.tabs.find((tab) => tab.tab_id === pane.tab_id)) : "",
+  const tab = useStoreSelector((state) =>
+    pane ? state.tabs.find((tab) => tab.tab_id === pane.tab_id) : undefined,
+  );
+  const place = tabName(tab);
+  const connectionId = useStoreSelector((state) => state.activeConnectionId);
+  const workspaceIds = useStoreSelector((state) =>
+    (state.workspaces ?? [])
+      .map((workspace) => workspace.workspace_id)
+      .join("\n"),
   );
   const agent = pane?.display_agent?.trim() || pane?.agent?.trim() || "";
   const status = agentStateKind(pane?.agent_status);
@@ -143,13 +157,27 @@ export function MobileTerminalIdentity({
       agent: agent || "Terminal",
       place,
       status,
+      tab,
+      owner: {
+        connectionId,
+        workspaceIds: workspaceIds ? workspaceIds.split("\n") : [],
+      },
     };
     terminalStore.set(identity);
     return () => {
       // Another visible terminal may have published since; keep its name.
       if (terminalStore.get() === identity) terminalStore.set(null);
     };
-  }, [visible, workspaceId, agent, place, status]);
+  }, [
+    visible,
+    workspaceId,
+    agent,
+    place,
+    status,
+    tab,
+    connectionId,
+    workspaceIds,
+  ]);
   return null;
 }
 
@@ -183,8 +211,25 @@ export function MobileTerminalAppBar() {
     ]
       .filter(Boolean)
       .join(", ") || undefined;
+  const color =
+    terminal?.tab && controls.tabColors
+      ? controls.tabColors.colorOf(terminal.owner, terminal.tab)
+      : null;
   return (
     <div className="mobile-terminal-appbar">
+      {terminal?.tab && controls.tabColors && color ? (
+        <ColorSwatchButton
+          className="mobile-terminal-swatch"
+          label="Terminal colour"
+          palette={controls.tabColors.palette}
+          current={color}
+          onColor={(id) => {
+            const { tabColors } = controls;
+            if (terminal.tab && tabColors)
+              tabColors.onColor(terminal.owner, terminal.tab, id);
+          }}
+        />
+      ) : null}
       {terminal ? (
         <button
           type="button"

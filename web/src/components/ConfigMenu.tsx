@@ -46,6 +46,7 @@ import { ConfigurationLoadingDialog } from "./ConfigurationLoadingDialog";
 import { HerdrSetupCard } from "./HerdrSetupCard";
 import { MobileSheetHandle } from "./MobileSheetHandle";
 import "./ConfigMenu.css";
+import { useLayer } from "../layerStack";
 import { DEVTOOLS } from "../world/devtools/flag";
 import { requestTrace, traceRemembered } from "../world/devtools/trace";
 
@@ -166,25 +167,13 @@ export function ConfigMenu({
             else setHerdrUnavailable(true);
           });
     }
-    const onDown = (event: MouseEvent) => {
-      if (ref.current && !ref.current.contains(event.target as Node))
-        setOpen(false);
-    };
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      event.preventDefault();
-      event.stopPropagation();
-      setOpen(false);
-      window.requestAnimationFrame(() => triggerRef.current?.focus());
-    };
-    window.addEventListener("mousedown", onDown);
-    window.addEventListener("keydown", onKey, { capture: true });
     return () => {
       cancelled = true;
-      window.removeEventListener("mousedown", onDown);
-      window.removeEventListener("keydown", onKey, { capture: true });
     };
   }, [connectionClient, open]);
+  // A layer on the shared stack: Escape, a press outside (the terminal
+  // included) and Back close it, and focus returns to what had it.
+  useLayer(open, () => setOpen(false), { element: () => ref.current });
 
   const updateOfficePreferences = (patch: Partial<OfficePreferences>) => {
     const next = writeOfficePreferences(worldLocalStorage, {

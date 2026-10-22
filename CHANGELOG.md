@@ -21,6 +21,10 @@ are optional because the merged PR history records their source.
 
 ### Changed
 
+- Show a terminal's colour as a swatch beside its name in the terminal's
+  header on desktop and phones, and offer the same picker under **Colour** in
+  the terminal window's menu and in the Town peek's header. All pickers are
+  one component with **Default colour**.
 - Show attachment uploads in every composer that attaches files: the phone
   Composer, Spaces, the Town peek and Inspector Chat (which can now attach).
   Each file has a chip with byte progress, then done or failed with Retry and
@@ -77,6 +81,13 @@ are optional because the merged PR history records their source.
 
 ### Fixed
 
+- Close menus, dropdowns, pickers and the phone's workspace list top first.
+  Tapping the terminal now closes a dropdown on phones; Escape closes a menu
+  even while the terminal has focus; on-screen Back closes the workspace list
+  opened from a terminal's title instead of leaving it over the scene; and
+  focus returns to the terminal. One layer stack handles Escape, outside
+  presses and Back for all of them: Escape and Back close the top layer,
+  and a tap outside all of them closes them all.
 - Chat no longer reports a message as sent to the conversation it shows when
   Herdr delivered it to another session. Herdr's prompt cannot be made
   conditional, so Chat shows a sent message as not yet seen until its own

@@ -1,3 +1,4 @@
+import { useLayer } from "../layerStack";
 import { useEffectCallback } from "../useEffectCallback";
 import { UncertainRequestError } from "../api";
 import { worldLocalStorage } from "../browserStorage";
@@ -229,16 +230,17 @@ function FileExplorerEntryMenu({
   const ref = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
+  // Escape, a press outside and Back close it through the shared stack, which
+  // returns focus to what had it.
+  useLayer(state !== null, () => onCloseRef.current(), {
+    element: () => ref.current,
+  });
 
   useEffect(() => {
     if (!state) return;
-    const previousFocus = document.activeElement as HTMLElement | null;
     const close = () => onCloseRef.current();
-    const onDown = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) close();
-    };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" || e.key === "Tab") {
+      if (e.key === "Tab") {
         e.preventDefault();
         close();
         return;
@@ -264,18 +266,14 @@ function FileExplorerEntryMenu({
       buttons[nextIndex]?.focus();
     };
     const t = setTimeout(() => {
-      window.addEventListener("mousedown", onDown);
       window.addEventListener("keydown", onKey);
       window.addEventListener("scroll", close, true);
       ref.current?.querySelector<HTMLButtonElement>("button")?.focus();
     }, 0);
     return () => {
       clearTimeout(t);
-      window.removeEventListener("mousedown", onDown);
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("scroll", close, true);
-      if (previousFocus?.isConnected)
-        previousFocus.focus({ preventScroll: true });
     };
   }, [state]);
 

@@ -1,3 +1,4 @@
+import { useLayer } from "../layerStack";
 import type { Tab } from "../types";
 import { useEffect, useLayoutEffect, useRef } from "react";
 import {
@@ -332,28 +333,19 @@ export function AgentContextMenu({
 }) {
   const ref = useRef<HTMLDivElement>(null);
 
+  useLayer(state !== null, onClose, { element: () => ref.current });
   useEffect(() => {
     if (!state) return;
-    const onDown = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
     const onScroll = (e: Event) => {
       const target = e.target;
       if (target instanceof Node && ref.current?.contains(target)) return;
       onClose();
     };
     const t = setTimeout(() => {
-      window.addEventListener("mousedown", onDown);
-      window.addEventListener("keydown", onKey);
       window.addEventListener("scroll", onScroll, true);
     }, 0);
     return () => {
       clearTimeout(t);
-      window.removeEventListener("mousedown", onDown);
-      window.removeEventListener("keydown", onKey);
       window.removeEventListener("scroll", onScroll, true);
     };
   }, [state, onClose]);

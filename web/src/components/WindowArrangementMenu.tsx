@@ -1,3 +1,4 @@
+import { useLayer } from "../layerStack";
 import {
   WindowSwitcher,
   type WindowSwitcherEntry,
@@ -89,6 +90,11 @@ export function WindowArrangementMenu({
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  // Escape, a press outside and Back close it through the shared stack.
+  useLayer(open, () => setOpen(false), {
+    element: () => menuRef.current,
+    anchors: () => [triggerRef.current],
+  });
 
   useEffect(() => {
     if (!open) return;
@@ -100,25 +106,9 @@ export function WindowArrangementMenu({
     );
     (firstEnabled ?? items?.[0])?.focus();
 
-    const onPointerDown = (event: PointerEvent) => {
-      const target = event.target as Node;
-      if (
-        !menuRef.current?.contains(target) &&
-        !triggerRef.current?.contains(target)
-      ) {
-        setOpen(false);
-      }
-    };
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        setOpen(false);
-        triggerRef.current?.focus();
-      } else if (event.key === "Tab") {
-        setOpen(false);
-      }
+      if (event.key === "Tab") setOpen(false);
     };
-    document.addEventListener("pointerdown", onPointerDown);
     document.addEventListener("keydown", onKeyDown);
     window.addEventListener("resize", closeMenu);
     const onScroll = (event: Event) => {
@@ -126,7 +116,6 @@ export function WindowArrangementMenu({
     };
     window.addEventListener("scroll", onScroll, true);
     return () => {
-      document.removeEventListener("pointerdown", onPointerDown);
       document.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("resize", closeMenu);
       window.removeEventListener("scroll", onScroll, true);

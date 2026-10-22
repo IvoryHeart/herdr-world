@@ -1,4 +1,10 @@
-import { useEffect, useMemo, useRef, useSyncExternalStore } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useSyncExternalStore,
+} from "react";
 import type { TabColorControl } from "../components/TabBar";
 import {
   sharedBoardStore,
@@ -6,7 +12,7 @@ import {
 } from "./board/boardDocument";
 import {
   resolveTerminal,
-  TERMINAL_COLOR_HEX,
+  TERMINAL_COLOR_PALETTE,
   TERMINAL_COLORS,
   terminalColorKey,
   type TerminalColor,
@@ -64,11 +70,6 @@ export function setTerminalColor(
   ]);
 }
 
-const PALETTE = TERMINAL_COLORS.map((id) => ({
-  id,
-  hex: TERMINAL_COLOR_HEX[id],
-}));
-
 /** Spaces' tab strip, coloured from World's store (TabBar's colour seam). */
 export function useWorldTabColors(): TabColorControl {
   const colors = useTerminalColors();
@@ -83,7 +84,7 @@ export function useWorldTabColors(): TabColorControl {
       workspaceIds: new Set(owner.workspaceIds),
     });
     return {
-      palette: PALETTE,
+      palette: TERMINAL_COLOR_PALETTE,
       colorOf: (owner, tab) => {
         const { color, own } = resolveTerminal(colors, targetOf(owner, tab));
         // Only the tab's own colour can be reset; a workspace's is not its.
@@ -98,4 +99,38 @@ export function useWorldTabColors(): TabColorControl {
         ),
     };
   }, [colors]);
+}
+
+export type TerminalColorChoice = {
+  palette: typeof TERMINAL_COLOR_PALETTE;
+  current: { id: TerminalColor; custom: boolean };
+  onColor(id: string | null): void;
+};
+
+/**
+ * Terminal colours for the shared picker (ColorSwatch.tsx): a function from a
+ * tab to its colour, whether it is the tab's own, and how to change it.
+ */
+export function useTerminalColorChoices(): (
+  target: TerminalColorTarget,
+) => TerminalColorChoice {
+  const colors = useTerminalColors();
+  return useCallback(
+    (target) => {
+      const { color, own } = resolveTerminal(colors, target);
+      return {
+        palette: TERMINAL_COLOR_PALETTE,
+        // Only the tab's own colour can be reset; a workspace's is not its.
+        current: { id: color, custom: own },
+        onColor: (id) =>
+          void setTerminalColor(
+            target,
+            TERMINAL_COLORS.includes(id as TerminalColor)
+              ? (id as TerminalColor)
+              : null,
+          ),
+      };
+    },
+    [colors],
+  );
 }

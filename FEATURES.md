@@ -77,9 +77,11 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
 - **Terminal colours.** Every tab has one colour, shown as the tab in Spaces,
   the card in Board and its table in Town (tabs beyond a room's drawn tables
   show it in Spaces and Board). A tab starts with a stable default colour, or
-  its workspace's Board colour; choose another from the tab's menu in Spaces,
-  an agent's peek (**Colour**) in Town, or the selected card in Board, and reset
-  a tab's own colour the same way. Herdr has no tab colour, so the World service
+  its workspace's Board colour; choose another from the swatch beside the
+  terminal's name in its header (desktop window or phone app bar), the
+  terminal window's menu (**Colour**), the tab's menu in Spaces, the swatch in
+  an agent's peek in Town, or the selected card in Board, and reset a tab's own
+  colour with **Default colour** the same way. Herdr has no tab colour, so the World service
   saves the choice keyed by host and Herdr tab ID, the same on every device. A
   closed tab's saved colour is dropped.
   - A desk moved to another room keeps the colour it showed, even a default or
@@ -166,9 +168,17 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   placements; snapping into an occupied region overlaps without rearranging it.
   Tiled windows share resizable dividers. **Open windows** restores minimized windows.
   Window close dismisses presentation; native tab closure remains separate.
+- Menus, dropdowns, pickers and the workspace list opened from a terminal's
+  title close top first: Escape and Back close only the topmost one; a press
+  or tap outside all of them (on the terminal, say) closes them all, so one
+  tap shows the terminal, and a press inside a lower one closes only those
+  above it. Escape, Back or a choice returns
+  focus to where it was, such as the terminal. The phone's Tabs sheet
+  and Composer close with the phone's Back.
 - Mobile shows one active window and preserves desktop positions. The on-screen
-  **Back** returns from a terminal to the visual view even with Composer open;
-  the phone's own Back closes Composer first, then the terminal. Tabs and More stay in the shared top app bar; More exposes Arrange windows.
+  **Back** first closes an open menu or the workspace list (opened from the
+  terminal's title), then returns from a terminal to the visual view even with
+  Composer open; the phone's own Back closes Composer first, then the terminal. Tabs and More stay in the shared top app bar; More exposes Arrange windows.
   Tabs also restores minimized windows and retains native tab actions. The duplicate
   list icon and mobile tab strip are hidden. The outer shell coordinates terminal sizing with the keyboard viewport.
 - A Spaces tab window shows that tab's Herdr split panes. An Inspector in a visual

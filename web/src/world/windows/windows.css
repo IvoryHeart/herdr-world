@@ -131,6 +131,12 @@
 .world-window-snap-menu > button:focus {
   background: var(--accent-soft);
 }
+.world-window-snap-menu > .world-window-color {
+  grid-column: 1 / -1;
+  justify-content: flex-start;
+  border-top: 1px solid var(--shell-border);
+  border-radius: 0 0 4px 4px;
+}
 .world-window-snap-preview {
   position: absolute;
   pointer-events: none;
