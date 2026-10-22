@@ -498,3 +498,23 @@
 .agent-chat-answered b {
   color: var(--text);
 }
+/* Scrolled up from the newest message, a button brings it back. It sits at
+   the bottom of the visible list without taking room from the messages. */
+.agent-chat-jump {
+  position: sticky;
+  top: calc(100% - 40px);
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0 auto -28px;
+  height: 28px;
+  padding: 0 10px;
+  color: var(--text-strong);
+  font-size: 12px;
+  background: var(--panel);
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  box-shadow: var(--shadow-lg, 0 4px 14px #0004);
+  cursor: pointer;
+}

@@ -1,9 +1,15 @@
 import {
   floatingTerminalGeometryId,
+  readFloatingTerminalDock,
   readFloatingTerminalGeometry,
+  type FloatingTerminalDock,
 } from "./floatingTerminalPreferences";
 import { useLayoutPreferences } from "../layoutPreferences";
-import { fitWindow, initialWindowRect } from "./windows/windowManager";
+import {
+  fitWindow,
+  initialWindowRect,
+  type SnapTarget,
+} from "./windows/windowManager";
 import {
   useWindowManager,
   useWindowWorkArea,
@@ -97,11 +103,14 @@ export function useWorldInspectorWindows({
       inspectorConversations.map((conversation, index) => ({
         id: worldInspectorWindowId(conversation),
         label: `${conversation.label} · ${conversation.hostLabel}`,
-        initialSnap:
-          view === "desk" ||
-          (view === "town" && officeInspectorPresentation === "docked")
-            ? ("right" as const)
-            : undefined,
+        initialSnap: inspectorInitialSnap(
+          view,
+          officeInspectorPresentation,
+          readFloatingTerminalDock(
+            worldLocalStorage,
+            floatingTerminalGeometryId(conversation),
+          ),
+        ),
         initialGeometry: readFloatingTerminalGeometry(
           worldLocalStorage,
           floatingTerminalGeometryId(conversation),
@@ -448,3 +457,19 @@ export function useWorldInspectorWindows({
 }
 
 export type WorldInspectorWindows = ReturnType<typeof useWorldInspectorWindows>;
+
+/**
+ * Where an Inspector window opens: Desk docks right; Town docks right unless
+ * the "Inspector opening" preference floats it, and either way a window keeps
+ * the dock it was last left with (docked somewhere, or floating).
+ */
+export function inspectorInitialSnap(
+  view: string,
+  presentation: "docked" | "floating",
+  saved: FloatingTerminalDock | null,
+): SnapTarget | undefined {
+  if (view === "desk") return "right";
+  if (view !== "town") return undefined;
+  if (saved) return saved === "float" ? undefined : saved;
+  return presentation === "docked" ? "right" : undefined;
+}
