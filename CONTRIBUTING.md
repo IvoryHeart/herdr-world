@@ -188,8 +188,13 @@ behavior, verification, and compatibility impact. For UI changes, upload
 screenshots as GitHub attachments and embed them in the PR description. Do not
 commit screenshot files to the repository solely for PR review. Do not commit
 generated assets (`dist/`, `server/public/`) or binaries.
-Add user-facing Unreleased changelog entries before the first push. PR links in
-those entries are optional; do not push again solely to add one after the PR opens.
+Record a user-facing change as a changelog fragment, `changes/<pr-number-or-slug>.md`,
+before the first push, rather than editing `CHANGELOG.md`. See
+[changes/README.md](changes/README.md) for the format; `bun run changelog:check`
+validates it. CI requires a fragment from every PR that is not documentation-only.
+A PR with nothing user-facing (tests, CI, contributor tooling) instead puts
+`Changelog: none — <specific reason>` in its description. PR links in entries are
+optional; do not push again solely to add one after the PR opens.
 
 Unlabeled PRs get `documentation` (docs-only), `dependencies` (dependency updates),
 `bug` (fix titles), or `enhancement` (other code). Release preparation gets
