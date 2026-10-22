@@ -45,7 +45,6 @@ import { TownCanvas } from "./town/TownCanvas";
 import { townDeskColorTarget } from "./town/townModel";
 import { resolveTerminal, type TerminalColor } from "./terminalColor";
 import { setTerminalColor, useTerminalColors } from "./useTerminalColors";
-import { bridge } from "../api";
 import { groupTerminals, ungroupTerminals, useRelations } from "./relations";
 import { inheritedColorKey } from "../../../shared/terminalColor";
 import type { TerminalRef } from "../../../shared/relations";
