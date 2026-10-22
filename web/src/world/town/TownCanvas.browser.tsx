@@ -1143,8 +1143,26 @@ async function run() {
     }
     return [];
   })();
+  // Every move that lands is drawn landing, with dust unless motion is
+  // reduced: a same-room reorder and a move to another room alike.
+  const drags = () => window.__HERDR_TOWN_RENDERER__!.drags;
+  const landed = async (
+    since: { landings: number; dust: number },
+    why: string,
+  ) => {
+    await waitFor(
+      () => drags().landings > since.landings,
+      `${why} did not land`,
+    );
+    check(
+      window.__HERDR_TOWN_RENDERER__!.reducedMotion ||
+        drags().dust > since.dust,
+      `${why} landed without dust`,
+    );
+  };
   if (fromDesk && ontoDesk) {
     const before = moves.length;
+    const drawn = { ...drags() };
     const at = (target: HTMLElement) => {
       const box = target.getBoundingClientRect();
       return [box.left + box.width / 2, box.top + box.height / 2] as const;
@@ -1191,6 +1209,63 @@ async function run() {
         typeof reorder.params.insert_index === "number",
       `desk reorder sent ${JSON.stringify(reorder)}`,
     );
+    await landed(drawn, "a reordered desk");
+
+    // Carried to another room's floor, the desk moves there with
+    // town.move_desk and lands the same way.
+    const rooms = [
+      ...host.querySelectorAll<HTMLElement>(
+        '.world-semantic-target[data-kind="room"]',
+      ),
+    ].filter((target) => {
+      const box = target.getBoundingClientRect();
+      return (
+        box.width > 0 &&
+        box.left > 0 &&
+        box.top > 0 &&
+        box.right < window.innerWidth &&
+        box.bottom + 40 < window.innerHeight
+      );
+    });
+    const floor = (target: HTMLElement) => {
+      const box = target.getBoundingClientRect();
+      return [box.left + box.width / 2, box.bottom + 24] as const;
+    };
+    let moved = false;
+    for (const room of rooms) {
+      const ghost = () => host.querySelector<HTMLElement>(".town-drag-ghost");
+      press("pointerdown", at(fromDesk));
+      await waitFor(() => ghost() !== null, "holding a desk did not lift it");
+      press("pointermove", floor(room));
+      await settle();
+      const label = ghost()?.textContent ?? "";
+      if (
+        ghost()?.dataset.valid !== "true" ||
+        label.includes("’s place") ||
+        label.includes("last of")
+      ) {
+        // Not another room here: carry it back home and let it go.
+        press("pointermove", at(fromDesk));
+        press("pointerup", [-10, -10]);
+        await waitFor(() => ghost() === null, "a cancelled carry stayed up");
+        continue;
+      }
+      const before = moves.length;
+      const drawn = { ...drags() };
+      press("pointerup", floor(room));
+      await waitFor(
+        () => moves.length === before + 1,
+        "dropping a desk in another room did not move it",
+      );
+      check(
+        moves[before]!.method === "town.move_desk",
+        `a cross-room drop sent ${JSON.stringify(moves[before])}`,
+      );
+      await landed(drawn, "a desk moved to another room");
+      moved = true;
+      break;
+    }
+    check(moved, "no visible room took a carried desk");
   } else check(false, "no two visible desks share a room");
 
   // Town shows no move icons; moving is by drag, hold or the keyboard.
