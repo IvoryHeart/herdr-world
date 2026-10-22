@@ -387,6 +387,47 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
     }
     return true;
   };
+  /**
+   * A window opened in the background (Town's docked master chat): it neither
+   * takes the selection nor cancels the user's own open, and once it exists
+   * the window that was on top is raised again.
+   */
+  const backgroundOpenRef = useRef<{ id: string; keep: string | null } | null>(
+    null,
+  );
+  const openInBackground = (id: string, requestedView: InspectorView) => {
+    const next = world.nodeById.get(id);
+    if (!next || next.kind === "host" || !next.actionable) return false;
+    const windowId = worldInspectorWindowIdForNode(next);
+    if (
+      inspectorConversationsRef.current.some(
+        (conversation) => worldInspectorWindowId(conversation) === windowId,
+      )
+    )
+      return true;
+    const conversation = conversationFor(next, requestedView, world);
+    if (!conversation) return false;
+    backgroundOpenRef.current = { id: windowId, keep: activeInspectorId };
+    const nextConversations = [
+      ...inspectorConversationsRef.current,
+      conversation,
+    ];
+    inspectorConversationsRef.current = nextConversations;
+    onInspectorConversationsChange(nextConversations);
+    return true;
+  };
+  useLayoutEffect(() => {
+    const pending = backgroundOpenRef.current;
+    if (!pending || !managedWindows.windows[pending.id]) return;
+    backgroundOpenRef.current = null;
+    if (
+      pending.keep &&
+      pending.keep !== pending.id &&
+      managedWindows.windows[pending.keep] &&
+      activeInspectorId === pending.id
+    )
+      windowCommand({ type: "raise", id: pending.keep });
+  }, [managedWindows, activeInspectorId, windowCommand]);
   useLayoutEffect(() => {
     const focusPane = (windowId: string, paneId: string) => {
       const conversation = inspectorConversationsRef.current.find(
@@ -1038,6 +1079,7 @@ export function useWorldInspectorController(props: WorldControlPlaneProps) {
   );
   return {
     ...props,
+    openInBackground,
     watchlistStore,
     watchlist,
     pinnedOnly,
