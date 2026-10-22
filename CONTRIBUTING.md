@@ -175,9 +175,13 @@ The film at `site/film/` draws its Town with the app's own Town code:
 `site/film/town-art.ts` re-exports the layout, painting and sprite functions from
 `web/src/world/town/`, and the build bundles it into `film/town-art.js`, so open the
 film from `.pages-dist/`, not from `site/`. Changes to Town's art reach the film on the
-next site build. `film/?t=<seconds>` opens the film at a frame and `?render` drops the
-page chrome for 1920×1080 captures; regenerate `site/assets/herdr-world-film-poster.jpg`
-(1280×720) from a rendered frame when the film changes.
+next site build, and the Pages workflow redeploys when Town's art changes.
+`scripts/pages-film.test.ts` renders every frame in headless Chrome, with and without
+reduced motion, so a Town change that breaks the film fails the gate.
+`film/?t=<seconds>` opens the film at a frame and `?render` drops the page chrome for
+1920×1080 captures; regenerate the social-card poster
+`site/assets/herdr-world-film-poster.jpg` (1280×720, JPEG quality about 60) from a
+rendered frame when the film changes.
 
 Serve `.pages-dist/` locally and check the homepage and `/tutorial/`, narrow screens, keyboard
 navigation, and JavaScript-disabled reading. Production canonical URLs, social

@@ -7,6 +7,9 @@ on:
             - site/**
             - docs/TUTORIAL.md
             - docs/images/**
+            - web/src/world/town/**
+            - web/src/world/terminalColor.ts
+            - shared/terminalColor.ts
             - scripts/build-pages.ts
             - scripts/pages-content.ts
             - scripts/pages-*.test.ts
@@ -48,8 +51,8 @@ jobs:
               uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
               with:
                   enablement: true
-            - name: Test tutorial rendering and site references
-              run: bun test scripts/pages-content.test.ts scripts/pages-workflow.test.ts
+            - name: Test tutorial rendering, site references and the film
+              run: bun test scripts/pages-content.test.ts scripts/pages-workflow.test.ts scripts/pages-film.test.ts
             - name: Build landing page and tutorial
               run: bun run build:site
             - name: Upload Pages artifact

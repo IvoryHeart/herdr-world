@@ -39,6 +39,10 @@ test("Pages deploys on main pushes or manual dispatch and checks installer avail
       "site/**",
       "docs/TUTORIAL.md",
       "docs/images/**",
+      // The film bundles Town's art (site/film/town-art.ts).
+      "web/src/world/town/**",
+      "web/src/world/terminalColor.ts",
+      "shared/terminalColor.ts",
       "scripts/build-pages.ts",
       "scripts/pages-content.ts",
       "scripts/pages-*.test.ts",

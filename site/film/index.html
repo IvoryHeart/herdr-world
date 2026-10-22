@@ -117,6 +117,23 @@
     position: fixed; left: 0; right: 0; bottom: 0; padding: 18px 12px 10px;
     background: linear-gradient(rgba(0,0,0,0), rgba(0,0,0,.78));
   }
+  .wrap.pseudo-full {
+    position: fixed; inset: 0; z-index: 10; width: 100vw; height: 100dvh; max-width: none; display: block; background: #000;
+  }
+  .wrap.pseudo-full .eyebrow, .wrap.pseudo-full .note, .wrap.pseudo-full .transcript { display: none; }
+  .wrap.pseudo-full .stage { width: 100%; height: 100%; aspect-ratio: auto; border: 0; border-radius: 0; }
+  .wrap.pseudo-full .bar {
+    position: fixed; left: 0; right: 0; bottom: 0; padding: 18px 12px 10px;
+    background: linear-gradient(rgba(0,0,0,0), rgba(0,0,0,.78));
+  }
+  .rotate-hint {
+    display: none; position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+    padding: 8px 14px; border-radius: 999px; background: rgba(16,21,33,.92); border: 1px solid var(--line);
+    color: var(--soft); font-size: 13px; white-space: nowrap; pointer-events: none;
+  }
+  @media (orientation: portrait) {
+    .wrap.pseudo-full .rotate-hint, .wrap:fullscreen .rotate-hint { display: block; }
+  }
   @media (prefers-reduced-motion: reduce) {
     .big-play .disc { transition: none; }
   }
@@ -127,11 +144,12 @@
   <div class="eyebrow"><a href="../">← Herdr.World</a><span>Promoted to CEO · 62 s · sound on</span></div>
   <div class="stage">
     <canvas id="film" width="1920" height="1080" role="img" aria-label="Animated film: Promoted to CEO, about Herdr.World. A text version follows the player." aria-describedby="film-summary"></canvas>
+    <p class="rotate-hint" aria-hidden="true">Turn your phone sideways for a bigger picture</p>
     <button class="big-play" id="bigplay" type="button" aria-label="Play the film">
       <span class="disc"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3l16 9-16 9z"/></svg></span>
     </button>
   </div>
-  <p id="film-summary" class="sr-only">Your AI agents become pixel people in a Town: workspaces are rooms and tabs are desks. Finished or blocked agents queue at reception, checked agents rest in the lounge, and you answer them in Chat. Every host is a building. Board shows the same terminals as cards and strings, and the phone app lets you reply from anywhere.</p>
+  <p id="film-summary" class="sr-only">Your AI agents become pixel people in a Town: workspaces are rooms and tabs are desks. Finished or blocked agents queue at reception, checked agents rest in the lounge, and you answer them in Chat, from a peek or a chat window docked beside Town. Every host is a building. Board shows the same terminals as cards and strings, and the phone app lets you reply from anywhere.</p>
   <div class="bar">
     <button id="play" type="button">Play</button>
     <button id="restart" type="button" aria-label="Restart from the beginning">↺</button>
@@ -149,15 +167,15 @@
       <li><b>0:13 — Town.</b> The roof lifts off a pixel office. “Workspaces are rooms. Tabs are desks.” Each desk carries a nameplate in its terminal’s colour, and agents type at their tables.</li>
       <li><b>0:17 — Reception.</b> One agent finishes and walks to reception with a ✓; another needs an answer and joins the queue with a “?”. “Done or stuck? They come to reception.”</li>
       <li><b>0:21 — Lounge.</b> The finished work is checked, so that agent heads to the lounge sofa. “Checked off? Off to the lounge.”</li>
-      <li><b>0:24 — Chat.</b> A click on the waiting agent opens the Inspector’s Chat tab: “Push 3 commits to origin and open a PR?” You reply “Yes, push it and open the PR.” The agent walks back to its desk. “Answer in Chat. Back to work.”</li>
+      <li><b>0:24 — Chat.</b> A click on the waiting agent opens its peek, which shows its latest Chat message, “Push 3 commits to origin and open a PR?”, with answers and a reply box. Open chat docks the conversation as a window on the right; you reply “Yes, push it and open the PR.” and the agent walks back to its desk. “Answer in Chat. Peek to reply, or dock the chat.”</li>
       <li><b>0:27 — Every host.</b> The camera pulls back to a street of three buildings, one per host, each with its own reception board. “Every host is a building. Local or over plain OpenSSH. Nothing to install remotely but Herdr.”</li>
       <li><b>0:37 — Board.</b> The same terminals appear as cards strung to their workspaces, in the same colours; sticky notes drop in and are strung to the work they describe. “Plan on the Board.”</li>
-      <li><b>0:46 — Pocket.</b> A phone shows Town and a notification: an agent on another host needs you. You answer it in Chat and it goes back to work. “Herd from your pocket.”</li>
+      <li><b>0:46 — Pocket.</b> A phone shows Town and a notification: an agent on another host needs you. Its chat fills the phone screen; you answer and it goes back to work. “Herd from your pocket.”</li>
       <li><b>0:53 — Finale.</b> The whole herd walks across the screen. “Stop babysitting. Start herding.” Install with <code>npx @ivoryheart/herdr-world</code> from https://herdr.world.</li>
     </ol>
   </details>
   <p class="note">Everything here is drawn and scored live in your browser: canvas pixels and Web Audio, no video file.
-    The Town is painted by Herdr.World’s own Town code, so its rooms, desks and people are the app’s. Respects reduced motion: camera shake and flashes are off when your system asks for less motion.
+    The Town is painted by Herdr.World’s own Town code, so its rooms, desks and people are the app’s. Respects reduced motion: when your system asks for less motion, camera moves become cuts and shake, flashes and slides are off.
     Get Herdr.World at <a href="../#install">https://herdr.world</a>.
     Fonts: Big Shoulders, JetBrains Mono and Silkscreen (<a href="./fonts/OFL.txt">SIL Open Font License 1.1</a>).</p>
 </div>
@@ -308,7 +326,7 @@ const CC = [
   [14.2, 17.3, 'Workspaces are rooms. Tabs are desks.'],
   [17.6, 20.8, 'Done or stuck? They come to reception.'],
   [21.0, 23.7, 'Checked off? Off to the lounge.'],
-  [23.9, 27.1, 'Answer in Chat. Back to work.'],
+  [23.9, 27.1, 'Answer in Chat. Peek to reply, or dock the chat.'],
   [30.6, 33.9, 'Every host is a building. One town.'],
   [34.0, 36.9, 'Local or over plain OpenSSH. Nothing to install remotely but Herdr.'],
   [37.7, 45.9, 'Plan on the Board: cards and strings, in the same colours as Town.'],
@@ -381,7 +399,7 @@ const promptT = i => (i === 5 ? 1.8 : i === 10 ? 3.1 : i === 2 ? 4.0 : 4.8 + has
 function S1(t) {
   const [cols, rows, t0] = gridAt(t);
   const pop = t0 ? .07 * (1 - eo(seg(t, t0, t0 + .3))) : 0;
-  const zoom = 1 + t * .012 + pop;
+  const zoom = REDUCED ? 1 : 1 + t * .012 + pop;
   const [sx, sy] = shake(t, t > 6 ? (t - 6) * 2.4 : 0);
   ctx.save();
   ctx.translate(W / 2 + sx, H / 2 + sy); ctx.scale(zoom, zoom); ctx.translate(-W / 2, -H / 2);
@@ -485,7 +503,7 @@ TOWN_ROOMS.forEach(r => r[3].forEach(d => { DESK_COLOR[d[0]] = d[2]; }));
 const AGENTS = [
   { k: 'builder', kind: 'claude', desk: 'web', seat: 0 },
   { k: 'stylist', kind: 'gemini', desk: 'web', seat: 1 },
-  { k: 'reviewer', kind: 'codex', desk: 'api', seat: 0, st: [[18.2, 'blocked'], [25.9, 'working']], moves: [[18.6, 20.5, 'queue', 1], [26.4, 28.6, 'seat']] },
+  { k: 'reviewer', kind: 'codex', desk: 'api', seat: 0, st: [[18.2, 'blocked'], [26.1, 'working']], moves: [[18.6, 20.5, 'queue', 1], [26.4, 28.6, 'seat']] },
   { k: 'scribe', kind: 'claude', desk: 'docs', seat: 0, st: [[17.4, 'done'], [21.0, 'idle']], moves: [[17.8, 19.7, 'queue', 0], [21.25, 23.3, 'lounge', 2]] },
   { k: 'migrator', kind: 'claude', desk: 'cli', seat: 0 },
   { k: 'tester', kind: 'codex', desk: 'checks', seat: 0 },
@@ -827,29 +845,79 @@ const DESK_CHAT = [
   ['you', 'Fix the expired-session bug in api, then run the tests.', -1],
   ['agent', 'Fixed: expired sessions now refresh before retrying. 214 tests pass.', -1],
   ['agent', 'Push 3 commits to origin and open a PR?', -1, true],
-  ['you', 'Yes, push it and open the PR.', 25.75],
-  ['agent', 'Pushed. PR #42 is open.', 26.25]
+  ['you', 'Yes, push it and open the PR.', 25.95],
+  ['agent', 'Pushed. PR #42 is open.', 26.4]
 ];
-function inspectorChat(t) {
-  const op = eback(seg(t, 24.55, 24.9)) * (1 - eio(seg(t, 26.95, 27.3)));
+// Town's panels: dark glass with a hard edge, as in the Town prototype.
+function townPanel(x, y, w, h) {
+  ctx.shadowColor = 'rgba(0,0,0,.45)'; ctx.shadowBlur = 30; ctx.shadowOffsetY = 10;
+  fillRR(x, y, w, h, 12, 'rgba(17,21,29,.95)'); ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
+  strokeRR(x, y, w, h, 12, '#090c11', 2); strokeRR(x + 2, y + 2, w - 4, h - 4, 10, 'rgba(255,255,255,.07)', 1);
+}
+function townButton(x, y, w, h, label, o = {}) {
+  fillRR(x, y, w, h, 9, o.hot ? '#e3aa3a' : o.on ? '#3a4459' : '#273141');
+  if (o.ring) strokeRR(x, y, w, h, 9, C.blueB, 3);
+  text(label, x + w / 2, y + h * .64, o.size || 17, o.hot ? '#1f1606' : C.text, { weight: 700, align: 'center' });
+}
+/** The reviewer's place at reception, on screen. */
+function reviewerAt(t) {
+  const b = TW.hosts.get('laptop'), q = b.queue[1], cam = townCam(t);
+  return [W / 2 + ((q.x + .5) * TT - cam.x) * cam.z, H / 2 + ((q.y + 1) * TT - 26 - cam.y) * cam.z];
+}
+const PEEK_W = 480, PEEK_H = 334;
+function peekBox(t) { const [ax, ay] = reviewerAt(t); return [clamp(ax - PEEK_W / 2, 700, W - PEEK_W - 20), ay - PEEK_H - 60]; }
+// A click on an agent opens its peek: the latest Chat message and a reply.
+function townPeek(t) {
+  const op = eback(seg(t, 24.3, 24.5)) * (1 - seg(t, 24.85, 25.0));
   if (op <= .01) return;
-  const x = 60, y = 200, w = 640, h = 760;
-  ctx.save(); ctx.translate(x + w / 2, y + h / 2); ctx.scale(op, op); ctx.translate(-x - w / 2, -y - h / 2);
-  ctx.shadowColor = 'rgba(0,0,0,.6)'; ctx.shadowBlur = 40; fillRR(x, y, w, h, 12, C.panel); ctx.shadowBlur = 0;
-  strokeRR(x, y, w, h, 12, C.blue, 2);
-  fillRR(x + 18, y + 16, 44, 56, 8, C.panel3); person('reviewer', x + 40, y + 66, 2.2);
-  text('reviewer', x + 78, y + 42, 22, C.text, { weight: 700 });
-  text('codex · api · Atlas · laptop', x + 78, y + 66, 15, C.muted);
-  const need = t < 25.9;
-  fillRR(x + w - 148, y + 26, 128, 32, 16, need ? C.amber : C.green);
-  text(need ? 'needs you' : 'working', x + w - 84, y + 48, 15, '#0b0f18', { weight: 700, align: 'center' });
-  ['Terminal', 'Files', 'Changes', 'Chat'].forEach((tb, k) => {
-    const tx = x + 18 + k * 152; fillRR(tx, y + 88, 144, 38, 7, k === 3 ? C.blueD : C.panel2);
-    text(tb, tx + 72, y + 113, 16, k === 3 ? C.text : C.soft, { weight: 700, align: 'center' });
-  });
-  chatBody(x + 22, y + 140, w - 44, h - 236, t, DESK_CHAT, 19);
-  composer(x + 18, y + h - 80, w - 36, 62, t, 'Yes, push it and open the PR.', 25.0, 25.55, 25.75, 18);
+  const [x, y] = peekBox(t), w = PEEK_W;
+  ctx.save(); ctx.translate(x + w / 2, y + PEEK_H); ctx.scale(op, op); ctx.translate(-x - w / 2, -y - PEEK_H);
+  townPanel(x, y, w, PEEK_H);
+  fillRR(x + 14, y + 14, 44, 50, 6, '#1b2230'); person('reviewer', x + 36, y + 60, 2);
+  text('reviewer', x + 70, y + 38, 20, C.text, { fam: F.px, weight: 700 });
+  text('codex · api · Atlas · needs you', x + 70, y + 60, 15, '#a9b2a4');
+  fillRR(x + 14, y + 76, w - 28, 92, 8, '#0d1117');
+  text('CHAT · LATEST', x + 28, y + 100, 12, '#a9b2a4', { fam: F.px, weight: 700 });
+  wrap('Push 3 commits to origin and open a PR?', w - 60, 18).forEach((l, k) => text(l, x + 28, y + 128 + k * 24, 18, '#ffd166'));
+  townButton(x + 14, y + 180, (w - 34) / 2, 42, 'Yes  ¹');
+  townButton(x + 20 + (w - 34) / 2, y + 180, (w - 34) / 2, 42, 'No  ²');
+  fillRR(x + 14, y + 232, w - 110, 42, 9, '#0d1117'); strokeRR(x + 14, y + 232, w - 110, 42, 9, '#090c11', 2);
+  text('Reply… (just start typing)', x + 28, y + 259, 16, '#a9b2a4');
+  townButton(x + w - 88, y + 232, 74, 42, 'Send', { size: 16 });
+  townButton(x + 14, y + 284, (w - 34) / 2, 36, 'Open chat ›', { hot: true, size: 16, ring: t >= 24.8 && t < 24.95 });
+  townButton(x + 20 + (w - 34) / 2, y + 284, (w - 34) / 2, 36, 'Terminal', { size: 16 });
   ctx.restore();
+}
+// Chat opens as a window docked on the right of Town.
+function chatDock(t) {
+  const p = seg(t, 24.9, 25.25), out = seg(t, 26.95, 27.3);
+  if (p <= 0 || out >= 1) return;
+  const dw = 640, x = W - 16 - dw, y = 78, h = H - y - 16;
+  const slide = REDUCED ? 0 : (1 - eo(p) + eio(out)) * (dw + 40);
+  withA(REDUCED ? p * (1 - out) : 1, () => {
+    ctx.save(); ctx.translate(slide, 0);
+    townPanel(x, y, dw, h);
+    townButton(x + 12, y + 12, 44, 44, '‹', { size: 24 });
+    fillRR(x + 66, y + 10, 40, 48, 6, '#1b2230'); person('reviewer', x + 86, y + 54, 1.8);
+    text('reviewer', x + 118, y + 32, 20, C.text, { fam: F.px, weight: 700 });
+    text('codex · api · Atlas · laptop', x + 118, y + 54, 15, '#a9b2a4');
+    const need = t < 26.1;
+    fillRR(x + dw - 238, y + 18, 118, 32, 16, need ? '#ffb547' : '#6fc3ff');
+    text(need ? 'needs you' : 'working', x + dw - 179, y + 40, 15, '#11151c', { weight: 700, align: 'center' });
+    townButton(x + dw - 108, y + 12, 94, 44, 'Next ›', { size: 16 });
+    ctx.fillStyle = 'rgba(255,255,255,.07)'; ctx.fillRect(x + 2, y + 68, dw - 4, 1); ctx.fillRect(x + 2, y + 120, dw - 4, 1);
+    ['Chat', 'Terminal', 'Files', 'Changes'].forEach((tb, k) => townButton(x + 12 + k * 118, y + 78, 110, 34, tb, { on: !k, size: 15 }));
+    const answers = t < 25.95;
+    const bottom = y + h - 84 - (answers ? 56 : 0);
+    fillRR(x + 12, y + 130, dw - 24, bottom - y - 140, 8, '#0d1117');
+    chatBody(x + 28, y + 140, dw - 56, bottom - y - 164, t, DESK_CHAT, 19);
+    if (answers) {
+      townButton(x + 12, y + h - 132, (dw - 30) / 2, 46, 'Yes, push it');
+      townButton(x + 18 + (dw - 30) / 2, y + h - 132, (dw - 30) / 2, 46, 'Not yet');
+    }
+    composer(x + 12, y + h - 76, dw - 24, 62, t, 'Yes, push it and open the PR.', 25.35, 25.8, 25.95, 18);
+    ctx.restore();
+  });
 }
 
 // ================= SCENES 3+4: Town, then every host =================
@@ -860,7 +928,8 @@ function townCam(t) {
   const close = { x: b.x * TT + 340 / cz, y: b.y * TT + 474 / cz, z: cz };
   const wide = { x: b.x * TT + b.w * TT / 2, y: 330, z: 1.1 };
   const far = { x: street.width * TT / 2, y: 372, z: .88 };
-  const p = eio(seg(t, 13.3, 14.9)), q = eio(seg(t, 27.2, 30.0));
+  // Less motion: cut between framings instead of zooming.
+  const p = REDUCED ? 1 : eio(seg(t, 13.3, 14.9)), q = REDUCED ? (t >= 28.4 ? 1 : 0) : eio(seg(t, 27.2, 30.0));
   const mix = (a, c, k) => ({ x: lerp(a.x, c.x, k), y: lerp(a.y, c.y, k), z: lerp(a.z, c.z, k) });
   return mix(mix(wide, close, p), far, q);
 }
@@ -880,6 +949,7 @@ function S34(t) {
       g.addColorStop(0, 'rgba(8,11,18,.94)'); g.addColorStop(.72, 'rgba(8,11,18,.82)'); g.addColorStop(1, 'rgba(8,11,18,0)');
       ctx.fillStyle = g; ctx.fillRect(0, 0, 820, H);
     });
+    if (REDUCED) withA(1 - Math.abs(t - 28.4) / .5, () => { ctx.fillStyle = C.bg; ctx.fillRect(0, 0, W, H); });
     appBar(t, 'Town', -76 * (1 - eo(seg(t, 13.25, 13.75))));
     const L = { x: 64, align: 'left', size: 90 };
     caption(t, 14.2, 17.3, 'Workspaces', { ...L, y: 400 });
@@ -892,15 +962,16 @@ function S34(t) {
     caption(t, 18.6, 20.8, '✓ finished  ·  ? needs you', { ...L, y: 750, size: 34, fam: F.mono, weight: 700, color: C.soft, stagger: .03 });
     caption(t, 21.0, 23.7, 'Checked off?', { ...L, y: 480 });
     caption(t, 21.3, 23.7, 'Off to the *lounge.*', { ...L, y: 600 });
-    caption(t, 23.9, 27.1, 'Answer in *Chat.*', { ...L, y: 160, size: 80, accent: C.green });
-    inspectorChat(t);
-    // cursor to the waiting reviewer
-    if (t >= 23.6 && t < 24.9) {
-      const b = TW.hosts.get('laptop'), q = b.queue[1], cam = townCam(t);
-      const tx = W / 2 + ((q.x + .5) * TT - cam.x) * cam.z, ty = H / 2 + ((q.y + 1) * TT - 26 - cam.y) * cam.z;
-      const cp = eio(seg(t, 23.6, 24.3));
-      const mx = lerp(1500, tx, cp), my = lerp(980, ty, cp);
-      clickRing(mx, my, t, 24.35); pointer(mx, my);
+    caption(t, 23.9, 27.1, 'Answer in *Chat.*', { ...L, y: 470, accent: C.green });
+    caption(t, 24.4, 27.1, 'Peek to reply, or dock the chat.', { ...L, y: 560, size: 34, fam: F.mono, weight: 700, color: C.soft, stagger: .03 });
+    townPeek(t);
+    chatDock(t);
+    // cursor: the waiting reviewer, then the peek's Open chat
+    if (t >= 23.6 && t < 25.0) {
+      const [tx, ty] = reviewerAt(t), [px, py] = peekBox(t);
+      const cp = eio(seg(t, 23.6, 24.2)), op = eio(seg(t, 24.45, 24.8));
+      const mx = lerp(lerp(1500, tx, cp), px + 110, op), my = lerp(lerp(980, ty, cp), py + 300, op);
+      clickRing(mx, my, t, 24.25); clickRing(mx, my, t, 24.85); pointer(mx, my);
     }
     band(t, 30.5, 37.0, 120, 250);
     caption(t, 30.6, 33.9, 'Every host is a *building.* One town.', { y: 150, size: 100 });
@@ -1019,7 +1090,7 @@ function S6(t) {
   withA(A, () => {
     const g = ctx.createRadialGradient(1440, 540, 50, 1440, 540, 900);
     g.addColorStop(0, 'rgba(73,121,223,.28)'); g.addColorStop(1, 'rgba(8,11,18,0)'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
-    const rise = 1 - eo(seg(t, 46.0, 46.9));
+    const rise = REDUCED ? 0 : 1 - eo(seg(t, 46.0, 46.9));
     const [bx, by] = (t > 47.7 && t < 48.5) ? shake(t, 9) : [0, 0];
     const px = 1440 - 220 + bx, py = 90 + rise * 1000 + by, pw = 440, ph = 900;
     ctx.save();
@@ -1047,12 +1118,11 @@ function S6(t) {
       }
     } else {
       ctx.fillStyle = '#0d111b'; ctx.fillRect(sx, sy + 56, sw, 64);
-      text('‹ Back', sx + 20, sy + 95, 17, C.blueB, { weight: 700 });
-      text('metrics · gpu-box', sx + sw - 20, sy + 95, 16, C.text, { weight: 700, align: 'right' });
-      ['Terminal', 'Files', 'Chat'].forEach((tb, k) => {
-        const tx = sx + 16 + k * 124; fillRR(tx, sy + 132, 116, 36, 7, k === 2 ? C.blueD : C.panel2);
-        text(tb, tx + 58, sy + 156, 15, k === 2 ? C.text : C.soft, { weight: 700, align: 'center' });
-      });
+      // On a phone the chat window fills the screen; Back returns to Town.
+      townButton(sx + 14, sy + 66, 44, 44, '‹', { size: 24 });
+      text('metrics', sx + 70, sy + 86, 18, C.text, { fam: F.px, weight: 700 });
+      text('gemini · Train · gpu-box', sx + 70, sy + 106, 14, '#a9b2a4');
+      ['Chat', 'Terminal', 'Files'].forEach((tb, k) => townButton(sx + 14 + k * 124, sy + 132, 116, 36, tb, { on: !k, size: 15 }));
       chatBody(sx + 16, sy + 184, sw - 32, 560, t, PHONE_CHAT, 18);
       composer(sx + 14, sy + 758, sw - 28, 58, t, 'Keep the best three.', 49.6, 50.05, 50.3, 16);
       if (t >= 51.1) {
@@ -1170,11 +1240,12 @@ function buildScore() {
   E(18.2, A => { A.tone(18.2, { f: mf(72), dur: .12, type: 'square', vol: .07, lp: 3000 }); A.tone(18.34, { f: mf(79), dur: .22, type: 'square', vol: .07, lp: 3000 }); });
   E(21.0, A => { A.tone(21.0, { f: mf(67), dur: .18, type: 'triangle', vol: .12 }); A.tone(21.18, { f: mf(60), dur: .3, type: 'triangle', vol: .12 }); });
   E(23.3, A => { A.tone(23.3, { f: 2600, dur: .25, type: 'sine', vol: .08 }); A.tone(23.3, { f: 3900, dur: .2, type: 'sine', vol: .05 }); });
-  E(24.35, A => A.noise(24.35, { dur: .03, vol: .3, type: 'highpass', freq: 2000 }));
-  E(24.55, A => A.noise(24.55, { dur: .25, vol: .12, type: 'bandpass', freq: 800, freq2: 3000, q: 1 }));
-  for (let k = 0; k < 9; k++) { const tt = 25.0 + k * .06; E(tt, A => A.noise(tt, { dur: .018, vol: .08, type: 'bandpass', freq: 2200 + hash(k + 7) * 1500, q: 2 })); }
-  E(25.75, A => A.tone(25.75, { f: mf(79), f2: mf(86), dur: .12, type: 'sine', vol: .12 }));
-  E(26.25, A => [72, 76, 79, 84].forEach((m, k) => A.tone(26.25 + k * .06, { f: mf(m), dur: .25, type: 'triangle', vol: .15 })));
+  [24.25, 24.85].forEach(tt => E(tt, A => A.noise(tt, { dur: .03, vol: .3, type: 'highpass', freq: 2000 })));
+  E(24.3, A => A.tone(24.3, { f: mf(76), f2: mf(83), dur: .1, type: 'sine', vol: .08 }));
+  E(24.9, A => A.noise(24.9, { dur: .3, vol: .12, type: 'bandpass', freq: 800, freq2: 3000, q: 1 }));
+  for (let k = 0; k < 9; k++) { const tt = 25.35 + k * .05; E(tt, A => A.noise(tt, { dur: .018, vol: .08, type: 'bandpass', freq: 2200 + hash(k + 7) * 1500, q: 2 })); }
+  E(25.95, A => A.tone(25.95, { f: mf(79), f2: mf(86), dur: .12, type: 'sine', vol: .12 }));
+  E(26.4, A => [72, 76, 79, 84].forEach((m, k) => A.tone(26.4 + k * .06, { f: mf(m), dur: .25, type: 'triangle', vol: .15 })));
   // S4
   E(27.2, A => A.noise(27.2, { dur: 1.8, vol: .2, type: 'bandpass', freq: 3500, freq2: 250, q: 1.5 }));
   [29.2, 29.4, 29.6].forEach((tt, k) => E(tt, A => A.tone(tt, { f: mf(81 + k * 2), f2: mf(93 + k * 2), dur: .14, type: 'square', vol: .05, lp: 4000 })));
@@ -1253,6 +1324,8 @@ function startAudio(from) {
 }
 function stopAudio() { if (audio) { try { audio.close(); } catch (e) {} audio = null; } }
 const $ = id => document.getElementById(id);
+const wrapEl = document.querySelector('.wrap');
+const isFull = () => document.fullscreenElement === wrapEl || wrapEl.classList.contains('pseudo-full');
 const fmt = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 function speak() {
   const line = playing ? (CC.find(([a, b]) => cur >= a && cur < b) || [])[2] || '' : '';
@@ -1265,7 +1338,7 @@ function ui() {
   $('clock').textContent = `${fmt(cur)} / ${fmt(DUR)}`; $('scrub').value = Math.round(cur * 10);
   $('bigplay').hidden = playing;
   $('bigplay').setAttribute('aria-label', cur >= DUR - .1 ? 'Replay the film' : cur > 0 ? 'Resume the film' : 'Play the film');
-  const fullscreen = document.fullscreenElement === document.querySelector('.wrap');
+  const fullscreen = isFull();
   $('fullscreen').textContent = fullscreen ? 'Exit full screen' : 'Full screen';
   $('fullscreen').setAttribute('aria-pressed', String(fullscreen));
   document.body.classList.toggle('playing', playing);
@@ -1311,11 +1384,17 @@ if (!RENDER) {
   $('restart').addEventListener('click', () => { cur = 0; if (playing) seek(0); else play(); });
   $('scrub').addEventListener('input', e => seek(e.target.value / 10));
   $('mute').addEventListener('click', () => { muted = !muted; if (playing) { muted ? stopAudio() : startAudio(cur); } ui(); });
-  $('fullscreen').hidden = !document.fullscreenEnabled;
+  // Without the Fullscreen API (iPhone), the player fills the window instead.
+  // An embedded player cannot leave its frame that way, so it keeps no button.
+  $('fullscreen').hidden = !document.fullscreenEnabled && EMBED;
   $('fullscreen').addEventListener('click', async () => {
-    if (document.fullscreenElement) await document.exitFullscreen();
-    else await document.querySelector('.wrap').requestFullscreen();
+    if (!document.fullscreenEnabled) { wrapEl.classList.toggle('pseudo-full'); ui(); return; }
+    if (document.fullscreenElement) { await document.exitFullscreen(); return; }
+    await wrapEl.requestFullscreen();
+    // Phones in portrait otherwise show a thin 16:9 strip.
+    try { await screen.orientation.lock('landscape'); } catch (e) {}
   });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && wrapEl.classList.contains('pseudo-full')) { wrapEl.classList.remove('pseudo-full'); ui(); } });
   document.addEventListener('fullscreenchange', ui);
   document.addEventListener('keydown', e => { if (e.code === 'Space' && e.target.tagName !== 'BUTTON' && e.target.tagName !== 'INPUT' && e.target.tagName !== 'SUMMARY') { e.preventDefault(); playing ? pause() : play(); } });
   document.addEventListener('visibilitychange', () => { if (document.hidden && playing) pause(); });
