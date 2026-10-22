@@ -54,7 +54,11 @@ export class WorldAsksStore {
           void this.refresh();
       }),
       this.client.onStatus((status) => {
-        if (status === "connected") void this.refresh();
+        // A restarted service may count revisions from the start again.
+        if (status === "connected") {
+          this.revision = -1;
+          void this.refresh();
+        }
       }),
     ];
     void this.refresh();

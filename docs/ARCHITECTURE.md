@@ -417,8 +417,9 @@ Replies/events have validated, exclusive message kinds; downstream events cannot
 reserved bridge fields. NDJSON lines and subscription acknowledgements are bounded, and
 malformed terminal frames are dropped.
 The agent CLI endpoint `/api/world/cli` is the one route that takes a bearer
-credential instead of a session cookie: the same password or generated token,
-from loopback only and never with an Origin header. Its callers are attributed
+credential instead of a session cookie: a token derived from the session
+signing secret that no other route accepts, from loopback only and never with
+an Origin header. Its callers are attributed
 only after the service places the calling process in the pane it names
 ([agent CLI](development.md#agent-cli)).
 Observable HTTP traversal forms are rejected, but Bun can normalize dot segments

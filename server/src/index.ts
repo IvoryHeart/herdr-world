@@ -43,6 +43,7 @@ import { runTaskSummaryCommand } from "./herdr/task-summary";
 import { runSpawnStampCommand, stampSpawn } from "./herdr/spawn-stamp";
 import {
   handleWorldCliEndpoint,
+  WORLD_CLI_IDLE_TIMEOUT_SECONDS,
   WORLD_CLI_PATH,
 } from "./http/world-cli-endpoint";
 import { answerAsk, CliError, createWorldCli } from "./world/world-cli";
@@ -2410,12 +2411,16 @@ function main() {
             return response;
           }
 
-          if (url.pathname === WORLD_CLI_PATH)
+          if (url.pathname === WORLD_CLI_PATH) {
+            // `ask --wait` holds a call for up to 20 s; Bun's default idle
+            // timeout (10 s) would cut it.
+            server.timeout(req, WORLD_CLI_IDLE_TIMEOUT_SECONDS);
             return handleWorldCliEndpoint(req, server.requestIP(req), {
               serverPort: server.port ?? config.port,
               bearerAuth,
               handle: (body, chain) => worldCli.handle(body as never, chain),
             });
+          }
 
           // Loopback listeners retain World's trusted local access policy.
           if (!isAuthed(req)) {

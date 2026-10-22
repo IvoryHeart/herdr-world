@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import { worldLocalStorage } from "../../browserStorage";
 import type { OfficeAgent } from "../herdrOfficeProjection";
 import type { WorldAsk } from "../worldAsks";
@@ -57,6 +57,7 @@ function TownAsk({
   now: number;
   onAnswer(id: string, text: string): Promise<string | null>;
 }) {
+  const questionId = useId();
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -80,13 +81,14 @@ function TownAsk({
         {ask.actor.label}
         {ask.actor.verified ? "" : " (unverified)"} · {townAgo(ask.at, now)}
       </small>
-      <p>{ask.question}</p>
+      <p id={questionId}>{ask.question}</p>
       {ask.options.length ? (
         <div className="town-ask-options">
-          {ask.options.map((option) => (
+          {ask.options.map((option, index) => (
             <button
-              key={option}
+              key={`${index}:${option}`}
               type="button"
+              aria-describedby={questionId}
               disabled={busy}
               onClick={() => void send(option)}
             >
@@ -98,7 +100,8 @@ function TownAsk({
       <div className="town-ask-reply">
         <input
           value={draft}
-          aria-label="Your answer"
+          aria-label={`Your answer to ${ask.actor.label}`}
+          aria-describedby={questionId}
           placeholder={ask.options.length ? "Or type an answer" : "Your answer"}
           onChange={(event) => setDraft(event.target.value)}
         />
@@ -217,7 +220,12 @@ export function TownRail({
         </button>
       </div>
       {asks.length && !collapsed ? (
-        <div className="town-asks" aria-label="Questions for you">
+        <div
+          className="town-asks"
+          role="region"
+          aria-label="Questions for you"
+          aria-live="polite"
+        >
           {asks.map((ask) => (
             <TownAsk key={ask.id} ask={ask} now={now} onAnswer={onAnswer} />
           ))}

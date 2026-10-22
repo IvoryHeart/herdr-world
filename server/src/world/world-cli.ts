@@ -19,6 +19,7 @@ import {
   RESULT_STATUSES,
   type CliActor,
   type LedgerChange,
+  type LedgerProbe,
   type ResultStatus,
   type WorldLedger,
 } from "./world-ledger";
@@ -192,6 +193,9 @@ function resolveTarget(
   if (target === "me") {
     if (!actor.verified || !actor.pane_id)
       refused("`me` needs a verified pane; run this inside a Herdr pane");
+    // Pane IDs repeat across hosts: `me` is only ever the caller's own host.
+    if (topology.host.connection_id !== actor.connection_id)
+      refused("`me` is on your own host; drop --connection or name a pane");
     return resolveTarget(`pane:${actor.pane_id}`, topology, actor);
   }
   const at = target.indexOf(":");
@@ -254,11 +258,15 @@ function terminalOf(target: Target, topology: Topology): TerminalRef {
 /* ---------- Board changes and their undo ---------- */
 
 function point(params: Record<string, unknown>, name = "point"): BoardPoint {
-  const x = Number(params.x);
-  const y = Number(params.y);
-  if (!Number.isFinite(x) || !Number.isFinite(y))
+  const { x, y } = params;
+  if (
+    typeof x !== "number" ||
+    typeof y !== "number" ||
+    !Number.isFinite(x) ||
+    !Number.isFinite(y)
+  )
     usage(`${name} needs numbers x and y`);
-  return { x, y };
+  return { x: x as number, y: y as number };
 }
 
 function groupOf(groups: readonly RelationGroup[], ref: TerminalRef) {
@@ -267,27 +275,58 @@ function groupOf(groups: readonly RelationGroup[], ref: TerminalRef) {
   );
 }
 
-/** Ops that put `ref` back where it was among `before`'s groups. */
-function restoreGroup(
-  before: readonly RelationGroup[],
-  ref: TerminalRef,
+/** The current value of what a change touched, to compare before an undo. */
+export function probeValue(document: BoardDocument, probe: LedgerProbe) {
+  switch (probe.aspect) {
+    case "pinned":
+      return JSON.stringify(document.layout.pinned[probe.key] ?? null);
+    case "offset":
+      return JSON.stringify(document.layout.offsets[probe.key] ?? null);
+    case "colour":
+      return JSON.stringify(document.layout.colors[probe.key] ?? null);
+    case "group": {
+      const group = probe.ref
+        ? groupOf(document.relations.groups, probe.ref)
+        : undefined;
+      return JSON.stringify(
+        group
+          ? group.members.map((member) => terminalKey(member)).sort()
+          : null,
+      );
+    }
+  }
+}
+
+/** Undo a group change: leave, then rejoin whoever is left of the old group. */
+function regroupOps(
+  document: BoardDocument,
+  regroup: NonNullable<LedgerChange["regroup"]>,
 ): BoardOp[] {
-  const ops: BoardOp[] = [{ op: "group.leave", members: [ref] }];
-  const previous = groupOf(before, ref);
-  const mate = previous?.members.find(
-    (member) => terminalKey(member) !== terminalKey(ref),
+  const ops: BoardOp[] = [{ op: "group.leave", members: [regroup.ref] }];
+  const others = (regroup.members ?? []).filter(
+    (member) => terminalKey(member) !== terminalKey(regroup.ref),
   );
-  if (previous && mate)
+  // Prefer a former teammate still in a group, so the old group is rejoined.
+  const mate =
+    others.find((member) => groupOf(document.relations.groups, member)) ??
+    others[0];
+  if (mate)
     ops.push({
       op: "group.join",
       id: `g-${randomUUID()}`,
-      members: [ref],
+      members: [regroup.ref],
       target: [mate],
     });
   return ops;
 }
 
-type Planned = { ops: BoardOp[]; undo: BoardOp[]; summary: string };
+type Planned = {
+  ops: BoardOp[];
+  undo: BoardOp[];
+  summary: string;
+  probe: LedgerProbe;
+  regroup?: LedgerChange["regroup"];
+};
 
 function planBoard(
   command: WorldCliCommand,
@@ -308,6 +347,7 @@ function planBoard(
           ? [{ op: "layout.set", pinned: { [key]: pinned } }]
           : [{ op: "layout.set", unpinned: [key] }],
         summary: `pinned ${key} at ${at.x},${at.y}`,
+        probe: { aspect: "pinned", key },
       };
     }
     case "board card unpin":
@@ -316,6 +356,7 @@ function planBoard(
         ops: [{ op: "layout.set", unpinned: [key] }],
         undo: [{ op: "layout.set", pinned: { [key]: pinned! } }],
         summary: `unpinned ${key}`,
+        probe: { aspect: "pinned", key },
       };
     case "board card move": {
       const by = point(params, "move --by");
@@ -325,6 +366,7 @@ function planBoard(
           ops: [{ op: "layout.set", pinned: { [key]: at } }],
           undo: [{ op: "layout.set", pinned: { [key]: pinned } }],
           summary: `moved pinned ${key} to ${at.x},${at.y}`,
+          probe: { aspect: "pinned", key },
         };
       }
       const offset = document.layout.offsets[key] ?? { x: 0, y: 0 };
@@ -337,6 +379,7 @@ function planBoard(
         ],
         undo: [{ op: "layout.set", offsets: { [key]: offset } }],
         summary: `moved ${key} by ${by.x},${by.y}`,
+        probe: { aspect: "offset", key },
       };
     }
     case "colour set":
@@ -349,10 +392,25 @@ function planBoard(
         ops: [{ op: "card.color", key, color: colour as never }],
         undo: [{ op: "card.color", key, color: before }],
         summary: colour ? `coloured ${key} ${colour}` : `reset ${key}'s colour`,
+        probe: { aspect: "colour", key },
       };
     }
-    case "board card group": {
+    case "board card group":
+    case "board card ungroup": {
       const ref = terminalOf(target, topology);
+      const previous = groupOf(document.relations.groups, ref);
+      const regroup = { ref, members: previous?.members ?? null };
+      const probe: LedgerProbe = { aspect: "group", key, ref };
+      if (command === "board card ungroup") {
+        if (!previous) refused(`${key} is in no group`);
+        return {
+          ops: [{ op: "group.leave", members: [ref] }],
+          undo: [],
+          summary: `ungrouped ${key}`,
+          probe,
+          regroup,
+        };
+      }
       const mate = terminalOf(
         resolveTarget(params.with, topology, actor),
         topology,
@@ -368,29 +426,10 @@ function planBoard(
             target: [mate],
           },
         ],
-        undo: restoreGroup(document.relations.groups, ref),
+        undo: [],
         summary: `grouped ${key} with ${String(params.with)}`,
-      };
-    }
-    case "board card ungroup": {
-      const ref = terminalOf(target, topology);
-      if (!groupOf(document.relations.groups, ref))
-        refused(`${key} is in no group`);
-      const previous = groupOf(document.relations.groups, ref)!;
-      const mate = previous.members.find(
-        (member) => terminalKey(member) !== terminalKey(ref),
-      )!;
-      return {
-        ops: [{ op: "group.leave", members: [ref] }],
-        undo: [
-          {
-            op: "group.join",
-            id: `g-${randomUUID()}`,
-            members: [ref],
-            target: [mate],
-          },
-        ],
-        summary: `ungrouped ${key}`,
+        probe,
+        regroup,
       };
     }
     default:
@@ -410,7 +449,8 @@ const BOARD_COMMANDS = new Set<WorldCliCommand>([
   "colour reset",
 ]);
 
-const ASK_WAIT_MAX_MS = 25_000;
+/** How long one `ask get` call may hold; the CLI's --wait asks again. */
+export const ASK_WAIT_MAX_MS = 20_000;
 
 export function createWorldCli(deps: WorldCliDeps) {
   const now = deps.now ?? Date.now;
@@ -420,6 +460,7 @@ export function createWorldCli(deps: WorldCliDeps) {
     command: string,
     summary: string,
     undo: BoardOp[] | null,
+    extra: Partial<LedgerChange> = {},
   ) => {
     const id = deps.ledger.nextId("c");
     const change: LedgerChange = {
@@ -429,6 +470,7 @@ export function createWorldCli(deps: WorldCliDeps) {
       command,
       summary,
       undo,
+      ...extra,
     };
     deps.publishLedger(
       deps.ledger.update((document) => document.changes.push(change)),
@@ -439,6 +481,29 @@ export function createWorldCli(deps: WorldCliDeps) {
   const patchBoard = (ops: BoardOp[]) => {
     const document = deps.board.patch(ops);
     deps.publishBoard(document.revision);
+    return document;
+  };
+
+  /**
+   * Change the Board, then record it. The two files cannot change together,
+   * so a change that cannot be recorded is taken back.
+   */
+  const changeBoard = (
+    ops: BoardOp[],
+    revert: BoardOp[],
+    write: (document: BoardDocument) => LedgerChange,
+  ) => {
+    const document = patchBoard(ops);
+    try {
+      return write(document);
+    } catch (error) {
+      try {
+        patchBoard(revert);
+      } catch {
+        // The original error says more.
+      }
+      throw error;
+    }
   };
 
   /** The host a command acts on, with its live topology. */
@@ -493,8 +558,19 @@ export function createWorldCli(deps: WorldCliDeps) {
         topology,
         actor,
       );
-      patchBoard(plan.ops);
-      return record(actor, command, plan.summary, plan.undo);
+      const revert = plan.regroup
+        ? regroupOps(deps.board.get(), plan.regroup)
+        : plan.undo;
+      return changeBoard(plan.ops, revert, (document) =>
+        record(actor, command, plan.summary, plan.undo, {
+          expect: {
+            probe: plan.probe,
+            value: probeValue(document, plan.probe),
+          },
+          redo: plan.ops,
+          ...(plan.regroup ? { regroup: plan.regroup } : {}),
+        }),
+      );
     }
     switch (command) {
       case "whoami":
@@ -548,15 +624,36 @@ export function createWorldCli(deps: WorldCliDeps) {
           refused(
             `${id} changed Herdr, which World cannot take back; make the opposite change instead`,
           );
-        patchBoard(change!.undo!);
-        const undone = record(actor, "undo", `undid ${id}`, null);
-        deps.publishLedger(
-          deps.ledger.update((document) => {
-            const entry = document.changes.find((c) => c.id === id);
-            if (entry) entry.undone_by = undone.id;
-          }),
-        );
-        return undone;
+        const current = deps.board.get();
+        if (
+          change!.expect &&
+          probeValue(current, change!.expect.probe) !== change!.expect.value
+        )
+          refused(
+            `${change!.expect.probe.key} changed after ${id}; undo the later change first, or set it again`,
+          );
+        const ops = change!.regroup
+          ? regroupOps(current, change!.regroup)
+          : change!.undo!;
+        return changeBoard(ops, change!.redo ?? [], () => {
+          const undone: LedgerChange = {
+            id: deps.ledger.nextId("c"),
+            at: now(),
+            actor,
+            command: "undo",
+            summary: `undid ${id}`,
+            undo: null,
+          };
+          // One write records the undo and marks what it undid.
+          deps.publishLedger(
+            deps.ledger.update((document) => {
+              document.changes.push(undone);
+              const entry = document.changes.find((c) => c.id === id);
+              if (entry) entry.undone_by = undone.id;
+            }),
+          );
+          return undone;
+        });
       }
       case "town desk move": {
         if (params.herdr !== true)
@@ -615,6 +712,16 @@ export function createWorldCli(deps: WorldCliDeps) {
           : [];
         if (options.length > LEDGER_LIMITS.options)
           usage(`at most ${LEDGER_LIMITS.options} options`);
+        const open = deps.ledger.get().asks.filter((entry) => !entry.answer);
+        if (open.length >= LEDGER_LIMITS.asks)
+          refused("too many open questions; wait for answers");
+        if (
+          open.filter((entry) => entry.actor.label === actor.label).length >=
+          LEDGER_LIMITS.asksPerActor
+        )
+          refused(
+            `you have ${LEDGER_LIMITS.asksPerActor} open questions; wait for answers`,
+          );
         const id = deps.ledger.nextId("q");
         deps.publishLedger(
           deps.ledger.update((document) =>
@@ -651,6 +758,15 @@ export function createWorldCli(deps: WorldCliDeps) {
         const ask = deps.ledger.get().asks.find((entry) => entry.id === id);
         if (!ask) notFound(`no question ${id}`);
         if (ask!.owner_only) refused("only the owner answers this, in World");
+        // An answer from an agent must come from a pane World has placed,
+        // and never from the agent that asked.
+        if (!actor.verified)
+          refused("only the owner or a verified agent answers questions");
+        if (
+          ask!.actor.connection_id === actor.connection_id &&
+          ask!.actor.pane_id === actor.pane_id
+        )
+          refused("an agent cannot answer its own question");
         if (ask!.answer) refused(`${id} is already answered`);
         deps.publishLedger(
           answerAsk(deps.ledger, id, answer, actor.label, now()),
@@ -747,13 +863,17 @@ export function createWorldCli(deps: WorldCliDeps) {
       } catch (error) {
         if (error instanceof CliError)
           return { ok: false, code: error.code, error: error.message, actor };
-        // Board validation and Herdr refusals are the caller's to fix.
-        return {
-          ok: false,
-          code: "refused",
-          error: (error as Error).message,
-          actor,
-        };
+        const message = error instanceof Error ? error.message : String(error);
+        // Board validation is the caller's to fix; anything else is Herdr or
+        // the service failing.
+        return message.startsWith("invalid board")
+          ? { ok: false, code: "refused", error: message, actor }
+          : {
+              ok: false,
+              code: "unavailable",
+              error: "Herdr or the World service could not do that; try again",
+              actor,
+            };
       }
     },
   };

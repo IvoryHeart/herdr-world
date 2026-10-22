@@ -1,13 +1,16 @@
 import { describe, expect, test } from "bun:test";
+import { worldCliToken } from "../config/session-secret";
 import { createAuthHandlers } from "./auth";
 import { handleWorldCliEndpoint } from "./world-cli-endpoint";
 
-const SECRET = "synthetic-generated-token-0123456789abcdef";
+const PASSWORD = "synthetic-generated-token-0123456789abcdef";
+const SESSION_SECRET = "ab".repeat(32);
+const SECRET = worldCliToken(SESSION_SECRET);
 const auth = () =>
   createAuthHandlers({
     authRequired: true,
-    password: SECRET,
-    sessionSecret: "ab".repeat(32),
+    password: PASSWORD,
+    sessionSecret: SESSION_SECRET,
   } as never);
 
 const request = (headers: Record<string, string> = {}, body = "{}") =>
@@ -74,6 +77,13 @@ describe("the agent CLI endpoint", () => {
       deps(),
     );
     expect(wrong.status).toBe(401);
+    // The login credential is not the CLI token: it cannot be used here.
+    const login = await handleWorldCliEndpoint(
+      request({ authorization: `Bearer ${PASSWORD}` }),
+      local,
+      deps(),
+    );
+    expect(login.status).toBe(401);
     const missing = await handleWorldCliEndpoint(
       request({ authorization: "" }),
       local,
@@ -98,5 +108,38 @@ describe("the agent CLI endpoint", () => {
     expect(
       (await handleWorldCliEndpoint(request(), local, shared)).status,
     ).toBe(429);
+  });
+
+  test("CLI failures never lock the owner out of the login page", async () => {
+    const handlers = auth();
+    const shared = { ...deps(), bearerAuth: handlers.bearerAuth };
+    for (let attempt = 0; attempt < 12; attempt += 1)
+      await handleWorldCliEndpoint(
+        request({ authorization: "Bearer nope" }),
+        local,
+        shared,
+      );
+    const login = await handlers.handleLogin(
+      new Request("http://127.0.0.1:8790/api/login", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ password: PASSWORD }),
+      }),
+      "127.0.0.1",
+    );
+    expect(login.status).toBe(200);
+  });
+});
+
+test("refusals answer in the CLI's shape", async () => {
+  const response = await handleWorldCliEndpoint(
+    request({ authorization: "Bearer nope" }),
+    local,
+    deps(),
+  );
+  expect(await response.json()).toEqual({
+    ok: false,
+    code: "refused",
+    error: "wrong World CLI token",
   });
 });

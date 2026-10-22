@@ -2,6 +2,7 @@ import { existsSync, readFileSync, renameSync } from "node:fs";
 import { join } from "node:path";
 import { dataRoot, replaceDataFile } from "../config/data-paths";
 import { worldEnv } from "../config/environment";
+import type { TerminalRef } from "../../../shared/relations";
 import type { BoardOp } from "./board-store";
 
 /**
@@ -22,6 +23,13 @@ export type CliActor = {
   agent?: string;
 };
 
+/** One aspect of one card or terminal a change touched. */
+export type LedgerProbe = {
+  aspect: "pinned" | "offset" | "colour" | "group";
+  key: string;
+  ref?: TerminalRef;
+};
+
 export type LedgerChange = {
   id: string;
   at: number;
@@ -33,6 +41,12 @@ export type LedgerChange = {
   undo: BoardOp[] | null;
   /** The change that undid this one. */
   undone_by?: string;
+  /** What the change left behind: it is undone only while that still holds. */
+  expect?: { probe: LedgerProbe; value: string };
+  /** The operations that made it, put back if its undo cannot be recorded. */
+  redo?: BoardOp[];
+  /** A group change: the group the terminal was in before, rebuilt on undo. */
+  regroup?: { ref: TerminalRef; members: TerminalRef[] | null };
 };
 
 export type LedgerAsk = {
@@ -74,6 +88,8 @@ export type LedgerDocument = {
 export const LEDGER_LIMITS = {
   changes: 2000,
   asks: 500,
+  /** Open questions one caller may have at once. */
+  asksPerActor: 20,
   results: 1000,
   text: 4000,
   options: 12,
@@ -159,10 +175,12 @@ export class WorldLedger {
     next.revision = this.document.revision + 1;
     trim(next.changes, LEDGER_LIMITS.changes);
     trim(next.results, LEDGER_LIMITS.results);
-    // Keep open questions: drop the oldest answered ones first.
+    // Keep open questions: only answered ones are dropped, oldest first
+    // (`ask` refuses a new question when the open ones fill the list).
     while (next.asks.length > LEDGER_LIMITS.asks) {
       const answered = next.asks.findIndex((ask) => ask.answer);
-      next.asks.splice(answered >= 0 ? answered : 0, 1);
+      if (answered < 0) break;
+      next.asks.splice(answered, 1);
     }
     if (this.options.persist !== false)
       replaceDataFile(this.path, JSON.stringify(next));

@@ -246,16 +246,20 @@ when piped, with stable exit codes:
   and World cannot undo it.
 - `ask "…" [--options a,b] [--owner-only] [--wait]`: a question for you. It
   appears first in Town's **Needs you** list, where you pick an option or
-  type an answer; `--wait` blocks until then. Other agents may answer a
-  question that is not owner-only with `ask answer`.
+  type an answer; `--wait` blocks until then. Another verified agent (never
+  the one that asked) may answer a question that is not owner-only.
 - `result --task ID "…" [--pr N] [--status done|blocked|failed]` and
   `result ls`: task results kept by World, instead of terminal scraping.
-- `spawned-by <parent-pane>`: the spawn stamp, made by the child itself.
+- `spawned-by <parent-pane>`: the spawn stamp, made by the child itself. It
+  is display-only Herdr pane metadata, so it needs no `--herdr`; the parent
+  it names is the child's claim.
 - `whoami`, `ls`, `history [--actor]`.
 
 World checks who is calling: the CLI sends its `HERDR_PANE_ID`, and the
 service accepts it only when the calling process runs in that pane of a local
 Herdr (the pane's shell or foreground process is among its ancestors).
+The CLI reaches only a World service on the same machine, with a token
+derived from the service's signing secret that cannot log a browser in.
 Otherwise the change is labelled unverified, or the owner's terminal when no
 pane is named; `me` and `spawned-by` need a verified pane. The CLI never
 merges, deletes panes, tabs or workspaces, or reaches outside World.

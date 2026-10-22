@@ -8,6 +8,10 @@ import {
   UsageError,
   wantsHelp,
 } from "./command";
+import { dataRoot } from "../config/data-paths";
+import { worldEnv } from "../config/environment";
+import { readWorldCliToken, sessionSecretPath } from "../config/session-secret";
+import { isLoopbackAddress } from "../workspace/file-manager";
 import { readServiceAccess, readServiceSetup } from "./service-context";
 import { WORLD_SKILL } from "./world-skill";
 
@@ -27,6 +31,9 @@ export const WORLD_EXIT = {
   not_found: 4,
   timeout: 5,
 } as const;
+
+/** One held `ask get` call; the service holds at most 20 s. */
+const POLL_MS = 20_000;
 
 const CODE_EXIT: Record<string, number> = {
   usage: WORLD_EXIT.usage,
@@ -48,32 +55,58 @@ export type WorldCliTransport = (
   params: Record<string, unknown>,
 ) => Promise<Reply>;
 
-/** Where the service listens and the credential it takes, as the CLI sees them. */
+/** Where the service listens and the CLI token it takes, as the CLI sees them. */
 function serviceEndpoint(context: CliContext) {
   const env = context.runtime.env;
   let base = env.HERDR_WORLD_URL?.replace(/\/+$/, "");
   let token = env.HERDR_WORLD_TOKEN;
   if (!base || !token) {
-    const access = readServiceAccess(readServiceSetup(context.runtime));
-    const host =
-      access.host === "0.0.0.0" || access.host === "::"
+    const setup = readServiceSetup(context.runtime);
+    const access = readServiceAccess(setup);
+    if (!base) {
+      const wildcard = access.host === "0.0.0.0" || access.host === "::";
+      const host = wildcard
         ? "127.0.0.1"
         : access.host.includes(":")
           ? `[${access.host}]`
           : access.host;
-    base ??= `${access.tls ? "https" : "http"}://${host}:${access.port}`;
-    token ??= access.token;
+      base = `${access.tls ? "https" : "http"}://${host}:${access.port}`;
+    }
+    token ??=
+      readWorldCliToken(
+        sessionSecretPath(
+          worldEnv("SETTINGS_PATH", env) ??
+            worldEnv("SETTINGS_PATH", setup.env),
+          dataRoot(context.runtime.homeDir, context.runtime.platform),
+        ),
+      ) ?? undefined;
   }
+  // The token stays on this machine: the endpoint answers loopback only.
+  const host = new URL(base).hostname.replace(/^\[|\]$/g, "");
+  if (host !== "localhost" && !isLoopbackAddress(host))
+    throw new Error(
+      `the World service listens on ${host}; the agent CLI needs a loopback listener (or HERDR_WORLD_URL on 127.0.0.1)`,
+    );
   if (!token)
     throw new Error(
-      "no World credential: set HERDR_WORLD_TOKEN to the service's token or password",
+      "no World CLI token: start the World service once, or set HERDR_WORLD_TOKEN",
     );
   return { url: `${base}/api/world/cli`, token };
 }
 
 export function httpTransport(context: CliContext): WorldCliTransport {
   return async (command, params) => {
-    const { url, token } = serviceEndpoint(context);
+    let endpoint: ReturnType<typeof serviceEndpoint>;
+    try {
+      endpoint = serviceEndpoint(context);
+    } catch (error) {
+      return {
+        ok: false,
+        code: "unavailable",
+        error: (error as Error).message,
+      };
+    }
+    const { url, token } = endpoint;
     const paneId = context.runtime.env.HERDR_PANE_ID;
     let response: Response;
     try {
@@ -442,7 +475,11 @@ export async function runWorldCommand(
     const id = String((reply.result as { id?: unknown }).id);
     const started = Date.now();
     for (;;) {
-      reply = await transport("ask get", { id, wait_ms: 25_000 });
+      const left = timeoutMs ? timeoutMs - (Date.now() - started) : POLL_MS;
+      reply = await transport("ask get", {
+        id,
+        wait_ms: Math.max(0, Math.min(POLL_MS, left)),
+      });
       const answered = Boolean(
         reply.ok && (reply.result as { answer?: unknown })?.answer,
       );

@@ -11,6 +11,8 @@ import { readJsonBody } from "./json-body";
  */
 
 export const WORLD_CLI_PATH = "/api/world/cli";
+/** Longer than the longest held `ask get` (world-cli.ts ASK_WAIT_MAX_MS). */
+export const WORLD_CLI_IDLE_TIMEOUT_SECONDS = 40;
 const MAX_BODY_BYTES = 64 * 1024;
 
 const STATUS: Record<CliErrorCode, number> = {
@@ -43,14 +45,23 @@ export async function handleWorldCliEndpoint(
       { status: 403 },
     );
   const auth = deps.bearerAuth(req, ip);
-  if (auth !== true)
-    return (
-      auth ??
-      Response.json(
-        { ok: false, code: "refused", error: "missing bearer token" },
-        { status: 401 },
-      )
+  if (auth !== true) {
+    // Answer in the CLI's own shape, keeping the throttle's status and wait.
+    const status = auth?.status ?? 401;
+    const retry = auth?.headers.get("retry-after");
+    return Response.json(
+      {
+        ok: false,
+        code: "refused",
+        error: !auth
+          ? "missing World CLI token"
+          : status === 429
+            ? "too many wrong tokens; wait and try again"
+            : "wrong World CLI token",
+      },
+      { status, headers: retry ? { "retry-after": retry } : {} },
     );
+  }
   let body: unknown;
   try {
     body = await readJsonBody(req, MAX_BODY_BYTES);
@@ -62,7 +73,7 @@ export async function handleWorldCliEndpoint(
   }
   const chain =
     (deps.platform ?? process.platform) === "linux" && peer
-      ? (deps.callerChain ?? callerProcesses)(peer.port, deps.serverPort)
+      ? (deps.callerChain ?? callerProcesses)(peer, deps.serverPort)
       : null;
   const response = await deps.handle(body, chain);
   return Response.json(response, {

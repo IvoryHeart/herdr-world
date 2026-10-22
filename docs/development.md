@@ -250,15 +250,22 @@ runs in that pane.
 `herdr-world --skill` is the agent guide (`server/src/cli/world-skill.ts`).
 The verbs (`server/src/cli/world.ts`) POST to `/api/world/cli` on the running
 service (`server/src/http/world-cli-endpoint.ts`): loopback only, no browser
-Origin, and the login password or generated token as a bearer credential,
-with failed attempts counted like failed logins. The service maps the
-caller's TCP connection to its process through `/proc` and accepts its
+Origin, and a bearer token derived from the session signing secret
+(`worldCliToken`), so it rotates with the login credential and cannot log a
+browser in. Wrong tokens get the login throttle, counted apart from logins so
+they never lock the owner out. One call holds at most 20 s for `ask --wait`. Behind a reverse proxy on
+loopback every peer looks local, so "loopback only" is a transport rule, not
+proof of locality: the token itself stays in the service's private data
+directory, and attribution still needs the caller's process on this machine.
+The service maps the caller's TCP connection (address and port, failing
+closed on any ambiguity) to its process through `/proc` and accepts its
 `HERDR_PANE_ID` only when an ancestor is that pane's shell or foreground
 process (`pane.process_info`) on a local Herdr
 (`server/src/world/caller-identity.ts`). Changes, questions and results live
 in `world-ledger.json` beside the Board file (`HERDR_WORLD_LEDGER_PATH`
-overrides it). To try it against a development service, set
-`HERDR_WORLD_URL` and `HERDR_WORLD_TOKEN`, and point the service at a
+overrides it). To try it against a development service, run the CLI with the
+same `HOME` (or set `HERDR_WORLD_URL` to its loopback URL and
+`HERDR_WORLD_TOKEN` to its CLI token), and point the service at a
 throwaway `herdr --session` with explicit `--socket-path` and
 `--client-socket-path`.
 

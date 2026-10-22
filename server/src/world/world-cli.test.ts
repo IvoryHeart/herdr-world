@@ -73,30 +73,28 @@ function host(overrides: Partial<CliHost> = {}): CliHost {
   };
 }
 
-const snapshot = (stale = false): WorldSnapshotResult => ({
+const snapshot = (stale = false, ids = ["studio"]): WorldSnapshotResult => ({
   revision: 1,
   observed_at: 1,
-  connections: [
-    {
-      connection_id: "studio",
-      label: "Studio",
-      source: "test",
-      is_default: true,
-      state: "ready" as never,
-      generation: 2,
-      snapshot_generation: 2,
-      stale,
-      actionable: !stale,
-      snapshot: {
-        workspaces: [{ workspace_id: "w1", label: "room" }],
-        tabs: TABS,
-        panes: PANES,
-        agents: [],
-        coverage: {} as never,
-        watch_admission: {} as never,
-      },
+  connections: ids.map((connection_id) => ({
+    connection_id,
+    label: "Studio",
+    source: "test",
+    is_default: true,
+    state: "ready" as never,
+    generation: 2,
+    snapshot_generation: 2,
+    stale,
+    actionable: !stale,
+    snapshot: {
+      workspaces: [{ workspace_id: "w1", label: "room" }],
+      tabs: TABS,
+      panes: PANES,
+      agents: [],
+      coverage: {} as never,
+      watch_admission: {} as never,
     },
-  ],
+  })),
 });
 
 /** A CLI process whose ancestor is the shell of `pid`'s pane. */
@@ -106,7 +104,9 @@ const inPane = (shell: number): CallerProcess[] => [
   { pid: shell, ppid: 1, pgrp: shell },
 ];
 
-function setup(options: { stale?: boolean; hosts?: CliHost[] } = {}) {
+function setup(
+  options: { stale?: boolean; hosts?: CliHost[]; ids?: string[] } = {},
+) {
   const board = new BoardStore(join(root, "board.json"));
   const ledger = new WorldLedger(join(root, "ledger.json"), {
     persist: false,
@@ -118,7 +118,7 @@ function setup(options: { stale?: boolean; hosts?: CliHost[] } = {}) {
     ledger,
     hosts: () => options.hosts ?? [host()],
     defaultConnectionId: () => "studio",
-    snapshot: async () => snapshot(options.stale),
+    snapshot: async () => snapshot(options.stale, options.ids),
     publishBoard: () => (published.board += 1),
     publishLedger: () => (published.ledger += 1),
     now: () => 1_000,
@@ -385,5 +385,98 @@ describe("questions and results", () => {
     expect(resultOf(owner)).toMatchObject([
       { summary: "coloured studio:w1:t2 red" },
     ]);
+  });
+});
+
+describe("review fixes", () => {
+  test("undo refuses when the card changed since, and goes last first", async () => {
+    const { board, ledger, run } = setup();
+    await run("board card pin", { target: "tab:w1:t2", x: 10, y: 20 });
+    await run("board card pin", { target: "tab:w1:t2", x: 30, y: 40 });
+    const [first, second] = ledger.get().changes;
+    expect(await run("undo", { id: first!.id })).toMatchObject({
+      ok: false,
+      code: "refused",
+    });
+    expect(board.get().layout.pinned["studio:w1:t2"]).toEqual({ x: 30, y: 40 });
+    await run("undo", { id: second!.id });
+    expect(board.get().layout.pinned["studio:w1:t2"]).toEqual({ x: 10, y: 20 });
+    await run("undo", { id: first!.id });
+    expect(board.get().layout.pinned["studio:w1:t2"]).toBeUndefined();
+  });
+
+  test("undoing an ungroup rebuilds the group it left", async () => {
+    const { board, ledger, run } = setup();
+    await run("board card group", { target: "me", with: "tab:w1:t2" });
+    await run("board card ungroup", { target: "me" });
+    expect(board.get().relations.groups).toEqual([]);
+    await run("undo", { id: ledger.get().changes[1]!.id });
+    expect(
+      board
+        .get()
+        .relations.groups[0]?.members.map((m) => m.terminal_id)
+        .sort(),
+    ).toEqual(["term_a", "term_b"]);
+  });
+
+  test("a question is never answered by its asker or an unverified caller", async () => {
+    const { run } = setup();
+    const ask = await run("ask", { question: "Merge order?" });
+    const id = (resultOf(ask) as { id: string }).id;
+    expect(await run("ask answer", { id, answer: "mine" })).toMatchObject({
+      ok: false,
+      code: "refused",
+    });
+    expect(
+      await run("ask answer", { id, answer: "x" }, "w1:p2", null),
+    ).toMatchObject({ ok: false, code: "refused" });
+    expect(
+      await run("ask answer", { id, answer: "x" }, null, null),
+    ).toMatchObject({ ok: false, code: "refused" });
+  });
+
+  test("open questions are capped per caller", async () => {
+    const { run } = setup();
+    for (let index = 0; index < 20; index += 1)
+      expect((await run("ask", { question: `q${index}` })).ok).toBe(true);
+    expect(await run("ask", { question: "one more" })).toMatchObject({
+      ok: false,
+      code: "refused",
+    });
+  });
+
+  test("`me` never resolves on another host, and points must be numbers", async () => {
+    const other = host({ connection_id: "laptop" });
+    const { run } = setup({
+      hosts: [host(), other],
+      ids: ["studio", "laptop"],
+    });
+    expect(
+      await run("colour set", {
+        target: "me",
+        colour: "red",
+        connection: "laptop",
+      }),
+    ).toMatchObject({ ok: false, code: "refused" });
+    expect(
+      await run("board card pin", { target: "me", x: "10", y: null }),
+    ).toMatchObject({ ok: false, code: "usage" });
+  });
+
+  test("a Herdr failure is unavailable, not the caller's fault", async () => {
+    const failing = host({
+      call: async (method, params) => {
+        if (method === "tab.list") throw new Error("socket closed: synthetic");
+        return host().call(method, params);
+      },
+    });
+    const { run } = setup({ hosts: [failing] });
+    expect(
+      await run("town desk move", {
+        target: "tab:w1:t2",
+        onto: "tab:w1:t1",
+        herdr: true,
+      }),
+    ).toMatchObject({ ok: false, code: "unavailable" });
   });
 });

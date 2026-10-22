@@ -50,10 +50,13 @@ Targets are on your own host; add --connection ID for another one.
   town desk move TARGET --onto TARGET|--last --herdr
          changes Herdr's tab order, so it needs --herdr; World cannot undo it
   ask "QUESTION" [--options a,b,c] [--owner-only] [--wait [--timeout S]]
-  ask get ID [--wait] | ask answer ID "ANSWER"   (not for --owner-only)
+  ask get ID [--wait] | ask answer ID "ANSWER"
+         another verified agent may answer, never the asker; --owner-only
+         questions are answered only by the owner in World
   result --task ID "SUMMARY" [--pr N] [--status done|blocked|failed]
   result ls [--task ID]
   spawned-by PARENT_PANE   stamp your pane as spawned by PARENT_PANE
+         (display-only Herdr pane metadata, so no --herdr)
 
 The CLI never merges, deletes panes, tabs or workspaces, or sends anything
 outside World.
@@ -66,7 +69,9 @@ JSON when stdout is not a terminal, or with --json:
 Exit 0 ok, 1 failure or service unavailable, 2 usage, 3 refused, 4 not
 found, 5 --wait timed out.
 
-The CLI finds the running World service from its service settings; set
-HERDR_WORLD_URL and HERDR_WORLD_TOKEN to reach another instance.
+The CLI talks only to a World service on this machine (loopback), which it
+finds from its service settings, with a CLI token derived from the service's
+signing secret; that token cannot log a browser in. HERDR_WORLD_URL (a
+loopback URL) and HERDR_WORLD_TOKEN reach another local instance.
 "
 `;

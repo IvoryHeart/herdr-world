@@ -25,12 +25,78 @@ const realProc: ProcFs = {
 
 const ESTABLISHED = "01";
 
-/** The socket inode of the client end of a loopback TCP connection. */
+/** An address as 16 bytes of hex, IPv4 as IPv4-mapped IPv6; null if unparsable. */
+export function addressKey(address: string): string | null {
+  const v4 = (text: string) => {
+    const parts = text.split(".").map(Number);
+    return parts.length === 4 &&
+      parts.every((part) => Number.isInteger(part) && part >= 0 && part < 256)
+      ? parts.map((part) => part.toString(16).padStart(2, "0")).join("")
+      : null;
+  };
+  const plain = address.replace(/^\[|\]$/g, "").toLowerCase();
+  if (!plain.includes(":")) {
+    const hex = v4(plain);
+    return hex ? `00000000000000000000ffff${hex}` : null;
+  }
+  let text = plain;
+  const tail = text.match(/:(\d+\.\d+\.\d+\.\d+)$/);
+  if (tail) {
+    const hex = v4(tail[1]!);
+    if (!hex) return null;
+    text = `${text.slice(0, -tail[1]!.length)}${hex.slice(0, 4)}:${hex.slice(4)}`;
+  }
+  const [head, rest, ...extra] = text.split("::");
+  if (extra.length) return null;
+  const left = head ? head.split(":") : [];
+  const right = rest !== undefined && rest ? rest.split(":") : [];
+  const missing = 8 - left.length - right.length;
+  if (rest === undefined ? missing !== 0 : missing < 1) return null;
+  const groups = [
+    ...left,
+    ...Array(rest === undefined ? 0 : missing).fill("0"),
+    ...right,
+  ];
+  if (!groups.every((group) => /^[0-9a-f]{1,4}$/.test(group))) return null;
+  return groups.map((group) => group.padStart(4, "0")).join("");
+}
+
+/** A /proc/net/tcp{,6} address field ("0100007F:1F90") as addressKey and port. */
+function procAddress(field: string): { key: string; port: number } | null {
+  const [hex, port] = field.split(":");
+  if (!hex || !port) return null;
+  // The kernel prints each 32-bit word in host (little-endian) byte order.
+  const words = hex.match(/.{8}/g) ?? [];
+  const bytes = words
+    .map((word) => word.match(/../g)!.reverse().join(""))
+    .join("")
+    .toLowerCase();
+  const key =
+    bytes.length === 8
+      ? `00000000000000000000ffff${bytes}`
+      : bytes.length === 32
+        ? bytes
+        : null;
+  return key ? { key, port: Number.parseInt(port, 16) } : null;
+}
+
+const isLoopbackKey = (key: string) =>
+  key === "00000000000000000000000000000001" ||
+  key.startsWith("00000000000000000000ffff7f");
+
+/**
+ * The socket inode of the client end of this loopback connection: the one
+ * established row whose local address and port are the peer's and whose
+ * remote end is this service's port on loopback. Any ambiguity fails closed.
+ */
 function clientSocketInode(
   fs: ProcFs,
-  clientPort: number,
+  peer: { address: string; port: number },
   serverPort: number,
 ): string | null {
+  const peerKey = addressKey(peer.address);
+  if (!peerKey) return null;
+  const found: string[] = [];
   for (const table of ["/proc/net/tcp", "/proc/net/tcp6"]) {
     let text: string;
     try {
@@ -40,14 +106,20 @@ function clientSocketInode(
     }
     for (const line of text.split("\n").slice(1)) {
       const fields = line.trim().split(/\s+/);
-      if (fields.length < 10 || fields[3] !== ESTABLISHED) continue;
-      const local = Number.parseInt(fields[1]!.split(":").pop()!, 16);
-      const remote = Number.parseInt(fields[2]!.split(":").pop()!, 16);
-      if (local === clientPort && remote === serverPort && fields[9] !== "0")
-        return fields[9]!;
+      if (fields.length < 10 || fields[3] !== ESTABLISHED || fields[9] === "0")
+        continue;
+      const local = procAddress(fields[1]!);
+      const remote = procAddress(fields[2]!);
+      if (
+        local?.key === peerKey &&
+        local.port === peer.port &&
+        remote?.port === serverPort &&
+        isLoopbackKey(remote.key)
+      )
+        found.push(fields[9]!);
     }
   }
-  return null;
+  return found.length === 1 ? found[0]! : null;
 }
 
 function processOf(fs: ProcFs, pid: number): CallerProcess | null {
@@ -61,35 +133,59 @@ function processOf(fs: ProcFs, pid: number): CallerProcess | null {
   }
 }
 
+/** Where a socket was last found, so a polling caller is not searched again. */
+const holderCaches = new WeakMap<
+  ProcFs,
+  Map<string, { pid: number; fd: string }>
+>();
+
+function socketHolder(fs: ProcFs, inode: string): number | null {
+  const target = `socket:[${inode}]`;
+  let holders = holderCaches.get(fs);
+  if (!holders) holderCaches.set(fs, (holders = new Map()));
+  const cached = holders.get(inode);
+  if (cached) {
+    try {
+      if (fs.link(`/proc/${cached.pid}/fd/${cached.fd}`) === target)
+        return cached.pid;
+    } catch {
+      // Gone: search again.
+    }
+    holders.delete(inode);
+  }
+  const found: { pid: number; fd: string }[] = [];
+  for (const entry of safeList(fs, "/proc")) {
+    if (!/^\d+$/.test(entry) || Number(entry) === process.pid) continue;
+    for (const fd of safeList(fs, `/proc/${entry}/fd`)) {
+      try {
+        if (fs.link(`/proc/${entry}/fd/${fd}`) === target) {
+          found.push({ pid: Number(entry), fd });
+          break;
+        }
+      } catch {
+        // Not readable, or closed meanwhile.
+      }
+    }
+  }
+  // A socket shared by several processes (an inherited descriptor) is not one caller.
+  if (found.length !== 1) return null;
+  if (holders.size >= 64) holders.delete(holders.keys().next().value!);
+  holders.set(inode, found[0]!);
+  return found[0]!.pid;
+}
+
 /**
  * The process holding the client end of a loopback connection to this
- * service, and its ancestors (nearest first). Null when it cannot be found,
- * for example off Linux or for another user's process.
+ * service, and its ancestors (nearest first). Null when it cannot be found
+ * unambiguously, for example off Linux or for another user's process.
  */
 export function callerProcesses(
-  clientPort: number,
+  peer: { address: string; port: number },
   serverPort: number,
   fs: ProcFs = realProc,
 ): CallerProcess[] | null {
-  const inode = clientSocketInode(fs, clientPort, serverPort);
-  if (!inode) return null;
-  const target = `socket:[${inode}]`;
-  let owner: number | null = null;
-  for (const entry of safeList(fs, "/proc")) {
-    if (!/^\d+$/.test(entry) || Number(entry) === process.pid) continue;
-    if (
-      safeList(fs, `/proc/${entry}/fd`).some((fd) => {
-        try {
-          return fs.link(`/proc/${entry}/fd/${fd}`) === target;
-        } catch {
-          return false;
-        }
-      })
-    ) {
-      owner = Number(entry);
-      break;
-    }
-  }
+  const inode = clientSocketInode(fs, peer, serverPort);
+  const owner = inode ? socketHolder(fs, inode) : null;
   if (owner === null) return null;
   const chain: CallerProcess[] = [];
   for (let pid = owner; pid > 1 && chain.length < 64; ) {
@@ -117,24 +213,19 @@ export type PaneProcessInfo = {
 };
 
 /**
- * True when the caller or an ancestor runs in the pane: it is the pane's
- * shell, one of its foreground processes or in its foreground process group.
+ * True when the caller or an ancestor is the pane's shell or one of its
+ * foreground processes. A shared process group alone is not enough.
  */
 export function runsInPane(
   chain: readonly CallerProcess[],
   info: PaneProcessInfo | null | undefined,
 ): boolean {
   if (!info) return false;
-  const group = info.foreground_process_group_id;
   const pids = new Set(
     (info.foreground_processes ?? [])
       .map((entry) => entry.pid)
       .concat(info.shell_pid)
       .filter((pid): pid is number => typeof pid === "number" && pid > 1),
   );
-  return chain.some(
-    (entry) =>
-      pids.has(entry.pid) ||
-      (typeof group === "number" && group > 1 && entry.pgrp === group),
-  );
+  return chain.some((entry) => pids.has(entry.pid));
 }
