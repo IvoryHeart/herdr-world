@@ -48,8 +48,10 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   an agent's peek (**Colour**) in Town, or the selected card in Board, and reset
   a tab's own colour the same way. Herdr has no tab colour, so the World service
   saves the choice keyed by host and Herdr tab ID, the same on every device. A
-  tab moved to another room in World keeps the colour it showed, even a
-  default; a closed tab's saved colour is dropped.
+  closed tab's saved colour is dropped.
+  - A desk moved to another room keeps the colour it showed, even a default or
+    its old room's, saved as its own colour: it no longer follows its room's
+    colour, and **Default colour** resets it to its new tab's default.
 
 - **Board** (`/board`) shows hosts as zones, workspaces as cards and tabs as
   cards around their workspace, beside your notes. Cards are elastic while you

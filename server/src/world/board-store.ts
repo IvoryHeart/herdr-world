@@ -604,9 +604,9 @@ export function moveFollowOps(
 /**
  * A moved tab keeps the colour it showed (shared/terminalColor.ts), chosen,
  * inherited or default: its new tab ID would otherwise give it another
- * default. Written under the new key only when the new tab would not show
- * that colour anyway. Read from `colors.before`, taken before the move, so a
- * close of the old tab seen during the move cannot lose it.
+ * default. It is saved as the moved tab's own colour. Read from
+ * `colors.before`, taken before the move, so a close of the old tab seen
+ * during the move cannot lose it.
  */
 function colorFollowOps(
   connectionId: string,
@@ -630,15 +630,11 @@ function colorFollowOps(
     tabId: movedTab,
     workspaceIds,
   });
-  const shown = resolveTerminalColor(before, {
-    connectionId,
-    workspaceId: to,
-    tabId: moved.tab_id,
-    workspaceIds,
-  });
-  const ops: BoardOp[] = [];
-  if (shown.color !== color)
-    ops.push({ op: "card.color", key: nextKey, color: color as CardColor });
+  // Always as the tab's own colour: one that merely matched the new room's
+  // would otherwise be lost to it, and change when that room is recoloured.
+  const ops: BoardOp[] = [
+    { op: "card.color", key: nextKey, color: color as CardColor },
+  ];
   if (before[previousKey])
     ops.push({ op: "card.color", key: previousKey, color: null });
   return ops;

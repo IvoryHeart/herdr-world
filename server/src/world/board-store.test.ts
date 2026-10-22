@@ -546,6 +546,24 @@ describe("Board store", () => {
       expect(store.get().layout.colors["alpha:w2"]).toBe("pink");
     });
 
+    test("a tab's own colour stays its own when it matches the new room's", () => {
+      const store = new BoardStore(path);
+      store.patch([
+        { op: "card.color", key: "alpha:w1:t1", color: "red" },
+        { op: "card.color", key: "alpha:w2", color: "red" },
+      ]);
+      store.patch(
+        move(store, "w1:t1", { tab_id: "w2:t4", from: "w1", workspace: "w2" }),
+      );
+      expect(store.get().layout.colors).toEqual({
+        "alpha:w2": "red",
+        "alpha:w2:t4": "red",
+      });
+      // Recolouring the room later leaves the moved tab alone.
+      store.patch([{ op: "card.color", key: "alpha:w2", color: "blue" }]);
+      expect(shown(store, "w2", "w2:t4")).toBe("red");
+    });
+
     test("a tab whose ID is a workspace's (older Herdr) uses the qualified key", () => {
       const store = new BoardStore(path);
       // A colour the new tab would not show by default, so it must be saved.

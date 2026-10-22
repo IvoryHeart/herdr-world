@@ -1541,7 +1541,8 @@ SHALL appear in every view and on every device, and MAY be reset; reset is
 offered only for a tab's own colour, not one inherited from its workspace. The
 key carries no terminal witness, so after a Herdr restart a colour follows
 whichever tab holds that ID. A tab World moves to another workspace SHALL keep
-the colour it showed, whether chosen, inherited or default. When World observes
+the colour it showed, whether chosen, inherited or default, saved as its own
+colour. When World observes
 Herdr close a tab on the connection's current runtime, it SHALL drop that tab's
 saved colour. Terminal colour SHALL never stand for or hide a status. World
 SHALL NOT write a colour to Herdr.
