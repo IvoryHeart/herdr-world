@@ -25,7 +25,7 @@ jobs:
         with:
           bun-version: "1.4.3"
           no-cache: true
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "24.19.0"
       - name: Select runner Java 21
@@ -45,7 +45,7 @@ jobs:
         run: bun run verification:diagnostic-control
       - name: Retain source-bound evidence manifests
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: behavioral-evidence-${{ github.run_attempt }}
           path: |
