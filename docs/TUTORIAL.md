@@ -281,8 +281,8 @@ use the on-screen **Back** to return straight to the visual view, including
 when Composer is open. The phone's own Back closes Composer first, then the
 terminal on the next press. Tapping the terminal's name opens the workspace
 list; Back (on-screen or the phone's) or tapping the name again closes it and
-shows the terminal. Any open menu or picker closes the same way, or with a tap
-outside it. Use the ellipsis controls for additional navigation.
+shows the terminal. Any open menu or picker closes the same way, one at a time;
+tapping the terminal closes them all. Use the ellipsis controls for additional navigation.
 Closing an Inspector leaves the terminal session running.
 
 ### Learn this one hierarchy

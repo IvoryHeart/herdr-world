@@ -1,7 +1,7 @@
 import * as React from "react";
 import * as PopoverPrimitive from "@radix-ui/react-popover";
 
-import { useLayer } from "../../layerStack";
+import { lastInputWasPress, useLayer } from "../../layerStack";
 import { cn } from "../../utils";
 import "./popover.css";
 
@@ -116,9 +116,9 @@ const PopoverContent = React.forwardRef<
             }}
             onFocusOutside={(event) => {
               onFocusOutside?.(event);
-              // Focus follows a press (the stack decides those); Tab still
-              // leaves and closes the popover.
-              if (refs && pressedRecently()) event.preventDefault();
+              // Focus that follows a press is the stack's to judge; focus
+              // moved by a key (Tab) leaves and closes the popover.
+              if (refs && lastInputWasPress()) event.preventDefault();
             }}
             {...props}
           />
@@ -128,18 +128,5 @@ const PopoverContent = React.forwardRef<
   },
 );
 PopoverContent.displayName = PopoverPrimitive.Content.displayName;
-
-let lastPress = -Infinity;
-if (typeof window !== "undefined")
-  window.addEventListener(
-    "pointerdown",
-    () => {
-      lastPress = performance.now();
-    },
-    true,
-  );
-function pressedRecently() {
-  return performance.now() - lastPress < 1_000;
-}
 
 export { Popover, PopoverContent, PopoverTrigger };

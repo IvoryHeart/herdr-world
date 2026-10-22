@@ -11,6 +11,7 @@ import { rememberTerminalInputMode } from "./terminalInputMode";
 import { openLayerCount } from "./layerStack";
 import { TerminalView } from "./components/TerminalView";
 import { ThemedSelect } from "./components/ThemedSelect";
+import { WindowArrangementMenu } from "./components/WindowArrangementMenu";
 import { ColorSwatchButton } from "./components/ColorSwatch";
 import { WindowControls } from "./world/windows/WindowControls";
 import { TERMINAL_COLOR_PALETTE } from "./world/terminalColor";
@@ -122,6 +123,14 @@ function TerminalWindow() {
             { value: "attention", label: "Attention first" },
             { value: "manual", label: "Manual order" },
           ]}
+        />
+        <WindowArrangementMenu
+          showWindowSwitcher={false}
+          control={{
+            activePreset: null,
+            disabledReasons: {},
+            onSelect() {},
+          }}
         />
         <WindowControls
           label="builder window"
@@ -251,6 +260,22 @@ async function run() {
   await pressTerminal();
   check(!menu(), "pressing the terminal left the window menu open");
 
+  // Menus that used to keep their own listeners are on the stack too:
+  // Spaces' window arrangement menu closes on a terminal tap and on Escape
+  // from the terminal.
+  const arrangement = () => $('[role="menu"][aria-label="Arrange windows"]');
+  await press($('button[aria-label="Arrange windows"]'), "arrangement menu");
+  check(Boolean(arrangement()), "arrangement menu did not open");
+  await pressTerminal();
+  check(!arrangement(), "pressing the terminal left the arrangement menu open");
+  await press($('button[aria-label="Arrange windows"]'), "arrangement menu");
+  textarea()?.focus();
+  await escape();
+  check(
+    !arrangement(),
+    "Escape from the terminal left the arrangement menu open",
+  );
+
   // Nested layers close top first: Escape, then a press outside.
   await press(menuTrigger(), "window menu trigger");
   await press($(".world-window-color"), "menu colour item");
@@ -262,13 +287,26 @@ async function run() {
   await escape();
   check(!menu(), "second Escape left the menu open");
 
+  // A press closes every layer it is outside of: the terminal is outside
+  // both, so one press shows the terminal; the menu holds a press on itself,
+  // which closes only the picker.
   await press(menuTrigger(), "window menu trigger");
   await press($(".world-window-color"), "menu colour item");
   await pressTerminal();
-  check(!swatches(), "pressing the terminal left the colour picker open");
-  check(Boolean(menu()), "one press closed both nested layers");
-  await pressTerminal();
-  check(!menu(), "second press left the menu open");
+  check(
+    !swatches() && !menu(),
+    "one press on the terminal left a layer over it",
+  );
+  await press(menuTrigger(), "window menu trigger");
+  await press($(".world-window-color"), "menu colour item");
+  // The menu's padding, clear of the picker that may cover its items.
+  await press(menu(), "the window menu", (element) => {
+    const rect = element.getBoundingClientRect();
+    return { x: rect.left + 3, y: rect.bottom - 3 };
+  });
+  check(!swatches(), "a press in the menu left the picker open");
+  check(Boolean(menu()), "a press in the menu closed the menu");
+  await escape();
 
   // Two quick Escapes close the two layers, one each.
   await press(menuTrigger(), "window menu trigger");
@@ -345,6 +383,19 @@ async function run() {
       document.activeElement === textarea(),
       `Escape returned focus to ${document.activeElement?.className}, not the terminal`,
     );
+    // A Tab right after the press that opened the dropdown moves focus by
+    // keyboard: the dropdown closes.
+    await press($('button[aria-label="Sort order"]'), "dropdown trigger");
+    check(Boolean(select()), "dropdown did not open before Tab");
+    for (const type of ["keyDown", "keyUp"])
+      await input("Input.dispatchKeyEvent", {
+        type,
+        key: "Tab",
+        code: "Tab",
+        windowsVirtualKeyCode: 9,
+      });
+    await settle();
+    check(!select(), "a quick Tab out left the dropdown open");
     // xterm consumes keys in its textarea; Escape still closes the top layer.
     await press($('button[aria-label="Sort order"]'), "dropdown trigger");
     textarea()?.focus();

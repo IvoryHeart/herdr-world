@@ -1576,10 +1576,13 @@ opened as a transient layer.
 ### Requirement: Transient layers close top first
 
 Menus, popovers, pickers and lists opened over a terminal or view SHALL form one
-last-in, first-out stack. Escape, a press outside the top layer (including on
-the terminal) and Back SHALL close only the top layer, whether focus is in the
-terminal or the layer and whether the press is a mouse click or a touch. A press
-outside SHALL still reach what was pressed. The on-screen Back SHALL close an
+last-in, first-out stack. Escape and Back SHALL close only the top layer. A press
+(including on the terminal) SHALL close, from the top, every layer it is outside
+of and stop at the first layer that holds it, so a press inside a menu closes
+only what was opened above that menu. These rules SHALL hold whether focus is in
+the terminal or a layer and whether the press is a mouse click or a touch. A
+press outside SHALL still reach what was pressed. A dialog outside the stack
+keeps its own keys and presses while it is above the top layer. The on-screen Back SHALL close an
 open layer before it leaves a terminal. Closing a layer by Escape, Back or a
 choice SHALL return focus to what had it before the layer opened, the terminal
 included; closing it by a press SHALL leave focus with what was pressed.
@@ -1592,7 +1595,12 @@ included; closing it by a press SHALL leave focus with what was pressed.
 #### Scenario: Nested layers
 
 - **WHEN** a terminal window's menu and the colour picker inside it are open
-- **THEN** Escape, Back or a press on the terminal closes the picker, and a second one closes the menu
+- **THEN** Escape or Back closes the picker, and a second one closes the menu
+
+#### Scenario: A press outside nested layers
+
+- **WHEN** a terminal window's menu and the colour picker inside it are open
+- **THEN** a press on the terminal closes both and shows the terminal, while a press on the menu closes only the picker
 
 #### Scenario: Back from the workspace list
 

@@ -4,12 +4,13 @@ import { useSystemBack } from "./systemBack";
 /**
  * One LIFO stack for transient layers: menus, popovers, pickers and sheets.
  *
- * Escape, a press outside and the phone's Back close only the top layer. The
+ * Escape and the phone's Back close only the top layer; a press closes every
+ * layer it is outside of, from the top, down to the one that holds it. The
  * stack listens in the capture phase on window, before the terminal or any
  * component: xterm consumes keys in its textarea and the terminal cancels the
  * compatibility click after a touch, so per-menu listeners on document or the
  * click never fire over a terminal. A press outside also reaches its target,
- * so pressing the terminal closes the top layer and focuses the terminal.
+ * so pressing the terminal closes the layers over it and focuses it.
  *
  * Closing by Escape, Back or by choosing an item returns focus to what had it
  * before the layer opened: the trigger when opened by keyboard, or the
@@ -49,16 +50,25 @@ const MODAL = '.modal-backdrop, [aria-modal="true"]';
 // it is not a press outside.
 const BACK_CONTROL = "[data-layer-back]";
 
+// Event targets are checked by shape, not `instanceof Node`/`Element`, which
+// test DOMs and other realms may not provide.
+function isNode(target: EventTarget | null): target is Node {
+  return typeof (target as Node | null)?.nodeType === "number";
+}
+function isElement(target: EventTarget | null): target is Element {
+  return typeof (target as Element | null)?.closest === "function";
+}
+
 function contains(layer: Layer, target: Node) {
   if (layer.element()?.contains(target)) return true;
-  if (target instanceof Element && target.closest(BACK_CONTROL)) return true;
+  if (isElement(target) && target.closest(BACK_CONTROL)) return true;
   for (const anchor of layer.anchors())
     if (anchor?.contains(target)) return true;
   return false;
 }
 
 function belowUnstackedModal(layer: Layer, target: EventTarget | null) {
-  if (!(target instanceof Element) || contains(layer, target)) return false;
+  if (!isElement(target) || contains(layer, target)) return false;
   // A key with nothing focused, or a press on a dialog's bare area, targets
   // the body: an open modal still owns it.
   const modal =
@@ -88,11 +98,19 @@ function closeTop(reason: LayerCloseReason) {
   top.close(reason);
 }
 
+// Whether the latest input was a press or a key: focus moved right after a
+// press follows the press, a key after it (a quick Tab) moves it by keyboard.
+let lastInput: "press" | "key" = "key";
+
+/** Whether focus is moving because of a press rather than a key. */
+export function lastInputWasPress() {
+  return lastInput === "press";
+}
+
 function rememberInputFocus(target: EventTarget | null) {
-  const holder =
-    target instanceof Node
-      ? stack.find((layer) => layer.element()?.contains(target))
-      : undefined;
+  const holder = isNode(target)
+    ? stack.find((layer) => layer.element()?.contains(target))
+    : undefined;
   inputFocus = {
     element: document.activeElement,
     fallback: holder ? (holder.restore ?? holder.fallback) : null,
@@ -109,14 +127,17 @@ function listen() {
   window.addEventListener(
     "pointerdown",
     (event) => {
-      const top = openTop();
-      if (
-        top &&
-        event.target instanceof Node &&
-        !contains(top, event.target) &&
-        !belowUnstackedModal(top, event.target)
-      )
-        closeTop("outside");
+      // A press closes every layer it is outside of, top down, and stops at
+      // the first layer that holds it: pressing the terminal closes a menu
+      // and the picker opened from it together; pressing the menu closes
+      // only the picker. Escape and Back close one layer at a time.
+      const target = event.target;
+      if (isNode(target))
+        for (let top = openTop(); top; top = openTop()) {
+          if (contains(top, target) || belowUnstackedModal(top, target)) break;
+          closeTop("outside");
+        }
+      lastInput = "press";
       rememberInputFocus(event.target);
     },
     true,
@@ -125,6 +146,7 @@ function listen() {
     "keydown",
     (event) => {
       inputFocus = null;
+      lastInput = "key";
       const top = openTop();
       if (
         top &&
@@ -141,10 +163,15 @@ function listen() {
   );
 }
 
+// Checked by shape like the event targets above.
 function focusTarget(element: Element | null): HTMLElement | null {
-  if (!(element instanceof HTMLElement) || element === document.body)
+  if (
+    !element ||
+    element === document.body ||
+    typeof (element as HTMLElement).focus !== "function"
+  )
     return null;
-  return element;
+  return element as HTMLElement;
 }
 
 /**
@@ -246,8 +273,8 @@ export function useLayer(
           : null;
       if (!target)
         for (const anchor of layer.anchors())
-          if (anchor instanceof HTMLElement && anchor.isConnected) {
-            target = anchor;
+          if (anchor?.isConnected && focusTarget(anchor)) {
+            target = focusTarget(anchor);
             break;
           }
       target?.focus({ preventScroll: true });

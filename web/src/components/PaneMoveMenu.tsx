@@ -1,3 +1,4 @@
+import { useLayer } from "../layerStack";
 import {
   ArrowDown,
   ArrowLeft,
@@ -419,24 +420,9 @@ export function PaneMoveMenu({
     if (!canMove) setOpen(false);
   }, [canMove]);
 
-  useEffect(() => {
-    if (!open) return;
-    const dismissOutside = (e: PointerEvent) => {
-      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
-    };
-    const dismissOnEscape = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      e.preventDefault();
-      e.stopPropagation();
-      setOpen(false);
-    };
-    document.addEventListener("pointerdown", dismissOutside, true);
-    document.addEventListener("keydown", dismissOnEscape, true);
-    return () => {
-      document.removeEventListener("pointerdown", dismissOutside, true);
-      document.removeEventListener("keydown", dismissOnEscape, true);
-    };
-  }, [open]);
+  // The pad is a layer on the shared stack: Escape, a press outside and Back
+  // close it.
+  useLayer(open, () => setOpen(false), { element: () => rootRef.current });
 
   if (!canMove) return null;
 
