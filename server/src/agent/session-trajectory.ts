@@ -191,6 +191,16 @@ function piTokenUsageToMetrics(value: unknown) {
   return metrics;
 }
 
+const CODEX_INJECTED_CONTEXT =
+  /^(?:# AGENTS\.md instructions\b|<(?:environment_context|user_instructions|permissions instructions|turn_aborted)>)/;
+
+const CODEX_QUESTION_REPLY =
+  /^<send_user_message_question_reply>([\s\S]*)<\/send_user_message_question_reply>\s*$/;
+
+function isCodexInjectedContext(text: string) {
+  return CODEX_INJECTED_CONTEXT.test(text);
+}
+
 function projectCodexTrajectory(
   file: SessionFile,
   records: Record<string, unknown>[],
@@ -249,11 +259,20 @@ function projectCodexTrajectory(
       const role = stringValue(payload.role);
       const text = cleanMessageText(codexContentText(payload.content));
       if (!text) return;
+      // Codex sends repository instructions and its environment as user
+      // items; they are context, not something the user wrote.
+      if (role === "user" && isCodexInjectedContext(text)) return;
+      // An answer to the agent's question arrives wrapped in a tag.
+      const answer =
+        role === "user"
+          ? CODEX_QUESTION_REPLY.exec(text)?.[1]?.trim()
+          : undefined;
+      if (answer === "") return;
       steps.push({
         timestamp,
         source:
           role === "user" ? "user" : role === "assistant" ? "agent" : "system",
-        message: text,
+        message: answer ?? text,
         metrics: tokenUsageToMetrics(tokenUsageFrom(payload.usage)),
       });
     } else if (type === "reasoning") {
@@ -328,15 +347,93 @@ function projectCodexTrajectory(
   return createTrajectory("codex", file, records, steps);
 }
 
+const CLAUDE_COMPACTED = "Conversation compacted";
+const CLAUDE_TASK_NOTIFICATION = "Background task update";
+
+function isClaudePrompt(record: Record<string, unknown>) {
+  if (record.type !== "user" || record.isMeta === true) return false;
+  const message = isRecord(record.message) ? record.message : record;
+  return !(
+    Array.isArray(message.content) &&
+    message.content.some(
+      (part) => isRecord(part) && part.type === "tool_result",
+    )
+  );
+}
+
+/**
+ * Records on branches the user abandoned. Rewinding to edit a prompt writes
+ * the new prompt as another child of the same parent, so every earlier
+ * sibling prompt and everything after it is dead. Parallel tool calls also
+ * fork the tree, but never into two prompts, so they are kept.
+ */
+function abandonedClaudeRecords(records: Record<string, unknown>[]) {
+  const children = new Map<string, Record<string, unknown>[]>();
+  for (const record of records) {
+    const parent = stringValue(record.parentUuid);
+    if (!parent || !stringValue(record.uuid)) continue;
+    const list = children.get(parent);
+    if (list) list.push(record);
+    else children.set(parent, [record]);
+  }
+  const abandoned = new Set<string>();
+  for (const siblings of children.values()) {
+    const stack = siblings.filter(isClaudePrompt).slice(0, -1);
+    while (stack.length) {
+      const record = stack.pop()!;
+      const id = stringValue(record.uuid);
+      if (abandoned.has(id)) continue;
+      abandoned.add(id);
+      stack.push(...(children.get(id) ?? []));
+    }
+  }
+  return abandoned;
+}
+
 function projectClaudeTrajectory(
   file: SessionFile,
   records: Record<string, unknown>[],
 ) {
   const steps: Omit<AtifStep, "step_id">[] = [];
+  const abandoned = abandonedClaudeRecords(records);
   records.forEach((record, index) => {
     const timestamp = messageTime(record, file.mtimeMs, index);
     const type = stringValue(record.type);
     if (type !== "user" && type !== "assistant" && type !== "system") return;
+    // Caveats for local commands, subagent sidechains and rewound branches
+    // are not the conversation the user sees.
+    if (
+      record.isMeta === true ||
+      record.isSidechain === true ||
+      abandoned.has(stringValue(record.uuid))
+    )
+      return;
+    // Claude Code reports background task updates as user turns.
+    if (
+      type === "user" &&
+      /^\s*<task-notification>/.test(
+        textFromContent(
+          (isRecord(record.message) ? record.message : record).content,
+        ),
+      )
+    ) {
+      steps.push({
+        timestamp,
+        source: "agent",
+        message: CLAUDE_TASK_NOTIFICATION,
+        extra: { notice: "task_notification", record_type: type },
+      });
+      return;
+    }
+    if (record.isCompactSummary === true) {
+      steps.push({
+        timestamp,
+        source: "agent",
+        message: CLAUDE_COMPACTED,
+        extra: { notice: "compaction", record_type: type },
+      });
+      return;
+    }
     const message = isRecord(record.message) ? record.message : record;
     const role = stringValue(message.role) || type;
     const text = cleanMessageText(

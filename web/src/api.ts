@@ -279,8 +279,10 @@ export interface BridgeControlMsg {
     | "pause_connection"
     | "world_invalidated"
     | "world_watchlist_changed"
-    | "world_board_changed";
+    | "world_board_changed"
+    | "agent_conversation_changed";
   reason?: string;
+  pane_id?: string;
   connection_id?: string;
   connection_generation?: number;
   revision?: number;

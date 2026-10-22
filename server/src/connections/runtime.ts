@@ -150,6 +150,22 @@ export function createLegacyConnectionRuntime(args: {
       herdrCall: (...args) => herdr.call(...args),
       files: agentSessionFiles,
       remotePlatform,
+      onConversationChanged: (paneId, owners) => {
+        const line = JSON.stringify({
+          control: {
+            type: "agent_conversation_changed",
+            connection_id: identity.id,
+            connection_generation: args.connectionGeneration,
+            pane_id: paneId,
+          },
+        });
+        for (const owner of owners)
+          args.safeSend(
+            owner as ServerWebSocket<unknown>,
+            line,
+            "agent-conversation",
+          );
+      },
     }),
   );
   const agentCheckout = createAgentCheckoutContext({
@@ -560,6 +576,7 @@ export function createLegacyConnectionRuntime(args: {
     taskEvents.handleHerdrEvent(event);
     lastStepTurns.handleHerdrEvent(event);
     agentStatusSubscriptions.handleHerdrEvent(event);
+    agentSessions.conversationWatch.herdrEvent();
     if ((event as { event?: string })?.event === "workspace.focused")
       terminalBridge.refreshPopupObserverFocus();
     args.onEvent(event, identity);
@@ -670,6 +687,7 @@ export function createLegacyConnectionRuntime(args: {
     handleTerminalUpload.stopCleanup();
     herdr.off("event", onHerdrEvent);
     herdr.off("error", onHerdrError);
+    agentSessions.conversationWatch.stop();
     taskEvents.stop();
     pendingTaskEvents.clear();
     herdrNotifications?.stop();

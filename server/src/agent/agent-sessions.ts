@@ -2,6 +2,7 @@ import { basename } from "node:path";
 import { randomUUID } from "node:crypto";
 import { enrichAgentActivity } from "./agent-activity";
 import { createCodexSessionLinker } from "./codex-session-link";
+import { createConversationWatcher } from "./conversation-watch";
 import { createHerdrConversationSource } from "./herdr-conversation";
 import type { HerdrCall, SessionFile } from "./session-types";
 import {
@@ -33,18 +34,25 @@ export function createAgentSessionHandlers(args: {
   herdrCall: HerdrCall;
   files: AgentSessionFileAccess;
   remotePlatform?: string;
+  /** A watched pane's conversation changed; tell these owners. */
+  onConversationChanged?: (paneId: string, owners: ReadonlySet<object>) => void;
 }) {
   const resolverContext = createAgentSessionResolverContext();
   const cache = createSessionProjectionCache(args.files);
   const linker = createCodexSessionLinker(args.herdrCall, args.files);
+  const conversation = createHerdrConversationSource({
+    herdrCall: args.herdrCall,
+    files: args.files,
+    context: resolverContext,
+    cache,
+    remotePlatform: args.remotePlatform,
+  });
   return {
-    // An object, not a handler: it reports Windows as unavailable itself.
-    conversation: createHerdrConversationSource({
-      herdrCall: args.herdrCall,
-      files: args.files,
-      context: resolverContext,
-      cache,
-      remotePlatform: args.remotePlatform,
+    // Objects, not handlers: they report Windows as unavailable themselves.
+    conversation,
+    conversationWatch: createConversationWatcher({
+      identity: (paneId) => conversation.identity({ pane_id: paneId }),
+      notify: (paneId, owners) => args.onConversationChanged?.(paneId, owners),
     }),
     previewLink: linker.preview,
     link: linker.link,

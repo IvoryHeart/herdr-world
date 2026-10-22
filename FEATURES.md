@@ -310,10 +310,14 @@ See [resource ownership](docs/ARCHITECTURE.md#workspace-resource-ownership).
   browser completion notifications.
 - Read and reply to an agent in the Inspector's **Chat** tab, which replaces
   History. Chat reads the conversation from the agent's transcript, never the
-  terminal; sends with Herdr's agent prompt only to the session it shows; and
-  refreshes on agent status changes, without polling. When it cannot read the
-  conversation it shows the reason and **Open Terminal**. **Details** opens the
-  History view below. See [Chat](docs/CHAT.md).
+  terminal, and hides context the harness injects as user turns. It sends with
+  Herdr's agent prompt only to a session Herdr ties to the pane (a reported
+  session or a Codex title thread), not to one World guessed from the folder.
+  It refreshes when the service sees the transcript, title or status change,
+  without browser polling, and keeps the last good view if a read fails. When
+  it cannot read the conversation it shows the reason with the matching action:
+  copy the integration command, link a Codex session, **Refresh** or **Open
+  Terminal**. **Details** opens the History view below. See [Chat](docs/CHAT.md).
 - In Details, switch between **Chat** and **Timeline**. Chat pairs tool calls
   with results and shares Ranger's conversation minimap; Timeline keeps individual
   records available. Use **Link Codex session** to preview a full conversation UUID
@@ -341,8 +345,8 @@ See [resource ownership](docs/ARCHITECTURE.md#workspace-resource-ownership).
   Inspector offers Timeline, searchable ATIF/raw transcripts, and original-file
   or normalized ATIF export.
 
-Supported providers: **Codex, Claude, Kimi, Grok Build, Pi, Muse Code, Antigravity CLI**, with a readable
-session record. Missing Herdr integration metadata shows the integration command.
+Readers exist for **Codex, Claude, Kimi, Grok Build, Pi, Muse Code, Antigravity CLI**; Codex,
+Claude and Pi are checked against real transcripts (see the [harness matrix](docs/CHAT.md#harness-matrix)). Missing Herdr integration metadata shows the integration command.
 Codex 0.157 and later run conversations in a shared background service, so
 Herdr's hook cannot say which pane shows which one. Run `/title` in Codex and
 add Thread ID: History then reads the conversation from the pane's title, and

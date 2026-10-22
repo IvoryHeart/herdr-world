@@ -1,8 +1,10 @@
+import { createHash } from "node:crypto";
 import { taskSummarySessionFingerprint } from "../herdr/task-summary";
 import {
   conversationMessages,
   latestAssistantMessage,
   type Conversation,
+  type ConversationBinding,
   type ConversationLatest,
   type ConversationSource,
   type ConversationUnavailableReason,
@@ -11,16 +13,63 @@ import type { AgentSessionFileAccess } from "./session-file-access";
 import type { SessionProjectionCache } from "./session-projection-cache";
 import {
   SESSION_AGENTS,
+  codexIdsFromTitle,
   resolveAgentSessionInfo,
   type AgentSessionResolverContext,
 } from "./session-resolver";
-import type { AgentSessionResolved, HerdrCall } from "./session-types";
+import type { HerdrCall } from "./session-types";
 import { isRecord, normalizeAgentName, stringValue } from "./session-utils";
 
 export const CODEX_DAEMON_ISSUE =
   "https://github.com/IvoryHeart/herdr-world/issues/250";
 
 type Unavailable = Extract<Conversation, { status: "unavailable" }>;
+
+/**
+ * The session Herdr ties to a pane, from its `agent.get` reply alone: the
+ * thread a Codex title names, else the session the integration reported.
+ * Directory guesses are never a binding. No file access, so a send can check
+ * it immediately before prompting.
+ */
+export function paneBinding(
+  agent: string,
+  info: Record<string, unknown>,
+): {
+  binding: Exclude<ConversationBinding, "guessed">;
+  fingerprint: string;
+} | null {
+  if (agent === "codex") {
+    const ids = codexIdsFromTitle(stringValue(info.terminal_title));
+    const truncated = ids.filter((id) => id.truncated);
+    const prefixes = new Set(
+      (truncated.length ? truncated : ids).map((id) => id.prefix.slice(0, 29)),
+    );
+    // The title decides whenever it names a thread; two names bind nothing.
+    if (prefixes.size > 1) return null;
+    const [prefix] = prefixes;
+    if (prefix)
+      return {
+        binding: "title",
+        fingerprint: createHash("sha256")
+          .update(JSON.stringify(["codex-title", prefix]))
+          .digest("hex"),
+      };
+  }
+  const session = isRecord(info.agent_session) ? info.agent_session : null;
+  if (
+    !session ||
+    ["source", "agent", "kind", "value"].some(
+      (key) => typeof session[key] !== "string" || !session[key],
+    )
+  )
+    return null;
+  return {
+    binding: "reported",
+    fingerprint: taskSummarySessionFingerprint(
+      session as { source: string; agent: string; kind: string; value: string },
+    ),
+  };
+}
 
 function withoutMessages(conversation: Conversation): ConversationLatest {
   const latest: Partial<Conversation> = { ...conversation };
@@ -67,12 +116,13 @@ export function createHerdrConversationSource(args: {
   const resolve = async (paneId: string) => {
     const info = await agentInfo(paneId);
     const agent = normalizeAgentName(stringValue(info?.agent));
-    const base = {
-      conversation_version: 1 as const,
+    const base: Omit<Conversation, "status" | "unavailable"> = {
+      conversation_version: 1,
       source: "herdr",
       pane_id: paneId,
       agent: agent || null,
       agent_status: stringValue(info?.agent_status) || null,
+      session_binding: null,
       session_fingerprint: null,
       updated_at: null,
       messages: [],
@@ -97,19 +147,22 @@ export function createHerdrConversationSource(args: {
         `Chat cannot read ${agent} conversations yet.`,
       );
     const reported = isRecord(info.agent_session) ? info.agent_session : null;
-    // ID and directory lookups for these harnesses search this machine. A
-    // remote pane must never show a local transcript.
+    // The Grok and Antigravity readers, and Claude and Kimi ID lookups, only
+    // open files on this machine. A remote pane must never show a local
+    // transcript, so these are refused rather than read.
     if (
       args.files.remote &&
-      reported?.kind !== "path" &&
       (agent === "grok" ||
         agent === "agy" ||
-        (reported && agent !== "pi" && agent !== "codex"))
+        (reported &&
+          reported.kind !== "path" &&
+          agent !== "pi" &&
+          agent !== "codex"))
     )
       return unavailable(
         base,
         "remote_lookup",
-        "Herdr did not report a transcript path for this remote agent, so Chat cannot find its conversation.",
+        "Chat cannot read this agent's conversation on an SSH host yet.",
       );
     const resolved = await resolveAgentSessionInfo(
       { pane_id: paneId },
@@ -117,11 +170,21 @@ export function createHerdrConversationSource(args: {
       args.files,
       args.context,
     );
-    return { base, resolved };
+    // A session found by searching the pane's directory may belong to
+    // another agent in the same folder: show it, but never send to it.
+    const bound = resolved.session?.source.endsWith("-local")
+      ? null
+      : paneBinding(agent, info);
+    return {
+      base: {
+        ...base,
+        session_binding:
+          bound?.binding ?? (resolved.session ? ("guessed" as const) : null),
+        session_fingerprint: bound?.fingerprint ?? null,
+      },
+      resolved,
+    };
   };
-
-  const fingerprint = (resolved: AgentSessionResolved) =>
-    resolved.session ? taskSummarySessionFingerprint(resolved.session) : null;
 
   const read = async ({
     pane_id,
@@ -131,6 +194,13 @@ export function createHerdrConversationSource(args: {
     const step = await resolve(pane_id);
     if (!("resolved" in step)) return step;
     const { base, resolved } = step;
+    // A new Codex thread has no transcript until its first message; it is
+    // still the pane's conversation, so Chat keeps its composer.
+    if (
+      resolved.reason === "no_messages_yet" &&
+      base.session_binding === "title"
+    )
+      return { ...base, status: "ok", unavailable: null };
     if (!resolved.file) {
       args.cache.invalidate(resolved);
       const reason = resolved.reason ?? "no_session";
@@ -146,7 +216,6 @@ export function createHerdrConversationSource(args: {
         ...base,
         status: "ok",
         unavailable: null,
-        session_fingerprint: fingerprint(resolved),
         updated_at: new Date(projection.file.mtimeMs).toISOString(),
         messages,
         latest: latestAssistantMessage(messages),
@@ -168,6 +237,30 @@ export function createHerdrConversationSource(args: {
     id: "herdr",
     read,
     latest,
+    identity: async ({ pane_id }) => {
+      const step = await resolve(pane_id);
+      if (!("resolved" in step))
+        return {
+          key: JSON.stringify([step.agent, step.unavailable.reason]),
+          path: null,
+        };
+      const { base, resolved } = step;
+      const file = resolved.file;
+      return {
+        key: JSON.stringify([
+          base.agent_status,
+          base.session_binding,
+          base.session_fingerprint,
+          resolved.reason ?? null,
+          resolved.session?.value ?? null,
+          file?.path ?? null,
+          file?.mtimeMs ?? null,
+          file?.size ?? null,
+          file?.changeToken ?? null,
+        ]),
+        path: file && !args.files.remote ? file.path : null,
+      };
+    },
     latestAll: async (paneIds) => {
       const ids =
         paneIds ??
@@ -198,6 +291,7 @@ export function createHerdrConversationSource(args: {
                   pane_id,
                   agent: null,
                   agent_status: null,
+                  session_binding: null,
                   session_fingerprint: null,
                   updated_at: null,
                   messages: [],
@@ -219,15 +313,22 @@ export function createHerdrConversationSource(args: {
           reason: "empty",
           message: "Write a message first.",
         };
-      const step = await resolve(pane_id);
-      if (!("resolved" in step) || !step.resolved.file)
+      // Re-read the pane immediately before prompting, with no other await
+      // in between. Herdr's prompt takes no expected session, so a switch
+      // after this reply and before the prompt lands is still possible.
+      const info =
+        args.remotePlatform === "windows" ? null : await agentInfo(pane_id);
+      const agent = normalizeAgentName(stringValue(info?.agent));
+      const bound =
+        info && SESSION_AGENTS.has(agent) ? paneBinding(agent, info) : null;
+      if (!bound)
         return {
           status: "refused",
           reason: "unavailable",
           message:
-            "Chat cannot read this conversation, so nothing was sent. Use the Terminal tab.",
+            "Herdr has not tied a conversation to this pane, so nothing was sent. Use the Terminal tab.",
         };
-      if (fingerprint(step.resolved) !== session_fingerprint)
+      if (bound.fingerprint !== session_fingerprint)
         return {
           status: "refused",
           reason: "changed",

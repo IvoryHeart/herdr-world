@@ -1,3 +1,4 @@
+import type { ConversationIdentity } from "./conversation-watch";
 import type { HistoryEntry } from "./session-history";
 
 // The conversation read model is the one contract Chat and other consumers
@@ -8,8 +9,11 @@ import type { HistoryEntry } from "./session-history";
 export type ConversationMessage = {
   id: string;
   role: "user" | "assistant" | "tool";
-  /** `activity` summarises a run of tool calls between two messages. */
-  kind: "message" | "error" | "activity";
+  /**
+   * `activity` summarises a run of tool calls between two messages; `notice`
+   * marks an event in the conversation, such as a compaction.
+   */
+  kind: "message" | "error" | "activity" | "notice";
   text: string;
   sent_at: string;
   tools?: { name: string; calls: number }[];
@@ -28,13 +32,21 @@ export type ConversationUnavailableReason =
   | "file_missing"
   | "read_failed";
 
+/**
+ * How the shown session is tied to the pane: `reported` by the harness's
+ * Herdr integration, named in the pane's Codex `title`, or `guessed` from the
+ * pane's directory. Only a reported or titled conversation can be sent to.
+ */
+export type ConversationBinding = "reported" | "title" | "guessed" | null;
+
 export type Conversation = {
   conversation_version: 1;
   source: string;
   pane_id: string;
   agent: string | null;
   agent_status: string | null;
-  /** Identifies the session read; send refuses when it has changed. */
+  session_binding: ConversationBinding;
+  /** The bound session; null for a guess. Send refuses when it changes. */
   session_fingerprint: string | null;
   updated_at: string | null;
   messages: ConversationMessage[];
@@ -68,6 +80,8 @@ export interface ConversationSource {
   readonly id: string;
   read(target: ConversationTarget): Promise<Conversation>;
   latest(target: ConversationTarget): Promise<ConversationLatest>;
+  /** A cheap key for change notification, without reading the transcript. */
+  identity(target: ConversationTarget): Promise<ConversationIdentity>;
   /** Latest for the named panes, or for every agent the source sees. */
   latestAll(paneIds?: readonly string[]): Promise<ConversationLatest[]>;
   send(
@@ -123,7 +137,8 @@ export function conversationMessages(
     messages.push({
       id: entry.id,
       role: entry.role,
-      kind: entry.kind === "error" ? "error" : "message",
+      kind:
+        entry.kind === "error" ? "error" : entry.notice ? "notice" : "message",
       text: entry.text,
       sent_at: entry.sent_at,
     });

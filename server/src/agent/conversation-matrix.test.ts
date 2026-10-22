@@ -5,6 +5,7 @@ import { join } from "node:path";
 import {
   CODEX_DAEMON_ISSUE,
   createHerdrConversationSource,
+  paneBinding,
 } from "./herdr-conversation";
 import type { Conversation } from "./conversation";
 import { localAgentSessionFiles } from "./session-file-access";
@@ -31,19 +32,47 @@ type Fixture = {
   write(dir: string): Promise<string>;
   /** False where the format carries no tool records in this fixture. */
   tools?: boolean;
+  /** Shown entries expected before the question, such as a compaction. */
+  lead?: string[];
 };
 
 const fixtures: Fixture[] = [
   {
     agent: "codex",
+    // Injected instructions and environment are hidden; a wrapped answer to
+    // the agent's question is shown as what the user wrote.
+    lead: ["user:Yes, the demo."],
     async write(dir) {
       const path = join(
         dir,
         "rollout-2026-10-22T09-00-00-019a0000-0000-7000-8000-000000000001.jsonl",
       );
+      const injected = (second: number, text: string) => ({
+        type: "response_item",
+        timestamp: at(second),
+        payload: {
+          type: "message",
+          role: "user",
+          content: [{ type: "input_text", text }],
+        },
+      });
       await writeFile(
         path,
         jsonl([
+          // Codex writes repository instructions and its environment as
+          // user items before the first prompt.
+          injected(
+            0,
+            "# AGENTS.md instructions for /work/demo\n\n<INSTRUCTIONS>\nSynthetic.\n</INSTRUCTIONS>",
+          ),
+          injected(
+            0,
+            "<send_user_message_question_reply>\nYes, the demo.\n</send_user_message_question_reply>",
+          ),
+          injected(
+            0,
+            "<environment_context>\n  <cwd>/work/demo</cwd>\n</environment_context>",
+          ),
           {
             type: "response_item",
             timestamp: at(1),
@@ -88,53 +117,84 @@ const fixtures: Fixture[] = [
   },
   {
     agent: "claude",
+    // A compaction summary, a local-command caveat, a rewound prompt with its
+    // answer and a sidechain record surround the live conversation.
+    lead: [
+      "notice:Conversation compacted",
+      "user:/review the demo",
+      "assistant:Reviewing.",
+      "notice:Background task update",
+    ],
     async write(dir) {
       const path = join(dir, "claude-session.jsonl");
+      const record = (
+        type: "user" | "assistant",
+        uuid: string,
+        parentUuid: string | null,
+        second: number,
+        content: unknown,
+        extra: Record<string, unknown> = {},
+      ) => ({
+        type,
+        uuid,
+        parentUuid,
+        timestamp: at(second),
+        message: { role: type, content },
+        ...extra,
+      });
       await writeFile(
         path,
         jsonl([
-          {
-            type: "user",
-            timestamp: at(1),
-            message: { role: "user", content: QUESTION },
-          },
-          {
-            type: "assistant",
-            timestamp: at(2),
-            message: {
-              role: "assistant",
-              content: [
-                {
-                  type: "tool_use",
-                  id: "toolu_1",
-                  name: "Read",
-                  input: { file_path: "README.md" },
-                },
-              ],
+          record("user", "summary", null, 0, "Synthetic earlier summary.", {
+            isCompactSummary: true,
+          }),
+          record("user", "caveat", "summary", 0, "Caveat: synthetic.", {
+            isMeta: true,
+          }),
+          record(
+            "user",
+            "command",
+            "caveat",
+            0,
+            "<command-message>review</command-message>\n<command-name>/review</command-name>\n<command-args>the demo</command-args>",
+          ),
+          record("assistant", "command-answer", "command", 0, [
+            { type: "text", text: "Reviewing." },
+          ]),
+          record(
+            "user",
+            "notification",
+            "command-answer",
+            0,
+            "<task-notification>\n<status>completed</status>\n</task-notification>",
+          ),
+          record("user", "rewound", "notification", 1, "An abandoned question"),
+          record("assistant", "rewound-answer", "rewound", 1, [
+            { type: "text", text: "An abandoned answer" },
+          ]),
+          record("user", "question", "notification", 1, QUESTION),
+          record("assistant", "call", "question", 2, [
+            {
+              type: "tool_use",
+              id: "toolu_1",
+              name: "Read",
+              input: { file_path: "README.md" },
             },
-          },
-          {
-            type: "user",
-            timestamp: at(3),
-            message: {
-              role: "user",
-              content: [
-                {
-                  type: "tool_result",
-                  tool_use_id: "toolu_1",
-                  content: "# Demo",
-                },
-              ],
-            },
-          },
-          {
-            type: "assistant",
-            timestamp: at(4),
-            message: {
-              role: "assistant",
-              content: [{ type: "text", text: ANSWER }],
-            },
-          },
+          ]),
+          record(
+            "assistant",
+            "side",
+            "call",
+            2,
+            [{ type: "text", text: "Subagent chatter" }],
+            { isSidechain: true },
+          ),
+          record("user", "result", "call", 3, [
+            { type: "tool_result", tool_use_id: "toolu_1", content: "# Demo" },
+          ]),
+          record("assistant", "answer", "result", 4, [
+            { type: "text", text: ANSWER },
+          ]),
         ]),
       );
       return path;
@@ -446,13 +506,17 @@ describe("conversation read model across harnesses", () => {
         const shape = conversation.messages.map((message) =>
           message.kind === "activity"
             ? `tool:${message.tools?.length}`
-            : `${message.role}:${message.text}`,
+            : message.kind === "notice"
+              ? `notice:${message.text}`
+              : `${message.role}:${message.text}`,
         );
-        expect(shape).toEqual(
-          fixture.tools === false
-            ? [`user:${QUESTION}`, `assistant:${ANSWER}`]
-            : [`user:${QUESTION}`, "tool:1", `assistant:${ANSWER}`],
-        );
+        expect(shape).toEqual([
+          ...(fixture.lead ?? []),
+          `user:${QUESTION}`,
+          ...(fixture.tools === false ? [] : ["tool:1"]),
+          `assistant:${ANSWER}`,
+        ]);
+        expect(conversation.session_binding).toBe("reported");
         expect(conversation.latest?.text).toBe(ANSWER);
       });
 
@@ -631,14 +695,32 @@ describe("conversation availability", () => {
       expect(conversation.latest?.text).toBe(ANSWER);
     });
 
-    test("a named thread without a transcript has no messages yet", async () => {
-      const conversation = await source(
-        herdr({
-          ...pane("codex"),
-          terminal_title: title("019b0000-0000-7000-8000-0000000000d2"),
+    test("a new thread without a transcript keeps its composer", async () => {
+      const prompts: unknown[] = [];
+      const chat = source(
+        herdr(
+          {
+            ...pane("codex"),
+            terminal_title: title("019b0000-0000-7000-8000-0000000000d2"),
+          },
+          prompts,
+        ),
+      );
+      const conversation = await chat.read({ pane_id: "w1:p1" });
+      expect(conversation).toMatchObject({
+        status: "ok",
+        session_binding: "title",
+        messages: [],
+        latest: null,
+      });
+      expect(
+        await chat.send({
+          pane_id: "w1:p1",
+          text: "Start here",
+          session_fingerprint: conversation.session_fingerprint!,
         }),
-      ).read({ pane_id: "w1:p1" });
-      expect(unavailable(conversation)?.reason).toBe("no_messages_yet");
+      ).toEqual({ status: "sent" });
+      expect(prompts).toHaveLength(1);
     });
   });
 
@@ -706,5 +788,156 @@ describe("conversation availability", () => {
       status: "ok",
       latest: { role: "assistant", text: ANSWER },
     });
+  });
+});
+
+describe("conversation binding and remote admission", () => {
+  test("remote Grok and Antigravity paths are refused, never read locally", async () => {
+    // A local file at the reported path must not stand in for the remote one.
+    const dir = await mkdtemp(join(root, "remote-collision-"));
+    const grok = await fixtures.find((f) => f.agent === "grok")!.write(dir);
+    const agy = await fixtures.find((f) => f.agent === "agy")!.write(dir);
+    for (const [agent, path] of [
+      ["grok", grok],
+      ["agy", agy],
+    ] as const) {
+      const files = {
+        ...localAgentSessionFiles,
+        remote: true,
+        statFile: async (value: string) => ({
+          path: value,
+          mtimeMs: 1,
+          size: 1,
+        }),
+        readText: async () => {
+          throw new Error("remote read attempted");
+        },
+      };
+      const chat = createHerdrConversationSource({
+        herdrCall: herdr(
+          pane(agent, {
+            source: `herdr:${agent}`,
+            agent,
+            kind: "path",
+            value: path,
+          }),
+        ),
+        files,
+        context: createAgentSessionResolverContext(),
+        cache: createSessionProjectionCache(files),
+      });
+      const conversation = await chat.read({ pane_id: "w1:p1" });
+      expect(unavailable(conversation)?.reason).toBe("remote_lookup");
+      expect(conversation.messages).toEqual([]);
+    }
+  });
+
+  test("a conversation found in the pane's folder is shown but cannot be sent to", async () => {
+    const session = join(
+      process.env.GROK_HOME!,
+      "sessions",
+      encodeURIComponent("/work/guess"),
+      "folder-guess",
+    );
+    await mkdir(session, { recursive: true });
+    const written = await fixtures
+      .find((f) => f.agent === "grok")!
+      .write(await mkdtemp(join(root, "grok-guess-")));
+    const { copyFile } = await import("node:fs/promises");
+    await copyFile(written, join(session, "chat_history.jsonl"));
+    await writeFile(
+      join(session, "summary.json"),
+      JSON.stringify({ info: { id: "folder-guess", cwd: "/work/guess" } }),
+    );
+    const prompts: unknown[] = [];
+    const chat = source(
+      herdr({ ...pane("grok"), cwd: "/work/guess" }, prompts),
+    );
+    const conversation = await chat.read({ pane_id: "w1:p1" });
+    expect(conversation).toMatchObject({
+      status: "ok",
+      session_binding: "guessed",
+      session_fingerprint: null,
+      latest: { text: ANSWER },
+    });
+    expect(
+      await chat.send({
+        pane_id: "w1:p1",
+        text: "hello",
+        session_fingerprint: "",
+      }),
+    ).toMatchObject({ status: "refused", reason: "unavailable" });
+    expect(prompts).toEqual([]);
+  });
+
+  test("send rereads the pane immediately before prompting", async () => {
+    const dir = await mkdtemp(join(root, "race-"));
+    const path = await fixtures[1]!.write(dir);
+    const reported = (value: string) =>
+      pane("claude", {
+        source: "herdr:claude",
+        agent: "claude",
+        kind: "path",
+        value,
+      });
+    let current = reported(path);
+    const log: string[] = [];
+    const call: HerdrCall = async (method) => {
+      log.push(method);
+      if (method === "agent.get") return { agent: current };
+      if (method === "agent.prompt") return { agent: { pane_id: "w1:p1" } };
+      throw new Error(`unexpected ${method}`);
+    };
+    const chat = source(call);
+    const { session_fingerprint } = await chat.read({ pane_id: "w1:p1" });
+    // The pane switches sessions after Chat read it: nothing is sent.
+    current = reported(join(dir, "other.jsonl"));
+    log.length = 0;
+    expect(
+      await chat.send({
+        pane_id: "w1:p1",
+        text: "hello",
+        session_fingerprint: session_fingerprint!,
+      }),
+    ).toMatchObject({ status: "refused", reason: "changed" });
+    expect(log).toEqual(["agent.get"]);
+    // Unchanged, the check is the last Herdr call before the prompt.
+    current = reported(path);
+    log.length = 0;
+    expect(
+      await chat.send({
+        pane_id: "w1:p1",
+        text: "hello",
+        session_fingerprint: session_fingerprint!,
+      }),
+    ).toEqual({ status: "sent" });
+    expect(log).toEqual(["agent.get", "agent.prompt"]);
+  });
+
+  test("the session a Herdr report and a Codex title bind agree with the read", async () => {
+    const reported = {
+      ...pane("codex"),
+      agent_session: {
+        source: "herdr:codex",
+        agent: "codex",
+        kind: "id",
+        value: "019c0000-0000-7000-8000-000000000003",
+      },
+    };
+    expect(paneBinding("codex", reported)?.binding).toBe("reported");
+    const titled = {
+      ...reported,
+      terminal_title: "demo · 019c0000-0000-7000-8000-00000...",
+    };
+    // The title decides over a possibly stale report.
+    expect(paneBinding("codex", titled)?.binding).toBe("title");
+    expect(
+      paneBinding("codex", {
+        ...titled,
+        terminal_title:
+          "019c0000-0000-7000-8000-00000... 019d0000-0000-7000-8000-00000...",
+      }),
+    ).toBeNull();
+    expect(paneBinding("grok", pane("grok"))).toBeNull();
   });
 });

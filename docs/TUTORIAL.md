@@ -325,9 +325,9 @@ attention, and `done`/`idle` suggest when to return. **Status is not verificatio
 `done` does not mean tests passed. Available states depend on agent integration.
 
 Open **Chat** in the Inspector to read the conversation and reply. Chat shows
-user and agent messages, with one line for each run of tool calls, and refreshes
-when the agent's status changes. If Chat cannot read the conversation it says
-why and offers **Open Terminal**. Choose **Details** for the Session Inspector:
+user and agent messages, with one line for each run of tool calls, and updates
+while the agent works. If Chat cannot read the conversation it says why and
+offers the fix it names, or **Open Terminal**. Choose **Details** for the Session Inspector:
 Chat and Timeline, ATIF (a normalized trajectory), and raw transcript; original
 export preserves the source record. Use the [shortcut reference](../FEATURES.md#keyboard-shortcuts)
 for Chat, Files, and Changes on your platform. In Details, switch **Chat / Timeline**
@@ -342,8 +342,9 @@ The link replaces the pane's existing session association for all viewers.
 
 **You are done when:** you found the explanation, not just the last terminal line.
 
-> Chat and inspection support Codex, Claude, Kimi, Grok Build, Pi, Muse Code and Antigravity CLI
-> with readable records; see the [harness matrix](./CHAT.md#harness-matrix).
+> Chat and inspection read Codex, Claude, Kimi, Grok Build, Pi, Muse Code and Antigravity CLI
+> transcripts; Codex, Claude and Pi are checked against real ones. See the
+> [harness matrix](./CHAT.md#harness-matrix).
 > Follow missing-metadata integration hints. For Codex 0.157 and later, run
 > `/title` in Codex and add Thread ID so History knows which conversation a pane
 > shows. SSH reads Herdr-reported paths and

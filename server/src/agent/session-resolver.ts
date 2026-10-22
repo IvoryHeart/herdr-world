@@ -63,7 +63,7 @@ function normalizeParams(raw: Record<string, unknown>): AgentHistoryParams {
   };
 }
 
-function piAgentDirectory() {
+export function piAgentDirectory() {
   const configured = process.env.PI_CODING_AGENT_DIR?.trim();
   if (!configured) return join(homedir(), ".pi", "agent");
   if (configured === "~") return homedir();
@@ -250,6 +250,8 @@ async function sessionFileFor(
   files: AgentSessionFileAccess,
   context: AgentSessionResolverContext,
 ) {
+  // The Grok and Antigravity readers only open files on this machine.
+  if ((agent === "grok" || agent === "agy") && files.remote) return null;
   if (agent === "grok") {
     const descriptor =
       session.kind === "path"
@@ -384,7 +386,7 @@ export async function resolveAgentSessionInfo(
       };
     }
   }
-  if (agent === "grok" && !resolvedSession) {
+  if (agent === "grok" && !resolvedSession && !files.remote) {
     const descriptor = await findGrokSessionForCwd(cwd);
     if (descriptor) {
       file = descriptor.file;
@@ -396,7 +398,7 @@ export async function resolveAgentSessionInfo(
       };
     }
   }
-  if (agent === "agy" && !resolvedSession) {
+  if (agent === "agy" && !resolvedSession && !files.remote) {
     const descriptor = await findAntigravitySessionForCwd(cwd);
     if (descriptor) {
       file = descriptor.file;
@@ -429,19 +431,21 @@ export async function resolveAgentSessionInfo(
           ? files.remote
             ? "Muse session inspection over SSH requires a Herdr-reported transcript path. Local session discovery is not used for remote panes."
             : cwd
-              ? `No local Muse Code session was found for ${cwd}. Start Muse Code in this directory without --no-session-log, then refresh Session Inspect.`
+              ? `No local Muse Code session was found for ${cwd}. Start Muse Code in this directory without --no-session-log, then refresh.`
               : "Herdr did not report a working directory for this Muse Code pane."
-          : agent === "grok"
-            ? cwd
-              ? `No local Grok Build session was found for ${cwd}. Start Grok Build in this directory, then refresh Session Inspect.`
-              : "Herdr did not report a working directory for this Grok Build pane."
-            : agent === "agy"
+          : (agent === "grok" || agent === "agy") && files.remote
+            ? "World cannot read this agent's sessions on an SSH host yet."
+            : agent === "grok"
               ? cwd
-                ? `No local Antigravity session was found for ${cwd}. Start Antigravity in this directory, then refresh Session Inspect.`
-                : "Herdr did not report a working directory for this Antigravity pane."
-              : agent === "codex"
-                ? "This pane isn't linked to a Codex session. In Codex, run /title and add Thread ID, or link the session by ID."
-                : "Herdr has not received an agent session id for this pane. Install the Herdr integration for this agent and start a new agent session.",
+                ? `No local Grok Build session was found for ${cwd}. Start Grok Build in this directory, then refresh.`
+                : "Herdr did not report a working directory for this Grok Build pane."
+              : agent === "agy"
+                ? cwd
+                  ? `No local Antigravity session was found for ${cwd}. Start Antigravity in this directory, then refresh.`
+                  : "Herdr did not report a working directory for this Antigravity pane."
+                : agent === "codex"
+                  ? "This pane isn't linked to a Codex session. In Codex, run /title and add Thread ID, or link the session by ID."
+                  : "Herdr has not received an agent session id for this pane. Install the Herdr integration for this agent and start a new agent session.",
       command:
         agent === "grok" || agent === "muse" || agent === "codex"
           ? undefined

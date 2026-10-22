@@ -1,5 +1,5 @@
 import { createRoot } from "react-dom/client";
-import { bridge } from "../api";
+import { bridge, type BridgeControlMsg } from "../api";
 import type { Pane } from "../types";
 import { AgentChat, type Conversation } from "./AgentChat";
 import "../styles/tokens.css";
@@ -22,6 +22,7 @@ const conversation = (
   pane_id: "p",
   agent: "claude",
   agent_status: status,
+  session_binding: "reported",
   session_fingerprint: "a".repeat(64),
   status: "ok",
   unavailable: null,
@@ -45,6 +46,20 @@ const message = (
 
 async function run() {
   const originalConnection = bridge.connection;
+  const originalControl = bridge.onControl;
+  const controls = new Set<(control: BridgeControlMsg) => void>();
+  bridge.onControl = (handler) => {
+    controls.add(handler);
+    return () => controls.delete(handler);
+  };
+  const push = (pane_id = "p") =>
+    controls.forEach((handler) =>
+      handler({
+        type: "agent_conversation_changed",
+        connection_id: "test",
+        pane_id,
+      }),
+    );
   const calls: { method: string; params: Record<string, unknown> }[] = [];
   let reply: Conversation = conversation([
     message("u1", "user", "What does the README say?"),
@@ -70,6 +85,11 @@ async function run() {
       calls.push({ method, params });
       if (method === "agent_conversation.send") return sendResult;
       if (method === "agent_conversation.get") return reply;
+      if (
+        method === "agent_conversation.watch" ||
+        method === "agent_conversation.unwatch"
+      )
+        return { ok: true };
       throw new Error(`unexpected ${method}`);
     },
   });
@@ -98,8 +118,9 @@ async function run() {
         onClose={() => {}}
       />,
     );
-  const reads = () =>
-    calls.filter((call) => call.method === "agent_conversation.get").length;
+  const count = (method: string) =>
+    calls.filter((call) => call.method === method).length;
+  const reads = () => count("agent_conversation.get");
   try {
     render("idle", false);
     await settle();
@@ -108,6 +129,10 @@ async function run() {
     render("idle");
     await settle();
     check(reads() === 1, "Opening Chat must read the conversation once");
+    check(
+      count("agent_conversation.watch") === 1,
+      "Opening Chat must ask the service to watch the pane",
+    );
     const bubbles = [...container.querySelectorAll(".agent-chat-message")];
     check(
       bubbles.map((node) => node.getAttribute("data-role")).join() ===
@@ -129,9 +154,12 @@ async function run() {
       "Chat must never render terminal content",
     );
 
-    // No timers: nothing rereads until Herdr reports a status change.
+    // No timers: nothing rereads until the service says it changed.
     await new Promise((resolve) => setTimeout(resolve, 600));
     check(reads() === 1, "Chat must not poll");
+    push("another-pane");
+    await settle();
+    check(reads() === 1, "A change to another pane must not reread");
     reply = conversation(
       [
         ...reply.messages,
@@ -140,17 +168,9 @@ async function run() {
       ],
       "working",
     );
-    render("working");
+    push();
     await settle();
-    check(reads() === 2, "A status change must reread the conversation");
-    // A fast turn can end on the status it started from; Herdr's state
-    // sequence still moves.
-    render("working", true, 7);
-    await settle();
-    check(
-      reads() === 3,
-      "A state sequence change must reread the conversation",
-    );
+    check(reads() === 2, "A pushed change must reread the conversation");
     check(
       container.querySelectorAll(".agent-chat-message").length === 4,
       "A reread must show new messages",
@@ -200,6 +220,62 @@ async function run() {
     );
     check(textarea.value === "Another", "A refused draft must stay");
 
+    // A read that fails mid-write keeps the last good conversation.
+    reply = {
+      ...conversation([]),
+      status: "unavailable",
+      session_fingerprint: null,
+      unavailable: { reason: "read_failed", detail: "Unexpected end." },
+    } as Conversation;
+    push();
+    await settle();
+    check(
+      container.querySelectorAll(".agent-chat-message").length === 4 &&
+        !container.querySelector(".agent-chat-unavailable"),
+      "A failed read must keep the last good conversation",
+    );
+    check(
+      container
+        .querySelector(".agent-chat-stale")
+        ?.textContent?.includes("Unexpected end.") === true,
+      "A failed read must mark the conversation stale",
+    );
+
+    // A conversation found in the pane's folder is shown, never sent to.
+    reply = {
+      ...conversation([message("g1", "assistant", "Guessed answer")]),
+      session_binding: "guessed",
+      session_fingerprint: null,
+    };
+    push();
+    await settle();
+    check(
+      !container.querySelector("textarea") &&
+        !!container.querySelector(".agent-chat-guessed") &&
+        !container.querySelector(".agent-chat-stale"),
+      "A guessed conversation must not offer a composer",
+    );
+
+    reply = conversation([
+      message("c0", "user", "Earlier"),
+      {
+        id: "n1",
+        role: "assistant",
+        kind: "notice",
+        text: "Conversation compacted",
+        sent_at: "2026-10-22T09:00:02Z",
+      },
+      message("c1", "assistant", "Later"),
+    ]);
+    push();
+    await settle();
+    check(
+      container.querySelector(".agent-chat-divider")?.textContent ===
+        "Conversation compacted" &&
+        container.querySelectorAll(".agent-chat-message").length === 2,
+      "A compaction must render as a divider, not a message",
+    );
+
     reply = {
       ...conversation([]),
       status: "unavailable",
@@ -210,8 +286,12 @@ async function run() {
         issue: "https://example.com/issues/250",
       },
     } as Conversation;
-    render("done");
+    push();
     await settle();
+    check(
+      !!container.querySelector(".agent-chat-link input"),
+      "An unlinked Codex pane must offer the link it names",
+    );
     check(
       container
         .querySelector(".agent-chat-unavailable")
@@ -228,10 +308,40 @@ async function run() {
       .find((button) => button.textContent?.includes("Open Terminal"))
       ?.click();
     check(terminalOpened === 1, "Unavailable Chat must link to the Terminal");
+
+    reply = {
+      ...conversation([]),
+      status: "unavailable",
+      session_fingerprint: null,
+      unavailable: {
+        reason: "no_session",
+        detail: "Install the Herdr integration for this agent.",
+        command: "herdr integration install kimi",
+      },
+    } as Conversation;
+    push();
+    await settle();
+    const buttons = [
+      ...container.querySelectorAll<HTMLButtonElement>(
+        ".agent-chat-unavailable button",
+      ),
+    ].map((button) => button.textContent?.trim());
+    check(
+      buttons.includes("Copy command") && buttons.includes("Refresh"),
+      "A missing integration must offer to copy its command and refresh",
+    );
+
+    render("done", false);
+    await settle();
+    check(
+      count("agent_conversation.unwatch") === 1,
+      "Hiding Chat must stop watching the pane",
+    );
   } finally {
     root.unmount();
     container.remove();
     bridge.connection = originalConnection;
+    bridge.onControl = originalControl;
   }
 }
 

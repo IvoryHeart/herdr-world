@@ -122,6 +122,7 @@ export function latestTurnReceipt(
     if (
       step.source === "agent" &&
       isConversationStep(step) &&
+      step.extra?.notice === undefined &&
       !PLACEHOLDER.test(step.message.trim())
     )
       report = step;

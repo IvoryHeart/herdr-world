@@ -244,3 +244,67 @@
 .agent-chat.is-details {
   min-height: 0;
 }
+
+.agent-chat-divider {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.agent-chat-divider::before,
+.agent-chat-divider::after {
+  content: "";
+  flex: 1 1 auto;
+  border-top: 1px solid var(--border-soft);
+}
+
+.agent-chat-stale,
+.agent-chat-guessed {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 6px 12px;
+  color: var(--muted);
+  font-size: 12px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.agent-chat-guessed {
+  border-top: 1px solid var(--border-soft);
+  border-bottom: 0;
+}
+
+.agent-chat-guessed span {
+  flex: 1 1 auto;
+}
+
+.agent-chat-command,
+.agent-chat-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.agent-chat-link {
+  width: min(100%, 420px);
+  text-align: left;
+}
+
+.agent-chat-guessed button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  color: var(--text);
+  font-size: 12px;
+  background: transparent;
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+  cursor: pointer;
+}
