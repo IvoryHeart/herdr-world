@@ -120,14 +120,20 @@ function elapsed(ms: number) {
  * this view saw it start. Transcripts are written per message or tool call,
  * so this is what moves between writes. Never terminal output.
  */
+/** Harnesses where Esc interrupts the current turn without quitting. */
+const STOPS_WITH_ESCAPE = new Set(["claude", "codex", "pi"]);
+
 function WorkingLine({
   title,
   tool,
   elapsedMs,
+  onStop,
 }: {
   title: string | null;
   tool: string | null;
   elapsedMs: number | null;
+  /** Press Esc in the agent's pane; only where Esc interrupts a turn. */
+  onStop: (() => void) | null;
 }) {
   // The title's leading spinner glyph is the harness's, not ours.
   const task = title?.replace(/^[^\p{L}\p{N}]+/u, "").trim() || null;
@@ -141,6 +147,16 @@ function WorkingLine({
       {tool ? <span> · {tool}</span> : null}
       {elapsedMs !== null ? (
         <span className="agent-chat-working-time"> · {elapsed(elapsedMs)}</span>
+      ) : null}
+      {onStop ? (
+        <button
+          type="button"
+          className="agent-chat-stop"
+          title="Press Esc in the agent's terminal to interrupt this turn"
+          onClick={onStop}
+        >
+          Stop <kbd>Esc</kbd>
+        </button>
       ) : null}
     </p>
   );
@@ -478,6 +494,22 @@ export function AgentChat({
     [answering, connectionClient, pane.pane_id],
   );
   const choices = ask?.choices ?? [];
+  // Stop presses Esc in the agent's pane when the user asks, never by itself.
+  const stop = useCallback(async () => {
+    setNotice("");
+    try {
+      await connectionClient.call("pane.send_input", {
+        pane_id: pane.pane_id,
+        text: "",
+        keys: ["escape"],
+      });
+      setNotice(
+        `Pressed Esc in ${conversation?.agent ?? "the agent"}'s terminal.`,
+      );
+    } catch (reason) {
+      setNotice(reason instanceof Error ? reason.message : String(reason));
+    }
+  }, [connectionClient, conversation?.agent, pane.pane_id]);
   // 1–9 answer while focus is in Chat but not in its message box.
   useEffect(() => {
     if (!choices.length) return;
@@ -733,6 +765,11 @@ export function AgentChat({
                   workingSince === null
                     ? null
                     : Math.max(0, clock - workingSince)
+                }
+                onStop={
+                  STOPS_WITH_ESCAPE.has(conversation?.agent ?? pane.agent ?? "")
+                    ? () => void stop()
+                    : null
                 }
               />
             ) : null}

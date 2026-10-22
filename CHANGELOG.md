@@ -10,7 +10,8 @@ are optional because the merged PR history records their source.
 ### Added
 
 - Chat shows live progress while an agent works (its task from the terminal
-  title, the tool it is using and the elapsed time), offers a waiting agent's
+  title, the tool it is using and the elapsed time) with a Stop button that
+  presses Esc for Claude Code, Codex and Pi, offers a waiting agent's
   numbered answers above the composer, keeps drafts when you switch views, and
   takes the Town prototype's look inside Town's windows.
 

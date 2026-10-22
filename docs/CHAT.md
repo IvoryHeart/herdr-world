@@ -31,7 +31,8 @@ view that you open on purpose.
   is using from the transcript, and how long it has worked since Chat saw it
   start. Harnesses write their transcripts per message or tool call, not per
   token, so this is what moves during a long step. It never shows terminal
-  output.
+  output. For Claude Code, Codex and Pi it offers **Stop**, which presses Esc
+  in the agent's pane to interrupt the turn; Chat never presses it by itself.
 - When the agent waits on a numbered question, boxes the question at the end
   of the conversation and offers its answers above the composer; an answer, or
   its number key, presses that key in the agent's pane. The question and

@@ -367,7 +367,7 @@ See [resource ownership](docs/ARCHITECTURE.md#workspace-resource-ownership).
   same time. Slash commands, and Claude Code's `!` and `#`, go through the
   Terminal.
   While the agent works, a slim line shows its current task, tool and elapsed
-  time; a waiting agent's numbered question shows with one-tap answers. Drafts
+  time, with Stop (Esc) for Claude Code, Codex and Pi; a waiting agent's numbered question shows with one-tap answers. Drafts
   survive switching views, and Town's windows give Chat the Town prototype's
   look.
   It refreshes when the service sees the transcript, title or status change,

@@ -722,6 +722,18 @@ async function run() {
         !working.textContent.includes("✳ Running"),
       `A working agent must show its task, tool and time (${working?.textContent})`,
     );
+    // Stop is the user's choice: it presses Esc in the agent's pane.
+    container.querySelector<HTMLButtonElement>(".agent-chat-stop")!.click();
+    await settle();
+    const stopped = calls.find(
+      (call) =>
+        call.method === "pane.send_input" &&
+        JSON.stringify(call.params.keys) === '["escape"]',
+    );
+    check(
+      stopped?.params.pane_id === "p" && stopped.params.text === "",
+      "Stop must press Esc in the agent's pane",
+    );
 
     // A waiting agent's question is boxed, and its answers sit above the
     // composer; an answer presses its key without Enter.
@@ -743,7 +755,9 @@ async function run() {
     );
     chips[0]!.click();
     await settle();
-    const pressed = calls.find((call) => call.method === "pane.send_input");
+    const pressed = calls.find(
+      (call) => call.method === "pane.send_input" && call.params.text === "1",
+    );
     check(
       pressed?.params.text === "1" &&
         JSON.stringify(pressed.params.keys) === "[]" &&
