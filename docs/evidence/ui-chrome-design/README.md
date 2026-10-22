@@ -50,7 +50,7 @@ only on desktop. `App.tsx` gates it on `!mobile`, so on phone it changes nothing
 | 1 | Dock side, expand, pop-out terminal | rare | ⋯ menu |
 | 1 | Colour swatch (#261) | rare | ⋯ → Colour; shown as the avatar ring or swatch |
 | 1 | Repository status icon | sometimes | Location popover (it duplicated bar 3) |
-| 2 | Terminal · Files · Changes · Commits · Chat | constant | View chips in the one bar; a thumb row on phone |
+| 2 | Terminal · Files · Changes · Commits · Chat | constant | One top selector in the bar, phone included (Commits stays in Changes' own toolbar) |
 | 3 | Branch-link row | rare | Removed; the location popover covers it |
 | 3 | PR card on Changes and Commits | sometimes | Pill in the Changes toolbar, plus the popover |
 
@@ -63,11 +63,10 @@ Inspector, the Spaces tab window and the Town chat window.
 
 - **Town skin** (Town v4 prototype): dark translucent panel with a 2px edge and
   soft shadow, 40–44px targets, and the name in Pixelify Sans. The bar is
-  `‹ Back · avatar · name / location line · view chips · Next › · ⋯`, 58px in
-  total. View chips are icon-only except the active one until the window reaches
-  640px, then all are labelled. Pane chips get a second row only when the desk
-  has two or more panes. Chat owns the conversation, answers and composer
-  (FM-CHAT-LAYOUT).
+  `‹ Back · avatar · name / location line · [Chat | Terminal | Changes | Files] · Next › · ⋯`,
+  58px in total. Selector chips are icons until the window reaches 640px, then
+  labelled. Pane chips get a second row only when the desk has two or more
+  panes. Only Chat has a bottom area: its composer.
 - **Calm skin** (Board and Spaces): a 38px bar of
   `swatch · name · location line · view chips · ⋯ · maximise · close`.
 - **Location line and popover:** shows status, host, room, desk and pane,
@@ -95,11 +94,11 @@ VS Code, Warp, Zed and iTerm2's compact theme.
 
 | Viewport | Town dock | Window bar | Tray and camera |
 | --- | --- | --- | --- |
-| Phone | The window covers the screen; Back returns to the map | Back, name and Next on top; view chips in a 44px thumb row above the composer | Bottom strip; one 44px camera button; bottom nav kept |
-| Mac laptop | Right dock, `min(520px, 40vw)`. FirstMate chat folds to its bar above the agent window | Icon chips except the active one | Left rail; camera beside the dock |
-| Half-width Linux | Right dock, 508px; both windows open in halves | As laptop | Left rail; hosts shown as an icon |
-| Wide Linux | Two docked 520px columns: FirstMate chat and the agent window | Labelled chips | Left rail |
-| Portrait | Bottom dock at 45% height, windows side by side | Town skin | Left rail; camera above the dock |
+| Phone | The window covers the screen; Back returns to the map; FirstMate is the other tab | ‹, avatar, name, the 4-icon selector and ⋯ (Next is in ⋯) | Bottom strip; view picker at bottom left; one 44px camera button; no bottom nav in Zen |
+| Mac laptop | Right dock, `min(520px, 40vw)`; FirstMate and the agent are avatar tabs in the bar | Icon chips | Left rail; camera beside the dock |
+| Half-width Linux | Right dock, 508px, with avatar tabs | As laptop | Left rail; hosts shown as an icon |
+| Wide Linux | Right dock of 520px with avatar tabs; undock a tab to float it beside the dock | Icon chips; labels at 640px or wider | Left rail |
+| Portrait | Bottom dock at 45% height and full width, with avatar tabs | Town skin, labelled chips | Left rail; camera above the dock |
 
 The dock is the shared `WindowFrame` snapped right (owner decision Q9), so
 windows can still be undocked, moved and resized.
@@ -118,17 +117,19 @@ The calm window bar goes from 119 to 38 (from 177 to 38 on Changes).
 
 ## Coordination
 
-- **#261 (layers, colour swatch).** Merge as is. Phase 2 moves its
+- **#261 (layers, colour swatch), merged.** Phase 2 moves its
   `ColorSwatchButton` out of the Inspector head and into ⋯ → Colour, keeping the
   component. Its layer stack still owns Escape order for the ⋯ menu and the
   popover.
-- **#260 and #262 (Town peek, chat window in `WindowFrame`).** The `town-chat`
-  scope keeps Chat's own header (‹, name, where, Next ›). Phase 2 turns that
-  header into the Town-skin `WindowBar` by adding the view chips and ⋯. #262's
-  `WindowControls` then move into ⋯ for the Town skin. No separate window bar is
-  added.
+- **#260 and #262 (Town peek, chat window in `WindowFrame`).** Superseded by
+  the single-window rule. Town's desk tap and the docked FirstMate open the
+  agent's Inspector window with Chat selected; there is no separate `town-chat`
+  window. Hover peeks stay as small cards.
+- **FM-CHAT-LAYOUT.** Owns only the Chat view body, which is `AgentChat` from
+  #256 reskinned through tokens. Design owns the bar and the selector. Chat
+  mounts while selected (Inspector view `history`), so drafts live in its store.
 - **#258 (Chat send guard).** Content only, so no chrome impact.
-- **FM-CHAT-LAYOUT (`agent/chat-layout`).** It shares `townHud.css` tokens
+- **Town HUD tokens.** FM-CHAT-LAYOUT shares `townHud.css` tokens
   (`--hud-panel`, `--hud-edge`, `--hud-font-*`, `.hud-panel`). It exposes
   `data-town-panel` and `--town-panel-width` on `.town-view-shell`, and the
   camera cluster keys off those.
@@ -144,7 +145,40 @@ The calm window bar goes from 119 to 38 (from 177 to 38 on Changes).
 2. Town shell defaults: no top bar, tab strip or sidebar in Town; HUD bar;
    Workspaces drawer; the phone camera button.
 
-## Questions for the owner
+## Owner decisions (2026-10-22)
+
+- **Q10, Town is full-bleed by default.** That is Zen mode. Town defaults to
+  Zen, and Zen works on phones too. In Zen, a small floating view picker
+  switches between Town, Board, Desk and Spaces. On desktop it hangs from the
+  top edge with Exit Zen beside it. On a phone it is a 52px button in the
+  bottom-left corner on root screens, and it opens a short menu (the four views
+  and "Show the bars"). It replaces the bottom nav while Zen is on.
+- **Q11, yes.** Board drops the tab strip; Spaces merges it into the title bar.
+- **Q12, yes.** Pixelify Sans and JetBrains Mono are bundled locally (OFL). No
+  Google Fonts requests.
+- **Q13, tabs.** FirstMate and the agent you opened share the dock as tabs. To
+  keep one bar, the tabs are avatar buttons at the start of the bar, like pinned
+  browser tabs. The active tab shows its name and location line; the others show
+  only an avatar, with a dot when they need you. There is no extra tab row.
+- **Q14 and the single-window rule (after testing #262).** There is one window
+  per agent: the Inspector window, themed per view. There is no separate peek or
+  chat window, and Town's desk tap and the docked FirstMate open this window.
+  - The header holds identity (colour, name, status and the location line), ONE
+    top selector `[Chat | Terminal | Changes | Files]`, then the window
+    controls.
+  - The body is the selected view. Chat is the existing `AgentChat` (#256),
+    reskinned for Town through tokens rather than built as a new component.
+  - The bottom holds Chat's composer (attach, reply box, send), only in Chat.
+    No button rows, no bottom tab strip and no thumb row.
+  - **Phone header** at 390px: `‹ · avatar · name/status · [💬 ▣ ± 📁] · ⋯`.
+    The selector is four 40px icon targets in the top bar. Next moves into ⋯,
+    because the need-you pill already covers it.
+  - **Desktop header:** `‹ · tab avatars · name/location · [💬 ▣ ±2 📁] · Next › · ⋯`.
+    Chip labels appear at 640px of window width or more.
+
+  This supersedes the earlier composer-row options (A, B and C).
+
+## Questions answered
 
 1. Should Town hide the app top bar, tab strip and sidebar by default (the HUD
    plus a ☰ drawer), or should the sidebar only start collapsed?

@@ -120,7 +120,7 @@ code{font:500 12px var(--f-mono);color:#cfd6c9;background:#0d1117;padding:1px 5p
 .tchip b{display:block;font:600 13px var(--f-body)}
 .tchip small{display:block;font-size:11px;color:var(--muted)}
 .tray{left:16px;top:70px;width:216px;flex-direction:column}
-@container dev (max-width:899px){ .tray{top:auto;width:auto;flex-direction:row;align-items:center;left:10px;right:70px;bottom:calc(var(--nav-h,0px) + 10px)} }
+@container dev (max-width:899px){ .tray{top:auto;width:auto;flex-direction:row;align-items:center;left:72px;right:72px;bottom:calc(var(--nav-h,0px) + 10px)} }
 
 /* Camera cluster */
 .camera{position:absolute;z-index:3;right:16px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:6px;padding:6px;background:var(--panel);border:2px solid var(--edge);border-radius:12px;box-shadow:inset 0 0 0 1px var(--hi),0 10px 30px rgba(0,0,0,.35);transition:right .3s}
@@ -158,7 +158,7 @@ code{font:500 12px var(--f-mono);color:#cfd6c9;background:#0d1117;padding:1px 5p
 .who{display:flex;align-items:center;gap:8px;min-width:0;flex:1 1 auto}
 .avatar{width:32px;height:36px;border-radius:7px;flex:none;position:relative;background:radial-gradient(circle at 50% 38%,#e0835f 0 26%,#3b4a63 27%,#1b2230);box-shadow:0 0 0 2px var(--swatch,#6fc3ff)}
 .avatar.fm{background:radial-gradient(circle at 50% 38%,#ffd166 0 26%,#3b4a63 27%,#1b2230)}
-.ident{min-width:0;display:flex;flex-direction:column}
+.ident{min-width:88px;flex:1 1 auto;display:flex;flex-direction:column}
 .ident b{font:700 16px/1.1 var(--f-display);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:6px}
 .where{all:unset;cursor:pointer;color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;border-radius:4px}
 .where:hover{color:var(--text)}
@@ -168,7 +168,6 @@ code{font:500 12px var(--f-mono);color:#cfd6c9;background:#0d1117;padding:1px 5p
 .chip[aria-selected="true"]{background:var(--btn-on);color:var(--text);box-shadow:inset 0 -2px 0 rgba(0,0,0,.35),0 0 0 1px rgba(255,255,255,.14)}
 .chip .n{font-size:10.5px;background:#3a2c14;color:#ffd79a;border-radius:999px;padding:0 6px}
 .chip .t{display:none}
-.chip[aria-selected="true"] .t{display:inline}
 @container win (min-width:640px){ .chip .t{display:inline} }
 .next{white-space:nowrap;flex:none}
 .st.working{color:var(--work)}.st.idle{color:var(--idle)}
@@ -203,10 +202,34 @@ code{font:500 12px var(--f-mono);color:#cfd6c9;background:#0d1117;padding:1px 5p
 .compose input{flex:1;min-width:0;font:400 14px var(--f-body);color:var(--text);background:var(--term);border:2px solid var(--edge);border-radius:9px;padding:0 12px;min-height:40px}
 .collapsed .panes,.collapsed .wbody,.collapsed .compose{display:none}
 .win.collapsed{height:auto!important}
+.avtab{all:unset;cursor:pointer;position:relative;display:inline-flex;border-radius:8px;opacity:.6;transform:scale(.82)}
+.avtab:hover,.avtab:focus-visible{opacity:1}
+.avtab:focus-visible{outline:2px solid var(--accent)}
+.avtab .badge{position:absolute;right:-2px;top:-2px;width:9px;height:9px;border-radius:50%;background:var(--wait);box-shadow:0 0 0 2px var(--edge)}
+.cviews{display:flex;gap:2px;flex:none}
+.cviews .chip{min-height:40px;padding:0 7px}
+.compose .dv-btn.on{background:var(--btn-on);color:var(--work)}
+.vpop{position:absolute;left:8px;bottom:56px;z-index:8;width:200px;padding:6px;background:var(--solid);border:2px solid var(--edge);border-radius:10px;display:flex;flex-direction:column}
+.vpop .mi,.zsheet .mi{all:unset;cursor:pointer;display:flex;align-items:center;gap:8px;padding:10px;border-radius:7px;font-size:14px;min-height:24px}
+.vpop .mi:hover,.zsheet .mi:hover,.zsheet .mi.on{background:#222b39}
+.vpop .n{font-size:10.5px;background:#3a2c14;color:#ffd79a;border-radius:999px;padding:0 6px}
+.zpick{position:absolute;z-index:3;top:0;left:50%;transform:translateX(-50%);display:flex;gap:2px;padding:4px 6px 5px;background:var(--panel);border:2px solid var(--edge);border-top:0;border-radius:0 0 12px 12px;box-shadow:0 10px 30px rgba(0,0,0,.35)}
+.zp{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:5px;height:30px;padding:0 9px;border-radius:8px;font:600 12px var(--f-body);color:var(--muted)}
+.zp span{display:none}
+.zp.on{background:var(--btn-on);color:var(--text)}.zp.on span{display:inline}
+.zp:hover{color:var(--text)}
+.zp.exit{border-left:1px solid var(--line);border-radius:0 8px 8px 0;margin-left:4px;font-size:11px}
+.zfab{position:absolute;z-index:5;left:10px;bottom:10px}
+.zfab>.dv-btn{width:52px;height:52px;padding:0;border-radius:14px;background:var(--panel)}
+.zsheet{position:absolute;left:0;bottom:60px;width:200px;padding:6px;background:var(--solid);border:2px solid var(--edge);border-radius:12px;box-shadow:0 12px 30px rgba(0,0,0,.5);display:flex;flex-direction:column}
+.zsheet hr{border:0;border-top:1px solid var(--line);margin:4px 2px}
 .thumbviews{display:none}
-/* phone: window covers the screen, views move to the thumb row above the composer */
+/* phone: the window covers the screen; the selector stays in the header */
 .win.cover{inset:0;border-radius:0;border:0;background:var(--solid)!important}
-.win.cover .wbar .views{display:none}
+.win.cover .wbar{gap:4px;padding:6px}
+.win.cover .views{padding:2px;gap:2px}
+.win.cover .chip{min-height:40px;padding:0 8px}
+.win.cover .ident{min-width:64px}
 .win.cover .thumbviews{display:flex;justify-content:space-between;padding:6px 8px 0;border-top:1px solid var(--line);flex:none}
 .win.cover .thumbviews .chip{flex:1;justify-content:center;min-height:44px}
 .win.cover .thumbviews .chip .t{display:inline}
@@ -274,10 +297,10 @@ code{font:500 12px var(--f-mono);color:#cfd6c9;background:#0d1117;padding:1px 5p
         <h3>Town window (v4 skin)</h3>
         <ul class="plain">
           <li><b>‹ Back</b> · avatar (its ring is the terminal colour) · <b>name</b> + status pill, with a <b>location line</b> underneath (room · desk · branch). Tap the location line for branch, worktree, path and PR.</li>
-          <li><b>View chips</b> for Terminal, Chat, Files and Changes sit in the same bar. The active chip shows its label; the others are icons until the window is 640px wide.</li>
-          <li><b>Next ›</b> is the primary action. It turns gold when someone else needs you.</li>
+          <li><b>One top selector</b> with Chat, Terminal, Changes and Files sits in the same bar on every screen size. The chips are icons until the window is 640px wide; Changes shows its count.</li>
+          <li><b>Next ›</b> is the primary action on desktop and turns gold when someone else needs you. On a phone it moves into ⋯, because the need-you pill already covers it.</li>
           <li><b>⋯</b> holds the rare actions: snap, float or dock, maximise, minimise, colour and pop-out. Double-click the bar to maximise; drag it to the edges to snap.</li>
-          <li>Pane chips get a second row only when the desk has 2 or more panes. The composer is owned by Chat.</li>
+          <li>Pane chips get a second row only when the desk has 2 or more panes. At the bottom there is only Chat's composer (attach, reply box, send), and only in Chat. Terminal, Changes and Files have no bottom bar.</li>
         </ul>
       </div>
       <div>
@@ -306,11 +329,11 @@ code{font:500 12px var(--f-mono);color:#cfd6c9;background:#0d1117;padding:1px 5p
     <div class="tablewrap"><table>
       <thead><tr><th>Viewport</th><th>Town dock</th><th>Window bar</th><th>Tray and camera</th><th>Board / Spaces</th></tr></thead>
       <tbody>
-        <tr><td>Phone 390 × 844</td><td>Window covers the screen. Back returns to the map. FirstMate chat is reached from the need-you pill.</td><td>Back, name, Next on top. View chips move to a 44px thumb row above the composer.</td><td>Bottom tray strip. One 44px camera button. Bottom nav kept.</td><td>Unchanged: phone Board and Spaces already use one header.</td></tr>
-        <tr><td>Mac laptop 1440 × 900</td><td>Right dock, <code>min(520px, 40vw)</code>. FirstMate chat folds to its 58px bar above the agent window.</td><td>Town skin. Icon chips except the active one.</td><td>Left rail of 216px. Camera sits beside the dock.</td><td>Calm 44px app bar. Spaces uses a 40px merged bar.</td></tr>
-        <tr><td>Half-width Linux 1270 × 1300</td><td>Right dock, 508px. Both windows open, stacked in halves (the height allows it).</td><td>As laptop.</td><td>Left rail. Hosts shrinks to an icon.</td><td>Sidebar follows the user's preference. Inspector windows open at 60% width.</td></tr>
-        <tr><td>Wide Linux 2560 × 1300</td><td>Two docked columns of 520px: FirstMate chat and the agent window.</td><td>Labelled chips, since the window is 520px or wider.</td><td>Left rail. Camera beside the dock.</td><td>As laptop.</td></tr>
-        <tr><td>Portrait 1080 × 1800</td><td>Bottom dock at 45% height, with the two windows side by side. Width is scarce here; height is not.</td><td>Town skin.</td><td>Left rail. Camera above the dock.</td><td>Spaces terminal gains the 84px.</td></tr>
+        <tr><td>Phone 390 × 844</td><td>Window covers the screen. Back returns to the map. FirstMate is the other tab.</td><td>‹, avatar, name, the 4-icon selector (40px targets) and ⋯. Next goes into ⋯.</td><td>Bottom strip, with the view picker at bottom left and one 44px camera button. In Zen there is no bottom nav.</td><td>Unchanged: phone Board and Spaces already use one header.</td></tr>
+        <tr><td>Mac laptop 1440 × 900</td><td>Right dock, <code>min(520px, 40vw)</code>. FirstMate and the agent share it as avatar tabs in the bar.</td><td>Town skin. Icon chips.</td><td>Left rail. Camera beside the dock.</td><td>Calm 44px app bar. Spaces uses a 40px merged bar.</td></tr>
+        <tr><td>Half-width Linux 1270 × 1300</td><td>Right dock, 508px, with avatar tabs.</td><td>As laptop.</td><td>Left rail. Hosts shrinks to an icon.</td><td>Sidebar follows the user's preference. Inspector windows open at 60% width.</td></tr>
+        <tr><td>Wide Linux 2560 × 1300</td><td>Right dock of 520px, with avatar tabs. Undock a tab to float it beside the dock.</td><td>Icon chips; labels appear at 640px or wider.</td><td>Left rail. Camera beside the dock.</td><td>As laptop.</td></tr>
+        <tr><td>Portrait 1080 × 1800</td><td>Bottom dock at 45% height and full width, with avatar tabs. Width is scarce here; height is not.</td><td>Town skin.</td><td>Left rail. Camera above the dock.</td><td>Spaces terminal gains the 84px.</td></tr>
       </tbody>
     </table></div>
   </section>
@@ -331,7 +354,7 @@ code{font:500 12px var(--f-mono);color:#cfd6c9;background:#0d1117;padding:1px 5p
         <tr><td>1 controls</td><td>Dock / float / dock side / expand / pop-out</td><td>Inspector placement modes</td><td><span class="freq f4">rare</span></td><td>⋯ menu</td></tr>
         <tr><td>1 controls</td><td>Colour swatch (#261)</td><td>Pick the terminal colour</td><td><span class="freq f4">rare</span></td><td>Avatar ring or swatch; picker under ⋯ → Colour</td></tr>
         <tr><td>1 controls</td><td>Repository status (PR icon)</td><td>PR card popover</td><td><span class="freq f3">sometimes</span></td><td>Location popover. The icon goes, because it duplicates bar 3.</td></tr>
-        <tr><td>2 views</td><td>Terminal · Files · Changes (+count) · Commits · Chat</td><td>Switch the view</td><td><span class="freq f1">constant</span></td><td>Chips in the one bar; a thumb row on phone</td></tr>
+        <tr><td>2 views</td><td>Terminal · Files · Changes (+count) · Commits · Chat</td><td>Switch the view</td><td><span class="freq f1">constant</span></td><td>One top selector in the bar, phone included</td></tr>
         <tr><td>3 branch</td><td>Branch-link icon row</td><td>Opens PR status</td><td><span class="freq f4">rare</span></td><td>Removed; the location popover covers it</td></tr>
         <tr><td>3 PR card</td><td>“PR/MR status” card (Changes, Commits)</td><td>Provider PR state, refresh</td><td><span class="freq f3">sometimes</span></td><td>Pill in the Changes toolbar plus the popover</td></tr>
         <tr><td>Town</td><td>Camera + − ALL (+ ⋮ on phone)</td><td>Zoom and fit</td><td><span class="freq f2">often</span></td><td>Desktop cluster; one 44px fit button on phone (was 56 × 190)</td></tr>
@@ -363,8 +386,8 @@ const VPS = [
 ];
 const VIEWS = ['Town','Board','Spaces'];
 const MODES = ['Before','After'];
-let st = {vp:'laptop', view:'Town', mode:'After', open:true, drawer:false};
-try { const s = JSON.parse(localStorage.getItem('chrome-proto') || 'null'); if (s) st = {...st, ...s, drawer:false}; } catch {}
+let st = {vp:'laptop', view:'Town', mode:'After', open:true, drawer:false, opt:'B', picker:false};
+try { const s = JSON.parse(localStorage.getItem('chrome-proto') || 'null'); if (s) st = {...st, ...s, drawer:false, picker:false}; } catch {}
 const save = () => { try { localStorage.setItem('chrome-proto', JSON.stringify(st)); } catch {} };
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (m) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));
@@ -438,7 +461,7 @@ function extras() {
 }
 
 /* ---------- window mock ---------- */
-const VIEW_DEFS = [['terminal','Terminal',I.term],['chat','Chat',I.chat],['files','Files',I.files],['changes','Changes',I.diff]];
+const VIEW_DEFS = [['chat','Chat',I.chat],['terminal','Terminal',I.term],['changes','Changes',I.diff],['files','Files',I.files]];
 function chips(cur, id) {
   return VIEW_DEFS.map(([k,l,ic]) => `<button type="button" class="chip" role="tab" data-win="${id}" data-v="${k}" aria-selected="${cur===k}" aria-label="${l}">${ic}<span class="t">${l}</span>${k==='changes'?'<span class="n">2</span>':''}</button>`).join('');
 }
@@ -454,33 +477,33 @@ function body(v, w) {
  src/index.ts | 14 ++++++++------
  src/tags.ts  |  6 ++++++
 <span class="q">Apply the tag-index refactor to src/index.ts? [y/n]</span></pre>`;
-  if (v === 'chat') return `<div class="chatv"><div class="owner">Conversation, answers and composer: FM-CHAT-LAYOUT</div><div class="me">Can you split the tag index out of index.ts?</div><div class="ag">Done. <code>src/tags.ts</code> now owns grouping; <code>index.ts</code> imports it. Tests pass (3/3). Want me to update the guide too?</div><div class="me">Yes, keep it short.</div></div>`;
+  if (v === 'chat') return `<div class="chatv"><div class="owner">Conversation and answers: FM-CHAT-LAYOUT. The composer is the only thing at the bottom, and only in Chat.</div><div class="me">Can you split the tag index out of index.ts?</div><div class="ag">Done. <code>src/tags.ts</code> now owns grouping; <code>index.ts</code> imports it. Tests pass (3/3). Want me to update the guide too?</div><div class="me">Yes, keep it short.</div></div>`;
   if (v === 'files') return `<div class="listv"><div class="tb">~/demo/lantern-notes</div>${['README.md','src/','  index.ts','  tags.ts','  search.ts','docs/','  guide.md'].map((f)=>`<div class="r">${f.endsWith('/')?I.files:''}<code>${esc(f)}</code></div>`).join('')}</div>`;
   return `<div class="listv"><div class="tb">2 files · <span class="pill">⎇ feature/compact-chrome</span><span class="pill">No PR provider</span></div><div class="r"><code>src/index.ts</code><span class="add">+8</span><span class="del">−6</span></div><div class="r"><code>src/tags.ts</code><span class="add">+6</span><span class="del">−0</span></div></div>`;
 }
 const WIN = {
-  a:{name:'claude', status:'working', where:'lantern-notes · desk 1 · ⎇ feature/compact-chrome', view:'terminal', swatch:'#6fc3ff', panes:['claude','tests'], fm:false},
+  a:{name:'claude', status:'working', where:'lantern-notes · desk 1 · ⎇ feature/compact-chrome', view:'chat', swatch:'#6fc3ff', panes:['claude','tests'], fm:false},
   fm:{name:'FirstMate', status:'idle', where:'Town master chat · this machine', view:'chat', swatch:'#ffd166', panes:null, fm:true},
 };
-let menuOpen = null, popOpen = null;
+let menuOpen = null, popOpen = null, activeTab = 'a';
 function townWin(id, style, opts = {}) {
   const w = WIN[id];
   const cover = !!opts.cover;
   return `<section class="win ${cover?'cover':''} ${opts.collapsed?'collapsed':''}" data-skin="town" data-id="${id}" style="${style};--swatch:${w.swatch}" aria-label="${w.name} window">
     <header class="wbar" title="Drag to move · double-click to maximise">
       <button type="button" class="dv-btn" aria-label="Back to the town" style="font-size:20px;padding:0">‹</button>
-      <div class="who"><span class="avatar ${w.fm?'fm':''}"></span><div class="ident"><b>${esc(w.name)}</b><button type="button" class="where" data-pop="${id}" aria-expanded="${popOpen===id}"><span class="st ${w.status}">● ${w.status==='working'?'Working':'On a break'}</span> · ${esc(w.where)} ▾</button></div></div>
+      <div class="who">${opts.tabs?opts.tabs.map((t)=>t===id?'':`<button type="button" class="avtab" data-tab="${t}" aria-label="Switch to ${WIN[t].name}" title="${WIN[t].name}"><span class="avatar ${WIN[t].fm?'fm':''}" style="--swatch:${WIN[t].swatch}"></span>${t==='fm'?'':'<i class="badge"></i>'}</button>`).join(''):''}<span class="avatar ${w.fm?'fm':''}"></span><div class="ident"><b>${esc(w.name)}</b><button type="button" class="where" data-pop="${id}" aria-expanded="${popOpen===id}"><span class="st ${w.status}">● ${w.status==='working'?'Working':'On a break'}</span> · ${esc(w.where)} ▾</button></div></div>
       <div class="views" role="tablist" aria-label="Views">${chips(w.view, id)}</div>
-      ${w.fm?'':`<button type="button" class="dv-btn next hot">Next (1) ›</button>`}
+      ${w.fm||cover?'':`<button type="button" class="dv-btn next hot">Next (1) ›</button>`}
       <button type="button" class="dv-btn" data-menu="${id}" aria-label="More window actions" aria-expanded="${menuOpen===id}">${I.more}</button>
       ${menuOpen===id?menu(id,'town'):''}${popOpen===id?pop(id):''}
     </header>
     ${w.panes && !opts.collapsed ? `<nav class="panes" aria-label="Panes on this desk">${w.panes.map((p,i)=>`<button type="button" class="chip" aria-pressed="${i===0}"><i class="dot" style="background:${i===0?'var(--work)':'#7fbf7a'}"></i>${p}</button>`).join('')}</nav>` : ''}
     <div class="wbody">${body(w.view)}</div>
-    ${cover?`<nav class="thumbviews" role="tablist" aria-label="Views">${chips(w.view, id)}</nav>`:''}
-    <form class="compose" onsubmit="return false"><input aria-label="Message" placeholder="${w.view==='terminal'?'Type into the terminal…':'Message '+esc(w.name)+'…'}"><button type="button" class="dv-btn">Send</button></form>
+    ${w.view==='chat'?`<form class="compose" onsubmit="return false"><button type="button" class="dv-btn" aria-label="Attach">📎</button><input aria-label="Reply" placeholder="Reply to ${esc(w.name)}…"><button type="button" class="dv-btn">Send</button></form>`:''}
   </section>`;
 }
+let viewPop = false;
 function calmWin(id, style) {
   const w = WIN[id];
   return `<section class="win" data-skin="calm" data-id="${id}" style="${style};--swatch:${w.swatch}" aria-label="${w.name} Inspector window">
@@ -496,8 +519,9 @@ function calmWin(id, style) {
   </section>`;
 }
 function menu(id, skin) {
+  const views = st.vp === 'phone' && skin === 'town' ? `<button type="button" class="mi" role="menuitem">Next agent that needs you<kbd>1</kbd></button><hr>` : '';
   const items = [['Maximise','double-click'],['Minimise',''],['Snap left','drag ←'],['Snap right','drag →'],['Snap top / bottom',''],[skin==='town'?'Undock (float)':'Dock to the right',''],['Open terminal window','']];
-  return `<div class="wmenu" role="menu">${items.map(([l,k])=>`<button type="button" class="mi" role="menuitem">${l}<kbd>${k}</kbd></button>`).join('')}<hr><div class="sw" aria-label="Colour">${['#6fc3ff','#7be08f','#ffb547','#ff7a6b','#c79bff','#d9c39b'].map(c=>`<i style="background:${c}"></i>`).join('')}</div><hr><button type="button" class="mi" role="menuitem">Close<kbd>Esc</kbd></button></div>`;
+  return `<div class="wmenu" role="menu">${views}${items.map(([l,k])=>`<button type="button" class="mi" role="menuitem">${l}<kbd>${k}</kbd></button>`).join('')}<hr><div class="sw" aria-label="Colour">${['#6fc3ff','#7be08f','#ffb547','#ff7a6b','#c79bff','#d9c39b'].map(c=>`<i style="background:${c}"></i>`).join('')}</div><hr><button type="button" class="mi" role="menuitem">Close<kbd>Esc</kbd></button></div>`;
 }
 function pop(id) {
   const fm = WIN[id].fm;
@@ -512,7 +536,6 @@ function townHud(vp) {
     <div class="panel counts" role="status"><span class="c" title="Working"><i class="dot" style="background:var(--work)"></i>1</span><span class="c" title="Finished"><i class="dot" style="background:var(--done)"></i>0</span><span class="c" title="On a break"><i class="dot" style="background:var(--idle)"></i>1</span><button type="button" class="c attn"><i class="dot" style="background:var(--wait)"></i>1<span class="lbl">&nbsp;need you</span></button></div>
     <div class="spacer"></div>
     <button type="button" class="dv-btn jump" style="min-height:44px">${I.search}<span>Jump to…</span><kbd>/</kbd></button>
-    <button type="button" class="dv-btn viewsel" style="min-height:44px">${I.town} Town ▾</button>
     <button type="button" class="dv-btn hosts" style="min-height:44px">${I.hosts}<span>All hosts</span></button>
     <button type="button" class="dv-btn" style="min-height:44px" aria-label="Menu">${I.more}</button>
   </div>`;
@@ -527,6 +550,12 @@ function camera() {
   ${camToast?'<div class="camtoast">Fitted the whole town</div>':''}`;
 }
 let camPop = false, camToast = false;
+const PICK = [['Town',I.town],['Board',I.board],['Desk',I.desk],['Spaces',I.spaces]];
+function picker(vp) {
+  const phone = vp.w < 641;
+  if (!phone) return `<div class="zpick" role="group" aria-label="World view">${PICK.map(([l,ic])=>`<button type="button" class="zp ${l==='Town'?'on':''}" aria-pressed="${l==='Town'}" title="${l}">${ic}<span>${l}</span></button>`).join('')}<button type="button" class="zp exit" title="Show the bars (Ctrl+Alt+Z)">Exit Zen</button></div>`;
+  return `<div class="zfab"><button type="button" class="dv-btn" id="pickBtn" aria-haspopup="menu" aria-expanded="${st.picker}" aria-label="Switch view: Town">${I.town}</button>${st.picker?`<div class="zsheet" role="menu">${PICK.map(([l,ic])=>`<button type="button" class="mi ${l==='Town'?'on':''}" role="menuitem">${ic} ${l}</button>`).join('')}<hr><button type="button" class="mi" role="menuitem">Show the bars</button></div>`:''}</div>`;
+}
 function drawer() {
   return `<nav class="drawer" aria-label="Workspaces"><b style="font:700 13px var(--f-display);color:var(--muted)">WORKSPACES</b>
     <div class="ws">lantern-notes</div><div class="row on"><i class="dot" style="background:var(--work)"></i>claude<em>Working</em></div><div class="row"><i class="dot" style="background:#7fbf7a"></i>tests<em>shell</em></div>
@@ -540,9 +569,10 @@ function townScene(vp) {
   let html = `<img class="backdrop" alt="" src="img/${vp.id}-backdrop.webp">`;
   let dock = 'none';
   const dw = Math.min(520, Math.round(vp.w * 0.4));
-  if (phone) d.style.setProperty('--nav-h', '75px');
+  if (phone) d.style.setProperty('--nav-h', '0px');
   html += townHud(vp) + tray(vp) + camera();
-  if (phone) html += `<div class="mnav"><span class="on">${I.town}Town</span><span>${I.board}Board</span><span>${I.desk}Desk</span><span>${I.spaces}Spaces</span></div>`;
+  if (!(phone && st.open)) html += picker(vp);
+  if (false) html += `<div class="mnav"><span class="on">${I.town}Town</span><span>${I.board}Board</span><span>${I.desk}Desk</span><span>${I.spaces}Spaces</span></div>`;
   if (st.open) {
     if (phone) {
       html += townWin('a', 'inset:0', {cover:true});
@@ -550,25 +580,11 @@ function townScene(vp) {
       dock = 'bottom';
       const dh = Math.round(vp.h * 0.45);
       d.style.setProperty('--dock-h', dh + 'px');
-      const half = Math.round((vp.w - 48) / 2);
-      html += townWin('fm', `left:16px;bottom:16px;width:${half}px;height:${dh}px`);
-      html += townWin('a', `right:16px;bottom:16px;width:${half}px;height:${dh}px`);
-    } else if (wide) {
-      dock = 'right';
-      d.style.setProperty('--dock-w', (dw * 2 + 12) + 'px');
-      html += townWin('fm', `right:${16 + dw + 12}px;top:70px;bottom:16px;width:${dw}px`);
-      html += townWin('a', `right:16px;top:70px;bottom:16px;width:${dw}px`);
-    } else if (vp.h >= 1100) {
-      dock = 'right';
-      d.style.setProperty('--dock-w', dw + 'px');
-      const hh = Math.round((vp.h - 70 - 16 - 12) / 2);
-      html += townWin('fm', `right:16px;top:70px;width:${dw}px;height:${hh}px`);
-      html += townWin('a', `right:16px;top:${70 + hh + 12}px;width:${dw}px;bottom:16px`);
+      html += townWin(activeTab, `left:16px;right:16px;bottom:16px;height:${dh}px`, {tabs:['a','fm']});
     } else {
       dock = 'right';
       d.style.setProperty('--dock-w', dw + 'px');
-      html += townWin('fm', `right:16px;top:70px;width:${dw}px`, {collapsed:true});
-      html += townWin('a', `right:16px;top:${70 + 62 + 10}px;width:${dw}px;bottom:16px`);
+      html += townWin(activeTab, `right:16px;top:70px;width:${dw}px;bottom:16px`, {tabs:['a','fm']});
     }
   }
   if (st.drawer) html += drawer();
@@ -640,7 +656,10 @@ function render() {
 document.addEventListener('click', (e) => {
   const t = e.target.closest('button');
   if (!t || !$('device').contains(t)) { if (menuOpen || popOpen) { menuOpen = popOpen = null; if ($('device').contains(e.target)) render(); } return; }
-  if (t.dataset.v) { WIN[t.dataset.win].view = t.dataset.v; render(); return; }
+  if (t.dataset.v) { WIN[t.dataset.win].view = t.dataset.v; menuOpen = null; viewPop = false; render(); return; }
+  if (t.dataset.tab) { activeTab = t.dataset.tab; render(); return; }
+  if (t.id === 'viewBtn') { viewPop = !viewPop; render(); return; }
+  if (t.id === 'pickBtn') { st.picker = !st.picker; render(); return; }
   if (t.dataset.menu) { menuOpen = menuOpen === t.dataset.menu ? null : t.dataset.menu; popOpen = null; render(); return; }
   if (t.dataset.pop) { popOpen = popOpen === t.dataset.pop ? null : t.dataset.pop; menuOpen = null; render(); return; }
   if (t.hasAttribute('data-drawer')) { st.drawer = !st.drawer; render(); return; }
