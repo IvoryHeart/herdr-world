@@ -1241,9 +1241,9 @@ desktop the list SHALL be a left rail grouped by host and then room, with
 collapsible host groups, and the user SHALL be able to hide it to a count and
 restore it; this choice SHALL persist per browser. On phones the list SHALL be a
 bottom tray that remains reachable while a peek or card is open. Hovering an
-entry SHALL open its peek, and activating an entry SHALL open that peek pinned,
-where its reply line takes a reply. A keyboard command SHALL open the next agent that
-needs the user.
+entry SHALL show its card, and activating an entry SHALL open that agent's
+window on Chat, where replies go. A keyboard command SHALL open the next agent
+that needs the user.
 The rail SHALL list a bounded number of entries and count the rest.
 
 #### Scenario: Work through waiting agents on desktop
@@ -1340,15 +1340,12 @@ service reports the conversation changed, sharing Chat's watch rather than
 polling. It SHALL NOT show terminal
 screen text as the message; when the conversation is unavailable it SHALL show
 Chat's reason. A waiting agent's question, read from the pane's latest lines,
-SHALL be set apart below the message, with its answers as one-tap buttons. The peek SHALL end
-with a reply line and Send. On desktop the reply line SHALL be typed in the peek
-itself and typing while a peek is pinned SHALL go to it. On the phone layout
-tapping the reply line SHALL grow World's own terminal composer in place, with
-its keys, attachments and the draft it shares with the pane's terminal, and the
-composer SHALL stay visible above the keyboard while the screen lines shrink.
-The peek's Open terminal action, and the composer's Direct mode, SHALL open the
-pane's full terminal. Attaching files in the peek, the phone composer, Spaces or
-Chat SHALL show one chip per file: uploading with byte progress where the
+SHALL be set apart below the message, with its answers as one-tap buttons. The
+peek is a read-only preview: it SHALL have no reply line and no attachments of
+its own, and its Open chat (Follow up for a finished agent) SHALL open the
+agent's window on Chat. The peek's Open terminal action SHALL open the pane's
+full terminal. Attaching files in the phone composer, Spaces or Chat SHALL show
+one chip per file: uploading with byte progress where the
 transport reports it, then done or failed, with Retry and Remove for a failed
 file; picking a failed file again SHALL retry it. Send SHALL wait for uploads,
 and a file picked again while it uploads SHALL NOT be uploaded twice. A path
@@ -1360,17 +1357,11 @@ using the same path as the shell's Actions menu. Answers and replies SHALL be
 sent only to the exact qualified pane, and the result SHALL be confirmed by a
 short notice; a finished agent SHALL announce itself once.
 
-#### Scenario: Reply from a desktop peek
+#### Scenario: Reply from the peek
 
-- **WHEN** the user types in a waiting agent's peek and presses Send
-- **THEN** the text and Enter reach that agent's pane and the terminal does not
-  open
-
-#### Scenario: Reply to a waiting agent on a phone
-
-- **WHEN** the user taps the reply line in a waiting agent's peek
-- **THEN** the peek shows World's composer for that pane without opening the
-  terminal, and the keyboard does not cover the message field or Send
+- **WHEN** the user chooses Open chat in an agent's peek
+- **THEN** the agent's window opens on Chat, where the reply is written; the
+  peek offers no reply line or attachments of its own
 
 #### Scenario: The peek renders the latest message
 
@@ -1396,7 +1387,12 @@ dragging with a mouse, by holding and then dragging on touch, and from the
 keyboard by pressing M on a focused desk or agent target, which opens a list of
 destinations. Town SHALL NOT add visible move controls to the scene. While a
 drag is in progress Town SHALL show where the desk or agent would land, or why
-it cannot. A request SHALL be qualified by connection ID and runtime generation,
+it cannot. A picked-up desk or agent SHALL lift off and follow the pointer;
+every move Herdr confirms, within a room or to another room, SHALL land on its
+target with a puff of dust, and a refused move SHALL return to where it was.
+Under reduced motion or calm motion the carried desk or agent SHALL stay under
+the pointer, and every drag SHALL end with a short fade, without bounce, shake
+or dust. A request SHALL be qualified by connection ID and runtime generation,
 SHALL run in the World service, and SHALL be refused across hosts, for retired
 generations, or when the runtime cannot export a tab's layout. Before sending
 any move, a desk move SHALL capture the source tab's complete split tree with

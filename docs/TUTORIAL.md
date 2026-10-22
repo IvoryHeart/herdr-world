@@ -136,16 +136,16 @@ changes what you see and does not disconnect hosts or retarget open terminals.
    **Terminal**; that tap also brings the agent back and, like the chat, does
    not mark its work reviewed.
 5. Read the question before using an answer button: it sends the offered key to
-   that live pane. When no supported choices appear, use the reply line or
-   **Open terminal** in the card's header, or the window's **Terminal** view.
-   The card's reply line sends to that pane; the window's **Chat** composer
-   sends with Herdr's agent prompt.
-6. Use the paperclip to attach files to the reply. Each file shows a chip while
-   it uploads, then done or failed; retry a failed one (or pick it again) or
-   remove it. **Send** waits for uploads. A path that finishes while the card is
-   away joins its reply line when it shows again. Uploads go to the selected pane's host; review the message and
-   attached paths before sending. Choose **Inspector** for files, changes and
-   history, or **Open terminal** for direct work.
+   that live pane. When no supported choices appear, use **Open chat** to reply
+   in the agent's window, or **Open terminal** in the card's header (or the
+   window's **Terminal** view). The window's **Chat** composer sends with
+   Herdr's agent prompt.
+6. Use the paperclip in the window's **Chat** composer to attach files. Each
+   file shows a chip while it uploads, then done or failed; retry a failed one
+   (or pick it again) or remove it. **Send** waits for uploads. Uploads go to
+   the selected pane's host; review the message and attached paths before
+   sending. Choose **Inspector** for files and changes, or **Open terminal**
+   for direct work.
    The colour swatch beside the agent's name changes the colour of its table;
    it is the tab's colour everywhere in World. The same swatch sits beside the
    name in a terminal's header, the terminal window's menu has **Colour**, and
@@ -156,8 +156,12 @@ changes what you see and does not disconnect hosts or retarget open terminals.
 7. To move a table to another room, zoom in until you see tables, then drag it
    with the mouse, or hold it for a moment on a phone and then drag. Drop it on
    another room of the same building; the plaque under your pointer says where
-   it will land, or why it cannot. To move one agent, drag it onto another
-   table instead. From the keyboard, focus a table or agent and press **M** to
+   it will land, or why it cannot. The table lifts off and swings along behind
+   your pointer with its agents aboard, then drops onto its new spot in a puff
+   of dust; if the move is refused, it shakes and springs back. To move one
+   agent, drag it onto another table instead: it dangles by the scruff on the
+   way. With **Town calm motion** or reduced motion, the table just follows
+   your pointer and fades into place. From the keyboard, focus a table or agent and press **M** to
    choose a destination. The live panes move, so agents keep running. If a move
    fails part-way, Town tries to move the panes back, and its notice says what
    happened: back in the original room (the table's pane layout may differ),

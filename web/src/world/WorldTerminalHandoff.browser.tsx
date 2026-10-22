@@ -17,6 +17,12 @@ import {
   updateShortcut,
 } from "../shortcutPreferences";
 import { __storeTesting, store } from "../store";
+import { worldLocalStorage } from "../browserStorage";
+import {
+  readOfficePreferences,
+  WORLD_OFFICE_PREFERENCES_CHANGED_EVENT,
+  writeOfficePreferences,
+} from "./officePreferences";
 import type { Pane, PaneLayout, Tab, Workspace } from "../types";
 import "../styles/tokens.css";
 import "../styles/base.css";
@@ -1431,6 +1437,35 @@ async function run() {
         ?.textContent?.includes("Create workspace") === true,
     "selected visual commands displaced native shell commands",
   );
+  await setShellActionsOpen(false);
+  // The Town master's chat docks in the background: its window opens, but
+  // the window on top and the selection stay as they were.
+  const selectedBeforeMaster = store.get().selectedPaneId;
+  writeOfficePreferences(worldLocalStorage, {
+    ...readOfficePreferences(worldLocalStorage),
+    townMaster: "reviewer",
+  });
+  window.dispatchEvent(new Event(WORLD_OFFICE_PREFERENCES_CHANGED_EVENT));
+  await until(
+    () =>
+      document.querySelector(
+        '[role="dialog"][aria-label="Reviewer Inspector"]',
+      ),
+    "Town master chat opened in the background",
+  );
+  await settle();
+  check(
+    document
+      .querySelector(".world-managed-window.is-active")
+      ?.getAttribute("aria-label") === "Builder Inspector" &&
+      store.get().selectedPaneId === selectedBeforeMaster,
+    "the Town master's background open took the selection or the top",
+  );
+  writeOfficePreferences(worldLocalStorage, {
+    ...readOfficePreferences(worldLocalStorage),
+    townMaster: "",
+  });
+  window.dispatchEvent(new Event(WORLD_OFFICE_PREFERENCES_CHANGED_EVENT));
   await setShellActionsOpen(false);
   await openAgent("Reviewer");
   await until(

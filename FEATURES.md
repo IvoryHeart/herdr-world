@@ -35,8 +35,10 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   - Hovering an agent shows a small card as a preview: its latest message from
     Chat's conversation read model, rendered as Chat renders it (never terminal
     text; an unavailable conversation shows Chat's reason), a question when
-    recognized, supported answer buttons, a reply line and file attachments.
-    The card refreshes when the conversation changes, without polling.
+    recognized and supported answer buttons. It is read-only: **Open chat**
+    (or **Follow up** for a finished agent) opens the agent's window on Chat,
+    where replies and attachments go. The card refreshes when the conversation
+    changes, without polling.
   - Tapping an agent or its table brings the agent back: from reception or the
     lounge it walks to its desk and stays there until its status changes. A
     table stands for an agent that needs you (waiting, then finished) before
@@ -56,7 +58,10 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     workspace/tab creation and room management on the captured host.
   - Drag a table onto another room of the same host, or an agent onto another
     table, to move it (hold, then drag on phones; **M** on a focused table or
-    agent from the keyboard). The live panes move, agents keep running, a failed
+    agent from the keyboard). A carried table lifts and sways after the
+    pointer, lands with a bounce and a puff of dust, and shakes and springs
+    back when a move is refused; calm and reduced motion keep it under the
+    pointer and end with a short fade. The live panes move, agents keep running, a failed
     move attempts rollback and reports partial or unknown results. Moving a
     room's last table asks first because the room closes. When a table closes, the tables after it close up.
   - Tables sit in Herdr's tab order, left to right and row by row, so moving a

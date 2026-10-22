@@ -95,7 +95,18 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
     retireInspectors,
     showSelectionProfile,
     applySelection,
+    openInBackground,
   } = controller;
+  /**
+   * Only Town reads where a window was left docked, so only Town writes it:
+   * snapping or floating a window in Desk never changes where it opens in
+   * Town.
+   */
+  const rememberTownDock = (
+    ...args: Parameters<typeof writeFloatingTerminalDock>
+  ) => {
+    if (view === "town") writeFloatingTerminalDock(...args);
+  };
   const {
     workspaceCreationOpen,
     setWorkspaceCreationOpen,
@@ -189,9 +200,12 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
                     >
                       <TownView
                         world={presentedWorld}
-                        onOpenInspectorView={(id, view, focus = true) =>
-                          void applySelection(id, view, focus)
-                        }
+                        onOpenInspectorView={(id, view, focus = true) => {
+                          // An unfocused open (the docked Town master) stays
+                          // in the background: no selection, not raised.
+                          if (focus) void applySelection(id, view);
+                          else openInBackground(id, view);
+                        }}
                         toolbarPortal={viewToolbarPortal}
                         selectedId={selectedId}
                         onSelect={selectNode}
@@ -347,7 +361,7 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
                       floatingTerminalGeometryId(conversation),
                       rect,
                     );
-                    writeFloatingTerminalDock(
+                    rememberTownDock(
                       worldLocalStorage,
                       floatingTerminalGeometryId(conversation),
                       "float",
@@ -355,7 +369,7 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
                     windowCommand({ type: "place", id: entry.id, rect });
                   }}
                   onSnap={(target) => {
-                    writeFloatingTerminalDock(
+                    rememberTownDock(
                       worldLocalStorage,
                       floatingTerminalGeometryId(conversation),
                       target,
@@ -472,7 +486,7 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
                 }),
               onClose: () => closeInspector(conversation),
               onSnap: (target) => {
-                writeFloatingTerminalDock(
+                rememberTownDock(
                   worldLocalStorage,
                   floatingTerminalGeometryId(conversation),
                   target,
@@ -484,7 +498,7 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
                 });
               },
               onFloat: () => {
-                writeFloatingTerminalDock(
+                rememberTownDock(
                   worldLocalStorage,
                   floatingTerminalGeometryId(conversation),
                   "float",
