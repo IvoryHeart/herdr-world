@@ -4,8 +4,14 @@ import { useSystemBack } from "./systemBack";
 /**
  * One LIFO stack for transient layers: menus, popovers, pickers and sheets.
  *
- * Escape and the phone's Back close only the top layer; a press closes every
- * layer it is outside of, from the top, down to the one that holds it. The
+ * The dismissal rule (the owner's ruling on "I can't get back to the
+ * terminal"):
+ * - Escape and Back close ONLY the top layer, one per key or Back.
+ * - A press outside ALL layers (the xterm canvas, the scene) closes EVERY
+ *   open layer, so one tap returns to the terminal.
+ * - A press inside a lower layer closes only the layers above it.
+ *
+ * The
  * stack listens in the capture phase on window, before the terminal or any
  * component: xterm consumes keys in its textarea and the terminal cancels the
  * compatibility click after a touch, so per-menu listeners on document or the
@@ -127,10 +133,10 @@ function listen() {
   window.addEventListener(
     "pointerdown",
     (event) => {
-      // A press closes every layer it is outside of, top down, and stops at
-      // the first layer that holds it: pressing the terminal closes a menu
-      // and the picker opened from it together; pressing the menu closes
-      // only the picker. Escape and Back close one layer at a time.
+      // The press rule (see the top of this file): close from the top every
+      // layer the press is outside of and stop at the first layer that holds
+      // it. Outside all layers, everything closes; inside a lower layer, only
+      // the layers above it close.
       const target = event.target;
       if (isNode(target))
         for (let top = openTop(); top; top = openTop()) {

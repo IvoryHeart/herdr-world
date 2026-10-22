@@ -1613,10 +1613,10 @@ opened as a transient layer.
 ### Requirement: Transient layers close top first
 
 Menus, popovers, pickers and lists opened over a terminal or view SHALL form one
-last-in, first-out stack. Escape and Back SHALL close only the top layer. A press
-(including on the terminal) SHALL close, from the top, every layer it is outside
-of and stop at the first layer that holds it, so a press inside a menu closes
-only what was opened above that menu. These rules SHALL hold whether focus is in
+last-in, first-out stack. Escape and Back SHALL close only the top layer, one
+per key or Back. A press outside all layers (including on the terminal) SHALL
+close every open layer, so one tap returns to the terminal. A press inside a
+lower layer SHALL close only the layers above it. These rules SHALL hold whether focus is in
 the terminal or a layer and whether the press is a mouse click or a touch. A
 press outside SHALL still reach what was pressed. A dialog outside the stack
 keeps its own keys and presses while it is above the top layer. The on-screen Back SHALL close an

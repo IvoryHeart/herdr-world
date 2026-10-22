@@ -287,14 +287,16 @@ async function run() {
   await escape();
   check(!menu(), "second Escape left the menu open");
 
-  // A press closes every layer it is outside of: the terminal is outside
-  // both, so one press shows the terminal; the menu holds a press on itself,
-  // which closes only the picker.
+  // The press rule (layerStack.ts): a press outside all layers, here on the
+  // terminal, closes every open layer, so one tap returns to the terminal; a
+  // press inside a lower layer (the menu) closes only the layers above it.
+  // Escape and Back, above, close one layer at a time.
   await press(menuTrigger(), "window menu trigger");
   await press($(".world-window-color"), "menu colour item");
+  check(openLayerCount() === 2, `expected 2 layers, ${openLayerCount()}`);
   await pressTerminal();
   check(
-    !swatches() && !menu(),
+    !swatches() && !menu() && openLayerCount() === 0,
     "one press on the terminal left a layer over it",
   );
   await press(menuTrigger(), "window menu trigger");
