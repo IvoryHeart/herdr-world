@@ -173,6 +173,8 @@ function codexTitleCandidates(title: string) {
 export function codexTitleBinding(
   title: string,
   context: AgentSessionResolverContext,
+  /** When given, only these just-searched prefix matches count. */
+  verified?: ReadonlyMap<string, string>,
 ):
   | { kind: "none" }
   | { kind: "unresolved" }
@@ -184,8 +186,29 @@ export function codexTitleBinding(
   if (distinct.size > 1) return { kind: "ambiguous" };
   const [only] = distinct.values();
   if (!only!.truncated) return { kind: "id", id: only!.prefix };
-  const cached = context.codexTitles.get(only!.prefix);
-  return cached ? { kind: "id", id: cached.id } : { kind: "unresolved" };
+  const id = verified
+    ? verified.get(only!.prefix)
+    : context.codexTitles.get(only!.prefix)?.id;
+  return id ? { kind: "id", id } : { kind: "unresolved" };
+}
+
+/**
+ * Search the transcripts a Codex title names now, ignoring remembered
+ * matches: a send must not trust a match made before another transcript
+ * with the same prefix appeared. Returns each title prefix that matched
+ * exactly one transcript, with its complete ID.
+ */
+export async function searchCodexTitle(
+  title: string,
+  files: AgentSessionFileAccess,
+  context: AgentSessionResolverContext,
+): Promise<Map<string, string>> {
+  const thread = await codexThreadFromTitle(title, files, context);
+  const verified = new Map<string, string>();
+  if (thread.kind !== "found") return verified;
+  for (const { prefix } of codexTitleCandidates(title))
+    if (thread.id.startsWith(prefix)) verified.set(prefix, thread.id);
+  return verified;
 }
 
 /**
@@ -194,9 +217,11 @@ export function codexTitleBinding(
  * own front end names its thread. Accept only an ID that matches exactly one
  * transcript. Each read searches again, so a later colliding transcript is
  * never missed, and remembers a unique match. A caller that only needs to
- * notice changes (`reuse`) stats the remembered transcript instead; it
- * searches only while the thread has no transcript or matches several, or
- * when the title names another thread.
+ * notice changes (`reuse`) stats the remembered transcript instead. That is
+ * safe only while something forgets remembered matches whenever a Codex
+ * transcript is created or removed (see the Herdr conversation source);
+ * without that, it searches only while the thread has no transcript or
+ * matches several, or when the title names another thread.
  */
 async function codexThreadFromTitle(
   title: string,

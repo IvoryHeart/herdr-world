@@ -1,4 +1,6 @@
 import { createHash } from "node:crypto";
+import { existsSync, type FSWatcher, watch } from "node:fs";
+import { join } from "node:path";
 import { taskSummarySessionFingerprint } from "../herdr/task-summary";
 import {
   conversationMessages,
@@ -9,11 +11,12 @@ import {
   type ConversationSource,
   type ConversationUnavailableReason,
 } from "./conversation";
-import type { AgentSessionFileAccess } from "./session-file-access";
+import { codexHome, type AgentSessionFileAccess } from "./session-file-access";
 import type { SessionProjectionCache } from "./session-projection-cache";
 import {
   SESSION_AGENTS,
   codexTitleBinding,
+  searchCodexTitle,
   resolveAgentSessionInfo,
   type AgentSessionResolverContext,
 } from "./session-resolver";
@@ -38,12 +41,18 @@ export function paneBinding(
   agent: string,
   info: Record<string, unknown>,
   context: AgentSessionResolverContext,
+  /** Title prefixes searched just now; remembered matches are ignored. */
+  verified?: ReadonlyMap<string, string>,
 ): {
   binding: Exclude<ConversationBinding, "guessed">;
   fingerprint: string | null;
 } | null {
   if (agent === "codex") {
-    const title = codexTitleBinding(stringValue(info.terminal_title), context);
+    const title = codexTitleBinding(
+      stringValue(info.terminal_title),
+      context,
+      verified,
+    );
     if (title.kind === "id")
       return {
         binding: "title",
@@ -87,7 +96,70 @@ export function createHerdrConversationSource(args: {
   context: AgentSessionResolverContext;
   cache: SessionProjectionCache;
   remotePlatform?: string;
-}): ConversationSource {
+  /** A Codex transcript was created or removed on this machine. */
+  onCodexSessionsChanged?: () => void;
+}): ConversationSource & { dispose(): void } {
+  // Change detection may reuse a remembered Codex title match only while
+  // every Codex session root is watched: any created or removed transcript
+  // can change which transcripts a title prefix matches, so it forgets them
+  // all. Remote hosts and unwatchable roots always search.
+  let codexWatch: { ok: boolean; close(): void } | null = null;
+  const watchCodexSessions = () => {
+    if (args.files.remote) return false;
+    if (codexWatch) return codexWatch.ok;
+    const watchers: FSWatcher[] = [];
+    let ok = true;
+    const forget = () => {
+      args.context.codexTitles.clear();
+      args.onCodexSessionsChanged?.();
+    };
+    const home = codexHome();
+    const roots = ["sessions", "archived_sessions"];
+    for (const name of roots) {
+      const root = join(home, name);
+      if (!existsSync(root)) continue;
+      try {
+        const watcher = watch(
+          root,
+          { recursive: true, persistent: false },
+          (type) => {
+            if (type === "rename") forget();
+          },
+        );
+        watcher.on("error", () => {
+          watcher.close();
+          if (codexWatch) codexWatch.ok = false;
+          args.context.codexTitles.clear();
+        });
+        watchers.push(watcher);
+      } catch {
+        ok = false;
+      }
+    }
+    // A root created later (Codex archives a thread for the first time) is
+    // seen through the home directory, and the roots are watched afresh.
+    try {
+      const watcher = watch(home, { persistent: false }, (_type, name) => {
+        if (!roots.includes(String(name))) return;
+        codexWatch?.close();
+        codexWatch = null;
+        forget();
+      });
+      watcher.on("error", () => {
+        watcher.close();
+        if (codexWatch) codexWatch.ok = false;
+      });
+      watchers.push(watcher);
+    } catch {
+      ok = false;
+    }
+    codexWatch = {
+      ok,
+      close: () => watchers.forEach((watcher) => watcher.close()),
+    };
+    return ok;
+  };
+
   const agentInfo = async (paneId: string) => {
     let result: unknown;
     try {
@@ -235,12 +307,17 @@ export function createHerdrConversationSource(args: {
 
   return {
     id: "herdr",
+    dispose: () => {
+      codexWatch?.close();
+      codexWatch = null;
+    },
     read,
     latest,
     identity: async ({ pane_id }) => {
       // Watching runs on every Herdr event; it need not search Codex
-      // transcripts again for a title it already resolved.
-      const step = await resolve(pane_id, true);
+      // transcripts again for a title it already resolved, while creations
+      // and removals of Codex transcripts are being watched.
+      const step = await resolve(pane_id, watchCodexSessions());
       if (!("resolved" in step))
         return {
           key: JSON.stringify([step.agent, step.unavailable.reason]),
@@ -315,15 +392,31 @@ export function createHerdrConversationSource(args: {
           reason: "empty",
           message: "Write a message first.",
         };
-      // Re-read the pane immediately before prompting, with no other await
-      // in between. Herdr's prompt takes no expected session, so a switch
-      // after this reply and before the prompt lands is still possible.
-      const info =
-        args.remotePlatform === "windows" ? null : await agentInfo(pane_id);
+      if (args.remotePlatform === "windows")
+        return {
+          status: "refused",
+          reason: "unavailable",
+          message: "Chat cannot send on a Windows host yet.",
+        };
+      // Read the pane immediately before prompting, with no other await in
+      // between. Herdr's prompt takes no expected session, so a switch after
+      // this reply and before the prompt lands is still possible.
+      let info = await agentInfo(pane_id);
+      let verified: Map<string, string> | undefined;
+      if (normalizeAgentName(stringValue(info?.agent)) === "codex") {
+        // A truncated Codex title ID is searched afresh, never taken from a
+        // remembered match; then the pane is read again for the prompt.
+        verified = await searchCodexTitle(
+          stringValue(info?.terminal_title),
+          args.files,
+          args.context,
+        );
+        info = await agentInfo(pane_id);
+      }
       const agent = normalizeAgentName(stringValue(info?.agent));
       const bound =
         info && SESSION_AGENTS.has(agent)
-          ? paneBinding(agent, info, args.context)
+          ? paneBinding(agent, info, args.context, verified)
           : null;
       if (!bound?.fingerprint)
         return {

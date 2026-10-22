@@ -49,12 +49,25 @@ test("transcript states that are not reader bugs are notes", () => {
 
 test("a version is printed only when it looks like one", () => {
   expect(versionToken("0.163.0")).toBe("0.163.0");
-  expect(versionToken("2.1.308+build_7-rc")).toBe("2.1.308+build_7-rc");
+  expect(versionToken("2.1.308")).toBe("2.1.308");
+  expect(versionToken("1.2.0-rc.1")).toBe("1.2.0-rc.1");
+  expect(versionToken("kimi-code")).toBe("kimi-code");
   expect(versionToken("")).toBe("unknown");
   expect(versionToken(undefined)).toBe("unknown");
   expect(versionToken("1.0 secret words")).toBe("other");
   expect(versionToken("/home/someone/project")).toBe("other");
   expect(versionToken("x".repeat(33))).toBe("other");
+  // Short tokens are content too, even when they look harmless.
+  for (const token of [
+    "PRIVATE-SENTINEL",
+    "SENTINEL",
+    "1.0-SENTINEL",
+    "1.0+SENTINEL",
+    "1.0.0-rc.SENTINEL",
+    "2.1.308+build_7-rc",
+    "v1.2.3",
+  ])
+    expect(versionToken(token)).toBe("other");
 });
 
 describe("the CLI never prints transcript content", () => {
@@ -126,6 +139,22 @@ describe("the CLI never prints transcript content", () => {
         },
       ]),
     );
+    // Short tokens that pass a loose identifier check.
+    for (const [index, version] of [
+      "PRIVATE-SENTINEL",
+      "1.0-SENTINEL",
+    ].entries())
+      await writeFile(
+        join(
+          codex,
+          `rollout-2026-10-22T09-00-0${index + 2}-019a0000-0000-7000-8000-00000000000${index + 3}.jsonl`,
+        ),
+        jsonl([
+          { type: "session_meta", payload: { cli_version: version } },
+          said("user", "Hi"),
+          said("assistant", "Hello"),
+        ]),
+      );
     // Not JSON at all: the reader's result is counted, never echoed.
     await writeFile(join(pi, "broken.jsonl"), `${SENTINEL} {not json`);
   });
@@ -158,8 +187,10 @@ describe("the CLI never prints transcript content", () => {
         run.exited,
       ]);
       expect(code).toBe(0);
-      expect(stdout).not.toContain(SENTINEL);
-      expect(stderr).not.toContain(SENTINEL);
+      for (const output of [stdout, stderr]) {
+        expect(output).not.toContain("SENTINEL");
+        expect(output).not.toContain("PRIVATE");
+      }
       expect(stdout).not.toContain(home);
       expect(stderr).not.toContain(home);
       expect(stdout).toContain("other");

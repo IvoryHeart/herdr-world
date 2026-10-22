@@ -1064,5 +1064,135 @@ describe("conversation binding and remote admission", () => {
     const gone = await chat.identity({ pane_id: "w1:p1" });
     expect(searches).toBe(3);
     expect(gone.key).not.toBe(first.key);
+    chat.dispose();
+  });
+  test("a second transcript for a remembered Codex prefix is noticed and blocks send", async () => {
+    // rev1's probe: a prefix resolves to one transcript, then another
+    // transcript with the same 29 characters appears.
+    const dir = join(process.env.CODEX_HOME!, "sessions", "2026", "10", "19");
+    await mkdir(dir, { recursive: true });
+    const { copyFile } = await import("node:fs/promises");
+    const written = await fixtures[0]!.write(
+      await mkdtemp(join(root, "collide-")),
+    );
+    const thread = "019f0000-0000-7000-8000-0000000000a1";
+    await copyFile(
+      written,
+      join(dir, `rollout-2026-10-19T09-00-00-${thread}.jsonl`),
+    );
+    let searches = 0;
+    const files = {
+      ...localAgentSessionFiles,
+      findCodexSessionByPrefix: async (prefix: string) => {
+        searches += 1;
+        return localAgentSessionFiles.findCodexSessionByPrefix(prefix);
+      },
+    };
+    let changes = 0;
+    const prompts: unknown[] = [];
+    const chat = createHerdrConversationSource({
+      herdrCall: herdr(
+        {
+          ...pane("codex"),
+          terminal_title: `demo · ${thread.slice(0, 29)}...`,
+        },
+        prompts,
+      ),
+      files,
+      context: createAgentSessionResolverContext(),
+      cache: createSessionProjectionCache(files),
+      onCodexSessionsChanged: () => {
+        changes += 1;
+      },
+    });
+    try {
+      const read = await chat.read({ pane_id: "w1:p1" });
+      expect(read.session_fingerprint).toMatch(/^[a-f0-9]{64}$/);
+      const before = await chat.identity({ pane_id: "w1:p1" });
+      const searchesBefore = searches;
+      await copyFile(
+        written,
+        join(dir, `rollout-2026-10-19T09-00-01-${thread.slice(0, 29)}b2.jsonl`),
+      );
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      expect(changes).toBeGreaterThan(0);
+      const after = await chat.identity({ pane_id: "w1:p1" });
+      expect(searches).toBeGreaterThan(searchesBefore);
+      expect(after.key).not.toBe(before.key);
+      expect(
+        await chat.send({
+          pane_id: "w1:p1",
+          text: "hello",
+          session_fingerprint: read.session_fingerprint!,
+        }),
+      ).toMatchObject({ status: "refused", reason: "unavailable" });
+      expect(prompts).toEqual([]);
+    } finally {
+      chat.dispose();
+    }
+  });
+
+  test("send searches a Codex title afresh even when a match is remembered", async () => {
+    const context = createAgentSessionResolverContext();
+    const thread = "019f1000-0000-7000-8000-0000000000c1";
+    // A remembered match whose transcript no search can find any more.
+    context.codexTitles.set(thread.slice(0, 29), {
+      id: thread,
+      path: join(root, "missing.jsonl"),
+    });
+    const title = `demo · ${thread.slice(0, 29)}...`;
+    const fingerprint = paneBinding(
+      "codex",
+      { ...pane("codex"), terminal_title: title },
+      context,
+    )?.fingerprint;
+    expect(fingerprint).toMatch(/^[a-f0-9]{64}$/);
+    const prompts: unknown[] = [];
+    const chat = createHerdrConversationSource({
+      herdrCall: herdr({ ...pane("codex"), terminal_title: title }, prompts),
+      files: localAgentSessionFiles,
+      context,
+      cache: createSessionProjectionCache(localAgentSessionFiles),
+    });
+    try {
+      expect(
+        await chat.send({
+          pane_id: "w1:p1",
+          text: "hello",
+          session_fingerprint: fingerprint!,
+        }),
+      ).toMatchObject({ status: "refused", reason: "unavailable" });
+      expect(prompts).toEqual([]);
+    } finally {
+      chat.dispose();
+    }
+  });
+
+  test("a remote host never reuses a remembered Codex title match", async () => {
+    const thread = "019f2000-0000-7000-8000-0000000000d1";
+    const path = `/srv/codex/sessions/rollout-2026-10-19T09-00-00-${thread}.jsonl`;
+    let searches = 0;
+    const files = {
+      ...localAgentSessionFiles,
+      remote: true,
+      statFile: async (value: string) => ({ path: value, mtimeMs: 1, size: 1 }),
+      findCodexSessionByPrefix: async () => {
+        searches += 1;
+        return { path, mtimeMs: 1, size: 1 };
+      },
+    };
+    const chat = createHerdrConversationSource({
+      herdrCall: herdr({
+        ...pane("codex"),
+        terminal_title: `demo · ${thread.slice(0, 29)}...`,
+      }),
+      files,
+      context: createAgentSessionResolverContext(),
+      cache: createSessionProjectionCache(files),
+    });
+    await chat.identity({ pane_id: "w1:p1" });
+    await chat.identity({ pane_id: "w1:p1" });
+    expect(searches).toBe(2);
+    chat.dispose();
   });
 });

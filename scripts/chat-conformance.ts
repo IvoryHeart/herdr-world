@@ -5,12 +5,14 @@
 // Runs every harness reader over the real transcripts on this machine and
 // prints pass/fail counts per harness and harness version. It never prints
 // transcript content, file paths or session IDs: only counts, harness names,
-// check names and version strings that match ^[\w.+-]{1,32}$ (others are
-// counted as "other"). Reader errors are counted, not printed. It writes
-// nothing, except that the Antigravity reader copies each database into a
-// private (0700) temporary directory while reading it; a killed run can
-// leave one behind as $TMPDIR/herdr-world-agy-*. Results describe this
-// machine; do not commit them as fixtures.
+// check names and canonical numeric versions (any other version string is
+// counted as "other"). Reader errors are counted, not printed.
+//
+// Disk: the script writes no output files. The one exception is the
+// Antigravity reader, which copies each database into a private (0700)
+// temporary directory while reading it and removes it afterwards; a killed
+// run can leave transcript content behind in $TMPDIR/herdr-world-agy-*.
+// Results describe this machine; do not commit them as fixtures.
 import { readdir } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -114,12 +116,20 @@ const INJECTED_USER_TEXT =
   /^(?:# AGENTS\.md instructions\b|<[a-z_ -]+>|Caveat: The messages below\b|This session is being continued from a previous conversation\b)/;
 
 /**
- * A version string comes from inside the transcript, so it is printed only
- * when it looks like a version; anything else is counted as `other`.
+ * A version string comes from inside the transcript, so only a canonical
+ * numeric version is printed (`0.163.0`, `2.1.308`, `1.2.0-rc.1`); any other
+ * value, however short, is counted as `other`. The two names are the
+ * readers' own fallbacks for harnesses that record no version.
  */
+const CANONICAL_VERSION =
+  /^\d{1,4}(?:\.\d{1,6}){1,3}(?:-(?:alpha|beta|rc|dev|pre|preview|nightly|canary)(?:\.?\d{1,6})?)?$/;
+const READER_VERSION_NAMES = new Set(["kimi-code", "antigravity-cli"]);
+
 export function versionToken(value: string | undefined) {
   if (!value || value === "unknown") return "unknown";
-  return /^[\w.+-]{1,32}$/.test(value) ? value : "other";
+  return CANONICAL_VERSION.test(value) || READER_VERSION_NAMES.has(value)
+    ? value
+    : "other";
 }
 
 /** Failures are reader bugs; notes describe the transcript, not the reader. */

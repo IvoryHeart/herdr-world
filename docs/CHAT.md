@@ -74,8 +74,14 @@ message.
 ID, and is null otherwise. Codex shows 29 characters of the thread ID in its
 title, so a new thread with no saved transcript, or a title naming two threads,
 is shown but cannot be sent to until the ID resolves; send its first message
-from the Terminal. Prefix equality is never treated as the same thread. A send rereads the pane with `agent.get` and prompts with no other await
-in between. If the bound session changed, nothing is sent.
+from the Terminal. Chat does not send a thread's first message. Prefix
+equality is never treated as the same thread.
+
+For a truncated Codex title ID, a send first searches the transcripts afresh,
+ignoring any remembered match, and accepts it only if exactly one transcript
+matches. It then rereads the pane with `agent.get` and prompts with no other
+await in between. If the bound session changed, or the title no longer names
+the thread just found, nothing is sent.
 
 **What remains.** Herdr's `agent.prompt` takes only a pane, not an expected
 session. A session switch after Herdr answers that `agent.get` and before it
@@ -108,11 +114,15 @@ machine, it also watches the file, so messages written during a long turn
 appear without a status change. When the pane's session, title thread,
 transcript size or time, or status changes, the service pushes
 `agent_conversation_changed` to the watching browser, which rereads. Transcripts
-on an SSH host are rechecked on Herdr events only. Once a truncated Codex title
-ID has matched one transcript, these rechecks stat that transcript instead of
-searching again; they search while the thread has no transcript or matches
-several, or when the title names another thread. Reads still search, so a
-later transcript with the same prefix is noticed.
+on an SSH host are rechecked on Herdr events only.
+
+Once a truncated Codex title ID has matched one transcript, rechecks on this
+machine stat that transcript instead of searching again. That is safe only
+because the service also watches the Codex session directories: whenever a
+transcript is created or removed, it forgets every remembered match and
+rechecks the watched panes, so a second transcript with the same prefix turns
+the title ambiguous. If those directories cannot be watched, or the host is
+remote, every recheck searches. Reads and sends always search.
 
 ## Harness matrix
 
@@ -149,17 +159,18 @@ hosts are not supported.
 the newest transcripts (50 per harness by default) in the standard locations on
 the machine it runs on, honouring the same environment overrides as World
 (`CODEX_HOME`, `GROK_HOME`, `PI_CODING_AGENT_DIR` and others). It prints pass
-counts per harness and harness version, and never prints or writes transcript
-content, paths or session IDs. A harness version is printed only when it
-matches `^[\w.+-]{1,32}$`; any other value read from a transcript is counted
-as `other`, and reader errors are counted without their message. Run it after
-a harness upgrade; do not commit its output or copy transcripts into the
-repository.
+counts per harness and harness version. It never prints transcript content,
+paths or session IDs. A harness version is printed only when it is a canonical
+numeric version (such as `0.163.0` or `1.2.0-rc.1`); any other value read from
+a transcript, however short, is counted as `other`. Reader errors are counted
+without their message. Run it after a harness upgrade; do not commit its
+output or copy transcripts into the repository.
 
-The script writes nothing itself. The Antigravity reader, here and in the
-service, reads a copy of each database from a private (0700) temporary
-directory and removes it afterwards; a process killed while reading can leave
-`herdr-world-agy-*` with transcript content in the temporary directory.
+It writes no output files. The one disk exception is Antigravity: its reader,
+here and in the service, reads a copy of each database from a private (0700)
+temporary directory and removes it afterwards, so a process killed while
+reading can leave `herdr-world-agy-*` with transcript content in the
+temporary directory.
 
 A transcript fails when it cannot be read or when text the user did not write
 (injected instructions, environment blocks, caveats, compaction summaries,
