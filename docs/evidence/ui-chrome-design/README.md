@@ -138,6 +138,28 @@ The calm window bar goes from 119 to 38 (from 177 to 38 on Changes).
   head and supplies slot content instead: identity, views and actions. That is a
   small, upstreamable "header slots" change; its view logic stays where it is.
 
+## One layout for every agent state
+
+Testing #262 showed one window drawing a different layout per state. "On a
+break" had a card, a reply box and a row of Inspector, Colour and Next buttons.
+"Finished" had a card, Mark reviewed and Follow up, then the terminal key bar
+and the global phone composer below it. The target is the same layout in every
+state (working, needs you, on a break, finished, unknown and shell):
+
+| Place | Holds | Never holds |
+| --- | --- | --- |
+| Header (one bar) | Avatar (its ring is the colour), name, status and location line, the selector `[Chat \| Terminal \| Changes \| Files]`, Next ›, ⋯, close or Back | A second row of actions |
+| ⋯ menu | Colour, Mark reviewed (when finished), minimise, snap and float or Position, open in Spaces | Navigation between views (except the "More views" overflow under 360px) |
+| Chat body (`AgentChat`) | The conversation; a waiting agent's question with its answers as chips at the end of the conversation, numbered 1–3 for the keyboard | Cards duplicating the latest message |
+| State chips (Chat only, above the composer) | At most one slim row, 32px high, that scrolls sideways and appears only when the state has actions. Finished: `✓ Mark reviewed` and `↩ Follow up` (Follow up focuses the composer). Needs you without listed answers: `Open terminal`. | Full-width buttons, Inspector, Colour, Next |
+| Composer (Chat only) | Attach, reply box, send. There is exactly one. | The global phone composer, the terminal key bar |
+| Terminal view | The terminal, plus on a phone Roamgate's key bar and terminal input | The chat composer and state chips |
+
+The Inspector button disappears because this window is the Inspector. While
+Chat is shown, the phone's global composer and the terminal key bar are hidden;
+they belong to the Terminal view. Hover peeks on desktop are cards, not this
+window, and may keep their one-line reply.
+
 ## Phone window placement
 
 The agent's one window on a phone (today a full-screen "compact" frame) can be
