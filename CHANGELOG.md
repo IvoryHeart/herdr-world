@@ -23,13 +23,6 @@ prepared.
 
 ### Changed
 
-- Give every window one bar: identity, the view selector and **⋯**,
-  maximize and close share a single row at every width. Minimize, snap and
-  float move into **⋯**; the location line under the name opens branch and PR
-  status, replacing the repository row and the PR card above Changes and
-  Commits. In Town the window takes the Town prototype's look with **‹ Back**,
-  and on a phone it replaces the top bar. Pixelify Sans and JetBrains Mono now
-  ship with World instead of falling back to system fonts.
 - Each agent has one window. Tapping an agent or its table in Town (or
   activating it, the needs-you list, **N** and **Next**) opens its Inspector on
   **Chat**, the existing Chat view with the full conversation, **Jump to
