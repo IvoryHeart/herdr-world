@@ -127,7 +127,10 @@ with the bump. Users receive the new Herdr with the World release that declares 
 
 ## Publishing a candidate or stable release
 
-1. Create a clean release branch from current `origin/main` and ensure the Unreleased
+1. Create a clean release branch from current `origin/main`. For a stable release,
+   run `bun run changelog:assemble` and commit the result: it appends every
+   `changes/*.md` fragment to the Unreleased section of `CHANGELOG.md`, grouped by
+   heading and ordered by file name, and deletes the fragments. Ensure the Unreleased
    changelog accurately describes user-visible changes and the current source lineage.
    Prepare a concise, reviewed `docs/releases/vX.Y.Z.md` or
    `docs/releases/vX.Y.Z-rc.N.md` covering upgrade steps,
@@ -138,7 +141,10 @@ with the bump. Users receive the new Herdr with the World release that declares 
    candidate, starting with `0.2.0-rc.1`, or `bun run release:prepare -- X.Y.Z`
    (or `patch`, `minor`, `major`) for stable. Review the public plugin version and
    release notes, then open a ready release PR. RCs leave the Unreleased changelog
-   open; stable preparation promotes it into a dated release section. The helper
+   and fragments open; stable preparation assembles any remaining fragments, then
+   promotes Unreleased into a dated release section. The release PR adds no
+   fragment, so its description states
+   `Changelog: none — release preparation assembles the existing fragments.` The helper
    drafts later RC notes from the stable notes when no exact RC notes exist; review
    and edit that draft in the PR. If stable publication moves to another UTC date,
    update and review the date in that PR. Private root, web and server manifests

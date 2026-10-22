@@ -3,27 +3,13 @@
 This changelog records Herdr World releases and downstream changes. Current releases identify the
 exact Roamgate source synchronization in [UPSTREAM.md](UPSTREAM.md); historical release entries
 retain their original Herdr Web lineage. Unreleased entries describe user-facing changes; PR links
-are optional because the merged PR history records their source.
+are optional because the merged PR history records their source. New entries arrive as
+fragments under [changes/](changes/README.md) and are added here when a stable release is
+prepared.
 
 ## [Unreleased]
 
 ### Added
-
-- Installing or updating Herdr World now installs or upgrades Herdr to the release
-  that World version verified, in Herdr's default location, and installs the Herdr
-  integrations for the Codex, Claude and Pi harnesses present on the machine. The
-  standalone installer and `herdr-world update` run the new
-  `herdr-world herdr upgrade`. In the browser, a World update follows up with a
-  visible Herdr step, and **Runtime → Upgrade Herdr** (or **Update Herdr
-  integrations**) appears whenever something is behind. The upgrade verifies
-  checksums and versions before replacing anything, keeps the old binary for
-  rollback, and never downgrades. It hands a running server's panes to the new
-  version only when it can prove nothing supervises that server (Linux); otherwise it says that a
-  restart is needed. A GitHub-installed Herdr World plugin is pinned to the
-  matching release tag. Windows uses Herdr's own installer and moves a Herdr that
-  older World releases installed to Herdr's default location. The Homebrew Formula
-  installs Herdr too, using the verified prebuilt binary on Intel Macs. Set
-  `HERDR_WORLD_SKIP_HERDR=1` to install World alone.
 
 - Add a Chat tab to the Inspector, replacing History. Chat shows an agent's
   conversation from its transcript, never the terminal, and replies with
