@@ -1957,6 +1957,7 @@ function ReceptionEntry({
       ref={ref}
       type="button"
       className={`town-reception-entry${agent.semanticStatus === "done" ? " town-reception-done" : ""}`}
+      data-agent-key={agent.key}
       aria-label={
         agent.semanticStatus === "done"
           ? `${agent.displayLabel}, finished`

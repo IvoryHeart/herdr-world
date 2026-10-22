@@ -35,6 +35,7 @@ import { TownActors, townActorWorld, type TownActor } from "./townActors";
 import {
   stepTownDrag,
   townDragPhase,
+  townGroundedPose,
   type TownDragMotion,
 } from "./townDragMotion";
 import type { TownMoveResult } from "./townMoves";
@@ -102,6 +103,8 @@ export type TownRendererDiagnostics = {
     buildings: number;
     rooms: number;
   };
+  /** Drag outcomes as drawn: lifts, landings (each with its dust), returns. */
+  drags: { lifts: number; landings: number; returns: number; dust: number };
 };
 
 declare global {
@@ -134,6 +137,7 @@ function diagnostics(): TownRendererDiagnostics {
     desks: 0,
     animation: { characters: 0, monitors: 0, statuses: 0 },
     layout: null,
+    drags: { lifts: 0, landings: 0, returns: 0, dust: 0 },
   };
   if (enabled) window.__HERDR_TOWN_RENDERER__ = value;
   return value;
@@ -166,8 +170,7 @@ export type TownRendererHandle = {
   moveDrag(x: number, y: number, targetKey: string | null): void;
   /** Spring back to its spot, or wait at the target while Herdr moves it. */
   endDrag(mode: "cancel" | "park"): void;
-  /** The move finished: land with a puff, or spring back on failure. */
-  /** Land on the target, spring home, or fade in place when uncertain. */
+  /** Land on the target with a puff, spring home, or fade when uncertain. */
   finishMove(result: TownMoveResult): void;
   destroy(): void;
 };
@@ -1332,8 +1335,9 @@ export async function createTownRenderer(
   type Puff = { x: number; y: number; vx: number; vy: number; life: number };
   const puffs: Puff[] = [];
   const quiet = () => camera.reducedMotion || state.calm;
+  /** Raise dust unless motion is quiet; true when it did. */
   const puffAt = (x: number, y: number, count: number) => {
-    if (quiet()) return;
+    if (quiet()) return false;
     for (let i = 0; i < count; i += 1) {
       const angle = Math.PI * (0.9 + 1.2 * Math.random());
       const speed = 18 + 34 * Math.random();
@@ -1345,20 +1349,17 @@ export async function createTownRenderer(
         life: 0.45 + 0.3 * Math.random(),
       });
     }
+    return true;
   };
   type DragVisual = {
     kind: "desk" | "agent";
     key: string;
     ghost: Container;
+    /** A carried agent, drawn kicking its legs. */
+    agent: { sprite: Sprite; look: TownLook } | null;
     shadow: Graphics;
     highlight: Graphics;
     slot: Sprite | null;
-    home: { x: number; y: number };
-    x: number;
-    y: number;
-    tilt: number;
-    lastX: number;
-    target: { x: number; y: number; w: number; h: number } | null;
     dimmed: Container | null;
     /** The desk snapshot made for this drag; cached textures are never ours. */
     snapshot: Texture | null;
@@ -1390,11 +1391,11 @@ export async function createTownRenderer(
     let home = { x, y };
     let dimmed: Container | null = null;
     let snapshot: Texture | null = null;
+    let image: Sprite;
     if (kind === "desk") {
       const cell = layoutCells.get(key);
       const pod = podOf(key);
       if (cell) home = { x: (cell.x + 3) * T, y: cell.y * T + 30 };
-      let image: Sprite;
       if (pod) {
         // A snapshot of the desk as drawn, people and screens included.
         snapshot = app.renderer.generateTexture(pod.container);
@@ -1419,11 +1420,13 @@ export async function createTownRenderer(
         const geometry = townSeat(cell, seat.seat);
         home = { x: geometry.cx, y: geometry.seatedY - 10 };
       } else if (actor) home = { x: actor.x, y: actor.y - 10 };
-      const image = new Sprite(
+      // Held by the scruff: it hangs from the top and swings.
+      image = new Sprite(
         textureOf(townCharacter(lookOf(key), "down", 0, "stand", false)),
       );
-      image.anchor.set(0.5, 0.8);
+      image.anchor.set(0.5, 0.1);
       image.scale.set(TOWN_AGENT_SCALE);
+      image.y = -0.7 * 18 * TOWN_AGENT_SCALE;
       ghost.addChild(image);
     }
     const shadow = new Graphics()
@@ -1435,20 +1438,24 @@ export async function createTownRenderer(
       kind,
       key,
       ghost,
+      agent: kind === "agent" ? { sprite: image, look: lookOf(key) } : null,
       shadow,
       highlight,
       slot: null,
       home,
       x: home.x,
       y: home.y,
-      tilt: 0,
-      lastX: x,
       target: null,
       dimmed,
       snapshot,
-      phase: { name: "drag" },
-      shown: { x, y, tilt: 0, alpha: 1, scale: 1 },
+      // It lifts off from where it stood and springs after the pointer.
+      phase: { name: "drag", t: 0 },
+      shown: townGroundedPose(home.x, home.y),
+      vx: 0,
+      vy: 0,
+      lean: 0,
     };
+    stats.drags.lifts += 1;
     puffAt(
       home.x,
       home.y + (kind === "desk" ? 24 : 8),
@@ -1458,10 +1465,6 @@ export async function createTownRenderer(
   };
   const moveDrag = (x: number, y: number, targetKey: string | null) => {
     if (!drag || !layout || drag.phase.name !== "drag") return;
-    drag.tilt +=
-      (Math.max(-0.35, Math.min(0.35, (x - drag.lastX) * 0.03)) - drag.tilt) *
-      0.3;
-    drag.lastX = x;
     drag.x = x;
     drag.y = y - (drag.kind === "desk" ? 24 : 14);
     drag.target = null;
@@ -1528,14 +1531,13 @@ export async function createTownRenderer(
       request("drag-uncertain");
       return;
     }
-    if (result === "moved" && drag.target) {
-      puffAt(
-        drag.target.x + drag.target.w / 2,
-        drag.target.y + drag.target.h - 4,
-        14,
-      );
-      drag.phase = { name: "land", t: 0 };
-    } else drag.phase = townDragPhase(drag, "back");
+    // Every move that lands raises dust when it touches down (see
+    // updateDrag), on its target or, without one, where it was dropped.
+    if (result === "moved") drag.phase = townDragPhase(drag, "land");
+    else {
+      drag.phase = townDragPhase(drag, "back");
+      stats.drags.returns += 1;
+    }
     request("drag-result");
   };
   /** Advance drag effects and puffs; true while anything still moves. */
@@ -1557,19 +1559,42 @@ export async function createTownRenderer(
         .fill({ color: 0xe8dcc4, alpha: Math.min(0.5, puff.life) });
     }
     if (!drag) return puffs.length > 0;
-    const { pose, done } = stepTownDrag(drag, dt, clock, quiet());
+    const { pose, done, landed } = stepTownDrag(drag, dt, clock, quiet());
+    const desk = drag.kind === "desk";
+    // The ground under the ghost: its shadow, and where the dust rises.
+    const ground = desk ? 40 : 12;
+    if (landed) {
+      stats.drags.landings += 1;
+      if (puffAt(pose.x, pose.y + ground - 2, desk ? 16 : 8))
+        stats.drags.dust += 1;
+    }
     if (done) {
       clearDrag();
       return puffs.length > 0;
     }
-    const { x, y, tilt, alpha, scale } = pose;
+    const { x, y, tilt, alpha, scale, lift, squash } = pose;
     const phase = drag.phase;
-    drag.ghost.position.set(x, y);
+    // Lifted, the ghost rises off its shadow, which spreads and fades.
+    drag.ghost.position.set(x, y - lift * (desk ? 14 : 10));
     drag.ghost.rotation = tilt;
     drag.ghost.alpha = alpha;
-    drag.ghost.scale.set(scale);
-    drag.shadow.position.set(x, y + (drag.kind === "desk" ? 40 : 12));
-    drag.shadow.alpha = alpha;
+    drag.ghost.scale.set(scale * Math.sqrt(squash), scale / Math.sqrt(squash));
+    drag.shadow.position.set(x, y + ground);
+    drag.shadow.scale.set(1 + 0.35 * lift);
+    drag.shadow.alpha = alpha * (1 - 0.4 * Math.min(1, lift));
+    if (drag.agent) {
+      // A carried agent swings from where it is held and kicks its legs.
+      const kicking = lift > 0.3 && phase.name !== "land";
+      const frame = kicking
+        ? Math.floor(clock * (Math.hypot(drag.vx, drag.vy) > 60 ? 12 : 5)) % 4
+        : 0;
+      drag.agent.sprite.texture = textureOf(
+        townCharacter(drag.agent.look, "down", frame, "stand", false),
+      );
+      drag.agent.sprite.rotation = kicking
+        ? Math.max(-0.5, Math.min(0.5, drag.vx * 0.002))
+        : 0;
+    }
     drag.highlight.clear();
     if (drag.target && phase.name !== "back") {
       const pulse = 0.12 + 0.08 * Math.sin(clock * 4);
