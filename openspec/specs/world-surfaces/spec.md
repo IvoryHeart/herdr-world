@@ -1268,7 +1268,12 @@ the terminal from the peek's header and go to the next waiting agent. Tapping an
 agent, or the table of an agent away at reception or in the lounge, SHALL open
 what the Town opens preference names: the agent's peek (Chat, the default) or
 its terminal; it SHALL NOT open an Inspector, and tapping a room SHALL only zoom
-to it. A table SHALL stand for its agent that needs the user (waiting, then
+to it. On a wide screen a pinned peek SHALL be a chat window in World's shared
+window frame, moved, resized, snapped, minimised and maximised as the Inspector
+window is, its placed position and size kept as the Inspector's are; opening an
+agent SHALL show a minimised chat window again. A hover peek SHALL stay a card
+beside its agent, and on a phone the peek SHALL be a sheet whose handle makes it
+taller, shorter or closes it. A table SHALL stand for its agent that needs the user (waiting, then
 finished) before the agent seated there. An agent opened this way, with either
 preference, SHALL walk back to its desk and stay there until its status
 changes, after which its status places it again; the tap SHALL NOT mark its
@@ -1301,6 +1306,14 @@ Opening the terminal from a peek SHALL follow the Inspector presentation prefere
 
 - **WHEN** the peeked pane closes or its runtime generation retires before the reply is sent
 - **THEN** World rejects the reply and does not redirect it to another pane, tab or host
+
+#### Scenario: Move and resize the chat window
+
+- **WHEN** on a wide screen the user opens an agent's peek, drags it by the
+  agent's name, resizes it from an edge, closes it and opens an agent again
+- **THEN** the peek is in World's shared window frame with the Inspector
+  window's snap, minimise, maximise and close controls, and reopens at the
+  position and size it was left with
 
 #### Scenario: Tap the table of an agent waiting at reception
 

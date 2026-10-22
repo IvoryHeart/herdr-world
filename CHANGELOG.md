@@ -34,6 +34,10 @@ are optional because the merged PR history records their source.
   agent brings it back to its desk until its status changes. **Menu → Town
   opens** chooses Chat (the default) or Terminal for these taps; neither marks
   finished work reviewed.
+- On a wide screen an opened Town peek is a chat window in World's shared
+  window frame, moved, resized, snapped, minimised and maximised like the
+  Inspector's, and reopened where it was left. On a phone the chat sheet has a
+  handle that makes it taller or shorter.
 - Town tables follow Herdr's tab order, so moving a tab in Spaces or Herdr
   moves its table. Drag a table onto another in its room (or press **M**) to
   reorder it: Town sends Herdr's `tab.move` the way Spaces does and shows the

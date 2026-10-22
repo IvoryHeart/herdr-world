@@ -6,6 +6,11 @@ import {
   type ReactNode,
 } from "react";
 import { SquareTerminal } from "lucide-react";
+import { MobileSheetHandle } from "../../components/MobileSheetHandle";
+import {
+  WindowControls,
+  type ManagedWindowControls,
+} from "../windows/WindowControls";
 import type { OfficeAgent } from "../herdrOfficeProjection";
 import { AttachmentChips } from "../../components/AttachmentChips";
 import {
@@ -71,7 +76,19 @@ export function TownPeek({
   uploadScope,
   onReviewed,
   deskColor = null,
+  windowControls = null,
+  sheetExpanded = false,
+  onSheetExpandedChange,
 }: {
+  /**
+   * Present while the peek is World's chat window (a pinned peek on a wide
+   * screen): the shared frame moves and resizes it, and these are its
+   * window buttons in place of the close button.
+   */
+  windowControls?: ManagedWindowControls | null;
+  /** The phone sheet's size, which its handle changes. */
+  sheetExpanded?: boolean;
+  onSheetExpandedChange?(expanded: boolean): void;
   /** The colour of the agent's desk (its terminal), to change or reset. */
   deskColor?: {
     current: TerminalColor;
@@ -222,7 +239,7 @@ export function TownPeek({
   return (
     <div
       ref={card}
-      className={`town-peek${anchor ? "" : " town-peek-sheet"}${chatting ? " town-peek-chat" : ""}${agent.semanticStatus === "blocked" ? " town-peek-blocked" : ""}`}
+      className={`town-peek${anchor ? "" : windowControls ? " town-peek-window" : ` town-peek-sheet${sheetExpanded ? " is-expanded" : ""}`}${chatting ? " town-peek-chat" : ""}${agent.semanticStatus === "blocked" ? " town-peek-blocked" : ""}`}
       role="dialog"
       tabIndex={-1}
       data-agent-key={agent.key}
@@ -238,9 +255,22 @@ export function TownPeek({
       onPointerLeave={() => onHold(false)}
       onFocus={() => onHold(true)}
     >
+      {!anchor && !windowControls && onSheetExpandedChange ? (
+        <MobileSheetHandle
+          label={`Resize or close ${agent.displayLabel}'s chat`}
+          expanded={sheetExpanded}
+          onExpand={() => onSheetExpandedChange(true)}
+          onCollapse={() => onSheetExpandedChange(false)}
+          onClose={onClose}
+        />
+      ) : null}
       <div className="town-peek-head">
         <img src={townPortrait(agent.key)} alt="" />
-        <div>
+        {/* In the chat window, the name is where the window is dragged. */}
+        <div
+          data-window-drag-handle={windowControls ? "" : undefined}
+          title={windowControls ? "Drag to move the chat window" : undefined}
+        >
           <b>{agent.displayLabel}</b>
           <small>
             <span className={`town-pill town-pill-${agent.semanticStatus}`}>
@@ -260,14 +290,21 @@ export function TownPeek({
           <SquareTerminal size={15} aria-hidden="true" />
           <span>Open terminal</span>
         </button>
-        <button
-          type="button"
-          className="town-peek-close"
-          aria-label="Close peek"
-          onClick={onClose}
-        >
-          ×
-        </button>
+        {windowControls ? (
+          <WindowControls
+            controls={windowControls}
+            label={`${agent.displayLabel} chat window`}
+          />
+        ) : (
+          <button
+            type="button"
+            className="town-peek-close"
+            aria-label="Close peek"
+            onClick={onClose}
+          >
+            ×
+          </button>
+        )}
       </div>
       <div
         ref={screen}

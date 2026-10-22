@@ -26,6 +26,13 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     peek, with keys, attachments, Insert and Send.
   - The peek refreshes when the agent's conversation changes, as Chat does,
     without polling.
+  - On a wide screen an opened (pinned) peek is a chat window in World's
+    shared window frame, like the Inspector's: drag its name to move it, drag
+    an edge to resize it, and snap, minimise, maximise or close it from its
+    buttons. Its position and size are kept in this browser; opening an agent
+    shows a minimised chat window again. Hovered peeks stay small cards beside
+    their agent. On a phone it is a sheet: drag its handle up to make it
+    taller, down to make it shorter or close it.
   - Tapping an agent or its table brings the agent back: from reception or the
     lounge it walks to its desk and stays there until its status changes. A
     table stands for an agent that needs you (waiting, then finished) before

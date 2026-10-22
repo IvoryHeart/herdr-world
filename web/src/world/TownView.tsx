@@ -106,8 +106,41 @@ import {
 } from "./completionSeenState";
 import { preferredOfficeConnectorAnchor } from "./worldConnectorGeometry";
 import { officeCreationInputsEqual } from "./officeCreationInputs";
+import {
+  readFloatingTerminalGeometry,
+  writeFloatingTerminalGeometry,
+} from "./floatingTerminalPreferences";
+import {
+  useWindowManager,
+  useWindowWorkArea,
+} from "./windows/useWindowManager";
+import { fitWindow } from "./windows/windowManager";
+import { WindowSurface } from "./windows/WindowSurface";
+import { WindowFrame } from "./windows/WindowFrame";
 
 /** A keyed index of a list, built the first time it is read. */
+/** The one chat window Town shows its pinned peek in. */
+const TOWN_CHAT_WINDOW_ID = "town-chat";
+const TOWN_CHAT_SHEET_KEY = "townChatSheetExpanded:v1";
+const ignoreLayer = () => {};
+
+/** Whether the phone's chat sheet was left expanded, in this browser. */
+function readTownChatSheetExpanded() {
+  try {
+    return worldLocalStorage.getItem(TOWN_CHAT_SHEET_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+
+function writeTownChatSheetExpanded(expanded: boolean) {
+  try {
+    worldLocalStorage.setItem(TOWN_CHAT_SHEET_KEY, String(expanded));
+  } catch {
+    // A presentation preference must never prevent chatting.
+  }
+}
+
 function lazyIndex<T>(items: readonly T[], keyOf: (item: T) => string) {
   let index: Map<string, T> | null = null;
   const read = () =>
@@ -547,6 +580,16 @@ export default function TownView({
   const now = useNow(5_000);
   const [railCollapsed, setRailCollapsed] = useState(readTownRailCollapsed);
   const [width, setWidth] = useState(() => window.innerWidth);
+  const [shell, setShell] = useState<HTMLDivElement | null>(null);
+  // The chat window's layer sits 8px inside the Town, as World's windows do.
+  const shellArea = useWindowWorkArea(shell);
+  const chatStage = useMemo(
+    () => ({
+      width: Math.max(0, shellArea.width - 16),
+      height: Math.max(0, shellArea.height - 16),
+    }),
+    [shellArea.width, shellArea.height],
+  );
   useEffect(() => {
     const resize = () => setWidth(window.innerWidth);
     window.addEventListener("resize", resize);
@@ -1133,9 +1176,12 @@ export default function TownView({
     if (DEVTOOLS) trace.record("peek", { key });
     window.clearTimeout(peekTimer.current);
     summon(key);
+    // Opening an agent shows the chat window again if it was minimised.
+    revealChat.current();
     setPeek({ key, anchor: sheetMode() ? null : anchor, pinned: true });
   };
   const lastPointer = useRef<{ x: number; y: number } | null>(null);
+  const revealChat = useRef(() => {});
   /**
    * The agent a table stands for: one that needs you (waiting, then
    * finished) even while it is away at reception, else the one seated there.
@@ -1229,6 +1275,104 @@ export default function TownView({
     };
   };
   const townSelectedKey = peek?.key ?? selectedKey;
+  // A pinned peek on a wide screen is World's chat window: the shared frame
+  // moves, resizes, snaps, minimises and maximises it, and its placed
+  // position is saved as the Inspector's is. Hover peeks stay cards beside
+  // their agent; the phone keeps a sheet.
+  // The frame takes touch as well as a mouse, so a wide touch screen gets
+  // the window too.
+  const chatWindow =
+    Boolean(peek?.pinned && peekAgent) &&
+    !layoutPreferences.mobile &&
+    width >= 640;
+  const chatWindowInputs = useMemo(
+    () =>
+      chatWindow
+        ? [
+            {
+              id: TOWN_CHAT_WINDOW_ID,
+              label: "Chat",
+              initialGeometry: readFloatingTerminalGeometry(
+                worldLocalStorage,
+                TOWN_CHAT_WINDOW_ID,
+                {
+                  left: Math.max(0, chatStage.width - 436),
+                  top: 0,
+                  width: Math.min(420, chatStage.width),
+                  height: Math.min(560, chatStage.height),
+                },
+                chatStage,
+                undefined,
+                fitWindow,
+              ),
+            },
+          ]
+        : [],
+    [chatWindow, chatStage],
+  );
+  const chatWindows = useWindowManager(
+    chatWindowInputs,
+    chatStage,
+    "town-chat",
+  );
+  const chatEntry = chatWindows.state.windows[TOWN_CHAT_WINDOW_ID];
+  revealChat.current = () =>
+    chatWindows.dispatch({ type: "focus", id: TOWN_CHAT_WINDOW_ID });
+  const [sheetExpanded, setSheetExpanded] = useState(readTownChatSheetExpanded);
+  /** The peek as a card or sheet, or inside the chat window's frame. */
+  const presentChat = (card: React.ReactElement) =>
+    chatWindow && chatEntry ? (
+      <WindowSurface
+        state={chatWindows.state}
+        dispatch={chatWindows.dispatch}
+        stage={chatStage}
+        compact={false}
+        onLayer={ignoreLayer}
+        bounds={chatStage}
+        className="town-chat-surface"
+      >
+        {({ entry, geometry, stage, workArea, zIndex, active }) => (
+          <WindowFrame
+            key={entry.id}
+            id={entry.id}
+            label={`${peekAgent?.displayLabel ?? "Agent"} chat window`}
+            geometry={geometry}
+            restoreGeometry={
+              entry.maximized || entry.placement.kind !== "floating"
+                ? entry.floating
+                : undefined
+            }
+            stage={stage}
+            workArea={workArea}
+            active={active}
+            compact={false}
+            zIndex={zIndex}
+            className="town-chat-window"
+            onRaise={() =>
+              chatWindows.dispatch({ type: "raise", id: entry.id })
+            }
+            onPlace={(rect) => {
+              writeFloatingTerminalGeometry(
+                worldLocalStorage,
+                TOWN_CHAT_WINDOW_ID,
+                rect,
+              );
+              chatWindows.dispatch({ type: "place", id: entry.id, rect });
+            }}
+            onSnap={(target) =>
+              chatWindows.dispatch({ type: "snap", id: entry.id, target })
+            }
+            onMaximize={() =>
+              chatWindows.dispatch({ type: "maximize", id: entry.id })
+            }
+          >
+            {card}
+          </WindowFrame>
+        )}
+      </WindowSurface>
+    ) : (
+      card
+    );
 
   if (!world.hosts.length) {
     return (
@@ -1264,6 +1408,7 @@ export default function TownView({
       {toolbarPortal ? createPortal(toolbar, toolbarPortal) : toolbar}
       <WorldSearchResults world={world} query={query} onSelect={onSelect} />
       <div
+        ref={setShell}
         className={`world-office-shell world-stage-shell town-view-shell`}
         onPointerDownCapture={(event) => {
           lastPointer.current = { x: event.clientX, y: event.clientY };
@@ -1334,84 +1479,124 @@ export default function TownView({
             })}
           />
         ) : null}
-        {peekAgent ? (
-          <TownPeek
-            // One card per agent session: late upload or reply results of
-            // another agent never land in this one.
-            key={peekLeaf ? townPaneIdentity(peekLeaf) : peekAgent.key}
-            agent={peekAgent}
-            where={whereOf(peekAgent.key)}
-            conversation={peekConversation}
-            question={peekQuestion}
-            choices={peekChoices}
-            canReply={peekCanReply}
-            anchor={peek!.anchor}
-            pinned={peek!.pinned}
-            onReply={(text, submit) =>
-              reply(peekLeaf, peekAgent.displayLabel, text, submit)
-            }
-            inlineReply={!layoutPreferences.mobile}
-            deskColor={peekDeskColor(peekAgent.key)}
-            onReviewed={() => {
-              markCompletionSeen(peekAgent);
-              toast("ok", `${peekAgent.displayLabel}'s work reviewed`);
-            }}
-            onAttach={(files, image) =>
-              attach(peekLeaf, peekAgent.key, files, image)
-            }
-            uploadScope={peekLeaf ? uploadScopeOf(peekLeaf) : null}
-            onChat={() => openReply(peekAgent.key)}
-            onTerminal={() => {
-              setPeek(null);
-              openOfficeTerminal(peekAgent.key);
-            }}
-            onInspector={() => {
-              setPeek(null);
-              if (onOpenInspectorView)
-                onOpenInspectorView(peekAgent.nodeId, "files");
-              else void onSelect(peekAgent.nodeId);
-            }}
-            onNext={
-              nextCall(peekAgent.key)
-                ? () => openPeek(nextCall(peekAgent.key)!.agent.key, null)
-                : null
-            }
-            onClose={() => {
-              holdPeek.current = false;
-              setPeek(null);
-            }}
-            composer={
-              peek!.chat && peekLeaf ? (
-                <TownComposer
-                  leaf={peekLeaf}
-                  onDirect={() => {
-                    setPeek(null);
-                    openOfficeTerminal(peekAgent.key);
-                  }}
-                  onClose={() =>
-                    setPeek((current) =>
-                      current ? { ...current, chat: false } : current,
-                    )
-                  }
-                  onSent={(submitted) =>
-                    toast(
-                      "ok",
-                      submitted
-                        ? `Sent to ${peekAgent.displayLabel}`
-                        : `Inserted for ${peekAgent.displayLabel}`,
-                    )
-                  }
-                  onError={(message) => toast("error", message)}
-                />
-              ) : null
-            }
-            onHold={(hold) => {
-              holdPeek.current = hold;
-              if (hold) window.clearTimeout(peekTimer.current);
-              else if (!peek?.pinned) schedulePeek(null, 320);
-            }}
-          />
-        ) : null}
+        {peekAgent
+          ? presentChat(
+              <TownPeek
+                // One card per agent session: late upload or reply results of
+                // another agent never land in this one.
+                key={peekLeaf ? townPaneIdentity(peekLeaf) : peekAgent.key}
+                agent={peekAgent}
+                where={whereOf(peekAgent.key)}
+                conversation={peekConversation}
+                question={peekQuestion}
+                choices={peekChoices}
+                canReply={peekCanReply}
+                anchor={peek!.anchor}
+                pinned={peek!.pinned}
+                onReply={(text, submit) =>
+                  reply(peekLeaf, peekAgent.displayLabel, text, submit)
+                }
+                inlineReply={!layoutPreferences.mobile}
+                deskColor={peekDeskColor(peekAgent.key)}
+                onReviewed={() => {
+                  markCompletionSeen(peekAgent);
+                  toast("ok", `${peekAgent.displayLabel}'s work reviewed`);
+                }}
+                onAttach={(files, image) =>
+                  attach(peekLeaf, peekAgent.key, files, image)
+                }
+                uploadScope={peekLeaf ? uploadScopeOf(peekLeaf) : null}
+                onChat={() => openReply(peekAgent.key)}
+                onTerminal={() => {
+                  setPeek(null);
+                  openOfficeTerminal(peekAgent.key);
+                }}
+                onInspector={() => {
+                  setPeek(null);
+                  if (onOpenInspectorView)
+                    onOpenInspectorView(peekAgent.nodeId, "files");
+                  else void onSelect(peekAgent.nodeId);
+                }}
+                onNext={
+                  nextCall(peekAgent.key)
+                    ? () => openPeek(nextCall(peekAgent.key)!.agent.key, null)
+                    : null
+                }
+                onClose={() => {
+                  holdPeek.current = false;
+                  setPeek(null);
+                }}
+                composer={
+                  peek!.chat && peekLeaf ? (
+                    <TownComposer
+                      leaf={peekLeaf}
+                      onDirect={() => {
+                        setPeek(null);
+                        openOfficeTerminal(peekAgent.key);
+                      }}
+                      onClose={() =>
+                        setPeek((current) =>
+                          current ? { ...current, chat: false } : current,
+                        )
+                      }
+                      onSent={(submitted) =>
+                        toast(
+                          "ok",
+                          submitted
+                            ? `Sent to ${peekAgent.displayLabel}`
+                            : `Inserted for ${peekAgent.displayLabel}`,
+                        )
+                      }
+                      onError={(message) => toast("error", message)}
+                    />
+                  ) : null
+                }
+                onHold={(hold) => {
+                  holdPeek.current = hold;
+                  if (hold) window.clearTimeout(peekTimer.current);
+                  else if (!peek?.pinned) schedulePeek(null, 320);
+                }}
+                windowControls={
+                  chatWindow && chatEntry
+                    ? {
+                        maximized: chatEntry.maximized,
+                        compact: false,
+                        onMinimize: () =>
+                          chatWindows.dispatch({
+                            type: "minimize",
+                            id: TOWN_CHAT_WINDOW_ID,
+                          }),
+                        onMaximize: () =>
+                          chatWindows.dispatch({
+                            type: "maximize",
+                            id: TOWN_CHAT_WINDOW_ID,
+                          }),
+                        onClose: () => {
+                          holdPeek.current = false;
+                          setPeek(null);
+                        },
+                        onSnap: (target) =>
+                          chatWindows.dispatch({
+                            type: "snap",
+                            id: TOWN_CHAT_WINDOW_ID,
+                            target,
+                          }),
+                        onFloat: () =>
+                          chatWindows.dispatch({
+                            type: "float",
+                            id: TOWN_CHAT_WINDOW_ID,
+                          }),
+                      }
+                    : null
+                }
+                sheetExpanded={sheetExpanded}
+                onSheetExpandedChange={(expanded) => {
+                  setSheetExpanded(expanded);
+                  writeTownChatSheetExpanded(expanded);
+                }}
+              />,
+            )
+          : null}
         <div className="town-toasts" role="status" aria-live="polite">
           {toasts.map((item) => (
             <div key={item.id} className={`town-toast town-toast-${item.kind}`}>

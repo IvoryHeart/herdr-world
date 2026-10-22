@@ -434,6 +434,15 @@ class FixtureUploadRequest {
 window.XMLHttpRequest =
   FixtureUploadRequest as unknown as typeof XMLHttpRequest;
 
+/** Close the open peek: its close button, or its chat window's. */
+function closePeek(host: HTMLElement) {
+  host
+    .querySelector<HTMLButtonElement>(
+      '.town-peek-close, .town-peek-window [aria-label^="Close"][aria-label$="chat window"]',
+    )!
+    .click();
+}
+
 async function attachNote(host: HTMLElement, name = "notes.txt") {
   const picker = host.querySelector<HTMLInputElement>(
     '.town-reply input[type="file"]',
@@ -837,7 +846,7 @@ async function run() {
     );
     // It lands in that agent's reply line when its peek opens again: the
     // path is kept for the pane, not for the card that started the upload.
-    host.querySelector<HTMLButtonElement>(".town-peek-close")!.click();
+    closePeek(host);
     await settle();
     host
       .querySelector<HTMLButtonElement>(
@@ -1010,6 +1019,114 @@ async function run() {
   );
   check(selected.length === 0, "Inspector must not change the selection path");
 
+  // A pinned peek is World's chat window on a wide screen, in the shared
+  // window frame; on the phone it is a sheet with a resize handle.
+  host.querySelector<HTMLButtonElement>(".town-reception-entry")!.click();
+  await waitFor(
+    () => host.querySelector(".town-peek") !== null,
+    "peek did not open for the chat window",
+  );
+  if (!phone) {
+    const frame = () =>
+      host.querySelector<HTMLElement>(".town-chat-window.world-managed-window");
+    check(
+      frame()?.querySelector(".town-peek.town-peek-window") !== null,
+      "a pinned peek should be in the chat window frame",
+    );
+    const rect = () => frame()!.getBoundingClientRect();
+    const drag = async (target: Element, dx: number, dy: number) => {
+      const from = target.getBoundingClientRect();
+      const x = from.left + from.width / 2;
+      const y = from.top + from.height / 2;
+      const event = (type: string, cx: number, cy: number) =>
+        new PointerEvent(type, {
+          bubbles: true,
+          cancelable: true,
+          pointerId: 7,
+          button: 0,
+          clientX: cx,
+          clientY: cy,
+        });
+      target.dispatchEvent(event("pointerdown", x, y));
+      for (let step = 1; step <= 4; step += 1)
+        window.dispatchEvent(
+          event("pointermove", x + (dx * step) / 4, y + (dy * step) / 4),
+        );
+      window.dispatchEvent(event("pointerup", x + dx, y + dy));
+      await settle();
+    };
+    // Move by its name, as the Inspector window moves by its title.
+    const before = rect();
+    await drag(frame()!.querySelector("[data-window-drag-handle]")!, -120, 40);
+    const moved = rect();
+    check(
+      Math.abs(moved.left - (before.left - 120)) < 4 &&
+        Math.abs(moved.top - (before.top + 40)) < 4,
+      `the chat window did not move (${before.left},${before.top} → ${moved.left},${moved.top})`,
+    );
+    // Resize from its left edge.
+    await drag(frame()!.querySelector('[data-window-resize="w"]')!, -60, 0);
+    check(
+      Math.abs(rect().width - (moved.width + 60)) < 4,
+      `the chat window did not resize (${moved.width} → ${rect().width})`,
+    );
+    const placed = rect();
+    // Its position is kept as the Inspector's is: closed and reopened, it
+    // comes back where it was.
+    check(
+      (
+        worldLocalStorage.getItem("worldFloatingTerminalGeometry:v1") ?? ""
+      ).includes('"town-chat"'),
+      "the chat window's position was not saved",
+    );
+    closePeek(host);
+    await waitFor(() => frame() === null, "the chat window did not close");
+    host.querySelector<HTMLButtonElement>(".town-reception-entry")!.click();
+    await waitFor(() => frame() !== null, "the chat window did not reopen");
+    check(
+      Math.abs(rect().left - placed.left) < 4 &&
+        Math.abs(rect().width - placed.width) < 4,
+      "the chat window did not reopen where it was left",
+    );
+    // Maximise fills the Town; restore brings it back.
+    frame()!
+      .querySelector<HTMLButtonElement>('[aria-label^="Maximize"]')!
+      .click();
+    await settle();
+    check(
+      rect().width > placed.width + 100,
+      "Maximize did not grow the chat window",
+    );
+    frame()!
+      .querySelector<HTMLButtonElement>('[aria-label^="Restore"]')!
+      .click();
+    await settle();
+    check(
+      Math.abs(rect().width - placed.width) < 4,
+      "Restore did not return the chat window to its size",
+    );
+    // Minimise hides it; opening an agent again shows it.
+    frame()!
+      .querySelector<HTMLButtonElement>('[aria-label^="Minimize"]')!
+      .click();
+    await waitFor(
+      () => host.querySelector(".town-peek") === null,
+      "Minimize did not hide the chat window",
+    );
+    host.querySelector<HTMLButtonElement>(".town-reception-entry")!.click();
+    await waitFor(
+      () => host.querySelector(".town-peek-window") !== null,
+      "opening an agent did not show the minimised chat window",
+    );
+  } else {
+    check(
+      host.querySelector(".town-peek-sheet .mobile-sheet-handle") !== null,
+      "the phone's chat sheet has no resize handle",
+    );
+  }
+  closePeek(host);
+  await settle();
+
   // Open terminal, in the peek's header, opens the agent's terminal.
   host.querySelector<HTMLButtonElement>(".town-reception-entry")!.click();
   await waitFor(
@@ -1039,7 +1156,7 @@ async function run() {
     "the peek did not show why the conversation is unavailable",
   );
   conversationUnavailable = false;
-  host.querySelector<HTMLButtonElement>(".town-peek-close")!.click();
+  closePeek(host);
   await settle();
 
   // Tapping the desk of an agent waiting at reception opens its chat.
@@ -1073,7 +1190,7 @@ async function run() {
     "tapping a desk did not open its waiting agent's chat",
   );
   check(opened.length === 0, "tapping a desk in Chat mode opened a terminal");
-  host.querySelector<HTMLButtonElement>(".town-peek-close")!.click();
+  closePeek(host);
   await settle();
 
   const waitingKey = waitingAgent?.dataset.targetKey ?? "";

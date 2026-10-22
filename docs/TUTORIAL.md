@@ -124,7 +124,11 @@ changes what you see and does not disconnect hosts or retarget open terminals.
    on phones; it hides when no agent is blocked. The peek shows the agent's
    latest message as the Inspector's **Chat** shows it, never terminal text; when
    the conversation cannot be read, it says why. It highlights a question when
-   one can be identified, and refreshes when the conversation changes. Opening
+   one can be identified, and refreshes when the conversation changes. On a
+   wide screen an opened peek is a chat window like the Inspector's: drag its
+   name to move it, drag an edge to resize it, and use its buttons to snap,
+   minimise, maximise or close it; it reopens where you left it. On a phone,
+   drag the sheet's handle to make it taller or shorter. Opening
    an agent brings it back to its desk from reception or the lounge until its
    status changes. To open terminals instead, set **Menu → Town opens** to
    **Terminal**; that tap also brings the agent back and, like the chat, does

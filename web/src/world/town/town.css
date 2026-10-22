@@ -1614,3 +1614,72 @@
   border: 1px solid #5a4410;
   border-radius: 6px;
 }
+
+/* The chat window: World's shared window frame holds the pinned peek, which
+   fills it. The frame moves, resizes and snaps it; the name is its handle. */
+.town-chat-surface {
+  z-index: 12;
+}
+
+.town-chat-window.world-managed-window {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+.town-peek.town-peek-window {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  max-height: none;
+  overflow: auto;
+  animation: none;
+}
+
+.town-peek-window .town-peek-screen {
+  flex: 1 1 auto;
+  max-height: none;
+}
+
+.town-peek-window .town-peek-head > [data-window-drag-handle] {
+  cursor: grab;
+  touch-action: none;
+}
+
+.town-peek-window .world-window-controls {
+  display: flex;
+  gap: 4px;
+  flex: none;
+}
+
+.town-peek-window .world-window-controls > button {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+}
+
+/* The phone sheet: its handle drags it taller or shorter, or closes it. */
+.town-peek.town-peek-sheet .mobile-sheet-handle {
+  min-height: 20px;
+  margin: -8px 0 2px;
+  padding: 6px 8px;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+.town-peek-sheet .mobile-sheet-handle > span {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+.town-peek-sheet.is-expanded {
+  max-height: calc(100% - 16px);
+}
+
+.town-peek-sheet.is-expanded .town-peek-screen {
+  max-height: min(60dvh, 520px);
+}
