@@ -69,6 +69,7 @@ import {
 } from "../systemBack";
 import { closeTopLayer } from "../layerStack";
 import { WorldMobileNav, worldViewLabel } from "./WorldMobileNav";
+import { WorldViewPicker } from "./WorldViewPicker";
 import { WorldControlPlane } from "./WorldControlPlane";
 import { EMPTY_VISUAL_ACTION_EXTENSION } from "./worldControlPlaneContract";
 
@@ -92,6 +93,7 @@ export default function WorldFoundationApp() {
     },
   );
   const [topbarPortal, setTopbarPortal] = useState<HTMLElement | null>(null);
+  const [zenActive, setZenActive] = useState(false);
   const [viewToolbarPortal, setViewToolbarPortal] =
     useState<HTMLDivElement | null>(null);
   const [visualActionExtension, setVisualActionExtension] =
@@ -332,12 +334,31 @@ export default function WorldFoundationApp() {
   }, [activeArrangementControl]);
 
   return (
-    <div className="world-foundation-shell" data-view={view}>
+    <div
+      className="world-foundation-shell"
+      data-view={view}
+      data-zen={zenActive ? "" : undefined}
+    >
       <div className="world-topbar-host" ref={setTopbarPortal} />
       <div className="world-spaces-layer is-active">
         <App
           operationalShortcutsEnabled={view === "spaces"}
           shellActionsEnabled
+          // Town opens full-bleed: Zen is its default, kept apart from the
+          // other views' choice. On a phone, Zen covers the root screens;
+          // a terminal or Spaces keeps its bar for Back.
+          zenScope={view === "town" ? "town" : undefined}
+          zenDefault={view === "town"}
+          zenOnMobile={mobile && view !== "spaces" && !canReturnToView}
+          renderZenControl={(exitZen) => (
+            <WorldViewPicker
+              view={view}
+              mobile={mobile}
+              onSelect={setView}
+              onExitZen={exitZen}
+            />
+          )}
+          onZenActiveChange={setZenActive}
           topbarPortal={topbarPortal}
           visualActionExtension={visualActionExtension}
           connectionControl={
@@ -566,7 +587,7 @@ export default function WorldFoundationApp() {
         />
         {spaces.renderWindows}
       </div>
-      {mobile && view !== "spaces" && !canReturnToView ? (
+      {mobile && view !== "spaces" && !canReturnToView && !zenActive ? (
         <WorldMobileNav view={view} onSelect={setView} />
       ) : null}
       {officeMetricsOpen

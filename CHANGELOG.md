@@ -21,6 +21,10 @@ are optional because the merged PR history records their source.
 
 ### Changed
 
+- Open Town in Zen mode, full-bleed, with its own Zen choice. Zen now works on
+  phones too, hiding the top bar and bottom navigation on Town, Board and Desk.
+  While Zen is on, a view picker (beside Exit Zen on desktop, a corner button on
+  phones) switches between Town, Board, Desk and Spaces.
 - Show a terminal's colour as a swatch beside its name in the terminal's
   header on desktop and phones, and offer the same picker under **Colour** in
   the terminal window's menu and in the Town peek's header. All pickers are

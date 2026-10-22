@@ -233,8 +233,13 @@ choice. Agent checkout has no Git mutation controls or Clear command.
   the topbar, tab strip, and sidebar and run the terminal flush to the window.
   Hovering the Exit Zen tab slides the topbar back, and it stays while one of its
   menus is open. The sidebar still toggles inside Zen and returns to its prior
-  state on exit; split layouts keep pane borders. Desktop only, stored in this
-  browser; mobile keeps its floating control collapse.
+  state on exit; split layouts keep pane borders. Town opens in Zen and keeps
+  its own choice; the other views share theirs. While Zen is on, a view picker
+  beside Exit Zen switches between Town, Board, Desk and Spaces. On a phone, Zen
+  hides the top bar and bottom navigation on Town, Board and Desk; a corner
+  button opens the views and **Show the bars**, and the settings menu's **Zen
+  mode** switch turns it back on. A terminal and Spaces keep their bar for Back.
+  Stored in this browser.
 
 Herdr 0.9.0 uses **Local navigation** per browser/connection; legacy connections
 use **Shared navigation**. Reconnect preserves live selections; reload starts
@@ -676,7 +681,7 @@ Common defaults (Linux/Android overrides follow the table):
 | Workspace Inspector | `Cmd+Shift+B` | `Ctrl+Alt+Shift+B` |
 | Expand / restore Inspector (desktop) | `Cmd+Option+Enter` | `Ctrl+Alt+Shift+Enter` |
 | Annotations | `Cmd+Option+A` | `Ctrl+Alt+A` |
-| Zen mode (desktop) | `Cmd+Shift+Z` | `Ctrl+Alt+Z` |
+| Zen mode | `Cmd+Shift+Z` | `Ctrl+Alt+Z` |
 | Recent pane switcher | `Ctrl+Tab` | `Ctrl+Alt+J` |
 | Pane Search | `Alt+K` | `Alt+K` |
 | Create / close tab or pane | `Cmd+T` / `Cmd+W` | `Ctrl+Alt+T` / `Ctrl+Alt+W` |

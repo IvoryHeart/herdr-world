@@ -265,33 +265,31 @@ export function ConfigMenu({
                     }}
                   />
                 )}
-                {layout.mobile ? null : (
-                  <div className="config-preference-row">
-                    <span className="config-item-icon">
-                      <Focus size={15} />
+                <div className="config-preference-row">
+                  <span className="config-item-icon">
+                    <Focus size={15} />
+                  </span>
+                  <div className="config-item-copy">
+                    <strong>Zen mode</strong>
+                    <span>
+                      {zenMode ? "Enabled" : "Disabled"}
+                      {layout.mobile ? "" : ` · ${shortcutLabel("zen.toggle")}`}
                     </span>
-                    <div className="config-item-copy">
-                      <strong>Zen mode</strong>
-                      <span>
-                        {zenMode ? "Enabled" : "Disabled"} ·{" "}
-                        {shortcutLabel("zen.toggle")}
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      role="switch"
-                      aria-label="Zen mode"
-                      aria-checked={zenMode}
-                      className={"settings-switch" + (zenMode ? " is-on" : "")}
-                      onClick={() => {
-                        onZenModeChange(!zenMode);
-                        setOpen(false);
-                      }}
-                    >
-                      <span />
-                    </button>
                   </div>
-                )}
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-label="Zen mode"
+                    aria-checked={zenMode}
+                    className={"settings-switch" + (zenMode ? " is-on" : "")}
+                    onClick={() => {
+                      onZenModeChange(!zenMode);
+                      setOpen(false);
+                    }}
+                  >
+                    <span />
+                  </button>
+                </div>
               </div>
               <div className="config-section config-section-tiles-3">
                 <div className="config-title">Views</div>

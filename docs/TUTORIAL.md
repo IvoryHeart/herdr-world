@@ -107,7 +107,9 @@ changes what you see and does not disconnect hosts or retarget open terminals.
 
 <a id="town"></a>
 
-1. Open **Town** from the view switcher, or return to the World root URL. Each
+1. Open **Town** from the view switcher, or return to the World root URL. Town
+   opens in Zen, full-bleed: use the view picker at the top edge (on a phone,
+   the corner button) to switch views, or **Exit Zen** to show the bars. Each
    host is a building, each workspace a room, each tab a table and each pane a
    seat. Plain terminal panes show a prompt rather than an agent character.
 2. Use **+** and **−** to move between town, building, room and desk detail;
