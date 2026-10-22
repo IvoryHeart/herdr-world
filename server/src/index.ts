@@ -296,10 +296,21 @@ interface WebSocketCleanupSnapshot {
 }
 let nextClientId = 1;
 
+// Conversation watchers each browser registered with, for cleanup on close.
+const conversationWatchers = new WeakMap<
+  ServerWebSocket<unknown>,
+  Set<{ unwatch(owner: object): void }>
+>();
+
 const rpcOutcomes = new Map<string, { status: "error"; detail?: string }>();
 
 const IMPORTANT_RPC_METHODS = new Set([
   "bridge.pause_others",
+  "agent_conversation.get",
+  "agent_conversation.latest",
+  "agent_conversation.send",
+  "agent_conversation.watch",
+  "agent_conversation.unwatch",
   "agent_history.get",
   "agent_history.entry",
   "agent_session.get",
@@ -1622,6 +1633,71 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
     }
     return;
   }
+  if (
+    method === "agent_conversation.watch" ||
+    method === "agent_conversation.unwatch"
+  ) {
+    try {
+      const paneId = typeof params?.pane_id === "string" ? params.pane_id : "";
+      if (!paneId) throw new Error(`${method} requires pane_id`);
+      const watcher = connection.agentSessions.conversationWatch;
+      if (method === "agent_conversation.watch") {
+        watcher.watch(ws, paneId);
+        let watchers = conversationWatchers.get(ws);
+        if (!watchers) {
+          watchers = new Set();
+          conversationWatchers.set(ws, watchers);
+        }
+        watchers.add(watcher);
+      } else {
+        watcher.unwatch(ws, paneId);
+      }
+      sendReply({ id, result: { ok: true } }, method);
+    } catch (e) {
+      sendError(`${method}-error`, e);
+    }
+    return;
+  }
+  if (
+    method === "agent_conversation.get" ||
+    method === "agent_conversation.latest" ||
+    method === "agent_conversation.send"
+  ) {
+    try {
+      const source = connection.agentSessions.conversation;
+      const p = params ?? {};
+      const paneId = typeof p.pane_id === "string" ? p.pane_id : "";
+      if (method !== "agent_conversation.latest" && !paneId)
+        throw new Error(`${method} requires pane_id`);
+      const result =
+        method === "agent_conversation.get"
+          ? await source.read({ pane_id: paneId })
+          : method === "agent_conversation.send"
+            ? await source.send({
+                pane_id: paneId,
+                text: typeof p.text === "string" ? p.text : "",
+                session_fingerprint:
+                  typeof p.session_fingerprint === "string"
+                    ? p.session_fingerprint
+                    : "",
+              })
+            : paneId
+              ? await source.latest({ pane_id: paneId })
+              : {
+                  conversations: await source.latestAll(
+                    Array.isArray(p.pane_ids)
+                      ? p.pane_ids.filter(
+                          (id): id is string => typeof id === "string",
+                        )
+                      : undefined,
+                  ),
+                };
+      sendReply({ id, result }, method);
+    } catch (e) {
+      sendError(`${method}-error`, e);
+    }
+    return;
+  }
   if (method === "agent_history.get") {
     try {
       const result = await readAgentMessageHistory(params ?? {});
@@ -2388,6 +2464,9 @@ function main() {
           },
           close(ws) {
             snapshotAdmission.retire(ws);
+            for (const watcher of conversationWatchers.get(ws) ?? [])
+              watcher.unwatch(ws);
+            conversationWatchers.delete(ws);
             const { client, viewedTerminals } = webSocketCleanup.complete(ws);
             logger.debug("client disconnected", {
               client,

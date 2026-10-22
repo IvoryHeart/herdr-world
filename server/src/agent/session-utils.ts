@@ -65,12 +65,20 @@ export function textFromContent(value: unknown): string {
 }
 
 export function cleanMessageText(value: string) {
-  const text = value
+  // A slash command with arguments reads as what was typed: `/name args`.
+  const command = /<command-name>([\s\S]*?)<\/command-name>/.exec(value)?.[1];
+  const args = /<command-args>([\s\S]*?)<\/command-args>/.exec(value)?.[1];
+  const rest = value
     .replace(/<command-message>[\s\S]*?<\/command-message>/g, "")
     .replace(/<command-name>[\s\S]*?<\/command-name>/g, "")
+    .replace(/<command-args>[\s\S]*?<\/command-args>/g, "")
     .replace(/<local-command-stdout>[\s\S]*?<\/local-command-stdout>/g, "")
     .replace(/\r\n/g, "\n")
     .trim();
+  const typed = args?.trim()
+    ? [command?.trim(), args.trim()].filter(Boolean).join(" ")
+    : "";
+  const text = [typed, rest].filter(Boolean).join("\n\n");
   if (text === "[Request interrupted by user]") return "";
   return text;
 }

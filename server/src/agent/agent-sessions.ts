@@ -2,6 +2,8 @@ import { basename } from "node:path";
 import { randomUUID } from "node:crypto";
 import { enrichAgentActivity } from "./agent-activity";
 import { createCodexSessionLinker } from "./codex-session-link";
+import { createConversationWatcher } from "./conversation-watch";
+import { createHerdrConversationSource } from "./herdr-conversation";
 import type { HerdrCall, SessionFile } from "./session-types";
 import {
   createAgentSessionResolverContext,
@@ -31,11 +33,39 @@ const MAX_MESSAGES_PER_AGENT = 200;
 export function createAgentSessionHandlers(args: {
   herdrCall: HerdrCall;
   files: AgentSessionFileAccess;
+  remotePlatform?: string;
+  /** A watched pane's conversation changed; tell these owners. */
+  onConversationChanged?: (paneId: string, owners: ReadonlySet<object>) => void;
 }) {
   const resolverContext = createAgentSessionResolverContext();
   const cache = createSessionProjectionCache(args.files);
   const linker = createCodexSessionLinker(args.herdrCall, args.files);
+  let watcher: ReturnType<typeof createConversationWatcher> | null = null;
+  const conversation = createHerdrConversationSource({
+    herdrCall: args.herdrCall,
+    files: args.files,
+    context: resolverContext,
+    cache,
+    remotePlatform: args.remotePlatform,
+    // A new or removed Codex transcript can change which thread a title
+    // names; recheck every watched pane.
+    onCodexSessionsChanged: () => watcher?.herdrEvent(),
+  });
+  watcher = createConversationWatcher({
+    identity: (paneId) => conversation.identity({ pane_id: paneId }),
+    notify: (paneId, owners) => args.onConversationChanged?.(paneId, owners),
+  });
+  const conversationWatch = {
+    ...watcher,
+    stop() {
+      watcher!.stop();
+      conversation.dispose();
+    },
+  };
   return {
+    // Objects, not handlers: they report Windows as unavailable themselves.
+    conversation,
+    conversationWatch,
     previewLink: linker.preview,
     link: linker.link,
     listWithActivity: async (params: Record<string, unknown>) =>

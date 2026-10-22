@@ -32,15 +32,32 @@ import {
   stringValue,
 } from "./session-utils";
 
+/** Harnesses with a transcript reader; Herdr can detect more than these. */
+export const SESSION_AGENTS: ReadonlySet<string> = new Set([
+  "codex",
+  "claude",
+  "kimi",
+  "grok",
+  "pi",
+  "muse",
+  "agy",
+]);
+
 export type AgentSessionResolverContext = {
   pathCache: Map<string, string>;
   museMetadata: MuseMetadataCache;
+  /** Codex title ID (or prefix) → the one transcript it resolved to. */
+  codexTitles: Map<string, { id: string; path: string }>;
 };
 
 const DEFAULT_RESOLVER_CONTEXT = createAgentSessionResolverContext();
 
 export function createAgentSessionResolverContext(): AgentSessionResolverContext {
-  return { pathCache: new Map(), museMetadata: new Map() };
+  return {
+    pathCache: new Map(),
+    museMetadata: new Map(),
+    codexTitles: new Map(),
+  };
 }
 
 function normalizeParams(raw: Record<string, unknown>): AgentHistoryParams {
@@ -52,7 +69,7 @@ function normalizeParams(raw: Record<string, unknown>): AgentHistoryParams {
   };
 }
 
-function piAgentDirectory() {
+export function piAgentDirectory() {
   const configured = process.env.PI_CODING_AGENT_DIR?.trim();
   if (!configured) return join(homedir(), ".pi", "agent");
   if (configured === "~") return homedir();
@@ -138,35 +155,113 @@ type CodexTitleThread =
   | { kind: "ambiguous" }
   | { kind: "found"; file: SessionFile; id: string };
 
-/**
- * Codex 0.157+ hosts threads in a shared daemon, so hooks cannot say which
- * pane shows which thread. With Thread ID in `tui.terminal_title`, the pane's
- * own front end names its thread. Accept only an ID that matches exactly one
- * transcript; uncached, so a later colliding transcript is never missed.
- */
-async function codexThreadFromTitle(
-  title: string,
-  files: AgentSessionFileAccess,
-): Promise<CodexTitleThread> {
+/** The thread IDs a Codex title offers, by the rule the resolver uses. */
+function codexTitleCandidates(title: string) {
   const ids = codexIdsFromTitle(title);
   // Codex truncates its thread item today, so a truncated ID is the thread;
   // full UUIDs are candidates only when no truncated ID is present.
   const truncated = ids.filter((id) => id.truncated);
-  const candidates = truncated.length ? truncated : ids;
+  return truncated.length ? truncated : ids;
+}
+
+/**
+ * The complete thread ID a Codex title binds the pane to, without file
+ * access: a full UUID in the title, or a truncated one this context already
+ * resolved to exactly one transcript. A prefix that is not yet resolved, or a
+ * title naming two threads, binds nothing.
+ */
+export function codexTitleBinding(
+  title: string,
+  context: AgentSessionResolverContext,
+  /** When given, only these just-searched prefix matches count. */
+  verified?: ReadonlyMap<string, string>,
+):
+  | { kind: "none" }
+  | { kind: "unresolved" }
+  | { kind: "ambiguous" }
+  | { kind: "id"; id: string } {
+  const candidates = codexTitleCandidates(title);
+  if (candidates.length === 0) return { kind: "none" };
+  const distinct = new Map(candidates.map((id) => [id.prefix, id]));
+  if (distinct.size > 1) return { kind: "ambiguous" };
+  const [only] = distinct.values();
+  if (!only!.truncated) return { kind: "id", id: only!.prefix };
+  const id = verified
+    ? verified.get(only!.prefix)
+    : context.codexTitles.get(only!.prefix)?.id;
+  return id ? { kind: "id", id } : { kind: "unresolved" };
+}
+
+/**
+ * Search the transcripts a Codex title names now, ignoring remembered
+ * matches: a send must not trust a match made before another transcript
+ * with the same prefix appeared. Returns each title prefix that matched
+ * exactly one transcript, with its complete ID.
+ */
+export async function searchCodexTitle(
+  title: string,
+  files: AgentSessionFileAccess,
+  context: AgentSessionResolverContext,
+): Promise<Map<string, string>> {
+  const thread = await codexThreadFromTitle(title, files, context);
+  const verified = new Map<string, string>();
+  if (thread.kind !== "found") return verified;
+  for (const { prefix } of codexTitleCandidates(title))
+    if (thread.id.startsWith(prefix)) verified.set(prefix, thread.id);
+  return verified;
+}
+
+/**
+ * Codex 0.157+ hosts threads in a shared daemon, so hooks cannot say which
+ * pane shows which thread. With Thread ID in `tui.terminal_title`, the pane's
+ * own front end names its thread. Accept only an ID that matches exactly one
+ * transcript. Each read searches again, so a later colliding transcript is
+ * never missed, and remembers a unique match. A caller that only needs to
+ * notice changes (`reuse`) stats the remembered transcript instead. That is
+ * safe only while something forgets remembered matches whenever a Codex
+ * transcript is created or removed (see the Herdr conversation source);
+ * without that, it searches only while the thread has no transcript or
+ * matches several, or when the title names another thread.
+ */
+async function codexThreadFromTitle(
+  title: string,
+  files: AgentSessionFileAccess,
+  context: AgentSessionResolverContext,
+  reuse = false,
+): Promise<CodexTitleThread> {
+  const candidates = codexTitleCandidates(title);
+  const forget = () => {
+    for (const { prefix } of candidates) context.codexTitles.delete(prefix);
+  };
   const found = new Map<string, SessionFile>();
   for (const { prefix } of candidates) {
+    const cached = reuse ? context.codexTitles.get(prefix) : undefined;
+    const known = cached ? await files.statFile(cached.path) : null;
+    if (known) {
+      found.set(known.path, known);
+      continue;
+    }
     const file = await files.findCodexSessionByPrefix(prefix);
-    if (file === "ambiguous") return { kind: "ambiguous" };
+    if (file === "ambiguous") {
+      forget();
+      return { kind: "ambiguous" };
+    }
     if (file) found.set(file.path, file);
   }
-  if (found.size > 1) return { kind: "ambiguous" };
+  if (found.size > 1) {
+    forget();
+    return { kind: "ambiguous" };
+  }
   const [file] = found.values();
   if (file) {
-    const id = CODEX_FULL_ID.exec(basename(file.path))?.[0];
-    return id
-      ? { kind: "found", file, id: id.toLowerCase() }
-      : { kind: "ambiguous" };
+    const id = CODEX_FULL_ID.exec(basename(file.path))?.[0]?.toLowerCase();
+    if (!id) return { kind: "ambiguous" };
+    for (const { prefix } of candidates)
+      if (id.startsWith(prefix))
+        context.codexTitles.set(prefix, { id, path: file.path });
+    return { kind: "found", file, id };
   }
+  forget();
   // A thread ID without a transcript is a thread with no messages yet. A bare
   // UUID in another title item lands here too: hiding a report beats showing
   // a stale one.
@@ -239,6 +334,8 @@ async function sessionFileFor(
   files: AgentSessionFileAccess,
   context: AgentSessionResolverContext,
 ) {
+  // The Grok and Antigravity readers only open files on this machine.
+  if ((agent === "grok" || agent === "agy") && files.remote) return null;
   if (agent === "grok") {
     const descriptor =
       session.kind === "path"
@@ -316,6 +413,8 @@ export async function resolveAgentSessionInfo(
   agentInfo: Record<string, unknown> | null,
   files: AgentSessionFileAccess,
   context: AgentSessionResolverContext,
+  /** Change detection may reuse a remembered Codex title match. */
+  options: { reuseCodexTitle?: boolean } = {},
 ): Promise<AgentSessionResolved> {
   const params = normalizeParams(rawParams);
   if (!params.pane_id) throw new Error("agent session requires pane_id");
@@ -323,15 +422,7 @@ export async function resolveAgentSessionInfo(
   const agent = normalizeAgentName(
     stringValue(agentInfo?.agent) || session?.agent || params.agent || "",
   );
-  if (
-    agent !== "codex" &&
-    agent !== "claude" &&
-    agent !== "kimi" &&
-    agent !== "grok" &&
-    agent !== "pi" &&
-    agent !== "muse" &&
-    agent !== "agy"
-  ) {
+  if (!SESSION_AGENTS.has(agent)) {
     throw new Error(
       `agent session only supports codex, claude, kimi, grok, pi, muse, and agy`,
     );
@@ -354,6 +445,8 @@ export async function resolveAgentSessionInfo(
     const title = await codexThreadFromTitle(
       stringValue(agentInfo?.terminal_title),
       files,
+      context,
+      options.reuseCodexTitle,
     );
     if (title.kind === "found") {
       // The title follows thread switches; a Herdr report may be stale.
@@ -369,6 +462,7 @@ export async function resolveAgentSessionInfo(
       return {
         ...base,
         status: "missing_file",
+        reason: title.kind === "pending" ? "no_messages_yet" : "ambiguous",
         detail:
           title.kind === "pending"
             ? "This Codex conversation has no saved messages yet."
@@ -380,7 +474,7 @@ export async function resolveAgentSessionInfo(
       };
     }
   }
-  if (agent === "grok" && !resolvedSession) {
+  if (agent === "grok" && !resolvedSession && !files.remote) {
     const descriptor = await findGrokSessionForCwd(cwd);
     if (descriptor) {
       file = descriptor.file;
@@ -392,7 +486,7 @@ export async function resolveAgentSessionInfo(
       };
     }
   }
-  if (agent === "agy" && !resolvedSession) {
+  if (agent === "agy" && !resolvedSession && !files.remote) {
     const descriptor = await findAntigravitySessionForCwd(cwd);
     if (descriptor) {
       file = descriptor.file;
@@ -419,24 +513,27 @@ export async function resolveAgentSessionInfo(
     return {
       ...base,
       status: "missing_session",
+      reason: agent === "codex" ? "codex_unlinked" : "no_session",
       detail:
         agent === "muse"
           ? files.remote
             ? "Muse session inspection over SSH requires a Herdr-reported transcript path. Local session discovery is not used for remote panes."
             : cwd
-              ? `No local Muse Code session was found for ${cwd}. Start Muse Code in this directory without --no-session-log, then refresh Session Inspect.`
+              ? `No local Muse Code session was found for ${cwd}. Start Muse Code in this directory without --no-session-log, then refresh.`
               : "Herdr did not report a working directory for this Muse Code pane."
-          : agent === "grok"
-            ? cwd
-              ? `No local Grok Build session was found for ${cwd}. Start Grok Build in this directory, then refresh Session Inspect.`
-              : "Herdr did not report a working directory for this Grok Build pane."
-            : agent === "agy"
+          : (agent === "grok" || agent === "agy") && files.remote
+            ? "World cannot read this agent's sessions on an SSH host yet."
+            : agent === "grok"
               ? cwd
-                ? `No local Antigravity session was found for ${cwd}. Start Antigravity in this directory, then refresh Session Inspect.`
-                : "Herdr did not report a working directory for this Antigravity pane."
-              : agent === "codex"
-                ? "This pane isn't linked to a Codex session. In Codex, run /title and add Thread ID, or link the session by ID."
-                : "Herdr has not received an agent session id for this pane. Install the Herdr integration for this agent and start a new agent session.",
+                ? `No local Grok Build session was found for ${cwd}. Start Grok Build in this directory, then refresh.`
+                : "Herdr did not report a working directory for this Grok Build pane."
+              : agent === "agy"
+                ? cwd
+                  ? `No local Antigravity session was found for ${cwd}. Start Antigravity in this directory, then refresh.`
+                  : "Herdr did not report a working directory for this Antigravity pane."
+                : agent === "codex"
+                  ? "This pane isn't linked to a Codex session. In Codex, run /title and add Thread ID, or link the session by ID."
+                  : "Herdr has not received an agent session id for this pane. Install the Herdr integration for this agent and start a new agent session.",
       command:
         agent === "grok" || agent === "muse" || agent === "codex"
           ? undefined
@@ -453,6 +550,7 @@ export async function resolveAgentSessionInfo(
     return {
       ...base,
       status: "missing_file",
+      reason: "file_missing",
       detail: `Could not find the ${agent} session transcript for ${resolvedSession.value}.`,
       updated_at: new Date(0).toISOString(),
       path: "",

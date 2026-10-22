@@ -12,6 +12,8 @@ export type HistoryEntry = {
   tool_name?: string;
   source_call_id?: string;
   is_error?: boolean;
+  // A marker in the conversation, such as a compaction, not a message.
+  notice?: string;
   // Set on redacted wire entries: UTF-8 byte length of the withheld text,
   // fetchable via agent_history.entry when the user expands the card.
   text_bytes?: number;
@@ -71,6 +73,9 @@ export function historyEntriesFromTrajectory(
         role: step.source === "user" ? "user" : "assistant",
         text: step.message,
         sent_at,
+        ...(typeof step.extra?.notice === "string"
+          ? { notice: step.extra.notice }
+          : {}),
       });
     }
     for (const call of step.tool_calls ?? []) {

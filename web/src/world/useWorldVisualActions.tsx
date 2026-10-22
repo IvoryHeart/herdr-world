@@ -7,6 +7,7 @@ import {
   FolderOpen,
   History,
   LayoutGrid,
+  MessagesSquare,
   Pin,
   PinOff,
   Terminal,
@@ -158,7 +159,7 @@ export function useWorldVisualActions(controller: WorldInspectorController) {
       files: "Open Files",
       changes: "Open Changes",
       commits: "Open Git History",
-      history: "Open Agent History",
+      history: "Open Chat",
       spaces: "Go to Spaces",
     };
     const icons = {
@@ -166,7 +167,7 @@ export function useWorldVisualActions(controller: WorldInspectorController) {
       files: <FolderOpen size={15} />,
       changes: <LayoutGrid size={15} />,
       commits: <History size={15} />,
-      history: <History size={15} />,
+      history: <MessagesSquare size={15} />,
       spaces: <LayoutGrid size={15} />,
     };
     const targetActions =

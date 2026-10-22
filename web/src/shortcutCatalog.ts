@@ -51,7 +51,7 @@ const descriptions: [ShortcutId, string, string][] = [
     "Command menu",
   ]),
   ["terminal.focus", "Focus the terminal input on desktop", "Terminal"],
-  ["terminal.history", "Toggle agent message history", "Terminal"],
+  ["terminal.history", "Toggle agent chat", "Terminal"],
   [
     "terminal.pageUp",
     "Page up in the application or shell history",

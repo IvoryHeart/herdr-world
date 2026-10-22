@@ -7,6 +7,18 @@ are optional because the merged PR history records their source.
 
 ## [Unreleased]
 
+### Added
+
+- Add a Chat tab to the Inspector, replacing History. Chat shows an agent's
+  conversation from its transcript, never the terminal, and replies with
+  Herdr's agent prompt only to a session Herdr ties to the pane. The service
+  pushes a change notice when the transcript, title or status changes, so the
+  browser never polls. Unavailable conversations explain why and offer the
+  matching action. The service offers one conversation read model
+  (`agent_conversation.get`, `.latest`, `.send`, `.watch`), and
+  `bun scripts/chat-conformance.ts` checks the readers against this machine's
+  real transcripts.
+
 ### Changed
 
 - Give every terminal one colour, shown as its tab in Spaces, its table in
@@ -38,6 +50,11 @@ are optional because the merged PR history records their source.
   with verified release checksums; terminal protocol remains 22.
 
 ### Fixed
+
+- History and Chat no longer show Codex repository instructions and environment
+  blocks, Claude Code local-command caveats, task notifications, compaction
+  summaries, subagent sidechains or rewound prompts as user messages. Remote
+  Grok Build and Antigravity paths are no longer read from this machine.
 
 - History shows Codex 0.157+ conversations again. With Thread ID added to the
   Codex title (`/title`), History reads which conversation a pane shows from its

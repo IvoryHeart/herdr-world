@@ -13,7 +13,7 @@ export type MuseMetadataCache = Map<
   }
 >;
 
-function museSessionsRoot() {
+export function museSessionsRoot() {
   const configured = process.env.XDG_DATA_HOME?.trim();
   return join(
     configured && isAbsolute(configured)
