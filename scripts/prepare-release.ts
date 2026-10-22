@@ -14,10 +14,16 @@ import {
   appendFileSync,
   existsSync,
   readFileSync,
+  rmSync,
   writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  assembleChangelog,
+  FRAGMENT_DIR,
+  readFragments,
+} from "./changelog-fragments";
 import { isReleaseCandidate, RELEASE_VERSION_RE } from "./release-version";
 
 const REPO_ROOT = fileURLToPath(new URL("..", import.meta.url));
@@ -28,7 +34,12 @@ const PACKAGE_FILES = [
 ];
 const PLUGIN_MANIFEST_FILE = "herdr-plugin.toml";
 const CHANGELOG_FILE = "CHANGELOG.md";
-const RELEASE_FILES = [...PACKAGE_FILES, PLUGIN_MANIFEST_FILE, CHANGELOG_FILE];
+const RELEASE_FILES = [
+  ...PACKAGE_FILES,
+  PLUGIN_MANIFEST_FILE,
+  CHANGELOG_FILE,
+  FRAGMENT_DIR,
+];
 
 export function parsePackageVersion(packageJsonText: string): string {
   const match = /^(\s*)"version": "([^"]+)"/m.exec(packageJsonText);
@@ -267,10 +278,13 @@ function main() {
   // Compute every output before writing anything so a validation failure
   // leaves the worktree untouched.
   const manifestWrite = replaceManifestVersion(manifestText, current, version);
+  // Stable releases first fold changes/ fragments into Unreleased; RCs leave
+  // both open for the stable release.
+  const fragments = candidate ? [] : readFragments(REPO_ROOT);
   const changelogWrite = candidate
     ? changelogText
     : promoteChangelog(
-        changelogText,
+        assembleChangelog(changelogText, fragments),
         version,
         new Date().toISOString().slice(0, 10),
       );
@@ -278,6 +292,9 @@ function main() {
   if (!notesExist) writeFileSync(notesPath, releaseNotes);
   if (changelogWrite !== changelogText) {
     writeFileSync(changelogPath, changelogWrite);
+  }
+  for (const { name } of fragments) {
+    rmSync(join(REPO_ROOT, FRAGMENT_DIR, name));
   }
 
   console.log(
