@@ -1,4 +1,5 @@
 import type { ConversationDelivery } from "./conversation-delivery";
+import type { PendingPrompt } from "./pending-prompt";
 import type { ConversationIdentity } from "./conversation-watch";
 import type { HistoryEntry } from "./session-history";
 
@@ -60,6 +61,11 @@ export type Conversation = {
    * unverified ones are notices for the pane until dismissed.
    */
   deliveries: ConversationDelivery[];
+  /**
+   * The question the agent is waiting on, read from its screen while Herdr
+   * reports it blocked; null otherwise.
+   */
+  pending_prompt: PendingPrompt | null;
 } & (
   | { status: "ok"; unavailable: null }
   | {
@@ -91,6 +97,15 @@ export type ConversationSendResult =
 
 export type ConversationTarget = { pane_id: string };
 
+export type ConversationAnswerResult =
+  | { status: "answered"; key: string; label: string }
+  | {
+      status: "refused";
+      reason: "not_blocked" | "changed" | "unknown_option";
+      message: string;
+      pending_prompt: PendingPrompt | null;
+    };
+
 export interface ConversationSource {
   readonly id: string;
   read(target: ConversationTarget): Promise<Conversation>;
@@ -109,6 +124,13 @@ export interface ConversationSource {
   ): Promise<ConversationSendResult>;
   /** Forget a delivery notice the user has seen. */
   dismiss(target: ConversationTarget & { delivery_id: string }): boolean;
+  /**
+   * Answer the agent's pending prompt by pressing one option's key, only if
+   * the agent is still blocked on that same prompt.
+   */
+  answer(
+    target: ConversationTarget & { key: string; prompt_fingerprint: string },
+  ): Promise<ConversationAnswerResult>;
 }
 
 function plural(name: string, calls: number) {

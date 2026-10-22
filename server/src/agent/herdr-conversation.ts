@@ -17,6 +17,11 @@ import {
   type DeliveryClock,
   type DeliveryView,
 } from "./conversation-delivery";
+import {
+  parsePendingPrompt,
+  PROMPT_SCREEN_LINES,
+  type PendingPrompt,
+} from "./pending-prompt";
 import { codexHome, type AgentSessionFileAccess } from "./session-file-access";
 import type { SessionProjectionCache } from "./session-projection-cache";
 import {
@@ -277,6 +282,7 @@ export function createHerdrConversationSource(args: {
       messages: [],
       latest: null,
       deliveries: deliveries.list(paneId),
+      pending_prompt: null,
     };
     if (args.remotePlatform === "windows")
       return unavailable(
@@ -428,6 +434,19 @@ export function createHerdrConversationSource(args: {
     deliveries.evaluate(paneId, current, views);
   };
 
+  /** The prompt a blocked agent shows at the bottom of its screen. */
+  const readPrompt = async (paneId: string): Promise<PendingPrompt | null> => {
+    const result = await args.herdrCall("pane.read", {
+      pane_id: paneId,
+      source: "recent",
+      lines: PROMPT_SCREEN_LINES,
+      format: "text",
+      strip_ansi: true,
+    });
+    const text = screenText(result);
+    return text === null ? null : parsePendingPrompt(text);
+  };
+
   const read = async ({
     pane_id,
   }: {
@@ -435,7 +454,12 @@ export function createHerdrConversationSource(args: {
   }): Promise<Conversation> => {
     const shown = await readShown(pane_id);
     await settle(pane_id, shown);
-    return { ...shown, deliveries: deliveries.list(pane_id) };
+    // A blocked agent's question is on its screen, not in its transcript.
+    const pending_prompt =
+      shown.agent_status === "blocked"
+        ? await readPrompt(pane_id).catch(() => null)
+        : null;
+    return { ...shown, deliveries: deliveries.list(pane_id), pending_prompt };
   };
 
   const latest = async (target: { pane_id: string }) =>
@@ -443,6 +467,43 @@ export function createHerdrConversationSource(args: {
 
   return {
     id: "herdr",
+    answer: async ({ pane_id, key, prompt_fingerprint }) => {
+      // Checked against the pane's current state just before the key goes:
+      // still blocked, on the same prompt, and the key is one of its options.
+      const info = await agentInfo(pane_id);
+      if (stringValue(info?.agent_status) !== "blocked")
+        return {
+          status: "refused",
+          reason: "not_blocked",
+          message:
+            "The agent is no longer waiting on a question. Nothing was sent.",
+          pending_prompt: null,
+        };
+      const prompt = await readPrompt(pane_id);
+      if (!prompt || prompt.fingerprint !== prompt_fingerprint)
+        return {
+          status: "refused",
+          reason: "changed",
+          message:
+            "The question changed. Nothing was sent; check it and answer again.",
+          pending_prompt: prompt,
+        };
+      const option = prompt.options.find((candidate) => candidate.key === key);
+      if (!option)
+        return {
+          status: "refused",
+          reason: "unknown_option",
+          message: "That is not one of the agent's options. Nothing was sent.",
+          pending_prompt: prompt,
+        };
+      // A menu choice is a single key, without Enter, as the menu expects.
+      await args.herdrCall("pane.send_input", {
+        pane_id,
+        text: option.key,
+        keys: [],
+      });
+      return { status: "answered", key: option.key, label: option.label };
+    },
     dismiss: ({ pane_id, delivery_id }) =>
       deliveries.dismiss(pane_id, delivery_id),
     dispose: () => {
@@ -539,6 +600,7 @@ export function createHerdrConversationSource(args: {
                   messages: [],
                   latest: null,
                   deliveries: [],
+                  pending_prompt: null,
                 },
                 "read_failed",
                 error instanceof Error ? error.message : String(error),
@@ -706,4 +768,15 @@ export function createHerdrConversationSource(args: {
       return { status: "sent", delivery };
     },
   };
+}
+
+/** The text of a `pane.read` reply, wherever Herdr nests it. */
+function screenText(result: unknown): string | null {
+  if (!isRecord(result)) return null;
+  if (typeof result.text === "string") return result.text;
+  for (const value of Object.values(result)) {
+    const nested = screenText(value);
+    if (nested !== null) return nested;
+  }
+  return null;
 }

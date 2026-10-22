@@ -24,6 +24,16 @@ view that you open on purpose.
   with a path, such as `/var/log/app.log fails`, is sent.
 - Refreshes when the service says the conversation changed (see
   [Refresh](#refresh)). The browser has no timer. **Refresh** rereads on demand.
+- Answers the agent's own question. When Herdr reports the agent blocked, Chat
+  reads the question from the bottom of its screen with fixed patterns (Claude
+  Code's and Codex's numbered permission menus, or a y/n prompt) and shows it
+  as an ask card: the command or file asked about, the question, and each
+  option with its key. Picking one, or pressing its key while Chat has focus,
+  presses that key in the agent's pane, and Chat says "You answered 2 · …".
+  The service first checks that the agent is still blocked on the same
+  question; if it changed, nothing is sent. When no menu can be read, Chat
+  shows the question and **Answer in the Terminal**, and never guesses.
+  Chat answers only when you pick an option.
 - Keeps the last good conversation when a read fails, for example while the
   transcript is being written, and says that it could not refresh.
 - When the conversation is unavailable, Chat shows the reason and the action it
@@ -52,9 +62,11 @@ projection cache as History ([History synchronization](HISTORY.md)).
 | `agent_conversation.latest` | `pane_id`, or `pane_ids`, or nothing for every agent | A conversation without `messages`, or `{ conversations }` |
 | `agent_conversation.send` | `pane_id`, `text`, `session_fingerprint`, optional `baseline` (IDs of the user messages Chat showed) | `{ status: "sent", delivery }` or `{ status: "refused", reason, message }` |
 | `agent_conversation.dismiss` | `pane_id`, `delivery_id` | `{ dismissed }`; forgets a delivery notice |
+| `agent_conversation.answer` | `pane_id`, `key`, `prompt_fingerprint` | `{ status: "answered", key, label }` or `{ status: "refused", reason, message, pending_prompt }` |
 | `agent_conversation.watch` / `.unwatch` | `pane_id` | `{ ok: true }`; see [Refresh](#refresh) |
 
-A conversation carries `agent`, `agent_status`, `session_binding`,
+A conversation carries `agent`, `agent_status`, `pending_prompt` (the question a
+blocked agent is waiting on, or null), `session_binding`,
 `session_fingerprint`, `updated_at`, ordered `messages`, `latest` (the last
 assistant message) and a `status` of `ok` or `unavailable`. Each message has a
 `role` (`user`, `assistant` or `tool`) and a `kind`:

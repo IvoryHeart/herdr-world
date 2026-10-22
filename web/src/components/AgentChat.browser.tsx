@@ -137,6 +137,8 @@ async function run() {
     call: async (method: string, params: Record<string, unknown> = {}) => {
       calls.push({ method, params });
       if (method === "agent_conversation.send") return sendResult;
+      if (method === "agent_conversation.answer")
+        return { status: "answered", key: params.key, label: "Yes, always" };
       if (method === "agent_conversation.get") return reply;
       if (
         method === "agent_conversation.watch" ||
@@ -674,6 +676,75 @@ async function run() {
     check(
       buttons.includes("Copy command") && buttons.includes("Refresh"),
       "A missing integration must offer to copy its command and refresh",
+    );
+
+    // A blocked agent's question becomes an ask card; a number key answers
+    // it with the prompt's fingerprint, and Chat says what it pressed.
+    const asking = {
+      question: ["Do you want to proceed?"],
+      command: "git push -u origin agent/demo",
+      options: [
+        { key: "1", label: "Yes" },
+        { key: "2", label: "Yes, always" },
+        { key: "3", label: "No, and tell the agent what to do" },
+      ],
+      fingerprint: "f1",
+    };
+    reply = {
+      ...conversation([message("u7", "user", "Push it")], "blocked"),
+      pending_prompt: asking,
+    };
+    render("blocked", true, 50);
+    push();
+    await settle();
+    const card = container.querySelector(".agent-chat-ask");
+    check(
+      card?.querySelector("pre")?.textContent ===
+        "git push -u origin agent/demo" &&
+        card.textContent?.includes("Do you want to proceed?") === true &&
+        card.querySelectorAll(".agent-chat-ask-options button").length === 3,
+      "A blocked agent's question must show as an ask card with its options",
+    );
+    container
+      .querySelector<HTMLElement>(".agent-chat-list")!
+      .dispatchEvent(new KeyboardEvent("keydown", { key: "2", bubbles: true }));
+    await settle();
+    const answered = calls.find(
+      (call) => call.method === "agent_conversation.answer",
+    );
+    check(
+      answered?.params.key === "2" &&
+        answered.params.prompt_fingerprint === "f1" &&
+        answered.params.pane_id === "p",
+      `A number key must answer with the prompt's fingerprint (${JSON.stringify(answered?.params)})`,
+    );
+    reply = { ...reply, pending_prompt: null };
+    push();
+    await settle();
+    check(
+      container.querySelector(".agent-chat-answered")?.textContent ===
+        "You answered 2 · Yes, always",
+      "Chat must say which answer it pressed",
+    );
+    // A prompt Chat cannot read offers the Terminal, never a guess.
+    reply = {
+      ...reply,
+      pending_prompt: {
+        question: ["Which database should the migration target?"],
+        command: null,
+        options: [],
+        fingerprint: "f2",
+      },
+    };
+    push();
+    await settle();
+    check(
+      container.querySelectorAll(".agent-chat-ask-options button").length ===
+        0 &&
+        (
+          container.querySelector(".agent-chat-ask")?.textContent ?? ""
+        ).includes("Answer in the Terminal"),
+      "An unreadable prompt must offer the Terminal and no answers",
     );
 
     const unwatched = count("agent_conversation.unwatch");
