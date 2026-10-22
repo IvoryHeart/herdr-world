@@ -506,10 +506,23 @@ function agentTarget(label: string) {
 }
 
 /** Opens an agent's Inspector from Town: a click only selects it. */
-function openAgent(label: string) {
+/**
+ * Open an agent's terminal from Town as a user does: activating the agent
+ * opens its chat window, and Open terminal in the chat's header opens the
+ * terminal (Town's default is chat; the terminal is one tap away).
+ */
+async function openAgent(label: string) {
   const target = agentTarget(label)!;
-  target.click();
-  target.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+  flushSync(() => {
+    target.click();
+    target.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+  });
+  const openTerminal = () =>
+    document.querySelector<HTMLButtonElement>(
+      `[aria-label="${label} chat window"] .town-peek-terminal`,
+    );
+  await until(openTerminal, `${label} chat window`);
+  flushSync(() => openTerminal()!.click());
 }
 
 /** Board's card for a single-pane tab, or a split tab's pane row, by name. */
@@ -1365,7 +1378,7 @@ async function run() {
       '.world-selection-panel button[aria-label="Close profile"]',
     )!
     .click();
-  flushSync(() => openAgent("Builder"));
+  await openAgent("Builder");
   await until(
     () =>
       document.querySelector('[role="dialog"][aria-label="Builder Inspector"]'),
@@ -1392,7 +1405,7 @@ async function run() {
     "selected visual commands displaced native shell commands",
   );
   await setShellActionsOpen(false);
-  flushSync(() => openAgent("Reviewer"));
+  await openAgent("Reviewer");
   await until(
     () =>
       document.querySelector(
@@ -2030,7 +2043,7 @@ async function run() {
     "delayed navigator focus resurrected the closed target Inspector",
   );
 
-  flushSync(() => openAgent("Reviewer"));
+  await openAgent("Reviewer");
   await until(
     () =>
       document.querySelector(
@@ -2091,7 +2104,7 @@ async function run() {
   dockedOpeningSelect.value = "docked";
   dockedOpeningSelect.dispatchEvent(new Event("change", { bubbles: true }));
   toggleTopbarMenu();
-  flushSync(() => openAgent("Builder"));
+  await openAgent("Builder");
   await until(
     () =>
       document
@@ -2258,7 +2271,7 @@ async function run() {
   store.clearNotice();
   await settle();
   await until(() => agentTarget("Builder"), "Builder desk target");
-  flushSync(() => openAgent("Builder"));
+  await openAgent("Builder");
   await until(
     () =>
       document
@@ -2456,7 +2469,7 @@ async function run() {
     "resizing the floating Inspector focused its terminal",
   );
 
-  flushSync(() => openAgent("Reviewer"));
+  await openAgent("Reviewer");
   await until(
     () =>
       document
@@ -2788,7 +2801,7 @@ async function run() {
     "previously focused docked terminal after browser focus return",
   );
 
-  flushSync(() => openAgent("Reviewer"));
+  await openAgent("Reviewer");
   await until(
     () =>
       document
@@ -2921,7 +2934,7 @@ async function run() {
     "view transition moved the Inspector",
   );
   await until(() => agentTarget("Reviewer"), "Reviewer Town target");
-  flushSync(() => openAgent("Reviewer"));
+  await openAgent("Reviewer");
   await until(
     () => document.querySelector('[aria-label="Reviewer Inspector"]'),
     "Town opens the second managed Inspector",
@@ -2953,7 +2966,7 @@ async function run() {
   laterWindow
     .querySelector<HTMLButtonElement>('[aria-label="Close Inspector window"]')!
     .click();
-  flushSync(() => openAgent("Builder"));
+  await openAgent("Builder");
   await until(
     () =>
       document.querySelector(
@@ -4192,7 +4205,7 @@ async function run() {
     !document.querySelector(".workspace-inspector"),
     "closed Inspector reappeared through an arrangement",
   );
-  flushSync(() => openAgent("Builder"));
+  await openAgent("Builder");
   await until(
     () => Boolean(document.querySelector(".workspace-inspector")),
     "visual Inspector reopened after Close all",
