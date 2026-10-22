@@ -186,6 +186,12 @@ The latter is not simultaneous total memory. Where available, the Linux cgroup
 lifetime peak is recorded separately and includes other job/setup processes.
 All configured JVM/Node caps and finite/consumer evidence limits remain unchanged.
 
+Three workers with three CPUs of quota did not shorten hosted CI (measured
+2026-10-21). Two workers took 293 seconds and three took 295: space-admission,
+which bounds the pool, slowed from about 198 to 294 seconds, and every other case
+slowed by 30-45%. The cases are CPU-bound on the four-CPU hosted runner, so more
+workers only divide the same CPU; peak memory rose from about 1.36 to 1.70 GB.
+
 The first complete constrained local run measured 1,149,575,168 bytes of aggregate
 peak memory (approximately 1.07 GiB), with zero OOM kills under the hard 4 GiB limit.
 The actual 64 MiB memory control and cancellation/descendant control also passed.

@@ -88,16 +88,21 @@ test("Delivery checks require the pre-merge installer upgrade matrix", async () 
     ).text(),
   ) as any;
   expect(workflow.jobs.delivery.needs).toContain("installer-upgrade");
-  expect(workflow.jobs["installer-upgrade"].uses).toBe(
-    "./.github/workflows/installer-upgrade.yml",
+  expect(workflow.jobs["installer-upgrade"]).toMatchObject({
+    uses: "./.github/workflows/installer-upgrade.yml",
+    needs: "validation-scope",
+    if: "needs.validation-scope.outputs.mode == 'full'",
+  });
+  // ci-delivery-result requires success for full validation and a skip for
+  // Markdown-only or exact-head reuse.
+  const gates = workflow.jobs.delivery.steps.filter(
+    (step: any) => step.run === "bun scripts/ci-delivery-result.ts",
   );
-  const gate = workflow.jobs.delivery.steps.find(
-    (step: any) => step.name === "Require installer upgrade evidence",
-  );
-  expect(gate?.env.INSTALLER_RESULT).toBe(
-    "${{ needs.installer-upgrade.result }}",
-  );
-  expect(gate?.run).toBe('test "$INSTALLER_RESULT" = success');
+  expect(gates).toHaveLength(2);
+  for (const gate of gates)
+    expect(gate.env.INSTALLER_RESULT).toBe(
+      "${{ needs.installer-upgrade.result }}",
+    );
 });
 
 test("installer upgrades run native released artifacts on every supported platform", async () => {

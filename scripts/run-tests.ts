@@ -2,16 +2,26 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { availableParallelism, tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  assertWebBrowserInventory,
   assertWorldBrowserInventory,
+  browserWorkflowIgnorePattern,
+  webBrowserSuites,
   worldBrowserIgnorePattern,
 } from "./world-browser-suites";
 
 // Keep browser profiles and Bun WebView files inside one run-owned directory.
 // A failed test can skip its own finally block when the runner exits early.
-const args = process.argv.slice(2);
+// `--web-browser` selects the Chrome-driven suites outside World, which CI runs
+// as their own job; HERDR_TEST_EXCLUDE_WORLD_BROWSER=1 leaves out everything
+// that job and the World shards run.
+const webBrowser = process.argv[2] === "--web-browser";
+const args = webBrowser
+  ? [...webBrowserSuites, ...process.argv.slice(3)]
+  : process.argv.slice(2);
 const excludeWorld = process.env.HERDR_TEST_EXCLUDE_WORLD_BROWSER === "1";
 const runWorldAfter = args.length === 0 && !excludeWorld;
 if (excludeWorld || runWorldAfter) await assertWorldBrowserInventory();
+if (excludeWorld || webBrowser) await assertWebBrowserInventory();
 const configuredParallelism = process.env.HERDR_TEST_PARALLEL;
 const parallelism = configuredParallelism
   ? Number(configuredParallelism)
@@ -35,7 +45,9 @@ const testArgs = args.some((arg) => /^--parallel(?:=|$)/.test(arg))
   : [`--parallel=${parallelism}`, ...args];
 if (!testArgs.some((arg) => /^--max-concurrency(?:=|$)/.test(arg)))
   testArgs.push(`--max-concurrency=${maxConcurrency}`);
-if (excludeWorld || runWorldAfter)
+if (excludeWorld)
+  testArgs.push(`--path-ignore-patterns=${browserWorkflowIgnorePattern}`);
+else if (runWorldAfter)
   testArgs.push(`--path-ignore-patterns=${worldBrowserIgnorePattern}`);
 console.info(
   `[test-runner] ${testArgs.filter((arg) => arg.startsWith("--")).join(" ")}`,

@@ -71,6 +71,15 @@ jobs:
         with:
           bun-version: "1.4.3"
           no-cache: true
+      # Linux installs take seconds; Windows and macOS spend up to 90 s
+      # downloading packages. CI runs only for pull requests, so a cache serves
+      # later pushes to the same pull request.
+      - name: Cache Bun packages
+        if: runner.os != 'Linux'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('bun.lock') }}
       - run: bun install --frozen-lockfile
       - name: Build the proposed merge with the release packaging script
         shell: bash

@@ -1,35 +1,94 @@
 import { expect, test } from "bun:test";
 import { assertDeliveryResults } from "./ci-delivery-result";
 
+const ok = ["success", "success"];
+const skip = ["skipped", "skipped"];
+
 test("full delivery requires both repository validation and every World shard to succeed", () => {
   expect(() =>
-    assertDeliveryResults("full", "success", "success", "success", "success"),
+    assertDeliveryResults(
+      "full",
+      "success",
+      "success",
+      "success",
+      "success",
+      ok,
+    ),
   ).not.toThrow();
   for (const result of ["failure", "cancelled", "skipped", undefined]) {
     expect(() =>
-      assertDeliveryResults("full", "success", "success", result, "success"),
+      assertDeliveryResults(
+        "full",
+        "success",
+        "success",
+        result,
+        "success",
+        ok,
+      ),
     ).toThrow();
     expect(() =>
-      assertDeliveryResults("full", "success", result, "success", "success"),
+      assertDeliveryResults(
+        "full",
+        "success",
+        result,
+        "success",
+        "success",
+        ok,
+      ),
     ).toThrow();
     expect(() =>
-      assertDeliveryResults("full", result, "success", "success", "success"),
+      assertDeliveryResults(
+        "full",
+        result,
+        "success",
+        "success",
+        "success",
+        ok,
+      ),
     ).toThrow();
   }
 });
 
 test("documentation and exact-head reuse allow only their expected skipped jobs", () => {
   expect(() =>
-    assertDeliveryResults("docs", "success", "success", "skipped", "success"),
+    assertDeliveryResults(
+      "docs",
+      "success",
+      "success",
+      "skipped",
+      "success",
+      skip,
+    ),
   ).not.toThrow();
   expect(() =>
-    assertDeliveryResults("reuse", "success", "skipped", "skipped", "skipped"),
+    assertDeliveryResults(
+      "reuse",
+      "success",
+      "skipped",
+      "skipped",
+      "skipped",
+      skip,
+    ),
   ).not.toThrow();
   expect(() =>
-    assertDeliveryResults("docs", "success", "failure", "skipped", "success"),
+    assertDeliveryResults(
+      "docs",
+      "success",
+      "failure",
+      "skipped",
+      "success",
+      skip,
+    ),
   ).toThrow();
   expect(() =>
-    assertDeliveryResults("reuse", "failure", "skipped", "skipped", "skipped"),
+    assertDeliveryResults(
+      "reuse",
+      "failure",
+      "skipped",
+      "skipped",
+      "skipped",
+      skip,
+    ),
   ).toThrow();
   expect(() =>
     assertDeliveryResults(
@@ -38,6 +97,7 @@ test("documentation and exact-head reuse allow only their expected skipped jobs"
       "skipped",
       "skipped",
       "success",
+      skip,
     ),
   ).toThrow();
 });
@@ -45,10 +105,70 @@ test("documentation and exact-head reuse allow only their expected skipped jobs"
 test("behavioral failure, cancellation and missing evidence block full and docs delivery", () => {
   for (const result of ["failure", "cancelled", "skipped", undefined]) {
     expect(() =>
-      assertDeliveryResults("full", "success", "success", "success", result),
+      assertDeliveryResults(
+        "full",
+        "success",
+        "success",
+        "success",
+        result,
+        ok,
+      ),
     ).toThrow();
     expect(() =>
-      assertDeliveryResults("docs", "success", "success", "skipped", result),
+      assertDeliveryResults(
+        "docs",
+        "success",
+        "success",
+        "skipped",
+        result,
+        skip,
+      ),
+    ).toThrow();
+  }
+});
+
+test("full delivery requires Windows plugin and installer evidence; shorter paths require them skipped", () => {
+  for (const result of ["failure", "cancelled", "skipped", undefined]) {
+    for (const packaging of [
+      ["success", result],
+      [result, "success"],
+    ])
+      expect(() =>
+        assertDeliveryResults(
+          "full",
+          "success",
+          "success",
+          "success",
+          "success",
+          packaging,
+        ),
+      ).toThrow();
+  }
+  expect(() =>
+    assertDeliveryResults("full", "success", "success", "success", "success", [
+      "success",
+    ]),
+  ).toThrow();
+  for (const result of ["success", "failure", "cancelled", undefined]) {
+    expect(() =>
+      assertDeliveryResults(
+        "docs",
+        "success",
+        "success",
+        "skipped",
+        "success",
+        ["skipped", result],
+      ),
+    ).toThrow();
+    expect(() =>
+      assertDeliveryResults(
+        "reuse",
+        "success",
+        "skipped",
+        "skipped",
+        "skipped",
+        [result, "skipped"],
+      ),
     ).toThrow();
   }
 });
