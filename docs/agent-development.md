@@ -143,9 +143,9 @@ for polling. The reusable [task prompt](agent-task-prompt.md) repeats this rule.
 Inspect the final diff and history for unrelated edits, generated output and sensitive
 data. Prepare the PR body with available verification and agent execution using the
 [PR template](../.github/pull_request_template.md) before creating the PR; use
-`unknown` for values not yet available. Include the Unreleased changelog entry
-before the first push; the PR number need not be added to it or linked from the
-PR body. Keep later usage accounting in the workflow output and final handoff
+`unknown` for values not yet available. Include the changelog fragment under
+`changes/` (or the `Changelog: none — <reason>` line) before the first push; the
+PR number need not be added to it or linked from the PR body. Keep later usage accounting in the workflow output and final handoff
 instead of editing the PR body solely for totals, because an edit starts another
 CI run. Reuse earlier results only when their relevant inputs are unchanged.
 Open a ready PR and stop before merge.

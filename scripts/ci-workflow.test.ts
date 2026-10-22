@@ -161,6 +161,12 @@ test("CI exposes the protected delivery gate and runs the complete repository ch
     run: 'bun scripts/check-knowledge-map.ts "$GITHUB_EVENT_PATH"',
   });
   expect(
+    scope?.steps.find((step) => step.name === "Check changelog fragments"),
+  ).toMatchObject({
+    if: "github.event_name == 'pull_request'",
+    run: 'bun scripts/changelog-fragments.ts pr "$GITHUB_EVENT_PATH"',
+  });
+  expect(
     scope?.steps.find((step) => step.uses?.startsWith("actions/checkout@"))
       ?.with?.["fetch-depth"],
   ).toBe(0);

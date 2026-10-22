@@ -173,13 +173,15 @@ Large outputs are the primary driver of context bloat and token cost.
 
 ## Changelog and releases
 
-- Add user-facing changes under the appropriate `CHANGELOG.md` Unreleased heading
-  in the implementation commit, before the first push. PR numbers and links are
-  optional in changelog entries; the PR and merge history provide traceability.
-  Keep existing linked entries. Prepare the final PR description before creation;
-  it does not need to link to itself. Do not amend or push solely to add a new PR
-  number to the changelog, or edit the PR body solely for later usage accounting;
-  retain later usage in the workflow output.
+- Do not edit `CHANGELOG.md` for a change. Add a user-facing change as a fragment,
+  `changes/<pr-number-or-slug>.md`, in the implementation commit, before the first
+  push; [changes/README.md](changes/README.md) gives the format. CI requires a
+  fragment from every PR that is not documentation-only; a change with nothing
+  user-facing instead states `Changelog: none — <specific reason>` in its PR
+  description. PR numbers and links are optional in entries. Prepare the final PR
+  description before creation; it does not need to link to itself. Do not amend or
+  push solely to rename a fragment after the PR number, or edit the PR body solely
+  for later usage accounting; retain later usage in the workflow output.
 - Record the exact Roamgate source synchronization in `UPSTREAM.md`; say "derived
   from" for source and "compatible with" for the external Herdr runtime.
 - Release preparation happens on a clean branch from `origin/main` and is delivered
