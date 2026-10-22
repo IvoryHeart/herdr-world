@@ -578,7 +578,13 @@ export function WorkspaceInspectorHost({
               className="workspace-inspector-agent-avatar"
               aria-hidden="true"
             >
-              {agentContext.kind === "agent" ? (
+              {agentContext.portrait ? (
+                <img
+                  className="workspace-inspector-portrait"
+                  src={agentContext.portrait}
+                  alt=""
+                />
+              ) : agentContext.kind === "agent" ? (
                 <AgentIcon
                   agent={agentContext.agent ?? agentContext.label}
                   compact
@@ -594,13 +600,18 @@ export function WorkspaceInspectorHost({
             </span>
             {locationLine(
               <>
-                <span className="workspace-inspector-state">
+                <span
+                  className="workspace-inspector-state"
+                  data-tone={agentContext.statusTone}
+                >
                   {agentContext.stateLabel}
                 </span>
-                {` · ${agentContext.locationLabel}`}
-                {agentContext.taskSummary
-                  ? ` · ${agentContext.taskSummary}`
-                  : ""}
+                <span className="workspace-inspector-where">
+                  {` · ${agentContext.locationLabel}`}
+                  {agentContext.taskSummary
+                    ? ` · ${agentContext.taskSummary}`
+                    : ""}
+                </span>
               </>,
               `${agentContext.kind}, ${agentContext.stateLabel}, ${agentContext.locationLabel}`,
             )}

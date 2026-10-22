@@ -18,6 +18,10 @@ export interface WorkspaceInspectorContext {
   locationLabel: string;
   agent?: string;
   taskSummary?: string;
+  /** The status as a tone (working, blocked, done, idle, unknown) for its pill. */
+  statusTone?: string;
+  /** An image of the agent, drawn by the host view in place of its icon. */
+  portrait?: string;
 }
 const DEFAULT_INSPECTOR_VIEWS: readonly InspectorView[] = [
   "files",

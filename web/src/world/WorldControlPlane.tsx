@@ -498,6 +498,7 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
               back: view === "town" ? { label: "Back to Town" } : undefined,
             }}
             terminalColor={inspectorColor(conversation)}
+            townSkin={view === "town"}
             onResourceFocus={() => {
               intentRequestRef.current++;
               const id = worldInspectorWindowId(conversation);
