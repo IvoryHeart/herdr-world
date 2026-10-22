@@ -151,6 +151,32 @@ test("finished agents queue at reception after waiting agents", () => {
   expect(actors.actors.get("c")!.goal?.kind).toBe("seat");
 });
 
+test("an opened agent walks back to its desk from reception or the lounge", () => {
+  const away = world({ done: "done", resting: "idle", waiting: "blocked" });
+  const actors = new TownActors();
+  actors.sync(
+    world({ done: "working", resting: "working", waiting: "working" })
+      .actorWorld,
+    false,
+  );
+  actors.sync(away.actorWorld, false);
+  settle(actors);
+  expect(actors.actors.get("done")!.goal?.kind).toBe("queue");
+  expect(actors.actors.get("resting")!.goal?.kind).toBe("lounge");
+  actors.sync(away.actorWorld, false, new Set(["done", "resting"]));
+  settle(actors);
+  for (const key of ["done", "resting"]) {
+    expect(actors.actors.get(key)!.goal?.kind).toBe("seat");
+    expect(actors.actors.get(key)!.mode).toBe("seat");
+  }
+  // The others move up the queue; the summoned agent leaves it.
+  expect(actors.actors.get("waiting")!.queueSlot).toBe(0);
+  // Once no longer summoned, status places it again.
+  actors.sync(away.actorWorld, false, new Set());
+  settle(actors);
+  expect(actors.actors.get("resting")!.goal?.kind).toBe("lounge");
+});
+
 test("seated agents move with their desk when Herdr reorders it", () => {
   const actors = new TownActors();
   actors.sync(world({ a: "working" }).actorWorld, false);

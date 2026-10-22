@@ -1206,6 +1206,24 @@
   text-overflow: ellipsis;
 }
 
+/* Open terminal: the peek's way to the agent's terminal. */
+.town-peek .town-peek-terminal {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: none;
+  min-height: 30px;
+  padding: 0 9px;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+@media (max-width: 380px) {
+  .town-peek .town-peek-terminal span {
+    display: none;
+  }
+}
+
 .town-peek .town-peek-close {
   width: 30px;
   height: 30px;
@@ -1223,14 +1241,93 @@
   background: var(--town-term);
   border-radius: 8px;
   color: #c9d1c3;
-  font:
-    400 11.5px / 1.5 "JetBrains Mono",
-    ui-monospace,
-    SFMono-Regular,
-    Menlo,
-    monospace;
-  white-space: pre-wrap;
+  font-size: 13px;
+  line-height: 1.5;
   overflow-wrap: anywhere;
+}
+
+/* The latest message, rendered as Chat renders it. */
+.town-peek-message time {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--town-muted);
+}
+
+.town-peek-message.is-error {
+  color: #ff9a8b;
+}
+
+.town-peek .town-peek-markdown {
+  padding: 0;
+  overflow: visible;
+  color: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  background: transparent;
+}
+
+.town-peek-markdown > :first-child {
+  margin-top: 0;
+}
+
+.town-peek-markdown > :last-child {
+  margin-bottom: 0;
+}
+
+/* The peek is always dark, whatever World's theme: keep Markdown readable. */
+.town-peek .town-peek-markdown :is(h1, h2, h3, h4, strong, a) {
+  color: #e6edf3;
+}
+
+.town-peek .town-peek-markdown code {
+  color: #ffe0a8;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.town-peek .town-peek-markdown table {
+  font-size: 12px;
+}
+
+.town-peek .town-peek-markdown th,
+.town-peek .town-peek-markdown td {
+  padding: 3px 7px;
+  color: #c9d1c3;
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+.town-peek .town-peek-markdown th {
+  color: #e6edf3;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.town-peek .town-peek-markdown tr:nth-child(even) td {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.town-peek-unavailable {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--town-muted);
+}
+
+.town-peek-unavailable strong {
+  color: #e6edf3;
+}
+
+.town-peek-unavailable code {
+  overflow-wrap: anywhere;
+  color: #ffe0a8;
+}
+
+.town-peek-empty {
+  margin: 0;
+  color: var(--town-muted);
+}
+
+.town-peek .attachment-chips {
+  margin-top: 8px;
 }
 
 .town-answers {
@@ -1500,40 +1597,17 @@
   font-weight: 600;
 }
 
-/* The latest chatter, coloured as the agent's TUI marks it. */
-.town-line-tool {
-  color: #8b949e;
-}
-
-.town-line-ok {
-  color: #7be08f;
-}
-
-.town-line-busy {
-  color: #ffb547;
-}
-
-/* Session messages: the user's in gold, tool steps dim, errors red. */
-.town-msg {
-  display: block;
-  margin-bottom: 4px;
-}
-
-.town-msg-user {
-  color: #ffe0a8;
-}
-
-.town-msg-tool {
-  color: #8b949e;
-}
-
-.town-msg-error {
-  color: #ff9a8b;
-}
-
 .town-question {
   display: block;
   margin: 6px 0 2px;
+  font:
+    400 11.5px / 1.5 "JetBrains Mono",
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
   padding: 7px 9px;
   color: #ffe0a8;
   background: #1d1708;

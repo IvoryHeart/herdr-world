@@ -20,6 +20,7 @@ import {
   Server,
   Settings,
   Wifi,
+  MessageSquare,
   Wind,
   Bug,
 } from "lucide-react";
@@ -326,6 +327,29 @@ export function ConfigMenu({
                   >
                     <option value="floating">Floating</option>
                     <option value="docked">Snap right</option>
+                  </select>
+                </label>
+                <label className="config-preference-row">
+                  <span className="config-item-icon">
+                    <MessageSquare size={15} />
+                  </span>
+                  <span className="config-item-copy">
+                    <strong>Town opens</strong>
+                    <span>What tapping an agent or its desk opens</span>
+                  </span>
+                  <select
+                    className="config-preference-select"
+                    aria-label="Town opens"
+                    value={officePreferences.townOpens}
+                    onChange={(event) =>
+                      updateOfficePreferences({
+                        townOpens: event.target
+                          .value as OfficePreferences["townOpens"],
+                      })
+                    }
+                  >
+                    <option value="chat">Chat</option>
+                    <option value="terminal">Terminal</option>
                   </select>
                 </label>
                 <div className="config-preference-row">
