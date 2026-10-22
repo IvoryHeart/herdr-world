@@ -366,6 +366,10 @@ See [resource ownership](docs/ARCHITECTURE.md#workspace-resource-ownership).
   says so, or that it cannot tell when the same words appeared at about the
   same time. Slash commands, and Claude Code's `!` and `#`, go through the
   Terminal.
+  While the agent works, a slim line shows its current task, tool and elapsed
+  time; a waiting agent's numbered question shows with one-tap answers. Drafts
+  survive switching views, and Town's windows give Chat the Town prototype's
+  look.
   It refreshes when the service sees the transcript, title or status change,
   without browser polling, and keeps the last good view if a read fails. When
   it cannot read the conversation it shows the reason with the matching action:

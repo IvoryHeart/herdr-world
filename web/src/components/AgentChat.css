@@ -424,6 +424,61 @@
   }
 }
 
+/* A waiting agent's question, and its answers above the composer. */
+.agent-chat-question {
+  margin: 0;
+  padding: 7px 9px;
+  color: var(--warning-text, var(--text));
+  font: 12px / 1.5 var(--font-mono, ui-monospace, monospace);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  background: var(--warning-soft, var(--input-bg));
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+}
+
+.agent-chat-answers {
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 10px 0;
+}
+
+.agent-chat-answers button {
+  display: inline-flex;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 36px;
+  max-width: 100%;
+  padding: 4px 10px;
+  color: var(--text);
+  font-size: 13px;
+  background: var(--input-bg);
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.agent-chat-answers button.is-primary {
+  color: var(--bg);
+  background: var(--accent);
+  border-color: transparent;
+}
+
+.agent-chat-answers span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-chat-answers kbd {
+  font: 600 10px var(--font-mono, ui-monospace, monospace);
+  opacity: 0.7;
+}
+
 /* Town's skin, after the Town prototype's docked panel: a terminal-dark
    screen in a mono voice, what the user said as dim "›" lines, tools as "●"
    lines, and a one-line composer with a gold Send. It applies inside any
@@ -624,7 +679,9 @@
 
 :where([data-skin="town"]) .agent-chat-composer textarea {
   min-width: 0;
+  height: 40px;
   min-height: 40px;
+  overflow-y: auto;
   resize: none;
   max-height: 160px;
   padding: 9px 12px;
@@ -655,6 +712,35 @@
 :where([data-skin="town"])
   .agent-chat-composer
   button[type="submit"]:not(:disabled) {
+  color: #1f1606;
+  background: #e3aa3a;
+}
+
+:where([data-skin="town"]) .agent-chat-question {
+  color: #ffe0a8;
+  font: inherit;
+  background: #1d1708;
+  border-color: #5a4410;
+}
+
+:where([data-skin="town"]) .agent-chat-answers {
+  padding: 10px 10px 0;
+  background: var(--chat-town-panel);
+}
+
+:where([data-skin="town"]) .agent-chat-answers button {
+  min-height: 44px;
+  color: var(--hud-text, #f1efe6);
+  font: 600 14px var(--chat-town-body);
+  background: var(--chat-town-btn);
+  border: 2px solid var(--chat-town-edge);
+  border-radius: 9px;
+  box-shadow:
+    inset 0 -3px 0 rgba(0, 0, 0, 0.35),
+    inset 0 2px 0 rgba(255, 255, 255, 0.07);
+}
+
+:where([data-skin="town"]) .agent-chat-answers button.is-primary {
   color: #1f1606;
   background: #e3aa3a;
 }

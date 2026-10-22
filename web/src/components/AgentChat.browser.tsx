@@ -128,6 +128,15 @@ async function run() {
     message("a1", "assistant", "It describes the **demo** project."),
   ]);
   let sendResult: unknown = { status: "sent" };
+  // A waiting agent's screen: its question and a numbered menu.
+  const screen = [
+    "● Update(src/notes/ListHeader.tsx)",
+    "",
+    "Do you want to make this edit to ListHeader.tsx?",
+    "❯ 1. Yes",
+    "  2. Yes, and don't ask again this session",
+    "  3. No, and tell the agent what to do differently (esc)",
+  ].join("\n");
   bridge.connection = () => ({
     connectionId: "test",
     generation: 1,
@@ -137,6 +146,8 @@ async function run() {
     call: async (method: string, params: Record<string, unknown> = {}) => {
       calls.push({ method, params });
       if (method === "agent_conversation.send") return sendResult;
+      if (method === "pane.read") return { text: screen };
+      if (method === "pane.send_input") return {};
       if (method === "agent_conversation.get") return reply;
       if (
         method === "agent_conversation.watch" ||
@@ -712,6 +723,36 @@ async function run() {
       `A working agent must show its task, tool and time (${working?.textContent})`,
     );
 
+    // A waiting agent's question is boxed, and its answers sit above the
+    // composer; an answer presses its key without Enter.
+    render("blocked", true, 41);
+    await settle();
+    await settle();
+    const chips = [
+      ...container.querySelectorAll<HTMLButtonElement>(
+        ".agent-chat-answers button",
+      ),
+    ];
+    check(
+      chips.length === 3 &&
+        chips[0]!.textContent?.includes("Yes") === true &&
+        (
+          container.querySelector(".agent-chat-question")?.textContent ?? ""
+        ).startsWith("Do you want"),
+      `A waiting agent must show its question and three answers (${chips.length})`,
+    );
+    chips[0]!.click();
+    await settle();
+    const pressed = calls.find((call) => call.method === "pane.send_input");
+    check(
+      pressed?.params.text === "1" &&
+        JSON.stringify(pressed.params.keys) === "[]" &&
+        pressed.params.pane_id === "p",
+      `An answer must press its key in the agent's pane (${JSON.stringify(pressed?.params)})`,
+    );
+    render("working", true, 42);
+    await settle();
+
     // A draft outlives the view, as when switching to the Terminal and back.
     const box = container.querySelector<HTMLTextAreaElement>("textarea")!;
     Object.getOwnPropertyDescriptor(
@@ -733,7 +774,15 @@ async function run() {
         />
       </div>,
     );
-    await settle();
+    for (
+      let tries = 0;
+      tries < 20 &&
+      !container.querySelector(
+        ".agent-chat-message.is-user .agent-chat-bubble",
+      );
+      tries += 1
+    )
+      await settle();
     check(
       container.querySelector<HTMLTextAreaElement>("textarea")?.value ===
         "Keep this draft",
