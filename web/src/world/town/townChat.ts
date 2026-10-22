@@ -279,22 +279,6 @@ export function townChoices(lines: readonly string[]): TownChoice[] {
     : [];
 }
 
-/** The text of a `pane.read` reply, or null if it has none. */
-export const paneReadText = textOf;
-
-/**
- * What a waiting agent asks, from its screen: the question at the bottom and
- * the answers it offers, as the peek shows them.
- */
-export function townAsk(screen: string | null) {
-  const choices = townChoices(townScreenLines(screen, 12));
-  const { question } = townQuestion(
-    townScreenLines(screen),
-    choices.length > 0,
-  );
-  return { question, choices };
-}
-
 export class TownReplyError extends Error {}
 
 /**

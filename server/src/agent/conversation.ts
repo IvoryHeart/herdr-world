@@ -51,11 +51,6 @@ export type Conversation = {
   session_fingerprint: string | null;
   /** A plain name for the session shown, such as "claude session <id>". */
   session_label: string | null;
-  /**
-   * What the harness shows as its terminal title, such as the task it is on;
-   * Chat shows it on its working line. Null when Herdr reports none.
-   */
-  terminal_title: string | null;
   updated_at: string | null;
   messages: ConversationMessage[];
   latest: ConversationMessage | null;

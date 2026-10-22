@@ -27,8 +27,6 @@ import {
   uploadTerminalImage,
 } from "../terminalImageUpload";
 import { copyTextWithFeedback } from "../copyText";
-import { terminalComposerRequest } from "../terminalComposer";
-import { paneReadText, townAsk } from "../world/town/townChat";
 import type { Pane } from "../types";
 import { formatUiDateTime } from "../uiLocale";
 import { useConnectionClient } from "../useConnectionClient";
@@ -57,8 +55,6 @@ export type Conversation = {
   session_binding: "reported" | "title" | "guessed" | null;
   session_fingerprint: string | null;
   session_label: string | null;
-  /** The harness's terminal title, such as the task it is on. */
-  terminal_title?: string | null;
   status: "ok" | "unavailable";
   unavailable: {
     reason: string;
@@ -99,68 +95,6 @@ const chatDrafts = new Map<string, string>();
 
 const preview = (text: string) =>
   text.length > 80 ? `${text.slice(0, 79)}…` : text;
-
-/** The tool the agent is using: the last activity, if nothing was said since. */
-function currentTool(messages: readonly ConversationMessage[]) {
-  const last = messages[messages.length - 1];
-  const tools = last?.kind === "activity" ? (last.tools ?? []) : [];
-  return tools[tools.length - 1]?.name ?? null;
-}
-
-function elapsed(ms: number) {
-  const seconds = Math.floor(ms / 1000);
-  return seconds < 60
-    ? `${seconds}s`
-    : `${Math.floor(seconds / 60)}m ${String(seconds % 60).padStart(2, "0")}s`;
-}
-
-/**
- * A slim line while the agent works: its terminal title (the task it shows),
- * the tool it is using from the transcript, and how long it has worked since
- * this view saw it start. Transcripts are written per message or tool call,
- * so this is what moves between writes. Never terminal output.
- */
-/** Harnesses where Esc interrupts the current turn without quitting. */
-const STOPS_WITH_ESCAPE = new Set(["claude", "codex", "pi"]);
-
-function WorkingLine({
-  title,
-  tool,
-  elapsedMs,
-  onStop,
-}: {
-  title: string | null;
-  tool: string | null;
-  elapsedMs: number | null;
-  /** Press Esc in the agent's pane; only where Esc interrupts a turn. */
-  onStop: (() => void) | null;
-}) {
-  // The title's leading spinner glyph is the harness's, not ours.
-  const task = title?.replace(/^[^\p{L}\p{N}]+/u, "").trim() || null;
-  return (
-    <p className="agent-chat-working" role="status" aria-live="polite">
-      <span className="agent-chat-working-mark" aria-hidden="true">
-        ✻
-      </span>{" "}
-      Working
-      {task ? <span> · {task}</span> : null}
-      {tool ? <span> · {tool}</span> : null}
-      {elapsedMs !== null ? (
-        <span className="agent-chat-working-time"> · {elapsed(elapsedMs)}</span>
-      ) : null}
-      {onStop ? (
-        <button
-          type="button"
-          className="agent-chat-stop"
-          title="Press Esc in the agent's terminal to interrupt this turn"
-          onClick={onStop}
-        >
-          Stop <kbd>Esc</kbd>
-        </button>
-      ) : null}
-    </p>
-  );
-}
 
 const ChatMessage = memo(function ChatMessage({
   message,
@@ -413,126 +347,6 @@ export function AgentChat({
     [connectionClient, load, pane.pane_id],
   );
 
-  // Live progress between transcript writes: when this view saw the agent
-  // start working, and a display clock while it works. Nothing is polled;
-  // the status itself comes from Herdr's state changes.
-  // Herdr's pane state is newer than the last conversation read.
-  const liveStatus = pane.agent_status || conversation?.agent_status;
-  const working = liveStatus === "working";
-  const [workingSince, setWorkingSince] = useState<number | null>(null);
-  const wasWorking = useRef(working);
-  useEffect(() => {
-    if (working && !wasWorking.current) setWorkingSince(Date.now());
-    if (!working) setWorkingSince(null);
-    wasWorking.current = working;
-  }, [working]);
-  const [clock, setClock] = useState(() => Date.now());
-  useEffect(() => {
-    if (!working || workingSince === null) return;
-    const timer = window.setInterval(() => setClock(Date.now()), 1000);
-    return () => window.clearInterval(timer);
-  }, [working, workingSince]);
-
-  // A waiting agent's question and its answers, read from its screen as the
-  // Town peek reads them: when it starts waiting, at each state change and at
-  // each conversation push. Never on a timer.
-  const blocked = liveStatus === "blocked";
-  const [ask, setAsk] = useState<ReturnType<typeof townAsk> | null>(null);
-  const [answering, setAnswering] = useState(false);
-  useEffect(() => {
-    if (!active || details || !blocked) {
-      setAsk(null);
-      return;
-    }
-    let cancelled = false;
-    connectionClient
-      .call(
-        "pane.read",
-        {
-          pane_id: pane.pane_id,
-          source: "recent",
-          lines: 150,
-          format: "text",
-          strip_ansi: true,
-        },
-        8_000,
-      )
-      .then((result) => {
-        if (!cancelled && connectionClient.isCurrent())
-          setAsk(townAsk(paneReadText(result)));
-      })
-      .catch(() => {
-        // An unreadable screen offers no answers; the Terminal still does.
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    active,
-    blocked,
-    connectionClient,
-    conversation,
-    details,
-    pane.pane_id,
-    pane.state_change_seq,
-  ]);
-  const answer = useCallback(
-    async (key: string) => {
-      if (answering) return;
-      setAnswering(true);
-      setNotice("");
-      try {
-        const request = terminalComposerRequest(pane.pane_id, key, false);
-        await connectionClient.call(request.method, request.params);
-        setAsk(null);
-      } catch (reason) {
-        setNotice(reason instanceof Error ? reason.message : String(reason));
-      } finally {
-        setAnswering(false);
-      }
-    },
-    [answering, connectionClient, pane.pane_id],
-  );
-  const choices = ask?.choices ?? [];
-  // Stop presses Esc in the agent's pane when the user asks, never by itself.
-  const stop = useCallback(async () => {
-    setNotice("");
-    try {
-      await connectionClient.call("pane.send_input", {
-        pane_id: pane.pane_id,
-        text: "",
-        keys: ["escape"],
-      });
-      setNotice(
-        `Pressed Esc in ${conversation?.agent ?? "the agent"}'s terminal.`,
-      );
-    } catch (reason) {
-      setNotice(reason instanceof Error ? reason.message : String(reason));
-    }
-  }, [connectionClient, conversation?.agent, pane.pane_id]);
-  // 1–9 answer while focus is in Chat but not in its message box.
-  useEffect(() => {
-    if (!choices.length) return;
-    const keydown = (event: KeyboardEvent) => {
-      const target = event.target;
-      if (
-        !(target instanceof HTMLElement) ||
-        !target.closest(".agent-chat") ||
-        target.closest("textarea, input") ||
-        event.metaKey ||
-        event.ctrlKey ||
-        event.altKey
-      )
-        return;
-      const choice = choices[Number(event.key) - 1];
-      if (!choice) return;
-      event.preventDefault();
-      void answer(choice.key);
-    };
-    window.addEventListener("keydown", keydown);
-    return () => window.removeEventListener("keydown", keydown);
-  }, [answer, choices]);
-
   if (details) {
     return (
       <div className="agent-chat is-details" data-skin={skin}>
@@ -752,27 +566,6 @@ export function AgentChat({
                 matched={matchedIds.has(message.id)}
               />
             ))}
-            {ask?.question.length ? (
-              <pre className="agent-chat-question">
-                {ask.question.join("\n")}
-              </pre>
-            ) : null}
-            {working ? (
-              <WorkingLine
-                title={conversation?.terminal_title ?? null}
-                tool={currentTool(conversation?.messages ?? [])}
-                elapsedMs={
-                  workingSince === null
-                    ? null
-                    : Math.max(0, clock - workingSince)
-                }
-                onStop={
-                  STOPS_WITH_ESCAPE.has(conversation?.agent ?? pane.agent ?? "")
-                    ? () => void stop()
-                    : null
-                }
-              />
-            ) : null}
             {pending.map((delivery) => (
               <article
                 key={delivery.id}
@@ -798,23 +591,6 @@ export function AgentChat({
           </div>
         </div>
       )}
-      {choices.length ? (
-        <div className="agent-chat-answers" role="group" aria-label="Answers">
-          {choices.map((choice, index) => (
-            <button
-              key={choice.key}
-              type="button"
-              className={index === 0 ? "is-primary" : undefined}
-              title={choice.label}
-              disabled={answering}
-              onClick={() => void answer(choice.key)}
-            >
-              <span>{choice.label}</span>
-              <kbd>{index + 1}</kbd>
-            </button>
-          ))}
-        </div>
-      ) : null}
       {conversation?.status === "ok" && !canSend ? (
         <div className="agent-chat-guessed" role="status">
           <span>

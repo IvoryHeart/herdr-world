@@ -128,15 +128,6 @@ async function run() {
     message("a1", "assistant", "It describes the **demo** project."),
   ]);
   let sendResult: unknown = { status: "sent" };
-  // A waiting agent's screen: its question and a numbered menu.
-  const screen = [
-    "● Update(src/notes/ListHeader.tsx)",
-    "",
-    "Do you want to make this edit to ListHeader.tsx?",
-    "❯ 1. Yes",
-    "  2. Yes, and don't ask again this session",
-    "  3. No, and tell the agent what to do differently (esc)",
-  ].join("\n");
   bridge.connection = () => ({
     connectionId: "test",
     generation: 1,
@@ -146,8 +137,6 @@ async function run() {
     call: async (method: string, params: Record<string, unknown> = {}) => {
       calls.push({ method, params });
       if (method === "agent_conversation.send") return sendResult;
-      if (method === "pane.read") return { text: screen };
-      if (method === "pane.send_input") return {};
       if (method === "agent_conversation.get") return reply;
       if (
         method === "agent_conversation.watch" ||
@@ -687,86 +676,17 @@ async function run() {
       "A missing integration must offer to copy its command and refresh",
     );
 
-    // While the agent works, a slim line shows its task from the terminal
-    // title, the tool it is using from the transcript, and the time since
-    // Chat saw it start: progress between transcript writes, never terminal
-    // output.
-    reply = {
-      ...conversation(
-        [
-          message("u9", "user", "Run the tests"),
-          {
-            id: "t9",
-            role: "tool",
-            kind: "activity",
-            text: "Used Bash",
-            sent_at: "2026-10-22T09:00:02Z",
-            tools: [{ name: "Bash", calls: 1 }],
-            failed: 0,
-          },
-        ],
-        "working",
-      ),
-      terminal_title: "✳ Running tests",
-    };
+    // Town's skin needs a conversation with something the user said.
+    reply = conversation(
+      [
+        message("u9", "user", "Run the tests"),
+        message("a9", "assistant", "Running them now."),
+      ],
+      "working",
+    );
     render("idle");
     push();
     await settle();
-    render("working", true, 40);
-    await new Promise((resolve) => setTimeout(resolve, 1_200));
-    const working = container.querySelector(".agent-chat-working");
-    check(
-      working?.textContent?.includes("Running tests") === true &&
-        working.textContent.includes("Bash") &&
-        /· [1-9]\d*s/.test(working.textContent) &&
-        !working.textContent.includes("✳ Running"),
-      `A working agent must show its task, tool and time (${working?.textContent})`,
-    );
-    // Stop is the user's choice: it presses Esc in the agent's pane.
-    container.querySelector<HTMLButtonElement>(".agent-chat-stop")!.click();
-    await settle();
-    const stopped = calls.find(
-      (call) =>
-        call.method === "pane.send_input" &&
-        JSON.stringify(call.params.keys) === '["escape"]',
-    );
-    check(
-      stopped?.params.pane_id === "p" && stopped.params.text === "",
-      "Stop must press Esc in the agent's pane",
-    );
-
-    // A waiting agent's question is boxed, and its answers sit above the
-    // composer; an answer presses its key without Enter.
-    render("blocked", true, 41);
-    await settle();
-    await settle();
-    const chips = [
-      ...container.querySelectorAll<HTMLButtonElement>(
-        ".agent-chat-answers button",
-      ),
-    ];
-    check(
-      chips.length === 3 &&
-        chips[0]!.textContent?.includes("Yes") === true &&
-        (
-          container.querySelector(".agent-chat-question")?.textContent ?? ""
-        ).startsWith("Do you want"),
-      `A waiting agent must show its question and three answers (${chips.length})`,
-    );
-    chips[0]!.click();
-    await settle();
-    const pressed = calls.find(
-      (call) => call.method === "pane.send_input" && call.params.text === "1",
-    );
-    check(
-      pressed?.params.text === "1" &&
-        JSON.stringify(pressed.params.keys) === "[]" &&
-        pressed.params.pane_id === "p",
-      `An answer must press its key in the agent's pane (${JSON.stringify(pressed?.params)})`,
-    );
-    render("working", true, 42);
-    await settle();
-
     // A draft outlives the view, as when switching to the Terminal and back.
     const box = container.querySelector<HTMLTextAreaElement>("textarea")!;
     Object.getOwnPropertyDescriptor(

@@ -26,19 +26,6 @@ view that you open on purpose.
   [Refresh](#refresh)). The browser has no timer. **Refresh** rereads on demand.
 - Keeps the last good conversation when a read fails, for example while the
   transcript is being written, and says that it could not refresh.
-- While the agent works, shows a slim line between transcript writes: the task
-  the harness puts in its terminal title (such as "Running tests"), the tool it
-  is using from the transcript, and how long it has worked since Chat saw it
-  start. Harnesses write their transcripts per message or tool call, not per
-  token, so this is what moves during a long step. It never shows terminal
-  output. For Claude Code, Codex and Pi it offers **Stop**, which presses Esc
-  in the agent's pane to interrupt the turn; Chat never presses it by itself.
-- When the agent waits on a numbered question, boxes the question at the end
-  of the conversation and offers its answers above the composer; an answer, or
-  its number key, presses that key in the agent's pane. The question and
-  answers are read from the agent's screen, as the Town peek reads them, when
-  it starts waiting, at each state change and at each refresh, never on a
-  timer.
 - Keeps an unsent draft for each pane while World is open, so switching to the
   Terminal and back keeps it.
 - In Town's windows (any element marked `data-skin="town"`), takes the Town
@@ -73,7 +60,7 @@ projection cache as History ([History synchronization](HISTORY.md)).
 | `agent_conversation.dismiss` | `pane_id`, `delivery_id` | `{ dismissed }`; forgets a delivery notice |
 | `agent_conversation.watch` / `.unwatch` | `pane_id` | `{ ok: true }`; see [Refresh](#refresh) |
 
-A conversation carries `agent`, `agent_status`, `terminal_title`, `session_binding`,
+A conversation carries `agent`, `agent_status`, `session_binding`,
 `session_fingerprint`, `updated_at`, ordered `messages`, `latest` (the last
 assistant message) and a `status` of `ok` or `unavailable`. Each message has a
 `role` (`user`, `assistant` or `tool`) and a `kind`:
@@ -222,11 +209,9 @@ reports and `pane.updated`, which Herdr sends when a pane's title changes, so a
 Codex thread switch through the title is seen. For a transcript on this
 machine, it also watches the file, so messages written during a long turn
 appear without a status change. When the pane's session, title thread,
-transcript size or time, status, or the task in the terminal title changes
-(not its spinner glyph), the service pushes `agent_conversation_changed` to
-the watching browser, which rereads. Transcripts on an SSH host are rechecked
-on Herdr events only, so a write there with no status or title change in
-between shows at the next one.
+transcript size or time, or status changes, the service pushes
+`agent_conversation_changed` to the watching browser, which rereads. Transcripts
+on an SSH host are rechecked on Herdr events only.
 
 Once a truncated Codex title ID has matched one transcript, rechecks on this
 machine stat that transcript instead of searching again. That is safe only

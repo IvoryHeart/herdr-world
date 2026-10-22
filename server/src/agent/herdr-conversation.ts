@@ -270,7 +270,6 @@ export function createHerdrConversationSource(args: {
       pane_id: paneId,
       agent: agent || null,
       agent_status: stringValue(info?.agent_status) || null,
-      terminal_title: stringValue(info?.terminal_title).trim() || null,
       session_binding: null,
       session_fingerprint: null,
       session_label: null,
@@ -486,9 +485,6 @@ export function createHerdrConversationSource(args: {
       return {
         key: JSON.stringify([
           base.agent_status,
-          // A title change (the harness's current task) is news; its spinner
-          // turning is not.
-          base.terminal_title?.replace(/^[^\p{L}\p{N}]+/u, "") ?? null,
           base.session_binding,
           base.session_fingerprint,
           resolved.reason ?? null,
@@ -539,7 +535,6 @@ export function createHerdrConversationSource(args: {
                   session_binding: null,
                   session_fingerprint: null,
                   session_label: null,
-                  terminal_title: null,
                   updated_at: null,
                   messages: [],
                   latest: null,
