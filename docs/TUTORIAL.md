@@ -345,7 +345,9 @@ attention, and `done`/`idle` suggest when to return. **Status is not verificatio
 Open **Chat** in the Inspector to read the conversation and reply. Chat shows
 user and agent messages, with one line for each run of tool calls, and updates
 while the agent works. If Chat cannot read the conversation it says why and
-offers the fix it names, or **Open Terminal**. Choose **Details** for the Session Inspector:
+offers the fix it names, or **Open Terminal**. A message you send shows as
+not yet seen until the transcript has the same words; if it went to another session, a red
+notice names it. Send commands such as `/compact` from the Terminal. Choose **Details** for the Session Inspector:
 Chat and Timeline, ATIF (a normalized trajectory), and raw transcript; original
 export preserves the source record. Use the [shortcut reference](../FEATURES.md#keyboard-shortcuts)
 for Chat, Files, and Changes on your platform. In Details, switch **Chat / Timeline**
