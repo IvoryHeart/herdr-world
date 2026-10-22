@@ -580,7 +580,7 @@ export function createHerdrConversationSource(args: {
             quest: resolved.file ? await args.cache.quest(resolved) : null,
           };
         } catch {
-          return empty;
+          return { ...empty, read_failed: true };
         }
       }),
     send: async ({ pane_id, text, session_fingerprint, baseline }) => {

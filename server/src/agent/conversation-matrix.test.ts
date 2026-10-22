@@ -847,6 +847,38 @@ describe("quests", () => {
     ]);
   });
 
+  test("a quest that cannot be read is marked, not reported as none", async () => {
+    const files = {
+      ...localAgentSessionFiles,
+      statFile: async (path: string) => ({ path, mtimeMs: 1 }),
+      readText: async () => {
+        throw new Error("changed while reading");
+      },
+    };
+    const chat = createHerdrConversationSource({
+      herdrCall: herdr(
+        pane("claude", {
+          source: "herdr:claude",
+          agent: "claude",
+          kind: "path",
+          value: "/work/demo/session.jsonl",
+        }),
+      ),
+      files,
+      context: createAgentSessionResolverContext(),
+      cache: createSessionProjectionCache(files),
+    });
+    expect(await chat.quests(["w1:p1"])).toEqual([
+      {
+        pane_id: "w1:p1",
+        agent: null,
+        session_binding: null,
+        quest: null,
+        read_failed: true,
+      },
+    ]);
+  });
+
   test("a pane without an agent has no quest", async () => {
     expect(await source(herdr(null)).quests(["w1:p9"])).toEqual([
       { pane_id: "w1:p9", agent: null, session_binding: null, quest: null },

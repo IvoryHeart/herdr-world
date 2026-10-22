@@ -46,6 +46,11 @@ export type AgentQuest = {
   /** How the session is tied to the pane; see ConversationBinding. */
   session_binding: "reported" | "title" | "guessed" | null;
   quest: Quest | null;
+  /**
+   * The quest could not be read just now, for example while the transcript
+   * was being written; keep showing the last one.
+   */
+  read_failed?: true;
 };
 
 const CHECKLIST_TOOLS = new Set([
@@ -91,6 +96,8 @@ function stepStatus(value: unknown): QuestStepStatus | "removed" {
 
 type Checklist = {
   tool: string;
+  /** How many user prompts came before it started. */
+  prompts: number;
   set_by: string | null;
   started_at: string;
   updated_at: string;
@@ -100,6 +107,8 @@ type Checklist = {
 
 type Plan = {
   tool: string;
+  /** How many user prompts came before it was approved. */
+  prompts: number;
   set_by: string | null;
   at: string;
   title: string;
@@ -156,6 +165,10 @@ type Goal = {
 
 const timeOf = (value: string) => Date.parse(value) || 0;
 
+/** User turns the harness writes itself, which never title a quest. */
+const INJECTED_PROMPT =
+  /^(?:\[Request interrupted\b|<[a-z_ -]+>|Caveat: The messages below\b)/;
+
 /**
  * The agent's current quest, or null when its transcript records none.
  * `records` are the transcript's raw records, for what the trajectory does
@@ -167,24 +180,34 @@ export function questFromSession(
   records: readonly Record<string, unknown>[] = [],
 ): Quest | null {
   let prompt = "";
+  let prompts = 0;
   let checklist = null as Checklist | null;
   let plan = null as Plan | null;
   let loop = null as Loop | null;
   let helpers = 0;
+  // Claude Code numbers tasks across the session, not per list.
   let nextTask = 1;
   // TaskCreate call IDs, so a result naming the harness's task ID renames it.
   const created = new Map<string, string>();
+  /** Replace one step's key in place, keeping the steps' order. */
+  const rekey = (list: Checklist, from: string, to: string) => {
+    list.steps = new Map(
+      [...list.steps].map(([key, item]) =>
+        key === from ? [to, { ...item, id: to }] : [key, item],
+      ),
+    );
+  };
 
   const startChecklist = (tool: string, id: string | null, at: string) => {
     checklist = {
       tool,
+      prompts,
       set_by: id,
       started_at: at,
       updated_at: at,
       title: questTitle(prompt),
       steps: new Map(),
     };
-    nextTask = 1;
     return checklist;
   };
 
@@ -193,39 +216,57 @@ export function questFromSession(
     if (
       step.source === "user" &&
       !step.tool_calls?.length &&
-      !step.extra?.notice
-    )
+      !step.extra?.notice &&
+      !INJECTED_PROMPT.test(step.message.trimStart())
+    ) {
       prompt = step.message;
+      prompts += 1;
+    }
     for (const result of step.observation?.results ?? []) {
-      const key = created.get(result.source_call_id ?? "");
+      const callId = result.source_call_id ?? "";
+      const key = created.get(callId);
       const list = checklist as Checklist | null;
-      const item = key && list?.steps.get(key);
-      const id = /#(\d+)/.exec(result.content ?? "")?.[1];
-      if (!item || !list || !id || id === key || list.steps.has(id)) continue;
-      list.steps.delete(key);
-      list.steps.set(id, { ...item, id });
-      created.delete(result.source_call_id ?? "");
+      if (!key || !list?.steps.has(key)) continue;
+      created.delete(callId);
+      // The harness's own ID, else the next number in creation order.
+      const id = /#(\d+)/.exec(result.content ?? "")?.[1] ?? String(nextTask);
+      nextTask = Math.max(nextTask, Number(id) + 1);
+      if (!list.steps.has(id)) rekey(list, key, id);
     }
     for (const call of step.tool_calls ?? []) {
       const name = call.function_name;
       const args = call.arguments;
       const id = call.tool_call_id;
       if (CHECKLIST_TOOLS.has(name.toLowerCase())) {
-        const items = checklistItems(args);
+        // Repeated text keeps its own step: "Run tests", "Run tests #2".
+        const seen = new Map<string, number>();
+        const items = checklistItems(args).map((item) => {
+          const count = (seen.get(item.text) ?? 0) + 1;
+          seen.set(item.text, count);
+          return {
+            ...item,
+            key: count > 1 ? `${item.text} #${count}` : item.text,
+          };
+        });
         const old = checklist as Checklist | null;
-        // A list sharing no step with the last one is a new quest.
+        // Clearing the list ends its quest.
+        if (items.length === 0) {
+          checklist = null;
+          continue;
+        }
+        // A list sharing no step with an unfinished last one is a new quest.
         const same =
           old !== null &&
-          items.some((item) => old.steps.has(item.text)) &&
+          items.some((item) => old.steps.has(item.key)) &&
           [...old.steps.values()].some((item) => item.status !== "done");
         const list = same && old ? old : startChecklist(name, id, at);
         const steps = new Map<string, QuestStep & { blocked_by: string[] }>();
         for (const item of items)
-          steps.set(item.text, {
-            id: item.text,
+          steps.set(item.key, {
+            id: item.key,
             text: item.text,
             status: item.status,
-            step_ids: list.steps.get(item.text)?.step_ids ?? [],
+            step_ids: list.steps.get(item.key)?.step_ids ?? [],
             blocked_by: [],
           });
         list.steps = steps;
@@ -251,7 +292,9 @@ export function questFromSession(
               [...list.steps.values()].every((item) => item.status === "done"))
           )
             list = startChecklist(name, id, at);
-          const key = String(nextTask++);
+          // A local key until the result names the harness's task ID, so
+          // parallel creations never take each other's numbers.
+          const key = `call:${id}`;
           list.steps.set(key, {
             id: key,
             text: subject,
@@ -280,7 +323,8 @@ export function questFromSession(
       }
       if (name === "ExitPlanMode") {
         const text = stringValue(args.plan);
-        if (text) plan = { tool: name, set_by: id, at, ...planOf(text) };
+        if (text)
+          plan = { tool: name, prompts, set_by: id, at, ...planOf(text) };
         continue;
       }
       if (LOOP_TOOLS.has(name)) {
@@ -348,7 +392,15 @@ export function questFromSession(
         payload.item.type === "Plan"
       ) {
         const text = stringValue(payload.item.text);
-        if (text) plan = { tool: "plan", set_by: null, at, ...planOf(text) };
+        // Codex records no prompt count here; its plan item ends a turn.
+        if (text)
+          plan = {
+            tool: "plan",
+            prompts: Number.POSITIVE_INFINITY,
+            set_by: null,
+            at,
+            ...planOf(text),
+          };
       }
     }
 
@@ -365,8 +417,10 @@ export function questFromSession(
         status ??
         (total > 0 && done === total
           ? "done"
-          : quest.steps.some((item) => item.status === "active") ||
-              !quest.steps.some((item) => item.status === "blocked")
+          : // Blocked only when every unfinished step is blocked.
+            quest.steps.some(
+                (item) => item.status === "active" || item.status === "pending",
+              ) || !quest.steps.some((item) => item.status === "blocked")
             ? "active"
             : "blocked"),
       progress: { done, total },
@@ -380,14 +434,27 @@ export function questFromSession(
           ...item,
           status:
             item.status === "pending" &&
-            blocked_by.some((id) => list.steps.get(id)?.status !== "done")
+            blocked_by.some((id) => {
+              // A blocker that was deleted no longer blocks.
+              const blocker = list.steps.get(id);
+              return blocker !== undefined && blocker.status !== "done";
+            })
               ? "blocked"
               : item.status,
           step_ids: [...item.step_ids],
         }))
       : [];
 
-  if (goal) {
+  // A completed goal gives way to work begun after it.
+  const goalCurrent =
+    goal !== null &&
+    !(
+      goal.status === "complete" &&
+      [list?.updated_at, plan?.at, loop?.at].some(
+        (at) => at !== undefined && timeOf(at) > timeOf(goal!.at),
+      )
+    );
+  if (goal && goalCurrent) {
     const withSteps =
       list && timeOf(list.updated_at) >= timeOf(goal.started_at);
     return finish(
@@ -430,9 +497,13 @@ export function questFromSession(
   if (!latest) return null;
   if (latest.kind === "todo" && list) {
     const approved = plan as Plan | null;
-    // A list made after an approved plan carries out that plan.
+    // A list made after an approved plan, with no new prompt between them,
+    // carries out that plan.
     const title =
-      approved && timeOf(approved.at) <= timeOf(list.started_at)
+      approved &&
+      timeOf(approved.at) <= timeOf(list.started_at) &&
+      (approved.prompts === Number.POSITIVE_INFINITY ||
+        approved.prompts === list.prompts)
         ? approved.title
         : list.title;
     return finish({
@@ -452,8 +523,8 @@ export function questFromSession(
         source: "plan",
         tool: approved.tool,
         title: approved.title || "Plan",
-        steps: approved.steps.map((text) => ({
-          id: text,
+        steps: approved.steps.map((text, index) => ({
+          id: String(index + 1),
           text,
           status: "pending",
           step_ids: [],

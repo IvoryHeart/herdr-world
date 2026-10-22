@@ -245,12 +245,22 @@ step cards are keyed by the same call IDs.
 | Grok Build, Muse Code, Antigravity CLI | A tool with one of the names above is read; no native equivalent is known | None | None | None | None |
 
 The current quest is the Codex goal when there is one, with the checklist's
-steps once the checklist was updated after the goal began. Otherwise it is the
-most recently updated of the checklist, the plan and the loop. A checklist made
-after an approved plan takes the plan's title; otherwise it takes the user's
-prompt before it. A new list that shares no step with a finished one starts a
-new quest. Subagent sidechains never set the parent's quest. A quest from a
-session World only guessed from the folder is not shown on desks or cards.
+steps once the checklist was updated after the goal began; a completed goal
+gives way to a checklist, plan or loop updated after it. Otherwise it is the
+most recently updated of the checklist, the plan and the loop (on equal times
+the loop, then the plan). A checklist made after an approved plan, with no new
+prompt between them, takes the plan's title; otherwise it takes the user's
+last prompt before it (never a turn the harness wrote, such as an
+interruption notice). A list starts a new quest when it shares no step with
+the last list or the last list was finished; an empty list ends the quest.
+Repeated step text stays separate steps. Claude Code tasks keep the IDs its
+results report, and a deleted blocker no longer blocks; a quest is `blocked`
+only when every unfinished step is. Subagent sidechains are left out of the
+projection, so they never set the parent's quest. A quest from a session
+World only guessed from the folder is not shown on desks or cards. When a
+quest cannot be read for a moment (the transcript changed while it was read),
+`agent_quest.list` marks it `read_failed` and Town and Board keep the last one.
+A hidden page reads again when it is shown.
 
 Known gaps: Claude Code builds that keep the plan in a file (the
 `plan_mode_exit` attachment names `~/.claude/plans/…`) are not read, because

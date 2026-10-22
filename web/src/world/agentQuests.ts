@@ -88,7 +88,11 @@ export function useAgentQuests(
     if (!active) return;
     let cancelled = false;
     let timer: number | undefined;
+    // One read at a time; a read already running answers a later request.
+    let reading = false;
     const read = async () => {
+      if (reading) return;
+      reading = true;
       if (document.visibilityState !== "hidden") {
         // One call per connection and runtime generation.
         const groups = new Map<
@@ -106,26 +110,33 @@ export function useAgentQuests(
         const next = new Map<string, Quest>();
         await Promise.all(
           [...groups.values()].map(async ({ client, group }) => {
+            // Without an answer for a leaf, its last quest stays.
+            const keep = (leaf: WorldLeafObject) => {
+              const kept = shown.current.get(leaf.id);
+              if (kept) next.set(leaf.id, kept);
+            };
             try {
               const reply = (await client.call(
                 "agent_quest.list",
                 { pane_ids: group.map((leaf) => leaf.pane.pane_id) },
                 8_000,
               )) as { quests?: AgentQuest[] } | null;
-              if (!client.isCurrent() || !Array.isArray(reply?.quests)) return;
+              if (!client.isCurrent()) return;
+              if (!Array.isArray(reply?.quests)) {
+                group.forEach(keep);
+                return;
+              }
               const byPane = new Map(
                 reply.quests.map((entry) => [entry.pane_id, entry]),
               );
               for (const leaf of group) {
                 const entry = byPane.get(leaf.pane.pane_id);
-                if (entry?.quest && entry.session_binding !== "guessed")
+                if (!entry || entry.read_failed) keep(leaf);
+                else if (entry.quest && entry.session_binding !== "guessed")
                   next.set(leaf.id, entry.quest);
               }
             } catch {
-              for (const leaf of group) {
-                const kept = shown.current.get(leaf.id);
-                if (kept) next.set(leaf.id, kept);
-              }
+              group.forEach(keep);
             }
           }),
         );
@@ -136,12 +147,22 @@ export function useAgentQuests(
               : next,
           );
       }
+      reading = false;
       if (!cancelled && working)
         timer = window.setTimeout(read, QUEST_REFRESH_MS);
     };
+    // A hidden page skips reads; catch up when it is shown again.
+    const shownAgain = () => {
+      if (document.visibilityState !== "visible") return;
+      if (timer !== undefined) window.clearTimeout(timer);
+      timer = undefined;
+      void read();
+    };
+    document.addEventListener("visibilitychange", shownAgain);
     void read();
     return () => {
       cancelled = true;
+      document.removeEventListener("visibilitychange", shownAgain);
       if (timer !== undefined) window.clearTimeout(timer);
     };
   }, [signature, active, working]);

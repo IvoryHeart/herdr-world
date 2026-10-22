@@ -152,13 +152,98 @@ describe("Claude Code", () => {
   test("a pending task waiting on an unfinished one is blocked", () => {
     const result = quest("claude", [
       claudeTool(1, "t1", "TaskCreate", { subject: "First" }),
+      claudeResult(1, "t1", "Task #1 created successfully: First"),
       claudeTool(2, "t2", "TaskCreate", { subject: "Second" }),
+      claudeResult(2, "t2", "Task #2 created successfully: Second"),
       claudeTool(3, "t3", "TaskUpdate", { taskId: "2", addBlockedBy: ["1"] }),
     ]);
     expect(result!.steps.map((step) => step.status)).toEqual([
       "pending",
       "blocked",
     ]);
+    // A pending step can still be worked, so the quest is not blocked.
+    expect(result!.status).toBe("active");
+    const deleted = quest("claude", [
+      claudeTool(1, "t1", "TaskCreate", { subject: "First" }),
+      claudeResult(1, "t1", "Task #1 created successfully: First"),
+      claudeTool(2, "t2", "TaskCreate", { subject: "Second" }),
+      claudeResult(2, "t2", "Task #2 created successfully: Second"),
+      claudeTool(3, "t3", "TaskUpdate", { taskId: "2", addBlockedBy: ["1"] }),
+      claudeTool(4, "t4", "TaskUpdate", { taskId: "1", status: "deleted" }),
+    ]);
+    // A deleted blocker no longer blocks.
+    expect(deleted!.steps.map((step) => [step.id, step.status])).toEqual([
+      ["2", "pending"],
+    ]);
+  });
+
+  test("parallel TaskCreate calls in a later quest keep the harness's IDs", () => {
+    const done = (second: number, id: string, taskId: string) =>
+      claudeTool(second, id, "TaskUpdate", { taskId, status: "completed" });
+    const result = quest("claude", [
+      claudeTool(1, "a1", "TaskCreate", { subject: "Old one" }),
+      claudeResult(1, "a1", "Task #1 created successfully: Old one"),
+      claudeTool(2, "a2", "TaskCreate", { subject: "Old two" }),
+      claudeResult(2, "a2", "Task #2 created successfully: Old two"),
+      done(3, "u1", "1"),
+      done(4, "u2", "2"),
+      // A new quest creates three tasks in one turn; results follow.
+      claudeTool(5, "b1", "TaskCreate", { subject: "A" }),
+      claudeTool(5, "b2", "TaskCreate", { subject: "B" }),
+      claudeTool(5, "b3", "TaskCreate", { subject: "C" }),
+      claudeResult(6, "b1", "Task #3 created successfully: A"),
+      claudeResult(6, "b2", "Task #4 created successfully: B"),
+      claudeResult(6, "b3", "Task #5 created successfully: C"),
+      done(7, "u3", "3"),
+    ]);
+    expect(
+      result!.steps.map((step) => [step.id, step.text, step.status]),
+    ).toEqual([
+      ["3", "A", "done"],
+      ["4", "B", "pending"],
+      ["5", "C", "pending"],
+    ]);
+  });
+
+  test("clearing the checklist ends its quest", () => {
+    expect(
+      quest("claude", [
+        claudeTool(1, "c1", "TodoWrite", {
+          todos: [{ content: "Only step", status: "completed" }],
+        }),
+        claudeTool(2, "c2", "TodoWrite", { todos: [] }),
+      ]),
+    ).toBeNull();
+  });
+
+  test("repeated step text stays two steps", () => {
+    const result = quest("claude", [
+      claudeTool(1, "c1", "TodoWrite", {
+        todos: [
+          { content: "Run tests", status: "completed" },
+          { content: "Fix", status: "completed" },
+          { content: "Run tests", status: "pending" },
+        ],
+      }),
+    ]);
+    expect(result).toMatchObject({ progress: { done: 2, total: 3 } });
+    expect(result!.steps.map((step) => step.text)).toEqual([
+      "Run tests",
+      "Fix",
+      "Run tests",
+    ]);
+  });
+
+  test("an injected interruption never titles a quest", () => {
+    expect(
+      quest("claude", [
+        claudeUser(0, "Real request"),
+        claudeUser(1, "[Request interrupted by user]"),
+        claudeTool(2, "c1", "TodoWrite", {
+          todos: [{ content: "Step", status: "pending" }],
+        }),
+      ]),
+    ).toMatchObject({ title: "Real request" });
   });
 
   test("an approved plan is a quest, and titles the checklist after it", () => {
@@ -190,6 +275,16 @@ describe("Claude Code", () => {
       source: "todo",
       title: "Example migration",
     });
+    // A new prompt after the plan starts other work with its own title.
+    expect(
+      quest("claude", [
+        claudeTool(1, "p1", "ExitPlanMode", { plan }),
+        claudeUser(2, "Something else entirely"),
+        claudeTool(3, "c1", "TodoWrite", {
+          todos: [{ content: "Other step", status: "pending" }],
+        }),
+      ]),
+    ).toMatchObject({ source: "todo", title: "Something else entirely" });
   });
 
   test("ScheduleWakeup is a loop that counts its iterations", () => {
@@ -319,6 +414,17 @@ describe("Codex", () => {
     expect(
       quest("codex", [...records, goal(5, "budget_limited")]),
     ).toMatchObject({ status: "blocked" });
+    // Work begun after a completed goal is the quest again.
+    expect(
+      quest("codex", [
+        ...records,
+        goal(5, "complete"),
+        codexCall(6, "u2", "update_plan", {
+          explanation: "Next task",
+          plan: [{ step: "New work", status: "in_progress" }],
+        }),
+      ]),
+    ).toMatchObject({ source: "todo", title: "Next task", status: "active" });
     expect(quest("codex", [goal(0, "paused")])).toMatchObject({
       status: "paused",
       steps: [],
