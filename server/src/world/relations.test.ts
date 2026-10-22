@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { emptyBoardDocument } from "./board-store";
+import { emptyBoardDocument, type BoardOp } from "./board-store";
 import { spawnRecordOps } from "./relations";
 import type { WorldConnectionSnapshot, WorldSnapshotResult } from "./snapshot";
 
@@ -69,6 +69,8 @@ test("cached, stale or previous-runtime topology is never recorded", () => {
 test("a claim already saved is not written again", () => {
   const document = emptyBoardDocument();
   const [op] = spawnRecordOps(document, result(connection()), 9);
-  document.relations.spawns = (op as { claims: never[] }).claims;
+  document.relations.spawns = (
+    op as Extract<BoardOp, { op: "spawn.record" }>
+  ).claims;
   expect(spawnRecordOps(document, result(connection()), 10)).toEqual([]);
 });
