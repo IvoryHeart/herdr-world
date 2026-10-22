@@ -13,6 +13,7 @@ import {
 } from "./conversation";
 import {
   createDeliveryLedger,
+  DELIVERY_CHECK_MS,
   type DeliveryClock,
   type DeliveryView,
 } from "./conversation-delivery";
@@ -128,6 +129,8 @@ export function createHerdrConversationSource(args: {
   remotePlatform?: string;
   /** A Codex transcript was created or removed on this machine. */
   onCodexSessionsChanged?: () => void;
+  /** A sent message's check ended without a read; recheck watched panes. */
+  onDeliveriesChanged?: () => void;
 }): ConversationSource & { dispose(): void } {
   const deliveries = createDeliveryLedger();
   // Sessions this pane has shown, so a sent message can still be checked in
@@ -146,12 +149,32 @@ export function createHerdrConversationSource(args: {
     if (sessions.size > 64) sessions.delete(sessions.keys().next().value!);
   };
   // An SSH host's clock is measured, and measured again after ten minutes.
+  // A failed measurement is not remembered.
   let measured: { clock: DeliveryClock; at: number } | null = null;
-  const clock = async (): Promise<DeliveryClock> => {
+  const clock = async (): Promise<DeliveryClock | null> => {
     if (!args.files.clockOffset) return { offsetMs: 0, uncertaintyMs: 0 };
-    if (!measured || Date.now() - measured.at > 10 * 60_000)
-      measured = { clock: await args.files.clockOffset(), at: Date.now() };
+    if (!measured || Date.now() - measured.at > 10 * 60_000) {
+      try {
+        measured = { clock: await args.files.clockOffset(), at: Date.now() };
+      } catch {
+        return null;
+      }
+    }
     return measured.clock;
+  };
+  // Each sent message's check ends at its deadline even if nothing reads
+  // the pane: a last read settles what it can, the rest becomes unverified,
+  // and watched panes are rechecked so browsers showing them reread.
+  const deadlines = new Set<ReturnType<typeof setTimeout>>();
+  const scheduleDeadline = (paneId: string) => {
+    const timer = setTimeout(async () => {
+      deadlines.delete(timer);
+      await read({ pane_id: paneId }).catch(() => {});
+      deliveries.expire(paneId);
+      args.onDeliveriesChanged?.();
+    }, DELIVERY_CHECK_MS + 1000);
+    (timer as { unref?: () => void }).unref?.();
+    deadlines.add(timer);
   };
   // Change detection may reuse a remembered Codex title match only while
   // every Codex session root is watched: any created or removed transcript
@@ -398,7 +421,8 @@ export function createHerdrConversationSource(args: {
           messages: conversationMessages(projection.entries),
         });
       } catch {
-        // Unreadable for now; the check window still ends it.
+        // A session Chat can no longer read cannot settle the message.
+        views.push({ fingerprint, label: session.label, messages: null });
       }
     }
     deliveries.evaluate(paneId, current, views);
@@ -411,18 +435,7 @@ export function createHerdrConversationSource(args: {
   }): Promise<Conversation> => {
     const shown = await readShown(pane_id);
     await settle(pane_id, shown);
-    // A pending message belongs to the conversation it was sent to; the
-    // other states are notices for the pane.
-    return {
-      ...shown,
-      deliveries: deliveries
-        .list(pane_id)
-        .filter(
-          (delivery) =>
-            delivery.state !== "pending" ||
-            delivery.fingerprint === shown.session_fingerprint,
-        ),
-    };
+    return { ...shown, deliveries: deliveries.list(pane_id) };
   };
 
   const latest = async (target: { pane_id: string }) =>
@@ -433,6 +446,8 @@ export function createHerdrConversationSource(args: {
     dismiss: ({ pane_id, delivery_id }) =>
       deliveries.dismiss(pane_id, delivery_id),
     dispose: () => {
+      for (const timer of deadlines) clearTimeout(timer);
+      deadlines.clear();
       codexWatch?.close();
       codexWatch = null;
     },
@@ -474,6 +489,7 @@ export function createHerdrConversationSource(args: {
           file?.size ?? null,
           file?.changeToken ?? null,
           otherStats.map((stat) => [stat?.mtimeMs, stat?.size]),
+          deliveries.list(pane_id).map((delivery) => delivery.state),
         ]),
         paths: [
           ...(file && !args.files.remote ? [file.path] : []),
@@ -543,12 +559,13 @@ export function createHerdrConversationSource(args: {
         };
       // A command can switch the session by design and is not recorded as
       // something the user said, so Chat could never settle it.
-      if (text.trimStart().startsWith("/"))
+      // A pasted path such as /var/log/… is a message, not a command word.
+      if (/^\/[A-Za-z][\w:-]*(\s|$)/.test(text.trimStart()))
         return {
           status: "refused",
           reason: "command",
           message:
-            "Chat does not send commands that start with “/”, because it cannot check where they went. Nothing was sent; use the Terminal tab.",
+            "Chat does not send commands such as /compact, because it cannot check where they went. Nothing was sent; use the Terminal tab.",
         };
       if (deliveries.full(pane_id))
         return {
@@ -594,6 +611,13 @@ export function createHerdrConversationSource(args: {
           .map((message) => message.id) ?? baseline!;
       // Times in the transcripts are compared on their host's clock.
       const transcriptClock = await clock();
+      if (!transcriptClock)
+        return {
+          status: "refused",
+          reason: "unavailable",
+          message:
+            "Chat could not read the SSH host's clock, so it could not check where the message goes. Nothing was sent; try again, or use the Terminal tab.",
+        };
       // Read the pane immediately before prompting, with no other await in
       // between. Herdr's prompt takes no expected session (#4764), so a
       // switch after this reply and before the prompt lands is still
@@ -673,6 +697,7 @@ export function createHerdrConversationSource(args: {
             }
           : {}),
       });
+      scheduleDeadline(pane_id);
       return { status: "sent", delivery };
     },
   };

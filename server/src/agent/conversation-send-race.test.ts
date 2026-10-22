@@ -1,5 +1,12 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { appendFile, chmod, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { afterAll, beforeAll, describe, expect, jest, test } from "bun:test";
+import {
+  appendFile,
+  chmod,
+  mkdtemp,
+  rename,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -94,6 +101,10 @@ function chat(call: HerdrCall, files = localAgentSessionFiles) {
     cache: createSessionProjectionCache(files),
   });
 }
+
+// The fingerprint a pending receipt carries differs from the shown one.
+const otherThan = (conversation: { session_fingerprint: string | null }) =>
+  expect.not.stringMatching(`^${conversation.session_fingerprint}$`);
 
 async function sendTo(
   source: ReturnType<typeof chat>,
@@ -282,8 +293,11 @@ describe("a session switch between Chat's check and Herdr's prompt", () => {
     await sendTo(source);
     state.current = claude(other);
     const after = await source.read({ pane_id: "w1:p1" });
-    // Pending belongs to the shown session, so the next one lists nothing.
-    expect(after.deliveries).toEqual([]);
+    // Still pending for the shown session, with its fingerprint, so Chat
+    // shows it as a pane notice here rather than in this conversation.
+    expect(after.deliveries).toMatchObject([
+      { state: "pending", fingerprint: otherThan(after) },
+    ]);
     // It is still checked in its own session after the pane moved on.
     await appendFile(shown, line("user", "Run the tests", 1));
     await source.read({ pane_id: "w1:p1" });
@@ -343,12 +357,22 @@ describe("a session switch between Chat's check and Herdr's prompt", () => {
     const shown = await transcript("shown-k");
     const { state, call } = fakeHerdr(claude(shown));
     const source = chat(call);
-    for (const text of ["/compact", "  /clear", "!ls", "# remember this"])
+    for (const text of [
+      "/compact",
+      "  /clear",
+      "/review:fast now",
+      "!ls",
+      "# remember this",
+    ])
       expect(await sendTo(source, text)).toMatchObject({
         status: "refused",
         reason: "command",
       });
     expect(state.prompts).toEqual([]);
+    // A pasted path is a message, not a command word.
+    expect(
+      await sendTo(source, "/var/log/app.log shows an error; why?"),
+    ).toMatchObject({ status: "sent" });
   });
 
   test("a full pane refuses the next send instead of dropping a notice", async () => {
@@ -423,6 +447,114 @@ describe("a session switch between Chat's check and Herdr's prompt", () => {
     });
     expect(result).toMatchObject({ delivery: { state: "pending" } });
     expect(reads).toEqual([]);
+  });
+});
+
+describe("a copy at about the time of the send", () => {
+  test("in the shown session it is uncertain, not settled", async () => {
+    const shown = await transcript("shown-o");
+    const { call } = fakeHerdr(claude(shown));
+    const source = chat(call);
+    await sendTo(source);
+    // Same words, absent from what Chat showed, stamped 500 ms before.
+    await appendFile(shown, line("user", "Run the tests", -0.5));
+    const after = await source.read({ pane_id: "w1:p1" });
+    expect(after.deliveries).toMatchObject([
+      { state: "uncertain", detail: expect.stringContaining("cannot tell") },
+    ]);
+  });
+
+  test("in the next session it is uncertain, not a misdelivery", async () => {
+    const shown = await transcript("shown-p");
+    const other = await transcript("other-p");
+    const { state, call } = fakeHerdr(claude(shown));
+    const source = chat(call);
+    state.onPrompt = () => {
+      state.replyWith = claude(shown);
+    };
+    await sendTo(source);
+    await appendFile(other, line("user", "Run the tests", -0.5));
+    state.current = claude(other);
+    expect((await source.read({ pane_id: "w1:p1" })).deliveries).toMatchObject([
+      { state: "uncertain" },
+    ]);
+  });
+
+  test("just after the send it settles or is evidence", async () => {
+    const shown = await transcript("shown-q");
+    const other = await transcript("other-q");
+    const { state, call } = fakeHerdr(claude(shown));
+    const source = chat(call);
+    state.onPrompt = () => {
+      state.replyWith = claude(shown);
+    };
+    await sendTo(source);
+    await appendFile(other, line("user", "Run the tests", 0.05));
+    state.current = claude(other);
+    expect((await source.read({ pane_id: "w1:p1" })).deliveries).toMatchObject([
+      { state: "misdelivered", evidence: "transcript" },
+    ]);
+  });
+});
+
+describe("when Chat can no longer check", () => {
+  test("a departed session whose transcript is gone is unverified", async () => {
+    const shown = await transcript("shown-r");
+    const other = await transcript("other-r");
+    const { state, call } = fakeHerdr(claude(shown));
+    const source = chat(call);
+    await sendTo(source);
+    state.current = claude(other);
+    await rename(shown, `${shown}.moved`);
+    expect((await source.read({ pane_id: "w1:p1" })).deliveries).toMatchObject([
+      { state: "unverified", detail: expect.stringContaining("cannot read") },
+    ]);
+  });
+
+  test("the deadline ends the check with no read, and tells watchers", async () => {
+    const shown = await transcript("shown-s");
+    const { call } = fakeHerdr(claude(shown));
+    let changed = 0;
+    jest.useFakeTimers();
+    try {
+      const source = createHerdrConversationSource({
+        herdrCall: call,
+        files: localAgentSessionFiles,
+        context: createAgentSessionResolverContext(),
+        cache: createSessionProjectionCache(localAgentSessionFiles),
+        onDeliveriesChanged: () => {
+          changed += 1;
+        },
+      });
+      await sendTo(source);
+      jest.advanceTimersByTime(DELIVERY_CHECK_MS + 2000);
+      for (let tick = 0; tick < 50 && changed === 0; tick += 1)
+        await new Promise((resolve) => setImmediate(resolve));
+      expect(changed).toBe(1);
+      expect(
+        (await source.read({ pane_id: "w1:p1" })).deliveries,
+      ).toMatchObject([{ state: "unverified" }]);
+      source.dispose();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  test("a failed SSH clock reading refuses in plain words", async () => {
+    const shown = await transcript("shown-t");
+    const { state, call } = fakeHerdr(claude(shown));
+    const source = chat(call, {
+      ...localAgentSessionFiles,
+      remote: true,
+      clockOffset: async () => {
+        throw new Error("ssh: connect timed out");
+      },
+    });
+    expect(await sendTo(source)).toMatchObject({
+      status: "refused",
+      message: expect.stringContaining("clock"),
+    });
+    expect(state.prompts).toEqual([]);
   });
 });
 

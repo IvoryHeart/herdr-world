@@ -210,15 +210,22 @@ printf '%s\\t%s\\t%s\\t%s\\t%s\\n' "$size" "$mtime" "$path64" "$identity" "$chan
     statFile,
     async clockOffset() {
       const before = Date.now();
-      const seconds = Number((await runRemote("date +%s")).toString().trim());
+      const output = (await runRemote("date +%s%N")).toString().trim();
       const after = Date.now();
-      if (!Number.isFinite(seconds))
-        throw new Error("The SSH host did not report its time.");
-      // `date +%s` truncates to the second: the host's time was within
-      // [seconds, seconds + 1) at some point during the round trip.
+      const halfTrip = (after - before) / 2;
+      // GNU date prints nanoseconds; BSD date prints a literal "N".
+      if (/^\d{19}$/.test(output))
+        return {
+          offsetMs: Number(output) / 1e6 - (before + after) / 2,
+          uncertaintyMs: halfTrip + 1,
+        };
+      const seconds = /^(\d{9,11})N?$/.exec(output)?.[1];
+      if (!seconds) throw new Error("The SSH host did not report its time.");
+      // Whole seconds: the host's time was within [seconds, seconds + 1)
+      // at some point during the round trip.
       return {
-        offsetMs: seconds * 1000 + 500 - (before + after) / 2,
-        uncertaintyMs: (after - before) / 2 + 500,
+        offsetMs: Number(seconds) * 1000 + 500 - (before + after) / 2,
+        uncertaintyMs: halfTrip + 500,
       };
     },
     async findCodexSessionById(id) {

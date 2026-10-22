@@ -56,8 +56,8 @@ are optional because the merged PR history records their source.
   conditional, so Chat shows a sent message as not yet seen until its own
   session's transcript has it after the send. A red notice names the other
   session, and pauses Send, only on evidence of a switch after the send, and
-  Chat says when it can no longer check. Chat refuses commands it cannot
-  check (`/`, and Claude Code's `!` and `#`).
+  Chat says when it can no longer check, or cannot tell. Chat refuses
+  commands it cannot check (slash commands, and Claude Code's `!` and `#`).
 
 - History and Chat no longer show Codex repository instructions and environment
   blocks, Claude Code local-command caveats, task notifications, compaction

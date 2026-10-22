@@ -16,9 +16,11 @@ view that you open on purpose.
   was sent to. When there is evidence it went to another session, a red notice
   names both sessions and pauses Send until you dismiss it; when Chat can no
   longer check, it says so (see [Delivery](#delivery)).
-- Does not send commands: text that starts with `/`, or for Claude Code with
-  `!` or `#`, is refused with a pointer to the Terminal, because a command can
-  switch the session and is not recorded as something you said.
+- Does not send commands: a slash command word such as `/compact` or
+  `/review:fast`, or for Claude Code text that starts with `!` or `#`, is
+  refused with a pointer to the Terminal, because a command can switch the
+  session and is not recorded as something you said. A message that starts
+  with a path, such as `/var/log/app.log fails`, is sent.
 - Refreshes when the service says the conversation changed (see
   [Refresh](#refresh)). The browser has no timer. **Refresh** rereads on demand.
 - Keeps the last good conversation when a read fails, for example while the
@@ -108,15 +110,24 @@ Each send leaves a receipt for the pane, bound to the session it was sent to:
 
 | State | Meaning | Shown |
 | --- | --- | --- |
-| `pending` | Not yet seen in the session it was sent to | Only in that session's conversation, as "Sent; not yet seen", with **Stop checking** |
+| `pending` | Not yet seen in the session it was sent to | In that session's conversation as "Sent; not yet seen"; after the pane moves on, as a line "Still checking <session>". Both have **Stop checking** |
 | `misdelivered` | Evidence of a switch after the send | A red notice naming both sessions; Send is paused until it is dismissed |
+| `uncertain` | The same words appeared at about the time of the send, too close to tell apart | A notice saying Chat cannot tell, with **Dismiss** |
 | `unverified` | Chat can no longer check | A notice saying why, with **Dismiss** |
 
-A receipt is settled, and removed, when the transcript of the session it was
-sent to has a user message with the same text (trimmed) that Chat did not show
-before the send and that the transcript timestamps after the send. A message
-from before the send never settles it, even if it is written late, and each
-transcript message settles one send.
+Transcript times are sorted into three bands around the send: before it,
+about the time of it (the clock's uncertainty plus one second, for
+transcripts that round), and clearly after it.
+
+- A receipt is settled, and removed, by a user message in its own session's
+  transcript with the same text (trimmed) that Chat did not show before the
+  send and that is stamped clearly after it. A message from before the send
+  never settles it, even if it is written late, and each transcript message
+  settles one send.
+- A copy stamped about the time of the send, in its own session or as the
+  first message in a session the pane moved to, makes it `uncertain`: Chat
+  cannot tell it from this message, so it never settles it or calls it a
+  misdelivery.
 
 A misdelivery needs evidence of a switch after the send:
 
@@ -126,22 +137,31 @@ A misdelivery needs evidence of a switch after the send:
   text certainly arrived there. A reply that names no session, or a Codex
   title that does not resolve, proves nothing and leaves the receipt pending.
 - Or the pane moved to another session, and the text is the first thing said
-  in that session after the send, within 10 seconds of it. The same words
-  typed there later, or already there, are not evidence. Chat keeps checking
-  every session the pane showed while the receipt was pending, so a switch
-  through two sessions is still caught.
+  there clearly after the send, within 10 seconds of it. Chat says the
+  message appears to have gone there. The same words typed there later, or
+  already there, are not evidence. Chat keeps checking every session the
+  pane showed while the receipt was pending, so a switch through two
+  sessions is still caught.
+
+Without a submission ID from Herdr, identical words typed by hand within
+those 10 seconds still cannot be told apart from Chat's message.
 
 Times are compared on the transcript host's clock. For an SSH host the
-service measures that clock's offset with `date +%s` (to within the round
-trip and one second) when it sends, at most every ten minutes.
+service measures that clock's offset with `date` (nanoseconds where the host
+prints them, else whole seconds) to within the round trip, when it sends, at
+most every ten minutes. If the measurement fails, Chat refuses the send in
+plain words rather than guess.
 
 After the pane moves to another session, Chat keeps checking the receipt in
-its own session's transcript, and watches that file on this machine. A receipt
-becomes `unverified` when that transcript cannot be read, or when it is not
-seen within 15 minutes; a harness that records no timestamps therefore always
-ends there. Over SSH a transcript is read again only on Herdr events and
-**Refresh**, so a late write is seen then. Up to 20 receipts are kept per pane;
-then Chat refuses to send until you dismiss some, rather than drop one.
+its own session's transcript, and watches that file on this machine. A
+receipt becomes `unverified` when that transcript can no longer be read, or
+15 minutes after the send. The service ends each check at that deadline
+itself: it reads the pane once more, marks what is still pending
+`unverified`, and tells browsers showing the pane to reread, so an idle pane
+does not stay pending. A harness that records no timestamps always ends
+there. Over SSH a transcript is read again on Herdr events, **Refresh** and
+the deadline. Up to 20 receipts are kept per pane; then Chat refuses to send
+until you dismiss some, rather than drop one.
 
 Over SSH, a send uses the user messages Chat showed (`baseline`) instead of
 reading the transcript again; on this machine it rereads it and refuses with

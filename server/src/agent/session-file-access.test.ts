@@ -94,4 +94,22 @@ describe("agent session file access", () => {
     );
     expect(clock.uncertaintyMs).toBeGreaterThanOrEqual(500);
   });
+
+  test("uses nanoseconds when the SSH host's date prints them", async () => {
+    const hostMs = Date.now() + 30_000;
+    const files = createAgentSessionFileAccess({
+      sshHost: "operator@example.com",
+      shQuote: quote,
+      async runBinaryProcessWithTimeout() {
+        return {
+          code: 0,
+          stdout: Buffer.from(`${hostMs}000000\n`),
+          stderr: "",
+        };
+      },
+    });
+    const clock = await files.clockOffset!();
+    expect(clock.uncertaintyMs).toBeLessThan(100);
+    expect(Math.abs(clock.offsetMs - 30_000)).toBeLessThan(100);
+  });
 });

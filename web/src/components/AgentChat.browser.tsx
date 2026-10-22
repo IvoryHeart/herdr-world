@@ -244,6 +244,12 @@ async function run() {
         !/delivered/i.test(container.textContent ?? ""),
       "A pending send must show only in its own conversation, and say it is not yet seen, never delivered",
     );
+    const elsewhere = container.querySelector('[data-delivery="elsewhere"]');
+    check(
+      elsewhere?.textContent?.includes("claude session earlier") === true &&
+        elsewhere.textContent.includes("Stop checking"),
+      "A send to a session the pane left must stay visible, with Stop checking",
+    );
 
     // A send that reached another session is reported loudly, by name.
     reply = {
@@ -269,6 +275,15 @@ async function run() {
           detail:
             "Chat did not see it in claude session shown within 15 minutes.",
         },
+        {
+          id: "d3",
+          text: "Close call",
+          sent_at: sentAt,
+          state: "uncertain",
+          expected: "claude session shown",
+          fingerprint: "a".repeat(64),
+          detail: "The same words appeared at about the time you sent them.",
+        },
       ],
     };
     push();
@@ -293,6 +308,12 @@ async function run() {
       unverified?.textContent?.includes("can no longer check") === true &&
         unverified.textContent.includes("Earlier message"),
       "A send Chat cannot check any more must say so",
+    );
+    check(
+      [...container.querySelectorAll(".is-unverified")].some((notice) =>
+        notice.textContent?.includes("cannot tell where this went"),
+      ) && !/went to a different session/.test(container.textContent ?? ""),
+      "An ambiguous match must say Chat cannot tell, never that it went elsewhere",
     );
     [...container.querySelectorAll<HTMLButtonElement>("button")]
       .find((button) => button.textContent === "Dismiss")

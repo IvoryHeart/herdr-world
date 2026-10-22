@@ -63,7 +63,7 @@ export type ConversationDelivery = {
   id: string;
   text: string;
   sent_at: string;
-  state: "pending" | "misdelivered" | "unverified";
+  state: "pending" | "misdelivered" | "uncertain" | "unverified";
   expected: string;
   fingerprint: string;
   delivered_to?: string;
@@ -327,11 +327,18 @@ export function AgentChat({
       delivery.state === "pending" &&
       delivery.fingerprint === conversation?.session_fingerprint,
   );
+  // Sent to a session the pane has since left: still checked there.
+  const elsewhere = deliveries.filter(
+    (delivery) =>
+      delivery.state === "pending" &&
+      delivery.fingerprint !== conversation?.session_fingerprint,
+  );
   const misdelivered = deliveries.filter(
     (delivery) => delivery.state === "misdelivered",
   );
   const unverified = deliveries.filter(
-    (delivery) => delivery.state === "unverified",
+    (delivery) =>
+      delivery.state === "unverified" || delivery.state === "uncertain",
   );
   const canSend =
     conversation?.status === "ok" && !!conversation.session_fingerprint;
@@ -376,11 +383,14 @@ export function AgentChat({
             </>
           ) : (
             <>
-              <strong>Your message went to a different session.</strong>
+              <strong>
+                Your message appears to have gone to a different session.
+              </strong>
               <span>
-                “{preview(delivery.text)}” appeared in {delivery.delivered_to},
-                not in {delivery.expected} where you sent it. Check that
-                session; Send is paused until you dismiss this.
+                “{preview(delivery.text)}” was the first thing said in{" "}
+                {delivery.delivered_to} right after you sent it to{" "}
+                {delivery.expected}. Check that session; Send is paused until
+                you dismiss this.
               </span>
             </>
           )}
@@ -395,7 +405,11 @@ export function AgentChat({
           className="agent-chat-misdelivered is-unverified"
           role="status"
         >
-          <strong>Chat can no longer check this.</strong>
+          <strong>
+            {delivery.state === "uncertain"
+              ? "Chat cannot tell where this went."
+              : "Chat can no longer check this."}
+          </strong>
           <span>
             You sent “{preview(delivery.text)}” to {delivery.expected}.{" "}
             {delivery.detail} Look in the Terminal to see where it went.
@@ -404,6 +418,24 @@ export function AgentChat({
             Dismiss
           </button>
         </div>
+      ))}
+      {elsewhere.map((delivery) => (
+        <p
+          key={delivery.id}
+          className="agent-chat-elsewhere"
+          role="status"
+          data-delivery="elsewhere"
+        >
+          Still checking {delivery.expected} for “{preview(delivery.text)}”,
+          sent before this pane moved on.{" "}
+          <button
+            type="button"
+            className="agent-chat-pending-dismiss"
+            onClick={() => dismiss(delivery.id)}
+          >
+            Stop checking
+          </button>
+        </p>
       ))}
       {stale ? (
         <p className="agent-chat-stale" role="status">

@@ -10,18 +10,19 @@ import type { ConversationMessage } from "./conversation";
  *   session's conversation.
  * - `misdelivered`: there is evidence of a switch after the send, either
  *   Herdr's prompt reply naming another session or the text arriving first
- *   in another session right after the send.
- * - `unverified`: Chat can no longer check it, for example because the pane
- *   left the session before the text was seen there and that transcript
- *   cannot be read, or because the check window passed.
- * A pending message seen in its own session is settled and removed. The
- * others stay until the user dismisses them.
+ *   in another session clearly after the send and within moments of it.
+ * - `uncertain`: the same words appeared at about the time of the send, so
+ *   close to it that Chat cannot tell them from this message.
+ * - `unverified`: Chat can no longer check it, because the transcript it
+ *   was sent to cannot be read or the check window passed.
+ * A pending message seen in its own session clearly after the send is
+ * settled and removed. The others stay until the user dismisses them.
  */
 export type ConversationDelivery = {
   id: string;
   text: string;
   sent_at: string;
-  state: "pending" | "misdelivered" | "unverified";
+  state: "pending" | "misdelivered" | "uncertain" | "unverified";
   /** The session Chat showed when the message was sent. */
   expected: string;
   /** That session's fingerprint; a pending message shows only there. */
@@ -30,7 +31,7 @@ export type ConversationDelivery = {
   delivered_to?: string;
   /** misdelivered: Herdr's prompt reply, or another session's transcript. */
   evidence?: "herdr" | "transcript";
-  /** unverified: why Chat stopped checking. */
+  /** uncertain and unverified: why Chat cannot tell. */
   detail?: string;
 };
 
@@ -52,8 +53,15 @@ export type DeliveryView = {
 type Receipt = ConversationDelivery & {
   typed: string;
   sentAtMs: number;
-  /** Transcript time before which the text cannot have been recorded. */
-  from: number;
+  /**
+   * Transcript times from `near` up to `after` are about the time of the
+   * send: the clock's uncertainty, and a second for transcripts that round.
+   * A copy stamped there may or may not be this message. One stamped at or
+   * after `after` was written after the send began; one before `near` was
+   * written before it.
+   */
+  near: number;
+  after: number;
   /** Latest transcript time at which another session's copy is evidence. */
   switchedBy: number;
   /** Latest transcript time at which the expected session's copy counts. */
@@ -72,8 +80,8 @@ export const DELIVERY_CHECK_MS = 15 * 60_000;
  * within this long after the send.
  */
 export const MISDELIVERY_WINDOW_MS = 10_000;
-// Transcript timestamps may be rounded to the second.
-const TIMESTAMP_SLACK_MS = 1000;
+// Transcript timestamps may be rounded down to the second.
+const TIMESTAMP_ROUNDING_MS = 1000;
 /** Receipts kept per pane; a send is refused rather than drop one. */
 export const RECEIPTS_PER_PANE = 20;
 const SEEN_PER_RECEIPT = 4;
@@ -104,6 +112,11 @@ export function createDeliveryLedger() {
     return list;
   };
 
+  const expireOne = (receipt: Receipt) => {
+    receipt.state = "unverified";
+    receipt.detail = `Chat did not see it in ${receipt.expected} within ${DELIVERY_CHECK_MS / 60_000} minutes.`;
+  };
+
   return {
     /** No room for another receipt: refuse the send rather than drop one. */
     full: (paneId: string) =>
@@ -129,8 +142,9 @@ export function createDeliveryLedger() {
       },
     ): ConversationDelivery {
       const { offsetMs, uncertaintyMs } = send.clock;
-      const from =
-        send.startedAt + offsetMs - uncertaintyMs - TIMESTAMP_SLACK_MS;
+      const near =
+        send.startedAt + offsetMs - uncertaintyMs - TIMESTAMP_ROUNDING_MS;
+      const after = send.startedAt + offsetMs + uncertaintyMs;
       const latest = send.endedAt + offsetMs + uncertaintyMs;
       const receipt: Receipt = {
         id: randomUUID(),
@@ -144,7 +158,8 @@ export function createDeliveryLedger() {
           : {}),
         typed: typedText(send.text),
         sentAtMs: send.startedAt,
-        from,
+        near,
+        after,
         switchedBy: latest + MISDELIVERY_WINDOW_MS,
         until: latest + DELIVERY_CHECK_MS,
         baseline: new Set(send.baseline),
@@ -191,54 +206,81 @@ export function createDeliveryLedger() {
         const own = views.find(
           (view) => view.fingerprint === receipt.fingerprint,
         );
-        const arrived = own?.messages
-          ? userMessages(own.messages).find((message) => {
-              const at = Date.parse(message.sent_at);
-              return (
-                message.text.trim() === receipt.typed &&
-                !receipt.baseline.has(message.id) &&
-                !claimed.has(claimKey(paneId, own.fingerprint, message.id)) &&
-                at >= receipt.from &&
-                at <= receipt.until
-              );
-            })
-          : undefined;
-        if (own && arrived) {
-          claimed.add(claimKey(paneId, own.fingerprint, arrived.id));
-          list.splice(list.indexOf(receipt), 1);
-          continue;
+        const candidates = (view: DeliveryView) =>
+          userMessages(view.messages ?? []).filter(
+            (message) =>
+              !claimed.has(claimKey(paneId, view.fingerprint, message.id)) &&
+              Date.parse(message.sent_at) >= receipt.near,
+          );
+        const same = (message: ConversationMessage) =>
+          message.text.trim() === receipt.typed;
+        let unclear: { view: DeliveryView; id: string } | null = null;
+        // Its own session: a copy written clearly after the send settles it.
+        if (own?.messages) {
+          const copies = candidates(own).filter(
+            (message) =>
+              same(message) &&
+              !receipt.baseline.has(message.id) &&
+              Date.parse(message.sent_at) <= receipt.until,
+          );
+          const settled = copies.find(
+            (message) => Date.parse(message.sent_at) >= receipt.after,
+          );
+          if (settled) {
+            claimed.add(claimKey(paneId, own.fingerprint, settled.id));
+            list.splice(list.indexOf(receipt), 1);
+            continue;
+          }
+          if (copies[0]) unclear = { view: own, id: copies[0].id };
         }
-        // Another session is evidence only when the text is the first thing
-        // anyone said there after the send, within moments of it: the same
-        // words typed there later are not.
+        // Another session: evidence only when the text is the first thing
+        // said there clearly after the send, within moments of it. The same
+        // words typed there later, or already there, are not.
+        let evidence: { view: DeliveryView; id: string } | null = null;
         for (const view of views) {
           if (view.fingerprint === receipt.fingerprint || !view.messages)
             continue;
-          const first = userMessages(view.messages).find(
-            (message) => Date.parse(message.sent_at) >= receipt.from,
-          );
-          if (
-            !first ||
-            first.text.trim() !== receipt.typed ||
-            Date.parse(first.sent_at) > receipt.switchedBy ||
-            claimed.has(claimKey(paneId, view.fingerprint, first.id))
-          )
-            continue;
-          claimed.add(claimKey(paneId, view.fingerprint, first.id));
+          const first = candidates(view)[0];
+          if (!first || !same(first)) continue;
+          const at = Date.parse(first.sent_at);
+          if (at < receipt.after) unclear ??= { view, id: first.id };
+          else if (at <= receipt.switchedBy) {
+            evidence = { view, id: first.id };
+            break;
+          }
+        }
+        if (evidence) {
+          claimed.add(claimKey(paneId, evidence.view.fingerprint, evidence.id));
           receipt.state = "misdelivered";
           receipt.evidence = "transcript";
-          receipt.delivered_to = view.label;
-          break;
+          receipt.delivered_to = evidence.view.label;
+          continue;
         }
-        if (receipt.state !== "pending") continue;
-        if (now - receipt.sentAtMs > DELIVERY_CHECK_MS) {
-          receipt.state = "unverified";
-          receipt.detail = `Chat did not see it in ${receipt.expected} within ${DELIVERY_CHECK_MS / 60_000} minutes.`;
-        } else if (current !== receipt.fingerprint && own?.messages === null) {
+        if (unclear) {
+          claimed.add(claimKey(paneId, unclear.view.fingerprint, unclear.id));
+          receipt.state = "uncertain";
+          receipt.detail = `The same words appeared in ${unclear.view.label || receipt.expected} at about the time you sent them, so Chat cannot tell whether that was this message.`;
+          continue;
+        }
+        if (now - receipt.sentAtMs > DELIVERY_CHECK_MS) expireOne(receipt);
+        else if (current !== receipt.fingerprint && own?.messages === null) {
           receipt.state = "unverified";
           receipt.detail = `The pane left ${receipt.expected} before Chat saw the message there, and Chat cannot read that session.`;
         }
       }
+    },
+
+    /**
+     * End the check for receipts past their window, whether or not a read
+     * happened: the source calls this when a receipt's deadline passes.
+     */
+    expire(paneId: string, now = Date.now()) {
+      for (const receipt of panes.get(paneId) ?? [])
+        if (
+          receipt.state === "pending" &&
+          now - receipt.sentAtMs > DELIVERY_CHECK_MS
+        )
+          expireOne(receipt);
     },
 
     list(paneId: string): ConversationDelivery[] {

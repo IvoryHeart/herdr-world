@@ -363,3 +363,11 @@
   border: 0;
   cursor: pointer;
 }
+
+.agent-chat-elsewhere {
+  flex: 0 0 auto;
+  margin: 6px 10px 0;
+  color: var(--muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
