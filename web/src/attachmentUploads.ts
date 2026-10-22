@@ -1,12 +1,18 @@
-import { useSyncExternalStore } from "react";
+import { useEffect, useRef, useSyncExternalStore } from "react";
 import type { UploadProgress } from "./terminalImageUpload";
 
 /**
  * Attachment uploads a composer shows as chips: one per file, uploading with
  * its byte progress, then done or failed. A failed file can be retried or
  * removed. Uploads are kept per scope (a composer's draft key) in memory, so a
- * remounted composer shows the same chips, and picking a file again while it
- * is still uploading does not upload it twice.
+ * remounted composer shows the same chips. Picking a file again while it is
+ * still uploading does not upload it twice, and picking a failed file again
+ * retries it.
+ *
+ * A task either delivers its path itself (into a draft store that outlives the
+ * composer) or resolves to the text to insert. That text is kept for the scope
+ * until a composer mounted for it takes it (`useAttachmentDelivery`), so a
+ * path is never lost because the composer that started the upload closed.
  */
 export type AttachmentUpload = {
   id: string;
@@ -18,13 +24,14 @@ export type AttachmentUpload = {
 };
 
 /**
- * Uploads one file and delivers its path. It reports byte progress and
- * throws when the upload or the delivery fails.
+ * Uploads one file and either delivers its path itself or resolves to the
+ * text to insert. It reports byte progress and throws when the upload or its
+ * own delivery fails.
  */
 export type AttachmentTask = (
   file: File,
   onProgress: UploadProgress,
-) => Promise<void>;
+) => Promise<string | void>;
 
 type Job = AttachmentUpload & {
   file: File;
@@ -37,6 +44,9 @@ const DONE_VISIBLE_MS = 2_500;
 
 const jobs = new Map<string, readonly Job[]>();
 const listeners = new Map<string, Set<() => void>>();
+/** Text from finished uploads that no composer has taken yet, per scope. */
+const deliveries = new Map<string, string[]>();
+const deliveryListeners = new Map<string, Set<() => void>>();
 const NONE: readonly AttachmentUpload[] = [];
 let nextId = 0;
 
@@ -74,9 +84,15 @@ async function run(scope: string, id: string) {
   if (!job) return;
   patch(scope, id, { status: "uploading", loaded: 0, error: null });
   try {
-    await job.task(job.file, (loaded, total) =>
+    const text = await job.task(job.file, (loaded, total) =>
       patch(scope, id, { loaded, size: total || job.size }),
     );
+    // Kept before the chip says done, so a done chip's path always lands.
+    if (text) {
+      deliveries.set(scope, [...(deliveries.get(scope) ?? []), text]);
+      for (const listener of [...(deliveryListeners.get(scope) ?? [])])
+        listener();
+    }
     patch(scope, id, { status: "done", loaded: job.size });
     setTimeout(() => dismissAttachmentUpload(scope, id), DONE_VISIBLE_MS);
   } catch (error) {
@@ -89,8 +105,9 @@ async function run(scope: string, id: string) {
 
 /**
  * Uploads files one after another, in the order given, so their paths land
- * in that order. A file already uploading in this scope is skipped. Resolves
- * once every file is done or failed.
+ * in that order. A file already uploading in this scope is skipped; a file
+ * that failed is retried with this `task`. Resolves once every file is done
+ * or failed.
  */
 export async function startAttachmentUploads(
   scope: string,
@@ -101,10 +118,15 @@ export async function startAttachmentUploads(
   for (const file of files) {
     const print = fingerprint(file);
     const current = jobs.get(scope) ?? [];
-    if (
-      current.some((job) => job.fingerprint === print && job.status !== "done")
-    )
+    const same = current.find(
+      (job) => job.fingerprint === print && job.status !== "done",
+    );
+    if (same?.status === "uploading") continue;
+    if (same) {
+      patch(scope, same.id, { file, task });
+      added.push(same.id);
       continue;
+    }
     const id = `upload-${++nextId}`;
     added.push(id);
     write(scope, [
@@ -155,4 +177,33 @@ export function useAttachmentUploads(
     (listener) => (scope ? subscribe(scope, listener) : () => {}),
     () => (scope ? attachmentUploads(scope) : NONE),
   );
+}
+
+/**
+ * Takes the text of this scope's finished uploads into a mounted composer:
+ * any kept while no composer was mounted, then each as it finishes.
+ */
+export function useAttachmentDelivery(
+  scope: string | null,
+  deliver: (text: string) => void,
+) {
+  const latest = useRef(deliver);
+  latest.current = deliver;
+  useEffect(() => {
+    if (!scope) return;
+    const drain = () => {
+      const texts = deliveries.get(scope);
+      if (!texts?.length) return;
+      deliveries.delete(scope);
+      for (const text of texts) latest.current(text);
+    };
+    const set = deliveryListeners.get(scope) ?? new Set();
+    set.add(drain);
+    deliveryListeners.set(scope, set);
+    drain();
+    return () => {
+      set.delete(drain);
+      if (!set.size) deliveryListeners.delete(scope);
+    };
+  }, [scope]);
 }

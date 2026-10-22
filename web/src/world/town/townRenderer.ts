@@ -91,6 +91,8 @@ export type TownRendererDiagnostics = {
   zoom: number;
   actors: number;
   walking: number;
+  /** Agents opened by the user whose goal is their own desk. */
+  summoned: string[];
   desks: number;
   /** Animated node counts, kept compatible with existing browser evidence. */
   animation: { characters: number; monitors: number; statuses: number };
@@ -128,6 +130,7 @@ function diagnostics(): TownRendererDiagnostics {
     zoom: 1,
     actors: 0,
     walking: 0,
+    summoned: [],
     desks: 0,
     animation: { characters: 0, monitors: 0, statuses: 0 },
     layout: null,
@@ -1305,6 +1308,9 @@ export async function createTownRenderer(
       actorWorld,
       instant || camera.reducedMotion,
       state.summonedKeys,
+    );
+    stats.summoned = [...state.summonedKeys].filter(
+      (key) => actors.actors.get(key)?.goal?.kind === "seat",
     );
   };
 

@@ -338,6 +338,71 @@ async function run() {
         "A finished upload must add its path to the message",
       );
       check(!send().disabled, "Send must be enabled once uploads finish");
+
+      // A file that failed is retried when it is picked again.
+      const notes = new File(["synthetic notes"], "notes.txt", {
+        type: "text/plain",
+        lastModified: 2,
+      });
+      const pickFile = (file: File) => {
+        const files = new DataTransfer();
+        files.items.add(file);
+        const input = container.querySelector<HTMLInputElement>(
+          ".agent-chat-composer input[type=file]",
+        )!;
+        input.files = files.files;
+        input.dispatchEvent(new Event("change", { bubbles: true }));
+      };
+      pickFile(notes);
+      await settle();
+      uploadRequests[2]!.answer(false);
+      await settle();
+      pickFile(notes);
+      await settle();
+      check(
+        uploadRequests.length === 4,
+        "Picking a failed file again must retry it",
+      );
+
+      // A path that finishes after Chat closes lands when Chat opens again.
+      root.render(<div />);
+      await settle();
+      uploadRequests[3]!.answer(true);
+      await settle();
+      render("idle");
+      await settle();
+      check(
+        (
+          container.querySelector<HTMLTextAreaElement>("textarea")?.value ?? ""
+        ).includes("/uploads/notes.txt"),
+        "A path that finished while Chat was closed must reach the reopened draft",
+      );
+      // Retry after a remount delivers to the Chat now open.
+      pickFile(
+        new File(["synthetic log"], "log.txt", {
+          type: "text/plain",
+          lastModified: 3,
+        }),
+      );
+      await settle();
+      uploadRequests[4]!.answer(false);
+      await settle();
+      root.render(<div />);
+      await settle();
+      render("idle");
+      await settle();
+      container
+        .querySelector<HTMLButtonElement>('[aria-label="Retry log.txt"]')!
+        .click();
+      await settle();
+      uploadRequests[5]!.answer(true);
+      await settle();
+      check(
+        (
+          container.querySelector<HTMLTextAreaElement>("textarea")?.value ?? ""
+        ).includes("/uploads/log.txt"),
+        "A retry after Chat reopened must reach the open draft",
+      );
     } finally {
       window.XMLHttpRequest = originalRequest;
     }
@@ -469,10 +534,11 @@ async function run() {
       "A missing integration must offer to copy its command and refresh",
     );
 
+    const unwatched = count("agent_conversation.unwatch");
     render("done", false);
     await settle();
     check(
-      count("agent_conversation.unwatch") === 1,
+      count("agent_conversation.unwatch") === unwatched + 1,
       "Hiding Chat must stop watching the pane",
     );
   } finally {

@@ -15,9 +15,10 @@ import {
   SquareTerminal,
   Wrench,
 } from "lucide-react";
-import { bridge } from "../api";
+import { watchConversation } from "../conversationWatch";
 import {
   startAttachmentUploads,
+  useAttachmentDelivery,
   useAttachmentUploads,
 } from "../attachmentUploads";
 import { terminalUploadedPathsText } from "../terminalFileDrop";
@@ -165,25 +166,23 @@ export function AgentChat({
     (upload) => upload.status === "uploading",
   );
   // Files upload through the pane's connection, as the terminal composer's
-  // do; each file's path joins the message as it finishes.
+  // do. Each finished path joins the message of whichever Chat is open for
+  // this pane, even if the one that started the upload has closed since.
   const attach = (files: File[]) => {
     if (!files.length) return;
-    void startAttachmentUploads(
-      uploadScope,
-      files,
-      async (file, onProgress) => {
-        const path = await (file.type.startsWith("image/")
+    void startAttachmentUploads(uploadScope, files, async (file, onProgress) =>
+      terminalUploadedPathsText([
+        await (file.type.startsWith("image/")
           ? uploadTerminalImage
-          : uploadTerminalFile)(connectionClient, file, onProgress);
-        const text = terminalUploadedPathsText([path]);
-        setDraft((current) =>
-          current && !/\s$/.test(current)
-            ? `${current} ${text}`
-            : current + text,
-        );
-      },
+          : uploadTerminalFile)(connectionClient, file, onProgress),
+      ]),
     );
   };
+  useAttachmentDelivery(uploadScope, (text) =>
+    setDraft((current) =>
+      current && !/\s$/.test(current) ? `${current} ${text}` : current + text,
+    ),
+  );
 
   const load = useCallback(() => {
     if (!connectionClient.isCurrent()) return;
@@ -219,43 +218,12 @@ export function AgentChat({
   }, [connectionClient, pane.pane_id]);
 
   // While visible, ask the service to watch this pane and reread when it says
-  // the conversation changed. Watch again after the connection comes back.
+  // the conversation changed, or after the connection comes back.
   useEffect(() => {
     if (!active || details) return;
-    const paneId = pane.pane_id;
-    const watch = () => {
-      if (!connectionClient.isCurrent()) return;
-      connectionClient
-        .call("agent_conversation.watch", { pane_id: paneId })
-        .catch(() => {});
-    };
-    watch();
+    const stop = watchConversation(connectionClient, pane.pane_id, load);
     load();
-    const stopControl = bridge.onControl((control) => {
-      if (
-        control.type === "agent_conversation_changed" &&
-        control.connection_id === connectionClient.connectionId &&
-        control.pane_id === paneId
-      )
-        load();
-    });
-    // onStatus reports the current status at once; only a later reconnect
-    // needs a new watch.
-    let current = true;
-    const stopStatus = bridge.onStatus((status) => {
-      if (current || status !== "connected") return;
-      watch();
-      load();
-    });
-    current = false;
-    return () => {
-      stopControl();
-      stopStatus();
-      if (connectionClient.isCurrent())
-        connectionClient
-          .call("agent_conversation.unwatch", { pane_id: paneId })
-          .catch(() => {});
-    };
+    return stop;
   }, [active, connectionClient, details, load, pane.pane_id]);
 
   useLayoutEffect(() => {

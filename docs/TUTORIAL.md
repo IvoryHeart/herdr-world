@@ -124,17 +124,20 @@ changes what you see and does not disconnect hosts or retarget open terminals.
    on phones; it hides when no agent is blocked. The peek shows the agent's
    latest message as the Inspector's **Chat** shows it, never terminal text; when
    the conversation cannot be read, it says why. It highlights a question when
-   one can be identified. Opening an agent brings it back to its desk from
-   reception or the lounge until its status changes. To open terminals instead,
-   set **Menu → Town opens** to **Terminal**.
+   one can be identified, and refreshes when the conversation changes. Opening
+   an agent brings it back to its desk from reception or the lounge until its
+   status changes. To open terminals instead, set **Menu → Town opens** to
+   **Terminal**; that tap also brings the agent back and, like the chat, does
+   not mark its work reviewed.
 5. Read the question before using an answer button: it sends the offered key to
    that live pane. When no supported choices appear, use the reply line or
    **Open terminal** in the peek's header. Desktop replies send from the peek; on phones the reply line
    opens World's **Composer** inside the peek, with keys, attachments, **Insert**
    and **Send**. **Insert** prepares input; **Send** submits it.
 6. Use the paperclip to attach files to the reply. Each file shows a chip while
-   it uploads, then done or failed; retry or remove a failed one. **Send** waits
-   for uploads. Uploads go to the selected pane's host; review the message and
+   it uploads, then done or failed; retry a failed one (or pick it again) or
+   remove it. **Send** waits for uploads. A path that finishes while the peek is
+   closed joins the reply line when you open that agent's peek again. Uploads go to the selected pane's host; review the message and
    attached paths before sending. Choose **Inspector** for files, changes and
    history, or **Open terminal** for direct work.
    **Colour** changes the colour of the agent's table; it is the tab's colour

@@ -1257,9 +1257,11 @@ the terminal from the peek's header and go to the next waiting agent. Tapping an
 agent, or the table of an agent away at reception or in the lounge, SHALL open
 what the Town opens preference names: the agent's peek (Chat, the default) or
 its terminal; it SHALL NOT open an Inspector, and tapping a room SHALL only zoom
-to it. An agent opened this way SHALL walk back to its desk and stay there until
-its status changes, after which its status places it again; opening it SHALL NOT
-mark its completion reviewed. Tapping and dragging SHALL stay separate gestures:
+to it. A table SHALL stand for its agent that needs the user (waiting, then
+finished) before the agent seated there. An agent opened this way, with either
+preference, SHALL walk back to its desk and stay there until its status
+changes, after which its status places it again; the tap SHALL NOT mark its
+completion reviewed. Tapping and dragging SHALL stay separate gestures:
 a tap never starts a move and a drag never opens a peek.
 
 Peek keyboard shortcuts SHALL apply only while keyboard focus is in the Town
@@ -1298,8 +1300,10 @@ Opening the terminal from a peek SHALL follow the Inspector presentation prefere
 
 #### Scenario: Town opens Terminal
 
-- **WHEN** the user sets Town opens to Terminal and taps an agent or its table
-- **THEN** that agent's terminal opens and no peek opens
+- **WHEN** the user sets Town opens to Terminal and taps the table of a
+  finished agent waiting at reception
+- **THEN** that agent's terminal opens, no peek opens, the agent walks back to
+  its desk, and its completion is not marked reviewed
 
 #### Scenario: No recognizable choice is on screen
 
@@ -1311,7 +1315,9 @@ Opening the terminal from a peek SHALL follow the Inspector presentation prefere
 
 An agent's peek SHALL show the agent's latest message from the conversation
 read model that the Inspector's Chat reads (`agent_conversation.latest` for the
-exact qualified pane), rendered as Chat renders it. It SHALL NOT show terminal
+exact qualified pane), rendered as Chat renders it, and SHALL reread it when the
+service reports the conversation changed, sharing Chat's watch rather than
+polling. It SHALL NOT show terminal
 screen text as the message; when the conversation is unavailable it SHALL show
 Chat's reason. A waiting agent's question, read from the pane's latest lines,
 SHALL be set apart below the message, with its answers as one-tap buttons. The peek SHALL end
@@ -1324,8 +1330,11 @@ The peek's Open terminal action, and the composer's Direct mode, SHALL open the
 pane's full terminal. Attaching files in the peek, the phone composer, Spaces or
 Chat SHALL show one chip per file: uploading with byte progress where the
 transport reports it, then done or failed, with Retry and Remove for a failed
-file. Send SHALL wait for uploads, and a file picked again while it uploads
-SHALL NOT be uploaded twice. The peek's Inspector action SHALL open World's Inspector
+file; picking a failed file again SHALL retry it. Send SHALL wait for uploads,
+and a file picked again while it uploads SHALL NOT be uploaded twice. A path
+whose upload finishes after its composer closed SHALL be kept for that pane and
+join the draft of the next composer opened for it; a chip SHALL NOT show done
+for a path that can no longer reach a draft. The peek's Inspector action SHALL open World's Inspector
 on the agent's Files view, from which Changes and History are one tap away,
 using the same path as the shell's Actions menu. Answers and replies SHALL be
 sent only to the exact qualified pane, and the result SHALL be confirmed by a

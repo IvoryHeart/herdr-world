@@ -8,7 +8,10 @@ import {
 import { SquareTerminal } from "lucide-react";
 import type { OfficeAgent } from "../herdrOfficeProjection";
 import { AttachmentChips } from "../../components/AttachmentChips";
-import { useAttachmentUploads } from "../../attachmentUploads";
+import {
+  useAttachmentDelivery,
+  useAttachmentUploads,
+} from "../../attachmentUploads";
 import { MarkdownPreview } from "../../components/markdown";
 import { formatUiDateTime } from "../../uiLocale";
 import type { TownChoice, TownConversation } from "./townChat";
@@ -81,12 +84,12 @@ export function TownPeek({
   question: readonly string[];
   /** Check a finished agent's work, which sends it for a break. */
   onReviewed(): void;
+  /** Upload files for this pane, one chip each under `uploadScope`. */
+  onAttach(files: File[], image: boolean): void;
   /**
-   * Upload files for this pane, one chip each under `uploadScope`. Each
-   * file's path is given to `insert`, unless it went to World's composer.
+   * Where this pane's attachments are kept. Paths finished there join the
+   * inline reply line, including ones started by an earlier peek.
    */
-  onAttach(files: File[], image: boolean, insert: (text: string) => void): void;
-  /** Where this pane's attachment chips are kept: its composer draft. */
   uploadScope: string | null;
   /** Type the reply in the card itself rather than opening the composer. */
   inlineReply: boolean;
@@ -119,17 +122,23 @@ export function TownPeek({
   const [colors, setColors] = useState(false);
   const filePicker = useRef<HTMLInputElement>(null);
   const attach = (files: File[], image: boolean) => {
-    if (!files.length) return;
-    onAttach(files, image, (text) => {
-      setDraft((current) =>
-        current && !current.endsWith(" ")
-          ? `${current} ${text}`
-          : current + text,
-      );
-      input.current?.focus();
-    });
+    if (files.length) onAttach(files, image);
   };
-  useEffect(() => setDraft(""), [agent.key]);
+  // A different agent starts with an empty reply; mounting keeps any path
+  // already taken in for this one.
+  const draftAgent = useRef(agent.key);
+  useEffect(() => {
+    if (draftAgent.current === agent.key) return;
+    draftAgent.current = agent.key;
+    setDraft("");
+  }, [agent.key]);
+  // On the phone, paths go to World's composer draft instead.
+  useAttachmentDelivery(inlineReply ? uploadScope : null, (text) => {
+    setDraft((current) =>
+      current && !current.endsWith(" ") ? `${current} ${text}` : current + text,
+    );
+    input.current?.focus();
+  });
   // Follow the newest message unless the reader has scrolled up in it.
   const follow = useRef(true);
   const latest = conversation?.latest ?? null;
@@ -216,6 +225,7 @@ export function TownPeek({
       className={`town-peek${anchor ? "" : " town-peek-sheet"}${chatting ? " town-peek-chat" : ""}${agent.semanticStatus === "blocked" ? " town-peek-blocked" : ""}`}
       role="dialog"
       tabIndex={-1}
+      data-agent-key={agent.key}
       aria-label={`${agent.displayLabel} peek`}
       style={
         anchor

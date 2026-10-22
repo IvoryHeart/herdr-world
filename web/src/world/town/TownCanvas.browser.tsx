@@ -11,7 +11,12 @@ import "../../components/TerminalView.css";
 import "../../components/MobileControls.css";
 import { requestTrace } from "../devtools/trace";
 import { initializeLayoutPreferences } from "../../layoutPreferences";
-import { bridge, type ConnectionClient } from "../../api";
+import {
+  bridge,
+  type BridgeControlMsg,
+  type ConnectionClient,
+} from "../../api";
+import { readCompletionSeen } from "../completionSeenState";
 import "../world.css";
 import { worldLocalStorage } from "../../browserStorage";
 import {
@@ -243,6 +248,23 @@ const SCREENS = {
     "✻ Thinking…",
   ],
 };
+// The service's conversation pushes, delivered as the bridge delivers them.
+const controls = new Set<(control: BridgeControlMsg) => void>();
+bridge.onControl = (handler) => {
+  controls.add(handler);
+  return () => controls.delete(handler);
+};
+const pushConversation = (connectionId: string, paneId: string) =>
+  [...controls].forEach((handler) =>
+    handler({
+      type: "agent_conversation_changed",
+      connection_id: connectionId,
+      pane_id: paneId,
+    }),
+  );
+const conversationCalls: { method: string; paneId: string }[] = [];
+let latestText =
+  "I'll sort the reception queue by when agents started waiting.\n\n| Queue | Order |\n|---|---|\n| reception | oldest first |";
 (bridge as unknown as { connection: unknown }).connection = (
   connectionId: string,
   generation: number,
@@ -262,6 +284,13 @@ const SCREENS = {
         ),
       };
     }
+    if (method.startsWith("agent_conversation."))
+      conversationCalls.push({ method, paneId });
+    if (
+      method === "agent_conversation.watch" ||
+      method === "agent_conversation.unwatch"
+    )
+      return { ok: true };
     if (method === "agent_conversation.latest")
       return conversationUnavailable
         ? {
@@ -291,7 +320,7 @@ const SCREENS = {
               id: "a1",
               role: "assistant",
               kind: "message",
-              text: "I'll sort the reception queue by when agents started waiting.\n\n| Queue | Order |\n|---|---|\n| reception | oldest first |",
+              text: latestText,
               sent_at: "2026-01-01T00:00:01Z",
             },
           };
@@ -662,6 +691,33 @@ async function run() {
       ),
     "the peek should render the message's markdown table",
   );
+  // The peek watches the pane as Chat does and rereads only on a push.
+  check(
+    conversationCalls.some(
+      (call) =>
+        call.method === "agent_conversation.watch" && call.paneId === peekPane,
+    ),
+    "the peek did not ask the service to watch its pane",
+  );
+  const readsBefore = conversationCalls.filter(
+    (call) => call.method === "agent_conversation.latest",
+  ).length;
+  await new Promise((resolve) => setTimeout(resolve, 4_500));
+  check(
+    conversationCalls.filter(
+      (call) => call.method === "agent_conversation.latest",
+    ).length === readsBefore,
+    "the peek reread its conversation without a push",
+  );
+  latestText = "The queue now keeps the oldest agent first.";
+  pushConversation(peekConnection!, peekPane);
+  await waitFor(
+    () =>
+      host
+        .querySelector(".town-peek-screen")
+        ?.textContent?.includes("keeps the oldest agent first") === true,
+    "a pushed change did not refresh the peek",
+  );
   // The question sits in its own box above the answers.
   check(
     (
@@ -747,7 +803,8 @@ async function run() {
     let release!: () => void;
     uploadGate = new Promise<void>((resolve) => (release = resolve));
     await attachNote(host);
-    const firstCard = host.querySelector(".town-peek");
+    const firstCard = host.querySelector<HTMLElement>(".town-peek");
+    const firstAgentKey = firstCard?.dataset.agentKey ?? "";
     [...host.querySelectorAll<HTMLButtonElement>(".town-peek-foot button")]
       .find((button) => button.textContent?.startsWith("Next"))!
       .click();
@@ -767,6 +824,34 @@ async function run() {
         .querySelector<HTMLInputElement>(".town-reply input:not([type])")
         ?.value.includes("/uploads/"),
       "an earlier agent's upload landed in the next agent's reply",
+    );
+    // It lands in that agent's reply line when its peek opens again: the
+    // path is kept for the pane, not for the card that started the upload.
+    host.querySelector<HTMLButtonElement>(".town-peek-close")!.click();
+    await settle();
+    host
+      .querySelector<HTMLButtonElement>(
+        `.world-semantic-target[data-kind="agent"][data-target-key="${CSS.escape(firstAgentKey)}"]`,
+      )!
+      .click();
+    await waitFor(
+      () =>
+        host.querySelector<HTMLElement>(".town-peek")?.dataset.agentKey ===
+        firstAgentKey,
+      "the first agent's peek did not reopen",
+    );
+    await settle();
+    const reopened =
+      host.querySelector<HTMLInputElement>(".town-reply input:not([type])")
+        ?.value ?? "";
+    check(
+      reopened.includes("/uploads/notes.txt"),
+      `an upload finished while its peek was closed was lost (${JSON.stringify(reopened)})`,
+    );
+    check(
+      host.querySelector('.town-peek .attachment-chip[data-status="done"]') !==
+        null,
+      "the reopened peek should show the finished upload's chip",
     );
   } else {
     // 📎 uploads through the pane's own connection into World's composer.
@@ -819,7 +904,7 @@ async function run() {
     const chatScreen =
       host.querySelector(".town-peek-screen")?.textContent ?? "";
     check(
-      chatScreen.includes("I'll sort the reception queue") &&
+      chatScreen.includes("keeps the oldest agent first") &&
         chatScreen.includes("Do you want"),
       "chat should show the agent's messages and its question",
     );
@@ -974,21 +1059,57 @@ async function run() {
   await waitFor(
     () =>
       host.querySelector(`.town-peek[aria-label="${waitingName} peek"]`) !==
-      null,
-    "tapping a desk did not open its agent's chat",
+        null && host.querySelector(".town-peek .town-pill-blocked") !== null,
+    "tapping a desk did not open its waiting agent's chat",
   );
   check(opened.length === 0, "tapping a desk in Chat mode opened a terminal");
   host.querySelector<HTMLButtonElement>(".town-peek-close")!.click();
   await settle();
 
-  // With Town opens set to Terminal, the same tap opens the terminal.
+  const waitingKey = waitingAgent?.dataset.targetKey ?? "";
+  await waitFor(
+    () => window.__HERDR_TOWN_RENDERER__!.summoned.includes(waitingKey),
+    "the tapped agent did not walk to its desk",
+  );
+
+  // With Town opens set to Terminal, tapping a finished agent's table opens
+  // its terminal, brings it to its desk too, and marks nothing reviewed.
   writeOfficePreferences(worldLocalStorage, {
     ...readOfficePreferences(worldLocalStorage),
     townOpens: "terminal",
   });
   window.dispatchEvent(new Event(WORLD_OFFICE_PREFERENCES_CHANGED_EVENT));
   await settle();
-  waitingDesk?.click();
+  const finishedAgent = [
+    ...host.querySelectorAll<HTMLButtonElement>(
+      '.world-semantic-target[data-kind="agent"]',
+    ),
+  ].find(
+    (target) =>
+      target.getAttribute("aria-label")?.includes(", done, desk ") &&
+      !window.__HERDR_TOWN_RENDERER__!.summoned.includes(
+        target.dataset.targetKey ?? "",
+      ),
+  );
+  check(finishedAgent !== undefined, "no finished agent has a target");
+  const [, , finishedDesk, finishedRoom, finishedHost] = finishedAgent!
+    .getAttribute("aria-label")!
+    .split(", ");
+  const seenBefore = [...readCompletionSeen(worldLocalStorage)].sort().join();
+  [
+    ...host.querySelectorAll<HTMLButtonElement>(
+      '.world-semantic-target[data-kind="desk"]',
+    ),
+  ]
+    .find((target) =>
+      target
+        .getAttribute("aria-label")
+        ?.toLowerCase()
+        .includes(
+          `${finishedDesk}, ${finishedRoom}, ${finishedHost},`.toLowerCase(),
+        ),
+    )
+    ?.click();
   await waitFor(
     () => opened.length === 1,
     "Terminal mode did not open the terminal",
@@ -996,6 +1117,17 @@ async function run() {
   check(
     host.querySelector(".town-peek") === null,
     "Terminal mode opened a peek",
+  );
+  await waitFor(
+    () =>
+      window.__HERDR_TOWN_RENDERER__!.summoned.includes(
+        finishedAgent?.dataset.targetKey ?? "",
+      ),
+    "Terminal mode did not bring the agent to its desk",
+  );
+  check(
+    [...readCompletionSeen(worldLocalStorage)].sort().join() === seenBefore,
+    "Terminal mode marked the finished agent reviewed",
   );
   writeOfficePreferences(worldLocalStorage, {
     ...readOfficePreferences(worldLocalStorage),

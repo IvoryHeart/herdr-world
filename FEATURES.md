@@ -24,10 +24,14 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     attachments. Answers send the offered key to that pane; reply **Send**
     submits text. On phones, the reply line opens World's Composer inside the
     peek, with keys, attachments, Insert and Send.
+  - The peek refreshes when the agent's conversation changes, as Chat does,
+    without polling.
   - Tapping an agent or its table brings the agent back: from reception or the
-    lounge it walks to its desk and stays there until its status changes.
-    Opening it does not mark finished work reviewed. **Menu → Town opens**
-    chooses whether that tap opens the chat (the default) or the terminal.
+    lounge it walks to its desk and stays there until its status changes. A
+    table stands for an agent that needs you (waiting, then finished) before
+    the one seated there. **Menu → Town opens** chooses whether that tap opens
+    the chat (the default) or the terminal; either way the tap does not mark
+    finished work reviewed. **Open terminal** in the peek does, as before.
   - **Open terminal** in the peek's header opens the live pane; **Inspector**
     opens files, changes and history. **Next** cycles other waiting agents, then
     finished agents if none wait.
@@ -271,9 +275,10 @@ commit a search selection. Press K in the recent switcher to convert it to searc
   including through `--ssh-host`.
 - Every composer that attaches files (the phone Composer, Spaces, the Town peek
   and Inspector Chat) shows a chip per file: uploading with byte progress, then
-  done or failed. A failed file can be retried or removed. Send waits until
-  uploads finish, and picking a file again while it uploads does not upload it
-  twice.
+  done or failed. A failed file can be retried, by **Retry** or by picking it
+  again, or removed. Send waits until uploads finish, and picking a file again
+  while it uploads does not upload it twice. A path that finishes after its
+  composer closed joins the draft when that composer opens again.
 - Drag a file or directory path from the File Explorer into a terminal to
   insert its quoted host path. Terminal font size is adjustable independently
   of interface scale in **Menu → Appearance**.
