@@ -45,19 +45,6 @@ prepared.
   reorder it: Town sends Herdr's `tab.move` the way Spaces does and shows the
   order Herdr reports. World now listens for Herdr's `tab.moved` event, so a
   reorder made anywhere updates every view.
-- Rework the website film around today's World: Town is the hero (rooms and
-  nameplated desks, reception with ✓ and ?, the lounge), an agent's peek and a
-  chat window docked beside Town answer it, Board shows the same terminals as cards
-  and strings, and the phone scene replies in Chat. The film paints Town with the
-  app's own Town code instead of the retired Office's Claw-Empire sprites, adds a
-  text version and spoken captions, and with reduced motion cuts instead of moving
-  the camera. Full screen turns a phone to landscape where it can, and fills the
-  window on iPhone. New poster image.
-- The film page now plays a video recorded from the live film (WebM VP9 with an
-  MP4 fallback and WebVTT captions, about 7 MiB, never autoplaying), so phones no
-  longer wait for the canvas to draw. "Watch it drawn live" keeps the interactive
-  film. `bun run film:render` records it, and the Pages deploy renders it.
-
 - Give every terminal one colour, shown as its tab in Spaces, its table in
   Town and its card in Board. Tabs start with a stable default; a colour chosen
   from the Spaces tab menu, a Town peek or Board is saved by the World service
