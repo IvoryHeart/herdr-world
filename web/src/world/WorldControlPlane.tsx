@@ -510,6 +510,30 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
               },
               // The colour is chosen from the swatch beside the name.
               back: view === "town" ? { label: "Back to Town" } : undefined,
+              // A phone switches between agents and terminals from ⋯, as
+              // its terminal does: agents open on Chat, terminals on Terminal.
+              switchTo: compactArrangement
+                ? presentedWorld.nodes
+                    .filter(
+                      (node) =>
+                        (node.kind === "agent" || node.kind === "terminal") &&
+                        node.id !== conversation.nodeId,
+                    )
+                    .slice(0, 24)
+                    .map((node) => ({
+                      id: node.id,
+                      label: node.label,
+                      detail:
+                        node.kind === "agent" || node.kind === "terminal"
+                          ? `${node.stateLabels[node.status] ?? node.status} · ${node.spaceLabel}`
+                          : undefined,
+                      onSelect: () =>
+                        void applySelection(
+                          node.id,
+                          node.kind === "agent" ? "history" : "terminal",
+                        ),
+                    }))
+                : undefined,
             }}
             terminalColor={inspectorColor(conversation)}
             townSkin={view === "town"}

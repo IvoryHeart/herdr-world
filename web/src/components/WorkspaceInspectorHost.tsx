@@ -783,7 +783,28 @@ export function WorkspaceInspectorHost({
           </PopoverContent>
         </Popover>
         {windowControls ? (
-          <WindowControls controls={windowControls} label="Inspector window" />
+          <WindowControls
+            // A phone shows the window like its terminal: the views move
+            // into ⋯ beside the agents it can switch to.
+            controls={
+              windowControls.compact
+                ? {
+                    ...windowControls,
+                    views: INSPECTOR_TAB_ORDER.filter(
+                      (view) =>
+                        availableViews.includes(view) &&
+                        (view !== "history" || historyAvailable),
+                    ).map((view) => ({
+                      id: view,
+                      label: INSPECTOR_TAB_LABELS[view] ?? view,
+                      checked: state.view === view,
+                      onSelect: () => onViewChange(view),
+                    })),
+                  }
+                : windowControls
+            }
+            label="Inspector window"
+          />
         ) : (
           <div className="workspace-inspector-actions">
             {onWindowMaximize ? (

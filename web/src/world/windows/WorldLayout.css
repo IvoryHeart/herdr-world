@@ -92,10 +92,11 @@
   .world-foundation-shell .workspace-inspector-head {
     min-width: 0;
   }
-  /* World has no bottom view bar on a phone, so the window's top selector
-     stays: it is the only way between Chat, Terminal, Changes and Files. */
-  .world-foundation-shell .world-managed-window .workspace-inspector-tabs {
-    display: inline-flex;
+  /* A phone shows the window like its terminal: name and status in the bar,
+     with the views and the other agents under ⋯. */
+  .world-foundation-shell .world-managed-window .workspace-inspector-tabs,
+  .world-foundation-shell .world-managed-window .workspace-inspector-tabs-more {
+    display: none;
   }
 }
 

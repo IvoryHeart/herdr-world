@@ -131,6 +131,37 @@
 .world-window-snap-menu > button:focus {
   background: var(--accent-soft);
 }
+.world-window-snap-menu {
+  overflow-y: auto;
+}
+.world-window-menu-section {
+  grid-column: 1 / -1;
+  padding: 6px 8px 2px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.world-window-snap-menu > button.is-wide {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-height: 40px;
+}
+.world-window-snap-menu > button small {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+}
+.world-window-snap-menu > button[aria-checked="true"] {
+  background: var(--accent-soft);
+  color: var(--text-strong);
+  font-weight: 600;
+}
 .world-window-snap-menu > .world-window-color {
   grid-column: 1 / -1;
   justify-content: flex-start;

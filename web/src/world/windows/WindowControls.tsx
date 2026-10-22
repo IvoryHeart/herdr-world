@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { measuredFixedPositionScale } from "../../fixedPositionScale";
 import {
@@ -48,6 +48,20 @@ export type ManagedWindowControls = {
   back?: { label: string };
   /** The next agent that needs you, as the bar's primary action. */
   next?: { count: number; urgent: boolean; onNext(): void } | null;
+  /** On a phone, the window's views live in ⋯ instead of the bar. */
+  views?: readonly {
+    id: string;
+    label: string;
+    checked: boolean;
+    onSelect(): void;
+  }[];
+  /** Other agents and terminals this window can switch to. */
+  switchTo?: readonly {
+    id: string;
+    label: string;
+    detail?: string;
+    onSelect(): void;
+  }[];
 };
 
 /** Close presented as Back, for the leading edge of a window bar. */
@@ -79,7 +93,14 @@ const choices: { target: SnapTarget; label: string }[] = [
   { target: "bottom-left", label: "Bottom left" },
   { target: "bottom-right", label: "Bottom right" },
 ];
-type MenuItem = { label: string; checked?: boolean; run(): void };
+type MenuItem = {
+  key?: string;
+  label: string;
+  detail?: string;
+  checked?: boolean;
+  section?: string;
+  run(): void;
+};
 
 function phonePlacementItems(controls: ManagedWindowControls): MenuItem[] {
   const place = controls.onPhonePlacement;
@@ -149,7 +170,28 @@ export function WindowControls({
 }) {
   const [open, setOpen] = useState(false);
   const items: MenuItem[] = [
-    { label: "Minimize", run: controls.onMinimize },
+    ...(controls.views ?? []).map((view, index) => ({
+      key: `view:${view.id}`,
+      label: view.label,
+      checked: view.checked,
+      section: index === 0 ? "View" : undefined,
+      run: view.onSelect,
+    })),
+    ...(controls.switchTo ?? []).map((target, index) => ({
+      key: `switch:${target.id}`,
+      label: target.label,
+      detail: target.detail,
+      section: index === 0 ? "Switch to" : undefined,
+      run: target.onSelect,
+    })),
+    {
+      label: "Minimize",
+      section:
+        controls.views?.length || controls.switchTo?.length
+          ? "Window"
+          : undefined,
+      run: controls.onMinimize,
+    },
     ...(controls.compact
       ? phonePlacementItems(controls)
       : [
@@ -170,7 +212,9 @@ export function WindowControls({
   useEffect(() => {
     if (!open) return;
     menu.current
-      ?.querySelector<HTMLButtonElement>('[role^="menuitem"]')
+      ?.querySelector<HTMLButtonElement>(
+        '[aria-checked="true"], [role^="menuitem"]',
+      )
       ?.focus();
   }, [open]);
   const scale = open ? measuredFixedPositionScale() : 1;
@@ -276,24 +320,40 @@ export function WindowControls({
         createPortal(
           <div
             ref={menu}
-            style={position}
+            style={{
+              ...position,
+              maxHeight: `calc(100dvh - ${(position.top ?? 8) + 8}px)`,
+            }}
             className="world-window-snap-menu"
             role="menu"
             aria-label="Window actions"
           >
             {items.map((item) => (
-              <button
-                key={item.label}
-                type="button"
-                role={item.checked === undefined ? "menuitem" : "menuitemradio"}
-                aria-checked={item.checked}
-                onClick={() => {
-                  item.run();
-                  setOpen(false);
-                }}
-              >
-                {item.label}
-              </button>
+              <Fragment key={item.key ?? item.label}>
+                {item.section ? (
+                  <div
+                    className="world-window-menu-section"
+                    role="presentation"
+                  >
+                    {item.section}
+                  </div>
+                ) : null}
+                <button
+                  type="button"
+                  className={item.key ? "is-wide" : undefined}
+                  role={
+                    item.checked === undefined ? "menuitem" : "menuitemradio"
+                  }
+                  aria-checked={item.checked}
+                  onClick={() => {
+                    item.run();
+                    setOpen(false);
+                  }}
+                >
+                  <span>{item.label}</span>
+                  {item.detail ? <small>{item.detail}</small> : null}
+                </button>
+              </Fragment>
             ))}
             {controls.color ? (
               <ColorSwatchButton

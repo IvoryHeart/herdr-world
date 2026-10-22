@@ -167,8 +167,10 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   location line, the view selector and **⋯**, maximize and close. **⋯** holds
   minimize, the snap choices and float. Tapping the location line under the name
   shows the branch, worktree and PR status, replacing the card above Changes. In
-  Town the window takes the Town look (pixel name, chunky buttons, **‹ Back**),
-  and on a phone its bar replaces the top bar. Opening or focusing a window preserves other
+  Town the window takes the Town look (portrait, pixel name, status pill, chunky
+  buttons, **‹ Back**). On a phone the window fills the screen like the
+  terminal: its bar shows the name and status, and **⋯** switches the view
+  (Chat, Terminal, Changes, Files) or switches to another agent or terminal. Opening or focusing a window preserves other
   placements; snapping into an occupied region overlaps without rearranging it.
   Tiled windows share resizable dividers. **Open windows** restores minimized windows.
   Window close dismisses presentation; native tab closure remains separate.
