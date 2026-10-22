@@ -1,3 +1,4 @@
+import type { ConversationDelivery } from "./conversation-delivery";
 import type { ConversationIdentity } from "./conversation-watch";
 import type { HistoryEntry } from "./session-history";
 
@@ -48,9 +49,17 @@ export type Conversation = {
   session_binding: ConversationBinding;
   /** The bound session; null for a guess. Send refuses when it changes. */
   session_fingerprint: string | null;
+  /** A plain name for the session shown, such as "claude session <id>". */
+  session_label: string | null;
   updated_at: string | null;
   messages: ConversationMessage[];
   latest: ConversationMessage | null;
+  /**
+   * Messages Chat sent from this pane that are not yet settled: pending ones
+   * belong to the conversation whose fingerprint they carry; misdelivered and
+   * unverified ones are notices for the pane until dismissed.
+   */
+  deliveries: ConversationDelivery[];
 } & (
   | { status: "ok"; unavailable: null }
   | {
@@ -67,10 +76,16 @@ export type Conversation = {
 export type ConversationLatest = Omit<Conversation, "messages">;
 
 export type ConversationSendResult =
-  | { status: "sent" }
+  | { status: "sent"; delivery: ConversationDelivery }
   | {
       status: "refused";
-      reason: "changed" | "blocked" | "unavailable" | "empty";
+      reason:
+        | "changed"
+        | "blocked"
+        | "unavailable"
+        | "empty"
+        | "command"
+        | "unsettled";
       message: string;
     };
 
@@ -85,8 +100,15 @@ export interface ConversationSource {
   /** Latest for the named panes, or for every agent the source sees. */
   latestAll(paneIds?: readonly string[]): Promise<ConversationLatest[]>;
   send(
-    target: ConversationTarget & { text: string; session_fingerprint: string },
+    target: ConversationTarget & {
+      text: string;
+      session_fingerprint: string;
+      /** IDs of the user messages Chat showed; saves a reread over SSH. */
+      baseline?: readonly string[];
+    },
   ): Promise<ConversationSendResult>;
+  /** Forget a delivery notice the user has seen. */
+  dismiss(target: ConversationTarget & { delivery_id: string }): boolean;
 }
 
 function plural(name: string, calls: number) {
