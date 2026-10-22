@@ -1631,10 +1631,21 @@ Herdr close a tab on the connection's current runtime, it SHALL drop that tab's
 saved colour. Terminal colour SHALL never stand for or hide a status. World
 SHALL NOT write a colour to Herdr.
 
+A terminal's colour SHALL be shown, and offered for change, beside its name in
+the terminal's header (the window header on desktop, the app bar on a phone)
+and in the terminal window's menu, as well as in the Spaces tab menu, the Town
+peek and Board. Every picker SHALL be the same palette with **Default colour**,
+opened as a transient layer.
+
 #### Scenario: Colour a tab in Spaces
 
 - **WHEN** the user picks pink from a tab's menu in Spaces
 - **THEN** the tab's strip in Spaces, its table in Town and its card in Board show pink on every device
+
+#### Scenario: Colour a terminal from its header
+
+- **WHEN** the user opens the colour swatch beside a terminal's name and picks green
+- **THEN** the terminal shows green in its header, Spaces, Town and Board, and the picker closes
 
 #### Scenario: Reset a tab's colour
 
@@ -1645,6 +1656,45 @@ SHALL NOT write a colour to Herdr.
 
 - **WHEN** the user moves a desk whose tab shows its default colour to another room
 - **THEN** the tab, under its new Herdr tab ID, shows the same colour in every view
+
+### Requirement: Transient layers close top first
+
+Menus, popovers, pickers and lists opened over a terminal or view SHALL form one
+last-in, first-out stack. Escape and Back SHALL close only the top layer, one
+per key or Back. A press outside all layers (including on the terminal) SHALL
+close every open layer, so one tap returns to the terminal. A press inside a
+lower layer SHALL close only the layers above it. These rules SHALL hold whether focus is in
+the terminal or a layer and whether the press is a mouse click or a touch. A
+press outside SHALL still reach what was pressed. A dialog outside the stack
+keeps its own keys and presses while it is above the top layer. The on-screen Back SHALL close an
+open layer before it leaves a terminal. Closing a layer by Escape, Back or a
+choice SHALL return focus to what had it before the layer opened, the terminal
+included; closing it by a press SHALL leave focus with what was pressed.
+
+#### Scenario: Dismiss a dropdown by tapping the terminal
+
+- **WHEN** a dropdown is open over a terminal on a phone and the user taps the terminal
+- **THEN** the dropdown closes and the terminal is shown
+
+#### Scenario: Nested layers
+
+- **WHEN** a terminal window's menu and the colour picker inside it are open
+- **THEN** Escape or Back closes the picker, and a second one closes the menu
+
+#### Scenario: A press outside nested layers
+
+- **WHEN** a terminal window's menu and the colour picker inside it are open
+- **THEN** a press on the terminal closes both and shows the terminal, while a press on the menu closes only the picker
+
+#### Scenario: Back from the workspace list
+
+- **WHEN** the user opens the workspace list from a terminal's title on a phone and taps Back
+- **THEN** the list closes and the terminal is shown; the next Back leaves the terminal
+
+#### Scenario: Focus returns to the terminal
+
+- **WHEN** the user, typing in a terminal, opens its window menu and presses Escape
+- **THEN** the menu closes and keyboard focus is back in the terminal
 
 ### Requirement: Board placement and movement
 

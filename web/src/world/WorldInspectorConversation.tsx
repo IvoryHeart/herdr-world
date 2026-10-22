@@ -102,6 +102,7 @@ function InspectorResources({
   onFocus,
   onResourceFocus,
   windowControls,
+  terminalColor,
   onWindowMaximize,
   windowMaximized = false,
   onTerminalPortalChange,
@@ -118,6 +119,7 @@ function InspectorResources({
   onFocus?(): void;
   onResourceFocus(): void;
   windowControls?: ManagedWindowControls;
+  terminalColor?: ManagedWindowControls["color"];
   onWindowMaximize?(): void;
   windowMaximized?: boolean;
   onTerminalPortalChange(element: HTMLDivElement | null): void;
@@ -498,6 +500,7 @@ function InspectorResources({
             onDockChange={changeDock}
             onExpandedChange={changeExpanded}
             windowControls={windowControls}
+            terminalColor={terminalColor}
             onWindowMaximize={onWindowMaximize}
             windowMaximized={windowMaximized}
             onDockOut={floating ? undefined : onDockOut}
