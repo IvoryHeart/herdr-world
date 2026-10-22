@@ -21,7 +21,18 @@ describe("View preferences", () => {
     expect(readOfficePreferences(storage)).toEqual({
       inspectorPresentation: "docked",
       townCalm: true,
+      townOpens: "chat",
     });
+  });
+
+  test("Town opens Chat unless Terminal was chosen", () => {
+    const read = (townOpens: unknown) =>
+      readOfficePreferences(memoryStorage(JSON.stringify({ townOpens })))
+        .townOpens;
+    expect(DEFAULT_OFFICE_PREFERENCES.townOpens).toBe("chat");
+    expect(read("terminal")).toBe("terminal");
+    expect(read("chat")).toBe("chat");
+    expect(read("browser")).toBe("chat");
   });
 
   test("admits only known choices", () => {
@@ -51,12 +62,14 @@ describe("View preferences", () => {
     writeOfficePreferences(storage, {
       inspectorPresentation: "floating",
       townCalm: false,
+      townOpens: "terminal",
     });
     expect(storage.value).toEqual({
       key: OFFICE_PREFERENCES_KEY,
       value: JSON.stringify({
         inspectorPresentation: "floating",
         townCalm: false,
+        townOpens: "terminal",
       }),
     });
   });

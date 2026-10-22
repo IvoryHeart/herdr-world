@@ -24,6 +24,7 @@ const conversation = (
   agent_status: status,
   session_binding: "reported",
   session_fingerprint: "a".repeat(64),
+  session_label: "claude session shown",
   status: "ok",
   unavailable: null,
   messages,
@@ -43,6 +44,58 @@ const message = (
   text,
   sent_at: "2026-10-22T09:00:00Z",
 });
+
+/**
+ * Uploads with byte progress use XMLHttpRequest. Each request waits until the
+ * test answers it, so the chip can be seen uploading, failing and retrying.
+ */
+const uploadRequests: {
+  filename: string;
+  answer(ok: boolean): void;
+}[] = [];
+class FixtureUploadRequest {
+  upload: { onprogress: ((event: ProgressEvent) => void) | null } = {
+    onprogress: null,
+  };
+  responseType = "";
+  status = 0;
+  statusText = "";
+  response: Blob | null = null;
+  onload: (() => void) | null = null;
+  onerror: (() => void) | null = null;
+  onabort: (() => void) | null = null;
+  private url = new URL(window.location.origin);
+  private headers = "";
+  open(_method: string, url: string | URL) {
+    this.url = new URL(String(url), window.location.origin);
+  }
+  setRequestHeader() {}
+  getAllResponseHeaders() {
+    return this.headers;
+  }
+  send(body: Blob) {
+    this.upload.onprogress?.({
+      loaded: Math.floor(body.size / 2),
+      total: body.size,
+      lengthComputable: true,
+    } as ProgressEvent);
+    const filename = this.url.searchParams.get("filename") ?? "";
+    uploadRequests.push({
+      filename,
+      answer: (ok) => {
+        this.status = ok ? 200 : 507;
+        this.headers =
+          "content-type: application/json\r\nx-herdr-connection-id: test\r\nx-herdr-connection-generation: null";
+        this.response = new Blob([
+          JSON.stringify(
+            ok ? { path: `/uploads/${filename}` } : { error: "disk full" },
+          ),
+        ]);
+        this.onload?.();
+      },
+    });
+  }
+}
 
 async function run() {
   const originalConnection = bridge.connection;
@@ -90,6 +143,10 @@ async function run() {
         method === "agent_conversation.unwatch"
       )
         return { ok: true };
+      if (method === "agent_conversation.dismiss") {
+        reply = { ...reply, deliveries: [] };
+        return { dismissed: true };
+      }
       throw new Error(`unexpected ${method}`);
     },
   });
@@ -197,10 +254,147 @@ async function run() {
     check(
       sent?.params.text === "Run the tests" &&
         sent.params.session_fingerprint === "a".repeat(64) &&
-        sent.params.pane_id === "p",
+        sent.params.pane_id === "p" &&
+        JSON.stringify(sent.params.baseline) === JSON.stringify(["u1", "u2"]),
       "Enter must send the draft with the session it was written for",
     );
     check(textarea.value === "", "A sent draft must clear");
+
+    // A sent message is not called delivered until the transcript has it.
+    const sentAt = "2026-10-22T09:00:05Z";
+    reply = {
+      ...reply,
+      deliveries: [
+        {
+          id: "d1",
+          text: "Run the tests",
+          sent_at: sentAt,
+          state: "pending",
+          expected: "claude session shown",
+          fingerprint: "a".repeat(64),
+        },
+        {
+          id: "dm",
+          text: "Thanks",
+          sent_at: sentAt,
+          state: "matched",
+          expected: "claude session shown",
+          fingerprint: "a".repeat(64),
+          matched_id: "u2",
+        },
+        {
+          id: "d0",
+          text: "Meant for another conversation",
+          sent_at: sentAt,
+          state: "pending",
+          expected: "claude session earlier",
+          fingerprint: "b".repeat(64),
+        },
+      ],
+    };
+    push();
+    await settle();
+    const pendingBubbles = container.querySelectorAll(
+      '[data-delivery="pending"]',
+    );
+    const pendingBubble = pendingBubbles[0];
+    check(
+      pendingBubbles.length === 1 &&
+        pendingBubble?.textContent?.includes("Run the tests") === true &&
+        pendingBubble.textContent.includes("not yet seen") &&
+        !/delivered/i.test(container.textContent ?? ""),
+      "A pending send must show only in its own conversation, and say it is not yet seen, never delivered",
+    );
+    const matched = container.querySelector('[data-delivery="matched"]');
+    check(
+      matched?.textContent?.includes("Thanks") === true &&
+        matched.textContent.includes("matched by its words") &&
+        !/delivered/i.test(container.textContent ?? ""),
+      "A message matched by its words must say so, never that it was delivered",
+    );
+    const elsewhere = container.querySelector('[data-delivery="elsewhere"]');
+    check(
+      elsewhere?.textContent?.includes("claude session earlier") === true &&
+        elsewhere.textContent.includes("Stop checking"),
+      "A send to a session the pane left must stay visible, with Stop checking",
+    );
+
+    // A send that reached another session is reported loudly, by name.
+    reply = {
+      ...reply,
+      deliveries: [
+        {
+          id: "d1",
+          text: "Run the tests",
+          sent_at: sentAt,
+          state: "misdelivered",
+          expected: "claude session shown",
+          fingerprint: "a".repeat(64),
+          delivered_to: "claude session other",
+          evidence: "transcript",
+        },
+        {
+          id: "d2",
+          text: "Earlier message",
+          sent_at: sentAt,
+          state: "unverified",
+          expected: "claude session shown",
+          fingerprint: "a".repeat(64),
+          detail:
+            "Chat did not see it in claude session shown within 15 minutes.",
+        },
+        {
+          id: "d3",
+          text: "Close call",
+          sent_at: sentAt,
+          state: "uncertain",
+          expected: "claude session shown",
+          fingerprint: "a".repeat(64),
+          detail: "The same words appeared at about the time you sent them.",
+        },
+      ],
+    };
+    push();
+    await settle();
+    const alert = container.querySelector(
+      '.agent-chat-misdelivered[role="alert"]',
+    );
+    const sendButton = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Send"]',
+    );
+    type("Next");
+    await settle();
+    check(
+      alert?.textContent?.includes("claude session other") === true &&
+        alert.textContent.includes("claude session shown") &&
+        !container.querySelector('[data-delivery="pending"]') &&
+        sendButton?.disabled === true,
+      "A misdelivered send must name the session that got it and pause Send",
+    );
+    const unverified = container.querySelector(".is-unverified");
+    check(
+      unverified?.textContent?.includes("can no longer check") === true &&
+        unverified.textContent.includes("Earlier message"),
+      "A send Chat cannot check any more must say so",
+    );
+    check(
+      [...container.querySelectorAll(".is-unverified")].some((notice) =>
+        notice.textContent?.includes("cannot tell where this went"),
+      ) && !/went to a different session/.test(container.textContent ?? ""),
+      "An ambiguous match must say Chat cannot tell, never that it went elsewhere",
+    );
+    [...container.querySelectorAll<HTMLButtonElement>("button")]
+      .find((button) => button.textContent === "Dismiss")
+      ?.click();
+    await settle();
+    check(
+      calls.some(
+        (call) =>
+          call.method === "agent_conversation.dismiss" &&
+          call.params.delivery_id === "d1",
+      ) && !container.querySelector(".agent-chat-misdelivered"),
+      "Dismiss must clear the notice on the server",
+    );
 
     sendResult = {
       status: "refused",
@@ -219,6 +413,141 @@ async function run() {
       "A refused send must say why",
     );
     check(textarea.value === "Another", "A refused draft must stay");
+
+    // Attachments upload with a chip each; Send waits for them.
+    const originalRequest = window.XMLHttpRequest;
+    window.XMLHttpRequest =
+      FixtureUploadRequest as unknown as typeof XMLHttpRequest;
+    try {
+      const picker = container.querySelector<HTMLInputElement>(
+        ".agent-chat-composer input[type=file]",
+      )!;
+      const report = new File(["synthetic report"], "report.txt", {
+        type: "text/plain",
+        lastModified: 1,
+      });
+      const pick = () => {
+        const files = new DataTransfer();
+        files.items.add(report);
+        picker.files = files.files;
+        picker.dispatchEvent(new Event("change", { bubbles: true }));
+      };
+      const send = () =>
+        container.querySelector<HTMLButtonElement>(
+          'button[aria-label="Send"]',
+        )!;
+      const chip = () =>
+        container.querySelector<HTMLElement>(".agent-chat .attachment-chip");
+      pick();
+      await settle();
+      check(
+        chip()?.dataset.status === "uploading" &&
+          (chip()?.textContent ?? "").includes("report.txt"),
+        "An attached file must show an uploading chip",
+      );
+      check(
+        (chip()?.textContent ?? "").includes("Uploading 50%"),
+        "An uploading chip must show byte progress",
+      );
+      check(send().disabled, "Send must wait for uploads");
+      pick();
+      await settle();
+      check(
+        uploadRequests.length === 1,
+        "The same file picked again while uploading must not upload twice",
+      );
+      uploadRequests[0]!.answer(false);
+      await settle();
+      check(
+        chip()?.dataset.status === "failed" &&
+          (chip()?.textContent ?? "").includes("disk full"),
+        "A failed upload must say why on its chip",
+      );
+      check(!send().disabled, "A failed upload must not block Send");
+      container
+        .querySelector<HTMLButtonElement>('[aria-label="Retry report.txt"]')!
+        .click();
+      await settle();
+      check(uploadRequests.length === 2, "Retry must upload the file again");
+      uploadRequests[1]!.answer(true);
+      await settle();
+      check(
+        chip()?.dataset.status === "done",
+        "A finished upload must show a done chip",
+      );
+      check(
+        textarea.value === "Another /uploads/report.txt ",
+        "A finished upload must add its path to the message",
+      );
+      check(!send().disabled, "Send must be enabled once uploads finish");
+
+      // A file that failed is retried when it is picked again.
+      const notes = new File(["synthetic notes"], "notes.txt", {
+        type: "text/plain",
+        lastModified: 2,
+      });
+      const pickFile = (file: File) => {
+        const files = new DataTransfer();
+        files.items.add(file);
+        const input = container.querySelector<HTMLInputElement>(
+          ".agent-chat-composer input[type=file]",
+        )!;
+        input.files = files.files;
+        input.dispatchEvent(new Event("change", { bubbles: true }));
+      };
+      pickFile(notes);
+      await settle();
+      uploadRequests[2]!.answer(false);
+      await settle();
+      pickFile(notes);
+      await settle();
+      check(
+        uploadRequests.length === 4,
+        "Picking a failed file again must retry it",
+      );
+
+      // A path that finishes after Chat closes lands when Chat opens again.
+      root.render(<div />);
+      await settle();
+      uploadRequests[3]!.answer(true);
+      await settle();
+      render("idle");
+      await settle();
+      check(
+        (
+          container.querySelector<HTMLTextAreaElement>("textarea")?.value ?? ""
+        ).includes("/uploads/notes.txt"),
+        "A path that finished while Chat was closed must reach the reopened draft",
+      );
+      // Retry after a remount delivers to the Chat now open.
+      pickFile(
+        new File(["synthetic log"], "log.txt", {
+          type: "text/plain",
+          lastModified: 3,
+        }),
+      );
+      await settle();
+      uploadRequests[4]!.answer(false);
+      await settle();
+      root.render(<div />);
+      await settle();
+      render("idle");
+      await settle();
+      container
+        .querySelector<HTMLButtonElement>('[aria-label="Retry log.txt"]')!
+        .click();
+      await settle();
+      uploadRequests[5]!.answer(true);
+      await settle();
+      check(
+        (
+          container.querySelector<HTMLTextAreaElement>("textarea")?.value ?? ""
+        ).includes("/uploads/log.txt"),
+        "A retry after Chat reopened must reach the open draft",
+      );
+    } finally {
+      window.XMLHttpRequest = originalRequest;
+    }
 
     // A read that fails mid-write keeps the last good conversation.
     reply = {
@@ -347,10 +676,11 @@ async function run() {
       "A missing integration must offer to copy its command and refresh",
     );
 
+    const unwatched = count("agent_conversation.unwatch");
     render("done", false);
     await settle();
     check(
-      count("agent_conversation.unwatch") === 1,
+      count("agent_conversation.unwatch") === unwatched + 1,
       "Hiding Chat must stop watching the pane",
     );
   } finally {

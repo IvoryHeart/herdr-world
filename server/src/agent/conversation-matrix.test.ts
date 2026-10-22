@@ -419,7 +419,8 @@ function herdr(agent: Record<string, unknown> | null, prompts: unknown[] = []) {
     if (method === "agent.list") return { agents: agent ? [agent] : [] };
     if (method === "agent.prompt") {
       prompts.push(params);
-      return { agent: { pane_id: agent?.pane_id } };
+      // Herdr 0.9 replies with the pane's agent snapshot at submission.
+      return { agent };
     }
     throw new Error(`unexpected ${method}`);
   };
@@ -567,7 +568,7 @@ describe("conversation read model across harnesses", () => {
             text: "Thanks",
             session_fingerprint: session_fingerprint!,
           }),
-        ).toEqual({ status: "sent" });
+        ).toMatchObject({ status: "sent", delivery: { state: "pending" } });
         expect(prompts).toEqual([{ target: "w1:p1", text: "Thanks" }]);
         expect(
           await chat.send({
@@ -888,7 +889,7 @@ describe("conversation binding and remote admission", () => {
     const call: HerdrCall = async (method) => {
       log.push(method);
       if (method === "agent.get") return { agent: current };
-      if (method === "agent.prompt") return { agent: { pane_id: "w1:p1" } };
+      if (method === "agent.prompt") return { agent: current };
       throw new Error(`unexpected ${method}`);
     };
     const chat = source(call);
@@ -903,7 +904,8 @@ describe("conversation binding and remote admission", () => {
         session_fingerprint: session_fingerprint!,
       }),
     ).toMatchObject({ status: "refused", reason: "changed" });
-    expect(log).toEqual(["agent.get"]);
+    expect(log.at(-1)).toBe("agent.get");
+    expect(log).not.toContain("agent.prompt");
     // Unchanged, the check is the last Herdr call before the prompt.
     current = reported(path);
     log.length = 0;
@@ -913,8 +915,8 @@ describe("conversation binding and remote admission", () => {
         text: "hello",
         session_fingerprint: session_fingerprint!,
       }),
-    ).toEqual({ status: "sent" });
-    expect(log).toEqual(["agent.get", "agent.prompt"]);
+    ).toMatchObject({ status: "sent", delivery: { state: "pending" } });
+    expect(log.slice(-2)).toEqual(["agent.get", "agent.prompt"]);
   });
 
   test("a Codex title binds complete thread IDs only", async () => {
@@ -1003,7 +1005,7 @@ describe("conversation binding and remote admission", () => {
       if (method === "agent.get") return { agent: current };
       if (method === "agent.prompt") {
         prompts.push(params);
-        return { agent: { pane_id: "w1:p1" } };
+        return { agent: current };
       }
       throw new Error(`unexpected ${method}`);
     };

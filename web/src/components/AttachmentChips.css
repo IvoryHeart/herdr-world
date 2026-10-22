@@ -1,0 +1,82 @@
+.attachment-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.attachment-chip {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  min-height: 28px;
+  padding: 3px 4px 3px 9px;
+  overflow: hidden;
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.16));
+  border-radius: 8px;
+  background: var(--panel-2, rgba(255, 255, 255, 0.06));
+  color: var(--text-strong, #e6edf3);
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.attachment-chip[data-status="done"] {
+  border-color: color-mix(in srgb, #57ab5a 60%, transparent);
+}
+
+.attachment-chip[data-status="failed"] {
+  border-color: color-mix(in srgb, #e5534b 70%, transparent);
+}
+
+.attachment-chip-name {
+  min-width: 0;
+  max-width: 14em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.attachment-chip-state {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted, #9aa4b2);
+}
+
+.attachment-chip[data-status="failed"] .attachment-chip-state {
+  color: #f08c86;
+}
+
+.attachment-chip-bar {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 2px;
+  background: var(--accent, #4f8ef7);
+  transition: width 120ms linear;
+}
+
+.attachment-chip button {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.attachment-chip button:hover,
+.attachment-chip button:focus-visible {
+  background: rgba(255, 255, 255, 0.1);
+}
