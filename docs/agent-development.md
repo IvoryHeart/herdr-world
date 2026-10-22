@@ -115,8 +115,14 @@ lint, and the pre-push hook checks the candidate. Code changes get
 `bun run check:changed` (static checks and the affected tests; CI runs the full
 gate), and `HERDR_WORLD_PREPUSH=full` runs `bun run check:delivery` instead. A
 Markdown-only follow-up may use `bun run check:docs` after this worktree has a
-passed code gate on an ancestor. Worktrees share the
+passed code gate on an ancestor, and a push that only merges `origin/main` runs
+`bun run check:static` (see CONTRIBUTING for the exact rule). Worktrees share the
 same Git hook configuration.
+
+Agents in parallel worktrees share one machine-wide check queue: one browser lane
+and one behavioral verification at a time, two light lanes. A queued gate prints
+`[queue] <lane> waiting for <worktree> <lane> (pid, since)`. Do not bypass the
+hook because a gate is queued; the wait is shorter than the contention it avoids.
 
 Batch independent read-only inspections in one tool turn. Keep `rg` results and
 source excerpts bounded, then read more only when needed. The pre-push hook writes

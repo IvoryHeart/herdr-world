@@ -33,7 +33,7 @@ assets required by server typechecks and process tests.
 | Related tests | `bun run test <path>` or `bun run test:quick` (includes integration tests and excludes the dedicated browser suite). |
 | Browser regressions | `bun run test:browser` runs every Chrome-driven test and World browser suite; requires Chrome/Chromium or `CHROME_BIN`. |
 | Completed candidate | Stage intended files, run `bun run format:staged` once, restage and inspect the diff. The command rejects staged files with unstaged edits; docs-only candidates are a safe no-op. |
-| Branch push | The installed pre-push hook runs `bun run check:changed` for code: static checks plus the tests the change affects. A Markdown-only follow-up to a passed code gate runs `bun run check:docs`. CI runs the full gate on the PR head. |
+| Branch push | The installed pre-push hook runs `bun run check:changed` for code: static checks plus the tests the change affects. A Markdown-only follow-up to a passed code gate runs `bun run check:docs`; a push that only merges `origin/main` runs `bun run check:static`. CI runs the full gate on the PR head. |
 | Full local gate | `bun run check:delivery` runs every check, in parallel lanes; `HERDR_WORLD_PREPUSH=full git push` makes the hook run it. |
 
 Run `bun run install-hooks` once per clone to point Git at the tracked
@@ -57,12 +57,32 @@ OpenSpec, tooling and agent/contributor policy receive the code gate even when
 only Markdown changes. CI runs documentation
 checks for ordinary Markdown-only PR diffs, and reuses an exact-head successful full
 result for PR-description edits; missing proof falls back to the full check.
+
+A push that only merges `origin/main` into the already-pushed branch runs
+`bun run check:static` (the static lane alone): both sides were tested and CI runs
+the full gate on the merge. `scripts/merge-push.ts` decides this conservatively.
+The push must add exactly one merge commit on top of the remote branch tip, its
+second parent must be in `origin/main`, and `git merge-tree` must reproduce it
+without conflicts, except a `CHANGELOG.md` conflict resolved by taking main's file.
+The merge commit's tree must equal that clean merge apart from changelog
+fragments. Any other conflict resolution or edit, including one that touches
+code, gets the normal check.
 The three required CI job names remain the same. `bun run check:delivery` runs
 the full gate locally: static checks first (later lanes read the build), then
 behavioral verification alongside unit tests and the untimed World browser
 suites, then Chrome-driven tests and the wall-clock-budget suites once the CPU is
-quieter. Lane logs are kept in `.agents/delivery/lanes/`. One gate runs at a time
-per machine; a second waits. After a failed push check,
+quieter. Lane logs are kept in `.agents/delivery/lanes/`.
+
+Heavy local checks share one machine-wide queue (`scripts/check-lock.ts`) across
+all worktrees and clones: one browser lane (World browser suites, Chrome-driven
+tests, timed suites) and one behavioral verification at a time, and at most two
+light lanes (static checks, unit tests). `bun run check:changed`,
+`check:delivery`, `test:browser` and `scripts/run-world-tests.ts` all queue, and a
+waiting lane prints `waiting for <worktree> <lane> (pid, since)`. Slots are
+`flock(2)` locks under `$XDG_RUNTIME_DIR/herdr-world-checks` (or the temporary
+directory), released by the kernel when their holder exits however it exits, so a
+crashed gate never leaves a stale lock. A process holds one slot at a time, and its
+children run inside it, so gates cannot deadlock. CI does not queue. After a failed push check,
 use the failing stage and focused checks to diagnose the issue. Do not run
 `bun run format` for a scoped change. The pre-push hook records each gate's
 status, elapsed seconds and gate name in the ignored
