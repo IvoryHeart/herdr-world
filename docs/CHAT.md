@@ -12,8 +12,9 @@ view that you open on purpose.
   to the pane (see [Binding](#binding)). Herdr refuses a blocked agent; answer
   its question first.
 - Never calls a message delivered. A sent message shows as "Sent; not yet seen
-  in this conversation" until it appears in the transcript of the session it
-  was sent to. When there is evidence it went to another session, a red notice
+  in this conversation" until the same words appear in the transcript of the
+  session it was sent to, and then marks that message as matched by its words.
+  When there is evidence it went to another session, a red notice
   names both sessions and pauses Send until you dismiss it; when Chat can no
   longer check, it says so (see [Delivery](#delivery)).
 - Does not send commands: a slash command word such as `/compact` or
@@ -111,22 +112,27 @@ Each send leaves a receipt for the pane, bound to the session it was sent to:
 | State | Meaning | Shown |
 | --- | --- | --- |
 | `pending` | Not yet seen in the session it was sent to | In that session's conversation as "Sent; not yet seen"; after the pane moves on, as a line "Still checking <session>". Both have **Stop checking** |
+| `matched` | The same words appeared in its own session clearly after the send | That transcript message is marked "Sent from Chat; matched by its words" |
 | `misdelivered` | Evidence of a switch after the send | A red notice naming both sessions; Send is paused until it is dismissed |
-| `uncertain` | The same words appeared at about the time of the send, too close to tell apart | A notice saying Chat cannot tell, with **Dismiss** |
+| `uncertain` | The same words appeared at about the time of the send, or both in its own session and first in the session the pane moved to | A notice saying Chat cannot tell, with **Dismiss** |
 | `unverified` | Chat can no longer check | A notice saying why, with **Dismiss** |
 
 Transcript times are sorted into three bands around the send: before it,
 about the time of it (the clock's uncertainty plus one second, for
 transcripts that round), and clearly after it.
 
-- A receipt is settled, and removed, by a user message in its own session's
-  transcript with the same text (trimmed) that Chat did not show before the
-  send and that is stamped clearly after it. A message from before the send
-  never settles it, even if it is written late, and each transcript message
-  settles one send.
+- A receipt becomes `matched` when its own session's transcript has a user
+  message with the same text (trimmed) that Chat did not show before the send
+  and that is stamped clearly after it. That proves order, not cause: another
+  client or person could have typed the same words, so Chat never calls it
+  delivered and keeps checking the other sessions the pane showed until the
+  check window ends. If the words then turn up first thing after the send in
+  one of them, the receipt becomes `uncertain`. A message from before the
+  send never matches, even if it is written late, and each transcript message
+  matches one send. Matched receipts make room for new ones at the cap.
 - A copy stamped about the time of the send, in its own session or as the
   first message in a session the pane moved to, makes it `uncertain`: Chat
-  cannot tell it from this message, so it never settles it or calls it a
+  cannot tell it from this message, so it never matches it or calls it a
   misdelivery.
 
 A misdelivery needs evidence of a switch after the send:

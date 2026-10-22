@@ -222,6 +222,15 @@ async function run() {
           fingerprint: "a".repeat(64),
         },
         {
+          id: "dm",
+          text: "Thanks",
+          sent_at: sentAt,
+          state: "matched",
+          expected: "claude session shown",
+          fingerprint: "a".repeat(64),
+          matched_id: "u2",
+        },
+        {
           id: "d0",
           text: "Meant for another conversation",
           sent_at: sentAt,
@@ -243,6 +252,13 @@ async function run() {
         pendingBubble.textContent.includes("not yet seen") &&
         !/delivered/i.test(container.textContent ?? ""),
       "A pending send must show only in its own conversation, and say it is not yet seen, never delivered",
+    );
+    const matched = container.querySelector('[data-delivery="matched"]');
+    check(
+      matched?.textContent?.includes("Thanks") === true &&
+        matched.textContent.includes("matched by its words") &&
+        !/delivered/i.test(container.textContent ?? ""),
+      "A message matched by its words must say so, never that it was delivered",
     );
     const elsewhere = container.querySelector('[data-delivery="elsewhere"]');
     check(

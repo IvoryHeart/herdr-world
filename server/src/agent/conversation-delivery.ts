@@ -11,22 +11,30 @@ import type { ConversationMessage } from "./conversation";
  * - `misdelivered`: there is evidence of a switch after the send, either
  *   Herdr's prompt reply naming another session or the text arriving first
  *   in another session clearly after the send and within moments of it.
- * - `uncertain`: the same words appeared at about the time of the send, so
- *   close to it that Chat cannot tell them from this message.
+ * - `matched`: the same words appeared in its own session clearly after the
+ *   send. That shows order, not cause: another client or person could have
+ *   typed them. Chat marks that message as matched by its words, never as
+ *   delivered, and keeps checking the other sessions until the check window
+ *   ends.
+ * - `uncertain`: the same words appeared at about the time of the send, or
+ *   both in its own session and first in a session the pane moved to, so
+ *   Chat cannot tell where it went.
  * - `unverified`: Chat can no longer check it, because the transcript it
  *   was sent to cannot be read or the check window passed.
- * A pending message seen in its own session clearly after the send is
- * settled and removed. The others stay until the user dismisses them.
+ * Matched receipts are kept, oldest first out, so the cap never drops a
+ * warning; the others stay until the user dismisses them.
  */
 export type ConversationDelivery = {
   id: string;
   text: string;
   sent_at: string;
-  state: "pending" | "misdelivered" | "uncertain" | "unverified";
+  state: "pending" | "matched" | "misdelivered" | "uncertain" | "unverified";
   /** The session Chat showed when the message was sent. */
   expected: string;
   /** That session's fingerprint; a pending message shows only there. */
   fingerprint: string;
+  /** matched: the transcript message with the same words. */
+  matched_id?: string;
   /** misdelivered: the session the evidence names. */
   delivered_to?: string;
   /** misdelivered: Herdr's prompt reply, or another session's transcript. */
@@ -112,15 +120,26 @@ export function createDeliveryLedger() {
     return list;
   };
 
+  // Pending receipts, and matched ones within the check window, can still
+  // change.
+  const open = (receipt: Receipt, now: number) =>
+    receipt.state === "pending" ||
+    (receipt.state === "matched" &&
+      now - receipt.sentAtMs <= DELIVERY_CHECK_MS);
+
   const expireOne = (receipt: Receipt) => {
     receipt.state = "unverified";
     receipt.detail = `Chat did not see it in ${receipt.expected} within ${DELIVERY_CHECK_MS / 60_000} minutes.`;
   };
 
   return {
-    /** No room for another receipt: refuse the send rather than drop one. */
+    /**
+     * No room for another receipt: refuse the send rather than drop a
+     * pending one or a warning. Matched receipts make room.
+     */
     full: (paneId: string) =>
-      (panes.get(paneId)?.length ?? 0) >= RECEIPTS_PER_PANE,
+      (panes.get(paneId) ?? []).filter((receipt) => receipt.state !== "matched")
+        .length >= RECEIPTS_PER_PANE,
 
     /**
      * Record a send. `startedAt` and `endedAt` bracket the prompt call on
@@ -165,18 +184,24 @@ export function createDeliveryLedger() {
         baseline: new Set(send.baseline),
         seen: new Set(),
       };
-      receiptsFor(paneId).push(receipt);
+      const list = receiptsFor(paneId);
+      list.push(receipt);
+      while (list.length > RECEIPTS_PER_PANE) {
+        const index = list.findIndex((item) => item.state === "matched");
+        if (index < 0) break;
+        list.splice(index, 1);
+      }
       return publicDelivery(receipt);
     },
 
     /**
-     * The sessions whose transcripts can settle this pane's pending
-     * receipts: each one's own session and the others the pane showed since.
+     * The sessions whose transcripts can still change this pane's receipts:
+     * each open one's own session and the others the pane showed since.
      */
-    watching(paneId: string) {
+    watching(paneId: string, now = Date.now()) {
       const sessions = new Set<string>();
       for (const receipt of panes.get(paneId) ?? []) {
-        if (receipt.state !== "pending") continue;
+        if (!open(receipt, now)) continue;
         sessions.add(receipt.fingerprint);
         for (const fingerprint of receipt.seen) sessions.add(fingerprint);
       }
@@ -184,7 +209,7 @@ export function createDeliveryLedger() {
     },
 
     /**
-     * Settle pending receipts against the session the pane shows now
+     * Check open receipts against the session the pane shows now
      * (`current`, null when none is bound) and the transcripts read for it.
      */
     evaluate(
@@ -195,8 +220,8 @@ export function createDeliveryLedger() {
     ) {
       const list = panes.get(paneId);
       if (!list) return;
-      for (const receipt of [...list]) {
-        if (receipt.state !== "pending") continue;
+      for (const receipt of list) {
+        if (!open(receipt, now)) continue;
         if (
           current &&
           current !== receipt.fingerprint &&
@@ -215,23 +240,20 @@ export function createDeliveryLedger() {
         const same = (message: ConversationMessage) =>
           message.text.trim() === receipt.typed;
         let unclear: { view: DeliveryView; id: string } | null = null;
-        // Its own session: a copy written clearly after the send settles it.
-        if (own?.messages) {
+        // Its own session: a copy written clearly after the send matches it.
+        let match: { view: DeliveryView; id: string } | null = null;
+        if (receipt.state === "pending" && own?.messages) {
           const copies = candidates(own).filter(
             (message) =>
               same(message) &&
               !receipt.baseline.has(message.id) &&
               Date.parse(message.sent_at) <= receipt.until,
           );
-          const settled = copies.find(
+          const after = copies.find(
             (message) => Date.parse(message.sent_at) >= receipt.after,
           );
-          if (settled) {
-            claimed.add(claimKey(paneId, own.fingerprint, settled.id));
-            list.splice(list.indexOf(receipt), 1);
-            continue;
-          }
-          if (copies[0]) unclear = { view: own, id: copies[0].id };
+          if (after) match = { view: own, id: after.id };
+          else if (copies[0]) unclear = { view: own, id: copies[0].id };
         }
         // Another session: evidence only when the text is the first thing
         // said there clearly after the send, within moments of it. The same
@@ -249,15 +271,33 @@ export function createDeliveryLedger() {
             break;
           }
         }
+        const claim = (found: { view: DeliveryView; id: string }) =>
+          claimed.add(claimKey(paneId, found.view.fingerprint, found.id));
+        // Words in both sessions, or a match followed by evidence elsewhere,
+        // cannot be told apart.
+        if (evidence && (match || receipt.state === "matched")) {
+          claim(evidence);
+          if (match) claim(match);
+          receipt.state = "uncertain";
+          receipt.detail = `The same words appeared in ${receipt.expected} and, first thing after you sent them, in ${evidence.view.label}, so Chat cannot tell which got this message.`;
+          continue;
+        }
         if (evidence) {
-          claimed.add(claimKey(paneId, evidence.view.fingerprint, evidence.id));
+          claim(evidence);
           receipt.state = "misdelivered";
           receipt.evidence = "transcript";
           receipt.delivered_to = evidence.view.label;
           continue;
         }
+        if (match) {
+          claim(match);
+          receipt.state = "matched";
+          receipt.matched_id = match.id;
+          continue;
+        }
+        if (receipt.state !== "pending") continue;
         if (unclear) {
-          claimed.add(claimKey(paneId, unclear.view.fingerprint, unclear.id));
+          claim(unclear);
           receipt.state = "uncertain";
           receipt.detail = `The same words appeared in ${unclear.view.label || receipt.expected} at about the time you sent them, so Chat cannot tell whether that was this message.`;
           continue;
@@ -304,6 +344,7 @@ function publicDelivery(receipt: Receipt): ConversationDelivery {
     state: receipt.state,
     expected: receipt.expected,
     fingerprint: receipt.fingerprint,
+    ...(receipt.matched_id ? { matched_id: receipt.matched_id } : {}),
     ...(receipt.delivered_to ? { delivered_to: receipt.delivered_to } : {}),
     ...(receipt.evidence ? { evidence: receipt.evidence } : {}),
     ...(receipt.detail ? { detail: receipt.detail } : {}),

@@ -325,7 +325,8 @@ See [resource ownership](docs/ARCHITECTURE.md#workspace-resource-ownership).
   terminal, and hides context the harness injects as user turns. It sends with
   Herdr's agent prompt only to a session Herdr ties to the pane (a reported
   session or a Codex title thread), not to one World guessed from the folder.
-  A sent message shows as not yet seen until its session's transcript has it.
+  A sent message shows as not yet seen until its session's transcript has
+  the same words, and then as matched by its words, never as delivered.
   When there is evidence it went to another session, a red notice names both
   sessions and pauses Send until dismissed; when Chat can no longer check, it
   says so, or that it cannot tell when the same words appeared at about the

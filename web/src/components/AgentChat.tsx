@@ -63,9 +63,10 @@ export type ConversationDelivery = {
   id: string;
   text: string;
   sent_at: string;
-  state: "pending" | "misdelivered" | "uncertain" | "unverified";
+  state: "pending" | "matched" | "misdelivered" | "uncertain" | "unverified";
   expected: string;
   fingerprint: string;
+  matched_id?: string;
   delivered_to?: string;
   evidence?: "herdr" | "transcript";
   detail?: string;
@@ -82,8 +83,11 @@ const preview = (text: string) =>
 
 const ChatMessage = memo(function ChatMessage({
   message,
+  matched = false,
 }: {
   message: ConversationMessage;
+  /** Has the same words as a message Chat sent: matched, not proven. */
+  matched?: boolean;
 }) {
   if (message.kind === "notice") {
     return (
@@ -107,7 +111,11 @@ const ChatMessage = memo(function ChatMessage({
   }
   const tone = message.kind === "error" ? "is-error" : `is-${message.role}`;
   return (
-    <article className={`agent-chat-message ${tone}`} data-role={message.role}>
+    <article
+      className={`agent-chat-message ${tone}`}
+      data-role={message.role}
+      data-delivery={matched ? "matched" : undefined}
+    >
       <div className="agent-chat-bubble">
         {message.role === "user" ? (
           <p>{message.text}</p>
@@ -123,6 +131,11 @@ const ChatMessage = memo(function ChatMessage({
         <time dateTime={message.sent_at} title={message.sent_at}>
           {formatUiDateTime(message.sent_at)}
         </time>
+        {matched ? (
+          <span title="Chat sent the same words just before this appeared; it cannot prove this is that message.">
+            Sent from Chat; matched by its words
+          </span>
+        ) : null}
         <button
           type="button"
           className="agent-chat-copy"
@@ -327,6 +340,15 @@ export function AgentChat({
       delivery.state === "pending" &&
       delivery.fingerprint === conversation?.session_fingerprint,
   );
+  const matchedIds = new Set(
+    deliveries
+      .filter(
+        (delivery) =>
+          delivery.state === "matched" &&
+          delivery.fingerprint === conversation?.session_fingerprint,
+      )
+      .map((delivery) => delivery.matched_id),
+  );
   // Sent to a session the pane has since left: still checked there.
   const elsewhere = deliveries.filter(
     (delivery) =>
@@ -502,7 +524,11 @@ export function AgentChat({
               <p className="agent-chat-empty">Loading conversation…</p>
             ) : null}
             {conversation?.messages.map((message) => (
-              <ChatMessage key={message.id} message={message} />
+              <ChatMessage
+                key={message.id}
+                message={message}
+                matched={matchedIds.has(message.id)}
+              />
             ))}
             {pending.map((delivery) => (
               <article

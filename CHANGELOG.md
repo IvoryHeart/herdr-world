@@ -54,7 +54,8 @@ are optional because the merged PR history records their source.
 - Chat no longer reports a message as sent to the conversation it shows when
   Herdr delivered it to another session. Herdr's prompt cannot be made
   conditional, so Chat shows a sent message as not yet seen until its own
-  session's transcript has it after the send. A red notice names the other
+  session's transcript has the same words after the send, and then marks it
+  matched by its words, never delivered. A red notice names the other
   session, and pauses Send, only on evidence of a switch after the send, and
   Chat says when it can no longer check, or cannot tell. Chat refuses
   commands it cannot check (slash commands, and Claude Code's `!` and `#`).

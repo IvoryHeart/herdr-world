@@ -458,9 +458,14 @@ export function createHerdrConversationSource(args: {
       // transcripts again for a title it already resolved, while creations
       // and removals of Codex transcripts are being watched.
       const step = await resolve(pane_id, watchCodexSessions());
+      // Every branch carries the receipts' states, so a check that ends
+      // with no agent in the pane still reaches the browsers showing it.
+      const receipts = deliveries
+        .list(pane_id)
+        .map((delivery) => [delivery.id, delivery.state]);
       if (!("resolved" in step))
         return {
-          key: JSON.stringify([step.agent, step.unavailable.reason]),
+          key: JSON.stringify([step.agent, step.unavailable.reason, receipts]),
           paths: [],
         };
       const { base, resolved } = step;
@@ -489,7 +494,7 @@ export function createHerdrConversationSource(args: {
           file?.size ?? null,
           file?.changeToken ?? null,
           otherStats.map((stat) => [stat?.mtimeMs, stat?.size]),
-          deliveries.list(pane_id).map((delivery) => delivery.state),
+          receipts,
         ]),
         paths: [
           ...(file && !args.files.remote ? [file.path] : []),

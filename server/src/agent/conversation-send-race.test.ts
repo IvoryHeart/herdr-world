@@ -202,7 +202,7 @@ describe("a session switch between Chat's check and Herdr's prompt", () => {
     ]);
   });
 
-  test("no switch: the message is pending until the shown transcript has it", async () => {
+  test("no switch: pending until the shown transcript has the words, then matched", async () => {
     const shown = await transcript("shown-c");
     const { call } = fakeHerdr(claude(shown));
     const source = chat(call);
@@ -221,7 +221,11 @@ describe("a session switch between Chat's check and Herdr's prompt", () => {
       1,
     );
     await appendFile(shown, line("user", "Run the tests", 1));
-    expect((await source.read({ pane_id: "w1:p1" })).deliveries).toEqual([]);
+    // Matched by its words, never settled or called delivered.
+    const matched = await source.read({ pane_id: "w1:p1" });
+    expect(matched.deliveries).toMatchObject([
+      { state: "matched", matched_id: matched.messages.at(-1)!.id },
+    ]);
   });
 
   test("two identical sends each need their own transcript message", async () => {
@@ -235,12 +239,14 @@ describe("a session switch between Chat's check and Herdr's prompt", () => {
         text: "Again",
         session_fingerprint: read.session_fingerprint!,
       });
+    const states = async () =>
+      (await source.read({ pane_id: "w1:p1" })).deliveries.map(
+        (delivery) => delivery.state,
+      );
     await appendFile(shown, line("user", "Again", 1));
-    expect((await source.read({ pane_id: "w1:p1" })).deliveries).toHaveLength(
-      1,
-    );
+    expect(await states()).toEqual(["matched", "pending"]);
     await appendFile(shown, line("user", "Again", 2));
-    expect((await source.read({ pane_id: "w1:p1" })).deliveries).toEqual([]);
+    expect(await states()).toEqual(["matched", "matched"]);
   });
 
   test("an older Herdr reply without the session settles nothing by itself", async () => {
@@ -302,7 +308,9 @@ describe("a session switch between Chat's check and Herdr's prompt", () => {
     await appendFile(shown, line("user", "Run the tests", 1));
     await source.read({ pane_id: "w1:p1" });
     state.current = claude(shown);
-    expect((await source.read({ pane_id: "w1:p1" })).deliveries).toEqual([]);
+    expect((await source.read({ pane_id: "w1:p1" })).deliveries).toMatchObject([
+      { state: "matched" },
+    ]);
   });
 
   test("the same words typed later in the next session are not a misdelivery", async () => {
@@ -497,6 +505,62 @@ describe("a copy at about the time of the send", () => {
   });
 });
 
+describe("rev1's probes", () => {
+  test("words typed in the shown session after a raced send never settle it", async () => {
+    const shown = await transcript("shown-u");
+    const other = await transcript("other-u");
+    const { state, call } = fakeHerdr(claude(shown));
+    const source = chat(call);
+    // The text races to the other session while Herdr still reports this one.
+    state.onPrompt = () => {
+      state.replyWith = claude(shown);
+    };
+    await sendTo(source);
+    // Someone types the same words here 500 ms later.
+    await appendFile(shown, line("user", "Run the tests", 0.5));
+    expect((await source.read({ pane_id: "w1:p1" })).deliveries).toMatchObject([
+      { state: "matched" },
+    ]);
+    // The raced copy is still looked for, and the two cannot be told apart.
+    await appendFile(other, line("user", "Run the tests", 0.05));
+    state.current = claude(other);
+    expect((await source.read({ pane_id: "w1:p1" })).deliveries).toMatchObject([
+      { state: "uncertain", detail: expect.stringContaining("cannot tell") },
+    ]);
+  });
+
+  test("a check that ends after the agent exits still reaches the browser", async () => {
+    const shown = await transcript("shown-v");
+    const { state, call } = fakeHerdr(claude(shown));
+    jest.useFakeTimers();
+    try {
+      let ended = false;
+      const source = createHerdrConversationSource({
+        herdrCall: call,
+        files: localAgentSessionFiles,
+        context: createAgentSessionResolverContext(),
+        cache: createSessionProjectionCache(localAgentSessionFiles),
+        onDeliveriesChanged: () => {
+          ended = true;
+        },
+      });
+      await sendTo(source);
+      // The agent exits: Herdr sees no agent in the pane.
+      state.current = { pane_id: "w1:p1" };
+      const before = await source.identity({ pane_id: "w1:p1" });
+      jest.advanceTimersByTime(DELIVERY_CHECK_MS + 2000);
+      for (let tick = 0; tick < 5000 && !ended; tick += 1)
+        await new Promise((resolve) => setImmediate(resolve));
+      expect(ended).toBe(true);
+      const after = await source.identity({ pane_id: "w1:p1" });
+      expect(after.key).not.toBe(before.key);
+      source.dispose();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+});
+
 describe("when Chat can no longer check", () => {
   test("a departed session whose transcript is gone is unverified", async () => {
     const shown = await transcript("shown-r");
@@ -528,7 +592,7 @@ describe("when Chat can no longer check", () => {
       });
       await sendTo(source);
       jest.advanceTimersByTime(DELIVERY_CHECK_MS + 2000);
-      for (let tick = 0; tick < 50 && changed === 0; tick += 1)
+      for (let tick = 0; tick < 5000 && changed === 0; tick += 1)
         await new Promise((resolve) => setImmediate(resolve));
       expect(changed).toBe(1);
       expect(
