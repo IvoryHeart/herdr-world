@@ -9,6 +9,19 @@ are optional because the merged PR history records their source.
 
 ### Added
 
+- Installing or updating Herdr World now installs or upgrades Herdr to the release
+  that World version verified, in Herdr's default location. The standalone
+  installer and `herdr-world update` run the new `herdr-world herdr upgrade`. In
+  the browser, a World update follows up with a visible Herdr step, and
+  **Runtime → Upgrade Herdr** appears whenever Herdr is behind. The upgrade
+  verifies checksums and versions before replacing anything and keeps the old
+  binary for rollback. When it is safe, it hands a running server's panes to the
+  new version; otherwise it says that a restart is needed. It then installs or
+  updates the Codex, Claude and Pi integrations through `herdr integration
+  install` and reinstalls the Herdr World plugin at the matching release. Windows
+  uses Herdr's own installer, and the Homebrew Formula depends on `herdr`. Set
+  `HERDR_WORLD_SKIP_HERDR=1` to install World alone.
+
 - Add a Chat tab to the Inspector, replacing History. Chat shows an agent's
   conversation from its transcript, never the terminal, and replies with
   Herdr's agent prompt only to a session Herdr ties to the pane. The service

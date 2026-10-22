@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { runHerdrCommand } from "./cli";
 import { VERIFIED_HERDR_VERSION } from "./release";
+import type { HerdrUpgradeReport } from "./upgrade";
 
 function fakeConfig() {
   return {
@@ -103,5 +104,102 @@ describe("runHerdrCommand", () => {
     });
     expect(code).toBe(1);
     expect(io.err.join("\n")).toContain("checksum does not match");
+  });
+
+  function upgradeReport(
+    overrides: Partial<HerdrUpgradeReport> = {},
+  ): HerdrUpgradeReport {
+    return {
+      before: {
+        state: "outdated",
+        binaryPath: "/example/herdr",
+        version: "0.9.3",
+      },
+      binary: "upgraded",
+      binaryPath: "/example/herdr",
+      version: VERIFIED_HERDR_VERSION,
+      backupPath: "/example/herdr.previous",
+      server: { outcome: "handed-off" },
+      integrations: [{ target: "codex", action: "updated" }],
+      plugin: { target: "ivoryheart.herdr-world", action: "current" },
+      ...overrides,
+    };
+  }
+
+  test("upgrade passes its options and prints each step", async () => {
+    const io = capture();
+    const received: unknown[] = [];
+    const code = await runHerdrCommand(
+      ["herdr", "upgrade", "--install", "--no-plugin"],
+      "0.3.0",
+      {
+        ...io,
+        loadConfig: () => fakeConfig() as never,
+        serviceStatus: () => ({ installed: false, active: false }),
+        upgrade: async (options) => {
+          received.push(options);
+          return upgradeReport();
+        },
+      },
+    );
+    expect(code).toBe(0);
+    expect(received).toEqual([
+      { installMissing: true, integrations: true, plugin: false },
+    ]);
+    expect(io.out).toEqual([
+      `Upgraded Herdr 0.9.3 -> ${VERIFIED_HERDR_VERSION} at /example/herdr.`,
+      "Previous Herdr binary: /example/herdr.previous",
+      "The running Herdr server handed its panes to the new version.",
+      "Integration codex: updated",
+    ]);
+  });
+
+  test("upgrade --json prints the report and failed steps exit 1", async () => {
+    const io = capture();
+    const report = upgradeReport({
+      plugin: {
+        target: "ivoryheart.herdr-world",
+        action: "failed",
+        detail: "offline",
+      },
+    });
+    const code = await runHerdrCommand(
+      ["herdr", "upgrade", "--json"],
+      "0.3.0",
+      {
+        ...io,
+        loadConfig: () => fakeConfig() as never,
+        serviceStatus: () => ({ installed: false, active: false }),
+        upgrade: async () => report,
+      },
+    );
+    expect(code).toBe(1);
+    expect(JSON.parse(io.out.join("\n"))).toEqual(report);
+  });
+
+  test("rejects unknown options before doing anything", async () => {
+    const io = capture();
+    let upgrades = 0;
+    for (const args of [
+      ["herdr", "upgrade", "--force"],
+      ["herdr", "setup", "--install"],
+    ]) {
+      expect(
+        await runHerdrCommand(args, "0.3.0", {
+          ...io,
+          upgrade: async () => {
+            upgrades += 1;
+            return upgradeReport();
+          },
+        }),
+      ).toBe(1);
+    }
+    expect(upgrades).toBe(0);
+    expect(io.err.join("\n")).toContain(
+      "unknown herdr upgrade option: --force",
+    );
+    expect(io.err.join("\n")).toContain(
+      "unknown herdr setup option: --install",
+    );
   });
 });

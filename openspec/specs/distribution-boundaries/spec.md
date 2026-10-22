@@ -11,13 +11,24 @@ and operational details.
 ### Requirement: Minimal compatibility source
 The repository SHALL derive its application foundation from an exact Roamgate synchronization
 point and SHALL retain only Herdr World source, required upstream-derived source and generated legal
-notices. Herdr SHALL remain a separately installed external runtime.
+notices. Herdr SHALL remain a separately installed external runtime: no World artifact bundles it.
+World installers, the Homebrew Formula and World updates MAY install or upgrade it to the Herdr
+release that World version verified, in Herdr's own default location.
 
 #### Scenario: Desktop archive
 - **WHEN** a release archive is built
 - **THEN** it contains the Herdr World executable, embedded web assets, complete generated dependency
   inventory and licence/copyright texts, asset notices and documentation, without a bundled Herdr
   runtime, a second Roamgate executable or the retired Rust compatibility bridge
+
+#### Scenario: Herdr follows Herdr World
+- **WHEN** a World installer or update runs where Herdr is missing or older than the release that
+  World verified
+- **THEN** World installs or upgrades Herdr from that checksum-verified release in Herdr's default
+  location and keeps a replaced binary for rollback
+- **AND** it never downgrades a newer Herdr, replaces a package-managed Herdr or stops a running Herdr
+  server; it hands a running server off live only when that is safe and otherwise reports that a
+  restart is needed
 
 ### Requirement: Reviewed release identity
 Release preparation SHALL use a branch and reviewed PR. Final artifacts SHALL be built

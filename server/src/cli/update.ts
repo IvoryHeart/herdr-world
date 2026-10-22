@@ -33,6 +33,9 @@ import {
   serviceStatus,
 } from "./service-context";
 
+// Covers a verified download, a live handoff and a plugin rebuild.
+const HERDR_UPGRADE_TIMEOUT_MS = 10 * 60_000;
+
 export interface UpdateDependencies {
   runProcess?: RunProcessWithCodeTimeout;
 }
@@ -49,8 +52,10 @@ Options:
 
 The release manifest, archive checksum, package VERSION and binary version are
 verified before the executable is replaced in place. The previous executable is
-kept as herdr-world.previous; \`herdr-world rollback\` restores it. A running managed
-service that uses this executable is restarted afterwards.
+kept as herdr-world.previous; \`herdr-world rollback\` restores it. The new
+release then runs \`herdr-world herdr upgrade\` to bring Herdr, the agent
+integrations and the Herdr World plugin up to the versions it declares. A
+running managed service that uses this executable is restarted afterwards.
 
 HERDR_WORLD_UPDATE_BASE_URL selects a mirror (from the shell, else the service
 config). To install a specific version, rerun the installer with
@@ -210,6 +215,21 @@ export function createUpdateCommand(
         `Installed herdr-world ${manifest.version} at ${runtime.execPath}.`,
       );
       context.log(`Previous executable: ${runtime.execPath}.previous`);
+      // The new release declares its verified Herdr; let it bring Herdr, the
+      // agent integrations and the plugin up to date as a separate step.
+      // A Herdr problem leaves the World update in place.
+      context.log("Upgrading Herdr for this release...");
+      const herdr = await runProcess(
+        [runtime.execPath, "herdr", "upgrade"],
+        HERDR_UPGRADE_TIMEOUT_MS,
+      );
+      for (const line of `${herdr.stdout}\n${herdr.stderr}`.split("\n"))
+        if (line.trim()) context.log(line.trimEnd());
+      if (herdr.code !== 0) {
+        context.log(
+          "Herdr was not fully upgraded; run `herdr-world herdr upgrade` to retry.",
+        );
+      }
       return restartServiceUsing(context, runtime.execPath);
     },
   };

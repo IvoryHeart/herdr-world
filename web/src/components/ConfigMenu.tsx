@@ -29,7 +29,12 @@ import { logoutBrowserSession } from "../api";
 import { connectionHttpPath } from "../connectionHttp";
 import { useLayoutPreferences } from "../layoutPreferences";
 import { shortcutLabel, useShortcutPreferences } from "../shortcutPreferences";
-import { shallowEqual, store, useStoreSelector } from "../store";
+import {
+  herdrUpgradeOffered,
+  shallowEqual,
+  store,
+  useStoreSelector,
+} from "../store";
 import { useConnectionClient } from "../useConnectionClient";
 import type {
   ConfigurationProps,
@@ -85,6 +90,7 @@ export function ConfigMenu({
       status: state.status,
       updateInfo: state.updateInfo,
       updateInstalling: state.updateInstalling,
+      herdrUpgrading: state.herdrUpgrading,
     }),
     shallowEqual,
   );
@@ -122,6 +128,14 @@ export function ConfigMenu({
     protocol: number;
   } | null>(null);
   const [herdrUnavailable, setHerdrUnavailable] = useState(false);
+  // Offered only on the default connection: the upgrade concerns this
+  // machine's Herdr.
+  const [herdrUpgrade, setHerdrUpgrade] = useState<{
+    from: string;
+    to: string;
+  } | null>(null);
+  const onDefaultConnection =
+    !s.connectionPaused && s.activeConnectionId === s.defaultConnectionId;
   const ref = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const closeMenu = () => {
@@ -139,7 +153,22 @@ export function ConfigMenu({
     setHealth(null);
     setHerdrInfo(null);
     setHerdrUnavailable(false);
+    setHerdrUpgrade(null);
     setOfficePreferences(readOfficePreferences(worldLocalStorage));
+    if (onDefaultConnection)
+      fetch("/api/herdr/status", {
+        credentials: "same-origin",
+        cache: "no-store",
+      })
+        .then((r) => (r.ok ? r.json() : null))
+        .catch(() => null)
+        .then((status) => {
+          if (cancelled || !herdrUpgradeOffered(status)) return;
+          setHerdrUpgrade({
+            from: status.upgrade?.version ?? status.version,
+            to: status.verified_version,
+          });
+        });
     fetch("/api/health", { credentials: "same-origin", cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
       .catch(() => null)
@@ -183,7 +212,7 @@ export function ConfigMenu({
       window.removeEventListener("mousedown", onDown);
       window.removeEventListener("keydown", onKey, { capture: true });
     };
-  }, [connectionClient, open]);
+  }, [connectionClient, onDefaultConnection, open]);
 
   const updateOfficePreferences = (patch: Partial<OfficePreferences>) => {
     const next = writeOfficePreferences(worldLocalStorage, {
@@ -495,6 +524,23 @@ export function ConfigMenu({
                       : "-"}
                   </code>
                 </div>
+                {herdrUpgrade ? (
+                  <ConfigMenuItem
+                    icon={<Download size={15} />}
+                    label={
+                      s.herdrUpgrading
+                        ? "Upgrading Herdr..."
+                        : `Upgrade Herdr to ${herdrUpgrade.to}`
+                    }
+                    description={`Herdr ${herdrUpgrade.from} installed; this release verified ${herdrUpgrade.to}`}
+                    primary
+                    disabled={s.herdrUpgrading}
+                    onClick={() => {
+                      setOpen(false);
+                      void store.upgradeHerdr();
+                    }}
+                  />
+                ) : null}
                 {herdrUnavailable ? (
                   <HerdrSetupCard
                     key={connectionClient.connectionId}

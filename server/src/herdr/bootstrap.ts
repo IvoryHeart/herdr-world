@@ -1,9 +1,13 @@
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
-import { delimiter, join } from "node:path";
+import { delimiter, isAbsolute, join } from "node:path";
 import { HerdrClient } from "../bridge/herdr-client";
 import { assertSupportedHerdrProtocol } from "../bridge/protocol-compat";
-import { herdrManagedBinaryPath, installVerifiedHerdr } from "./release";
+import {
+  herdrDefaultBinaryPath,
+  installVerifiedHerdr,
+  legacyWindowsHerdrBinaryPath,
+} from "./release";
 import { installHerdrService } from "./service";
 
 export type HerdrSetupState =
@@ -34,7 +38,12 @@ export interface HerdrBootstrapDeps {
   arch?: string;
   homeDir?: string;
   appDataDir?: string;
+  localAppDataDir?: string;
+  /** HERDR_INSTALL_DIR. */
+  installDir?: string;
   pathEnv?: string;
+  /** HERDR_BIN_PATH, which Herdr sets for plugin processes. */
+  binPathEnv?: string;
   ping?: () => Promise<{ version: string; protocol: number }>;
   installRelease?: () => Promise<{ binaryPath: string }>;
   installService?: (binaryPath: string) => void;
@@ -64,14 +73,23 @@ export function assertManagedSetupAllowed(guard: HerdrSetupGuard = {}): void {
 export function findHerdrBinary(
   deps: Pick<
     HerdrBootstrapDeps,
-    "platform" | "homeDir" | "appDataDir" | "pathEnv"
+    | "platform"
+    | "homeDir"
+    | "appDataDir"
+    | "localAppDataDir"
+    | "installDir"
+    | "pathEnv"
+    | "binPathEnv"
   > = {},
 ): string | null {
   const platform = deps.platform ?? process.platform;
-  const homeDir = deps.homeDir ?? homedir();
   const executable = platform === "win32" ? "herdr.exe" : "herdr";
 
-  // 1. Whatever the user already has on PATH.
+  // 1. The binary Herdr itself names for the processes it starts.
+  const binPath = (deps.binPathEnv ?? process.env.HERDR_BIN_PATH)?.trim();
+  if (binPath && isAbsolute(binPath) && existsSync(binPath)) return binPath;
+
+  // 2. Whatever the user already has on PATH.
   const pathEnv = deps.pathEnv ?? process.env.PATH ?? "";
   for (const directory of pathEnv.split(delimiter)) {
     if (!directory) continue;
@@ -79,15 +97,12 @@ export function findHerdrBinary(
     if (existsSync(candidate)) return candidate;
   }
 
-  // 2. Install locations: the official Unix default (~/.local/bin), or
-  //    Herdr World's managed directory on Windows.
-  const managed = herdrManagedBinaryPath(
-    homeDir,
-    deps.appDataDir ?? process.env.APPDATA,
-    platform,
-  );
-  if (existsSync(managed)) return managed;
-  return null;
+  // 3. Herdr's default install location, which services may not have on
+  //    PATH, then the directory older Herdr World releases used on Windows.
+  const candidates = [herdrDefaultBinaryPath({ ...deps, platform })];
+  if (platform === "win32")
+    candidates.push(legacyWindowsHerdrBinaryPath({ ...deps, platform }));
+  return candidates.find((candidate) => existsSync(candidate)) ?? null;
 }
 
 export async function detectHerdrSetup(

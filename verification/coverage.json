@@ -1360,7 +1360,9 @@
         "scripts/plugin-native.test.ts",
         "server/src/config/plugin-command.test.ts",
         "scripts/installer-upgrade.test.ts",
-        "server/src/herdr/release.test.ts"
+        "server/src/herdr/release.test.ts",
+        "server/src/herdr/upgrade.test.ts",
+        "server/src/herdr/cli.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/186",
       "technique": "alternative",
@@ -1368,7 +1370,7 @@
       "status": "alternative-evidence",
       "remaining": "OS service managers and downloaded artifacts require supported-platform CI/live evidence; environment-gated checks must report prerequisites/skips.",
       "requiredChecks": ["bun run check", "bun run verification:gate"],
-      "evidenceDecision": "Real setup/update/service tests exercise verified assets, replacement failures, request budgets, saved default diagnostic precedence, package/plugin and preview ownership guards, and moved generated service paths without forcing custom definitions. Native plugin compatibility and system installers add checksum, metadata, native-support and failed-promotion checks; a compiled fixture with an isolated home and empty PATH verifies all frozen action verbs and canonical service ownership. Windows installer and macOS launchd execution remain platform CI evidence. Proposed installer-upgrade CI builds real native candidate archives and exercises latest-stable plugin installation, authenticated runtime/session migration and failed-checksum retention in isolated state. This direct platform evidence is more useful than a model of OS packaging; OS service/channel upgrades and older release combinations remain excluded (docs/release.md).",
+      "evidenceDecision": "Real setup/update/service tests exercise verified assets, replacement failures, request budgets, saved default diagnostic precedence, package/plugin and preview ownership guards, and moved generated service paths without forcing custom definitions. Native plugin compatibility and system installers add checksum, metadata, native-support and failed-promotion checks; a compiled fixture with an isolated home and empty PATH verifies all frozen action verbs and canonical service ownership. Windows installer and macOS launchd execution remain platform CI evidence. Proposed installer-upgrade CI builds real native candidate archives and exercises latest-stable plugin installation, authenticated runtime/session migration and failed-checksum retention in isolated state. Herdr installs and upgrades use fake Herdr binaries, installers and servers: checksum and version checks precede replacement, a failed check restores the previous binary, newer and package-managed installs stay untouched, and live handoff is requested only for an unsupervised Unix server that advertises it, otherwise the old server keeps running and a restart is reported. This direct platform evidence is more useful than a model of OS packaging; OS service/channel upgrades and older release combinations remain excluded (docs/release.md).",
       "partialEvidence": {
         "models": [],
         "contracts": ["verification/consumer-evidence.md"],
@@ -1383,7 +1385,9 @@
           "scripts/plugin-native.test.ts",
           "server/src/config/plugin-command.test.ts",
           "scripts/installer-upgrade.test.ts",
-          "server/src/herdr/release.test.ts"
+          "server/src/herdr/release.test.ts",
+          "server/src/herdr/upgrade.test.ts",
+          "server/src/herdr/cli.test.ts"
         ],
         "checks": ["bun run check"],
         "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."

@@ -19,6 +19,11 @@ test("Homebrew Formula uses each platform's verified archive digest", () => {
   expect(formula).toContain('libexec.install "herdr-world", "VERSION"');
   expect(formula).not.toContain('Dir["herdr-world-*"]');
   expect(formula).toContain('libexec/"herdr-world"');
+  // Homebrew orders dependencies before the platform blocks.
+  expect(formula).toContain('depends_on "herdr"');
+  expect(formula.indexOf('depends_on "herdr"')).toBeLessThan(
+    formula.indexOf("on_macos do"),
+  );
 });
 
 test("Homebrew RC Formula uses the separate candidate identity", () => {

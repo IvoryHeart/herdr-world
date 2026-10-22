@@ -148,6 +148,7 @@ export interface State extends ServerSessionState {
   automaticUpdateChecksEnabled: boolean;
   updateInfo: UpdateInfo | null;
   updateInstalling: boolean;
+  herdrUpgrading: boolean;
   pendingRestartVersion: string | null;
   dismissedUpdateVersion: string | null;
 }
@@ -217,6 +218,12 @@ const TASK_NOTIFICATIONS_KEY = "taskNotificationsEnabled";
 const TASK_NOTIFICATION_PREFERENCES_KEY = "taskNotificationPreferences";
 const AUTOMATIC_UPDATE_CHECKS_KEY = "automaticUpdateChecksEnabled";
 const PENDING_UPDATE_RELOAD_KEY = "pendingUpdateReloadVersion";
+// Set when a World update reloads the page, so the new release then upgrades
+// Herdr as its own visible step.
+const PENDING_HERDR_UPGRADE_KEY = "pendingHerdrUpgrade";
+let herdrUpgradePollMs = 1000;
+// A verified download, a live handoff and a plugin rebuild.
+const HERDR_UPGRADE_TIMEOUT_MS = 15 * 60_000;
 export const DEFAULT_NOTICE_AUTO_DISMISS_MS = 15 * 1000;
 const TASK_COMPLETED_TOAST_DISMISS_MS = DEFAULT_NOTICE_AUTO_DISMISS_MS;
 const UPDATE_RESTART_VERIFY_TIMEOUT_MS = 90 * 1000;
@@ -401,6 +408,57 @@ function storedPendingRestartVersion(): string | null {
   }
 }
 
+function markPendingHerdrUpgrade() {
+  try {
+    worldSessionStorage.setItem(PENDING_HERDR_UPGRADE_KEY, "1");
+  } catch {
+    // Without storage the upgrade stays available from the menu.
+  }
+}
+
+function consumePendingHerdrUpgrade(): boolean {
+  if (typeof sessionStorage === "undefined") return false;
+  try {
+    const pending = worldSessionStorage.getItem(PENDING_HERDR_UPGRADE_KEY);
+    worldSessionStorage.removeItem(PENDING_HERDR_UPGRADE_KEY);
+    return pending === "1";
+  } catch {
+    return false;
+  }
+}
+
+/** The Herdr status payload's upgrade offer, from /api/herdr/status. */
+export interface HerdrStatusUpgrade {
+  state:
+    | "missing"
+    | "current"
+    | "newer"
+    | "outdated"
+    | "package-managed"
+    | "unknown";
+  version?: string;
+  command?: string;
+}
+
+/** Whether Herdr World should offer to bring Herdr up to its verified version. */
+export function herdrUpgradeOffered(status: unknown): boolean {
+  if (!status || typeof status !== "object") return false;
+  const { upgrade, state, version, verified_version } = status as {
+    upgrade?: HerdrStatusUpgrade;
+    state?: unknown;
+    version?: unknown;
+    verified_version?: unknown;
+  };
+  if (upgrade?.state === "outdated") return true;
+  // An earlier upgrade can leave the running server on the old version.
+  return (
+    upgrade?.state === "current" &&
+    state === "running" &&
+    typeof version === "string" &&
+    version !== verified_version
+  );
+}
+
 function storePendingRestartVersion(version: string | null) {
   if (typeof sessionStorage === "undefined") return;
   try {
@@ -454,6 +512,7 @@ const initial: State = {
   automaticUpdateChecksEnabled: storedAutomaticUpdateChecksEnabled(),
   updateInfo: null,
   updateInstalling: false,
+  herdrUpgrading: false,
   pendingRestartVersion: storedPendingRestartVersion(),
   dismissedUpdateVersion: null,
 };
@@ -862,6 +921,7 @@ function reloadWhenUpdatedServerIsReady(
           const health = await response.json().catch(() => null);
           if (healthMatchesUpdateVersion(health, expectedVersion)) {
             storePendingRestartVersion(null);
+            markPendingHerdrUpgrade();
             set({
               pendingRestartVersion: null,
               notice: {
@@ -2599,6 +2659,8 @@ function handleBridgeStatus(s: ConnectionStatus) {
     });
     if (state.pendingRestartVersion) {
       void reloadWhenUpdatedServerIsReady(state.pendingRestartVersion);
+    } else if (consumePendingHerdrUpgrade()) {
+      void store.upgradeHerdr({ automatic: true });
     }
   }
 }
@@ -4682,6 +4744,82 @@ export const store = {
     });
   },
 
+  /**
+   * Bring Herdr, the agent integrations and the Herdr World plugin up to the
+   * versions this release verified. After a World update this runs on its
+   * own (automatic) and does nothing when Herdr is already current.
+   */
+  async upgradeHerdr({ automatic = false }: { automatic?: boolean } = {}) {
+    if (state.herdrUpgrading) return;
+    if (automatic) {
+      const status = await fetch("/api/herdr/status", {
+        credentials: "same-origin",
+        cache: "no-store",
+      })
+        .then((response) => (response.ok ? response.json() : null))
+        .catch(() => null);
+      if (!herdrUpgradeOffered(status)) return;
+    }
+    set({
+      herdrUpgrading: true,
+      notice: {
+        kind: "info",
+        message: "Upgrading Herdr",
+        detail:
+          "Bringing Herdr, agent integrations and the Herdr World plugin up to this release.",
+        loading: true,
+      },
+    });
+    try {
+      const response = await fetch("/api/herdr/upgrade", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "x-herdr-world-herdr-upgrade": "1" },
+      });
+      const started = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(started?.error ?? response.statusText);
+      const deadline = Date.now() + HERDR_UPGRADE_TIMEOUT_MS;
+      while (Date.now() < deadline) {
+        await wait(herdrUpgradePollMs);
+        const job = await fetch("/api/herdr/upgrade", {
+          credentials: "same-origin",
+          cache: "no-store",
+        })
+          .then((reply) => (reply.ok ? reply.json() : null))
+          .catch(() => null);
+        if (!job || job.status === "running") continue;
+        if (job.status === "failed") throw new Error(job.error);
+        if (job.status !== "done") {
+          throw new Error("Herdr World restarted before the upgrade finished.");
+        }
+        const restart = job.report?.server?.outcome === "restart-required";
+        set({
+          herdrUpgrading: false,
+          notice: {
+            kind: restart ? "info" : "success",
+            message: restart
+              ? "Herdr upgraded; restart needed"
+              : "Herdr is up to date",
+            detail: (job.lines as string[]).join("\n"),
+            detailMode: "output",
+            detailTitle: "Herdr upgrade",
+          },
+        });
+        return;
+      }
+      throw new Error("The Herdr upgrade did not report a result in time.");
+    } catch (e) {
+      set({
+        herdrUpgrading: false,
+        notice: {
+          kind: "error",
+          message: "Herdr upgrade failed",
+          detail: (e as Error).message,
+        },
+      });
+    }
+  },
+
   async installUpdate() {
     if (state.connectionPaused) {
       set({
@@ -5060,6 +5198,9 @@ export const store = {
 
 /** Test-only singleton seam for deterministic deferred production-store tests. */
 export const __storeTesting = {
+  setHerdrUpgradePollMs(ms: number) {
+    herdrUpgradePollMs = ms;
+  },
   notifyRangerTask,
   handleBridgeStatus,
   handleHerdrEvent,

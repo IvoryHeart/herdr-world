@@ -502,6 +502,9 @@ export async function verify() {
         ...state.env,
         HERDR_WORLD_VERSION: version,
         HERDR_WORLD_INSTALL_DIR: directory,
+        // The Herdr step is covered by fakes in unit tests; this job proves
+        // the World replacement without downloading a real Herdr.
+        HERDR_WORLD_SKIP_HERDR: "1",
       };
       copyFileSync(previousBinary, join(directory, executable));
       assert.equal(

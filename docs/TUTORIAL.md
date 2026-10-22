@@ -48,9 +48,13 @@ older World or Roamgate installation.
 ### Open your first workspace: about 5 minutes
 
 1. If Herdr is already installed, start it with a trusted project open. See
-   [herdr.dev](https://herdr.dev) for setup. If it is not installed, complete the
-   **standalone World installation in step 2 first**, then run
-   `herdr-world herdr setup` to install and start Herdr before step 3.
+   [herdr.dev](https://herdr.dev) for setup. If it is not installed, do step 2
+   first: the standalone installer and Homebrew install the Herdr version this
+   World release verified (with npm or a Windows archive, run
+   `herdr-world herdr upgrade --install`). Then run `herdr-world herdr setup` to
+   start Herdr before step 3. Later World updates upgrade Herdr and the Codex,
+   Claude and Pi integrations too; see
+   [Herdr installation and upgrades](./DEPLOYMENT.md#herdr-installation-and-upgrades).
 2. [Install Herdr World](./DEPLOYMENT.md#install-a-release). Standalone needs no Bun;
    Windows supports npm (`npm install --global @ivoryheart/herdr-world`,
    Node.js 22.14.0 or newer) or the matching x64/ARM64 archive and

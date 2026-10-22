@@ -19,6 +19,9 @@ export function renderHomebrewFormula(
   homepage "https://herdr.world/"
   version "${version}"
 
+  # Herdr World runs on Herdr; Homebrew installs and upgrades it with World.
+  depends_on "herdr"
+
   on_macos do
     on_arm do${source("darwin-arm64")}
     end

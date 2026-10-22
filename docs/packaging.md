@@ -2,7 +2,12 @@
 
 Release archives contain one compiled `herdr-world` executable with embedded web
 assets plus version, lineage and licence material. They do not contain Herdr, a second
-Roamgate application or the retired Rust bridge.
+Roamgate application or the retired Rust bridge. Instead the executable pins one
+verified Herdr release (`server/src/herdr/release.ts`: version, per-platform package
+checksums and the checksum of Herdr's Windows `install.ps1`). The standalone
+installer and World updates install or upgrade Herdr from that release in Herdr's
+own location, and the Homebrew Formula declares `depends_on "herdr"`. See
+[Herdr installation and upgrades](DEPLOYMENT.md#herdr-installation-and-upgrades).
 
 The web build is limited to 150 files and 13.25 MiB total embedded assets,
 including lazy features such as Ranger, commit history, the diff worker and the

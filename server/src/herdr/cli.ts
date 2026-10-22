@@ -9,6 +9,12 @@ import {
 } from "./bootstrap";
 import { herdrServiceStatus } from "./service";
 import { VERIFIED_HERDR_VERSION } from "./release";
+import {
+  describeHerdrUpgrade,
+  type HerdrUpgradeDeps,
+  type HerdrUpgradeReport,
+  upgradeHerdr,
+} from "./upgrade";
 
 function herdrHelp(): string {
   return `Install and start the local Herdr server.
@@ -16,12 +22,21 @@ function herdrHelp(): string {
 Usage:
   herdr-world herdr setup
   herdr-world herdr status
+  herdr-world herdr upgrade [--install] [--no-integrations] [--no-plugin] [--json]
 
 Setup installs the Herdr World-verified Herdr ${VERIFIED_HERDR_VERSION} release
 when no herdr binary is found, then installs and starts a user service running
 \`herdr server\` (systemd user service on Linux, launchd LaunchAgent on macOS,
-per-user Task Scheduler task on Windows). An existing herdr binary is used as
-is and never replaced. Status prints the detected state.
+per-user Task Scheduler task on Windows). Status prints the detected state.
+
+Upgrade brings an older Herdr up to ${VERIFIED_HERDR_VERSION}: it verifies the
+release checksum, keeps the replaced binary as herdr.previous (Windows keeps
+earlier releases through Herdr's installer), and asks a running local server to
+hand its panes to the new version when that is safe; otherwise it says that a
+restart is needed. It never downgrades a newer Herdr or replaces a Homebrew,
+mise or Nix install. It then installs or updates the Codex, Claude and Pi
+integrations for agents on PATH and reinstalls the Herdr World plugin at this
+release. --install also installs Herdr when none is found.
 `;
 }
 
@@ -29,16 +44,29 @@ export interface HerdrCommandDeps {
   loadConfig?: typeof loadServerConfig;
   detect?: () => Promise<HerdrSetupState>;
   setup?: () => Promise<HerdrSetupResult>;
+  upgrade?: (
+    options: Pick<
+      HerdrUpgradeDeps,
+      "installMissing" | "integrations" | "plugin"
+    >,
+  ) => Promise<HerdrUpgradeReport>;
   serviceStatus?: () => { installed: boolean; active: boolean };
   log?: (message: string) => void;
   error?: (message: string) => void;
 }
 
-// loadServerConfig parses process.argv strictly, so remove the herdr words
-// first. Guarded so tests (and unusual argv layouts) never mutate argv.
-function stripHerdrArgv(action: string) {
-  if (process.argv[2] === "herdr" && process.argv[3] === action) {
-    process.argv.splice(2, 2);
+const UPGRADE_FLAGS = [
+  "--install",
+  "--no-integrations",
+  "--no-plugin",
+  "--json",
+];
+
+// loadServerConfig parses process.argv strictly, so remove the herdr words and
+// their flags first. Guarded so tests (and unusual argv layouts) never mutate argv.
+function stripHerdrArgv(args: string[]) {
+  if (args.every((arg, index) => process.argv[2 + index] === arg)) {
+    process.argv.splice(2, args.length);
   }
 }
 
@@ -64,14 +92,22 @@ export async function runHerdrCommand(
     log(herdrHelp());
     return 0;
   }
-  if (action !== "setup" && action !== "status") {
+  if (action !== "setup" && action !== "status" && action !== "upgrade") {
     error(`unknown herdr action: ${action}`);
+    error("Run `herdr-world herdr --help` for usage.");
+    return 1;
+  }
+  const flags = args.slice(2);
+  const allowed = action === "upgrade" ? UPGRADE_FLAGS : [];
+  const unknownFlag = flags.find((flag) => !allowed.includes(flag));
+  if (unknownFlag) {
+    error(`unknown herdr ${action} option: ${unknownFlag}`);
     error("Run `herdr-world herdr --help` for usage.");
     return 1;
   }
 
   try {
-    stripHerdrArgv(action);
+    stripHerdrArgv(args);
     const loadConfig = dependencies.loadConfig ?? loadServerConfig;
     const config = loadConfig(appVersion);
     const guard: HerdrSetupGuard = {
@@ -111,6 +147,41 @@ export async function runHerdrCommand(
         }`,
       );
       return 0;
+    }
+
+    if (action === "upgrade") {
+      const upgrade =
+        dependencies.upgrade ??
+        ((options) =>
+          upgradeHerdr({
+            ...options,
+            worldVersion: appVersion,
+            log: error,
+            // A remote default connection keeps its own Herdr.
+            server: config.sshHost
+              ? undefined
+              : {
+                  ping,
+                  call: (method, params, timeoutMs) =>
+                    new HerdrClient(config.socketPath).call(
+                      method,
+                      params,
+                      timeoutMs,
+                    ),
+                  supervised: serviceStatus().active,
+                },
+          }));
+      const report = await upgrade({
+        installMissing: flags.includes("--install"),
+        integrations: !flags.includes("--no-integrations"),
+        plugin: !flags.includes("--no-plugin"),
+      });
+      if (flags.includes("--json")) log(JSON.stringify(report));
+      else for (const line of describeHerdrUpgrade(report)) log(line);
+      const failed =
+        report.integrations.some((item) => item.action === "failed") ||
+        report.plugin.action === "failed";
+      return failed ? 1 : 0;
     }
 
     const setup = dependencies.setup ?? (() => setupHerdr({ guard, ping }));

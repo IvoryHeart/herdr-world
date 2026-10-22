@@ -6,6 +6,8 @@ github_repository="IvoryHeart/herdr-world"
 custom_release_base="${HERDR_WORLD_RELEASE_BASE_URL-}"
 install_dir="${HERDR_WORLD_INSTALL_DIR-$HOME/.local/bin}"
 requested_version="${HERDR_WORLD_VERSION-}"
+# Set to 1 to install only herdr-world, leaving Herdr and its integrations alone.
+skip_herdr="${HERDR_WORLD_SKIP_HERDR-}"
 
 fail() {
   printf 'Herdr World installer: %s\n' "$*" >&2
@@ -218,3 +220,15 @@ case ":${PATH:-}:" in
   printf 'Add %s to PATH to run herdr-world directly.\n' "$install_dir"
   ;;
 esac
+
+# Herdr World runs on Herdr. The release just installed knows which Herdr it
+# verified: install it when missing, or upgrade an older one, then refresh the
+# agent integrations and the Herdr World plugin. A Herdr problem does not undo
+# the herdr-world installation.
+if [ "$skip_herdr" != "1" ]; then
+  printf 'Checking Herdr...\n'
+  if ! "$target" herdr upgrade --install; then
+    printf 'Herdr World installer: Herdr was not fully installed or upgraded; run `%s herdr upgrade --install` to retry.\n' \
+      "$target" >&2
+  fi
+fi

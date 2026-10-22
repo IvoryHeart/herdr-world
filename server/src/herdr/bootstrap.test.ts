@@ -8,7 +8,11 @@ import {
   findHerdrBinary,
   setupHerdr,
 } from "./bootstrap";
-import { herdrManagedBinaryPath, VERIFIED_HERDR_VERSION } from "./release";
+import {
+  herdrDefaultBinaryPath,
+  legacyWindowsHerdrBinaryPath,
+  VERIFIED_HERDR_VERSION,
+} from "./release";
 
 const trash: string[] = [];
 function scratch(): string {
@@ -46,49 +50,114 @@ describe("assertManagedSetupAllowed", () => {
 });
 
 describe("findHerdrBinary", () => {
-  test("prefers whatever is on PATH", () => {
+  // Herdr exports HERDR_BIN_PATH to the processes it starts; keep it out.
+  const isolated = { binPathEnv: "", installDir: undefined };
+
+  test("prefers the binary Herdr names in HERDR_BIN_PATH", () => {
     const homeDir = scratch();
-    const official = herdrManagedBinaryPath(homeDir, undefined, "linux");
+    const named = join(scratch(), "herdr");
+    writeFileSync(named, "named");
+    const pathDir = scratch();
+    writeFileSync(join(pathDir, "herdr"), "path");
+    expect(
+      findHerdrBinary({
+        platform: "linux",
+        homeDir,
+        pathEnv: pathDir,
+        binPathEnv: named,
+      }),
+    ).toBe(named);
+    // A stale or relative value is ignored.
+    for (const binPathEnv of [join(homeDir, "gone"), "herdr"])
+      expect(
+        findHerdrBinary({
+          platform: "linux",
+          homeDir,
+          pathEnv: pathDir,
+          binPathEnv,
+        }),
+      ).toBe(join(pathDir, "herdr"));
+  });
+
+  test("prefers whatever is on PATH over the default location", () => {
+    const homeDir = scratch();
+    const official = herdrDefaultBinaryPath({ platform: "linux", homeDir });
     mkdirSync(join(official, ".."), { recursive: true });
     writeFileSync(official, "official");
     const pathDir = scratch();
     writeFileSync(join(pathDir, "herdr"), "path");
     expect(
-      findHerdrBinary({ platform: "linux", homeDir, pathEnv: pathDir }),
+      findHerdrBinary({
+        ...isolated,
+        platform: "linux",
+        homeDir,
+        pathEnv: pathDir,
+      }),
     ).toBe(join(pathDir, "herdr"));
   });
 
-  test("falls back to the official installer location", () => {
+  test("falls back to the official installer location, honoring HERDR_INSTALL_DIR", () => {
     const homeDir = scratch();
     const localBin = join(homeDir, ".local", "bin");
     mkdirSync(localBin, { recursive: true });
     writeFileSync(join(localBin, "herdr"), "local");
-    expect(findHerdrBinary({ platform: "linux", homeDir, pathEnv: "" })).toBe(
-      join(localBin, "herdr"),
-    );
+    expect(
+      findHerdrBinary({ ...isolated, platform: "linux", homeDir, pathEnv: "" }),
+    ).toBe(join(localBin, "herdr"));
+    const installDir = scratch();
+    writeFileSync(join(installDir, "herdr"), "custom");
+    expect(
+      findHerdrBinary({
+        binPathEnv: "",
+        platform: "linux",
+        homeDir,
+        pathEnv: "",
+        installDir,
+      }),
+    ).toBe(join(installDir, "herdr"));
   });
 
   test("returns null when no herdr binary exists", () => {
     expect(
-      findHerdrBinary({ platform: "linux", homeDir: scratch(), pathEnv: "" }),
+      findHerdrBinary({
+        ...isolated,
+        platform: "linux",
+        homeDir: scratch(),
+        pathEnv: "",
+      }),
     ).toBeNull();
   });
 
-  test("looks for herdr.exe on Windows, including the managed directory", () => {
+  test("looks for herdr.exe on Windows in Herdr's layout, then the legacy World directory", () => {
     const homeDir = scratch();
     const pathDir = scratch();
     writeFileSync(join(pathDir, "herdr.exe"), "exe");
     expect(
-      findHerdrBinary({ platform: "win32", homeDir, pathEnv: pathDir }),
+      findHerdrBinary({
+        ...isolated,
+        platform: "win32",
+        homeDir,
+        pathEnv: pathDir,
+      }),
     ).toBe(join(pathDir, "herdr.exe"));
 
-    const managedHome = scratch();
-    const managed = herdrManagedBinaryPath(managedHome, undefined, "win32");
-    mkdirSync(join(managed, ".."), { recursive: true });
-    writeFileSync(managed, "managed");
-    expect(
-      findHerdrBinary({ platform: "win32", homeDir: managedHome, pathEnv: "" }),
-    ).toBe(managed);
+    const windowsHome = scratch();
+    const env = {
+      ...isolated,
+      platform: "win32",
+      homeDir: windowsHome,
+      localAppDataDir: join(windowsHome, "Local"),
+      appDataDir: join(windowsHome, "Roaming"),
+      pathEnv: "",
+    };
+    const legacy = legacyWindowsHerdrBinaryPath(env);
+    mkdirSync(join(legacy, ".."), { recursive: true });
+    writeFileSync(legacy, "legacy");
+    expect(findHerdrBinary(env)).toBe(legacy);
+    const official = herdrDefaultBinaryPath(env);
+    mkdirSync(join(official, ".."), { recursive: true });
+    writeFileSync(official, "official");
+    expect(findHerdrBinary(env)).toBe(official);
   });
 });
 
@@ -110,6 +179,7 @@ describe("detectHerdrSetup", () => {
       ping: failingPing,
       platform: "linux",
       homeDir,
+      binPathEnv: "",
       pathEnv: pathDir,
     };
     expect(await detectHerdrSetup(deps)).toEqual({
@@ -117,7 +187,12 @@ describe("detectHerdrSetup", () => {
       binaryPath: join(pathDir, "herdr"),
     });
     expect(
-      await detectHerdrSetup({ ...deps, homeDir: scratch(), pathEnv: "" }),
+      await detectHerdrSetup({
+        ...deps,
+        homeDir: scratch(),
+        pathEnv: "",
+        binPathEnv: "",
+      }),
     ).toEqual({ state: "missing" });
   });
 });
@@ -150,6 +225,7 @@ describe("setupHerdr", () => {
     const result = await setupHerdr({
       platform: "linux",
       homeDir,
+      binPathEnv: "",
       pathEnv: pathDir,
       ping: () => {
         pings += 1;
@@ -176,12 +252,13 @@ describe("setupHerdr", () => {
 
   test("installs the verified release when no binary exists", async () => {
     const homeDir = scratch();
-    const managed = herdrManagedBinaryPath(homeDir, undefined, "linux");
+    const managed = herdrDefaultBinaryPath({ platform: "linux", homeDir });
     const serviced: string[] = [];
     let pings = 0;
     const result = await setupHerdr({
       platform: "linux",
       homeDir,
+      binPathEnv: "",
       pathEnv: "",
       ping: () => {
         pings += 1;
