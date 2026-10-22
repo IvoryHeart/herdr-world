@@ -3,6 +3,7 @@
 - What changed and why:
 - Parent PR or branch, if stacked:
 - Documentation impact: <list relevant guides updated, or explain why existing instructions remain accurate; changelog alone is insufficient>
+- Changelog: <changes/NAME.md fragment, or none — explain why nothing is user-facing>
 - Knowledge map impact: <updated, or unchanged — explain why navigation did not change>
 
 ## Verification
