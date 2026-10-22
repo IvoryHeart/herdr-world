@@ -570,6 +570,79 @@ describe("upgradeHerdr", () => {
     );
   });
 
+  test("a Windows upgrade that moves Herdr repoints World's task, legacy or not", async () => {
+    // install.ps1 puts its active release directory on PATH, and herdr setup
+    // may have registered World's task with that absolute path.
+    for (const fromRelease of [true, false]) {
+      const homeDir = scratch();
+      const env = {
+        platform: "win32",
+        homeDir,
+        localAppDataDir: join(homeDir, "Local"),
+        appDataDir: join(homeDir, "Roaming"),
+      };
+      const official = herdrDefaultBinaryPath(env);
+      const release = join(
+        homeDir,
+        ".herdr",
+        "packages",
+        "standalone",
+        "releases",
+        "0.9.3-x86_64-pc-windows-msvc",
+        "herdr.exe",
+      );
+      const found = fromRelease ? release : official;
+      mkdirSync(dirname(found), { recursive: true });
+      writeFileSync(found, "old exe");
+      const rebinds: string[][] = [];
+      let installed = false;
+      const report = await upgradeHerdr(
+        deps(homeDir, {
+          ...env,
+          pathEnv: dirname(found),
+          integrations: false,
+          plugin: false,
+          expectedInstallerSha256: createHash("sha256")
+            .update("ps1")
+            .digest("hex"),
+          download: async (url, path) =>
+            writeFileSync(
+              path,
+              url.endsWith("install.ps1") ? "ps1" : verifiedBinary,
+            ),
+          runCommand: () => {
+            mkdirSync(dirname(official), { recursive: true });
+            writeFileSync(official, "new exe");
+            installed = true;
+            return 0;
+          },
+          readVersion: () =>
+            `herdr ${installed ? VERIFIED_HERDR_VERSION : "0.9.3"}`,
+          rebindTask: (from, to) => {
+            rebinds.push([from, to]);
+            return true;
+          },
+        }),
+      );
+      expect(report).toMatchObject({
+        binary: "upgraded",
+        binaryPath: official,
+      });
+      expect(report.migratedFrom).toBeUndefined();
+      if (fromRelease) {
+        expect(rebinds).toEqual([[release, official]]);
+        expect(report.taskRebound).toBe(true);
+        expect(describeHerdrUpgrade(report)).toContain(
+          `Herdr World's Herdr task now starts ${official} instead of ${release} at the next logon or restart.`,
+        );
+      } else {
+        // Already at the default location: nothing moves, no task changes.
+        expect(rebinds).toEqual([]);
+        expect(report.taskRebound).toBeUndefined();
+      }
+    }
+  });
+
   test("a current Herdr only installs missing or outdated harness integrations", async () => {
     const { homeDir } = installHerdr(VERIFIED_HERDR_VERSION);
     const cli = fakeCli({ plugins: pluginList("0.3.0") });

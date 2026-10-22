@@ -218,9 +218,10 @@ What the upgrade does:
    `%USERPROFILE%\.herdr` (`HERDR_HOME`), which PATH may point at directly. A Herdr
    that Herdr World 0.2.6 or earlier installed under
    `%APPDATA%\herdr-world\herdr\<version>` (found even though it is not on PATH)
-   moves to Herdr's default location. The old copy stays as a backup, and
-   World's Herdr scheduled task is re-registered at the new path without being
-   restarted. A Herdr elsewhere is reported and left alone. World never downgrades
+   moves to Herdr's default location, and the old copy stays as a backup. Whenever
+   an upgrade moves Herdr (from that legacy copy, or from a release directory on
+   PATH to the default bin), World's Herdr scheduled task is re-registered at the
+   new path without being restarted. A Herdr elsewhere is reported and left alone. World never downgrades
    a newer Herdr. It also leaves Homebrew, mise, asdf and Nix installs, and any
    shim, to their manager; it prints the command to use.
 2. **Running server.** A Herdr server keeps running its old version until it is

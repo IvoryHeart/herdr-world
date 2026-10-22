@@ -591,10 +591,16 @@ export async function upgradeHerdr(
       report.backupPath = replaced.backupPath;
       report.binary = "upgraded";
       changed = true;
-      if (before.legacyWindows) {
-        // The legacy directory stays as the backup; World's task, which
-        // starts Herdr at logon, moves to the new location.
-        report.migratedFrom = before.binaryPath;
+      // Herdr's Windows installer publishes the new release at its default
+      // location, so a Herdr found elsewhere (World's legacy copy, or one of
+      // the installer's own release directories on PATH) moves. World's
+      // Herdr task, which starts Herdr at logon by absolute path, follows it
+      // without being restarted; the old files stay as the backup.
+      if (
+        (deps.platform ?? process.platform) === "win32" &&
+        !samePath(before.binaryPath, binaryPath, "win32")
+      ) {
+        if (before.legacyWindows) report.migratedFrom = before.binaryPath;
         report.taskRebound = (
           deps.rebindTask ??
           ((from, to) =>
@@ -656,6 +662,11 @@ export function describeHerdrUpgrade(report: HerdrUpgradeReport): string[] {
     );
     if (report.backupPath)
       lines.push(`Previous Herdr binary: ${report.backupPath}`);
+    if (report.taskRebound && !report.migratedFrom) {
+      lines.push(
+        `Herdr World's Herdr task now starts ${report.binaryPath} instead of ${before.binaryPath} at the next logon or restart.`,
+      );
+    }
     if (report.migratedFrom) {
       lines.push(
         `Moved Herdr to Herdr's default location. The copy older Herdr World releases installed stays at ${dirname(report.migratedFrom)} as a backup; delete it once Herdr ${VERIFIED_HERDR_VERSION} works.`,
