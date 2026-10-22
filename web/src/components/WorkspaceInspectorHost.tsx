@@ -80,6 +80,7 @@ import { FilePreviewTabs } from "./FilePreviewTabs";
 import { workspaceInspectorLayout } from "./workspaceInspectorLayout";
 import { PullRequestCard } from "./PullRequestCard";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
+import { ColorSwatchButton } from "./ColorSwatch";
 import { InspectorSplitResizer } from "./InspectorSplitResizer";
 import "./WorkspaceInspectorHost.css";
 
@@ -146,6 +147,7 @@ export function WorkspaceInspectorHost({
   onDockChange,
   onExpandedChange,
   windowControls,
+  terminalColor,
   onWindowMaximize,
   windowMaximized = false,
   onClose,
@@ -192,6 +194,8 @@ export function WorkspaceInspectorHost({
   onDockChange: (dock: InspectorDock) => void;
   onExpandedChange: (expanded: boolean) => void;
   windowControls?: ManagedWindowControls;
+  /** The terminal's colour, shown and chosen beside its name. */
+  terminalColor?: ManagedWindowControls["color"];
   onWindowMaximize?: () => void;
   windowMaximized?: boolean;
   onClose: () => void;
@@ -491,6 +495,15 @@ export function WorkspaceInspectorHost({
               : undefined
         }
       >
+        {terminalColor ? (
+          <ColorSwatchButton
+            className="workspace-inspector-swatch"
+            label="Terminal colour"
+            palette={terminalColor.palette}
+            current={terminalColor.current}
+            onColor={terminalColor.onColor}
+          />
+        ) : null}
         {agentContext ? (
           <div className="workspace-inspector-identity workspace-inspector-agent-identity">
             <span

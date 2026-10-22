@@ -142,29 +142,8 @@
   background: var(--tab-color);
 }
 
-.context-menu-swatches {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  padding: 6px 4px 2px;
+.context-menu-colors {
   border-top: 1px solid var(--border-soft);
-}
-
-.context-menu-swatch {
-  width: 18px;
-  height: 18px;
-  padding: 0;
-  border: 2px solid transparent;
-  border-radius: 50%;
-  cursor: pointer;
-}
-
-.context-menu-swatch[aria-pressed="true"] {
-  border-color: var(--text-strong);
-}
-
-.context-menu-swatches .context-menu-item {
-  flex: 1 0 100%;
 }
 
 .tabbar-agent-marker {

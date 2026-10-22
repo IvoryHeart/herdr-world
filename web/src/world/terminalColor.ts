@@ -32,6 +32,12 @@ export const TERMINAL_COLORS = Object.keys(
   TERMINAL_COLOR_HEX,
 ) as readonly TerminalColor[];
 
+/** The palette as the shared colour picker (ColorSwatch.tsx) takes it. */
+export const TERMINAL_COLOR_PALETTE = TERMINAL_COLORS.map((id) => ({
+  id,
+  hex: TERMINAL_COLOR_HEX[id],
+}));
+
 export type TerminalColorTarget = TerminalTab;
 export type TerminalColors = Readonly<Record<string, TerminalColor>>;
 
