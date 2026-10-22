@@ -16,7 +16,8 @@ are optional because the merged PR history records their source.
   agent's pull request or ticket (`#123 ✓`). GitHub uses the service user's
   `gh` sign-in; Jira Cloud takes a site, email and API token in **Settings →
   Sources**, where each source can be switched off. The token stays in private
-  service storage and never reaches the browser.
+  service storage, never reaches the browser and is removed when the site or
+  email changes.
 
 - Add a Chat tab to the Inspector, replacing History. Chat shows an agent's
   conversation from its transcript, never the terminal, and replies with

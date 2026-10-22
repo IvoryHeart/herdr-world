@@ -247,9 +247,13 @@ on your phone and desktop.
    GitHub pull requests in columns from **In review** through **Fixing**,
    **Green** and **Ready to merge** to **Merged**, and on the **Tickets** tab
    your Jira tickets and assigned issues by status. A card names the agents
-   working on it; tap one to close Work and jump to its card. The same pull
+   working on it; tap one to close Work and jump to its card. Escape or a
+   press outside also closes Work. **Green** means checks pass while a
+   required review is pending; **Ready to merge** means approved, or passing
+   in a repository that requires no review. The same pull
    request appears as a badge on the agent's desk in Town, such as `#42 ✓`.
-   If a column says no source is connected, open **Settings → Sources**: sign
+   If Work shows **Set up Jira** or says no source is connected, open
+   **Settings → Sources**: sign
    in to GitHub with `gh auth login` as the user that runs World, or add your
    Jira site, account email and an API token there.
 

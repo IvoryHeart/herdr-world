@@ -47,6 +47,23 @@ worldSourcesStore.useFetch(async () =>
         itemCount: 1,
         config: { kind: "github" },
       },
+      {
+        id: "jira",
+        label: "Jira",
+        enabled: true,
+        state: "not_connected",
+        detail: "Add your Jira site, email and API token in Sources settings.",
+        checkedAt: 1,
+        lastSuccessAt: null,
+        itemCount: 0,
+        config: {
+          kind: "jira",
+          site: null,
+          email: null,
+          jql: "",
+          tokenSet: false,
+        },
+      },
     ],
     items: [
       {
@@ -80,8 +97,19 @@ worldSourcesStore.useFetch(async () =>
     links: [
       {
         connectionId: "studio",
+        generation: 1,
         paneId: "w1:p1",
+        sessionFingerprint: null,
         itemKey: "github:pr:example-org/web-app#42",
+        via: "branch",
+      },
+      // Made for the same pane ID in an earlier runtime: not this agent.
+      {
+        connectionId: "studio",
+        generation: 0,
+        paneId: "w1:p1",
+        sessionFingerprint: null,
+        itemKey: "jira:WEB-7",
         via: "branch",
       },
     ],
@@ -602,6 +630,11 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
           Boolean(fixing?.textContent?.includes("checks failing")),
         "a failing pull request is in Fixing with its checks",
       );
+      check(
+        host.querySelector(".work-lens-setup")?.textContent === "Set up Jira" &&
+          !host.querySelector('.work-lens-note[role="status"]'),
+        "a source never set up is a quiet hint, not a problem",
+      );
       const link = fixing?.querySelector<HTMLAnchorElement>(".work-card-ref");
       check(
         link?.target === "_blank" && link.rel.includes("noopener"),
@@ -621,6 +654,12 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
           ),
         "tickets are grouped by status",
       );
+      check(
+        !host.querySelector(
+          '.work-lens-column[data-lane="doing"] .work-card-agents',
+        ),
+        "a link from an earlier runtime names no agent",
+      );
       host
         .querySelector<HTMLButtonElement>(
           '.work-lens [role="tab"]:nth-child(1)',
@@ -637,6 +676,16 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
         `the linked agent is selected on Board (${selected.slice(before)})`,
       );
       check(!host.querySelector(".work-lens"), "the lens closes on the jump");
+      toggle.click();
+      await waitFor(
+        () => Boolean(host.querySelector(".work-lens")),
+        "the lens opens again",
+      );
+      window.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+      );
+      await settle(100);
+      check(!host.querySelector(".work-lens"), "Escape closes the lens");
     },
   ],
   [

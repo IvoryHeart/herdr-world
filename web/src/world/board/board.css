@@ -1248,6 +1248,22 @@
   color: var(--board-soft);
   font-size: 13px;
 }
+.work-lens-hint {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0 0;
+}
+.work-lens-setup {
+  border: 1px dashed var(--board-line);
+  border-radius: 999px;
+  padding: 2px 10px;
+  background: transparent;
+  color: var(--board-soft);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
 .work-lens-columns {
   flex: 1;
   min-height: 0;

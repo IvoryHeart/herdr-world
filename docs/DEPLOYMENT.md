@@ -244,8 +244,10 @@ topology, terminal conversations and Inspector operations continue normally.
 
 World shows your pull requests and tickets on Board's Work lens and as desk
 badges in Town. Both sources ship with World and are on by default; switch
-either off in **Settings → Sources**. Each is read only while a browser shows
-it, at most once a minute, and a failed refresh keeps the last items.
+either off in **Settings → Sources**. Each is read only while a visible browser
+tab shows it, at most once a minute, and a failed refresh keeps the last items.
+Requests answer within two seconds with what World has while a slow `gh`,
+Jira or SSH lookup finishes in the background.
 
 - **GitHub** runs `gh` as the service user. Install the
   [GitHub CLI](https://cli.github.com/) for that user and run `gh auth login`
@@ -257,7 +259,7 @@ it, at most once a minute, and a failed refresh keeps the last items.
   `settings.json` (`custom.world_sources`); the token is saved in an owner-only
   `source-secrets.json` (or `source-secrets-<hash>.json` beside a custom
   `HERDR_WORLD_SETTINGS_PATH`) in World's data directory and is never sent to the
-  browser. The filter defaults to `(assignee = currentUser() OR watcher =
+  browser. Changing the site or email removes the saved token. The filter defaults to `(assignee = currentUser() OR watcher =
   currentUser()) AND (statusCategory != Done OR updated >= -7d) ORDER BY updated DESC`;
   up to 100 tickets are read.
 

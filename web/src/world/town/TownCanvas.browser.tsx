@@ -561,7 +561,9 @@ async function run() {
       ],
       links: agents.map((leaf) => ({
         connectionId: leaf.connectionId,
+        generation: leaf.generation,
         paneId: leaf.nativeId,
+        sessionFingerprint: leaf.agentSessionFingerprint ?? null,
         itemKey: "github:pr:example-org/atlas#7",
         via: "branch",
       })),

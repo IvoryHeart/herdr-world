@@ -53,8 +53,10 @@ Built-in sources act with the service user's own access: GitHub through that
 user's `gh` sign-in, and Jira with the account email and API token saved in
 **Settings → Sources**. The token is kept in a separate owner-only file in
 private World storage, never in `settings.json`, and is never returned to the
-browser; anyone who can sign in to World can see the user's pull requests and
-tickets, and can replace or remove the token.
+browser. Changing the Jira site or email removes the saved token, so it is
+only ever sent to the site it was entered for. Anyone who can sign in to World
+can see the user's pull requests and tickets, and can replace or remove the
+token.
 
 Updates trust the configured HTTPS release origin (or explicit loopback test
 mirror) and its manifest/checksums. Checksums detect corruption and bind the

@@ -36,8 +36,10 @@ Ideas only were taken from these Herdr plugins; no code was copied.
   installation gets everything and a missing prerequisite degrades to a plain
   "not connected, here's how".
 - **Demand-driven refresh.** The service refreshes a source only while a
-  browser asks, at most once a minute (five seconds when the user asks for
-  a refresh), one request at a time per source; a
+  visible browser tab asks, at most once a minute (five seconds when the user
+  asks for a refresh), one cycle at a time. A request waits at most two
+  seconds, then answers with what World has and `refreshing`, and the browser
+  asks again shortly; a settings save supersedes older responses. A
   failed refresh keeps the last items. There are no webhooks, which would need
   a public endpoint. Links are recomputed at most every 15 seconds.
 - **GitHub through `gh`.** One `gh api graphql` request reads open PRs the
@@ -47,26 +49,36 @@ Ideas only were taken from these Herdr plugins; no code was copied.
   stores no GitHub credentials.
 - **Lanes.** A PR is Merged when merged; Fixing when changes are requested,
   checks fail or it conflicts; In review when a draft or checks run; Ready to
-  merge when approved; Green when checks pass without approval; otherwise In
-  review. Tickets use Jira's status category (To do, In progress, Done);
+  merge when approved, or when checks pass and the repository requires no
+  review (GitHub reports no decision); Green when checks pass and a required
+  review is pending; otherwise In review. Tickets use Jira's status category (To do, In progress, Done);
   assigned GitHub issues are To do.
 - **Jira Cloud only.** `GET /rest/api/3/myself` checks the credentials and
-  tells assigned from watched tickets; `POST /rest/api/3/search/jql` reads up
+  tells assigned tickets; `watches.isWatching` tells watched ones (a ticket a
+  broad filter returns may be neither); `POST /rest/api/3/search/jql` reads up
   to 100 tickets. The default filter is assigned or watched tickets that are
   not done or changed in the last week.
 - **Secrets stay on the service.** The Jira token is written to a private
   0600 file, named per settings file like the session signing state. The
-  browser gets `tokenSet` only and the token field is write-only.
+  browser gets `tokenSet` only and the token field is write-only. Changing
+  the site or email removes the saved token, so it is never sent to another
+  host.
 - **Links.** For each agent pane World uses its reported checkout path, else
   its pane directory, else its workspace's checkout, and reads the branch and
   GitHub remotes there (locally, or over SSH for an SSH profile; Windows hosts
   are skipped). At most 32 checkouts are read per refresh, four at a time,
   each cached for two minutes. A PR links when its head branch matches and its
-  base or head repository is one of the checkout's remotes; an agent-reported
+  head repository (the fork, for a fork's PR) is one of the checkout's
+  remotes; a PR whose head repository is gone links only when reported. A
+  link carries the pane's runtime generation and agent session, and views
+  ignore it for a pane ID reused by a restarted runtime or a new agent; an
+  agent-reported
   PR URL links directly. A ticket links when the branch names its key.
 - **Views.** Board's Work lens is an overlay with its own scrolling, outside
-  Board's gestures. Town's badge is part of the desk's DOM nameplate, so it is
-  crisp, clickable and never overlaps neighbouring desks' chips.
+  Board's gestures, and a layer on the shared stack (Escape, Back or a press
+  outside closes it); the Sources dialog is a layer too. Town's badge is part
+  of the desk's DOM nameplate, so it is crisp, clickable and never overlaps
+  neighbouring desks' chips.
 
 ## Follow-ups
 

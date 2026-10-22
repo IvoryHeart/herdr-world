@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import type { WorldSourceStatus } from "../../../shared/worldSources";
 import { CloseButton } from "../components/CloseButton";
 import { focusDialogElement } from "../components/dialogFocus";
+import { useLayer } from "../layerStack";
 import {
   updateWorldSource,
   useWorldSources,
@@ -16,8 +17,10 @@ import {
 export function SourcesDialog({ onClose }: { onClose(): void }) {
   const snapshot = useWorldSources();
   const dialogRef = useRef<HTMLDivElement>(null);
-  const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
+  const backdropRef = useRef<HTMLDivElement>(null);
+  // Escape and Back close it through the shared stack, top layer first, so
+  // they never also reach Board or a Work lens underneath.
+  useLayer(true, onClose, { element: () => backdropRef.current });
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -38,17 +41,8 @@ export function SourcesDialog({ onClose }: { onClose(): void }) {
 
   useEffect(() => {
     const cancelFocus = focusDialogElement(dialogRef.current);
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      event.preventDefault();
-      onCloseRef.current();
-    };
-    window.addEventListener("keydown", onKeyDown);
     void worldSourcesStore.refresh();
-    return () => {
-      cancelFocus();
-      window.removeEventListener("keydown", onKeyDown);
-    };
+    return cancelFocus;
   }, []);
 
   const run = async (
@@ -81,7 +75,7 @@ export function SourcesDialog({ onClose }: { onClose(): void }) {
     );
 
   return (
-    <div className="modal-backdrop" onMouseDown={onClose}>
+    <div ref={backdropRef} className="modal-backdrop" onMouseDown={onClose}>
       <div
         ref={dialogRef}
         tabIndex={-1}

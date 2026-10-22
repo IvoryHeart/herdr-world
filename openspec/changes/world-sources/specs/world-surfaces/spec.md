@@ -24,7 +24,8 @@ desk.
 
 #### Scenario: Agent works on a pull request
 - **WHEN** an agent's checkout is on the head branch of one of the user's
-  open pull requests in the same GitHub repository
+  open pull requests and has that branch's own repository (the fork, for a
+  fork's pull request) as a GitHub remote
 - **THEN** the Work lens names the agent on that pull request's card and the
   agent's Town desk shows its number and check state
 
@@ -32,3 +33,14 @@ desk.
 - **WHEN** the user saves a Jira API token in Sources settings
 - **THEN** the service keeps it in private storage and every later response
   reports only that a token is set
+
+#### Scenario: Pane reused after a restart
+- **WHEN** a Herdr runtime restarts or a new agent session starts and reuses
+  a linked pane ID
+- **THEN** Board and Town show no item for that pane until World links it
+  again
+
+#### Scenario: Jira site or account changed
+- **WHEN** the user changes the Jira site or email without entering a token
+- **THEN** the service removes the saved token and never sends it to the new
+  site

@@ -1,5 +1,7 @@
 import { ExternalLink, Settings2, X } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
+import type { WorldSourceStatus } from "../../../../shared/worldSources";
+import { useLayer } from "../../layerStack";
 import { workBadgeText } from "../../../../shared/worldSources";
 import { WORLD_SOURCES_SETTINGS_EVENT } from "../../workspaceResource";
 import type { WorldObject } from "../worldObject";
@@ -10,20 +12,44 @@ import {
   type WorkLensGroup,
 } from "./workLensModel";
 
+const openSourcesSettings = () =>
+  window.dispatchEvent(new Event(WORLD_SOURCES_SETTINGS_EVENT));
+
+/**
+ * A source the user never set up is a quiet hint, not a problem: it has never
+ * answered, and (for Jira) has nothing saved.
+ */
+function neverSetUp(source: WorldSourceStatus) {
+  if (source.state !== "not_connected" || source.lastSuccessAt !== null)
+    return false;
+  return source.config.kind !== "jira"
+    ? true
+    : !source.config.site && !source.config.email && !source.config.tokenSet;
+}
+
 /**
  * The Work lens over Board: pull requests from review to merged, and tickets
- * by status. A card's agents jump to their Board cards.
+ * by status. A card's agents jump to their Board cards. It is a layer:
+ * Escape, Back or a press outside closes it.
  */
 export function WorkLens({
   world,
+  anchor,
   onSelectAgent,
   onClose,
 }: {
   world: WorldObject;
+  /** The control that toggles the lens; pressing it is not outside. */
+  anchor?: () => Element | null;
   onSelectAgent(id: string): void;
   onClose(): void;
 }) {
   const snapshot = useWorldSources();
+  const sectionRef = useRef<HTMLElement | null>(null);
+  useLayer(true, onClose, {
+    element: () => sectionRef.current,
+    anchors: () => [anchor?.() ?? null],
+  });
   const [group, setGroup] = useState<WorkLensGroup>("pull_requests");
   const columns = useMemo(
     () => workLensColumns(snapshot, world, group),
@@ -33,11 +59,18 @@ export function WorkLens({
     (source) => source.state === "connected",
   );
   const problems = snapshot.sources.filter(
-    (source) => source.state === "not_connected" || source.state === "error",
+    (source) =>
+      source.state === "error" ||
+      (source.state === "not_connected" && !neverSetUp(source)),
   );
+  const unset = snapshot.sources.filter(neverSetUp);
   const empty = columns.every((column) => !column.cards.length);
   return (
-    <section className="work-lens" aria-label="Work: pull requests and tickets">
+    <section
+      ref={sectionRef}
+      className="work-lens"
+      aria-label="Work: pull requests and tickets"
+    >
       <header className="work-lens-head">
         <div className="work-lens-tabs" role="tablist" aria-label="Work">
           {(
@@ -61,9 +94,7 @@ export function WorkLens({
           type="button"
           className="work-lens-icon"
           aria-label="Sources settings"
-          onClick={() =>
-            window.dispatchEvent(new Event(WORLD_SOURCES_SETTINGS_EVENT))
-          }
+          onClick={openSourcesSettings}
         >
           <Settings2 size={16} aria-hidden="true" />
         </button>
@@ -81,6 +112,20 @@ export function WorkLens({
           {problems
             .map((source) => `${source.label}: ${source.detail}`)
             .join(" ")}
+        </p>
+      ) : null}
+      {unset.length ? (
+        <p className="work-lens-hint">
+          {unset.map((source) => (
+            <button
+              key={source.id}
+              type="button"
+              className="work-lens-setup"
+              onClick={openSourcesSettings}
+            >
+              Set up {source.label}
+            </button>
+          ))}
         </p>
       ) : null}
       {empty ? (

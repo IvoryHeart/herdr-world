@@ -498,6 +498,7 @@ export default function BoardView({
   const [query, setQuery] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
   const [workOpen, setWorkOpen] = useState(false);
+  const workButtonRef = useRef<HTMLButtonElement | null>(null);
   /** The pane chooser: to pick a pane, or to finish a string to one. */
   const [chooser, setChooser] = useState<{
     tabKey: string;
@@ -3645,6 +3646,7 @@ export default function BoardView({
             </button>
           ) : null}
           <button
+            ref={workButtonRef}
             type="button"
             aria-label="Work: pull requests and tickets"
             aria-pressed={workOpen}
@@ -3689,6 +3691,7 @@ export default function BoardView({
         {workOpen ? (
           <WorkLens
             world={world}
+            anchor={() => workButtonRef.current}
             onClose={() => setWorkOpen(false)}
             onSelectAgent={(id) => {
               setWorkOpen(false);
