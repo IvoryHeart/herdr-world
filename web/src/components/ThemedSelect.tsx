@@ -1,7 +1,6 @@
 import { Check, ChevronDown } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useLayoutPreferences } from "../layoutPreferences";
-import { useSystemBack } from "../systemBack";
 import { cn } from "../utils";
 import {
   Command,
@@ -21,8 +20,9 @@ export type ThemedSelectOption = {
 };
 
 // Themed replacement for the native <select>: cmdk provides arrow/Home/End/
-// Enter keyboard support and the popover handles Escape and outside clicks,
-// so the dropdown matches the command menu instead of the OS popup.
+// Enter keyboard support and the popover's layer handles Escape, Back and
+// outside presses, so the dropdown matches the command menu instead of the OS
+// popup.
 export function ThemedSelect({
   value,
   options,
@@ -61,7 +61,6 @@ export function ThemedSelect({
   const selected = useRef(false);
   const listRef = useRef<HTMLDivElement>(null);
   const { mobile } = useLayoutPreferences();
-  useSystemBack(open && !disabled, () => setOpen(false), "popup");
   useEffect(() => {
     if (mobile) return;
     const close = () => setOpen(false);

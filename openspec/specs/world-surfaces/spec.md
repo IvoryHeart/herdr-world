@@ -1261,12 +1261,19 @@ The rail SHALL list a bounded number of entries and count the rest.
 
 Hovering an agent, a reception entry or a rail entry with a pointer SHALL open a
 peek after a short delay, and tapping one SHALL open a pinned peek. The peek SHALL
-show the agent's name, location and status, the latest bounded lines of its pane
-(the question when it is waiting), answer options only when those lines present a
+show the agent's name, location and status, its latest message (the question
+when it is waiting), answer options only when the pane's latest lines present a
 numbered menu or a yes/no prompt, and actions to reply, open the Inspector, open
-the terminal and go to the next waiting agent. Tapping an agent in Town
-SHALL open its peek and SHALL NOT open an Inspector; tapping a room SHALL only
-zoom to it.
+the terminal from the peek's header and go to the next waiting agent. Tapping an
+agent, or the table of an agent away at reception or in the lounge, SHALL open
+what the Town opens preference names: the agent's peek (Chat, the default) or
+its terminal; it SHALL NOT open an Inspector, and tapping a room SHALL only zoom
+to it. A table SHALL stand for its agent that needs the user (waiting, then
+finished) before the agent seated there. An agent opened this way, with either
+preference, SHALL walk back to its desk and stay there until its status
+changes, after which its status places it again; the tap SHALL NOT mark its
+completion reviewed. Tapping and dragging SHALL stay separate gestures:
+a tap never starts a move and a drag never opens a peek.
 
 Peek keyboard shortcuts SHALL apply only while keyboard focus is in the Town
 scene or in the peek; pointer hover alone SHALL NOT capture keys. In that context,
@@ -1295,6 +1302,20 @@ Opening the terminal from a peek SHALL follow the Inspector presentation prefere
 - **WHEN** the peeked pane closes or its runtime generation retires before the reply is sent
 - **THEN** World rejects the reply and does not redirect it to another pane, tab or host
 
+#### Scenario: Tap the table of an agent waiting at reception
+
+- **WHEN** Town opens Chat and the user taps the table of an agent that is
+  waiting at reception
+- **THEN** that agent's peek opens, the agent walks back to its desk, and no
+  terminal opens
+
+#### Scenario: Town opens Terminal
+
+- **WHEN** the user sets Town opens to Terminal and taps the table of a
+  finished agent waiting at reception
+- **THEN** that agent's terminal opens, no peek opens, the agent walks back to
+  its desk, and its completion is not marked reviewed
+
 #### Scenario: No recognizable choice is on screen
 
 - **WHEN** a blocked agent's latest lines contain neither a numbered menu nor a
@@ -1303,18 +1324,28 @@ Opening the terminal from a peek SHALL follow the Inspector presentation prefere
 
 ### Requirement: Town peeks show recent chatter and take replies
 
-An agent's peek SHALL show the agent's recent messages from its session
-history when the agent has a readable session, and otherwise its recent output
-read from the exact qualified pane, in a small box that scrolls back and follows the newest lines
-unless the user has scrolled up. A waiting agent's question SHALL be set apart
-from its earlier output, with its answers as one-tap buttons. The peek SHALL end
+An agent's peek SHALL show the agent's latest message from the conversation
+read model that the Inspector's Chat reads (`agent_conversation.latest` for the
+exact qualified pane), rendered as Chat renders it, and SHALL reread it when the
+service reports the conversation changed, sharing Chat's watch rather than
+polling. It SHALL NOT show terminal
+screen text as the message; when the conversation is unavailable it SHALL show
+Chat's reason. A waiting agent's question, read from the pane's latest lines,
+SHALL be set apart below the message, with its answers as one-tap buttons. The peek SHALL end
 with a reply line and Send. On desktop the reply line SHALL be typed in the peek
 itself and typing while a peek is pinned SHALL go to it. On the phone layout
 tapping the reply line SHALL grow World's own terminal composer in place, with
 its keys, attachments and the draft it shares with the pane's terminal, and the
 composer SHALL stay visible above the keyboard while the screen lines shrink.
-The peek's Terminal action, and the composer's Direct mode, SHALL open the
-pane's full terminal. The peek's Inspector action SHALL open World's Inspector
+The peek's Open terminal action, and the composer's Direct mode, SHALL open the
+pane's full terminal. Attaching files in the peek, the phone composer, Spaces or
+Chat SHALL show one chip per file: uploading with byte progress where the
+transport reports it, then done or failed, with Retry and Remove for a failed
+file; picking a failed file again SHALL retry it. Send SHALL wait for uploads,
+and a file picked again while it uploads SHALL NOT be uploaded twice. A path
+whose upload finishes after its composer closed SHALL be kept for that pane and
+join the draft of the next composer opened for it; a chip SHALL NOT show done
+for a path that can no longer reach a draft. The peek's Inspector action SHALL open World's Inspector
 on the agent's Files view, from which Changes and History are one tap away,
 using the same path as the shell's Actions menu. Answers and replies SHALL be
 sent only to the exact qualified pane, and the result SHALL be confirmed by a
@@ -1331,6 +1362,17 @@ short notice; a finished agent SHALL announce itself once.
 - **WHEN** the user taps the reply line in a waiting agent's peek
 - **THEN** the peek shows World's composer for that pane without opening the
   terminal, and the keyboard does not cover the message field or Send
+
+#### Scenario: The peek renders the latest message
+
+- **WHEN** an agent's latest message contains a Markdown table
+- **THEN** the peek shows a table, not the message's pipes
+
+#### Scenario: An upload fails
+
+- **WHEN** a file attached in a composer fails to upload
+- **THEN** its chip says it failed and why, Retry uploads it again, and Send is
+  not blocked by the failed file
 
 #### Scenario: Open the Inspector from a peek
 
@@ -1584,10 +1626,21 @@ Herdr close a tab on the connection's current runtime, it SHALL drop that tab's
 saved colour. Terminal colour SHALL never stand for or hide a status. World
 SHALL NOT write a colour to Herdr.
 
+A terminal's colour SHALL be shown, and offered for change, beside its name in
+the terminal's header (the window header on desktop, the app bar on a phone)
+and in the terminal window's menu, as well as in the Spaces tab menu, the Town
+peek and Board. Every picker SHALL be the same palette with **Default colour**,
+opened as a transient layer.
+
 #### Scenario: Colour a tab in Spaces
 
 - **WHEN** the user picks pink from a tab's menu in Spaces
 - **THEN** the tab's strip in Spaces, its table in Town and its card in Board show pink on every device
+
+#### Scenario: Colour a terminal from its header
+
+- **WHEN** the user opens the colour swatch beside a terminal's name and picks green
+- **THEN** the terminal shows green in its header, Spaces, Town and Board, and the picker closes
 
 #### Scenario: Reset a tab's colour
 
@@ -1598,6 +1651,45 @@ SHALL NOT write a colour to Herdr.
 
 - **WHEN** the user moves a desk whose tab shows its default colour to another room
 - **THEN** the tab, under its new Herdr tab ID, shows the same colour in every view
+
+### Requirement: Transient layers close top first
+
+Menus, popovers, pickers and lists opened over a terminal or view SHALL form one
+last-in, first-out stack. Escape and Back SHALL close only the top layer, one
+per key or Back. A press outside all layers (including on the terminal) SHALL
+close every open layer, so one tap returns to the terminal. A press inside a
+lower layer SHALL close only the layers above it. These rules SHALL hold whether focus is in
+the terminal or a layer and whether the press is a mouse click or a touch. A
+press outside SHALL still reach what was pressed. A dialog outside the stack
+keeps its own keys and presses while it is above the top layer. The on-screen Back SHALL close an
+open layer before it leaves a terminal. Closing a layer by Escape, Back or a
+choice SHALL return focus to what had it before the layer opened, the terminal
+included; closing it by a press SHALL leave focus with what was pressed.
+
+#### Scenario: Dismiss a dropdown by tapping the terminal
+
+- **WHEN** a dropdown is open over a terminal on a phone and the user taps the terminal
+- **THEN** the dropdown closes and the terminal is shown
+
+#### Scenario: Nested layers
+
+- **WHEN** a terminal window's menu and the colour picker inside it are open
+- **THEN** Escape or Back closes the picker, and a second one closes the menu
+
+#### Scenario: A press outside nested layers
+
+- **WHEN** a terminal window's menu and the colour picker inside it are open
+- **THEN** a press on the terminal closes both and shows the terminal, while a press on the menu closes only the picker
+
+#### Scenario: Back from the workspace list
+
+- **WHEN** the user opens the workspace list from a terminal's title on a phone and taps Back
+- **THEN** the list closes and the terminal is shown; the next Back leaves the terminal
+
+#### Scenario: Focus returns to the terminal
+
+- **WHEN** the user, typing in a terminal, opens its window menu and presses Escape
+- **THEN** the menu closes and keyboard focus is back in the terminal
 
 ### Requirement: Board placement and movement
 

@@ -437,11 +437,11 @@ async function run() {
       )!
       .click();
     await until(
-      () => document.querySelector(".town-peek-foot"),
+      () => document.querySelector(".town-peek-head .town-peek-terminal"),
       "Town agent card",
     );
-    [...document.querySelectorAll<HTMLButtonElement>(".town-peek-foot button")]
-      .find((button) => button.textContent === "Terminal")!
+    document
+      .querySelector<HTMLButtonElement>(".town-peek-head .town-peek-terminal")!
       .click();
     await until(
       () =>

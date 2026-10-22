@@ -53,9 +53,22 @@ import {
   isWorkspacePathDrag,
   workspacePathFromDrag,
 } from "../workspacePathDrag";
+import {
+  attachmentUploading,
+  startAttachmentUploads,
+  useAttachmentUploads,
+} from "../attachmentUploads";
+import type { UploadProgress } from "../terminalImageUpload";
+import { AttachmentChips } from "./AttachmentChips";
 import "./TerminalComposer.css";
 import type { TerminalInputMode } from "../terminalInputMode";
 export type { TerminalInputMode } from "../terminalInputMode";
+
+/** Uploads one file and resolves to the text to insert for it. */
+export type ComposerUpload = (
+  file: File,
+  onProgress?: UploadProgress,
+) => Promise<string>;
 
 const SHORTCUTS_OPEN_STORAGE_KEY = "terminalComposerShortcutsOpen.v1";
 let unsavedShortcutsOpen: boolean | undefined;
@@ -124,8 +137,8 @@ export function TerminalComposer({
   onShortcutsVisibleChange?: (visible: boolean) => void;
   onClose: () => void;
   onSubmit: (text: string, submit: boolean) => Promise<void>;
-  onUploadImage: (file: File) => Promise<string>;
-  onUploadFile: (file: File) => Promise<string>;
+  onUploadImage: ComposerUpload;
+  onUploadFile: ComposerUpload;
   onPreparePathInsertion?: () => (text: string) => Promise<void>;
   onError: (message: string) => void;
 }) {
@@ -137,6 +150,7 @@ export function TerminalComposer({
   const [uploadCount, setUploadCount] = useState(() =>
     terminalComposerUploadCount(draftKey),
   );
+  const attachments = useAttachmentUploads(draftKey);
   const [composing, setComposing] = useState(false);
   const [editorFocused, setEditorFocused] = useState(false);
   // Latch expansion for this focus session: expanding changes the wrapping
@@ -399,39 +413,55 @@ export function TerminalComposer({
 
   const uploadAndInsert = async (
     files: File[],
-    upload: (file: File) => Promise<string>,
+    upload: ComposerUpload,
     insert = preparePathInsertion(),
     uploadDraftKey = draftKey,
   ) => {
     if (files.length === 0) return;
     if (
       composingRef.current ||
-      terminalComposerSubmissionPending(uploadDraftKey) ||
-      !beginTerminalComposerUpload(uploadDraftKey)
+      terminalComposerSubmissionPending(uploadDraftKey)
     )
       return;
-    const paths: string[] = [];
-    try {
-      for (const file of files) paths.push(await upload(file));
-      if (composingRef.current)
-        throw new Error(
-          "Path insertion deferred during text composition; path retained in Message draft",
-        );
-      await insert(terminalUploadedPathsText(paths));
-      paths.length = 0;
-    } catch (error) {
-      // Keep successful earlier files when a later upload fails. Delivery
-      // itself owns its fallback, so do not retry an uncertain PTY write.
-      if (paths.length) {
-        retainTerminalComposerUploadPaths(
-          uploadDraftKey,
-          terminalUploadedPathsText(paths),
-        );
-      }
-      onError(error instanceof Error ? error.message : "File upload failed");
-    } finally {
-      finishTerminalComposerUpload(uploadDraftKey);
-    }
+    // One chip per file; each path is inserted as its file finishes, so a
+    // failed file can be retried without uploading the others again.
+    await startAttachmentUploads(
+      uploadDraftKey,
+      files,
+      async (file, onProgress) => {
+        if (!beginTerminalComposerUpload(uploadDraftKey))
+          throw new Error("This pane's composer closed");
+        let path: string | null = null;
+        try {
+          path = await upload(file, onProgress);
+          if (composingRef.current)
+            throw new Error(
+              "Path insertion deferred during text composition; path retained in Message draft",
+            );
+          await insert(terminalUploadedPathsText([path]));
+          path = null;
+        } catch (error) {
+          // Keep a successful upload's path when its insertion fails. Delivery
+          // itself owns its fallback, so do not retry an uncertain PTY write.
+          if (path !== null) {
+            retainTerminalComposerUploadPaths(
+              uploadDraftKey,
+              terminalUploadedPathsText([path]),
+            );
+            onError(
+              error instanceof Error ? error.message : "File upload failed",
+            );
+            return;
+          }
+          onError(
+            error instanceof Error ? error.message : "File upload failed",
+          );
+          throw error;
+        } finally {
+          finishTerminalComposerUpload(uploadDraftKey);
+        }
+      },
+    );
   };
 
   const pickFiles = (input: HTMLInputElement, context = prepareUpload()) => {
@@ -448,6 +478,7 @@ export function TerminalComposer({
       !accessoriesOpen ||
       !draft ||
       terminalComposerUploadCount(submittedDraftKey) > 0 ||
+      attachmentUploading(submittedDraftKey) ||
       composingRef.current ||
       !beginTerminalComposerSubmission(submittedDraftKey)
     ) {
@@ -549,6 +580,7 @@ export function TerminalComposer({
       event.currentTarget.disabled ||
       composingRef.current ||
       terminalComposerUploadCount(draftKey) > 0 ||
+      attachmentUploading(draftKey) ||
       terminalComposerSubmissionPending(draftKey)
     )
       return;
@@ -727,7 +759,10 @@ export function TerminalComposer({
     return false;
   };
 
-  const busy = submissionPending || uploadCount > 0;
+  const uploading =
+    uploadCount > 0 ||
+    attachments.some((attachment) => attachment.status === "uploading");
+  const busy = submissionPending || uploading;
   useEffect(() => {
     if (busy || composing) cancelSubmitTouch();
   }, [busy, composing]);
@@ -770,13 +805,14 @@ export function TerminalComposer({
           if (mode === "direct" && !directDisabled) onFocusDirect();
         }}
       >
+        <AttachmentChips scope={draftKey} />
         <div className="terminal-composer-toolbar" hidden={!accessoriesOpen}>
           <button
             type="button"
             className="terminal-composer-attach"
             title="Add a file"
             aria-label="Add a file"
-            disabled={busy || composing}
+            disabled={submissionPending || composing}
             onMouseDown={keepTextareaFocus}
             onClick={() => {
               if (composingRef.current) return;
@@ -877,7 +913,7 @@ export function TerminalComposer({
             hidden={mode !== "composer"}
           >
             <span className="terminal-composer-hint" role="status">
-              {uploadCount > 0
+              {uploading
                 ? "Uploading file…"
                 : submissionPending
                   ? "Sending…"
@@ -1169,10 +1205,10 @@ export function TerminalComposer({
               // No image on the clipboard: let the native text paste proceed.
               if (images.length === 0) return;
               e.preventDefault();
-              void uploadAndInsert(images, (file) =>
+              void uploadAndInsert(images, (file, onProgress) =>
                 file.type.startsWith("image/")
-                  ? onUploadImage(file)
-                  : onUploadFile(file),
+                  ? onUploadImage(file, onProgress)
+                  : onUploadFile(file, onProgress),
               );
             }}
             onDragOver={(e) => {

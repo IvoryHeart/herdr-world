@@ -310,6 +310,7 @@ const IMPORTANT_RPC_METHODS = new Set([
   "agent_conversation.get",
   "agent_conversation.latest",
   "agent_conversation.send",
+  "agent_conversation.dismiss",
   "agent_conversation.watch",
   "agent_conversation.unwatch",
   "agent_history.get",
@@ -1681,7 +1682,8 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
   if (
     method === "agent_conversation.get" ||
     method === "agent_conversation.latest" ||
-    method === "agent_conversation.send"
+    method === "agent_conversation.send" ||
+    method === "agent_conversation.dismiss"
   ) {
     try {
       const source = connection.agentSessions.conversation;
@@ -1692,26 +1694,41 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
       const result =
         method === "agent_conversation.get"
           ? await source.read({ pane_id: paneId })
-          : method === "agent_conversation.send"
-            ? await source.send({
-                pane_id: paneId,
-                text: typeof p.text === "string" ? p.text : "",
-                session_fingerprint:
-                  typeof p.session_fingerprint === "string"
-                    ? p.session_fingerprint
-                    : "",
-              })
-            : paneId
-              ? await source.latest({ pane_id: paneId })
-              : {
-                  conversations: await source.latestAll(
-                    Array.isArray(p.pane_ids)
-                      ? p.pane_ids.filter(
+          : method === "agent_conversation.dismiss"
+            ? {
+                dismissed: source.dismiss({
+                  pane_id: paneId,
+                  delivery_id:
+                    typeof p.delivery_id === "string" ? p.delivery_id : "",
+                }),
+              }
+            : method === "agent_conversation.send"
+              ? await source.send({
+                  pane_id: paneId,
+                  text: typeof p.text === "string" ? p.text : "",
+                  session_fingerprint:
+                    typeof p.session_fingerprint === "string"
+                      ? p.session_fingerprint
+                      : "",
+                  ...(Array.isArray(p.baseline)
+                    ? {
+                        baseline: p.baseline.filter(
                           (id): id is string => typeof id === "string",
-                        )
-                      : undefined,
-                  ),
-                };
+                        ),
+                      }
+                    : {}),
+                })
+              : paneId
+                ? await source.latest({ pane_id: paneId })
+                : {
+                    conversations: await source.latestAll(
+                      Array.isArray(p.pane_ids)
+                        ? p.pane_ids.filter(
+                            (id): id is string => typeof id === "string",
+                          )
+                        : undefined,
+                    ),
+                  };
       sendReply({ id, result }, method);
     } catch (e) {
       sendError(`${method}-error`, e);

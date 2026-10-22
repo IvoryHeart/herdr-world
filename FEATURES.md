@@ -17,13 +17,24 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   - Blocked agents queue at reception oldest first. Finished agents wait there
     until you open their terminal or mark that completion reviewed, then join
     idle agents in the lounge. Movement only represents state.
-  - Hover or tap an agent for a peek: recent session messages (screen text when
-    history is unavailable), a question when recognized, supported answer buttons,
-    a reply line and file attachments. Answers send the offered key to that pane;
-    reply **Send** submits text. On phones, the reply line opens World's Composer
-    inside the peek, with keys, attachments, Insert and Send.
-  - **Inspector** opens files, changes and history; **Terminal** opens the live
-    pane. **Next** cycles other waiting agents, then finished agents if none wait.
+  - Hover an agent, or tap it or its table, for a peek: the agent's latest
+    message from Chat's conversation read model, rendered as Chat renders it
+    (never terminal text; an unavailable conversation shows Chat's reason), a
+    question when recognized, supported answer buttons, a reply line and file
+    attachments. Answers send the offered key to that pane; reply **Send**
+    submits text. On phones, the reply line opens World's Composer inside the
+    peek, with keys, attachments, Insert and Send.
+  - The peek refreshes when the agent's conversation changes, as Chat does,
+    without polling.
+  - Tapping an agent or its table brings the agent back: from reception or the
+    lounge it walks to its desk and stays there until its status changes. A
+    table stands for an agent that needs you (waiting, then finished) before
+    the one seated there. **Menu → Town opens** chooses whether that tap opens
+    the chat (the default) or the terminal; either way the tap does not mark
+    finished work reviewed. **Open terminal** in the peek does, as before.
+  - **Open terminal** in the peek's header opens the live pane; **Inspector**
+    opens files, changes and history. **Next** cycles other waiting agents, then
+    finished agents if none wait.
     The needs-you list becomes a bottom tray on phones and hides when no agent
     is blocked. Review marks acknowledge a specific completion in this browser,
     without certifying its correctness.
@@ -49,9 +60,11 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
 - **Terminal colours.** Every tab has one colour, shown as the tab in Spaces,
   the card in Board and its table in Town (tabs beyond a room's drawn tables
   show it in Spaces and Board). A tab starts with a stable default colour, or
-  its workspace's Board colour; choose another from the tab's menu in Spaces,
-  an agent's peek (**Colour**) in Town, or the selected card in Board, and reset
-  a tab's own colour the same way. Herdr has no tab colour, so the World service
+  its workspace's Board colour; choose another from the swatch beside the
+  terminal's name in its header (desktop window or phone app bar), the
+  terminal window's menu (**Colour**), the tab's menu in Spaces, the swatch in
+  an agent's peek in Town, or the selected card in Board, and reset a tab's own
+  colour with **Default colour** the same way. Herdr has no tab colour, so the World service
   saves the choice keyed by host and Herdr tab ID, the same on every device. A
   closed tab's saved colour is dropped.
   - A desk moved to another room keeps the colour it showed, even a default or
@@ -138,9 +151,17 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   placements; snapping into an occupied region overlaps without rearranging it.
   Tiled windows share resizable dividers. **Open windows** restores minimized windows.
   Window close dismisses presentation; native tab closure remains separate.
+- Menus, dropdowns, pickers and the workspace list opened from a terminal's
+  title close top first: Escape and Back close only the topmost one; a press
+  or tap outside all of them (on the terminal, say) closes them all, so one
+  tap shows the terminal, and a press inside a lower one closes only those
+  above it. Escape, Back or a choice returns
+  focus to where it was, such as the terminal. The phone's Tabs sheet
+  and Composer close with the phone's Back.
 - Mobile shows one active window and preserves desktop positions. The on-screen
-  **Back** returns from a terminal to the visual view even with Composer open;
-  the phone's own Back closes Composer first, then the terminal. Tabs and More stay in the shared top app bar; More exposes Arrange windows.
+  **Back** first closes an open menu or the workspace list (opened from the
+  terminal's title), then returns from a terminal to the visual view even with
+  Composer open; the phone's own Back closes Composer first, then the terminal. Tabs and More stay in the shared top app bar; More exposes Arrange windows.
   Tabs also restores minimized windows and retains native tab actions. The duplicate
   list icon and mobile tab strip are hidden. The outer shell coordinates terminal sizing with the keyboard viewport.
 - A Spaces tab window shows that tab's Herdr split panes. An Inspector in a visual
@@ -267,6 +288,12 @@ commit a search selection. Press K in the recent switcher to convert it to searc
   the selection before scrolling further. Pixel mouse is unsupported.
 - Paste clipboard images to upload to the Herdr host and insert their paths,
   including through `--ssh-host`.
+- Every composer that attaches files (the phone Composer, Spaces, the Town peek
+  and Inspector Chat) shows a chip per file: uploading with byte progress, then
+  done or failed. A failed file can be retried, by **Retry** or by picking it
+  again, or removed. Send waits until uploads finish, and picking a file again
+  while it uploads does not upload it twice. A path that finishes after its
+  composer closed joins the draft when that composer opens again.
 - Drag a file or directory path from the File Explorer into a terminal to
   insert its quoted host path. Terminal font size is adjustable independently
   of interface scale in **Menu → Appearance**.
@@ -330,6 +357,15 @@ See [resource ownership](docs/ARCHITECTURE.md#workspace-resource-ownership).
   terminal, and hides context the harness injects as user turns. It sends with
   Herdr's agent prompt only to a session Herdr ties to the pane (a reported
   session or a Codex title thread), not to one World guessed from the folder.
+  The paperclip attaches files, which upload to the pane's host and add their
+  paths to the message.
+  A sent message shows as not yet seen until its session's transcript has
+  the same words, and then as matched by its words, never as delivered.
+  When there is evidence it went to another session, a red notice names both
+  sessions and pauses Send until dismissed; when Chat can no longer check, it
+  says so, or that it cannot tell when the same words appeared at about the
+  same time. Slash commands, and Claude Code's `!` and `#`, go through the
+  Terminal.
   It refreshes when the service sees the transcript, title or status change,
   without browser polling, and keeps the last good view if a read fails. When
   it cannot read the conversation it shows the reason with the matching action:

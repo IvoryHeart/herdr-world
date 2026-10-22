@@ -20,6 +20,7 @@ import {
   Server,
   Settings,
   Wifi,
+  MessageSquare,
   Wind,
   Bug,
 } from "lucide-react";
@@ -50,6 +51,7 @@ import { ConfigurationLoadingDialog } from "./ConfigurationLoadingDialog";
 import { HerdrSetupCard } from "./HerdrSetupCard";
 import { MobileSheetHandle } from "./MobileSheetHandle";
 import "./ConfigMenu.css";
+import { useLayer } from "../layerStack";
 import { DEVTOOLS } from "../world/devtools/flag";
 import { requestTrace, traceRemembered } from "../world/devtools/trace";
 
@@ -194,25 +196,13 @@ export function ConfigMenu({
             else setHerdrUnavailable(true);
           });
     }
-    const onDown = (event: MouseEvent) => {
-      if (ref.current && !ref.current.contains(event.target as Node))
-        setOpen(false);
-    };
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      event.preventDefault();
-      event.stopPropagation();
-      setOpen(false);
-      window.requestAnimationFrame(() => triggerRef.current?.focus());
-    };
-    window.addEventListener("mousedown", onDown);
-    window.addEventListener("keydown", onKey, { capture: true });
     return () => {
       cancelled = true;
-      window.removeEventListener("mousedown", onDown);
-      window.removeEventListener("keydown", onKey, { capture: true });
     };
   }, [connectionClient, onDefaultConnection, open]);
+  // A layer on the shared stack: Escape, a press outside (the terminal
+  // included) and Back close it, and focus returns to what had it.
+  useLayer(open, () => setOpen(false), { element: () => ref.current });
 
   const updateOfficePreferences = (patch: Partial<OfficePreferences>) => {
     const next = writeOfficePreferences(worldLocalStorage, {
@@ -355,6 +345,29 @@ export function ConfigMenu({
                   >
                     <option value="floating">Floating</option>
                     <option value="docked">Snap right</option>
+                  </select>
+                </label>
+                <label className="config-preference-row">
+                  <span className="config-item-icon">
+                    <MessageSquare size={15} />
+                  </span>
+                  <span className="config-item-copy">
+                    <strong>Town opens</strong>
+                    <span>What tapping an agent or its desk opens</span>
+                  </span>
+                  <select
+                    className="config-preference-select"
+                    aria-label="Town opens"
+                    value={officePreferences.townOpens}
+                    onChange={(event) =>
+                      updateOfficePreferences({
+                        townOpens: event.target
+                          .value as OfficePreferences["townOpens"],
+                      })
+                    }
+                  >
+                    <option value="chat">Chat</option>
+                    <option value="terminal">Terminal</option>
                   </select>
                 </label>
                 <div className="config-preference-row">
