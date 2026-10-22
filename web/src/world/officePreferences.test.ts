@@ -22,6 +22,7 @@ describe("View preferences", () => {
       inspectorPresentation: "docked",
       townCalm: true,
       townOpens: "chat",
+      townMaster: "firstmate",
     });
   });
 
@@ -33,6 +34,17 @@ describe("View preferences", () => {
     expect(read("terminal")).toBe("terminal");
     expect(read("chat")).toBe("chat");
     expect(read("browser")).toBe("chat");
+  });
+
+  test("the Town master defaults to firstmate and keeps a chosen name", () => {
+    const read = (townMaster: unknown) =>
+      readOfficePreferences(memoryStorage(JSON.stringify({ townMaster })))
+        .townMaster;
+    expect(DEFAULT_OFFICE_PREFERENCES.townMaster).toBe("firstmate");
+    expect(read(" lead ")).toBe("lead");
+    expect(read("")).toBe("");
+    expect(read(7)).toBe("firstmate");
+    expect(read("x".repeat(65))).toBe("firstmate");
   });
 
   test("admits only known choices", () => {
@@ -63,6 +75,7 @@ describe("View preferences", () => {
       inspectorPresentation: "floating",
       townCalm: false,
       townOpens: "terminal",
+      townMaster: "",
     });
     expect(storage.value).toEqual({
       key: OFFICE_PREFERENCES_KEY,
@@ -70,6 +83,7 @@ describe("View preferences", () => {
         inspectorPresentation: "floating",
         townCalm: false,
         townOpens: "terminal",
+        townMaster: "",
       }),
     });
   });

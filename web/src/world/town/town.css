@@ -1662,24 +1662,39 @@
   padding: 0;
 }
 
-/* The phone sheet: its handle drags it taller or shorter, or closes it. */
-.town-peek.town-peek-sheet .mobile-sheet-handle {
-  min-height: 20px;
-  margin: -8px 0 2px;
-  padding: 6px 8px;
-  background: transparent;
-  border: 0;
-  box-shadow: none;
+/* On the phone the chat window docks at the bottom: a grip on its top edge
+   drags its height, the name moves or snaps it, and a double tap fills it. */
+.town-chat-window.is-phone .town-peek-window {
+  padding-top: 0;
 }
 
-.town-peek-sheet .mobile-sheet-handle > span {
-  background: rgba(255, 255, 255, 0.28);
+.town-chat-grip {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  margin: 0 -10px 2px;
+  cursor: ns-resize;
+  touch-action: none;
 }
 
-.town-peek-sheet.is-expanded {
-  max-height: calc(100% - 16px);
+.town-chat-grip > span {
+  width: 44px;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.32);
 }
 
-.town-peek-sheet.is-expanded .town-peek-screen {
-  max-height: min(60dvh, 520px);
+.town-chat-grip:focus-visible {
+  outline: 2px solid var(--town-accent);
+  outline-offset: -2px;
+}
+
+/* A phone's header keeps the name and the window buttons; Open terminal
+   shows its icon only. */
+@media (max-width: 640px) {
+  .town-peek-window .town-peek-terminal span {
+    display: none;
+  }
 }

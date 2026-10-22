@@ -6,7 +6,6 @@ import {
   type ReactNode,
 } from "react";
 import { SquareTerminal } from "lucide-react";
-import { MobileSheetHandle } from "../../components/MobileSheetHandle";
 import {
   WindowControls,
   type ManagedWindowControls,
@@ -77,8 +76,8 @@ export function TownPeek({
   onReviewed,
   deskColor = null,
   windowControls = null,
-  sheetExpanded = false,
-  onSheetExpandedChange,
+  onToggleFull,
+  grip = false,
 }: {
   /**
    * Present while the peek is World's chat window (a pinned peek on a wide
@@ -86,9 +85,10 @@ export function TownPeek({
    * window buttons in place of the close button.
    */
   windowControls?: ManagedWindowControls | null;
-  /** The phone sheet's size, which its handle changes. */
-  sheetExpanded?: boolean;
-  onSheetExpandedChange?(expanded: boolean): void;
+  /** Fill the window, or return from full; a double tap on the name. */
+  onToggleFull?(): void;
+  /** A grip on the window's top edge that drags its height (the phone). */
+  grip?: boolean;
   /** The colour of the agent's desk (its terminal), to change or reset. */
   deskColor?: {
     current: TerminalColor;
@@ -128,6 +128,7 @@ export function TownPeek({
   onHold(hold: boolean): void;
 }) {
   const card = useRef<HTMLDivElement>(null);
+  const lastTap = useRef<{ at: number; x: number; y: number } | null>(null);
   const screen = useRef<HTMLDivElement>(null);
   const chatting = Boolean(composer);
   const input = useRef<HTMLInputElement>(null);
@@ -239,7 +240,7 @@ export function TownPeek({
   return (
     <div
       ref={card}
-      className={`town-peek${anchor ? "" : windowControls ? " town-peek-window" : ` town-peek-sheet${sheetExpanded ? " is-expanded" : ""}`}${chatting ? " town-peek-chat" : ""}${agent.semanticStatus === "blocked" ? " town-peek-blocked" : ""}`}
+      className={`town-peek${anchor ? "" : windowControls ? " town-peek-window" : " town-peek-sheet"}${chatting ? " town-peek-chat" : ""}${agent.semanticStatus === "blocked" ? " town-peek-blocked" : ""}`}
       role="dialog"
       tabIndex={-1}
       data-agent-key={agent.key}
@@ -255,21 +256,47 @@ export function TownPeek({
       onPointerLeave={() => onHold(false)}
       onFocus={() => onHold(true)}
     >
-      {!anchor && !windowControls && onSheetExpandedChange ? (
-        <MobileSheetHandle
-          label={`Resize or close ${agent.displayLabel}'s chat`}
-          expanded={sheetExpanded}
-          onExpand={() => onSheetExpandedChange(true)}
-          onCollapse={() => onSheetExpandedChange(false)}
-          onClose={onClose}
-        />
+      {grip ? (
+        <div
+          className="town-chat-grip"
+          role="separator"
+          aria-orientation="horizontal"
+          aria-label={`Resize ${agent.displayLabel}'s chat`}
+          title="Drag to resize; it settles at a third, half or full"
+          tabIndex={0}
+          data-window-resize="n"
+        >
+          <span />
+        </div>
       ) : null}
       <div className="town-peek-head">
         <img src={townPortrait(agent.key)} alt="" />
         {/* In the chat window, the name is where the window is dragged. */}
         <div
           data-window-drag-handle={windowControls ? "" : undefined}
-          title={windowControls ? "Drag to move the chat window" : undefined}
+          title={
+            windowControls
+              ? "Drag to move the chat window; double-tap to fill the screen"
+              : undefined
+          }
+          onPointerDown={(event) => {
+            // A second tap on the name soon after the first fills the window
+            // or returns it. The frame takes the pointer for dragging, so a
+            // tap is judged by where it lands, not by its release.
+            if (!onToggleFull || event.button !== 0) return;
+            const last = lastTap.current;
+            const now = event.timeStamp;
+            lastTap.current = { at: now, x: event.clientX, y: event.clientY };
+            if (
+              last &&
+              now - last.at < 350 &&
+              Math.abs(event.clientX - last.x) < 16 &&
+              Math.abs(event.clientY - last.y) < 16
+            ) {
+              lastTap.current = null;
+              onToggleFull();
+            }
+          }}
         >
           <b>{agent.displayLabel}</b>
           <small>

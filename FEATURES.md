@@ -26,13 +26,23 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     peek, with keys, attachments, Insert and Send.
   - The peek refreshes when the agent's conversation changes, as Chat does,
     without polling.
-  - On a wide screen an opened (pinned) peek is a chat window in World's
-    shared window frame, like the Inspector's: drag its name to move it, drag
-    an edge to resize it, and snap, minimise, maximise or close it from its
-    buttons. Its position and size are kept in this browser; opening an agent
+  - An opened (pinned) peek is a chat window in World's shared window frame,
+    like the Inspector's. On a wide screen it docks on the right by default:
+    drag its name to undock and move it, drag an edge to resize it, and snap,
+    minimise, maximise or close it from its buttons. Activating an agent or
+    its table (double-click, **Shift+Enter**) opens its chat. Opening an agent
     shows a minimised chat window again. Hovered peeks stay small cards beside
-    their agent. On a phone it is a sheet: drag its handle up to make it
-    taller, down to make it shorter or close it.
+    their agent.
+  - The Town master's chat (**Menu → Town master**, `firstmate` by default)
+    is docked on the right from the start on wide screens; beside an agent's
+    chat the two share the right edge, top and bottom. Closing it hides it
+    until you open that agent again.
+  - On a phone the chat is a window docked at the bottom, sized and moved by
+    touch: drag the grip on its top edge to change its height (it settles at
+    a third, half or full), drag its name to move it or to the top to fill the
+    screen, and double-tap its name to fill the screen or return.
+  - Where each chat window was left (docked, floating, full, its size and
+    position) is kept per device in this browser, as the Inspector's is.
   - Tapping an agent or its table brings the agent back: from reception or the
     lounge it walks to its desk and stays there until its status changes. A
     table stands for an agent that needs you (waiting, then finished) before

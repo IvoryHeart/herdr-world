@@ -1268,12 +1268,17 @@ the terminal from the peek's header and go to the next waiting agent. Tapping an
 agent, or the table of an agent away at reception or in the lounge, SHALL open
 what the Town opens preference names: the agent's peek (Chat, the default) or
 its terminal; it SHALL NOT open an Inspector, and tapping a room SHALL only zoom
-to it. On a wide screen a pinned peek SHALL be a chat window in World's shared
-window frame, moved, resized, snapped, minimised and maximised as the Inspector
-window is, its placed position and size kept as the Inspector's are; opening an
-agent SHALL show a minimised chat window again. A hover peek SHALL stay a card
-beside its agent, and on a phone the peek SHALL be a sheet whose handle makes it
-taller, shorter or closes it. A table SHALL stand for its agent that needs the user (waiting, then
+to it. A pinned peek SHALL be a chat window in World's shared window frame,
+moved, resized, snapped, minimised and maximised as the Inspector window is.
+On a wide screen it SHALL dock on the right by default and MAY be undocked;
+activating an agent or its table SHALL open its chat; opening an agent SHALL
+show a minimised chat window again. The Town master's chat, named by a
+setting, SHALL be docked from the start on wide screens, sharing the right edge
+with an agent's chat. On a phone the chat window SHALL dock at the bottom and
+be moved and resized by touch: a grip on its top edge sets its height, settling
+at a third, half or full; its name moves it; a double tap fills the screen or
+returns it. Each window's dock, floating size and position SHALL be kept per
+device as the Inspector's are. A hover peek SHALL stay a card beside its agent. A table SHALL stand for its agent that needs the user (waiting, then
 finished) before the agent seated there. An agent opened this way, with either
 preference, SHALL walk back to its desk and stay there until its status
 changes, after which its status places it again; the tap SHALL NOT mark its
@@ -1309,11 +1314,19 @@ Opening the terminal from a peek SHALL follow the Inspector presentation prefere
 
 #### Scenario: Move and resize the chat window
 
-- **WHEN** on a wide screen the user opens an agent's peek, drags it by the
-  agent's name, resizes it from an edge, closes it and opens an agent again
-- **THEN** the peek is in World's shared window frame with the Inspector
-  window's snap, minimise, maximise and close controls, and reopens at the
-  position and size it was left with
+- **WHEN** on a wide screen the user opens an agent's peek
+- **THEN** it is in World's shared window frame, docked right, with the
+  Inspector window's snap, minimise, maximise and close controls
+- **WHEN** the user undocks it, drags it by the agent's name, resizes it from
+  an edge, closes it and opens an agent again
+- **THEN** it reopens at the position and size it was left with
+
+#### Scenario: Resize the chat on a phone
+
+- **WHEN** on a phone the user opens an agent's chat and drags the grip on its
+  top edge up near the top
+- **THEN** the chat, docked at the bottom, settles at the full height; dragged
+  down near a third it settles at a third, and it reopens at that height
 
 #### Scenario: Tap the table of an agent waiting at reception
 

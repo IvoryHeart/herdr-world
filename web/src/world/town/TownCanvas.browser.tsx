@@ -1028,12 +1028,28 @@ async function run() {
   );
   if (!phone) {
     const frame = () =>
-      host.querySelector<HTMLElement>(".town-chat-window.world-managed-window");
+      host.querySelector<HTMLElement>('[data-window-id="town-chat"]');
     check(
       frame()?.querySelector(".town-peek.town-peek-window") !== null,
       "a pinned peek should be in the chat window frame",
     );
     const rect = () => frame()!.getBoundingClientRect();
+    // It opens docked right, the full height of the Town.
+    const layer = host
+      .querySelector<HTMLElement>(".town-chat-surface")!
+      .getBoundingClientRect();
+    check(
+      Math.abs(rect().right - layer.right) < 4 &&
+        Math.abs(rect().height - layer.height) < 4,
+      `the chat window did not open docked right (${rect().left}-${rect().right} in ${layer.left}-${layer.right})`,
+    );
+    // Undocked, it floats where it was last placed.
+    frame()!.querySelector<HTMLButtonElement>('[aria-label^="Snap"]')!.click();
+    await settle();
+    [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')]
+      .find((item) => item.textContent === "Float window")!
+      .click();
+    await settle();
     const drag = async (target: Element, dx: number, dy: number) => {
       const from = target.getBoundingClientRect();
       const x = from.left + from.width / 2;
@@ -1105,6 +1121,22 @@ async function run() {
       Math.abs(rect().width - placed.width) < 4,
       "Restore did not return the chat window to its size",
     );
+    // Docked right again, it stays docked when it is closed and reopened.
+    frame()!.querySelector<HTMLButtonElement>('[aria-label^="Snap"]')!.click();
+    await settle();
+    [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')]
+      .find((item) => item.textContent === "Right half")!
+      .click();
+    await settle();
+    closePeek(host);
+    await waitFor(() => frame() === null, "the chat window did not close");
+    host.querySelector<HTMLButtonElement>(".town-reception-entry")!.click();
+    await waitFor(() => frame() !== null, "the chat window did not reopen");
+    check(
+      Math.abs(rect().right - layer.right) < 4 &&
+        Math.abs(rect().height - layer.height) < 4,
+      "a chat window docked right did not reopen docked",
+    );
     // Minimise hides it; opening an agent again shows it.
     frame()!
       .querySelector<HTMLButtonElement>('[aria-label^="Minimize"]')!
@@ -1118,10 +1150,163 @@ async function run() {
       () => host.querySelector(".town-peek-window") !== null,
       "opening an agent did not show the minimised chat window",
     );
-  } else {
+    // The Town master's chat is docked from the start; beside an agent's
+    // chat the two share the right edge.
+    closePeek(host);
+    await waitFor(() => frame() === null, "the chat window did not close");
+    writeOfficePreferences(worldLocalStorage, {
+      ...readOfficePreferences(worldLocalStorage),
+      townMaster: "codex",
+    });
+    window.dispatchEvent(new Event(WORLD_OFFICE_PREFERENCES_CHANGED_EVENT));
+    const masterFrame = () =>
+      host.querySelector<HTMLElement>('[data-window-id="town-master"]');
+    await waitFor(
+      () => masterFrame() !== null,
+      "the Town master's chat was not docked",
+    );
+    const masterRect = () => masterFrame()!.getBoundingClientRect();
     check(
-      host.querySelector(".town-peek-sheet .mobile-sheet-handle") !== null,
-      "the phone's chat sheet has no resize handle",
+      Math.abs(masterRect().right - layer.right) < 4 &&
+        Math.abs(masterRect().height - layer.height) < 4,
+      "the Town master's chat alone should dock the whole right edge",
+    );
+    host.querySelector<HTMLButtonElement>(".town-reception-entry")!.click();
+    await waitFor(() => frame() !== null, "the agent's chat did not open");
+    await waitFor(
+      () => Math.abs(masterRect().height - layer.height / 2) < 8,
+      "the master's chat did not make room for the agent's",
+    );
+    check(
+      Math.abs(masterRect().top - layer.top) < 4 &&
+        Math.abs(rect().bottom - layer.bottom) < 4 &&
+        Math.abs(rect().right - layer.right) < 4,
+      "the master's chat should dock top right and the agent's bottom right",
+    );
+    masterFrame()!
+      .querySelector<HTMLButtonElement>('[aria-label^="Close"]')!
+      .click();
+    await waitFor(
+      () => masterFrame() === null,
+      "closing the master's chat did not close it",
+    );
+    writeOfficePreferences(worldLocalStorage, {
+      ...readOfficePreferences(worldLocalStorage),
+      townMaster: "",
+    });
+    window.dispatchEvent(new Event(WORLD_OFFICE_PREFERENCES_CHANGED_EVENT));
+  } else {
+    // On the phone the chat is a window too, docked at the bottom, moved and
+    // resized by touch.
+    const frame = () =>
+      host.querySelector<HTMLElement>(".town-chat-window.is-phone");
+    check(frame() !== null, "the phone's chat is not a window");
+    const rect = () => frame()!.getBoundingClientRect();
+    const layer = () =>
+      host
+        .querySelector<HTMLElement>(".town-chat-surface")!
+        .getBoundingClientRect();
+    const near = (a: number, b: number) => Math.abs(a - b) < 6;
+    check(
+      near(rect().bottom, layer().bottom) &&
+        near(rect().height, (layer().height - 8) / 2) &&
+        near(rect().width, layer().width),
+      `the phone's chat did not open docked at the bottom (${rect().top}-${rect().bottom} of ${layer().top}-${layer().bottom})`,
+    );
+    const touch = async (target: Element, dx: number, dy: number) => {
+      const from = target.getBoundingClientRect();
+      const x = from.left + from.width / 2;
+      const y = from.top + from.height / 2;
+      const event = (type: string, cx: number, cy: number) =>
+        new PointerEvent(type, {
+          bubbles: true,
+          cancelable: true,
+          pointerId: 11,
+          pointerType: "touch",
+          isPrimary: true,
+          button: 0,
+          clientX: cx,
+          clientY: cy,
+        });
+      target.dispatchEvent(event("pointerdown", x, y));
+      for (let step = 1; step <= 5; step += 1)
+        window.dispatchEvent(
+          event("pointermove", x + (dx * step) / 5, y + (dy * step) / 5),
+        );
+      window.dispatchEvent(event("pointerup", x + dx, y + dy));
+      await settle();
+    };
+    const tap = (target: Element) => {
+      const box = target.getBoundingClientRect();
+      for (const type of ["pointerdown", "pointerup"])
+        target.dispatchEvent(
+          new PointerEvent(type, {
+            bubbles: true,
+            cancelable: true,
+            pointerId: 12,
+            pointerType: "touch",
+            isPrimary: true,
+            button: 0,
+            clientX: box.left + 8,
+            clientY: box.top + 8,
+          }),
+        );
+    };
+    const grip = () => frame()!.querySelector(".town-chat-grip")!;
+    const name = () => frame()!.querySelector("[data-window-drag-handle]")!;
+    // The grip drags its height and settles near a third, half or full.
+    await touch(grip(), 0, -(layer().height / 2 - 14));
+    check(
+      near(rect().height, layer().height) && near(rect().top, layer().top),
+      `the grip did not settle the chat at full height (${rect().height} of ${layer().height})`,
+    );
+    await touch(grip(), 0, (layer().height * 2) / 3 - 10);
+    const third = layer().height / 3;
+    check(
+      near(rect().height, third) && near(rect().bottom, layer().bottom),
+      `the grip did not settle the chat at a third (${rect().height}, want ${third})`,
+    );
+    // A double tap on the name fills the screen; another returns it.
+    tap(name());
+    tap(name());
+    await settle();
+    check(
+      near(rect().height, layer().height) && near(rect().width, layer().width),
+      "a double tap did not fill the screen with the chat",
+    );
+    tap(name());
+    tap(name());
+    await settle();
+    check(near(rect().height, third), "a second double tap did not return it");
+    // Dragging the name to the top edge fills the screen too.
+    // The pointer ends at the top edge of the Town, where the frame fills.
+    const nameBox = name().getBoundingClientRect();
+    await touch(
+      name(),
+      0,
+      layer().top + 4 - (nameBox.top + nameBox.height / 2),
+    );
+    check(
+      near(rect().height, layer().height),
+      "dragging the chat to the top did not fill the screen",
+    );
+    tap(name());
+    tap(name());
+    await settle();
+    // Kept per device: closed and opened again, it is where it was left.
+    check(
+      (
+        worldLocalStorage.getItem("worldFloatingTerminalGeometry:v1") ?? ""
+      ).includes('"town-chat:phone"'),
+      "the phone's chat position was not saved",
+    );
+    closePeek(host);
+    await waitFor(() => frame() === null, "the phone's chat did not close");
+    host.querySelector<HTMLButtonElement>(".town-reception-entry")!.click();
+    await waitFor(() => frame() !== null, "the phone's chat did not reopen");
+    check(
+      near(rect().height, third),
+      `the phone's chat did not reopen at the height it was left (${rect().height})`,
     );
   }
   closePeek(host);
@@ -1190,6 +1375,16 @@ async function run() {
     "tapping a desk did not open its waiting agent's chat",
   );
   check(opened.length === 0, "tapping a desk in Chat mode opened a terminal");
+  // In its window the tapped agent's chat fills the frame, not a card.
+  check(
+    phone ||
+      (host.querySelector(".town-chat-window .town-peek.town-peek-window") !==
+        null &&
+        host
+          .querySelector(".town-chat-window .town-peek")
+          ?.getAttribute("style") === null),
+    "a desk tap left an anchored card inside the chat window",
+  );
   closePeek(host);
   await settle();
 
@@ -1264,21 +1459,25 @@ async function run() {
   await settle();
   opened.length = 0;
 
-  // Opening a desk's terminal on desktop must leave its keys to the terminal:
-  // no hidden composer may be requested.
+  // Activating an agent's desk opens its chat, not its terminal; the
+  // terminal is a tap away through Open terminal, which on desktop must leave
+  // its keys to the terminal: no hidden composer may be requested.
   if (!phone) {
     let composerRequests = 0;
     const countRequest = () => (composerRequests += 1);
     window.addEventListener(TERMINAL_COMPOSER_REQUEST_EVENT, countRequest);
-    [
-      ...host.querySelectorAll<HTMLButtonElement>(
-        '.world-semantic-target[data-kind="desk"]',
-      ),
-    ]
-      .find(
-        (target) => !target.getAttribute("aria-label")?.endsWith(", 6 panes"),
-      )!
-      .dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+    const waitingDeskTarget = waitingDesk!;
+    waitingDeskTarget.dispatchEvent(
+      new MouseEvent("dblclick", { bubbles: true }),
+    );
+    await waitFor(
+      () => host.querySelector(".town-chat-window .town-peek") !== null,
+      "activating a desk did not open its agent's chat window",
+    );
+    check(opened.length === 0, "activating a desk opened a terminal");
+    host
+      .querySelector<HTMLButtonElement>(".town-peek-head .town-peek-terminal")!
+      .click();
     await waitFor(() => opened.length === 1, "desk did not open its terminal");
     window.removeEventListener(TERMINAL_COMPOSER_REQUEST_EVENT, countRequest);
     check(
@@ -1591,7 +1790,11 @@ async function run() {
 
 run()
   .catch((error: unknown) => {
-    failures.push(error instanceof Error ? error.message : String(error));
+    failures.push(
+      error instanceof Error
+        ? `${error.message} @ ${error.stack?.split("\n").slice(1, 3).join(" ")}`
+        : String(error),
+    );
   })
   .finally(() => {
     if (mode === "test")

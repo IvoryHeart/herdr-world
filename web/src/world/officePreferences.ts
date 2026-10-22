@@ -13,12 +13,18 @@ export type OfficePreferences = {
   /** Less ambient motion and shorter camera moves in Town. */
   townCalm: boolean;
   townOpens: TownOpens;
+  /**
+   * The agent whose chat Town docks on wide screens from the start (the
+   * Town's master, FirstMate), by its name; empty docks none.
+   */
+  townMaster: string;
 };
 
 export const DEFAULT_OFFICE_PREFERENCES: OfficePreferences = Object.freeze({
   inspectorPresentation: "floating",
   townCalm: false,
   townOpens: "chat",
+  townMaster: "firstmate",
 });
 
 export const OFFICE_PREFERENCES_KEY = "officePreferences:v1";
@@ -42,6 +48,7 @@ export function readOfficePreferences(
         : DEFAULT_OFFICE_PREFERENCES.inspectorPresentation,
       townCalm: value.townCalm === true,
       townOpens: value.townOpens === "terminal" ? "terminal" : "chat",
+      townMaster: townMasterName(value.townMaster),
     };
   } catch {
     return { ...DEFAULT_OFFICE_PREFERENCES };
@@ -60,6 +67,7 @@ export function writeOfficePreferences(
       : DEFAULT_OFFICE_PREFERENCES.inspectorPresentation,
     townCalm: preferences.townCalm === true,
     townOpens: preferences.townOpens === "terminal" ? "terminal" : "chat",
+    townMaster: townMasterName(preferences.townMaster),
   };
   try {
     storage.setItem(OFFICE_PREFERENCES_KEY, JSON.stringify(admitted));
@@ -73,4 +81,11 @@ function isInspectorPresentation(
   value: unknown,
 ): value is OfficeInspectorPresentation {
   return value === "docked" || value === "floating";
+}
+
+/** An agent name, at most 64 characters; anything else is the default. */
+function townMasterName(value: unknown) {
+  return typeof value === "string" && value.length <= 64
+    ? value.trim()
+    : DEFAULT_OFFICE_PREFERENCES.townMaster;
 }

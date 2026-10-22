@@ -352,6 +352,34 @@ export function ConfigMenu({
                     <option value="terminal">Terminal</option>
                   </select>
                 </label>
+                <label className="config-preference-row">
+                  <span className="config-item-icon">
+                    <MessageSquare size={15} />
+                  </span>
+                  <span className="config-item-copy">
+                    <strong>Town master</strong>
+                    <span>
+                      The agent whose chat Town docks from the start; empty
+                      docks none
+                    </span>
+                  </span>
+                  <input
+                    className="config-preference-select"
+                    aria-label="Town master"
+                    defaultValue={officePreferences.townMaster}
+                    maxLength={64}
+                    spellCheck={false}
+                    autoComplete="off"
+                    onBlur={(event) =>
+                      updateOfficePreferences({
+                        townMaster: event.currentTarget.value,
+                      })
+                    }
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") event.currentTarget.blur();
+                    }}
+                  />
+                </label>
                 <div className="config-preference-row">
                   <span className="config-item-icon">
                     <Wind size={15} />
