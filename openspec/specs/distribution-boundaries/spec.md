@@ -26,9 +26,9 @@ release that World version verified, in Herdr's own default location.
   World verified
 - **THEN** World installs or upgrades Herdr from that checksum-verified release in Herdr's default
   location and keeps a replaced binary for rollback
-- **AND** it never downgrades a newer Herdr, replaces a package-managed Herdr or stops a running Herdr
-  server; it hands a running server off live only when that is safe and otherwise reports that a
-  restart is needed
+- **AND** it never downgrades a newer Herdr or Herdr server, replaces a package- or version-managed
+  Herdr, or stops a running Herdr server; it hands a running server off live only when it can confirm
+  that no service manager runs that server, and otherwise reports that a restart is needed
 
 ### Requirement: Reviewed release identity
 Release preparation SHALL use a branch and reviewed PR. Final artifacts SHALL be built

@@ -53,7 +53,7 @@ Options:
 The release manifest, archive checksum, package VERSION and binary version are
 verified before the executable is replaced in place. The previous executable is
 kept as herdr-world.previous; \`herdr-world rollback\` restores it. The new
-release then runs \`herdr-world herdr upgrade\` to bring Herdr, the agent
+release then runs \`herdr-world herdr upgrade\` to bring Herdr, the harness
 integrations and the Herdr World plugin up to the versions it declares. A
 running managed service that uses this executable is restarted afterwards.
 
@@ -216,7 +216,7 @@ export function createUpdateCommand(
       );
       context.log(`Previous executable: ${runtime.execPath}.previous`);
       // The new release declares its verified Herdr; let it bring Herdr, the
-      // agent integrations and the plugin up to date as a separate step.
+      // harness integrations and the plugin up to date as a separate step.
       // A Herdr problem leaves the World update in place.
       context.log("Upgrading Herdr for this release...");
       const herdr = await runProcess(

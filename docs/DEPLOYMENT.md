@@ -75,9 +75,9 @@ npm install --global @ivoryheart/herdr-world
 
 Choose one channel. Homebrew uses the published platform archive; npm installs a
 small launcher and the matching platform binary. npm needs Node.js 22.14.0 or newer
-and optional dependencies enabled. The Homebrew Formula depends on Homebrew's
-`herdr`, so `brew install` and `brew upgrade` install and upgrade Herdr too; npm
-leaves Herdr to you (see [Herdr installation and upgrades](#herdr-installation-and-upgrades)).
+and optional dependencies enabled. `brew install` and `brew upgrade` install and
+upgrade Herdr too (Homebrew's bottle, or the verified prebuilt binary on Intel
+Macs); npm leaves Herdr to you (see [Herdr installation and upgrades](#herdr-installation-and-upgrades)).
 Neither starts Herdr. For an existing installation, stop the old World process
 before upgrading the channel.
 
@@ -167,13 +167,14 @@ continues to use the same World profiles, settings, token, and browser namespace
 ## Herdr installation and upgrades
 
 Each Herdr World release verifies one Herdr release (currently 0.9.5) and pins its
-SHA-256 checksums. World installs and upgrades Herdr to that release so users stay
-on a Herdr it was tested with:
+SHA-256 checksums. World installs and upgrades Herdr to that release, and installs
+the Herdr integrations for the harnesses it supports, so it works with a Herdr it was
+tested with:
 
 ```bash
 herdr-world herdr status
 herdr-world herdr setup             # install if missing, then start a user service
-herdr-world herdr upgrade           # bring Herdr, integrations and the plugin up to date
+herdr-world herdr upgrade           # Herdr, harness integrations and plugin
 herdr-world herdr upgrade --install # also install Herdr when none is found
 ```
 
@@ -189,13 +190,19 @@ When it runs:
   `herdr-world herdr upgrade --install`. Set `HERDR_WORLD_SKIP_HERDR=1` to install only
   World. A Herdr problem prints a warning and leaves World installed.
 - **`herdr-world update` and the in-app update**: once the new World is in place, the
-  new release runs the Herdr step. In the browser it appears as its own notice
-  after the reload, with each step's result.
-- **Menu**: **Runtime → Upgrade Herdr** appears whenever Herdr is older than the
-  verified release, or its server still runs an older version.
-- **Homebrew**: the Formula depends on Homebrew's `herdr`. Homebrew decides that
-  version; on Intel Macs, where Homebrew has no Herdr bottle, it builds Herdr from
-  source.
+  new release runs the Herdr step, even when it keeps the same Herdr version, because
+  the harness integrations and the plugin follow the World release. In the browser it
+  is its own notice after the reload. That notice appears only when something
+  changed, and it reports a failed step as incomplete.
+- **Menu**: **Runtime → Upgrade Herdr** appears when Herdr or its running server is
+  older than the verified release. **Runtime → Update Herdr integrations** appears
+  when only harness integrations or the plugin are behind.
+- **Homebrew**: on Apple Silicon and Linux the Formula depends on Homebrew's `herdr`
+  bottle, so Homebrew decides that version. Homebrew has no Intel Mac bottle, so on
+  Intel Macs the Formula installs Herdr's own prebuilt `herdr-macos-x86_64` binary
+  for the verified release (pinned by the same checksum), not a source build. If
+  Homebrew's `herdr` is already installed there, `brew link` reports the conflict;
+  uninstall one of them.
 - **npm and Windows archives**: run `herdr-world herdr upgrade --install` once
   yourself, or use the menu.
 
@@ -203,26 +210,39 @@ What the upgrade does:
 
 1. **Binary.** It downloads the verified release and checks its checksum and
    `herdr --version` before replacing anything. On Linux and macOS the old binary
-   stays beside the new one as `herdr.previous`, and a failed check restores it. On
-   Windows, World runs Herdr's own `install.ps1` (checksum-pinned) with the verified
-   package; that installer keeps earlier releases and switches only after its own
-   checks. World never downgrades a newer Herdr, and it leaves Homebrew, mise and Nix
-   installs to their package manager (it prints the command).
-2. **Running server.** A Herdr server keeps running on its old version until it is
+   stays beside the new one as `herdr.previous`, and a failed check restores it.
+   On Windows, World runs Herdr's own `install.ps1` (checksum-pinned) with the
+   verified package; that installer keeps earlier releases and switches only after
+   its own checks. World upgrades only a Windows Herdr in Herdr's default location.
+   A Herdr that Herdr World 0.2 or earlier installed under
+   `%APPDATA%\herdr-world\herdr` moves there. The old copy stays as a backup, and
+   World's Herdr scheduled task is re-registered at the new path without being
+   restarted. A Herdr elsewhere is reported and left alone. World never downgrades
+   a newer Herdr. It also leaves Homebrew, mise, asdf and Nix installs, and any
+   shim, to their manager; it prints the command to use.
+2. **Running server.** A Herdr server keeps running its old version until it is
    replaced. On Linux and macOS, World asks the server to hand its panes to the new
-   version live, as `herdr update --handoff` does, when the server supports it and
-   no supervisor runs it. Otherwise (Windows, World's own Herdr service, an older
-   server, or a failed handoff) the old server keeps your panes, and World says that
-   a restart is needed. A restart ends running pane processes, so World never
-   restarts Herdr for you.
-3. **Integrations.** For Codex, Claude and Pi agents on `PATH`, World runs
-   `herdr integration install <agent>` when an integration is missing or outdated,
-   and for all of them after a Herdr upgrade. A new Herdr can change what an
-   integration installs: 0.9.5 dropped Codex turn hooks.
+   version live, as `herdr update --handoff` does, but only when the server supports
+   it and World can confirm that no service manager runs it. On Linux the confirmed
+   case is a server in a terminal or login scope; on macOS it is a server that is
+   not a launchd job. Herdr starts the new server as a child of the old one, so a
+   service manager would end the panes when the old server exits. Otherwise
+   (Windows, any systemd or launchd service, an unidentified supervisor, an older
+   server or a failed handoff) the old server keeps your panes, and World says that
+   a restart is needed. World never stops or restarts Herdr itself, and never hands
+   a newer or unidentified server to an older release. A handoff that leaves no
+   server running is reported as a failure.
+3. **Harness integrations.** World supports the Codex, Claude and Pi harnesses. For
+   each one installed on this machine (its `codex`, `claude` or `pi` command is on
+   `PATH`), World runs `herdr integration install codex|claude|pi`. It does so
+   without prompting when the integration is missing or outdated, and for every
+   present harness after a Herdr upgrade: a new Herdr can change what an
+   integration installs, as 0.9.5 did when it dropped Codex turn hooks. Harnesses
+   that are not installed are skipped.
 4. **Plugin.** If the `ivoryheart.herdr-world` plugin was installed from GitHub,
-   World reinstalls it at this World's release tag with
-   `herdr plugin install IvoryHeart/herdr-world --ref vX.Y.Z --yes`. A linked
-   plugin is left alone.
+   World pins it to this World's release or release-candidate tag with
+   `herdr plugin install IvoryHeart/herdr-world --ref vX.Y.Z --yes`. A linked plugin,
+   a pre-merge preview or a source build is left alone.
 
 To roll back a Linux or macOS Herdr binary, move `herdr.previous` back over `herdr`;
 the running server is unaffected.
@@ -237,8 +257,8 @@ connection's OpenSSH command it would read the remote `herdr --version`. Only wh
 Herdr's published manifest offers exactly the version and checksum this World
 verified would it run the remote `herdr update --handoff`; Herdr's updater verifies
 the download and refuses package-managed installs. It would then run the same
-integration step remotely and report the outcome. It would never install Herdr on
-a host that lacks it.
+harness-integration step remotely and report the outcome. It would never install
+Herdr on a host that lacks it.
 
 ## Local and SSH connections
 

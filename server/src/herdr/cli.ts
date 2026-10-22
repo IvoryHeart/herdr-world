@@ -11,6 +11,7 @@ import { herdrServiceStatus } from "./service";
 import { VERIFIED_HERDR_VERSION } from "./release";
 import {
   describeHerdrUpgrade,
+  failedHerdrSteps,
   type HerdrUpgradeDeps,
   type HerdrUpgradeReport,
   upgradeHerdr,
@@ -30,13 +31,18 @@ when no herdr binary is found, then installs and starts a user service running
 per-user Task Scheduler task on Windows). Status prints the detected state.
 
 Upgrade brings an older Herdr up to ${VERIFIED_HERDR_VERSION}: it verifies the
-release checksum, keeps the replaced binary as herdr.previous (Windows keeps
-earlier releases through Herdr's installer), and asks a running local server to
-hand its panes to the new version when that is safe; otherwise it says that a
-restart is needed. It never downgrades a newer Herdr or replaces a Homebrew,
-mise or Nix install. It then installs or updates the Codex, Claude and Pi
-integrations for agents on PATH and reinstalls the Herdr World plugin at this
-release. --install also installs Herdr when none is found.
+release checksum and version, keeps the replaced binary as herdr.previous
+(Windows keeps earlier releases through Herdr's installer, and a Herdr installed
+by older Herdr World releases moves to Herdr's default location), and asks a
+running local server to hand its panes to the new version only when no service
+manager runs it; otherwise it says that a restart is needed. It never downgrades
+a newer Herdr or server, or replaces a package- or version-managed install.
+
+Every run also brings this release's harness integrations and plugin up to
+date: \`herdr integration install\` for the codex, claude and pi harnesses found
+on PATH when their integration is missing or outdated (and after every Herdr
+upgrade), and the Herdr World plugin, if installed from GitHub, reinstalled at
+this release's tag. --install also installs Herdr when none is found.
 `;
 }
 
@@ -161,6 +167,7 @@ export async function runHerdrCommand(
             server: config.sshHost
               ? undefined
               : {
+                  socketPath: config.socketPath,
                   ping,
                   call: (method, params, timeoutMs) =>
                     new HerdrClient(config.socketPath).call(
@@ -168,7 +175,6 @@ export async function runHerdrCommand(
                       params,
                       timeoutMs,
                     ),
-                  supervised: serviceStatus().active,
                 },
           }));
       const report = await upgrade({
@@ -178,10 +184,7 @@ export async function runHerdrCommand(
       });
       if (flags.includes("--json")) log(JSON.stringify(report));
       else for (const line of describeHerdrUpgrade(report)) log(line);
-      const failed =
-        report.integrations.some((item) => item.action === "failed") ||
-        report.plugin.action === "failed";
-      return failed ? 1 : 0;
+      return failedHerdrSteps(report).length ? 1 : 0;
     }
 
     const setup = dependencies.setup ?? (() => setupHerdr({ guard, ping }));

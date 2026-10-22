@@ -223,7 +223,7 @@ esac
 
 # Herdr World runs on Herdr. The release just installed knows which Herdr it
 # verified: install it when missing, or upgrade an older one, then refresh the
-# agent integrations and the Herdr World plugin. A Herdr problem does not undo
+# harness integrations and the Herdr World plugin. A Herdr problem does not undo
 # the herdr-world installation.
 if [ "$skip_herdr" != "1" ]; then
   printf 'Checking Herdr...\n'

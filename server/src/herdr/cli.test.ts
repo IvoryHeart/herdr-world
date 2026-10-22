@@ -150,7 +150,7 @@ describe("runHerdrCommand", () => {
       `Upgraded Herdr 0.9.3 -> ${VERIFIED_HERDR_VERSION} at /example/herdr.`,
       "Previous Herdr binary: /example/herdr.previous",
       "The running Herdr server handed its panes to the new version.",
-      "Integration codex: updated",
+      "codex harness integration: updated",
     ]);
   });
 
@@ -175,6 +175,20 @@ describe("runHerdrCommand", () => {
     );
     expect(code).toBe(1);
     expect(JSON.parse(io.out.join("\n"))).toEqual(report);
+  });
+
+  test("a handoff that loses the server exits 1", async () => {
+    const io = capture();
+    const code = await runHerdrCommand(["herdr", "upgrade"], "0.3.0", {
+      ...io,
+      loadConfig: () => fakeConfig() as never,
+      upgrade: async () =>
+        upgradeReport({ server: { outcome: "lost", detail: "No server." } }),
+    });
+    expect(code).toBe(1);
+    expect(io.out.at(-1)).toBe(
+      "Not completed: Herdr server handoff. Run `herdr-world herdr upgrade` to retry.",
+    );
   });
 
   test("rejects unknown options before doing anything", async () => {

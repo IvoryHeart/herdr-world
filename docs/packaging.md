@@ -6,7 +6,8 @@ Roamgate application or the retired Rust bridge. Instead the executable pins one
 verified Herdr release (`server/src/herdr/release.ts`: version, per-platform package
 checksums and the checksum of Herdr's Windows `install.ps1`). The standalone
 installer and World updates install or upgrade Herdr from that release in Herdr's
-own location, and the Homebrew Formula declares `depends_on "herdr"`. See
+own location. The Homebrew Formula depends on Homebrew's `herdr` where it is
+bottled and installs the verified prebuilt Herdr on Intel Macs. See
 [Herdr installation and upgrades](DEPLOYMENT.md#herdr-installation-and-upgrades).
 
 The web build is limited to 150 files and 13.25 MiB total embedded assets,

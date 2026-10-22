@@ -5,10 +5,14 @@ import {
   VERIFIED_HERDR_VERSION,
 } from "../herdr/release";
 import {
+  compareHerdrVersions,
   describeHerdrUpgrade,
+  failedHerdrSteps,
+  herdrUpgradeChangedAnything,
   type HerdrUpgradeDeps,
   type HerdrUpgradePlan,
   type HerdrUpgradeReport,
+  pendingHerdrSteps,
   planHerdrUpgrade,
   upgradeHerdr,
 } from "../herdr/upgrade";
@@ -84,11 +88,20 @@ function resultPayload(result: HerdrSetupResult): Record<string, unknown> {
   };
 }
 
-function upgradePayload(plan: HerdrUpgradePlan): Record<string, unknown> {
+function upgradePayload(
+  plan: HerdrUpgradePlan,
+  pending: string[],
+  serverOutdated: boolean,
+): Record<string, unknown> {
   return {
     state: plan.state,
+    // An earlier upgrade can leave the running server on an older version.
+    server_outdated: serverOutdated,
     ...("version" in plan && plan.version ? { version: plan.version } : {}),
     ...(plan.state === "package-managed" ? { command: plan.command } : {}),
+    // Harness integrations and the plugin follow the World release even when
+    // the Herdr binary is current.
+    pending,
   };
 }
 
@@ -106,6 +119,7 @@ export function createHerdrSetupHandlers({
     /** The default connection's local Herdr server; undefined for SSH. */
     server: () => HerdrUpgradeDeps["server"];
     plan?: () => HerdrUpgradePlan;
+    pending?: (binaryPath: string) => Promise<string[]>;
     run?: (deps: HerdrUpgradeDeps) => Promise<HerdrUpgradeReport>;
   };
 }) {
@@ -136,11 +150,32 @@ export function createHerdrSetupHandlers({
         upgrade && !target.sshHost
           ? (upgrade.plan ?? (() => planHerdrUpgrade(bootstrap)))()
           : undefined;
+      const pending =
+        upgrade && upgradePlan && "binaryPath" in upgradePlan
+          ? await (
+              upgrade.pending ??
+              ((binaryPath: string) =>
+                pendingHerdrSteps(binaryPath, {
+                  ...bootstrap,
+                  worldVersion: upgrade.worldVersion,
+                }))
+            )(upgradePlan.binaryPath).catch(() => [])
+          : [];
       return herdrJson({
         ...statePayload(state),
         can_setup: canSetup && (state.state !== "missing" || hasRelease),
         verified_version: VERIFIED_HERDR_VERSION,
-        ...(upgradePlan ? { upgrade: upgradePayload(upgradePlan) } : {}),
+        ...(upgradePlan
+          ? {
+              upgrade: upgradePayload(
+                upgradePlan,
+                pending,
+                state.state === "running" &&
+                  compareHerdrVersions(state.version, VERIFIED_HERDR_VERSION) <
+                    0,
+              ),
+            }
+          : {}),
       });
     } catch (error) {
       return herdrJson({ error: (error as Error).message }, { status: 500 });
@@ -175,7 +210,13 @@ export function createHerdrSetupHandlers({
   // plugin rebuild can outlast an HTTP request.
   let upgradeJob:
     | { status: "running" }
-    | { status: "done"; report: HerdrUpgradeReport; lines: string[] }
+    | {
+        status: "done";
+        report: HerdrUpgradeReport;
+        lines: string[];
+        changed: boolean;
+        failed: string[];
+      }
     | { status: "failed"; error: string }
     | null = null;
 
@@ -224,6 +265,8 @@ export function createHerdrSetupHandlers({
           status: "done",
           report,
           lines: describeHerdrUpgrade(report),
+          changed: herdrUpgradeChangedAnything(report),
+          failed: failedHerdrSteps(report),
         };
       } catch (error) {
         upgradeJob = { status: "failed", error: (error as Error).message };

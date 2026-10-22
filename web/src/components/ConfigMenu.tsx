@@ -31,6 +31,7 @@ import { connectionHttpPath } from "../connectionHttp";
 import { useLayoutPreferences } from "../layoutPreferences";
 import { shortcutLabel, useShortcutPreferences } from "../shortcutPreferences";
 import {
+  herdrUpgradeMenuEntry,
   herdrUpgradeOffered,
   shallowEqual,
   store,
@@ -133,8 +134,8 @@ export function ConfigMenu({
   // Offered only on the default connection: the upgrade concerns this
   // machine's Herdr.
   const [herdrUpgrade, setHerdrUpgrade] = useState<{
-    from: string;
-    to: string;
+    label: string;
+    description: string;
   } | null>(null);
   const onDefaultConnection =
     !s.connectionPaused && s.activeConnectionId === s.defaultConnectionId;
@@ -166,10 +167,7 @@ export function ConfigMenu({
         .catch(() => null)
         .then((status) => {
           if (cancelled || !herdrUpgradeOffered(status)) return;
-          setHerdrUpgrade({
-            from: status.upgrade?.version ?? status.version,
-            to: status.verified_version,
-          });
+          setHerdrUpgrade(herdrUpgradeMenuEntry(status));
         });
     fetch("/api/health", { credentials: "same-origin", cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
@@ -542,10 +540,10 @@ export function ConfigMenu({
                     icon={<Download size={15} />}
                     label={
                       s.herdrUpgrading
-                        ? "Upgrading Herdr..."
-                        : `Upgrade Herdr to ${herdrUpgrade.to}`
+                        ? "Updating Herdr..."
+                        : herdrUpgrade.label
                     }
-                    description={`Herdr ${herdrUpgrade.from} installed; this release verified ${herdrUpgrade.to}`}
+                    description={herdrUpgrade.description}
                     primary
                     disabled={s.herdrUpgrading}
                     onClick={() => {

@@ -4,18 +4,29 @@ import {
   mkdirSync,
   mkdtempSync,
   rmSync,
+  lstatSync,
   symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { afterEach, describe, expect, test } from "bun:test";
-import { VERIFIED_HERDR_PROTOCOL, VERIFIED_HERDR_VERSION } from "./release";
+import {
+  herdrDefaultBinaryPath,
+  legacyWindowsHerdrBinaryPath,
+  VERIFIED_HERDR_PROTOCOL,
+  VERIFIED_HERDR_VERSION,
+} from "./release";
+import { detectServerSupervision } from "./supervision";
 import {
   compareHerdrVersions,
   describeHerdrUpgrade,
+  failedHerdrSteps,
   type HerdrUpgradeDeps,
+  herdrUpgradeChangedAnything,
+  isPublishedWorldVersion,
   parseIntegrationStates,
+  pendingHerdrSteps,
   planHerdrUpgrade,
   upgradeHerdr,
   WORLD_PLUGIN_ID,
@@ -52,8 +63,8 @@ function installHerdr(version: string) {
   return { homeDir, binaryPath };
 }
 
-/** Agent commands on PATH, as empty executables. */
-function agentPath(...commands: string[]): string {
+/** Harness commands on PATH, as empty executables. */
+function harnessPath(...commands: string[]): string {
   const dir = scratch();
   for (const command of commands)
     writeFileSync(join(dir, command), "", { mode: 0o755 });
@@ -108,8 +119,8 @@ function fakeServer(
   version: string,
   options: {
     liveHandoff?: boolean;
-    supervised?: boolean;
     handOff?: boolean;
+    disappear?: boolean;
   } = {},
 ) {
   let running: string | null = version;
@@ -117,7 +128,7 @@ function fakeServer(
   return {
     handoffs,
     server: {
-      supervised: options.supervised ?? false,
+      socketPath: "/run/example/herdr.sock",
       ping: async () => {
         if (!running) throw new Error("ENOENT");
         return {
@@ -129,7 +140,8 @@ function fakeServer(
       call: async (method: string, params: Record<string, unknown>) => {
         expect(method).toBe("server.live_handoff");
         handoffs.push(params);
-        if (options.handOff ?? true) running = VERIFIED_HERDR_VERSION;
+        if (options.disappear) running = null;
+        else if (options.handOff ?? true) running = VERIFIED_HERDR_VERSION;
         // The old server closes the request connection as it exits.
         throw new Error("ECONNRESET");
       },
@@ -151,6 +163,7 @@ function deps(
     pathEnv: join(homeDir, ".local", "bin"),
     expectedSha256: verifiedSha256,
     download: async (_url, path) => writeFileSync(path, verifiedBinary),
+    supervision: async () => "unsupervised",
     sleep: () => Promise.resolve(),
     handoffConfirmTimeoutMs: 0,
     ...overrides,
@@ -175,6 +188,20 @@ describe("parseIntegrationStates", () => {
       ["omp", "not installed"],
       ["letta", "not installed"],
     ]);
+  });
+});
+
+describe("isPublishedWorldVersion", () => {
+  test("follows releases and published candidates, not previews or source builds", () => {
+    for (const version of ["0.3.0", "0.3.0-rc.1", "1.0.0-rc.12"])
+      expect(isPublishedWorldVersion(version)).toBe(true);
+    for (const version of [
+      "0.0.0-rc.42",
+      "0.3.0-4-gabc1234",
+      "0.3.0-dev",
+      "v0.3.0",
+    ])
+      expect(isPublishedWorldVersion(version)).toBe(false);
   });
 });
 
@@ -211,6 +238,37 @@ describe("planHerdrUpgrade", () => {
     });
   });
 
+  test("never replaces a version-manager shim", async () => {
+    // mise puts links to its own executable on PATH, which then picks the
+    // project's Herdr version.
+    const root = scratch();
+    const mise = join(root, "mise-bin", "mise");
+    mkdirSync(join(root, "mise-bin"));
+    writeFileSync(mise, fakeHerdr("0.9.3"), { mode: 0o755 });
+    const shims = join(root, "share", "mise", "shims");
+    mkdirSync(shims, { recursive: true });
+    symlinkSync(mise, join(shims, "herdr"));
+    const misePlan = planHerdrUpgrade(deps(scratch(), { pathEnv: shims }));
+    expect(misePlan).toMatchObject({
+      state: "package-managed",
+      command: "mise upgrade herdr",
+    });
+    // Any link to a program that is not herdr is treated the same way.
+    const other = join(root, "other");
+    mkdirSync(other);
+    symlinkSync(mise, join(other, "herdr"));
+    expect(planHerdrUpgrade(deps(scratch(), { pathEnv: other }))).toMatchObject(
+      {
+        state: "package-managed",
+      },
+    );
+    const report = await upgradeHerdr(
+      deps(scratch(), { pathEnv: shims, integrations: false, plugin: false }),
+    );
+    expect(report.binary).toBe("unchanged");
+    expect(lstatSync(join(shims, "herdr")).isSymbolicLink()).toBe(true);
+  });
+
   test("leaves a binary alone when it reports no version", () => {
     const { homeDir, binaryPath } = installHerdr("0.9.3");
     writeFileSync(binaryPath, "#!/bin/sh\nexit 1\n");
@@ -219,10 +277,47 @@ describe("planHerdrUpgrade", () => {
       binaryPath,
     });
   });
+
+  test("on Windows upgrades only Herdr's own location or World's legacy copy", () => {
+    const homeDir = scratch();
+    const env = {
+      platform: "win32",
+      homeDir,
+      localAppDataDir: join(homeDir, "Local"),
+      appDataDir: join(homeDir, "Roaming"),
+      pathEnv: "",
+      readVersion: () => "herdr 0.9.3",
+    };
+    const place = (path: string) => {
+      mkdirSync(dirname(path), { recursive: true });
+      writeFileSync(path, "exe");
+      return path;
+    };
+    const custom = place(join(homeDir, "tools", "herdr.exe"));
+    expect(
+      planHerdrUpgrade(deps(homeDir, { ...env, binPathEnv: custom })),
+    ).toMatchObject({
+      state: "unknown",
+      binaryPath: custom,
+    });
+    const legacy = place(legacyWindowsHerdrBinaryPath(env));
+    expect(planHerdrUpgrade(deps(homeDir, env))).toEqual({
+      state: "outdated",
+      binaryPath: legacy,
+      version: "0.9.3",
+      legacyWindows: true,
+    });
+    const official = place(herdrDefaultBinaryPath(env));
+    expect(planHerdrUpgrade(deps(homeDir, env))).toEqual({
+      state: "outdated",
+      binaryPath: official,
+      version: "0.9.3",
+    });
+  });
 });
 
 describe("upgradeHerdr", () => {
-  test("upgrades the binary, hands off the server, then integrations and the plugin", async () => {
+  test("upgrades the binary, hands off the server, then harness integrations and the plugin", async () => {
     const { homeDir, binaryPath } = installHerdr("0.9.3");
     const { server, handoffs } = fakeServer("0.9.3");
     const cli = fakeCli();
@@ -230,7 +325,7 @@ describe("upgradeHerdr", () => {
       deps(homeDir, {
         server,
         run: cli.run,
-        pathEnv: `${join(homeDir, ".local", "bin")}:${agentPath("codex", "claude")}`,
+        pathEnv: `${join(homeDir, ".local", "bin")}:${harnessPath("codex", "claude")}`,
       }),
     );
     expect(report).toMatchObject({
@@ -251,7 +346,7 @@ describe("upgradeHerdr", () => {
         expected_protocol: VERIFIED_HERDR_PROTOCOL,
       },
     ]);
-    // After an upgrade every present agent's integration is reinstalled,
+    // After an upgrade every present harness integration is reinstalled,
     // including a "current" Codex; Pi is not on PATH.
     expect(report.integrations).toEqual([
       { target: "codex", action: "updated" },
@@ -276,30 +371,52 @@ describe("upgradeHerdr", () => {
         "--yes",
       ],
     ]);
+    expect(failedHerdrSteps(report)).toEqual([]);
     expect(describeHerdrUpgrade(report)).toEqual([
       `Upgraded Herdr 0.9.3 -> ${VERIFIED_HERDR_VERSION} at ${binaryPath}.`,
       `Previous Herdr binary: ${binaryPath}.previous`,
       "The running Herdr server handed its panes to the new version.",
-      "Integration codex: updated",
-      "Integration claude: updated",
+      "codex harness integration: updated",
+      "claude harness integration: updated",
       "Herdr World plugin: updated (v0.3.0)",
     ]);
   });
 
-  for (const [name, options, reason] of [
-    ["a supervised server", { supervised: true }, "supervised service"],
+  for (const [name, options, supervision, reason] of [
+    [
+      "a server run by a service manager",
+      {},
+      "supervised",
+      "runs under a service manager",
+    ],
+    [
+      "a server whose supervisor is unknown",
+      {},
+      "unknown",
+      "could not confirm",
+    ],
     [
       "a server without live handoff",
       { liveHandoff: false },
+      "unsupervised",
       "does not support live handoff",
     ],
-    ["a failed handoff", { handOff: false }, "old server kept your panes"],
+    [
+      "a failed handoff",
+      { handOff: false },
+      "unsupervised",
+      "old server kept your panes",
+    ],
   ] as const) {
     test(`reports a required restart for ${name} and keeps its panes`, async () => {
       const { homeDir } = installHerdr("0.9.3");
       const { server, handoffs } = fakeServer("0.9.3", options);
       const report = await upgradeHerdr(
-        deps(homeDir, { server, run: fakeCli().run }),
+        deps(homeDir, {
+          server,
+          run: fakeCli().run,
+          supervision: async () => supervision,
+        }),
       );
       expect(report.binary).toBe("upgraded");
       expect(report.server.outcome).toBe("restart-required");
@@ -309,20 +426,87 @@ describe("upgradeHerdr", () => {
     });
   }
 
-  test("never hands off on Windows", async () => {
+  test("detects an operator's own systemd unit through the real supervision probe", async () => {
+    // Fake procfs: the server listening on the socket runs in herdr.service.
+    const { homeDir } = installHerdr("0.9.3");
+    const { server, handoffs } = fakeServer("0.9.3");
+    const proc = scratch();
+    mkdirSync(join(proc, "net"));
+    writeFileSync(
+      join(proc, "net", "unix"),
+      `Num       RefCount Protocol Flags    Type St Inode Path\n0000: 00000002 00000000 00010000 0001 01 4242 ${server.socketPath}\n`,
+    );
+    mkdirSync(join(proc, "321", "fd"), { recursive: true });
+    symlinkSync("socket:[4242]", join(proc, "321", "fd", "7"));
+    writeFileSync(
+      join(proc, "321", "cgroup"),
+      "0::/user.slice/user-1.slice/user@1.service/app.slice/herdr.service\n",
+    );
+    const report = await upgradeHerdr(
+      deps(homeDir, {
+        server,
+        run: fakeCli().run,
+        supervision: (socketPath) =>
+          detectServerSupervision(socketPath, {
+            platform: "linux",
+            procRoot: proc,
+          }),
+      }),
+    );
+    expect(report.server.outcome).toBe("restart-required");
+    expect(report.server.detail).toContain("runs under a service manager");
+    expect(handoffs).toEqual([]);
+  });
+
+  test("reports a handoff that leaves no server as a failure", async () => {
+    const { homeDir } = installHerdr("0.9.3");
+    const report = await upgradeHerdr(
+      deps(homeDir, {
+        server: fakeServer("0.9.3", { disappear: true }).server,
+        run: fakeCli().run,
+      }),
+    );
+    expect(report.server.outcome).toBe("lost");
+    expect(failedHerdrSteps(report)).toEqual(["Herdr server handoff"]);
+    expect(describeHerdrUpgrade(report).at(-1)).toBe(
+      "Not completed: Herdr server handoff. Run `herdr-world herdr upgrade` to retry.",
+    );
+  });
+
+  test("never hands a newer or unidentified server to the verified release", async () => {
+    const { homeDir } = installHerdr(VERIFIED_HERDR_VERSION);
+    for (const [running, detail] of [
+      ["0.10.0", "is newer than"],
+      ["not-a-version", "did not report a version"],
+    ]) {
+      const { server, handoffs } = fakeServer(running);
+      const report = await upgradeHerdr(
+        deps(homeDir, { server, integrations: false, plugin: false }),
+      );
+      expect(report.server.outcome).toBe("left-unchanged");
+      expect(report.server.detail).toContain(detail);
+      expect(handoffs).toEqual([]);
+    }
+  });
+
+  test("never hands off on Windows and moves World's legacy Herdr with its task", async () => {
     const homeDir = scratch();
-    const localAppDataDir = join(homeDir, "Local");
-    const binDir = join(localAppDataDir, "Programs", "Herdr", "bin");
-    mkdirSync(binDir, { recursive: true });
-    const binaryPath = join(binDir, "herdr.exe");
-    writeFileSync(binaryPath, "exe");
-    let installed = false;
+    const env = {
+      platform: "win32",
+      homeDir,
+      localAppDataDir: join(homeDir, "Local"),
+      appDataDir: join(homeDir, "Roaming"),
+      pathEnv: "",
+    };
+    const legacy = legacyWindowsHerdrBinaryPath(env);
+    mkdirSync(dirname(legacy), { recursive: true });
+    writeFileSync(legacy, "legacy exe");
+    const official = herdrDefaultBinaryPath(env);
+    const rebinds: string[][] = [];
     const { server, handoffs } = fakeServer("0.9.3");
     const report = await upgradeHerdr(
       deps(homeDir, {
-        platform: "win32",
-        localAppDataDir,
-        pathEnv: "",
+        ...env,
         server,
         run: fakeCli().run,
         expectedInstallerSha256: createHash("sha256")
@@ -334,30 +518,46 @@ describe("upgradeHerdr", () => {
             url.endsWith("install.ps1") ? "ps1" : verifiedBinary,
           ),
         runCommand: () => {
-          installed = true;
+          mkdirSync(dirname(official), { recursive: true });
+          writeFileSync(official, "new exe");
           return 0;
         },
-        readVersion: () =>
-          `herdr ${installed ? VERIFIED_HERDR_VERSION : "0.9.3"}`,
+        readVersion: (path) =>
+          `herdr ${path === official ? VERIFIED_HERDR_VERSION : "0.9.3"}`,
+        rebindTask: (from, to) => {
+          rebinds.push([from, to]);
+          return true;
+        },
       }),
     );
     expect(report).toMatchObject({
       binary: "upgraded",
-      binaryPath,
+      binaryPath: official,
+      migratedFrom: legacy,
+      taskRebound: true,
       server: { outcome: "restart-required" },
     });
+    expect(rebinds).toEqual([[legacy, official]]);
+    expect(await Bun.file(legacy).text()).toBe("legacy exe");
     expect(report.server.detail).toContain("no live handoff on Windows");
     expect(handoffs).toEqual([]);
+    const lines = describeHerdrUpgrade(report);
+    expect(lines).toContain(
+      `Moved Herdr to Herdr's default location. The copy older Herdr World releases installed stays at ${dirname(legacy)} as a backup; delete it once Herdr ${VERIFIED_HERDR_VERSION} works.`,
+    );
+    expect(lines).toContain(
+      "Herdr World's Herdr task now starts the new location at the next logon or restart.",
+    );
   });
 
-  test("a current Herdr only installs missing or outdated integrations", async () => {
+  test("a current Herdr only installs missing or outdated harness integrations", async () => {
     const { homeDir } = installHerdr(VERIFIED_HERDR_VERSION);
     const cli = fakeCli({ plugins: pluginList("0.3.0") });
     const report = await upgradeHerdr(
       deps(homeDir, {
         server: fakeServer(VERIFIED_HERDR_VERSION).server,
         run: cli.run,
-        pathEnv: agentPath("codex", "claude", "pi"),
+        pathEnv: harnessPath("codex", "claude", "pi"),
         binPathEnv: join(homeDir, ".local", "bin", "herdr"),
       }),
     );
@@ -374,8 +574,32 @@ describe("upgradeHerdr", () => {
     ]);
     expect(describeHerdrUpgrade(report)).toEqual([
       `Herdr ${VERIFIED_HERDR_VERSION} is the version this Herdr World recommends.`,
-      "Integration claude: updated",
+      "claude harness integration: updated",
     ]);
+  });
+
+  test("a World update that keeps the same Herdr still pins the plugin to the new release", async () => {
+    const { homeDir } = installHerdr(VERIFIED_HERDR_VERSION);
+    const options = {
+      server: fakeServer(VERIFIED_HERDR_VERSION).server,
+      pathEnv: harnessPath("claude"),
+      binPathEnv: join(homeDir, ".local", "bin", "herdr"),
+    };
+    const pending = await pendingHerdrSteps(
+      join(homeDir, ".local", "bin", "herdr"),
+      deps(homeDir, { ...options, run: fakeCli().run }),
+    );
+    expect(pending).toEqual(["claude", WORLD_PLUGIN_ID]);
+    const cli = fakeCli();
+    const report = await upgradeHerdr(
+      deps(homeDir, { ...options, run: cli.run }),
+    );
+    expect(report.binary).toBe("unchanged");
+    expect(report.plugin).toMatchObject({
+      action: "updated",
+      detail: "v0.3.0",
+    });
+    expect(herdrUpgradeChangedAnything(report)).toBe(true);
   });
 
   test("hands off a server left on an older version by an earlier upgrade", async () => {
@@ -388,7 +612,7 @@ describe("upgradeHerdr", () => {
     expect(handoffs).toHaveLength(1);
   });
 
-  test("leaves a newer or package-managed Herdr untouched", async () => {
+  test("leaves a newer Herdr untouched", async () => {
     const { homeDir, binaryPath } = installHerdr("0.10.0");
     const { server, handoffs } = fakeServer("0.10.0");
     const report = await upgradeHerdr(
@@ -400,6 +624,7 @@ describe("upgradeHerdr", () => {
     });
     expect(handoffs).toEqual([]);
     expect(await Bun.file(binaryPath).text()).toBe(fakeHerdr("0.10.0"));
+    expect(herdrUpgradeChangedAnything(report)).toBe(false);
     expect(describeHerdrUpgrade(report)).toEqual([
       `Herdr 0.10.0 is newer than the ${VERIFIED_HERDR_VERSION} this Herdr World verified; it was left unchanged.`,
     ]);
@@ -427,15 +652,39 @@ describe("upgradeHerdr", () => {
     expect(await Bun.file(binaryPath).text()).toBe(verifiedBinary);
   });
 
-  test("the plugin follows published World releases from GitHub only", async () => {
+  test("the plugin follows published World releases and candidates from GitHub only", async () => {
     const { homeDir } = installHerdr(VERIFIED_HERDR_VERSION);
+    const rc = fakeCli();
+    expect(
+      (
+        await upgradeHerdr(
+          deps(homeDir, {
+            worldVersion: "0.3.0-rc.1",
+            run: rc.run,
+            integrations: false,
+          }),
+        )
+      ).plugin,
+    ).toEqual({
+      target: WORLD_PLUGIN_ID,
+      action: "updated",
+      detail: "v0.3.0-rc.1",
+    });
+    expect(rc.calls.at(-1)).toEqual([
+      "plugin",
+      "install",
+      "IvoryHeart/herdr-world",
+      "--ref",
+      "v0.3.0-rc.1",
+      "--yes",
+    ]);
     for (const [worldVersion, plugins, action, detail] of [
       ["0.3.0", pluginList("0.2.6", "local"), "skipped", "locally linked"],
       [
-        "0.3.0-rc.1",
+        "0.0.0-rc.42",
         pluginList("0.2.6"),
         "skipped",
-        "Herdr World 0.3.0-rc.1 is not a published release",
+        "Herdr World 0.0.0-rc.42 is not a published release",
       ],
       [
         "0.3.0",
@@ -457,13 +706,13 @@ describe("upgradeHerdr", () => {
     }
   });
 
-  test("reports integration and plugin failures without hiding the upgrade", async () => {
+  test("reports harness integration and plugin failures without hiding the upgrade", async () => {
     const { homeDir } = installHerdr("0.9.3");
     const report = await upgradeHerdr(
       deps(homeDir, {
         run: fakeCli({ fail: ["integration install codex", "plugin install"] })
           .run,
-        pathEnv: `${join(homeDir, ".local", "bin")}:${agentPath("codex")}`,
+        pathEnv: `${join(homeDir, ".local", "bin")}:${harnessPath("codex")}`,
       }),
     );
     expect(report.binary).toBe("upgraded");
@@ -475,5 +724,9 @@ describe("upgradeHerdr", () => {
       },
     ]);
     expect(report.plugin).toMatchObject({ action: "failed" });
+    expect(failedHerdrSteps(report)).toEqual([
+      "codex harness integration",
+      "Herdr World plugin",
+    ]);
   });
 });

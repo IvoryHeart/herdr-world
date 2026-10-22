@@ -213,7 +213,7 @@ function upgradeHandlers(
 ) {
   const received: { worldVersion: string; server: unknown }[] = [];
   const server = {
-    supervised: false,
+    socketPath: "/run/example/herdr.sock",
     ping: async () => ({}),
     call: async () => ({}),
   };
@@ -228,6 +228,7 @@ function upgradeHandlers(
         binaryPath: "/example/herdr",
         version: "0.9.3",
       }),
+      pending: async () => ["codex"],
       run: async (deps) => {
         received.push({ worldVersion: deps.worldVersion, server: deps.server });
         return (options.run ?? (async () => upgradeReport))();
@@ -269,7 +270,12 @@ test("status offers the Herdr upgrade only for a local default connection", asyn
     await (await upgradeHandlers().handlers.handleHerdrStatus()).json(),
   ).toMatchObject({
     state: "running",
-    upgrade: { state: "outdated", version: "0.9.3" },
+    upgrade: {
+      state: "outdated",
+      version: "0.9.3",
+      pending: ["codex"],
+      server_outdated: true,
+    },
     verified_version: VERIFIED_HERDR_VERSION,
   });
   const remote = await (
@@ -306,6 +312,8 @@ test("a confirmed upgrade runs once in the background and reports its steps", as
       `Upgraded Herdr 0.9.3 -> ${VERIFIED_HERDR_VERSION} at /example/herdr.`,
       "The running Herdr server handed its panes to the new version.",
     ],
+    changed: true,
+    failed: [],
   });
   expect(received).toEqual([{ worldVersion: "0.3.0", server }]);
 });

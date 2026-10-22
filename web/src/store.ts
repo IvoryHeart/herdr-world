@@ -438,25 +438,59 @@ export interface HerdrStatusUpgrade {
     | "unknown";
   version?: string;
   command?: string;
+  /** Harness integrations and `ivoryheart.herdr-world` still to update. */
+  pending?: string[];
+  server_outdated?: boolean;
 }
 
-/** Whether Herdr World should offer to bring Herdr up to its verified version. */
+const WORLD_PLUGIN_ID = "ivoryheart.herdr-world";
+
+function statusUpgrade(status: unknown): HerdrStatusUpgrade | null {
+  if (!status || typeof status !== "object") return null;
+  const upgrade = (status as { upgrade?: unknown }).upgrade;
+  return upgrade && typeof upgrade === "object"
+    ? (upgrade as HerdrStatusUpgrade)
+    : null;
+}
+
+/**
+ * Whether Herdr World should offer its Herdr step: Herdr or its running
+ * server is behind the verified release, or this World release still has
+ * harness integrations or its plugin to bring up to date.
+ */
 export function herdrUpgradeOffered(status: unknown): boolean {
-  if (!status || typeof status !== "object") return false;
-  const { upgrade, state, version, verified_version } = status as {
-    upgrade?: HerdrStatusUpgrade;
-    state?: unknown;
-    version?: unknown;
-    verified_version?: unknown;
-  };
-  if (upgrade?.state === "outdated") return true;
-  // An earlier upgrade can leave the running server on the old version.
+  const upgrade = statusUpgrade(status);
   return (
-    upgrade?.state === "current" &&
-    state === "running" &&
-    typeof version === "string" &&
-    version !== verified_version
+    upgrade?.state === "outdated" ||
+    upgrade?.server_outdated === true ||
+    (upgrade?.pending?.length ?? 0) > 0
   );
+}
+
+/** The menu entry for the Herdr step, given a status that offers it. */
+export function herdrUpgradeMenuEntry(status: {
+  version?: string;
+  verified_version?: string;
+  upgrade?: HerdrStatusUpgrade;
+}): { label: string; description: string } {
+  const upgrade = status.upgrade;
+  if (upgrade?.state === "outdated" || upgrade?.server_outdated) {
+    const from =
+      upgrade.state === "outdated" ? upgrade.version : status.version;
+    return {
+      label: `Upgrade Herdr to ${status.verified_version}`,
+      description: `Herdr ${from} is installed or running; this release verified ${status.verified_version}`,
+    };
+  }
+  const names = (upgrade?.pending ?? []).map((item) =>
+    item === WORLD_PLUGIN_ID
+      ? "Herdr World plugin"
+      : `${item} harness integration`,
+  );
+  return {
+    label: "Update Herdr integrations",
+    description: `For this release: ${names.join(", ")}`,
+  };
 }
 
 function storePendingRestartVersion(version: string | null) {
@@ -4745,28 +4779,22 @@ export const store = {
   },
 
   /**
-   * Bring Herdr, the agent integrations and the Herdr World plugin up to the
-   * versions this release verified. After a World update this runs on its
-   * own (automatic) and does nothing when Herdr is already current.
+   * Bring Herdr, the harness integrations and the Herdr World plugin up to
+   * this release. After a World update this runs on its own (automatic), even
+   * when Herdr itself is current, because the integrations and the plugin
+   * follow the World release; it stays quiet when nothing changed.
    */
   async upgradeHerdr({ automatic = false }: { automatic?: boolean } = {}) {
     if (state.herdrUpgrading) return;
-    if (automatic) {
-      const status = await fetch("/api/herdr/status", {
-        credentials: "same-origin",
-        cache: "no-store",
-      })
-        .then((response) => (response.ok ? response.json() : null))
-        .catch(() => null);
-      if (!herdrUpgradeOffered(status)) return;
-    }
     set({
       herdrUpgrading: true,
       notice: {
         kind: "info",
-        message: "Upgrading Herdr",
+        message: automatic
+          ? "Updating Herdr for this release"
+          : "Upgrading Herdr",
         detail:
-          "Bringing Herdr, agent integrations and the Herdr World plugin up to this release.",
+          "Bringing Herdr, its harness integrations and the Herdr World plugin up to this release.",
         loading: true,
       },
     });
@@ -4792,14 +4820,21 @@ export const store = {
         if (job.status !== "done") {
           throw new Error("Herdr World restarted before the upgrade finished.");
         }
+        const failed: string[] = Array.isArray(job.failed) ? job.failed : [];
+        if (automatic && !job.changed && !failed.length) {
+          set({ herdrUpgrading: false, notice: null });
+          return;
+        }
         const restart = job.report?.server?.outcome === "restart-required";
         set({
           herdrUpgrading: false,
           notice: {
-            kind: restart ? "info" : "success",
-            message: restart
-              ? "Herdr upgraded; restart needed"
-              : "Herdr is up to date",
+            kind: failed.length ? "error" : restart ? "info" : "success",
+            message: failed.length
+              ? "Herdr upgrade incomplete"
+              : restart
+                ? "Herdr upgraded; restart needed"
+                : "Herdr is up to date",
             detail: (job.lines as string[]).join("\n"),
             detailMode: "output",
             detailTitle: "Herdr upgrade",

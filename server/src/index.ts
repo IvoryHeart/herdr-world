@@ -48,7 +48,6 @@ import {
   herdrSetupGuardForProfile,
 } from "./http/herdr-setup";
 import { HerdrClient } from "./bridge/herdr-client";
-import { herdrServiceStatus } from "./herdr/service";
 import {
   connectionRoutingErrorResponse,
   type ParsedConnectionHttpRoute,
@@ -773,10 +772,10 @@ const {
       if (profile?.type !== "local") return undefined;
       const client = () => new HerdrClient(profile.control_socket_path);
       return {
+        socketPath: profile.control_socket_path,
         ping: () => client().ping(),
         call: (method, params, timeoutMs) =>
           client().call(method, params, timeoutMs),
-        supervised: herdrServiceStatus().active,
       };
     },
   },

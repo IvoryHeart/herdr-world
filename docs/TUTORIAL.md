@@ -52,8 +52,8 @@ older World or Roamgate installation.
    first: the standalone installer and Homebrew install the Herdr version this
    World release verified (with npm or a Windows archive, run
    `herdr-world herdr upgrade --install`). Then run `herdr-world herdr setup` to
-   start Herdr before step 3. Later World updates upgrade Herdr and the Codex,
-   Claude and Pi integrations too; see
+   start Herdr before step 3. Later World updates upgrade Herdr and the Herdr
+   integrations for the Codex, Claude and Pi harnesses on the machine too; see
    [Herdr installation and upgrades](./DEPLOYMENT.md#herdr-installation-and-upgrades).
 2. [Install Herdr World](./DEPLOYMENT.md#install-a-release). Standalone needs no Bun;
    Windows supports npm (`npm install --global @ivoryheart/herdr-world`,
