@@ -7,7 +7,7 @@ function setup() {
   const notified: string[] = [];
   const files = new Map<string, () => void>();
   const watcher = createConversationWatcher({
-    identity: async () => ({ key, path }),
+    identity: async () => ({ key, paths: path ? [path] : [] }),
     notify: (paneId, owners) => notified.push(`${paneId}:${owners.size}`),
     watchFile: (file, onChange) => {
       files.set(file, onChange);

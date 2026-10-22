@@ -1,3 +1,4 @@
+import { useLayer } from "../layerStack";
 import {
   shortcutMatches,
   shortcutLabel,
@@ -78,31 +79,23 @@ export function AnnotationComposerPopover({
       });
       textareaRef.current?.focus({ preventScroll: true });
     });
-    const closeOnPointerDown = (event: PointerEvent) => {
-      const target = event.target instanceof Node ? event.target : null;
-      if (target && formRef.current?.contains(target)) return;
-      if (
-        suspendOnFileTabNavigation &&
-        target instanceof Element &&
-        target.closest(
-          "[data-file-preview-tab], .inspector-files-resource .workspace-inspector-navigation",
-        )
-      )
-        return;
-      onCloseRef.current();
-    };
-    window.addEventListener("pointerdown", closeOnPointerDown, {
-      capture: true,
-    });
     return () => {
       cancelAnimationFrame(frame);
       if (form?.contains(document.activeElement) && returnFocus?.isConnected)
         returnFocus.focus({ preventScroll: true });
-      window.removeEventListener("pointerdown", closeOnPointerDown, {
-        capture: true,
-      });
     };
-  }, [draftQuote, draftTitle, draftX, draftY, suspendOnFileTabNavigation]);
+  }, [draftQuote, draftTitle, draftX, draftY]);
+  // A layer on the shared stack: Escape, a press outside and Back close it.
+  // File tabs and navigation suspend the draft rather than close it.
+  useLayer(Boolean(draft), () => onCloseRef.current(), {
+    element: () => formRef.current,
+    anchors: () =>
+      suspendOnFileTabNavigation
+        ? document.querySelectorAll(
+            "[data-file-preview-tab], .inspector-files-resource .workspace-inspector-navigation",
+          )
+        : [],
+  });
 
   if (!draft) return null;
 

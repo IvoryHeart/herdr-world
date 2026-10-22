@@ -21,6 +21,28 @@ are optional because the merged PR history records their source.
 
 ### Changed
 
+- Show a terminal's colour as a swatch beside its name in the terminal's
+  header on desktop and phones, and offer the same picker under **Colour** in
+  the terminal window's menu and in the Town peek's header. All pickers are
+  one component with **Default colour**.
+- Show attachment uploads in every composer that attaches files: the phone
+  Composer, Spaces, the Town peek and Inspector Chat (which can now attach).
+  Each file has a chip with byte progress, then done or failed with Retry and
+  Remove; Send waits for uploads, a file picked again while it uploads is not
+  uploaded twice, picking a failed file again retries it, and a path that
+  finishes after its composer closed joins the draft when it opens again.
+- The Town peek shows the agent's latest message from Chat's conversation read
+  model, rendered as Chat renders it, instead of terminal text, and has **Open
+  terminal** in its header, and refreshes when the conversation changes rather
+  than polling. Tapping an agent's table opens its peek too, and opening an
+  agent brings it back to its desk until its status changes. **Menu → Town
+  opens** chooses Chat (the default) or Terminal for these taps; neither marks
+  finished work reviewed.
+- Town tables follow Herdr's tab order, so moving a tab in Spaces or Herdr
+  moves its table. Drag a table onto another in its room (or press **M**) to
+  reorder it: Town sends Herdr's `tab.move` the way Spaces does and shows the
+  order Herdr reports. World now listens for Herdr's `tab.moved` event, so a
+  reorder made anywhere updates every view.
 - Rework the website film around today's World: Town is the hero (rooms and
   nameplated desks, reception with ✓ and ?, the lounge), an agent's peek and a
   chat window docked beside Town answer it, Board shows the same terminals as cards
@@ -63,6 +85,22 @@ are optional because the merged PR history records their source.
   with verified release checksums; terminal protocol remains 22.
 
 ### Fixed
+
+- Close menus, dropdowns, pickers and the phone's workspace list top first.
+  Tapping the terminal now closes a dropdown on phones; Escape closes a menu
+  even while the terminal has focus; on-screen Back closes the workspace list
+  opened from a terminal's title instead of leaving it over the scene; and
+  focus returns to the terminal. One layer stack handles Escape, outside
+  presses and Back for all of them: Escape and Back close the top layer,
+  and a tap outside all of them closes them all.
+- Chat no longer reports a message as sent to the conversation it shows when
+  Herdr delivered it to another session. Herdr's prompt cannot be made
+  conditional, so Chat shows a sent message as not yet seen until its own
+  session's transcript has the same words after the send, and then marks it
+  matched by its words, never delivered. A red notice names the other
+  session, and pauses Send, only on evidence of a switch after the send, and
+  Chat says when it can no longer check, or cannot tell. Chat refuses
+  commands it cannot check (slash commands, and Claude Code's `!` and `#`).
 
 - History and Chat no longer show Codex repository instructions and environment
   blocks, Claude Code local-command caveats, task notifications, compaction

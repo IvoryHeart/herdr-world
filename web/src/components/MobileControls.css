@@ -92,6 +92,16 @@
     touch-action: manipulation;
   }
 
+  .mobile-terminal-appbar .mobile-terminal-swatch {
+    width: 36px;
+    flex: none;
+  }
+
+  .mobile-terminal-swatch i {
+    width: 16px;
+    height: 16px;
+  }
+
   .mobile-terminal-appbar button:disabled {
     opacity: 0.4;
   }

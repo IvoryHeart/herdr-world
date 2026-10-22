@@ -20,6 +20,7 @@ import {
   workspacePullRequest,
 } from "../workspaceTreeBadges";
 import { copyTextFromUserGesture } from "../terminalClipboard";
+import { useLayer } from "../layerStack";
 import { observeClampedContextMenu } from "./contextMenuPosition";
 import "./ContextMenu.css";
 
@@ -114,14 +115,11 @@ export function ContextMenu({
     closeRef.current();
   }, [activeConnectionId, connectionGeneration]);
 
+  useLayer(state !== null, () => closeRef.current(), {
+    element: () => ref.current,
+  });
   useEffect(() => {
     if (!state) return;
-    const onDown = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
     const onScroll = (e: Event) => {
       const target = e.target;
       if (target instanceof Node && ref.current?.contains(target)) return;
@@ -129,14 +127,10 @@ export function ContextMenu({
     };
     // Defer so the triggering contextmenu event doesn't immediately close it.
     const t = setTimeout(() => {
-      window.addEventListener("mousedown", onDown);
-      window.addEventListener("keydown", onKey);
       window.addEventListener("scroll", onScroll, true);
     }, 0);
     return () => {
       clearTimeout(t);
-      window.removeEventListener("mousedown", onDown);
-      window.removeEventListener("keydown", onKey);
       window.removeEventListener("scroll", onScroll, true);
     };
   }, [state, onClose]);

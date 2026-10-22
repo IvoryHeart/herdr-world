@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   createEventSubscriptionLoop,
+  deferredSubscription,
   type EventSubscription,
 } from "./subscription-loop";
 
@@ -195,5 +196,44 @@ describe("event subscription loop", () => {
     expect(readyCallbacks).toBe(2);
     expect(subscriptions[1].closeCount()).toBe(1);
     expect(subscriptions[3].closeCount()).toBe(1);
+  });
+});
+
+describe("deferredSubscription", () => {
+  test("opens the subscription once its event list is known", async () => {
+    const inner = controllableSubscription();
+    const start = deferred<EventSubscription>();
+    const subscription = deferredSubscription(start.promise);
+    let ready = false;
+    void subscription.ready.then(() => {
+      ready = true;
+    });
+    start.resolve(inner.subscription);
+    await Promise.resolve();
+    expect(ready).toBe(false);
+    inner.acknowledge();
+    await subscription.ready;
+    subscription.close();
+    await subscription.closed;
+    expect(inner.closeCount()).toBe(1);
+  });
+
+  test("a failed start fails ready and settles closed", async () => {
+    const subscription = deferredSubscription(
+      Promise.reject(new Error("protocol unknown")),
+    );
+    await expect(subscription.ready).rejects.toThrow("protocol unknown");
+    await subscription.closed;
+  });
+
+  test("closing before the start settles closes what it opens", async () => {
+    const inner = controllableSubscription();
+    const start = deferred<EventSubscription>();
+    const subscription = deferredSubscription(start.promise);
+    subscription.close();
+    start.resolve(inner.subscription);
+    await expect(subscription.ready).rejects.toThrow("closed before ready");
+    await subscription.closed;
+    expect(inner.closeCount()).toBeGreaterThan(0);
   });
 });

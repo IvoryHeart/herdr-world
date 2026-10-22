@@ -128,6 +128,7 @@ import {
   useVisibleTerminalWorkspaceId,
 } from "./components/MobileControls";
 import { useSystemBack } from "./systemBack";
+import { useLayer } from "./layerStack";
 import { requestClosePane, requestCloseTab, TabBar } from "./components/TabBar";
 import type { WindowArrangementControl } from "./components/TabBar";
 import { WindowArrangementMenu } from "./components/WindowArrangementMenu";
@@ -1135,6 +1136,8 @@ export default function App({
   });
   const [mobileTabSheetOpen, setMobileTabSheetOpen] = useState(false);
   const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
+  // The workspace list was opened from the terminal's title, over it.
+  const [workspacesOverTerminal, setWorkspacesOverTerminal] = useState(false);
   const terminalComposerScopeKey = JSON.stringify([
     s.activeConnectionId,
     s.connectionGeneration,
@@ -4287,23 +4290,50 @@ export default function App({
           setMobileTabSheetOpen(false);
           setMobileMoreOpen((open) => !open);
         },
+        tabColors: worldTabColors,
         workspacesOpen: mobileView === "workspaces",
         toggleWorkspaces: () => {
           setMobileMoreOpen(false);
           setMobileTabSheetOpen(false);
           if (mobileView === "workspaces") activateTerminalSurface();
-          else openWorkspaces();
+          else {
+            openWorkspaces();
+            setWorkspacesOverTerminal(true);
+          }
         },
       }
     : null;
   usePublishMobileControls(mobileControls);
-  useSystemBack(mobileMoreOpen, () => setMobileMoreOpen(false), "popup");
+  useLayer(mobileMoreOpen, () => setMobileMoreOpen(false), {
+    element: () =>
+      appRef.current?.querySelector(".mobile-controls-stack") ?? null,
+    anchors: () =>
+      document.querySelectorAll('button[aria-label="More options"]'),
+  });
   useSystemBack(
     mobileTabSheetOpen,
     () => setMobileTabSheetOpen(false),
     "popup",
   );
-  useSystemBack(mobileView === "workspaces", activateTerminalSurface, "panel");
+  // The workspace list opened from the terminal's title covers the terminal:
+  // a layer, so Escape, Back, a press outside or the title close it before
+  // anything below. Opened as a destination, it is a panel for Back only.
+  const workspaceList = mobile && mobileView === "workspaces";
+  useEffect(() => {
+    if (!workspaceList) setWorkspacesOverTerminal(false);
+  }, [workspaceList]);
+  useSystemBack(
+    workspaceList && !workspacesOverTerminal,
+    activateTerminalSurface,
+    "panel",
+  );
+  useLayer(workspaceList && workspacesOverTerminal, activateTerminalSurface, {
+    element: () => document.getElementById("workspace-navigator"),
+    anchors: () =>
+      document.querySelectorAll(
+        ".mobile-terminal-title, .mobile-workspace-shortcut",
+      ),
+  });
   return (
     <div
       ref={appRef}

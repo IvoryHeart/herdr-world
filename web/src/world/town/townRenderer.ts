@@ -91,6 +91,8 @@ export type TownRendererDiagnostics = {
   zoom: number;
   actors: number;
   walking: number;
+  /** Agents opened by the user whose goal is their own desk. */
+  summoned: string[];
   desks: number;
   /** Animated node counts, kept compatible with existing browser evidence. */
   animation: { characters: number; monitors: number; statuses: number };
@@ -128,6 +130,7 @@ function diagnostics(): TownRendererDiagnostics {
     zoom: 1,
     actors: 0,
     walking: 0,
+    summoned: [],
     desks: 0,
     animation: { characters: 0, monitors: 0, statuses: 0 },
     layout: null,
@@ -140,6 +143,8 @@ export type TownSceneState = {
   selectedKey: string | null;
   hoverKey: string | null;
   completionSeenKeys: ReadonlySet<string>;
+  /** Agents the user opened, who walk back to their desks. */
+  summonedKeys: ReadonlySet<string>;
   /** Building currently held open (for example while moving a desk). */
   openHostKey: string | null;
   calm: boolean;
@@ -337,6 +342,7 @@ export async function createTownRenderer(
     selectedKey: null,
     hoverKey: null,
     completionSeenKeys: new Set(),
+    summonedKeys: new Set(),
     openHostKey: null,
     calm: false,
   };
@@ -1298,7 +1304,14 @@ export async function createTownRenderer(
     if (!layout || !model) return;
     const actorWorld = townActorWorld(layout, model);
     layoutCells = new Map(actorWorld.cells);
-    actors.sync(actorWorld, instant || camera.reducedMotion);
+    actors.sync(
+      actorWorld,
+      instant || camera.reducedMotion,
+      state.summonedKeys,
+    );
+    stats.summoned = [...state.summonedKeys].filter(
+      (key) => actors.actors.get(key)?.goal?.kind === "seat",
+    );
   };
 
   /* ---------- drag and move effects ---------- */
@@ -1441,11 +1454,14 @@ export async function createTownRenderer(
     drag.slot?.destroy();
     drag.slot = null;
     if (targetKey && drag.kind === "desk") {
-      // The next free spot of the target room, where the desk will land.
+      // Another desk's slot when reordering in the room, or else the next
+      // free spot of the target room: where the desk will land.
       const room = layout.buildings
         .flatMap((b) => b.rooms)
         .find((candidate) => candidate.key === targetKey);
-      const cell = room?.cells.find((candidate) => !candidate.deskKey);
+      const cell =
+        layoutCells.get(targetKey) ??
+        room?.cells.find((candidate) => !candidate.deskKey);
       if (cell) {
         drag.target = {
           x: (cell.x + 1) * T - 3,
@@ -1588,8 +1604,10 @@ export async function createTownRenderer(
       request("scene");
     },
     setState(nextState) {
+      const summonedChanged = nextState.summonedKeys !== state.summonedKeys;
       state = nextState;
       camera.calm = nextState.calm;
+      if (summonedChanged) syncActors(false);
       request("scene-state");
     },
     setViewport(viewport) {
