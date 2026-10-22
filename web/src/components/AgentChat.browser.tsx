@@ -24,6 +24,7 @@ const conversation = (
   agent_status: status,
   session_binding: "reported",
   session_fingerprint: "a".repeat(64),
+  session_label: "claude session shown",
   status: "ok",
   unavailable: null,
   messages,
@@ -90,6 +91,10 @@ async function run() {
         method === "agent_conversation.unwatch"
       )
         return { ok: true };
+      if (method === "agent_conversation.dismiss") {
+        reply = { ...reply, deliveries: [] };
+        return { dismissed: true };
+      }
       throw new Error(`unexpected ${method}`);
     },
   });
@@ -201,6 +206,67 @@ async function run() {
       "Enter must send the draft with the session it was written for",
     );
     check(textarea.value === "", "A sent draft must clear");
+
+    // A sent message is not called delivered until the transcript has it.
+    const sentAt = "2026-10-22T09:00:05Z";
+    reply = {
+      ...reply,
+      deliveries: [
+        {
+          id: "d1",
+          text: "Run the tests",
+          sent_at: sentAt,
+          state: "pending",
+          expected: "claude session shown",
+        },
+      ],
+    };
+    push();
+    await settle();
+    const pendingBubble = container.querySelector('[data-delivery="pending"]');
+    check(
+      pendingBubble?.textContent?.includes("Run the tests") === true &&
+        pendingBubble.textContent.includes("not yet seen") &&
+        !/delivered/i.test(container.textContent ?? ""),
+      "A pending send must say it is not yet seen, never delivered",
+    );
+
+    // A send that reached another session is reported loudly, by name.
+    reply = {
+      ...reply,
+      deliveries: [
+        {
+          id: "d1",
+          text: "Run the tests",
+          sent_at: sentAt,
+          state: "misdelivered",
+          expected: "claude session shown",
+          delivered_to: "claude session other",
+        },
+      ],
+    };
+    push();
+    await settle();
+    const alert = container.querySelector(".agent-chat-misdelivered");
+    check(
+      alert?.getAttribute("role") === "alert" &&
+        alert.textContent?.includes("claude session other") === true &&
+        alert.textContent.includes("claude session shown") &&
+        !container.querySelector('[data-delivery="pending"]'),
+      "A misdelivered send must name the session that got it",
+    );
+    [...container.querySelectorAll<HTMLButtonElement>("button")]
+      .find((button) => button.textContent === "Dismiss")
+      ?.click();
+    await settle();
+    check(
+      calls.some(
+        (call) =>
+          call.method === "agent_conversation.dismiss" &&
+          call.params.delivery_id === "d1",
+      ) && !container.querySelector(".agent-chat-misdelivered"),
+      "Dismiss must clear the notice on the server",
+    );
 
     sendResult = {
       status: "refused",

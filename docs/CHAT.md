@@ -11,6 +11,10 @@ view that you open on purpose.
 - Sends with Herdr's `agent prompt`, and only to a conversation that Herdr ties
   to the pane (see [Binding](#binding)). Herdr refuses a blocked agent; answer
   its question first.
+- Never calls a message delivered on Herdr's word alone. A sent message shows
+  as "Sent; not yet seen in this conversation" until it appears in the shown
+  session's transcript. If it reached another session, Chat says so in a red
+  notice that names both sessions (see [Delivery](#delivery)).
 - Refreshes when the service says the conversation changed (see
   [Refresh](#refresh)). The browser has no timer. **Refresh** rereads on demand.
 - Keeps the last good conversation when a read fails, for example while the
@@ -34,7 +38,8 @@ projection cache as History ([History synchronization](HISTORY.md)).
 | --- | --- | --- |
 | `agent_conversation.get` | `pane_id` | A conversation |
 | `agent_conversation.latest` | `pane_id`, or `pane_ids`, or nothing for every agent | A conversation without `messages`, or `{ conversations }` |
-| `agent_conversation.send` | `pane_id`, `text`, `session_fingerprint` | `{ status: "sent" }` or `{ status: "refused", reason, message }` |
+| `agent_conversation.send` | `pane_id`, `text`, `session_fingerprint` | `{ status: "sent", delivery }` or `{ status: "refused", reason, message }` |
+| `agent_conversation.dismiss` | `pane_id`, `delivery_id` | `{ dismissed }`; forgets a delivery notice |
 | `agent_conversation.watch` / `.unwatch` | `pane_id` | `{ ok: true }`; see [Refresh](#refresh) |
 
 A conversation carries `agent`, `agent_status`, `session_binding`,
@@ -83,11 +88,30 @@ matches. It then rereads the pane with `agent.get` and prompts with no other
 await in between. If the bound session changed, or the title no longer names
 the thread just found, nothing is sent.
 
-**What remains.** Herdr's `agent.prompt` takes only a pane, not an expected
-session. A session switch after Herdr answers that `agent.get` and before it
-handles the prompt still reaches the new session. That window is one local
-round trip; closing it needs a Herdr prompt conditioned on the session, which
-World would then pass through.
+### Delivery
+
+Herdr's `agent.prompt` takes only a pane and text. Herdr 0.9.3 accepts and
+ignores any other field, including an expected session, revision or state
+sequence (checked against a live server), so World cannot make the prompt
+conditional. A session switch after Chat's last check and before Herdr
+handles the prompt still delivers the text to the new session
+([herdrdev/herdr#4764](https://github.com/herdrdev/herdr/issues/4764)).
+World cannot prevent that; it detects it:
+
+1. Herdr's reply to the prompt describes the pane as Herdr submitted the
+   text. If that session is not the one Chat showed, the message is marked
+   `misdelivered` at once, naming the session that got it.
+2. Otherwise the message is `pending`. Each read of the pane compares it with
+   new user messages: when the shown session's transcript has it, the notice
+   goes and the transcript message stands; when another session's transcript
+   (the pane's session changed) has it, it becomes `misdelivered`. An
+   identical message from before the send never counts, and each transcript
+   message settles one send.
+
+Every conversation read carries these as `deliveries`. A misdelivery stays
+until the user dismisses it. A pending message that never appears stays
+pending; Chat never claims it arrived. An older Herdr whose reply does not
+describe the session leaves the decision to the transcripts.
 
 ### Unavailable reasons
 

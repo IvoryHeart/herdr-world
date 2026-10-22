@@ -42,6 +42,7 @@ export type Conversation = {
   agent_status: string | null;
   session_binding: "reported" | "title" | "guessed" | null;
   session_fingerprint: string | null;
+  session_label: string | null;
   status: "ok" | "unavailable";
   unavailable: {
     reason: string;
@@ -51,6 +52,17 @@ export type Conversation = {
   } | null;
   messages: ConversationMessage[];
   latest: ConversationMessage | null;
+  /** Sends not yet seen in this conversation, or that went elsewhere. */
+  deliveries?: ConversationDelivery[];
+};
+
+export type ConversationDelivery = {
+  id: string;
+  text: string;
+  sent_at: string;
+  state: "pending" | "misdelivered";
+  expected: string;
+  delivered_to?: string;
 };
 
 type SendResult =
@@ -58,6 +70,9 @@ type SendResult =
   | { status: "refused"; reason: string; message: string };
 
 const FOLLOW_THRESHOLD_PX = 48;
+
+const preview = (text: string) =>
+  text.length > 80 ? `${text.slice(0, 79)}…` : text;
 
 const ChatMessage = memo(function ChatMessage({
   message,
@@ -253,6 +268,18 @@ export function AgentChat({
     }
   }, [connectionClient, conversation, draft, load, pane.pane_id, sending]);
 
+  const dismiss = useCallback(
+    (deliveryId: string) => {
+      connectionClient
+        .call("agent_conversation.dismiss", {
+          pane_id: pane.pane_id,
+          delivery_id: deliveryId,
+        })
+        .then(load, load);
+    },
+    [connectionClient, load, pane.pane_id],
+  );
+
   if (details) {
     return (
       <div className="agent-chat is-details">
@@ -276,6 +303,11 @@ export function AgentChat({
 
   const status = conversation?.agent_status ?? pane.agent_status;
   const unavailable = conversation?.unavailable;
+  const deliveries = conversation?.deliveries ?? [];
+  const pending = deliveries.filter((delivery) => delivery.state === "pending");
+  const misdelivered = deliveries.filter(
+    (delivery) => delivery.state === "misdelivered",
+  );
   const canSend =
     conversation?.status === "ok" && !!conversation.session_fingerprint;
   return (
@@ -303,6 +335,19 @@ export function AgentChat({
           <ListTree size={13} /> Details
         </button>
       </div>
+      {misdelivered.map((delivery) => (
+        <div key={delivery.id} className="agent-chat-misdelivered" role="alert">
+          <strong>Your message went to a different session.</strong>
+          <span>
+            “{preview(delivery.text)}” reached {delivery.delivered_to}, not{" "}
+            {delivery.expected} shown here. Check that session before sending
+            again.
+          </span>
+          <button type="button" onClick={() => dismiss(delivery.id)}>
+            Dismiss
+          </button>
+        </div>
+      ))}
       {stale ? (
         <p className="agent-chat-stale" role="status">
           Could not refresh, so this is the last conversation read. {stale}
@@ -369,6 +414,21 @@ export function AgentChat({
             ) : null}
             {conversation?.messages.map((message) => (
               <ChatMessage key={message.id} message={message} />
+            ))}
+            {pending.map((delivery) => (
+              <article
+                key={delivery.id}
+                className="agent-chat-message is-user is-pending"
+                data-role="user"
+                data-delivery="pending"
+              >
+                <div className="agent-chat-bubble">
+                  <p>{delivery.text}</p>
+                </div>
+                <div className="agent-chat-meta">
+                  Sent; not yet seen in this conversation
+                </div>
+              </article>
             ))}
           </div>
         </div>

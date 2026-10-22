@@ -51,6 +51,12 @@ are optional because the merged PR history records their source.
 
 ### Fixed
 
+- Chat no longer reports a message as sent to the conversation it shows when
+  Herdr delivered it to another session. Herdr's prompt cannot be made
+  conditional, so Chat shows a sent message as not yet seen until the shown
+  transcript has it, and names the other session in a red notice when the
+  prompt reply or a transcript shows the message went there.
+
 - History and Chat no longer show Codex repository instructions and environment
   blocks, Claude Code local-command caveats, task notifications, compaction
   summaries, subagent sidechains or rewound prompts as user messages. Remote
