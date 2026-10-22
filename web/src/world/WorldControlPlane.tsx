@@ -23,6 +23,8 @@ import {
 import { type WorldControlPlaneProps } from "./worldControlPlaneContract";
 import { useWorldInspectorController } from "./useWorldInspectorController";
 import { useWorldVisualActions } from "./useWorldVisualActions";
+import { useTerminalColorChoices } from "./useTerminalColors";
+import type { WorldInspectorConversation } from "./worldTerminalPresentation";
 
 const TownView = lazyWithReload("world-town", () => import("./TownView"));
 const BoardView = lazyWithReload("world-board", () => import("./BoardView"));
@@ -98,6 +100,22 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
     setWorkspaceCreationOpen,
     workspaceCreationDestination,
   } = useWorldVisualActions(controller);
+  const colorChoice = useTerminalColorChoices();
+  const inspectorColor = (conversation: WorldInspectorConversation) =>
+    conversation.tabId
+      ? colorChoice({
+          connectionId: conversation.connectionId,
+          workspaceId: conversation.workspaceId,
+          tabId: conversation.tabId,
+          workspaceIds: new Set(
+            world.spaces
+              .filter(
+                (space) => space.connectionId === conversation.connectionId,
+              )
+              .map((space) => space.nativeId),
+          ),
+        })
+      : null;
 
   return (
     <main
@@ -449,7 +467,9 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
                   type: "float",
                   id: worldInspectorWindowId(conversation),
                 }),
+              color: inspectorColor(conversation),
             }}
+            terminalColor={inspectorColor(conversation)}
             onResourceFocus={() => {
               intentRequestRef.current++;
               const id = worldInspectorWindowId(conversation);

@@ -29,6 +29,8 @@ import {
 import { tabMoveInsertIndex } from "../tabReorder";
 import { useTabReorderDrag } from "./useTabReorderDrag";
 import { useTabStripScroll } from "./useTabStripScroll";
+import { useLayer } from "../layerStack";
+import { ColorSwatches } from "./ColorSwatch";
 import "./TabBar.css";
 
 export type { WindowArrangementControl } from "./WindowArrangementMenu";
@@ -630,23 +632,14 @@ function TabContextMenu({
   const ref = useRef<HTMLDivElement>(null);
 
   // Keep the floating menu tied to the current interaction.
+  useLayer(state !== null, onClose, { element: () => ref.current });
   useEffect(() => {
     if (!state) return;
-    const onDown = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
     const t = setTimeout(() => {
-      window.addEventListener("mousedown", onDown);
-      window.addEventListener("keydown", onKey);
       window.addEventListener("scroll", onClose, true);
     }, 0);
     return () => {
       clearTimeout(t);
-      window.removeEventListener("mousedown", onDown);
-      window.removeEventListener("keydown", onKey);
       window.removeEventListener("scroll", onClose, true);
     };
   }, [state, onClose]);
@@ -703,36 +696,16 @@ function TabContextMenu({
         </button>
       ))}
       {color ? (
-        <div
-          className="context-menu-swatches"
-          role="group"
-          aria-label="Tab colour"
-        >
-          {color.palette.map((entry) => (
-            <button
-              key={entry.id}
-              type="button"
-              className="context-menu-swatch"
-              style={{ background: entry.hex }}
-              aria-label={`Colour ${entry.id}`}
-              aria-pressed={color.current.id === entry.id}
-              onClick={() => {
-                onClose();
-                color.onColor(state.tab, entry.id);
-              }}
-            />
-          ))}
-          <button
-            type="button"
-            className="context-menu-item"
-            disabled={!color.current.custom}
-            onClick={() => {
+        <div className="context-menu-colors">
+          <ColorSwatches
+            palette={color.palette}
+            current={color.current}
+            label="Tab colour"
+            onColor={(id) => {
               onClose();
-              color.onColor(state.tab, null);
+              color.onColor(state.tab, id);
             }}
-          >
-            Default colour
-          </button>
+          />
         </div>
       ) : null}
     </div>
