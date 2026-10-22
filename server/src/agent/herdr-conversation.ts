@@ -5,6 +5,7 @@ import { taskSummarySessionFingerprint } from "../herdr/task-summary";
 import {
   conversationMessages,
   latestAssistantMessage,
+  type AgentQuest,
   type Conversation,
   type ConversationBinding,
   type ConversationLatest,
@@ -276,6 +277,7 @@ export function createHerdrConversationSource(args: {
       updated_at: null,
       messages: [],
       latest: null,
+      quest: null,
       deliveries: deliveries.list(paneId),
     };
     if (args.remotePlatform === "windows")
@@ -379,6 +381,7 @@ export function createHerdrConversationSource(args: {
         updated_at: new Date(projection.file.mtimeMs).toISOString(),
         messages,
         latest: latestAssistantMessage(messages),
+        quest: projection.quest,
       } satisfies Conversation;
     } catch (error) {
       args.cache.invalidate(resolved);
@@ -441,6 +444,36 @@ export function createHerdrConversationSource(args: {
   const latest = async (target: { pane_id: string }) =>
     withoutMessages(await read(target));
 
+  /** Run `each` for the named panes, or every agent pane, four at a time. */
+  const eachPane = async <T>(
+    paneIds: readonly string[] | undefined,
+    each: (paneId: string) => Promise<T>,
+  ) => {
+    const ids =
+      paneIds ??
+      (await (async () => {
+        const result = await args.herdrCall("agent.list", {});
+        const agents =
+          isRecord(result) && Array.isArray(result.agents) ? result.agents : [];
+        return agents
+          .filter(isRecord)
+          .map((agent) => stringValue(agent.pane_id))
+          .filter(Boolean);
+      })());
+    const results: T[] = [];
+    // Bound filesystem and SSH work when many agents are open.
+    let next = 0;
+    await Promise.all(
+      Array.from({ length: Math.min(4, ids.length) }, async () => {
+        while (next < ids.length) {
+          const index = next++;
+          results[index] = await each(ids[index]!);
+        }
+      }),
+    );
+    return results;
+  };
+
   return {
     id: "herdr",
     dismiss: ({ pane_id, delivery_id }) =>
@@ -502,53 +535,54 @@ export function createHerdrConversationSource(args: {
         ],
       };
     },
-    latestAll: async (paneIds) => {
-      const ids =
-        paneIds ??
-        (await (async () => {
-          const result = await args.herdrCall("agent.list", {});
-          const agents =
-            isRecord(result) && Array.isArray(result.agents)
-              ? result.agents
-              : [];
-          return agents
-            .filter(isRecord)
-            .map((agent) => stringValue(agent.pane_id))
-            .filter(Boolean);
-        })());
-      const results: Conversation[] = [];
-      // Bound filesystem and SSH work when many agents are open.
-      let next = 0;
-      await Promise.all(
-        Array.from({ length: Math.min(4, ids.length) }, async () => {
-          while (next < ids.length) {
-            const index = next++;
-            const pane_id = ids[index]!;
-            results[index] = await read({ pane_id }).catch((error) =>
-              unavailable(
-                {
-                  conversation_version: 1,
-                  source: "herdr",
-                  pane_id,
-                  agent: null,
-                  agent_status: null,
-                  session_binding: null,
-                  session_fingerprint: null,
-                  session_label: null,
-                  updated_at: null,
-                  messages: [],
-                  latest: null,
-                  deliveries: [],
-                },
-                "read_failed",
-                error instanceof Error ? error.message : String(error),
-              ),
-            );
-          }
-        }),
-      );
-      return results.map(withoutMessages);
-    },
+    latestAll: async (paneIds) =>
+      (
+        await eachPane(paneIds, (pane_id) =>
+          read({ pane_id }).catch((error) =>
+            unavailable(
+              {
+                conversation_version: 1,
+                source: "herdr",
+                pane_id,
+                agent: null,
+                agent_status: null,
+                session_binding: null,
+                session_fingerprint: null,
+                session_label: null,
+                updated_at: null,
+                messages: [],
+                latest: null,
+                quest: null,
+                deliveries: [],
+              },
+              "read_failed",
+              error instanceof Error ? error.message : String(error),
+            ),
+          ),
+        )
+      ).map(withoutMessages),
+    quests: (paneIds) =>
+      eachPane(paneIds, async (pane_id): Promise<AgentQuest> => {
+        const empty = {
+          pane_id,
+          agent: null,
+          session_binding: null,
+          quest: null,
+        };
+        try {
+          const step = await resolve(pane_id, true);
+          if (!("resolved" in step)) return { ...empty, agent: step.agent };
+          const { base, resolved } = step;
+          return {
+            pane_id,
+            agent: base.agent,
+            session_binding: base.session_binding,
+            quest: resolved.file ? await args.cache.quest(resolved) : null,
+          };
+        } catch {
+          return empty;
+        }
+      }),
     send: async ({ pane_id, text, session_fingerprint, baseline }) => {
       if (!text.trim())
         return {

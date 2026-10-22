@@ -292,6 +292,32 @@ let latestText =
       method === "agent_conversation.unwatch"
     )
       return { ok: true };
+    if (method === "agent_quest.list")
+      return {
+        quests: ((params?.pane_ids as string[] | undefined) ?? []).map(
+          (pane_id, index) => ({
+            pane_id,
+            agent: "claude",
+            session_binding: "reported",
+            quest:
+              index % 2
+                ? null
+                : {
+                    quest_version: 1,
+                    source: "todo",
+                    tool: "TodoWrite",
+                    title: "Synthetic quest",
+                    status: "active",
+                    steps: [],
+                    progress: { done: index % 3, total: 3 },
+                    started_at: "2026-01-01T00:00:00Z",
+                    updated_at: "2026-01-01T00:00:01Z",
+                    set_by: null,
+                    helpers: 0,
+                  },
+          }),
+        ),
+      };
     if (method === "agent_conversation.latest")
       return conversationUnavailable
         ? {
@@ -468,6 +494,10 @@ async function run() {
   check(
     diagnostics.level === "overview",
     `default level is ${diagnostics.level}, expected overview`,
+  );
+  check(
+    diagnostics.animation.quests === 0,
+    "quest markers must not float over the overview's room cards",
   );
   check(
     (diagnostics.layout?.buildings ?? 0) === 3,
@@ -976,6 +1006,11 @@ async function run() {
     "zoomed room stayed at overview",
   );
   check(selected.length === 0, "a room tap must not open an Inspector");
+  // Seated agents with a quest show its progress over their desks.
+  await waitFor(
+    () => window.__HERDR_TOWN_RENDERER__!.animation.quests > 0,
+    "no quest marker over any desk in the zoomed room",
+  );
 
   // From the keyboard, M on a desk lists the host's other rooms; choosing one
   // asks the service to move that desk there.

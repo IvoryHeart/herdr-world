@@ -35,6 +35,8 @@ import { AgentHistoryDrawer } from "./AgentHistoryDrawer";
 import { AttachmentChips } from "./AttachmentChips";
 import { CodexSessionLink } from "./CodexSessionLink";
 import { MarkdownPreview } from "./markdown";
+import { QuestLog } from "./QuestLog";
+import type { Quest } from "../../../server/src/agent/quest";
 import "./AgentChat.css";
 
 // Mirrors the server's conversation read model (server/src/agent/conversation.ts).
@@ -65,6 +67,8 @@ export type Conversation = {
   } | null;
   messages: ConversationMessage[];
   latest: ConversationMessage | null;
+  /** The agent's quest: its todos, plan, goal or loop. */
+  quest?: Quest | null;
   /**
    * Sends not yet seen in this conversation, sends with evidence they went
    * elsewhere, and sends Chat can no longer check.
@@ -405,6 +409,7 @@ export function AgentChat({
           <ListTree size={13} /> Details
         </button>
       </div>
+      <QuestLog quest={conversation?.quest} />
       {misdelivered.map((delivery) => (
         <div key={delivery.id} className="agent-chat-misdelivered" role="alert">
           {delivery.evidence === "herdr" ? (

@@ -1,3 +1,4 @@
+import { questMark, useAgentQuests } from "./agentQuests";
 import {
   useCreationProgress,
   creationPendingReason,
@@ -570,6 +571,18 @@ export default function TownView({
     });
   }, [agentByKey]);
   const summonedKeys = useMemo(() => new Set(summoned.keys()), [summoned]);
+  // Each agent's quest, marked over its desk by agent key.
+  const agentQuests = useAgentQuests(world.leaves);
+  const questMarks = useMemo(
+    () =>
+      new Map(
+        office.roster.flatMap(({ agent }) => {
+          const quest = agentQuests.get(agent.nodeId);
+          return quest ? [[agent.key, questMark(quest)] as const] : [];
+        }),
+      ),
+    [agentQuests, office.roster],
+  );
   const summon = (key: string) => {
     const status = agentByKey.get(key)?.agent.semanticStatus;
     if (status)
@@ -1347,6 +1360,7 @@ export default function TownView({
             selectedKey={townSelectedKey}
             completionSeenKeys={completionSeenKeys}
             summonedKeys={summonedKeys}
+            quests={questMarks}
             conversationTargets={conversationTargets}
             onSelect={tapTown}
             onActivateAgent={openReply}

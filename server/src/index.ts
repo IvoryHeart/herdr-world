@@ -312,6 +312,7 @@ const IMPORTANT_RPC_METHODS = new Set([
   "agent_conversation.dismiss",
   "agent_conversation.watch",
   "agent_conversation.unwatch",
+  "agent_quest.list",
   "agent_history.get",
   "agent_history.entry",
   "agent_session.get",
@@ -1710,6 +1711,18 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
                     ),
                   };
       sendReply({ id, result }, method);
+    } catch (e) {
+      sendError(`${method}-error`, e);
+    }
+    return;
+  }
+  if (method === "agent_quest.list") {
+    try {
+      const ids = Array.isArray(params?.pane_ids)
+        ? params.pane_ids.filter((id): id is string => typeof id === "string")
+        : undefined;
+      const quests = await connection.agentSessions.conversation.quests(ids);
+      sendReply({ id, result: { quests } }, method);
     } catch (e) {
       sendError(`${method}-error`, e);
     }

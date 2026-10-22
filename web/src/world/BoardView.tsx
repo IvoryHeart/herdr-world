@@ -1,3 +1,5 @@
+import { QuestChip } from "../components/QuestLog";
+import { useAgentQuests } from "./agentQuests";
 import {
   ChevronDown,
   ChevronUp,
@@ -438,6 +440,8 @@ export default function BoardView({
   // never holds up typing in a terminal.
   const shownWorld = useDeferredValue(world);
   const fullModel = useMemo(() => projectBoard(shownWorld), [shownWorld]);
+  // Each agent's quest, as a progress chip on its card.
+  const quests = useAgentQuests(shownWorld.leaves);
   // A large board's first render is only the frame; its cards follow in a
   // transition, which yields to input while it builds.
   const [built, setBuilt] = useState(
@@ -3137,6 +3141,9 @@ export default function BoardView({
                       <span className="board-dot" />
                     )}
                     <span className="board-label">{tab.label}</span>
+                    {!multi && pane?.isAgent && quests.get(pane.leaf.id) ? (
+                      <QuestChip quest={quests.get(pane.leaf.id)!} />
+                    ) : null}
                     <span className="board-who">
                       {multi
                         ? `${tab.panes.length} panes`
@@ -3167,6 +3174,9 @@ export default function BoardView({
                           <span className="board-pane-name">
                             {paneName(row)}
                           </span>
+                          {row.isAgent && quests.get(row.leaf.id) ? (
+                            <QuestChip quest={quests.get(row.leaf.id)!} />
+                          ) : null}
                           <span className="board-pane-state">
                             {row.isAgent ? STATUS_LABEL[row.status] : "shell"}
                           </span>

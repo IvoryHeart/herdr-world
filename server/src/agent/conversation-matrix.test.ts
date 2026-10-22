@@ -795,6 +795,65 @@ describe("conversation availability", () => {
   });
 });
 
+describe("quests", () => {
+  const todo = (status: string) =>
+    JSON.stringify({
+      type: "assistant",
+      uuid: "q1",
+      timestamp: "2026-10-22T10:00:01Z",
+      message: {
+        role: "assistant",
+        content: [
+          {
+            type: "tool_use",
+            id: "call_q1",
+            name: "TodoWrite",
+            input: { todos: [{ content: "Example step", status }] },
+          },
+        ],
+      },
+    });
+
+  test("quests come with the conversation and in bulk, without messages", async () => {
+    const dir = await mkdtemp(join(root, "quest-"));
+    const path = join(dir, "session.jsonl");
+    await writeFile(path, `${todo("in_progress")}\n`);
+    const chat = source(
+      herdr(
+        pane("claude", {
+          source: "herdr:claude",
+          agent: "claude",
+          kind: "path",
+          value: path,
+        }),
+      ),
+    );
+    expect((await chat.read({ pane_id: "w1:p1" })).quest).toMatchObject({
+      source: "todo",
+      progress: { done: 0, total: 1 },
+    });
+    await writeFile(path, `${todo("completed")}\n`);
+    expect(await chat.quests()).toEqual([
+      {
+        pane_id: "w1:p1",
+        agent: "claude",
+        session_binding: "reported",
+        quest: expect.objectContaining({
+          status: "done",
+          progress: { done: 1, total: 1 },
+          set_by: "call_q1",
+        }),
+      },
+    ]);
+  });
+
+  test("a pane without an agent has no quest", async () => {
+    expect(await source(herdr(null)).quests(["w1:p9"])).toEqual([
+      { pane_id: "w1:p9", agent: null, session_binding: null, quest: null },
+    ]);
+  });
+});
+
 describe("conversation binding and remote admission", () => {
   test("remote Grok and Antigravity paths are refused, never read locally", async () => {
     // A local file at the reported path must not stand in for the remote one.

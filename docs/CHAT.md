@@ -53,10 +53,12 @@ projection cache as History ([History synchronization](HISTORY.md)).
 | `agent_conversation.send` | `pane_id`, `text`, `session_fingerprint`, optional `baseline` (IDs of the user messages Chat showed) | `{ status: "sent", delivery }` or `{ status: "refused", reason, message }` |
 | `agent_conversation.dismiss` | `pane_id`, `delivery_id` | `{ dismissed }`; forgets a delivery notice |
 | `agent_conversation.watch` / `.unwatch` | `pane_id` | `{ ok: true }`; see [Refresh](#refresh) |
+| `agent_quest.list` | `pane_ids`, or nothing for every agent | `{ quests }`: per pane, `agent`, `session_binding` and `quest`; see [Quests](#quests) |
 
 A conversation carries `agent`, `agent_status`, `session_binding`,
 `session_fingerprint`, `updated_at`, ordered `messages`, `latest` (the last
-assistant message) and a `status` of `ok` or `unavailable`. Each message has a
+assistant message), `quest` (see [Quests](#quests)) and a `status` of `ok` or
+`unavailable`. Each message has a
 `role` (`user`, `assistant` or `tool`) and a `kind`:
 
 - `message`: user or assistant text.
@@ -215,6 +217,46 @@ rechecks the watched panes, so a second transcript with the same prefix turns
 the title ambiguous. If those directories cannot be watched, or the host is
 remote, every recheck searches. Reads and sends always search.
 
+## Quests
+
+A quest is what an agent is working through, read from its own transcript by
+fixed rules, without a model (`server/src/agent/quest.ts`). It is computed with
+the projection, over the whole transcript rather than Chat's 200-entry window,
+and each connection keeps up to 256 quests, so a quest whose transcript has not
+changed is answered without reading it again. Chat shows the quest log above
+the conversation; Town marks progress over a seated agent; Board puts a chip on
+the agent's card.
+
+A quest has a `title`, a `source` (`todo`, `plan`, `goal` or `loop`), the
+harness `tool` it came from, a `status` (`active`, `done`, `blocked` or
+`paused`), `steps` with a `status` each (`pending`, `active`, `done` or
+`blocked`), `progress` (`done` of `total`), `started_at`, `updated_at`,
+`set_by`, `iterations` for a loop and the number of `helpers` (subagents) the
+agent spawned. A step's `step_ids` are the tool-call IDs the agent made while
+that step was active, and `set_by` is the call that last set the quest; Chat's
+step cards are keyed by the same call IDs.
+
+| Harness | Checklist (`todo`) | Plan | Goal | Loop | Helpers |
+| --- | --- | --- | --- | --- | --- |
+| Claude Code | `TodoWrite`; `TaskCreate` and `TaskUpdate` (the harness's task IDs; a pending task waiting on an unfinished one is `blocked`) | `ExitPlanMode` with the plan inline | None recorded | `ScheduleWakeup` (`/loop`), `CronCreate`; `stop` ends it | `Agent`, `Task` |
+| Codex | `update_plan` (its `explanation` titles the quest) | Plan-mode `Plan` item | `thread_goal_updated` (paused, blocked, usage- or budget-limited, complete) | None recorded | `spawn_agent` |
+| Kimi Code | `SetTodoList` | None | None | None | None |
+| Pi | No built-in tool; an extension tool named `todo_write` or `write_todos` that writes the whole list is read | None | None | None | None |
+| Grok Build, Muse Code, Antigravity CLI | A tool with one of the names above is read; no native equivalent is known | None | None | None | None |
+
+The current quest is the Codex goal when there is one, with the checklist's
+steps once the checklist was updated after the goal began. Otherwise it is the
+most recently updated of the checklist, the plan and the loop. A checklist made
+after an approved plan takes the plan's title; otherwise it takes the user's
+prompt before it. A new list that shares no step with a finished one starts a
+new quest. Subagent sidechains never set the parent's quest. A quest from a
+session World only guessed from the folder is not shown on desks or cards.
+
+Known gaps: Claude Code builds that keep the plan in a file (the
+`plan_mode_exit` attachment names `~/.claude/plans/…`) are not read, because
+the service reads only the transcript; Claude Code records no goal; loop
+iterations count wake-ups, not finished passes.
+
 ## Harness matrix
 
 Herdr 0.9.3 detects 24 agent kinds. World has a transcript reader for seven.
@@ -256,6 +298,9 @@ numeric version (such as `0.163.0` or `1.2.0-rc.1`); any other value read from
 a transcript, however short, is counted as `other`. Reader errors are counted
 without their message. Run it after a harness upgrade; do not commit its
 output or copy transcripts into the repository.
+
+It also counts, per harness version, how many transcripts have a quest from
+each source (todo, plan, goal or loop) or none, as counts only.
 
 It writes no output files. The one disk exception is Antigravity: its reader,
 here and in the service, reads a copy of each database from a private (0700)
