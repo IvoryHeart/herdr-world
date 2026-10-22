@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef } from "react";
+import { useLayer } from "../layerStack";
 import { observeClampedContextMenu } from "./contextMenuPosition";
 
 export type ActionsMenuItem = {
@@ -17,8 +18,8 @@ export type ActionsMenuGroup = {
 };
 
 // Shared anchored popup menu (right-click, long-press, keyboard, toolbar).
-// Mirrors the file explorer menu behavior: outside click / Escape / scroll
-// closes, arrows navigate, focus returns to the trigger on close.
+// A layer on the shared stack: outside press / Escape / Back close it and
+// focus returns to what had it; scroll and Tab also close, arrows navigate.
 export function ActionsMenu({
   x,
   y,
@@ -36,14 +37,11 @@ export function ActionsMenu({
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
 
+  useLayer(true, () => onCloseRef.current(), { element: () => ref.current });
   useEffect(() => {
-    const previousFocus = document.activeElement as HTMLElement | null;
     const close = () => onCloseRef.current();
-    const onDown = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) close();
-    };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" || e.key === "Tab") {
+      if (e.key === "Tab") {
         e.preventDefault();
         close();
         return;
@@ -70,7 +68,6 @@ export function ActionsMenu({
       buttons[nextIndex]?.focus();
     };
     const t = setTimeout(() => {
-      window.addEventListener("mousedown", onDown);
       window.addEventListener("keydown", onKey);
       window.addEventListener("scroll", close, true);
       ref.current
@@ -79,12 +76,8 @@ export function ActionsMenu({
     }, 0);
     return () => {
       clearTimeout(t);
-      window.removeEventListener("mousedown", onDown);
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("scroll", close, true);
-      if (previousFocus?.isConnected) {
-        previousFocus.focus({ preventScroll: true });
-      }
     };
   }, []);
 

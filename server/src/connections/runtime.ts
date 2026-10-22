@@ -22,6 +22,7 @@ import {
 } from "../bridge/endpoint-client";
 import {
   assertSupportedHerdrProtocol,
+  HerdrCompatibilityError,
   isTerminalHelloProtocol,
 } from "../bridge/protocol-compat";
 import { worldEnv } from "../config/environment";
@@ -68,7 +69,10 @@ import {
 } from "../worktree/remove";
 import { createAgentStatusSubscriptionLoop } from "./agent-status-subscription";
 import { sanitizeConnectionError } from "./manager";
-import { createEventSubscriptionLoop } from "./subscription-loop";
+import {
+  createEventSubscriptionLoop,
+  deferredSubscription,
+} from "./subscription-loop";
 import { type ConnectionIdentity, STARTUP_DEFAULT_CONNECTION } from "./types";
 import { unixOnlyHandlers } from "./unix-only";
 
@@ -591,7 +595,24 @@ export function createLegacyConnectionRuntime(args: {
     recoveryMessage: "event subscription recovered",
   });
   const subscriptionLoop = createEventSubscriptionLoop({
-    subscribe: () => herdr.subscribe(DEFAULT_EVENTS),
+    // Herdr refuses a subscription that names an event it does not know, so
+    // tab order events are asked for only where tab.move exists. A failed
+    // probe fails this attempt and the loop retries; only a Herdr this build
+    // does not support is subscribed without them.
+    subscribe: () =>
+      deferredSubscription(
+        terminalBridge
+          .tabMoveSupported()
+          .catch((error) => {
+            if (error instanceof HerdrCompatibilityError) return false;
+            throw error;
+          })
+          .then((tabMove) =>
+            herdr.subscribe(
+              tabMove ? [...DEFAULT_EVENTS, "tab.moved"] : DEFAULT_EVENTS,
+            ),
+          ),
+      ),
     onReady: () => {
       // Browser snapshots may start before the subscription ACK. Reconcile
       // after every ACK (including reconnect) to close that missed-event gap.

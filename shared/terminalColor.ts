@@ -70,12 +70,19 @@ export function resolveTerminalColor<C extends string>(
   tab: TerminalTab,
 ): { color: C | TerminalColorName; own: boolean } {
   const key = tabCardKey(tab.connectionId, tab.tabId, tab.workspaceIds);
-  const own = colors[key];
+  // A saved colour outside the palette (from an older or newer build) counts
+  // as none, so every view shows a colour the picker offers.
+  const known = (color: C | undefined) =>
+    color !== undefined &&
+    (TERMINAL_COLOR_NAMES as readonly string[]).includes(color)
+      ? color
+      : undefined;
+  const own = known(colors[key]);
   if (own) return { color: own, own: true };
   return {
     color:
-      colors[inheritedColorKey(key)] ??
-      colors[cardKey(tab.connectionId, tab.workspaceId)] ??
+      known(colors[inheritedColorKey(key)]) ??
+      known(colors[cardKey(tab.connectionId, tab.workspaceId)]) ??
       defaultTerminalColorFor(key),
     own: false,
   };

@@ -26,6 +26,16 @@ describe("terminal colour", () => {
     expect(terminalColorKey(tab("w2"))).toBe("studio:tab:w2");
   });
 
+  test("a saved colour outside the palette shows the default and is not the tab's own", () => {
+    const colors = { "studio:w1:t1": "chartreuse", "studio:w1": "mauve" };
+    expect(
+      resolveTerminal(
+        colors as unknown as Parameters<typeof resolveTerminal>[0],
+        tab("w1:t1"),
+      ),
+    ).toEqual({ color: defaultTerminalColor("studio:w1:t1"), own: false });
+  });
+
   test("defaults are deterministic, spread over the palette and per connection", () => {
     expect(terminalColor({}, tab("w1:t1"))).toBe(
       defaultTerminalColor("studio:w1:t1"),

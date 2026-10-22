@@ -108,6 +108,14 @@ export type TownRoomActions = {
   onMoveAgent(agentKey: string): void;
   /** A desk dragged onto another room; resolves how the move ended. */
   onDropDesk(deskKey: string, roomKey: string): Promise<TownMoveResult>;
+  /**
+   * A desk dragged within its room: into `ontoDeskKey`'s slot, or last when
+   * null. Resolves how the reorder ended.
+   */
+  onReorderDesk(
+    deskKey: string,
+    ontoDeskKey: string | null,
+  ): Promise<TownMoveResult>;
   /** An agent dragged onto another desk; resolves how the move ended. */
   onDropAgent(agentKey: string, deskKey: string): Promise<TownMoveResult>;
   /** A desk dragged onto another desk: join its team (townTeams.ts). */
@@ -125,6 +133,7 @@ const savedCameras = new Map<
 const portrait = townPortrait;
 const NO_COLORS: TerminalColors = {};
 const NO_RELATIONS = { relations: [], places: new Map() };
+const NO_KEYS: ReadonlySet<string> = new Set();
 
 function ago(since: number, now: number) {
   const seconds = Math.max(0, Math.round((now - since) / 1000));
@@ -135,6 +144,7 @@ export function TownCanvas({
   projection,
   selectedKey,
   completionSeenKeys,
+  summonedKeys = NO_KEYS,
   conversationTargets,
   onSelect,
   onActivateAgent,
@@ -165,6 +175,8 @@ export function TownCanvas({
   projection: HerdrOfficeProjection;
   selectedKey: string | null;
   completionSeenKeys: ReadonlySet<string>;
+  /** Agents the user opened, who walk back to their desks. */
+  summonedKeys?: ReadonlySet<string>;
   conversationTargets: readonly WorldConversationAnchorTarget[];
   onSelect: (key: string) => void;
   onActivateAgent: (key: string) => void;
@@ -240,6 +252,7 @@ export function TownCanvas({
     hover,
     calm,
     completionSeenKeys,
+    summonedKeys,
     conversationTargets,
     onSelect,
     onActivateAgent,
@@ -258,6 +271,7 @@ export function TownCanvas({
     selectedKey,
     hover,
     completionSeenKeys,
+    summonedKeys,
     conversationTargets,
     onSelect,
     onActivateAgent,
@@ -508,6 +522,7 @@ export function TownCanvas({
     selectedKey: latest.current.selectedKey,
     hoverKey: latest.current.hover,
     completionSeenKeys: latest.current.completionSeenKeys,
+    summonedKeys: latest.current.summonedKeys,
     openHostKey: null,
     calm: latest.current.calm,
   });
@@ -611,7 +626,7 @@ export function TownCanvas({
   useEffect(() => {
     rendererRef.current?.setState(sceneState());
     scheduleAnchors();
-  }, [selectedKey, hover, completionSeenKeys, calm]);
+  }, [selectedKey, hover, completionSeenKeys, summonedKeys, calm]);
 
   useEffect(() => {
     scheduleAnchors();
@@ -818,7 +833,12 @@ export function TownCanvas({
                 ? actions.onGroupDesk(drag.key, targetKey)
                 : action === "ungroup"
                   ? actions.onUngroupDesk(drag.key)
-                  : actions.onDropDesk(drag.key, targetKey)
+                  : action === "reorder"
+                    ? actions.onReorderDesk(
+                        drag.key,
+                        targetKey === drag.from ? null : targetKey,
+                      )
+                    : actions.onDropDesk(drag.key, targetKey)
           )
             .catch((): TownMoveResult => "uncertain")
             .then((result) => rendererRef.current?.finishMove(result));

@@ -1,28 +1,132 @@
 import * as React from "react";
 import * as PopoverPrimitive from "@radix-ui/react-popover";
 
+import { lastInputWasPress, useLayer } from "../../layerStack";
 import { cn } from "../../utils";
 import "./popover.css";
 
-const Popover = PopoverPrimitive.Root;
-const PopoverTrigger = PopoverPrimitive.Trigger;
+type PopoverLayerRefs = {
+  trigger: React.MutableRefObject<HTMLElement | null>;
+  content: React.MutableRefObject<HTMLElement | null>;
+};
+const PopoverLayerContext = React.createContext<PopoverLayerRefs | null>(null);
+
+/** One stable callback ref that fills the layer's ref and the caller's. */
+function useMergedRef<T extends HTMLElement>(
+  own: React.MutableRefObject<HTMLElement | null> | undefined,
+  forwarded: React.ForwardedRef<T>,
+) {
+  return React.useCallback(
+    (node: T | null) => {
+      if (own) own.current = node;
+      if (typeof forwarded === "function") forwarded(node);
+      else if (forwarded) forwarded.current = node;
+    },
+    [own, forwarded],
+  );
+}
+
+/**
+ * Radix's popover on the shared layer stack (layerStack.ts): the stack, not
+ * Radix, closes it on Escape, an outside press or Back, so nested layers
+ * close one at a time and a press on the terminal still dismisses it.
+ */
+function Popover({
+  open: controlledOpen,
+  defaultOpen = false,
+  onOpenChange,
+  ...props
+}: React.ComponentPropsWithoutRef<typeof PopoverPrimitive.Root>) {
+  const [uncontrolledOpen, setUncontrolledOpen] = React.useState(defaultOpen);
+  const open = controlledOpen ?? uncontrolledOpen;
+  const latest = React.useRef(onOpenChange);
+  latest.current = onOpenChange;
+  const setOpen = React.useCallback(
+    (next: boolean) => {
+      if (controlledOpen === undefined) setUncontrolledOpen(next);
+      latest.current?.(next);
+    },
+    [controlledOpen],
+  );
+  const refs = React.useRef<PopoverLayerRefs>({
+    trigger: { current: null },
+    content: { current: null },
+  }).current;
+  useLayer(open, () => setOpen(false), {
+    element: () => refs.content.current,
+    anchors: () => [refs.trigger.current],
+  });
+  return (
+    <PopoverLayerContext.Provider value={refs}>
+      <PopoverPrimitive.Root open={open} onOpenChange={setOpen} {...props} />
+    </PopoverLayerContext.Provider>
+  );
+}
+
+const PopoverTrigger = React.forwardRef<
+  React.ElementRef<typeof PopoverPrimitive.Trigger>,
+  React.ComponentPropsWithoutRef<typeof PopoverPrimitive.Trigger>
+>((props, ref) => {
+  const refs = React.useContext(PopoverLayerContext);
+  const merged = useMergedRef(refs?.trigger, ref);
+  return <PopoverPrimitive.Trigger ref={merged} {...props} />;
+});
+PopoverTrigger.displayName = PopoverPrimitive.Trigger.displayName;
 
 const PopoverContent = React.forwardRef<
   React.ElementRef<typeof PopoverPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof PopoverPrimitive.Content>
->(({ className, align = "start", sideOffset = 8, ...props }, ref) => (
-  <PopoverPrimitive.Portal>
-    <div className="popover-portal">
-      <PopoverPrimitive.Content
-        ref={ref}
-        align={align}
-        sideOffset={sideOffset}
-        className={cn("popover-content", className)}
-        {...props}
-      />
-    </div>
-  </PopoverPrimitive.Portal>
-));
+>(
+  (
+    {
+      className,
+      align = "start",
+      sideOffset = 8,
+      onEscapeKeyDown,
+      onPointerDownOutside,
+      onFocusOutside,
+      onCloseAutoFocus,
+      ...props
+    },
+    ref,
+  ) => {
+    const refs = React.useContext(PopoverLayerContext);
+    const merged = useMergedRef(refs?.content, ref);
+    return (
+      <PopoverPrimitive.Portal>
+        <div className="popover-portal">
+          <PopoverPrimitive.Content
+            ref={merged}
+            align={align}
+            sideOffset={sideOffset}
+            className={cn("popover-content", className)}
+            onEscapeKeyDown={(event) => {
+              onEscapeKeyDown?.(event);
+              if (refs) event.preventDefault();
+            }}
+            onPointerDownOutside={(event) => {
+              onPointerDownOutside?.(event);
+              if (refs) event.preventDefault();
+            }}
+            onCloseAutoFocus={(event) => {
+              onCloseAutoFocus?.(event);
+              // The stack returns focus to what had it before opening, or
+              // leaves it with what an outside press reached.
+              if (refs) event.preventDefault();
+            }}
+            onFocusOutside={(event) => {
+              onFocusOutside?.(event);
+              // Focus that follows a press is the stack's to judge; focus
+              // moved by a key (Tab) leaves and closes the popover.
+              if (refs && lastInputWasPress()) event.preventDefault();
+            }}
+            {...props}
+          />
+        </div>
+      </PopoverPrimitive.Portal>
+    );
+  },
+);
 PopoverContent.displayName = PopoverPrimitive.Content.displayName;
 
 export { Popover, PopoverContent, PopoverTrigger };

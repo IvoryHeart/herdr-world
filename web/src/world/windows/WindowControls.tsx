@@ -2,6 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { measuredFixedPositionScale } from "../../fixedPositionScale";
 import { Columns2, Maximize2, Minimize2, Minus, X } from "lucide-react";
+import {
+  ColorSwatchButton,
+  type ColorChoice,
+  type ColorValue,
+} from "../../components/ColorSwatch";
+import { useLayer } from "../../layerStack";
 import type { SnapTarget } from "./windowManager";
 import "./windows.css";
 
@@ -13,6 +19,12 @@ export type ManagedWindowControls = {
   onClose(): void;
   onSnap(target: SnapTarget): void;
   onFloat(): void;
+  /** A terminal window's colour, chosen in its menu. */
+  color?: {
+    palette: readonly ColorChoice[];
+    current: ColorValue;
+    onColor(id: string | null): void;
+  } | null;
 };
 const choices: { target: SnapTarget; label: string }[] = [
   { target: "left", label: "Left half" },
@@ -35,20 +47,15 @@ export function WindowControls({
   const host = useRef<HTMLDivElement>(null);
   const menu = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
+  useLayer(open, () => setOpen(false), {
+    element: () => menu.current,
+    anchors: () => [trigger.current],
+  });
   useEffect(() => {
     if (!open) return;
     menu.current
       ?.querySelector<HTMLButtonElement>('[role="menuitem"]')
       ?.focus();
-    const outside = (event: PointerEvent) => {
-      if (
-        !host.current?.contains(event.target as Node) &&
-        !menu.current?.contains(event.target as Node)
-      )
-        setOpen(false);
-    };
-    window.addEventListener("pointerdown", outside);
-    return () => window.removeEventListener("pointerdown", outside);
   }, [open]);
   const scale = open ? measuredFixedPositionScale() : 1;
   const anchor = trigger.current?.getBoundingClientRect();
@@ -65,7 +72,10 @@ export function WindowControls({
         top:
           Math.max(
             8,
-            Math.min(anchor.bottom + 4, window.innerHeight - 210 * scale - 8),
+            Math.min(
+              anchor.bottom + 4,
+              window.innerHeight - (controls.color ? 250 : 210) * scale - 8,
+            ),
           ) / scale,
       }
     : {};
@@ -75,19 +85,13 @@ export function WindowControls({
       className="world-window-controls workspace-inspector-actions"
       onKeyDown={(event) => {
         if (!open) return;
-        if (event.key === "Escape") {
-          event.preventDefault();
-          event.stopPropagation();
-          setOpen(false);
-          trigger.current?.focus();
-        }
         if (event.key === "Tab") setOpen(false);
         if (event.key === "ArrowDown" || event.key === "ArrowUp") {
           event.preventDefault();
           event.stopPropagation();
           const items = Array.from(
             menu.current?.querySelectorAll<HTMLButtonElement>(
-              '[role="menuitem"]',
+              '[role="menuitem"], .color-swatch-button',
             ) ?? [],
           );
           const index = items.indexOf(
@@ -160,7 +164,6 @@ export function WindowControls({
                 onClick={() => {
                   controls.onSnap(target);
                   setOpen(false);
-                  trigger.current?.focus();
                 }}
               >
                 {label}
@@ -172,11 +175,23 @@ export function WindowControls({
               onClick={() => {
                 controls.onFloat();
                 setOpen(false);
-                trigger.current?.focus();
               }}
             >
               Float window
             </button>
+            {controls.color ? (
+              <ColorSwatchButton
+                className="world-window-color"
+                label="Terminal colour"
+                text="Colour"
+                palette={controls.color.palette}
+                current={controls.color.current}
+                onColor={(id) => {
+                  setOpen(false);
+                  controls.color?.onColor(id);
+                }}
+              />
+            ) : null}
           </div>,
           document.body,
         )}

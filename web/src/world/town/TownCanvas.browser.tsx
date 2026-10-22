@@ -11,7 +11,12 @@ import "../../components/TerminalView.css";
 import "../../components/MobileControls.css";
 import { requestTrace } from "../devtools/trace";
 import { initializeLayoutPreferences } from "../../layoutPreferences";
-import { bridge, type ConnectionClient } from "../../api";
+import {
+  bridge,
+  type BridgeControlMsg,
+  type ConnectionClient,
+} from "../../api";
+import { readCompletionSeen } from "../completionSeenState";
 import "../world.css";
 import {
   joinGroup,
@@ -19,6 +24,12 @@ import {
   type RelationGroup,
   type TerminalRef,
 } from "../../../../shared/relations";
+import { worldLocalStorage } from "../../browserStorage";
+import {
+  readOfficePreferences,
+  WORLD_OFFICE_PREFERENCES_CHANGED_EVENT,
+  writeOfficePreferences,
+} from "../officePreferences";
 
 /*
  * Synthetic Office town fixture. `?mode=test` runs checks and posts them to
@@ -232,8 +243,8 @@ function topology(seed: number): Topology {
  */
 const sent: { paneId: string; text: string; keys: string[] }[] = [];
 const moves: { method: string; params: Record<string, unknown> }[] = [];
-/** The fixture's hosts, for Herdr's tab list. */
-let fixtureConnections: WorldRuntimeConnection[] = [];
+/** Each host's tabs in Herdr's order, for tab.list. */
+let herdrTabs: (connectionId: string) => unknown[] = () => [];
 let statusOf: (paneId: string) => string = () => "working";
 const SCREENS = {
   blocked: [
@@ -254,6 +265,23 @@ const SCREENS = {
     "✻ Thinking…",
   ],
 };
+// The service's conversation pushes, delivered as the bridge delivers them.
+const controls = new Set<(control: BridgeControlMsg) => void>();
+bridge.onControl = (handler) => {
+  controls.add(handler);
+  return () => controls.delete(handler);
+};
+const pushConversation = (connectionId: string, paneId: string) =>
+  [...controls].forEach((handler) =>
+    handler({
+      type: "agent_conversation_changed",
+      connection_id: connectionId,
+      pane_id: paneId,
+    }),
+  );
+const conversationCalls: { method: string; paneId: string }[] = [];
+let latestText =
+  "I'll sort the reception queue by when agents started waiting.\n\n| Queue | Order |\n|---|---|\n| reception | oldest first |";
 (bridge as unknown as { connection: unknown }).connection = (
   connectionId: string,
   generation: number,
@@ -273,44 +301,50 @@ const SCREENS = {
         ),
       };
     }
-    if (method === "agent_history.get")
-      return {
-        history_version: 2,
-        mode: "snapshot",
-        cursor: { epoch: "synthetic", revision: 1 },
-        window_limit: 200,
-        agent: "claude",
-        pane_id: paneId,
-        workspace_id: String(params?.workspace_id ?? ""),
-        tab_id: String(params?.tab_id ?? ""),
-        updated_at: "2026-01-01T00:00:00Z",
-        path: "",
-        entries: [
-          {
-            id: "u1",
-            role: "user",
-            kind: "message",
-            text: "Keep the oldest waiting agent first",
-            sent_at: "2026-01-01T00:00:00Z",
-          },
-          {
-            id: "a1",
-            role: "assistant",
-            kind: "message",
-            text: "I'll sort the reception queue by when agents started waiting.",
-            sent_at: "2026-01-01T00:00:01Z",
-          },
-        ],
-      };
-    if (method === "tab.list")
-      return {
-        tabs: (fixtureConnections.find(
-          (connection) => connection.connectionId === connectionId,
-        )?.snapshot?.tabs ?? []) as Tab[],
-      };
+    if (method.startsWith("agent_conversation."))
+      conversationCalls.push({ method, paneId });
+    if (
+      method === "agent_conversation.watch" ||
+      method === "agent_conversation.unwatch"
+    )
+      return { ok: true };
+    if (method === "agent_conversation.latest")
+      return conversationUnavailable
+        ? {
+            conversation_version: 1,
+            pane_id: paneId,
+            agent: "claude",
+            agent_status: statusOf(paneId),
+            session_binding: null,
+            session_fingerprint: null,
+            status: "unavailable",
+            unavailable: {
+              reason: "no_session",
+              detail: "No saved session for this agent yet.",
+            },
+            latest: null,
+          }
+        : {
+            conversation_version: 1,
+            pane_id: paneId,
+            agent: "claude",
+            agent_status: statusOf(paneId),
+            session_binding: "reported",
+            session_fingerprint: "synthetic",
+            status: "ok",
+            unavailable: null,
+            latest: {
+              id: "a1",
+              role: "assistant",
+              kind: "message",
+              text: latestText,
+              sent_at: "2026-01-01T00:00:01Z",
+            },
+          };
+    if (method === "tab.list") return { tabs: herdrTabs(connectionId) };
     if (method === "tab.move") {
-      moves.push({ method, params: params ?? {} });
-      return { type: "ok" };
+      moves.push({ method, params: { ...params, connectionId } });
+      return { type: "tab_list", tabs: [] };
     }
     if (method === "town.move_desk" || method === "town.move_pane") {
       moves.push({ method, params: params ?? {} });
@@ -391,38 +425,95 @@ worldBridge.onControl = (listener) => {
 const uploads: string[] = [];
 /** While set, uploads wait for it, as a slow upload would. */
 let uploadGate: Promise<void> | null = null;
+/** Set to fail the next upload, as a full disk would. */
+let failNextUpload = false;
+/** Set to make every conversation read unavailable. */
+let conversationUnavailable = false;
+async function answerUpload(url: URL): Promise<Response | null> {
+  const match = /^\/api\/connections\/([^/]+)\/terminal-upload$/.exec(
+    url.pathname,
+  );
+  if (!match) return null;
+  const connectionId = decodeURIComponent(match[1]!);
+  uploads.push(connectionId);
+  if (uploadGate) await uploadGate;
+  const headers = {
+    "content-type": "application/json",
+    "X-Herdr-Connection-Id": connectionId,
+    "X-Herdr-Connection-Generation":
+      url.searchParams.get("connection_generation") ?? "",
+  };
+  if (failNextUpload) {
+    failNextUpload = false;
+    return new Response(JSON.stringify({ error: "disk full" }), {
+      status: 507,
+      headers,
+    });
+  }
+  return new Response(
+    JSON.stringify({ path: `/uploads/${url.searchParams.get("filename")}` }),
+    { headers },
+  );
+}
 const realFetch = window.fetch.bind(window);
 window.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   const url = new URL(
     input instanceof Request ? input.url : String(input),
     window.location.origin,
   );
-  const match = /^\/api\/connections\/([^/]+)\/terminal-upload$/.exec(
-    url.pathname,
-  );
-  if (!match) return realFetch(input, init);
-  const connectionId = decodeURIComponent(match[1]!);
-  uploads.push(connectionId);
-  if (uploadGate) await uploadGate;
-  return new Response(
-    JSON.stringify({ path: `/uploads/${url.searchParams.get("filename")}` }),
-    {
-      headers: {
-        "content-type": "application/json",
-        "X-Herdr-Connection-Id": connectionId,
-        "X-Herdr-Connection-Generation":
-          url.searchParams.get("connection_generation") ?? "",
-      },
-    },
-  );
+  return (await answerUpload(url)) ?? realFetch(input, init);
 }) as typeof fetch;
+/** Uploads with byte progress use XMLHttpRequest; answer those the same way. */
+class FixtureUploadRequest {
+  upload: { onprogress: ((event: ProgressEvent) => void) | null } = {
+    onprogress: null,
+  };
+  responseType = "";
+  status = 0;
+  statusText = "";
+  response: Blob | null = null;
+  onload: (() => void) | null = null;
+  onerror: (() => void) | null = null;
+  onabort: (() => void) | null = null;
+  private url = new URL(window.location.origin);
+  private headers = "";
+  open(_method: string, url: string | URL) {
+    this.url = new URL(String(url), window.location.origin);
+  }
+  setRequestHeader() {}
+  getAllResponseHeaders() {
+    return this.headers;
+  }
+  send(body: Blob) {
+    this.upload.onprogress?.({
+      loaded: body.size,
+      total: body.size,
+      lengthComputable: true,
+    } as ProgressEvent);
+    void answerUpload(this.url).then(async (response) => {
+      if (!response) {
+        this.onerror?.();
+        return;
+      }
+      this.status = response.status;
+      this.statusText = response.statusText;
+      this.headers = [...response.headers]
+        .map(([name, value]) => `${name}: ${value}`)
+        .join("\r\n");
+      this.response = await response.blob();
+      this.onload?.();
+    });
+  }
+}
+window.XMLHttpRequest =
+  FixtureUploadRequest as unknown as typeof XMLHttpRequest;
 
-async function attachNote(host: HTMLElement) {
+async function attachNote(host: HTMLElement, name = "notes.txt") {
   const picker = host.querySelector<HTMLInputElement>(
     '.town-reply input[type="file"]',
   )!;
   const files = new DataTransfer();
-  files.items.add(new File(["synthetic"], "notes.txt", { type: "text/plain" }));
+  files.items.add(new File(["synthetic"], name, { type: "text/plain" }));
   picker.files = files.files;
   picker.dispatchEvent(new Event("change", { bubbles: true }));
 }
@@ -556,7 +647,9 @@ async function run() {
   layoutShell.append(host);
   document.body.append(layoutShell);
   const base = topology(7);
-  fixtureConnections = base.connections;
+  herdrTabs = (connectionId) =>
+    base.connections.find((c) => c.connectionId === connectionId)?.snapshot
+      ?.tabs ?? [];
   if (!phone && mode === "test") {
     const world = worldFor(base.connections);
     const leaf = world.leaves.find((candidate) => candidate.kind === "agent")!;
@@ -773,13 +866,48 @@ async function run() {
   const peekConnection = base.connections.find((connection) =>
     connection.snapshot?.panes.some((pane) => pane.pane_id === peekPane),
   )?.connectionId;
-  // The chatter is the agent's session history when it has one.
+  // The message is the agent's latest from Chat's conversation read model.
   await waitFor(
     () =>
       host
         .querySelector(".town-peek-screen")
         ?.textContent?.includes("I'll sort the reception queue") === true,
-    "peek did not show the agent's session messages",
+    "peek did not show the agent's latest message",
+  );
+  // The message is rendered as Chat renders it, never as terminal text.
+  check(
+    host.querySelector(".town-peek-screen table") !== null &&
+      !(host.querySelector(".town-peek-screen")?.textContent ?? "").includes(
+        "|---",
+      ),
+    "the peek should render the message's markdown table",
+  );
+  // The peek watches the pane as Chat does and rereads only on a push.
+  check(
+    conversationCalls.some(
+      (call) =>
+        call.method === "agent_conversation.watch" && call.paneId === peekPane,
+    ),
+    "the peek did not ask the service to watch its pane",
+  );
+  const readsBefore = conversationCalls.filter(
+    (call) => call.method === "agent_conversation.latest",
+  ).length;
+  await new Promise((resolve) => setTimeout(resolve, 4_500));
+  check(
+    conversationCalls.filter(
+      (call) => call.method === "agent_conversation.latest",
+    ).length === readsBefore,
+    "the peek reread its conversation without a push",
+  );
+  latestText = "The queue now keeps the oldest agent first.";
+  pushConversation(peekConnection!, peekPane);
+  await waitFor(
+    () =>
+      host
+        .querySelector(".town-peek-screen")
+        ?.textContent?.includes("keeps the oldest agent first") === true,
+    "a pushed change did not refresh the peek",
   );
   // The question sits in its own box above the answers.
   check(
@@ -824,6 +952,34 @@ async function run() {
       uploads.length === 1 && uploads[0] === peekConnection,
       `attachment uploaded through ${JSON.stringify(uploads)}`,
     );
+    check(
+      host.querySelector('.town-peek .attachment-chip[data-status="done"]') !==
+        null,
+      "the uploaded file should show a done chip",
+    );
+    // A failed upload shows a failed chip with Retry; retrying delivers it.
+    failNextUpload = true;
+    await attachNote(host, "retry.txt");
+    await waitFor(
+      () =>
+        host.querySelector(
+          '.town-peek .attachment-chip[data-status="failed"]',
+        ) !== null,
+      "a failed upload did not show a failed chip",
+    );
+    host
+      .querySelector<HTMLButtonElement>(
+        '.town-peek [aria-label="Retry retry.txt"]',
+      )!
+      .click();
+    await waitFor(
+      () =>
+        host
+          .querySelector<HTMLInputElement>(".town-reply input:not([type])")
+          ?.value.includes("/uploads/retry.txt") === true,
+      "the retried upload did not reach the reply line",
+    );
+    uploads.length = 1;
     // A number key pressed on another control never answers the agent.
     const zoomIn = host.querySelector<HTMLButtonElement>(
       '[aria-label="Zoom in"]',
@@ -838,7 +994,8 @@ async function run() {
     let release!: () => void;
     uploadGate = new Promise<void>((resolve) => (release = resolve));
     await attachNote(host);
-    const firstCard = host.querySelector(".town-peek");
+    const firstCard = host.querySelector<HTMLElement>(".town-peek");
+    const firstAgentKey = firstCard?.dataset.agentKey ?? "";
     [...host.querySelectorAll<HTMLButtonElement>(".town-peek-foot button")]
       .find((button) => button.textContent?.startsWith("Next"))!
       .click();
@@ -859,6 +1016,34 @@ async function run() {
         ?.value.includes("/uploads/"),
       "an earlier agent's upload landed in the next agent's reply",
     );
+    // It lands in that agent's reply line when its peek opens again: the
+    // path is kept for the pane, not for the card that started the upload.
+    host.querySelector<HTMLButtonElement>(".town-peek-close")!.click();
+    await settle();
+    host
+      .querySelector<HTMLButtonElement>(
+        `.world-semantic-target[data-kind="agent"][data-target-key="${CSS.escape(firstAgentKey)}"]`,
+      )!
+      .click();
+    await waitFor(
+      () =>
+        host.querySelector<HTMLElement>(".town-peek")?.dataset.agentKey ===
+        firstAgentKey,
+      "the first agent's peek did not reopen",
+    );
+    await settle();
+    const reopened =
+      host.querySelector<HTMLInputElement>(".town-reply input:not([type])")
+        ?.value ?? "";
+    check(
+      reopened.includes("/uploads/notes.txt"),
+      `an upload finished while its peek was closed was lost (${JSON.stringify(reopened)})`,
+    );
+    check(
+      host.querySelector('.town-peek .attachment-chip[data-status="done"]') !==
+        null,
+      "the reopened peek should show the finished upload's chip",
+    );
   } else {
     // 📎 uploads through the pane's own connection into World's composer.
     await attachNote(host);
@@ -870,6 +1055,11 @@ async function run() {
           )
           ?.value.includes("/uploads/notes.txt") === true,
       "attachment did not reach the composer",
+    );
+    check(
+      host.querySelector(".town-peek .terminal-composer .attachment-chip") !==
+        null,
+      "the composer should show the upload's chip",
     );
     check(
       uploads.length === 1 && uploads[0] === peekConnection,
@@ -905,7 +1095,7 @@ async function run() {
     const chatScreen =
       host.querySelector(".town-peek-screen")?.textContent ?? "";
     check(
-      chatScreen.includes("I'll sort the reception queue") &&
+      chatScreen.includes("keeps the oldest agent first") &&
         chatScreen.includes("Do you want"),
       "chat should show the agent's messages and its question",
     );
@@ -1001,6 +1191,143 @@ async function run() {
   );
   check(selected.length === 0, "Inspector must not change the selection path");
 
+  // Open terminal, in the peek's header, opens the agent's terminal.
+  host.querySelector<HTMLButtonElement>(".town-reception-entry")!.click();
+  await waitFor(
+    () => host.querySelector(".town-peek-head .town-peek-terminal") !== null,
+    "the peek header has no Open terminal",
+  );
+  opened.length = 0;
+  host
+    .querySelector<HTMLButtonElement>(".town-peek-head .town-peek-terminal")!
+    .click();
+  await waitFor(() => opened.length === 1, "Open terminal did not open it");
+  check(
+    host.querySelector(".town-peek") === null,
+    "Open terminal should close the peek",
+  );
+  opened.length = 0;
+
+  // An unreadable conversation shows Chat's reason, not the screen.
+  conversationUnavailable = true;
+  host.querySelector<HTMLButtonElement>(".town-reception-entry")!.click();
+  await waitFor(
+    () =>
+      host
+        .querySelector(".town-peek-screen")
+        ?.textContent?.includes("No saved session for this agent yet.") ===
+      true,
+    "the peek did not show why the conversation is unavailable",
+  );
+  conversationUnavailable = false;
+  host.querySelector<HTMLButtonElement>(".town-peek-close")!.click();
+  await settle();
+
+  // Tapping the desk of an agent waiting at reception opens its chat.
+  const waitingAgent = [
+    ...host.querySelectorAll<HTMLButtonElement>(
+      '.world-semantic-target[data-kind="agent"]',
+    ),
+  ].find((target) =>
+    target.getAttribute("aria-label")?.includes(", needs input, desk "),
+  );
+  check(waitingAgent !== undefined, "no waiting agent has a target");
+  const [waitingName, , deskName, roomName, hostName] = waitingAgent!
+    .getAttribute("aria-label")!
+    .split(", ");
+  const waitingDesk = [
+    ...host.querySelectorAll<HTMLButtonElement>(
+      '.world-semantic-target[data-kind="desk"]',
+    ),
+  ].find((target) =>
+    target
+      .getAttribute("aria-label")
+      ?.toLowerCase()
+      .includes(`${deskName}, ${roomName}, ${hostName},`.toLowerCase()),
+  );
+  check(waitingDesk !== undefined, "the waiting agent's desk has no target");
+  waitingDesk?.click();
+  await waitFor(
+    () =>
+      host.querySelector(`.town-peek[aria-label="${waitingName} peek"]`) !==
+        null && host.querySelector(".town-peek .town-pill-blocked") !== null,
+    "tapping a desk did not open its waiting agent's chat",
+  );
+  check(opened.length === 0, "tapping a desk in Chat mode opened a terminal");
+  host.querySelector<HTMLButtonElement>(".town-peek-close")!.click();
+  await settle();
+
+  const waitingKey = waitingAgent?.dataset.targetKey ?? "";
+  await waitFor(
+    () => window.__HERDR_TOWN_RENDERER__!.summoned.includes(waitingKey),
+    "the tapped agent did not walk to its desk",
+  );
+
+  // With Town opens set to Terminal, tapping a finished agent's table opens
+  // its terminal, brings it to its desk too, and marks nothing reviewed.
+  writeOfficePreferences(worldLocalStorage, {
+    ...readOfficePreferences(worldLocalStorage),
+    townOpens: "terminal",
+  });
+  window.dispatchEvent(new Event(WORLD_OFFICE_PREFERENCES_CHANGED_EVENT));
+  await settle();
+  const finishedAgent = [
+    ...host.querySelectorAll<HTMLButtonElement>(
+      '.world-semantic-target[data-kind="agent"]',
+    ),
+  ].find(
+    (target) =>
+      target.getAttribute("aria-label")?.includes(", done, desk ") &&
+      !window.__HERDR_TOWN_RENDERER__!.summoned.includes(
+        target.dataset.targetKey ?? "",
+      ),
+  );
+  check(finishedAgent !== undefined, "no finished agent has a target");
+  const [, , finishedDesk, finishedRoom, finishedHost] = finishedAgent!
+    .getAttribute("aria-label")!
+    .split(", ");
+  const seenBefore = [...readCompletionSeen(worldLocalStorage)].sort().join();
+  [
+    ...host.querySelectorAll<HTMLButtonElement>(
+      '.world-semantic-target[data-kind="desk"]',
+    ),
+  ]
+    .find((target) =>
+      target
+        .getAttribute("aria-label")
+        ?.toLowerCase()
+        .includes(
+          `${finishedDesk}, ${finishedRoom}, ${finishedHost},`.toLowerCase(),
+        ),
+    )
+    ?.click();
+  await waitFor(
+    () => opened.length === 1,
+    "Terminal mode did not open the terminal",
+  );
+  check(
+    host.querySelector(".town-peek") === null,
+    "Terminal mode opened a peek",
+  );
+  await waitFor(
+    () =>
+      window.__HERDR_TOWN_RENDERER__!.summoned.includes(
+        finishedAgent?.dataset.targetKey ?? "",
+      ),
+    "Terminal mode did not bring the agent to its desk",
+  );
+  check(
+    [...readCompletionSeen(worldLocalStorage)].sort().join() === seenBefore,
+    "Terminal mode marked the finished agent reviewed",
+  );
+  writeOfficePreferences(worldLocalStorage, {
+    ...readOfficePreferences(worldLocalStorage),
+    townOpens: "chat",
+  });
+  window.dispatchEvent(new Event(WORLD_OFFICE_PREFERENCES_CHANGED_EVENT));
+  await settle();
+  opened.length = 0;
+
   // Opening a desk's terminal on desktop must leave its keys to the terminal:
   // no hidden composer may be requested.
   if (!phone) {
@@ -1072,7 +1399,15 @@ async function run() {
     () => host.querySelectorAll(".town-chooser-list button").length > 0,
     "M on a desk did not list rooms to move it to",
   );
-  host.querySelector<HTMLButtonElement>(".town-chooser-list button")!.click();
+  // The desk's own room comes first: other desks' places, then Last.
+  const choices = [
+    ...host.querySelectorAll<HTMLButtonElement>(".town-chooser-list button"),
+  ];
+  check(
+    choices[0]?.textContent?.includes("’s place") === true,
+    `M on a desk lists places in its room first (${choices[0]?.textContent})`,
+  );
+  choices.find((button) => button.textContent?.includes(" desks"))!.click();
   await waitFor(
     () => moves.length === 1,
     "choosing a room did not move the desk",
@@ -1184,6 +1519,85 @@ async function run() {
     );
     requestTrace("town", false);
   }
+
+  // Holding a desk and dropping it on another desk of its room reorders the
+  // room's tabs with Herdr's tab.move on that host, as Spaces does.
+  const [fromDesk, ontoDesk] = (() => {
+    const visible = [
+      ...host.querySelectorAll<HTMLElement>(
+        '.world-semantic-target[data-kind="desk"]',
+      ),
+    ].filter((target) => {
+      const box = target.getBoundingClientRect();
+      return (
+        box.width > 0 &&
+        box.left > 0 &&
+        box.top > 0 &&
+        box.right < window.innerWidth &&
+        box.bottom < window.innerHeight
+      );
+    });
+    const room = (target: HTMLElement) => {
+      const [connectionId, , tabId] = JSON.parse(target.dataset.targetKey!);
+      return `${connectionId} ${String(tabId).replace(/-tab-\d+$/, "")}`;
+    };
+    for (const from of visible) {
+      const onto = visible.find(
+        (other) => other !== from && room(other) === room(from),
+      );
+      if (onto) return [from, onto];
+    }
+    return [];
+  })();
+  if (fromDesk && ontoDesk) {
+    const before = moves.length;
+    const at = (target: HTMLElement) => {
+      const box = target.getBoundingClientRect();
+      return [box.left + box.width / 2, box.top + box.height / 2] as const;
+    };
+    const press = (type: string, [x, y]: readonly [number, number]) =>
+      canvasHost.dispatchEvent(
+        new PointerEvent(type, {
+          bubbles: true,
+          pointerId: 31,
+          pointerType: "touch",
+          button: 0,
+          buttons: type === "pointerup" ? 0 : 1,
+          clientX: x,
+          clientY: y,
+        }),
+      );
+    press("pointerdown", at(fromDesk));
+    await waitFor(
+      () => host.querySelector(".town-drag-ghost") !== null,
+      "holding a desk did not lift it for a reorder",
+    );
+    press("pointermove", at(ontoDesk));
+    await waitFor(
+      () =>
+        host.querySelector<HTMLElement>(".town-drag-ghost")?.dataset.valid ===
+        "true",
+      "a desk in its own room was not a drop target",
+    );
+    check(
+      host.querySelector(".town-drag-ghost")!.textContent!.includes("’s place"),
+      "the drag names the reorder",
+    );
+    press("pointerup", at(ontoDesk));
+    await waitFor(
+      () => moves.length === before + 1,
+      "dropping a desk on another in its room did not reorder",
+    );
+    const [connectionId, , tabId] = JSON.parse(fromDesk.dataset.targetKey!);
+    const reorder = moves[before]!;
+    check(
+      reorder.method === "tab.move" &&
+        reorder.params.tab_id === tabId &&
+        reorder.params.connectionId === connectionId &&
+        typeof reorder.params.insert_index === "number",
+      `desk reorder sent ${JSON.stringify(reorder)}`,
+    );
+  } else check(false, "no two visible desks share a room");
 
   // Town shows no move icons; moving is by drag, hold or the keyboard.
   check(

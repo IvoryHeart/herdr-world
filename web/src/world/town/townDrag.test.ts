@@ -8,15 +8,26 @@ function model() {
     key,
     { key, hostKey, roomKey, displayLabel: key, canOpenInSpaces: true },
   ];
-  const room = (key: string, hostKey: string) => [
+  const room = (
+    key: string,
+    hostKey: string,
+    desks: string[],
+    omittedDeskCount = 0,
+  ) => [
     key,
-    { key, hostKey, displayLabel: key.toUpperCase() },
+    {
+      key,
+      hostKey,
+      displayLabel: key.toUpperCase(),
+      desks: desks.map((deskKey) => ({ key: deskKey })),
+      omittedDeskCount,
+    },
   ];
   return {
     rooms: new Map([
-      room("r1", "a"),
-      room("r2", "a"),
-      room("r3", "b"),
+      room("r1", "a", ["d1", "d2"]),
+      room("r2", "a", ["d3"]),
+      room("r3", "b", ["d4"]),
     ] as never),
     desks: new Map([
       desk("d1", "a", "r1"),
@@ -69,10 +80,9 @@ test("a desk lands on another room of its host, never its own or another host's"
   });
   // Dropping at once on a desk means that desk's room.
   expect(townDropTarget(drag, { kind: "desk", key: "d3" }, m).key).toBe("r2");
-  expect(townDropTarget(drag, { kind: "desk", key: "d2" }, m).key).toBeNull();
   // Its own room's floor: nothing, while it is in no team.
   expect(townDropTarget(drag, { kind: "room", key: "r1" }, m).key).toBeNull();
-  // Its own desk is not a teammate.
+  // Its own desk is neither a slot nor a teammate.
   expect(townDropTarget(drag, { kind: "desk", key: "d1" }, m).key).toBeNull();
   expect(townDropTarget(drag, { kind: "room", key: "r3" }, m)).toMatchObject({
     key: null,
@@ -145,4 +155,46 @@ test("a grouped desk leaves its team on its own floor; teammates do not regroup"
   expect(
     townDropTarget(drag, { kind: "desk", key: "d3" }, m, teams, "d3"),
   ).toMatchObject({ key: "d3", action: "group" });
+});
+
+test("a desk dropped in its own room is reordered, as a tab in Spaces", () => {
+  const m = model();
+  const drag = townDragFor({ kind: "desk", key: "d1" }, m, "room")!;
+  // Onto another desk: take its slot.
+  expect(townDropTarget(drag, { kind: "desk", key: "d2" }, m)).toMatchObject({
+    key: "d2",
+    action: "reorder",
+  });
+  expect(townDropTarget(drag, { kind: "agent", key: "ag" }, m).key).toBeNull();
+  // Onto the free spot: go last.
+  const cell = { kind: "cell", roomKey: "r1", cellIndex: 2 } as const;
+  expect(townDropTarget(drag, cell, m)).toMatchObject({
+    key: "r1",
+    action: "reorder",
+  });
+  expect(townDropTarget(drag, { kind: "room", key: "r1" }, m).key).toBeNull();
+  // Already last: nothing to do.
+  const lastDrag = townDragFor({ kind: "desk", key: "d2" }, m, "room")!;
+  expect(townDropTarget(lastDrag, cell, m).key).toBeNull();
+  // With hidden desks, the free spot is the last drawn desk's place, so the
+  // desk stays in view; the last drawn desk itself stays put.
+  (m.rooms.get("r1") as { omittedDeskCount: number }).omittedDeskCount = 3;
+  expect(townDropTarget(drag, cell, m)).toMatchObject({
+    key: "d2",
+    action: "reorder",
+  });
+  expect(townDropTarget(lastDrag, cell, m).key).toBeNull();
+});
+
+test("a standing agent does not stand for its desk's slot", () => {
+  const m = model();
+  const drag = townDragFor({ kind: "desk", key: "d2" }, m, "room")!;
+  // ag sits at d1: a seated hit is d1's slot, a lounge or queue hit is not.
+  expect(townDropTarget(drag, { kind: "agent", key: "ag" }, m)).toMatchObject({
+    key: "d1",
+    action: "reorder",
+  });
+  expect(
+    townDropTarget(drag, { kind: "agent", key: "ag", standing: true }, m).key,
+  ).toBeNull();
 });

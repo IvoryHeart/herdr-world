@@ -4,7 +4,9 @@
  * Where an agent stands follows its authoritative status: seated while working,
  * unknown; at its host reception while blocked (oldest first) or finished
  * (after the waiting agents); and in the lounge while idle. When reception or
- * the lounge is full, the rest stay at their desks. Movement never delays operational state, and every actor keeps
+ * the lounge is full, the rest stay at their desks. An agent the user opened
+ * (summoned) walks back to its desk whatever its status, until that status
+ * changes. Movement never delays operational state, and every actor keeps
  * its agent key, so its exact pane target is unchanged wherever it stands.
  */
 
@@ -214,14 +216,23 @@ export class TownActors {
   readonly actors = new Map<string, TownActor>();
   private world: TownActorWorld | null = null;
   private clock = 0;
+  private summoned: ReadonlySet<string> = new Set();
 
   get time() {
     return this.clock;
   }
 
-  /** Reconcile actors with a new model or layout. `instant` skips walking. */
-  sync(world: TownActorWorld, instant: boolean) {
+  /**
+   * Reconcile actors with a new model or layout. `instant` skips walking;
+   * `summoned` agents go to their desks rather than reception or the lounge.
+   */
+  sync(
+    world: TownActorWorld,
+    instant: boolean,
+    summoned: ReadonlySet<string> = this.summoned,
+  ) {
     this.world = world;
+    this.summoned = summoned;
     const { model } = world;
     const seen = new Set<string>();
     const fresh = new Set<string>();
@@ -284,7 +295,11 @@ export class TownActors {
     const queues = new Map<string, TownActor[]>();
     for (const actor of this.actors.values()) {
       const agent = model.agents.get(actor.key)!;
-      if (agent.semanticStatus !== "blocked" && agent.semanticStatus !== "done")
+      if (
+        (agent.semanticStatus !== "blocked" &&
+          agent.semanticStatus !== "done") ||
+        this.summoned.has(actor.key)
+      )
         continue;
       const list = queues.get(actor.hostKey) ?? [];
       list.push(actor);
@@ -318,7 +333,10 @@ export class TownActors {
       };
       const slot = queueSlots.get(actor.key);
       if (slot !== undefined) goal = { kind: "queue", slot };
-      else if (agent.semanticStatus === "idle") {
+      else if (
+        agent.semanticStatus === "idle" &&
+        !this.summoned.has(actor.key)
+      ) {
         if (actor.spot) goal = { kind: "lounge", spot: actor.spot };
         else {
           const taken = loungeTaken.get(actor.hostKey) ?? new Set();
@@ -339,6 +357,8 @@ export class TownActors {
       if (sameGoal(actor.goal, goal) && !instant) {
         if (actor.mode === "seat" || actor.mode === "stand")
           this.travel(actor, true, true);
+        else if (actor.mode === "walk" || actor.mode === "tween")
+          this.retarget(actor);
         continue;
       }
       actor.goal = goal;
@@ -425,6 +445,35 @@ export class TownActors {
     } else if (actor.mode === "tween") {
       this.afterTween.set(actor.key, begin);
     } else begin();
+  }
+
+  /**
+   * An agent heading to a seat that moved (a reordered desk) heads to the new
+   * one: a walker re-paths, and one sitting down stands up where it is and
+   * walks over.
+   */
+  private retarget(actor: TownActor) {
+    const target = this.destination(actor);
+    if (!target) return;
+    if (actor.mode === "tween") {
+      const tween = actor.tween;
+      if (
+        !tween ||
+        tween.next !== "seat" ||
+        !target.seat ||
+        (tween.x === target.seat.x && tween.y === target.seat.y)
+      )
+        return;
+      actor.tween = null;
+      actor.mode = "stand";
+      this.afterTween.delete(actor.key);
+      this.travel(actor, false);
+      return;
+    }
+    const end = actor.path[actor.path.length - 1];
+    if (!end) return;
+    const [x, y] = tileCenter(...target.tile);
+    if (end[0] !== x || end[1] !== y) this.travel(actor, false);
   }
 
   private readonly afterTween = new Map<string, () => void>();

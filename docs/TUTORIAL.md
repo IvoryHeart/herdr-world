@@ -119,22 +119,32 @@ changes what you see and does not disconnect hosts or retarget open terminals.
    agents also wait there until you open their terminal or mark that completion
    reviewed, then join idle agents in the lounge. These locations visualize
    status; they do not move the underlying pane or change its host.
-4. Hover or tap an agent to open its **peek**. The **NEEDS YOU** list provides
-   another route to waiting agents and becomes a bottom tray on phones; it hides
-   when no agent is blocked. The peek shows recent session messages, falling back
-   to terminal screen text when history is unavailable, and highlights a question
-   when one can be identified.
+4. Hover an agent, or tap it or its table, to open its **peek**. The **NEEDS
+   YOU** list provides another route to waiting agents and becomes a bottom tray
+   on phones; it hides when no agent is blocked. The peek shows the agent's
+   latest message as the Inspector's **Chat** shows it, never terminal text; when
+   the conversation cannot be read, it says why. It highlights a question when
+   one can be identified, and refreshes when the conversation changes. Opening
+   an agent brings it back to its desk from reception or the lounge until its
+   status changes. To open terminals instead, set **Menu → Town opens** to
+   **Terminal**; that tap also brings the agent back and, like the chat, does
+   not mark its work reviewed.
 5. Read the question before using an answer button: it sends the offered key to
    that live pane. When no supported choices appear, use the reply line or
-   **Terminal**. Desktop replies send from the peek; on phones the reply line
+   **Open terminal** in the peek's header. Desktop replies send from the peek; on phones the reply line
    opens World's **Composer** inside the peek, with keys, attachments, **Insert**
    and **Send**. **Insert** prepares input; **Send** submits it.
-6. Use the paperclip to attach files to the reply. Uploads go to the selected
-   pane's host; review the message and attached paths before sending. Choose
-   **Inspector** for files, changes and history, or **Terminal** for direct work.
-   **Colour** changes the colour of the agent's table; it is the tab's colour
-   everywhere in World, and in Spaces the tab's menu (right-click or long-press)
-   offers the same palette and **Default colour**.
+6. Use the paperclip to attach files to the reply. Each file shows a chip while
+   it uploads, then done or failed; retry a failed one (or pick it again) or
+   remove it. **Send** waits for uploads. A path that finishes while the peek is
+   closed joins the reply line when you open that agent's peek again. Uploads go to the selected pane's host; review the message and
+   attached paths before sending. Choose **Inspector** for files, changes and
+   history, or **Open terminal** for direct work.
+   The colour swatch beside the agent's name changes the colour of its table;
+   it is the tab's colour everywhere in World. The same swatch sits beside the
+   name in a terminal's header, the terminal window's menu has **Colour**, and
+   in Spaces the tab's menu (right-click or long-press) offers the same palette
+   and **Default colour**.
    **Next** cycles waiting agents, then finished agents when no other agent is
    waiting.
 7. To move a table to another room, zoom in until you see tables, then drag it
@@ -148,12 +158,22 @@ changes what you see and does not disconnect hosts or retarget open terminals.
    only partly moved, or locations unknown. Unless the notice says the table is
    back, check both rooms before you carry on. Moving a room's last table
    closes that room, so Town asks first.
-8. To group tables, drag one onto another table and rest it there a moment:
-   it snaps to that table and the plaque says **Group with …**; let go. The two get one wall, and Town brings the table to that room and
-   next to the other in Herdr's tab order. An agent started by another agent
-   is grouped automatically, with a solid connector to its parent and the
-   parent's colour. To take a table you grouped out of its group, drag it onto
-   its own room's floor (**Leave the team**); a spawn link stays.
+8. Tables sit in the order of their tabs, left to right and then row by row.
+   To change the order, drag a table onto another table in the same room: it
+   takes that table's place, and the tables in between shift along. Drop it on
+   the room's free spot to put it last of the tables shown (a room with more
+   tabs than tables keeps the rest hidden behind its count). Town moves the tab in Herdr, so Spaces
+   shows the new order too, and moving a tab in Spaces moves its table. The
+   tables move once Herdr reports the new order, and agents stay with their
+   table.
+9. To group tables, drag one onto another table and rest it there a moment:
+   it snaps to that table and the plaque says **Group with …**; let go. The
+   two get one wall, and Town brings the table to that room and beside the
+   other in Herdr's tab order. An agent started by another agent is grouped
+   automatically, with a solid connector to its parent and the parent's
+   colour. To take a table you grouped out of its group, drag it onto its own
+   room's bare floor, away from the free spot (**Leave the team**); a spawn
+   link stays.
 
 A table with more panes than drawn seats shows the count and offers a chooser
 for every pane. When a table closes, the tables after it close up so the room
@@ -286,7 +306,10 @@ On desktop, **Arrange windows** can tile or cascade open Inspectors; use **Open
 windows** to restore minimized ones. On mobile, one Inspector fills the screen:
 use the on-screen **Back** to return straight to the visual view, including
 when Composer is open. The phone's own Back closes Composer first, then the
-terminal on the next press. Use the ellipsis controls for additional navigation.
+terminal on the next press. Tapping the terminal's name opens the workspace
+list; Back (on-screen or the phone's) or tapping the name again closes it and
+shows the terminal. Any open menu or picker closes the same way, one at a time;
+tapping the terminal closes them all. Use the ellipsis controls for additional navigation.
 Closing an Inspector leaves the terminal session running.
 
 ### Learn this one hierarchy
@@ -341,7 +364,9 @@ attention, and `done`/`idle` suggest when to return. **Status is not verificatio
 Open **Chat** in the Inspector to read the conversation and reply. Chat shows
 user and agent messages, with one line for each run of tool calls, and updates
 while the agent works. If Chat cannot read the conversation it says why and
-offers the fix it names, or **Open Terminal**. Choose **Details** for the Session Inspector:
+offers the fix it names, or **Open Terminal**. A message you send shows as
+not yet seen until the transcript has the same words; if it went to another session, a red
+notice names it. Send commands such as `/compact` from the Terminal. Choose **Details** for the Session Inspector:
 Chat and Timeline, ATIF (a normalized trajectory), and raw transcript; original
 export preserves the source record. Use the [shortcut reference](../FEATURES.md#keyboard-shortcuts)
 for Chat, Files, and Changes on your platform. In Details, switch **Chat / Timeline**
