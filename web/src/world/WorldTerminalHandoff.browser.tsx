@@ -4275,28 +4275,6 @@ async function run() {
     () => document.querySelector('button[aria-label="Back to Town"]'),
     "mobile view switcher returns to Town before dismissing Inspectors",
   );
-  // The terminal's title opens the workspace list over the terminal. Back
-  // closes that list first and shows the terminal again; it used to close
-  // the terminal beneath and leave the list over the scene.
-  const terminalTitle = () =>
-    document.querySelector<HTMLButtonElement>(".mobile-terminal-title");
-  await until(terminalTitle, "mobile terminal title before the workspace list");
-  terminalTitle()!.click();
-  await until(
-    () => terminalTitle()?.getAttribute("aria-expanded") === "true",
-    "terminal title opens the workspace list",
-  );
-  backToOffice.click();
-  await until(
-    () => terminalTitle()?.getAttribute("aria-expanded") === "false",
-    "Back closes the workspace list before the terminal",
-  );
-  check(
-    window.location.pathname === "/town" &&
-      !!document.querySelector(".workspace-inspector") &&
-      !!document.querySelector('button[aria-label="Back to Town"]'),
-    "Back with the workspace list open closed the terminal beneath it",
-  );
   // The on-screen Back returns to the view in one tap even with Composer
   // open; only the phone's own Back closes Composer first. Open Composer in
   // the visible Inspector (never a parked terminal owner): focus its pane so
@@ -4342,6 +4320,29 @@ async function run() {
       !!visibleInspector()?.querySelector("textarea.terminal-composer-input"),
     () =>
       `visible Inspector pane ${visiblePaneId()} active before Back to Town`,
+  );
+  // With the pane active, the terminal names itself in the app bar. Its title
+  // opens the workspace list over the terminal. Back closes that list first
+  // and shows the terminal again; it used to close the terminal beneath and
+  // leave the list over the scene.
+  const terminalTitle = () =>
+    document.querySelector<HTMLButtonElement>(".mobile-terminal-title");
+  await until(terminalTitle, "mobile terminal title before the workspace list");
+  terminalTitle()!.click();
+  await until(
+    () => terminalTitle()?.getAttribute("aria-expanded") === "true",
+    "terminal title opens the workspace list",
+  );
+  backToOffice.click();
+  await until(
+    () => terminalTitle()?.getAttribute("aria-expanded") === "false",
+    "Back closes the workspace list before the terminal",
+  );
+  check(
+    window.location.pathname === "/town" &&
+      !!document.querySelector(".workspace-inspector") &&
+      !!document.querySelector('button[aria-label="Back to Town"]'),
+    "Back with the workspace list open closed the terminal beneath it",
   );
   visibleInspector()!
     .querySelector<HTMLTextAreaElement>("textarea.terminal-composer-input")!
