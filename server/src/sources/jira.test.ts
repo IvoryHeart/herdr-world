@@ -12,12 +12,18 @@ import {
 const SITE = "https://example.atlassian.net";
 const config = { site: SITE, email: "dev@example.com", jql: DEFAULT_JIRA_JQL };
 
-const issue = (key: string, category: string, assignee = "acct-me") => ({
+const issue = (
+  key: string,
+  category: string,
+  assignee = "acct-me",
+  isWatching = false,
+) => ({
   key,
   fields: {
     summary: `Synthetic ticket ${key}`,
     status: { name: `Status of ${key}`, statusCategory: { key: category } },
     assignee: { accountId: assignee },
+    watches: { isWatching },
     updated: "2026-01-02T03:04:05.000+0000",
   },
 });
@@ -48,8 +54,10 @@ describe("Jira source", () => {
       {
         issues: [
           issue("ABC-1", "new"),
-          issue("ABC-2", "indeterminate", "acct-other"),
+          issue("ABC-2", "indeterminate", "acct-other", true),
           issue("ABC-3", "done"),
+          // A broad filter's ticket: neither assigned nor watched.
+          issue("ABC-4", "new", "acct-other"),
           { key: "not a key" },
         ],
       },
@@ -62,6 +70,7 @@ describe("Jira source", () => {
       ["ABC-1", "todo", ["assignee"], "Status of ABC-1"],
       ["ABC-2", "doing", ["watcher"], "Status of ABC-2"],
       ["ABC-3", "done", ["assignee"], "Status of ABC-3"],
+      ["ABC-4", "todo", [], "Status of ABC-4"],
     ]);
     expect(items[0]!.url).toBe(`${SITE}/browse/ABC-1`);
   });

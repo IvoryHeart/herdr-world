@@ -58,6 +58,7 @@ function setup(
     settings?: StoredSourceSettings;
     run?: RunProcess;
     fetchImpl?: typeof fetch;
+    waitMs?: number;
   } = {},
 ) {
   let now = 1_000;
@@ -114,6 +115,7 @@ function setup(
     topology: async () => [
       {
         connection_id: "local-1",
+        generation: 1,
         stale: false,
         snapshot: {
           workspaces: [],
@@ -123,6 +125,7 @@ function setup(
     ],
     resolver: new CheckoutResolver(run, () => ({ kind: "local" })),
     now: () => now,
+    ...(options.waitMs === undefined ? {} : { waitMs: options.waitMs }),
   });
   return {
     service,
@@ -159,7 +162,9 @@ describe("World sources service", () => {
     expect(snapshot.links).toEqual([
       {
         connectionId: "local-1",
+        generation: 1,
         paneId: "p1",
+        sessionFingerprint: null,
         itemKey: "github:pr:example-org/widgets#5",
         via: "branch",
       },
@@ -179,6 +184,26 @@ describe("World sources service", () => {
     advance(5_000);
     await service.snapshot(true);
     expect(counts.gh).toBe(6);
+  });
+
+  test("a slow source never holds a request: it answers with what it has and refreshing", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const run: RunProcess = async (argv) => {
+      if (argv[0] !== "gh") return { code: 1, stdout: "", stderr: "" };
+      if (argv[1] === "auth") return { code: 0, stdout: "", stderr: "" };
+      await gate;
+      return { code: 0, stdout: JSON.stringify(graphql), stderr: "" };
+    };
+    const { service } = setup({ run, waitMs: 5 });
+    const first = await service.snapshot();
+    expect(first.refreshing).toBe(true);
+    expect(first.items).toEqual([]);
+    release();
+    await Bun.sleep(0);
+    const later = await service.snapshot();
+    expect(later.refreshing).toBe(false);
+    expect(later.items).toHaveLength(1);
   });
 
   test("a switched-off source makes no requests and shows nothing", async () => {
@@ -242,6 +267,29 @@ describe("World sources service", () => {
     expect(secrets()).toEqual({ jiraToken: "synthetic-token" });
     expect(JSON.stringify(saved)).not.toContain("synthetic-token");
     expect(counts.jira).toBe(2);
+  });
+
+  test("a new Jira site or email drops the saved token, so it is never sent elsewhere", async () => {
+    const { handle, secrets } = setup();
+    const save = (body: Record<string, unknown>) =>
+      handle(
+        put(`${WORLD_SOURCES_PATH}/jira`, body),
+        `${WORLD_SOURCES_PATH}/jira`,
+      );
+    await save({
+      site: "example.atlassian.net",
+      email: "dev@example.com",
+      token: "synthetic-token",
+    });
+    // Saving the same site and account keeps it.
+    await save({ site: "example.atlassian.net", jql: "project = ABC" });
+    expect(secrets()).toEqual({ jiraToken: "synthetic-token" });
+    await save({ site: "other.example.com" });
+    expect(secrets().jiraToken).toBeUndefined();
+    await save({ email: "dev2@example.com", token: "second-token" });
+    expect(secrets()).toEqual({ jiraToken: "second-token" });
+    await save({ email: "dev@example.com" });
+    expect(secrets().jiraToken).toBeUndefined();
   });
 
   test("rejects invalid settings without saving anything", async () => {

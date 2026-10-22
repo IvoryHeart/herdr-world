@@ -1,6 +1,7 @@
 import { isAbsolute } from "node:path";
 import type { WorkItem, WorkLink } from "../../../shared/worldSources";
 import { sshCommandArgv } from "../bridge/ssh-command";
+import { agentCheckoutSessionFingerprint } from "../herdr/agent-checkout";
 import {
   agentSessionOf,
   parseAgentCheckoutTokens,
@@ -20,6 +21,8 @@ import { record, type RunProcess } from "./github";
 
 export type TopologyConnection = {
   connection_id: string;
+  generation: number;
+  snapshot_generation?: number | null;
   stale: boolean;
   snapshot: {
     workspaces: Record<string, unknown>[];
@@ -43,7 +46,9 @@ const TICKET_KEY = /\b([A-Z][A-Z0-9_]+-\d+)\b/gu;
 
 type Candidate = {
   connectionId: string;
+  generation: number;
   paneId: string;
+  sessionFingerprint: string | null;
   path: string | null;
   reportedPr: string | null;
 };
@@ -112,6 +117,7 @@ export function linkCandidates(connections: TopologyConnection[]): Candidate[] {
   const paths = new Set<string>();
   for (const connection of connections) {
     if (connection.stale || !connection.snapshot) continue;
+    const generation = connection.snapshot_generation ?? connection.generation;
     const checkouts = new Map<string, string>();
     for (const workspace of connection.snapshot.workspaces) {
       const id = workspace.workspace_id;
@@ -142,7 +148,11 @@ export function linkCandidates(connections: TopologyConnection[]): Candidate[] {
       }
       candidates.push({
         connectionId: connection.connection_id,
+        generation,
         paneId,
+        sessionFingerprint: activeSession
+          ? agentCheckoutSessionFingerprint(activeSession)
+          : null,
         path,
         reportedPr: report?.reportedPr ?? null,
       });
@@ -189,7 +199,9 @@ export async function linkWorkItems(
     seen.add(key);
     links.push({
       connectionId: candidate.connectionId,
+      generation: candidate.generation,
       paneId: candidate.paneId,
+      sessionFingerprint: candidate.sessionFingerprint,
       itemKey: item.key,
       via,
     });
@@ -203,14 +215,14 @@ export async function linkWorkItems(
       ? resolver.cached(candidate.connectionId, candidate.path)
       : null;
     if (!checkout) continue;
-    // Open pull requests first, so a reused branch links its live one.
+    // The branch must live in one of the checkout's remotes: a fork's PR
+    // shares its base repository with every upstream checkout. Open pull
+    // requests first, so a reused branch links its live one.
     const matches = pullRequests
       .filter(
         (item) =>
           item.branch === checkout.branch &&
-          checkout.repos.some(
-            (repo) => repo === item.repo || repo === item.headRepo,
-          ),
+          checkout.repos.includes(item.headRepo ?? item.repo ?? ""),
       )
       .sort(
         (a, b) =>

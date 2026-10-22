@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import type { WorkItem } from "../../../shared/worldSources";
-import { agentCheckoutTokens } from "../herdr/agent-checkout";
+import {
+  agentCheckoutSessionFingerprint,
+  agentCheckoutTokens,
+} from "../herdr/agent-checkout";
 import type { RunProcess } from "./github";
 import {
   CheckoutResolver,
@@ -57,6 +60,8 @@ const connection = (
   stale = false,
 ): TopologyConnection => ({
   connection_id: id,
+  generation: 3,
+  snapshot_generation: 2,
   stale,
   snapshot: { workspaces, panes },
 });
@@ -113,19 +118,18 @@ describe("work links", () => {
       ],
       resolver,
     );
+    // Links name the generation the pane was observed in.
+    const linked = (itemKey: string) => ({
+      connectionId: "local-1",
+      generation: 2,
+      paneId: "p1",
+      sessionFingerprint: null,
+      itemKey,
+      via: "branch" as const,
+    });
     expect(links).toEqual([
-      {
-        connectionId: "local-1",
-        paneId: "p1",
-        itemKey: "github:pr:example-org/widgets#2",
-        via: "branch",
-      },
-      {
-        connectionId: "local-1",
-        paneId: "p1",
-        itemKey: "jira:ABC-12",
-        via: "branch",
-      },
+      linked("github:pr:example-org/widgets#2"),
+      linked("jira:ABC-12"),
     ]);
   });
 
@@ -146,6 +150,33 @@ describe("work links", () => {
       new CheckoutResolver(run, () => ({ kind: "local" })),
     );
     expect(links).toEqual([]);
+  });
+
+  test("a fork's pull request links only from a checkout of that fork", async () => {
+    const fork = pullRequest(4, "feature/login", {
+      headRepo: "someone/widgets",
+    });
+    const link = async (remote: string) => {
+      const { run } = fakeGit({
+        "/work/widgets": gitOutput("feature/login", remote),
+      });
+      return linkWorkItems(
+        [
+          connection("local-1", [
+            { pane_id: "p1", agent: "claude", cwd: "/work/widgets" },
+          ]),
+        ],
+        [fork],
+        new CheckoutResolver(run, () => ({ kind: "local" })),
+      );
+    };
+    // An upstream checkout on a branch of the same name is someone else's.
+    expect(await link("git@github.com:example-org/widgets.git")).toEqual([]);
+    expect(
+      (await link("git@github.com:someone/widgets.git")).map(
+        (entry) => entry.itemKey,
+      ),
+    ).toEqual([fork.key]);
   });
 
   test("an agent's reported pull request wins, and its reported path is used", async () => {
@@ -175,7 +206,9 @@ describe("work links", () => {
     expect(links).toEqual([
       {
         connectionId: "local-1",
+        generation: 2,
         paneId: "p1",
+        sessionFingerprint: agentCheckoutSessionFingerprint(session),
         itemKey: "github:pr:example-org/widgets#1",
         via: "reported",
       },

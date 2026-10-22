@@ -81,6 +81,13 @@ describe("GitHub source", () => {
     expect(items[0]).toMatchObject({ headRepo: "someone/widgets" });
   });
 
+  test("a pull request whose head repository is gone has no branch to link", () => {
+    const [item] = parseGitHubResponse(
+      response({ authored: [pr(3, { headRepository: null })] }),
+    );
+    expect(item).not.toHaveProperty("branch");
+  });
+
   test("lanes run review, fixing, green, ready and merged", () => {
     const base = {
       merged: false,
@@ -101,6 +108,11 @@ describe("GitHub source", () => {
     ).toBe("fixing");
     expect(pullRequestLane({ ...base, review: "approved" })).toBe("ready");
     expect(pullRequestLane({ ...base, checks: "none" })).toBe("review");
+    // No review rule: GitHub reports no decision, and passing is ready.
+    expect(pullRequestLane({ ...base, review: "none" })).toBe("ready");
+    expect(
+      pullRequestLane({ ...base, review: "none", checks: "pending" }),
+    ).toBe("review");
     expect(pullRequestLane({ ...base, merged: true, checks: "fail" })).toBe(
       "merged",
     );

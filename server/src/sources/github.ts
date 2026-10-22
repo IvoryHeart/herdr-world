@@ -160,7 +160,9 @@ function pullRequestItem(node: Record<string, unknown>): WorkItem | null {
     updatedAt: time(node.updatedAt),
     number: number as number,
     repo,
-    ...(typeof node.headRefName === "string" && node.headRefName
+    // A branch whose head repository is gone (a deleted fork) cannot be
+    // attributed to any checkout.
+    ...(headRepo && typeof node.headRefName === "string" && node.headRefName
       ? { branch: node.headRefName }
       : {}),
     ...(headRepo && headRepo !== repo ? { headRepo } : {}),

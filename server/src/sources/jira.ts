@@ -123,7 +123,7 @@ export async function refreshJira(
       body: JSON.stringify({
         jql: config.jql,
         maxResults: MAX_RESULTS,
-        fields: ["summary", "status", "assignee", "updated"],
+        fields: ["summary", "status", "assignee", "watches", "updated"],
       }),
     });
     if (search.status === 401 || search.status === 403)
@@ -178,7 +178,14 @@ export function parseJiraIssues(
       url: new URL(`/browse/${key}`, site).toString(),
       lane: (typeof category === "string" && LANE_OF[category]) || "todo",
       status: bounded(status.name, MAX_STATUS) || "Unknown",
-      roles: [accountId && assignee === accountId ? "assignee" : "watcher"],
+      // Only what Jira confirms: a broad filter returns tickets that are
+      // neither assigned to nor watched by the user.
+      roles: [
+        ...(accountId && assignee === accountId ? ["assignee" as const] : []),
+        ...(record(fields.watches).isWatching === true
+          ? ["watcher" as const]
+          : []),
+      ],
       updatedAt: Number.isFinite(updated) ? updated : 0,
     });
   }

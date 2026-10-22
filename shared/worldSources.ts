@@ -105,7 +105,11 @@ export type WorkItem = {
 /** A work item linked to the agent pane whose checkout or report names it. */
 export type WorkLink = {
   connectionId: string;
+  /** The runtime generation the pane was observed in. */
+  generation: number;
   paneId: string;
+  /** The pane's agent session when linked; null for none. */
+  sessionFingerprint: string | null;
   itemKey: string;
   /** `branch`: the pane's checkout branch; `reported`: the agent reported it. */
   via: "branch" | "reported";
@@ -113,6 +117,8 @@ export type WorkLink = {
 
 export type WorldSourcesSnapshot = {
   observedAt: number;
+  /** A refresh is still running; ask again shortly for its result. */
+  refreshing: boolean;
   sources: WorldSourceStatus[];
   items: WorkItem[];
   links: WorkLink[];
@@ -137,8 +143,10 @@ export function workBadgeText(item: WorkItem): string {
 
 /**
  * Where a pull request stands, worst first: anything that needs the author
- * is fixing; green but unapproved waits for review; approved and green is
- * ready. Drafts and pending checks are still in review.
+ * is fixing; drafts and pending checks are still in review. Approved is
+ * ready, and so is a passing PR in a repository that requires no review
+ * (GitHub reports no decision there). Passing but awaiting a required
+ * review is green.
  */
 export function pullRequestLane(pr: {
   merged: boolean;
@@ -156,5 +164,6 @@ export function pullRequestLane(pr: {
     return "fixing";
   if (pr.draft || pr.checks === "pending") return "review";
   if (pr.review === "approved") return "ready";
+  if (pr.review === "none" && pr.checks === "pass") return "ready";
   return pr.checks === "pass" ? "green" : "review";
 }

@@ -22,7 +22,22 @@ export function townDeskBadges(
 ): ReadonlyMap<string, TownDeskBadge> {
   const badges = new Map<string, TownDeskBadge>();
   if (!snapshot.links.length) return badges;
-  const byPane = workItemsByPane(snapshot);
+  const panes = new Map(
+    projection.rooms.flatMap((room) =>
+      room.desks.flatMap((desk) =>
+        desk.paneDevices.map((device) => [
+          paneKey(device.paneRef.connectionId, device.paneRef.nativeId),
+          {
+            generation: device.paneRef.generation,
+            agentSessionFingerprint: device.agentSessionFingerprint,
+          },
+        ]),
+      ),
+    ),
+  );
+  const byPane = workItemsByPane(snapshot, (connectionId, paneId) =>
+    panes.get(paneKey(connectionId, paneId)),
+  );
   for (const room of projection.rooms)
     for (const desk of room.desks) {
       const items = desk.paneDevices.flatMap((device) =>
@@ -64,7 +79,12 @@ export function sameTownBadges(
   if (left.size !== right.size) return false;
   for (const [key, badge] of left) {
     const other = right.get(key);
-    if (!other || other.text !== badge.text || other.tone !== badge.tone)
+    if (
+      !other ||
+      other.text !== badge.text ||
+      other.tone !== badge.tone ||
+      other.url !== badge.url
+    )
       return false;
   }
   return true;

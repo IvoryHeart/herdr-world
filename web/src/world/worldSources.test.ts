@@ -7,7 +7,12 @@ import { fixtureHost, fixtureWorld } from "./board/boardFixture";
 import { workCardFacts, workLensColumns } from "./board/workLensModel";
 import type { HerdrOfficeProjection } from "./herdrOfficeProjection";
 import { sameTownBadges, townDeskBadges } from "./town/townBadges";
-import { parseWorldSources, workItemsByPane } from "./worldSources";
+import {
+  parseWorldSources,
+  updateWorldSource,
+  workItemsByPane,
+  worldSourcesStore,
+} from "./worldSources";
 
 const pr = (number: number, fields: Partial<WorkItem> = {}): WorkItem => ({
   key: `github:pr:example-org/widgets#${number}`,
@@ -42,7 +47,27 @@ const ticket: WorkItem = {
 const snapshot = (
   items: WorkItem[],
   links: WorldSourcesSnapshot["links"] = [],
-): WorldSourcesSnapshot => ({ observedAt: 1, sources: [], items, links });
+): WorldSourcesSnapshot => ({
+  observedAt: 1,
+  refreshing: false,
+  sources: [],
+  items,
+  links,
+});
+
+const link = (
+  paneId: string,
+  itemKey: string,
+  fields: { generation?: number; sessionFingerprint?: string | null } = {},
+) => ({
+  connectionId: "local-1",
+  generation: 1,
+  paneId,
+  sessionFingerprint: null,
+  itemKey,
+  via: "branch" as const,
+  ...fields,
+});
 
 describe("World sources in the browser", () => {
   test("decoding drops malformed items, unsafe URLs and links to unknown items", () => {
@@ -75,9 +100,11 @@ describe("World sources in the browser", () => {
         { ...pr(3), lane: "nowhere" },
       ],
       links: [
-        { connectionId: "c", paneId: "p", itemKey: pr(1).key, via: "branch" },
-        { connectionId: "c", paneId: "p", itemKey: pr(2).key, via: "branch" },
-        { connectionId: "c", paneId: "p", itemKey: pr(1).key, via: "guess" },
+        { ...link("p", pr(1).key), connectionId: "c" },
+        { ...link("p", pr(2).key), connectionId: "c" },
+        { ...link("p", pr(1).key), connectionId: "c", via: "guess" },
+        // A link without its runtime generation is not trusted.
+        { ...link("p", pr(1).key), connectionId: "c", generation: undefined },
       ],
     });
     expect(decoded.items.map((item) => item.number)).toEqual([1]);
@@ -101,12 +128,14 @@ describe("World sources in the browser", () => {
         ticket,
       ],
       [
-        {
-          connectionId: "local-1",
-          paneId: leaf.nativeId,
-          itemKey: pr(2).key,
-          via: "branch",
-        },
+        link(leaf.nativeId, pr(2).key, { generation: leaf.generation }),
+        // The same pane ID in another runtime generation or agent session
+        // is a different pane.
+        link(leaf.nativeId, pr(1).key, { generation: leaf.generation + 1 }),
+        link(leaf.nativeId, pr(3).key, {
+          generation: leaf.generation,
+          sessionFingerprint: "f".repeat(64),
+        }),
       ],
     );
     const columns = workLensColumns(data, world, "pull_requests");
@@ -121,6 +150,7 @@ describe("World sources in the browser", () => {
     expect(columns[1]!.cards[0]!.agents).toEqual([
       { id: leaf.id, label: "login" },
     ]);
+    expect(columns[0]!.cards.flatMap((card) => card.agents)).toEqual([]);
     const tickets = workLensColumns(data, world, "tickets");
     expect(tickets.map((column) => column.cards.length)).toEqual([0, 1, 0]);
     expect(
@@ -140,7 +170,11 @@ describe("World sources in the browser", () => {
               paneDevices: [
                 {
                   agentKey: "a1",
-                  paneRef: { connectionId: "local-1", nativeId: "p1" },
+                  paneRef: {
+                    connectionId: "local-1",
+                    generation: 1,
+                    nativeId: "p1",
+                  },
                 },
               ],
             },
@@ -148,7 +182,13 @@ describe("World sources in the browser", () => {
               key: "desk-2",
               paneDevices: [
                 // A shell pane is never badged.
-                { paneRef: { connectionId: "local-1", nativeId: "p2" } },
+                {
+                  paneRef: {
+                    connectionId: "local-1",
+                    generation: 1,
+                    nativeId: "p2",
+                  },
+                },
               ],
             },
           ],
@@ -156,24 +196,9 @@ describe("World sources in the browser", () => {
       ],
     } as unknown as HerdrOfficeProjection;
     const links = [
-      {
-        connectionId: "local-1",
-        paneId: "p1",
-        itemKey: ticket.key,
-        via: "branch" as const,
-      },
-      {
-        connectionId: "local-1",
-        paneId: "p1",
-        itemKey: pr(12).key,
-        via: "branch" as const,
-      },
-      {
-        connectionId: "local-1",
-        paneId: "p2",
-        itemKey: pr(13).key,
-        via: "branch" as const,
-      },
+      link("p1", ticket.key),
+      link("p1", pr(12).key),
+      link("p2", pr(13).key),
     ];
     const badges = townDeskBadges(
       projection,
@@ -194,8 +219,40 @@ describe("World sources in the browser", () => {
     ]);
     expect(sameTownBadges(badges, new Map(badges))).toBe(true);
     expect(sameTownBadges(badges, new Map())).toBe(false);
+    // Another repository's #12 with the same state is a different badge.
+    const elsewhere = new Map([
+      [
+        "desk-1",
+        {
+          ...badges.get("desk-1")!,
+          url: "https://github.com/example-org/gadgets/pull/12",
+        },
+      ],
+    ]);
+    expect(sameTownBadges(badges, elsewhere)).toBe(false);
+    const current = () => ({ generation: 1 });
     expect(
-      workItemsByPane(snapshot([ticket], links)).get("local-1\0p1"),
+      workItemsByPane(snapshot([ticket], links), current).get("local-1\0p1"),
     ).toEqual([ticket]);
+    // After a runtime restart reuses p1, the old link shows nothing.
+    expect(
+      workItemsByPane(snapshot([ticket], links), () => ({ generation: 2 }))
+        .size,
+    ).toBe(0);
+  });
+
+  test("a settings save wins over a refresh that started before it", async () => {
+    let answer!: (response: Response) => void;
+    worldSourcesStore.useFetch(
+      () => new Promise<Response>((resolve) => (answer = resolve)),
+    );
+    const older = worldSourcesStore.refresh();
+    const saved = snapshot([ticket]);
+    await updateWorldSource("jira", { enabled: true }, async () =>
+      Response.json(saved),
+    );
+    answer(Response.json(snapshot([pr(1)])));
+    await older;
+    expect(worldSourcesStore.snapshot().items).toEqual([ticket]);
   });
 });

@@ -23,12 +23,15 @@ type FetchLike = (
 
 const SOURCES_PATH = "/api/world/sources";
 const POLL_MS = 60_000;
+/** While the service is still refreshing, ask again this soon. */
+const FOLLOW_UP_MS = 3_000;
 const MAX_ITEMS = 500;
 const MAX_LINKS = 2_000;
 const LANES = new Set<string>([...PULL_REQUEST_LANES, ...TICKET_LANES]);
 
 export const EMPTY_WORLD_SOURCES: WorldSourcesSnapshot = {
   observedAt: 0,
+  refreshing: false,
   sources: [],
   items: [],
   links: [],
@@ -63,7 +66,7 @@ export async function updateWorldSource(
   });
   if (!response.ok) throw new Error(await responseError(response));
   const snapshot = parseWorldSources(await response.json());
-  worldSourcesStore.publish(snapshot);
+  worldSourcesStore.publishSettled(snapshot);
   return snapshot;
 }
 
@@ -84,13 +87,18 @@ export function parseWorldSources(value: unknown): WorldSourcesSnapshot {
     .flatMap((link): WorkLink[] =>
       text(link.connectionId) &&
       text(link.paneId) &&
+      Number.isSafeInteger(link.generation) &&
+      (link.sessionFingerprint === null ||
+        typeof link.sessionFingerprint === "string") &&
       typeof link.itemKey === "string" &&
       keys.has(link.itemKey) &&
       (link.via === "branch" || link.via === "reported")
         ? [
             {
               connectionId: link.connectionId as string,
+              generation: link.generation as number,
               paneId: link.paneId as string,
+              sessionFingerprint: link.sessionFingerprint as string | null,
               itemKey: link.itemKey,
               via: link.via,
             },
@@ -99,6 +107,7 @@ export function parseWorldSources(value: unknown): WorldSourcesSnapshot {
     );
   return {
     observedAt: number(data.observedAt),
+    refreshing: data.refreshing === true,
     sources,
     items,
     links,
@@ -190,15 +199,35 @@ function parseItem(value: unknown): WorkItem | null {
   };
 }
 
+/** A pane as World observes it now, to check a link still describes it. */
+export type LinkedPane = {
+  generation: number;
+  agentSessionFingerprint?: string;
+};
+
+/**
+ * A link names the runtime generation and agent session it was made for; a
+ * restarted runtime or a new agent in the same pane ID is not that pane.
+ */
+export function linkMatchesPane(link: WorkLink, pane: LinkedPane) {
+  return (
+    link.generation === pane.generation &&
+    link.sessionFingerprint === (pane.agentSessionFingerprint ?? null)
+  );
+}
+
 /** Each agent pane's linked items, keyed by connection and pane. */
 export function workItemsByPane(
   snapshot: WorldSourcesSnapshot,
+  paneOf: (connectionId: string, paneId: string) => LinkedPane | undefined,
 ): ReadonlyMap<string, WorkItem[]> {
   const items = new Map(snapshot.items.map((item) => [item.key, item]));
   const byPane = new Map<string, WorkItem[]>();
   for (const link of snapshot.links) {
     const item = items.get(link.itemKey);
     if (!item) continue;
+    const pane = paneOf(link.connectionId, link.paneId);
+    if (!pane || !linkMatchesPane(link, pane)) continue;
     const key = paneKey(link.connectionId, link.paneId);
     const list = byPane.get(key) ?? [];
     if (!list.includes(item)) list.push(item);
@@ -212,13 +241,21 @@ export const paneKey = (connectionId: string, paneId: string) =>
 
 type Listener = () => void;
 
-/** One poll for every view; it stops when nothing is subscribed. */
+/**
+ * One poll for every view. It stops when nothing is subscribed or the page
+ * is hidden, and asks again soon while the service is still refreshing.
+ * Responses publish in request order, and a settings save supersedes every
+ * request that started before it.
+ */
 class WorldSourcesStore {
   #snapshot = EMPTY_WORLD_SOURCES;
   #listeners = new Set<Listener>();
-  #timer: ReturnType<typeof setInterval> | null = null;
+  #timer: ReturnType<typeof setTimeout> | null = null;
   #inFlight: Promise<void> | null = null;
   #fetch: FetchLike = (input, init) => fetch(input, init);
+  /** The latest request started, and the newest one published. */
+  #requested = 0;
+  #published = 0;
 
   subscribe = (listener: Listener) => {
     this.#listeners.add(listener);
@@ -231,20 +268,22 @@ class WorldSourcesStore {
 
   snapshot = () => this.#snapshot;
 
-  publish(snapshot: WorldSourcesSnapshot) {
-    this.#snapshot = snapshot;
-    for (const listener of this.#listeners) listener();
+  /** A settings response: newer than any request still on its way. */
+  publishSettled(snapshot: WorldSourcesSnapshot) {
+    this.#publish(++this.#requested, snapshot);
   }
 
   refresh(force = false) {
     if (this.#inFlight && !force) return this.#inFlight;
+    const sequence = ++this.#requested;
     const task = fetchWorldSources(this.#fetch, force)
-      .then((snapshot) => this.publish(snapshot))
+      .then((snapshot) => this.#publish(sequence, snapshot))
       .catch(() => {
         // The service is unreachable; keep the last snapshot.
       })
       .finally(() => {
         if (this.#inFlight === task) this.#inFlight = null;
+        this.#schedule();
       });
     this.#inFlight = task;
     return task;
@@ -255,14 +294,46 @@ class WorldSourcesStore {
     this.#fetch = fetchImpl;
   }
 
+  #publish(sequence: number, snapshot: WorldSourcesSnapshot) {
+    if (sequence < this.#published) return;
+    this.#published = sequence;
+    this.#snapshot = snapshot;
+    for (const listener of this.#listeners) listener();
+  }
+
+  #hidden() {
+    return typeof document !== "undefined" && document.hidden;
+  }
+
+  #onVisibility = () => {
+    if (this.#hidden()) this.#clearTimer();
+    else void this.refresh();
+  };
+
   #start() {
-    void this.refresh();
-    this.#timer = setInterval(() => void this.refresh(), POLL_MS);
+    if (typeof document !== "undefined")
+      document.addEventListener("visibilitychange", this.#onVisibility);
+    if (!this.#hidden()) void this.refresh();
+  }
+
+  #schedule() {
+    this.#clearTimer();
+    if (!this.#listeners.size || this.#hidden()) return;
+    this.#timer = setTimeout(
+      () => void this.refresh(),
+      this.#snapshot.refreshing ? FOLLOW_UP_MS : POLL_MS,
+    );
+  }
+
+  #clearTimer() {
+    if (this.#timer) clearTimeout(this.#timer);
+    this.#timer = null;
   }
 
   #stop() {
-    if (this.#timer) clearInterval(this.#timer);
-    this.#timer = null;
+    if (typeof document !== "undefined")
+      document.removeEventListener("visibilitychange", this.#onVisibility);
+    this.#clearTimer();
   }
 }
 

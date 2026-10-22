@@ -6,7 +6,7 @@ import {
   type WorldSourcesSnapshot,
 } from "../../../../shared/worldSources";
 import type { WorldObject } from "../worldObject";
-import { paneKey } from "../worldSources";
+import { linkMatchesPane, paneKey } from "../worldSources";
 
 /**
  * Board's Work lens: pull requests and tickets as kanban columns, each card
@@ -39,7 +39,8 @@ export function workLensColumns(
   const agentsByItem = new Map<string, WorkLensAgent[]>();
   for (const link of snapshot.links) {
     const leaf = leaves.get(paneKey(link.connectionId, link.paneId));
-    if (!leaf) continue;
+    // A restarted runtime or a new agent can reuse the pane ID.
+    if (!leaf || !linkMatchesPane(link, leaf)) continue;
     const list = agentsByItem.get(link.itemKey) ?? [];
     if (!list.some((agent) => agent.id === leaf.id))
       list.push({

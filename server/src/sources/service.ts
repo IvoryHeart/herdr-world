@@ -27,7 +27,9 @@ import type { SourceSecrets } from "./secrets";
  * World's built-in sources. Each is on by default and can be switched off;
  * one without its prerequisites reports `not_connected` with what to do.
  * Refreshes run only while a browser asks, at most once per interval, one at
- * a time per source; a failed refresh keeps the last items.
+ * a time per source; a failed refresh keeps the last items. A request waits
+ * briefly for a refresh, then answers with what World has and `refreshing`,
+ * so a slow `gh`, Jira or SSH host never holds a request open.
  */
 
 export type StoredSourceSettings = {
@@ -68,6 +70,8 @@ export type SourcesServiceOptions = {
   now?: () => number;
   refreshMs?: number;
   linkMs?: number;
+  /** How long a request waits for a refresh before answering. */
+  waitMs?: number;
 };
 
 /** Settings the user can correct; the message names the field. */
@@ -77,6 +81,7 @@ const DEFAULT_REFRESH_MS = 60_000;
 const DEFAULT_LINK_MS = 15_000;
 /** Even a forced refresh waits this long after the last one. */
 const MIN_FORCED_MS = 5_000;
+const DEFAULT_WAIT_MS = 2_000;
 
 export type JiraSettingsPatch = {
   enabled?: boolean;
@@ -93,10 +98,13 @@ export class SourcesService {
   #now: () => number;
   #refreshMs: number;
   #linkMs: number;
+  #waitMs: number;
   #sources: Record<WorldSourceId, SourceRuntime>;
   #links: WorkLink[] = [];
   #linkedAt = 0;
-  #linking: Promise<void> | null = null;
+  /** Bumped by a settings change; older refresh cycles then write nothing. */
+  #epoch = 0;
+  #cycling: Promise<void> | null = null;
 
   constructor(options: SourcesServiceOptions) {
     this.#options = options;
@@ -104,6 +112,7 @@ export class SourcesService {
     this.#now = options.now ?? Date.now;
     this.#refreshMs = options.refreshMs ?? DEFAULT_REFRESH_MS;
     this.#linkMs = options.linkMs ?? DEFAULT_LINK_MS;
+    this.#waitMs = options.waitMs ?? DEFAULT_WAIT_MS;
     const runtime = (id: WorldSourceId, label: string): SourceRuntime => ({
       id,
       label,
@@ -171,21 +180,55 @@ export class SourcesService {
   }
 
   async snapshot(force = false): Promise<WorldSourcesSnapshot> {
-    await Promise.all([
-      this.#refresh("github", force),
-      this.#refresh("jira", force),
+    const cycle = this.#cycle(force);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    await Promise.race([
+      cycle,
+      new Promise((resolve) => {
+        timer = setTimeout(resolve, this.#waitMs);
+      }),
     ]);
-    const items = (["github", "jira"] as const).flatMap((id) =>
-      this.enabled(id) ? this.#sources[id].items : [],
-    );
-    await this.#link(items, force);
+    clearTimeout(timer);
+    return this.current();
+  }
+
+  /** What World has now, without refreshing. */
+  current(): WorldSourcesSnapshot {
+    const items = this.#items();
     const keys = new Set(items.map((item) => item.key));
     return {
       observedAt: this.#now(),
+      refreshing: this.#cycling !== null,
       sources: this.statuses(),
       items,
       links: this.#links.filter((link) => keys.has(link.itemKey)),
     };
+  }
+
+  #items() {
+    return (["github", "jira"] as const).flatMap((id) =>
+      this.enabled(id) ? this.#sources[id].items : [],
+    );
+  }
+
+  /** One refresh cycle at a time: the sources, then their links. */
+  #cycle(force: boolean): Promise<void> {
+    if (this.#cycling) return this.#cycling;
+    const epoch = this.#epoch;
+    const task = (async () => {
+      await Promise.all([
+        this.#refresh("github", force),
+        this.#refresh("jira", force),
+      ]);
+      await this.#link(epoch, force);
+    })().catch(() => {
+      // Each source records its own failure; links keep their last value.
+    });
+    this.#cycling = task;
+    void task.finally(() => {
+      if (this.#cycling === task) this.#cycling = null;
+    });
+    return task;
   }
 
   async configureGitHub(patch: { enabled?: boolean }) {
@@ -217,6 +260,16 @@ export class SourcesService {
         cause instanceof Error ? cause.message : "Invalid Jira settings",
       );
     }
+    // The saved token belongs to its site and account: a new site or email
+    // must bring a new token, so the token can never be sent elsewhere.
+    const current = this.jiraConfig();
+    if (
+      token === undefined &&
+      ((next.site ?? null) !== current.site ||
+        (next.email ?? null) !== current.email) &&
+      this.#jiraToken()
+    )
+      token = null;
     if (token !== undefined) {
       const secrets = this.#options.secrets.read();
       this.#options.secrets.write({
@@ -235,6 +288,8 @@ export class SourcesService {
   }
 
   #reset(id: WorldSourceId) {
+    this.#epoch += 1;
+    this.#cycling = null;
     const source = this.#sources[id];
     source.generation += 1;
     source.refreshing = null;
@@ -298,23 +353,18 @@ export class SourcesService {
     }
   }
 
-  async #link(items: WorkItem[], force: boolean) {
-    if (this.#linking) return this.#linking;
+  async #link(epoch: number, force: boolean) {
+    if (epoch !== this.#epoch) return;
     if (!force && this.#linkedAt && this.#now() - this.#linkedAt < this.#linkMs)
       return;
-    const task = (async () => {
-      const topology = await this.#options.topology().catch(() => []);
-      this.#links = items.length
-        ? await linkWorkItems(topology, items, this.#options.resolver)
-        : [];
-      this.#linkedAt = this.#now();
-    })();
-    this.#linking = task;
-    try {
-      await task;
-    } finally {
-      this.#linking = null;
-    }
+    const items = this.#items();
+    const topology = await this.#options.topology().catch(() => []);
+    const links = items.length
+      ? await linkWorkItems(topology, items, this.#options.resolver)
+      : [];
+    if (epoch !== this.#epoch) return;
+    this.#links = links;
+    this.#linkedAt = this.#now();
   }
 }
 
