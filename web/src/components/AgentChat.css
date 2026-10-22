@@ -390,3 +390,219 @@
   font-size: 12px;
   overflow-wrap: anywhere;
 }
+
+/* Steps: one card per tool call, alive while it runs, a receipt after. */
+.agent-chat-step {
+  min-width: 0;
+  overflow: hidden;
+  background: var(--input-bg);
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+}
+
+.agent-chat-step.is-running {
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+}
+
+.agent-chat-step-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 34px;
+  padding: 6px 10px;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.agent-chat-step-head:disabled {
+  cursor: default;
+}
+
+.agent-chat-step-icon {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 16px;
+  font: 600 12px var(--font-mono, ui-monospace, monospace);
+}
+
+.agent-chat-step.is-running .agent-chat-step-icon {
+  color: var(--accent);
+}
+
+.agent-chat-step.is-ok .agent-chat-step-icon {
+  color: var(--success-text, #7be08f);
+}
+
+.agent-chat-step.is-failed .agent-chat-step-icon {
+  color: var(--danger-text);
+}
+
+.agent-chat-step.is-interrupted .agent-chat-step-icon {
+  color: var(--warning-text, var(--muted));
+}
+
+.agent-chat-step-label {
+  flex: 1;
+  min-width: 0;
+}
+
+.agent-chat-step-label b {
+  font-weight: 500;
+}
+
+.agent-chat-step-label code {
+  display: block;
+  overflow: hidden;
+  color: var(--muted);
+  font: 12px var(--font-mono, ui-monospace, monospace);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-chat-step-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 3px;
+}
+
+.agent-chat-step-files code {
+  display: inline;
+  padding: 0 5px;
+  background: var(--bg);
+  border-radius: 4px;
+}
+
+.agent-chat-step-time {
+  flex: none;
+  color: var(--muted);
+  font: 500 11.5px var(--font-mono, ui-monospace, monospace);
+  font-variant-numeric: tabular-nums;
+}
+
+.agent-chat-step-badge {
+  flex: none;
+  padding: 1px 7px;
+  font-size: 11.5px;
+  font-weight: 600;
+  border-radius: 999px;
+}
+
+.agent-chat-step-badge.is-green,
+.agent-chat-step-strip.is-green {
+  color: var(--success-text, #b8f0c2);
+  background: var(--success-soft, #173a22);
+}
+
+.agent-chat-step-badge.is-red,
+.agent-chat-step-strip.is-red {
+  color: var(--danger-text);
+  background: var(--danger-soft);
+}
+
+.agent-chat-step-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  background: var(--bg);
+  border-top: 1px solid var(--border-soft);
+}
+
+.agent-chat-step-strip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 9px;
+  font-size: 12.5px;
+  font-weight: 600;
+  border-radius: 7px;
+}
+
+.agent-chat-step-bar {
+  flex: 1;
+  height: 6px;
+  overflow: hidden;
+  background: var(--danger-text);
+  border-radius: 3px;
+}
+
+.agent-chat-step-strip.is-green .agent-chat-step-bar {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.agent-chat-step-bar i {
+  display: block;
+  height: 100%;
+  background: var(--success-text, #7be08f);
+}
+
+.agent-chat-step-failure {
+  margin: 0;
+  color: var(--danger-text);
+  font: 12px var(--font-mono, ui-monospace, monospace);
+  overflow-wrap: anywhere;
+}
+
+.agent-chat-step-diff,
+.agent-chat-step-tail {
+  max-height: 260px;
+  margin: 0;
+  overflow: auto;
+  font: 12px / 1.5 var(--font-mono, ui-monospace, monospace);
+}
+
+.agent-chat-step-diff span {
+  display: block;
+  padding: 0 6px;
+  white-space: pre;
+}
+
+.agent-chat-step-diff .is-head {
+  color: var(--muted);
+}
+
+.agent-chat-step-diff .is-removed {
+  color: var(--danger-text);
+  background: var(--danger-soft);
+}
+
+.agent-chat-step-diff .is-added {
+  color: var(--success-text, #b8f0c2);
+  background: var(--success-soft, #1d3a26);
+}
+
+.agent-chat-step-tail {
+  color: var(--text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.agent-chat-step .agent-chat-spinner {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: agent-chat-step-spin 0.8s linear infinite;
+}
+
+@keyframes agent-chat-step-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-chat-step .agent-chat-spinner {
+    animation: none;
+  }
+}

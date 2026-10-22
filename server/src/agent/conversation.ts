@@ -1,5 +1,6 @@
 import type { ConversationDelivery } from "./conversation-delivery";
 import type { ConversationIdentity } from "./conversation-watch";
+import { stepsFromEntries, type ConversationStep } from "./conversation-steps";
 import type { HistoryEntry } from "./session-history";
 
 // The conversation read model is the one contract Chat and other consumers
@@ -14,10 +15,12 @@ export type ConversationMessage = {
    * `activity` summarises a run of tool calls between two messages; `notice`
    * marks an event in the conversation, such as a compaction.
    */
-  kind: "message" | "error" | "activity" | "notice";
+  kind: "message" | "error" | "activity" | "notice" | "step";
   text: string;
   sent_at: string;
   tools?: { name: string; calls: number }[];
+  /** For a `step`: one tool call with its evidence. */
+  step?: ConversationStep;
   failed?: number;
 };
 
@@ -122,8 +125,44 @@ function plural(name: string, calls: number) {
  */
 export function conversationMessages(
   entries: readonly HistoryEntry[],
+  /** One `step` per tool call instead of one activity line per run. */
+  options: { steps?: boolean } = {},
 ): ConversationMessage[] {
   const messages: ConversationMessage[] = [];
+  if (options.steps) {
+    const steps = new Map(
+      stepsFromEntries(entries).map((step) => [step.id, step] as const),
+    );
+    for (const entry of entries) {
+      if (entry.role === "tool") {
+        if (entry.kind !== "tool_call") continue;
+        const step = steps.get(entry.source_call_id ?? `entry:${entry.id}`);
+        if (step)
+          messages.push({
+            id: step.id,
+            role: "tool",
+            kind: "step",
+            text: step.label,
+            sent_at: step.started_at,
+            step,
+          });
+        continue;
+      }
+      messages.push({
+        id: entry.id,
+        role: entry.role,
+        kind:
+          entry.kind === "error"
+            ? "error"
+            : entry.notice
+              ? "notice"
+              : "message",
+        text: entry.text,
+        sent_at: entry.sent_at,
+      });
+    }
+    return messages;
+  }
   let activity: ConversationMessage | null = null;
   const counts = new Map<string, number>();
   const close = () => {

@@ -2,6 +2,7 @@ import { createRoot } from "react-dom/client";
 import { bridge, type BridgeControlMsg } from "../api";
 import type { Pane } from "../types";
 import { AgentChat, type Conversation } from "./AgentChat";
+import type { ConversationStep } from "./StepCard";
 import "../styles/tokens.css";
 import "../styles/base.css";
 import "../styles/vendor.css";
@@ -674,6 +675,107 @@ async function run() {
     check(
       buttons.includes("Copy command") && buttons.includes("Refresh"),
       "A missing integration must offer to copy its command and refresh",
+    );
+
+    // Steps: one card per tool call, keyed by its call ID. Reads fold into a
+    // group; an edit opens to its diff; a failed test run starts open with its
+    // strip; a running step spins.
+    const step = (
+      id: string,
+      tool: string,
+      label: string,
+      extra: Partial<ConversationStep> = {},
+    ): Conversation["messages"][number] => ({
+      id,
+      role: "tool",
+      kind: "step",
+      text: label,
+      sent_at: "2026-10-22T09:00:00Z",
+      step: {
+        id,
+        call_id: id,
+        tool,
+        label,
+        input_summary: null,
+        state: "ok",
+        started_at: "2026-10-22T09:00:00Z",
+        ended_at: "2026-10-22T09:00:01Z",
+        result_tail: null,
+        diff: null,
+        test: null,
+        ...extra,
+      },
+    });
+    reply = conversation(
+      [
+        message("u6", "user", "Add backoff"),
+        step("r1", "Read", "Read reconnect.ts", {
+          input_summary: "src/reconnect.ts",
+        }),
+        step("r2", "Read", "Read reconnect.test.ts", {
+          input_summary: "src/reconnect.test.ts",
+        }),
+        step("e1", "Edit", "Edit reconnect.ts", {
+          diff: {
+            file: "src/reconnect.ts",
+            removed: ["  return 1000;"],
+            added: ["  return backoff(attempt);"],
+            truncated: false,
+          },
+        }),
+        step("b1", "Bash", "Run reconnect tests", {
+          state: "failed",
+          input_summary: "bun test src",
+          test: {
+            runner: "bun",
+            passed: 12,
+            failed: 1,
+            first_failure: "backs off to the cap",
+          },
+          result_tail: "(fail) backs off to the cap",
+        }),
+        step("b2", "Bash", "Run reconnect tests", {
+          state: "running",
+          ended_at: null,
+          input_summary: "bun test src",
+        }),
+      ],
+      "working",
+    );
+    push();
+    await settle();
+    const group = container.querySelector(".agent-chat-step.is-group");
+    check(
+      group?.textContent?.includes("Read 2 files") === true &&
+        group.textContent.includes("src/reconnect.test.ts"),
+      "Consecutive reads must fold into one group with their files",
+    );
+    const edit = container.querySelector<HTMLElement>('[data-step-id="e1"]')!;
+    check(
+      !edit.querySelector(".agent-chat-step-diff"),
+      "A finished edit must start folded",
+    );
+    edit.querySelector<HTMLButtonElement>(".agent-chat-step-head")!.click();
+    await settle();
+    check(
+      edit.querySelector(".is-removed")?.textContent === "-   return 1000;" &&
+        edit.querySelector(".is-added")?.textContent ===
+          "+   return backoff(attempt);",
+      "Opening an edit must show its diff",
+    );
+    const failed = container.querySelector('[data-step-id="b1"]');
+    check(
+      failed
+        ?.querySelector(".agent-chat-step-strip.is-red")
+        ?.textContent?.includes("12 passed · 1 failed") === true &&
+        failed.textContent?.includes("backs off to the cap") === true,
+      "A failed test run must start open with its red strip and failing test",
+    );
+    check(
+      container.querySelector(
+        '[data-step-id="b2"].is-running .agent-chat-spinner',
+      ) !== null,
+      "A running step must spin",
     );
 
     const unwatched = count("agent_conversation.unwatch");

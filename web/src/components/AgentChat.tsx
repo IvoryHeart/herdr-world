@@ -34,17 +34,25 @@ import { AgentHistoryDrawer } from "./AgentHistoryDrawer";
 import { AttachmentChips } from "./AttachmentChips";
 import { CodexSessionLink } from "./CodexSessionLink";
 import { MarkdownPreview } from "./markdown";
+import {
+  readsFiles,
+  StepCard,
+  StepGroup,
+  type ConversationStep,
+} from "./StepCard";
 import "./AgentChat.css";
 
 // Mirrors the server's conversation read model (server/src/agent/conversation.ts).
 export type ConversationMessage = {
   id: string;
   role: "user" | "assistant" | "tool";
-  kind: "message" | "error" | "activity" | "notice";
+  kind: "message" | "error" | "activity" | "notice" | "step";
   text: string;
   sent_at: string;
   tools?: { name: string; calls: number }[];
   failed?: number;
+  /** For a `step`: one tool call with its evidence. */
+  step?: ConversationStep;
 };
 
 export type Conversation = {
@@ -92,6 +100,31 @@ const FOLLOW_THRESHOLD_PX = 48;
 
 const preview = (text: string) =>
   text.length > 80 ? `${text.slice(0, 79)}…` : text;
+
+/** Runs of two or more finished file reads fold into one group. */
+function groupSteps(messages: readonly ConversationMessage[]) {
+  const items: (
+    | { message: ConversationMessage }
+    | { group: ConversationStep[] }
+  )[] = [];
+  let run: ConversationMessage[] = [];
+  const flush = () => {
+    if (run.length > 1)
+      items.push({ group: run.map((message) => message.step!) });
+    else for (const message of run) items.push({ message });
+    run = [];
+  };
+  for (const message of messages) {
+    if (message.kind === "step" && message.step && readsFiles(message.step)) {
+      run.push(message);
+      continue;
+    }
+    flush();
+    items.push({ message });
+  }
+  flush();
+  return items;
+}
 
 const ChatMessage = memo(function ChatMessage({
   message,
@@ -536,13 +569,19 @@ export function AgentChat({
             {!conversation && !stale ? (
               <p className="agent-chat-empty">Loading conversation…</p>
             ) : null}
-            {conversation?.messages.map((message) => (
-              <ChatMessage
-                key={message.id}
-                message={message}
-                matched={matchedIds.has(message.id)}
-              />
-            ))}
+            {groupSteps(conversation?.messages ?? []).map((item) =>
+              "group" in item ? (
+                <StepGroup key={item.group[0]!.id} steps={item.group} />
+              ) : item.message.kind === "step" && item.message.step ? (
+                <StepCard key={item.message.id} step={item.message.step} />
+              ) : (
+                <ChatMessage
+                  key={item.message.id}
+                  message={item.message}
+                  matched={matchedIds.has(item.message.id)}
+                />
+              ),
+            )}
             {pending.map((delivery) => (
               <article
                 key={delivery.id}

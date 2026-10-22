@@ -61,8 +61,17 @@ assistant message) and a `status` of `ok` or `unavailable`. Each message has a
 
 - `message`: user or assistant text.
 - `error`: an error the harness recorded.
+- `step`: one tool call, which Chat shows as a card. Its `step` carries the
+  harness's tool-call ID (`id`, the same ID other views such as Quests link to),
+  the tool, a label ("Read reconnect.ts", "Run tests"), the command or file it
+  names, its state (`running` with no result yet, `ok`, `failed`, or
+  `interrupted` when the agent moved on without a result), start and end
+  times, the end of its output (12 lines at most, with credential-shaped
+  values redacted), the lines an edit removed and added, and for a test run
+  its pass and fail counts (bun, vitest, jest, pytest and cargo summaries).
+  Chat folds runs of reads into one card and opens running and failed steps.
 - `activity`: one line for each run of tool calls between messages, such as
-  "Used Read, Bash ×2", with per-tool counts and the number of failed results.
+  "Used Read, Bash ×2", for consumers that want a summary instead of steps.
 - `notice`: an event in the conversation, such as "Conversation compacted" or a
   Claude Code background task update.
 

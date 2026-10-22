@@ -366,6 +366,9 @@ See [resource ownership](docs/ARCHITECTURE.md#workspace-resource-ownership).
   says so, or that it cannot tell when the same words appeared at about the
   same time. Slash commands, and Claude Code's `!` and `#`, go through the
   Terminal.
+  Each tool call shows as a step card: reads fold into one line, an edit opens
+  to its diff, and a test run shows a green or red strip with its counts and
+  first failure.
   It refreshes when the service sees the transcript, title or status change,
   without browser polling, and keeps the last good view if a read fails. When
   it cannot read the conversation it shows the reason with the matching action:

@@ -365,7 +365,9 @@ export function createHerdrConversationSource(args: {
     }
     try {
       const projection = await args.cache.get(resolved);
-      const messages = conversationMessages(projection.entries);
+      const messages = conversationMessages(projection.entries, {
+        steps: true,
+      });
       if (base.session_fingerprint)
         remember(
           base.session_fingerprint,

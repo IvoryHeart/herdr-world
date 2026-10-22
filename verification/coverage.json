@@ -910,6 +910,7 @@
         "server/src/agent/conversation-matrix.test.ts",
         "server/src/agent/conversation-watch.test.ts",
         "server/src/agent/conversation-send-race.test.ts",
+        "server/src/agent/conversation-steps.test.ts",
         "server/src/agent/codex-session-link.test.ts",
         "server/src/connections/session-link-routing.test.ts",
         "server/src/agent/codex-session.test.ts",
