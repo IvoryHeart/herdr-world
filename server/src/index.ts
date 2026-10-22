@@ -41,6 +41,12 @@ import { cliCommands, runCli, topLevelHelp } from "./cli";
 import { CONTINUE_TO_SERVER, defaultCliContext } from "./cli/command";
 import { runTaskSummaryCommand } from "./herdr/task-summary";
 import { runSpawnStampCommand, stampSpawn } from "./herdr/spawn-stamp";
+import {
+  handleWorldCliEndpoint,
+  WORLD_CLI_PATH,
+} from "./http/world-cli-endpoint";
+import { answerAsk, CliError, createWorldCli } from "./world/world-cli";
+import { WorldLedger } from "./world/world-ledger";
 import { runAgentCheckoutCommand } from "./herdr/agent-checkout";
 import { createWebPushService } from "./notifications/web-push";
 import { enrichIntegrationVersions } from "./herdr/integration-versions";
@@ -277,6 +283,7 @@ const {
   handlePinLogin,
   handleLogout,
   loginPage,
+  bearerAuth,
 } = createAuthHandlers({
   authRequired: config.authRequired,
   password: config.password,
@@ -622,6 +629,54 @@ function publishBoardChanged(revision: number) {
   });
   for (const ws of clients) safeSend(ws, line, "world-board");
 }
+
+let worldLedgerStore: WorldLedger | null = null;
+/** The agent CLI's change log, questions and results (world-ledger.ts). */
+function worldLedger() {
+  worldLedgerStore ??= new WorldLedger(undefined, {
+    log: (message) => console.warn(message),
+  });
+  return worldLedgerStore;
+}
+
+function publishLedgerChanged(revision: number) {
+  const line = JSON.stringify({
+    control: { type: "world_ledger_changed", revision },
+  });
+  for (const ws of clients) safeSend(ws, line, "world-ledger");
+}
+
+const worldCli = createWorldCli({
+  board: {
+    get: () => board().get(),
+    patch: (ops) => board().patch(ops),
+  },
+  get ledger() {
+    return worldLedger();
+  },
+  hosts: () =>
+    connectionManager.list().flatMap((status) => {
+      const lease = connectionManager.readyRuntimeLease(status.id);
+      if (!lease?.isCurrent()) return [];
+      return [
+        {
+          connection_id: lease.connectionId,
+          generation: lease.generation,
+          local: !lease.runtime.sshHost(),
+          call: (method: string, params: Record<string, unknown>) =>
+            lease.runtime.herdr.call(method, params, 5_000),
+        },
+      ];
+    }),
+  defaultConnectionId: () => connectionManager.defaultId(),
+  snapshot: async () => {
+    if (!worldSnapshots)
+      throw new Error("World snapshot service is unavailable");
+    return worldSnapshots.snapshot({});
+  },
+  publishBoard: publishBoardChanged,
+  publishLedger: publishLedgerChanged,
+});
 
 function publishWatchlistChanged(revision: number) {
   const line = JSON.stringify({
@@ -1173,6 +1228,28 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
       sendError("world-snapshot-error", error);
     } finally {
       transfer?.close();
+    }
+    return;
+  }
+  if (method === "world.ledger.get") {
+    sendReply({ id, result: worldLedger().get() }, "world-ledger");
+    return;
+  }
+  if (method === "world.ask.answer") {
+    try {
+      const p = (params ?? {}) as Record<string, unknown>;
+      const answer = typeof p.answer === "string" ? p.answer.trim() : "";
+      if (typeof p.id !== "string" || !answer || answer.length > 4000)
+        throw new Error("an answer needs a question ID and text");
+      publishLedgerChanged(
+        answerAsk(worldLedger(), p.id, answer, "owner", Date.now()),
+      );
+      sendReply({ id, result: worldLedger().get() }, "world-ask-answer");
+    } catch (error) {
+      sendError(
+        "world-ask-answer",
+        error instanceof CliError ? new Error(error.message) : error,
+      );
     }
     return;
   }
@@ -2332,6 +2409,13 @@ function main() {
             }
             return response;
           }
+
+          if (url.pathname === WORLD_CLI_PATH)
+            return handleWorldCliEndpoint(req, server.requestIP(req), {
+              serverPort: server.port ?? config.port,
+              bearerAuth,
+              handle: (body, chain) => worldCli.handle(body as never, chain),
+            });
 
           // Loopback listeners retain World's trusted local access policy.
           if (!isAuthed(req)) {

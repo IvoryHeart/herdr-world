@@ -237,6 +237,25 @@ export function createAuthHandlers(args: {
     return parseCookie(req.headers.get("cookie"), AUTH_COOKIE);
   }
 
+  /**
+   * A local client's `Authorization: Bearer` credential: the same password or
+   * generated token the login page takes. Only the agent CLI endpoint uses
+   * it, so frequent CLI calls need no login. A wrong credential counts as a
+   * failed login for the caller's address.
+   */
+  function bearerAuth(req: Request, ip = "unknown"): true | Response | null {
+    const header = req.headers.get("authorization");
+    if (!header?.startsWith("Bearer ")) return null;
+    const existing = loginAttempts.get(ip);
+    const cooldown = existing ? checkCooldown(existing, Date.now()) : null;
+    if (cooldown) return cooldown;
+    if (secretsEqual(header.slice(7), args.password)) return true;
+    const attempts = beginLogin(ip);
+    if (attempts instanceof Response) return attempts;
+    failLogin(attempts);
+    return Response.json({ error: "wrong token" }, { status: 401 });
+  }
+
   function handleLogout(req: Request): Response {
     if (req.method !== "POST") {
       return new Response("method not allowed", {
@@ -379,6 +398,7 @@ export function createAuthHandlers(args: {
 
   return {
     isAuthed,
+    bearerAuth,
     sessionToken,
     handleTokenLogin,
     handleLogin,

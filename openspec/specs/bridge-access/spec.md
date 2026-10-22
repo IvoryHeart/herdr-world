@@ -89,3 +89,23 @@ per-client throttling plus a bounded global failure cooldown.
 #### Scenario: Credential replacement
 - **WHEN** a configured login credential changes and the listener starts
 - **THEN** cookies signed before the change no longer authenticate
+
+### Requirement: Local agent command line
+The World service SHALL accept agent CLI calls at `/api/world/cli` only from a
+loopback peer without an Origin header, authenticated with the login password or
+generated token as a bearer credential; failed bearer attempts SHALL count
+toward the same login cooldown. The service SHALL attribute a call to the
+Herdr pane it names only when the calling process, found from its connection,
+or one of its ancestors is that pane's shell or foreground process on a local
+Herdr; otherwise it SHALL label the call unverified, or the owner's terminal
+when no pane is named. Calls SHALL never merge, delete Herdr objects or reach
+outside World; a change to Herdr's layout SHALL require explicit confirmation,
+and every change SHALL be recorded with its actor and time.
+
+#### Scenario: Spoofed pane
+- **WHEN** a process in one pane calls with another pane's `HERDR_PANE_ID`
+- **THEN** the call is labelled unverified, and commands that act as that pane are refused
+
+#### Scenario: Remote or browser caller
+- **WHEN** a request reaches `/api/world/cli` from another machine or with an Origin header
+- **THEN** the service refuses it before reading credentials or the body

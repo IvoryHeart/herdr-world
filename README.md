@@ -113,7 +113,9 @@ The process must stay running and reachable. **PWA mode is not offline access.**
   ([Markdown](./docs/TUTORIAL.md)): [Town](./docs/TUTORIAL.md#town),
   [Board](./docs/TUTORIAL.md#board), [Desk](./docs/TUTORIAL.md#desk), terminal/file review, mobile,
   and private remote access.
-- [Features and shortcuts](./FEATURES.md)
+- [Features and shortcuts](./FEATURES.md), including the
+  [agent CLI](./FEATURES.md#agent-cli-herdr-world---skill): run
+  `herdr-world --skill` to teach an agent to change World.
 - [Deployment](./docs/DEPLOYMENT.md): installation, configuration, services, builds.
 - [Architecture](./docs/ARCHITECTURE.md): system contracts.
 - [Repository knowledge map](./docs/knowledge-map.md) and

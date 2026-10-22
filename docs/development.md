@@ -241,6 +241,27 @@ ID that may since name another pane. Inside an agent pane `HERDR_SOCKET_PATH` se
 that pane's own Herdr ahead of `--session`; pass `--socket-path` to target
 another. Experiment only in a throwaway `herdr --session`.
 
+From inside the child pane, `herdr-world spawned-by w1:p1` makes the same
+stamp through the running World service, which first checks that the caller
+runs in that pane.
+
+## Agent CLI
+
+`herdr-world --skill` is the agent guide (`server/src/cli/world-skill.ts`).
+The verbs (`server/src/cli/world.ts`) POST to `/api/world/cli` on the running
+service (`server/src/http/world-cli-endpoint.ts`): loopback only, no browser
+Origin, and the login password or generated token as a bearer credential,
+with failed attempts counted like failed logins. The service maps the
+caller's TCP connection to its process through `/proc` and accepts its
+`HERDR_PANE_ID` only when an ancestor is that pane's shell or foreground
+process (`pane.process_info`) on a local Herdr
+(`server/src/world/caller-identity.ts`). Changes, questions and results live
+in `world-ledger.json` beside the Board file (`HERDR_WORLD_LEDGER_PATH`
+overrides it). To try it against a development service, set
+`HERDR_WORLD_URL` and `HERDR_WORLD_TOKEN`, and point the service at a
+throwaway `herdr --session` with explicit `--socket-path` and
+`--client-socket-path`.
+
 ## Harness agent checkouts
 
 An active agent harness can report its own checkout without starting the World web

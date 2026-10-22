@@ -1124,6 +1124,70 @@
   color: var(--town-muted);
 }
 
+/* Questions agents asked (`herdr-world ask`), above the waiting agents. */
+.town-asks {
+  display: grid;
+  gap: 6px;
+  padding: 4px 6px 8px;
+  max-height: 45vh;
+  overflow-y: auto;
+}
+
+.town-ask {
+  display: grid;
+  gap: 4px;
+  padding: 6px 8px;
+  border-left: 3px solid var(--town-wait);
+  border-radius: 6px;
+  background: var(--town-btn);
+}
+
+.town-ask small {
+  font-size: 11px;
+  color: var(--town-muted);
+}
+
+.town-ask p {
+  margin: 0;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.town-ask-options,
+.town-ask-reply {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.town-ask-reply input {
+  flex: 1 1 8em;
+  min-width: 0;
+  font: inherit;
+  font-size: 13px;
+  color: var(--town-text);
+  background: var(--town-term);
+  border: 1px solid var(--town-edge);
+  border-radius: 4px;
+  padding: 3px 6px;
+}
+
+.town-ask button {
+  font: inherit;
+  font-size: 12px;
+  color: var(--town-text);
+  background: var(--town-panel);
+  border: 1px solid var(--town-edge);
+  border-radius: 4px;
+  padding: 3px 8px;
+  cursor: pointer;
+}
+
+.town-ask button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 .town-rail-empty {
   margin: 0;
   padding: 2px 8px 6px;

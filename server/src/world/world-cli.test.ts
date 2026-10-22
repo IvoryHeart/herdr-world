@@ -1,0 +1,389 @@
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { mkdirSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { BoardStore } from "./board-store";
+import type { CallerProcess } from "./caller-identity";
+import type { WorldSnapshotResult } from "./snapshot";
+import {
+  createWorldCli,
+  OWNER_TERMINAL,
+  type CliHost,
+  type WorldCliResponse,
+} from "./world-cli";
+import { WorldLedger } from "./world-ledger";
+
+const resultOf = (reply: WorldCliResponse) =>
+  (reply as { result?: unknown }).result;
+
+/*
+ * Synthetic host "studio": workspace w1 with tabs w1:t1 (agent pane w1:p1,
+ * whose shell is pid 100) and w1:t2 (agent pane w1:p2, shell pid 200).
+ */
+const PANES = [
+  {
+    pane_id: "w1:p1",
+    tab_id: "w1:t1",
+    workspace_id: "w1",
+    terminal_id: "term_a",
+    agent: "claude",
+    shell: 100,
+  },
+  {
+    pane_id: "w1:p2",
+    tab_id: "w1:t2",
+    workspace_id: "w1",
+    terminal_id: "term_b",
+    agent: "codex",
+    shell: 200,
+  },
+];
+const TABS = [
+  { tab_id: "w1:t1", workspace_id: "w1", label: "one" },
+  { tab_id: "w1:t2", workspace_id: "w1", label: "two" },
+];
+
+let root: string;
+let calls: { method: string; params: Record<string, unknown> }[];
+let tabOrder: string[];
+
+function host(overrides: Partial<CliHost> = {}): CliHost {
+  return {
+    connection_id: "studio",
+    generation: 2,
+    local: true,
+    async call(method, params) {
+      calls.push({ method, params });
+      const pane = PANES.find((entry) => entry.pane_id === params.pane_id);
+      if (method === "pane.process_info")
+        return pane
+          ? { process_info: { pane_id: pane.pane_id, shell_pid: pane.shell } }
+          : Promise.reject(new Error("pane not found"));
+      if (method === "pane.get")
+        return pane ? { pane } : Promise.reject(new Error("pane not found"));
+      if (method === "tab.list")
+        return {
+          tabs: tabOrder.map((tab_id) => ({ tab_id, workspace_id: "w1" })),
+        };
+      if (method === "tab.move" || method === "pane.report_metadata")
+        return { type: "ok" };
+      throw new Error(`unexpected ${method}`);
+    },
+    ...overrides,
+  };
+}
+
+const snapshot = (stale = false): WorldSnapshotResult => ({
+  revision: 1,
+  observed_at: 1,
+  connections: [
+    {
+      connection_id: "studio",
+      label: "Studio",
+      source: "test",
+      is_default: true,
+      state: "ready" as never,
+      generation: 2,
+      snapshot_generation: 2,
+      stale,
+      actionable: !stale,
+      snapshot: {
+        workspaces: [{ workspace_id: "w1", label: "room" }],
+        tabs: TABS,
+        panes: PANES,
+        agents: [],
+        coverage: {} as never,
+        watch_admission: {} as never,
+      },
+    },
+  ],
+});
+
+/** A CLI process whose ancestor is the shell of `pid`'s pane. */
+const inPane = (shell: number): CallerProcess[] => [
+  { pid: 900, ppid: 800, pgrp: 800 },
+  { pid: 800, ppid: shell, pgrp: 800 },
+  { pid: shell, ppid: 1, pgrp: shell },
+];
+
+function setup(options: { stale?: boolean; hosts?: CliHost[] } = {}) {
+  const board = new BoardStore(join(root, "board.json"));
+  const ledger = new WorldLedger(join(root, "ledger.json"), {
+    persist: false,
+    now: () => 1_000,
+  });
+  const published = { board: 0, ledger: 0 };
+  const cli = createWorldCli({
+    board,
+    ledger,
+    hosts: () => options.hosts ?? [host()],
+    defaultConnectionId: () => "studio",
+    snapshot: async () => snapshot(options.stale),
+    publishBoard: () => (published.board += 1),
+    publishLedger: () => (published.ledger += 1),
+    now: () => 1_000,
+  });
+  const run = (
+    command: string,
+    params: Record<string, unknown> = {},
+    pane: string | null = "w1:p1",
+    chain: CallerProcess[] | null = inPane(100),
+  ) =>
+    cli.handle(
+      { command, params, caller: pane ? { pane_id: pane } : {} },
+      chain,
+    );
+  return { board, ledger, published, run };
+}
+
+beforeEach(() => {
+  root = join(tmpdir(), `world-cli-${crypto.randomUUID()}`);
+  mkdirSync(root, { recursive: true });
+  calls = [];
+  tabOrder = ["w1:t1", "w1:t2"];
+});
+afterEach(() => rmSync(root, { recursive: true, force: true }));
+
+describe("caller identity", () => {
+  test("a pane whose process runs there is verified, with its agent", async () => {
+    const { run } = setup();
+    expect(await run("whoami")).toMatchObject({
+      ok: true,
+      result: {
+        label: "claude in w1:p1",
+        verified: true,
+        connection_id: "studio",
+        terminal_id: "term_a",
+      },
+    });
+  });
+
+  test("a spoofed HERDR_PANE_ID from another pane is unverified", async () => {
+    const { run } = setup();
+    // The process runs in w1:p2 (shell 200) but claims w1:p1.
+    const reply = await run("whoami", {}, "w1:p1", inPane(200));
+    expect(reply).toMatchObject({
+      ok: true,
+      result: { label: "unverified w1:p1", verified: false },
+    });
+    // An unknown process, or a remote Herdr, cannot be checked either.
+    expect((await run("whoami", {}, "w1:p1", null)).actor?.verified).toBe(
+      false,
+    );
+    const remote = setup({ hosts: [host({ local: false })] });
+    expect((await remote.run("whoami")).actor?.verified).toBe(false);
+  });
+
+  test("a plain shell is the owner's terminal", async () => {
+    const { run } = setup();
+    expect((await run("whoami", {}, null, null)).actor).toEqual({
+      label: OWNER_TERMINAL,
+      verified: false,
+    });
+  });
+
+  test("`me` needs a verified pane; spawn claims too", async () => {
+    const { run } = setup();
+    const spoofed = await run(
+      "colour set",
+      { target: "me", colour: "teal" },
+      "w1:p1",
+      inPane(200),
+    );
+    expect(spoofed).toMatchObject({ ok: false, code: "refused" });
+    expect(
+      await run("spawned-by", { parent: "w1:p2" }, "w1:p1", inPane(200)),
+    ).toMatchObject({ ok: false, code: "refused" });
+    expect(calls.some((call) => call.method === "pane.report_metadata")).toBe(
+      false,
+    );
+  });
+});
+
+describe("Board and colour changes", () => {
+  test("colour set and reset write the tab's key, recorded and undoable", async () => {
+    const { board, ledger, published, run } = setup();
+    const set = await run("colour set", { target: "me", colour: "teal" });
+    expect(set.ok).toBe(true);
+    expect(board.get().layout.colors["studio:w1:t1"]).toBe("teal");
+    const change = ledger.get().changes[0]!;
+    expect(change).toMatchObject({
+      command: "colour set",
+      actor: { label: "claude in w1:p1", verified: true },
+      undo: [{ op: "card.color", key: "studio:w1:t1", color: null }],
+    });
+    expect(published.board).toBe(1);
+    await run("undo", { id: change.id });
+    expect(board.get().layout.colors["studio:w1:t1"]).toBeUndefined();
+    expect(ledger.get().changes[0]!.undone_by).toBe(
+      ledger.get().changes[1]!.id,
+    );
+    expect(await run("undo", { id: change.id })).toMatchObject({
+      ok: false,
+      code: "refused",
+    });
+    // A workspace has its own key; unknown colours are refused.
+    await run("colour set", { target: "workspace:w1", colour: "red" });
+    expect(board.get().layout.colors["studio:w1"]).toBe("red");
+    expect(
+      await run("colour set", { target: "tab:w1:t2", colour: "mauve" }),
+    ).toMatchObject({ ok: false, code: "usage" });
+  });
+
+  test("pin, move and unpin a card", async () => {
+    const { board, run } = setup();
+    await run("board card pin", { target: "tab:w1:t2", x: 10, y: 20 });
+    expect(board.get().layout.pinned["studio:w1:t2"]).toEqual({ x: 10, y: 20 });
+    await run("board card move", { target: "tab:w1:t2", x: 5, y: -5 });
+    expect(board.get().layout.pinned["studio:w1:t2"]).toEqual({ x: 15, y: 15 });
+    await run("board card unpin", { target: "tab:w1:t2" });
+    expect(board.get().layout.pinned["studio:w1:t2"]).toBeUndefined();
+    expect(
+      await run("board card unpin", { target: "tab:w1:t2" }),
+    ).toMatchObject({ ok: false, code: "refused" });
+    // An elastic card moves by its offset.
+    await run("board card move", { target: "tab:w1:t1", x: 30, y: 0 });
+    expect(board.get().layout.offsets["studio:w1:t1"]).toEqual({ x: 30, y: 0 });
+  });
+
+  test("group and ungroup by terminal, and undo a group", async () => {
+    const { board, ledger, run } = setup();
+    await run("board card group", { target: "me", with: "tab:w1:t2" });
+    expect(board.get().relations.groups[0]?.members).toEqual([
+      { connection_id: "studio", terminal_id: "term_b" },
+      { connection_id: "studio", terminal_id: "term_a" },
+    ]);
+    await run("undo", { id: ledger.get().changes[0]!.id });
+    expect(board.get().relations.groups).toEqual([]);
+    await run("board card group", { target: "me", with: "pane:w1:p2" });
+    await run("board card ungroup", { target: "me" });
+    expect(board.get().relations.groups).toEqual([]);
+    expect(await run("board card ungroup", { target: "me" })).toMatchObject({
+      ok: false,
+      code: "refused",
+    });
+  });
+
+  test("unknown targets, stale hosts and bad input are refused", async () => {
+    expect(
+      await setup().run("colour set", { target: "tab:w9:t9", colour: "red" }),
+    ).toMatchObject({ ok: false, code: "not_found" });
+    expect(
+      await setup({ stale: true }).run("colour set", {
+        target: "tab:w1:t1",
+        colour: "red",
+      }),
+    ).toMatchObject({ ok: false, code: "unavailable" });
+    expect(await setup().run("merge")).toMatchObject({
+      ok: false,
+      code: "usage",
+    });
+  });
+});
+
+describe("Herdr changes", () => {
+  test("a desk move needs --herdr, goes through tab.move and cannot be undone", async () => {
+    const { ledger, run } = setup();
+    expect(
+      await run("town desk move", { target: "tab:w1:t2", onto: "tab:w1:t1" }),
+    ).toMatchObject({ ok: false, code: "refused" });
+    expect(calls.some((call) => call.method === "tab.move")).toBe(false);
+    await run("town desk move", {
+      target: "tab:w1:t2",
+      onto: "tab:w1:t1",
+      herdr: true,
+    });
+    expect(calls.find((call) => call.method === "tab.move")?.params).toEqual({
+      tab_id: "w1:t2",
+      insert_index: 0,
+    });
+    const change = ledger.get().changes[0]!;
+    expect(change.undo).toBeNull();
+    expect(await run("undo", { id: change.id })).toMatchObject({
+      ok: false,
+      code: "refused",
+    });
+  });
+
+  test("spawned-by stamps the verified caller's pane", async () => {
+    const { run } = setup();
+    expect((await run("spawned-by", { parent: "w1:p2" })).ok).toBe(true);
+    expect(
+      calls.find((call) => call.method === "pane.report_metadata")?.params,
+    ).toMatchObject({
+      pane_id: "w1:p1",
+      tokens: { spawned_by: "w1:p2", spawned_by_terminal: "term_b" },
+    });
+  });
+});
+
+describe("questions and results", () => {
+  test("an ask waits for its answer; owner-only questions refuse agents", async () => {
+    const { ledger, run } = setup();
+    const ask = await run("ask", {
+      question: "Ship it?",
+      options: ["yes", "no"],
+      owner_only: true,
+    });
+    const id = (resultOf(ask) as { id: string }).id;
+    expect(await run("ask get", { id })).toMatchObject({
+      ok: true,
+      result: { question: "Ship it?", options: ["yes", "no"] },
+    });
+    expect(
+      await run("ask answer", { id, answer: "yes" }, "w1:p2", inPane(200)),
+    ).toMatchObject({ ok: false, code: "refused" });
+    const open = await run("ask", { question: "Which host?" });
+    const openId = (resultOf(open) as { id: string }).id;
+    expect(
+      await run(
+        "ask answer",
+        { id: openId, answer: "studio" },
+        "w1:p2",
+        inPane(200),
+      ),
+    ).toMatchObject({
+      ok: true,
+      result: { answer: { text: "studio", by: "codex in w1:p2" } },
+    });
+    expect(ledger.get().asks[0]!.answer).toBeUndefined();
+  });
+
+  test("results are kept with their task, status and PR", async () => {
+    const { run } = setup();
+    await run("result", {
+      task: "FM-1",
+      summary: "Fixed it",
+      pr: 12,
+      status: "done",
+    });
+    await run("result", { task: "FM-2", summary: "Stuck", status: "blocked" });
+    expect(
+      await run("result", { task: "FM-3", summary: "x", status: "maybe" }),
+    ).toMatchObject({ ok: false, code: "usage" });
+    expect(await run("result ls", { task: "FM-1" })).toMatchObject({
+      ok: true,
+      result: [
+        {
+          task: "FM-1",
+          summary: "Fixed it",
+          pr: 12,
+          status: "done",
+          actor: { label: "claude in w1:p1" },
+        },
+      ],
+    });
+  });
+
+  test("history filters by actor", async () => {
+    const { run } = setup();
+    await run("colour set", { target: "me", colour: "teal" });
+    await run("colour set", { target: "tab:w1:t2", colour: "red" }, null, null);
+    const mine = await run("history", { actor: "w1:p1" });
+    expect((resultOf(mine) as unknown[]).length).toBe(1);
+    const owner = await run("history", { actor: OWNER_TERMINAL });
+    expect(resultOf(owner)).toMatchObject([
+      { summary: "coloured studio:w1:t2 red" },
+    ]);
+  });
+});

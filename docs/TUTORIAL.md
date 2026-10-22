@@ -273,6 +273,17 @@ The phone Board close-up focuses one workspace, its tabs and a strung note.
 Their empty agent counts are intentional; the notes are sample planning text,
 not reports of completed agent work.
 
+### Let agents arrange World
+
+Agents can use World too. Tell an agent to run `herdr-world --skill`: it learns
+to colour and pin its card, group with the agent that started it, report a
+task result, or ask you a question (`herdr-world ask "Ship it?" --options
+yes,no --wait`). A question shows first in Town's **Needs you** list with the
+agent's name; pick an option or type an answer, and the waiting agent carries
+on. `herdr-world history` shows who changed what, and `herdr-world undo` takes
+back a World-side change. A change marked **unverified** came from a process
+World could not place in the pane it named.
+
 ### Use Desk: answer, review and follow work
 
 <a id="desk"></a>
