@@ -50,6 +50,8 @@ export type MoveOutcome =
       status: "moved";
       tab_id: string;
       workspace_id: string;
+      /** A desk move's source room, so the tab's colour can follow it. */
+      source_workspace_id?: string;
       panes: MovedPane[];
     }
   | { status: "refused"; reason: MoveRefusal; message: string }
@@ -310,6 +312,7 @@ export async function moveDesk(
     status: "moved",
     tab_id: targetTab!,
     workspace_id: request.workspace_id,
+    source_workspace_id: sourceWorkspace,
     panes: leaves.map((id) => ({ previous: id, current: current.get(id)! })),
   };
 }

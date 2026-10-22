@@ -238,6 +238,7 @@ import {
   worldInspectorWindowId,
   type WorldTerminalPresentation,
 } from "./world/worldTerminalPresentation";
+import { useWorldTabColors } from "./world/useTerminalColors";
 
 const WorkspaceInspectorHost = lazyWithReload("workspace-inspector", () =>
   import("./components/WorkspaceInspectorHost").then((module) => ({
@@ -2002,6 +2003,7 @@ export default function App({
       operations,
     ],
   );
+  const worldTabColors = useWorldTabColors();
   const toggleAnnotations = useCallback(() => {
     if (annotationsOpen && (!mobile || mobileView === "annotations")) {
       setAnnotationsOpen(false);
@@ -4834,6 +4836,7 @@ export default function App({
               onSelectTab={
                 operationalShortcutsEnabled ? onSelectSpacesTab : undefined
               }
+              tabColors={worldTabColors}
             />
           </OperationalContext.Provider>
           <div

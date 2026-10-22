@@ -40,6 +40,9 @@ import {
 } from "../store";
 import { WORLD_OBSERVABILITY_UPDATED_EVENT } from "../workspaceResource";
 import { TownCanvas } from "./town/TownCanvas";
+import { townDeskColorTarget } from "./town/townModel";
+import { resolveTerminal, type TerminalColor } from "./terminalColor";
+import { setTerminalColor, useTerminalColors } from "./useTerminalColors";
 import {
   sendTownReply,
   townChoices,
@@ -592,6 +595,7 @@ export default function TownView({
     const entry = agentByKey.get(agentKey);
     return entry ? `${entry.roomLabel} · ${entry.hostLabel}` : "";
   };
+  const terminalColors = useTerminalColors();
   const deviceByKey = useMemo(
     () => lazyIndex(office.paneRoster, (entry) => entry.device.key),
     [office.paneRoster],
@@ -1056,6 +1060,23 @@ export default function TownView({
     return () => window.removeEventListener("keydown", keydown);
   });
   const whereOf = whereOfAgent;
+  /** The peeked agent's desk colour: its terminal's, shared across World. */
+  const peekDeskColor = (agentKey: string) => {
+    const deskKey = office.paneRoster.find(
+      ({ device }) => device.agentKey === agentKey,
+    )?.device.deskKey;
+    const desk = deskKey ? deskForKey(deskKey) : null;
+    const target = desk ? townDeskColorTarget(office, desk) : null;
+    if (!target) return null;
+    const { color, own } = resolveTerminal(terminalColors, target);
+    return {
+      current: color,
+      // Only the tab's own colour can be reset; a workspace's is not its.
+      custom: own,
+      onColor: (color: TerminalColor | null) =>
+        void setTerminalColor(target, color),
+    };
+  };
   const townSelectedKey = peek?.key ?? selectedKey;
 
   if (!world.hosts.length) {
@@ -1182,6 +1203,7 @@ export default function TownView({
               reply(peekLeaf, peekAgent.displayLabel, text, submit)
             }
             inlineReply={!layoutPreferences.mobile}
+            deskColor={peekDeskColor(peekAgent.key)}
             onReviewed={() => {
               markCompletionSeen(peekAgent);
               toast("ok", `${peekAgent.displayLabel}'s work reviewed`);
@@ -1253,6 +1275,7 @@ export default function TownView({
           <TownCanvas
             trace={trace}
             projection={office}
+            terminalColors={terminalColors}
             selectedKey={townSelectedKey}
             completionSeenKeys={completionSeenKeys}
             conversationTargets={conversationTargets}

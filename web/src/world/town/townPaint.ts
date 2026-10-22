@@ -314,7 +314,8 @@ export type TownFurniture = {
   tableSmall: Record<string, TownCanvas>;
   chair: TownCanvas;
   chairBack: TownCanvas;
-  woodFor: (deskKey: string) => string;
+  /** The desk's terminal colour, which names its table. */
+  colorFor: (deskKey: string) => string;
 };
 
 export function paintTownInterior(
@@ -426,7 +427,7 @@ export function paintTownInterior(
           if (slot.top) g.drawImage(furniture.chair, X + slot.chairX, Y + 2);
         const table = (
           cell.seats <= 2 ? furniture.tableSmall : furniture.table
-        )[furniture.woodFor(cell.deskKey)];
+        )[furniture.colorFor(cell.deskKey)];
         if (table) g.drawImage(table, X + place.x, Y + 17);
         for (const slot of slots)
           if (!slot.top)

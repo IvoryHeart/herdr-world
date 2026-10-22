@@ -129,6 +129,7 @@ import {
   clientBoardOps,
   moveFollowOps,
   reconcileOps,
+  tabClosedColorOps,
   BoardConflictError,
   BoardStore,
   type BoardOp,
@@ -140,6 +141,7 @@ import {
 } from "./world/board-recipient";
 import { linkedNoteText, sendNote } from "./world/board-send";
 import { checkAnchor } from "./world/board-anchor";
+import { herdrEventName } from "./utils/herdr-events";
 import { startFromNote } from "./world/board-start";
 import {
   createOfficeObservabilityHttpHandler,
@@ -496,6 +498,59 @@ function board() {
 }
 
 /**
+ * A tab Herdr closed on the current runtime loses its saved colour, so colours
+ * of closed tabs do not accumulate. The tab's plain key could also be an older
+ * Herdr workspace's ID; it goes only once Herdr says no such workspace exists.
+ */
+/** The host's workspace IDs after a move, with both rooms of the move. */
+async function moveWorkspaceIds(
+  call: (method: string, params: Record<string, unknown>) => Promise<unknown>,
+  moved: { workspace_id: string; source_workspace_id?: string },
+) {
+  const ids = new Set([moved.workspace_id]);
+  if (moved.source_workspace_id) ids.add(moved.source_workspace_id);
+  try {
+    const listed = (await call("workspace.list", {})) as {
+      workspaces?: { workspace_id?: unknown }[];
+    };
+    for (const entry of listed?.workspaces ?? [])
+      if (typeof entry.workspace_id === "string") ids.add(entry.workspace_id);
+  } catch {
+    // The two rooms of the move are what a colliding tab key usually needs.
+  }
+  return ids;
+}
+
+async function dropClosedTabColor(
+  connectionId: string,
+  tabId: string,
+  call: (method: string, params: Record<string, unknown>) => Promise<unknown>,
+  isCurrent: () => boolean,
+) {
+  try {
+    const colors = board().get().layout.colors;
+    const plain = Boolean(colors[`${connectionId}:${tabId}`]);
+    if (!plain && !colors[`${connectionId}:tab:${tabId}`]) return;
+    const absent =
+      plain &&
+      (
+        await checkAnchor(call, {
+          kind: "workspace",
+          native_id: tabId,
+          isCurrent,
+        })
+      ).state === "absent";
+    if (!isCurrent()) return;
+    const ops = tabClosedColorOps(board().get(), connectionId, tabId, absent);
+    if (ops.length) publishBoardChanged(board().patch(ops).revision);
+  } catch (error) {
+    logger.warn("Board could not drop a closed tab's colour", {
+      detail: String(error),
+    });
+  }
+}
+
+/**
  * Record which agent each newly strung pane end is for: the agent the
  * browser showed, confirmed by reading the pane on its host's current
  * runtime (see recipientOps). Saving never waits for this; a string left
@@ -748,6 +803,17 @@ function runtimeFactoryForProfile(
         onEvent: (event, eventIdentity) => {
           if (!context.isCurrent()) return;
           publishWorldInvalidation(eventIdentity.id, context.generation);
+          const closedTab =
+            herdrEventName(event)?.replaceAll("_", ".") === "tab.closed"
+              ? (event as { data?: { tab_id?: unknown } }).data?.tab_id
+              : undefined;
+          if (typeof closedTab === "string" && closedTab)
+            void dropClosedTabColor(
+              eventIdentity.id,
+              closedTab,
+              (rpc, rpcParams) => runtime.herdr.call(rpc, rpcParams, 10_000),
+              context.isCurrent,
+            );
           logger.debug("Herdr event", {
             connection: eventIdentity.id,
             detail: summarizeHerdrEvent(event),
@@ -1484,8 +1550,12 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
     }
     try {
       const p = params ?? {};
-      const result = await queue(() =>
-        method === "town.move_desk"
+      // The colours as the move starts: a close of the old tab seen during
+      // the move must not lose the colour it carries over.
+      let colorsBefore = board().get().layout.colors;
+      const result = await queue(() => {
+        colorsBefore = board().get().layout.colors;
+        return method === "town.move_desk"
           ? moveDesk(call, {
               tab_id: String(p.tab_id ?? ""),
               workspace_id: String(p.workspace_id ?? ""),
@@ -1497,8 +1567,8 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
               tab_id: String(p.tab_id ?? ""),
               allow_close_room: p.allow_close_room === true,
               isCurrent: requestIsCurrent,
-            }),
-      );
+            });
+      });
       // Board's strings follow the move whichever view or client made it.
       if (
         (result.status === "moved" || result.status === "failed") &&
@@ -1514,6 +1584,12 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
                   route.connectionId,
                   method === "town.move_desk" ? String(p.tab_id ?? "") : null,
                   result,
+                  method === "town.move_desk"
+                    ? {
+                        before: colorsBefore,
+                        workspaceIds: await moveWorkspaceIds(call, result),
+                      }
+                    : undefined,
                 )
               : reconcileOps(
                   board().get(),

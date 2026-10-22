@@ -17,8 +17,13 @@ import {
   clientBoardOps,
   moveFollowOps,
   reconcileOps,
+  tabClosedColorOps,
   type BoardAnchor,
 } from "./board-store";
+import {
+  defaultTerminalColorFor,
+  resolveTerminalColor,
+} from "../../../shared/terminalColor";
 import { encodeRecipient, recipientOps, sessionOf } from "./board-recipient";
 
 let root: string;
@@ -476,6 +481,120 @@ describe("Board store", () => {
     });
     expect(single.map((op) => op.op === "string.put" && op.string.id)).toEqual([
       "c",
+    ]);
+  });
+
+  describe("a moved tab keeps the colour it showed", () => {
+    const ids = new Set(["w1", "w2", "w3"]);
+    const move = (
+      store: BoardStore,
+      tab: string,
+      to: { tab_id: string; from: string; workspace: string },
+    ) =>
+      moveFollowOps(
+        store.get(),
+        "alpha",
+        tab,
+        {
+          tab_id: to.tab_id,
+          workspace_id: to.workspace,
+          source_workspace_id: to.from,
+          panes: [],
+        },
+        { before: store.get().layout.colors, workspaceIds: ids },
+      );
+
+    test("a chosen colour moves to the new tab ID; other hosts are untouched", () => {
+      const store = new BoardStore(path);
+      store.patch([
+        { op: "card.color", key: "alpha:w1:t1", color: "teal" },
+        { op: "card.color", key: "beta:w1:t1", color: "red" },
+      ]);
+      store.patch(
+        move(store, "w1:t1", { tab_id: "w2:t4", from: "w1", workspace: "w2" }),
+      );
+      expect(store.get().layout.colors).toEqual({
+        "alpha:w2:t4": "teal",
+        "beta:w1:t1": "red",
+      });
+    });
+
+    const shown = (store: BoardStore, workspaceId: string, tabId: string) =>
+      resolveTerminalColor<string>(store.get().layout.colors, {
+        connectionId: "alpha",
+        workspaceId,
+        tabId,
+        workspaceIds: ids,
+      }).color;
+
+    test("a default colour is kept by saving it for the new tab", () => {
+      const store = new BoardStore(path);
+      const before = shown(store, "w1", "w1:t1");
+      store.patch(
+        move(store, "w1:t1", { tab_id: "w2:t4", from: "w1", workspace: "w2" }),
+      );
+      expect(shown(store, "w2", "w2:t4")).toBe(before);
+    });
+
+    test("an inherited workspace colour is kept; the workspace keeps its own", () => {
+      const store = new BoardStore(path);
+      store.patch([{ op: "card.color", key: "alpha:w2", color: "pink" }]);
+      store.patch(
+        move(store, "w2:t4", { tab_id: "w3:t1", from: "w2", workspace: "w3" }),
+      );
+      expect(shown(store, "w3", "w3:t1")).toBe("pink");
+      expect(store.get().layout.colors["alpha:w2"]).toBe("pink");
+    });
+
+    test("a tab's own colour stays its own when it matches the new room's", () => {
+      const store = new BoardStore(path);
+      store.patch([
+        { op: "card.color", key: "alpha:w1:t1", color: "red" },
+        { op: "card.color", key: "alpha:w2", color: "red" },
+      ]);
+      store.patch(
+        move(store, "w1:t1", { tab_id: "w2:t4", from: "w1", workspace: "w2" }),
+      );
+      expect(store.get().layout.colors).toEqual({
+        "alpha:w2": "red",
+        "alpha:w2:t4": "red",
+      });
+      // Recolouring the room later leaves the moved tab alone.
+      store.patch([{ op: "card.color", key: "alpha:w2", color: "blue" }]);
+      expect(shown(store, "w2", "w2:t4")).toBe("red");
+    });
+
+    test("a tab whose ID is a workspace's (older Herdr) uses the qualified key", () => {
+      const store = new BoardStore(path);
+      // A colour the new tab would not show by default, so it must be saved.
+      const own =
+        defaultTerminalColorFor("alpha:w2:t9") === "pink" ? "orange" : "pink";
+      store.patch([
+        { op: "card.color", key: "alpha:w1", color: "green" },
+        { op: "card.color", key: "alpha:tab:w1", color: own },
+      ]);
+      expect(
+        move(store, "w1", { tab_id: "w2:t9", from: "w1", workspace: "w2" }),
+      ).toEqual([
+        { op: "card.color", key: "alpha:w2:t9", color: own },
+        { op: "card.color", key: "alpha:tab:w1", color: null },
+      ]);
+    });
+  });
+
+  test("a closed tab's colour goes; a plain key only when no workspace holds it", () => {
+    const store = new BoardStore(path);
+    store.patch([
+      { op: "card.color", key: "alpha:w1:t1", color: "teal" },
+      { op: "card.color", key: "alpha:w2", color: "green" },
+      { op: "card.color", key: "alpha:tab:w2", color: "pink" },
+    ]);
+    expect(tabClosedColorOps(store.get(), "alpha", "w1:t1", true)).toEqual([
+      { op: "card.color", key: "alpha:w1:t1", color: null },
+    ]);
+    // Older Herdr: tab w2 closed while workspace w2 still exists.
+    expect(tabClosedColorOps(store.get(), "alpha", "w2", false)).toEqual([
+      { op: "card.color", key: "alpha:tab:w2", color: null },
     ]);
   });
 

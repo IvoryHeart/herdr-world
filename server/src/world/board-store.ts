@@ -3,6 +3,11 @@ import { join } from "node:path";
 import { dataRoot, replaceDataFile } from "../config/data-paths";
 import { worldEnv } from "../config/environment";
 import { RECIPIENT_MAX, type ObservedAgent } from "./board-recipient";
+import {
+  cardKey,
+  resolveTerminalColor,
+  tabCardKey,
+} from "../../../shared/terminalColor";
 
 /**
  * Board's saved state: layout, notes and strings. One document for the World
@@ -556,7 +561,8 @@ function applyOp(next: BoardDocument, op: BoardOp, current: BoardDocument) {
 /**
  * After a move in any view: anchors to a moved pane take its new ID (moved
  * panes keep their terminals, so witnesses stay), and anchors to a moved tab
- * take its new tab ID. Returns the string updates to save, if any.
+ * take its new tab ID; with `colors`, the tab keeps its colour. Returns the
+ * updates to save, if any.
  */
 export function moveFollowOps(
   document: BoardDocument,
@@ -564,8 +570,11 @@ export function moveFollowOps(
   movedTab: string | null,
   moved: {
     tab_id: string;
+    workspace_id?: string;
+    source_workspace_id?: string;
     panes: readonly { previous: string; current: string }[];
   },
+  colors?: MoveColors,
 ): BoardOp[] {
   const panes = new Map(
     moved.panes.map((pane) => [pane.previous, pane.current]),
@@ -587,7 +596,72 @@ export function moveFollowOps(
     if (from !== string.from || to !== string.to)
       ops.push({ op: "string.put", string: { ...string, from, to } });
   }
+  if (movedTab && colors)
+    ops.push(...colorFollowOps(connectionId, movedTab, moved, colors));
   return ops;
+}
+
+/**
+ * A moved tab keeps the colour it showed (shared/terminalColor.ts), chosen,
+ * inherited or default: its new tab ID would otherwise give it another
+ * default. It is saved as the moved tab's own colour. Read from
+ * `colors.before`, taken before the move, so a close of the old tab seen
+ * during the move cannot lose it.
+ */
+function colorFollowOps(
+  connectionId: string,
+  movedTab: string,
+  moved: {
+    tab_id: string;
+    workspace_id?: string;
+    source_workspace_id?: string;
+  },
+  colors: MoveColors,
+): BoardOp[] {
+  const { before, workspaceIds } = colors;
+  const { source_workspace_id: from, workspace_id: to } = moved;
+  if (!from || !to) return [];
+  const previousKey = tabCardKey(connectionId, movedTab, workspaceIds);
+  const nextKey = tabCardKey(connectionId, moved.tab_id, workspaceIds);
+  if (previousKey === nextKey) return [];
+  const { color } = resolveTerminalColor(before, {
+    connectionId,
+    workspaceId: from,
+    tabId: movedTab,
+    workspaceIds,
+  });
+  // Always as the tab's own colour: one that merely matched the new room's
+  // would otherwise be lost to it, and change when that room is recoloured.
+  const ops: BoardOp[] = [
+    { op: "card.color", key: nextKey, color: color as CardColor },
+  ];
+  if (before[previousKey])
+    ops.push({ op: "card.color", key: previousKey, color: null });
+  return ops;
+}
+
+/** The colours before a move, and the host's workspace IDs for tab keys. */
+export type MoveColors = {
+  before: Readonly<Record<string, CardColor>>;
+  workspaceIds: ReadonlySet<string>;
+};
+
+/**
+ * After Herdr closes a tab on the current runtime, its saved colour goes. The
+ * plain key is dropped only when no workspace holds that ID (older Herdr can
+ * reuse one), which the caller checks with Herdr as Board's detach does.
+ */
+export function tabClosedColorOps(
+  document: BoardDocument,
+  connectionId: string,
+  tabId: string,
+  workspaceAbsent: boolean,
+): BoardOp[] {
+  const keys = [cardKey(connectionId, `tab:${tabId}`)];
+  if (workspaceAbsent) keys.push(cardKey(connectionId, tabId));
+  return keys
+    .filter((key) => document.layout.colors[key])
+    .map((key) => ({ op: "card.color", key, color: null }));
 }
 
 /**

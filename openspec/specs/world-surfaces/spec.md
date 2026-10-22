@@ -1500,7 +1500,8 @@ non-actionable. Town SHALL be unaffected.
 
 A workspace card SHALL count its agents by status and its shells. The user MAY
 give any workspace or tab card a colour from a fixed palette, saved with the
-board; a tab without its own colour SHALL take its workspace's. A card's colour
+board; a tab card SHALL show its terminal colour (see Terminal colour), so a tab
+without its own colour takes its workspace's, then its default. A card's colour
 SHALL never stand for or hide a status: status keeps its own colours on the dot,
 ring, badge and overview squares. From an actionable workspace card the user MAY
 open a plain terminal tab or start an agent in a new tab without a note, and
@@ -1525,6 +1526,41 @@ from a live host's label MAY open World's New workspace dialog.
 
 - **WHEN** a host's topology is cached after a failure
 - **THEN** its zone and cards are shown as stale and offer no actions
+
+### Requirement: Terminal colour
+
+Every Herdr tab SHALL have one terminal colour from a fixed palette, shown as
+its tab in Spaces, its card in Board and, when Town draws a table for it, that
+table; a tab beyond a room's drawn tables keeps its colour in Spaces and Board.
+Without a choice of its own a tab SHALL take its workspace's Board colour, if
+any, or else a default derived only from its connection and Herdr tab ID, so it
+is the same on every device and after reloads. A colour chosen in any view
+SHALL be saved by the World service, keyed by connection and Herdr tab ID (as
+Board keys a tab card, qualified when the tab ID is also a workspace ID),
+SHALL appear in every view and on every device, and MAY be reset; reset is
+offered only for a tab's own colour, not one inherited from its workspace. The
+key carries no terminal witness, so after a Herdr restart a colour follows
+whichever tab holds that ID. A tab World moves to another workspace SHALL keep
+the colour it showed, whether chosen, inherited or default, saved as its own
+colour. When World observes
+Herdr close a tab on the connection's current runtime, it SHALL drop that tab's
+saved colour. Terminal colour SHALL never stand for or hide a status. World
+SHALL NOT write a colour to Herdr.
+
+#### Scenario: Colour a tab in Spaces
+
+- **WHEN** the user picks pink from a tab's menu in Spaces
+- **THEN** the tab's strip in Spaces, its table in Town and its card in Board show pink on every device
+
+#### Scenario: Reset a tab's colour
+
+- **WHEN** the user chooses Default colour for a tab with a chosen colour
+- **THEN** every view shows the tab's default colour again
+
+#### Scenario: Move a desk without a chosen colour
+
+- **WHEN** the user moves a desk whose tab shows its default colour to another room
+- **THEN** the tab, under its new Herdr tab ID, shows the same colour in every view
 
 ### Requirement: Board placement and movement
 

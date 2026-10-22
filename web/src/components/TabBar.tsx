@@ -38,6 +38,21 @@ const LONG_PRESS_MOVE_PX = 10;
 const REQUEST_CLOSE_TAB_EVENT = "herdr-world:request-close-tab";
 const REQUEST_CLOSE_PANE_EVENT = "herdr-world:request-close-pane";
 
+/**
+ * Optional tab colours, supplied by the host application. The strip shows each
+ * tab's colour and the tab menu offers a palette and a reset; where the colour
+ * is stored is the host's concern.
+ */
+export type TabColorControl = {
+  palette: readonly { id: string; hex: string }[];
+  colorOf(owner: TabColorOwner, tab: Tab): { id: string; custom: boolean };
+  onColor(owner: TabColorOwner, tab: Tab, id: string | null): void;
+};
+export type TabColorOwner = {
+  connectionId: string;
+  workspaceIds: readonly string[];
+};
+
 interface TabMenuState {
   tab: Tab;
   x: number;
@@ -90,6 +105,7 @@ export function TabBar({
   onFocusSurface,
   onSelectTab,
   arrangementControl,
+  tabColors,
 }: {
   mobile?: boolean;
   inspectorOpen?: boolean;
@@ -106,6 +122,7 @@ export function TabBar({
     paneId?: string;
   }) => void | Promise<unknown>;
   onSelectTab?: (tabId: string) => void;
+  tabColors?: TabColorControl;
 }) {
   const store = useOperationalStore();
   useShortcutPreferences();
@@ -260,6 +277,18 @@ export function TabBar({
 
   if (!focusedWs) return null;
 
+  const colorOwner: TabColorOwner = {
+    connectionId: s.activeConnectionId,
+    workspaceIds: s.workspaces.map((w) => w.workspace_id),
+  };
+  const colorOf = (tab: Tab) => {
+    if (!tabColors) return null;
+    const { id, custom } = tabColors.colorOf(colorOwner, tab);
+    const hex = tabColors.palette.find((entry) => entry.id === id)?.hex;
+    return hex ? { id, custom, hex } : null;
+  };
+  const menuColor = menu ? colorOf(menu.tab) : null;
+
   const overlays = (
     <>
       <TabContextMenu
@@ -274,6 +303,15 @@ export function TabBar({
           setTabPinned(s.activeConnectionId, tab.tab_id, pinned)
         }
         onCloseTab={(tab) => setPendingCloseTabId(tab.tab_id)}
+        color={
+          tabColors && menuColor
+            ? {
+                palette: tabColors.palette,
+                current: menuColor,
+                onColor: (tab, id) => tabColors.onColor(colorOwner, tab, id),
+              }
+            : null
+        }
         createReason={createReason}
         onCreateTab={() => {
           store.createTab(focusedWs.workspace_id);
@@ -351,6 +389,7 @@ export function TabBar({
               const agentSummary = summarizeTabAgents(s.panes, t.tab_id);
               const pinned = pinnedTabIds.has(t.tab_id);
               const reorderHandlers = reorder.handlers(t.tab_id);
+              const color = colorOf(t);
               return (
                 <div
                   key={t.tab_id}
@@ -365,6 +404,12 @@ export function TabBar({
                   className={`tabbar-tab ${t.focused ? "is-active" : ""} ${
                     pinned ? "is-pinned" : ""
                   }`}
+                  data-color={color?.id}
+                  style={
+                    color
+                      ? ({ "--tab-color": color.hex } as React.CSSProperties)
+                      : undefined
+                  }
                   onClick={() => {
                     void focusTab(t);
                   }}
@@ -564,6 +609,7 @@ function TabContextMenu({
   onTogglePin,
   onCloseTab,
   onCreateTab,
+  color,
   createReason,
 }: {
   state: TabMenuState | null;
@@ -574,6 +620,11 @@ function TabContextMenu({
   onTogglePin: (tab: Tab, pinned: boolean) => void;
   onCloseTab: (tab: Tab) => void;
   onCreateTab: () => void;
+  color: {
+    palette: TabColorControl["palette"];
+    current: { id: string; custom: boolean };
+    onColor: (tab: Tab, id: string | null) => void;
+  } | null;
   createReason: string | null;
 }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -627,7 +678,10 @@ function TabContextMenu({
     ),
     top: Math.max(
       menuMargin,
-      Math.min(state.y, window.innerHeight - items.length * 34 - menuMargin),
+      Math.min(
+        state.y,
+        window.innerHeight - items.length * 34 - (color ? 64 : 0) - menuMargin,
+      ),
     ),
     zIndex: 1000,
   };
@@ -648,6 +702,39 @@ function TabContextMenu({
           {item.label}
         </button>
       ))}
+      {color ? (
+        <div
+          className="context-menu-swatches"
+          role="group"
+          aria-label="Tab colour"
+        >
+          {color.palette.map((entry) => (
+            <button
+              key={entry.id}
+              type="button"
+              className="context-menu-swatch"
+              style={{ background: entry.hex }}
+              aria-label={`Colour ${entry.id}`}
+              aria-pressed={color.current.id === entry.id}
+              onClick={() => {
+                onClose();
+                color.onColor(state.tab, entry.id);
+              }}
+            />
+          ))}
+          <button
+            type="button"
+            className="context-menu-item"
+            disabled={!color.current.custom}
+            onClick={() => {
+              onClose();
+              color.onColor(state.tab, null);
+            }}
+          >
+            Default colour
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }

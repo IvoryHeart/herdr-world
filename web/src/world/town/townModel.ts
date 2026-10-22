@@ -6,6 +6,12 @@ import type {
   OfficePaneDevice,
   OfficeRoom,
 } from "../herdrOfficeProjection";
+import {
+  terminalColor,
+  type TerminalColor,
+  type TerminalColorTarget,
+  type TerminalColors,
+} from "../terminalColor";
 import type { TownInput } from "./townLayout";
 
 export type TownSeatRef = { deskKey: string; seat: number };
@@ -22,6 +28,8 @@ export type TownModel = {
   agents: ReadonlyMap<string, OfficeAgent>;
   agentSeats: ReadonlyMap<string, TownSeatRef>;
   roomCounts: ReadonlyMap<string, TownRoomCounts>;
+  /** Each desk's terminal colour (its Herdr tab's, see terminalColor.ts). */
+  deskColors: ReadonlyMap<string, TerminalColor>;
 };
 
 export type TownRoomCounts = {
@@ -36,8 +44,59 @@ export type TownRoomCounts = {
 
 export type TownAgentStatus = OfficeAgent["semanticStatus"];
 
+/** Each connection's workspace IDs, which qualify a colliding tab key. */
+function workspaceIdsOf(projection: HerdrOfficeProjection) {
+  const ids = new Map<string, Set<string>>();
+  for (const room of projection.rooms) {
+    const { connectionId, nativeId } = room.workspaceRef;
+    if (!ids.has(connectionId)) ids.set(connectionId, new Set());
+    ids.get(connectionId)!.add(nativeId);
+  }
+  return ids;
+}
+
+const deskTarget = (
+  room: OfficeRoom,
+  desk: OfficeDesk,
+  ids: ReadonlyMap<string, ReadonlySet<string>>,
+): TerminalColorTarget => ({
+  connectionId: desk.tabRef.connectionId,
+  workspaceId: room.workspaceRef.nativeId,
+  tabId: desk.tabRef.nativeId,
+  workspaceIds: ids.get(desk.tabRef.connectionId) ?? new Set(),
+});
+
+/** What a desk's colour is saved under: its Herdr tab on its connection. */
+export function townDeskColorTarget(
+  projection: HerdrOfficeProjection,
+  desk: OfficeDesk,
+): TerminalColorTarget | null {
+  const room = projection.rooms.find((entry) => entry.key === desk.roomKey);
+  return room ? deskTarget(room, desk, workspaceIdsOf(projection)) : null;
+}
+
+/**
+ * Each desk's terminal colour. Kept apart from the model's layout input, so a
+ * colour change repaints tables without placing the town again.
+ */
+export function townDeskColors(
+  projection: HerdrOfficeProjection,
+  colors: TerminalColors,
+): ReadonlyMap<string, TerminalColor> {
+  const ids = workspaceIdsOf(projection);
+  const deskColors = new Map<string, TerminalColor>();
+  for (const room of projection.rooms)
+    for (const desk of room.desks)
+      deskColors.set(
+        desk.key,
+        terminalColor(colors, deskTarget(room, desk, ids)),
+      );
+  return deskColors;
+}
+
 export function townModelFromProjection(
   projection: HerdrOfficeProjection,
+  colors: TerminalColors = {},
 ): TownModel {
   const hosts = new Map(projection.hosts.map((host) => [host.key, host]));
   const rooms = new Map<string, OfficeRoom>();
@@ -105,6 +164,7 @@ export function townModelFromProjection(
     agents,
     agentSeats,
     roomCounts,
+    deskColors: townDeskColors(projection, colors),
   };
 }
 

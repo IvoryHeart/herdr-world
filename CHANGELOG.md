@@ -9,6 +9,14 @@ are optional because the merged PR history records their source.
 
 ### Changed
 
+- Give every terminal one colour, shown as its tab in Spaces, its table in
+  Town and its card in Board. Tabs start with a stable default; a colour chosen
+  from the Spaces tab menu, a Town peek or Board is saved by the World service
+  for every device and can be reset. A tab moved to another room keeps the
+  colour it showed.
+  Town's table nameplates now sit on the table's front edge, and agents are
+  drawn larger.
+
 - Reject pending Ranger follow-ups after their chat changes and deduplicate
   concurrent queue retries after scope capture. Remote Codex History and session
   linking no longer require Python 3 on Unix SSH hosts.
