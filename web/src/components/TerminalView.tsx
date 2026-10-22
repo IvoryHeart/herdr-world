@@ -16,7 +16,10 @@ import {
   isNativeFileDrag,
   terminalUploadedPathsText,
 } from "../terminalFileDrop";
-import { uploadTerminalFile } from "../terminalImageUpload";
+import {
+  uploadTerminalFile,
+  type UploadProgress,
+} from "../terminalImageUpload";
 import { PaneDragHandle, PaneMoveMenu } from "./PaneMoveMenu";
 import { MobileTerminalIdentity } from "./MobileControls";
 import { useSystemBack } from "../systemBack";
@@ -3548,10 +3551,10 @@ export function TerminalView({
     const request = terminalComposerRequest(targetPaneId, text, submit);
     await connectionClient.call(request.method, request.params);
   };
-  const uploadComposerImage = (file: File) =>
-    uploadTerminalImage(connectionClient, file);
-  const uploadComposerFile = (file: File) =>
-    uploadTerminalFile(connectionClient, file);
+  const uploadComposerImage = (file: File, onProgress?: UploadProgress) =>
+    uploadTerminalImage(connectionClient, file, onProgress);
+  const uploadComposerFile = (file: File, onProgress?: UploadProgress) =>
+    uploadTerminalFile(connectionClient, file, onProgress);
   const notifyComposerError = (message: string) => {
     store.notify({
       kind: "error",

@@ -11,19 +11,84 @@ import { connectionHttpPath } from "./connectionHttp";
 export async function uploadTerminalImage(
   client: ConnectionClient,
   file: File,
+  onProgress?: UploadProgress,
 ): Promise<string> {
   const ext = (file.type.split("/")[1] || "png").toLowerCase();
-  return uploadTerminalPayload(client, file, "/upload-image", {
-    "x-image-ext": ext,
-    "content-type": file.type || "image/png",
-  });
+  return uploadTerminalPayload(
+    client,
+    file,
+    "/upload-image",
+    {
+      "x-image-ext": ext,
+      "content-type": file.type || "image/png",
+    },
+    onProgress,
+  );
 }
 
 export function uploadTerminalFile(
   client: ConnectionClient,
   file: File,
+  onProgress?: UploadProgress,
 ): Promise<string> {
-  return uploadTerminalPayload(client, file, "/terminal-upload");
+  return uploadTerminalPayload(
+    client,
+    file,
+    "/terminal-upload",
+    undefined,
+    onProgress,
+  );
+}
+
+/** Bytes of the request body sent so far, out of the file's size. */
+export type UploadProgress = (loaded: number, total: number) => void;
+
+/**
+ * fetch cannot report how much of a request body has been sent, so a caller
+ * that shows byte progress gets XMLHttpRequest, answered as a Response.
+ */
+function postWithProgress(
+  url: URL,
+  file: File,
+  headers: Record<string, string> | undefined,
+  onProgress: UploadProgress,
+): Promise<Response> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", url);
+    xhr.responseType = "blob";
+    for (const [name, value] of Object.entries(headers ?? {}))
+      xhr.setRequestHeader(name, value);
+    xhr.upload.onprogress = (event) =>
+      onProgress(
+        event.loaded,
+        event.lengthComputable ? event.total : file.size,
+      );
+    xhr.onload = () => {
+      const replyHeaders = new Headers();
+      for (const line of xhr
+        .getAllResponseHeaders()
+        .trim()
+        .split(/[\r\n]+/)) {
+        const at = line.indexOf(":");
+        if (at > 0)
+          replyHeaders.append(
+            line.slice(0, at).trim(),
+            line.slice(at + 1).trim(),
+          );
+      }
+      resolve(
+        new Response(xhr.response as Blob | null, {
+          status: xhr.status,
+          statusText: xhr.statusText,
+          headers: replyHeaders,
+        }),
+      );
+    };
+    xhr.onerror = () => reject(new TypeError("Upload failed: network error"));
+    xhr.onabort = () => reject(new TypeError("Upload cancelled"));
+    xhr.send(file);
+  });
 }
 
 async function uploadTerminalPayload(
@@ -31,6 +96,7 @@ async function uploadTerminalPayload(
   file: File,
   endpoint: "/upload-image" | "/terminal-upload",
   headers?: Record<string, string>,
+  onProgress?: UploadProgress,
 ): Promise<string> {
   if (!client.isCurrent()) throw new Error("connection changed during upload");
   const uploadUrl = new URL(
@@ -47,11 +113,13 @@ async function uploadTerminalPayload(
   if (uploadUrl.origin !== window.location.origin) {
     throw new Error("invalid upload origin");
   }
-  const res = await fetch(uploadUrl, {
-    method: "POST",
-    headers,
-    body: file,
-  });
+  const res = onProgress
+    ? await postWithProgress(uploadUrl, file, headers, onProgress)
+    : await fetch(uploadUrl, {
+        method: "POST",
+        headers,
+        body: file,
+      });
   if (!res.ok) {
     const body = (await res.text()).trim();
     if (!client.isCurrent()) {

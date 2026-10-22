@@ -17,13 +17,24 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   - Blocked agents queue at reception oldest first. Finished agents wait there
     until you open their terminal or mark that completion reviewed, then join
     idle agents in the lounge. Movement only represents state.
-  - Hover or tap an agent for a peek: recent session messages (screen text when
-    history is unavailable), a question when recognized, supported answer buttons,
-    a reply line and file attachments. Answers send the offered key to that pane;
-    reply **Send** submits text. On phones, the reply line opens World's Composer
-    inside the peek, with keys, attachments, Insert and Send.
-  - **Inspector** opens files, changes and history; **Terminal** opens the live
-    pane. **Next** cycles other waiting agents, then finished agents if none wait.
+  - Hover an agent, or tap it or its table, for a peek: the agent's latest
+    message from Chat's conversation read model, rendered as Chat renders it
+    (never terminal text; an unavailable conversation shows Chat's reason), a
+    question when recognized, supported answer buttons, a reply line and file
+    attachments. Answers send the offered key to that pane; reply **Send**
+    submits text. On phones, the reply line opens World's Composer inside the
+    peek, with keys, attachments, Insert and Send.
+  - The peek refreshes when the agent's conversation changes, as Chat does,
+    without polling.
+  - Tapping an agent or its table brings the agent back: from reception or the
+    lounge it walks to its desk and stays there until its status changes. A
+    table stands for an agent that needs you (waiting, then finished) before
+    the one seated there. **Menu → Town opens** chooses whether that tap opens
+    the chat (the default) or the terminal; either way the tap does not mark
+    finished work reviewed. **Open terminal** in the peek does, as before.
+  - **Open terminal** in the peek's header opens the live pane; **Inspector**
+    opens files, changes and history. **Next** cycles other waiting agents, then
+    finished agents if none wait.
     The needs-you list becomes a bottom tray on phones and hides when no agent
     is blocked. Review marks acknowledge a specific completion in this browser,
     without certifying its correctness.
@@ -270,6 +281,12 @@ commit a search selection. Press K in the recent switcher to convert it to searc
   the selection before scrolling further. Pixel mouse is unsupported.
 - Paste clipboard images to upload to the Herdr host and insert their paths,
   including through `--ssh-host`.
+- Every composer that attaches files (the phone Composer, Spaces, the Town peek
+  and Inspector Chat) shows a chip per file: uploading with byte progress, then
+  done or failed. A failed file can be retried, by **Retry** or by picking it
+  again, or removed. Send waits until uploads finish, and picking a file again
+  while it uploads does not upload it twice. A path that finishes after its
+  composer closed joins the draft when that composer opens again.
 - Drag a file or directory path from the File Explorer into a terminal to
   insert its quoted host path. Terminal font size is adjustable independently
   of interface scale in **Menu → Appearance**.
@@ -333,6 +350,8 @@ See [resource ownership](docs/ARCHITECTURE.md#workspace-resource-ownership).
   terminal, and hides context the harness injects as user turns. It sends with
   Herdr's agent prompt only to a session Herdr ties to the pane (a reported
   session or a Codex title thread), not to one World guessed from the folder.
+  The paperclip attaches files, which upload to the pane's host and add their
+  paths to the message.
   A sent message shows as not yet seen until its session's transcript has
   the same words, and then as matched by its words, never as delivered.
   When there is evidence it went to another session, a red notice names both

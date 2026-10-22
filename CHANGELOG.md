@@ -26,6 +26,19 @@ are optional because the merged PR history records their source.
   its legs. Every confirmed move, in a room or to another room, lands with a
   bounce and a puff of dust; a refused move shakes and springs back. Calm and
   reduced motion keep the carry under the pointer and end with a short fade.
+- Show attachment uploads in every composer that attaches files: the phone
+  Composer, Spaces, the Town peek and Inspector Chat (which can now attach).
+  Each file has a chip with byte progress, then done or failed with Retry and
+  Remove; Send waits for uploads, a file picked again while it uploads is not
+  uploaded twice, picking a failed file again retries it, and a path that
+  finishes after its composer closed joins the draft when it opens again.
+- The Town peek shows the agent's latest message from Chat's conversation read
+  model, rendered as Chat renders it, instead of terminal text, and has **Open
+  terminal** in its header, and refreshes when the conversation changes rather
+  than polling. Tapping an agent's table opens its peek too, and opening an
+  agent brings it back to its desk until its status changes. **Menu → Town
+  opens** chooses Chat (the default) or Terminal for these taps; neither marks
+  finished work reviewed.
 - Town tables follow Herdr's tab order, so moving a tab in Spaces or Herdr
   moves its table. Drag a table onto another in its room (or press **M**) to
   reorder it: Town sends Herdr's `tab.move` the way Spaces does and shows the
