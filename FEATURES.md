@@ -90,6 +90,12 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     strings whose target closed wait in Needs a home. Selecting a card opens
     the shared Inspector. Development builds add an event trace for bug reports
     ([development tools](docs/development.md#development-tools)).
+  - **Work** (the pull request button in Board's controls) lays your pull
+    requests out as columns: In review, Fixing (changes requested, checks
+    failing or conflicts), Green, Ready to merge and Merged; the Tickets tab
+    groups Jira tickets and assigned GitHub issues by status. Each card links
+    to the pull request or ticket and names the agents working on it; tap an
+    agent to jump to its card. See [Sources](#sources-github-and-jira).
   See the [Board exercise](./docs/TUTORIAL.md#board).
 
 - **Desk** organizes the filtered hosts' agents by what
@@ -162,6 +168,29 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   or assign tasks to an agent.
 - World runs as one application and one browser origin. No remote World/Roamgate
   service or browser bridge URL is required for an SSH host.
+
+### Sources: GitHub and Jira
+
+World reads your pull requests and tickets itself; there is nothing else to
+install, and every source is on by default. Open **Settings → Sources** to see
+each source's state, switch it off or configure it.
+
+- **GitHub** uses the GitHub CLI signed in as the user that runs World (`gh
+  auth login`): open pull requests you opened, were asked to review or are
+  assigned, the last week's merged ones and issues assigned to you, each with
+  review state, checks and mergeability. World stores no GitHub credentials.
+- **Jira Cloud** needs a site, your account email and an API token. The token
+  stays in World's private storage on the service and is never shown again.
+  The filter (JQL) defaults to tickets assigned to you or that you watch.
+- An agent is linked to the pull request whose branch its checkout is on (in
+  a GitHub remote of that checkout), to a pull request it reported with
+  `herdr-world agent-checkout --pr`, and to a ticket whose key its branch names
+  (for example `abc-12-fix-login` and `ABC-12`). Its Town desk shows the badge
+  on its nameplate (`#123 ✓`, `#123 ✗`, `#123 ●` or `ABC-12`), and Board's Work
+  lens names it on the card.
+- A source that is not signed in or configured says how to connect it; the
+  views work without it. The service refreshes at most once a minute while a
+  browser shows sources, and the browser never contacts GitHub or Jira.
 
 ### Retired views and runtime boundaries
 

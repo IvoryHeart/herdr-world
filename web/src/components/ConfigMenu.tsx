@@ -11,6 +11,7 @@ import {
   ExternalLink,
   Focus,
   Activity,
+  GitPullRequest,
   Keyboard,
   LogOut,
   Palette,
@@ -66,6 +67,7 @@ type ConfigMenuProps = ConfigurationProps & {
   zenMode: boolean;
   onZenModeChange: (zenMode: boolean) => void;
   onOpenOfficeMetrics?: () => void;
+  onOpenSources?: () => void;
   onShowShortcuts: () => void;
 };
 
@@ -73,6 +75,7 @@ export function ConfigMenu({
   zenMode,
   onZenModeChange,
   onOpenOfficeMetrics,
+  onOpenSources,
   onShowShortcuts,
   ...configuration
 }: ConfigMenuProps) {
@@ -379,6 +382,18 @@ export function ConfigMenu({
                       <span />
                     </button>
                   </div>
+                ) : null}
+                {onOpenSources ? (
+                  <ConfigMenuItem
+                    icon={<GitPullRequest size={15} />}
+                    label="Sources"
+                    className="config-menu-item-row"
+                    description="GitHub pull requests and Jira tickets beside your agents"
+                    onClick={() => {
+                      setOpen(false);
+                      onOpenSources();
+                    }}
+                  />
                 ) : null}
                 {onOpenOfficeMetrics ? (
                   <ConfigMenuItem

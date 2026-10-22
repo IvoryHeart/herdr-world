@@ -233,6 +233,16 @@ on your phone and desktop.
    asks first, with **Don't ask again**, and always asks before moving a
    workspace's last tab, which closes that workspace. Strings follow the move.
 
+9. Press the pull request button in Board's controls to open **Work**: your
+   GitHub pull requests in columns from **In review** through **Fixing**,
+   **Green** and **Ready to merge** to **Merged**, and on the **Tickets** tab
+   your Jira tickets and assigned issues by status. A card names the agents
+   working on it; tap one to close Work and jump to its card. The same pull
+   request appears as a badge on the agent's desk in Town, such as `#42 ✓`.
+   If a column says no source is connected, open **Settings → Sources**: sign
+   in to GitHub with `gh auth login` as the user that runs World, or add your
+   Jira site, account email and an API token there.
+
 After Herdr restarts, Board cannot prove that a workspace or agent is the one a
 string was made with, so it draws those strings dashed and asks once per host:
 **Keep** or **Detach**. A string whose target closed waits in **Needs a home**

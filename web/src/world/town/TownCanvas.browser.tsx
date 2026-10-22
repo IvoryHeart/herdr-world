@@ -12,6 +12,7 @@ import "../../components/MobileControls.css";
 import { requestTrace } from "../devtools/trace";
 import { initializeLayoutPreferences } from "../../layoutPreferences";
 import { bridge, type ConnectionClient } from "../../api";
+import { worldSourcesStore } from "../worldSources";
 import "../world.css";
 
 /*
@@ -438,6 +439,38 @@ async function run() {
       />
     );
   }
+  // Every agent works on one synthetic pull request, so desks show badges.
+  const agents = worldFor(base.connections).leaves.filter(
+    (leaf) => leaf.kind === "agent",
+  );
+  worldSourcesStore.useFetch(async () =>
+    Response.json({
+      observedAt: 1,
+      sources: [],
+      items: [
+        {
+          key: "github:pr:example-org/atlas#7",
+          source: "github",
+          kind: "pull_request",
+          ref: "example-org/atlas#7",
+          title: "Synthetic change",
+          url: "https://github.com/example-org/atlas/pull/7",
+          lane: "green",
+          status: "open",
+          roles: ["author"],
+          updatedAt: 1,
+          number: 7,
+          checks: "pass",
+        },
+      ],
+      links: agents.map((leaf) => ({
+        connectionId: leaf.connectionId,
+        paneId: leaf.nativeId,
+        itemKey: "github:pr:example-org/atlas#7",
+        via: "branch",
+      })),
+    }),
+  );
   const root = createRoot(host);
   root.render(
     <StrictMode>
@@ -870,6 +903,18 @@ async function run() {
     "zoomed room stayed at overview",
   );
   check(selected.length === 0, "a room tap must not open an Inspector");
+  await waitFor(
+    () => host.querySelector(".town-desk-badge") !== null,
+    "desks of agents with a pull request show its badge",
+  );
+  const badge = host.querySelector<HTMLAnchorElement>(".town-desk-badge")!;
+  check(
+    badge.textContent === "#7 ✓" &&
+      badge.dataset.tone === "pass" &&
+      badge.target === "_blank" &&
+      badge.rel.includes("noopener"),
+    `a desk badge links its pull request (${badge.textContent})`,
+  );
 
   // From the keyboard, M on a desk lists the host's other rooms; choosing one
   // asks the service to move that desk there.
