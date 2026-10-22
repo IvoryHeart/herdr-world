@@ -178,10 +178,22 @@ film from `.pages-dist/`, not from `site/`. Changes to Town's art reach the film
 next site build, and the Pages workflow redeploys when Town's art changes.
 `scripts/pages-film.test.ts` renders every frame in headless Chrome, with and without
 reduced motion, so a Town change that breaks the film fails the gate.
-`film/?t=<seconds>` opens the film at a frame and `?render` drops the page chrome for
-1920×1080 captures; regenerate the social-card poster
-`site/assets/herdr-world-film-poster.jpg` (1280×720, JPEG quality about 60) from a
-rendered frame when the film changes.
+`/film/` plays a video recorded from the live film; `?live` draws it in the browser,
+and the page falls back to drawing it live when the video is missing (a plain
+`build:site`). `bun run film:render` records the video after `bun run build:site`: it
+plays the film frame by frame in headless Chrome, renders the score offline and
+encodes `film/media/herdr-world-film.webm` (VP9/Opus, 1080p), `.mp4` (H.264/AAC, 720p)
+and `.vtt` captions with ffmpeg, about 7 MiB in all. The video is a generated output,
+so it is never committed: the Pages workflow renders it on every deploy. Use
+`--keep <dir>` to reuse a capture while tuning encoder settings, and `--update-poster`
+to regenerate `site/assets/herdr-world-film-poster.jpg`, the video poster and social
+card. `film/?t=<seconds>` opens the live film at a frame, and `?render` drops the page
+chrome for 1920×1080 captures.
+
+`YOUTUBE_ID` in `site/film/index.html` is empty. If the owner uploads the film, setting
+it replaces the video with a click-to-load YouTube facade: no request reaches
+`youtube-nocookie.com` until the viewer clicks, and the page's Content Security Policy
+allows only that frame origin.
 
 Serve `.pages-dist/` locally and check the homepage and `/tutorial/`, narrow screens, keyboard
 navigation, and JavaScript-disabled reading. Production canonical URLs, social

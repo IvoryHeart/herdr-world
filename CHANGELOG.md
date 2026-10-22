@@ -29,6 +29,10 @@ are optional because the merged PR history records their source.
   text version and spoken captions, and with reduced motion cuts instead of moving
   the camera. Full screen turns a phone to landscape where it can, and fills the
   window on iPhone. New poster image.
+- The film page now plays a video recorded from the live film (WebM VP9 with an
+  MP4 fallback and WebVTT captions, about 7 MiB, never autoplaying), so phones no
+  longer wait for the canvas to draw. "Watch it drawn live" keeps the interactive
+  film. `bun run film:render` records it, and the Pages deploy renders it.
 
 - Give every terminal one colour, shown as its tab in Spaces, its table in
   Town and its card in Board. Tabs start with a stable default; a colour chosen

@@ -17,6 +17,8 @@
 <meta name="twitter:image" content="https://herdr.world/assets/herdr-world-film-poster.jpg">
 <link rel="canonical" href="https://herdr.world/film/">
 <link rel="icon" href="../favicon.ico" sizes="32x32">
+<!-- YouTube is framed only after a click on the facade (youtube-nocookie.com). -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self'; font-src 'self'; connect-src 'self'; frame-src https://www.youtube-nocookie.com; base-uri 'none'; form-action 'none'; object-src 'none'">
 <style>
   @font-face { font-family: "Big Shoulders Display"; font-weight: 800 900; font-display: swap; src: url("./fonts/big-shoulders-display.woff2") format("woff2"); }
   @font-face { font-family: "JetBrains Mono"; font-weight: 400 700; font-display: swap; src: url("./fonts/jetbrains-mono.woff2") format("woff2"); }
@@ -89,6 +91,20 @@
   .transcript summary:focus-visible { outline: 2px solid var(--herd-bright); outline-offset: 2px; }
   .transcript ol { padding-left: 2.2em; display: grid; gap: 8px; }
   .transcript b { color: var(--text); }
+  .stage video, .stage iframe { display: block; width: 100%; height: 100%; object-fit: contain; background: #000; border: 0; }
+  body:not(.live) #film, body:not(.live) .big-play, body:not(.live) .bar, body:not(.live) .rotate-hint { display: none !important; }
+  body.live .stage video, body.live .yt { display: none; }
+  .modes { margin: 0; font-size: 13px; color: var(--muted); }
+  .modes a { color: var(--herd-bright); }
+  body.embed .modes { display: none; }
+  .yt {
+    position: absolute; inset: 0; display: grid; place-items: center; align-content: center; gap: 14px;
+    border: 0; cursor: pointer; color: var(--text); font: 700 15px/1.3 "JetBrains Mono", monospace;
+    background: #000 url("../assets/herdr-world-film-poster.jpg") center / contain no-repeat;
+  }
+  .yt[hidden] { display: none; }
+  .yt span { background: rgba(8,11,18,.88); padding: 10px 16px; border-radius: 10px; max-width: 90%; }
+  .yt:focus-visible { outline: 3px solid var(--herd-bright); outline-offset: -3px; }
   .sr-only {
     position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
     overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
@@ -143,6 +159,8 @@
 <div class="wrap">
   <div class="eyebrow"><a href="../">← Herdr.World</a><span>Promoted to CEO · 62 s · sound on</span></div>
   <div class="stage">
+    <video id="video" controls playsinline preload="metadata" poster="../assets/herdr-world-film-poster.jpg" aria-label="Promoted to CEO, a 62-second film about Herdr.World" aria-describedby="film-summary"></video>
+    <button class="yt" id="yt" type="button" hidden><span>▶ Play on YouTube<br><small>Loads youtube-nocookie.com only when you click</small></span></button>
     <canvas id="film" width="1920" height="1080" role="img" aria-label="Animated film: Promoted to CEO, about Herdr.World. A text version follows the player." aria-describedby="film-summary"></canvas>
     <p class="rotate-hint" aria-hidden="true">Turn your phone sideways for a bigger picture</p>
     <button class="big-play" id="bigplay" type="button" aria-label="Play the film">
@@ -158,6 +176,7 @@
     <button id="mute" type="button" aria-pressed="false">Sound on</button>
     <button id="fullscreen" type="button" aria-pressed="false">Full screen</button>
   </div>
+  <p class="modes"><a id="mode-link" href="?live">Watch it drawn live in your browser</a></p>
   <p id="captions" class="sr-only" aria-live="polite"></p>
   <details class="transcript">
     <summary>Read the film as text</summary>
@@ -174,8 +193,8 @@
       <li><b>0:53 — Finale.</b> The whole herd walks across the screen. “Stop babysitting. Start herding.” Install with <code>npx @ivoryheart/herdr-world</code> from https://herdr.world.</li>
     </ol>
   </details>
-  <p class="note">Everything here is drawn and scored live in your browser: canvas pixels and Web Audio, no video file.
-    The Town is painted by Herdr.World’s own Town code, so its rooms, desks and people are the app’s. Respects reduced motion: when your system asks for less motion, camera moves become cuts and shake, flashes and slides are off.
+  <p class="note">The video is recorded from the live film, which is drawn and scored in your browser with canvas pixels and Web Audio.
+    The Town is painted by Herdr.World’s own Town code, so its rooms, desks and people are the app’s. Nothing plays until you press play. Drawn live, it respects reduced motion: when your system asks for less motion, camera moves become cuts and shake, flashes and slides are off.
     Get Herdr.World at <a href="../#install">https://herdr.world</a>.
     Fonts: Big Shoulders, JetBrains Mono and Silkscreen (<a href="./fonts/OFL.txt">SIL Open Font License 1.1</a>).</p>
 </div>
@@ -204,6 +223,8 @@ if (RENDER) document.body.classList.add('render');
 const EMBED = PARAMS.has('embed');
 if (EMBED) document.body.classList.add('embed');
 const START = PARAMS.has('t') ? clamp(Number(PARAMS.get('t')) || 0, 0, DUR - .05) : null;
+// The page plays the rendered video; ?live draws the film in the browser.
+const LIVE = PARAMS.has('live') || RENDER || START !== null;
 // Less motion: no camera shake, flashes, shock rings or typing chatter.
 const REDUCED = !RENDER && matchMedia('(prefers-reduced-motion: reduce)').matches;
 const shake = (t, amp) => REDUCED ? [0, 0] : [(hash(Math.floor(t * 30)) - .5) * 2 * amp, (hash(Math.floor(t * 30) + 99) - .5) * 2 * amp];
@@ -1366,14 +1387,19 @@ function loop() {
 }
 function seek(t) { cur = clamp(t, 0, DUR - .05); frame(cur); if (playing) { offset = cur; t0perf = performance.now(); if (!muted) startAudio(cur); } ui(); }
 
-const ready = Promise.all([
-  logo.decode().catch(() => {}),
-  document.fonts.load('900 80px "Big Shoulders Display"'), document.fonts.load('700 20px "Silkscreen"'),
-  document.fonts.load('400 20px "Silkscreen"'), document.fonts.load('700 20px "JetBrains Mono"'), document.fonts.load('400 20px "JetBrains Mono"')
-].map(p => Promise.resolve(p).catch(() => {}))).then(() => document.fonts.ready).then(buildTown);
-
-ready.then(() => { frame(START ?? (EMBED ? 18.9 : cur)); ui(); });
-if (!RENDER) {
+let ready = null;
+function startLive() {
+  if (ready) return ready;
+  document.body.classList.add('live');
+  $('video').removeAttribute('src'); $('video').replaceChildren(); $('video').load();
+  $('mode-link').href = './'; $('mode-link').textContent = 'Watch the video';
+  ready = Promise.all([
+    logo.decode().catch(() => {}),
+    document.fonts.load('900 80px "Big Shoulders Display"'), document.fonts.load('700 20px "Silkscreen"'),
+    document.fonts.load('400 20px "Silkscreen"'), document.fonts.load('700 20px "JetBrains Mono"'), document.fonts.load('400 20px "JetBrains Mono"')
+  ].map(p => Promise.resolve(p).catch(() => {}))).then(() => document.fonts.ready).then(buildTown);
+  ready.then(() => { frame(START ?? (EMBED ? 18.9 : cur)); ui(); });
+  if (RENDER) return ready;
   $('bigplay').addEventListener('click', play);
   cv.addEventListener('click', () => { if (playing) pause(); });
   if (EMBED) {
@@ -1398,10 +1424,39 @@ if (!RENDER) {
   document.addEventListener('fullscreenchange', ui);
   document.addEventListener('keydown', e => { if (e.code === 'Space' && e.target.tagName !== 'BUTTON' && e.target.tagName !== 'INPUT' && e.target.tagName !== 'SUMMARY') { e.preventDefault(); playing ? pause() : play(); } });
   document.addEventListener('visibilitychange', () => { if (document.hidden && playing) pause(); });
+  return ready;
 }
+// The owner's YouTube upload, if any: a click-to-load facade, no request before.
+const YOUTUBE_ID = '';
+function startVideo() {
+  const video = $('video');
+  if (YOUTUBE_ID) {
+    video.hidden = true; $('yt').hidden = false;
+    $('yt').addEventListener('click', () => {
+      const frame = document.createElement('iframe');
+      frame.src = `https://www.youtube-nocookie.com/embed/${encodeURIComponent(YOUTUBE_ID)}?autoplay=1&rel=0`;
+      frame.title = 'Promoted to CEO, a Herdr.World film, on YouTube';
+      frame.allow = 'autoplay; encrypted-media; picture-in-picture; fullscreen';
+      frame.allowFullscreen = true;
+      $('yt').replaceWith(frame);
+    }, { once: true });
+    return;
+  }
+  // Rendered by `bun run film:render`; without it (a plain site build) the
+  // film falls back to drawing itself live.
+  const media = [['webm', 'video/webm; codecs="vp9, opus"'], ['mp4', 'video/mp4; codecs="avc1.64001f, mp4a.40.2"']];
+  const sources = media.map(([ext, type]) => Object.assign(document.createElement('source'), { src: `./media/herdr-world-film.${ext}`, type }));
+  const track = Object.assign(document.createElement('track'), { kind: 'captions', srclang: 'en', label: 'English', src: './media/herdr-world-film.vtt' });
+  sources[sources.length - 1].addEventListener('error', startLive);
+  video.addEventListener('error', startLive);
+  video.append(...sources, track);
+  video.load();
+}
+if (LIVE) startLive(); else startVideo();
 
 window.FILM = {
-  ready, DUR,
+  get ready() { return startLive(); },
+  DUR, captions: CC,
   renderFrame: t => { frame(t); return true; },
   fontsOk: () => ['900 80px "Big Shoulders Display"', '700 20px "Silkscreen"', '400 20px "JetBrains Mono"'].map(f => document.fonts.check(f)),
   async renderWav() {

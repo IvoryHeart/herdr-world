@@ -38,7 +38,7 @@ frame.onload = async () => {
 
 for (const [query, motion] of [
   ["render", "full motion"],
-  ["embed", "reduced motion"],
+  ["embed&live", "reduced motion"],
 ] as const) {
   test.skipIf(!chrome)(
     `the website film renders every frame with Town's art (?${query}, ${motion})`,

@@ -71,5 +71,7 @@ same code: `site/film/town-art.ts` re-exports `townLayout.ts`, `townPaint.ts`,
 them into `film/town-art.js`. The film's other pictures (terminals, Board cards,
 Chat and the phone) are canvas drawing in `site/film/index.html`, and the Herdr
 logo is the project's own. The film therefore carries no third-party art; its
-fonts are listed in [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md).
+fonts are listed in [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md). The film's
+video (`bun run film:render`) is recorded from this same canvas and score, so it adds
+no other assets.
 
