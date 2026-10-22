@@ -157,20 +157,38 @@ test("a closed tab leaves no gap: later desks close up in order", () => {
   );
 });
 
-test("growing a capacity step keeps every desk's grid coordinate", () => {
+test("desk slots follow Herdr's tab order, so a reorder moves desks", () => {
+  const first = layoutTown(town({ a: [6] }), "wide");
+  const input = town({ a: [6] });
+  const keys = [...input.rooms[0]!.deskKeys];
+  // Herdr moved the last tab to the front.
+  const reordered = [keys[5]!, ...keys.slice(0, 5)];
+  const second = layoutTown(
+    { ...input, rooms: [{ ...input.rooms[0]!, deskKeys: reordered }] },
+    "wide",
+    first.memory,
+  );
+  const room = second.layout.buildings[0]!.rooms[0]!;
+  expect(
+    room.cells.filter((cell) => cell.deskKey).map((cell) => cell.deskKey),
+  ).toEqual(reordered);
+  const was = cellOf(first.layout, keys[0]!)!;
+  const now = cellOf(second.layout, keys[5]!)!;
+  expect([now.col, now.row]).toEqual([was.col, was.row]);
+});
+
+test("at every capacity step, slot i is the i-th desk in reading order", () => {
   let result = layoutTown(town({ a: [1] }), "wide");
   for (let count = 2; count <= TOWN_MAX_RENDERED_DESKS; count += 1) {
-    const previous = new Map(
-      desks("a/room-0", count - 1).map((key) => {
-        const cell = cellOf(result.layout, key)!;
-        return [key, [cell.col, cell.row]];
-      }),
-    );
     result = layoutTown(town({ a: [count] }), "wide", result.memory);
-    for (const [key, at] of previous) {
+    const room = result.layout.buildings[0]!.rooms[0]!;
+    desks("a/room-0", count).forEach((key, index) => {
       const cell = cellOf(result.layout, key)!;
-      expect([cell.col, cell.row]).toEqual(at);
-    }
+      expect([cell.col, cell.row]).toEqual([
+        index % room.cols,
+        Math.floor(index / room.cols),
+      ]);
+    });
   }
 });
 

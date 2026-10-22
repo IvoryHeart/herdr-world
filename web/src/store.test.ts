@@ -114,6 +114,37 @@ describe("upstream actions retain their World owner", () => {
     });
   });
 
+  test("a tab reorder on a host Spaces has not observed lets Herdr answer", async () => {
+    await withOwners(async (calls) => {
+      const snapshot = store.get();
+      const beta = (lastRefresh: number) =>
+        __storeTesting.replaceState({
+          ...snapshot,
+          sessionsByConnectionId: {
+            ...snapshot.sessionsByConnectionId,
+            beta: {
+              ...snapshot.sessionsByConnectionId.beta!,
+              tabMoveSupported: false,
+              lastRefresh,
+            },
+          },
+        });
+      const owner = operationalStore({
+        connectionId: "beta",
+        runtimeGeneration: 1,
+      });
+      // Town reorders desks on any host: an unobserved host is asked.
+      beta(0);
+      await owner.moveTab("same-tab", 0);
+      // A host observed without tab.move is refused locally, as in Spaces.
+      beta(1);
+      await owner.moveTab("same-tab", 0);
+      expect(calls.filter((item) => item.method === "tab.move")).toEqual([
+        { host: "beta", method: "tab.move" },
+      ]);
+    });
+  });
+
   test("cross-tab pane moves and breakout retain an inactive host and reject its replacement", async () => {
     await withOwners(async (calls) => {
       const snapshot = store.get();

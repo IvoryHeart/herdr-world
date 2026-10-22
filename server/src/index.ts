@@ -2066,6 +2066,13 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
         endpoint_availability: terminalBridge.endpointAvailability(),
       };
     }
+    // Town reads a room's order with tab.list before reordering, and refuses
+    // plainly where this Herdr has no tab.move.
+    if (method === "tab.list")
+      result = {
+        ...result,
+        tab_move_supported: await terminalBridge.tabMoveSupported(),
+      };
     sendReply({ id, result }, method);
   } catch (e) {
     sendError(`${method}-error`, e);

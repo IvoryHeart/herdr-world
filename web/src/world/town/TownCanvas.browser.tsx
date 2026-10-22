@@ -228,6 +228,8 @@ function topology(seed: number): Topology {
  */
 const sent: { paneId: string; text: string; keys: string[] }[] = [];
 const moves: { method: string; params: Record<string, unknown> }[] = [];
+/** Each host's tabs in Herdr's order, for tab.list. */
+let herdrTabs: (connectionId: string) => unknown[] = () => [];
 let statusOf: (paneId: string) => string = () => "working";
 const SCREENS = {
   blocked: [
@@ -324,6 +326,11 @@ let latestText =
               sent_at: "2026-01-01T00:00:01Z",
             },
           };
+    if (method === "tab.list") return { tabs: herdrTabs(connectionId) };
+    if (method === "tab.move") {
+      moves.push({ method, params: { ...params, connectionId } });
+      return { type: "tab_list", tabs: [] };
+    }
     if (method === "town.move_desk" || method === "town.move_pane") {
       moves.push({ method, params: params ?? {} });
       return { status: "moved", tab_id: "moved-tab", workspace_id: "moved" };
@@ -459,6 +466,9 @@ async function run() {
   layoutShell.append(host);
   document.body.append(layoutShell);
   const base = topology(7);
+  herdrTabs = (connectionId) =>
+    base.connections.find((c) => c.connectionId === connectionId)?.snapshot
+      ?.tabs ?? [];
   if (!phone && mode === "test") {
     const world = worldFor(base.connections);
     const leaf = world.leaves.find((candidate) => candidate.kind === "agent")!;
@@ -1208,7 +1218,15 @@ async function run() {
     () => host.querySelectorAll(".town-chooser-list button").length > 0,
     "M on a desk did not list rooms to move it to",
   );
-  host.querySelector<HTMLButtonElement>(".town-chooser-list button")!.click();
+  // The desk's own room comes first: other desks' places, then Last.
+  const choices = [
+    ...host.querySelectorAll<HTMLButtonElement>(".town-chooser-list button"),
+  ];
+  check(
+    choices[0]?.textContent?.includes("’s place") === true,
+    `M on a desk lists places in its room first (${choices[0]?.textContent})`,
+  );
+  choices.find((button) => button.textContent?.includes(" desks"))!.click();
   await waitFor(
     () => moves.length === 1,
     "choosing a room did not move the desk",
@@ -1319,6 +1337,85 @@ async function run() {
     );
     requestTrace("town", false);
   }
+
+  // Holding a desk and dropping it on another desk of its room reorders the
+  // room's tabs with Herdr's tab.move on that host, as Spaces does.
+  const [fromDesk, ontoDesk] = (() => {
+    const visible = [
+      ...host.querySelectorAll<HTMLElement>(
+        '.world-semantic-target[data-kind="desk"]',
+      ),
+    ].filter((target) => {
+      const box = target.getBoundingClientRect();
+      return (
+        box.width > 0 &&
+        box.left > 0 &&
+        box.top > 0 &&
+        box.right < window.innerWidth &&
+        box.bottom < window.innerHeight
+      );
+    });
+    const room = (target: HTMLElement) => {
+      const [connectionId, , tabId] = JSON.parse(target.dataset.targetKey!);
+      return `${connectionId} ${String(tabId).replace(/-tab-\d+$/, "")}`;
+    };
+    for (const from of visible) {
+      const onto = visible.find(
+        (other) => other !== from && room(other) === room(from),
+      );
+      if (onto) return [from, onto];
+    }
+    return [];
+  })();
+  if (fromDesk && ontoDesk) {
+    const before = moves.length;
+    const at = (target: HTMLElement) => {
+      const box = target.getBoundingClientRect();
+      return [box.left + box.width / 2, box.top + box.height / 2] as const;
+    };
+    const press = (type: string, [x, y]: readonly [number, number]) =>
+      canvasHost.dispatchEvent(
+        new PointerEvent(type, {
+          bubbles: true,
+          pointerId: 31,
+          pointerType: "touch",
+          button: 0,
+          buttons: type === "pointerup" ? 0 : 1,
+          clientX: x,
+          clientY: y,
+        }),
+      );
+    press("pointerdown", at(fromDesk));
+    await waitFor(
+      () => host.querySelector(".town-drag-ghost") !== null,
+      "holding a desk did not lift it for a reorder",
+    );
+    press("pointermove", at(ontoDesk));
+    await waitFor(
+      () =>
+        host.querySelector<HTMLElement>(".town-drag-ghost")?.dataset.valid ===
+        "true",
+      "a desk in its own room was not a drop target",
+    );
+    check(
+      host.querySelector(".town-drag-ghost")!.textContent!.includes("’s place"),
+      "the drag names the reorder",
+    );
+    press("pointerup", at(ontoDesk));
+    await waitFor(
+      () => moves.length === before + 1,
+      "dropping a desk on another in its room did not reorder",
+    );
+    const [connectionId, , tabId] = JSON.parse(fromDesk.dataset.targetKey!);
+    const reorder = moves[before]!;
+    check(
+      reorder.method === "tab.move" &&
+        reorder.params.tab_id === tabId &&
+        reorder.params.connectionId === connectionId &&
+        typeof reorder.params.insert_index === "number",
+      `desk reorder sent ${JSON.stringify(reorder)}`,
+    );
+  } else check(false, "no two visible desks share a room");
 
   // Town shows no move icons; moving is by drag, hold or the keyboard.
   check(

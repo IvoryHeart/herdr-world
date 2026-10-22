@@ -34,7 +34,11 @@ are optional because the merged PR history records their source.
   agent brings it back to its desk until its status changes. **Menu → Town
   opens** chooses Chat (the default) or Terminal for these taps; neither marks
   finished work reviewed.
-
+- Town tables follow Herdr's tab order, so moving a tab in Spaces or Herdr
+  moves its table. Drag a table onto another in its room (or press **M**) to
+  reorder it: Town sends Herdr's `tab.move` the way Spaces does and shows the
+  order Herdr reports. World now listens for Herdr's `tab.moved` event, so a
+  reorder made anywhere updates every view.
 - Give every terminal one colour, shown as its tab in Spaces, its table in
   Town and its card in Board. Tabs start with a stable default; a colour chosen
   from the Spaces tab menu, a Town peek or Board is saved by the World service

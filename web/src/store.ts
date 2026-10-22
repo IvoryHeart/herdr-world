@@ -3642,15 +3642,18 @@ export const store = {
         if (!leaseIsCurrent(lease))
           throw new Error("Tab move owner is no longer available");
         const snapshot = leaseSnapshot(lease);
-        if (!snapshot.tabMoveSupported)
+        // A host Spaces has not observed yet (Town reorders any host's desks)
+        // has no recorded support: Herdr answers for itself.
+        if (snapshot.lastRefresh > 0 && !snapshot.tabMoveSupported)
           throw new Error(
             "This Herdr connection does not support tab reordering.",
           );
         // Settle the strip in its new order before Herdr's list comes back.
         const previousTabs = snapshot.tabs;
-        setForConnection(lease, {
-          tabs: moveTabInList(previousTabs, tabId, insertIndex),
-        });
+        if (previousTabs.some((tab) => tab.tab_id === tabId))
+          setForConnection(lease, {
+            tabs: moveTabInList(previousTabs, tabId, insertIndex),
+          });
         try {
           return await lease.client.call("tab.move", {
             tab_id: tabId,

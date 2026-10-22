@@ -1454,11 +1454,14 @@ export async function createTownRenderer(
     drag.slot?.destroy();
     drag.slot = null;
     if (targetKey && drag.kind === "desk") {
-      // The next free spot of the target room, where the desk will land.
+      // Another desk's slot when reordering in the room, or else the next
+      // free spot of the target room: where the desk will land.
       const room = layout.buildings
         .flatMap((b) => b.rooms)
         .find((candidate) => candidate.key === targetKey);
-      const cell = room?.cells.find((candidate) => !candidate.deskKey);
+      const cell =
+        layoutCells.get(targetKey) ??
+        room?.cells.find((candidate) => !candidate.deskKey);
       if (cell) {
         drag.target = {
           x: (cell.x + 1) * T - 3,

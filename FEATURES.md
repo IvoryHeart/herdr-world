@@ -48,6 +48,11 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     agent from the keyboard). The live panes move, agents keep running, a failed
     move attempts rollback and reports partial or unknown results. Moving a
     room's last table asks first because the room closes. When a table closes, the tables after it close up.
+  - Tables sit in Herdr's tab order, left to right and row by row, so moving a
+    tab in Spaces or Herdr moves its table. Drag a table onto another table in
+    its room to put it in that place, or onto the room's free spot to put it
+    last of the tables shown (**M** lists the same places). Town asks Herdr to move the tab and
+    shows the new order when Herdr reports it; agents stay with their table.
   - Cached failed-host buildings stay stale and non-actionable. Search and Hosts
     use the shared aggregate. Reception and lounge positions only show status;
     only an explicit move changes Herdr's layout, always within one host.

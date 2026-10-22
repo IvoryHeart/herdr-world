@@ -99,6 +99,14 @@ export type TownRoomActions = {
   onMoveAgent(agentKey: string): void;
   /** A desk dragged onto another room; resolves how the move ended. */
   onDropDesk(deskKey: string, roomKey: string): Promise<TownMoveResult>;
+  /**
+   * A desk dragged within its room: into `ontoDeskKey`'s slot, or last when
+   * null. Resolves how the reorder ended.
+   */
+  onReorderDesk(
+    deskKey: string,
+    ontoDeskKey: string | null,
+  ): Promise<TownMoveResult>;
   /** An agent dragged onto another desk; resolves how the move ended. */
   onDropAgent(agentKey: string, deskKey: string): Promise<TownMoveResult>;
 };
@@ -753,9 +761,14 @@ export function TownCanvas({
           renderer.endDrag("park");
           const actions = latest.current.roomActions;
           void (
-            drag.kind === "desk"
-              ? actions.onDropDesk(drag.key, targetKey)
-              : actions.onDropAgent(drag.key, targetKey)
+            drag.kind === "agent"
+              ? actions.onDropAgent(drag.key, targetKey)
+              : drag.target?.reorder
+                ? actions.onReorderDesk(
+                    drag.key,
+                    targetKey === drag.from ? null : targetKey,
+                  )
+                : actions.onDropDesk(drag.key, targetKey)
           )
             .catch((): TownMoveResult => "uncertain")
             .then((result) => rendererRef.current?.finishMove(result));
