@@ -191,3 +191,32 @@ export function createEventSubscriptionLoop(args: {
 
   return { start, stop, isRunning: () => running };
 }
+
+/**
+ * A subscription opened once `start` settles, for event lists that depend on
+ * what the Herdr server supports. A failed start fails `ready` and settles
+ * `closed`, so the loop retries as for any refused subscription.
+ */
+export function deferredSubscription(
+  start: Promise<EventSubscription>,
+): EventSubscription {
+  let closeRequested = false;
+  const opened = start.then((subscription) => {
+    if (closeRequested) subscription.close();
+    return subscription;
+  });
+  return {
+    ready: opened.then((subscription) => subscription.ready),
+    closed: opened.then(
+      (subscription) => subscription.closed,
+      () => undefined,
+    ),
+    close: () => {
+      closeRequested = true;
+      void opened.then(
+        (subscription) => subscription.close(),
+        () => undefined,
+      );
+    },
+  };
+}

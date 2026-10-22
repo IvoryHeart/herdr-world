@@ -339,6 +339,8 @@ export class TownActors {
       if (sameGoal(actor.goal, goal) && !instant) {
         if (actor.mode === "seat" || actor.mode === "stand")
           this.travel(actor, true, true);
+        else if (actor.mode === "walk" || actor.mode === "tween")
+          this.retarget(actor);
         continue;
       }
       actor.goal = goal;
@@ -425,6 +427,35 @@ export class TownActors {
     } else if (actor.mode === "tween") {
       this.afterTween.set(actor.key, begin);
     } else begin();
+  }
+
+  /**
+   * An agent heading to a seat that moved (a reordered desk) heads to the new
+   * one: a walker re-paths, and one sitting down stands up where it is and
+   * walks over.
+   */
+  private retarget(actor: TownActor) {
+    const target = this.destination(actor);
+    if (!target) return;
+    if (actor.mode === "tween") {
+      const tween = actor.tween;
+      if (
+        !tween ||
+        tween.next !== "seat" ||
+        !target.seat ||
+        (tween.x === target.seat.x && tween.y === target.seat.y)
+      )
+        return;
+      actor.tween = null;
+      actor.mode = "stand";
+      this.afterTween.delete(actor.key);
+      this.travel(actor, false);
+      return;
+    }
+    const end = actor.path[actor.path.length - 1];
+    if (!end) return;
+    const [x, y] = tileCenter(...target.tile);
+    if (end[0] !== x || end[1] !== y) this.travel(actor, false);
   }
 
   private readonly afterTween = new Map<string, () => void>();

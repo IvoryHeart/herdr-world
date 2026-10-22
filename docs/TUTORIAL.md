@@ -150,6 +150,14 @@ changes what you see and does not disconnect hosts or retarget open terminals.
    only partly moved, or locations unknown. Unless the notice says the table is
    back, check both rooms before you carry on. Moving a room's last table
    closes that room, so Town asks first.
+8. Tables sit in the order of their tabs, left to right and then row by row.
+   To change the order, drag a table onto another table in the same room: it
+   takes that table's place, and the tables in between shift along. Drop it on
+   the room's free spot to put it last of the tables shown (a room with more
+   tabs than tables keeps the rest hidden behind its count). Town moves the tab in Herdr, so Spaces
+   shows the new order too, and moving a tab in Spaces moves its table. The
+   tables move once Herdr reports the new order, and agents stay with their
+   table.
 
 A table with more panes than drawn seats shows the count and offers a chooser
 for every pane. When a table closes, the tables after it close up so the room

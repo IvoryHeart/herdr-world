@@ -1,5 +1,13 @@
 import { expect, test } from "bun:test";
-import { townMoveNotice, townMoveResult } from "./townMoves";
+import { bridge } from "../../api";
+import { moveTabInList } from "../../tabReorder";
+import type { OfficeDesk } from "../herdrOfficeProjection";
+import {
+  deskReorderIndex,
+  requestDeskReorder,
+  townMoveNotice,
+  townMoveResult,
+} from "./townMoves";
 
 const pane = (tab: string, n: number) => ({
   terminal_id: `term-${n}`,
@@ -42,4 +50,85 @@ test("unknown pane locations ask the user to check both rooms", () => {
   };
   expect(townMoveResult(outcome)).toBe("uncertain");
   expect(townMoveNotice("Desk", outcome, "t1")).toContain("Check both rooms");
+});
+
+const order = ["a", "b", "c", "d"];
+
+/** Herdr's order after tab.move, as Spaces applies it locally. */
+const after = (tabId: string, insertIndex: number) =>
+  moveTabInList(
+    order.map((tab_id) => ({ tab_id, workspace_id: "w" })),
+    tabId,
+    insertIndex,
+  ).map(({ tab_id }) => tab_id);
+
+test("a desk dropped on another takes that desk's slot", () => {
+  // Forward: lands after the desk it was dropped on.
+  expect(after("a", deskReorderIndex(order, "a", "c")!)).toEqual([
+    "b",
+    "c",
+    "a",
+    "d",
+  ]);
+  // Backward: lands before it.
+  expect(after("d", deskReorderIndex(order, "d", "b")!)).toEqual([
+    "a",
+    "d",
+    "b",
+    "c",
+  ]);
+  expect(after("b", deskReorderIndex(order, "b", "a")!)).toEqual([
+    "b",
+    "a",
+    "c",
+    "d",
+  ]);
+});
+
+test("a desk sent last goes after every tab, hidden ones included", () => {
+  expect(after("b", deskReorderIndex(order, "b", null)!)).toEqual([
+    "a",
+    "c",
+    "d",
+    "b",
+  ]);
+  expect(deskReorderIndex(order, "d", null)).toBeNull();
+});
+
+test("a desk or target that left the room is refused", () => {
+  expect(deskReorderIndex(order, "a", "x")).toBeUndefined();
+  expect(deskReorderIndex(order, "x", "a")).toBeUndefined();
+});
+
+test("an old Herdr host is refused in plain words, before any tab.move", async () => {
+  const calls: string[] = [];
+  const connection = bridge.connection;
+  bridge.connection = ((connectionId: string, generation: number) => ({
+    connectionId,
+    generation,
+    serverRuntimeGeneration: generation,
+    isCurrent: () => true,
+    acceptsServerGeneration: () => true,
+    call: async (method: string) => {
+      calls.push(method);
+      return { tabs: [], tab_move_supported: false };
+    },
+  })) as unknown as typeof bridge.connection;
+  const desk = (tab: string) =>
+    ({
+      key: tab,
+      roomKey: "room",
+      tabRef: { connectionId: "old", generation: 2, nativeId: tab },
+    }) as unknown as OfficeDesk;
+  try {
+    const outcome = await requestDeskReorder(desk("t1"), desk("t2"));
+    expect(outcome).toMatchObject({
+      status: "refused",
+      message:
+        "This host's Herdr cannot reorder tabs. Herdr 0.7.2 or later can.",
+    });
+    expect(calls).toEqual(["tab.list"]);
+  } finally {
+    bridge.connection = connection;
+  }
 });

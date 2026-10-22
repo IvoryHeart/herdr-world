@@ -960,36 +960,32 @@ function projectRoom(space: WorldSpaceObject, host: OfficeHost): ProjectedRoom {
 function buildRoom(space: WorldSpaceObject, host: OfficeHost): ProjectedRoom {
   const operational = space.capabilities.openSpaces;
   const roomKey = space.id;
-  const desks = [...space.tabs]
-    .sort(
-      (left, right) =>
-        left.number - right.number || left.tab_id.localeCompare(right.tab_id),
-    )
-    .map(
-      (tab): OfficeDesk => ({
-        key: JSON.stringify([space.connectionId, "tab", tab.tab_id]),
-        hostKey: host.key,
-        roomKey,
-        tabRef: target(space, "tab", tab.tab_id),
-        terminalSelectionKeys: space.children
-          .filter(({ tabId }) => tabId === tab.tab_id)
-          .map(({ id }) => id)
-          .sort(),
-        observedGeneration: space.generation,
-        displayLabel:
-          boundedOptionalText(tab.label, 100) ?? `Tab ${tab.number}`,
-        order: tab.number,
-        stale: space.stale,
-        canOpenInSpaces: operational,
-        completionAgentKeys: [],
-        paneDevices: [],
-        observedPaneCount: Math.max(
-          tab.pane_count,
-          space.children.filter(({ tabId }) => tabId === tab.tab_id).length,
-        ),
-        omittedPaneCount: 0,
-      }),
-    );
+  // Desks keep Herdr's tab order: tab.list order is the source of truth, and
+  // a moved tab keeps the number it had.
+  const desks = space.tabs.map(
+    (tab, index): OfficeDesk => ({
+      key: JSON.stringify([space.connectionId, "tab", tab.tab_id]),
+      hostKey: host.key,
+      roomKey,
+      tabRef: target(space, "tab", tab.tab_id),
+      terminalSelectionKeys: space.children
+        .filter(({ tabId }) => tabId === tab.tab_id)
+        .map(({ id }) => id)
+        .sort(),
+      observedGeneration: space.generation,
+      displayLabel: boundedOptionalText(tab.label, 100) ?? `Tab ${tab.number}`,
+      order: index,
+      stale: space.stale,
+      canOpenInSpaces: operational,
+      completionAgentKeys: [],
+      paneDevices: [],
+      observedPaneCount: Math.max(
+        tab.pane_count,
+        space.children.filter(({ tabId }) => tabId === tab.tab_id).length,
+      ),
+      omittedPaneCount: 0,
+    }),
+  );
   const deskKeys = new Map(
     desks.map((desk) => [desk.tabRef.nativeId, desk.key]),
   );
