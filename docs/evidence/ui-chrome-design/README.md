@@ -59,7 +59,7 @@ only on desktop. `App.tsx` gates it on `!mobile`, so on phone it changes nothing
 **One bar, one frame, two skins.** A World-owned `WindowBar` renders inside
 `WindowFrame`, with slots for lead, identity, views, primary action and overflow.
 Every window kind fills those slots instead of drawing its own head: the
-Inspector, the Spaces tab window and the Town chat window.
+Inspector (the one window per agent, Town included) and the Spaces tab window.
 
 - **Town skin** (Town v4 prototype): dark translucent panel with a 2px edge and
   soft shadow, 40–44px targets, and the name in Pixelify Sans. The bar is
@@ -197,8 +197,10 @@ retired chat window.
 
 ## Phase 2 (after owner approval)
 
-1. `WindowBar` with Town and calm skins, used by the Inspector, the Spaces tab
-   window and the Town chat window. Removes bars 2 and 3 and the PR card band.
+1. One bar in the Inspector (the single window per agent) and the Spaces tab
+   window, with the Town and calm skins. It removes bars 2 and 3 and the PR
+   card band. On phones the window looks like the terminal: name, status and
+   ⋯, which holds the views and the other agents and terminals to switch to.
 2. Town shell defaults: no top bar, tab strip or sidebar in Town; HUD bar;
    Workspaces drawer; the phone camera button.
 
