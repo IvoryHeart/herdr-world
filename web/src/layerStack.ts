@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import { useSystemBack } from "./systemBack";
 
 /**
@@ -22,6 +22,8 @@ type Layer = {
   anchors: () => Iterable<Element | null>;
   close: (reason: LayerCloseReason) => void;
   restore: HTMLElement | null;
+  /** Where focus goes if `restore` is gone, e.g. a menu item that closed. */
+  fallback: HTMLElement | null;
   closedBy?: LayerCloseReason;
 };
 
@@ -29,8 +31,14 @@ const stack: Layer[] = [];
 
 // Focus as it was just before the latest press, so a layer opened by that
 // press can return focus past its own trigger. A key leaves focus where it
-// was, so a layer opened by a key reads it when it opens.
-let inputFocus: { element: Element | null; at: number } | null = null;
+// was, so a layer opened by a key reads it when it opens; a key therefore
+// forgets the press. A press inside an open layer also keeps that layer's
+// opener, for when the pressed item closes with it.
+let inputFocus: {
+  element: Element | null;
+  fallback: HTMLElement | null;
+  at: number;
+} | null = null;
 const INPUT_FOCUS_MS = 1_000;
 
 // Modals outside the stack (most dialogs) own their keys and presses while
@@ -51,7 +59,12 @@ function contains(layer: Layer, target: Node) {
 
 function belowUnstackedModal(layer: Layer, target: EventTarget | null) {
   if (!(target instanceof Element) || contains(layer, target)) return false;
-  const modal = target.closest(MODAL);
+  // A key with nothing focused, or a press on a dialog's bare area, targets
+  // the body: an open modal still owns it.
+  const modal =
+    target === document.body || target === document.documentElement
+      ? document.querySelector(MODAL)
+      : target.closest(MODAL);
   if (!modal) return false;
   // The layer opened from inside this modal, so it is above the modal.
   if (layer.restore && modal.contains(layer.restore)) return false;
@@ -60,15 +73,31 @@ function belowUnstackedModal(layer: Layer, target: EventTarget | null) {
   return true;
 }
 
+// The top layer still open: a closed layer stays on the stack until React
+// unmounts it, and a repeated key or tap must not close it twice.
+function openTop() {
+  for (let index = stack.length - 1; index >= 0; index--)
+    if (!stack[index]!.closedBy) return stack[index];
+  return undefined;
+}
+
 function closeTop(reason: LayerCloseReason) {
-  const top = stack[stack.length - 1];
+  const top = openTop();
   if (!top) return;
   top.closedBy = reason;
   top.close(reason);
 }
 
-function rememberInputFocus() {
-  inputFocus = { element: document.activeElement, at: performance.now() };
+function rememberInputFocus(target: EventTarget | null) {
+  const holder =
+    target instanceof Node
+      ? stack.find((layer) => layer.element()?.contains(target))
+      : undefined;
+  inputFocus = {
+    element: document.activeElement,
+    fallback: holder ? (holder.restore ?? holder.fallback) : null,
+    at: performance.now(),
+  };
 }
 
 // Installed from useLayer, so they exist before any trigger is pressed, once
@@ -80,7 +109,7 @@ function listen() {
   window.addEventListener(
     "pointerdown",
     (event) => {
-      const top = stack[stack.length - 1];
+      const top = openTop();
       if (
         top &&
         event.target instanceof Node &&
@@ -88,14 +117,15 @@ function listen() {
         !belowUnstackedModal(top, event.target)
       )
         closeTop("outside");
-      rememberInputFocus();
+      rememberInputFocus(event.target);
     },
     true,
   );
   window.addEventListener(
     "keydown",
     (event) => {
-      const top = stack[stack.length - 1];
+      inputFocus = null;
+      const top = openTop();
       if (
         top &&
         event.key === "Escape" &&
@@ -123,14 +153,14 @@ function focusTarget(element: Element | null): HTMLElement | null {
  * `data-layer-back` so pressing it does not already close the layer.
  */
 export function closeTopLayer(): boolean {
-  if (!stack.length) return false;
+  if (!openTop()) return false;
   closeTop("back");
   return true;
 }
 
 /** Number of open layers; for tests and for code that defers to them. */
 export function openLayerCount() {
-  return stack.length;
+  return stack.filter((layer) => !layer.closedBy).length;
 }
 
 /**
@@ -153,18 +183,26 @@ export function useLayer(
   const latest = useRef({ close, element, anchors });
   latest.current = { close, element, anchors };
   const current = useRef<Layer | null>(null);
-  // What had focus when the layer opened, read while rendering the opening:
-  // the layer's own effects (Radix's autofocus) move focus before ours run.
-  const opener = useRef<HTMLElement | null>(null);
-  const wasOpen = useRef(false);
-  if (open && !wasOpen.current) {
+  // What had focus when the layer opened, read in a layout effect: the
+  // layer's own effects (Radix's autofocus) move focus before ours run, and
+  // every layout effect runs before them.
+  const opener = useRef<{
+    restore: HTMLElement | null;
+    fallback: HTMLElement | null;
+  }>({ restore: null, fallback: null });
+  useLayoutEffect(() => {
+    if (!open) return;
     const recent =
       inputFocus && performance.now() - inputFocus.at < INPUT_FOCUS_MS
-        ? focusTarget(inputFocus.element)
+        ? inputFocus
         : null;
-    opener.current = recent ?? focusTarget(document.activeElement);
-  }
-  wasOpen.current = open;
+    opener.current = {
+      restore:
+        (recent && focusTarget(recent.element)) ??
+        focusTarget(document.activeElement),
+      fallback: recent?.fallback ?? null,
+    };
+  }, [open]);
   useSystemBack(
     open,
     () => {
@@ -181,7 +219,8 @@ export function useLayer(
       element: () => latest.current.element(),
       anchors: () => latest.current.anchors(),
       close: (reason) => latest.current.close(reason),
-      restore: opener.current,
+      restore: opener.current.restore,
+      fallback: opener.current.fallback,
     };
     stack.push(layer);
     current.current = layer;
@@ -200,7 +239,11 @@ export function useLayer(
         Boolean(element?.contains(active));
       if (!lost) return;
       // Without an opener (nothing had focus), the trigger takes it.
-      let target = layer.restore?.isConnected ? layer.restore : null;
+      let target = layer.restore?.isConnected
+        ? layer.restore
+        : layer.fallback?.isConnected
+          ? layer.fallback
+          : null;
       if (!target)
         for (const anchor of layer.anchors())
           if (anchor instanceof HTMLElement && anchor.isConnected) {

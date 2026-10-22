@@ -135,10 +135,11 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   placements; snapping into an occupied region overlaps without rearranging it.
   Tiled windows share resizable dividers. **Open windows** restores minimized windows.
   Window close dismisses presentation; native tab closure remains separate.
-- Menus, dropdowns, pickers and the workspace list close top first: Escape, a
-  press or tap outside (the terminal included) and Back close only the topmost
-  one, and Escape, Back or a choice returns focus to where it was, such as the
-  terminal.
+- Menus, dropdowns, pickers and the workspace list opened from a terminal's
+  title close top first: Escape, a press or tap outside (the terminal
+  included) and Back close only the topmost one, and Escape, Back or a choice
+  returns focus to where it was, such as the terminal. The phone's Tabs sheet
+  and Composer close with the phone's Back.
 - Mobile shows one active window and preserves desktop positions. The on-screen
   **Back** first closes an open menu or the workspace list (opened from the
   terminal's title), then returns from a terminal to the visual view even with

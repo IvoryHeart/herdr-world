@@ -61,7 +61,12 @@ import {
   focusWorldNode,
   activateWorldNodeHost,
 } from "./worldInspectorSelection";
-import { pushRoute, stepBack, useSystemBack } from "../systemBack";
+import {
+  isBackPending,
+  pushRoute,
+  stepBack,
+  useSystemBack,
+} from "../systemBack";
 import { closeTopLayer } from "../layerStack";
 import { WorldMobileNav, worldViewLabel } from "./WorldMobileNav";
 import { WorldControlPlane } from "./WorldControlPlane";
@@ -244,7 +249,12 @@ export default function WorldFoundationApp() {
   const setView = (next: WorldView, replace = false) => {
     setViewState(next);
     if (next !== "spaces") setVisualView(next);
-    if (window.location.pathname !== WORLD_VIEW_PATHS[next]) {
+    // While our own Back traverses, the location is stale: always record the
+    // route so the traversal cannot land on another view.
+    if (
+      window.location.pathname !== WORLD_VIEW_PATHS[next] ||
+      (!replace && isBackPending())
+    ) {
       const url = new URL(window.location.href);
       url.pathname = WORLD_VIEW_PATHS[next];
       // Records the route it came from, so an on-screen Back can return
@@ -278,7 +288,8 @@ export default function WorldFoundationApp() {
   // Then it undoes the in-app navigation that opened Spaces, so the next
   // system Back does not reopen it. Opened directly, it replaces itself.
   const leaveSpaces = () => {
-    if (closeTopLayer() || stepBack()) return;
+    // A Back already traversing takes this press; a second would leave.
+    if (isBackPending() || closeTopLayer() || stepBack()) return;
     const from = (window.history.state as { herdrFrom?: unknown } | null)
       ?.herdrFrom;
     if (from === WORLD_VIEW_PATHS[visualView]) window.history.back();
@@ -420,8 +431,9 @@ export default function WorldFoundationApp() {
                   aria-label={returnLabel}
                   data-layer-back
                   onClick={() => {
-                    // An open menu or list above the terminal closes first.
-                    if (closeTopLayer()) return;
+                    // An open menu or list above the terminal closes first;
+                    // a Back already traversing takes this press.
+                    if (isBackPending() || closeTopLayer()) return;
                     // Then the on-screen Back returns to the view at once,
                     // Composer or not; the phone's Back closes the Composer
                     // first.

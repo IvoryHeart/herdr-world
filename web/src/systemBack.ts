@@ -87,6 +87,38 @@ let backPending = false;
 // it is pushed when the traversal lands.
 let deferredRoute: { state: Record<string, unknown>; url: URL } | null = null;
 
+let ownBackTimer: ReturnType<typeof setTimeout> | undefined;
+// A traversal that cannot move fires no popstate; stop waiting for it after
+// this long, so later routes and guards are not held back forever.
+const OWN_BACK_TIMEOUT_MS = 1_000;
+
+function goOwnBack(delta: number) {
+  backPending = true;
+  clearTimeout(ownBackTimer);
+  ownBackTimer = setTimeout(() => {
+    if (backPending) landOwnBack();
+  }, OWN_BACK_TIMEOUT_MS);
+  window.history.go(delta);
+}
+
+/** Our traversal landed (or never will): push a deferred route, reconcile. */
+function landOwnBack() {
+  clearTimeout(ownBackTimer);
+  backPending = false;
+  const route = deferredRoute;
+  deferredRoute = null;
+  // The page may have returned to where it is since the route was chosen.
+  if (route && route.url.pathname !== window.location.pathname)
+    pushRoute(route.state, route.url);
+  previousState = window.history.state;
+  reconcile();
+}
+
+/** Whether a Back of our own is still traversing history. */
+export function isBackPending() {
+  return backPending;
+}
+
 function isGuard(state: unknown) {
   return typeof state === "object" && state !== null && GUARD in state;
 }
@@ -138,8 +170,7 @@ function reconcile() {
     previousState = window.history.state;
   } else if (layers.size < depth && closedOnScreen) {
     // Layers closed on screen take their guards with them.
-    backPending = true;
-    window.history.go(layers.size - depth);
+    goOwnBack(layers.size - depth);
   }
   closedOnScreen = false;
 }
@@ -162,12 +193,8 @@ if (typeof window !== "undefined") {
     const from = previousState;
     previousState = event.state;
     if (backPending) {
-      backPending = false;
-      const route = deferredRoute;
-      deferredRoute = null;
       // Pushed before other popstate listeners read the location.
-      if (route) pushRoute(route.state, route.url);
-      reconcile();
+      landOwnBack();
       return;
     }
     // Direction within one guard run: a higher guard of the same pair means
@@ -189,15 +216,13 @@ if (typeof window !== "undefined") {
         // Forward ended inside the run and the user went Back: skip the rest
         // of the run and its page, which all look alike, in one press.
         forwardBase = undefined;
-        backPending = true;
-        window.history.go(-(depth + 1));
+        goOwnBack(-(depth + 1));
         return;
       }
       forwardBase = undefined;
       // A leftover guard reached going Back returns to its page.
       if (depth > 0) {
-        backPending = true;
-        window.history.go(-depth);
+        goOwnBack(-depth);
       }
       return;
     }

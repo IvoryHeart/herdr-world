@@ -1136,6 +1136,8 @@ export default function App({
   });
   const [mobileTabSheetOpen, setMobileTabSheetOpen] = useState(false);
   const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
+  // The workspace list was opened from the terminal's title, over it.
+  const [workspacesOverTerminal, setWorkspacesOverTerminal] = useState(false);
   const terminalComposerScopeKey = JSON.stringify([
     s.activeConnectionId,
     s.connectionGeneration,
@@ -4294,7 +4296,10 @@ export default function App({
           setMobileMoreOpen(false);
           setMobileTabSheetOpen(false);
           if (mobileView === "workspaces") activateTerminalSurface();
-          else openWorkspaces();
+          else {
+            openWorkspaces();
+            setWorkspacesOverTerminal(true);
+          }
         },
       }
     : null;
@@ -4311,8 +4316,18 @@ export default function App({
     "popup",
   );
   // The workspace list opened from the terminal's title covers the terminal:
-  // a layer, so Escape, Back or the title close it before anything below.
-  useLayer(mobile && mobileView === "workspaces", activateTerminalSurface, {
+  // a layer, so Escape, Back, a press outside or the title close it before
+  // anything below. Opened as a destination, it is a panel for Back only.
+  const workspaceList = mobile && mobileView === "workspaces";
+  useEffect(() => {
+    if (!workspaceList) setWorkspacesOverTerminal(false);
+  }, [workspaceList]);
+  useSystemBack(
+    workspaceList && !workspacesOverTerminal,
+    activateTerminalSurface,
+    "panel",
+  );
+  useLayer(workspaceList && workspacesOverTerminal, activateTerminalSurface, {
     element: () => document.getElementById("workspace-navigator"),
     anchors: () =>
       document.querySelectorAll(

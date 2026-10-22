@@ -11,9 +11,19 @@ type PopoverLayerRefs = {
 };
 const PopoverLayerContext = React.createContext<PopoverLayerRefs | null>(null);
 
-function setRef<T>(ref: React.ForwardedRef<T>, value: T | null) {
-  if (typeof ref === "function") ref(value);
-  else if (ref) ref.current = value;
+/** One stable callback ref that fills the layer's ref and the caller's. */
+function useMergedRef<T extends HTMLElement>(
+  own: React.MutableRefObject<HTMLElement | null> | undefined,
+  forwarded: React.ForwardedRef<T>,
+) {
+  return React.useCallback(
+    (node: T | null) => {
+      if (own) own.current = node;
+      if (typeof forwarded === "function") forwarded(node);
+      else if (forwarded) forwarded.current = node;
+    },
+    [own, forwarded],
+  );
 }
 
 /**
@@ -58,15 +68,8 @@ const PopoverTrigger = React.forwardRef<
   React.ComponentPropsWithoutRef<typeof PopoverPrimitive.Trigger>
 >((props, ref) => {
   const refs = React.useContext(PopoverLayerContext);
-  return (
-    <PopoverPrimitive.Trigger
-      ref={(node) => {
-        if (refs) refs.trigger.current = node;
-        setRef(ref, node);
-      }}
-      {...props}
-    />
-  );
+  const merged = useMergedRef(refs?.trigger, ref);
+  return <PopoverPrimitive.Trigger ref={merged} {...props} />;
 });
 PopoverTrigger.displayName = PopoverPrimitive.Trigger.displayName;
 
@@ -88,14 +91,12 @@ const PopoverContent = React.forwardRef<
     ref,
   ) => {
     const refs = React.useContext(PopoverLayerContext);
+    const merged = useMergedRef(refs?.content, ref);
     return (
       <PopoverPrimitive.Portal>
         <div className="popover-portal">
           <PopoverPrimitive.Content
-            ref={(node) => {
-              if (refs) refs.content.current = node;
-              setRef(ref, node);
-            }}
+            ref={merged}
             align={align}
             sideOffset={sideOffset}
             className={cn("popover-content", className)}

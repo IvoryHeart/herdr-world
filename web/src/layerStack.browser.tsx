@@ -1,6 +1,6 @@
 import { createRoot } from "react-dom/client";
 import { flushSync } from "react-dom";
-import { useState } from "react";
+import { StrictMode, useState } from "react";
 import { bridge, type ConnectionClient } from "./api";
 import { __storeTesting, store } from "./store";
 import {
@@ -154,7 +154,14 @@ const host = document.createElement("div");
 host.style.cssText =
   "position:fixed;inset:0;display:flex;flex-direction:column";
 document.body.append(host);
-flushSync(() => createRoot(host).render(<TerminalWindow />));
+// StrictMode runs every layer's effects twice, as development does.
+flushSync(() =>
+  createRoot(host).render(
+    <StrictMode>
+      <TerminalWindow />
+    </StrictMode>,
+  ),
+);
 
 const $ = <T extends Element = HTMLElement>(selector: string) =>
   document.querySelector<T>(selector);
@@ -204,14 +211,16 @@ const pressTerminal = () =>
     const rect = element.getBoundingClientRect();
     return { x: rect.left + 24, y: rect.bottom - 24 };
   });
-async function escape() {
-  for (const type of ["keyDown", "keyUp"])
-    await input("Input.dispatchKeyEvent", {
-      type,
-      key: "Escape",
-      code: "Escape",
-      windowsVirtualKeyCode: 27,
-    });
+async function escape(times = 1) {
+  // Several presses before React commits, as a key repeat or a double tap.
+  for (let press = 0; press < times; press++)
+    for (const type of ["keyDown", "keyUp"])
+      await input("Input.dispatchKeyEvent", {
+        type,
+        key: "Escape",
+        code: "Escape",
+        windowsVirtualKeyCode: 27,
+      });
   await settle();
 }
 async function back() {
@@ -260,6 +269,32 @@ async function run() {
   check(Boolean(menu()), "one press closed both nested layers");
   await pressTerminal();
   check(!menu(), "second press left the menu open");
+
+  // Two quick Escapes close the two layers, one each.
+  await press(menuTrigger(), "window menu trigger");
+  await press($(".world-window-color"), "menu colour item");
+  await escape(2);
+  check(!swatches() && !menu(), "two quick Escapes did not close both layers");
+
+  // A dialog outside the stack, above an open menu, keeps its Escape even
+  // when nothing has focus.
+  await press(menuTrigger(), "window menu trigger");
+  const dialog = document.createElement("div");
+  dialog.className = "modal-backdrop";
+  let dialogEscapes = 0;
+  const onDialogKey = (event: KeyboardEvent) => {
+    if (event.key === "Escape") dialogEscapes++;
+  };
+  window.addEventListener("keydown", onDialogKey);
+  document.body.append(dialog);
+  (document.activeElement as HTMLElement | null)?.blur();
+  await escape();
+  check(Boolean(menu()), "Escape for a dialog above closed the menu below");
+  check(dialogEscapes === 1, "the dialog above did not receive its Escape");
+  dialog.remove();
+  window.removeEventListener("keydown", onDialogKey);
+  await escape();
+  check(!menu(), "Escape after the dialog closed left the menu open");
 
   // Choosing a colour applies it and closes both layers.
   await press(menuTrigger(), "window menu trigger");

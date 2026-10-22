@@ -97,7 +97,9 @@ async function registerDomTests() {
   history.pushState(null, "", "/a");
   history.pushState(null, "", "/b");
   history.pushState({ herdrBack: true }, "");
-  const { pushRoute, useSystemBack } = await import("./systemBack");
+  const { isBackPending, pushRoute, useSystemBack } = await import(
+    "./systemBack"
+  );
 
   type Name = "sheet" | "more" | "composer" | "files";
   const levels = {
@@ -204,6 +206,20 @@ async function registerDomTests() {
     expect([String(at()), guarded()]).toEqual(["http://localhost/c", false]);
     await userBack();
     expect(at()).toBe("/b");
+  });
+
+  test("a guard removal that never lands stops holding routes back", async () => {
+    await start();
+    await set(["more"]);
+    await act(async () => show([]));
+    await act(async () => Promise.resolve());
+    expect(isBackPending()).toBe(true);
+    // The traversal is lost: no popstate ever arrives.
+    traversals.splice(0);
+    pushRoute({}, new URL("http://localhost/d"));
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 1100)));
+    expect(isBackPending()).toBe(false);
+    expect(String(at())).toBe("http://localhost/d");
   });
 
   test("one Back leaves the page after layers close together", async () => {
