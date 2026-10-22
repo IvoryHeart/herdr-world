@@ -176,6 +176,15 @@ The calm window bar goes from 119 to 38 (from 177 to 38 on Changes).
   - **Desktop header:** `‹ · tab avatars · name/location · [💬 ▣ ±2 📁] · Next › · ⋯`.
     Chip labels appear at 640px of window width or more.
 
+- **Header breakpoints (the window's own width, via container queries).** The
+  same rule applies docked, floating and on phones:
+
+| Window width | Selector and actions |
+| --- | --- |
+| 640px and up | Icon and label for Chat, Terminal, Changes and Files; labelled actions ("Next (1) ›") |
+| 360–639px | Icons only, each with a tooltip and an aria-label; Next shows "(1) ›" |
+| Under 360px | Active view chip only; the other views are at the top of ⋯ |
+
   This supersedes the earlier composer-row options (A, B and C).
 
 ## Questions answered

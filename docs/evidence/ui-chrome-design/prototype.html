@@ -168,7 +168,11 @@ code{font:500 12px var(--f-mono);color:#cfd6c9;background:#0d1117;padding:1px 5p
 .chip[aria-selected="true"]{background:var(--btn-on);color:var(--text);box-shadow:inset 0 -2px 0 rgba(0,0,0,.35),0 0 0 1px rgba(255,255,255,.14)}
 .chip .n{font-size:10.5px;background:#3a2c14;color:#ffd79a;border-radius:999px;padding:0 6px}
 .chip .t{display:none}
-@container win (min-width:640px){ .chip .t{display:inline} }
+/* Header follows the window's own width: >=640 icon+label, 360-639 icons, <360 active view + views in ⋯ */
+@container win (min-width:640px){ .chip .t{display:inline} .next .nl{display:inline} }
+.next .nl{display:none}
+.wmenu .mview{display:none}
+@container win (max-width:359px){ .views .chip[aria-selected="false"]{display:none} .wmenu .mview{display:flex} .ident{min-width:56px} }
 .next{white-space:nowrap;flex:none}
 .st.working{color:var(--work)}.st.idle{color:var(--idle)}
 .next.hot{background:var(--gold);color:#1f1606}
@@ -457,6 +461,14 @@ function extras() {
     b.textContent = st.open ? 'Window open' : 'Map only';
     b.onclick = () => { st.open = !st.open; save(); render(); };
     g.append(b);
+    if (st.vp !== 'phone' && st.open) {
+      for (const [k, l] of [['', 'Docked width'], ['600', '600px window'], ['340', '340px window']]) {
+        const o = document.createElement('button'); o.type = 'button';
+        o.setAttribute('aria-pressed', String((st.ww || '') === k)); o.textContent = l;
+        o.onclick = () => { st.ww = k; save(); render(); };
+        g.append(o);
+      }
+    }
   }
 }
 
@@ -494,7 +506,7 @@ function townWin(id, style, opts = {}) {
       <button type="button" class="dv-btn" aria-label="Back to the town" style="font-size:20px;padding:0">‹</button>
       <div class="who">${opts.tabs?opts.tabs.map((t)=>t===id?'':`<button type="button" class="avtab" data-tab="${t}" aria-label="Switch to ${WIN[t].name}" title="${WIN[t].name}"><span class="avatar ${WIN[t].fm?'fm':''}" style="--swatch:${WIN[t].swatch}"></span>${t==='fm'?'':'<i class="badge"></i>'}</button>`).join(''):''}<span class="avatar ${w.fm?'fm':''}"></span><div class="ident"><b>${esc(w.name)}</b><button type="button" class="where" data-pop="${id}" aria-expanded="${popOpen===id}"><span class="st ${w.status}">● ${w.status==='working'?'Working':'On a break'}</span> · ${esc(w.where)} ▾</button></div></div>
       <div class="views" role="tablist" aria-label="Views">${chips(w.view, id)}</div>
-      ${w.fm||cover?'':`<button type="button" class="dv-btn next hot">Next (1) ›</button>`}
+      ${w.fm||cover?'':`<button type="button" class="dv-btn next hot" aria-label="Next agent that needs you (1)" title="Next agent that needs you"><span class="nl">Next </span>(1) ›</button>`}
       <button type="button" class="dv-btn" data-menu="${id}" aria-label="More window actions" aria-expanded="${menuOpen===id}">${I.more}</button>
       ${menuOpen===id?menu(id,'town'):''}${popOpen===id?pop(id):''}
     </header>
@@ -521,7 +533,8 @@ function calmWin(id, style) {
 function menu(id, skin) {
   const views = st.vp === 'phone' && skin === 'town' ? `<button type="button" class="mi" role="menuitem">Next agent that needs you<kbd>1</kbd></button><hr>` : '';
   const items = [['Maximise','double-click'],['Minimise',''],['Snap left','drag ←'],['Snap right','drag →'],['Snap top / bottom',''],[skin==='town'?'Undock (float)':'Dock to the right',''],['Open terminal window','']];
-  return `<div class="wmenu" role="menu">${views}${items.map(([l,k])=>`<button type="button" class="mi" role="menuitem">${l}<kbd>${k}</kbd></button>`).join('')}<hr><div class="sw" aria-label="Colour">${['#6fc3ff','#7be08f','#ffb547','#ff7a6b','#c79bff','#d9c39b'].map(c=>`<i style="background:${c}"></i>`).join('')}</div><hr><button type="button" class="mi" role="menuitem">Close<kbd>Esc</kbd></button></div>`;
+  const mviews = VIEW_DEFS.map(([k,l,ic])=>`<button type="button" class="mi mview" role="menuitem" data-win="${id}" data-v="${k}">${l}<kbd>${k==='changes'?'2':''}</kbd></button>`).join('');
+  return `<div class="wmenu" role="menu">${mviews}${views}${items.map(([l,k])=>`<button type="button" class="mi" role="menuitem">${l}<kbd>${k}</kbd></button>`).join('')}<hr><div class="sw" aria-label="Colour">${['#6fc3ff','#7be08f','#ffb547','#ff7a6b','#c79bff','#d9c39b'].map(c=>`<i style="background:${c}"></i>`).join('')}</div><hr><button type="button" class="mi" role="menuitem">Close<kbd>Esc</kbd></button></div>`;
 }
 function pop(id) {
   const fm = WIN[id].fm;
@@ -568,7 +581,7 @@ function townScene(vp) {
   const phone = vp.w < 641, portrait = vp.h > vp.w && !phone, wide = vp.w >= 1800;
   let html = `<img class="backdrop" alt="" src="img/${vp.id}-backdrop.webp">`;
   let dock = 'none';
-  const dw = Math.min(520, Math.round(vp.w * 0.4));
+  const dw = st.ww ? +st.ww : Math.min(520, Math.round(vp.w * 0.4));
   if (phone) d.style.setProperty('--nav-h', '0px');
   html += townHud(vp) + tray(vp) + camera();
   if (!(phone && st.open)) html += picker(vp);
