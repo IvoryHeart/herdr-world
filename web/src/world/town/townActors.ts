@@ -339,6 +339,7 @@ export class TownActors {
       if (sameGoal(actor.goal, goal) && !instant) {
         if (actor.mode === "seat" || actor.mode === "stand")
           this.travel(actor, true, true);
+        else if (actor.mode === "walk") this.retarget(actor);
         continue;
       }
       actor.goal = goal;
@@ -425,6 +426,15 @@ export class TownActors {
     } else if (actor.mode === "tween") {
       this.afterTween.set(actor.key, begin);
     } else begin();
+  }
+
+  /** A walker whose destination moved (a reordered desk) walks there instead. */
+  private retarget(actor: TownActor) {
+    const target = this.destination(actor);
+    const end = actor.path[actor.path.length - 1];
+    if (!target || !end) return;
+    const [x, y] = tileCenter(...target.tile);
+    if (end[0] !== x || end[1] !== y) this.travel(actor, false);
   }
 
   private readonly afterTween = new Map<string, () => void>();

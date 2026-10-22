@@ -5,6 +5,9 @@
  */
 
 import { bridge } from "../../api";
+import { operationalStore } from "../../store";
+import { tabMoveInsertIndex } from "../../tabReorder";
+import type { Tab } from "../../types";
 import type {
   OfficeDesk,
   OfficePaneDevice,
@@ -104,6 +107,78 @@ export async function requestDeskMove(
       moveTimeoutMs,
     ),
   );
+}
+
+/**
+ * Herdr's tab.move index that puts `tabId` into `ontoId`'s slot of a room's
+ * tab order (or last when `ontoId` is null): null when it is already there,
+ * undefined when either tab is not in the order.
+ */
+export function deskReorderIndex(
+  order: readonly string[],
+  tabId: string,
+  ontoId: string | null,
+): number | null | undefined {
+  const slot = ontoId === null ? order.length - 1 : order.indexOf(ontoId);
+  if (slot < 0 || !order.includes(tabId)) return undefined;
+  const next = order.filter((id) => id !== tabId);
+  next.splice(slot, 0, tabId);
+  return tabMoveInsertIndex(order, tabId, next);
+}
+
+/**
+ * Reorder a desk within its room: it takes `onto`'s slot, as a tab dragged
+ * onto another in Spaces, or goes last when `onto` is null. Town reads the room's order from Herdr, then moves
+ * the tab with Spaces' tab.move on the exact connection and runtime
+ * generation. Town shows no order of its own: desks move when Herdr's new
+ * order arrives.
+ */
+export async function requestDeskReorder(
+  desk: OfficeDesk,
+  onto: OfficeDesk | null,
+): Promise<TownMoveOutcome> {
+  if (
+    onto &&
+    (!sameOwner(desk.tabRef, onto.tabRef) || desk.roomKey !== onto.roomKey)
+  )
+    return {
+      status: "refused",
+      reason: "other_room",
+      message: "Desks reorder only within one room.",
+    };
+  const owner = {
+    connectionId: desk.tabRef.connectionId,
+    runtimeGeneration: desk.tabRef.generation,
+  };
+  const listed = (await bridge
+    .connection(owner.connectionId, owner.runtimeGeneration)
+    .call("tab.list", {})) as { tabs?: Tab[] } | undefined;
+  const tabs = listed?.tabs ?? [];
+  const tabId = desk.tabRef.nativeId;
+  const workspaceId = tabs.find((tab) => tab.tab_id === tabId)?.workspace_id;
+  const order = tabs
+    .filter((tab) => tab.workspace_id === workspaceId)
+    .map((tab) => tab.tab_id);
+  const insertIndex = workspaceId
+    ? deskReorderIndex(order, tabId, onto?.tabRef.nativeId ?? null)
+    : undefined;
+  if (!workspaceId || insertIndex === undefined)
+    return {
+      status: "refused",
+      reason: "changed",
+      message: "The room changed. Try again.",
+    };
+  if (insertIndex === null)
+    return { status: "moved", tab_id: tabId, workspace_id: workspaceId };
+  const operations = operationalStore(owner);
+  const result = await operations.moveTab(tabId, insertIndex);
+  if (result !== undefined)
+    return { status: "moved", tab_id: tabId, workspace_id: workspaceId };
+  return {
+    status: "refused",
+    reason: "tab_move",
+    message: operations.get().error ?? "Herdr did not reorder the tab.",
+  };
 }
 
 /**

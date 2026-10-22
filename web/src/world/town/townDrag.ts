@@ -10,7 +10,18 @@ export type TownDrag = {
   /** The desk's room, or the agent's desk: dropping there does nothing. */
   from: string;
   label: string;
-  target?: { key: string | null; label: string };
+  target?: TownDropTarget;
+};
+
+/**
+ * Where a drag lands. A desk dropped in its own room is reordered: onto
+ * another desk it takes that desk's slot (`key` is that desk), onto the free
+ * spot it goes last (`key` is the room).
+ */
+export type TownDropTarget = {
+  key: string | null;
+  label: string;
+  reorder?: boolean;
 };
 
 /** What a held press picks up: a desk or a seated agent, zoomed in. */
@@ -50,7 +61,7 @@ export function townDropTarget(
   drag: TownDrag,
   hit: TownHit | null,
   model: TownModel,
-): { key: string | null; label: string } {
+): TownDropTarget {
   if (drag.kind === "desk") {
     const roomKey =
       hit?.kind === "room"
@@ -68,8 +79,35 @@ export function townDropTarget(
     if (!room) return { key: null, label: `${drag.label}: drop on a room` };
     if (room.hostKey !== drag.hostKey)
       return { key: null, label: "Desks move only within one host" };
-    if (room.key === drag.from)
-      return { key: null, label: `${drag.label}: already in this room` };
+    if (room.key === drag.from) {
+      const name = model.desks.get(drag.key)?.displayLabel ?? "desk";
+      const ontoKey =
+        hit?.kind === "desk"
+          ? hit.key
+          : hit?.kind === "pane"
+            ? hit.deskKey
+            : hit?.kind === "agent"
+              ? model.agentSeats.get(hit.key)?.deskKey
+              : undefined;
+      const onto = ontoKey ? model.desks.get(ontoKey) : undefined;
+      if (onto && onto.key !== drag.key)
+        return {
+          key: onto.key,
+          label: `Put ${name} in ${onto.displayLabel}’s place`,
+          reorder: true,
+        };
+      const last = room.desks[room.desks.length - 1]?.key === drag.key;
+      if (hit?.kind === "cell" && !(last && room.omittedDeskCount === 0))
+        return {
+          key: room.key,
+          label: `Put ${name} last in ${room.displayLabel}`,
+          reorder: true,
+        };
+      return {
+        key: null,
+        label: `${drag.label}: drop on a desk to reorder`,
+      };
+    }
     return { key: room.key, label: `${drag.label} to ${room.displayLabel}` };
   }
   const deskKey =

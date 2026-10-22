@@ -258,10 +258,13 @@ test("layout subscription ACK and reconnect request browser reconciliation", asy
   });
   // No real sockets, settings-driven git operations, or pane processes.
   runtime.workspaceAutoSync.start = () => undefined;
-  runtime.herdr.call = async () => ({ panes: [] });
+  runtime.herdr.call = async (method) =>
+    method === "ping" ? { protocol: 22 } : { panes: [] };
   runtime.herdr.subscribe = (types) => {
     expect(types).toContain("layout.updated");
     expect(types).toContain("pane.updated");
+    // Herdr with tab.move also reports tab order changes.
+    expect(types).toContain("tab.moved");
     let ack!: () => void;
     let close!: () => void;
     const ready = new Promise<void>((resolve) => {
@@ -275,6 +278,9 @@ test("layout subscription ACK and reconnect request browser reconciliation", asy
   };
   try {
     runtime.startBackground();
+    // The event list waits for Herdr's protocol, so subscribing is async.
+    const started = Date.now() + 3000;
+    while (subscriptions.length < 1 && Date.now() < started) await Bun.sleep(1);
     expect(subscriptions).toHaveLength(1);
     expect(events).toEqual([]); // No snapshot invalidation before the ACK.
     subscriptions[0]!.ack();
@@ -300,6 +306,42 @@ test("layout subscription ACK and reconnect request browser reconciliation", asy
       data: {},
     });
     expect(events).toHaveLength(3);
+  } finally {
+    await runtime.stop();
+  }
+});
+
+test("Herdr without tab.move is not asked for tab.moved, which it would refuse", async () => {
+  const runtime = createLegacyConnectionRuntime({
+    config: {
+      socketPath: "/tmp/unused-old-herdr-control.sock",
+      clientSocketPath: "/tmp/unused-old-herdr-client.sock",
+      hasExplicitSocketPath: true,
+      hasExplicitClientSocketPath: true,
+    },
+    safeSend: () => true,
+    clientLabel: () => "test",
+    markRpcError: () => undefined,
+    onEvent: () => undefined,
+  });
+  runtime.workspaceAutoSync.start = () => undefined;
+  runtime.herdr.call = async (method) =>
+    method === "ping" ? { protocol: 15 } : { panes: [] };
+  const subscribed: string[][] = [];
+  runtime.herdr.subscribe = (types) => {
+    subscribed.push(types.map(String));
+    return {
+      ready: new Promise<void>(() => undefined),
+      closed: new Promise<void>(() => undefined),
+      close: () => undefined,
+    };
+  };
+  try {
+    runtime.startBackground();
+    const deadline = Date.now() + 3000;
+    while (subscribed.length < 1 && Date.now() < deadline) await Bun.sleep(1);
+    expect(subscribed[0]).toContain("tab.renamed");
+    expect(subscribed[0]).not.toContain("tab.moved");
   } finally {
     await runtime.stop();
   }

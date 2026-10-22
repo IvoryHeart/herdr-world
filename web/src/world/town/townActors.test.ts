@@ -5,7 +5,12 @@ import type { TownModel } from "./townModel";
 
 type Status = "working" | "blocked" | "done" | "idle" | "unknown";
 
-function world(statuses: Record<string, Status>, deskCount = 4) {
+function world(
+  statuses: Record<string, Status>,
+  deskCount = 4,
+  /** Herdr's tab order, as desk indexes; agents keep their desks. */
+  order?: number[],
+) {
   const deskKeys = Array.from(
     { length: deskCount },
     (_, i) => `room/desk-${i}`,
@@ -13,7 +18,14 @@ function world(statuses: Record<string, Status>, deskCount = 4) {
   const { layout } = layoutTown(
     {
       hosts: [{ key: "host", displayOrder: 0 }],
-      rooms: [{ key: "room", hostKey: "host", order: 0, deskKeys }],
+      rooms: [
+        {
+          key: "room",
+          hostKey: "host",
+          order: 0,
+          deskKeys: order ? order.map((i) => deskKeys[i]!) : deskKeys,
+        },
+      ],
     },
     "wide",
   );
@@ -137,4 +149,38 @@ test("finished agents queue at reception after waiting agents", () => {
   expect(actors.actors.get("b")!.goal).toEqual({ kind: "queue", slot: 0 });
   expect(actors.actors.get("a")!.goal).toEqual({ kind: "queue", slot: 1 });
   expect(actors.actors.get("c")!.goal?.kind).toBe("seat");
+});
+
+test("seated agents move with their desk when Herdr reorders it", () => {
+  const actors = new TownActors();
+  actors.sync(world({ a: "working" }).actorWorld, false);
+  const moved = world({ a: "working" }, 4, [3, 0, 1, 2]);
+  actors.sync(moved.actorWorld, false);
+  const actor = actors.actors.get("a")!;
+  const geometry = townSeat(moved.actorWorld.cells.get("room/desk-0")!, 0);
+  expect(actor.mode).toBe("seat");
+  expect([actor.x, actor.y]).toEqual([geometry.cx, geometry.seatedY]);
+});
+
+test("an agent walking back to a desk that moved walks to its new place", () => {
+  const actors = new TownActors();
+  actors.sync(world({ a: "working" }).actorWorld, false);
+  actors.sync(world({ a: "blocked" }).actorWorld, false);
+  settle(actors);
+  actors.sync(world({ a: "working" }).actorWorld, false);
+  for (let i = 0; i < 10; i += 1) actors.step(1 / 30);
+  expect(actors.actors.get("a")!.mode).toBe("walk");
+  const moved = world({ a: "working" }, 4, [3, 0, 1, 2]);
+  actors.sync(moved.actorWorld, false);
+  const geometry = townSeat(moved.actorWorld.cells.get("room/desk-0")!, 0);
+  // The path now ends at the new seat's aisle, not the old one.
+  const { path } = actors.actors.get("a")!;
+  expect(path[path.length - 1]).toEqual([
+    geometry.entry.x * TOWN_TILE + 8,
+    geometry.entry.y * TOWN_TILE + 13,
+  ]);
+  settle(actors);
+  const actor = actors.actors.get("a")!;
+  expect(actor.mode).toBe("seat");
+  expect([actor.x, actor.y]).toEqual([geometry.cx, geometry.seatedY]);
 });

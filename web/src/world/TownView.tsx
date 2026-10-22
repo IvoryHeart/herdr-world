@@ -6,6 +6,7 @@ import {
 import {
   requestAgentMove,
   requestDeskMove,
+  requestDeskReorder,
   townMoveNotice,
   townMoveResult,
   type TownMoveOutcome,
@@ -753,6 +754,37 @@ export default function TownView({
       setMovingKey(null);
     }
   };
+  /** Reorder a desk in its room: into `ontoKey`'s slot, or last when null. */
+  const runDeskReorder = async (
+    deskKey: string,
+    ontoKey: string | null,
+  ): Promise<TownMoveResult> => {
+    const desk = deskForKey(deskKey);
+    const room = desk ? roomForKey(desk.roomKey) : null;
+    const onto = ontoKey ? deskForKey(ontoKey) : null;
+    if (!desk || !room || (ontoKey && !onto) || movingKey) return "returned";
+    setMovingKey(desk.key);
+    try {
+      const outcome = await requestDeskReorder(desk, onto);
+      if (outcome.status === "moved") {
+        if (DEVTOOLS)
+          trace.record("move", {
+            label: desk.displayLabel,
+            status: outcome.status,
+          });
+        return "moved";
+      }
+      return reportMove(desk.displayLabel, outcome, desk.tabRef.nativeId);
+    } catch (cause) {
+      toast(
+        "error",
+        `${desk.displayLabel} may not have moved: ${String(cause)}`,
+      );
+      return "uncertain";
+    } finally {
+      setMovingKey(null);
+    }
+  };
   const runAgentMove = async (
     agentKey: string,
     deskKey: string,
@@ -808,20 +840,51 @@ export default function TownView({
               room.workspaceRef.connectionId === desk.tabRef.connectionId,
           )
         : [];
+      // Within its room a desk takes another desk's slot, as in a drag.
+      const home = desk ? roomForKey(desk.roomKey) : null;
+      const slots = home?.desks ?? [];
+      const reorder = (ontoKey: string | null) => () => {
+        setMoveFlow(null);
+        void runDeskReorder(flow.deskKey, ontoKey);
+      };
+      const places = [
+        ...slots
+          .filter((other) => other.key !== desk?.key)
+          .map((other) => ({
+            key: other.key,
+            label: `${other.displayLabel}’s place`,
+            detail: `Desk ${slots.indexOf(other) + 1} in ${home?.displayLabel}`,
+            onChoose: reorder(other.key),
+          })),
+        ...(slots[slots.length - 1]?.key !== desk?.key || home?.omittedDeskCount
+          ? [
+              {
+                key: `${flow.deskKey}:last`,
+                label: "Last",
+                detail: `After every desk in ${home?.displayLabel}`,
+                onChoose: reorder(null),
+              },
+            ]
+          : []),
+      ];
       return {
         title: `Move ${desk?.displayLabel ?? "desk"}`,
-        detail: rooms.length
-          ? "Choose a room on this host"
-          : "No other room on this host",
-        entries: rooms.map((room) => ({
-          key: room.key,
-          label: room.displayLabel,
-          detail: `${room.observedDeskCount} desks`,
-          onChoose: () => {
-            setMoveFlow(null);
-            void runDeskMove(flow.deskKey, room.key);
-          },
-        })),
+        detail:
+          places.length || rooms.length
+            ? "Choose a place in this room or a room on this host"
+            : "No other desk or room on this host",
+        entries: [
+          ...places,
+          ...rooms.map((room) => ({
+            key: room.key,
+            label: room.displayLabel,
+            detail: `${room.observedDeskCount} desks`,
+            onChoose: () => {
+              setMoveFlow(null);
+              void runDeskMove(flow.deskKey, room.key);
+            },
+          })),
+        ],
       };
     }
     const agent = agentByKey.get(flow.agentKey)?.agent;
@@ -1322,6 +1385,8 @@ export default function TownView({
             }}
             roomActions={{
               onDropDesk: (deskKey, roomKey) => runDeskMove(deskKey, roomKey),
+              onReorderDesk: (deskKey, ontoKey) =>
+                runDeskReorder(deskKey, ontoKey),
               onDropAgent: (agentKey, deskKey) =>
                 runAgentMove(agentKey, deskKey),
               onMoveDesk: (deskKey) => {
