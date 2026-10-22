@@ -186,7 +186,7 @@
       <li><b>0:13 — Town.</b> The roof lifts off a pixel office. “Workspaces are rooms. Tabs are desks.” Each desk carries a nameplate in its terminal’s colour, and agents type at their tables.</li>
       <li><b>0:17 — Reception.</b> One agent finishes and walks to reception with a ✓; another needs an answer and joins the queue with a “?”. “Done or stuck? They come to reception.”</li>
       <li><b>0:21 — Lounge.</b> The finished work is checked, so that agent heads to the lounge sofa. “Checked off? Off to the lounge.”</li>
-      <li><b>0:24 — Chat.</b> A click on the waiting agent opens its peek, which shows its latest Chat message, “Push 3 commits to origin and open a PR?”, with answers and a reply box. Open chat docks the conversation as a window on the right; you reply “Yes, push it and open the PR.” and the agent walks back to its desk. “Answer in Chat. Peek to reply, or dock the chat.”</li>
+      <li><b>0:24 — Chat.</b> A click on the waiting agent opens its peek, which shows its latest Chat message, “Push 3 commits to origin and open a PR?”, with answers, a reply box and Open terminal. Double-clicking the agent opens its chat, docked as a window on the right; you reply “Yes, push it and open the PR.” and the agent walks back to its desk. “Answer in Chat. Peek to reply, or open the chat.”</li>
       <li><b>0:27 — Every host.</b> The camera pulls back to a street of three buildings, one per host, each with its own reception board. “Every host is a building. Local or over plain OpenSSH. Nothing to install remotely but Herdr.”</li>
       <li><b>0:37 — Board.</b> The same terminals appear as cards strung to their workspaces, in the same colours; sticky notes drop in and are strung to the work they describe. “Plan on the Board.”</li>
       <li><b>0:46 — Pocket.</b> A phone shows Town and a notification: an agent on another host needs you. Its chat fills the phone screen; you answer and it goes back to work. “Herd from your pocket.”</li>
@@ -347,7 +347,7 @@ const CC = [
   [14.2, 17.3, 'Workspaces are rooms. Tabs are desks.'],
   [17.6, 20.8, 'Done or stuck? They come to reception.'],
   [21.0, 23.7, 'Checked off? Off to the lounge.'],
-  [23.9, 27.1, 'Answer in Chat. Peek to reply, or dock the chat.'],
+  [23.9, 27.1, 'Answer in Chat. Peek to reply, or open the chat.'],
   [30.6, 33.9, 'Every host is a building. One town.'],
   [34.0, 36.9, 'Local or over plain OpenSSH. Nothing to install remotely but Herdr.'],
   [37.7, 45.9, 'Plan on the Board: cards and strings, in the same colours as Town.'],
@@ -887,7 +887,8 @@ function reviewerAt(t) {
 }
 const PEEK_W = 480, PEEK_H = 334;
 function peekBox(t) { const [ax, ay] = reviewerAt(t); return [clamp(ax - PEEK_W / 2, 700, W - PEEK_W - 20), ay - PEEK_H - 60]; }
-// A click on an agent opens its peek: the latest Chat message and a reply.
+// A click on an agent opens its peek, as Town's does: the latest Chat
+// message, answers and a reply. Opening the agent (a double-click) opens Chat.
 function townPeek(t) {
   const op = eback(seg(t, 24.3, 24.5)) * (1 - seg(t, 24.85, 25.0));
   if (op <= .01) return;
@@ -896,17 +897,19 @@ function townPeek(t) {
   townPanel(x, y, w, PEEK_H);
   fillRR(x + 14, y + 14, 44, 50, 6, '#1b2230'); person('reviewer', x + 36, y + 60, 2);
   text('reviewer', x + 70, y + 38, 20, C.text, { fam: F.px, weight: 700 });
-  text('codex · api · Atlas · needs you', x + 70, y + 60, 15, '#a9b2a4');
+  text('codex · api · needs you', x + 70, y + 60, 15, '#a9b2a4');
+  townButton(x + w - 196, y + 18, 136, 36, 'Open terminal', { size: 14 });
+  townButton(x + w - 52, y + 18, 38, 36, '×', { size: 20 });
   fillRR(x + 14, y + 76, w - 28, 92, 8, '#0d1117');
-  text('CHAT · LATEST', x + 28, y + 100, 12, '#a9b2a4', { fam: F.px, weight: 700 });
+  text('LATEST MESSAGE', x + 28, y + 100, 12, '#a9b2a4', { fam: F.px, weight: 700 });
   wrap('Push 3 commits to origin and open a PR?', w - 60, 18).forEach((l, k) => text(l, x + 28, y + 128 + k * 24, 18, '#ffd166'));
   townButton(x + 14, y + 180, (w - 34) / 2, 42, 'Yes  ¹');
   townButton(x + 20 + (w - 34) / 2, y + 180, (w - 34) / 2, 42, 'No  ²');
   fillRR(x + 14, y + 232, w - 110, 42, 9, '#0d1117'); strokeRR(x + 14, y + 232, w - 110, 42, 9, '#090c11', 2);
   text('Reply… (just start typing)', x + 28, y + 259, 16, '#a9b2a4');
   townButton(x + w - 88, y + 232, 74, 42, 'Send', { size: 16 });
-  townButton(x + 14, y + 284, (w - 34) / 2, 36, 'Open chat ›', { hot: true, size: 16, ring: t >= 24.8 && t < 24.95 });
-  townButton(x + 20 + (w - 34) / 2, y + 284, (w - 34) / 2, 36, 'Terminal', { size: 16 });
+  townButton(x + 14, y + 284, (w - 34) / 2, 36, 'Inspector', { size: 16 });
+  townButton(x + 20 + (w - 34) / 2, y + 284, (w - 34) / 2, 36, 'Next ›', { size: 16 });
   ctx.restore();
 }
 // Chat opens as a window docked on the right of Town.
@@ -984,15 +987,14 @@ function S34(t) {
     caption(t, 21.0, 23.7, 'Checked off?', { ...L, y: 480 });
     caption(t, 21.3, 23.7, 'Off to the *lounge.*', { ...L, y: 600 });
     caption(t, 23.9, 27.1, 'Answer in *Chat.*', { ...L, y: 470, accent: C.green });
-    caption(t, 24.4, 27.1, 'Peek to reply, or dock the chat.', { ...L, y: 560, size: 34, fam: F.mono, weight: 700, color: C.soft, stagger: .03 });
+    caption(t, 24.4, 27.1, 'Peek to reply, or open the chat.', { ...L, y: 560, size: 34, fam: F.mono, weight: 700, color: C.soft, stagger: .03 });
     townPeek(t);
     chatDock(t);
-    // cursor: the waiting reviewer, then the peek's Open chat
+    // cursor: click the waiting reviewer (peek), then double-click it (Chat)
     if (t >= 23.6 && t < 25.0) {
-      const [tx, ty] = reviewerAt(t), [px, py] = peekBox(t);
-      const cp = eio(seg(t, 23.6, 24.2)), op = eio(seg(t, 24.45, 24.8));
-      const mx = lerp(lerp(1500, tx, cp), px + 110, op), my = lerp(lerp(980, ty, cp), py + 300, op);
-      clickRing(mx, my, t, 24.25); clickRing(mx, my, t, 24.85); pointer(mx, my);
+      const [tx, ty] = reviewerAt(t), cp = eio(seg(t, 23.6, 24.2));
+      const mx = lerp(1500, tx, cp), my = lerp(980, ty, cp);
+      clickRing(mx, my, t, 24.25); clickRing(mx, my, t, 24.72); clickRing(mx, my, t, 24.84); pointer(mx, my);
     }
     band(t, 30.5, 37.0, 120, 250);
     caption(t, 30.6, 33.9, 'Every host is a *building.* One town.', { y: 150, size: 100 });
@@ -1261,7 +1263,7 @@ function buildScore() {
   E(18.2, A => { A.tone(18.2, { f: mf(72), dur: .12, type: 'square', vol: .07, lp: 3000 }); A.tone(18.34, { f: mf(79), dur: .22, type: 'square', vol: .07, lp: 3000 }); });
   E(21.0, A => { A.tone(21.0, { f: mf(67), dur: .18, type: 'triangle', vol: .12 }); A.tone(21.18, { f: mf(60), dur: .3, type: 'triangle', vol: .12 }); });
   E(23.3, A => { A.tone(23.3, { f: 2600, dur: .25, type: 'sine', vol: .08 }); A.tone(23.3, { f: 3900, dur: .2, type: 'sine', vol: .05 }); });
-  [24.25, 24.85].forEach(tt => E(tt, A => A.noise(tt, { dur: .03, vol: .3, type: 'highpass', freq: 2000 })));
+  [24.25, 24.72, 24.84].forEach(tt => E(tt, A => A.noise(tt, { dur: .03, vol: .3, type: 'highpass', freq: 2000 })));
   E(24.3, A => A.tone(24.3, { f: mf(76), f2: mf(83), dur: .1, type: 'sine', vol: .08 }));
   E(24.9, A => A.noise(24.9, { dur: .3, vol: .12, type: 'bandpass', freq: 800, freq2: 3000, q: 1 }));
   for (let k = 0; k < 9; k++) { const tt = 25.35 + k * .05; E(tt, A => A.noise(tt, { dur: .018, vol: .08, type: 'bandpass', freq: 2200 + hash(k + 7) * 1500, q: 2 })); }
