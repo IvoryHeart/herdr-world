@@ -138,6 +138,41 @@ The calm window bar goes from 119 to 38 (from 177 to 38 on Changes).
   head and supplies slot content instead: identity, views and actions. That is a
   small, upstreamable "header slots" change; its view logic stays where it is.
 
+## Phone window placement
+
+The agent's one window on a phone (today a full-screen "compact" frame) can be
+moved and resized by touch. This replaces the sheet behaviour that #262 gave the
+retired chat window.
+
+- **Placements:** `full` (the default, below the safe-area top), `bottom` sheet,
+  `top` sheet, and `floating` (a card the width of the screen less 24px).
+- **Move:** drag the window bar (not its buttons). Releasing in the top 15% of
+  the screen docks top, in the bottom 15% docks bottom, and anywhere else
+  floats. Dragging a docked sheet against its own edge changes its height
+  instead.
+- **Height:** sheets snap to ⅓, ½ or full when released within 24px of a snap
+  point; otherwise the height is kept as dragged (free resize). The minimum is
+  the bar plus 96px of content. Dragging past the minimum snaps to ⅓; it never
+  closes the window, because Back does that. A floating card resizes from its
+  bottom edge.
+- **Keyboard-safe:** while the on-screen keyboard is open (`visualViewport`, the
+  existing `--keyboard-inset-content`), Chat's composer stays attached to the
+  keyboard and the bar stays visible. A bottom sheet's height is capped at the
+  visible viewport less the safe-area top. A top sheet or floating card whose
+  composer would sit under the keyboard grows to full until the keyboard
+  closes, then returns.
+- **The map stays live:** outside a sheet or card, Town still pans, zooms and
+  takes taps.
+- **Persisted per device:** placement, height fraction and floating rectangle
+  go in local storage only (`worldWindowPhoneLayout.v1`). The setting applies
+  to every agent window, not to each agent separately.
+- **Non-gesture path:** ⋯ → Position offers Full screen, Top, Bottom, ⅓, ½ and
+  Floating. Reduced motion turns off the settle animation.
+- **Ownership:** design owns the bar (the drag target) and ⋯ → Position. Peek
+  implements the gesture and placement state in `WindowFrame`'s compact mode,
+  reusing `MobileSheetHandle`'s drag and settle logic, so there is one code
+  path.
+
 ## Phase 2 (after owner approval)
 
 1. `WindowBar` with Town and calm skins, used by the Inspector, the Spaces tab
