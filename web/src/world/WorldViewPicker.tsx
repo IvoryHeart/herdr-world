@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { type KeyboardEvent, useEffect, useRef, useState } from "react";
 import { Maximize2 } from "lucide-react";
 import { useLayer } from "../layerStack";
 import type { WorldView } from "./worldViewRouting";
@@ -66,6 +66,41 @@ function PhoneViewPicker({
     (destination) => destination.view === view,
   );
   const CurrentIcon = current?.Icon;
+  // A menu takes focus on the current view and moves with the arrow keys,
+  // Home and End; Tab leaves it closed, and Escape or Back closes it through
+  // the layer stack.
+  useEffect(() => {
+    if (!open) return;
+    menu.current
+      ?.querySelector<HTMLButtonElement>(
+        '[aria-checked="true"], [role^="menuitem"]',
+      )
+      ?.focus();
+  }, [open]);
+  const onMenuKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === "Tab") {
+      setOpen(false);
+      return;
+    }
+    const items = Array.from(
+      menu.current?.querySelectorAll<HTMLButtonElement>('[role^="menuitem"]') ??
+        [],
+    );
+    const index = items.indexOf(document.activeElement as HTMLButtonElement);
+    const next =
+      event.key === "ArrowDown"
+        ? (index + 1) % items.length
+        : event.key === "ArrowUp"
+          ? (index - 1 + items.length) % items.length
+          : event.key === "Home"
+            ? 0
+            : event.key === "End"
+              ? items.length - 1
+              : -1;
+    if (next < 0) return;
+    event.preventDefault();
+    items[next]?.focus();
+  };
   const choose = (action: () => void) => {
     setOpen(false);
     action();
@@ -78,6 +113,7 @@ function PhoneViewPicker({
           className="world-view-picker-menu"
           role="menu"
           aria-label="World view"
+          onKeyDown={onMenuKeyDown}
         >
           {WORLD_VIEW_DESTINATIONS.map(({ view: destination, label, Icon }) => (
             <button

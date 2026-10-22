@@ -1802,11 +1802,20 @@ export default function App({
     },
     [sidebarHidden, zenMode],
   );
-  const toggleZenMode = useCallback(
-    () => applyZenMode(!zenMode),
-    [applyZenMode, zenMode],
+  // Only a choice the user makes is stored, so a scope's default stays a
+  // default until someone picks otherwise.
+  const chooseZenMode = useCallback(
+    (next: boolean) => {
+      worldLocalStorage.setItem(zenKeyRef.current, serializeZenMode(next));
+      applyZenMode(next);
+    },
+    [applyZenMode],
   );
-  const exitZen = useCallback(() => applyZenMode(false), [applyZenMode]);
+  const toggleZenMode = useCallback(
+    () => chooseZenMode(!zenMode),
+    [chooseZenMode, zenMode],
+  );
+  const exitZen = useCallback(() => chooseZenMode(false), [chooseZenMode]);
   const openWorkspaces = useCallback(() => {
     setSidebarHidden(false);
     if (mobile) {
@@ -3710,16 +3719,12 @@ export default function App({
       String(terminalFontScale),
     );
   }, [terminalFontScale]);
-  // A view switch moves to that view's own Zen choice. The write below follows
-  // the key through a ref, so the old choice is never copied to the new key.
+  // A view switch moves to that view's own Zen choice, or its default.
   const applyZenModeRef = useRef(applyZenMode);
   applyZenModeRef.current = applyZenMode;
   useEffect(() => {
     applyZenModeRef.current(loadZenMode(zenKey, zenDefaultRef.current));
   }, [zenKey]);
-  useEffect(() => {
-    worldLocalStorage.setItem(zenKeyRef.current, serializeZenMode(zenMode));
-  }, [zenMode]);
   useEffect(() => {
     worldLocalStorage.setItem(
       MOBILE_TERMINAL_SHORTCUTS_STORAGE_KEY,
@@ -4298,7 +4303,8 @@ export default function App({
                 setTerminalFontName(normalizeTerminalFontFamily(name))
               }
               zenMode={zenMode}
-              onZenModeChange={applyZenMode}
+              zenAvailable={!mobile || zenOnMobile}
+              onZenModeChange={chooseZenMode}
               onShowShortcuts={openShortcutCheatSheet}
               onMobileTerminalShortcutsChange={setMobileTerminalShortcuts}
               onMobileTerminalSideShortcutsChange={

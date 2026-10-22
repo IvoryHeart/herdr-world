@@ -16,6 +16,7 @@ import {
   shortcutLabel,
   updateShortcut,
 } from "../shortcutPreferences";
+import { worldLocalStorage } from "../browserStorage";
 import { __storeTesting, store } from "../store";
 import type { Pane, PaneLayout, Tab, Workspace } from "../types";
 import "../styles/tokens.css";
@@ -638,10 +639,18 @@ async function run() {
       ) !== null,
     "Town opening in Zen with the view picker",
   );
+  check(
+    worldLocalStorage.getItem("zenMode.town") === null,
+    "Town's default Zen was stored as if the user had chosen it",
+  );
   document.querySelector<HTMLButtonElement>(".zen-dock .zen-island")?.click();
   await until(
     () => document.querySelector(".app")?.classList.contains("zen") === false,
     "leaving Town's default Zen",
+  );
+  check(
+    worldLocalStorage.getItem("zenMode.town") === "0",
+    "leaving Zen in Town did not keep Town's own choice",
   );
   await until(() => {
     const seat = document.querySelector<HTMLButtonElement>(
