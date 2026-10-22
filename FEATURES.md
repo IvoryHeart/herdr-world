@@ -42,12 +42,14 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     only an explicit move changes Herdr's layout, always within one host.
   See the [Town exercise](./docs/TUTORIAL.md#town).
 - **Terminal colours.** Every tab has one colour, shown as the tab in Spaces,
-  the table in Town and the card in Board. A tab starts with a stable default
-  colour; choose another from the tab's menu in Spaces, an agent's peek
-  (**Colour**) in Town, or the selected card in Board, and reset it the same
-  way. Herdr has no tab colour, so the World service saves the choice by host
-  and Herdr tab ID; it is the same on every device and survives a Herdr restart
-  and a move to another workspace.
+  the card in Board and its table in Town (tabs beyond a room's drawn tables
+  show it in Spaces and Board). A tab starts with a stable default colour, or
+  its workspace's Board colour; choose another from the tab's menu in Spaces,
+  an agent's peek (**Colour**) in Town, or the selected card in Board, and reset
+  a tab's own colour the same way. Herdr has no tab colour, so the World service
+  saves the choice keyed by host and Herdr tab ID, the same on every device. A
+  tab moved to another room in World keeps the colour it showed, even a
+  default; a closed tab's saved colour is dropped.
 
 - **Board** (`/board`) shows hosts as zones, workspaces as cards and tabs as
   cards around their workspace, beside your notes. Cards are elastic while you

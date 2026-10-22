@@ -41,11 +41,7 @@ import {
 import { WORLD_OBSERVABILITY_UPDATED_EVENT } from "../workspaceResource";
 import { TownCanvas } from "./town/TownCanvas";
 import { townDeskColorTarget } from "./town/townModel";
-import {
-  customTerminalColor,
-  terminalColor,
-  type TerminalColor,
-} from "./terminalColor";
+import { resolveTerminal, type TerminalColor } from "./terminalColor";
 import { setTerminalColor, useTerminalColors } from "./useTerminalColors";
 import {
   sendTownReply,
@@ -1072,10 +1068,11 @@ export default function TownView({
     const desk = deskKey ? deskForKey(deskKey) : null;
     const target = desk ? townDeskColorTarget(office, desk) : null;
     if (!target) return null;
-    const custom = customTerminalColor(terminalColors, target);
+    const { color, own } = resolveTerminal(terminalColors, target);
     return {
-      current: custom ?? terminalColor(terminalColors, target),
-      custom: custom !== null,
+      current: color,
+      // Only the tab's own colour can be reset; a workspace's is not its.
+      custom: own,
       onColor: (color: TerminalColor | null) =>
         void setTerminalColor(target, color),
     };

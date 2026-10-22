@@ -6,6 +6,7 @@ import type {
   WorldSpaceObject,
 } from "../worldObject";
 import { yieldWorldTask } from "../worldObject";
+import { cardKey, tabCardKey } from "../../../../shared/terminalColor";
 
 /**
  * Board's projection of World's bounded topology: hosts as zones, workspaces as
@@ -99,23 +100,9 @@ export function mostUrgentStatus(statuses: readonly WorldAgentStatus[]) {
   return best;
 }
 
-export const boardKey = (connectionId: string, nativeId: string) =>
-  `${connectionId}:${nativeId}`;
-
-/**
- * A tab's card key. Current Herdr IDs never collide (`w1` and `w1:t1`), so a
- * tab keeps the plain key and saved arrangements stay valid; older Herdr can
- * give a tab the same ID as its workspace, and then the tab's key is
- * qualified so the two cards stay distinct.
- */
-export const boardTabKey = (
-  connectionId: string,
-  tabId: string,
-  workspaceIds: ReadonlySet<string>,
-) =>
-  workspaceIds.has(tabId)
-    ? boardKey(connectionId, `tab:${tabId}`)
-    : boardKey(connectionId, tabId);
+/** Card keys are shared with terminal colours (shared/terminalColor.ts). */
+export const boardKey = cardKey;
+export const boardTabKey = tabCardKey;
 
 const hostKeyOf = (host: WorldHostObject) => host.connectionId;
 

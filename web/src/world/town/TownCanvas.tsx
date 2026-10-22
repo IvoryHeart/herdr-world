@@ -57,6 +57,7 @@ import {
 } from "./townLayout";
 import {
   townAttention,
+  townDeskColors,
   townModelFromProjection,
   townRoomCounts,
   type TownModel,
@@ -70,7 +71,11 @@ import {
 import { townPortrait } from "./townSprites";
 import { townTargets, type TownTarget } from "./townTargets";
 import { yieldWorldTask } from "../worldObject";
-import { TERMINAL_COLOR_HEX, type TerminalColors } from "../terminalColor";
+import {
+  TERMINAL_COLOR_HEX,
+  type TerminalColor,
+  type TerminalColors,
+} from "../terminalColor";
 import "./town.css";
 
 export type TownRoomActions = {
@@ -172,10 +177,24 @@ export function TownCanvas({
     formFactor,
     memory: new Map(),
   });
-  const model = useMemo(
-    () => townModelFromProjection(projection, terminalColors),
-    [projection, terminalColors],
+  const topology = useMemo(
+    () => townModelFromProjection(projection),
+    [projection],
   );
+  // Colours ride on the model but not its layout input: a new colour repaints
+  // tables without placing the town again.
+  const lastDeskColors = useRef<ReadonlyMap<string, TerminalColor>>(new Map());
+  const model = useMemo(() => {
+    // The same colours keep the same map, so status updates never rebuild.
+    const next = townDeskColors(projection, terminalColors);
+    const last = lastDeskColors.current;
+    if (
+      next.size !== last.size ||
+      [...next].some(([key, color]) => last.get(key) !== color)
+    )
+      lastDeskColors.current = next;
+    return { ...topology, deskColors: lastDeskColors.current };
+  }, [topology, projection, terminalColors]);
   const layout = useMemo(() => {
     const previous =
       memoryRef.current.formFactor === formFactor

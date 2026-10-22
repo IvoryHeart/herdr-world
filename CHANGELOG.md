@@ -12,7 +12,8 @@ are optional because the merged PR history records their source.
 - Give every terminal one colour, shown as its tab in Spaces, its table in
   Town and its card in Board. Tabs start with a stable default; a colour chosen
   from the Spaces tab menu, a Town peek or Board is saved by the World service
-  for every device, follows a tab moved to another workspace and can be reset.
+  for every device and can be reset. A tab moved to another room keeps the
+  colour it showed.
   Town's table nameplates now sit on the table's front edge, and agents are
   drawn larger.
 

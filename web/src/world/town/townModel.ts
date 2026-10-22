@@ -44,24 +44,54 @@ export type TownRoomCounts = {
 
 export type TownAgentStatus = OfficeAgent["semanticStatus"];
 
+/** Each connection's workspace IDs, which qualify a colliding tab key. */
+function workspaceIdsOf(projection: HerdrOfficeProjection) {
+  const ids = new Map<string, Set<string>>();
+  for (const room of projection.rooms) {
+    const { connectionId, nativeId } = room.workspaceRef;
+    if (!ids.has(connectionId)) ids.set(connectionId, new Set());
+    ids.get(connectionId)!.add(nativeId);
+  }
+  return ids;
+}
+
+const deskTarget = (
+  room: OfficeRoom,
+  desk: OfficeDesk,
+  ids: ReadonlyMap<string, ReadonlySet<string>>,
+): TerminalColorTarget => ({
+  connectionId: desk.tabRef.connectionId,
+  workspaceId: room.workspaceRef.nativeId,
+  tabId: desk.tabRef.nativeId,
+  workspaceIds: ids.get(desk.tabRef.connectionId) ?? new Set(),
+});
+
 /** What a desk's colour is saved under: its Herdr tab on its connection. */
 export function townDeskColorTarget(
   projection: HerdrOfficeProjection,
   desk: OfficeDesk,
 ): TerminalColorTarget | null {
-  const { connectionId } = desk.tabRef;
   const room = projection.rooms.find((entry) => entry.key === desk.roomKey);
-  if (!room) return null;
-  return {
-    connectionId,
-    workspaceId: room.workspaceRef.nativeId,
-    tabId: desk.tabRef.nativeId,
-    workspaceIds: new Set(
-      projection.rooms
-        .filter((entry) => entry.workspaceRef.connectionId === connectionId)
-        .map((entry) => entry.workspaceRef.nativeId),
-    ),
-  };
+  return room ? deskTarget(room, desk, workspaceIdsOf(projection)) : null;
+}
+
+/**
+ * Each desk's terminal colour. Kept apart from the model's layout input, so a
+ * colour change repaints tables without placing the town again.
+ */
+export function townDeskColors(
+  projection: HerdrOfficeProjection,
+  colors: TerminalColors,
+): ReadonlyMap<string, TerminalColor> {
+  const ids = workspaceIdsOf(projection);
+  const deskColors = new Map<string, TerminalColor>();
+  for (const room of projection.rooms)
+    for (const desk of room.desks)
+      deskColors.set(
+        desk.key,
+        terminalColor(colors, deskTarget(room, desk, ids)),
+      );
+  return deskColors;
 }
 
 export function townModelFromProjection(
@@ -73,27 +103,10 @@ export function townModelFromProjection(
   const desks = new Map<string, OfficeDesk>();
   const devices = new Map<string, OfficePaneDevice>();
   const agentSeats = new Map<string, TownSeatRef>();
-  const deskColors = new Map<string, TerminalColor>();
-  const workspaceIds = new Map<string, Set<string>>();
-  for (const room of projection.rooms) {
-    const { connectionId, nativeId } = room.workspaceRef;
-    if (!workspaceIds.has(connectionId))
-      workspaceIds.set(connectionId, new Set());
-    workspaceIds.get(connectionId)!.add(nativeId);
-  }
   for (const room of projection.rooms) {
     rooms.set(room.key, room);
     for (const desk of room.desks) {
       desks.set(desk.key, desk);
-      deskColors.set(
-        desk.key,
-        terminalColor(colors, {
-          connectionId: desk.tabRef.connectionId,
-          workspaceId: room.workspaceRef.nativeId,
-          tabId: desk.tabRef.nativeId,
-          workspaceIds: workspaceIds.get(desk.tabRef.connectionId) ?? new Set(),
-        }),
-      );
       desk.paneDevices.forEach((device, seat) => {
         devices.set(device.key, device);
         if (device.agentKey && !agentSeats.has(device.agentKey))
@@ -151,7 +164,7 @@ export function townModelFromProjection(
     agents,
     agentSeats,
     roomCounts,
-    deskColors,
+    deskColors: townDeskColors(projection, colors),
   };
 }
 

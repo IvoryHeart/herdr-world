@@ -1563,12 +1563,20 @@ export async function createTownRenderer(
       return level;
     },
     setScene(nextModel, nextLayout, nextState) {
+      const layoutChanged = nextLayout !== layout;
+      // Tables are baked with their desk's colour, so a new colour rebuilds.
+      const colorsChanged = nextModel.deskColors !== model?.deskColors;
       const first = !layout;
       model = nextModel;
       layout = nextLayout;
       state = nextState;
       camera.calm = nextState.calm;
-      // Tables are baked with their desk's colour, so a new colour rebuilds.
+      if (!layoutChanged && !colorsChanged) {
+        syncActors(first);
+        dimDirty = true;
+        request("scene");
+        return;
+      }
       const key = `${nextLayout.width}x${nextLayout.height}:${nextLayout.buildings.map((b) => `${b.hostKey}@${b.x},${b.y},${b.w},${b.h}:${b.rooms.map((r) => r.cells.map((c) => (c.deskKey ? `${c.deskKey}#${c.seats}#${deskColor(c.deskKey)}` : "-")).join(",")).join("|")}`).join(";")}`;
       if (key !== sceneKey) {
         sceneKey = key;

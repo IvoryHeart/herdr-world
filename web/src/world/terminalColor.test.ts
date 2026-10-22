@@ -1,12 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import { boardTabKey } from "./board/boardModel";
 import {
-  customTerminalColor,
   defaultTerminalColor,
+  resolveTerminal,
   TERMINAL_COLORS,
   terminalColor,
   terminalColorKey,
 } from "./terminalColor";
+import { keepColors } from "./useTerminalColors";
 
 const tab = (tabId: string, connectionId = "studio") => ({
   connectionId,
@@ -40,7 +41,12 @@ describe("terminal colour", () => {
   });
 
   test("a chosen colour wins, then the workspace's, then the default", () => {
-    expect(customTerminalColor({}, tab("w1:t1"))).toBeNull();
+    expect(resolveTerminal({}, tab("w1:t1")).own).toBe(false);
+    // An inherited workspace colour is not the tab's own: nothing to reset.
+    expect(resolveTerminal({ "studio:w1": "pink" }, tab("w1:t1"))).toEqual({
+      color: "pink",
+      own: false,
+    });
     expect(terminalColor({ "studio:w1": "pink" }, tab("w1:t1"))).toBe("pink");
     expect(
       terminalColor(
@@ -50,7 +56,15 @@ describe("terminal colour", () => {
     ).toBe("teal");
     // Another host's tab with the same Herdr ID is a different terminal.
     expect(
-      customTerminalColor({ "studio:w1:t1": "teal" }, tab("w1:t1", "lab")),
-    ).toBeNull();
+      resolveTerminal({ "studio:w1:t1": "teal" }, tab("w1:t1", "lab")).own,
+    ).toBe(false);
+  });
+
+  test("a Board revision that changes no colour keeps the same colours object", () => {
+    const last = { "studio:w1:t1": "teal" } as const;
+    expect(keepColors(last, { "studio:w1:t1": "teal" })).toBe(last);
+    const changed = { "studio:w1:t1": "pink" } as const;
+    expect(keepColors(last, changed)).toBe(changed);
+    expect(keepColors(last, {})).toEqual({});
   });
 });
