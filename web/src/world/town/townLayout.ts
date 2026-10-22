@@ -141,6 +141,15 @@ type RoomMemory = {
   cells: Map<string, { col: number; row: number }>;
 };
 
+/**
+ * Pinned desks' cells by desk key. A null cell (a desk just pinned) keeps the
+ * cell the desk has in this scene until Town saves it.
+ */
+export type TownPinnedCells = ReadonlyMap<
+  string,
+  { col: number; row: number } | null
+>;
+
 /** Placement memory carried between layouts of one live scene. */
 export type TownPlacementMemory = Map<string, RoomMemory>;
 
@@ -160,19 +169,53 @@ export function townTierFor(desks: number, minimumTier = 0) {
  * i-th tab takes the i-th cell in reading order, so a reorder in Herdr, Spaces
  * or Town moves desks, and a closed desk leaves no gap. The room only grows
  * while a scene is live, so its walls never jump when a desk closes.
+ *
+ * A pinned desk keeps its cell whatever the tab order or room size, and the
+ * room grows to hold it; the other desks take the free cells in tab order.
  */
 function placeRoomDesks(
   deskKeys: readonly string[],
   previous: RoomMemory | undefined,
+  pins: TownPinnedCells | undefined,
 ): { memory: RoomMemory; overflow: string[] } {
-  const tier = townTierFor(deskKeys.length, previous?.tier ?? 0);
+  const fixed = new Map<string, { col: number; row: number }>();
+  if (pins?.size)
+    for (const key of deskKeys) {
+      if (!pins.has(key)) continue;
+      const cell = pins.get(key) ?? previous?.cells.get(key);
+      if (cell) fixed.set(key, cell);
+    }
+  let tier = townTierFor(deskKeys.length, previous?.tier ?? 0);
+  const outside = (tier: number) =>
+    [...fixed.values()].some(
+      ({ col, row }) =>
+        col >= TOWN_ROOM_TIERS[tier]![0] || row >= TOWN_ROOM_TIERS[tier]![1],
+    );
+  while (tier < TOWN_ROOM_TIERS.length - 1 && outside(tier)) tier += 1;
   const [cols, rows] = TOWN_ROOM_TIERS[tier]!;
   const capacity = Math.min(cols * rows - 1, TOWN_MAX_RENDERED_DESKS);
   const cells = new Map<string, { col: number; row: number }>();
-  deskKeys.slice(0, capacity).forEach((key, index) => {
+  const taken = new Set<number>();
+  for (const [key, { col, row }] of fixed) {
+    const index = row * cols + col;
+    if (col >= cols || row >= rows || taken.has(index)) continue;
+    if (cells.size >= capacity) break;
+    cells.set(key, { col, row });
+    taken.add(index);
+  }
+  const overflow: string[] = [];
+  let index = 0;
+  for (const key of deskKeys) {
+    if (cells.has(key)) continue;
+    if (cells.size >= capacity) {
+      overflow.push(key);
+      continue;
+    }
+    while (taken.has(index)) index += 1;
     cells.set(key, { col: index % cols, row: Math.floor(index / cols) });
-  });
-  return { memory: { tier, cells }, overflow: deskKeys.slice(capacity) };
+    taken.add(index);
+  }
+  return { memory: { tier, cells }, overflow };
 }
 
 function mulberry32(seed: number) {
@@ -198,11 +241,13 @@ function draftBuilding(
   rooms: readonly TownInputRoom[],
   memory: TownPlacementMemory,
   nextMemory: TownPlacementMemory,
+  pins: TownPinnedCells | undefined,
 ): DraftBuilding {
   const placed = rooms.map((room) => {
     const { memory: roomMemory, overflow } = placeRoomDesks(
       room.deskKeys,
       memory.get(room.key),
+      pins,
     );
     nextMemory.set(room.key, roomMemory);
     const [cols, rows] = TOWN_ROOM_TIERS[roomMemory.tier]!;
@@ -256,6 +301,7 @@ export function layoutTown(
   input: TownInput,
   formFactor: TownFormFactor,
   memory: TownPlacementMemory = new Map(),
+  pins?: TownPinnedCells,
 ): { layout: TownLayout; memory: TownPlacementMemory } {
   const nextMemory: TownPlacementMemory = new Map();
   const hosts = [...input.hosts].sort(
@@ -269,6 +315,7 @@ export function layoutTown(
         .sort((a, b) => a.order - b.order || a.key.localeCompare(b.key)),
       memory,
       nextMemory,
+      pins,
     ),
   );
   const seatsOf = new Map<string, number>();

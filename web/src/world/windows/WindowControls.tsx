@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { measuredFixedPositionScale } from "../../fixedPositionScale";
-import { Columns2, Maximize2, Minimize2, Minus, X } from "lucide-react";
+import { Columns2, Maximize2, Minimize2, Minus, Pin, X } from "lucide-react";
 import {
   ColorSwatchButton,
   type ColorChoice,
@@ -25,6 +25,8 @@ export type ManagedWindowControls = {
     current: ColorValue;
     onColor(id: string | null): void;
   } | null;
+  /** An agent window's Town desk pin (useDeskPins.ts), toggled in its menu. */
+  pin?: { pinned: boolean; onPin(pinned: boolean): void } | null;
 };
 const choices: { target: SnapTarget; label: string }[] = [
   { target: "left", label: "Left half" },
@@ -74,7 +76,10 @@ export function WindowControls({
             8,
             Math.min(
               anchor.bottom + 4,
-              window.innerHeight - (controls.color ? 250 : 210) * scale - 8,
+              window.innerHeight -
+                (210 + (controls.color ? 40 : 0) + (controls.pin ? 40 : 0)) *
+                  scale -
+                8,
             ),
           ) / scale,
       }
@@ -91,7 +96,7 @@ export function WindowControls({
           event.stopPropagation();
           const items = Array.from(
             menu.current?.querySelectorAll<HTMLButtonElement>(
-              '[role="menuitem"], .color-swatch-button',
+              '[role="menuitem"], [role="menuitemcheckbox"], .color-swatch-button',
             ) ?? [],
           );
           const index = items.indexOf(
@@ -179,6 +184,24 @@ export function WindowControls({
             >
               Float window
             </button>
+            {controls.pin ? (
+              <button
+                type="button"
+                role="menuitemcheckbox"
+                aria-checked={controls.pin.pinned}
+                className="world-window-pin"
+                title="A pinned desk keeps its place in Town, and its agents stay at it"
+                onClick={() => {
+                  controls.pin?.onPin(!controls.pin.pinned);
+                  setOpen(false);
+                }}
+              >
+                <Pin size={14} aria-hidden="true" />
+                {controls.pin.pinned
+                  ? "Unpin desk in Town"
+                  : "Pin desk in Town"}
+              </button>
+            ) : null}
             {controls.color ? (
               <ColorSwatchButton
                 className="world-window-color"

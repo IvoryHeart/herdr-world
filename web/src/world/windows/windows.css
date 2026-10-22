@@ -131,6 +131,17 @@
 .world-window-snap-menu > button:focus {
   background: var(--accent-soft);
 }
+.world-window-snap-menu > .world-window-pin {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-top: 1px solid var(--shell-border);
+  border-radius: 0;
+}
+.world-window-snap-menu > .world-window-pin[aria-checked="true"] {
+  color: var(--accent);
+}
 .world-window-snap-menu > .world-window-color {
   grid-column: 1 / -1;
   justify-content: flex-start;

@@ -5,6 +5,7 @@ import {
   EllipsisVertical,
   Maximize2,
   Minus,
+  Pin,
   Plus,
   Sparkles,
 } from "lucide-react";
@@ -493,6 +494,8 @@ export default function BoardView({
   const renderKeysRef = useRef<Set<string> | null>(null);
   const selectedKeysRef = useRef<ReadonlySet<string>>(new Set());
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
+  /** Cards pinned in place (layout.pinned), for their badge and the bar. */
+  const [pinnedKeys, setPinnedKeys] = useState<ReadonlySet<string>>(new Set());
   const [query, setQuery] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
   /** The pane chooser: to pick a pane, or to finish a string to one. */
@@ -836,6 +839,7 @@ export default function BoardView({
         { phone: isPhone(), sizeOf },
       );
       travelToLayout(model);
+      setPinnedKeys(new Set(layout.current.pinned.keys()));
       const folded = new Set(saved.layout.folded);
       if (
         folded.size !== latest.current.collapsed.size ||
@@ -865,6 +869,7 @@ export default function BoardView({
         }
       }
       setCollapsed(new Set(saved.layout.folded));
+      setPinnedKeys(new Set(layout.current.pinned.keys()));
       fit(true);
     }
     invalidate("change");
@@ -2218,6 +2223,7 @@ export default function BoardView({
         window.clearTimeout(tidyFit.current);
         layout.current = before;
         travelToLayout(latest.current.model);
+        setPinnedKeys(new Set(layout.current.pinned.keys()));
         placeNotes(notesWere);
         setToast({ text: "Restored" });
       },
@@ -2845,6 +2851,23 @@ export default function BoardView({
   }, [noteSelected, colorKey]);
   const setCardColor = (key: string, color: CardColor | null) =>
     void report(boardStore.patch([{ op: "card.color", key, color }]));
+  /**
+   * Pin a card where it is, or unpin it. A pinned card never moves on its
+   * own: placement, tidying and settling leave it; only a drag moves it.
+   * Unpinned, it belongs where it is beside its owner.
+   */
+  const togglePin = (key: string) => {
+    const card = cards.current.get(key);
+    if (!card) return;
+    if (layout.current.pinned.has(key)) {
+      layout.current.pinned.delete(key);
+      keepWhereItIs(key, model);
+    } else {
+      layout.current.pinned.set(key, { x: card.x, y: card.y });
+      scheduleSave();
+    }
+    setPinnedKeys(new Set(layout.current.pinned.keys()));
+  };
 
   const toolbar = (
     <WorldViewToolbar
@@ -3025,6 +3048,7 @@ export default function BoardView({
                   }}
                 >
                   <div className="board-row">
+                    {pinnedKeys.has(space.key) ? <PinBadge /> : null}
                     <span className="board-label">{space.label}</span>
                     <button
                       type="button"
@@ -3137,6 +3161,7 @@ export default function BoardView({
                       <span className="board-dot" />
                     )}
                     <span className="board-label">{tab.label}</span>
+                    {pinnedKeys.has(tab.key) ? <PinBadge /> : null}
                     <span className="board-who">
                       {multi
                         ? `${tab.panes.length} panes`
@@ -3492,6 +3517,8 @@ export default function BoardView({
                 model.tabByKey.has(colorKey) ? "Default colour" : "No colour"
               }
               onColor={(color) => setCardColor(colorKey, color)}
+              pinned={pinnedKeys.has(colorKey)}
+              onPin={() => togglePin(colorKey)}
             />
           ) : null}
           {noteSelected && saved?.notes.find((n) => n.id === noteSelected) ? (
@@ -4010,17 +4037,30 @@ const tintStyle = (color: CardColor | undefined) =>
     ? ({ "--tint": TERMINAL_COLOR_HEX[color] } as CSSProperties)
     : undefined;
 
+/** Marks a card pinned in place. */
+function PinBadge() {
+  return (
+    <span className="board-pin" role="img" aria-label="Pinned" title="Pinned">
+      <Pin size={12} aria-hidden="true" />
+    </span>
+  );
+}
+
 /** The selected workspace or tab's colour: the user's choice, never a status. */
 function CardBar({
   label,
   color,
   resetLabel,
   onColor,
+  pinned,
+  onPin,
 }: {
   label: string;
   color: CardColor | null;
   resetLabel: string;
   onColor(color: CardColor | null): void;
+  pinned: boolean;
+  onPin(): void;
 }) {
   return (
     <div
@@ -4045,6 +4085,20 @@ function CardBar({
         onClick={() => onColor(null)}
       >
         {resetLabel}
+      </button>
+      <button
+        type="button"
+        className="board-pin-toggle"
+        aria-pressed={pinned}
+        title={
+          pinned
+            ? "Let it move with auto-layout again"
+            : "Keep it here: auto-layout and grouping leave it"
+        }
+        onClick={onPin}
+      >
+        <Pin size={14} aria-hidden="true" />
+        {pinned ? "Unpin" : "Pin"}
       </button>
     </div>
   );

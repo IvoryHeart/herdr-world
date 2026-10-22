@@ -1557,6 +1557,45 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
           () => !saved.layout.colors?.[tabKey],
           "Default colour clears it",
         );
+        // Pin: the card stays where it is through Tidy, with a badge.
+        const pinButton = () =>
+          host.querySelector<HTMLButtonElement>(
+            '[aria-label="Colour of review"] .board-pin-toggle',
+          )!;
+        check(!card(tabKey)!.querySelector(".board-pin"), "no badge unpinned");
+        pinButton().click();
+        await waitFor(
+          () => Boolean(saved.layout.pinned[tabKey]),
+          "the pin is saved",
+        );
+        check(
+          Boolean(
+            card(tabKey)!.querySelector('.board-pin[aria-label="Pinned"]'),
+          ) && pinButton().getAttribute("aria-pressed") === "true",
+          "a pinned card shows its badge and the bar says Unpin",
+        );
+        // Push the pinned card's neighbour onto it, then tidy its workspace:
+        // auto-layout moves the others, never the pinned card.
+        const pinnedAt = at(tabKey)!;
+        host
+          .querySelector<HTMLButtonElement>(
+            '[aria-label="Tidy this workspace\'s tabs"], [aria-label="Tidy the board"]',
+          )!
+          .click();
+        await rest();
+        {
+          const now = at(tabKey)!;
+          check(
+            Math.hypot(now.x - pinnedAt.x, now.y - pinnedAt.y) < 2,
+            "Tidy leaves a pinned card where it is",
+          );
+        }
+        pinButton().click();
+        await waitFor(
+          () => !saved.layout.pinned[tabKey],
+          "Unpin removes the pin",
+        );
+        check(!card(tabKey)!.querySelector(".board-pin"), "unpinned, no badge");
         mount(2, world, null);
         await settle(50);
       }

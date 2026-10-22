@@ -24,6 +24,8 @@ import { type WorldControlPlaneProps } from "./worldControlPlaneContract";
 import { useWorldInspectorController } from "./useWorldInspectorController";
 import { useWorldVisualActions } from "./useWorldVisualActions";
 import { useTerminalColorChoices } from "./useTerminalColors";
+import { setDeskPinned, useDeskPins } from "./useDeskPins";
+import { terminalColorKey } from "./terminalColor";
 import type { WorldInspectorConversation } from "./worldTerminalPresentation";
 
 const TownView = lazyWithReload("world-town", () => import("./TownView"));
@@ -101,9 +103,10 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
     workspaceCreationDestination,
   } = useWorldVisualActions(controller);
   const colorChoice = useTerminalColorChoices();
-  const inspectorColor = (conversation: WorldInspectorConversation) =>
+  const deskPins = useDeskPins();
+  const inspectorTab = (conversation: WorldInspectorConversation) =>
     conversation.tabId
-      ? colorChoice({
+      ? {
           connectionId: conversation.connectionId,
           workspaceId: conversation.workspaceId,
           tabId: conversation.tabId,
@@ -114,8 +117,22 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
               )
               .map((space) => space.nativeId),
           ),
-        })
+        }
       : null;
+  const inspectorColor = (conversation: WorldInspectorConversation) => {
+    const tab = inspectorTab(conversation);
+    return tab ? colorChoice(tab) : null;
+  };
+  // An agent window pins its agent's desk in Town.
+  const inspectorPin = (conversation: WorldInspectorConversation) => {
+    const tab = inspectorTab(conversation);
+    return tab
+      ? {
+          pinned: Boolean(deskPins[terminalColorKey(tab)]),
+          onPin: (pinned: boolean) => void setDeskPinned(tab, pinned),
+        }
+      : null;
+  };
 
   return (
     <main
@@ -468,6 +485,7 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
                   id: worldInspectorWindowId(conversation),
                 }),
               color: inspectorColor(conversation),
+              pin: inspectorPin(conversation),
             }}
             terminalColor={inspectorColor(conversation)}
             onResourceFocus={() => {

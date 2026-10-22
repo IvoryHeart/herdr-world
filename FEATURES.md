@@ -53,6 +53,16 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     its room to put it in that place, or onto the room's free spot to put it
     last of the tables shown (**M** lists the same places). Town asks Herdr to move the tab and
     shows the new order when Herdr reports it; agents stay with their table.
+  - **Pin a desk** from its agent window's menu (**Pin desk in Town**). A
+    pinned table wears a pin and keeps its place: tab reorders, a room growing
+    or Town's own placement leave it, and it cannot be dragged until you unpin
+    it (other tables fill the free places in tab order). Its agents stay at it:
+    they never go to the lounge, leave only to wait at reception (blocked, or
+    finished and not yet seen) and walk straight back once you have seen them.
+    The pin is a World view setting, saved on the World service beside
+    terminal colours, so every device sees it; Herdr is unchanged, and
+    Spaces' tab pins (close protection in this browser) are separate. A pin
+    follows its tab when the tab moves to another room and goes when it closes.
   - Cached failed-host buildings stay stale and non-actionable. Search and Hosts
     use the shared aggregate. Reception and lounge positions only show status;
     only an explicit move changes Herdr's layout, always within one host.
@@ -77,6 +87,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   pans the board, as in Town) and settle within a second; workspaces fold into a count and open
   into free space; Tidy (with Undo) rearranges a workspace or the board and
   carries strung notes along. Zoomed out, workspaces show a square per pane.
+  - **Pin** in a selected card's bar keeps the card where it is: it shows a
+    pin, and placement, Tidy and settling leave it until **Unpin** (a drag
+    still moves it). Pins are saved with the board on the World service.
   - Tabs list each pane as a row; plain-shell tabs look like terminals; only a
     working agent's tab (or the selected one) pulses (a ⋯ setting).
   - **+** on a workspace opens New tab (Terminal, Claude or Codex, an optional

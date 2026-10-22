@@ -45,6 +45,7 @@ import { TownCanvas } from "./town/TownCanvas";
 import { townDeskColorTarget } from "./town/townModel";
 import { resolveTerminal, type TerminalColor } from "./terminalColor";
 import { setTerminalColor, useTerminalColors } from "./useTerminalColors";
+import { useDeskPins } from "./useDeskPins";
 import {
   sendTownReply,
   townChoices,
@@ -630,6 +631,7 @@ export default function TownView({
     return entry ? `${entry.roomLabel} · ${entry.hostLabel}` : "";
   };
   const terminalColors = useTerminalColors();
+  const deskPins = useDeskPins();
   const deviceByKey = useMemo(
     () => lazyIndex(office.paneRoster, (entry) => entry.device.key),
     [office.paneRoster],
@@ -1425,6 +1427,7 @@ export default function TownView({
             trace={trace}
             projection={office}
             terminalColors={terminalColors}
+            deskPins={deskPins}
             selectedKey={townSelectedKey}
             completionSeenKeys={completionSeenKeys}
             summonedKeys={summonedKeys}
