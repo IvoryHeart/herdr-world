@@ -150,7 +150,8 @@ changes what you see and does not disconnect hosts or retarget open terminals.
 7. To move a table to another room, zoom in until you see tables, then drag it
    with the mouse, or hold it for a moment on a phone and then drag. Drop it on
    another room of the same building; the plaque under your pointer says where
-   it will land, or why it cannot. The table lifts off and swings along behind
+   it will land, or why it cannot. Hold it near the edge of the view to scroll
+   the town toward rooms out of sight, as on a phone where rooms stack. The table lifts off and swings along behind
    your pointer with its agents aboard, then drops onto its new spot in a puff
    of dust; if the move is refused, it shakes and springs back. To move one
    agent, drag it onto another table instead: it dangles by the scruff on the

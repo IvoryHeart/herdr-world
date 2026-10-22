@@ -735,8 +735,54 @@ export function TownCanvas({
         world.y,
       );
     };
+    // Where the carried desk or agent is, and the frame that pans the town
+    // while it is held near an edge (rooms stack out of view on a phone).
+    let carryAt: { x: number; y: number } | null = null;
+    let edgeFrame = 0;
+    /** Show where the carry would land at screen point `at`. */
+    const carryTo = (at: { x: number; y: number }) => {
+      const renderer = rendererRef.current;
+      if (!carrying || !renderer) return;
+      carryAt = at;
+      const target = townDropTarget(
+        carrying,
+        hitAt(at.x, at.y),
+        latest.current.model,
+      );
+      carrying.target = target;
+      ghost.textContent = target.label;
+      ghost.dataset.valid = String(target.key !== null);
+      ghost.style.transform = `translate(${at.x}px, ${at.y}px)`;
+      const world = renderer.camera.toWorld(at.x, at.y);
+      renderer.moveDrag(world.x, world.y, target.key);
+    };
+    const EDGE = 56;
+    const EDGE_SPEED = 14;
+    const edgePan = () => {
+      edgeFrame = 0;
+      const renderer = rendererRef.current;
+      if (!carrying || !carryAt || !renderer) return;
+      const { width, height, inset } = renderer.camera.viewport;
+      const push = (p: number, low: number, high: number) =>
+        p < low + EDGE
+          ? Math.min(1, (low + EDGE - p) / EDGE) * EDGE_SPEED
+          : p > high - EDGE
+            ? -Math.min(1, (p - high + EDGE) / EDGE) * EDGE_SPEED
+            : 0;
+      const dx = push(carryAt.x, inset.left, width - inset.right);
+      const dy = push(carryAt.y, inset.top, height - inset.bottom);
+      if (dx || dy) {
+        renderer.camera.panBy(dx, dy);
+        renderer.invalidate("edge-pan");
+        carryTo(carryAt);
+      }
+      edgeFrame = requestAnimationFrame(edgePan);
+    };
     const startDrag = (drag: TownDrag, at: { x: number; y: number }) => {
       carrying = drag;
+      carryAt = at;
+      cancelAnimationFrame(edgeFrame);
+      edgeFrame = requestAnimationFrame(edgePan);
       latest.current.onHover?.(null);
       ghost.textContent = drag.label;
       ghost.dataset.valid = "false";
@@ -750,6 +796,9 @@ export function TownCanvas({
     };
     const endDrag = () => {
       ghost.remove();
+      cancelAnimationFrame(edgeFrame);
+      edgeFrame = 0;
+      carryAt = null;
       const drag = carrying;
       carrying = null;
       return drag;
@@ -818,21 +867,9 @@ export function TownCanvas({
           startDrag(effect.target.drag, effect.at);
           if (effect.held) navigator.vibrate?.(12);
           return;
-        case "moveCard": {
-          if (!carrying) return;
-          const target = townDropTarget(
-            carrying,
-            hitAt(effect.at.x, effect.at.y),
-            latest.current.model,
-          );
-          carrying.target = target;
-          ghost.textContent = target.label;
-          ghost.dataset.valid = String(target.key !== null);
-          ghost.style.transform = `translate(${effect.at.x}px, ${effect.at.y}px)`;
-          const at = renderer.camera.toWorld(effect.at.x, effect.at.y);
-          renderer.moveDrag(at.x, at.y, target.key);
+        case "moveCard":
+          carryTo(effect.at);
           return;
-        }
         case "dropCard": {
           const drag = endDrag();
           const targetKey = drag?.target?.key;
@@ -1006,6 +1043,7 @@ export function TownCanvas({
     host.addEventListener("wheel", wheel, { passive: false });
     return () => {
       window.clearTimeout(holdTimer);
+      cancelAnimationFrame(edgeFrame);
       ghost.remove();
       host.removeEventListener("pointerdown", down);
       host.removeEventListener("pointermove", move);

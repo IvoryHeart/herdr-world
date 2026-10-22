@@ -1508,7 +1508,48 @@ async function run() {
       moved = true;
       break;
     }
-    check(moved, "no visible room took a carried desk");
+    if (!moved) {
+      // A phone stacks rooms in one column, so the other rooms are out of
+      // view: held at the bottom edge, the desk scrolls the town until
+      // another room is under it.
+      const ghost = () => host.querySelector<HTMLElement>(".town-drag-ghost");
+      const otherRoom = () => {
+        // Only a move to another room reads "Move … to <room>"; its own
+        // room offers "… place" or "Put … last".
+        const label = ghost()?.textContent ?? "";
+        return ghost()?.dataset.valid === "true" && /^Move .+ to /.test(label);
+      };
+      press("pointerdown", at(fromDesk));
+      await waitFor(() => ghost() !== null, "holding a desk did not lift it");
+      // Nudge at the edge, then step back out of it so the town is still
+      // when we look and drop.
+      const edge = [window.innerWidth / 2, window.innerHeight - 20] as const;
+      const still = [window.innerWidth / 2, window.innerHeight - 110] as const;
+      for (let step = 0; step < 80 && !otherRoom(); step += 1) {
+        press("pointermove", edge);
+        await new Promise((resolve) => setTimeout(resolve, 120));
+        press("pointermove", still);
+        await settle();
+      }
+      check(
+        otherRoom(),
+        "holding a desk at the edge never scrolled another room under it",
+      );
+      const before = moves.length;
+      const drawn = { ...drags() };
+      press("pointerup", still);
+      await waitFor(
+        () => moves.length === before + 1,
+        "dropping a desk in a room scrolled into view did not move it",
+      );
+      check(
+        moves[before]!.method === "town.move_desk",
+        `an edge-scrolled drop sent ${JSON.stringify(moves[before])}`,
+      );
+      await landed(drawn, "a desk moved to a room scrolled into view");
+      moved = true;
+    }
+    check(moved, "no room took a carried desk");
   } else check(false, "no two visible desks share a room");
 
   // Town shows no move icons; moving is by drag, hold or the keyboard.

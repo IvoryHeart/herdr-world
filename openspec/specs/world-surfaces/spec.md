@@ -1419,7 +1419,9 @@ dragging with a mouse, by holding and then dragging on touch, and from the
 keyboard by pressing M on a focused desk or agent target, which opens a list of
 destinations. Town SHALL NOT add visible move controls to the scene. While a
 drag is in progress Town SHALL show where the desk or agent would land, or why
-it cannot. A picked-up desk or agent SHALL lift off and follow the pointer;
+it cannot, and holding the carried desk or agent near the edge of the usable
+view SHALL scroll the town toward that edge, so rooms out of view can be
+reached. A picked-up desk or agent SHALL lift off and follow the pointer;
 every move Herdr confirms, within a room or to another room, SHALL land on its
 target with a puff of dust, and a refused move SHALL return to where it was.
 Under reduced motion or calm motion the carried desk or agent SHALL stay under
