@@ -13,6 +13,12 @@ import { requestTrace } from "../devtools/trace";
 import { initializeLayoutPreferences } from "../../layoutPreferences";
 import { bridge, type ConnectionClient } from "../../api";
 import "../world.css";
+import { worldLocalStorage } from "../../browserStorage";
+import {
+  readOfficePreferences,
+  WORLD_OFFICE_PREFERENCES_CHANGED_EVENT,
+  writeOfficePreferences,
+} from "../officePreferences";
 
 /*
  * Synthetic Office town fixture. `?mode=test` runs checks and posts them to
@@ -256,35 +262,39 @@ const SCREENS = {
         ),
       };
     }
-    if (method === "agent_history.get")
-      return {
-        history_version: 2,
-        mode: "snapshot",
-        cursor: { epoch: "synthetic", revision: 1 },
-        window_limit: 200,
-        agent: "claude",
-        pane_id: paneId,
-        workspace_id: String(params?.workspace_id ?? ""),
-        tab_id: String(params?.tab_id ?? ""),
-        updated_at: "2026-01-01T00:00:00Z",
-        path: "",
-        entries: [
-          {
-            id: "u1",
-            role: "user",
-            kind: "message",
-            text: "Keep the oldest waiting agent first",
-            sent_at: "2026-01-01T00:00:00Z",
-          },
-          {
-            id: "a1",
-            role: "assistant",
-            kind: "message",
-            text: "I'll sort the reception queue by when agents started waiting.",
-            sent_at: "2026-01-01T00:00:01Z",
-          },
-        ],
-      };
+    if (method === "agent_conversation.latest")
+      return conversationUnavailable
+        ? {
+            conversation_version: 1,
+            pane_id: paneId,
+            agent: "claude",
+            agent_status: statusOf(paneId),
+            session_binding: null,
+            session_fingerprint: null,
+            status: "unavailable",
+            unavailable: {
+              reason: "no_session",
+              detail: "No saved session for this agent yet.",
+            },
+            latest: null,
+          }
+        : {
+            conversation_version: 1,
+            pane_id: paneId,
+            agent: "claude",
+            agent_status: statusOf(paneId),
+            session_binding: "reported",
+            session_fingerprint: "synthetic",
+            status: "ok",
+            unavailable: null,
+            latest: {
+              id: "a1",
+              role: "assistant",
+              kind: "message",
+              text: "I'll sort the reception queue by when agents started waiting.\n\n| Queue | Order |\n|---|---|\n| reception | oldest first |",
+              sent_at: "2026-01-01T00:00:01Z",
+            },
+          };
     if (method === "town.move_desk" || method === "town.move_pane") {
       moves.push({ method, params: params ?? {} });
       return { status: "moved", tab_id: "moved-tab", workspace_id: "moved" };
@@ -305,38 +315,95 @@ const SCREENS = {
 const uploads: string[] = [];
 /** While set, uploads wait for it, as a slow upload would. */
 let uploadGate: Promise<void> | null = null;
+/** Set to fail the next upload, as a full disk would. */
+let failNextUpload = false;
+/** Set to make every conversation read unavailable. */
+let conversationUnavailable = false;
+async function answerUpload(url: URL): Promise<Response | null> {
+  const match = /^\/api\/connections\/([^/]+)\/terminal-upload$/.exec(
+    url.pathname,
+  );
+  if (!match) return null;
+  const connectionId = decodeURIComponent(match[1]!);
+  uploads.push(connectionId);
+  if (uploadGate) await uploadGate;
+  const headers = {
+    "content-type": "application/json",
+    "X-Herdr-Connection-Id": connectionId,
+    "X-Herdr-Connection-Generation":
+      url.searchParams.get("connection_generation") ?? "",
+  };
+  if (failNextUpload) {
+    failNextUpload = false;
+    return new Response(JSON.stringify({ error: "disk full" }), {
+      status: 507,
+      headers,
+    });
+  }
+  return new Response(
+    JSON.stringify({ path: `/uploads/${url.searchParams.get("filename")}` }),
+    { headers },
+  );
+}
 const realFetch = window.fetch.bind(window);
 window.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   const url = new URL(
     input instanceof Request ? input.url : String(input),
     window.location.origin,
   );
-  const match = /^\/api\/connections\/([^/]+)\/terminal-upload$/.exec(
-    url.pathname,
-  );
-  if (!match) return realFetch(input, init);
-  const connectionId = decodeURIComponent(match[1]!);
-  uploads.push(connectionId);
-  if (uploadGate) await uploadGate;
-  return new Response(
-    JSON.stringify({ path: `/uploads/${url.searchParams.get("filename")}` }),
-    {
-      headers: {
-        "content-type": "application/json",
-        "X-Herdr-Connection-Id": connectionId,
-        "X-Herdr-Connection-Generation":
-          url.searchParams.get("connection_generation") ?? "",
-      },
-    },
-  );
+  return (await answerUpload(url)) ?? realFetch(input, init);
 }) as typeof fetch;
+/** Uploads with byte progress use XMLHttpRequest; answer those the same way. */
+class FixtureUploadRequest {
+  upload: { onprogress: ((event: ProgressEvent) => void) | null } = {
+    onprogress: null,
+  };
+  responseType = "";
+  status = 0;
+  statusText = "";
+  response: Blob | null = null;
+  onload: (() => void) | null = null;
+  onerror: (() => void) | null = null;
+  onabort: (() => void) | null = null;
+  private url = new URL(window.location.origin);
+  private headers = "";
+  open(_method: string, url: string | URL) {
+    this.url = new URL(String(url), window.location.origin);
+  }
+  setRequestHeader() {}
+  getAllResponseHeaders() {
+    return this.headers;
+  }
+  send(body: Blob) {
+    this.upload.onprogress?.({
+      loaded: body.size,
+      total: body.size,
+      lengthComputable: true,
+    } as ProgressEvent);
+    void answerUpload(this.url).then(async (response) => {
+      if (!response) {
+        this.onerror?.();
+        return;
+      }
+      this.status = response.status;
+      this.statusText = response.statusText;
+      this.headers = [...response.headers]
+        .map(([name, value]) => `${name}: ${value}`)
+        .join("\r\n");
+      this.response = await response.blob();
+      this.onload?.();
+    });
+  }
+}
+window.XMLHttpRequest =
+  FixtureUploadRequest as unknown as typeof XMLHttpRequest;
 
-async function attachNote(host: HTMLElement) {
+async function attachNote(host: HTMLElement, name = "notes.txt") {
   const picker = host.querySelector<HTMLInputElement>(
     '.town-reply input[type="file"]',
   )!;
   const files = new DataTransfer();
-  files.items.add(new File(["synthetic"], "notes.txt", { type: "text/plain" }));
+  files.items.add(new File(["synthetic"], name, { type: "text/plain" }));
   picker.files = files.files;
   picker.dispatchEvent(new Event("change", { bubbles: true }));
 }
@@ -579,13 +646,21 @@ async function run() {
   const peekConnection = base.connections.find((connection) =>
     connection.snapshot?.panes.some((pane) => pane.pane_id === peekPane),
   )?.connectionId;
-  // The chatter is the agent's session history when it has one.
+  // The message is the agent's latest from Chat's conversation read model.
   await waitFor(
     () =>
       host
         .querySelector(".town-peek-screen")
         ?.textContent?.includes("I'll sort the reception queue") === true,
-    "peek did not show the agent's session messages",
+    "peek did not show the agent's latest message",
+  );
+  // The message is rendered as Chat renders it, never as terminal text.
+  check(
+    host.querySelector(".town-peek-screen table") !== null &&
+      !(host.querySelector(".town-peek-screen")?.textContent ?? "").includes(
+        "|---",
+      ),
+    "the peek should render the message's markdown table",
   );
   // The question sits in its own box above the answers.
   check(
@@ -630,6 +705,34 @@ async function run() {
       uploads.length === 1 && uploads[0] === peekConnection,
       `attachment uploaded through ${JSON.stringify(uploads)}`,
     );
+    check(
+      host.querySelector('.town-peek .attachment-chip[data-status="done"]') !==
+        null,
+      "the uploaded file should show a done chip",
+    );
+    // A failed upload shows a failed chip with Retry; retrying delivers it.
+    failNextUpload = true;
+    await attachNote(host, "retry.txt");
+    await waitFor(
+      () =>
+        host.querySelector(
+          '.town-peek .attachment-chip[data-status="failed"]',
+        ) !== null,
+      "a failed upload did not show a failed chip",
+    );
+    host
+      .querySelector<HTMLButtonElement>(
+        '.town-peek [aria-label="Retry retry.txt"]',
+      )!
+      .click();
+    await waitFor(
+      () =>
+        host
+          .querySelector<HTMLInputElement>(".town-reply input:not([type])")
+          ?.value.includes("/uploads/retry.txt") === true,
+      "the retried upload did not reach the reply line",
+    );
+    uploads.length = 1;
     // A number key pressed on another control never answers the agent.
     const zoomIn = host.querySelector<HTMLButtonElement>(
       '[aria-label="Zoom in"]',
@@ -676,6 +779,11 @@ async function run() {
           )
           ?.value.includes("/uploads/notes.txt") === true,
       "attachment did not reach the composer",
+    );
+    check(
+      host.querySelector(".town-peek .terminal-composer .attachment-chip") !==
+        null,
+      "the composer should show the upload's chip",
     );
     check(
       uploads.length === 1 && uploads[0] === peekConnection,
@@ -806,6 +914,96 @@ async function run() {
     `Inspector opened ${JSON.stringify(inspected)}`,
   );
   check(selected.length === 0, "Inspector must not change the selection path");
+
+  // Open terminal, in the peek's header, opens the agent's terminal.
+  host.querySelector<HTMLButtonElement>(".town-reception-entry")!.click();
+  await waitFor(
+    () => host.querySelector(".town-peek-head .town-peek-terminal") !== null,
+    "the peek header has no Open terminal",
+  );
+  opened.length = 0;
+  host
+    .querySelector<HTMLButtonElement>(".town-peek-head .town-peek-terminal")!
+    .click();
+  await waitFor(() => opened.length === 1, "Open terminal did not open it");
+  check(
+    host.querySelector(".town-peek") === null,
+    "Open terminal should close the peek",
+  );
+  opened.length = 0;
+
+  // An unreadable conversation shows Chat's reason, not the screen.
+  conversationUnavailable = true;
+  host.querySelector<HTMLButtonElement>(".town-reception-entry")!.click();
+  await waitFor(
+    () =>
+      host
+        .querySelector(".town-peek-screen")
+        ?.textContent?.includes("No saved session for this agent yet.") ===
+      true,
+    "the peek did not show why the conversation is unavailable",
+  );
+  conversationUnavailable = false;
+  host.querySelector<HTMLButtonElement>(".town-peek-close")!.click();
+  await settle();
+
+  // Tapping the desk of an agent waiting at reception opens its chat.
+  const waitingAgent = [
+    ...host.querySelectorAll<HTMLButtonElement>(
+      '.world-semantic-target[data-kind="agent"]',
+    ),
+  ].find((target) =>
+    target.getAttribute("aria-label")?.includes(", needs input, desk "),
+  );
+  check(waitingAgent !== undefined, "no waiting agent has a target");
+  const [waitingName, , deskName, roomName, hostName] = waitingAgent!
+    .getAttribute("aria-label")!
+    .split(", ");
+  const waitingDesk = [
+    ...host.querySelectorAll<HTMLButtonElement>(
+      '.world-semantic-target[data-kind="desk"]',
+    ),
+  ].find((target) =>
+    target
+      .getAttribute("aria-label")
+      ?.toLowerCase()
+      .includes(`${deskName}, ${roomName}, ${hostName},`.toLowerCase()),
+  );
+  check(waitingDesk !== undefined, "the waiting agent's desk has no target");
+  waitingDesk?.click();
+  await waitFor(
+    () =>
+      host.querySelector(`.town-peek[aria-label="${waitingName} peek"]`) !==
+      null,
+    "tapping a desk did not open its agent's chat",
+  );
+  check(opened.length === 0, "tapping a desk in Chat mode opened a terminal");
+  host.querySelector<HTMLButtonElement>(".town-peek-close")!.click();
+  await settle();
+
+  // With Town opens set to Terminal, the same tap opens the terminal.
+  writeOfficePreferences(worldLocalStorage, {
+    ...readOfficePreferences(worldLocalStorage),
+    townOpens: "terminal",
+  });
+  window.dispatchEvent(new Event(WORLD_OFFICE_PREFERENCES_CHANGED_EVENT));
+  await settle();
+  waitingDesk?.click();
+  await waitFor(
+    () => opened.length === 1,
+    "Terminal mode did not open the terminal",
+  );
+  check(
+    host.querySelector(".town-peek") === null,
+    "Terminal mode opened a peek",
+  );
+  writeOfficePreferences(worldLocalStorage, {
+    ...readOfficePreferences(worldLocalStorage),
+    townOpens: "chat",
+  });
+  window.dispatchEvent(new Event(WORLD_OFFICE_PREFERENCES_CHANGED_EVENT));
+  await settle();
+  opened.length = 0;
 
   // Opening a desk's terminal on desktop must leave its keys to the terminal:
   // no hidden composer may be requested.

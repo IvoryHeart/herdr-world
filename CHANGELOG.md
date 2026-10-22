@@ -21,6 +21,17 @@ are optional because the merged PR history records their source.
 
 ### Changed
 
+- Show attachment uploads in every composer that attaches files: the phone
+  Composer, Spaces, the Town peek and Inspector Chat (which can now attach).
+  Each file has a chip with byte progress, then done or failed with Retry and
+  Remove; Send waits for uploads, and a file picked again while it uploads is
+  not uploaded twice.
+- The Town peek shows the agent's latest message from Chat's conversation read
+  model, rendered as Chat renders it, instead of terminal text, and has **Open
+  terminal** in its header. Tapping an agent's table opens its peek too, and
+  opening an agent brings it back to its desk until its status changes.
+  **Menu → Town opens** chooses Chat (the default) or Terminal for these taps.
+
 - Give every terminal one colour, shown as its tab in Spaces, its table in
   Town and its card in Board. Tabs start with a stable default; a colour chosen
   from the Spaces tab menu, a Town peek or Board is saved by the World service

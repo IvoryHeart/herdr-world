@@ -5,15 +5,20 @@
  */
 export type OfficeInspectorPresentation = "docked" | "floating";
 
+/** What tapping an agent or its desk in Town opens. */
+export type TownOpens = "chat" | "terminal";
+
 export type OfficePreferences = {
   inspectorPresentation: OfficeInspectorPresentation;
   /** Less ambient motion and shorter camera moves in Town. */
   townCalm: boolean;
+  townOpens: TownOpens;
 };
 
 export const DEFAULT_OFFICE_PREFERENCES: OfficePreferences = Object.freeze({
   inspectorPresentation: "floating",
   townCalm: false,
+  townOpens: "chat",
 });
 
 export const OFFICE_PREFERENCES_KEY = "officePreferences:v1";
@@ -36,6 +41,7 @@ export function readOfficePreferences(
         ? value.inspectorPresentation
         : DEFAULT_OFFICE_PREFERENCES.inspectorPresentation,
       townCalm: value.townCalm === true,
+      townOpens: value.townOpens === "terminal" ? "terminal" : "chat",
     };
   } catch {
     return { ...DEFAULT_OFFICE_PREFERENCES };
@@ -53,6 +59,7 @@ export function writeOfficePreferences(
       ? preferences.inspectorPresentation
       : DEFAULT_OFFICE_PREFERENCES.inspectorPresentation,
     townCalm: preferences.townCalm === true,
+    townOpens: preferences.townOpens === "terminal" ? "terminal" : "chat",
   };
   try {
     storage.setItem(OFFICE_PREFERENCES_KEY, JSON.stringify(admitted));

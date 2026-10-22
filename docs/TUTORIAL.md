@@ -119,19 +119,24 @@ changes what you see and does not disconnect hosts or retarget open terminals.
    agents also wait there until you open their terminal or mark that completion
    reviewed, then join idle agents in the lounge. These locations visualize
    status; they do not move the underlying pane or change its host.
-4. Hover or tap an agent to open its **peek**. The **NEEDS YOU** list provides
-   another route to waiting agents and becomes a bottom tray on phones; it hides
-   when no agent is blocked. The peek shows recent session messages, falling back
-   to terminal screen text when history is unavailable, and highlights a question
-   when one can be identified.
+4. Hover an agent, or tap it or its table, to open its **peek**. The **NEEDS
+   YOU** list provides another route to waiting agents and becomes a bottom tray
+   on phones; it hides when no agent is blocked. The peek shows the agent's
+   latest message as the Inspector's **Chat** shows it, never terminal text; when
+   the conversation cannot be read, it says why. It highlights a question when
+   one can be identified. Opening an agent brings it back to its desk from
+   reception or the lounge until its status changes. To open terminals instead,
+   set **Menu → Town opens** to **Terminal**.
 5. Read the question before using an answer button: it sends the offered key to
    that live pane. When no supported choices appear, use the reply line or
-   **Terminal**. Desktop replies send from the peek; on phones the reply line
+   **Open terminal** in the peek's header. Desktop replies send from the peek; on phones the reply line
    opens World's **Composer** inside the peek, with keys, attachments, **Insert**
    and **Send**. **Insert** prepares input; **Send** submits it.
-6. Use the paperclip to attach files to the reply. Uploads go to the selected
-   pane's host; review the message and attached paths before sending. Choose
-   **Inspector** for files, changes and history, or **Terminal** for direct work.
+6. Use the paperclip to attach files to the reply. Each file shows a chip while
+   it uploads, then done or failed; retry or remove a failed one. **Send** waits
+   for uploads. Uploads go to the selected pane's host; review the message and
+   attached paths before sending. Choose **Inspector** for files, changes and
+   history, or **Open terminal** for direct work.
    **Colour** changes the colour of the agent's table; it is the tab's colour
    everywhere in World, and in Spaces the tab's menu (right-click or long-press)
    offers the same palette and **Default colour**.

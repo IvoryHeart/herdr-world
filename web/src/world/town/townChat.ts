@@ -6,12 +6,7 @@
 
 import { useEffect, useState } from "react";
 import { bridge, type ConnectionClient } from "../../api";
-import {
-  mergeAgentHistory,
-  type AgentHistory,
-  type AgentHistoryResponse,
-  type HistoryEntry,
-} from "../../components/agentHistory";
+import type { Conversation } from "../../components/AgentChat";
 import { terminalComposerRequest } from "../../terminalComposer";
 import { deskClient } from "../handoffs";
 import { questionFromScreen, screenIdentity } from "../paneScreen";
@@ -112,61 +107,59 @@ export function useTownScreen(
   return screen?.id === identity ? screen.text : null;
 }
 
-/** Messages the peek shows from the agent's session history. */
-const HISTORY_MESSAGES = 24;
+export type TownConversation = Omit<Conversation, "messages">;
 
 /**
- * The agent's recent conversation from its session history, as the
- * Inspector's History shows it, refreshed while `active`. A small pane holds
- * little on screen, so this is the peek's chatter whenever the agent has a
- * readable session; null until it does.
+ * The agent's latest message from Chat's conversation read model
+ * (`agent_conversation.latest`), refreshed while `active`, with the same
+ * unavailable reasons Chat shows. A read that fails after a readable one keeps
+ * the readable one, as Chat does. Null until the first answer.
  */
-export function useTownHistory(
+export function useTownConversation(
   leaf: WorldLeafObject | null,
   active: boolean,
   intervalMs = 4_000,
-): HistoryEntry[] | null {
-  const [history, setHistory] = useState<{
+): TownConversation | null {
+  const [conversation, setConversation] = useState<{
     id: string;
-    value: AgentHistory;
+    value: TownConversation;
   } | null>(null);
-  const agent = leaf?.pane.agent;
-  const identity =
-    leaf && agent ? `${townPaneIdentity(leaf)}\u0000${agent}` : null;
+  const identity = leaf ? townPaneIdentity(leaf) : null;
   useEffect(() => {
-    if (!leaf || !agent || !active || !identity) return;
+    if (!leaf || !active || !identity) return;
     let cancelled = false;
     let timer: number | undefined;
-    let current: AgentHistory | null = null;
+    let shown: TownConversation | null = null;
     const read = async () => {
       const client = townOwner(leaf);
       if (client && document.visibilityState !== "hidden")
         try {
-          const requested = current?.cursor ?? null;
-          const response = (await client.call(
-            "agent_history.get",
-            {
-              history_version: 2,
-              cursor: requested,
-              pane_id: leaf.pane.pane_id,
-              workspace_id: leaf.pane.workspace_id,
-              tab_id: leaf.pane.tab_id,
-              agent,
-            },
+          const reply = (await client.call(
+            "agent_conversation.latest",
+            { pane_id: leaf.pane.pane_id },
             8_000,
-          )) as AgentHistoryResponse;
-          const merged = mergeAgentHistory(current, response, requested);
+          )) as TownConversation | null;
           if (
             !cancelled &&
             client.isCurrent() &&
-            merged &&
-            merged !== current
+            reply &&
+            typeof reply === "object" &&
+            (reply.status === "ok" || reply.status === "unavailable") &&
+            !(
+              reply.unavailable?.reason === "read_failed" &&
+              shown?.status === "ok"
+            )
           ) {
-            current = merged;
-            setHistory({ id: identity, value: merged });
+            shown = reply;
+            setConversation((current) =>
+              current?.id === identity &&
+              JSON.stringify(current.value) === JSON.stringify(reply)
+                ? current
+                : { id: identity, value: reply },
+            );
           }
         } catch {
-          // Without a readable session the peek shows the screen instead.
+          // An unreadable conversation keeps the last one until it can be read.
         }
       if (!cancelled) timer = window.setTimeout(read, intervalMs);
     };
@@ -175,14 +168,10 @@ export function useTownHistory(
       cancelled = true;
       if (timer !== undefined) window.clearTimeout(timer);
     };
-    // identity captures the leaf's owner, pane and agent.
+    // identity captures the leaf's owner and pane.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [identity, active, intervalMs]);
-  if (history?.id !== identity) return null;
-  const messages = history.value.messages.filter(
-    (entry) => entry.kind !== "tool_result" || entry.is_error,
-  );
-  return messages.length ? messages.slice(-HISTORY_MESSAGES) : null;
+  return conversation?.id === identity ? conversation.value : null;
 }
 
 /**
@@ -194,22 +183,6 @@ export function townScreenLines(
   maxLines = 40,
 ): string[] {
   return screen ? questionFromScreen(screen, maxLines) : [];
-}
-
-export type TownLineKind = "text" | "tool" | "ok" | "busy";
-
-/** How the peek colours one line, as the agent's TUI marks it. */
-export function townLineKind(line: string): TownLineKind {
-  const head = line.trimStart();
-  if (/^[✓✔]|^(done|tests? pass)/i.test(head)) return "ok";
-  if (/^[✻✳✶✢✽·⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏*]\s*\S.*(…|\.\.\.)/.test(head)) return "busy";
-  if (
-    /^[⏺●•⎿└]|^(Read|Edit|Write|Bash|Update|Search|Ran|Explored|Edited)\b/.test(
-      head,
-    )
-  )
-    return "tool";
-  return "text";
 }
 
 /**

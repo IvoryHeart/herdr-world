@@ -44,6 +44,58 @@ const message = (
   sent_at: "2026-10-22T09:00:00Z",
 });
 
+/**
+ * Uploads with byte progress use XMLHttpRequest. Each request waits until the
+ * test answers it, so the chip can be seen uploading, failing and retrying.
+ */
+const uploadRequests: {
+  filename: string;
+  answer(ok: boolean): void;
+}[] = [];
+class FixtureUploadRequest {
+  upload: { onprogress: ((event: ProgressEvent) => void) | null } = {
+    onprogress: null,
+  };
+  responseType = "";
+  status = 0;
+  statusText = "";
+  response: Blob | null = null;
+  onload: (() => void) | null = null;
+  onerror: (() => void) | null = null;
+  onabort: (() => void) | null = null;
+  private url = new URL(window.location.origin);
+  private headers = "";
+  open(_method: string, url: string | URL) {
+    this.url = new URL(String(url), window.location.origin);
+  }
+  setRequestHeader() {}
+  getAllResponseHeaders() {
+    return this.headers;
+  }
+  send(body: Blob) {
+    this.upload.onprogress?.({
+      loaded: Math.floor(body.size / 2),
+      total: body.size,
+      lengthComputable: true,
+    } as ProgressEvent);
+    const filename = this.url.searchParams.get("filename") ?? "";
+    uploadRequests.push({
+      filename,
+      answer: (ok) => {
+        this.status = ok ? 200 : 507;
+        this.headers =
+          "content-type: application/json\r\nx-herdr-connection-id: test\r\nx-herdr-connection-generation: null";
+        this.response = new Blob([
+          JSON.stringify(
+            ok ? { path: `/uploads/${filename}` } : { error: "disk full" },
+          ),
+        ]);
+        this.onload?.();
+      },
+    });
+  }
+}
+
 async function run() {
   const originalConnection = bridge.connection;
   const originalControl = bridge.onControl;
@@ -219,6 +271,76 @@ async function run() {
       "A refused send must say why",
     );
     check(textarea.value === "Another", "A refused draft must stay");
+
+    // Attachments upload with a chip each; Send waits for them.
+    const originalRequest = window.XMLHttpRequest;
+    window.XMLHttpRequest =
+      FixtureUploadRequest as unknown as typeof XMLHttpRequest;
+    try {
+      const picker = container.querySelector<HTMLInputElement>(
+        ".agent-chat-composer input[type=file]",
+      )!;
+      const report = new File(["synthetic report"], "report.txt", {
+        type: "text/plain",
+        lastModified: 1,
+      });
+      const pick = () => {
+        const files = new DataTransfer();
+        files.items.add(report);
+        picker.files = files.files;
+        picker.dispatchEvent(new Event("change", { bubbles: true }));
+      };
+      const send = () =>
+        container.querySelector<HTMLButtonElement>(
+          'button[aria-label="Send"]',
+        )!;
+      const chip = () =>
+        container.querySelector<HTMLElement>(".agent-chat .attachment-chip");
+      pick();
+      await settle();
+      check(
+        chip()?.dataset.status === "uploading" &&
+          (chip()?.textContent ?? "").includes("report.txt"),
+        "An attached file must show an uploading chip",
+      );
+      check(
+        (chip()?.textContent ?? "").includes("Uploading 50%"),
+        "An uploading chip must show byte progress",
+      );
+      check(send().disabled, "Send must wait for uploads");
+      pick();
+      await settle();
+      check(
+        uploadRequests.length === 1,
+        "The same file picked again while uploading must not upload twice",
+      );
+      uploadRequests[0]!.answer(false);
+      await settle();
+      check(
+        chip()?.dataset.status === "failed" &&
+          (chip()?.textContent ?? "").includes("disk full"),
+        "A failed upload must say why on its chip",
+      );
+      check(!send().disabled, "A failed upload must not block Send");
+      container
+        .querySelector<HTMLButtonElement>('[aria-label="Retry report.txt"]')!
+        .click();
+      await settle();
+      check(uploadRequests.length === 2, "Retry must upload the file again");
+      uploadRequests[1]!.answer(true);
+      await settle();
+      check(
+        chip()?.dataset.status === "done",
+        "A finished upload must show a done chip",
+      );
+      check(
+        textarea.value === "Another /uploads/report.txt ",
+        "A finished upload must add its path to the message",
+      );
+      check(!send().disabled, "Send must be enabled once uploads finish");
+    } finally {
+      window.XMLHttpRequest = originalRequest;
+    }
 
     // A read that fails mid-write keeps the last good conversation.
     reply = {
