@@ -16,8 +16,9 @@ import { MarkdownPreview } from "../../components/markdown";
 import { formatUiDateTime } from "../../uiLocale";
 import type { TownChoice, TownConversation } from "./townChat";
 import { townPortrait } from "./townSprites";
+import { ColorSwatchButton } from "../../components/ColorSwatch";
 import {
-  TERMINAL_COLOR_HEX,
+  TERMINAL_COLOR_PALETTE,
   TERMINAL_COLORS,
   type TerminalColor,
 } from "../terminalColor";
@@ -119,7 +120,6 @@ export function TownPeek({
   const uploading = useAttachmentUploads(uploadScope).some(
     (upload) => upload.status === "uploading",
   );
-  const [colors, setColors] = useState(false);
   const filePicker = useRef<HTMLInputElement>(null);
   const attach = (files: File[], image: boolean) => {
     if (files.length) onAttach(files, image);
@@ -249,7 +249,21 @@ export function TownPeek({
             {where}
           </small>
         </div>
-        {/* TODO(FM-LAYERS): ColorSwatchButton for deskColor. */}
+        {deskColor ? (
+          <ColorSwatchButton
+            className="town-peek-color"
+            label="Desk colour"
+            palette={TERMINAL_COLOR_PALETTE}
+            current={{ id: deskColor.current, custom: deskColor.custom }}
+            onColor={(id) =>
+              deskColor.onColor(
+                TERMINAL_COLORS.includes(id as TerminalColor)
+                  ? (id as TerminalColor)
+                  : null,
+              )
+            }
+          />
+        ) : null}
         <button
           type="button"
           className="town-peek-terminal"
@@ -425,45 +439,12 @@ export function TownPeek({
         >
           Inspector
         </button>
-        {deskColor ? (
-          <button
-            type="button"
-            className="town-peek-color"
-            aria-expanded={colors}
-            title="Desk colour, shared with its tab in Spaces and Board"
-            onClick={() => setColors((open) => !open)}
-          >
-            <i style={{ background: TERMINAL_COLOR_HEX[deskColor.current] }} />
-            Colour
-          </button>
-        ) : null}
         {onNext ? (
           <button type="button" onClick={onNext}>
             Next ›
           </button>
         ) : null}
       </div>
-      {deskColor && colors ? (
-        <div className="town-peek-colors" role="group" aria-label="Desk colour">
-          {TERMINAL_COLORS.map((color) => (
-            <button
-              key={color}
-              type="button"
-              style={{ background: TERMINAL_COLOR_HEX[color] }}
-              aria-label={`Colour ${color}`}
-              aria-pressed={deskColor.current === color}
-              onClick={() => deskColor.onColor(color)}
-            />
-          ))}
-          <button
-            type="button"
-            disabled={!deskColor.custom}
-            onClick={() => deskColor.onColor(null)}
-          >
-            Default
-          </button>
-        </div>
-      ) : null}
       {composer}
     </div>
   );

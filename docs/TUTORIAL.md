@@ -140,9 +140,11 @@ changes what you see and does not disconnect hosts or retarget open terminals.
    closed joins the reply line when you open that agent's peek again. Uploads go to the selected pane's host; review the message and
    attached paths before sending. Choose **Inspector** for files, changes and
    history, or **Open terminal** for direct work.
-   **Colour** changes the colour of the agent's table; it is the tab's colour
-   everywhere in World, and in Spaces the tab's menu (right-click or long-press)
-   offers the same palette and **Default colour**.
+   The colour swatch beside the agent's name changes the colour of its table;
+   it is the tab's colour everywhere in World. The same swatch sits beside the
+   name in a terminal's header, the terminal window's menu has **Colour**, and
+   in Spaces the tab's menu (right-click or long-press) offers the same palette
+   and **Default colour**.
    **Next** cycles waiting agents, then finished agents when no other agent is
    waiting.
 7. To move a table to another room, zoom in until you see tables, then drag it
@@ -295,7 +297,10 @@ On desktop, **Arrange windows** can tile or cascade open Inspectors; use **Open
 windows** to restore minimized ones. On mobile, one Inspector fills the screen:
 use the on-screen **Back** to return straight to the visual view, including
 when Composer is open. The phone's own Back closes Composer first, then the
-terminal on the next press. Use the ellipsis controls for additional navigation.
+terminal on the next press. Tapping the terminal's name opens the workspace
+list; Back (on-screen or the phone's) or tapping the name again closes it and
+shows the terminal. Any open menu or picker closes the same way, one at a time;
+tapping the terminal closes them all. Use the ellipsis controls for additional navigation.
 Closing an Inspector leaves the terminal session running.
 
 ### Learn this one hierarchy

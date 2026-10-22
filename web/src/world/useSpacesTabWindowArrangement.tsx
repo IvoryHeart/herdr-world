@@ -24,6 +24,8 @@ import { visibleWindowIds } from "./windows/windowManager";
 import { WindowSurface } from "./windows/WindowSurface";
 import { WindowFrame } from "./windows/WindowFrame";
 import { WindowControls } from "./windows/WindowControls";
+import { ColorSwatchButton } from "../components/ColorSwatch";
+import { useTerminalColorChoices } from "./useTerminalColors";
 
 const ignoreLayer = () => {};
 
@@ -50,6 +52,11 @@ export function useSpacesTabWindowArrangement(active: boolean): {
   );
   const { mobile } = useLayoutPreferences();
   const context = useMemo(() => spacesTabWindowContext(snapshot), [snapshot]);
+  const colorChoice = useTerminalColorChoices();
+  const workspaceIds = useMemo(
+    () => new Set(snapshot.workspaces.map((w) => w.workspace_id)),
+    [snapshot.workspaces],
+  );
   const scopeKey = context
     ? JSON.stringify([context.leaseKey, context.scopeKey])
     : "unavailable";
@@ -239,6 +246,12 @@ export function useSpacesTabWindowArrangement(active: boolean): {
               const tab = context.tabs.find((tab) => tab.tab_id === entry.id);
               if (!tab) return null;
               const label = tab.label || `Tab ${tab.number}`;
+              const color = colorChoice({
+                connectionId: snapshot.activeConnectionId,
+                workspaceId: tab.workspace_id,
+                tabId: tab.tab_id,
+                workspaceIds,
+              });
               return (
                 <WindowFrame
                   key={entry.id}
@@ -276,6 +289,13 @@ export function useSpacesTabWindowArrangement(active: boolean): {
                   }}
                 >
                   <header className="world-window-header">
+                    <ColorSwatchButton
+                      className="world-window-swatch"
+                      label={`${label} colour`}
+                      palette={color.palette}
+                      current={color.current}
+                      onColor={color.onColor}
+                    />
                     <button
                       type="button"
                       data-window-drag-handle
@@ -300,6 +320,7 @@ export function useSpacesTabWindowArrangement(active: boolean): {
                           dispatch({ type: "snap", id: entry.id, target }),
                         onFloat: () =>
                           dispatch({ type: "float", id: entry.id }),
+                        color,
                       }}
                     />
                   </header>
