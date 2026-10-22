@@ -695,7 +695,7 @@ describe("conversation availability", () => {
       expect(conversation.latest?.text).toBe(ANSWER);
     });
 
-    test("a new thread without a transcript keeps its composer", async () => {
+    test("a new thread shows no messages and is not sent to until its ID resolves", async () => {
       const prompts: unknown[] = [];
       const chat = source(
         herdr(
@@ -707,9 +707,12 @@ describe("conversation availability", () => {
         ),
       );
       const conversation = await chat.read({ pane_id: "w1:p1" });
+      // The title shows 29 ID characters; without a transcript there is no
+      // complete thread ID to bind, so Chat must not guess one.
       expect(conversation).toMatchObject({
         status: "ok",
         session_binding: "title",
+        session_fingerprint: null,
         messages: [],
         latest: null,
       });
@@ -717,10 +720,10 @@ describe("conversation availability", () => {
         await chat.send({
           pane_id: "w1:p1",
           text: "Start here",
-          session_fingerprint: conversation.session_fingerprint!,
+          session_fingerprint: "",
         }),
-      ).toEqual({ status: "sent" });
-      expect(prompts).toHaveLength(1);
+      ).toMatchObject({ status: "refused", reason: "unavailable" });
+      expect(prompts).toEqual([]);
     });
   });
 
@@ -914,7 +917,8 @@ describe("conversation binding and remote admission", () => {
     expect(log).toEqual(["agent.get", "agent.prompt"]);
   });
 
-  test("the session a Herdr report and a Codex title bind agree with the read", async () => {
+  test("a Codex title binds complete thread IDs only", async () => {
+    const context = createAgentSessionResolverContext();
     const reported = {
       ...pane("codex"),
       agent_session: {
@@ -924,20 +928,141 @@ describe("conversation binding and remote admission", () => {
         value: "019c0000-0000-7000-8000-000000000003",
       },
     };
-    expect(paneBinding("codex", reported)?.binding).toBe("reported");
-    const titled = {
+    expect(paneBinding("codex", reported, context)?.binding).toBe("reported");
+    const titled = (terminal_title: string) => ({
       ...reported,
-      terminal_title: "demo · 019c0000-0000-7000-8000-00000...",
-    };
-    // The title decides over a possibly stale report.
-    expect(paneBinding("codex", titled)?.binding).toBe("title");
+      terminal_title,
+    });
+    // Two full IDs that share 29 characters are two threads.
+    const first = paneBinding(
+      "codex",
+      titled("demo 019a0000-0000-7000-8000-000000000001"),
+      context,
+    );
+    const second = paneBinding(
+      "codex",
+      titled("demo 019a0000-0000-7000-8000-000000000002"),
+      context,
+    );
+    expect(first?.binding).toBe("title");
+    expect(first?.fingerprint).toMatch(/^[a-f0-9]{64}$/);
+    expect(second?.fingerprint).toMatch(/^[a-f0-9]{64}$/);
+    expect(first?.fingerprint).not.toBe(second?.fingerprint);
+    // A truncated ID is unresolved until a read finds its one transcript;
+    // the title still decides over a possibly stale report.
+    const truncated = titled("demo · 019c0000-0000-7000-8000-00000...");
+    expect(paneBinding("codex", truncated, context)).toEqual({
+      binding: "title",
+      fingerprint: null,
+    });
+    context.codexTitles.set("019c0000-0000-7000-8000-00000", {
+      id: "019c0000-0000-7000-8000-000000000003",
+      path: "/work/demo/rollout.jsonl",
+    });
+    expect(paneBinding("codex", truncated, context)?.fingerprint).toBe(
+      paneBinding(
+        "codex",
+        titled("demo 019c0000-0000-7000-8000-000000000003"),
+        context,
+      )?.fingerprint,
+    );
+    // A title naming two threads binds nothing that can be sent to.
     expect(
-      paneBinding("codex", {
-        ...titled,
-        terminal_title:
+      paneBinding(
+        "codex",
+        titled(
           "019c0000-0000-7000-8000-00000... 019d0000-0000-7000-8000-00000...",
+        ),
+        context,
+      ),
+    ).toEqual({ binding: "title", fingerprint: null });
+    expect(paneBinding("grok", pane("grok"), context)).toBeNull();
+  });
+
+  test("a switch between two full Codex IDs is refused", async () => {
+    const dir = join(process.env.CODEX_HOME!, "sessions", "2026", "10", "21");
+    await mkdir(dir, { recursive: true });
+    const { copyFile } = await import("node:fs/promises");
+    const written = await fixtures[0]!.write(
+      await mkdtemp(join(root, "full-")),
+    );
+    for (const id of [
+      "019a0000-0000-7000-8000-0000000000e1",
+      "019a0000-0000-7000-8000-0000000000e2",
+    ])
+      await copyFile(
+        written,
+        join(dir, `rollout-2026-10-21T09-00-00-${id}.jsonl`),
+      );
+    let current = {
+      ...pane("codex"),
+      terminal_title: "demo 019a0000-0000-7000-8000-0000000000e1",
+    };
+    const prompts: unknown[] = [];
+    const call: HerdrCall = async (method, params) => {
+      if (method === "agent.get") return { agent: current };
+      if (method === "agent.prompt") {
+        prompts.push(params);
+        return { agent: { pane_id: "w1:p1" } };
+      }
+      throw new Error(`unexpected ${method}`);
+    };
+    const chat = source(call);
+    const read = await chat.read({ pane_id: "w1:p1" });
+    expect(read).toMatchObject({ status: "ok", session_binding: "title" });
+    current = {
+      ...current,
+      terminal_title: "demo 019a0000-0000-7000-8000-0000000000e2",
+    };
+    expect(
+      await chat.send({
+        pane_id: "w1:p1",
+        text: "hello",
+        session_fingerprint: read.session_fingerprint!,
       }),
-    ).toBeNull();
-    expect(paneBinding("grok", pane("grok"))).toBeNull();
+    ).toMatchObject({ status: "refused", reason: "changed" });
+    expect(prompts).toEqual([]);
+  });
+
+  test("watching reuses a resolved Codex title until it stops matching", async () => {
+    const dir = join(process.env.CODEX_HOME!, "sessions", "2026", "10", "20");
+    await mkdir(dir, { recursive: true });
+    const { copyFile, rm: remove } = await import("node:fs/promises");
+    const thread = "019e0000-0000-7000-8000-0000000000f1";
+    const path = join(dir, `rollout-2026-10-20T09-00-00-${thread}.jsonl`);
+    await copyFile(
+      await fixtures[0]!.write(await mkdtemp(join(root, "watch-"))),
+      path,
+    );
+    let searches = 0;
+    const files = {
+      ...localAgentSessionFiles,
+      findCodexSessionByPrefix: async (prefix: string) => {
+        searches += 1;
+        return localAgentSessionFiles.findCodexSessionByPrefix(prefix);
+      },
+    };
+    const chat = createHerdrConversationSource({
+      herdrCall: herdr({
+        ...pane("codex"),
+        terminal_title: `demo · ${thread.slice(0, 29)}...`,
+      }),
+      files,
+      context: createAgentSessionResolverContext(),
+      cache: createSessionProjectionCache(files),
+    });
+    await chat.read({ pane_id: "w1:p1" });
+    expect(searches).toBe(1);
+    const first = await chat.identity({ pane_id: "w1:p1" });
+    await chat.identity({ pane_id: "w1:p1" });
+    expect(searches).toBe(1);
+    // A read still searches, so a later colliding transcript is not missed.
+    await chat.read({ pane_id: "w1:p1" });
+    expect(searches).toBe(2);
+    // A vanished transcript is searched for again.
+    await remove(path);
+    const gone = await chat.identity({ pane_id: "w1:p1" });
+    expect(searches).toBe(3);
+    expect(gone.key).not.toBe(first.key);
   });
 });

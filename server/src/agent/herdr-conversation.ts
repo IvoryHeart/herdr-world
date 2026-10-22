@@ -13,7 +13,7 @@ import type { AgentSessionFileAccess } from "./session-file-access";
 import type { SessionProjectionCache } from "./session-projection-cache";
 import {
   SESSION_AGENTS,
-  codexIdsFromTitle,
+  codexTitleBinding,
   resolveAgentSessionInfo,
   type AgentSessionResolverContext,
 } from "./session-resolver";
@@ -29,31 +29,30 @@ type Unavailable = Extract<Conversation, { status: "unavailable" }>;
  * The session Herdr ties to a pane, from its `agent.get` reply alone: the
  * thread a Codex title names, else the session the integration reported.
  * Directory guesses are never a binding. No file access, so a send can check
- * it immediately before prompting.
+ * it immediately before prompting. A Codex title binds a complete thread ID
+ * only: a truncated ID this context has not resolved to one transcript, or a
+ * title naming two threads, binds the pane to its title with no fingerprint,
+ * so nothing can be sent.
  */
 export function paneBinding(
   agent: string,
   info: Record<string, unknown>,
+  context: AgentSessionResolverContext,
 ): {
   binding: Exclude<ConversationBinding, "guessed">;
-  fingerprint: string;
+  fingerprint: string | null;
 } | null {
   if (agent === "codex") {
-    const ids = codexIdsFromTitle(stringValue(info.terminal_title));
-    const truncated = ids.filter((id) => id.truncated);
-    const prefixes = new Set(
-      (truncated.length ? truncated : ids).map((id) => id.prefix.slice(0, 29)),
-    );
-    // The title decides whenever it names a thread; two names bind nothing.
-    if (prefixes.size > 1) return null;
-    const [prefix] = prefixes;
-    if (prefix)
+    const title = codexTitleBinding(stringValue(info.terminal_title), context);
+    if (title.kind === "id")
       return {
         binding: "title",
         fingerprint: createHash("sha256")
-          .update(JSON.stringify(["codex-title", prefix]))
+          .update(JSON.stringify(["codex-title", title.id]))
           .digest("hex"),
       };
+    // The title decides whenever it names a thread.
+    if (title.kind !== "none") return { binding: "title", fingerprint: null };
   }
   const session = isRecord(info.agent_session) ? info.agent_session : null;
   if (
@@ -113,7 +112,7 @@ export function createHerdrConversationSource(args: {
     unavailable: { reason, detail, ...extra },
   });
 
-  const resolve = async (paneId: string) => {
+  const resolve = async (paneId: string, reuseCodexTitle = false) => {
     const info = await agentInfo(paneId);
     const agent = normalizeAgentName(stringValue(info?.agent));
     const base: Omit<Conversation, "status" | "unavailable"> = {
@@ -169,12 +168,13 @@ export function createHerdrConversationSource(args: {
       info,
       args.files,
       args.context,
+      { reuseCodexTitle },
     );
     // A session found by searching the pane's directory may belong to
     // another agent in the same folder: show it, but never send to it.
     const bound = resolved.session?.source.endsWith("-local")
       ? null
-      : paneBinding(agent, info);
+      : paneBinding(agent, info, args.context);
     return {
       base: {
         ...base,
@@ -238,7 +238,9 @@ export function createHerdrConversationSource(args: {
     read,
     latest,
     identity: async ({ pane_id }) => {
-      const step = await resolve(pane_id);
+      // Watching runs on every Herdr event; it need not search Codex
+      // transcripts again for a title it already resolved.
+      const step = await resolve(pane_id, true);
       if (!("resolved" in step))
         return {
           key: JSON.stringify([step.agent, step.unavailable.reason]),
@@ -320,13 +322,15 @@ export function createHerdrConversationSource(args: {
         args.remotePlatform === "windows" ? null : await agentInfo(pane_id);
       const agent = normalizeAgentName(stringValue(info?.agent));
       const bound =
-        info && SESSION_AGENTS.has(agent) ? paneBinding(agent, info) : null;
-      if (!bound)
+        info && SESSION_AGENTS.has(agent)
+          ? paneBinding(agent, info, args.context)
+          : null;
+      if (!bound?.fingerprint)
         return {
           status: "refused",
           reason: "unavailable",
           message:
-            "Herdr has not tied a conversation to this pane, so nothing was sent. Use the Terminal tab.",
+            "Herdr has not tied one conversation to this pane, so nothing was sent. Use the Terminal tab.",
         };
       if (bound.fingerprint !== session_fingerprint)
         return {

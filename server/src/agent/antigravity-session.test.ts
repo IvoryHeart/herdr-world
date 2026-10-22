@@ -8,6 +8,7 @@ import {
   findAntigravitySessionById,
   findAntigravitySessionForCwd,
   readAntigravitySessionRecords,
+  withTempDb,
 } from "./antigravity-session";
 import { resolveAgentSession } from "./session-resolver";
 import { projectAgentTrajectory } from "./session-trajectory";
@@ -513,4 +514,22 @@ describe("Antigravity sessions", () => {
     const records = await readAntigravitySessionRecords(corruptPath);
     expect(records).toEqual([]);
   });
+});
+
+test("the database copy is read from a private directory and removed", async () => {
+  const { statSync, existsSync } = await import("node:fs");
+  const directory = await mkdtemp(join(tmpdir(), "herdr-world-agy-copy-"));
+  try {
+    const path = join(directory, "conversation.db");
+    new Database(path).close();
+    let copy = "";
+    const mode = withTempDb(path, (db) => {
+      copy = db.filename;
+      return statSync(join(copy, "..")).mode & 0o777;
+    });
+    expect(mode).toBe(0o700);
+    expect(existsSync(copy)).toBe(false);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
 });

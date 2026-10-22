@@ -46,12 +46,18 @@ export const SESSION_AGENTS: ReadonlySet<string> = new Set([
 export type AgentSessionResolverContext = {
   pathCache: Map<string, string>;
   museMetadata: MuseMetadataCache;
+  /** Codex title ID (or prefix) → the one transcript it resolved to. */
+  codexTitles: Map<string, { id: string; path: string }>;
 };
 
 const DEFAULT_RESOLVER_CONTEXT = createAgentSessionResolverContext();
 
 export function createAgentSessionResolverContext(): AgentSessionResolverContext {
-  return { pathCache: new Map(), museMetadata: new Map() };
+  return {
+    pathCache: new Map(),
+    museMetadata: new Map(),
+    codexTitles: new Map(),
+  };
 }
 
 function normalizeParams(raw: Record<string, unknown>): AgentHistoryParams {
@@ -149,35 +155,88 @@ type CodexTitleThread =
   | { kind: "ambiguous" }
   | { kind: "found"; file: SessionFile; id: string };
 
-/**
- * Codex 0.157+ hosts threads in a shared daemon, so hooks cannot say which
- * pane shows which thread. With Thread ID in `tui.terminal_title`, the pane's
- * own front end names its thread. Accept only an ID that matches exactly one
- * transcript; uncached, so a later colliding transcript is never missed.
- */
-async function codexThreadFromTitle(
-  title: string,
-  files: AgentSessionFileAccess,
-): Promise<CodexTitleThread> {
+/** The thread IDs a Codex title offers, by the rule the resolver uses. */
+function codexTitleCandidates(title: string) {
   const ids = codexIdsFromTitle(title);
   // Codex truncates its thread item today, so a truncated ID is the thread;
   // full UUIDs are candidates only when no truncated ID is present.
   const truncated = ids.filter((id) => id.truncated);
-  const candidates = truncated.length ? truncated : ids;
+  return truncated.length ? truncated : ids;
+}
+
+/**
+ * The complete thread ID a Codex title binds the pane to, without file
+ * access: a full UUID in the title, or a truncated one this context already
+ * resolved to exactly one transcript. A prefix that is not yet resolved, or a
+ * title naming two threads, binds nothing.
+ */
+export function codexTitleBinding(
+  title: string,
+  context: AgentSessionResolverContext,
+):
+  | { kind: "none" }
+  | { kind: "unresolved" }
+  | { kind: "ambiguous" }
+  | { kind: "id"; id: string } {
+  const candidates = codexTitleCandidates(title);
+  if (candidates.length === 0) return { kind: "none" };
+  const distinct = new Map(candidates.map((id) => [id.prefix, id]));
+  if (distinct.size > 1) return { kind: "ambiguous" };
+  const [only] = distinct.values();
+  if (!only!.truncated) return { kind: "id", id: only!.prefix };
+  const cached = context.codexTitles.get(only!.prefix);
+  return cached ? { kind: "id", id: cached.id } : { kind: "unresolved" };
+}
+
+/**
+ * Codex 0.157+ hosts threads in a shared daemon, so hooks cannot say which
+ * pane shows which thread. With Thread ID in `tui.terminal_title`, the pane's
+ * own front end names its thread. Accept only an ID that matches exactly one
+ * transcript. Each read searches again, so a later colliding transcript is
+ * never missed, and remembers a unique match. A caller that only needs to
+ * notice changes (`reuse`) stats the remembered transcript instead; it
+ * searches only while the thread has no transcript or matches several, or
+ * when the title names another thread.
+ */
+async function codexThreadFromTitle(
+  title: string,
+  files: AgentSessionFileAccess,
+  context: AgentSessionResolverContext,
+  reuse = false,
+): Promise<CodexTitleThread> {
+  const candidates = codexTitleCandidates(title);
+  const forget = () => {
+    for (const { prefix } of candidates) context.codexTitles.delete(prefix);
+  };
   const found = new Map<string, SessionFile>();
   for (const { prefix } of candidates) {
+    const cached = reuse ? context.codexTitles.get(prefix) : undefined;
+    const known = cached ? await files.statFile(cached.path) : null;
+    if (known) {
+      found.set(known.path, known);
+      continue;
+    }
     const file = await files.findCodexSessionByPrefix(prefix);
-    if (file === "ambiguous") return { kind: "ambiguous" };
+    if (file === "ambiguous") {
+      forget();
+      return { kind: "ambiguous" };
+    }
     if (file) found.set(file.path, file);
   }
-  if (found.size > 1) return { kind: "ambiguous" };
+  if (found.size > 1) {
+    forget();
+    return { kind: "ambiguous" };
+  }
   const [file] = found.values();
   if (file) {
-    const id = CODEX_FULL_ID.exec(basename(file.path))?.[0];
-    return id
-      ? { kind: "found", file, id: id.toLowerCase() }
-      : { kind: "ambiguous" };
+    const id = CODEX_FULL_ID.exec(basename(file.path))?.[0]?.toLowerCase();
+    if (!id) return { kind: "ambiguous" };
+    for (const { prefix } of candidates)
+      if (id.startsWith(prefix))
+        context.codexTitles.set(prefix, { id, path: file.path });
+    return { kind: "found", file, id };
   }
+  forget();
   // A thread ID without a transcript is a thread with no messages yet. A bare
   // UUID in another title item lands here too: hiding a report beats showing
   // a stale one.
@@ -329,6 +388,8 @@ export async function resolveAgentSessionInfo(
   agentInfo: Record<string, unknown> | null,
   files: AgentSessionFileAccess,
   context: AgentSessionResolverContext,
+  /** Change detection may reuse a remembered Codex title match. */
+  options: { reuseCodexTitle?: boolean } = {},
 ): Promise<AgentSessionResolved> {
   const params = normalizeParams(rawParams);
   if (!params.pane_id) throw new Error("agent session requires pane_id");
@@ -359,6 +420,8 @@ export async function resolveAgentSessionInfo(
     const title = await codexThreadFromTitle(
       stringValue(agentInfo?.terminal_title),
       files,
+      context,
+      options.reuseCodexTitle,
     );
     if (title.kind === "found") {
       // The title follows thread switches; a Herdr report may be stale.

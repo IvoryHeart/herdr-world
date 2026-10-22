@@ -1,6 +1,9 @@
-import { expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { ConversationMessage } from "../server/src/agent/conversation";
-import { conformance } from "./chat-conformance";
+import { conformance, versionToken } from "./chat-conformance";
 
 const message = (
   role: "user" | "assistant",
@@ -42,4 +45,126 @@ test("transcript states that are not reader bugs are notes", () => {
     conformance([message("assistant", "Late", 2), message("user", "Early", 1)])
       .notes,
   ).toEqual(["timestamps_out_of_order"]);
+});
+
+test("a version is printed only when it looks like one", () => {
+  expect(versionToken("0.163.0")).toBe("0.163.0");
+  expect(versionToken("2.1.308+build_7-rc")).toBe("2.1.308+build_7-rc");
+  expect(versionToken("")).toBe("unknown");
+  expect(versionToken(undefined)).toBe("unknown");
+  expect(versionToken("1.0 secret words")).toBe("other");
+  expect(versionToken("/home/someone/project")).toBe("other");
+  expect(versionToken("x".repeat(33))).toBe("other");
+});
+
+describe("the CLI never prints transcript content", () => {
+  const SENTINEL = "PRIVATE-SENTINEL";
+  let home = "";
+
+  beforeAll(async () => {
+    home = await mkdtemp(join(tmpdir(), "chat-conformance-cli-"));
+    const codex = join(home, "codex", "sessions", "2026", "10", "22");
+    const claude = join(home, ".claude", "projects", "demo");
+    const pi = join(home, "pi", "sessions", "demo");
+    await mkdir(codex, { recursive: true });
+    await mkdir(claude, { recursive: true });
+    await mkdir(pi, { recursive: true });
+    const jsonl = (records: unknown[]) =>
+      records.map((record) => JSON.stringify(record)).join("\n");
+    const said = (role: string, text: string) => ({
+      type: "response_item",
+      timestamp: "2026-10-22T09:00:00Z",
+      payload: {
+        type: "message",
+        role,
+        content: [{ type: "input_text", text }],
+      },
+    });
+    // Hostile metadata: versions carrying content, a path and a long token.
+    await writeFile(
+      join(
+        codex,
+        "rollout-2026-10-22T09-00-00-019a0000-0000-7000-8000-000000000001.jsonl",
+      ),
+      jsonl([
+        {
+          type: "session_meta",
+          payload: { cli_version: `${SENTINEL} /home/someone/secret` },
+        },
+        said("user", `${SENTINEL} question`),
+        said("assistant", `${SENTINEL} answer`),
+      ]),
+    );
+    await writeFile(
+      join(
+        codex,
+        "rollout-2026-10-22T09-00-01-019a0000-0000-7000-8000-000000000002.jsonl",
+      ),
+      jsonl([
+        {
+          type: "session_meta",
+          payload: { cli_version: `${SENTINEL}${"x".repeat(40)}` },
+        },
+        said("user", `Caveat: The messages below ${SENTINEL}`),
+        said("assistant", `${SENTINEL}`),
+      ]),
+    );
+    await writeFile(
+      join(claude, "session.jsonl"),
+      jsonl([
+        {
+          type: "user",
+          version: `<${SENTINEL}>`,
+          message: { role: "user", content: `${SENTINEL} hi` },
+        },
+        {
+          type: "assistant",
+          message: {
+            role: "assistant",
+            content: [{ type: "text", text: `${SENTINEL} hello` }],
+          },
+        },
+      ]),
+    );
+    // Not JSON at all: the reader's result is counted, never echoed.
+    await writeFile(join(pi, "broken.jsonl"), `${SENTINEL} {not json`);
+  });
+  afterAll(async () => {
+    await rm(home, { recursive: true, force: true });
+  });
+
+  for (const mode of [[], ["--json"]]) {
+    test(`in ${mode.length ? "JSON" : "text"} mode`, async () => {
+      const run = Bun.spawn(
+        ["bun", join(import.meta.dir, "chat-conformance.ts"), ...mode],
+        {
+          env: {
+            PATH: process.env.PATH ?? "",
+            HOME: home,
+            CODEX_HOME: join(home, "codex"),
+            PI_CODING_AGENT_DIR: join(home, "pi"),
+            GROK_HOME: join(home, "grok"),
+            ANTIGRAVITY_HOME: join(home, "agy"),
+            XDG_DATA_HOME: join(home, "data"),
+            TMPDIR: join(home, "tmp"),
+          },
+          stdout: "pipe",
+          stderr: "pipe",
+        },
+      );
+      const [stdout, stderr, code] = await Promise.all([
+        new Response(run.stdout).text(),
+        new Response(run.stderr).text(),
+        run.exited,
+      ]);
+      expect(code).toBe(0);
+      expect(stdout).not.toContain(SENTINEL);
+      expect(stderr).not.toContain(SENTINEL);
+      expect(stdout).not.toContain(home);
+      expect(stderr).not.toContain(home);
+      expect(stdout).toContain("other");
+      // Injected-looking user text is still reported, by check name only.
+      expect(stdout).toContain("injected_user_text");
+    });
+  }
 });

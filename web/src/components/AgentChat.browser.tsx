@@ -256,6 +256,22 @@ async function run() {
       "A guessed conversation must not offer a composer",
     );
 
+    // A new Codex thread is shown, but its truncated title ID is not sent to.
+    reply = {
+      ...conversation([]),
+      session_binding: "title",
+      session_fingerprint: null,
+    };
+    push();
+    await settle();
+    check(
+      !container.querySelector("textarea") &&
+        container
+          .querySelector(".agent-chat-guessed")
+          ?.textContent?.includes("Codex title") === true,
+      "An unresolved Codex thread must explain why it cannot be sent to",
+    );
+
     reply = conversation([
       message("c0", "user", "Earlier"),
       {

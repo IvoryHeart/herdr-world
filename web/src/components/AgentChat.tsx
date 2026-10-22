@@ -376,8 +376,9 @@ export function AgentChat({
       {conversation?.status === "ok" && !canSend ? (
         <div className="agent-chat-guessed" role="status">
           <span>
-            World found this conversation in the pane's folder; Herdr has not
-            tied it to this pane, so Chat cannot send to it.
+            {conversation.session_binding === "title"
+              ? "The Codex title does not name one saved thread yet, so Chat cannot tell where a message would go. Send the first message from the Terminal; Chat can reply once Codex saves the thread."
+              : "World found this conversation in the pane's folder; Herdr has not tied it to this pane, so Chat cannot send to it."}
           </span>
           {onOpenTerminal ? (
             <button type="button" onClick={onOpenTerminal}>

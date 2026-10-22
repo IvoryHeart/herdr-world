@@ -1,5 +1,6 @@
 import { Database } from "bun:sqlite";
 import {
+  chmodSync,
   copyFileSync,
   existsSync,
   mkdtempSync,
@@ -135,8 +136,15 @@ export function extractToolOutputText(
   return text.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\ufffd]/g, "");
 }
 
+/**
+ * Reads a copy of an Antigravity database, so a running agent's locks and WAL
+ * are untouched. The copy holds transcript content: it lives in a private
+ * (0700) directory and is removed afterwards, but a process killed while
+ * reading leaves `herdr-world-agy-*` in the temporary directory.
+ */
 export function withTempDb<T>(dbPath: string, fn: (db: Database) => T): T {
   const tempDir = mkdtempSync(join(tmpdir(), "herdr-world-agy-"));
+  chmodSync(tempDir, 0o700);
   const tempDbPath = join(tempDir, basename(dbPath));
   try {
     copyFileSync(dbPath, tempDbPath);

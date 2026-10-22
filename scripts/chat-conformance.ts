@@ -4,9 +4,13 @@
 //
 // Runs every harness reader over the real transcripts on this machine and
 // prints pass/fail counts per harness and harness version. It never prints
-// or writes transcript content, file paths or session IDs: only counts,
-// harness names, versions and check names. Results describe this machine;
-// do not commit them as fixtures.
+// transcript content, file paths or session IDs: only counts, harness names,
+// check names and version strings that match ^[\w.+-]{1,32}$ (others are
+// counted as "other"). Reader errors are counted, not printed. It writes
+// nothing, except that the Antigravity reader copies each database into a
+// private (0700) temporary directory while reading it; a killed run can
+// leave one behind as $TMPDIR/herdr-world-agy-*. Results describe this
+// machine; do not commit them as fixtures.
 import { readdir } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -109,6 +113,15 @@ const HARNESSES: Harness[] = [
 const INJECTED_USER_TEXT =
   /^(?:# AGENTS\.md instructions\b|<[a-z_ -]+>|Caveat: The messages below\b|This session is being continued from a previous conversation\b)/;
 
+/**
+ * A version string comes from inside the transcript, so it is printed only
+ * when it looks like a version; anything else is counted as `other`.
+ */
+export function versionToken(value: string | undefined) {
+  if (!value || value === "unknown") return "unknown";
+  return /^[\w.+-]{1,32}$/.test(value) ? value : "other";
+}
+
 /** Failures are reader bugs; notes describe the transcript, not the reader. */
 export type ConformanceCheck = "read" | "injected_user_text";
 export type ConformanceNote = "no_exchange" | "timestamps_out_of_order";
@@ -188,7 +201,7 @@ async function run() {
           file,
           localAgentSessionFiles,
         );
-        version = projection.trajectory.agent.version || "unknown";
+        version = versionToken(projection.trajectory.agent.version);
         subagent = (await harness.isSubagent?.(path)) ?? false;
         result = conformance(conversationMessages(projection.entries));
       } catch {

@@ -67,11 +67,14 @@ message.
 | Binding | Source | Chat can send |
 | --- | --- | --- |
 | `reported` | The harness's Herdr integration reported the session | Yes |
-| `title` | The Codex pane title names the thread (Thread ID in `/title`) | Yes, including a new thread with no messages yet |
+| `title` | The Codex pane title names the thread (Thread ID in `/title`) | Only once the title gives a complete thread ID: a full UUID, or a truncated one that matched exactly one saved transcript |
 | `guessed` | World found the newest Grok Build, Antigravity or Muse session in the pane's folder | No; two agents in one folder would see the same guess |
 
-`session_fingerprint` identifies a reported or titled session and is null for a
-guess. A send rereads the pane with `agent.get` and prompts with no other await
+`session_fingerprint` identifies a reported session or a complete Codex thread
+ID, and is null otherwise. Codex shows 29 characters of the thread ID in its
+title, so a new thread with no saved transcript, or a title naming two threads,
+is shown but cannot be sent to until the ID resolves; send its first message
+from the Terminal. Prefix equality is never treated as the same thread. A send rereads the pane with `agent.get` and prompts with no other await
 in between. If the bound session changed, nothing is sent.
 
 **What remains.** Herdr's `agent.prompt` takes only a pane, not an expected
@@ -105,7 +108,11 @@ machine, it also watches the file, so messages written during a long turn
 appear without a status change. When the pane's session, title thread,
 transcript size or time, or status changes, the service pushes
 `agent_conversation_changed` to the watching browser, which rereads. Transcripts
-on an SSH host are rechecked on Herdr events only.
+on an SSH host are rechecked on Herdr events only. Once a truncated Codex title
+ID has matched one transcript, these rechecks stat that transcript instead of
+searching again; they search while the thread has no transcript or matches
+several, or when the title names another thread. Reads still search, so a
+later transcript with the same prefix is noticed.
 
 ## Harness matrix
 
@@ -143,8 +150,16 @@ the newest transcripts (50 per harness by default) in the standard locations on
 the machine it runs on, honouring the same environment overrides as World
 (`CODEX_HOME`, `GROK_HOME`, `PI_CODING_AGENT_DIR` and others). It prints pass
 counts per harness and harness version, and never prints or writes transcript
-content, paths or session IDs. Run it after a harness upgrade; do not commit its
-output or copy transcripts into the repository.
+content, paths or session IDs. A harness version is printed only when it
+matches `^[\w.+-]{1,32}$`; any other value read from a transcript is counted
+as `other`, and reader errors are counted without their message. Run it after
+a harness upgrade; do not commit its output or copy transcripts into the
+repository.
+
+The script writes nothing itself. The Antigravity reader, here and in the
+service, reads a copy of each database from a private (0700) temporary
+directory and removes it afterwards; a process killed while reading can leave
+`herdr-world-agy-*` with transcript content in the temporary directory.
 
 A transcript fails when it cannot be read or when text the user did not write
 (injected instructions, environment blocks, caveats, compaction summaries,
