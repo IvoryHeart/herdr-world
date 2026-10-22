@@ -17,7 +17,8 @@ import {
   herdrReleaseUrl,
   herdrWindowsInstallerUrl,
   installVerifiedHerdr,
-  legacyWindowsHerdrBinaryPath,
+  isOfficialWindowsHerdr,
+  legacyWindowsHerdrBinaries,
   parseHerdrVersion,
   replaceWithVerifiedHerdr,
   resolveHerdrReleaseTarget,
@@ -106,22 +107,67 @@ describe("default locations", () => {
         localAppDataDir: join(homeDir, "Local"),
       }),
     ).toBe(join(homeDir, "Local", "Programs", "Herdr", "bin", "herdr.exe"));
-    expect(
-      legacyWindowsHerdrBinaryPath({
-        platform: "win32",
-        homeDir,
-        appDataDir: join(homeDir, "Roaming"),
-      }),
-    ).toBe(
-      join(
-        homeDir,
-        "Roaming",
-        "herdr-world",
-        "herdr",
-        VERIFIED_HERDR_VERSION,
-        "herdr.exe",
+  });
+
+  test("find every legacy World-managed Windows Herdr, newest first", () => {
+    // Herdr World 0.2.6 installed Herdr 0.9.4 under a versioned directory.
+    const homeDir = scratch();
+    const env = {
+      platform: "win32",
+      homeDir,
+      appDataDir: join(homeDir, "Roaming"),
+    };
+    expect(legacyWindowsHerdrBinaries(env)).toEqual([]);
+    const root = join(homeDir, "Roaming", "herdr-world", "herdr");
+    for (const version of ["0.9.4", "0.9.10", "0.9.2"]) {
+      mkdirSync(join(root, version), { recursive: true });
+      writeFileSync(join(root, version, "herdr.exe"), "exe");
+    }
+    mkdirSync(join(root, "0.9.3")); // empty: a removed copy
+    mkdirSync(join(root, ".staging-1"));
+    expect(legacyWindowsHerdrBinaries(env)).toEqual(
+      ["0.9.10", "0.9.4", "0.9.2"].map((version) =>
+        join(root, version, "herdr.exe"),
       ),
     );
+  });
+
+  test("recognize Herdr's own Windows layout wherever PATH resolves it", () => {
+    const homeDir = join("/", "home", "example");
+    const env = {
+      platform: "win32",
+      homeDir,
+      localAppDataDir: join(homeDir, "Local"),
+    };
+    const standalone = join(homeDir, ".herdr", "packages", "standalone");
+    for (const path of [
+      join(homeDir, "Local", "Programs", "Herdr", "bin", "herdr.exe"),
+      join(standalone, "current", "herdr.exe"),
+      join(standalone, "releases", "0.9.4-x86_64-pc-windows-msvc", "herdr.exe"),
+      join(standalone, "releases", "0.9.4-x86_64-pc-windows-msvc", "HERDR.EXE"),
+    ])
+      expect(isOfficialWindowsHerdr(path, env)).toBe(true);
+    expect(
+      isOfficialWindowsHerdr(
+        join(
+          "/",
+          "data",
+          "herdr",
+          "packages",
+          "standalone",
+          "current",
+          "herdr.exe",
+        ),
+        { ...env, herdrHome: join("/", "data", "herdr") },
+      ),
+    ).toBe(true);
+    for (const path of [
+      join(homeDir, "tools", "herdr.exe"),
+      join(standalone, "releases", "herdr.exe"),
+      join(standalone, "releases", "0.9.4", "nested", "herdr.exe"),
+      join(standalone, "current", "conpty.dll"),
+    ])
+      expect(isOfficialWindowsHerdr(path, env)).toBe(false);
   });
 });
 

@@ -8,11 +8,7 @@ import {
   findHerdrBinary,
   setupHerdr,
 } from "./bootstrap";
-import {
-  herdrDefaultBinaryPath,
-  legacyWindowsHerdrBinaryPath,
-  VERIFIED_HERDR_VERSION,
-} from "./release";
+import { herdrDefaultBinaryPath, VERIFIED_HERDR_VERSION } from "./release";
 
 const trash: string[] = [];
 function scratch(): string {
@@ -150,7 +146,15 @@ describe("findHerdrBinary", () => {
       appDataDir: join(windowsHome, "Roaming"),
       pathEnv: "",
     };
-    const legacy = legacyWindowsHerdrBinaryPath(env);
+    // Herdr World 0.2.6 installed Herdr 0.9.4 here, outside PATH.
+    const legacy = join(
+      windowsHome,
+      "Roaming",
+      "herdr-world",
+      "herdr",
+      "0.9.4",
+      "herdr.exe",
+    );
     mkdirSync(join(legacy, ".."), { recursive: true });
     writeFileSync(legacy, "legacy");
     expect(findHerdrBinary(env)).toBe(legacy);

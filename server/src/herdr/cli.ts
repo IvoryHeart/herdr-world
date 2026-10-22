@@ -34,8 +34,9 @@ Upgrade brings an older Herdr up to ${VERIFIED_HERDR_VERSION}: it verifies the
 release checksum and version, keeps the replaced binary as herdr.previous
 (Windows keeps earlier releases through Herdr's installer, and a Herdr installed
 by older Herdr World releases moves to Herdr's default location), and asks a
-running local server to hand its panes to the new version only when no service
-manager runs it; otherwise it says that a restart is needed. It never downgrades
+running local server to hand its panes to the new version only when it can
+prove nothing supervises it (a daemonized Linux server); otherwise it says that
+a restart is needed. It never downgrades
 a newer Herdr or server, or replaces a package- or version-managed install.
 
 Every run also brings this release's harness integrations and plugin up to

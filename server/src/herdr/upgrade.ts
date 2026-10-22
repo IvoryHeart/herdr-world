@@ -9,10 +9,11 @@ import { basename, delimiter, dirname, join } from "node:path";
 import { runProcessWithCodeTimeout } from "../utils/process-utils";
 import { findHerdrBinary, type HerdrBootstrapDeps } from "./bootstrap";
 import {
-  herdrDefaultBinaryPath,
+  compareHerdrVersions,
   type InstallHerdrDeps,
   installVerifiedHerdr,
-  legacyWindowsHerdrBinaryPath,
+  isOfficialWindowsHerdr,
+  legacyWindowsHerdrBinaries,
   parseHerdrVersion,
   readHerdrVersion,
   replaceWithVerifiedHerdr,
@@ -137,23 +138,7 @@ const PLUGIN_TIMEOUT_MS = 300_000;
 const HANDOFF_REQUEST_TIMEOUT_MS = 240_000;
 const HANDOFF_CONFIRM_TIMEOUT_MS = 30_000;
 
-/** Negative when a < b. Pre-releases sort before their release. */
-export function compareHerdrVersions(a: string, b: string): number {
-  const parse = (value: string) => {
-    const [core, pre] = value.split("-", 2);
-    return { parts: core.split(".").map(Number), pre };
-  };
-  const left = parse(a);
-  const right = parse(b);
-  for (let index = 0; index < 3; index += 1) {
-    const difference = (left.parts[index] ?? 0) - (right.parts[index] ?? 0);
-    if (difference) return difference;
-  }
-  if (left.pre === right.pre) return 0;
-  if (!left.pre) return 1;
-  if (!right.pre) return -1;
-  return left.pre < right.pre ? -1 : 1;
-}
+export { compareHerdrVersions };
 
 /**
  * Package managers and version managers own their Herdr, as Herdr's own
@@ -233,14 +218,19 @@ export function planHerdrUpgrade(
     // Herdr's Windows installer always writes its own layout, so only a
     // Herdr found there (or World's legacy copy, which is migrated) can be
     // upgraded; anything else would leave the found binary behind.
-    if (samePath(binaryPath, herdrDefaultBinaryPath(deps), platform))
+    if (isOfficialWindowsHerdr(binaryPath, deps))
       return { state: "outdated", binaryPath, version };
-    if (samePath(binaryPath, legacyWindowsHerdrBinaryPath(deps), platform))
+    if (
+      legacyWindowsHerdrBinaries(deps).some((legacy) =>
+        samePath(binaryPath, legacy, platform),
+      )
+    )
       return { state: "outdated", binaryPath, version, legacyWindows: true };
     return {
       state: "unknown",
       binaryPath,
-      reason: `it is not where Herdr's installer puts Herdr (${herdrDefaultBinaryPath(deps)}); upgrade it the way it was installed, or remove it so World can install Herdr there`,
+      reason:
+        "it is not in the layout Herdr's installer manages; upgrade it the way it was installed, or remove it so World can install Herdr in Herdr's default location",
     };
   }
   if (!writable(dirname(binaryPath))) {

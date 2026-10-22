@@ -213,9 +213,12 @@ What the upgrade does:
    stays beside the new one as `herdr.previous`, and a failed check restores it.
    On Windows, World runs Herdr's own `install.ps1` (checksum-pinned) with the
    verified package; that installer keeps earlier releases and switches only after
-   its own checks. World upgrades only a Windows Herdr in Herdr's default location.
-   A Herdr that Herdr World 0.2 or earlier installed under
-   `%APPDATA%\herdr-world\herdr` moves there. The old copy stays as a backup, and
+   its own checks. World upgrades a Windows Herdr only in the layout that installer
+   manages: its visible bin, its `current` junction or a release directory under
+   `%USERPROFILE%\.herdr` (`HERDR_HOME`), which PATH may point at directly. A Herdr
+   that Herdr World 0.2.6 or earlier installed under
+   `%APPDATA%\herdr-world\herdr\<version>` (found even though it is not on PATH)
+   moves to Herdr's default location. The old copy stays as a backup, and
    World's Herdr scheduled task is re-registered at the new path without being
    restarted. A Herdr elsewhere is reported and left alone. World never downgrades
    a newer Herdr. It also leaves Homebrew, mise, asdf and Nix installs, and any
@@ -223,13 +226,15 @@ What the upgrade does:
 2. **Running server.** A Herdr server keeps running its old version until it is
    replaced. On Linux and macOS, World asks the server to hand its panes to the new
    version live, as `herdr update --handoff` does, but only when the server supports
-   it and World can confirm that no service manager runs it. On Linux the confirmed
-   case is a server in a terminal or login scope; on macOS it is a server that is
-   not a launchd job. Herdr starts the new server as a child of the old one, so a
-   service manager would end the panes when the old server exits. Otherwise
-   (Windows, any systemd or launchd service, an unidentified supervisor, an older
-   server or a failed handoff) the old server keeps your panes, and World says that
-   a restart is needed. World never stops or restarts Herdr itself, and never hands
+   it and World can prove that nothing supervises it. Herdr starts the new server as
+   a child of the old one, so a service manager or wrapper would end the panes or
+   start a competing server when the old one exits. The proven case is Linux: the
+   server owning the control socket is a daemonized Herdr (its parent is init or
+   the user's systemd manager) in a terminal or login scope. Everywhere else the old
+   server keeps your panes and World says that a restart is needed: macOS (no
+   unprivileged check can rule out a launchd job or wrapper), Windows, any systemd
+   service, a wrapper parent, an unidentifiable owner, an older server or a failed
+   handoff. World never stops or restarts Herdr itself, and never hands
    a newer or unidentified server to an older release. A handoff that leaves no
    server running is reported as a failure.
 3. **Harness integrations.** World supports the Codex, Claude and Pi harnesses. For

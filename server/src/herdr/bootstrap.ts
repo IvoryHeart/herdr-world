@@ -6,7 +6,7 @@ import { assertSupportedHerdrProtocol } from "../bridge/protocol-compat";
 import {
   herdrDefaultBinaryPath,
   installVerifiedHerdr,
-  legacyWindowsHerdrBinaryPath,
+  legacyWindowsHerdrBinaries,
 } from "./release";
 import { installHerdrService } from "./service";
 
@@ -101,7 +101,7 @@ export function findHerdrBinary(
   //    PATH, then the directory older Herdr World releases used on Windows.
   const candidates = [herdrDefaultBinaryPath({ ...deps, platform })];
   if (platform === "win32")
-    candidates.push(legacyWindowsHerdrBinaryPath({ ...deps, platform }));
+    candidates.push(...legacyWindowsHerdrBinaries({ ...deps, platform }));
   return candidates.find((candidate) => existsSync(candidate)) ?? null;
 }
 

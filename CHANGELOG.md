@@ -18,7 +18,7 @@ are optional because the merged PR history records their source.
   integrations**) appears whenever something is behind. The upgrade verifies
   checksums and versions before replacing anything, keeps the old binary for
   rollback, and never downgrades. It hands a running server's panes to the new
-  version only when no service manager runs that server; otherwise it says that a
+  version only when it can prove nothing supervises that server (Linux); otherwise it says that a
   restart is needed. A GitHub-installed Herdr World plugin is pinned to the
   matching release tag. Windows uses Herdr's own installer and moves a Herdr that
   older World releases installed to Herdr's default location. The Homebrew Formula

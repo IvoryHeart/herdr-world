@@ -13,7 +13,6 @@ import { dirname, join } from "node:path";
 import { afterEach, describe, expect, test } from "bun:test";
 import {
   herdrDefaultBinaryPath,
-  legacyWindowsHerdrBinaryPath,
   VERIFIED_HERDR_PROTOCOL,
   VERIFIED_HERDR_VERSION,
 } from "./release";
@@ -44,6 +43,11 @@ afterEach(() => {
     if (dir) rmSync(dir, { recursive: true, force: true });
   }
 });
+
+/** Where Herdr World 0.2.6 installed Windows Herdr 0.9.4, outside PATH. */
+function v026LegacyHerdr(appDataDir: string): string {
+  return join(appDataDir, "herdr-world", "herdr", "0.9.4", "herdr.exe");
+}
 
 /** A fake Herdr binary: a shell script that reports a version. */
 function fakeHerdr(version: string): string {
@@ -300,7 +304,8 @@ describe("planHerdrUpgrade", () => {
       state: "unknown",
       binaryPath: custom,
     });
-    const legacy = place(legacyWindowsHerdrBinaryPath(env));
+    // A real v0.2.6 layout: the managed copy is found off PATH.
+    const legacy = place(v026LegacyHerdr(env.appDataDir));
     expect(planHerdrUpgrade(deps(homeDir, env))).toEqual({
       state: "outdated",
       binaryPath: legacy,
@@ -313,6 +318,21 @@ describe("planHerdrUpgrade", () => {
       binaryPath: official,
       version: "0.9.3",
     });
+    // install.ps1 puts the active release directory itself on PATH.
+    const release = place(
+      join(
+        homeDir,
+        ".herdr",
+        "packages",
+        "standalone",
+        "releases",
+        "0.9.3-x86_64-pc-windows-msvc",
+        "herdr.exe",
+      ),
+    );
+    expect(
+      planHerdrUpgrade(deps(homeDir, { ...env, pathEnv: dirname(release) })),
+    ).toEqual({ state: "outdated", binaryPath: release, version: "0.9.3" });
   });
 });
 
@@ -498,7 +518,7 @@ describe("upgradeHerdr", () => {
       appDataDir: join(homeDir, "Roaming"),
       pathEnv: "",
     };
-    const legacy = legacyWindowsHerdrBinaryPath(env);
+    const legacy = v026LegacyHerdr(env.appDataDir);
     mkdirSync(dirname(legacy), { recursive: true });
     writeFileSync(legacy, "legacy exe");
     const official = herdrDefaultBinaryPath(env);

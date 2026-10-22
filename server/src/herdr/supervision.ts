@@ -1,6 +1,5 @@
 import { readdirSync, readFileSync, readlinkSync } from "node:fs";
 import { join } from "node:path";
-import { runProcessWithCodeTimeout } from "../utils/process-utils";
 
 /**
  * Whether a live handoff can keep the panes of the Herdr server listening on
@@ -9,20 +8,17 @@ import { runProcessWithCodeTimeout } from "../utils/process-utils";
  * (https://github.com/herdrdev/herdr/blob/v0.9.5/src/server/handoff.rs). A
  * supervisor that owns the old process treats that exit as the end of its
  * service: systemd's default KillMode=control-group then kills the child and
- * every pane, and launchd's KeepAlive starts a competing server. Only a
- * server proven to be outside any supervisor is "unsupervised"; anything
- * that cannot be identified is "unknown" and must be restarted instead.
+ * every pane, and launchd's KeepAlive or a wrapper starts a competing server.
+ * Only a server proven to be outside any supervisor is "unsupervised":
+ * on Linux, a daemonized server in a terminal or login scope. Anything else,
+ * including every macOS server, is "unknown" and must be restarted instead.
  */
 export type ServerSupervision = "unsupervised" | "supervised" | "unknown";
-
-type Run = typeof runProcessWithCodeTimeout;
 
 export interface SupervisionDeps {
   platform?: string;
   /** Linux: the procfs mount, replaced in tests. */
   procRoot?: string;
-  /** macOS: runs lsof and launchctl. */
-  run?: Run;
 }
 
 const SOCKET_LISTENING_FLAG = 0x10000; // __SO_ACCEPTCON in /proc/net/unix
@@ -83,23 +79,11 @@ function linuxServerPids(socketPath: string, procRoot: string): string[] {
   return pids;
 }
 
-async function macosSupervision(
-  socketPath: string,
-  run: Run,
-): Promise<ServerSupervision> {
-  const holders = await run(["lsof", "-t", "--", socketPath], 10_000);
-  const pids = [
-    ...new Set(holders.stdout.split("\n").map((pid) => pid.trim())),
-  ].filter((pid) => /^\d+$/.test(pid));
-  if (holders.code !== 0 || pids.length !== 1) return "unknown";
-  // The user's launchd jobs, as "PID Status Label"; a daemonized server that
-  // launchd merely adopted is not listed.
-  const jobs = await run(["launchctl", "list"], 10_000);
-  if (jobs.code !== 0) return "unknown";
-  const supervised = jobs.stdout
-    .split("\n")
-    .some((line) => line.trim().split(/\s+/)[0] === pids[0]);
-  return supervised ? "supervised" : "unsupervised";
+/** The parent PID from /proc/<pid>/stat; the command name may hold spaces. */
+export function parentPid(stat: string): string | null {
+  return (
+    /\)\s+\S+\s+(\d+)/.exec(stat.slice(stat.lastIndexOf(")")))?.[1] ?? null
+  );
 }
 
 export async function detectServerSupervision(
@@ -108,12 +92,8 @@ export async function detectServerSupervision(
 ): Promise<ServerSupervision> {
   const platform = deps.platform ?? process.platform;
   try {
-    if (platform === "darwin") {
-      return await macosSupervision(
-        socketPath,
-        deps.run ?? runProcessWithCodeTimeout,
-      );
-    }
+    // macOS cannot show, without privileges, that no launchd job in any
+    // domain (or a wrapper) supervises a process, so it is never proven safe.
     if (platform !== "linux") return "unknown";
     const procRoot = deps.procRoot ?? "/proc";
     const pids = linuxServerPids(socketPath, procRoot);
@@ -121,11 +101,22 @@ export async function detectServerSupervision(
     const leaf = cgroupLeaf(
       readFileSync(join(procRoot, pids[0], "cgroup"), "utf8"),
     );
-    // A scope (a terminal, a login session) has no main process to lose;
-    // a service's main process exit stops the service and its cgroup.
-    if (leaf?.endsWith(".scope")) return "unsupervised";
+    // A service's main process exit stops the service and its cgroup.
     if (leaf?.endsWith(".service")) return "supervised";
-    return "unknown";
+    // A scope (a terminal, a login session) has no main process to lose, but
+    // a wrapper inside it could still restart the server; only a daemonized
+    // server, reparented to init or the user's systemd manager, is proven safe.
+    if (!leaf?.endsWith(".scope")) return "unknown";
+    const parent = parentPid(
+      readFileSync(join(procRoot, pids[0], "stat"), "utf8"),
+    );
+    if (parent === "1") return "unsupervised";
+    if (!parent) return "unknown";
+    const parentName = readFileSync(
+      join(procRoot, parent, "comm"),
+      "utf8",
+    ).trim();
+    return parentName === "systemd" ? "unsupervised" : "unknown";
   } catch {
     return "unknown";
   }

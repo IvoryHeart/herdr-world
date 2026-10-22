@@ -5,6 +5,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   renameSync,
   rmSync,
 } from "node:fs";
@@ -94,6 +95,8 @@ export interface HerdrLocationEnv {
   appDataDir?: string;
   /** HERDR_INSTALL_DIR, honored by both official installers. */
   installDir?: string;
+  /** HERDR_HOME: where install.ps1 keeps its Windows release store. */
+  herdrHome?: string;
 }
 
 function locationEnv(env: HerdrLocationEnv) {
@@ -112,6 +115,7 @@ function locationEnv(env: HerdrLocationEnv) {
       join(homeDir, "AppData", "Roaming"),
     installDir:
       env.installDir ?? (process.env.HERDR_INSTALL_DIR?.trim() || undefined),
+    herdrHome: env.herdrHome ?? (process.env.HERDR_HOME?.trim() || undefined),
   };
 }
 
@@ -132,17 +136,71 @@ export function herdrDefaultBinaryPath(env: HerdrLocationEnv = {}): string {
   return join(installDir ?? join(homeDir, ".local", "bin"), "herdr");
 }
 
-/** Herdr World 0.2 and earlier installed Windows Herdr into its own directory. */
-export function legacyWindowsHerdrBinaryPath(
+/** Negative when a < b. Pre-releases sort before their release. */
+export function compareHerdrVersions(a: string, b: string): number {
+  const parse = (value: string) => {
+    const [core, pre] = value.split("-", 2);
+    return { parts: core.split(".").map(Number), pre };
+  };
+  const left = parse(a);
+  const right = parse(b);
+  for (let index = 0; index < 3; index += 1) {
+    const difference = (left.parts[index] ?? 0) - (right.parts[index] ?? 0);
+    if (difference) return difference;
+  }
+  if (left.pre === right.pre) return 0;
+  if (!left.pre) return 1;
+  if (!right.pre) return -1;
+  return left.pre < right.pre ? -1 : 1;
+}
+
+/**
+ * Herdr World 0.2.6 and earlier installed Windows Herdr into its own
+ * versioned directories, %APPDATA%\herdr-world\herdr\<version>\herdr.exe,
+ * outside PATH. Returns the installed copies, newest first.
+ */
+export function legacyWindowsHerdrBinaries(
   env: HerdrLocationEnv = {},
-): string {
+): string[] {
   const { appDataDir } = locationEnv(env);
-  return join(
-    appDataDir,
-    "herdr-world",
-    "herdr",
-    VERIFIED_HERDR_VERSION,
-    "herdr.exe",
+  const root = join(appDataDir, "herdr-world", "herdr");
+  let versions: string[];
+  try {
+    versions = readdirSync(root).filter((name) =>
+      /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(name),
+    );
+  } catch {
+    return [];
+  }
+  return versions
+    .sort((left, right) => compareHerdrVersions(right, left))
+    .map((version) => join(root, version, "herdr.exe"))
+    .filter((path) => existsSync(path));
+}
+
+/**
+ * Whether a Windows herdr.exe belongs to the layout Herdr's install.ps1
+ * manages: its visible bin junction, the `current` junction, or a release
+ * directory under %USERPROFILE%\.herdr\packages\standalone (HERDR_HOME
+ * moves it). The installer puts the active release directory on PATH, so
+ * PATH lookups often return the release directory itself.
+ */
+export function isOfficialWindowsHerdr(
+  binaryPath: string,
+  env: HerdrLocationEnv = {},
+): boolean {
+  const { homeDir, herdrHome } = locationEnv(env);
+  const standalone = join(
+    herdrHome ?? join(homeDir, ".herdr"),
+    "packages",
+    "standalone",
+  );
+  const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
+  return (
+    basename(binaryPath).toLowerCase() === "herdr.exe" &&
+    (same(binaryPath, herdrDefaultBinaryPath({ ...env, platform: "win32" })) ||
+      same(binaryPath, join(standalone, "current", "herdr.exe")) ||
+      same(dirname(dirname(binaryPath)), join(standalone, "releases")))
   );
 }
 
