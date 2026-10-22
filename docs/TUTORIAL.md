@@ -140,8 +140,12 @@ changes what you see and does not disconnect hosts or retarget open terminals.
 7. To move a table to another room, zoom in until you see tables, then drag it
    with the mouse, or hold it for a moment on a phone and then drag. Drop it on
    another room of the same building; the plaque under your pointer says where
-   it will land, or why it cannot. To move one agent, drag it onto another
-   table instead. From the keyboard, focus a table or agent and press **M** to
+   it will land, or why it cannot. The table lifts off and swings along behind
+   your pointer with its agents aboard, then drops onto its new spot in a puff
+   of dust; if the move is refused, it shakes and springs back. To move one
+   agent, drag it onto another table instead: it dangles by the scruff on the
+   way. With **Town calm motion** or reduced motion, the table just follows
+   your pointer and fades into place. From the keyboard, focus a table or agent and press **M** to
    choose a destination. The live panes move, so agents keep running. If a move
    fails part-way, Town tries to move the panes back, and its notice says what
    happened: back in the original room (the table's pane layout may differ),
