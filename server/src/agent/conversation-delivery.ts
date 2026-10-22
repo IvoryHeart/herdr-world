@@ -21,8 +21,9 @@ import type { ConversationMessage } from "./conversation";
  *   Chat cannot tell where it went.
  * - `unverified`: Chat can no longer check it, because the transcript it
  *   was sent to cannot be read or the check window passed.
- * Matched receipts are kept, oldest first out, so the cap never drops a
- * warning; the others stay until the user dismisses them.
+ * Matched receipts are kept until their check window ends; after that the
+ * cap may drop the oldest of them. The others stay until the user dismisses
+ * them, and a full pane refuses new sends instead.
  */
 export type ConversationDelivery = {
   id: string;
@@ -127,6 +128,11 @@ export function createDeliveryLedger() {
     (receipt.state === "matched" &&
       now - receipt.sentAtMs <= DELIVERY_CHECK_MS);
 
+  // A matched receipt whose window has ended can change no more, and
+  // carries no warning: the only kind the cap may drop.
+  const finished = (receipt: Receipt, now: number) =>
+    receipt.state === "matched" && !open(receipt, now);
+
   const expireOne = (receipt: Receipt) => {
     receipt.state = "unverified";
     receipt.detail = `Chat did not see it in ${receipt.expected} within ${DELIVERY_CHECK_MS / 60_000} minutes.`;
@@ -134,11 +140,12 @@ export function createDeliveryLedger() {
 
   return {
     /**
-     * No room for another receipt: refuse the send rather than drop a
-     * pending one or a warning. Matched receipts make room.
+     * No room for another receipt: refuse the send rather than drop one
+     * still being checked or a warning. Only matched receipts whose check
+     * window has ended make room.
      */
-    full: (paneId: string) =>
-      (panes.get(paneId) ?? []).filter((receipt) => receipt.state !== "matched")
+    full: (paneId: string, now = Date.now()) =>
+      (panes.get(paneId) ?? []).filter((receipt) => !finished(receipt, now))
         .length >= RECEIPTS_PER_PANE,
 
     /**
@@ -187,7 +194,7 @@ export function createDeliveryLedger() {
       const list = receiptsFor(paneId);
       list.push(receipt);
       while (list.length > RECEIPTS_PER_PANE) {
-        const index = list.findIndex((item) => item.state === "matched");
+        const index = list.findIndex((item) => finished(item, send.endedAt));
         if (index < 0) break;
         list.splice(index, 1);
       }

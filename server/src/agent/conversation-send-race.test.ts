@@ -651,6 +651,64 @@ describe("the delivery ledger", () => {
     ]);
   });
 
+  test("a full pane of matched receipts still being checked refuses, then keeps checking", () => {
+    const ledger = createDeliveryLedger();
+    const sends = Array.from({ length: RECEIPTS_PER_PANE }, (_, index) => ({
+      ...send,
+      text: `Message ${index}`,
+      startedAt: send.startedAt + index,
+      endedAt: send.endedAt + index,
+    }));
+    for (const each of sends) ledger.record("p", each);
+    // Every message appears in its own session: all matched, still checked.
+    ledger.evaluate(
+      "p",
+      "A",
+      [
+        {
+          fingerprint: "A",
+          label: "session A",
+          messages: sends.map((each) => said(each.text, each.endedAt + 50)),
+        },
+      ],
+      send.endedAt + 1000,
+    );
+    expect(ledger.list("p").every((item) => item.state === "matched")).toBe(
+      true,
+    );
+    expect(ledger.full("p", send.endedAt + 1000)).toBe(true);
+    // The first message then turns up first thing in the next session.
+    ledger.evaluate(
+      "p",
+      "B",
+      [
+        {
+          fingerprint: "B",
+          label: "session B",
+          messages: [said("Message 0", send.endedAt + 60)],
+        },
+      ],
+      send.endedAt + 2000,
+    );
+    expect(ledger.list("p")[0]).toMatchObject({
+      text: "Message 0",
+      state: "uncertain",
+    });
+    // Once their window ends, matched receipts make room.
+    expect(ledger.full("p", send.startedAt + DELIVERY_CHECK_MS + 1000)).toBe(
+      false,
+    );
+    ledger.record("p", {
+      ...send,
+      text: "Later",
+      startedAt: send.startedAt + DELIVERY_CHECK_MS + 1000,
+      endedAt: send.startedAt + DELIVERY_CHECK_MS + 1100,
+    });
+    expect(ledger.list("p")).toHaveLength(RECEIPTS_PER_PANE);
+    expect(ledger.list("p")[0]).toMatchObject({ text: "Message 0" });
+    expect(ledger.list("p").at(-1)).toMatchObject({ text: "Later" });
+  });
+
   test("the check ends after its window", () => {
     const ledger = createDeliveryLedger();
     ledger.record("p", send);

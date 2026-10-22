@@ -129,7 +129,7 @@ transcripts that round), and clearly after it.
   check window ends. If the words then turn up first thing after the send in
   one of them, the receipt becomes `uncertain`. A message from before the
   send never matches, even if it is written late, and each transcript message
-  matches one send. Matched receipts make room for new ones at the cap.
+  matches one send.
 - A copy stamped about the time of the send, in its own session or as the
   first message in a session the pane moved to, makes it `uncertain`: Chat
   cannot tell it from this message, so it never matches it or calls it a
@@ -166,8 +166,10 @@ itself: it reads the pane once more, marks what is still pending
 `unverified`, and tells browsers showing the pane to reread, so an idle pane
 does not stay pending. A harness that records no timestamps always ends
 there. Over SSH a transcript is read again on Herdr events, **Refresh** and
-the deadline. Up to 20 receipts are kept per pane; then Chat refuses to send
-until you dismiss some, rather than drop one.
+the deadline. Up to 20 receipts are kept per pane. A matched receipt whose
+check window has ended makes room for a new one; otherwise Chat refuses to
+send until you dismiss some, or until matched ones finish their check, rather
+than drop one that is still being checked or a warning.
 
 Over SSH, a send uses the user messages Chat showed (`baseline`) instead of
 reading the transcript again; on this machine it rereads it and refuses with
