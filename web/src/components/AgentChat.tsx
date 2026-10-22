@@ -75,13 +75,20 @@ export type Conversation = {
 
 export type PendingPrompt = {
   question: string[];
-  command: string | null;
-  options: { key: string; label: string }[];
+  /** The complete request asked about: a command, or a file and its edit. */
+  request: string[];
+  options: { number: string; label: string; key: string }[];
   fingerprint: string;
 };
 
 type AnswerResult =
-  | { status: "answered"; key: string; label: string }
+  | {
+      status: "sent";
+      number: string;
+      label: string;
+      acknowledged: boolean;
+      prompt_fingerprint: string;
+    }
   | { status: "refused"; reason: string; message: string };
 
 export type ConversationDelivery = {
@@ -127,10 +134,38 @@ function AskCard({
   onAnswer(key: string): void;
   onOpenTerminal?: () => void;
 }) {
+  const terminal = onOpenTerminal ? (
+    <button type="button" onClick={onOpenTerminal}>
+      <SquareTerminal size={13} /> Answer in the Terminal
+    </button>
+  ) : null;
   return (
-    <section className="agent-chat-ask" aria-label={`${agent} is waiting`}>
+    <section
+      className="agent-chat-ask"
+      aria-label={`${agent} is waiting`}
+      // Keys answer only while this card has focus, and a held key repeats
+      // nothing: another Chat's question is never answered from here.
+      tabIndex={0}
+      onKeyDown={(event) => {
+        if (
+          event.repeat ||
+          event.defaultPrevented ||
+          event.metaKey ||
+          event.ctrlKey ||
+          event.altKey ||
+          answering
+        )
+          return;
+        const option = prompt.options.find(
+          (candidate) => candidate.number === event.key,
+        );
+        if (!option) return;
+        event.preventDefault();
+        onAnswer(option.key);
+      }}
+    >
       <h3>{agent} is waiting on you</h3>
-      {prompt.command ? <pre>{prompt.command}</pre> : null}
+      {prompt.request.length ? <pre>{prompt.request.join("\n")}</pre> : null}
       {prompt.question.map((line, index) => (
         <p key={index}>{line}</p>
       ))}
@@ -143,38 +178,31 @@ function AskCard({
           >
             {prompt.options.map((option, index) => (
               <button
-                key={option.key}
+                key={option.number}
                 type="button"
                 className={index === 0 ? "is-primary" : undefined}
                 disabled={answering}
                 onClick={() => onAnswer(option.key)}
               >
-                <kbd>{option.key}</kbd>
+                <kbd>{option.number}</kbd>
                 <span>{option.label}</span>
               </button>
             ))}
           </div>
           <p className="agent-chat-ask-fine">
-            Options read from {agent}'s own prompt. Chat presses the key you
-            pick.
+            Options read from {agent}'s own prompt. Chat presses the one you
+            pick; with this card focused, its number picks it too.
           </p>
         </>
       ) : (
         <p className="agent-chat-ask-fine">
-          Chat cannot read the choices in this prompt, so it does not guess one.
-          {onOpenTerminal ? (
-            <>
-              {" "}
-              <button type="button" onClick={onOpenTerminal}>
-                <SquareTerminal size={13} /> Answer in the Terminal
-              </button>
-            </>
-          ) : null}
+          Chat cannot read the choices in this prompt safely, so it does not
+          answer it. {terminal}
         </p>
       )}
       {notice ? (
         <p className="agent-chat-ask-notice" role="alert">
-          {notice}
+          {notice} {terminal}
         </p>
       ) : null}
     </section>
@@ -414,14 +442,17 @@ export function AgentChat({
 
   // The agent's question: answered by pressing one option's key in its pane,
   // only when the user picks it. The service checks the agent still shows
-  // this same question before the key goes.
+  // this same question just before the key goes.
   const prompt = conversation?.pending_prompt ?? null;
   const [answering, setAnswering] = useState(false);
-  // What was answered, shown until the conversation moves on.
+  // The answer sent for a question, shown in its place until another
+  // question appears.
   const [answered, setAnswered] = useState<{
-    key: string;
+    fingerprint: string;
+    question: string[];
+    number: string;
     label: string;
-    messages: number;
+    acknowledged: boolean;
   } | null>(null);
   const [askNotice, setAskNotice] = useState("");
   const answer = useCallback(
@@ -438,11 +469,13 @@ export function AgentChat({
             prompt_fingerprint: prompt.fingerprint,
           },
         )) as AnswerResult;
-        if (result.status === "answered")
+        if (result.status === "sent")
           setAnswered({
-            key: result.key,
+            fingerprint: result.prompt_fingerprint,
+            question: prompt.question,
+            number: result.number,
             label: result.label,
-            messages: conversation?.messages.length ?? 0,
+            acknowledged: result.acknowledged,
           });
         else setAskNotice(result.message);
       } catch (reason) {
@@ -452,36 +485,19 @@ export function AgentChat({
         load();
       }
     },
-    [answering, connectionClient, conversation, load, pane.pane_id, prompt],
+    [answering, connectionClient, load, pane.pane_id, prompt],
   );
-  // A new question clears the last answer's note.
+  // A different question replaces the last answer's receipt.
+  const showAsk =
+    prompt !== null && prompt.fingerprint !== answered?.fingerprint;
   useEffect(() => {
-    if (prompt) setAskNotice("");
+    if (prompt && prompt.fingerprint !== answered?.fingerprint) {
+      setAskNotice("");
+      setAnswered(null);
+    }
+    // Only a new question resets the receipt.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prompt?.fingerprint]);
-  // Number keys (or y/n) answer while focus is in Chat but not in its box.
-  useEffect(() => {
-    if (!prompt?.options.length) return;
-    const keydown = (event: KeyboardEvent) => {
-      const target = event.target;
-      if (
-        !(target instanceof HTMLElement) ||
-        !target.closest(".agent-chat") ||
-        target.closest("textarea, input") ||
-        event.metaKey ||
-        event.ctrlKey ||
-        event.altKey
-      )
-        return;
-      const option = prompt.options.find(
-        (candidate) => candidate.key === event.key.toLowerCase(),
-      );
-      if (!option) return;
-      event.preventDefault();
-      void answer(option.key);
-    };
-    window.addEventListener("keydown", keydown);
-    return () => window.removeEventListener("keydown", keydown);
-  }, [answer, prompt]);
 
   if (details) {
     return (
@@ -724,17 +740,21 @@ export function AgentChat({
                 </div>
               </article>
             ))}
-            {answered &&
-            !prompt &&
-            answered.messages === (conversation?.messages.length ?? 0) ? (
+            {answered ? (
               <p className="agent-chat-answered" role="status">
-                You answered{" "}
+                {answered.acknowledged ? "You answered" : "Sent"}{" "}
                 <b>
-                  {answered.key} · {answered.label}
+                  {answered.number} · {answered.label}
                 </b>
+                {answered.acknowledged
+                  ? null
+                  : " · the question is still showing; check the Terminal if it does not move on."}
+                <span className="agent-chat-answered-question">
+                  {answered.question.join(" ")}
+                </span>
               </p>
             ) : null}
-            {prompt ? (
+            {showAsk && prompt ? (
               <AskCard
                 agent={conversation?.agent ?? "The agent"}
                 prompt={prompt}

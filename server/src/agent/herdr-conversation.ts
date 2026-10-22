@@ -434,8 +434,23 @@ export function createHerdrConversationSource(args: {
     deliveries.evaluate(paneId, current, views);
   };
 
+  /** The session and Herdr state a prompt is read under. */
+  const promptContext = (info: Record<string, unknown> | null) => ({
+    session: info
+      ? JSON.stringify([
+          isRecord(info.agent_session) ? info.agent_session.value : null,
+          stringValue(info.terminal_title),
+        ])
+      : null,
+    seq:
+      typeof info?.state_change_seq === "number" ? info.state_change_seq : null,
+  });
+
   /** The prompt a blocked agent shows at the bottom of its screen. */
-  const readPrompt = async (paneId: string): Promise<PendingPrompt | null> => {
+  const readPrompt = async (
+    paneId: string,
+    info: Record<string, unknown> | null,
+  ): Promise<PendingPrompt | null> => {
     const result = await args.herdrCall("pane.read", {
       pane_id: paneId,
       source: "recent",
@@ -444,7 +459,13 @@ export function createHerdrConversationSource(args: {
       strip_ansi: true,
     });
     const text = screenText(result);
-    return text === null ? null : parsePendingPrompt(text);
+    return text === null
+      ? null
+      : parsePendingPrompt(
+          normalizeAgentName(stringValue(info?.agent)),
+          text,
+          promptContext(info),
+        );
   };
 
   const read = async ({
@@ -457,7 +478,13 @@ export function createHerdrConversationSource(args: {
     // A blocked agent's question is on its screen, not in its transcript.
     const pending_prompt =
       shown.agent_status === "blocked"
-        ? await readPrompt(pane_id).catch(() => null)
+        ? await agentInfo(pane_id)
+            .then((info) =>
+              stringValue(info?.agent_status) === "blocked"
+                ? readPrompt(pane_id, info)
+                : null,
+            )
+            .catch(() => null)
         : null;
     return { ...shown, deliveries: deliveries.list(pane_id), pending_prompt };
   };
@@ -468,41 +495,76 @@ export function createHerdrConversationSource(args: {
   return {
     id: "herdr",
     answer: async ({ pane_id, key, prompt_fingerprint }) => {
-      // Checked against the pane's current state just before the key goes:
-      // still blocked, on the same prompt, and the key is one of its options.
-      const info = await agentInfo(pane_id);
-      if (stringValue(info?.agent_status) !== "blocked")
-        return {
-          status: "refused",
-          reason: "not_blocked",
-          message:
-            "The agent is no longer waiting on a question. Nothing was sent.",
-          pending_prompt: null,
-        };
-      const prompt = await readPrompt(pane_id);
+      // Herdr has no conditional input, so the prompt is checked as close to
+      // the key as World can: Herdr's state, the screen, then Herdr's state
+      // again, and any difference refuses. The pane can still change between
+      // the last check and the key; see docs/CHAT.md.
+      const before = await agentInfo(pane_id);
+      const refuse = (
+        reason: "not_blocked" | "changed" | "unknown_option",
+        message: string,
+        pending_prompt: PendingPrompt | null = null,
+      ) => ({ status: "refused" as const, reason, message, pending_prompt });
+      if (stringValue(before?.agent_status) !== "blocked")
+        return refuse(
+          "not_blocked",
+          "The agent is no longer waiting on a question. Nothing was sent.",
+        );
+      const prompt = await readPrompt(pane_id, before);
       if (!prompt || prompt.fingerprint !== prompt_fingerprint)
-        return {
-          status: "refused",
-          reason: "changed",
-          message:
-            "The question changed. Nothing was sent; check it and answer again.",
-          pending_prompt: prompt,
-        };
+        return refuse(
+          "changed",
+          "The question changed. Nothing was sent; check it and answer again.",
+          prompt,
+        );
       const option = prompt.options.find((candidate) => candidate.key === key);
       if (!option)
-        return {
-          status: "refused",
-          reason: "unknown_option",
-          message: "That is not one of the agent's options. Nothing was sent.",
-          pending_prompt: prompt,
-        };
-      // A menu choice is a single key, without Enter, as the menu expects.
-      await args.herdrCall("pane.send_input", {
-        pane_id,
-        text: option.key,
-        keys: [],
-      });
-      return { status: "answered", key: option.key, label: option.label };
+        return refuse(
+          "unknown_option",
+          "That is not one of the agent's options. Nothing was sent; answer in the Terminal.",
+          prompt,
+        );
+      const after = await agentInfo(pane_id);
+      const same = (name: string) =>
+        JSON.stringify(after?.[name] ?? null) ===
+        JSON.stringify(before?.[name] ?? null);
+      if (
+        stringValue(after?.agent_status) !== "blocked" ||
+        ![
+          "state_change_seq",
+          "agent_session",
+          "terminal_title",
+          "revision",
+        ].every(same)
+      )
+        return refuse(
+          "changed",
+          "The agent changed while Chat checked its question. Nothing was sent; check it and answer again.",
+        );
+      await args.herdrCall(
+        "pane.send_input",
+        option.key === "escape"
+          ? { pane_id, text: "", keys: ["escape"] }
+          : { pane_id, text: option.key, keys: [] },
+      );
+      // Whether the prompt went away: a sent key is not an acknowledged
+      // answer until the agent moves on from it.
+      const settled = await agentInfo(pane_id)
+        .then(async (info) =>
+          stringValue(info?.agent_status) !== "blocked"
+            ? true
+            : (await readPrompt(pane_id, info))?.fingerprint !==
+              prompt.fingerprint,
+        )
+        .catch(() => false);
+      return {
+        status: "sent" as const,
+        key: option.key,
+        number: option.number,
+        label: option.label,
+        acknowledged: settled,
+        prompt_fingerprint: prompt.fingerprint,
+      };
     },
     dismiss: ({ pane_id, delivery_id }) =>
       deliveries.dismiss(pane_id, delivery_id),

@@ -98,7 +98,16 @@ export type ConversationSendResult =
 export type ConversationTarget = { pane_id: string };
 
 export type ConversationAnswerResult =
-  | { status: "answered"; key: string; label: string }
+  | {
+      /** The key was pressed in the pane. */
+      status: "sent";
+      key: string;
+      number: string;
+      label: string;
+      /** The agent moved on from the prompt after the key. */
+      acknowledged: boolean;
+      prompt_fingerprint: string;
+    }
   | {
       status: "refused";
       reason: "not_blocked" | "changed" | "unknown_option";

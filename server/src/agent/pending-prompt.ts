@@ -1,148 +1,237 @@
 import { createHash } from "node:crypto";
 
 /**
- * The question a blocked agent is asking, read from the bottom of its screen
- * with fixed patterns: the numbered menus Claude Code, Codex and other
- * harnesses draw, or a y/n prompt. Chat shows it as an ask card and answers
- * by pressing the option's key in the pane. When no menu parses, `options` is
- * empty and Chat shows the question with a way to the Terminal: it never
- * guesses an answer.
+ * The question a blocked agent is asking, read from the bottom of its screen.
+ * Only the menu shapes of supported harnesses are recognised, with the keys
+ * those menus accept:
+ *
+ * - Claude Code: a whole permission box whose question ends in "?", with
+ *   numbered options and the ❯ cursor on exactly one. A digit selects.
+ * - Codex: numbered options each ending in its key hint, such as "(y)",
+ *   "(a)" or "(esc)", with the › cursor on exactly one, below a question that
+ *   ends in "?". The hint key selects.
+ *
+ * Anything else, a box cut off by the capture, or a request the harness shows
+ * shortened gives the question with no options, and Chat points to the
+ * Terminal: it never guesses.
  */
 export type PendingPrompt = {
   /** The question lines, without the menu. */
   question: string[];
-  /** The command or file the agent asks about, when the prompt names one. */
-  command: string | null;
-  options: { key: string; label: string }[];
-  /** Identifies this exact prompt, so an answer is checked against it. */
+  /** The complete request asked about: a command, or a file and its edit. */
+  request: string[];
+  options: PromptOption[];
+  /** Identifies this exact prompt, in this session, at this Herdr state. */
   fingerprint: string;
 };
 
+export type PromptOption = {
+  /** What the menu shows, such as "1". */
+  number: string;
+  label: string;
+  /** What to press: one character, or "escape". */
+  key: string;
+};
+
 /** Lines of recent output read for a blocked agent's prompt. */
-export const PROMPT_SCREEN_LINES = 60;
+export const PROMPT_SCREEN_LINES = 80;
 
-// Box-drawing frames and the cursor markers harnesses draw beside options.
-const FRAME_EDGE = /^\s*[│┃║|]\s?|\s?[│┃║|]\s*$/g;
-const FRAME_ONLY = /^[\s╭╮╰╯─━═┌┐└┘├┤┬┴┼╔╗╚╝]*$/;
-const OPTION =
-  /^\s*(?:[❯›>▶]\s*)?(\d)[.)]\s+(.{1,120}?)(?:\s+\((?:[a-z]|esc|shift\+tab)\))?\s*$/i;
-const YES_NO = /\((y)\/(n)\)|\[(y)\/(n)\]/i;
-// Key hints under a menu, such as "Esc to cancel" or "↑/↓ to navigate".
-const KEY_HINT =
-  /^\s*(?:press\s+)?(?:esc|enter|return|tab|↑|↓|←|→)(?:\s*\/\s*(?:esc|enter|return|tab|↑|↓|←|→))*\s+to\s+\w+/i;
-// A line that introduces the thing asked about, in Claude's and Codex's
-// permission prompts.
-const SUBJECT =
-  /^(?:Bash command|Edit file|Write file|Create file|Read file|Fetch|Run command|Command|Would you like to run the following command\??)$/i;
+/** What the prompt was read under: the pane's session and state sequence. */
+export type PromptContext = { session: string | null; seq: number | null };
 
-function cleanLine(line: string) {
-  return line.replace(FRAME_EDGE, "").replace(/\s+$/, "");
+const BOX_TOP = /^\s*╭─+╮\s*$/;
+const BOX_BOTTOM = /^\s*╰─+╯\s*$/;
+const BOX_LINE = /^\s*│(.*)│\s*$/;
+const CLAUDE_OPTION =
+  /^\s*(❯\s*)?(\d)\.\s+(.{1,200}?)\s*(?:\((?:esc|shift\+tab)\))?\s*$/i;
+const CODEX_OPTION = /^\s*(›\s*)?(\d)\.\s+(.{1,200}?)\s+\(([a-z]|esc)\)\s*$/i;
+// Signs that the harness shortened the request it shows.
+const ABBREVIATED =
+  /^(?:…|\.\.\.)|\(\+?\d+ (?:more )?lines?\)|\+\d+ more lines?|ctrl\+r to expand/i;
+
+const trimEnd = (line: string) => line.replace(/\s+$/, "");
+
+function fingerprint(context: PromptContext, shown: readonly string[]) {
+  return createHash("sha256")
+    .update(JSON.stringify([context.session, context.seq, shown]))
+    .digest("hex")
+    .slice(0, 32);
 }
 
-/**
- * Parse the bottom of a blocked agent's screen. Returns null when the screen
- * shows no question at all.
- */
-export function parsePendingPrompt(screen: string): PendingPrompt | null {
-  const lines = screen
-    .split("\n")
-    .map(cleanLine)
-    .filter((line) => !FRAME_ONLY.test(line) || line === "");
-  // Trim blank and key-hint lines from the bottom.
-  let end = lines.length;
-  while (end > 0 && (!lines[end - 1]!.trim() || KEY_HINT.test(lines[end - 1]!)))
-    end -= 1;
-  if (end === 0) return null;
+/** Split lines into paragraphs separated by blank lines. */
+function paragraphs(lines: readonly string[]) {
+  const result: string[][] = [];
+  let current: string[] = [];
+  for (const line of lines) {
+    if (!line.trim()) {
+      if (current.length) result.push(current);
+      current = [];
+    } else current.push(line);
+  }
+  if (current.length) result.push(current);
+  return result;
+}
 
-  // The menu: the last run of numbered options at the bottom.
-  const options: PendingPrompt["options"] = [];
-  let menuStart = end;
-  // Lines below an option that are indented further continue its label.
+type Parsed = {
+  shown: string[];
+  question: string[];
+  request: string[];
+  options: PromptOption[];
+};
+
+/** A Claude Code permission box at the bottom of the screen. */
+function claudePrompt(lines: string[]): Parsed | "incomplete" | null {
+  let bottom = lines.length - 1;
+  while (bottom >= 0 && !lines[bottom]!.trim()) bottom -= 1;
+  if (bottom < 0 || !BOX_BOTTOM.test(lines[bottom]!)) return null;
+  let top = bottom - 1;
+  while (top >= 0 && !BOX_TOP.test(lines[top]!)) {
+    // Every line inside must be a box line; anything else is a cut capture.
+    if (!BOX_LINE.test(lines[top]!)) return "incomplete";
+    top -= 1;
+  }
+  if (top < 0) return "incomplete";
+  const inner = lines
+    .slice(top + 1, bottom)
+    .map((line) => trimEnd(BOX_LINE.exec(line)![1]!));
+  // The menu: a run of options at the end of the box. A line indented
+  // further continues the label of the option above it.
+  const options: PromptOption[] = [];
+  let menuStart = inner.length;
+  let cursor = 0;
   let continued: string[] = [];
-  for (let index = end - 1; index >= 0 && index >= end - 16; index -= 1) {
-    const line = lines[index]!;
-    const match = OPTION.exec(line);
+  for (let index = inner.length - 1; index >= 0; index -= 1) {
+    const line = inner[index]!;
+    if (!line.trim() && !options.length && !continued.length) continue;
+    const match = CLAUDE_OPTION.exec(line);
     if (match) {
-      const label = [match[2]!.trim(), ...continued].join(" ");
+      if (match[1]) cursor += 1;
       options.unshift({
-        key: match[1]!,
-        label: label.replace(/\s+\((?:[a-z]|esc|shift\+tab)\)$/i, ""),
+        number: match[2]!,
+        label: [match[3]!.trim(), ...continued].join(" "),
+        key: match[2]!,
       });
       continued = [];
       menuStart = index;
       continue;
     }
-    if (/^\s{3,}\S/.test(line) && (options.length || index === end - 1)) {
+    if (/^\s{4,}\S/.test(line)) {
       continued.unshift(line.trim());
       continue;
     }
-    // Anything else ends the menu, or shows there is none at the bottom.
     break;
   }
-  const numbered =
+  const above = paragraphs(inner.slice(0, menuStart));
+  const question = above[above.length - 1] ?? [];
+  const valid =
     options.length >= 2 &&
-    options.every((option, index) => option.key === String(index + 1));
-  if (!numbered) options.length = 0;
-
-  // Above the menu (or the y/n line): paragraphs, nearest first, within a
-  // dozen lines. The question is the nearest one with a line ending in "?",
-  // else the nearest one.
-  const above = numbered ? menuStart : end;
-  const paragraphs: string[][] = [];
-  let current: string[] = [];
-  for (let index = above - 1; index >= 0 && index >= above - 12; index -= 1) {
-    const line = lines[index]!.trim();
-    if (!line) {
-      if (current.length) paragraphs.push(current);
-      current = [];
-      continue;
-    }
-    current.unshift(line);
-  }
-  if (current.length) paragraphs.push(current);
-  let asked = paragraphs.findIndex((paragraph) =>
-    paragraph.some((line) => /\?\s*(?:\([yn]\/[yn]\))?$/i.test(line)),
-  );
-  if (asked < 0) asked = 0;
-  let question = [...(paragraphs[asked] ?? [])];
-  // A y/n prompt has no numbered menu; its two answers are the letters.
-  if (!numbered) {
-    const last = lines[end - 1]!.trim();
-    if (YES_NO.test(last)) {
-      options.push({ key: "y", label: "Yes" }, { key: "n", label: "No" });
-      question = question.map((line) =>
-        line === last ? line.replace(YES_NO, "").trim() : line,
-      );
-    }
-  }
-  if (!question.length && !options.length) return null;
-
-  // The thing asked about, in two fixed shapes only: Codex's "$ command"
-  // between the question and the menu, or the line under a known title such
-  // as "Bash command" or "Edit file" above the question, as Claude draws it.
-  let command: string | null = null;
-  const shell = paragraphs
-    .slice(0, asked)
-    .flat()
-    .find((line) => line.startsWith("$ "));
-  if (shell) command = shell.slice(2).trim();
-  for (
-    let index = asked + 1;
-    !command && index < paragraphs.length;
-    index += 1
-  ) {
-    const paragraph = paragraphs[index]!;
-    if (!SUBJECT.test(paragraph[0]!)) continue;
-    command =
-      paragraph[1] ?? (index > asked + 1 ? paragraphs[index - 1]![0]! : null);
-  }
+    options.every((option, index) => option.number === String(index + 1)) &&
+    cursor === 1 &&
+    continued.length === 0 &&
+    question.length > 0 &&
+    /\?\s*$/.test(question[question.length - 1]!);
   return {
-    question,
-    command,
-    options,
-    fingerprint: createHash("sha256")
-      .update(JSON.stringify([question, command, options]))
-      .digest("hex")
-      .slice(0, 32),
+    shown: inner,
+    question: question.map((line) => line.trim()),
+    request: above
+      .slice(0, -1)
+      .flat()
+      .map((line) => line.trim()),
+    options: valid ? options : [],
+  };
+}
+
+/** A Codex approval menu at the bottom of the screen. */
+function codexPrompt(lines: string[]): Parsed | null {
+  let end = lines.length;
+  while (
+    end > 0 &&
+    (!lines[end - 1]!.trim() ||
+      /^\s*press\s+enter\s+to\s+confirm/i.test(lines[end - 1]!))
+  )
+    end -= 1;
+  const options: PromptOption[] = [];
+  let menuStart = end;
+  let cursor = 0;
+  for (let index = end - 1; index >= 0; index -= 1) {
+    const match = CODEX_OPTION.exec(lines[index]!);
+    if (!match) break;
+    if (match[1]) cursor += 1;
+    const hint = match[4]!.toLowerCase();
+    options.unshift({
+      number: match[2]!,
+      label: match[3]!.trim(),
+      key: hint === "esc" ? "escape" : hint,
+    });
+    menuStart = index;
+  }
+  if (!options.length) return null;
+  const from = Math.max(0, menuStart - 24);
+  const above = paragraphs(lines.slice(from, menuStart));
+  // The question is the nearest paragraph ending in "?"; what lies between
+  // it and the menu is the request.
+  let asked = -1;
+  for (let index = above.length - 1; index >= 0; index -= 1) {
+    const paragraph = above[index]!;
+    if (/\?\s*$/.test(paragraph[paragraph.length - 1]!)) {
+      asked = index;
+      break;
+    }
+  }
+  const valid =
+    options.length >= 2 &&
+    options.every((option, index) => option.number === String(index + 1)) &&
+    cursor === 1 &&
+    asked >= 0;
+  return {
+    shown: lines.slice(from, end),
+    question: asked >= 0 ? above[asked]!.map((line) => line.trim()) : [],
+    request:
+      asked >= 0
+        ? above
+            .slice(asked + 1)
+            .flat()
+            .map((line) => line.trim())
+        : [],
+    options: valid ? options : [],
+  };
+}
+
+/**
+ * Parse the bottom of a blocked agent's screen for `agent`'s own menu.
+ * Returns null when the screen is empty.
+ */
+export function parsePendingPrompt(
+  agent: string,
+  screen: string,
+  context: PromptContext,
+): PendingPrompt | null {
+  const lines = screen.split("\n").map(trimEnd);
+  const text = lines.filter((line) => line.trim());
+  if (!text.length) return null;
+  const parsed =
+    agent === "claude"
+      ? claudePrompt(lines)
+      : agent === "codex"
+        ? codexPrompt(lines)
+        : null;
+  if (parsed && parsed !== "incomplete") {
+    // A request the harness shortened is not one Chat can approve.
+    const abbreviated = parsed.request.some((line) => ABBREVIATED.test(line));
+    return {
+      question: parsed.question,
+      request: parsed.request,
+      options: abbreviated ? [] : parsed.options,
+      fingerprint: fingerprint(context, parsed.shown),
+    };
+  }
+  // Not a supported, complete menu: the end of the screen is shown as the
+  // question, with no answers.
+  const tail = text.slice(-6).map((line) => line.trim());
+  return {
+    question: tail,
+    request: [],
+    options: [],
+    fingerprint: fingerprint(context, tail),
   };
 }

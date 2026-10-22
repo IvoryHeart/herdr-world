@@ -42,32 +42,43 @@ afterAll(async () => {
   await rm(root, { recursive: true, force: true });
 });
 
-function fakeHerdr() {
+function fakeHerdr(agent = "claude") {
   const state = {
     status: "blocked",
     screen: PROMPT,
+    seq: 3,
+    session: transcript,
     sent: [] as unknown[],
+    /** Runs during each screen read, as a change racing Chat's check. */
+    onRead: () => {},
+    /** Runs when a key is pressed, as the agent reacting to it. */
+    onSend: () => {},
   };
   const call: HerdrCall = async (method, params) => {
     if (method === "agent.get")
       return {
         agent: {
           pane_id: "w1:p1",
-          agent: "claude",
+          agent,
           agent_status: state.status,
-          terminal_title: "claude",
+          state_change_seq: state.seq,
+          terminal_title: agent,
           agent_session: {
-            source: "herdr:claude",
-            agent: "claude",
+            source: `herdr:${agent}`,
+            agent,
             kind: "path",
-            value: transcript,
+            value: state.session,
           },
         },
       };
-    if (method === "pane.read")
-      return { read: { pane_id: "w1:p1", text: state.screen } };
+    if (method === "pane.read") {
+      const text = state.screen;
+      state.onRead();
+      return { read: { pane_id: "w1:p1", text } };
+    }
     if (method === "pane.send_input") {
       state.sent.push(params);
+      state.onSend();
       return {};
     }
     throw new Error(`unexpected ${method}`);
@@ -81,42 +92,88 @@ function fakeHerdr() {
   return { state, source };
 }
 
+const answer = async (
+  source: ReturnType<typeof fakeHerdr>["source"],
+  key: string,
+) => {
+  const read = await source.read({ pane_id: "w1:p1" });
+  return source.answer({
+    pane_id: "w1:p1",
+    key,
+    prompt_fingerprint: read.pending_prompt!.fingerprint,
+  });
+};
+
 describe("answering a blocked agent's prompt", () => {
-  test("a read of a blocked agent carries its prompt", async () => {
+  test("a read of a blocked agent carries its whole request and options", async () => {
     const { source } = fakeHerdr();
     const read = await source.read({ pane_id: "w1:p1" });
     expect(read.pending_prompt).toMatchObject({
       question: ["Do you want to proceed?"],
-      command: "git push -u origin agent/demo",
+      request: ["Bash command", "git push -u origin agent/demo"],
       options: [
-        { key: "1", label: "Yes" },
-        { key: "2", label: "Yes, and don't ask again" },
-        { key: "3", label: "No, and tell Claude what to do" },
+        { number: "1", label: "Yes", key: "1" },
+        { number: "2", label: "Yes, and don't ask again", key: "2" },
+        { number: "3", label: "No, and tell Claude what to do", key: "3" },
       ],
     });
   });
 
-  test("an answer presses that option's key, without Enter", async () => {
+  test("an answer presses the key, and says whether the agent moved on", async () => {
     const { state, source } = fakeHerdr();
-    const read = await source.read({ pane_id: "w1:p1" });
-    expect(
-      await source.answer({
-        pane_id: "w1:p1",
-        key: "2",
-        prompt_fingerprint: read.pending_prompt!.fingerprint,
-      }),
-    ).toEqual({
-      status: "answered",
-      key: "2",
+    expect(await answer(source, "2")).toMatchObject({
+      status: "sent",
+      number: "2",
       label: "Yes, and don't ask again",
+      acknowledged: false,
     });
     expect(state.sent).toEqual([{ pane_id: "w1:p1", text: "2", keys: [] }]);
+    const moving = fakeHerdr();
+    moving.state.onSend = () => {
+      moving.state.status = "working";
+      moving.state.seq += 1;
+    };
+    expect(await answer(moving.source, "1")).toMatchObject({
+      status: "sent",
+      acknowledged: true,
+    });
   });
 
   test("a question that changed since Chat showed it is not answered", async () => {
     const { state, source } = fakeHerdr();
     const read = await source.read({ pane_id: "w1:p1" });
     state.screen = PROMPT.replace("agent/demo", "agent/other");
+    expect(
+      await source.answer({
+        pane_id: "w1:p1",
+        key: "1",
+        prompt_fingerprint: read.pending_prompt!.fingerprint,
+      }),
+    ).toMatchObject({ status: "refused", reason: "changed" });
+    expect(state.sent).toEqual([]);
+  });
+
+  test("the same-looking prompt in a replacement session is not answered", async () => {
+    const { state, source } = fakeHerdr();
+    const read = await source.read({ pane_id: "w1:p1" });
+    state.session = `${transcript}.replacement`;
+    expect(
+      await source.answer({
+        pane_id: "w1:p1",
+        key: "1",
+        prompt_fingerprint: read.pending_prompt!.fingerprint,
+      }),
+    ).toMatchObject({ status: "refused", reason: "changed" });
+    expect(state.sent).toEqual([]);
+  });
+
+  test("an agent that leaves the prompt while Chat checks it is not answered", async () => {
+    const { state, source } = fakeHerdr();
+    const read = await source.read({ pane_id: "w1:p1" });
+    state.onRead = () => {
+      state.status = "working";
+      state.seq += 1;
+    };
     expect(
       await source.answer({
         pane_id: "w1:p1",
@@ -143,21 +200,32 @@ describe("answering a blocked agent's prompt", () => {
 
   test("only the prompt's own options are pressed", async () => {
     const { state, source } = fakeHerdr();
-    const read = await source.read({ pane_id: "w1:p1" });
-    expect(
-      await source.answer({
-        pane_id: "w1:p1",
-        key: "9",
-        prompt_fingerprint: read.pending_prompt!.fingerprint,
-      }),
-    ).toMatchObject({ status: "refused", reason: "unknown_option" });
+    expect(await answer(source, "9")).toMatchObject({
+      status: "refused",
+      reason: "unknown_option",
+    });
     expect(state.sent).toEqual([]);
   });
 
-  test("a working agent's read has no prompt and reads no screen", async () => {
+  test("Codex's esc option presses Escape", async () => {
+    const { state, source } = fakeHerdr("codex");
+    state.screen = [
+      "Would you like to run the following command?",
+      "",
+      "$ git push",
+      "",
+      "› 1. Yes, proceed (y)",
+      "  2. No, and tell Codex what to do differently (esc)",
+    ].join("\n");
+    expect(await answer(source, "escape")).toMatchObject({ status: "sent" });
+    expect(state.sent).toEqual([
+      { pane_id: "w1:p1", text: "", keys: ["escape"] },
+    ]);
+  });
+
+  test("a working agent's read has no prompt", async () => {
     const { state, source } = fakeHerdr();
     state.status = "working";
-    state.screen = "should not be read";
     const read = await source.read({ pane_id: "w1:p1" });
     expect(read.pending_prompt).toBeNull();
   });

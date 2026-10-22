@@ -2,34 +2,30 @@ import { describe, expect, test } from "bun:test";
 import { parsePendingPrompt } from "./pending-prompt";
 
 // Synthetic screens in the shapes each harness draws; no real output.
-const CLAUDE_BASH = `
-● Tests pass: 13 of 13.
+const context = { session: "s1", seq: 7 };
 
-╭──────────────────────────────────────────────────────────────╮
-│ Bash command                                                 │
-│                                                              │
-│   git push -u origin agent/retry-backoff                     │
-│   Push the branch                                            │
-│                                                              │
-│ Do you want to proceed?                                      │
-│ ❯ 1. Yes                                                     │
-│   2. Yes, and don't ask again for git push commands in       │
-│      /work/harbor                                            │
-│   3. No, and tell Claude what to do differently (esc)        │
-╰──────────────────────────────────────────────────────────────╯
-`;
+const box = (inner: string[]) => {
+  const width = 64;
+  return [
+    `╭${"─".repeat(width)}╮`,
+    ...inner.map((line) => `│ ${line.padEnd(width - 1)}│`),
+    `╰${"─".repeat(width)}╯`,
+  ].join("\n");
+};
 
-const CLAUDE_EDIT = `
-╭──────────────────────────────────────────────────────────────╮
-│ Edit file                                                    │
-│ src/notes/ListHeader.tsx                                     │
-│                                                              │
-│ Do you want to make this edit to ListHeader.tsx?             │
-│ ❯ 1. Yes                                                     │
-│   2. Yes, allow all edits during this session (shift+tab)    │
-│   3. No, and tell Claude what to do differently (esc)        │
-╰──────────────────────────────────────────────────────────────╯
-`;
+const claudeBash = (command: string[]) =>
+  `● Tests pass: 13 of 13.\n\n${box([
+    "Bash command",
+    "",
+    ...command.map((line) => `  ${line}`),
+    "  Push the branch",
+    "",
+    "Do you want to proceed?",
+    "❯ 1. Yes",
+    "  2. Yes, and don't ask again for git push commands in",
+    "     /work/harbor",
+    "  3. No, and tell Claude what to do differently (esc)",
+  ])}\n`;
 
 const CODEX_APPROVAL = `
   Would you like to run the following command?
@@ -43,86 +39,145 @@ const CODEX_APPROVAL = `
   Press enter to confirm or esc to cancel
 `;
 
-describe("a blocked agent's prompt", () => {
-  test("Claude's command permission: question, command and three options", () => {
-    const prompt = parsePendingPrompt(CLAUDE_BASH)!;
+describe("Claude Code's permission box", () => {
+  test("gives the whole request, the question and digit keys", () => {
+    const prompt = parsePendingPrompt(
+      "claude",
+      claudeBash(["git push -u origin agent/retry-backoff"]),
+      context,
+    )!;
     expect(prompt.question).toEqual(["Do you want to proceed?"]);
-    expect(prompt.command).toBe("git push -u origin agent/retry-backoff");
+    expect(prompt.request).toEqual([
+      "Bash command",
+      "git push -u origin agent/retry-backoff",
+      "Push the branch",
+    ]);
     expect(prompt.options).toEqual([
-      { key: "1", label: "Yes" },
+      { number: "1", label: "Yes", key: "1" },
       {
-        key: "2",
+        number: "2",
         label: "Yes, and don't ask again for git push commands in /work/harbor",
+        key: "2",
       },
-      { key: "3", label: "No, and tell Claude what to do differently" },
+      {
+        number: "3",
+        label: "No, and tell Claude what to do differently",
+        key: "3",
+      },
     ]);
   });
 
-  test("Claude's edit permission names the file", () => {
-    const prompt = parsePendingPrompt(CLAUDE_EDIT)!;
-    expect(prompt.question).toEqual([
-      "Do you want to make this edit to ListHeader.tsx?",
-    ]);
-    expect(prompt.command).toBe("src/notes/ListHeader.tsx");
-    expect(prompt.options.map((option) => option.key)).toEqual(["1", "2", "3"]);
-    expect(prompt.options[1]!.label).toBe(
-      "Yes, allow all edits during this session",
-    );
+  test("two multi-line commands that share a first line differ", () => {
+    const safe = parsePendingPrompt(
+      "claude",
+      claudeBash(["echo safe", "echo first"]),
+      context,
+    )!;
+    const risky = parsePendingPrompt(
+      "claude",
+      claudeBash(["echo safe", "rm -rf /work/example"]),
+      context,
+    )!;
+    expect(risky.request).toContain("rm -rf /work/example");
+    expect(risky.fingerprint).not.toBe(safe.fingerprint);
   });
 
-  test("Codex's approval: the $ command and its options", () => {
-    const prompt = parsePendingPrompt(CODEX_APPROVAL)!;
-    expect(prompt.command).toBe("git push -u origin agent/retry-backoff");
+  test("a box cut off by the capture offers no answers", () => {
+    const cut = claudeBash(["git push"]).split("\n").slice(4).join("\n");
+    expect(parsePendingPrompt("claude", cut, context)!.options).toEqual([]);
+  });
+
+  test("a request the harness shortened offers no answers", () => {
+    const prompt = parsePendingPrompt(
+      "claude",
+      claudeBash(["for f in *.log; do", "… +12 lines (ctrl+r to expand)"]),
+      context,
+    )!;
+    expect(prompt.options).toEqual([]);
+  });
+
+  test("a menu without the cursor is not a live menu", () => {
+    const screen = claudeBash(["git push"]).replace("❯ 1. Yes", "  1. Yes");
+    expect(parsePendingPrompt("claude", screen, context)!.options).toEqual([]);
+  });
+
+  test("numbered output is not a menu", () => {
+    const prompt = parsePendingPrompt(
+      "claude",
+      "Here is the plan:\n1. Inspect the repository\n2. Run the tests",
+      context,
+    )!;
+    expect(prompt.options).toEqual([]);
+    expect(prompt.question).toContain("2. Run the tests");
+  });
+
+  test("a y/n line is not a menu Chat answers", () => {
+    expect(
+      parsePendingPrompt("claude", "Overwrite notes.md? (y/n)", context)!
+        .options,
+    ).toEqual([]);
+  });
+});
+
+describe("Codex's approval menu", () => {
+  test("gives the $ command and answers with the hint keys", () => {
+    const prompt = parsePendingPrompt("codex", CODEX_APPROVAL, context)!;
     expect(prompt.question).toEqual([
       "Would you like to run the following command?",
     ]);
-    expect(prompt.options).toEqual([
-      { key: "1", label: "Yes, proceed" },
-      { key: "2", label: "Yes, and don't ask again for this command" },
-      { key: "3", label: "No, and tell Codex what to do differently" },
-    ]);
-  });
-
-  test("a y/n prompt answers with the letters", () => {
-    const prompt = parsePendingPrompt(
-      "Writing notes.md\nOverwrite notes.md? (y/n)",
-    )!;
-    expect(prompt.question).toEqual([
-      "Writing notes.md",
-      "Overwrite notes.md?",
+    expect(prompt.request).toEqual([
+      "$ git push -u origin agent/retry-backoff",
     ]);
     expect(prompt.options).toEqual([
-      { key: "y", label: "Yes" },
-      { key: "n", label: "No" },
+      { number: "1", label: "Yes, proceed", key: "y" },
+      {
+        number: "2",
+        label: "Yes, and don't ask again for this command",
+        key: "a",
+      },
+      {
+        number: "3",
+        label: "No, and tell Codex what to do differently",
+        key: "escape",
+      },
     ]);
   });
 
-  test("a question with no menu offers no answers, never a guess", () => {
-    const prompt = parsePendingPrompt(
-      "Which database should the migration target?\n> ",
-    )!;
-    expect(prompt.options).toEqual([]);
-    expect(prompt.question.join(" ")).toContain("Which database");
+  test("plain numbered lines without hints are not Codex's menu", () => {
+    expect(
+      parsePendingPrompt("codex", "Proceed?\n› 1. Yes\n  2. No", context)!
+        .options,
+    ).toEqual([]);
   });
 
-  test("an old menu with output after it is not the current prompt", () => {
-    const prompt = parsePendingPrompt(
-      `${CLAUDE_EDIT}\n● Updated ListHeader.tsx\nWhat next?`,
-    )!;
-    expect(prompt.options).toEqual([]);
-    expect(prompt.question).toContain("What next?");
+  test("a Codex menu on a Claude pane is not read", () => {
+    expect(
+      parsePendingPrompt("claude", CODEX_APPROVAL, context)!.options,
+    ).toEqual([]);
+  });
+});
+
+describe("the prompt's fingerprint", () => {
+  test("is the same for the same prompt, session and state", () => {
+    const screen = claudeBash(["git push"]);
+    expect(parsePendingPrompt("claude", screen, context)!.fingerprint).toBe(
+      parsePendingPrompt("claude", `\n\n${screen}`, context)!.fingerprint,
+    );
   });
 
-  test("the same prompt has the same fingerprint; another does not", () => {
-    expect(parsePendingPrompt(CLAUDE_BASH)!.fingerprint).toBe(
-      parsePendingPrompt(`\n\n${CLAUDE_BASH}`)!.fingerprint,
-    );
-    expect(parsePendingPrompt(CLAUDE_BASH)!.fingerprint).not.toBe(
-      parsePendingPrompt(CLAUDE_EDIT)!.fingerprint,
-    );
+  test("changes with the session or Herdr's state sequence", () => {
+    const screen = claudeBash(["git push"]);
+    const base = parsePendingPrompt("claude", screen, context)!.fingerprint;
+    expect(
+      parsePendingPrompt("claude", screen, { ...context, seq: 8 })!.fingerprint,
+    ).not.toBe(base);
+    expect(
+      parsePendingPrompt("claude", screen, { ...context, session: "s2" })!
+        .fingerprint,
+    ).not.toBe(base);
   });
 
   test("an empty screen is no prompt", () => {
-    expect(parsePendingPrompt("\n\n  \n")).toBeNull();
+    expect(parsePendingPrompt("claude", "\n\n  \n", context)).toBeNull();
   });
 });
