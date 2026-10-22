@@ -95,7 +95,7 @@ jobs:
                   exit "$result"
             - name: Retain browser lifecycle evidence
               if: always()
-              uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+              uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
               with:
                   name: browser-lifecycle-${{ matrix.suite }}-${{ matrix.order }}-${{ github.run_attempt }}
                   path: ${{ runner.temp }}/browser-diagnostics
@@ -349,7 +349,7 @@ jobs:
             - name: Verify branch preview archive
               shell: bash
               run: scripts/verify-release-package.sh "0.0.0-rc.$GITHUB_RUN_NUMBER" "${{ matrix.platform }}"
-            - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+            - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
               with:
                   name: preview-${{ matrix.platform }}
                   path: dist/herdr-world-v0.0.0-rc.${{ github.run_number }}-${{ matrix.platform }}.tar.xz*
@@ -372,10 +372,10 @@ jobs:
                   bun-version: "1.4.3"
                   no-cache: true
             - run: bun install --frozen-lockfile
-            - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+            - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
               with:
                   node-version: "24"
-            - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+            - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
               with:
                   path: dist
                   pattern: preview-*-*
@@ -395,7 +395,7 @@ jobs:
                     "./dist/npm-tarballs/ivoryheart-herdr-world-linux-x64-$version.tgz" \
                     "./dist/npm-tarballs/ivoryheart-herdr-world-$version.tgz"
                   test "$(dist/npm-smoke/node_modules/.bin/herdr-world --version)" = "herdr-world $version"
-            - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+            - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
               with:
                   name: preview-npm
                   path: dist/npm-tarballs/*.tgz
@@ -413,7 +413,7 @@ jobs:
               with:
                   ref: ${{ github.event.pull_request.head.sha }}
                   persist-credentials: false
-            - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+            - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
               with:
                   path: dist
                   pattern: preview-darwin-*
@@ -429,7 +429,7 @@ jobs:
                     archive="$(find dist -maxdepth 1 -name "herdr-world-v*-$platform.tar.xz" -print -quit)"
                     ruby scripts/check-homebrew-formula-stage.rb dist/herdr-world-preview.rb "$archive" HerdrWorldPreview
                   done
-            - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+            - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
               with:
                   name: preview-homebrew
                   path: |
