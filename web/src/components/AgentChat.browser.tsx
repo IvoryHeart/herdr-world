@@ -676,6 +676,65 @@ async function run() {
       "A missing integration must offer to copy its command and refresh",
     );
 
+    // Town's skin needs a conversation with something the user said.
+    reply = conversation(
+      [
+        message("u9", "user", "Run the tests"),
+        message("a9", "assistant", "Running them now."),
+      ],
+      "working",
+    );
+    render("idle");
+    push();
+    await settle();
+    // A draft outlives the view, as when switching to the Terminal and back.
+    const box = container.querySelector<HTMLTextAreaElement>("textarea")!;
+    Object.getOwnPropertyDescriptor(
+      HTMLTextAreaElement.prototype,
+      "value",
+    )!.set!.call(box, "Keep this draft");
+    box.dispatchEvent(new Event("input", { bubbles: true }));
+    await settle();
+    root.render(<div />);
+    await settle();
+    // Town's skin applies inside a window marked data-skin="town".
+    root.render(
+      <div data-skin="town" style={{ display: "flex", height: "100%" }}>
+        <AgentChat
+          pane={pane("working", 40)}
+          active
+          onOpenTerminal={() => terminalOpened++}
+          onClose={() => {}}
+        />
+      </div>,
+    );
+    for (
+      let tries = 0;
+      tries < 20 &&
+      !container.querySelector(
+        ".agent-chat-message.is-user .agent-chat-bubble",
+      );
+      tries += 1
+    )
+      await settle();
+    check(
+      container.querySelector<HTMLTextAreaElement>("textarea")?.value ===
+        "Keep this draft",
+      "A draft must survive leaving Chat and coming back",
+    );
+    const screen = container.querySelector<HTMLElement>(".agent-chat-list")!;
+    const said = container.querySelector(
+      ".agent-chat-message.is-user .agent-chat-bubble > p",
+    )!;
+    check(
+      /mono/i.test(getComputedStyle(screen).fontFamily) &&
+        getComputedStyle(screen).backgroundColor === "rgb(13, 17, 23)" &&
+        getComputedStyle(said, "::before").content.includes("›"),
+      "Town's skin must give Chat the prototype's screen and › lines",
+    );
+    render("working", true, 40);
+    await settle();
+
     const unwatched = count("agent_conversation.unwatch");
     render("done", false);
     await settle();

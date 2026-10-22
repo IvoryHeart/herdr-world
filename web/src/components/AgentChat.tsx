@@ -90,6 +90,9 @@ type SendResult =
 
 const FOLLOW_THRESHOLD_PX = 48;
 
+/** Unsent drafts by pane, kept while World is open. */
+const chatDrafts = new Map<string, string>();
+
 const preview = (text: string) =>
   text.length > 80 ? `${text.slice(0, 79)}…` : text;
 
@@ -174,19 +177,24 @@ export function AgentChat({
   wide = false,
   onOpenTerminal,
   onClose,
+  skin,
 }: {
   pane: Pane;
   active: boolean;
   wide?: boolean;
   onOpenTerminal?: () => void;
   onClose: () => void;
+  /**
+   * The window's theme. Town's look also applies under any element marked
+   * `data-skin="town"`, such as the Town's Inspector window.
+   */
+  skin?: "town";
 }) {
   const connectionClient = useConnectionClient();
   const [conversation, setConversation] = useState<Conversation | null>(null);
   // Set when the newest read failed; the last good conversation stays shown.
   const [stale, setStale] = useState("");
   const [loading, setLoading] = useState(false);
-  const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [notice, setNotice] = useState("");
   const [details, setDetails] = useState(false);
@@ -196,6 +204,21 @@ export function AgentChat({
   const shownRef = useRef<Conversation | null>(null);
   const filePicker = useRef<HTMLInputElement>(null);
   const uploadScope = `agent-chat\u0000${connectionClient.connectionId}\u0000${connectionClient.serverRuntimeGeneration}\u0000${pane.pane_id}`;
+  // The draft outlives this view, so switching to the Terminal and back
+  // keeps what was typed.
+  const [draft, setDraftState] = useState(
+    () => chatDrafts.get(uploadScope) ?? "",
+  );
+  const setDraft = useCallback(
+    (next: string | ((current: string) => string)) =>
+      setDraftState((current) => {
+        const value = typeof next === "function" ? next(current) : next;
+        if (value) chatDrafts.set(uploadScope, value);
+        else chatDrafts.delete(uploadScope);
+        return value;
+      }),
+    [uploadScope],
+  );
   const uploading = useAttachmentUploads(uploadScope).some(
     (upload) => upload.status === "uploading",
   );
@@ -326,7 +349,7 @@ export function AgentChat({
 
   if (details) {
     return (
-      <div className="agent-chat is-details">
+      <div className="agent-chat is-details" data-skin={skin}>
         <div className="agent-chat-toolbar">
           <button type="button" onClick={() => setDetails(false)}>
             Back to chat
@@ -378,7 +401,7 @@ export function AgentChat({
   const canSend =
     conversation?.status === "ok" && !!conversation.session_fingerprint;
   return (
-    <div className="agent-chat">
+    <div className="agent-chat" data-skin={skin}>
       <div className="agent-chat-toolbar">
         <span className={`agent-chat-status is-${status.toLowerCase()}`}>
           {status}

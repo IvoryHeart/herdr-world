@@ -26,6 +26,12 @@ view that you open on purpose.
   [Refresh](#refresh)). The browser has no timer. **Refresh** rereads on demand.
 - Keeps the last good conversation when a read fails, for example while the
   transcript is being written, and says that it could not refresh.
+- Keeps an unsent draft for each pane while World is open, so switching to the
+  Terminal and back keeps it.
+- In Town's windows (any element marked `data-skin="town"`), takes the Town
+  prototype's look: a dark mono screen, what you said as dim "›" lines, tools
+  as "●" lines, no bubbles, the time and copy shown on hover, and a one-line
+  composer with a gold Send.
 - When the conversation is unavailable, Chat shows the reason and the action it
   names: the integration command to copy, the Codex session link, **Refresh**
   and **Open Terminal**. It offers no composer then.
