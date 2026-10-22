@@ -1635,7 +1635,13 @@
         "server/src/world/board-store.test.ts",
         "server/src/world/board-send.test.ts",
         "server/src/world/board-start.test.ts",
-        "web/src/world/BoardView.test.ts"
+        "web/src/world/BoardView.test.ts",
+        "shared/relations.test.ts",
+        "server/src/world/relations.test.ts",
+        "server/src/herdr/spawn-stamp.test.ts",
+        "web/src/world/relations.test.ts",
+        "web/src/world/town/townDrag.test.ts",
+        "web/src/world/town/TownCanvas.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/186",
       "technique": "alternative",
@@ -1643,7 +1649,7 @@
       "status": "alternative-evidence",
       "remaining": "Pixel/layout/performance/device outcomes require real rendering and supported browser/site checks; no model of every device or accessibility event schedule. Board: live Herdr restart and ID reuse are checked in throwaway sessions only; cross-tab storage interleaving relies on per-draft keys, not an executed schedule.",
       "requiredChecks": ["bun run check", "bun run verification:gate"],
-      "evidenceDecision": "Actual production-context/browser/layout and generated site-content tests exercise rendering, search projection and published content. Board (PR #215): placement, the gesture state machine, the board store, anchors and move-following are checked directly. Pure-function unit tests cover every anchor state, empty and partial witnesses, desk, pane and rolled-back move outcomes, conditional detach and kept-draft storage across tabs. Service tests cover Send revalidation against the saved board and start identity. Browser races at 1440 and 390 px cover late absence replies, two-client layout and draft conflicts. A model would restate these small pure rules, while real Herdr restart and ID reuse behaviour was verified only in throwaway sessions.",
+      "evidenceDecision": "Actual production-context/browser/layout and generated site-content tests exercise rendering, search projection and published content. Board (PR #215): placement, the gesture state machine, the board store, anchors and move-following are checked directly. Pure-function unit tests cover every anchor state, empty and partial witnesses, desk, pane and rolled-back move outcomes, conditional detach and kept-draft storage across tabs. Service tests cover Send revalidation against the saved board and start identity. Browser races at 1440 and 390 px cover late absence replies, two-client layout and draft conflicts. A model would restate these small pure rules, while real Herdr restart and ID reuse behaviour was verified only in throwaway sessions. Relations (FM-TEAMS): which terminals know each other is a pure function of the saved document and the current observations; unit tests cover each evidence source and its system of record, token supersession, pane moves (terminal identity), cross-connection refusal, stale evidence kept as stale, one claim per child and generation-qualified recording that reads only live snapshots (relying on Q10's stale/non-actionable cached topology). Group join/leave rules, colour inheritance (a chosen colour always wins) and the stamp command are tested directly; Town and Board browser tests at 1440 and 390 px drag desks and cards together, group and ungroup. The spawn token's shape was confirmed against Herdr 0.9.3 in a throwaway session.",
       "partialEvidence": {
         "models": [],
         "contracts": ["verification/consumer-evidence.md"],

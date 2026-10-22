@@ -712,3 +712,116 @@ describe("Board store", () => {
     ).toEqual([]);
   });
 });
+
+describe("Relations in the Board store", () => {
+  const term = (terminal_id: string) => ({
+    connection_id: "studio",
+    terminal_id,
+  });
+  const spawn = (child: string, parent: string, generation = 1) => ({
+    child: term(child),
+    parent: term(parent),
+    source: "herdr:spawned_by",
+    generation,
+    observed_at: 5,
+  });
+
+  test("a board saved before relations reads with none", () => {
+    mkdirSync(join(root, "herdr-world", "boards"), { recursive: true });
+    writeFileSync(
+      path,
+      JSON.stringify({
+        version: 1,
+        revision: 4,
+        layout: { anchors: {}, offsets: {}, pinned: {}, folded: [] },
+        notes: [],
+        strings: [],
+      }),
+    );
+    expect(new BoardStore(path).get().relations).toEqual({
+      spawns: [],
+      groups: [],
+    });
+  });
+
+  test("manual groups persist, join and leave", () => {
+    const store = new BoardStore(path);
+    store.patch([
+      {
+        op: "group.join",
+        id: "g1",
+        members: [term("b")],
+        target: [term("a")],
+      },
+    ]);
+    store.patch([
+      {
+        op: "group.join",
+        id: "g2",
+        members: [term("c")],
+        target: [term("b")],
+      },
+    ]);
+    const reread = new BoardStore(path).get().relations.groups;
+    expect(reread).toMatchObject([
+      { id: "g1", members: [term("a"), term("b"), term("c")] },
+    ]);
+    store.patch([{ op: "group.leave", members: [term("a"), term("b")] }]);
+    expect(store.get().relations.groups).toEqual([]);
+  });
+
+  test("spawn claims are the service's to record, one per child", () => {
+    expect(() =>
+      clientBoardOps([{ op: "spawn.record", claims: [spawn("b", "a")] }]),
+    ).toThrow("unknown operation");
+    const store = new BoardStore(path);
+    store.patch([{ op: "spawn.record", claims: [spawn("b", "a")] }]);
+    store.patch([{ op: "spawn.record", claims: [spawn("b", "z", 2)] }]);
+    expect(new BoardStore(path).get().relations.spawns).toEqual([
+      spawn("b", "z", 2),
+    ]);
+  });
+
+  test("malformed relations are refused and change nothing", () => {
+    const store = new BoardStore(path);
+    expect(() =>
+      store.patch([
+        {
+          op: "group.join",
+          id: "g1",
+          members: [{ connection_id: "studio" } as never],
+          target: [term("a")],
+        },
+      ]),
+    ).toThrow("terminal ID");
+    expect(() =>
+      store.patch([
+        {
+          op: "spawn.record",
+          claims: [{ ...spawn("b", "a"), generation: -1 }],
+        },
+      ]),
+    ).toThrow("spawn generation");
+    expect(store.get().revision).toBe(0);
+  });
+
+  test("a moved tab whose colour is inherited does not freeze it", () => {
+    const document = new BoardStore(path).get();
+    const moved = {
+      tab_id: "w2:t9",
+      workspace_id: "w2",
+      source_workspace_id: "w1",
+      panes: [],
+    };
+    const colors = { before: {}, workspaceIds: new Set(["w1", "w2"]) };
+    expect(
+      moveFollowOps(document, "studio", "w1:t1", moved, colors),
+    ).toMatchObject([{ op: "card.color", key: "studio:w2:t9" }]);
+    expect(
+      moveFollowOps(document, "studio", "w1:t1", moved, {
+        ...colors,
+        inherited: true,
+      }),
+    ).toEqual([]);
+  });
+});

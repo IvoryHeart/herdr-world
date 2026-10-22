@@ -158,7 +158,13 @@ export type TownRendererHandle = {
   /** Lift a desk or agent under the pointer for a drag. */
   beginDrag(kind: "desk" | "agent", key: string, x: number, y: number): void;
   /** Follow the pointer (world point) and show where it would land. */
-  moveDrag(x: number, y: number, targetKey: string | null): void;
+  /** `snap`: the target is a desk the carried desk groups with. */
+  moveDrag(
+    x: number,
+    y: number,
+    targetKey: string | null,
+    snap?: boolean,
+  ): void;
   /** Spring back to its spot, or wait at the target while Herdr moves it. */
   endDrag(mode: "cancel" | "park"): void;
   /** The move finished: land with a puff, or spring back on failure. */
@@ -1429,7 +1435,12 @@ export async function createTownRenderer(
     );
     moveDrag(x, y, null);
   };
-  const moveDrag = (x: number, y: number, targetKey: string | null) => {
+  const moveDrag = (
+    x: number,
+    y: number,
+    targetKey: string | null,
+    snap = false,
+  ) => {
     if (!drag || !layout || drag.phase.name !== "drag") return;
     drag.tilt +=
       (Math.max(-0.35, Math.min(0.35, (x - drag.lastX) * 0.03)) - drag.tilt) *
@@ -1440,7 +1451,19 @@ export async function createTownRenderer(
     drag.target = null;
     drag.slot?.destroy();
     drag.slot = null;
-    if (targetKey && drag.kind === "desk") {
+    const teammate =
+      snap && targetKey && drag.kind === "desk"
+        ? layoutCells.get(targetKey)
+        : undefined;
+    if (teammate) {
+      // Dropped on a desk it groups with: the ghost snaps to that desk.
+      drag.target = {
+        x: (teammate.x + 1) * T - 3,
+        y: teammate.y * T + 2,
+        w: 70,
+        h: 57,
+      };
+    } else if (targetKey && drag.kind === "desk") {
       // The next free spot of the target room, where the desk will land.
       const room = layout.buildings
         .flatMap((b) => b.rooms)

@@ -10,7 +10,18 @@ export type TownDrag = {
   /** The desk's room, or the agent's desk: dropping there does nothing. */
   from: string;
   label: string;
-  target?: { key: string | null; label: string };
+  target?: TownDropTarget;
+};
+
+/**
+ * Where a drag lands: a desk dropped on a room moves there; on another desk
+ * it joins that desk's team (moving rooms first when needed); a grouped desk
+ * dropped on its own room's floor leaves its team.
+ */
+export type TownDropTarget = {
+  key: string | null;
+  label: string;
+  action?: "move" | "group" | "ungroup";
 };
 
 /** What a held press picks up: a desk or a seated agent, zoomed in. */
@@ -45,13 +56,56 @@ export function townDragFor(
   };
 }
 
-/** Where a drag would land under the pointer, or why it can't. */
+/** How long a dragged desk rests on another desk before it snaps to it. */
+export const TOWN_MAGNET_MS = 450;
+
+/** The desk under a dragged desk, if it is one it could group with. */
+export function townMagnetDesk(
+  drag: TownDrag,
+  hit: TownHit | null,
+  model: TownModel,
+): string | null {
+  if (drag.kind !== "desk") return null;
+  const key =
+    hit?.kind === "desk"
+      ? hit.key
+      : hit?.kind === "pane"
+        ? hit.deskKey
+        : hit?.kind === "agent"
+          ? model.agentSeats.get(hit.key)?.deskKey
+          : undefined;
+  return key && key !== drag.key && model.desks.has(key) ? key : null;
+}
+
+/**
+ * Where a drag would land under the pointer, or why it can't. A desk dropped
+ * at once on another desk means that desk's room; held still on it for
+ * TOWN_MAGNET_MS (`magnet`), it snaps to that desk and groups with it, so
+ * moving (or reordering) and grouping stay separate gestures.
+ */
 export function townDropTarget(
   drag: TownDrag,
   hit: TownHit | null,
   model: TownModel,
-): { key: string | null; label: string } {
+  /** Each grouped desk's team (townTeams.ts). */
+  deskTeams: ReadonlyMap<string, string> = new Map(),
+  /** The desk the dragged desk has rested on long enough to snap to. */
+  magnet: string | null = null,
+): TownDropTarget {
   if (drag.kind === "desk") {
+    const desk = magnet ? model.desks.get(magnet) : undefined;
+    if (desk && magnet === townMagnetDesk(drag, hit, model)) {
+      if (desk.hostKey !== drag.hostKey)
+        return { key: null, label: "Desks group only within one host" };
+      const team = deskTeams.get(desk.key);
+      if (team && team === deskTeams.get(drag.key))
+        return { key: null, label: `${drag.label}: already in this team` };
+      return {
+        key: desk.key,
+        label: `Group with ${desk.displayLabel}`,
+        action: "group",
+      };
+    }
     const roomKey =
       hit?.kind === "room"
         ? hit.key
@@ -69,8 +123,14 @@ export function townDropTarget(
     if (room.hostKey !== drag.hostKey)
       return { key: null, label: "Desks move only within one host" };
     if (room.key === drag.from)
-      return { key: null, label: `${drag.label}: already in this room` };
-    return { key: room.key, label: `${drag.label} to ${room.displayLabel}` };
+      return deskTeams.has(drag.key) && !townMagnetDesk(drag, hit, model)
+        ? { key: room.key, label: "Leave the team", action: "ungroup" }
+        : { key: null, label: `${drag.label}: already in this room` };
+    return {
+      key: room.key,
+      label: `${drag.label} to ${room.displayLabel}`,
+      action: "move",
+    };
   }
   const deskKey =
     hit?.kind === "desk"

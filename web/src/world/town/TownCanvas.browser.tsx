@@ -13,6 +13,12 @@ import { requestTrace } from "../devtools/trace";
 import { initializeLayoutPreferences } from "../../layoutPreferences";
 import { bridge, type ConnectionClient } from "../../api";
 import "../world.css";
+import {
+  joinGroup,
+  leaveGroups,
+  type RelationGroup,
+  type TerminalRef,
+} from "../../../../shared/relations";
 
 /*
  * Synthetic Office town fixture. `?mode=test` runs checks and posts them to
@@ -195,6 +201,15 @@ function topology(seed: number): Topology {
         agent_status: "working",
       });
     });
+    // An agent in the first room spawned the one at the next desk.
+    const [first] = workspaces;
+    const child = panes.find(
+      (pane) => pane.pane_id === `${first?.workspace_id}-tab-1-pane-0`,
+    );
+    if (child)
+      (child as Pane & { tokens?: Record<string, string> }).tokens = {
+        spawned_by: `${first!.workspace_id}-tab-2-pane-0`,
+      };
     return {
       connectionId: host.id,
       label: host.label,
@@ -285,6 +300,10 @@ const SCREENS = {
           },
         ],
       };
+    if (method === "tab.move") {
+      moves.push({ method, params: params ?? {} });
+      return { type: "ok" };
+    }
     if (method === "town.move_desk" || method === "town.move_pane") {
       moves.push({ method, params: params ?? {} });
       return { status: "moved", tab_id: "moved-tab", workspace_id: "moved" };
@@ -300,6 +319,65 @@ const SCREENS = {
     throw new Error(`unsupported ${method}`);
   },
 });
+
+/*
+ * World's Board store, as the service keeps it: groups are joined with the
+ * shared rules, and every patch is recorded.
+ */
+const boardPatches: { op: string; [key: string]: unknown }[] = [];
+let boardDocument = {
+  version: 1,
+  revision: 1,
+  layout: { anchors: {}, offsets: {}, pinned: {}, folded: [], colors: {} },
+  notes: [],
+  strings: [],
+  relations: { spawns: [], groups: [] as RelationGroup[] },
+};
+const boardListeners = new Set<
+  (control: { type: string; revision?: number }) => void
+>();
+const worldBridge = bridge as unknown as {
+  call(method: string, params?: Record<string, unknown>): Promise<unknown>;
+  onControl(listener: (control: { type: string }) => void): () => void;
+};
+const bridgeCall = worldBridge.call.bind(bridge);
+worldBridge.call = async (method, params) => {
+  if (method === "world.board.get") return structuredClone(boardDocument);
+  if (method === "world.board.patch") {
+    for (const op of (params?.ops ?? []) as {
+      op: string;
+      id: string;
+      members: TerminalRef[];
+      target: TerminalRef[];
+    }[]) {
+      boardPatches.push(op);
+      const groups = boardDocument.relations.groups;
+      boardDocument.relations.groups =
+        op.op === "group.join"
+          ? joinGroup(groups, op.members, op.target, op.id, Date.now())
+          : op.op === "group.leave"
+            ? leaveGroups(groups, op.members)
+            : groups;
+    }
+    boardDocument = { ...boardDocument, revision: boardDocument.revision + 1 };
+    for (const listener of boardListeners)
+      listener({
+        type: "world_board_changed",
+        revision: boardDocument.revision,
+      });
+    return { document: structuredClone(boardDocument) };
+  }
+  return bridgeCall(method, params);
+};
+const bridgeOnControl = worldBridge.onControl.bind(bridge);
+worldBridge.onControl = (listener) => {
+  boardListeners.add(listener);
+  const off = bridgeOnControl(listener);
+  return () => {
+    boardListeners.delete(listener);
+    off();
+  };
+};
 
 // Uploads answer as the World service does, for the connection asked.
 const uploads: string[] = [];
@@ -339,6 +417,113 @@ async function attachNote(host: HTMLElement) {
   files.items.add(new File(["synthetic"], "notes.txt", { type: "text/plain" }));
   picker.files = files.files;
   picker.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
+/**
+ * Teams: the fixture's spawn token draws a connector; dragging one desk onto
+ * another in its room groups them (a mouse on wide screens, a held touch on
+ * phones), seats its tab after the other's in Herdr and walls them in.
+ */
+async function groupTwoDesks(host: HTMLElement, canvasHost: HTMLElement) {
+  await waitFor(
+    () => host.querySelector('.town-team-link[data-kind="spawned"]') !== null,
+    "a spawned agent's desk has no connector to its parent's",
+  );
+  const onScreen = (target: HTMLElement) => {
+    const box = target.getBoundingClientRect();
+    return (
+      box.width > 0 &&
+      box.left > 8 &&
+      box.top > 8 &&
+      box.right < window.innerWidth - 8 &&
+      box.bottom < window.innerHeight - 8
+    );
+  };
+  const desks = [
+    ...host.querySelectorAll<HTMLElement>(
+      '.world-semantic-target[data-kind="desk"]',
+    ),
+  ].filter(onScreen);
+  const roomOf = (target: HTMLElement) =>
+    target.getAttribute("aria-label")?.split(", ")[1];
+  const from = desks[0];
+  const to = desks.find(
+    (target) => target !== from && roomOf(target) === roomOf(from!),
+  );
+  check(Boolean(from && to), "no two desks of one room on screen to group");
+  if (!from || !to) return;
+  const walled = () =>
+    [...host.querySelectorAll<SVGElement>(".town-team-wall")].reduce(
+      (sum, wall) => sum + Number(wall.dataset.desks ?? 0),
+      0,
+    );
+  const walls = walled();
+  const kind = phone ? "touch" : "mouse";
+  const point = (type: string, x: number, y: number) =>
+    canvasHost.dispatchEvent(
+      new PointerEvent(type, {
+        bubbles: true,
+        pointerId: 31,
+        pointerType: kind,
+        button: 0,
+        buttons: type === "pointerup" ? 0 : 1,
+        clientX: x,
+        clientY: y,
+      }),
+    );
+  const a = from.getBoundingClientRect();
+  const b = to.getBoundingClientRect();
+  const start = { x: a.left + a.width / 2, y: a.top + a.height / 2 };
+  const end = { x: b.left + b.width / 2, y: b.top + b.height / 2 };
+  point("pointerdown", start.x, start.y);
+  if (phone)
+    await waitFor(
+      () => host.querySelector(".town-drag-ghost") !== null,
+      "holding a desk did not lift it to group",
+    );
+  for (let step = 1; step <= 8; step += 1) {
+    point(
+      "pointermove",
+      start.x + ((end.x - start.x) * step) / 8,
+      start.y + ((end.y - start.y) * step) / 8,
+    );
+    await settle();
+  }
+  // Resting on the other desk snaps to it: the plaque offers to group.
+  await waitFor(
+    () =>
+      host
+        .querySelector(".town-drag-ghost")
+        ?.textContent?.startsWith("Group with") === true,
+    "a desk resting on another does not offer to group",
+  );
+  point("pointerup", end.x, end.y);
+  await waitFor(
+    () => boardPatches.some((op) => op.op === "group.join"),
+    "dropping a desk on another did not group them",
+  );
+  const join = boardPatches.find((op) => op.op === "group.join") as unknown as {
+    members: TerminalRef[];
+    target: TerminalRef[];
+  };
+  const tabOf = (ref: TerminalRef) => ref.terminal_id.split("-terminal-")[0];
+  check(
+    join.members.length === 1 &&
+      join.target.length === 1 &&
+      tabOf(join.members[0]!) !== tabOf(join.target[0]!),
+    `group.join sent one terminal per desk (${JSON.stringify(join)})`,
+  );
+  await waitFor(
+    () => moves.some((move) => move.method === "tab.move"),
+    "grouping did not seat the desk next to its teammate in Herdr",
+  );
+  const seat = moves.find((move) => move.method === "tab.move")!;
+  check(
+    seat.params.tab_id === tabOf(join.members[0]!) &&
+      Number.isInteger(seat.params.insert_index),
+    `tab.move seats the grouped tab (${JSON.stringify(seat)})`,
+  );
+  await waitFor(() => walled() > walls, "the grouped desks have no team wall");
 }
 
 function worldFor(connections: WorldRuntimeConnection[]) {
@@ -948,6 +1133,7 @@ async function run() {
     touch("pointerup", 22, box.left + 4, box.top + 4);
     touch("pointerup", 21, box.left + box.width / 2, box.top + box.height / 2);
     check(moves.length === 1, "a cancelled drag must not move anything");
+    await groupTwoDesks(host, canvasHost);
     // The exported trace holds the gesture (input, transitions, effects) and
     // the frames it asked for, with their reasons, once they are drawn.
     const drawn = window.__HERDR_TOWN_RENDERER__?.frames ?? 0;

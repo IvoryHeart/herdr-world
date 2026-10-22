@@ -1532,9 +1532,10 @@ from a live host's label MAY open World's New workspace dialog.
 Every Herdr tab SHALL have one terminal colour from a fixed palette, shown as
 its tab in Spaces, its card in Board and, when Town draws a table for it, that
 table; a tab beyond a room's drawn tables keeps its colour in Spaces and Board.
-Without a choice of its own a tab SHALL take its workspace's Board colour, if
-any, or else a default derived only from its connection and Herdr tab ID, so it
-is the same on every device and after reloads. A colour chosen in any view
+Without a choice of its own a tab SHALL take the colour of the tab whose agent
+spawned it (a spawn relation, never a manual group), then its workspace's Board
+colour, if any, or else a default derived only from its connection and Herdr
+tab ID, so it is the same on every device and after reloads. A colour chosen in any view
 SHALL be saved by the World service, keyed by connection and Herdr tab ID (as
 Board keys a tab card, qualified when the tab ID is also a workspace ID),
 SHALL appear in every view and on every device, and MAY be reset; reset is
@@ -1542,7 +1543,8 @@ offered only for a tab's own colour, not one inherited from its workspace. The
 key carries no terminal witness, so after a Herdr restart a colour follows
 whichever tab holds that ID. A tab World moves to another workspace SHALL keep
 the colour it showed, whether chosen, inherited or default, saved as its own
-colour. When World observes
+colour, except a colour inherited from its spawning tab, which follows its
+terminals and is not saved. When World observes
 Herdr close a tab on the connection's current runtime, it SHALL drop that tab's
 saved colour. Terminal colour SHALL never stand for or hide a status. World
 SHALL NOT write a colour to Herdr.

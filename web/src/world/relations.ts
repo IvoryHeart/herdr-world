@@ -1,0 +1,266 @@
+import { useEffect, useMemo, useRef } from "react";
+import {
+  relationsOf,
+  spawnParents,
+  terminalKey,
+  type Relation,
+  type RelationObservation,
+  type RelationsDocument,
+  type TerminalRef,
+} from "../../../shared/relations";
+import {
+  inheritedColorKey,
+  resolveTerminalColor,
+  tabCardKey,
+  type TerminalTab,
+} from "../../../shared/terminalColor";
+import {
+  sharedBoardStore,
+  useBoardDocument,
+  type BoardDocumentStore,
+} from "./board/boardDocument";
+import type { WorldRuntimeConnection } from "./runtimeStore";
+import type { WorldObject } from "./worldObject";
+
+/**
+ * The browser's side of relations (shared/relations.ts): which terminals know
+ * each other, from Board's saved document and World's current snapshots, and
+ * where each terminal is now, so the views can draw them together.
+ */
+
+export const NO_RELATIONS: RelationsDocument = { spawns: [], groups: [] };
+
+/** Each connection's snapshot as the shared rules read it. */
+export function relationObservations(
+  connections: readonly WorldRuntimeConnection[],
+): RelationObservation[] {
+  return connections.map((connection) => ({
+    connection_id: connection.connectionId,
+    generation: connection.generation,
+    current:
+      connection.state === "ready" &&
+      !connection.stale &&
+      connection.actionable &&
+      connection.snapshot !== null &&
+      connection.snapshotGeneration === connection.generation,
+    panes: (connection.snapshot?.panes ?? []).map((pane) => ({
+      pane_id: pane.pane_id,
+      terminal_id: pane.terminal_id,
+      tokens: (pane as { tokens?: unknown }).tokens,
+    })),
+  }));
+}
+
+/** Where a terminal is in the latest snapshot (cached ones too). */
+export type TerminalPlace = TerminalTab & { paneId: string };
+
+export function terminalPlaces(
+  connections: readonly WorldRuntimeConnection[],
+): Map<string, TerminalPlace> {
+  const places = new Map<string, TerminalPlace>();
+  for (const connection of connections) {
+    const snapshot = connection.snapshot;
+    if (!snapshot) continue;
+    const workspaceIds = new Set(
+      snapshot.workspaces.map((workspace) => workspace.workspace_id),
+    );
+    for (const pane of snapshot.panes)
+      places.set(
+        terminalKey({
+          connection_id: connection.connectionId,
+          terminal_id: pane.terminal_id,
+        }),
+        {
+          connectionId: connection.connectionId,
+          workspaceId: pane.workspace_id,
+          tabId: pane.tab_id,
+          paneId: pane.pane_id,
+          workspaceIds,
+        },
+      );
+  }
+  return places;
+}
+
+/**
+ * The saved colours plus each spawned tab's inherited one: a tab with no
+ * colour of its own shows its parent's tab colour (inheritedColorKey). A
+ * chosen colour always wins, and a parent in the same tab adds nothing.
+ */
+export function withInheritedColors<C extends string>(
+  colors: Readonly<Record<string, C>>,
+  relations: readonly Relation[],
+  places: ReadonlyMap<string, TerminalPlace>,
+): Readonly<Record<string, C>> {
+  const parentTabs = new Map<string, TerminalPlace>();
+  const tabs = new Map<string, TerminalPlace>();
+  for (const [child, parent] of spawnParents(relations)) {
+    const from = places.get(terminalKey(parent));
+    const to = places.get(child);
+    if (!from || !to || from.connectionId !== to.connectionId) continue;
+    if (from.tabId === to.tabId) continue;
+    const key = tabCardKey(to.connectionId, to.tabId, to.workspaceIds);
+    if (colors[key] || parentTabs.has(key)) continue;
+    parentTabs.set(key, from);
+    tabs.set(key, to);
+  }
+  if (!parentTabs.size) return colors;
+  const out: Record<string, C> = { ...colors };
+  const resolving = new Set<string>();
+  const resolve = (key: string): void => {
+    const parent = parentTabs.get(key);
+    if (!parent || out[inheritedColorKey(key)] || resolving.has(key)) return;
+    resolving.add(key);
+    // The parent may itself be spawned: settle its colour first.
+    resolve(tabCardKey(parent.connectionId, parent.tabId, parent.workspaceIds));
+    out[inheritedColorKey(key)] = resolveTerminalColor(out, parent).color as C;
+  };
+  for (const key of parentTabs.keys()) resolve(key);
+  return out;
+}
+
+type Derived = {
+  relations: Relation[];
+  places: Map<string, TerminalPlace>;
+};
+
+/** What relations are derived from: observations and every terminal's place. */
+export type RelationInputs = {
+  observations: readonly RelationObservation[];
+  places: ReadonlyMap<string, TerminalPlace>;
+};
+
+/** From World's runtime connections (the app's colour seam). */
+export function runtimeRelationInputs(
+  connections: readonly WorldRuntimeConnection[],
+): RelationInputs {
+  return {
+    observations: relationObservations(connections),
+    places: terminalPlaces(connections),
+  };
+}
+
+/** From a World object, as a view shows it: its hosts and their panes. */
+export function worldRelationInputs(
+  world: Pick<WorldObject, "hosts">,
+): RelationInputs {
+  const observations: RelationObservation[] = [];
+  const places = new Map<string, TerminalPlace>();
+  for (const host of world.hosts) {
+    const workspaceIds = new Set(host.spaces.map((space) => space.nativeId));
+    const leaves = host.spaces.flatMap((space) => space.children);
+    observations.push({
+      connection_id: host.connectionId,
+      generation: host.generation,
+      current: !host.stale && host.actionable,
+      panes: leaves.map((leaf) => ({
+        pane_id: leaf.nativeId,
+        terminal_id: leaf.terminalId,
+        tokens: (leaf.pane as { tokens?: unknown } | undefined)?.tokens,
+      })),
+    });
+    for (const leaf of leaves)
+      places.set(
+        terminalKey({
+          connection_id: host.connectionId,
+          terminal_id: leaf.terminalId,
+        }),
+        {
+          connectionId: host.connectionId,
+          workspaceId: leaf.workspaceId,
+          tabId: leaf.tabId,
+          paneId: leaf.nativeId,
+          workspaceIds,
+        },
+      );
+  }
+  return { observations, places };
+}
+
+/**
+ * Relations and the places of related terminals. The result is replaced only
+ * when a relation, its evidence or a related terminal's place changes, so a
+ * snapshot or a note edit that changes neither re-renders nothing.
+ */
+export function relationsDeriver() {
+  let lastDoc: RelationsDocument | undefined;
+  let lastInputs: RelationInputs | undefined;
+  let lastSignature = "";
+  let last: Derived = { relations: [], places: new Map() };
+  return (doc: RelationsDocument, inputs: RelationInputs): Derived => {
+    if (doc === lastDoc && inputs === lastInputs) return last;
+    lastDoc = doc;
+    lastInputs = inputs;
+    const relations = relationsOf(doc, inputs.observations);
+    const places = new Map<string, TerminalPlace>();
+    for (const relation of relations)
+      for (const end of [relation.a, relation.b]) {
+        const key = terminalKey(end);
+        const place = inputs.places.get(key);
+        if (place) places.set(key, place);
+      }
+    const signature = JSON.stringify([
+      relations.map((relation) => [
+        relation.key,
+        relation.evidence.map((entry) => [
+          entry.kind,
+          entry.sor,
+          entry.source,
+          entry.current,
+        ]),
+      ]),
+      [...places].map(([key, place]) => [
+        key,
+        place.workspaceId,
+        place.tabId,
+        place.paneId,
+        [...place.workspaceIds].includes(place.tabId),
+      ]),
+    ]);
+    if (signature !== lastSignature) {
+      lastSignature = signature;
+      last = { relations, places };
+    }
+    return last;
+  };
+}
+
+/** Relations for a World view, kept current from Board's store. */
+export function useRelations(
+  world: Pick<WorldObject, "hosts">,
+  store: BoardDocumentStore = sharedBoardStore(),
+): Derived {
+  useEffect(() => {
+    store.start();
+    return () => store.stop();
+  }, [store]);
+  const { document } = useBoardDocument(store);
+  const derive = useRef(relationsDeriver()).current;
+  const hosts = world.hosts;
+  const inputs = useMemo(() => worldRelationInputs({ hosts }), [hosts]);
+  return derive(document?.relations ?? NO_RELATIONS, inputs);
+}
+
+/** Group the terminals of `members` with those of `target`. */
+export function groupTerminals(
+  members: readonly TerminalRef[],
+  target: readonly TerminalRef[],
+  store: BoardDocumentStore = sharedBoardStore(),
+) {
+  return store.patch([
+    {
+      op: "group.join",
+      id: `g-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+      members: [...members],
+      target: [...target],
+    },
+  ]);
+}
+
+/** Take terminals out of their group. */
+export function ungroupTerminals(
+  members: readonly TerminalRef[],
+  store: BoardDocumentStore = sharedBoardStore(),
+) {
+  return store.patch([{ op: "group.leave", members: [...members] }]);
+}

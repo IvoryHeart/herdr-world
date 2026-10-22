@@ -9,6 +9,15 @@ are optional because the merged PR history records their source.
 
 ### Added
 
+- Group agents that know each other. An agent stamped as spawned by another
+  (`herdr-world stamp CHILD PARENT`, or Board's Start an agent from a note
+  strung to a pane) is joined to it automatically: a wall and connector in
+  Town, a string in Board, and its parent's colour unless it has its own. Rest
+  a dragged Town table on another table until it snaps, or drop a Board tab on
+  another tab (or use **Group…**), to group them; Town also brings the tab next to its teammate in
+  Herdr. World keeps the groups and the last spawn claims it saw, so they
+  outlive Herdr restarts, shown stale until both terminals return.
+
 - Add a Chat tab to the Inspector, replacing History. Chat shows an agent's
   conversation from its transcript, never the terminal, and replies with
   Herdr's agent prompt only to a session Herdr ties to the pane. The service

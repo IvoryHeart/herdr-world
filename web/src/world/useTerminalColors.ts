@@ -1,4 +1,10 @@
-import { useEffect, useMemo, useRef, useSyncExternalStore } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useSyncExternalStore,
+} from "react";
 import type { TabColorControl } from "../components/TabBar";
 import {
   sharedBoardStore,
@@ -13,6 +19,13 @@ import {
   type TerminalColors,
   type TerminalColorTarget,
 } from "./terminalColor";
+import {
+  NO_RELATIONS,
+  relationsDeriver,
+  runtimeRelationInputs,
+  withInheritedColors,
+} from "./relations";
+import { worldRuntimeStore } from "./runtimeStore";
 
 /** Terminal colours as World's service keeps them (see terminalColor.ts). */
 
@@ -31,26 +44,55 @@ export function keepColors(
 }
 
 /**
- * The saved colours, kept current from the World service. The object changes
+ * The saved colours, kept current from the World service, with the colours
+ * spawned tabs inherit from their parents (relations.ts). The object changes
  * only when a colour does, so Board's other edits (notes, positions) never
  * re-render or rebuild the views that colour terminals.
  */
 export function useTerminalColors(
   store: BoardDocumentStore = sharedBoardStore(),
+  runtime: Pick<
+    typeof worldRuntimeStore,
+    "get" | "subscribe"
+  > = worldRuntimeStore,
 ): TerminalColors {
   useEffect(() => {
     store.start();
     return () => store.stop();
   }, [store]);
+  const derive = useRef(relationsDeriver()).current;
   const last = useRef<TerminalColors>(NONE);
+  const lastConnections = useRef<unknown>(null);
+  const inputs = useRef(runtimeRelationInputs([]));
+  const subscribe = useCallback(
+    (listener: () => void) => {
+      const offStore = store.subscribe(listener);
+      const offRuntime = runtime.subscribe(listener);
+      return () => {
+        offStore();
+        offRuntime();
+      };
+    },
+    [store, runtime],
+  );
   const snapshot = () => {
+    const document = store.get().document;
+    const { connections } = runtime.get();
+    if (connections !== lastConnections.current) {
+      lastConnections.current = connections;
+      inputs.current = runtimeRelationInputs(connections);
+    }
+    const { relations, places } = derive(
+      document?.relations ?? NO_RELATIONS,
+      inputs.current,
+    );
     last.current = keepColors(
       last.current,
-      store.get().document?.layout.colors ?? NONE,
+      withInheritedColors(document?.layout.colors ?? NONE, relations, places),
     );
     return last.current;
   };
-  return useSyncExternalStore(store.subscribe, snapshot, snapshot);
+  return useSyncExternalStore(subscribe, snapshot, snapshot);
 }
 
 /** Choose a tab's colour, or reset it to the default with `null`. */

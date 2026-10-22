@@ -148,6 +148,12 @@ changes what you see and does not disconnect hosts or retarget open terminals.
    only partly moved, or locations unknown. Unless the notice says the table is
    back, check both rooms before you carry on. Moving a room's last table
    closes that room, so Town asks first.
+8. To group tables, drag one onto another table and rest it there a moment:
+   it snaps to that table and the plaque says **Group with …**; let go. The two get one wall, and Town brings the table to that room and
+   next to the other in Herdr's tab order. An agent started by another agent
+   is grouped automatically, with a solid connector to its parent and the
+   parent's colour. To leave a team, drag the table onto its own room's floor
+   (**Leave the team**).
 
 A table with more panes than drawn seats shows the count and offers a chooser
 for every pane. When a table closes, the tables after it close up so the room
@@ -188,8 +194,11 @@ on your phone and desktop.
    tab, and press **Create**; **+** beside a host's name creates a workspace. Select a workspace or
    tab to give it a colour of your own; status keeps its own colours. A tab's
    colour is its terminal colour, the same one Spaces and Town show: it starts
-   as a stable default (or its workspace's colour, if you gave the workspace
-   one), and **Default colour** returns to it.
+   as a stable default (the colour of the agent that spawned it, or its
+   workspace's colour, if you gave the workspace one), and **Default colour**
+   returns to it. A faint string joins tabs whose agents know each other.
+   Drag a tab onto another tab to group them, or select a tab, press
+   **Group…** and tap the other; a grouped tab's bar offers **Ungroup**.
 2. Scroll or pinch to zoom, drag empty board to pan, or use the controls at the
    bottom right. Zoomed out, each workspace shows a square per pane (hollow for
    shells); tap a workspace there to zoom in on it.

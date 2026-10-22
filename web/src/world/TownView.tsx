@@ -43,6 +43,12 @@ import { TownCanvas } from "./town/TownCanvas";
 import { townDeskColorTarget } from "./town/townModel";
 import { resolveTerminal, type TerminalColor } from "./terminalColor";
 import { setTerminalColor, useTerminalColors } from "./useTerminalColors";
+import { bridge } from "../api";
+import { groupTerminals, ungroupTerminals, useRelations } from "./relations";
+import { inheritedColorKey } from "../../../shared/terminalColor";
+import type { TerminalRef } from "../../../shared/relations";
+import type { OfficeDesk } from "./herdrOfficeProjection";
+import { terminalColorKey } from "./terminalColor";
 import {
   sendTownReply,
   townChoices,
@@ -596,6 +602,7 @@ export default function TownView({
     return entry ? `${entry.roomLabel} · ${entry.hostLabel}` : "";
   };
   const terminalColors = useTerminalColors();
+  const relations = useRelations(world);
   const deviceByKey = useMemo(
     () => lazyIndex(office.paneRoster, (entry) => entry.device.key),
     [office.paneRoster],
@@ -721,10 +728,105 @@ export default function TownView({
     );
     return townMoveResult(outcome);
   };
+  /** The desk shows its parent's colour rather than one of its own. */
+  const inheritsColor = (desk: OfficeDesk) => {
+    const target = townDeskColorTarget(office, desk);
+    if (!target) return false;
+    const key = terminalColorKey(target);
+    return (
+      !terminalColors[key] && Boolean(terminalColors[inheritedColorKey(key)])
+    );
+  };
+  /** Every terminal at a desk, as World observed its host. */
+  const deskTerminals = (desk: OfficeDesk): TerminalRef[] =>
+    (
+      world.hosts.find((host) => host.connectionId === desk.tabRef.connectionId)
+        ?.spaces ?? []
+    )
+      .flatMap((space) => space.children)
+      .filter((leaf) => leaf.tabId === desk.tabRef.nativeId)
+      // Its agent first: a group holds one terminal per desk.
+      .sort((a, b) => Number(b.kind === "agent") - Number(a.kind === "agent"))
+      .slice(0, 16)
+      .map((leaf) => ({
+        connection_id: desk.tabRef.connectionId,
+        terminal_id: leaf.terminalId,
+      }));
+  /**
+   * Seat a desk's tab right after another tab in Herdr, which owns the order;
+   * Town and Spaces follow what Herdr then reports.
+   */
+  const seatAfter = async (
+    desk: OfficeDesk,
+    tabId: string,
+    target: OfficeDesk,
+  ) => {
+    const tabs =
+      world.hosts
+        .find((host) => host.connectionId === target.tabRef.connectionId)
+        ?.spaces.find(
+          (space) =>
+            space.nativeId ===
+            roomForKey(target.roomKey)?.workspaceRef.nativeId,
+        )?.tabs ?? [];
+    const at = tabs.findIndex((tab) => tab.tab_id === target.tabRef.nativeId);
+    if (at < 0 || tabs[at + 1]?.tab_id === tabId) return;
+    try {
+      await bridge
+        .connection(target.tabRef.connectionId, target.tabRef.generation)
+        .call("tab.move", { tab_id: tabId, insert_index: at + 1 });
+    } catch (cause) {
+      toast(
+        "error",
+        `${desk.displayLabel} joined the team but kept its place: ${String(cause)}`,
+      );
+    }
+  };
+  const runGroupDesk = async (
+    deskKey: string,
+    targetKey: string,
+  ): Promise<TownMoveResult> => {
+    const desk = deskForKey(deskKey);
+    const target = deskForKey(targetKey);
+    if (!desk || !target || movingKey) return "returned";
+    const members = deskTerminals(desk).slice(0, 1);
+    const with_ = deskTerminals(target).slice(0, 1);
+    if (!members.length || !with_.length) {
+      toast("error", `${desk.displayLabel} was not grouped: no terminals seen`);
+      return "returned";
+    }
+    const problem = await groupTerminals(members, with_);
+    if (problem) {
+      toast("error", `${desk.displayLabel} was not grouped: ${problem}`);
+      return "returned";
+    }
+    toast("ok", `${desk.displayLabel} joined ${target.displayLabel}`);
+    // Bring it to the team's room and next to its teammate, through Herdr.
+    if (desk.roomKey !== target.roomKey)
+      return runDeskMove(deskKey, target.roomKey, false, (tabId) =>
+        seatAfter(desk, tabId, target),
+      );
+    await seatAfter(desk, desk.tabRef.nativeId, target);
+    return "returned";
+  };
+  const runUngroupDesk = async (deskKey: string): Promise<TownMoveResult> => {
+    const desk = deskForKey(deskKey);
+    if (!desk) return "returned";
+    const problem = await ungroupTerminals(deskTerminals(desk));
+    toast(
+      problem ? "error" : "ok",
+      problem
+        ? `${desk.displayLabel} is still in its team: ${problem}`
+        : `${desk.displayLabel} left its team`,
+    );
+    return "returned";
+  };
   const runDeskMove = async (
     deskKey: string,
     roomKey: string,
     allowCloseRoom = false,
+    /** After a move: seat the moved tab (its new ID) next to a teammate. */
+    then?: (tabId: string) => Promise<void>,
   ): Promise<TownMoveResult> => {
     const desk = deskForKey(deskKey);
     const room = roomForKey(roomKey);
@@ -734,15 +836,26 @@ export default function TownView({
     if (!allowCloseRoom && (source?.observedDeskCount ?? 2) <= 1) {
       setMoveConfirm({
         message: `“${desk.displayLabel}” is the last desk in “${source?.displayLabel}”. Moving it to “${room.displayLabel}” closes that room.`,
-        run: () => void runDeskMove(deskKey, roomKey, true),
+        run: () => void runDeskMove(deskKey, roomKey, true, then),
       });
       return "returned";
     }
     setMovingKey(desk.key);
     toast("ok", `Moving ${desk.displayLabel} to ${room.displayLabel}…`);
     try {
-      const outcome = await requestDeskMove(desk, room, allowCloseRoom);
-      return reportMove(desk.displayLabel, outcome, desk.tabRef.nativeId);
+      const outcome = await requestDeskMove(
+        desk,
+        room,
+        allowCloseRoom,
+        inheritsColor(desk),
+      );
+      const result = reportMove(
+        desk.displayLabel,
+        outcome,
+        desk.tabRef.nativeId,
+      );
+      if (outcome.status === "moved" && then) await then(outcome.tab_id);
+      return result;
     } catch (cause) {
       toast(
         "error",
@@ -1275,6 +1388,7 @@ export default function TownView({
           <TownCanvas
             trace={trace}
             projection={office}
+            relations={relations}
             terminalColors={terminalColors}
             selectedKey={townSelectedKey}
             completionSeenKeys={completionSeenKeys}
@@ -1322,6 +1436,9 @@ export default function TownView({
             }}
             roomActions={{
               onDropDesk: (deskKey, roomKey) => runDeskMove(deskKey, roomKey),
+              onGroupDesk: (deskKey, targetKey) =>
+                runGroupDesk(deskKey, targetKey),
+              onUngroupDesk: (deskKey) => runUngroupDesk(deskKey),
               onDropAgent: (agentKey, deskKey) =>
                 runAgentMove(agentKey, deskKey),
               onMoveDesk: (deskKey) => {

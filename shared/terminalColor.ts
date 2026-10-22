@@ -2,7 +2,8 @@
  * A terminal's colour: one per Herdr tab, shown as its tab in Spaces, its
  * table in Town and its card in Board. Herdr has no tab colour, so World keeps
  * a chosen colour in Board's saved layout on the service, under the tab's
- * Board card key. Without one, a tab takes its workspace's colour, then a
+ * Board card key. Without one, a tab takes the colour of the tab whose agent
+ * spawned it (shared/relations.ts), then its workspace's colour, then a
  * default derived from its key. The browser and the service share these rules
  * so they agree on keys and defaults.
  */
@@ -36,6 +37,12 @@ export const tabCardKey = (
     ? cardKey(connectionId, `tab:${tabId}`)
     : cardKey(connectionId, tabId);
 
+/**
+ * Where a spawned tab's inherited colour sits among the colours: computed by
+ * the browser from relations, never saved, and never a tab's own colour.
+ */
+export const inheritedColorKey = (key: string) => `~${key}`;
+
 /** FNV-1a, so the default never changes between builds or devices. */
 function hash(value: string) {
   let h = 0x811c9dc5;
@@ -67,6 +74,7 @@ export function resolveTerminalColor<C extends string>(
   if (own) return { color: own, own: true };
   return {
     color:
+      colors[inheritedColorKey(key)] ??
       colors[cardKey(tab.connectionId, tab.workspaceId)] ??
       defaultTerminalColorFor(key),
     own: false,

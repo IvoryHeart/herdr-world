@@ -37,6 +37,14 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     agent from the keyboard). The live panes move, agents keep running, a failed
     move attempts rollback and reports partial or unknown results. Moving a
     room's last table asks first because the room closes. When a table closes, the tables after it close up.
+  - **Teams.** Tables whose agents know each other are drawn inside one wall
+    with a connector: a spawned agent is joined to the agent that started it,
+    and a manual group with dotted lines; stale links are faded, never dropped.
+    Drag a table onto another table and hold it there a moment: it snaps to
+    that table (**Group with …**), and dropping groups them. Town moves it to
+    that room if needed and seats its tab after the other's in Herdr. A quick
+    drop keeps meaning a move, so moving and grouping stay separate gestures. Drop a grouped table
+    on its own room's floor to leave the team.
   - Cached failed-host buildings stay stale and non-actionable. Search and Hosts
     use the shared aggregate. Reception and lounge positions only show status;
     only an explicit move changes Herdr's layout, always within one host.
@@ -52,6 +60,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   - A desk moved to another room keeps the colour it showed, even a default or
     its old room's, saved as its own colour: it no longer follows its room's
     colour, and **Default colour** resets it to its new tab's default.
+  - A spawned agent's tab without a colour of its own takes the colour of the
+    tab that spawned it (before its workspace's colour), and keeps following it
+    when moved. A chosen colour always wins.
 
 - **Board** (`/board`) shows hosts as zones, workspaces as cards and tabs as
   cards around their workspace, beside your notes. Cards are elastic while you
@@ -179,6 +190,20 @@ session-qualified description of current work for an exact local or fixed-policy
 Herdr pane. The Inspector shows it only while the current
 agent session matches the report. Herdr owns expiry; the command does not infer work,
 assign tasks, or provide a Clear operation.
+
+### Teams and spawn stamps
+
+World groups terminals that know each other. Each relation lists its evidence,
+one entry per source, with the source's system of record and whether it holds
+now: a **spawn** (Herdr pane metadata while it lives, then World's saved copy)
+or a **manual group** (saved by World). Evidence for a terminal that is gone or
+on a stale host is shown as stale, not dropped. Herdr records no creator for a
+tab or pane, so a spawner stamps the child:
+`herdr-world stamp CHILD_PANE PARENT_PANE` (`bun run agent:stamp --` in a
+checkout). Board's **Start an agent** stamps the new agent when its note is
+strung to one pane. Town draws teams as walls and connectors; Board strings
+related cards and groups a tab dropped on another tab, or chosen with
+**Group…** and a tap; **Ungroup** undoes it.
 
 ### Agent checkout context
 

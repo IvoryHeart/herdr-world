@@ -40,6 +40,7 @@ import { readGuiSettings, updateGuiSettings } from "./config/gui-settings";
 import { cliCommands, runCli, topLevelHelp } from "./cli";
 import { CONTINUE_TO_SERVER, defaultCliContext } from "./cli/command";
 import { runTaskSummaryCommand } from "./herdr/task-summary";
+import { runSpawnStampCommand, stampSpawn } from "./herdr/spawn-stamp";
 import { runAgentCheckoutCommand } from "./herdr/agent-checkout";
 import { createWebPushService } from "./notifications/web-push";
 import { enrichIntegrationVersions } from "./herdr/integration-versions";
@@ -123,7 +124,10 @@ import {
 import { runProcessWithCodeTimeout, shQuote } from "./utils/process-utils";
 import { rpcLogLevel } from "./utils/rpc-logging";
 import { DOWNLOAD_TIMEOUT_MS } from "./workspace/file-constants";
-import { WorldSnapshotService } from "./world/snapshot";
+import {
+  WorldSnapshotService,
+  type WorldSnapshotResult,
+} from "./world/snapshot";
 import { WorldWatchlistRegistry } from "./world/watchlist";
 import {
   clientBoardOps,
@@ -143,6 +147,7 @@ import { linkedNoteText, sendNote } from "./world/board-send";
 import { checkAnchor } from "./world/board-anchor";
 import { herdrEventName } from "./utils/herdr-events";
 import { startFromNote } from "./world/board-start";
+import { spawnRecordOps } from "./world/relations";
 import {
   createOfficeObservabilityHttpHandler,
   resolveOfficeObservabilityBootstrap,
@@ -174,6 +179,11 @@ const agentCheckoutCommandResult = await runAgentCheckoutCommand(
 );
 if (agentCheckoutCommandResult !== null)
   process.exit(agentCheckoutCommandResult);
+const spawnStampCommandResult = await runSpawnStampCommand(
+  process.argv.slice(2),
+  APP_VERSION,
+);
+if (spawnStampCommandResult !== null) process.exit(spawnStampCommandResult);
 if (taskSummaryCommandResult !== null) {
   process.exit(taskSummaryCommandResult);
 }
@@ -506,6 +516,21 @@ function board() {
     log: (message) => console.warn(message),
   });
   return boardStore;
+}
+
+/**
+ * Keep the spawn claims a snapshot shows (world/relations.ts), so they
+ * outlive their Herdr tokens. Written only when a claim is new or changed.
+ */
+function recordSpawnClaims(snapshot: WorldSnapshotResult) {
+  try {
+    const ops = spawnRecordOps(board().get(), snapshot, Date.now());
+    if (ops.length) publishBoardChanged(board().patch(ops).revision);
+  } catch (error) {
+    logger.warn("World could not record spawn claims", {
+      detail: String(error),
+    });
+  }
 }
 
 /**
@@ -1133,9 +1158,11 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
         req.accept_world_snapshot_chunk_admission === true
       )
         transfer = snapshotAdmission.open(ws, id);
+      const snapshot = await snapshots.snapshot(params);
+      recordSpawnClaims(snapshot);
       await sendWorldSnapshotReply(
         id,
-        await snapshots.snapshot(params),
+        snapshot,
         req.accept_world_snapshot_chunks === true,
         (payload) => safeSend(ws, payload, "world-snapshot"),
         () => clients.has(ws),
@@ -1456,6 +1483,19 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
           isCurrent: requestIsCurrent,
         },
       );
+      // The note's agent spawned this one: stamp it so World groups them.
+      const parent =
+        typeof p.parent_pane_id === "string" ? p.parent_pane_id : "";
+      if (parent && result.pane_id && requestIsCurrent())
+        await stampSpawn(
+          (rpc, rpcParams) => herdr.call(rpc, rpcParams, 10_000),
+          result.pane_id,
+          parent,
+        ).catch((error) =>
+          logger.warn("Board could not stamp the agent it started", {
+            detail: String(error),
+          }),
+        );
       sendReply({ id, result }, method);
     } catch (error) {
       sendError(`${method}-error`, error);
@@ -1599,6 +1639,7 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
                     ? {
                         before: colorsBefore,
                         workspaceIds: await moveWorkspaceIds(call, result),
+                        inherited: p.inherited_color === true,
                       }
                     : undefined,
                 )

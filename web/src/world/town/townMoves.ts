@@ -82,6 +82,8 @@ export async function requestDeskMove(
   desk: OfficeDesk,
   room: OfficeRoom,
   allowCloseRoom: boolean,
+  /** The desk shows its parent's colour, which follows it on its own. */
+  inheritedColor = false,
 ): Promise<TownMoveOutcome> {
   if (!sameOwner(desk.tabRef, room.workspaceRef))
     return {
@@ -100,6 +102,7 @@ export async function requestDeskMove(
         tab_id: desk.tabRef.nativeId,
         workspace_id: room.workspaceRef.nativeId,
         allow_close_room: allowCloseRoom,
+        ...(inheritedColor ? { inherited_color: true } : {}),
       },
       moveTimeoutMs,
     ),
