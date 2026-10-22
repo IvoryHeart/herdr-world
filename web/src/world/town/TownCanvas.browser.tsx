@@ -346,108 +346,14 @@ let latestText =
   },
 });
 
-// Uploads answer as the World service does, for the connection asked.
-const uploads: string[] = [];
-/** While set, uploads wait for it, as a slow upload would. */
-let uploadGate: Promise<void> | null = null;
-/** Set to fail the next upload, as a full disk would. */
-let failNextUpload = false;
 /** Set to make every conversation read unavailable. */
 let conversationUnavailable = false;
-async function answerUpload(url: URL): Promise<Response | null> {
-  const match = /^\/api\/connections\/([^/]+)\/terminal-upload$/.exec(
-    url.pathname,
-  );
-  if (!match) return null;
-  const connectionId = decodeURIComponent(match[1]!);
-  uploads.push(connectionId);
-  if (uploadGate) await uploadGate;
-  const headers = {
-    "content-type": "application/json",
-    "X-Herdr-Connection-Id": connectionId,
-    "X-Herdr-Connection-Generation":
-      url.searchParams.get("connection_generation") ?? "",
-  };
-  if (failNextUpload) {
-    failNextUpload = false;
-    return new Response(JSON.stringify({ error: "disk full" }), {
-      status: 507,
-      headers,
-    });
-  }
-  return new Response(
-    JSON.stringify({ path: `/uploads/${url.searchParams.get("filename")}` }),
-    { headers },
-  );
-}
-const realFetch = window.fetch.bind(window);
-window.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
-  const url = new URL(
-    input instanceof Request ? input.url : String(input),
-    window.location.origin,
-  );
-  return (await answerUpload(url)) ?? realFetch(input, init);
-}) as typeof fetch;
-/** Uploads with byte progress use XMLHttpRequest; answer those the same way. */
-class FixtureUploadRequest {
-  upload: { onprogress: ((event: ProgressEvent) => void) | null } = {
-    onprogress: null,
-  };
-  responseType = "";
-  status = 0;
-  statusText = "";
-  response: Blob | null = null;
-  onload: (() => void) | null = null;
-  onerror: (() => void) | null = null;
-  onabort: (() => void) | null = null;
-  private url = new URL(window.location.origin);
-  private headers = "";
-  open(_method: string, url: string | URL) {
-    this.url = new URL(String(url), window.location.origin);
-  }
-  setRequestHeader() {}
-  getAllResponseHeaders() {
-    return this.headers;
-  }
-  send(body: Blob) {
-    this.upload.onprogress?.({
-      loaded: body.size,
-      total: body.size,
-      lengthComputable: true,
-    } as ProgressEvent);
-    void answerUpload(this.url).then(async (response) => {
-      if (!response) {
-        this.onerror?.();
-        return;
-      }
-      this.status = response.status;
-      this.statusText = response.statusText;
-      this.headers = [...response.headers]
-        .map(([name, value]) => `${name}: ${value}`)
-        .join("\r\n");
-      this.response = await response.blob();
-      this.onload?.();
-    });
-  }
-}
-window.XMLHttpRequest =
-  FixtureUploadRequest as unknown as typeof XMLHttpRequest;
 
 /** Show an agent's hover card, as a pointer over its reception entry does. */
 function hoverEntry(entry: Element) {
   entry.dispatchEvent(
     new MouseEvent("mouseover", { bubbles: true, relatedTarget: null }),
   );
-}
-
-async function attachNote(host: HTMLElement, name = "notes.txt") {
-  const picker = host.querySelector<HTMLInputElement>(
-    '.town-reply input[type="file"]',
-  )!;
-  const files = new DataTransfer();
-  files.items.add(new File(["synthetic"], name, { type: "text/plain" }));
-  picker.files = files.files;
-  picker.dispatchEvent(new Event("change", { bubbles: true }));
 }
 
 function worldFor(connections: WorldRuntimeConnection[]) {
@@ -655,7 +561,7 @@ async function run() {
     );
     check(selected.length === 0, "a peek must not select or open an Inspector");
     const answers = host.querySelectorAll<HTMLButtonElement>(
-      ".town-peek .town-answers button",
+      '.town-peek [aria-label="Answers"] button',
     );
     check(answers.length === 3, `expected 3 answers, found ${answers.length}`);
     answers[0]!.click();
@@ -726,148 +632,47 @@ async function run() {
       ).startsWith("Do you want"),
       "the peek should box the agent's question",
     );
-    // The reply line: the card's Send reaches that pane only.
-    {
-      const reply = host.querySelector<HTMLInputElement>(
-        ".town-reply input:not([type])",
-      )!;
-      Object.getOwnPropertyDescriptor(
-        HTMLInputElement.prototype,
-        "value",
-      )!.set!.call(reply, "Use the newest file");
-      reply.dispatchEvent(new Event("input", { bubbles: true }));
-      await settle();
-      host
-        .querySelector<HTMLButtonElement>('.town-reply button[type="submit"]')!
-        .click();
-      await waitFor(() => sent.length === 2, "reply was not sent");
-      check(
-        sent[1]!.paneId === peekPane &&
-          sent[1]!.text.includes("Use the newest file") &&
-          sent[1]!.keys.includes("enter"),
-        `reply sent ${JSON.stringify(sent[1])}`,
-      );
-      check(opened.length === 0, "replying must not open the full terminal");
-      // 📎 uploads through the pane's own connection into the reply line.
-      await attachNote(host);
-      await waitFor(
-        () =>
-          host
-            .querySelector<HTMLInputElement>(".town-reply input:not([type])")
-            ?.value.includes("/uploads/notes.txt") === true,
-        "attachment did not reach the reply line",
-      );
-      check(
-        uploads.length === 1 && uploads[0] === peekConnection,
-        `attachment uploaded through ${JSON.stringify(uploads)}`,
-      );
-      check(
-        host.querySelector(
-          '.town-peek .attachment-chip[data-status="done"]',
-        ) !== null,
-        "the uploaded file should show a done chip",
-      );
-      // A failed upload shows a failed chip with Retry; retrying delivers it.
-      failNextUpload = true;
-      await attachNote(host, "retry.txt");
-      await waitFor(
-        () =>
-          host.querySelector(
-            '.town-peek .attachment-chip[data-status="failed"]',
-          ) !== null,
-        "a failed upload did not show a failed chip",
-      );
-      host
-        .querySelector<HTMLButtonElement>(
-          '.town-peek [aria-label="Retry retry.txt"]',
-        )!
-        .click();
-      await waitFor(
-        () =>
-          host
-            .querySelector<HTMLInputElement>(".town-reply input:not([type])")
-            ?.value.includes("/uploads/retry.txt") === true,
-        "the retried upload did not reach the reply line",
-      );
-      uploads.length = 1;
-      // A number key pressed on another control never answers the agent.
-      const zoomIn = host.querySelector<HTMLButtonElement>(
-        '[aria-label="Zoom in"]',
-      )!;
-      zoomIn.focus();
-      zoomIn.dispatchEvent(
-        new KeyboardEvent("keydown", { key: "1", bubbles: true }),
-      );
-      await settle();
-      check(sent.length === 2, "a number key outside the peek sent an answer");
-      // An upload that finishes after switching agents stays with its agent.
-      let release!: () => void;
-      uploadGate = new Promise<void>((resolve) => (release = resolve));
-      await attachNote(host);
-      const firstCard = host.querySelector<HTMLElement>(".town-peek");
-      const firstAgentKey = firstCard?.dataset.agentKey ?? "";
-      // Next opens the next waiting agent's window; the card goes.
-      inspected.length = 0;
-      [...host.querySelectorAll<HTMLButtonElement>(".town-peek-foot button")]
-        .find((button) => button.textContent?.startsWith("Next"))!
-        .click();
-      await waitFor(
-        () =>
-          inspected.length === 1 &&
-          inspected[0]![1] === "history" &&
-          host.querySelector(".town-peek") === null,
-        "Next did not open the next agent's window",
-      );
-      inspected.length = 0;
-      release();
-      uploadGate = null;
-      await settle();
-      await settle();
-      // Another agent's card does not get it.
-      const entryFor = (key: string) =>
-        host.querySelector<HTMLElement>(
-          `.town-reception-entry[data-agent-key="${CSS.escape(key)}"]`,
-        );
-      const other = [
-        ...host.querySelectorAll<HTMLElement>(".town-reception-entry"),
-      ].find((candidate) => candidate.dataset.agentKey !== firstAgentKey)!;
-      hoverEntry(other);
-      await waitFor(
-        () =>
-          host.querySelector<HTMLElement>(".town-peek")?.dataset.agentKey ===
-          other.dataset.agentKey,
-        "another agent's card did not show",
-      );
-      check(
-        !host
-          .querySelector<HTMLInputElement>(".town-reply input:not([type])")
-          ?.value.includes("/uploads/"),
-        "an earlier agent's upload landed in the next agent's reply",
-      );
-      // It lands in that agent's reply line when its card shows again: the
-      // path is kept for the pane, not for the card that started the upload.
-      hoverEntry(entryFor(firstAgentKey)!);
-      await waitFor(
-        () =>
-          host.querySelector<HTMLElement>(".town-peek")?.dataset.agentKey ===
-          firstAgentKey,
-        "the first agent's card did not show again",
-      );
-      await settle();
-      const reopened =
-        host.querySelector<HTMLInputElement>(".town-reply input:not([type])")
-          ?.value ?? "";
-      check(
-        reopened.includes("/uploads/notes.txt"),
-        `an upload finished while its card was away was lost (${JSON.stringify(reopened)})`,
-      );
-      check(
-        host.querySelector(
-          '.town-peek .attachment-chip[data-status="done"]',
-        ) !== null,
-        "the card shown again should show the finished upload's chip",
-      );
-    }
+    // The card is a preview: no reply line and no attachments of its own.
+    // Open chat opens the agent's one window on Chat, where replies go.
+    check(
+      host.querySelector(".town-peek input, .town-peek textarea") === null &&
+        host.querySelector('.town-peek input[type="file"]') === null,
+      "the hover card should have no reply line or attachments",
+    );
+    inspected.length = 0;
+    [
+      ...host.querySelectorAll<HTMLButtonElement>(
+        '.town-peek [aria-label="Chat"] button',
+      ),
+    ]
+      .find((button) => button.textContent === "Open chat")!
+      .click();
+    await waitFor(
+      () =>
+        inspected.length === 1 &&
+        inspected[0]![1] === "history" &&
+        host.querySelector(".town-peek") === null,
+      "Open chat did not open the agent's window on Chat",
+    );
+    check(opened.length === 0, "Open chat must not open the full terminal");
+    // Next on the card opens the next waiting agent's window.
+    hoverEntry(entry);
+    await waitFor(
+      () => host.querySelector(".town-peek") !== null,
+      "the card did not show for Next",
+    );
+    inspected.length = 0;
+    [...host.querySelectorAll<HTMLButtonElement>(".town-peek-foot button")]
+      .find((button) => button.textContent?.startsWith("Next"))!
+      .click();
+    await waitFor(
+      () =>
+        inspected.length === 1 &&
+        inspected[0]![1] === "history" &&
+        host.querySelector(".town-peek") === null,
+      "Next did not open the next agent's window",
+    );
+    inspected.length = 0;
   }
 
   // A desk with more panes than seats lists every pane.

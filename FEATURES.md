@@ -35,8 +35,10 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   - Hovering an agent shows a small card as a preview: its latest message from
     Chat's conversation read model, rendered as Chat renders it (never terminal
     text; an unavailable conversation shows Chat's reason), a question when
-    recognized, supported answer buttons, a reply line and file attachments.
-    The card refreshes when the conversation changes, without polling.
+    recognized and supported answer buttons. It is read-only: **Open chat**
+    (or **Follow up** for a finished agent) opens the agent's window on Chat,
+    where replies and attachments go. The card refreshes when the conversation
+    changes, without polling.
   - Tapping an agent or its table brings the agent back: from reception or the
     lounge it walks to its desk and stays there until its status changes. A
     table stands for an agent that needs you (waiting, then finished) before
