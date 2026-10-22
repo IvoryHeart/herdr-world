@@ -30,8 +30,10 @@ view that you open on purpose.
   Terminal and back keeps it.
 - In Town's windows (any element marked `data-skin="town"`), takes the Town
   prototype's look: a dark mono screen, what you said as dim "›" lines, tools
-  as "●" lines, no bubbles, the time and copy shown on hover, and a one-line
-  composer with a gold Send.
+  as "●" lines, no bubbles, and a one-line composer with a gold Send. With a
+  pointer, a message's time and Copy appear when you point at it; on touch
+  they always show. The skin sets Chat's colour tokens, so it looks the same
+  under the light and dark app themes.
 - When the conversation is unavailable, Chat shows the reason and the action it
   names: the integration command to copy, the Codex session link, **Refresh**
   and **Open Terminal**. It offers no composer then.

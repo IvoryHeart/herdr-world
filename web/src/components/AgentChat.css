@@ -400,61 +400,51 @@
   overflow-wrap: anywhere;
 }
 
-/* Town's skin, after the Town prototype's docked panel: a terminal-dark
-   screen in a mono voice, what the user said as dim "›" lines, tools as "●"
-   lines, and a one-line composer with a gold Send. It applies inside any
-   element marked data-skin="town", such as the Town's Inspector window. The
-   fonts fall back to local ones until Town's are bundled. */
+/* Town's skin, after the Town prototype's docked panel. It redefines the
+   tokens Chat reads, so everything in Chat (notices, the unavailable panel,
+   Details, attachments) takes Town's colours in either app theme, then adds
+   the few structural changes of the prototype: a terminal-dark mono screen,
+   no bubbles, one "›" per message the user wrote, and a one-line composer.
+   It applies inside any element marked data-skin="town", such as the Town's
+   Inspector window, or with Chat's own skin prop. The fonts fall back to
+   local ones until Town's are bundled. */
 :where([data-skin="town"]) .agent-chat,
 .agent-chat[data-skin="town"] {
-  --chat-town-panel: var(--hud-panel, rgba(17, 21, 29, 0.92));
-  --chat-town-screen: #0d1117;
-  --chat-town-text: #c9d1c3;
-  --chat-town-dim: #8b949e;
-  --chat-town-edge: var(--hud-edge, #090c11);
-  --chat-town-hi: var(--hud-hi, rgba(255, 255, 255, 0.07));
-  --chat-town-btn: var(--hud-btn, #273141);
-  --chat-town-accent: var(--hud-accent, #ffd166);
-  --chat-town-mono: var(
-    --hud-font-mono,
-    "JetBrains Mono",
-    ui-monospace,
-    SFMono-Regular,
-    Menlo,
-    monospace
-  );
-  --chat-town-body: var(
-    --hud-font-body,
-    "Rubik",
-    system-ui,
-    -apple-system,
-    "Segoe UI",
-    sans-serif
-  );
-  color: var(--hud-text, #f1efe6);
-  font-family: var(--chat-town-body);
-  background: var(--chat-town-panel);
-}
-
-:where([data-skin="town"]) .agent-chat-toolbar {
-  border-bottom-color: var(--chat-town-hi);
-}
-
-:where([data-skin="town"]) .agent-chat-toolbar button,
-:where([data-skin="town"]) .agent-chat-unavailable button,
-:where([data-skin="town"]) .agent-chat-guessed button,
-:where([data-skin="town"]) .agent-chat-misdelivered button {
-  color: var(--hud-text, #f1efe6);
-  background: var(--chat-town-btn);
-  border: 2px solid var(--chat-town-edge);
-  border-radius: 8px;
-  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.35);
+  --bg: #0d1117;
+  --panel: #11151d;
+  --panel-2: #161c26;
+  --input-bg: #0d1117;
+  --text: #f1efe6;
+  --text-strong: #ffffff;
+  --muted: #a9b2a4;
+  --border: #090c11;
+  --border-soft: rgba(255, 255, 255, 0.09);
+  --accent: #e3aa3a;
+  --accent-soft: rgba(227, 170, 58, 0.18);
+  --danger-text: #ffb4a8;
+  --danger-soft: #2a1210;
+  --danger-border: #7a2c24;
+  --warning-text: #ffd79a;
+  --warning-soft: #1d1708;
+  --success-text: #b8f0c2;
+  --success-soft: #173a22;
+  /* Town's own: the conversation screen and its voices. */
+  --chat-screen: #0d1117;
+  --chat-screen-text: #c9d1c3;
+  --chat-said: #8b949e;
+  --chat-tool: #6fc3ff;
+  --chat-font-mono:
+    "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --chat-font-body: "Rubik", system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: var(--text);
+  font-family: var(--chat-font-body);
+  background: var(--panel);
 }
 
 :where([data-skin="town"]) .agent-chat-list {
-  color: var(--chat-town-text);
-  font: 400 12.5px / 1.6 var(--chat-town-mono);
-  background: var(--chat-town-screen);
+  color: var(--chat-screen-text);
+  font: 400 12.5px / 1.6 var(--chat-font-mono);
+  background: var(--chat-screen);
 }
 
 :where([data-skin="town"]) .agent-chat-content {
@@ -474,92 +464,85 @@
 }
 
 :where([data-skin="town"]) .agent-chat-bubble,
-:where([data-skin="town"]) .agent-chat-message.is-user .agent-chat-bubble {
+:where([data-skin="town"]) .agent-chat-message.is-user .agent-chat-bubble,
+:where([data-skin="town"]) .agent-chat-message.is-pending .agent-chat-bubble {
+  max-width: 100%;
+  min-width: 0;
   padding: 0;
+  color: inherit;
   font-size: inherit;
   line-height: inherit;
-  color: inherit;
   background: none;
   border: 0;
   border-radius: 0;
 }
 
+/* What the user wrote: dim, with one "›" before the message. */
 :where([data-skin="town"]) .agent-chat-message.is-user .agent-chat-bubble {
-  color: var(--chat-town-dim);
+  position: relative;
+  padding-left: 1.4ch;
+  color: var(--chat-said);
 }
 
 :where([data-skin="town"])
   .agent-chat-message.is-user
-  .agent-chat-bubble
-  > p::before {
-  content: "› ";
+  .agent-chat-bubble::before {
+  position: absolute;
+  top: 0;
+  left: 0;
+  content: "›";
 }
 
 :where([data-skin="town"]) .agent-chat-message.is-error .agent-chat-bubble {
-  color: #ff7a6b;
+  color: var(--danger-text);
 }
 
 :where([data-skin="town"]) .agent-chat-message.is-pending .agent-chat-bubble {
-  border: 0;
   opacity: 0.7;
 }
 
 :where([data-skin="town"]) .agent-chat-markdown {
+  max-width: 100%;
+  min-width: 0;
   font: inherit;
 }
 
-/* Time and copy stay out of the way until the message is pointed at. */
-:where([data-skin="town"]) .agent-chat-message .agent-chat-meta {
-  opacity: 0;
-  transition: opacity 0.15s ease;
-}
-
-:where([data-skin="town"])
-  .agent-chat-message:is(:hover, :focus-within)
-  .agent-chat-meta {
-  opacity: 1;
-}
-
 :where([data-skin="town"]) .agent-chat-markdown :is(h1, h2, h3, h4) {
-  color: var(--hud-text, #f1efe6);
-  font: 600 13px var(--chat-town-body);
-}
-
-:where([data-skin="town"]) .agent-chat-bubble,
-:where([data-skin="town"]) .agent-chat-markdown {
-  max-width: 100%;
-  min-width: 0;
-}
-
-/* Wide tables and code scroll inside the message, never the window. */
-:where([data-skin="town"]) .agent-chat-markdown :is(pre, table) {
-  display: block;
-  max-width: 100%;
-  overflow-x: auto;
+  color: var(--text);
+  font: 600 13px var(--chat-font-body);
 }
 
 :where([data-skin="town"]) .agent-chat-markdown pre {
-  background: #161b22;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--panel-2);
+  border: 1px solid var(--border-soft);
 }
 
 :where([data-skin="town"]) .agent-chat-markdown code {
-  color: #e6d8a8;
-  font-family: var(--chat-town-mono);
+  color: var(--warning-text);
+  font-family: var(--chat-font-mono);
 }
 
 :where([data-skin="town"]) .agent-chat-meta {
-  color: #6e7681;
-  font-family: var(--chat-town-body);
+  font-family: var(--chat-font-body);
 }
 
-/* A message Chat sent and has not seen yet keeps its note visible. */
-:where([data-skin="town"]) .agent-chat-message.is-pending .agent-chat-meta {
-  opacity: 1;
+/* With a pointer, time and copy wait until the message is pointed at; on
+   touch they always show, so Copy is never an invisible target. */
+@media (hover: hover) {
+  :where([data-skin="town"]) .agent-chat-message .agent-chat-meta {
+    opacity: 0;
+    transition: opacity 0.15s ease;
+  }
+
+  :where([data-skin="town"])
+    .agent-chat-message:is(:hover, :focus-within, .is-pending)
+    .agent-chat-meta {
+    opacity: 1;
+  }
 }
 
 :where([data-skin="town"]) .agent-chat-activity {
-  color: var(--chat-town-dim);
+  color: var(--chat-said);
   font: inherit;
   background: none;
   border: 0;
@@ -571,18 +554,33 @@
 
 :where([data-skin="town"]) .agent-chat-activity::before {
   content: "●";
-  color: #6fc3ff;
+  color: var(--chat-tool);
 }
 
-:where([data-skin="town"]) .agent-chat-divider {
-  color: #6e7681;
+/* Buttons are the prototype's raised keys. */
+:where([data-skin="town"])
+  .agent-chat
+  :is(
+    .agent-chat-toolbar button,
+    .agent-chat-unavailable button,
+    .agent-chat-guessed button,
+    .agent-chat-misdelivered button,
+    .agent-chat-composer button
+  ) {
+  color: var(--text);
+  background: var(--panel-2);
+  border: 2px solid var(--border);
+  border-radius: 9px;
+  box-shadow:
+    inset 0 -3px 0 rgba(0, 0, 0, 0.35),
+    inset 0 2px 0 rgba(255, 255, 255, 0.07);
 }
 
 /* The composer: one rounded line, attach and Send inside the row. */
 :where([data-skin="town"]) .agent-chat-composer {
   padding: 10px;
-  background: var(--chat-town-panel);
-  border-top: 1px solid var(--chat-town-hi);
+  background: var(--panel);
+  border-top: 1px solid var(--border-soft);
 }
 
 :where([data-skin="town"]) .agent-chat-composer-row {
@@ -593,37 +591,30 @@
   min-width: 0;
   height: 40px;
   min-height: 40px;
-  overflow-y: auto;
-  resize: none;
   max-height: 160px;
   padding: 9px 12px;
-  color: var(--hud-text, #f1efe6);
-  font: 400 14px / 1.4 var(--chat-town-body);
-  background: var(--chat-town-screen);
-  border: 2px solid var(--chat-town-edge);
+  overflow-y: auto;
+  color: var(--text);
+  font: 400 14px / 1.4 var(--chat-font-body);
+  background: var(--input-bg);
+  border: 2px solid var(--border);
   border-radius: 9px;
+  resize: none;
 }
 
 :where([data-skin="town"]) .agent-chat-composer textarea:focus-visible {
-  outline: 2px solid var(--chat-town-accent);
+  outline: 2px solid var(--accent);
   outline-offset: 0;
 }
 
 :where([data-skin="town"]) .agent-chat-composer button {
   min-width: 40px;
   min-height: 40px;
-  color: var(--hud-text, #f1efe6);
-  background: var(--chat-town-btn);
-  border: 2px solid var(--chat-town-edge);
-  border-radius: 9px;
-  box-shadow:
-    inset 0 -3px 0 rgba(0, 0, 0, 0.35),
-    inset 0 2px 0 rgba(255, 255, 255, 0.07);
 }
 
 :where([data-skin="town"])
   .agent-chat-composer
   button[type="submit"]:not(:disabled) {
   color: #1f1606;
-  background: #e3aa3a;
+  background: var(--accent);
 }

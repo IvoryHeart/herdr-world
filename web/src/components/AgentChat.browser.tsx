@@ -724,14 +724,29 @@ async function run() {
     );
     const screen = container.querySelector<HTMLElement>(".agent-chat-list")!;
     const said = container.querySelector(
-      ".agent-chat-message.is-user .agent-chat-bubble > p",
+      ".agent-chat-message.is-user .agent-chat-bubble",
     )!;
     check(
       /mono/i.test(getComputedStyle(screen).fontFamily) &&
         getComputedStyle(screen).backgroundColor === "rgb(13, 17, 23)" &&
-        getComputedStyle(said, "::before").content.includes("›"),
-      "Town's skin must give Chat the prototype's screen and › lines",
+        getComputedStyle(said, "::before").content.includes("›") &&
+        !getComputedStyle(
+          said.querySelector("p")!,
+          "::before",
+        ).content.includes("›"),
+      "Town's skin must give Chat the prototype's screen and one › per message",
     );
+    // The skin sets Chat's tokens, so the light app theme does not leak in.
+    document.documentElement.dataset.theme = "light";
+    await settle();
+    const chat = container.querySelector<HTMLElement>(".agent-chat")!;
+    check(
+      getComputedStyle(chat).color === "rgb(241, 239, 230)" &&
+        getComputedStyle(chat).getPropertyValue("--danger-soft").trim() ===
+          "#2a1210",
+      "Town's skin must keep its colours under the light app theme",
+    );
+    delete document.documentElement.dataset.theme;
     render("working", true, 40);
     await settle();
 
