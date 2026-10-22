@@ -33,9 +33,12 @@ Do not issue 30-second status loops or separate `ps`/`gh pr checks` probes while
 the blocking command is running. Do not add a Codex lifecycle hook for polling;
 it cannot intercept `write_stdin`.
 
-When delivering a PR, keep the Unreleased changelog entry and mention it in the
-PR description. The PR URL supplies the link; do not amend the branch solely to
-add its new number to the changelog or require a self-link in the description.
+When delivering a PR, keep its changelog fragment (`changes/<pr-number-or-slug>.md`,
+format in `changes/README.md`) and mention it in the PR description; for a change
+with nothing user-facing, put `Changelog: none — <specific reason>` in the
+description instead. Do not edit `CHANGELOG.md` directly. The PR URL supplies the
+link; do not amend the branch solely to rename the fragment after the PR number
+or require a self-link in the description.
 Prepare the PR body before opening one ready PR, then preserve independent
 review and CI. For a local-only handoff, finish after the requested artifacts
 and one explicit full check; a PR is not required to count the work as delivered.

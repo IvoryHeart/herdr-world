@@ -119,6 +119,9 @@ jobs:
             - name: Check knowledge-map impact
               if: github.event_name == 'pull_request'
               run: bun scripts/check-knowledge-map.ts "$GITHUB_EVENT_PATH"
+            - name: Check changelog fragments
+              if: github.event_name == 'pull_request'
+              run: bun scripts/changelog-fragments.ts pr "$GITHUB_EVENT_PATH"
             - name: Determine validation scope
               if: github.event_name == 'pull_request'
               id: scope
