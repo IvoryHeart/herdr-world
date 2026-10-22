@@ -55,6 +55,8 @@ export type Conversation = {
   session_binding: "reported" | "title" | "guessed" | null;
   session_fingerprint: string | null;
   session_label: string | null;
+  /** The harness's terminal title, such as the task it is on. */
+  terminal_title?: string | null;
   status: "ok" | "unavailable";
   unavailable: {
     reason: string;
@@ -90,8 +92,57 @@ type SendResult =
 
 const FOLLOW_THRESHOLD_PX = 48;
 
+/** Unsent drafts by pane, kept while World is open. */
+const chatDrafts = new Map<string, string>();
+
 const preview = (text: string) =>
   text.length > 80 ? `${text.slice(0, 79)}…` : text;
+
+/** The tool the agent is using: the last activity, if nothing was said since. */
+function currentTool(messages: readonly ConversationMessage[]) {
+  const last = messages[messages.length - 1];
+  const tools = last?.kind === "activity" ? (last.tools ?? []) : [];
+  return tools[tools.length - 1]?.name ?? null;
+}
+
+function elapsed(ms: number) {
+  const seconds = Math.floor(ms / 1000);
+  return seconds < 60
+    ? `${seconds}s`
+    : `${Math.floor(seconds / 60)}m ${String(seconds % 60).padStart(2, "0")}s`;
+}
+
+/**
+ * A slim line while the agent works: its terminal title (the task it shows),
+ * the tool it is using from the transcript, and how long it has worked since
+ * this view saw it start. Transcripts are written per message or tool call,
+ * so this is what moves between writes. Never terminal output.
+ */
+function WorkingLine({
+  title,
+  tool,
+  elapsedMs,
+}: {
+  title: string | null;
+  tool: string | null;
+  elapsedMs: number | null;
+}) {
+  // The title's leading spinner glyph is the harness's, not ours.
+  const task = title?.replace(/^[^\p{L}\p{N}]+/u, "").trim() || null;
+  return (
+    <p className="agent-chat-working" role="status" aria-live="polite">
+      <span className="agent-chat-working-mark" aria-hidden="true">
+        ✻
+      </span>{" "}
+      Working
+      {task ? <span> · {task}</span> : null}
+      {tool ? <span> · {tool}</span> : null}
+      {elapsedMs !== null ? (
+        <span className="agent-chat-working-time"> · {elapsed(elapsedMs)}</span>
+      ) : null}
+    </p>
+  );
+}
 
 const ChatMessage = memo(function ChatMessage({
   message,
@@ -174,19 +225,24 @@ export function AgentChat({
   wide = false,
   onOpenTerminal,
   onClose,
+  skin,
 }: {
   pane: Pane;
   active: boolean;
   wide?: boolean;
   onOpenTerminal?: () => void;
   onClose: () => void;
+  /**
+   * The window's theme. Town's look also applies under any element marked
+   * `data-skin="town"`, such as the Town's Inspector window.
+   */
+  skin?: "town";
 }) {
   const connectionClient = useConnectionClient();
   const [conversation, setConversation] = useState<Conversation | null>(null);
   // Set when the newest read failed; the last good conversation stays shown.
   const [stale, setStale] = useState("");
   const [loading, setLoading] = useState(false);
-  const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [notice, setNotice] = useState("");
   const [details, setDetails] = useState(false);
@@ -196,6 +252,21 @@ export function AgentChat({
   const shownRef = useRef<Conversation | null>(null);
   const filePicker = useRef<HTMLInputElement>(null);
   const uploadScope = `agent-chat\u0000${connectionClient.connectionId}\u0000${connectionClient.serverRuntimeGeneration}\u0000${pane.pane_id}`;
+  // The draft outlives this view, so switching to the Terminal and back
+  // keeps what was typed.
+  const [draft, setDraftState] = useState(
+    () => chatDrafts.get(uploadScope) ?? "",
+  );
+  const setDraft = useCallback(
+    (next: string | ((current: string) => string)) =>
+      setDraftState((current) => {
+        const value = typeof next === "function" ? next(current) : next;
+        if (value) chatDrafts.set(uploadScope, value);
+        else chatDrafts.delete(uploadScope);
+        return value;
+      }),
+    [uploadScope],
+  );
   const uploading = useAttachmentUploads(uploadScope).some(
     (upload) => upload.status === "uploading",
   );
@@ -324,9 +395,28 @@ export function AgentChat({
     [connectionClient, load, pane.pane_id],
   );
 
+  // Live progress between transcript writes: when this view saw the agent
+  // start working, and a display clock while it works. Nothing is polled;
+  // the status itself comes from Herdr's state changes.
+  const working =
+    (conversation?.agent_status ?? pane.agent_status) === "working";
+  const [workingSince, setWorkingSince] = useState<number | null>(null);
+  const wasWorking = useRef(working);
+  useEffect(() => {
+    if (working && !wasWorking.current) setWorkingSince(Date.now());
+    if (!working) setWorkingSince(null);
+    wasWorking.current = working;
+  }, [working]);
+  const [clock, setClock] = useState(() => Date.now());
+  useEffect(() => {
+    if (!working || workingSince === null) return;
+    const timer = window.setInterval(() => setClock(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [working, workingSince]);
+
   if (details) {
     return (
-      <div className="agent-chat is-details">
+      <div className="agent-chat is-details" data-skin={skin}>
         <div className="agent-chat-toolbar">
           <button type="button" onClick={() => setDetails(false)}>
             Back to chat
@@ -378,7 +468,7 @@ export function AgentChat({
   const canSend =
     conversation?.status === "ok" && !!conversation.session_fingerprint;
   return (
-    <div className="agent-chat">
+    <div className="agent-chat" data-skin={skin}>
       <div className="agent-chat-toolbar">
         <span className={`agent-chat-status is-${status.toLowerCase()}`}>
           {status}
@@ -543,6 +633,17 @@ export function AgentChat({
                 matched={matchedIds.has(message.id)}
               />
             ))}
+            {working ? (
+              <WorkingLine
+                title={conversation?.terminal_title ?? null}
+                tool={currentTool(conversation?.messages ?? [])}
+                elapsedMs={
+                  workingSince === null
+                    ? null
+                    : Math.max(0, clock - workingSince)
+                }
+              />
+            ) : null}
             {pending.map((delivery) => (
               <article
                 key={delivery.id}

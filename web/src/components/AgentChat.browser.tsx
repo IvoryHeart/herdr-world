@@ -676,6 +676,82 @@ async function run() {
       "A missing integration must offer to copy its command and refresh",
     );
 
+    // While the agent works, a slim line shows its task from the terminal
+    // title, the tool it is using from the transcript, and the time since
+    // Chat saw it start: progress between transcript writes, never terminal
+    // output.
+    reply = {
+      ...conversation(
+        [
+          message("u9", "user", "Run the tests"),
+          {
+            id: "t9",
+            role: "tool",
+            kind: "activity",
+            text: "Used Bash",
+            sent_at: "2026-10-22T09:00:02Z",
+            tools: [{ name: "Bash", calls: 1 }],
+            failed: 0,
+          },
+        ],
+        "working",
+      ),
+      terminal_title: "✳ Running tests",
+    };
+    render("idle");
+    push();
+    await settle();
+    render("working", true, 40);
+    await new Promise((resolve) => setTimeout(resolve, 1_200));
+    const working = container.querySelector(".agent-chat-working");
+    check(
+      working?.textContent?.includes("Running tests") === true &&
+        working.textContent.includes("Bash") &&
+        /· [1-9]\d*s/.test(working.textContent) &&
+        !working.textContent.includes("✳ Running"),
+      `A working agent must show its task, tool and time (${working?.textContent})`,
+    );
+
+    // A draft outlives the view, as when switching to the Terminal and back.
+    const box = container.querySelector<HTMLTextAreaElement>("textarea")!;
+    Object.getOwnPropertyDescriptor(
+      HTMLTextAreaElement.prototype,
+      "value",
+    )!.set!.call(box, "Keep this draft");
+    box.dispatchEvent(new Event("input", { bubbles: true }));
+    await settle();
+    root.render(<div />);
+    await settle();
+    // Town's skin applies inside a window marked data-skin="town".
+    root.render(
+      <div data-skin="town" style={{ display: "flex", height: "100%" }}>
+        <AgentChat
+          pane={pane("working", 40)}
+          active
+          onOpenTerminal={() => terminalOpened++}
+          onClose={() => {}}
+        />
+      </div>,
+    );
+    await settle();
+    check(
+      container.querySelector<HTMLTextAreaElement>("textarea")?.value ===
+        "Keep this draft",
+      "A draft must survive leaving Chat and coming back",
+    );
+    const screen = container.querySelector<HTMLElement>(".agent-chat-list")!;
+    const said = container.querySelector(
+      ".agent-chat-message.is-user .agent-chat-bubble > p",
+    )!;
+    check(
+      /mono/i.test(getComputedStyle(screen).fontFamily) &&
+        getComputedStyle(screen).backgroundColor === "rgb(13, 17, 23)" &&
+        getComputedStyle(said, "::before").content.includes("›"),
+      "Town's skin must give Chat the prototype's screen and › lines",
+    );
+    render("working", true, 40);
+    await settle();
+
     const unwatched = count("agent_conversation.unwatch");
     render("done", false);
     await settle();
