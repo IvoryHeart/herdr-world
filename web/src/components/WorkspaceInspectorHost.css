@@ -15,8 +15,9 @@
 
 .workspace-inspector-head {
   flex: 0 0 auto;
-  display: grid;
-  grid-template-columns: minmax(120px, 1fr) auto auto;
+  /* One bar: identity, the view selector and the actions share one row at
+     every width; the selector narrows instead of wrapping. */
+  display: flex;
   align-items: center;
   gap: 8px;
   min-height: 58px;
@@ -29,6 +30,19 @@
   min-width: 0;
   display: grid;
   gap: 1px;
+}
+
+.workspace-inspector-head > .workspace-inspector-identity {
+  flex: 1 1 0;
+  min-width: 72px;
+}
+
+.workspace-inspector-head > :not(.workspace-inspector-identity) {
+  flex: 0 0 auto;
+}
+
+.workspace-inspector-head > .workspace-inspector-tabs {
+  min-width: 0;
 }
 
 .workspace-inspector-agent-identity {
@@ -321,27 +335,7 @@
 
 /* Header controls must fit on the resize frame, before React's observer runs. */
 @container workspace-inspector (max-width: 639px) {
-  .workspace-inspector-head {
-    grid-template-columns: minmax(0, 1fr) auto;
-  }
-
-  .workspace-inspector-identity {
-    grid-column: 1;
-  }
-
-  .workspace-inspector-actions {
-    grid-column: 2;
-    grid-row: 1;
-  }
-
-  .workspace-inspector-tabs {
-    grid-column: 1 / -1;
-    grid-row: 2;
-    width: 100%;
-  }
-
   .workspace-inspector-tabs button {
-    flex: 1 1 0;
     min-width: 0;
     overflow: hidden;
     white-space: nowrap;
@@ -514,4 +508,45 @@
 /* The mobile shell already owns resource navigation and Inspector actions. */
 .workspace-inspector-head[hidden] {
   display: none;
+}
+
+/* The line under the name: where this is, and the way to its branch and PR
+   status. */
+.workspace-inspector-location {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  max-width: 100%;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 11px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.workspace-inspector-location:hover,
+.workspace-inspector-location[data-state="open"] {
+  color: var(--text-strong);
+}
+
+.workspace-inspector-location:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-radius: 3px;
+}
+
+.workspace-inspector-location-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-inspector-location svg {
+  flex: 0 0 auto;
 }

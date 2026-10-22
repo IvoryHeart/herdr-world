@@ -158,7 +158,12 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   none are assigned by default. Layout
   choices that cannot fit explain why.
 - Inspectors and arranged Spaces windows share snap, minimize, maximize/restore,
-  close and all eight resize handles. Opening or focusing a window preserves other
+  close and all eight resize handles. Each window has one bar: its name, a
+  location line, the view selector and **⋯**, maximize and close. **⋯** holds
+  minimize, the snap choices and float. Tapping the location line under the name
+  shows the branch, worktree and PR status, replacing the card above Changes. In
+  Town the window takes the Town look (pixel name, chunky buttons, **‹ Back**),
+  and on a phone its bar replaces the top bar. Opening or focusing a window preserves other
   placements; snapping into an occupied region overlaps without rearranging it.
   Tiled windows share resizable dividers. **Open windows** restores minimized windows.
   Window close dismisses presentation; native tab closure remains separate.

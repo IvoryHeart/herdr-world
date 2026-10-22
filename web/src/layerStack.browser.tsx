@@ -236,10 +236,11 @@ async function back() {
   history.back();
   await settle();
 }
-const menu = () => $('[role="menu"][aria-label="Window placement"]');
+const menu = () => $('[role="menu"][aria-label="Window actions"]');
 const swatches = () => $('.color-swatch-popover [role="group"]');
 const select = () => $(".themed-select-content");
-const menuTrigger = () => $('button[aria-label="Snap builder window"]');
+const menuTrigger = () =>
+  $('button[aria-label="More actions for builder window"]');
 
 async function run() {
   const deadline = performance.now() + 5_000;

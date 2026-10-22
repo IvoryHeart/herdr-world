@@ -2009,15 +2009,12 @@ async function run() {
   const selectSnap = async (label: string, target: string) => {
     document
       .querySelector<HTMLButtonElement>(
-        `[aria-label="${label} Inspector"] button[aria-label="Snap Inspector window"]`,
+        `[aria-label="${label} Inspector"] button[aria-label="More actions for Inspector window"]`,
       )!
       .click();
     await until(
-      () =>
-        document.querySelector(
-          '[aria-label="Snap Inspector window"] [role="menuitem"]',
-        ) || document.querySelector(".world-window-snap-menu"),
-      "snap menu opens",
+      () => document.querySelector(".world-window-snap-menu"),
+      "window menu opens",
     );
     [
       ...document.querySelectorAll<HTMLButtonElement>(
@@ -2028,6 +2025,35 @@ async function run() {
       .click();
     await settle();
   };
+  // One bar per window: identity, the view selector and the window's
+  // actions share a single row, with no repository row or PR card below.
+  const builderHead = document.querySelector<HTMLElement>(
+    '[aria-label="Builder Inspector"] .workspace-inspector-head',
+  )!;
+  const rowTop = (selector: string) =>
+    builderHead.querySelector(selector)?.getBoundingClientRect();
+  const headRows = [
+    rowTop(".workspace-inspector-identity"),
+    rowTop(".workspace-inspector-tabs"),
+    rowTop(".world-window-controls"),
+  ];
+  check(
+    headRows.every(
+      (rect) =>
+        rect &&
+        Math.abs(
+          rect.top +
+            rect.height / 2 -
+            (headRows[0]!.top + headRows[0]!.height / 2),
+        ) < 4,
+    ) &&
+      builderHead.getBoundingClientRect().height <= 64 &&
+      !builderHead.querySelector(".workspace-inspector-repository-action") &&
+      !document.querySelector(
+        '[aria-label="Builder Inspector"] .pull-request-card',
+      ),
+    `the Inspector's bar was not one row: ${JSON.stringify(headRows)}`,
+  );
   await selectSnap("Builder", "Left half");
   const focusedDock = document.querySelector<HTMLElement>(
     '[aria-label="Builder Inspector"]',

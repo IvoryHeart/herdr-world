@@ -68,6 +68,7 @@ import {
   useSystemBack,
 } from "../systemBack";
 import { closeTopLayer } from "../layerStack";
+import "./worldFonts.css";
 import { WorldMobileNav, worldViewLabel } from "./WorldMobileNav";
 import { WorldControlPlane } from "./WorldControlPlane";
 import { EMPTY_VISUAL_ACTION_EXTENSION } from "./worldControlPlaneContract";
@@ -338,6 +339,9 @@ export default function WorldFoundationApp() {
         <App
           operationalShortcutsEnabled={view === "spaces"}
           shellActionsEnabled
+          // On a phone an open agent window's own bar replaces the topbar:
+          // one bar, with Back, the views and the window's actions.
+          topbarHidden={Boolean(canReturnToView)}
           topbarPortal={topbarPortal}
           visualActionExtension={visualActionExtension}
           connectionControl={

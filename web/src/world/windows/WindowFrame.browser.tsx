@@ -215,7 +215,15 @@ async function run() {
     "cancel lost the maximize or snap state",
   );
   frame()
-    .querySelector<HTMLButtonElement>('[aria-label="Minimize A"]')!
+    .querySelector<HTMLButtonElement>('[aria-label="More actions for A"]')!
+    .click();
+  await settle();
+  [
+    ...document.querySelectorAll<HTMLButtonElement>(
+      '[role="menu"][aria-label="Window actions"] button',
+    ),
+  ]
+    .find((button) => button.textContent === "Minimize")!
     .click();
   await settle();
   check(!frame(), "minimized window remained visible");

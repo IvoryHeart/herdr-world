@@ -930,6 +930,7 @@ export default function App({
   onInspectorViewChange,
   onTerminalPopOut,
   inspectorContext = null,
+  topbarHidden = false,
 }: {
   operationalShortcutsEnabled?: boolean;
   shellActionsEnabled?: boolean;
@@ -960,6 +961,8 @@ export default function App({
   onInspectorViewChange?: (view: InspectorView) => void;
   onTerminalPopOut?: () => void;
   inspectorContext?: WorkspaceInspectorContext | null;
+  /** Slides the topbar away while the host's own window bar stands in. */
+  topbarHidden?: boolean;
 } = {}) {
   const operations = useOperationalStore();
   const creationSources = useCreationSources();
@@ -4164,7 +4167,9 @@ export default function App({
     </button>
   );
   const topbar = (
-    <header className={`topbar ${zenMode && !mobile ? "is-zen" : ""}`}>
+    <header
+      className={`topbar ${(zenMode && !mobile) || topbarHidden ? "is-zen" : ""}`}
+    >
       <div className="topbar-start">
         {!mobile ? (
           <div className="brand">

@@ -1,7 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { measuredFixedPositionScale } from "../../fixedPositionScale";
-import { Columns2, Maximize2, Minimize2, Minus, X } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Maximize2,
+  Minimize2,
+  MoreHorizontal,
+  X,
+} from "lucide-react";
 import {
   ColorSwatchButton,
   type ColorChoice,
@@ -10,6 +17,15 @@ import {
 import { useLayer } from "../../layerStack";
 import type { SnapTarget } from "./windowManager";
 import "./windows.css";
+
+/** Where a phone shows a window: the whole screen, a sheet or a card. */
+export type PhoneWindowPlacement =
+  | { kind: "full" }
+  | { kind: "sheet"; edge: "top" | "bottom"; fraction: number }
+  | {
+      kind: "float";
+      rect: { left: number; top: number; width: number; height: number };
+    };
 
 export type ManagedWindowControls = {
   maximized: boolean;
@@ -25,7 +41,34 @@ export type ManagedWindowControls = {
     current: ColorValue;
     onColor(id: string | null): void;
   } | null;
+  /** The phone placement, when the frame can move the window on a phone. */
+  phonePlacement?: PhoneWindowPlacement;
+  onPhonePlacement?(placement: PhoneWindowPlacement): void;
+  /** Close is shown as Back at the start of the bar, as Town's window does. */
+  back?: { label: string };
+  /** The next agent that needs you, as the bar's primary action. */
+  next?: { count: number; urgent: boolean; onNext(): void } | null;
 };
+
+/** Close presented as Back, for the leading edge of a window bar. */
+export function WindowBackButton({
+  controls,
+}: {
+  controls: ManagedWindowControls;
+}) {
+  if (!controls.back) return null;
+  return (
+    <button
+      type="button"
+      className="world-window-back"
+      aria-label={controls.back.label}
+      title={controls.back.label}
+      onClick={controls.onClose}
+    >
+      <ChevronLeft size={18} aria-hidden="true" />
+    </button>
+  );
+}
 const choices: { target: SnapTarget; label: string }[] = [
   { target: "left", label: "Left half" },
   { target: "right", label: "Right half" },
@@ -36,6 +79,67 @@ const choices: { target: SnapTarget; label: string }[] = [
   { target: "bottom-left", label: "Bottom left" },
   { target: "bottom-right", label: "Bottom right" },
 ];
+type MenuItem = { label: string; checked?: boolean; run(): void };
+
+function phonePlacementItems(controls: ManagedWindowControls): MenuItem[] {
+  const place = controls.onPhonePlacement;
+  if (!place) return [];
+  const current = controls.phonePlacement ?? { kind: "full" };
+  const edge = current.kind === "sheet" ? current.edge : "bottom";
+  const fraction = current.kind === "sheet" ? current.fraction : 0.5;
+  const sheetAt = (at: number) =>
+    current.kind === "sheet" && Math.abs(current.fraction - at) < 0.01;
+  return [
+    {
+      label: "Full screen",
+      checked: current.kind === "full",
+      run: () => place({ kind: "full" }),
+    },
+    {
+      label: "Top",
+      checked: current.kind === "sheet" && current.edge === "top",
+      run: () => place({ kind: "sheet", edge: "top", fraction }),
+    },
+    {
+      label: "Bottom",
+      checked: current.kind === "sheet" && current.edge === "bottom",
+      run: () => place({ kind: "sheet", edge: "bottom", fraction }),
+    },
+    {
+      label: "One third",
+      checked: sheetAt(1 / 3),
+      run: () => place({ kind: "sheet", edge, fraction: 1 / 3 }),
+    },
+    {
+      label: "Half",
+      checked: sheetAt(1 / 2),
+      run: () => place({ kind: "sheet", edge, fraction: 1 / 2 }),
+    },
+    {
+      label: "Floating",
+      checked: current.kind === "float",
+      run: () =>
+        place(
+          current.kind === "float"
+            ? current
+            : {
+                kind: "float",
+                rect: {
+                  left: 12,
+                  top: Math.round(window.innerHeight * 0.25),
+                  width: window.innerWidth - 24,
+                  height: Math.round(window.innerHeight * 0.5),
+                },
+              },
+        ),
+    },
+  ];
+}
+
+/**
+ * The window bar keeps maximise and close as buttons. The rarer actions
+ * (minimise, snap, float, a phone's position and the colour) share ⋯.
+ */
 export function WindowControls({
   controls,
   label = "window",
@@ -44,6 +148,18 @@ export function WindowControls({
   label?: string;
 }) {
   const [open, setOpen] = useState(false);
+  const items: MenuItem[] = [
+    { label: "Minimize", run: controls.onMinimize },
+    ...(controls.compact
+      ? phonePlacementItems(controls)
+      : [
+          ...choices.map(({ target, label }) => ({
+            label,
+            run: () => controls.onSnap(target),
+          })),
+          { label: "Float window", run: controls.onFloat },
+        ]),
+  ];
   const host = useRef<HTMLDivElement>(null);
   const menu = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
@@ -54,7 +170,7 @@ export function WindowControls({
   useEffect(() => {
     if (!open) return;
     menu.current
-      ?.querySelector<HTMLButtonElement>('[role="menuitem"]')
+      ?.querySelector<HTMLButtonElement>('[role^="menuitem"]')
       ?.focus();
   }, [open]);
   const scale = open ? measuredFixedPositionScale() : 1;
@@ -74,7 +190,7 @@ export function WindowControls({
             8,
             Math.min(
               anchor.bottom + 4,
-              window.innerHeight - (controls.color ? 250 : 210) * scale - 8,
+              window.innerHeight - (controls.color ? 290 : 250) * scale - 8,
             ),
           ) / scale,
       }
@@ -91,7 +207,7 @@ export function WindowControls({
           event.stopPropagation();
           const items = Array.from(
             menu.current?.querySelectorAll<HTMLButtonElement>(
-              '[role="menuitem"], .color-swatch-button',
+              '[role^="menuitem"], .color-swatch-button',
             ) ?? [],
           );
           const index = items.indexOf(
@@ -104,26 +220,33 @@ export function WindowControls({
         }
       }}
     >
-      {!controls.compact && (
+      {controls.next ? (
         <button
-          ref={trigger}
           type="button"
-          aria-label={`Snap ${label}`}
-          title="Snap window"
-          aria-haspopup="menu"
-          aria-expanded={open}
-          onClick={() => setOpen((value) => !value)}
+          className={`world-window-next ${controls.next.urgent ? "is-urgent" : ""}`}
+          aria-label={`Next agent that needs you (${controls.next.count})`}
+          title="Next agent that needs you"
+          onClick={controls.next.onNext}
         >
-          <Columns2 size={15} />
+          <span className="world-window-next-label">Next</span>
+          {controls.next.count > 0 ? (
+            <span className="world-window-next-count">
+              {controls.next.count}
+            </span>
+          ) : null}
+          <ChevronRight size={15} aria-hidden="true" />
         </button>
-      )}
+      ) : null}
       <button
+        ref={trigger}
         type="button"
-        aria-label={`Minimize ${label}`}
-        title="Minimize window"
-        onClick={controls.onMinimize}
+        aria-label={`More actions for ${label}`}
+        title="More window actions"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen((value) => !value)}
       >
-        <Minus size={15} />
+        <MoreHorizontal size={16} />
       </button>
       {!controls.compact && (
         <button
@@ -139,14 +262,16 @@ export function WindowControls({
           )}
         </button>
       )}
-      <button
-        type="button"
-        aria-label={`Close ${label}`}
-        title="Close window"
-        onClick={controls.onClose}
-      >
-        <X size={16} />
-      </button>
+      {controls.back ? null : (
+        <button
+          type="button"
+          aria-label={`Close ${label}`}
+          title="Close window"
+          onClick={controls.onClose}
+        >
+          <X size={16} />
+        </button>
+      )}
       {open &&
         createPortal(
           <div
@@ -154,31 +279,22 @@ export function WindowControls({
             style={position}
             className="world-window-snap-menu"
             role="menu"
-            aria-label="Window placement"
+            aria-label="Window actions"
           >
-            {choices.map(({ target, label }) => (
+            {items.map((item) => (
               <button
-                key={target}
+                key={item.label}
                 type="button"
-                role="menuitem"
+                role={item.checked === undefined ? "menuitem" : "menuitemradio"}
+                aria-checked={item.checked}
                 onClick={() => {
-                  controls.onSnap(target);
+                  item.run();
                   setOpen(false);
                 }}
               >
-                {label}
+                {item.label}
               </button>
             ))}
-            <button
-              type="button"
-              role="menuitem"
-              onClick={() => {
-                controls.onFloat();
-                setOpen(false);
-              }}
-            >
-              Float window
-            </button>
             {controls.color ? (
               <ColorSwatchButton
                 className="world-window-color"

@@ -307,7 +307,11 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
                   zIndex={zIndex}
                   active={windowActive}
                   compact={compactArrangement}
-                  className="world-floating-terminal"
+                  // Town draws its one window in the Town prototype's look;
+                  // Board and Desk keep the calm shell look.
+                  className={`world-floating-terminal ${
+                    view === "town" ? "is-town-skin" : ""
+                  }`}
                   onTerminalActivate={(paneId) => {
                     const snapshot = connectionSnapshot(
                       store.get(),
@@ -490,7 +494,8 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
                   id: worldInspectorWindowId(conversation),
                 });
               },
-              color: inspectorColor(conversation),
+              // The colour is chosen from the swatch beside the name.
+              back: view === "town" ? { label: "Back to Town" } : undefined,
             }}
             terminalColor={inspectorColor(conversation)}
             onResourceFocus={() => {

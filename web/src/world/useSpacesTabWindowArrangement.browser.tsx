@@ -125,7 +125,17 @@ async function run() {
   );
   windows()
     .find((element) => element.dataset.tabId === "one")!
-    .querySelector<HTMLButtonElement>('[aria-label="Minimize First window"]')
+    .querySelector<HTMLButtonElement>(
+      '[aria-label="More actions for First window"]',
+    )
+    ?.click();
+  await settle();
+  [
+    ...document.querySelectorAll<HTMLButtonElement>(
+      '[role="menu"][aria-label="Window actions"] button',
+    ),
+  ]
+    .find((button) => button.textContent === "Minimize")
     ?.click();
   await settle();
   if (

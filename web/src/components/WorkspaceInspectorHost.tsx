@@ -4,15 +4,16 @@ import { subscribeLocalStorage } from "../browserStorage";
 import { useLayoutPreferences } from "../layoutPreferences";
 import { connectionClientScopeKey } from "../useConnectionClient";
 import {
+  WindowBackButton,
   WindowControls,
   type ManagedWindowControls,
 } from "../world/windows/WindowControls";
 import {
+  ChevronDown,
   FileDiff,
   FolderTree,
   GitFork,
   GitGraph,
-  GitPullRequest,
   MessagesSquare,
   Maximize2,
   Minimize2,
@@ -35,6 +36,7 @@ import {
   useState,
   type CSSProperties,
   type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
 } from "react";
 import type { ConnectionClient } from "../api";
 import { worldLocalStorage } from "../browserStorage";
@@ -482,6 +484,47 @@ export function WorkspaceInspectorHost({
     return () => observer.disconnect();
   }, []);
 
+  // The line under the name says where this is; it opens the repository's
+  // branch and PR status, so the bar needs no separate button or card.
+  const locationLine = (content: ReactNode, description: string) =>
+    visible && state.open && workspace ? (
+      <Popover
+        key={connectionClientScopeKey(
+          connectionClient,
+          contentResourceKey,
+          workspace.workspace_id,
+          workspace.worktree?.checkout_path,
+          workspace.cwd,
+          workspace.worktree?.git_status?.branch,
+        )}
+      >
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            className="workspace-inspector-path workspace-inspector-location"
+            aria-label={`${description}. Repository status and source`}
+            title="Repository status and source"
+          >
+            <span className="workspace-inspector-location-text">{content}</span>
+            <ChevronDown size={12} aria-hidden="true" />
+          </button>
+        </PopoverTrigger>
+        <PopoverContent
+          className="workspace-inspector-repository-popover"
+          align="start"
+        >
+          <PullRequestCard
+            client={connectionClient}
+            workspaceId={workspace.workspace_id}
+            branch={workspace.worktree?.git_status?.branch}
+          />
+        </PopoverContent>
+      </Popover>
+    ) : (
+      <span className="workspace-inspector-path" title={description}>
+        {content}
+      </span>
+    );
   return (
     <aside
       ref={hostRef}
@@ -492,7 +535,10 @@ export function WorkspaceInspectorHost({
       data-view={state.view}
     >
       <header
-        hidden={mobile && state.view === "terminal"}
+        // A managed window keeps its bar on a phone, Terminal included: it
+        // holds the view selector. The shell's own Inspector uses the
+        // phone's terminal bar instead.
+        hidden={mobile && state.view === "terminal" && !windowControls}
         className={`workspace-inspector-head ${
           controlMode === "floating"
             ? "is-window-drag-handle"
@@ -516,6 +562,7 @@ export function WorkspaceInspectorHost({
               : undefined
         }
       >
+        {windowControls ? <WindowBackButton controls={windowControls} /> : null}
         {terminalColor ? (
           <ColorSwatchButton
             className="workspace-inspector-swatch"
@@ -542,19 +589,21 @@ export function WorkspaceInspectorHost({
                 <FolderTree size={16} />
               )}
             </span>
-            <span className="workspace-inspector-repo">
-              {agentContext.kind} · {agentContext.stateLabel}
-            </span>
             <span className="workspace-inspector-checkout">
               {agentContext.label}
             </span>
-            <span
-              className="workspace-inspector-path"
-              title={agentContext.taskSummary ?? agentContext.locationLabel}
-            >
-              {agentContext.locationLabel}
-              {agentContext.taskSummary ? ` · ${agentContext.taskSummary}` : ""}
-            </span>
+            {locationLine(
+              <>
+                <span className="workspace-inspector-state">
+                  {agentContext.stateLabel}
+                </span>
+                {` · ${agentContext.locationLabel}`}
+                {agentContext.taskSummary
+                  ? ` · ${agentContext.taskSummary}`
+                  : ""}
+              </>,
+              `${agentContext.kind}, ${agentContext.stateLabel}, ${agentContext.locationLabel}`,
+            )}
           </div>
         ) : (
           <div className="workspace-inspector-identity">
@@ -574,14 +623,14 @@ export function WorkspaceInspectorHost({
                 </span>
               ) : null}
             </span>
-            {workspace?.worktree?.checkout_path || workspace?.cwd ? (
-              <code
-                className="workspace-inspector-path"
-                title={workspace.worktree?.checkout_path ?? workspace.cwd}
-              >
-                {workspace.worktree?.checkout_path ?? workspace.cwd}
-              </code>
-            ) : null}
+            {workspace?.worktree?.checkout_path || workspace?.cwd
+              ? locationLine(
+                  <code>
+                    {workspace.worktree?.checkout_path ?? workspace.cwd}
+                  </code>,
+                  workspace.worktree?.checkout_path ?? workspace.cwd ?? "",
+                )
+              : null}
           </div>
         )}
         {/* One selector in the window's top bar, Chat first: Chat,
@@ -722,39 +771,6 @@ export function WorkspaceInspectorHost({
             ))}
           </PopoverContent>
         </Popover>
-        {visible && state.open && workspace ? (
-          <Popover
-            key={connectionClientScopeKey(
-              connectionClient,
-              contentResourceKey,
-              workspace.workspace_id,
-              workspace.worktree?.checkout_path,
-              workspace.cwd,
-              workspace.worktree?.git_status?.branch,
-            )}
-          >
-            <PopoverTrigger asChild>
-              <button
-                type="button"
-                className="workspace-inspector-repository-action"
-                aria-label="Repository status and source"
-                title="Repository status and source"
-              >
-                <GitPullRequest size={15} />
-              </button>
-            </PopoverTrigger>
-            <PopoverContent
-              className="workspace-inspector-repository-popover"
-              align="end"
-            >
-              <PullRequestCard
-                client={connectionClient}
-                workspaceId={workspace.workspace_id}
-                branch={workspace.worktree?.git_status?.branch}
-              />
-            </PopoverContent>
-          </Popover>
-        ) : null}
         {windowControls ? (
           <WindowControls controls={windowControls} label="Inspector window" />
         ) : (
@@ -886,25 +902,8 @@ export function WorkspaceInspectorHost({
         )}
       </header>
 
-      {visible &&
-      state.open &&
-      workspace &&
-      (state.view === "changes" || state.view === "commits") ? (
-        <PullRequestCard
-          key={connectionClientScopeKey(
-            connectionClient,
-            connectionClient.serverRuntimeGeneration,
-            contentResourceKey,
-            workspace.workspace_id,
-            workspace.worktree?.checkout_path,
-            workspace.cwd,
-            workspace.worktree?.git_status?.branch,
-          )}
-          client={connectionClient}
-          workspaceId={workspace.workspace_id}
-          branch={workspace.worktree?.git_status?.branch}
-        />
-      ) : null}
+      {/* PR status lives in the repository popover in the bar, so Changes
+          and Commits start with their own content. */}
 
       {!workspace ? (
         <div className="workspace-inspector-unavailable">
