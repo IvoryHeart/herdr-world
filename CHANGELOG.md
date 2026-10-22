@@ -11,12 +11,6 @@ prepared.
 
 ### Added
 
-- Chat shows live progress while an agent works (its task from the terminal
-  title, the tool it is using and the elapsed time) with a Stop button that
-  presses Esc for Claude Code, Codex and Pi, offers a waiting agent's
-  numbered answers above the composer, keeps drafts when you switch views, and
-  takes the Town prototype's look inside Town's windows.
-
 - Add a Chat tab to the Inspector, replacing History. Chat shows an agent's
   conversation from its transcript, never the terminal, and replies with
   Herdr's agent prompt only to a session Herdr ties to the pane. The service
@@ -80,9 +74,6 @@ prepared.
   with verified release checksums; terminal protocol remains 22.
 
 ### Fixed
-
-- Chat no longer grows wider than its window when a message has a wide table
-  or code block, which clipped the text and hid Send on phones.
 
 - Close menus, dropdowns, pickers and the phone's workspace list top first.
   Tapping the terminal now closes a dropdown on phones; Escape closes a menu
