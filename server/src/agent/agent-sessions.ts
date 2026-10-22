@@ -50,6 +50,8 @@ export function createAgentSessionHandlers(args: {
     // A new or removed Codex transcript can change which thread a title
     // names; recheck every watched pane.
     onCodexSessionsChanged: () => watcher?.herdrEvent(),
+    // A sent message's check ended; browsers showing the pane reread.
+    onDeliveriesChanged: () => watcher?.herdrEvent(),
   });
   watcher = createConversationWatcher({
     identity: (paneId) => conversation.identity({ pane_id: paneId }),
