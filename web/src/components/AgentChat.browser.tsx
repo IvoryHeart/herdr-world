@@ -137,6 +137,7 @@ async function run() {
     call: async (method: string, params: Record<string, unknown> = {}) => {
       calls.push({ method, params });
       if (method === "agent_conversation.send") return sendResult;
+      if (method === "pane.send_input") return {};
       if (method === "agent_conversation.get") return reply;
       if (
         method === "agent_conversation.watch" ||
@@ -675,6 +676,69 @@ async function run() {
       buttons.includes("Copy command") && buttons.includes("Refresh"),
       "A missing integration must offer to copy its command and refresh",
     );
+
+    // The Now bar: Herdr's status, the task from the terminal title and the
+    // time since the status changed; the step running now has its own timer.
+    reply = {
+      ...conversation([message("u8", "user", "Run the tests")], "working"),
+      terminal_title: "✳ Running tests",
+      running_tool: {
+        id: "toolu_8",
+        name: "Bash",
+        summary: "bun test server/src/link",
+        started_at: new Date(Date.now() - 3_000).toISOString(),
+      },
+    };
+    render("idle", true, 60);
+    push();
+    await settle();
+    render("working", true, 61);
+    await new Promise((resolve) => setTimeout(resolve, 1_200));
+    const now = container.querySelector(".agent-chat-now");
+    check(
+      now?.querySelector(".agent-chat-status")?.textContent === "Working" &&
+        now.querySelector(".agent-chat-now-title")?.textContent ===
+          "Running tests" &&
+        /^[1-9]\d*s$/.test(
+          now.querySelector(".agent-chat-now-time")?.textContent ?? "",
+        ),
+      `The Now bar must show the status, task and time (${now?.textContent})`,
+    );
+    const step = container.querySelector(".agent-chat-running");
+    check(
+      step?.textContent?.includes("Bash") === true &&
+        step.textContent.includes("bun test server/src/link") &&
+        /[3-9]s$/.test(step.textContent) &&
+        step.getAttribute("data-call-id") === "toolu_8",
+      `The running step must name its tool, command and time (${step?.textContent})`,
+    );
+    // Stop presses Esc in the pane; so does Esc twice, never once.
+    const escapes = () =>
+      calls.filter(
+        (call) =>
+          call.method === "pane.send_input" &&
+          JSON.stringify(call.params.keys) === '["escape"]',
+      ).length;
+    container.querySelector<HTMLButtonElement>(".agent-chat-stop")!.click();
+    await settle();
+    check(escapes() === 1, "Stop must press Esc in the agent's pane");
+    const list = container.querySelector<HTMLElement>(".agent-chat-list")!;
+    list.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+    );
+    await settle();
+    check(
+      escapes() === 1 &&
+        (
+          container.querySelector(".agent-chat-now-note")?.textContent ?? ""
+        ).includes("Press Esc again"),
+      "One Esc must only ask for a second",
+    );
+    list.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+    );
+    await settle();
+    check(escapes() === 2, "Esc twice must press Esc in the agent's pane");
 
     const unwatched = count("agent_conversation.unwatch");
     render("done", false);

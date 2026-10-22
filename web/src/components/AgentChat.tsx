@@ -55,6 +55,15 @@ export type Conversation = {
   session_binding: "reported" | "title" | "guessed" | null;
   session_fingerprint: string | null;
   session_label: string | null;
+  /** The harness's terminal title, such as the task it is on. */
+  terminal_title?: string | null;
+  /** The tool call started and not yet finished, from the transcript. */
+  running_tool?: {
+    id: string;
+    name: string;
+    summary: string | null;
+    started_at: string;
+  } | null;
   status: "ok" | "unavailable";
   unavailable: {
     reason: string;
@@ -92,6 +101,29 @@ const FOLLOW_THRESHOLD_PX = 48;
 
 const preview = (text: string) =>
   text.length > 80 ? `${text.slice(0, 79)}…` : text;
+
+/** Harnesses where Esc interrupts the current turn without quitting. */
+const STOPS_WITH_ESCAPE = new Set(["claude", "codex", "pi"]);
+/** Two presses of Esc this close together stop the agent. */
+const DOUBLE_ESCAPE_MS = 700;
+
+function elapsed(ms: number) {
+  const seconds = Math.max(0, Math.floor(ms / 1000));
+  return seconds < 60
+    ? `${seconds}s`
+    : `${Math.floor(seconds / 60)}m ${String(seconds % 60).padStart(2, "0")}s`;
+}
+
+/** The task a harness names in its title, without its spinner glyph. */
+const titleTask = (title: string | null | undefined) =>
+  title?.replace(/^[^\p{L}\p{N}]+/u, "").trim() || null;
+
+const STATUS_WORDS: Record<string, string> = {
+  working: "Working",
+  blocked: "Needs you",
+  done: "Done",
+  idle: "Idle",
+};
 
 const ChatMessage = memo(function ChatMessage({
   message,
@@ -324,6 +356,70 @@ export function AgentChat({
     [connectionClient, load, pane.pane_id],
   );
 
+  // The Now bar: Herdr's status (newer than the last read), the task in the
+  // terminal title, and time since this view saw the status change. A
+  // display clock ticks only while something is running; nothing is polled.
+  const liveStatus = pane.agent_status || conversation?.agent_status || "";
+  const [statusSince, setStatusSince] = useState<number | null>(null);
+  const seenStatus = useRef(liveStatus);
+  useEffect(() => {
+    if (seenStatus.current === liveStatus) return;
+    seenStatus.current = liveStatus;
+    setStatusSince(Date.now());
+  }, [liveStatus]);
+  const running = conversation?.running_tool ?? null;
+  const ticking = liveStatus === "working" || running !== null;
+  const [clock, setClock] = useState(() => Date.now());
+  useEffect(() => {
+    if (!ticking) return;
+    const timer = window.setInterval(() => setClock(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [ticking]);
+  // Stop presses Esc in the agent's pane, only when the user asks: the Stop
+  // button, or Esc twice while Chat has focus.
+  const agentName = conversation?.agent ?? pane.agent ?? "";
+  const canStop = liveStatus === "working" && STOPS_WITH_ESCAPE.has(agentName);
+  const [stopNote, setStopNote] = useState("");
+  const stop = useCallback(async () => {
+    try {
+      await connectionClient.call("pane.send_input", {
+        pane_id: pane.pane_id,
+        text: "",
+        keys: ["escape"],
+      });
+      setStopNote(`Pressed Esc in ${agentName || "the agent"}'s terminal.`);
+    } catch (reason) {
+      setStopNote(reason instanceof Error ? reason.message : String(reason));
+    }
+  }, [agentName, connectionClient, pane.pane_id]);
+  const firstEscape = useRef(0);
+  useEffect(() => {
+    if (!canStop) return;
+    const keydown = (event: KeyboardEvent) => {
+      if (
+        event.key !== "Escape" ||
+        event.isComposing ||
+        !(event.target instanceof HTMLElement) ||
+        !event.target.closest(".agent-chat")
+      )
+        return;
+      const now = Date.now();
+      if (now - firstEscape.current < DOUBLE_ESCAPE_MS) {
+        firstEscape.current = 0;
+        void stop();
+      } else {
+        firstEscape.current = now;
+        setStopNote(`Press Esc again to stop ${agentName || "the agent"}.`);
+      }
+    };
+    window.addEventListener("keydown", keydown);
+    return () => window.removeEventListener("keydown", keydown);
+  }, [agentName, canStop, stop]);
+  // A new turn clears the last stop note.
+  useEffect(() => {
+    if (liveStatus !== "working") setStopNote("");
+  }, [liveStatus]);
+
   if (details) {
     return (
       <div className="agent-chat is-details">
@@ -379,11 +475,39 @@ export function AgentChat({
     conversation?.status === "ok" && !!conversation.session_fingerprint;
   return (
     <div className="agent-chat">
-      <div className="agent-chat-toolbar">
-        <span className={`agent-chat-status is-${status.toLowerCase()}`}>
-          {status}
+      <div className="agent-chat-toolbar agent-chat-now" aria-live="polite">
+        <span className={`agent-chat-status is-${liveStatus.toLowerCase()}`}>
+          {liveStatus === "working" ? (
+            <span className="agent-chat-spinner" aria-hidden="true" />
+          ) : null}
+          {STATUS_WORDS[liveStatus] ?? status}
         </span>
-        <span className="agent-chat-toolbar-spacer" />
+        <span
+          className="agent-chat-now-title"
+          title={conversation?.terminal_title ?? ""}
+        >
+          {titleTask(conversation?.terminal_title)}
+        </span>
+        {stopNote ? (
+          <span className="agent-chat-now-note" role="status">
+            {stopNote}
+          </span>
+        ) : null}
+        {statusSince !== null && ticking ? (
+          <span className="agent-chat-now-time">
+            {elapsed(clock - statusSince)}
+          </span>
+        ) : null}
+        {canStop ? (
+          <button
+            type="button"
+            className="agent-chat-stop"
+            title="Press Esc in the agent's terminal to interrupt this turn (or press Esc twice)"
+            onClick={() => void stop()}
+          >
+            ■ Stop <kbd>Esc</kbd>
+          </button>
+        ) : null}
         <button
           type="button"
           onClick={load}
@@ -543,6 +667,25 @@ export function AgentChat({
                 matched={matchedIds.has(message.id)}
               />
             ))}
+            {running ? (
+              <div
+                className="agent-chat-running"
+                role="status"
+                data-call-id={running.id}
+              >
+                <span className="agent-chat-spinner" aria-hidden="true" />
+                <span className="agent-chat-running-label">
+                  <b>{running.name}</b>
+                  {running.summary ? <code>{running.summary}</code> : null}
+                </span>
+                {Number.isFinite(Date.parse(running.started_at)) &&
+                clock >= Date.parse(running.started_at) ? (
+                  <span className="agent-chat-now-time">
+                    {elapsed(clock - Date.parse(running.started_at))}
+                  </span>
+                ) : null}
+              </div>
+            ) : null}
             {pending.map((delivery) => (
               <article
                 key={delivery.id}
