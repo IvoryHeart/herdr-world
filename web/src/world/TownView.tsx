@@ -24,6 +24,7 @@ import {
   uploadTerminalFile,
   uploadTerminalImage,
 } from "../terminalImageUpload";
+import { startAttachmentUploads } from "../attachmentUploads";
 import { WorldSearchResults } from "./WorldSearchResults";
 import { DEVTOOLS, NO_TRACE } from "./devtools/flag";
 import { openTrace, rememberTrace, TRACE_TOGGLE_EVENT } from "./devtools/trace";
@@ -50,8 +51,9 @@ import {
   townLeaf,
   townOwner,
   townPaneIdentity,
-  useTownHistory,
+  townQuestion,
   townScreenLines,
+  useTownConversation,
   useTownScreen,
 } from "./town/townChat";
 import { requestTerminalComposer } from "./terminalComposerRequest";
@@ -507,7 +509,12 @@ export default function TownView({
       return next;
     });
   };
-  const inspectOfficeTerminal = async (key: string) => {
+  /**
+   * Open the terminal for a pane, agent or desk. Opening a finished agent's
+   * terminal marks its work reviewed, unless `markSeen` is false: a Town tap
+   * opens without reviewing, whichever view Town opens.
+   */
+  const inspectOfficeTerminal = async (key: string, markSeen = true) => {
     const device = office.paneRoster.find(
       ({ device }) => device.key === key,
     )?.device;
@@ -518,7 +525,8 @@ export default function TownView({
     const agent = office.roster.find(({ agent }) => agent.key === key)?.agent;
     if (agent) {
       await onOpenTerminal(agent.nodeId);
-      if (agent.semanticStatus === "done") markCompletionSeen(agent);
+      if (markSeen && agent.semanticStatus === "done")
+        markCompletionSeen(agent);
       return;
     }
     const desk = office.deskRoster.find(({ desk }) => desk.key === key)?.desk;
@@ -531,8 +539,8 @@ export default function TownView({
     const nodeId = occupant?.nodeId ?? desk.terminalSelectionKeys[0];
     if (nodeId) await onOpenTerminal(nodeId);
   };
-  const openOfficeTerminal = (key: string) => {
-    void inspectOfficeTerminal(key).catch(() => undefined);
+  const openOfficeTerminal = (key: string, markSeen = true) => {
+    void inspectOfficeTerminal(key, markSeen).catch(() => undefined);
   };
 
   /* ---------- Town attention, peek, replies and toasts ---------- */
@@ -551,6 +559,31 @@ export default function TownView({
     () => lazyIndex(office.roster, (entry) => entry.agent.key),
     [office.roster],
   );
+  // An agent the user opens walks back to its desk and stays there until its
+  // status changes; then Town places it by status again. Opening it does not
+  // mark its work as seen: Mark reviewed still does that.
+  const [summoned, setSummoned] = useState<ReadonlyMap<string, string>>(
+    () => new Map(),
+  );
+  useEffect(() => {
+    setSummoned((current) => {
+      let next: Map<string, string> | null = null;
+      for (const [key, status] of current)
+        if (agentByKey.get(key)?.agent.semanticStatus !== status)
+          (next ??= new Map(current)).delete(key);
+      return next ?? current;
+    });
+  }, [agentByKey]);
+  const summonedKeys = useMemo(() => new Set(summoned.keys()), [summoned]);
+  const summon = (key: string) => {
+    const status = agentByKey.get(key)?.agent.semanticStatus;
+    if (status)
+      setSummoned((current) =>
+        current.get(key) === status
+          ? current
+          : new Map(current).set(key, status),
+      );
+  };
   const calls = useMemo((): TownCall[] => {
     const since = blockedSince.current;
     const live = new Set<string>();
@@ -939,6 +972,7 @@ export default function TownView({
           .occupantAgentKey);
     if (mobile && agentKey && agentByKey.has(agentKey)) {
       window.clearTimeout(peekTimer.current);
+      summon(agentKey);
       setPeek((current) => ({
         key: agentKey,
         anchor: sheetMode()
@@ -999,22 +1033,27 @@ export default function TownView({
         .sort((a, b) => a.device.order - b.device.order)
     : [];
   const peekLeaf = townLeaf(world, peekAgent?.nodeId);
+  // The screen is read only for a waiting agent's question and answers; the
+  // peek's message comes from Chat's conversation read model.
+  const peekBlocked = peekAgent?.semanticStatus === "blocked";
   const peekScreen = useTownScreen(
     peekLeaf,
-    Boolean(peekAgent),
+    Boolean(peekAgent) && peekBlocked,
     peek?.chat ? 1_200 : 2_000,
   );
-  const peekHistory = useTownHistory(
-    peekLeaf,
-    Boolean(peekAgent),
-    peek?.chat ? 2_000 : 4_000,
-  );
-  const peekLines = townScreenLines(peekScreen);
+  const peekConversation = useTownConversation(peekLeaf, Boolean(peekAgent));
+  const peekCanReply =
+    Boolean(peekLeaf) && !!peekAgent?.canOpenInSpaces && !peekAgent.stale;
   // Answers come only from the question at the bottom of a waiting screen.
-  const peekChoices =
-    peekAgent?.semanticStatus === "blocked"
-      ? townChoices(townScreenLines(peekScreen, 12))
-      : [];
+  const peekChoices = peekBlocked
+    ? townChoices(townScreenLines(peekScreen, 12))
+    : [];
+  const peekQuestion = peekBlocked
+    ? townQuestion(
+        townScreenLines(peekScreen),
+        peekChoices.length > 0 && peekCanReply,
+      ).question
+    : [];
   const reply = async (
     leaf: ReturnType<typeof townLeaf>,
     label: string,
@@ -1035,72 +1074,114 @@ export default function TownView({
     }
   };
   /**
-   * Upload files for a pane as World's composer does. On the phone layout the
-   * paths go into that composer's shared draft, which opens in the peek.
+   * Where a pane's attachments are kept. On the phone layout they belong to
+   * the pane's composer draft, which opens in the peek, so the composer shows
+   * their chips. On desktop they belong to the peek's own reply line: the
+   * hidden terminal composer must not take their paths.
    */
-  const attach = async (
+  const uploadScopeOf = (leaf: NonNullable<ReturnType<typeof townLeaf>>) => {
+    const draftKey = terminalComposerDraftKey(
+      leaf.connectionId,
+      leaf.generation,
+      leaf.pane.pane_id,
+    );
+    return isMobileLayout() ? draftKey : `town-peek\u0000${draftKey}`;
+  };
+  /**
+   * Upload files for a pane as World's composer does, one chip per file. On
+   * the phone layout each path goes into the composer's shared draft, which
+   * outlives any one composer. On desktop it is kept for the pane's peek,
+   * which takes it into its reply line whenever it is open.
+   */
+  const attach = (
     leaf: ReturnType<typeof townLeaf>,
     agentKey: string,
     files: File[],
     image: boolean,
-  ): Promise<string | null> => {
+  ) => {
     const client = leaf && townOwner(leaf);
     if (!leaf || !client) {
       toast("error", "This agent's host changed; refresh before attaching.");
-      return null;
+      return;
     }
     const mobile = isMobileLayout();
-    // The composer only takes inserted paths while it is mounted.
     if (mobile) openReply(agentKey);
-    try {
-      const paths: string[] = [];
-      for (const file of files)
-        paths.push(
+    const draftKey = terminalComposerDraftKey(
+      leaf.connectionId,
+      leaf.generation,
+      leaf.pane.pane_id,
+    );
+    void startAttachmentUploads(
+      uploadScopeOf(leaf),
+      files,
+      async (file, onProgress) => {
+        const text = terminalUploadedPathsText([
           await (image ? uploadTerminalImage : uploadTerminalFile)(
             client,
             file,
+            onProgress,
           ),
-        );
-      const text = terminalUploadedPathsText(paths);
-      if (!mobile) return text;
-      insertIntoTerminalComposerDraft(
-        terminalComposerDraftKey(
-          leaf.connectionId,
-          leaf.generation,
-          leaf.pane.pane_id,
-        ),
-        text,
-      );
-    } catch (cause) {
-      toast(
-        "error",
-        `Upload failed: ${cause instanceof Error ? cause.message : String(cause)}`,
-      );
-    }
-    return null;
+        ]);
+        if (!mobile) return text;
+        insertIntoTerminalComposerDraft(draftKey, text);
+      },
+    );
   };
   const nextCall = (currentKey: string | null) =>
     nextTownCall(calls, currentKey);
   const openPeek = (key: string, anchor: { x: number; y: number } | null) => {
     if (DEVTOOLS) trace.record("peek", { key });
     window.clearTimeout(peekTimer.current);
+    summon(key);
     setPeek({ key, anchor: sheetMode() ? null : anchor, pinned: true });
   };
   const lastPointer = useRef<{ x: number; y: number } | null>(null);
+  /**
+   * The agent a table stands for: one that needs you (waiting, then
+   * finished) even while it is away at reception, else the one seated there.
+   */
+  const deskAgentKey = (deskKey: string) => {
+    const rank = (agent: OfficeAgent) =>
+      agent.semanticStatus === "blocked"
+        ? 0
+        : agent.semanticStatus === "done"
+          ? 1
+          : 2;
+    const occupant = office.deskRoster.find(({ desk }) => desk.key === deskKey)
+      ?.desk.occupantAgentKey;
+    let best: OfficeAgent | null = null;
+    for (const { agent } of office.roster)
+      if (
+        agent.deskKey === deskKey &&
+        (!best ||
+          rank(agent) < rank(best) ||
+          (rank(agent) === rank(best) && agent.key === occupant))
+      )
+        best = agent;
+    return best?.key ?? occupant ?? null;
+  };
+  /**
+   * Tapping an agent, or its desk even while the agent is away at reception
+   * or in the lounge, opens what the Town opens setting chooses: the agent's
+   * chat (the peek) or its terminal. A desk without an agent opens its pane.
+   */
   const tapTown = (key: string) => {
-    if (agentByKey.has(key)) {
-      openPeek(key, lastPointer.current);
+    const desk = agentByKey.has(key)
+      ? undefined
+      : office.deskRoster.find(({ desk }) => desk.key === key)?.desk;
+    const agentKey = agentByKey.has(key) ? key : desk && deskAgentKey(desk.key);
+    if (agentKey) {
+      // Either way the agent comes back to its desk and nothing is reviewed.
+      if (preferences.townOpens === "terminal") {
+        window.clearTimeout(peekTimer.current);
+        setPeek(null);
+        summon(agentKey);
+        openOfficeTerminal(agentKey, false);
+      } else openPeek(agentKey, lastPointer.current);
       return;
     }
-    if (deviceByKey.has(key)) {
+    if (deviceByKey.has(key) || desk) {
       openReply(key);
-      return;
-    }
-    const desk = office.deskRoster.find(({ desk }) => desk.key === key)?.desk;
-    if (desk) {
-      if (desk.occupantAgentKey)
-        openPeek(desk.occupantAgentKey, lastPointer.current);
-      else openReply(key);
       return;
     }
     selectOfficeKey(key);
@@ -1260,13 +1341,10 @@ export default function TownView({
             key={peekLeaf ? townPaneIdentity(peekLeaf) : peekAgent.key}
             agent={peekAgent}
             where={whereOf(peekAgent.key)}
-            lines={peekLines}
-            history={peekHistory}
-            loading={peekScreen === null && Boolean(peekLeaf)}
+            conversation={peekConversation}
+            question={peekQuestion}
             choices={peekChoices}
-            canReply={
-              Boolean(peekLeaf) && peekAgent.canOpenInSpaces && !peekAgent.stale
-            }
+            canReply={peekCanReply}
             anchor={peek!.anchor}
             pinned={peek!.pinned}
             onReply={(text, submit) =>
@@ -1281,6 +1359,7 @@ export default function TownView({
             onAttach={(files, image) =>
               attach(peekLeaf, peekAgent.key, files, image)
             }
+            uploadScope={peekLeaf ? uploadScopeOf(peekLeaf) : null}
             onChat={() => openReply(peekAgent.key)}
             onTerminal={() => {
               setPeek(null);
@@ -1348,6 +1427,7 @@ export default function TownView({
             terminalColors={terminalColors}
             selectedKey={townSelectedKey}
             completionSeenKeys={completionSeenKeys}
+            summonedKeys={summonedKeys}
             conversationTargets={conversationTargets}
             onSelect={tapTown}
             onActivateAgent={openReply}

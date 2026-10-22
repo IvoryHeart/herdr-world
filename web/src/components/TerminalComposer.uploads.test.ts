@@ -103,9 +103,14 @@ async function registerDomTests() {
     document.body.append(directInput);
     let mode: TerminalInputMode = "composer";
     let activeKey = key;
-    const upload = () => {
+    const progress: ((loaded: number, total: number) => void)[] = [];
+    const upload = (
+      _file: File,
+      onProgress?: (l: number, t: number) => void,
+    ) => {
       const pending = deferred();
       uploads.push(pending);
+      progress.push(onProgress ?? (() => {}));
       return pending.promise;
     };
     const render = () =>
@@ -133,7 +138,9 @@ async function registerDomTests() {
       );
     await act(async () => render());
     const textarea = () => container.querySelector("textarea")!;
-    const paste = async () => {
+    let pasted = 0;
+    // Each paste is a different file; the same file again is a duplicate.
+    const paste = async (name = `a${++pasted}.png`) => {
       await act(async () => {
         const event = new browser.Event("paste", {
           bubbles: true,
@@ -146,7 +153,10 @@ async function registerDomTests() {
                 kind: "file",
                 type: "image/png",
                 getAsFile: () =>
-                  new browser.File(["x"], "a.png", { type: "image/png" }),
+                  new browser.File(["x"], name, {
+                    type: "image/png",
+                    lastModified: 1,
+                  }),
               },
             ],
           },
@@ -200,6 +210,8 @@ async function registerDomTests() {
       key,
       connection,
       uploads,
+      progress,
+      container,
       errors,
       sent,
       textarea,
@@ -605,6 +617,60 @@ async function registerDomTests() {
       expect(drafts.terminalComposerUploadCount(h.key)).toBe(0);
     });
   }
+
+  test("each file shows a chip: byte progress, then done; Send waits for it", async () => {
+    const h = await mount("note ", 5, 5);
+    await h.paste("shot.png");
+    const chip = () =>
+      h.container.querySelector<HTMLElement>(".attachment-chip");
+    expect(chip()?.dataset.status).toBe("uploading");
+    expect(chip()?.textContent).toContain("shot.png");
+    const send = h.container.querySelector<HTMLButtonElement>(
+      '[aria-label="Send draft to the terminal"]',
+    )!;
+    expect(send.disabled).toBe(true);
+    await act(async () => h.progress[0]!(1, 2));
+    expect(chip()?.textContent).toContain("Uploading 50%");
+    await act(async () => h.uploads[0]!.resolve("/shot.png"));
+    expect(chip()?.dataset.status).toBe("done");
+    expect(drafts.readTerminalComposerDraft(h.key)).toContain("note /shot.png");
+    expect(send.disabled).toBe(false);
+  });
+
+  test("the same file again while it uploads is not uploaded twice", async () => {
+    const h = await mount("", 0, 0);
+    await h.paste("same.png");
+    await h.paste("same.png");
+    expect(h.uploads.length).toBe(1);
+    expect(h.container.querySelectorAll(".attachment-chip").length).toBe(1);
+    await act(async () => h.uploads[0]!.resolve("/same.png"));
+    expect(drafts.readTerminalComposerDraft(h.key).trim()).toBe("/same.png");
+  });
+
+  test("a failed file can be retried or removed", async () => {
+    const h = await mount("", 0, 0);
+    await h.paste("retry.png");
+    await act(async () => h.uploads[0]!.reject(new Error("disk full")));
+    const chip = () =>
+      h.container.querySelector<HTMLElement>(".attachment-chip");
+    expect(chip()?.dataset.status).toBe("failed");
+    expect(chip()?.textContent).toContain("disk full");
+    await act(async () =>
+      h.container
+        .querySelector<HTMLButtonElement>('[aria-label="Retry retry.png"]')!
+        .click(),
+    );
+    expect(h.uploads.length).toBe(2);
+    expect(chip()?.dataset.status).toBe("uploading");
+    await act(async () => h.uploads[1]!.reject(new Error("still full")));
+    await act(async () =>
+      h.container
+        .querySelector<HTMLButtonElement>('[aria-label="Remove retry.png"]')!
+        .click(),
+    );
+    expect(chip()).toBeNull();
+    expect(drafts.readTerminalComposerDraft(h.key)).toBe("");
+  });
 
   test("failed upload leaves selection and draft available to the next completion", async () => {
     const h = await mount();

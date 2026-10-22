@@ -119,6 +119,7 @@ const savedCameras = new Map<
 
 const portrait = townPortrait;
 const NO_COLORS: TerminalColors = {};
+const NO_KEYS: ReadonlySet<string> = new Set();
 
 function ago(since: number, now: number) {
   const seconds = Math.max(0, Math.round((now - since) / 1000));
@@ -129,6 +130,7 @@ export function TownCanvas({
   projection,
   selectedKey,
   completionSeenKeys,
+  summonedKeys = NO_KEYS,
   conversationTargets,
   onSelect,
   onActivateAgent,
@@ -153,6 +155,8 @@ export function TownCanvas({
   projection: HerdrOfficeProjection;
   selectedKey: string | null;
   completionSeenKeys: ReadonlySet<string>;
+  /** Agents the user opened, who walk back to their desks. */
+  summonedKeys?: ReadonlySet<string>;
   conversationTargets: readonly WorldConversationAnchorTarget[];
   onSelect: (key: string) => void;
   onActivateAgent: (key: string) => void;
@@ -223,6 +227,7 @@ export function TownCanvas({
     hover,
     calm,
     completionSeenKeys,
+    summonedKeys,
     conversationTargets,
     onSelect,
     onActivateAgent,
@@ -240,6 +245,7 @@ export function TownCanvas({
     selectedKey,
     hover,
     completionSeenKeys,
+    summonedKeys,
     conversationTargets,
     onSelect,
     onActivateAgent,
@@ -490,6 +496,7 @@ export function TownCanvas({
     selectedKey: latest.current.selectedKey,
     hoverKey: latest.current.hover,
     completionSeenKeys: latest.current.completionSeenKeys,
+    summonedKeys: latest.current.summonedKeys,
     openHostKey: null,
     calm: latest.current.calm,
   });
@@ -593,7 +600,7 @@ export function TownCanvas({
   useEffect(() => {
     rendererRef.current?.setState(sceneState());
     scheduleAnchors();
-  }, [selectedKey, hover, completionSeenKeys, calm]);
+  }, [selectedKey, hover, completionSeenKeys, summonedKeys, calm]);
 
   useEffect(() => {
     scheduleAnchors();

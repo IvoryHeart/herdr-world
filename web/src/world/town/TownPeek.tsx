@@ -5,9 +5,16 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { SquareTerminal } from "lucide-react";
 import type { OfficeAgent } from "../herdrOfficeProjection";
-import type { HistoryEntry } from "../../components/agentHistory";
-import { townLineKind, townQuestion, type TownChoice } from "./townChat";
+import { AttachmentChips } from "../../components/AttachmentChips";
+import {
+  useAttachmentDelivery,
+  useAttachmentUploads,
+} from "../../attachmentUploads";
+import { MarkdownPreview } from "../../components/markdown";
+import { formatUiDateTime } from "../../uiLocale";
+import type { TownChoice, TownConversation } from "./townChat";
 import { townPortrait } from "./townSprites";
 import { ColorSwatchButton } from "../../components/ColorSwatch";
 import {
@@ -24,16 +31,6 @@ const STATUS: Record<OfficeAgent["semanticStatus"], string> = {
   unknown: "Unknown",
 };
 
-/** One history entry as a line or two of chat. */
-function townHistoryText(entry: HistoryEntry) {
-  const text = entry.text.replace(/\s+\n/g, "\n").trim();
-  const short = text.length > 600 ? `${text.slice(0, 600)}…` : text;
-  if (entry.kind === "tool_call")
-    return `⏺ ${entry.tool_name ?? "Tool"}${short ? ` · ${short.split("\n")[0]!.slice(0, 120)}` : ""}`;
-  if (entry.kind === "error" || entry.is_error) return `✗ ${short}`;
-  return entry.role === "user" ? `› ${short}` : short || "…";
-}
-
 export function townStatusText(agent: OfficeAgent) {
   return agent.stale
     ? "Offline · last known state"
@@ -47,15 +44,17 @@ const typingTarget = (target: EventTarget | null) =>
     target.closest(".xterm, [role='dialog']:not(.town-peek)") !== null);
 
 /**
- * A hover card for one agent: its latest chatter, the question it is asking,
- * one-tap answers and a reply line. On the phone the reply line opens World's
- * composer, so typing, keys and uploads use one window.
+ * A hover card for one agent: its latest message from Chat's conversation
+ * read model (never terminal text), the question it is asking, one-tap
+ * answers and a reply line. On the phone the reply line opens World's
+ * composer, so typing, keys and uploads use one window. Open terminal in the
+ * header opens the agent's terminal.
  */
 export function TownPeek({
   agent,
   where,
-  lines,
-  loading,
+  conversation,
+  question,
   choices,
   canReply,
   anchor,
@@ -70,8 +69,8 @@ export function TownPeek({
   composer,
   inlineReply,
   onAttach,
+  uploadScope,
   onReviewed,
-  history,
   deskColor = null,
 }: {
   /** The colour of the agent's desk (its terminal), to change or reset. */
@@ -80,15 +79,19 @@ export function TownPeek({
     custom: boolean;
     onColor(color: TerminalColor | null): void;
   } | null;
-  /** Recent messages from the agent's session, shown in place of its screen. */
-  history: readonly HistoryEntry[] | null;
+  /** The agent's latest message, as Chat reads it; null while loading. */
+  conversation: TownConversation | null;
+  /** The question a waiting agent asks, shown above its answers. */
+  question: readonly string[];
   /** Check a finished agent's work, which sends it for a break. */
   onReviewed(): void;
+  /** Upload files for this pane, one chip each under `uploadScope`. */
+  onAttach(files: File[], image: boolean): void;
   /**
-   * Upload files for this pane. Resolves to the text to put in the reply
-   * line, or null when the upload went to World's composer instead.
+   * Where this pane's attachments are kept. Paths finished there join the
+   * inline reply line, including ones started by an earlier peek.
    */
-  onAttach(files: File[], image: boolean): Promise<string | null>;
+  uploadScope: string | null;
   /** Type the reply in the card itself rather than opening the composer. */
   inlineReply: boolean;
   /** World's composer for this pane; present while chatting. */
@@ -96,8 +99,6 @@ export function TownPeek({
   onInspector(): void;
   agent: OfficeAgent;
   where: string;
-  lines: readonly string[];
-  loading: boolean;
   choices: readonly TownChoice[];
   canReply: boolean;
   /** Client point the card sits beside; null shows it as a bottom sheet. */
@@ -111,38 +112,38 @@ export function TownPeek({
   onHold(hold: boolean): void;
 }) {
   const card = useRef<HTMLDivElement>(null);
-  const screen = useRef<HTMLPreElement>(null);
+  const screen = useRef<HTMLDivElement>(null);
   const chatting = Boolean(composer);
   const input = useRef<HTMLInputElement>(null);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
-  const [uploads, setUploads] = useState(0);
+  const uploading = useAttachmentUploads(uploadScope).some(
+    (upload) => upload.status === "uploading",
+  );
   const filePicker = useRef<HTMLInputElement>(null);
   const attach = (files: File[], image: boolean) => {
-    if (!files.length) return;
-    setUploads((count) => count + 1);
-    void onAttach(files, image).then((text) => {
-      setUploads((count) => count - 1);
-      if (text)
-        setDraft((current) =>
-          current && !current.endsWith(" ")
-            ? `${current} ${text}`
-            : current + text,
-        );
-      input.current?.focus();
-    });
+    if (files.length) onAttach(files, image);
   };
-  useEffect(() => setDraft(""), [agent.key]);
-  const { chatter, question } =
-    agent.semanticStatus === "blocked"
-      ? townQuestion(lines, choices.length > 0 && canReply)
-      : { chatter: [...lines], question: [] };
-  // Follow the newest lines, as Desk's cards do, unless the reader has
-  // scrolled up to read earlier messages.
+  // A different agent starts with an empty reply; mounting keeps any path
+  // already taken in for this one.
+  const draftAgent = useRef(agent.key);
+  useEffect(() => {
+    if (draftAgent.current === agent.key) return;
+    draftAgent.current = agent.key;
+    setDraft("");
+  }, [agent.key]);
+  // On the phone, paths go to World's composer draft instead.
+  useAttachmentDelivery(inlineReply ? uploadScope : null, (text) => {
+    setDraft((current) =>
+      current && !current.endsWith(" ") ? `${current} ${text}` : current + text,
+    );
+    input.current?.focus();
+  });
+  // Follow the newest message unless the reader has scrolled up in it.
   const follow = useRef(true);
-  const text =
-    lines.join("\n") +
-    (history?.length ? `#${history[history.length - 1]!.id}` : "");
+  const latest = conversation?.latest ?? null;
+  const unavailable = conversation?.unavailable ?? null;
+  const text = `${latest?.id ?? ""}${question.join("\n")}`;
   useEffect(() => {
     follow.current = true;
   }, [agent.key]);
@@ -175,7 +176,7 @@ export function TownPeek({
     setPlaced({ left: left - originX, top: top - originY });
     // The card is re-placed when its anchor point or content size changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [anchor?.x, anchor?.y, agent.key, lines.length, choices.length]);
+  }, [anchor?.x, anchor?.y, agent.key, text, choices.length]);
 
   useEffect(() => {
     if (!pinned) return;
@@ -224,6 +225,7 @@ export function TownPeek({
       className={`town-peek${anchor ? "" : " town-peek-sheet"}${chatting ? " town-peek-chat" : ""}${agent.semanticStatus === "blocked" ? " town-peek-blocked" : ""}`}
       role="dialog"
       tabIndex={-1}
+      data-agent-key={agent.key}
       aria-label={`${agent.displayLabel} peek`}
       style={
         anchor
@@ -264,6 +266,16 @@ export function TownPeek({
         ) : null}
         <button
           type="button"
+          className="town-peek-terminal"
+          aria-label={`Open ${agent.displayLabel}'s terminal`}
+          title="Open terminal"
+          onClick={onTerminal}
+        >
+          <SquareTerminal size={15} aria-hidden="true" />
+          <span>Open terminal</span>
+        </button>
+        <button
+          type="button"
           className="town-peek-close"
           aria-label="Close peek"
           onClick={onClose}
@@ -271,10 +283,10 @@ export function TownPeek({
           ×
         </button>
       </div>
-      <pre
+      <div
         ref={screen}
         className="town-peek-screen"
-        aria-label="Latest messages"
+        aria-label="Latest message"
         onScroll={(event) => {
           const element = event.currentTarget;
           follow.current =
@@ -282,33 +294,36 @@ export function TownPeek({
             24;
         }}
       >
-        {history?.length
-          ? history.map((entry) => (
-              <span
-                key={entry.id}
-                className={`town-msg town-msg-${entry.role}${entry.is_error ? " town-msg-error" : ""}`}
-              >
-                {townHistoryText(entry)}
-                {"\n"}
-              </span>
-            ))
-          : lines.length
-            ? chatter.map((line, index) => (
-                <span
-                  key={index}
-                  className={`town-line town-line-${townLineKind(line)}`}
-                >
-                  {line}
-                  {"\n"}
-                </span>
-              ))
-            : loading
-              ? "Reading the screen…"
-              : (agent.taskSummary ?? "Nothing on screen yet.")}
+        {unavailable ? (
+          <div className="town-peek-unavailable" role="status">
+            <strong>Conversation unavailable</strong>
+            <span>{unavailable.detail}</span>
+            {unavailable.command ? <code>{unavailable.command}</code> : null}
+          </div>
+        ) : latest ? (
+          <article
+            className={`town-peek-message${latest.kind === "error" ? " is-error" : ""}`}
+          >
+            <MarkdownPreview
+              text={latest.text}
+              className="agent-chat-markdown town-peek-markdown"
+              breaks
+            />
+            <time dateTime={latest.sent_at} title={latest.sent_at}>
+              {formatUiDateTime(latest.sent_at)}
+            </time>
+          </article>
+        ) : (
+          <p className="town-peek-empty">
+            {conversation
+              ? (agent.taskSummary ?? "No messages yet.")
+              : "Loading conversation…"}
+          </p>
+        )}
         {question.length ? (
-          <span className="town-question">{question.join("\n")}</span>
+          <pre className="town-question">{question.join("\n")}</pre>
         ) : null}
-      </pre>
+      </div>
       {choices.length && canReply ? (
         <div className="town-answers" role="group" aria-label="Answers">
           {choices.map((choice, index) => (
@@ -339,6 +354,7 @@ export function TownPeek({
           ) : null}
         </div>
       ) : null}
+      {!chatting ? <AttachmentChips scope={uploadScope} /> : null}
       {!chatting && canReply ? (
         <form
           className="town-reply"
@@ -349,7 +365,7 @@ export function TownPeek({
               onChat();
               return;
             }
-            if (!text || sending || uploads > 0) return;
+            if (!text || sending || uploading) return;
             setSending(true);
             void onReply(text, true).then((sent) => {
               setSending(false);
@@ -362,7 +378,6 @@ export function TownPeek({
             className="town-attach"
             aria-label="Attach files"
             title="Attach files"
-            disabled={uploads > 0}
             onClick={() => filePicker.current?.click()}
           >
             📎
@@ -385,7 +400,7 @@ export function TownPeek({
               value={draft}
               aria-label={`Reply to ${agent.displayLabel}`}
               placeholder={
-                uploads > 0 ? "Uploading…" : `Reply to ${agent.displayLabel}…`
+                uploading ? "Uploading…" : `Reply to ${agent.displayLabel}…`
               }
               autoComplete="off"
               onChange={(event) => setDraft(event.target.value)}
@@ -410,7 +425,7 @@ export function TownPeek({
           )}
           <button
             type="submit"
-            disabled={inlineReply && (!draft.trim() || sending || uploads > 0)}
+            disabled={inlineReply && (!draft.trim() || sending || uploading)}
           >
             Send
           </button>
@@ -423,9 +438,6 @@ export function TownPeek({
           onClick={onInspector}
         >
           Inspector
-        </button>
-        <button type="button" onClick={onTerminal}>
-          Terminal
         </button>
         {onNext ? (
           <button type="button" onClick={onNext}>

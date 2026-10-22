@@ -101,8 +101,12 @@ export function TownComposer({
           await sendTownReply(leaf, text, submit);
           onSent(submit);
         }}
-        onUploadImage={(file) => uploadTerminalImage(owner(), file)}
-        onUploadFile={(file) => uploadTerminalFile(owner(), file)}
+        onUploadImage={(file, onProgress) =>
+          uploadTerminalImage(owner(), file, onProgress)
+        }
+        onUploadFile={(file, onProgress) =>
+          uploadTerminalFile(owner(), file, onProgress)
+        }
         onError={onError}
       />
     </div>

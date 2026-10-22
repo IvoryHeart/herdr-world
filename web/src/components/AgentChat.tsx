@@ -9,17 +9,29 @@ import {
 import {
   Copy,
   ListTree,
+  Paperclip,
   RefreshCw,
   Send,
   SquareTerminal,
   Wrench,
 } from "lucide-react";
-import { bridge } from "../api";
+import { watchConversation } from "../conversationWatch";
+import {
+  startAttachmentUploads,
+  useAttachmentDelivery,
+  useAttachmentUploads,
+} from "../attachmentUploads";
+import { terminalUploadedPathsText } from "../terminalFileDrop";
+import {
+  uploadTerminalFile,
+  uploadTerminalImage,
+} from "../terminalImageUpload";
 import { copyTextWithFeedback } from "../copyText";
 import type { Pane } from "../types";
 import { formatUiDateTime } from "../uiLocale";
 import { useConnectionClient } from "../useConnectionClient";
 import { AgentHistoryDrawer } from "./AgentHistoryDrawer";
+import { AttachmentChips } from "./AttachmentChips";
 import { CodexSessionLink } from "./CodexSessionLink";
 import { MarkdownPreview } from "./markdown";
 import "./AgentChat.css";
@@ -182,6 +194,29 @@ export function AgentChat({
   const listRef = useRef<HTMLDivElement>(null);
   const followRef = useRef(true);
   const shownRef = useRef<Conversation | null>(null);
+  const filePicker = useRef<HTMLInputElement>(null);
+  const uploadScope = `agent-chat\u0000${connectionClient.connectionId}\u0000${connectionClient.serverRuntimeGeneration}\u0000${pane.pane_id}`;
+  const uploading = useAttachmentUploads(uploadScope).some(
+    (upload) => upload.status === "uploading",
+  );
+  // Files upload through the pane's connection, as the terminal composer's
+  // do. Each finished path joins the message of whichever Chat is open for
+  // this pane, even if the one that started the upload has closed since.
+  const attach = (files: File[]) => {
+    if (!files.length) return;
+    void startAttachmentUploads(uploadScope, files, async (file, onProgress) =>
+      terminalUploadedPathsText([
+        await (file.type.startsWith("image/")
+          ? uploadTerminalImage
+          : uploadTerminalFile)(connectionClient, file, onProgress),
+      ]),
+    );
+  };
+  useAttachmentDelivery(uploadScope, (text) =>
+    setDraft((current) =>
+      current && !/\s$/.test(current) ? `${current} ${text}` : current + text,
+    ),
+  );
 
   const load = useCallback(() => {
     if (!connectionClient.isCurrent()) return;
@@ -217,43 +252,12 @@ export function AgentChat({
   }, [connectionClient, pane.pane_id]);
 
   // While visible, ask the service to watch this pane and reread when it says
-  // the conversation changed. Watch again after the connection comes back.
+  // the conversation changed, or after the connection comes back.
   useEffect(() => {
     if (!active || details) return;
-    const paneId = pane.pane_id;
-    const watch = () => {
-      if (!connectionClient.isCurrent()) return;
-      connectionClient
-        .call("agent_conversation.watch", { pane_id: paneId })
-        .catch(() => {});
-    };
-    watch();
+    const stop = watchConversation(connectionClient, pane.pane_id, load);
     load();
-    const stopControl = bridge.onControl((control) => {
-      if (
-        control.type === "agent_conversation_changed" &&
-        control.connection_id === connectionClient.connectionId &&
-        control.pane_id === paneId
-      )
-        load();
-    });
-    // onStatus reports the current status at once; only a later reconnect
-    // needs a new watch.
-    let current = true;
-    const stopStatus = bridge.onStatus((status) => {
-      if (current || status !== "connected") return;
-      watch();
-      load();
-    });
-    current = false;
-    return () => {
-      stopControl();
-      stopStatus();
-      if (connectionClient.isCurrent())
-        connectionClient
-          .call("agent_conversation.unwatch", { pane_id: paneId })
-          .catch(() => {});
-    };
+    return stop;
   }, [active, connectionClient, details, load, pane.pane_id]);
 
   useLayoutEffect(() => {
@@ -266,6 +270,7 @@ export function AgentChat({
     if (
       !text ||
       sending ||
+      uploading ||
       !conversation?.session_fingerprint ||
       conversation.deliveries?.some(
         (delivery) => delivery.state === "misdelivered",
@@ -297,7 +302,15 @@ export function AgentChat({
     } finally {
       setSending(false);
     }
-  }, [connectionClient, conversation, draft, load, pane.pane_id, sending]);
+  }, [
+    connectionClient,
+    conversation,
+    draft,
+    load,
+    pane.pane_id,
+    sending,
+    uploading,
+  ]);
 
   const dismiss = useCallback(
     (deliveryId: string) => {
@@ -582,13 +595,41 @@ export function AgentChat({
               {notice}
             </p>
           ) : null}
+          <AttachmentChips scope={uploadScope} />
           <div className="agent-chat-composer-row">
+            <button
+              type="button"
+              className="agent-chat-attach"
+              aria-label="Attach files"
+              title="Attach files"
+              onClick={() => filePicker.current?.click()}
+            >
+              <Paperclip size={14} />
+            </button>
+            <input
+              ref={filePicker}
+              type="file"
+              multiple
+              hidden
+              onChange={(event) => {
+                const files = Array.from(event.target.files ?? []);
+                // Reset so picking the same file again still fires change.
+                event.target.value = "";
+                attach(files);
+              }}
+            />
             <textarea
               value={draft}
               rows={2}
               placeholder={`Message ${conversation?.agent ?? "agent"}`}
               aria-label="Message"
               onChange={(event) => setDraft(event.target.value)}
+              onPaste={(event) => {
+                const files = Array.from(event.clipboardData.files);
+                if (!files.length) return;
+                event.preventDefault();
+                attach(files);
+              }}
               onKeyDown={(event) => {
                 if (
                   event.key === "Enter" &&
@@ -602,12 +643,16 @@ export function AgentChat({
             />
             <button
               type="submit"
-              disabled={sending || !draft.trim() || misdelivered.length > 0}
+              disabled={
+                sending || uploading || !draft.trim() || misdelivered.length > 0
+              }
               aria-label="Send"
               title={
                 misdelivered.length > 0
                   ? "Dismiss the notice about the other session first"
-                  : "Send (Enter)"
+                  : uploading
+                    ? "Waiting for uploads"
+                    : "Send (Enter)"
               }
             >
               <Send size={14} />
