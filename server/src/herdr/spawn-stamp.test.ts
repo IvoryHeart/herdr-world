@@ -103,3 +103,23 @@ describe("stamp", () => {
     expect(await runSpawnStampCommand(["serve"], "0")).toBeNull();
   });
 });
+
+test("a parent pane that no longer holds the witnessed terminal is not stamped", async () => {
+  const { stampSpawn } = await import("./spawn-stamp");
+  const calls: string[] = [];
+  const call = async (method: string, params: Record<string, unknown>) => {
+    calls.push(method);
+    return {
+      pane: {
+        pane_id: params.pane_id,
+        terminal_id: params.pane_id === "w1:p1" ? "term_new" : "term_child",
+      },
+    };
+  };
+  await expect(stampSpawn(call, "w1:p2", "w1:p1", "term_old")).rejects.toThrow(
+    "no longer holds",
+  );
+  expect(calls).not.toContain("pane.report_metadata");
+  await stampSpawn(call, "w1:p2", "w1:p1", "term_new");
+  expect(calls).toContain("pane.report_metadata");
+});

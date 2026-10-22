@@ -1612,19 +1612,23 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
       if (innerWidth > 720) {
         // Drag one tab onto another: the other glows, and the drop groups.
         await bringIntoView(() => card(mate)!);
-        const from = centre(card(moving)!.querySelector(".board-label")!),
+        let to = centre(card(mate)!);
+        const carry = async () => {
+          const from = centre(card(moving)!.querySelector(".board-label")!);
           to = centre(card(mate)!);
-        pointer(card(moving)!, "pointerdown", from.x, from.y, 17);
-        for (let i = 1; i <= 10; i++) {
-          pointer(
-            card(moving)!,
-            "pointermove",
-            from.x + ((to.x - from.x) * i) / 10,
-            from.y + ((to.y - from.y) * i) / 10,
-            17,
-          );
-          await settle(16);
-        }
+          pointer(card(moving)!, "pointerdown", from.x, from.y, 17);
+          for (let i = 1; i <= 10; i++) {
+            pointer(
+              card(moving)!,
+              "pointermove",
+              from.x + ((to.x - from.x) * i) / 10,
+              from.y + ((to.y - from.y) * i) / 10,
+              17,
+            );
+            await settle(16);
+          }
+        };
+        await carry();
         check(
           card(mate)!.classList.contains("board-glue"),
           "the tab a tab is over glows",

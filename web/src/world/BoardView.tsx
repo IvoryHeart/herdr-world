@@ -252,7 +252,7 @@ async function startAgentThroughService(
   kind: string,
   name: string,
   text: string,
-  parentPaneId?: string,
+  parent?: { paneId: string; terminalId?: string },
 ) {
   const { bridge } = await import("../api");
   return (await bridge.connection(space.connectionId, space.generation).call(
@@ -262,7 +262,14 @@ async function startAgentThroughService(
       kind,
       name,
       text,
-      ...(parentPaneId ? { parent_pane_id: parentPaneId } : {}),
+      ...(parent
+        ? {
+            parent_pane_id: parent.paneId,
+            ...(parent.terminalId
+              ? { parent_terminal_id: parent.terminalId }
+              : {}),
+          }
+        : {}),
     },
     120_000,
   )) as StartOutcome;
@@ -436,7 +443,7 @@ export default function BoardView({
     name: string,
     text: string,
     /** The pane that spawns it, stamped on the new pane (spawned_by). */
-    parentPaneId?: string,
+    parent?: { paneId: string; terminalId?: string },
   ) => Promise<StartOutcome>;
   /** Nodes with an open Inspector window, so World can draw their lines. */
   conversationNodeIds?: readonly string[];
@@ -1944,7 +1951,9 @@ export default function BoardView({
     warmUp();
     const tab = latest.current.model.tabByKey.get(h.key);
     if (!tab) return;
-    // Over another tab card: the two group (magnetic), before any room move.
+    // Over another tab card it glows, and a drop there groups the two. No
+    // dwell as in Town: Board's elastic cards slide away from a resting one,
+    // and they do not overlap unless dragged onto each other.
     const over = document
       .elementsFromPoint(screen.x, screen.y)
       .map((el) => (el as HTMLElement).closest?.<HTMLElement>(".board-card"))
@@ -1962,7 +1971,7 @@ export default function BoardView({
       cardEls.current.get(h.key)?.classList.toggle("board-gluing", !!mate);
       teammate.current = mate;
     }
-    if (mate) {
+    if (teammate.current) {
       if (glue.current)
         cardEls.current.get(glue.current)?.classList.remove("board-glue");
       glue.current = null;
@@ -2060,15 +2069,20 @@ export default function BoardView({
       setPicked(null);
       setNoteSelected(null);
       setStringFrom(null);
+      setGroupFrom(null);
       return;
     }
     if (target.kind !== "card") return;
     setPicked(null);
     if (groupFrom) {
       setGroupFrom(null);
-      if (target.key !== groupFrom && m.tabByKey.has(target.key))
-        void groupCards(groupFrom, target.key);
-      return;
+      const from = m.tabByKey.get(groupFrom);
+      const to = m.tabByKey.get(target.key);
+      if (from && to && from.key !== to.key) {
+        if (from.hostKey === to.hostKey) void groupCards(from.key, to.key);
+        else setToast({ text: "Tabs group only within one host" });
+        return;
+      }
     }
     if (stringFrom) {
       finishString(stringFrom, {
@@ -2832,7 +2846,7 @@ export default function BoardView({
     setToast({ text: `Starting ${kind} in ${space.label}…` });
     try {
       // A note strung to one pane on this host asks that pane's agent's
-      // helper: the new agent is its child.
+      // helper: the new agent is its child (with the terminal seen there).
       const panes = (latest.current.saved?.strings ?? []).flatMap((entry) =>
         entry.detached
           ? []
@@ -2842,11 +2856,17 @@ export default function BoardView({
               end.anchor.connection_id === space.connectionId &&
               "note" in ends[1 - index]! &&
               (ends[1 - index] as { note: string }).note === note.id
-                ? [end.anchor.native_id]
+                ? [end.anchor]
                 : [],
             ),
       );
-      const parent = new Set(panes).size === 1 ? panes[0] : undefined;
+      const only =
+        new Set(panes.map((anchor) => anchor.native_id)).size === 1
+          ? panes[0]
+          : undefined;
+      const parent = only
+        ? { paneId: only.native_id, terminalId: only.witness[0] }
+        : undefined;
       const outcome = await startAgent(space, kind, name, note.text, parent);
       // String the note to the new pane whenever one was created, so the
       // agent can be found (and sent the note later if it was not ready).
@@ -3039,6 +3059,10 @@ export default function BoardView({
     [...selectedKeys].find((key) => model.workspaceByKey.has(key)) ??
     null;
   barKey.current = noteSelected ? NOTE_PREFIX + noteSelected : colorKey;
+  // A pending Group… belongs to the tab whose bar offered it.
+  useEffect(() => {
+    if (groupFrom && groupFrom !== colorKey) setGroupFrom(null);
+  }, [colorKey, groupFrom]);
   useEffect(() => {
     invalidate("bar");
   }, [noteSelected, colorKey]);

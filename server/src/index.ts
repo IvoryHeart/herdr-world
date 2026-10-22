@@ -1491,6 +1491,9 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
           (rpc, rpcParams) => herdr.call(rpc, rpcParams, 10_000),
           result.pane_id,
           parent,
+          typeof p.parent_terminal_id === "string"
+            ? p.parent_terminal_id
+            : undefined,
         ).catch((error) =>
           logger.warn("Board could not stamp the agent it started", {
             detail: String(error),

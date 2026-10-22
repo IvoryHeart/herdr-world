@@ -700,6 +700,7 @@ export function TownCanvas({
         latest.current.model,
         latest.current.teams.deskTeams,
         magnet?.on ? magnet.key : null,
+        latest.current.teams.groupedDesks,
       );
       carrying.target = target;
       ghost.textContent = target.label;

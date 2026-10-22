@@ -87,10 +87,12 @@ export function townDropTarget(
   drag: TownDrag,
   hit: TownHit | null,
   model: TownModel,
-  /** Each grouped desk's team (townTeams.ts). */
+  /** Each related desk's team (townTeams.ts). */
   deskTeams: ReadonlyMap<string, string> = new Map(),
   /** The desk the dragged desk has rested on long enough to snap to. */
   magnet: string | null = null,
+  /** Desks in a manual group: only these can leave one. */
+  groupedDesks: ReadonlySet<string> = new Set(),
 ): TownDropTarget {
   if (drag.kind === "desk") {
     const desk = magnet ? model.desks.get(magnet) : undefined;
@@ -123,7 +125,7 @@ export function townDropTarget(
     if (room.hostKey !== drag.hostKey)
       return { key: null, label: "Desks move only within one host" };
     if (room.key === drag.from)
-      return deskTeams.has(drag.key) && !townMagnetDesk(drag, hit, model)
+      return groupedDesks.has(drag.key) && !townMagnetDesk(drag, hit, model)
         ? { key: room.key, label: "Leave the team", action: "ungroup" }
         : { key: null, label: `${drag.label}: already in this room` };
     return {

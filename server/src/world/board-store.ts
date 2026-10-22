@@ -618,13 +618,20 @@ function applyOp(next: BoardDocument, op: BoardOp, current: BoardDocument) {
       return;
     }
     case "group.join": {
-      next.relations.groups = joinGroup(
-        next.relations.groups,
-        terminalRefs(op.members, "members"),
-        terminalRefs(op.target, "target"),
-        text(op.id, "group id", BOARD_LIMITS.key),
-        Date.now(),
-      );
+      const members = terminalRefs(op.members, "members");
+      const target = terminalRefs(op.target, "target");
+      const id = text(op.id, "group id", BOARD_LIMITS.key);
+      try {
+        next.relations.groups = joinGroup(
+          next.relations.groups,
+          members,
+          target,
+          id,
+          Date.now(),
+        );
+      } catch (error) {
+        fail((error as Error).message);
+      }
       return;
     }
     case "group.leave":

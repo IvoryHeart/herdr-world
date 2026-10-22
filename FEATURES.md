@@ -43,8 +43,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     Drag a table onto another table and hold it there a moment: it snaps to
     that table (**Group with …**), and dropping groups them. Town moves it to
     that room if needed and seats its tab after the other's in Herdr. A quick
-    drop keeps meaning a move, so moving and grouping stay separate gestures. Drop a grouped table
-    on its own room's floor to leave the team.
+    drop keeps meaning a move, so moving and grouping stay separate gestures. Drop a table you
+    grouped on its own room's floor to leave its group; a spawn link stays,
+    since Herdr's stamp records it.
   - Cached failed-host buildings stay stale and non-actionable. Search and Hosts
     use the shared aggregate. Reception and lounge positions only show status;
     only an explicit move changes Herdr's layout, always within one host.

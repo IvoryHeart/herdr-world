@@ -35,14 +35,17 @@ export type TownTeamLink = {
 };
 
 export type TownTeams = {
-  /** Each grouped desk's team. */
+  /** Each related desk's team. */
   deskTeams: ReadonlyMap<string, string>;
+  /** Desks in a manual group, which the user can take out of it. */
+  groupedDesks: ReadonlySet<string>;
   walls: TownTeamWall[];
   links: TownTeamLink[];
 };
 
 export const NO_TOWN_TEAMS: TownTeams = {
   deskTeams: new Map(),
+  groupedDesks: new Set(),
   walls: [],
   links: [],
 };
@@ -94,9 +97,13 @@ export function townTeams(
     return root;
   };
   const pairs: { a: string; b: string; relation: Relation }[] = [];
+  const groupedDesks = new Set<string>();
   for (const relation of relations) {
     const a = deskOf(relation.a);
     const b = deskOf(relation.b);
+    // A desk in a group can leave it even when its partner is gone.
+    if (relation.evidence.some((entry) => entry.kind === "manual"))
+      for (const desk of [a, b]) if (desk) groupedDesks.add(desk);
     if (!a || !b || a === b) continue;
     for (const key of [a, b]) if (!parent.has(key)) parent.set(key, key);
     const [x, y] = [find(a), find(b)].sort();
@@ -169,18 +176,24 @@ export function townTeams(
     }
   }
 
-  // A connector per related desk pair, unless one wall already holds both.
-  const links: TownTeamLink[] = [];
-  const seen = new Set<string>();
+  // A connector per related desk pair, unless one wall already holds both
+  // and it is only a manual group. Its evidence is all pairs' together.
+  const byPair = new Map<
+    string,
+    { a: string; b: string; spawned: boolean; current: boolean }
+  >();
   for (const { a, b, relation } of pairs) {
-    const kind = relation.evidence.some((entry) => entry.kind === "spawned")
-      ? "spawned"
-      : "manual";
-    if (kind === "manual" && walled.get(a) && walled.get(a) === walled.get(b))
-      continue;
     const key = [a, b].sort().join("\u0001");
-    if (seen.has(key)) continue;
-    seen.add(key);
+    const entry = byPair.get(key) ?? { a, b, spawned: false, current: false };
+    entry.spawned ||= relation.evidence.some(
+      (evidence) => evidence.kind === "spawned",
+    );
+    entry.current ||= relation.strength > 0;
+    byPair.set(key, entry);
+  }
+  const links: TownTeamLink[] = [];
+  for (const [key, { a, b, spawned, current }] of byPair) {
+    if (!spawned && walled.get(a) && walled.get(a) === walled.get(b)) continue;
     const from = cells.get(a);
     const to = cells.get(b);
     if (!from || !to) continue;
@@ -190,9 +203,9 @@ export function townTeams(
       y1: (from.y + 2.2) * T,
       x2: (to.x + 3) * T,
       y2: (to.y + 2.2) * T,
-      kind,
-      current: relation.strength > 0,
+      kind: spawned ? "spawned" : "manual",
+      current,
     });
   }
-  return { deskTeams, walls, links };
+  return { deskTeams, groupedDesks, walls, links };
 }

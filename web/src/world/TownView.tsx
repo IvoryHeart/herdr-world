@@ -761,20 +761,25 @@ export default function TownView({
     tabId: string,
     target: OfficeDesk,
   ) => {
-    const tabs =
-      world.hosts
-        .find((host) => host.connectionId === target.tabRef.connectionId)
-        ?.spaces.find(
-          (space) =>
-            space.nativeId ===
-            roomForKey(target.roomKey)?.workspaceRef.nativeId,
-        )?.tabs ?? [];
+    const workspaceId = roomForKey(target.roomKey)?.workspaceRef.nativeId;
+    const client = bridge.connection(
+      target.tabRef.connectionId,
+      target.tabRef.generation,
+    );
+    // Herdr's order now: a move just added the tab, at a place it chose.
+    const listed = await client.call("tab.list", {}).catch(() => null);
+    const tabs = (
+      Array.isArray((listed as { tabs?: unknown } | null)?.tabs)
+        ? (listed as { tabs: { tab_id: string; workspace_id: string }[] }).tabs
+        : (world.hosts
+            .find((host) => host.connectionId === target.tabRef.connectionId)
+            ?.spaces.find((space) => space.nativeId === workspaceId)?.tabs ??
+          [])
+    ).filter((tab) => tab.workspace_id === workspaceId);
     const at = tabs.findIndex((tab) => tab.tab_id === target.tabRef.nativeId);
     if (at < 0 || tabs[at + 1]?.tab_id === tabId) return;
     try {
-      await bridge
-        .connection(target.tabRef.connectionId, target.tabRef.generation)
-        .call("tab.move", { tab_id: tabId, insert_index: at + 1 });
+      await client.call("tab.move", { tab_id: tabId, insert_index: at + 1 });
     } catch (cause) {
       toast(
         "error",

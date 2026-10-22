@@ -232,6 +232,8 @@ function topology(seed: number): Topology {
  */
 const sent: { paneId: string; text: string; keys: string[] }[] = [];
 const moves: { method: string; params: Record<string, unknown> }[] = [];
+/** The fixture's hosts, for Herdr's tab list. */
+let fixtureConnections: WorldRuntimeConnection[] = [];
 let statusOf: (paneId: string) => string = () => "working";
 const SCREENS = {
   blocked: [
@@ -299,6 +301,12 @@ const SCREENS = {
             sent_at: "2026-01-01T00:00:01Z",
           },
         ],
+      };
+    if (method === "tab.list")
+      return {
+        tabs: (fixtureConnections.find(
+          (connection) => connection.connectionId === connectionId,
+        )?.snapshot?.tabs ?? []) as Tab[],
       };
     if (method === "tab.move") {
       moves.push({ method, params: params ?? {} });
@@ -548,6 +556,7 @@ async function run() {
   layoutShell.append(host);
   document.body.append(layoutShell);
   const base = topology(7);
+  fixtureConnections = base.connections;
   if (!phone && mode === "test") {
     const world = worldFor(base.connections);
     const leaf = world.leaves.find((candidate) => candidate.kind === "agent")!;

@@ -152,8 +152,8 @@ changes what you see and does not disconnect hosts or retarget open terminals.
    it snaps to that table and the plaque says **Group with …**; let go. The two get one wall, and Town brings the table to that room and
    next to the other in Herdr's tab order. An agent started by another agent
    is grouped automatically, with a solid connector to its parent and the
-   parent's colour. To leave a team, drag the table onto its own room's floor
-   (**Leave the team**).
+   parent's colour. To take a table you grouped out of its group, drag it onto
+   its own room's floor (**Leave the team**); a spawn link stays.
 
 A table with more panes than drawn seats shows the count and offers a chooser
 for every pane. When a table closes, the tables after it close up so the room

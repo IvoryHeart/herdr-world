@@ -10,8 +10,9 @@
  * - `manual`: the user grouped desks or cards; World's saved document is the
  *   record.
  *
- * Terminal IDs survive pane and tab moves within one Herdr runtime, so they
- * are the identity. Evidence is current only while both terminals are in a
+ * Terminal IDs survive pane and tab moves within one Herdr runtime and are
+ * issued anew when Herdr restarts (pane IDs are reused), so they are the
+ * identity. Evidence is current only while both terminals are in a
  * current (not cached, not stale) snapshot of their connection; otherwise it
  * is kept and shown as stale. The service and the browser share these rules.
  */
@@ -105,11 +106,13 @@ export function spawnTokenParent(
   if (!isRecord(pane.tokens)) return null;
   const byTerminal = pane.tokens[SPAWNED_BY_TERMINAL_TOKEN];
   const byPane = pane.tokens[SPAWNED_BY_TOKEN];
+  // The terminal is the identity: Herdr reuses pane IDs after a restart, so
+  // the pane ID is read only when no terminal was stamped.
   const found =
-    (typeof byTerminal === "string" &&
-      observation.panes.find((entry) => entry.terminal_id === byTerminal)) ||
-    (typeof byPane === "string" &&
-      observation.panes.find((entry) => entry.pane_id === byPane));
+    typeof byTerminal === "string"
+      ? observation.panes.find((entry) => entry.terminal_id === byTerminal)
+      : typeof byPane === "string" &&
+        observation.panes.find((entry) => entry.pane_id === byPane);
   if (!found || found.terminal_id === pane.terminal_id) return null;
   return {
     connection_id: observation.connection_id,
@@ -229,16 +232,21 @@ export function relationsOf(
     });
   }
   for (const group of document.groups) {
-    const [first, ...rest] = group.members;
-    if (!first) continue;
-    for (const member of rest)
-      add(first, member, {
-        kind: "manual",
-        sor: "world",
-        source: group.id,
-        observed_at: group.created_at,
-        current: bothLive(first, member),
-      });
+    // A star around its first live member, so a closed lead does not leave
+    // the rest unrelated.
+    const hub =
+      group.members.find((member) => live.has(terminalKey(member))) ??
+      group.members[0];
+    if (!hub) continue;
+    for (const member of group.members)
+      if (member !== hub)
+        add(hub, member, {
+          kind: "manual",
+          sor: "world",
+          source: group.id,
+          observed_at: group.created_at,
+          current: bothLive(hub, member),
+        });
   }
   return [...relations.values()];
 }
@@ -320,7 +328,9 @@ export function joinGroup(
   now: number,
 ): RelationGroup[] {
   const joining = members.filter(
-    (member) => !target.some((entry) => sameRef(entry, member)),
+    (member, index) =>
+      !target.some((entry) => sameRef(entry, member)) &&
+      members.findIndex((entry) => sameRef(entry, member)) === index,
   );
   if (!joining.length || !target.length) return [...groups];
   const host = groups.find((group) =>
@@ -337,9 +347,21 @@ export function joinGroup(
         (member) => !joining.some((entry) => sameRef(entry, member)),
       )
     : [...target];
+  if (!host && groups.some((group) => group.id === id))
+    throw new Error(`group ${id} already exists`);
   const group: RelationGroup = host
     ? { ...host, members: [...base, ...joining] }
-    : { id, members: [...base, ...joining], created_at: now };
+    : {
+        id,
+        members: [
+          ...base.filter(
+            (member, index) =>
+              base.findIndex((entry) => sameRef(entry, member)) === index,
+          ),
+          ...joining,
+        ],
+        created_at: now,
+      };
   if (group.members.length > RELATION_LIMITS.members)
     throw new Error(
       `a group holds at most ${RELATION_LIMITS.members} terminals`,

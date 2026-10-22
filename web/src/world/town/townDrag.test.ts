@@ -125,8 +125,19 @@ test("a grouped desk leaves its team on its own floor; teammates do not regroup"
     ["d2", "d1"],
   ]);
   const drag = townDragFor({ kind: "desk", key: "d1" }, m, "room")!;
+  // Only a manual group can be left; a spawn is Herdr's record, not a choice.
   expect(
     townDropTarget(drag, { kind: "room", key: "r1" }, m, teams),
+  ).toMatchObject({ key: null });
+  expect(
+    townDropTarget(
+      drag,
+      { kind: "room", key: "r1" },
+      m,
+      teams,
+      null,
+      new Set(["d1"]),
+    ),
   ).toMatchObject({ key: "r1", action: "ungroup", label: "Leave the team" });
   expect(
     townDropTarget(drag, { kind: "desk", key: "d2" }, m, teams, "d2"),

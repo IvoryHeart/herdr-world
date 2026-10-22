@@ -258,3 +258,45 @@ test("teams join every related terminal; parents come from spawns only", () => {
   expect(parents.get(terminalKey(ref("b")))).toEqual(ref("a"));
   expect(parents.has(terminalKey(ref("c")))).toBe(false);
 });
+
+describe("review fixes", () => {
+  test("a stamped terminal that is gone never falls back to a reused pane ID", () => {
+    const observations = [
+      host([
+        pane("w1:p1", "term_after_restart"),
+        pane("w1:p2", "term_child", {
+          spawned_by: "w1:p1",
+          spawned_by_terminal: "term_before_restart",
+        }),
+      ]),
+    ];
+    expect(relationsOf(none, observations)).toEqual([]);
+  });
+
+  test("a group whose lead closed still relates its live members", () => {
+    const groups = joinGroup([], [ref("b"), ref("c")], [ref("a")], "g1", 1);
+    const relations = relationsOf({ spawns: [], groups }, [
+      host([pane("w1:p2", "b"), pane("w1:p3", "c")]),
+    ]);
+    expect(
+      relations.map((relation) => [
+        relation.a.terminal_id,
+        relation.b.terminal_id,
+        relation.strength,
+      ]),
+    ).toEqual([
+      ["b", "a", 0],
+      ["b", "c", 1],
+    ]);
+  });
+
+  test("duplicates collapse, and a new group cannot reuse an ID", () => {
+    expect(
+      joinGroup([], [ref("b"), ref("b")], [ref("a"), ref("a")], "g1", 1),
+    ).toEqual([{ id: "g1", members: [ref("a"), ref("b")], created_at: 1 }]);
+    const groups = joinGroup([], [ref("b")], [ref("a")], "g1", 1);
+    expect(() => joinGroup(groups, [ref("d")], [ref("c")], "g1", 2)).toThrow(
+      "already exists",
+    );
+  });
+});

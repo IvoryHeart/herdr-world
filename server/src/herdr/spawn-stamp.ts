@@ -59,13 +59,24 @@ async function paneOf(call: Call, paneId: string) {
   return { pane_id: paneId, terminal_id: pane.terminal_id };
 }
 
-/** Stamp `child` as spawned by `parent` on one Herdr runtime. */
-export async function stampSpawn(call: Call, child: string, parent: string) {
+/**
+ * Stamp `child` as spawned by `parent` on one Herdr runtime. With
+ * `parentTerminal`, the parent pane must still hold that terminal: a pane ID
+ * alone may name another pane by now.
+ */
+export async function stampSpawn(
+  call: Call,
+  child: string,
+  parent: string,
+  parentTerminal?: string,
+) {
   if (child === parent) usage("a pane cannot spawn itself");
   const [, from] = await Promise.all([
     paneOf(call, child),
     paneOf(call, parent),
   ]);
+  if (parentTerminal && from.terminal_id !== parentTerminal)
+    usage(`pane ${parent} no longer holds the spawning terminal`);
   await call("pane.report_metadata", {
     pane_id: child,
     source: SPAWN_STAMP_SOURCE,
