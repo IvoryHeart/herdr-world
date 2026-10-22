@@ -13,7 +13,7 @@ import {
   GitFork,
   GitGraph,
   GitPullRequest,
-  History,
+  MessagesSquare,
   Maximize2,
   Minimize2,
   PanelBottom,
@@ -62,7 +62,7 @@ import {
   type WorkspaceInspectorContext,
 } from "../workspaceResource";
 import { AgentIcon } from "./AgentIcon";
-import { AgentHistoryDrawer } from "./AgentHistoryDrawer";
+import { AgentChat } from "./AgentChat";
 import { AgentCheckoutPanel } from "./AgentCheckoutPanel";
 import { paneHasAgentHistory } from "./agentSession";
 import {
@@ -211,7 +211,7 @@ export function WorkspaceInspectorHost({
   useLayoutEffect(() => {
     setFileTabs(readResourceFileTabs(worldLocalStorage, state.scope));
   }, [fileSelection.entry?.path, state.scope]);
-  // A scope can first open on Changes or History. Restore its active file when
+  // A scope can first open on Changes or Chat. Restore its active file when
   // entering Files, without requiring another explorer selection.
   const restoreFileOnViewEntry = useEffectCallback(() => {
     if (state.view === "files" && !fileSelection.entry && fileTabs.activePath)
@@ -620,8 +620,8 @@ export function WorkspaceInspectorHost({
               className={state.view === "history" ? "is-active" : ""}
               title={
                 historyAvailable
-                  ? "Agent history"
-                  : "Select an active agent pane to view history"
+                  ? "Agent conversation"
+                  : "Select an agent pane to chat with it"
               }
               disabled={!historyAvailable && state.view !== "history"}
               onClick={() => {
@@ -629,7 +629,7 @@ export function WorkspaceInspectorHost({
               }}
               onKeyDown={handleTabKeyDown}
             >
-              <History size={14} /> History
+              <MessagesSquare size={14} /> Chat
             </button>
           ) : null}
         </div>
@@ -1136,24 +1136,25 @@ export function WorkspaceInspectorHost({
               state.view === "history" ? "" : "is-hidden"
             }`}
           >
+            {/* The persisted "history" view now shows Chat. */}
             {historyAvailable && historyPane ? (
-              <AgentHistoryDrawer
+              <AgentChat
                 key={JSON.stringify([
                   historyPane.pane_id,
                   historySessionFingerprint ?? null,
                 ])}
                 pane={historyPane}
-                open={visible && state.open && state.view === "history"}
-                embedded
+                active={visible && state.open && state.view === "history"}
                 wide={!compact}
-                onOpenChange={(open) => {
-                  if (!open) onClose();
-                }}
+                onOpenTerminal={
+                  terminalAvailable ? () => onViewChange("terminal") : undefined
+                }
+                onClose={onClose}
               />
             ) : (
               <div className="workspace-inspector-unavailable">
-                <strong>No active agent session</strong>
-                <span>Select an agent pane to inspect its history.</span>
+                <strong>No agent selected</strong>
+                <span>Select an agent pane to chat with it.</span>
               </div>
             )}
           </div>

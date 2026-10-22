@@ -298,6 +298,9 @@ const rpcOutcomes = new Map<string, { status: "error"; detail?: string }>();
 
 const IMPORTANT_RPC_METHODS = new Set([
   "bridge.pause_others",
+  "agent_conversation.get",
+  "agent_conversation.latest",
+  "agent_conversation.send",
   "agent_history.get",
   "agent_history.entry",
   "agent_session.get",
@@ -1543,6 +1546,46 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
       sendReply({ id, result }, "agent-list");
     } catch (e) {
       sendError("agent-list-error", e);
+    }
+    return;
+  }
+  if (
+    method === "agent_conversation.get" ||
+    method === "agent_conversation.latest" ||
+    method === "agent_conversation.send"
+  ) {
+    try {
+      const source = connection.agentSessions.conversation;
+      const p = params ?? {};
+      const paneId = typeof p.pane_id === "string" ? p.pane_id : "";
+      if (method !== "agent_conversation.latest" && !paneId)
+        throw new Error(`${method} requires pane_id`);
+      const result =
+        method === "agent_conversation.get"
+          ? await source.read({ pane_id: paneId })
+          : method === "agent_conversation.send"
+            ? await source.send({
+                pane_id: paneId,
+                text: typeof p.text === "string" ? p.text : "",
+                session_fingerprint:
+                  typeof p.session_fingerprint === "string"
+                    ? p.session_fingerprint
+                    : "",
+              })
+            : paneId
+              ? await source.latest({ pane_id: paneId })
+              : {
+                  conversations: await source.latestAll(
+                    Array.isArray(p.pane_ids)
+                      ? p.pane_ids.filter(
+                          (id): id is string => typeof id === "string",
+                        )
+                      : undefined,
+                  ),
+                };
+      sendReply({ id, result }, method);
+    } catch (e) {
+      sendError(`${method}-error`, e);
     }
     return;
   }

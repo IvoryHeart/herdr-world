@@ -32,6 +32,17 @@ import {
   stringValue,
 } from "./session-utils";
 
+/** Harnesses with a transcript reader; Herdr can detect more than these. */
+export const SESSION_AGENTS: ReadonlySet<string> = new Set([
+  "codex",
+  "claude",
+  "kimi",
+  "grok",
+  "pi",
+  "muse",
+  "agy",
+]);
+
 export type AgentSessionResolverContext = {
   pathCache: Map<string, string>;
   museMetadata: MuseMetadataCache;
@@ -323,15 +334,7 @@ export async function resolveAgentSessionInfo(
   const agent = normalizeAgentName(
     stringValue(agentInfo?.agent) || session?.agent || params.agent || "",
   );
-  if (
-    agent !== "codex" &&
-    agent !== "claude" &&
-    agent !== "kimi" &&
-    agent !== "grok" &&
-    agent !== "pi" &&
-    agent !== "muse" &&
-    agent !== "agy"
-  ) {
+  if (!SESSION_AGENTS.has(agent)) {
     throw new Error(
       `agent session only supports codex, claude, kimi, grok, pi, muse, and agy`,
     );
@@ -369,6 +372,7 @@ export async function resolveAgentSessionInfo(
       return {
         ...base,
         status: "missing_file",
+        reason: title.kind === "pending" ? "no_messages_yet" : "ambiguous",
         detail:
           title.kind === "pending"
             ? "This Codex conversation has no saved messages yet."
@@ -419,6 +423,7 @@ export async function resolveAgentSessionInfo(
     return {
       ...base,
       status: "missing_session",
+      reason: agent === "codex" ? "codex_unlinked" : "no_session",
       detail:
         agent === "muse"
           ? files.remote
@@ -453,6 +458,7 @@ export async function resolveAgentSessionInfo(
     return {
       ...base,
       status: "missing_file",
+      reason: "file_missing",
       detail: `Could not find the ${agent} session transcript for ${resolvedSession.value}.`,
       updated_at: new Date(0).toISOString(),
       path: "",

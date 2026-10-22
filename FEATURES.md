@@ -272,7 +272,7 @@ commit a search selection. Press K in the recent switcher to convert it to searc
 
 ## Workspace Inspector
 
-Open Files, Changes, or Agent History with the TabBar Inspector button,
+Open Files, Changes, or Chat with the TabBar Inspector button,
 `Cmd+Shift+B` on macOS, or workspace/agent context menus. The header identifies repository,
 branch/worktree, and checkout path. Inspector and Annotations leave the primary
 sidebar's visibility unchanged. Workspace rows show the latest PR/MR status while
@@ -308,13 +308,19 @@ See [resource ownership](docs/ARCHITECTURE.md#workspace-resource-ownership).
 - See Herdr-recognized identity and working/blocked/done/idle status in the tree,
   pane switcher, command menu, and Agent panel. Focus panes there or through
   browser completion notifications.
-- Switch Agent History between **Chat** and **Timeline**. Chat pairs tool calls
+- Read and reply to an agent in the Inspector's **Chat** tab, which replaces
+  History. Chat reads the conversation from the agent's transcript, never the
+  terminal; sends with Herdr's agent prompt only to the session it shows; and
+  refreshes on agent status changes, without polling. When it cannot read the
+  conversation it shows the reason and **Open Terminal**. **Details** opens the
+  History view below. See [Chat](docs/CHAT.md).
+- In Details, switch between **Chat** and **Timeline**. Chat pairs tool calls
   with results and shares Ranger's conversation minimap; Timeline keeps individual
   records available. Use **Link Codex session** to preview a full conversation UUID
   and confirm its association with the foreground Codex pane. This replaces the
   existing link for all viewers. Codex lookup searches active and archived records
   on the selected local/Unix SSH runtime; Windows SSH history remains unavailable.
-- Open Agent History with independent User/Agent/Tool filters (User/Agent enabled,
+- Open Details with independent User/Agent/Tool filters (User/Agent enabled,
   Tool hidden initially), a message minimap, and on-demand tool details. The recent window
   counts 200 conversation entries, not associated tools; exports remain complete.
   See [History synchronization](docs/HISTORY.md).
@@ -335,7 +341,7 @@ See [resource ownership](docs/ARCHITECTURE.md#workspace-resource-ownership).
   Inspector offers Timeline, searchable ATIF/raw transcripts, and original-file
   or normalized ATIF export.
 
-Supported providers: **Codex, Claude, Kimi, Grok Build, Pi, Antigravity CLI**, with a readable
+Supported providers: **Codex, Claude, Kimi, Grok Build, Pi, Muse Code, Antigravity CLI**, with a readable
 session record. Missing Herdr integration metadata shows the integration command.
 Codex 0.157 and later run conversations in a shared background service, so
 Herdr's hook cannot say which pane shows which one. Run `/title` in Codex and
@@ -627,7 +633,7 @@ Common defaults (Linux/Android overrides follow the table):
 | Workspaces | `Ctrl+Shift+W` | `Ctrl+Alt+O` |
 | File Explorer | `Cmd+Shift+E` | `Ctrl+Alt+E` |
 | Diff Viewer | `Ctrl+Shift+G` | `Ctrl+Alt+G` |
-| Agent history | `Cmd+Shift+H` | `Ctrl+Alt+H` |
+| Agent chat | `Cmd+Shift+H` | `Ctrl+Alt+H` |
 | Search raw preview / diff | `Cmd+F` | `Ctrl+F` |
 | Send composer / add review comment | `Cmd+Enter` | `Ctrl+Enter` |
 | Copy terminal selection | `Cmd+C` | `Ctrl+Shift+C` / `Ctrl+Insert` |

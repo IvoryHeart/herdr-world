@@ -15,6 +15,7 @@ const chrome =
 for (const fixture of [
   "VisualPreview",
   "AgentHistoryDrawer",
+  "AgentChat",
   "OverlayScrollbarLayer",
   "ShellStyles",
   "StatusBadges",

@@ -44,10 +44,11 @@ attention counts reflect those scenes; no agent activity is fabricated. Click a 
 
 [![Spaces with a focused workspace and live terminal](./docs/images/herdr-world-desktop-spaces.png)](./docs/images/herdr-world-desktop-spaces.png)
 
-The shared Inspector keeps Terminal, Files, Changes and Agent History alongside
+The shared Inspector keeps Terminal, Files, Changes and agent Chat alongside
 its captured workspace, whether opened from Town, Board or Desk. See the
 [tutorial's review exercise](./docs/TUTORIAL.md#daily) for the complete flow.
-The Files, Changes and History captures below show the Inspector over Board.
+The Files, Changes and History captures below show the Inspector over Board;
+the History view is now **Details** inside [Chat](./docs/CHAT.md).
 They use a restored demo project, a sample working-tree diff and a genuine
 recorded Pi review.
 

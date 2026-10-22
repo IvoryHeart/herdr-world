@@ -197,7 +197,7 @@ on your phone and desktop.
    the whole board, and offers **Undo**; notes strung to cards move with them,
    and notes left on a card move to free space.
 4. Tap a workspace, tab or pane row to open its Inspector with Terminal, Files,
-   Changes and Agent History; a line joins each Inspector window to its card. Double-click a tab to open its terminal.
+   Changes and Chat; a line joins each Inspector window to its card. Double-click a tab to open its terminal.
 5. Double-click (or double-tap) empty board to pin a note and type; double-click
    a note to edit it. Tap a note for its bar: colour, **Edit**, **String to…**, **Delete** (or press Delete).
 6. Drag a card's red dot onto a pane row, a tab or a workspace to string a note
@@ -324,14 +324,17 @@ Watch Herdr's recognized status: `working` suggests activity, `blocked` needs
 attention, and `done`/`idle` suggest when to return. **Status is not verification:**
 `done` does not mean tests passed. Available states depend on agent integration.
 
-Open Agent History to find the explanation. Session Inspector offers Chat and Timeline,
-ATIF (a normalized trajectory), and raw transcript; original export preserves
-the source record. Use the [shortcut reference](../FEATURES.md#keyboard-shortcuts)
-for History, Files, and Changes on your platform. Switch **Chat / Timeline** to
-read the conversation or inspect individual records. The conversation minimap
+Open **Chat** in the Inspector to read the conversation and reply. Chat shows
+user and agent messages, with one line for each run of tool calls, and refreshes
+when the agent's status changes. If Chat cannot read the conversation it says
+why and offers **Open Terminal**. Choose **Details** for the Session Inspector:
+Chat and Timeline, ATIF (a normalized trajectory), and raw transcript; original
+export preserves the source record. Use the [shortcut reference](../FEATURES.md#keyboard-shortcuts)
+for Chat, Files, and Changes on your platform. In Details, switch **Chat / Timeline**
+to read the conversation or inspect individual records. The conversation minimap
 jumps between loaded messages; it does not load older transcript pages.
 
-If Codex history is missing, expand **Link Codex session**, enter the full
+If Chat cannot find a Codex conversation, open **Details**, expand **Link Codex session**, enter the full
 conversation UUID currently open in that pane and choose **Check session**.
 Review the directory, timestamp and transcript path, then **Confirm session link**.
 Keep Codex in the foreground and repeat the preview if the pane or session changes.
@@ -339,7 +342,8 @@ The link replaces the pane's existing session association for all viewers.
 
 **You are done when:** you found the explanation, not just the last terminal line.
 
-> Inspection supports Codex, Claude, Kimi, Grok Build, Pi, and Antigravity CLI with readable records.
+> Chat and inspection support Codex, Claude, Kimi, Grok Build, Pi, Muse Code and Antigravity CLI
+> with readable records; see the [harness matrix](./CHAT.md#harness-matrix).
 > Follow missing-metadata integration hints. For Codex 0.157 and later, run
 > `/title` in Codex and add Thread ID so History knows which conversation a pane
 > shows. SSH reads Herdr-reported paths and

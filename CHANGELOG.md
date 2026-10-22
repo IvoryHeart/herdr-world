@@ -7,6 +7,15 @@ are optional because the merged PR history records their source.
 
 ## [Unreleased]
 
+### Added
+
+- Add a Chat tab to the Inspector, replacing History. Chat shows an agent's
+  conversation from its transcript, never the terminal, replies with Herdr's
+  agent prompt, refreshes on status changes without polling, and explains why
+  a conversation is unavailable with a link to the Terminal. The service offers
+  one conversation read model (`agent_conversation.get`, `.latest`, `.send`)
+  for every supported harness.
+
 ### Changed
 
 - Reject pending Ranger follow-ups after their chat changes and deduplicate

@@ -104,6 +104,13 @@ export type AgentSessionResolved = {
   workspace_id: string;
   tab_id: string;
   status: "missing_session" | "missing_file" | "ok";
+  /** Why a non-ok session is unavailable, for clients that branch on it. */
+  reason?:
+    | "no_session"
+    | "codex_unlinked"
+    | "no_messages_yet"
+    | "ambiguous"
+    | "file_missing";
   detail: string;
   command?: string;
   updated_at: string;

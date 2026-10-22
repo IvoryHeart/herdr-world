@@ -149,6 +149,7 @@ export function createLegacyConnectionRuntime(args: {
     createAgentSessionHandlers({
       herdrCall: (...args) => herdr.call(...args),
       files: agentSessionFiles,
+      remotePlatform,
     }),
   );
   const agentCheckout = createAgentCheckoutContext({

@@ -2,6 +2,7 @@ import { basename } from "node:path";
 import { randomUUID } from "node:crypto";
 import { enrichAgentActivity } from "./agent-activity";
 import { createCodexSessionLinker } from "./codex-session-link";
+import { createHerdrConversationSource } from "./herdr-conversation";
 import type { HerdrCall, SessionFile } from "./session-types";
 import {
   createAgentSessionResolverContext,
@@ -31,11 +32,20 @@ const MAX_MESSAGES_PER_AGENT = 200;
 export function createAgentSessionHandlers(args: {
   herdrCall: HerdrCall;
   files: AgentSessionFileAccess;
+  remotePlatform?: string;
 }) {
   const resolverContext = createAgentSessionResolverContext();
   const cache = createSessionProjectionCache(args.files);
   const linker = createCodexSessionLinker(args.herdrCall, args.files);
   return {
+    // An object, not a handler: it reports Windows as unavailable itself.
+    conversation: createHerdrConversationSource({
+      herdrCall: args.herdrCall,
+      files: args.files,
+      context: resolverContext,
+      cache,
+      remotePlatform: args.remotePlatform,
+    }),
     previewLink: linker.preview,
     link: linker.link,
     listWithActivity: async (params: Record<string, unknown>) =>
