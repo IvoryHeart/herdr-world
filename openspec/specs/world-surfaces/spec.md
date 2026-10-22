@@ -1387,7 +1387,12 @@ dragging with a mouse, by holding and then dragging on touch, and from the
 keyboard by pressing M on a focused desk or agent target, which opens a list of
 destinations. Town SHALL NOT add visible move controls to the scene. While a
 drag is in progress Town SHALL show where the desk or agent would land, or why
-it cannot. A request SHALL be qualified by connection ID and runtime generation,
+it cannot. A picked-up desk or agent SHALL lift off and follow the pointer;
+every move Herdr confirms, within a room or to another room, SHALL land on its
+target with a puff of dust, and a refused move SHALL return to where it was.
+Under reduced motion or calm motion the carried desk or agent SHALL stay under
+the pointer, and every drag SHALL end with a short fade, without bounce, shake
+or dust. A request SHALL be qualified by connection ID and runtime generation,
 SHALL run in the World service, and SHALL be refused across hosts, for retired
 generations, or when the runtime cannot export a tab's layout. Before sending
 any move, a desk move SHALL capture the source tab's complete split tree with
