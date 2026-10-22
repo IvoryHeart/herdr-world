@@ -1,3 +1,5 @@
+import { Bot, Shirt } from "lucide-react";
+import { openProfileEditor, requestAgentLaunch } from "./agentProfiles";
 import {
   useCreationProgress,
   creationPendingReason,
@@ -1256,7 +1258,38 @@ export default function TownView({
         const match = searchMatches[0];
         if (match) void onSelect(match.id);
       }}
-    />
+    >
+      <button
+        type="button"
+        className="world-view-search-toggle town-toolbar-agent"
+        aria-label="New agent"
+        title="New agent from a profile or a kind"
+        onClick={() => {
+          const room = roomForKey(selectedRoomKey ?? null);
+          requestAgentLaunch(
+            room
+              ? {
+                  connectionId: room.workspaceRef.connectionId,
+                  generation: room.observedGeneration,
+                  workspaceId: room.workspaceRef.nativeId,
+                  workspaceLabel: room.displayLabel,
+                }
+              : {},
+          );
+        }}
+      >
+        <Bot size={15} aria-hidden="true" />
+      </button>
+      <button
+        type="button"
+        className="world-view-search-toggle"
+        aria-label="Agent profiles"
+        title="Agent profiles: dress and configure agents"
+        onClick={() => openProfileEditor()}
+      >
+        <Shirt size={15} aria-hidden="true" />
+      </button>
+    </WorldViewToolbar>
   );
 
   return (
@@ -1492,6 +1525,17 @@ export default function TownView({
               canCreateSeat,
               createSeatReason,
               onCreateSeat: (roomKey) => void createSeat(roomKey),
+              onNewAgent: (roomKey) => {
+                const room = roomForKey(roomKey);
+                if (!room || !canCreateSeat(roomKey)) return;
+                setPeek(null);
+                requestAgentLaunch({
+                  connectionId: room.workspaceRef.connectionId,
+                  generation: room.observedGeneration,
+                  workspaceId: room.workspaceRef.nativeId,
+                  workspaceLabel: room.displayLabel,
+                });
+              },
               showCreateRoom,
               canCreateRoom,
               createRoomReason,

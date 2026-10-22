@@ -60,6 +60,35 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     use the shared aggregate. Reception and lounge positions only show status;
     only an explicit move changes Herdr's layout, always within one host.
   See the [Town exercise](./docs/TUTORIAL.md#town).
+- **New agent and agent profiles.** **New agent** starts an agent in a new
+  tab of a room you choose, from a profile (one tap) or from any agent kind the
+  host's Herdr supports. It is in Town's toolbar and on each room's plaque (on
+  phones, tap a room, then **New agent**), beside **+** in Spaces' tab bar,
+  and in Board's New tab dialog. World creates the tab, starts the harness
+  through Herdr, waits until it is ready, then sends the first prompt; if the
+  harness stops on a question (such as Claude's folder trust) or exits at
+  once, it says so and offers to open the tab.
+  - The launcher shows whether each harness is installed and logged in on the
+    host, asked with the harness's own status command (`claude auth status`,
+    `codex login status`; Pi reports only whether it is installed). **Log in**
+    opens a small tab running the harness's own login command; World never
+    sees or stores credentials.
+  - **Agent profiles** (Menu → Agent profiles, the shirt in Town's toolbar, or
+    Edit profiles in the launcher and Board) set a name, home room, role,
+    colour, brain (harness, model, Codex reasoning effort, permission mode),
+    skills (the room's and host's `SKILL.md` folders), tools, a starting brief
+    with `{{name}}`, `{{task}}`, `{{room}}` and `{{spawned_by}}`, and a Town
+    look: skin, hair, outfit (including a dress or a captain's jacket),
+    colours and an accessory, with a live preview. Reviewer, Builder,
+    Designer and FirstMate are starters you can edit or delete.
+  - At launch a profile becomes the harness's own configuration: Claude Code
+    gets an inline subagent definition (`--agents` and `--agent`, the fields of
+    `.claude/agents/*.md`) and `--permission-mode`; Codex gets `-m`, `-a`,
+    `-s` and `-c` options with the role as developer instructions; other kinds
+    start plainly and get the role in their first prompt. The editor shows the
+    exact command. The new tab takes the profile's colour and its agent wears
+    the profile's look in Town.
+  See the [New agent exercise](./docs/TUTORIAL.md#new-agent).
 - **Terminal colours.** Every tab has one colour, shown as the tab in Spaces,
   the card in Board and its table in Town (tabs beyond a room's drawn tables
   show it in Spaces and Board). A tab starts with a stable default colour, or
@@ -82,8 +111,10 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   carries strung notes along. Zoomed out, workspaces show a square per pane.
   - Tabs list each pane as a row; plain-shell tabs look like terminals; only a
     working agent's tab (or the selected one) pulses (a ⋯ setting).
-  - **+** on a workspace opens New tab (Terminal, Claude or Codex, an optional
-    name, then Create; a note's Start an agent uses the same dialog); **+** on a host creates a workspace. Workspace cards count their
+  - **+** on a workspace opens New tab (Terminal, one of your agent profiles,
+    or any agent kind the host's Herdr supports, an optional name, then
+    Create; a note's Start an agent uses the same dialog, and **Edit profiles**
+    opens the profile editor); **+** on a host creates a workspace. Workspace cards count their
     agents by status; tabs show their terminal colour and workspaces take a
     colour the user picks, while status keeps its own colours.
   - Notes and strings are saved by the World service and shared across your
@@ -95,9 +126,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     even in the same terminal, nothing is sent: World names the new agent and
     sends to it only if you choose **Send to** it. If the agent changes while
     the note is being sent, World says it may have reached another agent.
-    A note offers **Start an agent** in a chosen workspace, but choosing Claude
-    or Codex currently opens a shell rather than launching that agent
-    ([issue #219](https://github.com/IvoryHeart/herdr-world/issues/219)).
+    A note offers **Start an agent** in a chosen workspace: World starts the
+    agent in a new tab and sends the note once it is ready.
   - Drag a tab onto another workspace of its host to move it (asks first).
     On phones, hold a card still before dragging; adding a second finger switches
     to pinch zoom without committing a move. Settling pauses while you type in

@@ -1193,3 +1193,15 @@
   left: 0;
   top: 0;
 }
+
+.board-link {
+  margin-top: 6px;
+  padding: 0;
+  color: var(--board-accent);
+  background: none;
+  border: 0;
+  font: inherit;
+  font-size: 12px;
+  text-decoration: underline;
+  cursor: pointer;
+}

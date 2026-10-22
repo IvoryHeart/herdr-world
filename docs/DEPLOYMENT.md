@@ -218,6 +218,29 @@ herdr-world --socket-path /path/to/herdr.sock \
 herdr-world --ssh-host workbox
 ```
 
+## Agent profiles and the launcher
+
+**New agent** starts a harness in a new Herdr tab through the connection that
+owns the chosen room (`tab.create`, then `agent.start` with the profile's
+arguments, then a readiness wait and the first prompt). Agent kinds come from
+the host's Herdr (`server.agent_manifests`); an older Herdr offers Claude and
+Codex. Profiles are stored atomically, with owner-only permissions, in
+`~/.config/herdr-world/agent-profiles.json` on Unix or
+`%APPDATA%\herdr-world\agent-profiles.json` on Windows; override the path
+with `HERDR_WORLD_AGENT_PROFILES_PATH`. Profiles refuse text that looks like a
+credential and never hold one.
+
+To show whether a harness is installed and logged in, the service runs each
+harness's own status command on the room's host (locally, or over the
+connection's OpenSSH destination): `claude auth status` and
+`codex login status`. It keeps only whether the harness is logged in and the
+login method; the commands' other output, which can name the account, is
+discarded. It also lists `SKILL.md` folders by name. A service whose `PATH`
+lacks the harness still finds it in the usual install folders (such as
+`~/.local/bin`). **Log in** types the harness's fixed login command
+(`claude auth login`, `codex login --device-auth`) into a new tab, where you
+finish the login yourself. Windows hosts are not probed.
+
 ## Optional cost metrics
 
 The Town board can show token use and reported cost from a Prometheus-compatible

@@ -23,6 +23,7 @@ import {
   MessageSquare,
   Wind,
   Bug,
+  Shirt,
 } from "lucide-react";
 import { APP_VERSION } from "../version";
 import { worldLocalStorage } from "../browserStorage";
@@ -68,6 +69,7 @@ type ConfigMenuProps = ConfigurationProps & {
   zenMode: boolean;
   onZenModeChange: (zenMode: boolean) => void;
   onOpenOfficeMetrics?: () => void;
+  onOpenAgentProfiles?: () => void;
   onShowShortcuts: () => void;
 };
 
@@ -75,6 +77,7 @@ export function ConfigMenu({
   zenMode,
   onZenModeChange,
   onOpenOfficeMetrics,
+  onOpenAgentProfiles,
   onShowShortcuts,
   ...configuration
 }: ConfigMenuProps) {
@@ -392,6 +395,18 @@ export function ConfigMenu({
                       <span />
                     </button>
                   </div>
+                ) : null}
+                {onOpenAgentProfiles ? (
+                  <ConfigMenuItem
+                    icon={<Shirt size={15} />}
+                    label="Agent profiles"
+                    className="config-menu-item-row"
+                    description="Name, brain, skills, brief and look for new agents"
+                    onClick={() => {
+                      setOpen(false);
+                      onOpenAgentProfiles();
+                    }}
+                  />
                 ) : null}
                 {onOpenOfficeMetrics ? (
                   <ConfigMenuItem

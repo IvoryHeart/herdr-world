@@ -272,6 +272,15 @@
   cursor: pointer;
 }
 
+.town-plaque-action.town-plaque-agent {
+  display: inline-flex;
+  gap: 3px;
+  width: auto;
+  padding: 0 6px;
+  font-size: 10px;
+  font-weight: 700;
+}
+
 .town-plaque-action:disabled {
   opacity: 0.4;
   cursor: not-allowed;
