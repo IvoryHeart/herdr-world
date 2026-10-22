@@ -556,7 +556,8 @@ function applyOp(next: BoardDocument, op: BoardOp, current: BoardDocument) {
 /**
  * After a move in any view: anchors to a moved pane take its new ID (moved
  * panes keep their terminals, so witnesses stay), and anchors to a moved tab
- * take its new tab ID. Returns the string updates to save, if any.
+ * take its new tab ID, as does the tab's colour. Returns the updates to save,
+ * if any.
  */
 export function moveFollowOps(
   document: BoardDocument,
@@ -587,6 +588,14 @@ export function moveFollowOps(
     if (from !== string.from || to !== string.to)
       ops.push({ op: "string.put", string: { ...string, from, to } });
   }
+  // A terminal keeps its colour (web/src/world/terminalColor.ts) when it moves.
+  const previousKey = movedTab ? `${connectionId}:${movedTab}` : null;
+  const color = previousKey ? document.layout.colors[previousKey] : undefined;
+  if (previousKey && color && movedTab !== moved.tab_id)
+    ops.push(
+      { op: "card.color", key: `${connectionId}:${moved.tab_id}`, color },
+      { op: "card.color", key: previousKey, color: null },
+    );
   return ops;
 }
 

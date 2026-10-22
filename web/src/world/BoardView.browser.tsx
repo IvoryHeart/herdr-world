@@ -14,6 +14,7 @@ import {
   fixtureWorld,
   type FixtureSpace,
 } from "./board/boardFixture";
+import { defaultTerminalColor } from "./terminalColor";
 import "./world.css";
 
 /*
@@ -1521,14 +1522,20 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
           );
           await bringIntoView(() => card(tabKey)!);
         }
+        // Every tab has its terminal colour; choose one it does not have.
+        const pick = defaultTerminalColor(tabKey) === "teal" ? "pink" : "teal";
+        check(
+          card(tabKey)!.classList.contains("board-tinted"),
+          "a tab shows its default terminal colour",
+        );
         const before = getComputedStyle(card(tabKey)!).backgroundColor;
         host
           .querySelector<HTMLButtonElement>(
-            '[aria-label="Colour of review"] [aria-label="Colour teal"]',
+            `[aria-label="Colour of review"] [aria-label="Colour ${pick}"]`,
           )!
           .click();
         await waitFor(
-          () => saved.layout.colors?.[tabKey] === "teal",
+          () => saved.layout.colors?.[tabKey] === pick,
           "the colour is saved",
         );
         await waitFor(
@@ -1544,11 +1551,11 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
             '[aria-label="Colour of review"] button',
           ),
         ]
-          .find((b) => b.textContent === "No colour")!
+          .find((b) => b.textContent === "Default colour")!
           .click();
         await waitFor(
           () => !saved.layout.colors?.[tabKey],
-          "No colour clears it",
+          "Default colour clears it",
         );
         mount(2, world, null);
         await settle(50);

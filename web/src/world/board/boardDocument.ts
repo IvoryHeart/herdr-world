@@ -141,6 +141,8 @@ export class BoardDocumentStore {
   private listeners = new Set<() => void>();
   private unlisten: (() => void)[] = [];
   private queue: Promise<unknown> = Promise.resolve();
+  /** Views that started the store; it listens while any of them is shown. */
+  private users = 0;
 
   constructor(private readonly client: BoardClient) {}
 
@@ -151,6 +153,7 @@ export class BoardDocumentStore {
   };
 
   start() {
+    this.users += 1;
     if (this.unlisten.length) return;
     this.unlisten = [
       this.client.onControl((control) => {
@@ -168,6 +171,8 @@ export class BoardDocumentStore {
   }
 
   stop() {
+    this.users = Math.max(0, this.users - 1);
+    if (this.users) return;
     for (const off of this.unlisten) off();
     this.unlisten = [];
   }

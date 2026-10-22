@@ -97,6 +97,7 @@ import type { WorldAgentStatus, WorldObject } from "./worldObject";
 import type { WorldCanvasAnchor } from "./worldConnectorGeometry";
 import { WorldSearchResults } from "./WorldSearchResults";
 import { WorldViewToolbar } from "./WorldViewToolbar";
+import { defaultTerminalColor, TERMINAL_COLOR_HEX } from "./terminalColor";
 import "./board/board.css";
 
 /**
@@ -2824,10 +2825,15 @@ export default function BoardView({
   }, [model, selectedId]);
   selectedKeysRef.current = selectedKeys;
 
-  /** Colours the user chose; a tab without its own takes its workspace's. */
+  /**
+   * Colours the user chose. A tab is a terminal and always has its terminal
+   * colour (terminalColor.ts): its own, its workspace's, or the default.
+   */
   const cardColors = saved?.layout.colors ?? {};
   const tabColor = (tab: BoardTab) =>
-    cardColors[tab.key] ?? cardColors[tab.workspaceKey];
+    cardColors[tab.key] ??
+    cardColors[tab.workspaceKey] ??
+    defaultTerminalColor(tab.key);
   /** The workspace or tab whose colour the bar changes. */
   const colorKey =
     [...selectedKeys].find((key) => model.tabByKey.has(key)) ??
@@ -3107,7 +3113,7 @@ export default function BoardView({
                   className={[
                     "board-card board-tab",
                     `board-s-${tab.status}`,
-                    tabColor(tab) ? "board-tinted" : "",
+                    "board-tinted",
                     tab.shellOnly ? "board-terminal" : "",
                     multi ? "board-multi" : "",
                     tab.stale ? "board-stale" : "",
@@ -3482,6 +3488,9 @@ export default function BoardView({
                 ""
               }
               color={cardColors[colorKey] ?? null}
+              resetLabel={
+                model.tabByKey.has(colorKey) ? "Default colour" : "No colour"
+              }
               onColor={(color) => setCardColor(colorKey, color)}
             />
           ) : null}
@@ -3997,16 +4006,20 @@ function edgeAnchor(rect: DOMRect, clip: DOMRect): WorldCanvasAnchor {
   };
 }
 const tintStyle = (color: CardColor | undefined) =>
-  color ? ({ "--tint": `var(--card-${color})` } as CSSProperties) : undefined;
+  color
+    ? ({ "--tint": TERMINAL_COLOR_HEX[color] } as CSSProperties)
+    : undefined;
 
 /** The selected workspace or tab's colour: the user's choice, never a status. */
 function CardBar({
   label,
   color,
+  resetLabel,
   onColor,
 }: {
   label: string;
   color: CardColor | null;
+  resetLabel: string;
   onColor(color: CardColor | null): void;
 }) {
   return (
@@ -4031,7 +4044,7 @@ function CardBar({
         aria-pressed={color === null}
         onClick={() => onColor(null)}
       >
-        No colour
+        {resetLabel}
       </button>
     </div>
   );

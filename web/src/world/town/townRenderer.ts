@@ -47,6 +47,7 @@ import {
 } from "./townCamera";
 import {
   TOWN_FACADE,
+  TOWN_AGENT_SCALE,
   TOWN_TILE as T,
   townDeskSlots,
   townDeskTable,
@@ -55,6 +56,7 @@ import {
   type TownLayout,
 } from "./townLayout";
 import type { TownModel } from "./townModel";
+import type { TerminalColor } from "../terminalColor";
 import {
   paintTownFacade,
   paintTownGround,
@@ -70,7 +72,6 @@ import {
   townHash,
   townLookFor,
   townScreen,
-  TOWN_WOODS,
   type TownCanvas,
   type TownLook,
 } from "./townSprites";
@@ -328,6 +329,9 @@ export async function createTownRenderer(
   app.stage.addChild(world, screenLayer);
 
   let model: TownModel | null = null;
+  /** A desk's table is drawn in its terminal colour. */
+  const deskColor = (deskKey: string): TerminalColor =>
+    model?.deskColors.get(deskKey) ?? "blue";
   let layout: TownLayout | null = null;
   let state: TownSceneState = {
     selectedKey: null,
@@ -495,8 +499,7 @@ export async function createTownRenderer(
             tableSmall: sprites.tableSmall,
             chair: sprites.chair,
             chairBack: sprites.chairBack,
-            woodFor: (deskKey) =>
-              TOWN_WOODS[townHash(deskKey) % TOWN_WOODS.length]!,
+            colorFor: deskColor,
           }),
         ),
       );
@@ -683,7 +686,7 @@ export async function createTownRenderer(
     const X = (cell.x + 1) * T;
     const Y = cell.y * T;
     container.zIndex = Y + 52;
-    const wood = TOWN_WOODS[townHash(desk.key) % TOWN_WOODS.length]!;
+    const wood = deskColor(desk.key);
     const make = (canvas: TownCanvas | null, x: number, y: number) => {
       const sprite = new Sprite(canvas ? textureOf(canvas) : Texture.EMPTY);
       sprite.position.set(x, y);
@@ -709,8 +712,15 @@ export async function createTownRenderer(
     // screens, the people seen from behind and their chair backs.
     for (const slot of slots)
       if (slot.top) make(sprites.chair, X + slot.chairX, Y + 2);
+    // Seated agents keep their feet (facing) or head (from behind) in place.
+    const seated = (sprite: Sprite, x: number, y: number, top: boolean) => {
+      sprite.anchor.set(0.5, top ? 1 : 0);
+      sprite.position.set(x + 7, top ? y + 20 : y);
+      sprite.scale.set(TOWN_AGENT_SCALE);
+      return sprite;
+    };
     const people = slots.map((slot) =>
-      slot.top ? make(null, X + slot.chairX, Y + 5) : null,
+      slot.top ? seated(make(null, 0, 0), X + slot.chairX, Y + 5, true) : null,
     );
     make(
       (cell.seats <= 2 ? sprites.tableSmall : sprites.table)[wood]!,
@@ -749,7 +759,9 @@ export async function createTownRenderer(
       return sprite;
     });
     const backs = slots.map((slot) =>
-      slot.top ? null : make(null, X + slot.chairX, Y + 34),
+      slot.top
+        ? null
+        : seated(make(null, 0, 0), X + slot.chairX, Y + 34, false),
     );
     for (const slot of slots)
       if (!slot.top) make(sprites.chairBack, X + slot.chairX, Y + 45);
@@ -909,6 +921,9 @@ export async function createTownRenderer(
         const shadow = new Graphics()
           .rect(-5, -1, 10, 3)
           .fill({ color: 0x000000, alpha: 0.22 });
+        sprite.anchor.set(0.5, 1);
+        sprite.scale.set(TOWN_AGENT_SCALE);
+        shadow.scale.set(TOWN_AGENT_SCALE, 1);
         building.dynamic.addChild(shadow, sprite);
         view = { sprite, shadow, look: lookOf(actor.key) };
         actorViews.set(actor.key, view);
@@ -920,8 +935,8 @@ export async function createTownRenderer(
         townCharacter(view.look, actor.dir, frame, "stand", blink(actor.key)),
       );
       view.sprite.position.set(
-        Math.round(actor.x - 7),
-        Math.round(actor.y - 19 + bob),
+        Math.round(actor.x),
+        Math.round(actor.y + 1 + bob),
       );
       view.sprite.zIndex = actor.y;
       view.shadow.position.set(Math.round(actor.x), Math.round(actor.y));
@@ -972,14 +987,16 @@ export async function createTownRenderer(
                     : null;
         if (!kind) continue;
         let headX = actor.x;
-        let headY = actor.y - 20;
+        let headY = actor.y - 20 * TOWN_AGENT_SCALE;
         if (actor.mode === "seat") {
           const seat = model.agentSeats.get(actor.key);
           const cell = seat && layoutCells.get(seat.deskKey);
           if (cell && seat) {
             const geometry = townSeat(cell, seat.seat);
             headX = geometry.cx;
-            headY = geometry.top ? geometry.tableY + 4 : geometry.tableY + 33;
+            headY = geometry.top
+              ? geometry.tableY + 24 - 20 * TOWN_AGENT_SCALE
+              : geometry.tableY + 33;
           }
         }
         const point = camera.toScreen(headX, headY);
@@ -1322,8 +1339,6 @@ export async function createTownRenderer(
   let drag: DragVisual | null = null;
   const podOf = (deskKey: string) =>
     buildings.flatMap((b) => b.pods).find((pod) => pod.deskKey === deskKey);
-  const deskWood = (deskKey: string) =>
-    TOWN_WOODS[townHash(deskKey) % TOWN_WOODS.length]!;
   const clearDrag = () => {
     if (!drag) return;
     if (drag.dimmed && !drag.dimmed.destroyed) drag.dimmed.alpha = 1;
@@ -1363,7 +1378,7 @@ export async function createTownRenderer(
         const seats = cell?.seats ?? 4;
         image = new Sprite(
           textureOf(
-            (seats <= 2 ? sprites.tableSmall : sprites.table)[deskWood(key)]!,
+            (seats <= 2 ? sprites.tableSmall : sprites.table)[deskColor(key)]!,
           ),
         );
       }
@@ -1381,6 +1396,7 @@ export async function createTownRenderer(
         textureOf(townCharacter(lookOf(key), "down", 0, "stand", false)),
       );
       image.anchor.set(0.5, 0.8);
+      image.scale.set(TOWN_AGENT_SCALE);
       ghost.addChild(image);
     }
     const shadow = new Graphics()
@@ -1441,7 +1457,7 @@ export async function createTownRenderer(
         const slot = new Sprite(
           textureOf(
             (seats <= 2 ? sprites.tableSmall : sprites.table)[
-              deskWood(drag.key)
+              deskColor(drag.key)
             ]!,
           ),
         );
@@ -1547,14 +1563,14 @@ export async function createTownRenderer(
       return level;
     },
     setScene(nextModel, nextLayout, nextState) {
-      const layoutChanged = nextLayout !== layout;
       const first = !layout;
       model = nextModel;
       layout = nextLayout;
       state = nextState;
       camera.calm = nextState.calm;
-      const key = `${nextLayout.width}x${nextLayout.height}:${nextLayout.buildings.map((b) => `${b.hostKey}@${b.x},${b.y},${b.w},${b.h}:${b.rooms.map((r) => r.cells.map((c) => (c.deskKey ? `${c.deskKey}#${c.seats}` : "-")).join(",")).join("|")}`).join(";")}`;
-      if (layoutChanged && key !== sceneKey) {
+      // Tables are baked with their desk's colour, so a new colour rebuilds.
+      const key = `${nextLayout.width}x${nextLayout.height}:${nextLayout.buildings.map((b) => `${b.hostKey}@${b.x},${b.y},${b.w},${b.h}:${b.rooms.map((r) => r.cells.map((c) => (c.deskKey ? `${c.deskKey}#${c.seats}#${deskColor(c.deskKey)}` : "-")).join(",")).join("|")}`).join(";")}`;
+      if (key !== sceneKey) {
         sceneKey = key;
         buildScene();
         stats.sceneRenders += 1;

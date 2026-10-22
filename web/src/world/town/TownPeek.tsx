@@ -9,6 +9,11 @@ import type { OfficeAgent } from "../herdrOfficeProjection";
 import type { HistoryEntry } from "../../components/agentHistory";
 import { townLineKind, townQuestion, type TownChoice } from "./townChat";
 import { townPortrait } from "./townSprites";
+import {
+  TERMINAL_COLOR_HEX,
+  TERMINAL_COLORS,
+  type TerminalColor,
+} from "../terminalColor";
 
 const STATUS: Record<OfficeAgent["semanticStatus"], string> = {
   working: "Working",
@@ -66,7 +71,14 @@ export function TownPeek({
   onAttach,
   onReviewed,
   history,
+  deskColor = null,
 }: {
+  /** The colour of the agent's desk (its terminal), to change or reset. */
+  deskColor?: {
+    current: TerminalColor;
+    custom: boolean;
+    onColor(color: TerminalColor | null): void;
+  } | null;
   /** Recent messages from the agent's session, shown in place of its screen. */
   history: readonly HistoryEntry[] | null;
   /** Check a finished agent's work, which sends it for a break. */
@@ -104,6 +116,7 @@ export function TownPeek({
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [uploads, setUploads] = useState(0);
+  const [colors, setColors] = useState(false);
   const filePicker = useRef<HTMLInputElement>(null);
   const attach = (files: File[], image: boolean) => {
     if (!files.length) return;
@@ -399,12 +412,45 @@ export function TownPeek({
         <button type="button" onClick={onTerminal}>
           Terminal
         </button>
+        {deskColor ? (
+          <button
+            type="button"
+            className="town-peek-color"
+            aria-expanded={colors}
+            title="Desk colour, shared with its tab in Spaces and Board"
+            onClick={() => setColors((open) => !open)}
+          >
+            <i style={{ background: TERMINAL_COLOR_HEX[deskColor.current] }} />
+            Colour
+          </button>
+        ) : null}
         {onNext ? (
           <button type="button" onClick={onNext}>
             Next ›
           </button>
         ) : null}
       </div>
+      {deskColor && colors ? (
+        <div className="town-peek-colors" role="group" aria-label="Desk colour">
+          {TERMINAL_COLORS.map((color) => (
+            <button
+              key={color}
+              type="button"
+              style={{ background: TERMINAL_COLOR_HEX[color] }}
+              aria-label={`Colour ${color}`}
+              aria-pressed={deskColor.current === color}
+              onClick={() => deskColor.onColor(color)}
+            />
+          ))}
+          <button
+            type="button"
+            disabled={!deskColor.custom}
+            onClick={() => deskColor.onColor(null)}
+          >
+            Default
+          </button>
+        </div>
+      ) : null}
       {composer}
     </div>
   );

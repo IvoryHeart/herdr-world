@@ -1500,7 +1500,8 @@ non-actionable. Town SHALL be unaffected.
 
 A workspace card SHALL count its agents by status and its shells. The user MAY
 give any workspace or tab card a colour from a fixed palette, saved with the
-board; a tab without its own colour SHALL take its workspace's. A card's colour
+board; a tab card SHALL show its terminal colour (see Terminal colour), so a tab
+without its own colour takes its workspace's, then its default. A card's colour
 SHALL never stand for or hide a status: status keeps its own colours on the dot,
 ring, badge and overview squares. From an actionable workspace card the user MAY
 open a plain terminal tab or start an agent in a new tab without a note, and
@@ -1525,6 +1526,28 @@ from a live host's label MAY open World's New workspace dialog.
 
 - **WHEN** a host's topology is cached after a failure
 - **THEN** its zone and cards are shown as stale and offer no actions
+
+### Requirement: Terminal colour
+
+Every Herdr tab SHALL have one terminal colour from a fixed palette, shown as
+its tab in Spaces, its table in Town and its card in Board. Without a choice a
+tab SHALL take its workspace's Board colour, if any, or else a default derived
+only from its connection and Herdr tab ID, so it is the same on every device
+and after reloads. A colour chosen in any view SHALL be saved by the World
+service, keyed by connection and Herdr tab ID, SHALL appear in every view and
+on every device, and MAY be reset to the default. A tab moved to another
+workspace SHALL keep its chosen colour. Terminal colour SHALL never stand for or
+hide a status. World SHALL NOT write a colour to Herdr.
+
+#### Scenario: Colour a tab in Spaces
+
+- **WHEN** the user picks pink from a tab's menu in Spaces
+- **THEN** the tab's strip in Spaces, its table in Town and its card in Board show pink on every device
+
+#### Scenario: Reset a tab's colour
+
+- **WHEN** the user chooses Default colour for a tab with a chosen colour
+- **THEN** every view shows the tab's default colour again
 
 ### Requirement: Board placement and movement
 

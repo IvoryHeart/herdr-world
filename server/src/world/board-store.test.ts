@@ -479,6 +479,31 @@ describe("Board store", () => {
     ]);
   });
 
+  test("a moved tab keeps its terminal colour under its new tab ID", () => {
+    const store = new BoardStore(path);
+    store.patch([
+      { op: "card.color", key: "alpha:w1:t1", color: "teal" },
+      { op: "card.color", key: "beta:w1:t1", color: "red" },
+    ]);
+    store.patch(
+      moveFollowOps(store.get(), "alpha", "w1:t1", {
+        tab_id: "w2:t4",
+        panes: [],
+      }),
+    );
+    expect(store.get().layout.colors).toEqual({
+      "alpha:w2:t4": "teal",
+      "beta:w1:t1": "red",
+    });
+    // A tab without a chosen colour keeps its default; nothing to save.
+    expect(
+      moveFollowOps(store.get(), "alpha", "w3:t1", {
+        tab_id: "w4:t1",
+        panes: [],
+      }),
+    ).toEqual([]);
+  });
+
   test("a conditional detach applies only while the end still names the checked target", () => {
     const store = new BoardStore(path);
     store.patch([

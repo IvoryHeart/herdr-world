@@ -6,6 +6,12 @@
  * of identity and the definitions below.
  */
 
+import {
+  TERMINAL_COLOR_HEX,
+  TERMINAL_COLORS,
+  type TerminalColor,
+} from "../terminalColor";
+
 export type TownCanvas = HTMLCanvasElement;
 type Rect = (x: number, y: number, w: number, h: number, color: string) => void;
 type Disc = (cx: number, cy: number, r: number, color: string) => void;
@@ -330,7 +336,18 @@ export function townCharacter(
 
 /* ---------- furniture and scenery ---------- */
 
-export const TOWN_WOODS = ["#c48d57", "#b07a4a", "#d2a46e", "#a36f47"] as const;
+const WOOD = "#b07a4a";
+
+/** A desk is its terminal's colour, kept warm by a little of the wood. */
+export const TOWN_DESK_COLORS = Object.fromEntries(
+  TERMINAL_COLORS.map((color) => {
+    const [r, g, b] = rgb(TERMINAL_COLOR_HEX[color]);
+    const [wr, wg, wb] = rgb(WOOD);
+    const mix = (a: number, w: number) => Math.round(a * 0.7 + w * 0.3);
+    const n = (1 << 24) | (mix(r, wr) << 16) | (mix(g, wg) << 8) | mix(b, wb);
+    return [color, `#${n.toString(16).slice(1)}`];
+  }),
+) as Record<TerminalColor, string>;
 export const TOWN_KIND_LOGOS: Record<string, string> = {
   claude: "#e0835f",
   codex: "#f0f0f0",
@@ -355,12 +372,12 @@ export function buildTownSprites() {
       if (W > 40) R(W / 2 - 2, 30, 4, 2, townShade(w, -0.55));
     });
   const table = Object.fromEntries(
-    TOWN_WOODS.map((w) => [w, tableOf(64, w)]),
-  ) as Record<string, TownCanvas>;
+    TERMINAL_COLORS.map((c) => [c, tableOf(64, TOWN_DESK_COLORS[c])]),
+  ) as Record<TerminalColor, TownCanvas>;
   /** The small table of a solo or face-to-face desk. */
   const tableSmall = Object.fromEntries(
-    TOWN_WOODS.map((w) => [w, tableOf(36, w)]),
-  ) as Record<string, TownCanvas>;
+    TERMINAL_COLORS.map((c) => [c, tableOf(36, TOWN_DESK_COLORS[c])]),
+  ) as Record<TerminalColor, TownCanvas>;
   const lid = (logo: string) =>
     townSprite(14, 7, (R) => {
       R(0, 0, 14, 5, "#5d6574");

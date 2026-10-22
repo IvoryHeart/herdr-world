@@ -1,5 +1,6 @@
 import type { TownLevel } from "./townCamera";
 import {
+  TOWN_AGENT_SCALE as S,
   TOWN_FACADE,
   TOWN_TILE as T,
   townDeskSlots,
@@ -65,9 +66,9 @@ export function townHitTest(
       .sort((a, b) => b.y - a.y);
     for (const actor of standing)
       if (
-        x >= actor.x - 9 - pad &&
-        x <= actor.x + 9 + pad &&
-        y >= actor.y - 22 - pad &&
+        x >= actor.x - 9 * S - pad &&
+        x <= actor.x + 9 * S + pad &&
+        y >= actor.y - 22 * S - pad &&
         y <= actor.y + 3 + pad
       )
         return { kind: "agent", key: actor.key };

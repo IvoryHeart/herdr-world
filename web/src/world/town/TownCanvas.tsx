@@ -70,6 +70,7 @@ import {
 import { townPortrait } from "./townSprites";
 import { townTargets, type TownTarget } from "./townTargets";
 import { yieldWorldTask } from "../worldObject";
+import { TERMINAL_COLOR_HEX, type TerminalColors } from "../terminalColor";
 import "./town.css";
 
 export type TownRoomActions = {
@@ -104,6 +105,7 @@ const savedCameras = new Map<
 >();
 
 const portrait = townPortrait;
+const NO_COLORS: TerminalColors = {};
 
 function ago(since: number, now: number) {
   const seconds = Math.max(0, Math.round((now - since) / 1000));
@@ -125,6 +127,7 @@ export function TownCanvas({
   selectedRoomKey,
   observability,
   calm = false,
+  terminalColors = NO_COLORS,
   chrome = NO_CHROME,
   trace = NO_TRACE,
 }: {
@@ -146,6 +149,8 @@ export function TownCanvas({
   onSelectedAnchorChange?: (anchor: WorldCanvasAnchor | null) => void;
   roomActions: TownRoomActions;
   selectedRoomKey: string | null;
+  /** Saved terminal colours (useTerminalColors); desks use their tab's. */
+  terminalColors?: TerminalColors;
 }) {
   const shellRef = useRef<HTMLDivElement | null>(null);
   const traceRef = useRef(trace);
@@ -168,8 +173,8 @@ export function TownCanvas({
     memory: new Map(),
   });
   const model = useMemo(
-    () => townModelFromProjection(projection),
-    [projection],
+    () => townModelFromProjection(projection, terminalColors),
+    [projection, terminalColors],
   );
   const layout = useMemo(() => {
     const previous =
@@ -1498,10 +1503,16 @@ const TownWorldLayer = memo(function TownWorldLayer({
                           <div
                             key={desk.key}
                             className="town-desk-tags"
-                            style={{
-                              left: (cell.x + 1 - placed.x) * T,
-                              top: (cell.y - placed.y) * T,
-                            }}
+                            style={
+                              {
+                                left: (cell.x + 1 - placed.x) * T,
+                                top: (cell.y - placed.y) * T,
+                                "--desk-color":
+                                  TERMINAL_COLOR_HEX[
+                                    model.deskColors.get(desk.key) ?? "blue"
+                                  ],
+                              } as React.CSSProperties
+                            }
                           >
                             <span className="town-desk-tag" aria-hidden="true">
                               {desk.displayLabel}

@@ -132,6 +132,9 @@ changes what you see and does not disconnect hosts or retarget open terminals.
 6. Use the paperclip to attach files to the reply. Uploads go to the selected
    pane's host; review the message and attached paths before sending. Choose
    **Inspector** for files, changes and history, or **Terminal** for direct work.
+   **Colour** changes the colour of the agent's table; it is the tab's colour
+   everywhere in World, and in Spaces the tab's menu (right-click or long-press)
+   offers the same palette and **Default colour**.
    **Next** cycles waiting agents, then finished agents when no other agent is
    waiting.
 7. To move a table to another room, zoom in until you see tables, then drag it
@@ -183,8 +186,10 @@ on your phone and desktop.
    The round **+** on a workspace's right edge (shown on hover or selection)
    opens **New tab**: choose a Terminal, Claude or Codex, optionally name the
    tab, and press **Create**; **+** beside a host's name creates a workspace. Select a workspace or
-   tab to give it a colour of your own (a tab takes its workspace's colour
-   unless it has one); status keeps its own colours.
+   tab to give it a colour of your own; status keeps its own colours. A tab's
+   colour is its terminal colour, the same one Spaces and Town show: it starts
+   as a stable default (or its workspace's colour, if you gave the workspace
+   one), and **Default colour** returns to it.
 2. Scroll or pinch to zoom, drag empty board to pan, or use the controls at the
    bottom right. Zoomed out, each workspace shows a square per pane (hollow for
    shells); tap a workspace there to zoom in on it.

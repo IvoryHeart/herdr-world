@@ -130,6 +130,43 @@
   font-weight: 500;
 }
 
+/* A tab's colour, when the host supplies one: a stripe at its leading edge. */
+.tabbar-tab[data-color]::before {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 6px;
+  bottom: 6px;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--tab-color);
+}
+
+.context-menu-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 6px 4px 2px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.context-menu-swatch {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.context-menu-swatch[aria-pressed="true"] {
+  border-color: var(--text-strong);
+}
+
+.context-menu-swatches .context-menu-item {
+  flex: 1 0 100%;
+}
+
 .tabbar-agent-marker {
   height: 21px;
   flex: 0 0 auto;

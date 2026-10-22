@@ -33,6 +33,12 @@ const MIN_BUILDING_WIDTH = 38;
 const MARGIN = 3;
 const ROAD_GAP = 5;
 export const TOWN_FACADE = 2;
+
+/**
+ * Agents are drawn larger than the furniture's pixel grid so they read as the
+ * subject of a room, not as props. Hit-testing and drawing share it.
+ */
+export const TOWN_AGENT_SCALE = 1.4;
 const YARD = 2;
 const PARK_HEIGHT = 12;
 const QUEUE_OFFSETS = [0, 1, -1, 2, -2, 3, -3, 4, -4, 5];

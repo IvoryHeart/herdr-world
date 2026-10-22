@@ -12,7 +12,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
 - **Town** is the default view (`/town`); the root URL opens it too.
   Each host is a building, each workspace a room, each tab a team table and each
   pane a seat. Plain terminals show prompts. Additional panes beyond the drawn
-  seats remain available through the table's count and chooser.
+  seats remain available through the table's count and chooser. Each table
+  carries its tab's name on a nameplate at its front edge.
   - Blocked agents queue at reception oldest first. Finished agents wait there
     until you open their terminal or mark that completion reviewed, then join
     idle agents in the lounge. Movement only represents state.
@@ -40,6 +41,13 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     use the shared aggregate. Reception and lounge positions only show status;
     only an explicit move changes Herdr's layout, always within one host.
   See the [Town exercise](./docs/TUTORIAL.md#town).
+- **Terminal colours.** Every tab has one colour, shown as the tab in Spaces,
+  the table in Town and the card in Board. A tab starts with a stable default
+  colour; choose another from the tab's menu in Spaces, an agent's peek
+  (**Colour**) in Town, or the selected card in Board, and reset it the same
+  way. Herdr has no tab colour, so the World service saves the choice by host
+  and Herdr tab ID; it is the same on every device and survives a Herdr restart
+  and a move to another workspace.
 
 - **Board** (`/board`) shows hosts as zones, workspaces as cards and tabs as
   cards around their workspace, beside your notes. Cards are elastic while you
@@ -51,8 +59,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     working agent's tab (or the selected one) pulses (a ⋯ setting).
   - **+** on a workspace opens New tab (Terminal, Claude or Codex, an optional
     name, then Create; a note's Start an agent uses the same dialog); **+** on a host creates a workspace. Workspace cards count their
-    agents by status; workspaces and tabs take a colour the user picks, while
-    status keeps its own colours.
+    agents by status; tabs show their terminal colour and workspaces take a
+    colour the user picks, while status keeps its own colours.
   - Notes and strings are saved by the World service and shared across your
     devices. Strings attach to an exact pane, tab or workspace; a note strung to
     a pane is sent to its agent only when you press Send. When you make the
@@ -181,7 +189,7 @@ choice. Agent checkout has no Git mutation controls or Clear command.
 ## Workspace, Tab, and Pane Navigation
 
 - Browse workspaces and recognized agents; create, rename, focus, pin, or close
-  workspaces and create, rename, switch, or close tabs.
+  workspaces and create, rename, colour, switch, or close tabs.
 - Group linked Git worktrees under their repository. Pin workspaces/worktrees
   to the top and collapse groups; preferences stay in this browser.
 - Split panes right/down, resize boundaries, focus neighbors, zoom, or close.
