@@ -97,7 +97,7 @@ async function registerDomTests() {
   history.pushState(null, "", "/a");
   history.pushState(null, "", "/b");
   history.pushState({ herdrBack: true }, "");
-  const { useSystemBack } = await import("./systemBack");
+  const { pushRoute, useSystemBack } = await import("./systemBack");
 
   type Name = "sheet" | "more" | "composer" | "files";
   const levels = {
@@ -187,6 +187,23 @@ async function registerDomTests() {
     expect([at(), guarded()]).toEqual(["/b", false]);
     await userBack();
     expect(at()).toBe("/a");
+  });
+
+  test("a route chosen from a closing layer survives its guard's removal", async () => {
+    await start();
+    await set(["more"]);
+    expect(guarded()).toBe(true);
+    // Closing the menu starts the guard's Back; the chosen route is pushed
+    // before that traversal lands, as an asynchronous command does.
+    await act(async () => show([]));
+    await act(async () => {
+      await Promise.resolve();
+      pushRoute({}, new URL("http://localhost/c"));
+    });
+    await settle();
+    expect([String(at()), guarded()]).toEqual(["http://localhost/c", false]);
+    await userBack();
+    expect(at()).toBe("/b");
   });
 
   test("one Back leaves the page after layers close together", async () => {

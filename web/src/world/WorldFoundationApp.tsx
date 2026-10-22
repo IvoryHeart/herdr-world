@@ -62,6 +62,7 @@ import {
   activateWorldNodeHost,
 } from "./worldInspectorSelection";
 import { pushRoute, stepBack, useSystemBack } from "../systemBack";
+import { closeTopLayer } from "../layerStack";
 import { WorldMobileNav, worldViewLabel } from "./WorldMobileNav";
 import { WorldControlPlane } from "./WorldControlPlane";
 import { EMPTY_VISUAL_ACTION_EXTENSION } from "./worldControlPlaneContract";
@@ -277,7 +278,7 @@ export default function WorldFoundationApp() {
   // Then it undoes the in-app navigation that opened Spaces, so the next
   // system Back does not reopen it. Opened directly, it replaces itself.
   const leaveSpaces = () => {
-    if (stepBack()) return;
+    if (closeTopLayer() || stepBack()) return;
     const from = (window.history.state as { herdrFrom?: unknown } | null)
       ?.herdrFrom;
     if (from === WORLD_VIEW_PATHS[visualView]) window.history.back();
@@ -417,9 +418,13 @@ export default function WorldFoundationApp() {
                   className="world-back-to-view"
                   title={returnLabel}
                   aria-label={returnLabel}
+                  data-layer-back
                   onClick={() => {
-                    // The on-screen Back returns to the view at once, Composer
-                    // or not; the phone's Back closes the Composer first.
+                    // An open menu or list above the terminal closes first.
+                    if (closeTopLayer()) return;
+                    // Then the on-screen Back returns to the view at once,
+                    // Composer or not; the phone's Back closes the Composer
+                    // first.
                     creationIntentRevision.current++;
                     visualArrangementControl?.onSelect("close-all");
                   }}
@@ -432,6 +437,7 @@ export default function WorldFoundationApp() {
                   className="world-back-to-view"
                   title={`Back to ${worldViewLabel(visualView)}`}
                   aria-label={`Back to ${worldViewLabel(visualView)}`}
+                  data-layer-back
                   onClick={leaveSpaces}
                 >
                   <ArrowLeft size={20} aria-hidden="true" />

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { measuredFixedPositionScale } from "../../fixedPositionScale";
 import { PanelsTopLeft, Minus } from "lucide-react";
+import { useLayer } from "../../layerStack";
 import "./windows.css";
 
 export type WindowSwitcherEntry = {
@@ -50,16 +51,11 @@ export function WindowSwitcher({
       menu.current?.querySelector<HTMLButtonElement>('[aria-current="true"]') ??
       menu.current?.querySelector<HTMLButtonElement>("button")
     )?.focus();
-    const outside = (event: PointerEvent) => {
-      if (
-        !menu.current?.contains(event.target as Node) &&
-        !trigger.current?.contains(event.target as Node)
-      )
-        setOpen(false);
-    };
-    window.addEventListener("pointerdown", outside);
-    return () => window.removeEventListener("pointerdown", outside);
   }, [open, entries.length]);
+  useLayer(open, () => setOpen(false), {
+    element: () => menu.current,
+    anchors: () => [trigger.current],
+  });
   if (!entries.length) return null;
   return (
     <>
@@ -85,12 +81,6 @@ export function WindowSwitcher({
             aria-label="Open windows"
             style={position}
             onKeyDown={(event) => {
-              if (event.key === "Escape") {
-                event.preventDefault();
-                event.stopPropagation();
-                setOpen(false);
-                trigger.current?.focus();
-              }
               if (event.key === "Tab") setOpen(false);
               if (event.key === "ArrowDown" || event.key === "ArrowUp") {
                 event.preventDefault();

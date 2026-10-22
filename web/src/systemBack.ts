@@ -83,6 +83,9 @@ let reconcileScheduled = false;
 // history.back() is asynchronous; until our own Back lands, the current entry
 // is stale and a popstate is ours, not the user's.
 let backPending = false;
+// A route pushed while our Back is in flight; the traversal would undo it, so
+// it is pushed when the traversal lands.
+let deferredRoute: { state: Record<string, unknown>; url: URL } | null = null;
 
 function isGuard(state: unknown) {
   return typeof state === "object" && state !== null && GUARD in state;
@@ -160,6 +163,10 @@ if (typeof window !== "undefined") {
     previousState = event.state;
     if (backPending) {
       backPending = false;
+      const route = deferredRoute;
+      deferredRoute = null;
+      // Pushed before other popstate listeners read the location.
+      if (route) pushRoute(route.state, route.url);
       reconcile();
       return;
     }
@@ -237,6 +244,10 @@ export function stepBack(): boolean {
  * below the route, so Back from the route reaches the page before it.
  */
 export function pushRoute(state: Record<string, unknown>, url: URL) {
+  if (backPending) {
+    deferredRoute = { state, url };
+    return;
+  }
   if (isGuard(window.history.state))
     window.history.replaceState(state, "", url);
   else window.history.pushState(state, "", url);

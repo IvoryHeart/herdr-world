@@ -1286,36 +1286,6 @@
   font-weight: 600;
 }
 
-.town-peek-color i {
-  display: inline-block;
-  width: 10px;
-  height: 10px;
-  margin-right: 5px;
-  border-radius: 50%;
-  vertical-align: -1px;
-}
-
-/* The desk's terminal colour: a palette and a reset. */
-.town-peek-colors {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  margin-top: 8px;
-}
-
-.town-peek-colors button[aria-label] {
-  width: 24px;
-  height: 24px;
-  padding: 0;
-  border: 2px solid transparent;
-  border-radius: 50%;
-}
-
-.town-peek-colors button[aria-pressed="true"] {
-  border-color: #fff;
-}
-
 /* Toasts. */
 .town-toasts {
   position: absolute;

@@ -21,6 +21,10 @@ are optional because the merged PR history records their source.
 
 ### Changed
 
+- Show a terminal's colour as a swatch beside its name in the terminal's
+  header on desktop and phones, and offer the same picker under **Colour** in
+  the terminal window's menu and in the Town peek's header. All pickers are
+  one component with **Default colour**.
 - Give every terminal one colour, shown as its tab in Spaces, its table in
   Town and its card in Board. Tabs start with a stable default; a colour chosen
   from the Spaces tab menu, a Town peek or Board is saved by the World service
@@ -51,6 +55,12 @@ are optional because the merged PR history records their source.
 
 ### Fixed
 
+- Close menus, dropdowns, pickers and the phone's workspace list top first.
+  Tapping the terminal now closes a dropdown on phones; Escape closes a menu
+  even while the terminal has focus; on-screen Back closes the workspace list
+  opened from a terminal's title instead of leaving it over the scene; and
+  focus returns to the terminal. One layer stack handles Escape, outside
+  presses and Back for all of them.
 - History and Chat no longer show Codex repository instructions and environment
   blocks, Claude Code local-command caveats, task notifications, compaction
   summaries, subagent sidechains or rewound prompts as user messages. Remote

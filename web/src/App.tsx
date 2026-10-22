@@ -128,6 +128,7 @@ import {
   useVisibleTerminalWorkspaceId,
 } from "./components/MobileControls";
 import { useSystemBack } from "./systemBack";
+import { useLayer } from "./layerStack";
 import { requestClosePane, requestCloseTab, TabBar } from "./components/TabBar";
 import type { WindowArrangementControl } from "./components/TabBar";
 import { WindowArrangementMenu } from "./components/WindowArrangementMenu";
@@ -4287,6 +4288,7 @@ export default function App({
           setMobileTabSheetOpen(false);
           setMobileMoreOpen((open) => !open);
         },
+        tabColors: worldTabColors,
         workspacesOpen: mobileView === "workspaces",
         toggleWorkspaces: () => {
           setMobileMoreOpen(false);
@@ -4297,13 +4299,26 @@ export default function App({
       }
     : null;
   usePublishMobileControls(mobileControls);
-  useSystemBack(mobileMoreOpen, () => setMobileMoreOpen(false), "popup");
+  useLayer(mobileMoreOpen, () => setMobileMoreOpen(false), {
+    element: () =>
+      appRef.current?.querySelector(".mobile-controls-stack") ?? null,
+    anchors: () =>
+      document.querySelectorAll('button[aria-label="More options"]'),
+  });
   useSystemBack(
     mobileTabSheetOpen,
     () => setMobileTabSheetOpen(false),
     "popup",
   );
-  useSystemBack(mobileView === "workspaces", activateTerminalSurface, "panel");
+  // The workspace list opened from the terminal's title covers the terminal:
+  // a layer, so Escape, Back or the title close it before anything below.
+  useLayer(mobile && mobileView === "workspaces", activateTerminalSurface, {
+    element: () => document.getElementById("workspace-navigator"),
+    anchors: () =>
+      document.querySelectorAll(
+        ".mobile-terminal-title, .mobile-workspace-shortcut",
+      ),
+  });
   return (
     <div
       ref={appRef}

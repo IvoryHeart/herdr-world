@@ -1,0 +1,101 @@
+/* The terminal colour picker (ColorSwatch.tsx). */
+.color-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 4px 2px;
+}
+
+.color-swatch {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.color-swatch[aria-pressed="true"] {
+  border-color: var(--text-strong);
+}
+
+.color-swatches-reset {
+  flex: 1 0 100%;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.color-swatches-reset:hover:not(:disabled) {
+  background: var(--panel-2);
+}
+
+.color-swatches-reset:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* Above World's windows and their menus. */
+.popover-content.color-swatch-popover {
+  z-index: 6100;
+  width: 184px;
+  padding: 4px;
+}
+
+/* A header swatch: the current colour, opening the picker. */
+.color-swatch-button {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  cursor: pointer;
+}
+
+.color-swatch-button:hover,
+.color-swatch-button[data-state="open"] {
+  background: var(--panel-2);
+}
+
+.color-swatch-button:has(span) {
+  width: auto;
+  gap: 8px;
+  padding: 0 8px;
+  color: inherit;
+  font: inherit;
+}
+
+.color-swatch-button i {
+  display: block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25);
+}
+
+@media (pointer: coarse) {
+  .color-swatch {
+    width: 28px;
+    height: 28px;
+  }
+
+  .color-swatch-button {
+    width: 36px;
+    height: 36px;
+  }
+
+  .popover-content.color-swatch-popover {
+    width: 230px;
+  }
+}
