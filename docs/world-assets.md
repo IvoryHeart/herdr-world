@@ -6,9 +6,11 @@ Claw-Empire repository at revision
 tracked PNGs are byte-identical to those source files. That source carries the
 Apache License 2.0 and the copyright notice `Copyright 2026 GreenSheep01201
 (seowongil@gmail.com)`. Herdr World has no build or runtime dependency on the
-reference workspace. The application no longer ships the sprites; the website
-film under `site/film/` embeds downscaled copies, so this provenance and the
-Apache-2.0 notice remain.
+reference workspace. Neither the application nor the website ships the sprites
+any more: the Office view was retired, and the website film under `site/film/`,
+which embedded downscaled copies until October 2026, now draws only Town art (see
+below). This provenance and the Apache-2.0 notice remain for the releases and site
+versions that carried them.
 
 The reference workspace is historical provenance only; contributors do not
 need to clone or start another repository to build, test, or run Herdr World.
@@ -62,4 +64,14 @@ The Town view draws only original pixel art generated at load time from compact
 definitions in `web/src/world/town/townSprites.ts` and `townPaint.ts`: ground,
 roads, buildings, furniture, speech bubbles and characters, whose appearance is
 derived from each agent's key. It ships no image files and no third-party art.
+
+The website film draws its Town scenes, characters and finale parade with the
+same code: `site/film/town-art.ts` re-exports `townLayout.ts`, `townPaint.ts`,
+`townSprites.ts` and the terminal colour palette, and `bun run build:site` bundles
+them into `film/town-art.js`. The film's other pictures (terminals, Board cards,
+Chat and the phone) are canvas drawing in `site/film/index.html`, and the Herdr
+logo is the project's own. The film therefore carries no third-party art; its
+fonts are listed in [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md). The film's
+video (`bun run film:render`) is recorded from this same canvas and score, so it adds
+no other assets.
 
