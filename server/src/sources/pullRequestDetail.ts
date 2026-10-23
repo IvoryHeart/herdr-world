@@ -307,19 +307,23 @@ export function resultOutcome(line: string): PullRequestReviewer["outcome"] {
     });
   // A count that is the second half of `2/3` is not a count of its own.
   const lone = `(?<![/\\d])${NUMBER}`;
-  const resolved = /(\d+)\s*\/\s*(\d+)\b[^,;]*?\bresolved/iu.exec(line);
+  // Every fraction counts: `2/2 resolved; 0/1 resolved` is not resolved.
+  const fractions = [
+    ...line.matchAll(/(\d+)\s*\/\s*(\d+)\b[^,;]*?\bresolved/giu),
+  ].map((match) => [Number(match[1]), Number(match[2])] as const);
   const open =
     counts(
       `${lone}\\s+(?:[\\w-]+\\s+){0,3}?(?:remain(?:s|ing)?|open|unresolved|unfixed|outstanding(?!\\s+(?:findings?\\s+)?(?:resolved|fixed|confirmed)))\\b`,
     ).some(Boolean) ||
     counts(`${lone}\\s+new\\b`).some(Boolean) ||
-    counts(`(?<![/\\d])(\\d+)\\s+findings?\\b`).some(Boolean) ||
+    // `3 findings`, `one finding`; `all four findings` is a tally, not a count.
+    counts(`(?<!\\ball\\s)${lone}\\s+findings?\\b`).some(Boolean) ||
     /\b(?:not|never)\s+(?:yet\s+)?(?:confirmed|resolved|fixed)\b|\bunconfirmed\b/iu.test(
       line,
     ) ||
-    (resolved !== null && Number(resolved[1]) < Number(resolved[2]));
+    fractions.some(([done, total]) => done < total);
   if (open) return "open";
-  return resolved ||
+  return fractions.length ||
     /\b(?:confirmed|no (?:new )?findings|0 (?:new )?findings)\b/iu.test(line)
     ? "confirmed"
     : "unknown";

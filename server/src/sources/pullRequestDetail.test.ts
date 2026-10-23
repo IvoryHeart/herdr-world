@@ -232,6 +232,8 @@ describe("pull request detail", () => {
       ["2/2 resolved, 3 findings (P2)", "open"],
       ["not confirmed, 0 new findings", "open"],
       ["one P2 remains", "open"],
+      ["2/2 resolved; one finding (P2)", "open"],
+      ["2/2 resolved; 0/1 resolved, 0 new", "open"],
       ["All four findings confirmed; 0 new.", "confirmed"],
       ["both remaining P2s confirmed fixed; no new findings.", "confirmed"],
       ["looks fine to me", "unknown"],
