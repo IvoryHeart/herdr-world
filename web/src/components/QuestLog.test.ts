@@ -45,12 +45,13 @@ test("progress text, mark and current step", () => {
   ).toBe("Goal");
 });
 
-test("the quest log lists objectives with links to their step cards", () => {
+test("the quest log lists objectives with their state", () => {
   const html = renderToStaticMarkup(createElement(QuestLog, { quest }));
   expect(html).toContain("Add retry to the example client");
   expect(html).toContain('aria-valuenow="1"');
   expect(html).toContain('aria-valuemax="3"');
-  expect(html).toContain('class="is-active" data-step-ids="c2 c3"');
+  expect(html).toContain('<li class="is-active">');
+  expect(html).toContain('<li class="is-done">');
   expect(html).toContain("Checklist from TodoWrite · 1 helper");
   expect(renderToStaticMarkup(createElement(QuestLog, { quest: null }))).toBe(
     "",

@@ -64,6 +64,123 @@ const leafClient = (leaf: WorldLeafObject): ConnectionClient | null =>
     leaf,
   );
 
+/** A shown quest and the session it was read from. */
+type ShownQuest = {
+  quest: Quest;
+  /** The service's fingerprint of the session, when it binds one. */
+  session: string | null;
+  /** The World's fingerprint of the pane's session when it was read. */
+  leafSession: string | undefined;
+};
+
+/**
+ * Quest reads for a set of agents, without React. Reads may overlap: only
+ * the latest one started is applied, so a slow earlier answer never
+ * replaces a newer one. A pane that cannot be read just now keeps its last
+ * quest only while it is still the same session; a pane reused by another
+ * session never shows the previous one's quest.
+ */
+export class AgentQuestReads {
+  private started = 0;
+  private shown: ReadonlyMap<string, ShownQuest> = new Map();
+
+  constructor(
+    private readonly clientFor: (
+      leaf: WorldLeafObject,
+    ) => ConnectionClient | null = leafClient,
+  ) {}
+
+  quests(): ReadonlyMap<string, Quest> {
+    return new Map([...this.shown].map(([id, shown]) => [id, shown.quest]));
+  }
+
+  /**
+   * Read the first QUEST_PANE_LIMIT agents among the leaves. Resolves to
+   * whether the shown quests changed and whether one of the agents is
+   * working, or null when a later read started meanwhile.
+   */
+  async read(
+    leaves: readonly WorldLeafObject[],
+  ): Promise<{ changed: boolean; working: boolean } | null> {
+    const sequence = ++this.started;
+    let working = false;
+    // One call per connection and runtime generation, its client resolved
+    // once: every leaf in a group shares it.
+    const groups = new Map<
+      string,
+      { client: ConnectionClient; group: WorldLeafObject[] }
+    >();
+    const refused = new Set<string>();
+    let asked = 0;
+    for (const leaf of leaves) {
+      if (leaf.kind !== "agent") continue;
+      if (asked++ >= QUEST_PANE_LIMIT) break;
+      if (leaf.status === "working") working = true;
+      const key = `${leaf.connectionId}\0${leaf.generation}`;
+      const entry = groups.get(key);
+      if (entry) {
+        entry.group.push(leaf);
+        continue;
+      }
+      if (refused.has(key)) continue;
+      const client = this.clientFor(leaf);
+      if (client) groups.set(key, { client, group: [leaf] });
+      else refused.add(key);
+    }
+    const prior = this.shown;
+    const next = new Map<string, ShownQuest>();
+    // Without an answer, the last quest stays only for the same session:
+    // the World's fingerprint must not have changed, and the service's
+    // (when it gives one) must match the one the quest was read from.
+    const keep = (leaf: WorldLeafObject, session?: string | null) => {
+      const last = prior.get(leaf.id);
+      if (!last || last.leafSession !== leaf.agentSessionFingerprint) return;
+      const same = session
+        ? session === last.session
+        : last.leafSession !== undefined;
+      if (same) next.set(leaf.id, last);
+    };
+    await Promise.all(
+      [...groups.values()].map(async ({ client, group }) => {
+        try {
+          const reply = (await client.call(
+            "agent_quest.list",
+            { pane_ids: group.map((leaf) => leaf.pane.pane_id) },
+            8_000,
+          )) as { quests?: AgentQuest[] } | null;
+          if (!client.isCurrent()) return;
+          if (!Array.isArray(reply?.quests)) {
+            group.forEach((leaf) => keep(leaf));
+            return;
+          }
+          const byPane = new Map(
+            reply.quests.map((entry) => [entry.pane_id, entry]),
+          );
+          for (const leaf of group) {
+            const entry = byPane.get(leaf.pane.pane_id);
+            if (!entry) keep(leaf);
+            else if (entry.read_failed) keep(leaf, entry.session_fingerprint);
+            else if (entry.quest && entry.session_binding !== "guessed")
+              next.set(leaf.id, {
+                quest: entry.quest,
+                session: entry.session_fingerprint ?? null,
+                leafSession: leaf.agentSessionFingerprint,
+              });
+          }
+        } catch {
+          group.forEach((leaf) => keep(leaf));
+        }
+      }),
+    );
+    if (sequence !== this.started) return null;
+    const changed =
+      JSON.stringify([...prior].map(([id, shown]) => [id, shown.quest])) !==
+      JSON.stringify([...next].map(([id, shown]) => [id, shown.quest]));
+    this.shown = next;
+    return { changed, working };
+  }
+}
+
 /**
  * Quests by leaf ID for the given agents. They are read again when the
  * leaves change (at most once per QUEST_MIN_GAP_MS), and every
@@ -71,21 +188,22 @@ const leafClient = (leaf: WorldLeafObject): ConnectionClient | null =>
  * read asks for the first QUEST_PANE_LIMIT agents only: a dense World has
  * millions of panes, and render does no work per leaf. A session found only
  * by guessing from the pane's folder may be another agent's, so it shows no
- * quest. A connection that cannot answer keeps its last quests.
+ * quest.
  */
 export function useAgentQuests(
   leaves: readonly WorldLeafObject[],
   active = true,
 ): ReadonlyMap<string, Quest> {
   const [quests, setQuests] = useState(EMPTY);
-  const shown = useRef(quests);
-  shown.current = quests;
+  const reads = useRef<AgentQuestReads | null>(null);
+  reads.current ??= new AgentQuestReads();
   const latest = useRef(leaves);
   latest.current = leaves;
   const lastRead = useRef(0);
   // A read that started for earlier leaves still answers for those leaves,
-  // so a change of leaves does not discard it (only unmounting does);
-  // otherwise every change during a read would wait out QUEST_MIN_GAP_MS.
+  // so a change of leaves does not discard it (only unmounting, or a later
+  // read, does); otherwise every change during a read would wait out
+  // QUEST_MIN_GAP_MS.
   const mounted = useRef(true);
   useEffect(() => {
     mounted.current = true;
@@ -95,6 +213,7 @@ export function useAgentQuests(
   }, []);
   useEffect(() => {
     if (!active) return;
+    const quests = reads.current!;
     let cancelled = false;
     let timer: number | undefined;
     // One read at a time; a read already running answers a later request.
@@ -105,68 +224,9 @@ export function useAgentQuests(
       lastRead.current = Date.now();
       let working = false;
       if (document.visibilityState !== "hidden") {
-        // One call per connection and runtime generation.
-        const groups = new Map<
-          string,
-          { client: ConnectionClient; group: WorldLeafObject[] }
-        >();
-        // Resolved once per group: every leaf in it shares the client.
-        const refused = new Set<string>();
-        let asked = 0;
-        for (const leaf of latest.current) {
-          if (leaf.kind !== "agent") continue;
-          if (asked++ >= QUEST_PANE_LIMIT) break;
-          if (leaf.status === "working") working = true;
-          const key = `${leaf.connectionId}\0${leaf.generation}`;
-          const entry = groups.get(key);
-          if (entry) {
-            entry.group.push(leaf);
-            continue;
-          }
-          if (refused.has(key)) continue;
-          const client = leafClient(leaf);
-          if (client) groups.set(key, { client, group: [leaf] });
-          else refused.add(key);
-        }
-        const next = new Map<string, Quest>();
-        await Promise.all(
-          [...groups.values()].map(async ({ client, group }) => {
-            // Without an answer for a leaf, its last quest stays.
-            const keep = (leaf: WorldLeafObject) => {
-              const kept = shown.current.get(leaf.id);
-              if (kept) next.set(leaf.id, kept);
-            };
-            try {
-              const reply = (await client.call(
-                "agent_quest.list",
-                { pane_ids: group.map((leaf) => leaf.pane.pane_id) },
-                8_000,
-              )) as { quests?: AgentQuest[] } | null;
-              if (!client.isCurrent()) return;
-              if (!Array.isArray(reply?.quests)) {
-                group.forEach(keep);
-                return;
-              }
-              const byPane = new Map(
-                reply.quests.map((entry) => [entry.pane_id, entry]),
-              );
-              for (const leaf of group) {
-                const entry = byPane.get(leaf.pane.pane_id);
-                if (!entry || entry.read_failed) keep(leaf);
-                else if (entry.quest && entry.session_binding !== "guessed")
-                  next.set(leaf.id, entry.quest);
-              }
-            } catch {
-              group.forEach(keep);
-            }
-          }),
-        );
-        if (mounted.current)
-          setQuests((current) =>
-            JSON.stringify([...current]) === JSON.stringify([...next])
-              ? current
-              : next,
-          );
+        const result = await quests.read(latest.current);
+        working = result?.working ?? false;
+        if (result?.changed && mounted.current) setQuests(quests.quests());
       }
       reading = false;
       if (!cancelled && working)

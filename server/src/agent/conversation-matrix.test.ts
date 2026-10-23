@@ -838,6 +838,7 @@ describe("quests", () => {
         pane_id: "w1:p1",
         agent: "claude",
         session_binding: "reported",
+        session_fingerprint: expect.any(String),
         quest: expect.objectContaining({
           status: "done",
           progress: { done: 1, total: 1 },
@@ -903,20 +904,28 @@ describe("quests", () => {
       context: createAgentSessionResolverContext(),
       cache: createSessionProjectionCache(files),
     });
-    expect(await chat.quests(["w1:p1"])).toEqual([
-      {
-        pane_id: "w1:p1",
-        agent: null,
-        session_binding: null,
-        quest: null,
-        read_failed: true,
-      },
-    ]);
+    // The session is known, so the reply names it: a browser keeps the last
+    // quest only if it came from this session.
+    const [failed] = await chat.quests(["w1:p1"]);
+    expect(failed).toEqual({
+      pane_id: "w1:p1",
+      agent: "claude",
+      session_binding: "reported",
+      session_fingerprint: expect.any(String),
+      quest: null,
+      read_failed: true,
+    });
   });
 
   test("a pane without an agent has no quest", async () => {
     expect(await source(herdr(null)).quests(["w1:p9"])).toEqual([
-      { pane_id: "w1:p9", agent: null, session_binding: null, quest: null },
+      {
+        pane_id: "w1:p9",
+        agent: null,
+        session_binding: null,
+        session_fingerprint: null,
+        quest: null,
+      },
     ]);
   });
 });

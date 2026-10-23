@@ -45,10 +45,16 @@ export type AgentQuest = {
   agent: string | null;
   /** How the session is tied to the pane; see ConversationBinding. */
   session_binding: "reported" | "title" | "guessed" | null;
+  /**
+   * The bound session's fingerprint (as in Conversation), or null when no
+   * session is bound or it is not known.
+   */
+  session_fingerprint: string | null;
   quest: Quest | null;
   /**
    * The quest could not be read just now, for example while the transcript
-   * was being written; keep showing the last one.
+   * was being written. A browser keeps the last one only for the same
+   * session: this reply's `session_fingerprint`, when it has one, names it.
    */
   read_failed?: true;
 };
@@ -455,8 +461,13 @@ export function questFromSession(
       )
     );
   if (goal && goalCurrent) {
+    // A completed goal is authoritative: the plan it carried may have been
+    // left unfinished, and showing "Complete" beside 1/2 and a step still
+    // active would contradict it. It keeps no steps.
     const withSteps =
-      list && timeOf(list.updated_at) >= timeOf(goal.started_at);
+      goal.status !== "complete" &&
+      list &&
+      timeOf(list.updated_at) >= timeOf(goal.started_at);
     return finish(
       {
         source: "goal",

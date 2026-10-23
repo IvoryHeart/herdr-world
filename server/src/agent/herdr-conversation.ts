@@ -591,23 +591,35 @@ export function createHerdrConversationSource(args: {
             pane_id,
             agent: null,
             session_binding: null,
+            session_fingerprint: null,
             quest: null,
           };
           if (listFailed) return { ...empty, read_failed: true };
+          let step: Awaited<ReturnType<typeof resolve>>;
           try {
-            const step = await resolve(pane_id, true, {
+            step = await resolve(pane_id, true, {
               info: listed.get(pane_id) ?? null,
             });
-            if (!("resolved" in step)) return { ...empty, agent: step.agent };
-            const { base, resolved } = step;
+          } catch {
+            return { ...empty, read_failed: true };
+          }
+          if (!("resolved" in step)) return { ...empty, agent: step.agent };
+          const { base, resolved } = step;
+          const found = {
+            pane_id,
+            agent: base.agent,
+            session_binding: base.session_binding,
+            session_fingerprint: base.session_fingerprint,
+          };
+          try {
             return {
-              pane_id,
-              agent: base.agent,
-              session_binding: base.session_binding,
+              ...found,
               quest: resolved.file ? await args.cache.quest(resolved) : null,
             };
           } catch {
-            return { ...empty, read_failed: true };
+            // The session is known: say which, so a browser keeps the last
+            // quest only if it came from this session.
+            return { ...found, quest: null, read_failed: true };
           }
         },
       );

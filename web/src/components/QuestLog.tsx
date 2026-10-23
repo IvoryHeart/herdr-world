@@ -93,11 +93,7 @@ export function QuestLog({ quest }: { quest: Quest | null | undefined }) {
           {quest.steps.length ? (
             <ol className="quest-log-steps">
               {quest.steps.map((step) => (
-                <li
-                  key={step.id}
-                  className={`is-${step.status}`}
-                  data-step-ids={step.step_ids.join(" ") || undefined}
-                >
+                <li key={step.id} className={`is-${step.status}`}>
                   <span className="quest-log-mark" aria-hidden="true">
                     {STEP_MARKS[step.status]}
                   </span>

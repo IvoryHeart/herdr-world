@@ -53,7 +53,7 @@ projection cache as History ([History synchronization](HISTORY.md)).
 | `agent_conversation.send` | `pane_id`, `text`, `session_fingerprint`, optional `baseline` (IDs of the user messages Chat showed) | `{ status: "sent", delivery }` or `{ status: "refused", reason, message }` |
 | `agent_conversation.dismiss` | `pane_id`, `delivery_id` | `{ dismissed }`; forgets a delivery notice |
 | `agent_conversation.watch` / `.unwatch` | `pane_id` | `{ ok: true }`; see [Refresh](#refresh) |
-| `agent_quest.list` | `pane_ids`, or nothing for every agent | `{ quests }`: per pane, `agent`, `session_binding` and `quest`; see [Quests](#quests) |
+| `agent_quest.list` | `pane_ids`, or nothing for every agent | `{ quests }`: per pane, `agent`, `session_binding`, `session_fingerprint` and `quest`; see [Quests](#quests) |
 
 A conversation carries `agent`, `agent_status`, `session_binding`,
 `session_fingerprint`, `updated_at`, ordered `messages`, `latest` (the last
@@ -233,8 +233,9 @@ harness `tool` it came from, a `status` (`active`, `done`, `blocked` or
 `blocked`), `progress` (`done` of `total`), `started_at`, `updated_at`,
 `set_by`, `iterations` for a loop and the number of `helpers` (subagents) the
 agent spawned. A step's `step_ids` are the tool-call IDs the agent made while
-that step was active, and `set_by` is the call that last set the quest; Chat's
-step cards are keyed by the same call IDs.
+that step was active, and `set_by` is the call that last set the quest. They
+are the IDs Chat's step cards will be keyed by; the quest log does not link to
+step cards yet.
 
 | Harness | Checklist (`todo`) | Plan | Goal | Loop | Helpers |
 | --- | --- | --- | --- | --- | --- |
@@ -259,7 +260,13 @@ only when every unfinished step is. Subagent sidechains are left out of the
 projection, so they never set the parent's quest. A quest from a session
 World only guessed from the folder is not shown on desks or cards. When a
 quest cannot be read for a moment (the transcript changed while it was read),
-`agent_quest.list` marks it `read_failed` and Town and Board keep the last one.
+`agent_quest.list` marks it `read_failed` and names the pane's session
+(`session_fingerprint`). Town and Board keep the last quest only while the pane
+holds the same session: the World's session fingerprint for the pane is
+unchanged and, when the reply names a session, it is the one the quest was read
+from. A pane another session took over never shows the previous quest. When
+reads overlap, only the latest one started is shown. A completed Codex goal
+keeps no steps, so it never shows "Complete" beside an unfinished plan.
 A hidden page reads again when it is shown.
 
 Town and Board read quests when the World changes, at most once every 5

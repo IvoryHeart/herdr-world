@@ -407,9 +407,12 @@ describe("Codex", () => {
       status: "active",
       progress: { done: 1, total: 2 },
     });
+    // The completed goal decides: no unfinished plan step beside "done".
     expect(quest("codex", [...records, goal(5, "complete")])).toMatchObject({
       status: "done",
       started_at: at(0),
+      steps: [],
+      progress: { done: 0, total: 0 },
     });
     expect(
       quest("codex", [...records, goal(5, "budget_limited")]),
