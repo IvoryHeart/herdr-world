@@ -169,6 +169,10 @@ with the bump. Users receive the new Herdr with the World release that declares 
    git merge-base --is-ancestor "$release_sha" origin/main
    gh run list --workflow CI --event push --commit "$release_sha" \
      --json conclusion --jq '.[0].conclusion' # must print success
+   # A batch of merges is checked at its newest commit only. If the release
+   # commit has no push run, check it directly before tagging:
+   #   git push origin "$release_sha:refs/heads/release-check/vX.Y.Z-rc.N"
+   #   gh workflow run CI --ref release-check/vX.Y.Z-rc.N
    git show "$release_sha:herdr-plugin.toml" | rg '^version = "X.Y.Z-rc.N"$'
    git ls-remote --tags origin "refs/tags/vX.Y.Z-rc.N" # must print nothing
    git tag -a vX.Y.Z-rc.N -m "Herdr World X.Y.Z-rc.N" "$release_sha"

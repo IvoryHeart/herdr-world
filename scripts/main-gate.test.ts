@@ -100,3 +100,25 @@ test("the red commit marker round-trips and ignores other text", () => {
   expect(redShaOf(`text\n${redShaMarker(sha)}\n`)).toBe(sha);
   expect(redShaOf("<!-- main-gate-sha: not-a-sha -->")).toBeUndefined();
 });
+
+test("a red tip of an untested batch names every merge and prepares no revert", () => {
+  const earlier = "1111111111111111111111111111111111111111";
+  const direct = "2222222222222222222222222222222222222222";
+  const plan = planMainGate({
+    ...base,
+    conclusion: "failure",
+    pr: { number: 44, title: "Newest" },
+    untested: [
+      { sha: earlier, pr: { number: 42, title: "Older" } },
+      { sha: direct },
+    ],
+  });
+  if (plan.kind !== "open") throw new Error("expected an issue");
+  expect(plan.issueTitle).toBe("main is red at 01234567 after 3 merges");
+  expect(plan.issueBody).toContain("- #42 (Older) at 11111111");
+  expect(plan.issueBody).toContain("- commit 22222222 at 22222222");
+  expect(plan.issueBody).toContain("- #44 (Newest) at 01234567 (tested)");
+  expect(plan.issueBody).toContain("No revert was prepared");
+  expect(plan.createRevert).toBe(false);
+  expect(redShaOf(plan.issueBody)).toBe(sha);
+});

@@ -3,6 +3,10 @@
  * fails, this opens an issue naming the merge commit and its PR, and prepares
  * a revert PR for the owner to merge or close. It never merges anything.
  *
+ * A batch of merges is tested only at its newest commit (CI supersedes queued
+ * main runs), so a red commit names every merge since the last green one and
+ * prepares a revert only when it is the sole suspect.
+ *
  * One break gets one issue and one revert: while a `main-red` issue is open,
  * later red commits are added to it as comments instead. A green run at or
  * after the red commit closes the issue and its revert PR, so a forgotten
@@ -29,6 +33,8 @@ export type MainGateFacts = {
   /** A closed main-red issue for this same commit, e.g. a rerun that failed again. */
   closedIssueForSha?: number;
   revertBranchExists: boolean;
+  /** Earlier merges since the last green main commit, oldest first; CI skipped them. */
+  untested?: Array<{ sha: string; pr?: { number: number; title: string } }>;
 };
 
 export type MainGatePlan =
@@ -68,24 +74,43 @@ export function planMainGate(facts: MainGateFacts): MainGatePlan {
       issue: facts.openIssue.number,
       body: `main is still red at ${facts.sha}, after ${source}: ${facts.runUrl}`,
     };
+  const untested = facts.untested ?? [];
+  const named = (merge: {
+    sha: string;
+    pr?: { number: number; title: string };
+  }) =>
+    merge.pr
+      ? `#${merge.pr.number} (${merge.pr.title})`
+      : `commit ${merge.sha.slice(0, 8)}`;
+  const suspects = [
+    ...untested.map((merge) => `- ${named(merge)} at ${merge.sha.slice(0, 8)}`),
+    `- ${source} at ${short} (tested)`,
+  ];
   return {
     kind: "open",
     reopen: facts.closedIssueForSha,
-    issueTitle: `main is red at ${short} after ${facts.pr ? `#${facts.pr.number}` : "a direct commit"}`,
+    issueTitle: untested.length
+      ? `main is red at ${short} after ${untested.length + 1} merges`
+      : `main is red at ${short} after ${facts.pr ? `#${facts.pr.number}` : "a direct commit"}`,
     issueBody: [
-      `@${facts.owner} CI failed on main at ${facts.sha}, the merge of ${source}.`,
+      untested.length
+        ? `@${facts.owner} CI failed on main at ${facts.sha}. It was the newest of ${untested.length + 1} merges since the last green main commit, and CI tested only it, so any of them may have caused it:`
+        : `@${facts.owner} CI failed on main at ${facts.sha}, the merge of ${source}.`,
+      ...(untested.length ? ["", ...suspects] : []),
       "",
       `Failed run: ${facts.runUrl}`,
       "",
       "1. If the failure is a known flaky test, rerun the failed jobs. A green run closes this issue and the revert PR.",
-      "2. Otherwise merge the revert PR (its CI was dispatched) or land a fix; the next green main run closes this issue.",
+      untested.length
+        ? "2. Otherwise find the merge that broke it (the failing job usually names its area), then revert or fix it; the next green main run closes this issue. No revert was prepared, because more than one merge is a suspect."
+        : "2. Otherwise merge the revert PR (its CI was dispatched) or land a fix; the next green main run closes this issue.",
       "",
       "Releases are cut only from a main commit whose push CI is green (docs/release.md).",
       "",
       redShaMarker(facts.sha),
     ].join("\n"),
     revertBranch,
-    createRevert: !facts.revertBranchExists,
+    createRevert: !facts.revertBranchExists && untested.length === 0,
     revertTitle: `Revert ${source} (main red at ${short})`,
     revertBody: (issue) =>
       [
@@ -147,7 +172,10 @@ async function run() {
   const redSha = open && redShaOf(open.body);
   await git(["fetch", "--quiet", "origin", "main"]);
   const revertBranch = `revert/main-${sha.slice(0, 8)}`;
+  const untested =
+    conclusion === "failure" && !open ? await untestedMerges(repo, sha) : [];
   const plan = planMainGate({
+    untested,
     sha,
     runUrl: Bun.env.RUN_URL!,
     owner: Bun.env.GITHUB_REPOSITORY_OWNER!,
@@ -288,6 +316,53 @@ async function run() {
   );
   // Pull requests opened with the workflow token start no workflows.
   await gh(["workflow", "run", "CI", "--ref", plan.revertBranch]);
+}
+
+/**
+ * First-parent merges between the newest green main commit before `sha` and
+ * `sha` itself, oldest first: CI superseded their queued runs.
+ */
+async function untestedMerges(repo: string, sha: string) {
+  const green = (
+    await gh([
+      "api",
+      `repos/${repo}/actions/workflows/ci.yml/runs?branch=main&event=push&status=success&per_page=50`,
+      "--jq",
+      ".workflow_runs[].head_sha",
+    ])
+  ).split("\n");
+  let base: string | undefined;
+  for (const candidate of green)
+    if (
+      candidate &&
+      candidate !== sha &&
+      (await git(["merge-base", "--is-ancestor", candidate, sha]))
+    ) {
+      base = candidate;
+      break;
+    }
+  // Without a green ancestor on record, name only the tested commit.
+  if (!base) return [];
+  const child = Bun.spawn(
+    ["git", "rev-list", "--first-parent", "--reverse", `${base}..${sha}`],
+    { stdout: "pipe", stderr: "inherit" },
+  );
+  const shas = (await new Response(child.stdout).text())
+    .split("\n")
+    .filter((commit) => commit && commit !== sha)
+    .slice(-20);
+  const merges = [];
+  for (const commit of shas) {
+    const pulls = JSON.parse(
+      await gh(["api", `repos/${repo}/commits/${commit}/pulls`]),
+    ) as Array<{ number: number; title: string; merge_commit_sha?: string }>;
+    const pr = pulls.find((pull) => pull.merge_commit_sha === commit);
+    merges.push({
+      sha: commit,
+      pr: pr && { number: pr.number, title: pr.title },
+    });
+  }
+  return merges;
 }
 
 if (import.meta.main) await run();
