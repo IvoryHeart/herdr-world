@@ -58,6 +58,14 @@ only ever sent to the site it was entered for. Anyone who can sign in to World
 can see the user's pull requests and tickets, and can replace or remove the
 token.
 
+Merging, closing or marking a pull request ready from World runs `gh` with the
+service user's sign-in after a confirm in the browser. Merge is pinned to the
+head the viewer saw and never bypasses branch protection. These verbs are on
+the browser's World API only, not on the `herdr-world` CLI, the agent skill or
+MCP. That is a convention, not a boundary: agents run as the same user with
+the same `gh` sign-in, so "only the owner merges" is a crew rule World does
+not enforce.
+
 Updates trust the configured HTTPS release origin (or explicit loopback test
 mirror) and its manifest/checksums. Checksums detect corruption and bind the
 archive, **not independently verify publisher identity**. Custom mirrors are

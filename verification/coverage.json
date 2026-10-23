@@ -1643,6 +1643,8 @@
       "requirement": "openspec/specs/world-surfaces/spec.md",
       "properties": "Deterministic geometry/counts; renderer lifetime; bounded metric/cache work",
       "existingTests": [
+        "web/src/world/ConcurrentContexts.test.ts",
+        "web/src/world/board/boardCardRefs.test.ts",
         "web/src/world/ProductionContexts.test.ts",
         "web/src/world/town/townLayout.test.ts",
         "scripts/pages-content.test.ts",
@@ -1676,6 +1678,8 @@
         "models": [],
         "contracts": ["verification/consumer-evidence.md"],
         "tests": [
+          "web/src/world/ConcurrentContexts.test.ts",
+          "web/src/world/board/boardCardRefs.test.ts",
           "web/src/world/ProductionContexts.test.ts",
           "web/src/world/town/townLayout.test.ts",
           "scripts/pages-content.test.ts",

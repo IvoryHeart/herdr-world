@@ -1,5 +1,7 @@
 import type { GuiSettings } from "../config/gui-settings";
+import { MAX_CLOSE_COMMENT, type PullRequestVerbRequest } from "./actions";
 import {
+  PullRequestVerbError,
   SourceSettingsError,
   type JiraSettingsPatch,
   type SourcesService,
@@ -18,6 +20,10 @@ const JIRA_FIELDS = ["enabled", "site", "email", "jql", "token"] as const;
  * - `PUT /api/world/sources/github` `{enabled}`.
  * - `PUT /api/world/sources/jira` `{enabled?, site?, email?, jql?, token?}`;
  *   the token is write-only.
+ * - `POST /api/world/sources/github/pull-request`
+ *   `{key, verb: "merge"|"close"|"ready", headSha?, comment?}`: a verb the
+ *   viewer confirmed; answers `{action, snapshot}`. Browser only: not in the
+ *   CLI, the agent skill or MCP.
  */
 export function createSourcesHttpHandler(service: SourcesService) {
   return async (request: Request, pathname: string) => {
@@ -28,6 +34,26 @@ export function createSourcesHttpHandler(service: SourcesService) {
     if (pathname === `${WORLD_SOURCES_PATH}/refresh`) {
       if (request.method !== "POST") return methodNotAllowed("POST");
       return jsonResponse(await service.snapshot(true));
+    }
+    if (pathname === `${WORLD_SOURCES_PATH}/github/pull-request`) {
+      if (request.method !== "POST") return methodNotAllowed("POST");
+      let body: Record<string, unknown>;
+      try {
+        body = await readBody(request);
+      } catch (cause) {
+        return jsonError(errorMessage(cause), 400);
+      }
+      const verb = verbRequest(body);
+      if (typeof verb === "string") return jsonError(verb, 400);
+      try {
+        return jsonResponse(
+          await service.pullRequestVerb(body.key as string, verb),
+        );
+      } catch (cause) {
+        return cause instanceof PullRequestVerbError
+          ? jsonError(cause.message, cause.status)
+          : jsonError("Could not run the action", 500);
+      }
     }
     if (
       pathname === `${WORLD_SOURCES_PATH}/github` ||
@@ -74,6 +100,42 @@ export function createSourcesHttpHandler(service: SourcesService) {
       }
     }
     return null;
+  };
+}
+
+/** The request, or what is wrong with it. */
+function verbRequest(
+  body: Record<string, unknown>,
+): PullRequestVerbRequest | string {
+  if (
+    Object.keys(body).some(
+      (key) => !["key", "verb", "headSha", "comment"].includes(key),
+    )
+  )
+    return "A pull request action takes key, verb, headSha and comment";
+  if (typeof body.key !== "string" || !body.key.startsWith("github:pr:"))
+    return "Name the pull request by its key";
+  if (body.verb !== "merge" && body.verb !== "close" && body.verb !== "ready")
+    return "The verb is merge, close or ready";
+  if (
+    body.headSha !== undefined &&
+    (typeof body.headSha !== "string" || !/^[0-9a-f]{40}$/u.test(body.headSha))
+  )
+    return "headSha must be a full commit SHA";
+  if (body.verb === "merge" && body.headSha === undefined)
+    return "Merge needs the head you reviewed";
+  if (
+    body.comment !== undefined &&
+    (body.verb !== "close" ||
+      typeof body.comment !== "string" ||
+      body.comment.length > MAX_CLOSE_COMMENT)
+  )
+    return `A comment goes with close, up to ${MAX_CLOSE_COMMENT} characters`;
+  const comment = typeof body.comment === "string" ? body.comment.trim() : "";
+  return {
+    verb: body.verb,
+    ...(body.headSha ? { headSha: body.headSha as string } : {}),
+    ...(comment ? { comment } : {}),
   };
 }
 
