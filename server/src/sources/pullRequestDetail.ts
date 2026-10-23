@@ -305,8 +305,8 @@ export function resultOutcome(line: string): PullRequestReviewer["outcome"] {
       const word = match[1]!.toLowerCase();
       return WORDS[word] ?? Number(word);
     });
-  // A count that is the second half of `2/3` is not a count of its own.
-  const lone = `(?<![/\\d])${NUMBER}`;
+  // A count stands alone: not the second half of `2/3`, nor the 3 in `P1–P3`.
+  const lone = `(?<![/\\d])\\b${NUMBER}`;
   // Every fraction counts: `2/2 resolved; 0/1 resolved` is not resolved.
   const fractions = [
     ...line.matchAll(/(\d+)\s*\/\s*(\d+)\b[^,;]*?\bresolved/giu),
@@ -316,6 +316,12 @@ export function resultOutcome(line: string): PullRequestReviewer["outcome"] {
       `${lone}\\s+(?:[\\w-]+\\s+){0,3}?(?:remain(?:s|ing)?|open|unresolved|unfixed|outstanding(?!\\s+(?:findings?\\s+)?(?:resolved|fixed|confirmed)))\\b`,
     ).some(Boolean) ||
     counts(`${lone}\\s+new\\b`).some(Boolean) ||
+    // `a new P2`, `another new P3`, `new findings`, but not `no new findings`.
+    [
+      ...line.matchAll(
+        /(\b(?:no|zero|0)\s+)?\bnew\s+(?:P\d|findings?|issues?|regressions?)\b/giu,
+      ),
+    ].some((match) => !match[1]) ||
     // `3 findings`, `one finding`; `all four findings` is a tally, not a count.
     counts(`(?<!\\ball\\s)${lone}\\s+findings?\\b`).some(Boolean) ||
     /\b(?:not|never)\s+(?:yet\s+)?(?:confirmed|resolved|fixed)\b|\bunconfirmed\b/iu.test(

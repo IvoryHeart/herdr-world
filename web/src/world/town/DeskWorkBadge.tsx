@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { actionablePullRequest } from "../../../../shared/pullRequests";
 import { useLayer } from "../../layerStack";
@@ -88,22 +88,41 @@ function BadgePopover({
     element: () => panel.current,
     anchors: () => [anchor.current],
   });
-  // Beside the badge, kept on screen; a phone shows it as a bottom sheet.
+  // Beside the badge, kept on screen, following it as the camera zooms and
+  // pans; a phone shows it as a bottom sheet.
   useLayoutEffect(() => {
-    const at = anchor.current?.getBoundingClientRect();
-    const size = panel.current?.getBoundingClientRect();
-    if (!at || !size || window.innerWidth < PHONE) return;
-    const left = Math.min(
-      Math.max(MARGIN, at.left),
-      window.innerWidth - size.width - MARGIN,
-    );
-    const below = at.bottom + GAP;
-    const top =
-      below + size.height <= window.innerHeight - MARGIN
-        ? below
-        : Math.max(MARGIN, at.top - GAP - size.height);
-    setPlace({ left, top });
+    let frame = 0;
+    const follow = () => {
+      const at = anchor.current?.getBoundingClientRect();
+      const size = panel.current?.getBoundingClientRect();
+      if (at && size && window.innerWidth >= PHONE) {
+        const left = Math.min(
+          Math.max(MARGIN, at.left),
+          window.innerWidth - size.width - MARGIN,
+        );
+        const below = at.bottom + GAP;
+        const top =
+          below + size.height <= window.innerHeight - MARGIN
+            ? below
+            : Math.max(MARGIN, at.top - GAP - size.height);
+        setPlace((current) =>
+          current?.left === left && current.top === top
+            ? current
+            : { left, top },
+        );
+      }
+      frame = requestAnimationFrame(follow);
+    };
+    follow();
+    return () => cancelAnimationFrame(frame);
   }, [anchor]);
+  // Keyboard users land in the card once it is shown (it stays hidden until
+  // placed); closing returns focus to the badge.
+  const shown = place !== null || window.innerWidth < PHONE;
+  useEffect(() => {
+    if (shown)
+      panel.current?.querySelector<HTMLElement>("button, a[href]")?.focus();
+  }, [shown]);
   return (
     <div
       ref={panel}

@@ -1177,6 +1177,10 @@ async function run() {
       selected.length === 0,
     "the card offers Open on GitHub and the merge command, not an Inspector",
   );
+  check(
+    popover.contains(document.activeElement),
+    "focus moves into the card, so a keyboard reaches its actions",
+  );
   window.dispatchEvent(
     new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
   );
