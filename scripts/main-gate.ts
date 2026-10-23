@@ -23,15 +23,41 @@ export const MAIN_RED_LABEL = "main-red";
 export const INFRA_FLAKES = [
   /browser startup timed out after \d+ms/, // first Chrome launch on a fresh runner
   /AssertionError: Invalid control group/, // verification:resources on the runner (#242)
-  /Cannot remove item .*\.plugin-install-/, // Windows staging cleanup lock (#254)
 ];
 
 /** Jobs that only aggregate other jobs' results. */
 const AGGREGATES = new Set(["Delivery checks"]);
 
+/** Lines in a failed step that say nothing beyond the failure itself. */
+const NEUTRAL = [
+  /^\(pass\) /,
+  /^\(fail\) /,
+  /exited with code \d+/,
+  /^##\[error\]Process completed with exit code \d+/,
+  /^\d+ tests? failed:$/,
+  /^\d+ fail$/,
+  /^\d+ \|/, // source excerpt in a stack trace
+];
+const ERRORISH = /error|exceed|fail|assert|panic|refus|denied|mismatch/i;
+
+/** The output of the step that failed: from its `##[group]Run` to the job's first exit error. */
+export function failedStepOutput(log: string): string[] {
+  const lines = log
+    .split("\n")
+    .map((line) => line.replace(/^\d{4}-\d\d-\d\dT[\d:.]+Z ?/, "").trim());
+  const end = lines.findIndex((line) =>
+    /^##\[error\]Process completed with exit code/.test(line),
+  );
+  if (end < 0) return lines;
+  let start = end;
+  while (start > 0 && !lines[start - 1]!.startsWith("##[group]Run ")) start--;
+  return lines.slice(start, end + 1);
+}
+
 /**
  * True when every failed job (aggregates aside) failed only through a known
- * infrastructure flake: its log matches one, and at most one test failed.
+ * infrastructure flake: its failed step shows that flake, at most one failing
+ * test, and no other error of any kind.
  */
 export function onlyInfraFlakes(
   failed: Array<{ name: string; log: string }>,
@@ -40,12 +66,19 @@ export function onlyInfraFlakes(
   return (
     jobs.length > 0 &&
     jobs.every((job) => {
-      const tests = new Set(
-        job.log.match(/\(fail\) [^\n[]+/g)?.map((line) => line.trim()) ?? [],
+      const step = failedStepOutput(job.log);
+      const tests = new Set(step.filter((line) => line.startsWith("(fail) ")));
+      const flake = step.some((line) =>
+        INFRA_FLAKES.some((pattern) => pattern.test(line)),
       );
-      return (
-        INFRA_FLAKES.some((pattern) => pattern.test(job.log)) && tests.size <= 1
+      const other = step.some(
+        (line) =>
+          !line.startsWith("##[group]") &&
+          ERRORISH.test(line) &&
+          !INFRA_FLAKES.some((pattern) => pattern.test(line)) &&
+          !NEUTRAL.some((pattern) => pattern.test(line)),
       );
+      return flake && tests.size <= 1 && !other;
     })
   );
 }
@@ -70,6 +103,8 @@ export type MainGateFacts = {
   revertBranchExists: boolean;
   /** Earlier merges since the last green main commit, oldest first; CI skipped them. */
   untested?: Array<{ sha: string; pr?: { number: number; title: string } }>;
+  /** Older merges in that range left out of `untested` to keep the list short. */
+  omitted?: number;
 };
 
 export type MainGatePlan =
@@ -83,6 +118,8 @@ export type MainGatePlan =
       issueBody: string;
       revertBranch: string;
       createRevert: boolean;
+      /** Why no revert is prepared: one exists already, or several merges are suspects. */
+      revertSkipped?: "exists" | "batch";
       revertTitle: string;
       revertBody: (issue: number) => string;
     };
@@ -110,6 +147,8 @@ export function planMainGate(facts: MainGateFacts): MainGatePlan {
       body: `main is still red at ${facts.sha}, after ${source}: ${facts.runUrl}`,
     };
   const untested = facts.untested ?? [];
+  const omitted = facts.omitted ?? 0;
+  const merges = untested.length + omitted + 1;
   const named = (merge: {
     sha: string;
     pr?: { number: number; title: string };
@@ -118,6 +157,11 @@ export function planMainGate(facts: MainGateFacts): MainGatePlan {
       ? `#${merge.pr.number} (${merge.pr.title})`
       : `commit ${merge.sha.slice(0, 8)}`;
   const suspects = [
+    ...(omitted
+      ? [
+          `- ${omitted} older merge${omitted === 1 ? "" : "s"} since the last green commit, not listed`,
+        ]
+      : []),
     ...untested.map((merge) => `- ${named(merge)} at ${merge.sha.slice(0, 8)}`),
     `- ${source} at ${short} (tested)`,
   ];
@@ -125,11 +169,11 @@ export function planMainGate(facts: MainGateFacts): MainGatePlan {
     kind: "open",
     reopen: facts.closedIssueForSha,
     issueTitle: untested.length
-      ? `main is red at ${short} after ${untested.length + 1} merges`
+      ? `main is red at ${short} after ${merges} merges`
       : `main is red at ${short} after ${facts.pr ? `#${facts.pr.number}` : "a direct commit"}`,
     issueBody: [
       untested.length
-        ? `@${facts.owner} CI failed on main at ${facts.sha}. It was the newest of ${untested.length + 1} merges since the last green main commit, and CI tested only it, so any of them may have caused it:`
+        ? `@${facts.owner} CI failed on main at ${facts.sha}. It was the newest of ${merges} merges since the last green main commit, and CI tested only it, so any of them may have caused it:`
         : `@${facts.owner} CI failed on main at ${facts.sha}, the merge of ${source}.`,
       ...(untested.length ? ["", ...suspects] : []),
       "",
@@ -146,6 +190,11 @@ export function planMainGate(facts: MainGateFacts): MainGatePlan {
     ].join("\n"),
     revertBranch,
     createRevert: !facts.revertBranchExists && untested.length === 0,
+    revertSkipped: untested.length
+      ? "batch"
+      : facts.revertBranchExists
+        ? "exists"
+        : undefined,
     revertTitle: `Revert ${source} (main red at ${short})`,
     revertBody: (issue) =>
       [
@@ -233,10 +282,13 @@ async function run() {
   const redSha = open && redShaOf(open.body);
   await git(["fetch", "--quiet", "origin", "main"]);
   const revertBranch = `revert/main-${sha.slice(0, 8)}`;
-  const untested =
-    conclusion === "failure" && !open ? await untestedMerges(repo, sha) : [];
+  const { merges: untested, omitted } =
+    conclusion === "failure" && !open
+      ? await untestedMerges(repo, sha)
+      : { merges: [], omitted: 0 };
   const plan = planMainGate({
     untested,
+    omitted,
     sha,
     runUrl: Bun.env.RUN_URL!,
     owner: Bun.env.GITHUB_REPOSITORY_OWNER!,
@@ -329,10 +381,12 @@ async function run() {
     issue = Number(issueUrl.split("/").pop());
   }
   if (!plan.createRevert) {
-    await gh(
-      ["issue", "comment", String(issue), "--body-file", "-"],
-      `A revert branch for ${sha} already exists: \`${plan.revertBranch}\`. Use its PR, or reopen it.`,
-    );
+    // A batch's issue body already says why no revert was prepared.
+    if (plan.revertSkipped === "exists")
+      await gh(
+        ["issue", "comment", String(issue), "--body-file", "-"],
+        `A revert branch for ${sha} already exists: \`${plan.revertBranch}\`. Use its PR, or reopen it.`,
+      );
     return;
   }
   const parents = (
@@ -403,15 +457,16 @@ async function untestedMerges(repo: string, sha: string) {
       break;
     }
   // Without a green ancestor on record, name only the tested commit.
-  if (!base) return [];
+  if (!base) return { merges: [], omitted: 0 };
   const child = Bun.spawn(
     ["git", "rev-list", "--first-parent", "--reverse", `${base}..${sha}`],
     { stdout: "pipe", stderr: "inherit" },
   );
-  const shas = (await new Response(child.stdout).text())
+  const all = (await new Response(child.stdout).text())
     .split("\n")
-    .filter((commit) => commit && commit !== sha)
-    .slice(-20);
+    .filter((commit) => commit && commit !== sha);
+  // List the newest 20 by name; the issue counts the rest.
+  const shas = all.slice(-20);
   const merges = [];
   for (const commit of shas) {
     const pulls = JSON.parse(
@@ -423,7 +478,7 @@ async function untestedMerges(repo: string, sha: string) {
       pr: pr && { number: pr.number, title: pr.title },
     });
   }
-  return merges;
+  return { merges, omitted: all.length - shas.length };
 }
 
 if (import.meta.main) await run();

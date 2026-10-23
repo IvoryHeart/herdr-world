@@ -128,10 +128,36 @@ test("a red tip of an untested batch names every merge and prepares no revert", 
   expect(redShaOf(plan.issueBody)).toBe(sha);
 });
 
+const stamp = (line: string) => `2026-10-23T07:44:33.6070043Z ${line}`;
+/** A job log: an earlier passing step, then the failing step. */
+const jobLog = (...failing: string[]) =>
+  [
+    "##[group]Run bun install --frozen-lockfile",
+    "error: earlier step diagnostics mention an error but passed",
+    "##[endgroup]",
+    "##[group]Run bun run test:world --shard=3/6",
+    ...failing,
+    "##[error]Process completed with exit code 1.",
+  ]
+    .map(stamp)
+    .join("\n");
+const startupLines = [
+  "37 |           () => reject(new Error(`${label} timed out after ${timeoutMs}ms`)),",
+  "error: Hosts filter browser acceptance browser startup timed out after 35000ms",
+  "      at <anonymous> (web/src/browserChrome.ts:37:28)",
+  "(fail) the shell preserves targets [35199ms]",
+  "(pass) the shell preserves other targets [1364ms]",
+  "1 tests failed:",
+  "(fail) the shell preserves targets [35199ms]",
+  "25 pass",
+  "1 fail",
+  'error: script "test:world" exited with code 1',
+];
+
 test("only known infrastructure flakes are rerun before alerting", () => {
   const startup = {
-    name: "World browser tests / World browser tests (3/6)",
-    log: "error: Hosts filter browser acceptance browser startup timed out after 35000ms\n(fail) the shell preserves targets [35199ms]\n(fail) the shell preserves targets [35199ms]",
+    name: "World browser tests (3/6)",
+    log: jobLog(...startupLines),
   };
   const delivery = { name: "Delivery checks", log: "Delivery checks failed" };
   expect(onlyInfraFlakes([startup, delivery])).toBe(true);
@@ -139,17 +165,20 @@ test("only known infrastructure flakes are rerun before alerting", () => {
     onlyInfraFlakes([
       {
         name: "Behavioral verification",
-        log: "AssertionError: Invalid control group (ActiveState=inactive)",
+        log: jobLog(
+          "AssertionError: Invalid control group (ActiveState=inactive)",
+          'error: script "verification:resources" exited with code 1',
+        ),
       },
     ]),
   ).toBe(true);
-  // A real failure next to a flake, or two failing tests, is not a flake.
+  // A real failure next to a flake, in another job or in the same step.
   expect(
     onlyInfraFlakes([
       startup,
       {
         name: "Repository validation",
-        log: "web asset total: 13.3/13.25 MiB (budget exceeded)",
+        log: jobLog("web asset total: 13.3/13.25 MiB (budget exceeded)"),
       },
     ]),
   ).toBe(false);
@@ -157,10 +186,97 @@ test("only known infrastructure flakes are rerun before alerting", () => {
     onlyInfraFlakes([
       {
         name: startup.name,
-        log: `${startup.log}\n(fail) the Office town renders [1732ms]`,
+        log: jobLog(
+          ...startupLines,
+          "web asset total: 13.3/13.25 MiB (budget exceeded)",
+        ),
+      },
+    ]),
+  ).toBe(false);
+  expect(
+    onlyInfraFlakes([
+      {
+        name: startup.name,
+        log: jobLog(
+          ...startupLines,
+          "error: expect(received).toEqual(expected)",
+        ),
+      },
+    ]),
+  ).toBe(false);
+  // Two failing tests are not one flake.
+  expect(
+    onlyInfraFlakes([
+      {
+        name: startup.name,
+        log: jobLog(...startupLines, "(fail) the Office town renders [1732ms]"),
+      },
+    ]),
+  ).toBe(false);
+  // A flake string only in an earlier, passing step does not count.
+  expect(
+    onlyInfraFlakes([
+      {
+        name: startup.name,
+        log: [
+          "##[group]Run warm",
+          "error: browser startup timed out after 35000ms",
+          "##[group]Run test",
+          "error: expect(received).toEqual(expected)",
+          "##[error]Process completed with exit code 1.",
+        ]
+          .map(stamp)
+          .join("\n"),
+      },
+    ]),
+  ).toBe(false);
+  // The Windows staging lock is a product bug (#254), not a runner flake.
+  expect(
+    onlyInfraFlakes([
+      {
+        name: "Installer upgrade (windows-arm64)",
+        log: jobLog(
+          "Remove-Item : Cannot remove item C:\\Temp\\server\\.plugin-install-x\\herdr-world.exe: The process cannot access the file",
+        ),
       },
     ]),
   ).toBe(false);
   // Only the aggregate failed: nothing to attribute to a flake.
   expect(onlyInfraFlakes([delivery])).toBe(false);
+});
+
+test("a batch's alert explains the missing revert without claiming one exists", () => {
+  const plan = planMainGate({
+    ...base,
+    conclusion: "failure",
+    untested: [{ sha: "1111111111111111111111111111111111111111" }],
+  });
+  if (plan.kind !== "open") throw new Error("expected an issue");
+  expect(plan.createRevert).toBe(false);
+  expect(plan.revertSkipped).toBe("batch");
+  const existing = planMainGate({
+    ...base,
+    conclusion: "failure",
+    revertBranchExists: true,
+  });
+  if (existing.kind !== "open") throw new Error("expected an issue");
+  expect(existing.revertSkipped).toBe("exists");
+});
+
+test("a range longer than the list counts the merges it leaves out", () => {
+  const listed = Array.from({ length: 20 }, (_, index) => ({
+    sha: String(index).padStart(40, "a"),
+  }));
+  const plan = planMainGate({
+    ...base,
+    conclusion: "failure",
+    untested: listed,
+    omitted: 4,
+  });
+  if (plan.kind !== "open") throw new Error("expected an issue");
+  expect(plan.issueTitle).toBe("main is red at 01234567 after 25 merges");
+  expect(plan.issueBody).toContain("newest of 25 merges");
+  expect(plan.issueBody).toContain(
+    "- 4 older merges since the last green commit, not listed",
+  );
 });
