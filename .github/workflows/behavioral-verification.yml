@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: behavioral-verification-${{ github.event.pull_request.number || github.ref }}
+  group: behavioral-verification-${{ github.event.pull_request.number || (github.event_name == 'push' && 'main-push') || github.ref }}
   cancel-in-progress: true
 
 jobs:

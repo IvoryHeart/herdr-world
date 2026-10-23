@@ -17,6 +17,12 @@ import {
   updateShortcut,
 } from "../shortcutPreferences";
 import { __storeTesting, store } from "../store";
+import { worldLocalStorage } from "../browserStorage";
+import {
+  readOfficePreferences,
+  WORLD_OFFICE_PREFERENCES_CHANGED_EVENT,
+  writeOfficePreferences,
+} from "./officePreferences";
 import type { Pane, PaneLayout, Tab, Workspace } from "../types";
 import "../styles/tokens.css";
 import "../styles/base.css";
@@ -506,10 +512,40 @@ function agentTarget(label: string) {
 }
 
 /** Opens an agent's Inspector from Town: a click only selects it. */
-function openAgent(label: string) {
+/**
+ * Open an agent's terminal from Town as a user does: activating the agent
+ * opens its window on Chat, and the window's Terminal view shows the
+ * terminal.
+ */
+async function openAgent(label: string) {
   const target = agentTarget(label)!;
-  target.click();
-  target.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+  flushSync(() => {
+    target.click();
+    target.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+  });
+  const window = `[role="dialog"][aria-label="${label} Inspector"]`;
+  // The window opens on Chat first, even when it was already open.
+  await until(
+    () =>
+      document.querySelector(
+        `${window} .workspace-inspector[data-view="history"]`,
+      ),
+    `${label} window on Chat`,
+  );
+  flushSync(() =>
+    document
+      .querySelector<HTMLButtonElement>(
+        `${window} [role="tab"][aria-label="Terminal"]`,
+      )!
+      .click(),
+  );
+  await until(
+    () =>
+      document.querySelector(
+        `${window} .workspace-inspector[data-view="terminal"]`,
+      ),
+    `${label} window's Terminal view`,
+  );
 }
 
 /** Board's card for a single-pane tab, or a split tab's pane row, by name. */
@@ -627,6 +663,30 @@ async function run() {
     () => window.__HERDR_TOWN_RENDERER__?.ready === true,
     "Town renderer",
   );
+  // Town opens full-bleed in Zen, with the views one choice away beside
+  // Exit Zen. The rest of this fixture drives the bars, so it leaves Zen the
+  // way a user would, which also records Town's own choice.
+  await until(
+    () =>
+      document.querySelector(".app")?.classList.contains("zen") === true &&
+      document.querySelector(
+        '.zen-dock .world-view-picker button[aria-pressed="true"][aria-label="Town"]',
+      ) !== null,
+    "Town opening in Zen with the view picker",
+  );
+  check(
+    worldLocalStorage.getItem("zenMode.town") === null,
+    "Town's default Zen was stored as if the user had chosen it",
+  );
+  document.querySelector<HTMLButtonElement>(".zen-dock .zen-island")?.click();
+  await until(
+    () => document.querySelector(".app")?.classList.contains("zen") === false,
+    "leaving Town's default Zen",
+  );
+  check(
+    worldLocalStorage.getItem("zenMode.town") === "0",
+    "leaving Zen in Town did not keep Town's own choice",
+  );
   await until(() => {
     const seat = document.querySelector<HTMLButtonElement>(
       ".world-new-seat-canvas-action",
@@ -743,7 +803,7 @@ async function run() {
   );
   check(
     ![...document.querySelectorAll(".workspace-inspector-agent-identity")].some(
-      (identity) => identity.textContent?.includes("terminal"),
+      (identity) => identity.getAttribute("data-kind") === "terminal",
     ),
     "pending browser-local created-seat focus opened an unadmitted Inspector",
   );
@@ -755,7 +815,7 @@ async function run() {
       store.get().selectedPaneId === "created-pane-3" &&
       [
         ...document.querySelectorAll(".workspace-inspector-agent-identity"),
-      ].some((identity) => identity.textContent?.includes("terminal")),
+      ].some((identity) => identity.getAttribute("data-kind") === "terminal"),
     "browser-local created seat exact Inspector after transient focus rejection",
   );
   check(
@@ -1104,11 +1164,21 @@ async function run() {
     'select[aria-label="Inspector opening"]',
   )!;
   check(
-    inspectorOpeningSelect.value === "floating" &&
+    inspectorOpeningSelect.value === "docked" &&
       !document.querySelector('select[aria-label="Office room alignment"]') &&
       !document.querySelector('select[aria-label="Office long room titles"]'),
-    "Inspector opening was not menu-owned, did not default to Floating, or Town-only settings remained",
+    "Inspector opening was not menu-owned, did not default to Snap right, or Town-only settings remained",
   );
+  // The floating cases below choose Floating, as a user does.
+  flushSync(() => {
+    Object.getOwnPropertyDescriptor(
+      HTMLSelectElement.prototype,
+      "value",
+    )!.set!.call(inspectorOpeningSelect, "floating");
+    inspectorOpeningSelect.dispatchEvent(
+      new Event("change", { bubbles: true }),
+    );
+  });
   toggleTopbarMenu();
   await until(
     () => !document.querySelector(".config-dropdown"),
@@ -1365,7 +1435,7 @@ async function run() {
       '.world-selection-panel button[aria-label="Close profile"]',
     )!
     .click();
-  flushSync(() => openAgent("Builder"));
+  await openAgent("Builder");
   await until(
     () =>
       document.querySelector('[role="dialog"][aria-label="Builder Inspector"]'),
@@ -1392,7 +1462,36 @@ async function run() {
     "selected visual commands displaced native shell commands",
   );
   await setShellActionsOpen(false);
-  flushSync(() => openAgent("Reviewer"));
+  // The Town master's chat docks in the background: its window opens, but
+  // the window on top and the selection stay as they were.
+  const selectedBeforeMaster = store.get().selectedPaneId;
+  writeOfficePreferences(worldLocalStorage, {
+    ...readOfficePreferences(worldLocalStorage),
+    townMaster: "reviewer",
+  });
+  window.dispatchEvent(new Event(WORLD_OFFICE_PREFERENCES_CHANGED_EVENT));
+  await until(
+    () =>
+      document.querySelector(
+        '[role="dialog"][aria-label="Reviewer Inspector"]',
+      ),
+    "Town master chat opened in the background",
+  );
+  await settle();
+  check(
+    document
+      .querySelector(".world-managed-window.is-active")
+      ?.getAttribute("aria-label") === "Builder Inspector" &&
+      store.get().selectedPaneId === selectedBeforeMaster,
+    "the Town master's background open took the selection or the top",
+  );
+  writeOfficePreferences(worldLocalStorage, {
+    ...readOfficePreferences(worldLocalStorage),
+    townMaster: "",
+  });
+  window.dispatchEvent(new Event(WORLD_OFFICE_PREFERENCES_CHANGED_EVENT));
+  await setShellActionsOpen(false);
+  await openAgent("Reviewer");
   await until(
     () =>
       document.querySelector(
@@ -1714,12 +1813,59 @@ async function run() {
   const mobileInspector = [
     ...document.querySelectorAll<HTMLElement>(".workspace-inspector"),
   ].find((inspector) => inspector.getBoundingClientRect().width > 0)!;
+  // On a phone, the Chat view shows one composer, Chat's own: no terminal
+  // key bar and no terminal composer (those belong to the Terminal view).
+  const shown = (element: Element) => element.getClientRects().length > 0;
+  document
+    .querySelector<HTMLButtonElement>(
+      '.mobile-nav[aria-label="Workspace view switcher"] button[aria-label="Show agent message history"]',
+    )
+    ?.click();
+  await until(
+    () => mobileInspector.getAttribute("data-view") === "history",
+    "phone window Chat view",
+  );
+  await settle();
+  check(
+    ![...document.querySelectorAll(".terminal-composer")].some(shown) &&
+      ![
+        ...document.querySelectorAll(
+          ".terminal-composer-shortcuts, .mobile-terminal-shortcuts",
+        ),
+      ].some(shown),
+    "the phone Chat view shows a terminal composer or key bar",
+  );
+  check(
+    [
+      ...document.querySelectorAll(
+        ".agent-chat-composer textarea, textarea.terminal-composer-input",
+      ),
+    ].filter(shown).length <= 1,
+    "the phone Chat view shows more than one composer",
+  );
+  document
+    .querySelector<HTMLButtonElement>(
+      '.mobile-nav[aria-label="Workspace view switcher"] button[aria-label="Show terminal session"]',
+    )
+    ?.click();
+  await until(
+    () => mobileInspector.getAttribute("data-view") === "terminal",
+    "phone window back on Terminal",
+  );
+  await settle();
   const mobileHeader = mobileInspector.querySelector<HTMLElement>(
     ".workspace-inspector-head",
   )!;
+  // On a phone the window looks like the terminal: its own bar (name,
+  // status and ⋯) is the only bar, and the app's topbar slides away.
   check(
-    mobileHeader.getBoundingClientRect().height === 0,
-    "mobile terminal title and resource bars consume no terminal height",
+    mobileHeader.getBoundingClientRect().height > 0 &&
+      mobileHeader.getBoundingClientRect().height <= 72 &&
+      !mobileInspector
+        .querySelector(".workspace-inspector-tabs:not([hidden])")
+        ?.getClientRects().length &&
+      document.querySelector(".topbar")?.classList.contains("is-zen") === true,
+    "the phone terminal window shows one bar of its own and no topbar above it",
   );
   const mobileInput = mobileInspector.querySelector<HTMLTextAreaElement>(
     "textarea.terminal-composer-input",
@@ -1929,15 +2075,12 @@ async function run() {
   const selectSnap = async (label: string, target: string) => {
     document
       .querySelector<HTMLButtonElement>(
-        `[aria-label="${label} Inspector"] button[aria-label="Snap Inspector window"]`,
+        `[aria-label="${label} Inspector"] button[aria-label="More actions for Inspector window"]`,
       )!
       .click();
     await until(
-      () =>
-        document.querySelector(
-          '[aria-label="Snap Inspector window"] [role="menuitem"]',
-        ) || document.querySelector(".world-window-snap-menu"),
-      "snap menu opens",
+      () => document.querySelector(".world-window-snap-menu"),
+      "window menu opens",
     );
     [
       ...document.querySelectorAll<HTMLButtonElement>(
@@ -1948,7 +2091,66 @@ async function run() {
       .click();
     await settle();
   };
+  // One bar per window: identity, the view selector and the window's
+  // actions share a single row, with no repository row or PR card below.
+  const builderHead = document.querySelector<HTMLElement>(
+    '[aria-label="Builder Inspector"] .workspace-inspector-head',
+  )!;
+  const rowTop = (selector: string) =>
+    builderHead.querySelector(selector)?.getBoundingClientRect();
+  const headRows = [
+    rowTop(".workspace-inspector-identity"),
+    rowTop(".workspace-inspector-tabs"),
+    rowTop(".world-window-controls"),
+  ];
+  check(
+    headRows.every(
+      (rect) =>
+        rect &&
+        Math.abs(
+          rect.top +
+            rect.height / 2 -
+            (headRows[0]!.top + headRows[0]!.height / 2),
+        ) < 4,
+    ) &&
+      builderHead.getBoundingClientRect().height <= 72 &&
+      !builderHead.querySelector(".workspace-inspector-repository-action") &&
+      !document.querySelector(
+        '[aria-label="Builder Inspector"] .pull-request-card',
+      ),
+    `the Inspector's bar was not one row: ${JSON.stringify(headRows)}`,
+  );
+  // A crowded bar moves its views into ⋯ rather than squeezing the name or
+  // pushing a control past the window's edge.
+  const checkBarFits = (label: string) => {
+    const frame = document.querySelector<HTMLElement>(
+      `[aria-label="${label} Inspector"]`,
+    )!;
+    const head = frame.querySelector<HTMLElement>(".workspace-inspector-head")!;
+    const bounds = frame.getBoundingClientRect();
+    const name = head
+      .querySelector<HTMLElement>(
+        ".workspace-inspector-agent-identity, .workspace-inspector-identity",
+      )!
+      .getBoundingClientRect().width;
+    const outside = [...head.querySelectorAll<HTMLElement>("button")]
+      .filter((button) => {
+        const rect = button.getBoundingClientRect();
+        return (
+          rect.width > 0 &&
+          (rect.left < bounds.left - 1 || rect.right > bounds.right + 1)
+        );
+      })
+      .map((button) => button.getAttribute("aria-label"));
+    check(
+      outside.length === 0 &&
+        (name >= 120 || head.hasAttribute("data-views-in-menu")),
+      `the ${label} bar overflowed: ${JSON.stringify({ outside, name, width: bounds.width })}`,
+    );
+  };
+  checkBarFits("Builder");
   await selectSnap("Builder", "Left half");
+  checkBarFits("Builder");
   const focusedDock = document.querySelector<HTMLElement>(
     '[aria-label="Builder Inspector"]',
   )!;
@@ -2030,7 +2232,7 @@ async function run() {
     "delayed navigator focus resurrected the closed target Inspector",
   );
 
-  flushSync(() => openAgent("Reviewer"));
+  await openAgent("Reviewer");
   await until(
     () =>
       document.querySelector(
@@ -2091,7 +2293,7 @@ async function run() {
   dockedOpeningSelect.value = "docked";
   dockedOpeningSelect.dispatchEvent(new Event("change", { bubbles: true }));
   toggleTopbarMenu();
-  flushSync(() => openAgent("Builder"));
+  await openAgent("Builder");
   await until(
     () =>
       document
@@ -2258,7 +2460,7 @@ async function run() {
   store.clearNotice();
   await settle();
   await until(() => agentTarget("Builder"), "Builder desk target");
-  flushSync(() => openAgent("Builder"));
+  await openAgent("Builder");
   await until(
     () =>
       document
@@ -2456,7 +2658,7 @@ async function run() {
     "resizing the floating Inspector focused its terminal",
   );
 
-  flushSync(() => openAgent("Reviewer"));
+  await openAgent("Reviewer");
   await until(
     () =>
       document
@@ -2535,7 +2737,7 @@ async function run() {
   );
 
   builderWindow
-    .querySelector<HTMLButtonElement>('[role="tab"]:nth-of-type(2)')!
+    .querySelector<HTMLButtonElement>('[role="tab"][aria-label="Files"]')!
     .click();
   await until(
     () =>
@@ -2605,7 +2807,7 @@ async function run() {
     );
   }
   reviewerFloatingWindow
-    .querySelector<HTMLButtonElement>('[role="tab"]:first-of-type')!
+    .querySelector<HTMLButtonElement>('[role="tab"][aria-label="Terminal"]')!
     .click();
   await until(
     () =>
@@ -2615,7 +2817,7 @@ async function run() {
     "Reviewer Terminal after file handoff",
   );
   const builderTerminalTab = builderWindow.querySelector<HTMLButtonElement>(
-    '[role="tab"]:first-of-type',
+    '[role="tab"][aria-label="Terminal"]',
   )!;
   builderTerminalTab.dispatchEvent(
     new PointerEvent("pointerdown", {
@@ -2631,7 +2833,7 @@ async function run() {
     "background Builder Inspector control focus",
   );
   const builderFilesTab = builderWindow.querySelector<HTMLButtonElement>(
-    '[role="tab"]:nth-of-type(2)',
+    '[role="tab"][aria-label="Files"]',
   )!;
   builderFilesTab.dispatchEvent(
     new PointerEvent("pointerdown", {
@@ -2738,7 +2940,7 @@ async function run() {
   );
 
   inspector!
-    .querySelector<HTMLButtonElement>('[role="tab"]:first-of-type')!
+    .querySelector<HTMLButtonElement>('[role="tab"][aria-label="Terminal"]')!
     .click();
   await until(
     () =>
@@ -2788,7 +2990,7 @@ async function run() {
     "previously focused docked terminal after browser focus return",
   );
 
-  flushSync(() => openAgent("Reviewer"));
+  await openAgent("Reviewer");
   await until(
     () =>
       document
@@ -2921,7 +3123,7 @@ async function run() {
     "view transition moved the Inspector",
   );
   await until(() => agentTarget("Reviewer"), "Reviewer Town target");
-  flushSync(() => openAgent("Reviewer"));
+  await openAgent("Reviewer");
   await until(
     () => document.querySelector('[aria-label="Reviewer Inspector"]'),
     "Town opens the second managed Inspector",
@@ -2953,7 +3155,7 @@ async function run() {
   laterWindow
     .querySelector<HTMLButtonElement>('[aria-label="Close Inspector window"]')!
     .click();
-  flushSync(() => openAgent("Builder"));
+  await openAgent("Builder");
   await until(
     () =>
       document.querySelector(
@@ -3210,7 +3412,7 @@ async function run() {
   // skip returning to the explorer on a slow renderer.
   const compactFilesBack = () =>
     persistentReviewerInspector?.querySelector<HTMLButtonElement>(
-      'button[aria-label="Files"]',
+      'button[aria-label="Files"]:not([role="tab"])',
     );
   await until(compactFilesBack, "compact Files retained-file back action");
   compactFilesBack()!.click();
@@ -3469,7 +3671,7 @@ async function run() {
     ".world-managed-window.is-active .workspace-inspector",
   )!;
   reviewerInspector
-    .querySelector<HTMLButtonElement>('[role="tab"]:nth-of-type(2)')!
+    .querySelector<HTMLButtonElement>('[role="tab"][aria-label="Files"]')!
     .click();
   await until(
     () => reviewerInspector.getAttribute("data-view") === "files",
@@ -3981,6 +4183,9 @@ async function run() {
           ".workspace-inspector-head button",
         ),
       ].flatMap((button) => {
+        // In the narrowest window the inactive views are hidden on purpose;
+        // they are under ⋯ (checked below).
+        if (button.getClientRects().length === 0) return [];
         const control = button.getBoundingClientRect();
         const reachable =
           control.width > 0 &&
@@ -4023,6 +4228,28 @@ async function run() {
     () => `three Inspectors in narrow Columns: ${narrowLayoutDiagnostic()}`,
   );
   await settle();
+  // Every view stays one tap away: as a tab, or, in the narrowest window,
+  // under the window's one ⋯ menu beside its actions.
+  check(
+    [
+      ...document.querySelectorAll<HTMLElement>(
+        '[role="dialog"][aria-label$=" Inspector"]',
+      ),
+    ].every(
+      (window) =>
+        [
+          ...window.querySelectorAll<HTMLElement>(
+            '.workspace-inspector-tabs [role="tab"]',
+          ),
+        ].every((tab) => tab.getClientRects().length > 0) ||
+        (window
+          .querySelector<HTMLElement>(
+            'button[aria-label="More actions for Inspector window"]',
+          )
+          ?.getClientRects().length ?? 0) > 0,
+    ),
+    "a narrow Inspector hid views without offering More views",
+  );
   check(
     clippedVisualControls().length === 0,
     `narrow Columns clipped Inspector controls: ${JSON.stringify(clippedVisualControls())}`,
@@ -4192,7 +4419,7 @@ async function run() {
     !document.querySelector(".workspace-inspector"),
     "closed Inspector reappeared through an arrangement",
   );
-  flushSync(() => openAgent("Builder"));
+  await openAgent("Builder");
   await until(
     () => Boolean(document.querySelector(".workspace-inspector")),
     "visual Inspector reopened after Close all",

@@ -3,6 +3,7 @@ import { availableParallelism, tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildWorldBrowserBundle } from "../web/src/world/testing/browserBundles";
 import { acquireCheckSlot, heldEnv } from "./check-lock";
+import { guardDiskSpace } from "./disk-guard";
 import {
   assertWorldBrowserInventory,
   selectWorldBrowserShard,
@@ -27,6 +28,7 @@ if (named.length && shard)
   throw new Error("Name World browser suites or a shard, not both");
 const files = named.length ? named : selectWorldBrowserShard(shard);
 const testArgs = args.filter((arg) => arg !== shardArg);
+guardDiskSpace("the World browser suites");
 await assertWorldBrowserInventory();
 const chrome =
   Bun.env.CHROME_BIN ||

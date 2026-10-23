@@ -6,6 +6,7 @@ import type {
   WorldSpaceObject,
 } from "./worldObject";
 import { boundedOptionalText, yieldWorldTask } from "./worldObject";
+import { tabCardKey } from "../../../shared/terminalColor";
 
 export const OFFICE_PRESENTATION_BOUNDS = Object.freeze({
   rooms: 128,
@@ -22,11 +23,15 @@ export type OfficePresentationBounds = {
   readonly [K in keyof typeof OFFICE_PRESENTATION_BOUNDS]: number;
 };
 
-/** Town rooms render more desks; every other bound matches Office. */
+/**
+ * Town rooms extend to fit real rooms (townLayout's TOWN_MAX_RENDERED_DESKS),
+ * and seat every agent at those desks; every other bound matches Office.
+ */
 export const TOWN_PRESENTATION_BOUNDS: OfficePresentationBounds = Object.freeze(
   {
     ...OFFICE_PRESENTATION_BOUNDS,
-    desksPerRoom: 19,
+    desksPerRoom: 127,
+    roomAgentsPerRoom: 127 * 4,
   },
 );
 
@@ -66,6 +71,8 @@ export type OfficeAgent = {
   roomKey: string;
   hostKey: string;
   displayLabel: string;
+  /** The name Herdr gives the agent (agent.list), when it has one. */
+  agentName?: string;
   taskSummary?: string;
   semanticStatus: WorldAgentStatus;
   stateLabels: Partial<Record<WorldAgentStatus, string>>;
@@ -90,6 +97,7 @@ export type OfficePaneDevice = {
   stale: boolean;
   canOpenInSpaces: boolean;
   agentKey?: string;
+  agentSessionFingerprint?: string;
 };
 
 export type OfficePaneRosterEntry = {
@@ -258,6 +266,7 @@ export function createOfficeProjector(
   let previousWorld: WorldObject | null = null;
   let previous: HerdrOfficeProjection | null = null;
   let previousSelected: string | null = null;
+  let previousPinned: ReadonlySet<string> = NO_PINNED_TABS;
   const intern = <T extends { key: string }>(next: T[], prior: T[]) => {
     const byKey = new Map(prior.map((item) => [item.key, item]));
     const result = next.map((item) => {
@@ -273,16 +282,25 @@ export function createOfficeProjector(
     world: WorldObject,
     generatedAt: number,
     selectedId: string | null,
+    pinnedTabs: ReadonlySet<string> = NO_PINNED_TABS,
   ): HerdrOfficeProjection => {
     let next: HerdrOfficeProjection | null = null;
     const inputs = previous && projectionInputs.get(previous);
+    // Pinned desks are admitted first, so a pin change admits desks again.
+    const samePins = pinnedTabs === previousPinned;
     if (
       previous &&
       previousWorld === world &&
-      selectedId === previousSelected
+      selectedId === previousSelected &&
+      samePins
     ) {
       next = { ...previous, generatedAt };
-    } else if (previous && previousWorld === world && inputs?.prepared) {
+    } else if (
+      previous &&
+      previousWorld === world &&
+      samePins &&
+      inputs?.prepared
+    ) {
       const selection = selectedId ? world.nodeById.get(selectedId) : undefined;
       const selectedSpaceId =
         selection?.kind === "space" ? selection.id : selection?.parentId;
@@ -383,7 +401,14 @@ export function createOfficeProjector(
       }
     }
     if (next && inputs) projectionInputs.set(next, inputs);
-    else next = projectWorldOffice(world, generatedAt, selectedId, bounds);
+    else
+      next = projectWorldOffice(
+        world,
+        generatedAt,
+        selectedId,
+        bounds,
+        pinnedTabs,
+      );
     if (previous && next.rooms !== previous.rooms) {
       // Compare content once at projection admission, never once per canvas frame.
       next.rooms = intern(next.rooms, previous.rooms);
@@ -393,16 +418,25 @@ export function createOfficeProjector(
     }
     previousWorld = world;
     previousSelected = selectedId;
+    previousPinned = pinnedTabs;
     previous = next;
     return next;
   };
 }
 
+const NO_PINNED_TABS: ReadonlySet<string> = new Set();
+
+/**
+ * `pinnedTabs` holds the tab card keys of Town's pinned desks (useDeskPins.ts):
+ * past a room's desk bound they are admitted right after the selected desk,
+ * so a pinned desk never drops out of its room.
+ */
 export function projectWorldOffice(
   world: WorldObject,
   generatedAt: number,
   selectedId: string | null = null,
   bounds: OfficePresentationBounds = OFFICE_PRESENTATION_BOUNDS,
+  pinnedTabs: ReadonlySet<string> = NO_PINNED_TABS,
 ): HerdrOfficeProjection {
   const selection = selectedId ? world.nodeById.get(selectedId) : undefined;
   const selectedSpaceId =
@@ -457,13 +491,32 @@ export function projectWorldOffice(
     selectedId && prepared
       ? prepared.roster[prepared.agentIndex.get(selectedId) ?? -1]?.agent
       : undefined;
+  const workspaceIds = new Map<string, Set<string>>();
+  if (pinnedTabs.size)
+    for (const { room } of presentedRooms) {
+      const { connectionId, nativeId } = room.workspaceRef;
+      if (!workspaceIds.has(connectionId))
+        workspaceIds.set(connectionId, new Set());
+      workspaceIds.get(connectionId)!.add(nativeId);
+    }
+  const pinned = (desk: OfficeDesk) =>
+    pinnedTabs.size > 0 &&
+    pinnedTabs.has(
+      tabCardKey(
+        desk.tabRef.connectionId,
+        desk.tabRef.nativeId,
+        workspaceIds.get(desk.tabRef.connectionId) ?? NO_PINNED_TABS,
+      ),
+    );
   const rooms = presentedRooms.map((entry) => {
-    const desks = boundedWithPriority(
+    const desks = boundedDesks(
       entry.desks,
+      entry.agents,
       bounds.desksPerRoom,
       (desk) =>
         entry.source.id === selectedSpaceId &&
         desk.tabRef.nativeId === selectedLeaf?.tabId,
+      pinned,
     ).map((desk) => {
       const devices = boundedWithPriority(
         projectPaneDevices(entry.source.children, desk),
@@ -482,6 +535,11 @@ export function projectWorldOffice(
       ),
     );
     const deskOrder = new Map(desks.map((desk, index) => [desk.key, index]));
+    // A pinned desk keeps its agents too.
+    const pinnedDesks = new Set(desks.filter(pinned).map((desk) => desk.key));
+    const keptAgent = (agent: { key: string; deskKey: string | null }) =>
+      agent.key === selectedId ||
+      (agent.deskKey !== null && pinnedDesks.has(agent.deskKey));
     const roomAgents = entry.agents
       .filter(({ destination }) => destination === "room")
       .map((agent) => ({
@@ -491,20 +549,24 @@ export function projectWorldOffice(
           : ("standing" as const),
       }))
       .sort((left, right) => compareRoomAgents(left, right, deskOrder));
+    // Like their desks, the selected and pinned desks' agents stay past the
+    // bound.
+    const shownAgents = boundedWithPriority(
+      roomAgents,
+      Math.max(bounds.roomAgentsPerRoom, roomAgents.filter(keptAgent).length),
+      keptAgent,
+      (agent) => agent.key === selectedId,
+    );
     return {
       ...entry.room,
       desks,
-      roomAgents: boundedWithPriority(
-        roomAgents,
-        bounds.roomAgentsPerRoom,
-        (agent) => agent.key === selectedId,
-      ),
+      roomAgents: shownAgents,
       omittedDeskCount: Math.max(0, entry.source.coverage.tabs - desks.length),
       omittedAgentCount: Math.max(
         0,
         entry.source.coverage.status.working +
           entry.source.coverage.status.unknown -
-          Math.min(roomAgents.length, bounds.roomAgentsPerRoom),
+          shownAgents.length,
       ),
       observedDeskCount: entry.source.coverage.tabs,
       observedAgentCount: entry.source.coverage.agents,
@@ -1065,6 +1127,9 @@ function projectPaneDevices(
       stale: leaf.stale,
       canOpenInSpaces: leaf.capabilities.openSpaces,
       ...(leaf.kind === "agent" ? { agentKey: leaf.id } : {}),
+      ...(leaf.agentSessionFingerprint
+        ? { agentSessionFingerprint: leaf.agentSessionFingerprint }
+        : {}),
     }));
   preparedPaneDevices.set(desk, devices);
   return devices;
@@ -1089,6 +1154,7 @@ function projectAgent(
     roomKey,
     hostKey,
     displayLabel: leaf.agentLabel ?? leaf.label,
+    ...(leaf.agentName ? { agentName: leaf.agentName } : {}),
     ...(summary ? { taskSummary: summary } : {}),
     semanticStatus: leaf.status,
     stateLabels: leaf.stateLabels,
@@ -1158,20 +1224,85 @@ function boundedSorted<T>(
   return kept;
 }
 
+/** `first` ranks some priority values ahead of the rest of them. */
 function boundedWithPriority<T>(
   values: readonly T[],
   limit: number,
   priority: (value: T) => boolean,
+  first: (value: T) => boolean = () => false,
 ) {
   if (values.length <= limit) return [...values];
   const admitted = new Set(
     [
-      ...values.filter(priority),
+      ...values.filter(first),
+      ...values.filter((value) => !first(value) && priority(value)),
       ...values.filter((value) => !priority(value)),
     ].slice(0, limit),
   );
   return values.filter((value) => admitted.has(value));
 }
+
+/**
+ * A room's desks within its bound, in tab order. When a room has more, the
+ * selected desk, then pinned desks, then the newest tabs (Herdr appends new tabs) always stay, then
+ * desks whose agents need the user, are working or are unknown, then finished
+ * ones; idle and empty desks are hidden first, and among equals newer tabs
+ * stay. With more busy desks than the bound, the oldest of them are hidden
+ * too; every hidden desk is counted on its room (`omittedDeskCount`).
+ */
+function boundedDesks(
+  desks: readonly OfficeDesk[],
+  agents: readonly {
+    deskKey: string | null;
+    semanticStatus: WorldAgentStatus;
+  }[],
+  limit: number,
+  selected: (desk: OfficeDesk) => boolean,
+  pinned: (desk: OfficeDesk) => boolean,
+) {
+  if (desks.length <= limit) return [...desks];
+  const need = new Map<string, number>();
+  for (const agent of agents) {
+    if (!agent.deskKey) continue;
+    const rank = DESK_STATUS_RANK[agent.semanticStatus];
+    need.set(agent.deskKey, Math.min(need.get(agent.deskKey) ?? 9, rank));
+  }
+  const newest = desks.length - NEWEST_DESKS_KEPT;
+  const rank = (desk: OfficeDesk, index: number) =>
+    selected(desk)
+      ? -3
+      : pinned(desk)
+        ? -2
+        : index >= newest
+          ? -1
+          : (need.get(desk.key) ?? DESK_STATUS_RANK.idle);
+  const admitted = new Set(
+    desks
+      .map((desk, index) => ({ desk, index, rank: rank(desk, index) }))
+      .sort((left, right) => left.rank - right.rank || right.index - left.index)
+      // The selected and pinned desks stay even past the bound.
+      .slice(
+        0,
+        Math.max(
+          limit,
+          desks.filter((desk) => selected(desk) || pinned(desk)).length,
+        ),
+      )
+      .map(({ desk }) => desk),
+  );
+  return desks.filter((desk) => admitted.has(desk));
+}
+
+/** Past the bound, this many newest tabs always keep a desk. */
+const NEWEST_DESKS_KEPT = 3;
+
+const DESK_STATUS_RANK: Record<WorldAgentStatus, number> = {
+  blocked: 0,
+  working: 1,
+  unknown: 2,
+  done: 3,
+  idle: 4,
+};
 
 function compareAgents(left: OfficeAgent, right: OfficeAgent) {
   return left.key.localeCompare(right.key);

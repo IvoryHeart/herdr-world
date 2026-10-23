@@ -4,12 +4,19 @@ import {
   TOWN_MAX_RENDERED_DESKS,
   TOWN_ROOM_TIERS,
   townDeskSlots,
+  townPinCell,
   townSeat,
+  townRoomTiers,
+  TOWN_SHAPES,
+  townShapeFor,
   townTierFor,
   TownGround,
   type TownInput,
   type TownLayout,
 } from "./townLayout";
+
+/** Tiles per desk cell, as townLayout draws them. */
+const CELL_TILES = 5;
 
 const desks = (room: string, count: number) =>
   Array.from({ length: count }, (_, index) => `${room}/tab-${index}`);
@@ -219,6 +226,49 @@ test("desks beyond the rendered bound stay reachable as overflow", () => {
   expect(room.overflowDeskKeys.length).toBe(4);
 });
 
+test("rooms extend to show every desk of real rooms, wide and narrow", () => {
+  for (const formFactor of ["wide", "narrow"] as const)
+    for (const count of [24, 50, 100, TOWN_MAX_RENDERED_DESKS]) {
+      const { layout } = layoutTown(town({ a: [count, 6, 3] }), formFactor);
+      const building = layout.buildings[0]!;
+      const room = building.rooms[0]!;
+      expect(room.overflowDeskKeys).toEqual([]);
+      // Every desk has a cell, in tab order, with a free spot left over.
+      expect(room.cells.filter((c) => c.deskKey).map((c) => c.deskKey)).toEqual(
+        desks("a/room-0", count),
+      );
+      expect(room.cells.some((c) => !c.deskKey)).toBe(true);
+      // The building grows around its rooms, which never overlap, and the
+      // town around its buildings.
+      for (const placed of building.rooms) {
+        expect(placed.x).toBeGreaterThanOrEqual(building.x);
+        expect(placed.y).toBeGreaterThanOrEqual(building.y);
+        expect(placed.x + placed.w).toBeLessThanOrEqual(
+          building.x + building.w,
+        );
+        expect(placed.y + placed.h).toBeLessThanOrEqual(building.lobbyY);
+        for (const cell of placed.cells) {
+          expect(cell.x + CELL_TILES).toBeLessThanOrEqual(placed.x + placed.w);
+          expect(cell.y + CELL_TILES).toBeLessThanOrEqual(placed.y + placed.h);
+        }
+        for (const other of building.rooms)
+          if (other !== placed) expect(overlaps(placed, other)).toBe(false);
+      }
+      expect(layout.width).toBeGreaterThanOrEqual(building.x + building.w);
+      expect(layout.height).toBeGreaterThanOrEqual(building.y + building.h);
+    }
+});
+
+test("a room grows square to eight desks wide, then extends downward", () => {
+  expect(TOWN_ROOM_TIERS[townTierFor(19)]).toEqual([5, 4]);
+  expect(TOWN_ROOM_TIERS[townTierFor(24)]).toEqual([5, 5]);
+  expect(TOWN_ROOM_TIERS[townTierFor(50)]).toEqual([8, 7]);
+  expect(TOWN_ROOM_TIERS[townTierFor(100)]).toEqual([8, 13]);
+  expect(TOWN_ROOM_TIERS[townTierFor(TOWN_MAX_RENDERED_DESKS)]).toEqual([
+    8, 16,
+  ]);
+});
+
 test("reception queue and lounge spots sit on walkable building floor", () => {
   const { layout } = layoutTown(town({ a: [4, 4, 4, 4] }), "wide");
   const building = layout.buildings[0]!;
@@ -281,4 +331,196 @@ test("a desk's furniture follows its panes", () => {
     [32, false],
   ]);
   expect(townDeskSlots(3).length).toBe(4);
+});
+
+test("a pinned desk keeps its cell through reflow and reorder; others fill around it", () => {
+  const keys = desks("a/room-0", 3);
+  // 3 desks: a 2×2 room; pin tab-2 at column 1, row 1 (its cell there).
+  const pins = new Map([[keys[2]!, { col: 1, row: 1 }]]);
+  const first = layoutTown(town({ a: [3] }), "wide", new Map(), pins);
+  expect(cellOf(first.layout, keys[2]!)).toMatchObject({ col: 1, row: 1 });
+  // The room reflows to 3 columns, and Herdr moves tab-2 to the front: the
+  // pinned desk stays; the others take the free cells in tab order.
+  const input = town({ a: [6] });
+  const order = [
+    keys[2]!,
+    ...input.rooms[0]!.deskKeys.filter((k) => k !== keys[2]),
+  ];
+  const second = layoutTown(
+    { ...input, rooms: [{ ...input.rooms[0]!, deskKeys: order }] },
+    "wide",
+    first.memory,
+    pins,
+  );
+  const room = second.layout.buildings[0]!.rooms[0]!;
+  expect(room.cols).toBe(3);
+  expect(cellOf(second.layout, keys[2]!)).toMatchObject({ col: 1, row: 1 });
+  const others = room.cells
+    .filter((cell) => cell.deskKey && cell.deskKey !== keys[2])
+    .map((cell) => cell.deskKey);
+  expect(others).toEqual(order.slice(1));
+  // Unpinned, it follows tab order again.
+  const unpinned = layoutTown(
+    { ...input, rooms: [{ ...input.rooms[0]!, deskKeys: order }] },
+    "wide",
+    second.memory,
+  );
+  expect(cellOf(unpinned.layout, keys[2]!)).toMatchObject({ col: 0, row: 0 });
+});
+
+test("a room grows to hold a pinned desk's cell, and a new pin keeps the cell it has", () => {
+  const keys = desks("a/room-0", 2);
+  const far = layoutTown(
+    town({ a: [2] }),
+    "wide",
+    new Map(),
+    new Map([[keys[0]!, { col: 3, row: 2 }]]),
+  );
+  const room = far.layout.buildings[0]!.rooms[0]!;
+  expect(room.cols).toBeGreaterThan(3);
+  expect(room.rows).toBeGreaterThan(2);
+  expect(cellOf(far.layout, keys[0]!)).toMatchObject({ col: 3, row: 2 });
+  // Just pinned (no saved cell): it keeps this scene's cell.
+  const live = layoutTown(town({ a: [5] }), "wide");
+  const at = cellOf(live.layout, "a/room-0/tab-4")!;
+  const input = town({ a: [5] });
+  const reordered = [...input.rooms[0]!.deskKeys].reverse();
+  const next = layoutTown(
+    { ...input, rooms: [{ ...input.rooms[0]!, deskKeys: reordered }] },
+    "wide",
+    live.memory,
+    new Map([["a/room-0/tab-4", null]]),
+  );
+  expect(cellOf(next.layout, "a/room-0/tab-4")).toMatchObject({
+    col: at.col,
+    row: at.row,
+  });
+});
+
+test("the container's size picks the shape, not one breakpoint", () => {
+  expect(townShapeFor(390, 844)).toBe(TOWN_SHAPES.phone);
+  expect(townShapeFor(1080, 1920)).toBe(TOWN_SHAPES.portrait);
+  expect(townShapeFor(960, 1080)).toBe(TOWN_SHAPES.portrait);
+  expect(townShapeFor(1100, 800)).toBe(TOWN_SHAPES.medium);
+  expect(townShapeFor(1440, 900)).toBe(TOWN_SHAPES.wide);
+  for (const shape of Object.values(TOWN_SHAPES)) {
+    const tiers = townRoomTiers(shape.deskColumns);
+    const [cols, rows] = tiers[tiers.length - 1]!;
+    expect(cols).toBe(shape.deskColumns);
+    expect(cols * rows).toBeGreaterThan(TOWN_MAX_RENDERED_DESKS);
+  }
+});
+
+/** The columns of a building's rooms, by their left edge, in room order. */
+const columnsOf = (layout: TownLayout) => {
+  const columns = new Map<number, string[]>();
+  for (const room of layout.buildings[0]!.rooms)
+    columns.set(room.x, [...(columns.get(room.x) ?? []), room.key]);
+  return [...columns.values()];
+};
+
+test("a phone stacks rooms in one column and grows big rooms downward", () => {
+  const { layout } = layoutTown(
+    town({ a: [100, 50, 24], b: [3] }),
+    TOWN_SHAPES.phone,
+  );
+  expect(layout.formFactor).toBe("narrow");
+  expect(columnsOf(layout)).toHaveLength(1);
+  const rooms = layout.buildings[0]!.rooms;
+  for (const room of rooms) expect(room.cols).toBeLessThanOrEqual(4);
+  for (let i = 1; i < rooms.length; i += 1)
+    expect(rooms[i]!.y).toBeGreaterThan(rooms[i - 1]!.y + rooms[i - 1]!.h);
+  // Buildings stack too.
+  expect(layout.buildings[1]!.y).toBeGreaterThan(
+    layout.buildings[0]!.y + layout.buildings[0]!.h,
+  );
+});
+
+test("wide, medium and portrait shapes lay rooms out in columns", () => {
+  const input = town({ a: [24, 6, 6, 3, 3, 3], b: [4] });
+  const columns = (shape: (typeof TOWN_SHAPES)[keyof typeof TOWN_SHAPES]) =>
+    columnsOf(layoutTown(input, shape).layout).length;
+  expect(columns(TOWN_SHAPES.wide)).toBe(3);
+  expect(columns(TOWN_SHAPES.medium)).toBe(2);
+  expect(columns(TOWN_SHAPES.portrait)).toBe(2);
+  expect(layoutTown(input, TOWN_SHAPES.portrait).layout.formFactor).toBe(
+    "narrow",
+  );
+  const wide = layoutTown(input, TOWN_SHAPES.wide).layout;
+  // Side by side on one street.
+  expect(wide.buildings[1]!.y).toBe(
+    wide.buildings[0]!.y + wide.buildings[0]!.h - wide.buildings[1]!.h,
+  );
+});
+
+test("a room that grows moves only the rooms below it in its column", () => {
+  for (const shape of Object.values(TOWN_SHAPES)) {
+    const before = layoutTown(town({ a: [3, 3, 3, 3, 3, 3] }), shape);
+    // The first room grows by many desks; it gains rows (and maybe columns).
+    const after = layoutTown(
+      town({ a: [60, 3, 3, 3, 3, 3] }),
+      shape,
+      before.memory,
+    );
+    const at = (layout: TownLayout) =>
+      new Map(layout.buildings[0]!.rooms.map((room) => [room.key, room]));
+    const was = at(before.layout);
+    const now = at(after.layout);
+    const grown = now.get("a/room-0")!;
+    expect(grown.rows).toBeGreaterThan(was.get("a/room-0")!.rows);
+    for (const [key, room] of now) {
+      if (key === "a/room-0") continue;
+      const old = was.get(key)!;
+      const sameColumn = old.x === was.get("a/room-0")!.x;
+      // Every room keeps its column; only rooms under the grown one move down.
+      if (sameColumn)
+        expect(room.y - old.y).toBe(grown.h - was.get("a/room-0")!.h);
+      else expect(room.y).toBe(old.y);
+    }
+  }
+});
+
+test("reception, queue and lounge stay on walkable floor in every shape", () => {
+  for (const shape of Object.values(TOWN_SHAPES)) {
+    const { layout } = layoutTown(town({ a: [100, 24, 4, 4] }), shape);
+    const building = layout.buildings[0]!;
+    const lowest = Math.max(...building.rooms.map((room) => room.y + room.h));
+    expect(building.lobbyY).toBeGreaterThanOrEqual(lowest);
+    for (const spot of [...building.queue, ...building.lounge.spots]) {
+      expect(layout.ground[spot.y * layout.width + spot.x]).toBe(
+        TownGround.building,
+      );
+      for (const room of building.rooms)
+        expect(
+          spot.x >= room.x &&
+            spot.x < room.x + room.w &&
+            spot.y >= room.y &&
+            spot.y < room.y + room.h,
+        ).toBe(false);
+    }
+  }
+});
+
+test("a desk pinned during a held reflow keeps the cell the user sees", () => {
+  const keys = desks("a/room-0", 3);
+  // The visible (held) layout has tab-2 in tab order; the pending one has
+  // moved it to column 1, row 1.
+  const visible = layoutTown(town({ a: [3] }), "wide").layout;
+  const pending = layoutTown(
+    town({ a: [3] }),
+    "wide",
+    new Map(),
+    new Map([[keys[2]!, { col: 1, row: 1 }]]),
+  ).layout;
+  const seen = cellOf(visible, keys[2]!)!;
+  expect(cellOf(pending, keys[2]!)).toMatchObject({ col: 1, row: 1 });
+  expect(seen.col === 1 && seen.row === 1).toBe(false);
+  expect(townPinCell(visible, pending, keys[2]!)).toEqual({
+    col: seen.col,
+    row: seen.row,
+  });
+  // A desk the visible layout lacks takes its pending cell.
+  const before = layoutTown(town({ a: [2] }), "wide").layout;
+  expect(townPinCell(before, pending, keys[2]!)).toEqual({ col: 1, row: 1 });
+  expect(townPinCell(before, before, keys[2]!)).toBeNull();
 });

@@ -4,18 +4,20 @@ import { subscribeLocalStorage } from "../browserStorage";
 import { useLayoutPreferences } from "../layoutPreferences";
 import { connectionClientScopeKey } from "../useConnectionClient";
 import {
+  WindowBackButton,
   WindowControls,
   type ManagedWindowControls,
 } from "../world/windows/WindowControls";
 import {
+  ChevronDown,
   FileDiff,
   FolderTree,
   GitFork,
   GitGraph,
-  GitPullRequest,
   MessagesSquare,
   Maximize2,
   Minimize2,
+  MoreHorizontal,
   PanelBottom,
   PanelRight,
   PanelRightClose,
@@ -34,6 +36,7 @@ import {
   useState,
   type CSSProperties,
   type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
 } from "react";
 import type { ConnectionClient } from "../api";
 import { worldLocalStorage } from "../browserStorage";
@@ -113,6 +116,23 @@ function checkoutLabel(workspace?: Workspace) {
 }
 
 const INSPECTOR_RESOURCE_HORIZONTAL_PADDING = 16;
+
+const INSPECTOR_TAB_LABELS: Partial<Record<InspectorView, string>> = {
+  history: "Chat",
+  terminal: "Terminal",
+  changes: "Changes",
+  files: "Files",
+  commits: "Commits",
+};
+
+/** The Inspector's views as its top selector shows them, Chat first. */
+const INSPECTOR_TAB_ORDER: readonly InspectorView[] = [
+  "history",
+  "terminal",
+  "changes",
+  "files",
+  "commits",
+];
 
 export function WorkspaceInspectorHost({
   state,
@@ -261,6 +281,10 @@ export function WorkspaceInspectorHost({
   const diffViewerRef = useRef<DiffViewerPanelHandle | null>(null);
   const splitId = useId();
   const [hostWidth, setHostWidth] = useState(0);
+  // The window width the bar needs with its views inline and a readable
+  // name; below it a managed window's views join ⋯.
+  const [barNeeds, setBarNeeds] = useState(360);
+  const headRef = useRef<HTMLElement | null>(null);
   const { mobile } = useLayoutPreferences();
   const [fileDiffState, setFileDiffState] = useState<{
     resourceKey: string;
@@ -401,6 +425,7 @@ export function WorkspaceInspectorHost({
       setDrillInByView((current) => ({ ...current, files: true }));
   }, [fileSelection.entry, state.view, state.initialDirectory]);
 
+  const [viewsMenuOpen, setViewsMenuOpen] = useState(false);
   const handleTabKeyDown = (event: ReactKeyboardEvent<HTMLButtonElement>) => {
     if (event.key === "ArrowDown" && state.view === "files") {
       const treeItem = hostRef.current?.querySelector<HTMLElement>(
@@ -413,8 +438,10 @@ export function WorkspaceInspectorHost({
       }
       return;
     }
-    const views = availableViews.filter(
-      (view) => view !== "history" || historyAvailable,
+    const views = INSPECTOR_TAB_ORDER.filter(
+      (view) =>
+        availableViews.includes(view) &&
+        (view !== "history" || historyAvailable),
     );
     const currentIndex = Math.max(0, views.indexOf(state.view));
     const nextView: InspectorView | undefined =
@@ -461,6 +488,99 @@ export function WorkspaceInspectorHost({
     return () => observer.disconnect();
   }, []);
 
+  const viewsInMenu = Boolean(
+    windowControls &&
+      (windowControls.compact || (hostWidth > 0 && hostWidth < barNeeds)),
+  );
+  // While the views are inline, measure what the bar needs: everything but
+  // the name, plus 120px so the name stays readable. The Town skin's larger
+  // targets need more than 360px. It is a property of the bar's content, so
+  // a passing overflow (a zoom, a font still loading) does not stick.
+  useLayoutEffect(() => {
+    const head = headRef.current;
+    if (!windowControls || viewsInMenu || !head || hostWidth <= 0) return;
+    const identity = head.querySelector<HTMLElement>(
+      ".workspace-inspector-agent-identity, .workspace-inspector-identity",
+    );
+    if (!identity) return;
+    // The bar needs its other controls, the gaps and padding, and 120px for
+    // the name. View labels show only at 640px and wider, so they are left
+    // out; otherwise a window that narrows keeps a wide need.
+    const style = getComputedStyle(head);
+    const shown = [...head.children].filter(
+      (child): child is HTMLElement =>
+        child instanceof HTMLElement && child.offsetWidth > 0,
+    );
+    const labels = [
+      ...head.querySelectorAll<HTMLElement>(".workspace-inspector-tab-label"),
+    ].reduce(
+      (width, label) =>
+        width +
+        label.offsetWidth +
+        (label.offsetWidth
+          ? parseFloat(getComputedStyle(label.parentElement!).columnGap) || 0
+          : 0),
+      0,
+    );
+    const needs = Math.max(
+      360,
+      Math.ceil(
+        shown.reduce(
+          (width, child) =>
+            child === identity ? width : width + child.offsetWidth,
+          0,
+        ) -
+          labels +
+          120 +
+          (parseFloat(style.columnGap) || 0) * (shown.length - 1) +
+          parseFloat(style.paddingLeft) +
+          parseFloat(style.paddingRight),
+      ),
+    );
+    if (Math.abs(needs - barNeeds) > 1) setBarNeeds(needs);
+  }, [windowControls, viewsInMenu, hostWidth, barNeeds, state.view]);
+
+  // The line under the name says where this is; it opens the repository's
+  // branch and PR status, so the bar needs no separate button or card.
+  const locationLine = (content: ReactNode, description: string) =>
+    visible && state.open && workspace ? (
+      <Popover
+        key={connectionClientScopeKey(
+          connectionClient,
+          contentResourceKey,
+          workspace.workspace_id,
+          workspace.worktree?.checkout_path,
+          workspace.cwd,
+          workspace.worktree?.git_status?.branch,
+        )}
+      >
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            className="workspace-inspector-path workspace-inspector-location"
+            aria-label={`${description}. Repository status and source`}
+            title="Repository status and source"
+          >
+            <span className="workspace-inspector-location-text">{content}</span>
+            <ChevronDown size={12} aria-hidden="true" />
+          </button>
+        </PopoverTrigger>
+        <PopoverContent
+          className="workspace-inspector-repository-popover"
+          align="start"
+        >
+          <PullRequestCard
+            client={connectionClient}
+            workspaceId={workspace.workspace_id}
+            branch={workspace.worktree?.git_status?.branch}
+          />
+        </PopoverContent>
+      </Popover>
+    ) : (
+      <span className="workspace-inspector-path" title={description}>
+        {content}
+      </span>
+    );
   return (
     <aside
       ref={hostRef}
@@ -471,7 +591,14 @@ export function WorkspaceInspectorHost({
       data-view={state.view}
     >
       <header
-        hidden={mobile && state.view === "terminal"}
+        ref={headRef}
+        data-views-in-menu={
+          viewsInMenu && !windowControls?.compact ? "" : undefined
+        }
+        // A managed window keeps its bar on a phone, Terminal included: it
+        // holds the view selector. The shell's own Inspector uses the
+        // phone's terminal bar instead.
+        hidden={mobile && state.view === "terminal" && !windowControls}
         className={`workspace-inspector-head ${
           controlMode === "floating"
             ? "is-window-drag-handle"
@@ -495,6 +622,12 @@ export function WorkspaceInspectorHost({
               : undefined
         }
       >
+        {windowControls ? (
+          <WindowBackButton
+            controls={windowControls}
+            label="Inspector window"
+          />
+        ) : null}
         {terminalColor ? (
           <ColorSwatchButton
             className="workspace-inspector-swatch"
@@ -505,12 +638,21 @@ export function WorkspaceInspectorHost({
           />
         ) : null}
         {agentContext ? (
-          <div className="workspace-inspector-identity workspace-inspector-agent-identity">
+          <div
+            className="workspace-inspector-identity workspace-inspector-agent-identity"
+            data-kind={agentContext.kind}
+          >
             <span
               className="workspace-inspector-agent-avatar"
               aria-hidden="true"
             >
-              {agentContext.kind === "agent" ? (
+              {agentContext.portrait ? (
+                <img
+                  className="workspace-inspector-portrait"
+                  src={agentContext.portrait}
+                  alt=""
+                />
+              ) : agentContext.kind === "agent" ? (
                 <AgentIcon
                   agent={agentContext.agent ?? agentContext.label}
                   compact
@@ -521,19 +663,26 @@ export function WorkspaceInspectorHost({
                 <FolderTree size={16} />
               )}
             </span>
-            <span className="workspace-inspector-repo">
-              {agentContext.kind} · {agentContext.stateLabel}
-            </span>
             <span className="workspace-inspector-checkout">
               {agentContext.label}
             </span>
-            <span
-              className="workspace-inspector-path"
-              title={agentContext.taskSummary ?? agentContext.locationLabel}
-            >
-              {agentContext.locationLabel}
-              {agentContext.taskSummary ? ` · ${agentContext.taskSummary}` : ""}
-            </span>
+            {locationLine(
+              <>
+                <span
+                  className="workspace-inspector-state"
+                  data-tone={agentContext.statusTone}
+                >
+                  {agentContext.stateLabel}
+                </span>
+                <span className="workspace-inspector-where">
+                  {` · ${agentContext.locationLabel}`}
+                  {agentContext.taskSummary
+                    ? ` · ${agentContext.taskSummary}`
+                    : ""}
+                </span>
+              </>,
+              `${agentContext.kind}, ${agentContext.stateLabel}, ${agentContext.locationLabel}`,
+            )}
           </div>
         ) : (
           <div className="workspace-inspector-identity">
@@ -553,81 +702,25 @@ export function WorkspaceInspectorHost({
                 </span>
               ) : null}
             </span>
-            {workspace?.worktree?.checkout_path || workspace?.cwd ? (
-              <code
-                className="workspace-inspector-path"
-                title={workspace.worktree?.checkout_path ?? workspace.cwd}
-              >
-                {workspace.worktree?.checkout_path ?? workspace.cwd}
-              </code>
-            ) : null}
+            {workspace?.worktree?.checkout_path || workspace?.cwd
+              ? locationLine(
+                  <code>
+                    {workspace.worktree?.checkout_path ?? workspace.cwd}
+                  </code>,
+                  workspace.worktree?.checkout_path ?? workspace.cwd ?? "",
+                )
+              : null}
           </div>
         )}
+        {/* One selector in the window's top bar, Chat first: Chat,
+            Terminal, Changes, Files (and Commits). */}
         <div className="workspace-inspector-tabs" role="tablist">
-          {terminalAvailable ? (
-            <button
-              ref={terminalTabRef}
-              type="button"
-              role="tab"
-              aria-selected={state.view === "terminal"}
-              tabIndex={state.view === "terminal" ? 0 : -1}
-              className={state.view === "terminal" ? "is-active" : ""}
-              onClick={() => onViewChange("terminal")}
-              onKeyDown={handleTabKeyDown}
-            >
-              <SquareTerminal size={14} /> Terminal
-            </button>
-          ) : null}
-          {filesAvailable ? (
-            <button
-              ref={filesTabRef}
-              type="button"
-              role="tab"
-              aria-selected={state.view === "files"}
-              tabIndex={state.view === "files" ? 0 : -1}
-              className={state.view === "files" ? "is-active" : ""}
-              onClick={() => onViewChange("files")}
-              onKeyDown={handleTabKeyDown}
-            >
-              <FolderTree size={14} /> Files
-            </button>
-          ) : null}
-          {changesAvailable ? (
-            <button
-              ref={changesTabRef}
-              type="button"
-              role="tab"
-              aria-selected={state.view === "changes"}
-              tabIndex={state.view === "changes" ? 0 : -1}
-              className={state.view === "changes" ? "is-active" : ""}
-              onClick={() => onViewChange("changes")}
-              onKeyDown={handleTabKeyDown}
-            >
-              <FileDiff size={14} /> Changes
-              {changeCount > 0 ? (
-                <span className="workspace-inspector-count">{changeCount}</span>
-              ) : null}
-            </button>
-          ) : null}
-          {availableViews.includes("commits") ? (
-            <button
-              ref={commitsTabRef}
-              type="button"
-              role="tab"
-              aria-selected={state.view === "commits"}
-              tabIndex={state.view === "commits" ? 0 : -1}
-              className={state.view === "commits" ? "is-active" : ""}
-              onClick={() => onViewChange("commits")}
-              onKeyDown={handleTabKeyDown}
-            >
-              <GitGraph size={14} /> Commits
-            </button>
-          ) : null}
           {availableViews.includes("history") ? (
             <button
               ref={historyTabRef}
               type="button"
               role="tab"
+              aria-label="Chat"
               aria-selected={state.view === "history"}
               tabIndex={state.view === "history" ? 0 : -1}
               className={state.view === "history" ? "is-active" : ""}
@@ -642,45 +735,147 @@ export function WorkspaceInspectorHost({
               }}
               onKeyDown={handleTabKeyDown}
             >
-              <MessagesSquare size={14} /> Chat
+              <MessagesSquare size={14} aria-hidden="true" />
+              <span className="workspace-inspector-tab-label">Chat</span>
+            </button>
+          ) : null}
+          {terminalAvailable ? (
+            <button
+              ref={terminalTabRef}
+              type="button"
+              role="tab"
+              aria-label="Terminal"
+              title="Terminal"
+              aria-selected={state.view === "terminal"}
+              tabIndex={state.view === "terminal" ? 0 : -1}
+              className={state.view === "terminal" ? "is-active" : ""}
+              onClick={() => onViewChange("terminal")}
+              onKeyDown={handleTabKeyDown}
+            >
+              <SquareTerminal size={14} aria-hidden="true" />
+              <span className="workspace-inspector-tab-label">Terminal</span>
+            </button>
+          ) : null}
+          {changesAvailable ? (
+            <button
+              ref={changesTabRef}
+              type="button"
+              role="tab"
+              aria-label="Changes"
+              title="Changes"
+              aria-selected={state.view === "changes"}
+              tabIndex={state.view === "changes" ? 0 : -1}
+              className={state.view === "changes" ? "is-active" : ""}
+              onClick={() => onViewChange("changes")}
+              onKeyDown={handleTabKeyDown}
+            >
+              <FileDiff size={14} aria-hidden="true" />
+              <span className="workspace-inspector-tab-label">Changes</span>
+              {changeCount > 0 ? (
+                <span className="workspace-inspector-count">{changeCount}</span>
+              ) : null}
+            </button>
+          ) : null}
+          {filesAvailable ? (
+            <button
+              ref={filesTabRef}
+              type="button"
+              role="tab"
+              aria-label="Files"
+              title="Files"
+              aria-selected={state.view === "files"}
+              tabIndex={state.view === "files" ? 0 : -1}
+              className={state.view === "files" ? "is-active" : ""}
+              onClick={() => onViewChange("files")}
+              onKeyDown={handleTabKeyDown}
+            >
+              <FolderTree size={14} aria-hidden="true" />
+              <span className="workspace-inspector-tab-label">Files</span>
+            </button>
+          ) : null}
+          {availableViews.includes("commits") ? (
+            <button
+              ref={commitsTabRef}
+              type="button"
+              role="tab"
+              aria-label="Commits"
+              title="Commits"
+              aria-selected={state.view === "commits"}
+              tabIndex={state.view === "commits" ? 0 : -1}
+              className={state.view === "commits" ? "is-active" : ""}
+              onClick={() => onViewChange("commits")}
+              onKeyDown={handleTabKeyDown}
+            >
+              <GitGraph size={14} aria-hidden="true" />
+              <span className="workspace-inspector-tab-label">Commits</span>
             </button>
           ) : null}
         </div>
-        {visible && state.open && workspace ? (
-          <Popover
-            key={connectionClientScopeKey(
-              connectionClient,
-              contentResourceKey,
-              workspace.workspace_id,
-              workspace.worktree?.checkout_path,
-              workspace.cwd,
-              workspace.worktree?.git_status?.branch,
-            )}
-          >
-            <PopoverTrigger asChild>
-              <button
-                type="button"
-                className="workspace-inspector-repository-action"
-                aria-label="Repository status and source"
-                title="Repository status and source"
-              >
-                <GitPullRequest size={15} />
-              </button>
-            </PopoverTrigger>
-            <PopoverContent
-              className="workspace-inspector-repository-popover"
-              align="end"
+        {/* In the narrowest window only the active view's tab shows; the
+            others are one tap away here. */}
+        <Popover open={viewsMenuOpen} onOpenChange={setViewsMenuOpen}>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              className="workspace-inspector-tabs-more"
+              aria-label="More views"
+              title="More views"
             >
-              <PullRequestCard
-                client={connectionClient}
-                workspaceId={workspace.workspace_id}
-                branch={workspace.worktree?.git_status?.branch}
-              />
-            </PopoverContent>
-          </Popover>
-        ) : null}
+              <MoreHorizontal size={15} aria-hidden="true" />
+            </button>
+          </PopoverTrigger>
+          <PopoverContent
+            className="workspace-inspector-tabs-menu"
+            align="end"
+            role="menu"
+            aria-label="Views"
+          >
+            {INSPECTOR_TAB_ORDER.filter(
+              (view) =>
+                availableViews.includes(view) &&
+                view !== state.view &&
+                (view !== "history" || historyAvailable),
+            ).map((view) => (
+              <button
+                key={view}
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setViewsMenuOpen(false);
+                  onViewChange(view);
+                }}
+              >
+                {INSPECTOR_TAB_LABELS[view]}
+              </button>
+            ))}
+          </PopoverContent>
+        </Popover>
         {windowControls ? (
-          <WindowControls controls={windowControls} label="Inspector window" />
+          <WindowControls
+            // A phone shows the window like its terminal: the views move
+            // into ⋯ beside the agents it can switch to.
+            controls={
+              // A crowded or narrow window's views join ⋯ too, so it keeps
+              // one menu rather than two.
+              viewsInMenu
+                ? {
+                    ...windowControls,
+                    narrow: !windowControls.compact,
+                    views: INSPECTOR_TAB_ORDER.filter(
+                      (view) =>
+                        availableViews.includes(view) &&
+                        (view !== "history" || historyAvailable),
+                    ).map((view) => ({
+                      id: view,
+                      label: INSPECTOR_TAB_LABELS[view] ?? view,
+                      checked: state.view === view,
+                      onSelect: () => onViewChange(view),
+                    })),
+                  }
+                : windowControls
+            }
+            label="Inspector window"
+          />
         ) : (
           <div className="workspace-inspector-actions">
             {onWindowMaximize ? (
@@ -810,25 +1005,8 @@ export function WorkspaceInspectorHost({
         )}
       </header>
 
-      {visible &&
-      state.open &&
-      workspace &&
-      (state.view === "changes" || state.view === "commits") ? (
-        <PullRequestCard
-          key={connectionClientScopeKey(
-            connectionClient,
-            connectionClient.serverRuntimeGeneration,
-            contentResourceKey,
-            workspace.workspace_id,
-            workspace.worktree?.checkout_path,
-            workspace.cwd,
-            workspace.worktree?.git_status?.branch,
-          )}
-          client={connectionClient}
-          workspaceId={workspace.workspace_id}
-          branch={workspace.worktree?.git_status?.branch}
-        />
-      ) : null}
+      {/* PR status lives in the repository popover in the bar, so Changes
+          and Commits start with their own content. */}
 
       {!workspace ? (
         <div className="workspace-inspector-unavailable">

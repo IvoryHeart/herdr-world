@@ -3,6 +3,7 @@ import {
   type NotificationTarget,
 } from "./taskNotifications";
 import { preferencesStorageKey } from "./workspaceResource";
+import { openProfileEditor } from "./world/agentProfiles";
 import { useMobileControlsDrag } from "./components/useMobileControlsDrag";
 import {
   MOBILE_CONTROLS_PLACEMENT_STORAGE_KEY,
@@ -227,6 +228,7 @@ import {
   type WorkspaceInspectorContext,
   type WorkspaceInspectorState,
   WORLD_OBSERVABILITY_SETTINGS_EVENT,
+  WORLD_SOURCES_SETTINGS_EVENT,
   writeInspectorPreferences,
   writeResourceFileSelection,
 } from "./workspaceResource";
@@ -240,6 +242,7 @@ import {
   type WorldTerminalPresentation,
 } from "./world/worldTerminalPresentation";
 import { useWorldTabColors } from "./world/useTerminalColors";
+import { useWorldTabPin } from "./world/useDeskPins";
 
 const WorkspaceInspectorHost = lazyWithReload("workspace-inspector", () =>
   import("./components/WorkspaceInspectorHost").then((module) => ({
@@ -448,8 +451,15 @@ function loadTerminalFontFamily(): string {
   );
 }
 
-function loadZenMode(): boolean {
-  return normalizeZenMode(worldLocalStorage.getItem(ZEN_MODE_KEY));
+// A scoped surface keeps its own Zen choice, and starts from its default
+// until the user picks one.
+function zenModeKey(scope: string | undefined) {
+  return scope ? `${ZEN_MODE_KEY}.${scope}` : ZEN_MODE_KEY;
+}
+
+function loadZenMode(key = ZEN_MODE_KEY, fallback = false): boolean {
+  const value = worldLocalStorage.getItem(key);
+  return value === null ? fallback : normalizeZenMode(value);
 }
 
 function loadTerminalThemeSelection(): TerminalThemeSelection {
@@ -930,6 +940,12 @@ export default function App({
   onInspectorViewChange,
   onTerminalPopOut,
   inspectorContext = null,
+  topbarHidden = false,
+  zenScope,
+  zenDefault = false,
+  zenOnMobile = false,
+  renderZenControl,
+  onZenActiveChange,
 }: {
   operationalShortcutsEnabled?: boolean;
   shellActionsEnabled?: boolean;
@@ -960,6 +976,17 @@ export default function App({
   onInspectorViewChange?: (view: InspectorView) => void;
   onTerminalPopOut?: () => void;
   inspectorContext?: WorkspaceInspectorContext | null;
+  /** Slides the topbar away while the host's own window bar stands in. */
+  topbarHidden?: boolean;
+  /** Keeps a separate Zen choice for this surface, e.g. one World view. */
+  zenScope?: string;
+  /** Zen for a scope the user has not toggled yet. */
+  zenDefault?: boolean;
+  /** Lets Zen hide the topbar on a phone, where it is otherwise desktop-only. */
+  zenOnMobile?: boolean;
+  /** Extra Zen controls, shown with Exit Zen while Zen is on. */
+  renderZenControl?: (exitZen: () => void) => ReactNode;
+  onZenActiveChange?: (active: boolean) => void;
 } = {}) {
   const operations = useOperationalStore();
   const creationSources = useCreationSources();
@@ -1101,7 +1128,12 @@ export default function App({
       ),
     [resolvedTheme, terminalThemeSelection, customTerminalThemes],
   );
-  const [zenMode, setZenMode] = useState(loadZenMode);
+  const zenKey = zenModeKey(zenScope);
+  const zenKeyRef = useRef(zenKey);
+  zenKeyRef.current = zenKey;
+  const zenDefaultRef = useRef(zenDefault);
+  zenDefaultRef.current = zenDefault;
+  const [zenMode, setZenMode] = useState(() => loadZenMode(zenKey, zenDefault));
   const [shortcutCheatSheetOpen, setShortcutCheatSheetOpen] = useState(false);
   const openShortcutCheatSheet = useCallback(
     () => setShortcutCheatSheetOpen(true),
@@ -1115,7 +1147,9 @@ export default function App({
   useEffect(() => {
     if (mobile) setShortcutCheatSheetOpen(false);
   }, [mobile]);
-  const [sidebarHidden, setSidebarHidden] = useState(loadZenMode);
+  const [sidebarHidden, setSidebarHidden] = useState(() =>
+    loadZenMode(zenKey, zenDefault),
+  );
   // What the sidebar was doing before Zen hid it, restored when Zen ends.
   const sidebarBeforeZenRef = useRef(false);
   const [mobileControlsCollapsed, setMobileControlsCollapsed] = useState(false);
@@ -1774,10 +1808,20 @@ export default function App({
     },
     [sidebarHidden, zenMode],
   );
-  const toggleZenMode = useCallback(
-    () => applyZenMode(!zenMode),
-    [applyZenMode, zenMode],
+  // Only a choice the user makes is stored, so a scope's default stays a
+  // default until someone picks otherwise.
+  const chooseZenMode = useCallback(
+    (next: boolean) => {
+      worldLocalStorage.setItem(zenKeyRef.current, serializeZenMode(next));
+      applyZenMode(next);
+    },
+    [applyZenMode],
   );
+  const toggleZenMode = useCallback(
+    () => chooseZenMode(!zenMode),
+    [chooseZenMode, zenMode],
+  );
+  const exitZen = useCallback(() => chooseZenMode(false), [chooseZenMode]);
   const openWorkspaces = useCallback(() => {
     setSidebarHidden(false);
     if (mobile) {
@@ -2007,6 +2051,7 @@ export default function App({
     ],
   );
   const worldTabColors = useWorldTabColors();
+  const worldTabPin = useWorldTabPin();
   const toggleAnnotations = useCallback(() => {
     if (annotationsOpen && (!mobile || mobileView === "annotations")) {
       setAnnotationsOpen(false);
@@ -3681,9 +3726,12 @@ export default function App({
       String(terminalFontScale),
     );
   }, [terminalFontScale]);
+  // A view switch moves to that view's own Zen choice, or its default.
+  const applyZenModeRef = useRef(applyZenMode);
+  applyZenModeRef.current = applyZenMode;
   useEffect(() => {
-    worldLocalStorage.setItem(ZEN_MODE_KEY, serializeZenMode(zenMode));
-  }, [zenMode]);
+    applyZenModeRef.current(loadZenMode(zenKey, zenDefaultRef.current));
+  }, [zenKey]);
   useEffect(() => {
     worldLocalStorage.setItem(
       MOBILE_TERMINAL_SHORTCUTS_STORAGE_KEY,
@@ -3723,7 +3771,8 @@ export default function App({
           setTerminalFontScale(loadTerminalFontScale());
         if (key === null || key === TERMINAL_FONT_FAMILY_KEY)
           setTerminalFontName(loadTerminalFontFamily());
-        if (key === null || key === ZEN_MODE_KEY) applyZenMode(loadZenMode());
+        if (key === null || key === zenKeyRef.current)
+          applyZenMode(loadZenMode(zenKeyRef.current, zenDefaultRef.current));
         if (key === null || key === "sidebarWidth")
           setSidebarWidth(loadSidebarWidth());
         if (key === null || key === "annotationPanelMode")
@@ -4116,6 +4165,11 @@ export default function App({
     </div>
   ) : null;
   const desktopSidebarHidden = !mobile && (sidebarHidden || zenMode);
+  // Zen applies on desktop, and on a phone only where its host allows it.
+  const zenActive = zenMode && (!mobile || zenOnMobile);
+  const onZenActiveChangeRef = useRef(onZenActiveChange);
+  onZenActiveChangeRef.current = onZenActiveChange;
+  useEffect(() => onZenActiveChangeRef.current?.(zenActive), [zenActive]);
   const workspaceSurfaceMobileView =
     workspaceSurfaceInspector?.view === "terminal"
       ? "session"
@@ -4164,7 +4218,7 @@ export default function App({
     </button>
   );
   const topbar = (
-    <header className={`topbar ${zenMode && !mobile ? "is-zen" : ""}`}>
+    <header className={`topbar ${zenActive || topbarHidden ? "is-zen" : ""}`}>
       <div className="topbar-start">
         {!mobile ? (
           <div className="brand">
@@ -4256,7 +4310,8 @@ export default function App({
                 setTerminalFontName(normalizeTerminalFontFamily(name))
               }
               zenMode={zenMode}
-              onZenModeChange={applyZenMode}
+              zenAvailable={!mobile || zenOnMobile}
+              onZenModeChange={chooseZenMode}
               onShowShortcuts={openShortcutCheatSheet}
               onMobileTerminalShortcutsChange={setMobileTerminalShortcuts}
               onMobileTerminalSideShortcutsChange={
@@ -4268,6 +4323,10 @@ export default function App({
                 window.dispatchEvent(
                   new Event(WORLD_OBSERVABILITY_SETTINGS_EVENT),
                 )
+              }
+              onOpenAgentProfiles={() => openProfileEditor()}
+              onOpenSources={() =>
+                window.dispatchEvent(new Event(WORLD_SOURCES_SETTINGS_EVENT))
               }
             />
           </OperationalContext.Provider>
@@ -4291,6 +4350,7 @@ export default function App({
           setMobileMoreOpen((open) => !open);
         },
         tabColors: worldTabColors,
+        tabPin: hasWorkspaceSurface ? worldTabPin : undefined,
         workspacesOpen: mobileView === "workspaces",
         toggleWorkspaces: () => {
           setMobileMoreOpen(false);
@@ -4343,23 +4403,27 @@ export default function App({
         } as CSSProperties
       }
       className={`app ${mobile && assistantVisible ? "assistant-view" : ""} ${mobileControlsPlacement.side === "left" ? "mobile-controls-left" : ""} ${desktopSidebarHidden ? "sidebar-hidden" : ""} ${
-        zenMode && !mobile ? "zen" : ""
+        zenActive ? "zen" : ""
       } ${mobileControlsCollapsed ? "mobile-controls-collapsed" : ""}`}
       data-mobile-more={mobile && mobileMoreOpen ? "open" : undefined}
     >
       {topbarPortal ? createPortal(topbar, topbarPortal) : topbar}
-      {zenMode && !mobile ? (
-        <button
-          type="button"
-          className="zen-island"
-          title={shortcutTitle("Exit Zen mode", "zen.toggle")}
-          aria-label={shortcutTitle("Exit Zen mode", "zen.toggle")}
-          onClick={() => applyZenMode(false)}
-        >
-          <Minimize2 size={13} />
-          <span>Exit Zen</span>
-        </button>
+      {zenActive && !mobile ? (
+        <div className={renderZenControl ? "zen-dock" : undefined}>
+          {renderZenControl?.(exitZen)}
+          <button
+            type="button"
+            className="zen-island"
+            title={shortcutTitle("Exit Zen mode", "zen.toggle")}
+            aria-label={shortcutTitle("Exit Zen mode", "zen.toggle")}
+            onClick={exitZen}
+          >
+            <Minimize2 size={13} />
+            <span>Exit Zen</span>
+          </button>
+        </div>
       ) : null}
+      {zenActive && mobile ? renderZenControl?.(exitZen) : null}
 
       {mobile && mobileMoreOpen ? (
         <button

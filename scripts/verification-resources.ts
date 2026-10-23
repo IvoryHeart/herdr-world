@@ -169,9 +169,8 @@ export async function runConstrainedVerification(
     () => watching.abort(new Error("Constrained verification timed out")),
     options.timeoutMs,
   );
-  const events = watch(directory, {
-    signal: AbortSignal.any([signal, watching.signal]),
-  });
+  const stopWatching = AbortSignal.any([signal, watching.signal]);
+  const events = watch(directory, { signal: stopWatching });
   const completed = (async () => {
     for await (const event of events) {
       if (event.filename === "exit-code.txt")
@@ -180,7 +179,9 @@ export async function runConstrainedVerification(
     throw new Error("Resource supervisor did not publish an exit code");
   })().then(
     (value) => ({ value }),
-    (error) => ({ error }),
+    // Report why the watch stopped (the deadline or cancellation), not the
+    // watcher's generic AbortError.
+    (error) => ({ error: stopWatching.aborted ? stopWatching.reason : error }),
   );
   try {
     try {
@@ -205,7 +206,11 @@ export async function runConstrainedVerification(
           "--property=KillMode=control-group",
           "--property=TimeoutStopSec=10s",
           "--property=OOMPolicy=continue",
-          `--property=RuntimeMaxSec=${Math.ceil(options.timeoutMs / 1000)}`,
+          // Only bounds a unit whose client died. It must outlive the client's
+          // own deadline: a unit stopped at that same moment loses its control
+          // group, and the timed-out run could then be neither measured nor
+          // reported as a timeout.
+          `--property=RuntimeMaxSec=${Math.ceil(options.timeoutMs / 1000) + 60}`,
           "--",
           "/bin/sh",
           "-c",
@@ -237,10 +242,25 @@ export async function runConstrainedVerification(
     }
     // Read the service's own subtree, not the runner's lifetime-wide memory peak.
     const group = await control("show", "--property=ControlGroup", "--value");
-    assert(
-      /^\/[a-zA-Z0-9_.@/-]+$/.test(group) && !group.split("/").includes(".."),
-      "Invalid control group",
-    );
+    if (
+      !/^\/[a-zA-Z0-9_.@/-]+$/.test(group) ||
+      group.split("/").includes("..")
+    ) {
+      // Name the unit's end state and keep the earlier failure visible rather
+      // than replacing it.
+      const state = await control(
+        "show",
+        "--property=ActiveState,SubState,Result,ExecMainCode,ExecMainStatus",
+      );
+      const output = await readFile(resolve(directory, "worker.log"), "utf8")
+        .then((log) => sanitizeDiagnostic(log.slice(-2000), root))
+        .catch(() => "");
+      throw new Error(
+        `Invalid control group (${state.split("\n").join(", ")})${
+          failure instanceof Error ? ` after: ${failure.message}` : ""
+        }${output ? `\nUnit output:\n${output}` : ""}`,
+      );
+    }
     const base = resolve("/sys/fs/cgroup", `.${group}`);
     const [peak, events, maximum, swap, cpu] = await Promise.all([
       readFile(resolve(base, "memory.peak"), "utf8"),
@@ -324,6 +344,28 @@ export async function runConstrainedVerification(
   signal.throwIfAborted();
   assert(evidence, "Missing constrained resource accounting");
   return { code, failure, evidence, directory };
+}
+
+/** Live regression: a child that outlives its deadline is still measured and reported as a timeout. */
+export async function verifyTimeoutAccounting(root: string, system: boolean) {
+  const result = await runConstrainedVerification(
+    root,
+    system,
+    ["sleep", "30"],
+    {
+      memoryMaxBytes: 128 * 1024 * 1024,
+      cpuQuotaPercent: 200,
+      timeoutMs: 1500,
+    },
+    new AbortController().signal,
+  );
+  assert(
+    result.failure instanceof Error &&
+      result.failure.message === "Constrained verification timed out",
+    `Timeout reported as: ${String(result.failure)}`,
+  );
+  assert.equal(result.code, undefined, "Timed-out child reported an exit");
+  assert(result.evidence.peakBytes > 0, "Timed-out run skipped accounting");
 }
 
 /** Deterministic live regression: zero-exit child, then cancellation at a held boundary. */

@@ -5,10 +5,12 @@ import {
   projectWorldOffice,
   prepareWorldOffice,
   createOfficeProjector,
+  TOWN_PRESENTATION_BOUNDS,
 } from "./herdrOfficeProjection";
 import type { WorldRuntimeConnection } from "./runtimeStore";
 import { buildWorldObject } from "./worldObject";
 import { officePresentationKey } from "./officeSelection";
+import { tabCardKey } from "../../../shared/terminalColor";
 
 describe("Pixel Office projection", () => {
   test("prepared presentation lookup matches complete roster resolution and canonical-key priority", async () => {
@@ -46,6 +48,26 @@ describe("Pixel Office projection", () => {
       expected,
     );
   });
+  test("an agent keeps the name Herdr gives it, for finding the Town master", () => {
+    const source = connection(
+      "alpha",
+      [tab("shared", 1)],
+      [pane("shared", "working", "claude", 0)],
+    );
+    source.snapshot!.agents = [
+      {
+        pane_id: "pane-shared-0",
+        terminal_id: "terminal-shared-0",
+        agent: "claude",
+        name: "firstmate",
+      },
+    ];
+    const office = projectWorldOffice(buildWorldObject([source]), 1);
+    const agent = office.roster[0]!.agent;
+    expect(agent.displayLabel).toBe("claude");
+    expect(agent.agentName).toBe("firstmate");
+  });
+
   test("desks follow Herdr's tab list order, not tab numbers", () => {
     // After tab.move Herdr lists tabs in their new order; numbers stay.
     const world = buildWorldObject([
@@ -124,6 +146,118 @@ describe("Pixel Office projection", () => {
         projectWorldOffice(world, 3, null),
       );
     }
+  });
+  test("a pinned desk past the room's bound is admitted with its agents", async () => {
+    const tabs = Array.from(
+      { length: OFFICE_PRESENTATION_BOUNDS.desksPerRoom + 3 },
+      (_, index) => tab(`tab-${index}`, index + 1),
+    );
+    const world = buildWorldObject([
+      connection(
+        "alpha",
+        tabs,
+        tabs.flatMap((entry, index) => [
+          pane(entry.tab_id, "working", `Synthetic ${index}`, 0),
+          pane(entry.tab_id, "working", `Synthetic ${index}b`, 1),
+        ]),
+      ),
+    ]);
+    await prepareWorldOffice(world);
+    // The oldest tab: past the bound, the newest tabs stay.
+    const oldest = tabs[0]!.tab_id;
+    const tabsOf = (room: { desks: { tabRef: { nativeId: string } }[] }) =>
+      room.desks.map((desk) => desk.tabRef.nativeId);
+    expect(tabsOf(projectWorldOffice(world, 1).rooms[0]!)).not.toContain(
+      oldest,
+    );
+    const pinned = new Set([
+      tabCardKey("alpha", oldest, new Set(["workspace"])),
+    ]);
+    const room = projectWorldOffice(
+      world,
+      1,
+      null,
+      OFFICE_PRESENTATION_BOUNDS,
+      pinned,
+    ).rooms[0]!;
+    expect(tabsOf(room)).toHaveLength(OFFICE_PRESENTATION_BOUNDS.desksPerRoom);
+    expect(tabsOf(room)[0]).toBe(oldest);
+    const desk = room.desks[0]!;
+    expect(
+      room.roomAgents.filter((agent) => agent.deskKey === desk.key),
+    ).toHaveLength(2);
+    // The cached projector admits it again when the pins change.
+    const project = createOfficeProjector();
+    project(world, 1, null);
+    expect(project(world, 2, null, pinned)).toEqual(
+      projectWorldOffice(world, 2, null, OFFICE_PRESENTATION_BOUNDS, pinned),
+    );
+    const selected = world.leaves[0]!.id;
+    expect(project(world, 3, selected, pinned)).toEqual(
+      projectWorldOffice(
+        world,
+        3,
+        selected,
+        OFFICE_PRESENTATION_BOUNDS,
+        pinned,
+      ),
+    );
+  });
+  test("more pinned desks than the bound, and another selected, all stay", async () => {
+    const limit = OFFICE_PRESENTATION_BOUNDS.desksPerRoom;
+    const tabs = Array.from({ length: limit + 3 }, (_, index) =>
+      tab(`tab-${index}`, index + 1),
+    );
+    const world = buildWorldObject([
+      connection(
+        "alpha",
+        tabs,
+        tabs.flatMap((entry, index) => [
+          pane(entry.tab_id, "working", `Synthetic ${index}`, 0),
+          pane(entry.tab_id, "working", `Synthetic ${index}b`, 1),
+        ]),
+      ),
+    ]);
+    await prepareWorldOffice(world);
+    // The oldest limit + 1 tabs are pinned; the newest tab is selected.
+    const pinnedIds = tabs.slice(0, limit + 1).map((entry) => entry.tab_id);
+    const pinned = new Set(
+      pinnedIds.map((id) => tabCardKey("alpha", id, new Set(["workspace"]))),
+    );
+    const selected = world.leaves.find(
+      (leaf) => leaf.tabId === tabs[tabs.length - 1]!.tab_id,
+    )!.id;
+    const room = projectWorldOffice(
+      world,
+      1,
+      selected,
+      OFFICE_PRESENTATION_BOUNDS,
+      pinned,
+    ).rooms[0]!;
+    const shown = room.desks.map((desk) => desk.tabRef.nativeId);
+    expect(shown).toEqual([...pinnedIds, tabs[tabs.length - 1]!.tab_id]);
+    const pinnedDesks = new Set(
+      room.desks
+        .filter((desk) => pinnedIds.includes(desk.tabRef.nativeId))
+        .map((desk) => desk.key),
+    );
+    expect(
+      room.roomAgents.filter(
+        (agent) => agent.deskKey && pinnedDesks.has(agent.deskKey),
+      ),
+    ).toHaveLength(pinnedIds.length * 2);
+    expect(room.roomAgents.map((agent) => agent.key)).toContain(selected);
+    const project = createOfficeProjector();
+    project(world, 1, null, pinned);
+    expect(project(world, 2, selected, pinned)).toEqual(
+      projectWorldOffice(
+        world,
+        2,
+        selected,
+        OFFICE_PRESENTATION_BOUNDS,
+        pinned,
+      ),
+    );
   });
   test("selecting an admitted terminal preserves desk, device and standing-agent positions", () => {
     const tabs = Array.from({ length: 3 }, (_, index) =>
@@ -286,7 +420,8 @@ describe("Pixel Office projection", () => {
     );
     const world = buildWorldObject([connection("beta", tabs, panes)], null);
     await prepareWorldOffice(world);
-    const selected = world.leaves[19]!;
+    // Among equally busy desks the newest stay, so the oldest is omitted.
+    const selected = world.leaves[0]!;
     const before = projectWorldOffice(world, 1);
     expect(
       before.paneRoster.find(({ device }) => device.nodeId === selected.id)
@@ -570,6 +705,59 @@ describe("Pixel Office projection", () => {
     });
   });
 
+  test("Town shows every desk of a real room and, past its bound, hides idle and older desks first", () => {
+    const shown = (count: number, panes: (tabs: Tab[]) => Pane[]) => {
+      const tabs = Array.from({ length: count }, (_, index) =>
+        tab(`tab-${index}`, index + 1),
+      );
+      const office = projectWorldOffice(
+        buildWorldObject([connection("local", tabs, panes(tabs))], "local"),
+        1,
+        null,
+        TOWN_PRESENTATION_BOUNDS,
+      );
+      return office.rooms[0]!;
+    };
+    // A 24-tab room with an agent at every desk shows them all, seated.
+    const real = shown(24, (tabs) =>
+      tabs.map((entry, index) => pane(entry.tab_id, "working", `a${index}`)),
+    );
+    expect(real.desks.length).toBe(24);
+    expect(real.omittedDeskCount).toBe(0);
+    expect(
+      real.roomAgents.filter(({ placement }) => placement === "seated").length,
+    ).toBe(24);
+
+    // Past the bound: the old desk that needs the user and the working one
+    // stay, the newest tab stays, and the oldest idle desks give way.
+    const limit = TOWN_PRESENTATION_BOUNDS.desksPerRoom;
+    const crowded = shown(limit + 13, (tabs) => [
+      pane(tabs[0]!.tab_id, "blocked", "asks"),
+      pane(tabs[1]!.tab_id, "working", "busy"),
+      ...tabs.slice(2).map((entry) => pane(entry.tab_id, "idle", "rests")),
+    ]);
+    const ids = crowded.desks.map((desk) => desk.tabRef.nativeId);
+    expect(ids.length).toBe(limit);
+    expect(crowded.omittedDeskCount).toBe(13);
+    expect(ids.slice(0, 2)).toEqual(["tab-0", "tab-1"]);
+    expect(ids).toContain(`tab-${limit + 12}`);
+    expect(ids).not.toContain("tab-2");
+    expect(ids).not.toContain("tab-14");
+    expect(ids).toContain("tab-15");
+
+    // Even when every older desk is busy, the newest tabs keep a desk: here
+    // 127 working tabs and three new idle ones.
+    const busy = shown(limit + 3, (tabs) =>
+      tabs.map((entry, index) =>
+        pane(entry.tab_id, index < limit ? "working" : "idle", `a${index}`),
+      ),
+    );
+    const kept = busy.desks.map((desk) => desk.tabRef.nativeId);
+    for (const index of [limit, limit + 1, limit + 2])
+      expect(kept).toContain(`tab-${index}`);
+    expect(busy.omittedDeskCount).toBe(3);
+  });
+
   test("keeps mixed-status shared tabs truthful beyond the eight-desk scene bound", () => {
     const tabs = Array.from({ length: 9 }, (_, index) =>
       tab(`tab-${index}`, index + 1),
@@ -579,10 +767,15 @@ describe("Pixel Office projection", () => {
       ...pane("tab-0", "unknown", "unknown", 2),
       focused: true,
     };
-    const outside = pane("tab-8", "working", "outside", 3);
+    // Busier and newer desks keep their places, so tab-5's unknown agent
+    // has none.
+    const busy = [1, 2, 3, 4, 6, 7, 8].map((index, n) =>
+      pane(`tab-${index}`, "working", `busy ${n}`, 10 + n),
+    );
+    const outside = pane("tab-5", "unknown", "outside", 3);
     const office = projectWorldOffice(
       buildWorldObject(
-        [connection("local", tabs, [unknown, working, outside])],
+        [connection("local", tabs, [unknown, working, outside, ...busy])],
         "local",
       ),
       1,

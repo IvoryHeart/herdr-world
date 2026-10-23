@@ -6,8 +6,11 @@
  * (after the waiting agents); and in the lounge while idle. When reception or
  * the lounge is full, the rest stay at their desks. An agent the user opened
  * (summoned) walks back to its desk whatever its status, until that status
- * changes. Movement never delays operational state, and every actor keeps
- * its agent key, so its exact pane target is unchanged wherever it stands.
+ * changes. An agent at a pinned desk never goes to the lounge: it leaves its
+ * desk only to wait at reception (blocked, or finished and not yet seen), and
+ * walks straight back once seen. Movement never delays operational state,
+ * and every actor keeps its agent key, so its exact pane target is unchanged
+ * wherever it stands.
  */
 
 import {
@@ -335,7 +338,8 @@ export class TownActors {
       if (slot !== undefined) goal = { kind: "queue", slot };
       else if (
         agent.semanticStatus === "idle" &&
-        !this.summoned.has(actor.key)
+        !this.summoned.has(actor.key) &&
+        !model.deskPins.has(seat.deskKey)
       ) {
         if (actor.spot) goal = { kind: "lounge", spot: actor.spot };
         else {

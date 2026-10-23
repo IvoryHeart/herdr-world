@@ -6,7 +6,7 @@ import type { Pane, Tab, Workspace } from "../../types";
 import type { WorldRuntimeConnection } from "../runtimeStore";
 import { buildWorldObject, type WorldObject } from "../worldObject";
 import TownView from "../TownView";
-import { TownComposer } from "./TownComposer";
+import { TOWN_SHAPES, townShapeFor } from "./townLayout";
 import "../../components/TerminalView.css";
 import "../../components/MobileControls.css";
 import { requestTrace } from "../devtools/trace";
@@ -17,6 +17,7 @@ import {
   type ConnectionClient,
 } from "../../api";
 import { readCompletionSeen } from "../completionSeenState";
+import { worldSourcesStore } from "../worldSources";
 import "../world.css";
 import { worldLocalStorage } from "../../browserStorage";
 import {
@@ -150,8 +151,15 @@ function topology(seed: number): Topology {
     const panes: Pane[] = [];
     roomNames.forEach((roomName, roomIndex) => {
       const workspaceId = `${host.id}-${roomName}`;
-      const deskCount =
-        scale === "max"
+      // Extended rooms: agents spawning agents fill the first rooms far past
+      // the owner's 2026-10-17 estimate of 11-15 desks.
+      const extended =
+        scale === "extended" && host === HOSTS[0]
+          ? [100, 50, 24][roomIndex]
+          : 0;
+      const deskCount = extended
+        ? extended
+        : scale === "max"
           ? 11 + Math.floor(r() * 5)
           : 3 + Math.floor(r() * r() * 13);
       let paneTotal = 0;
@@ -293,6 +301,39 @@ let latestText =
       method === "agent_conversation.unwatch"
     )
       return { ok: true };
+    if (method === "agent_quest.list")
+      return {
+        // A quest belongs to its pane, whatever order the panes are asked in.
+        quests: ((params?.pane_ids as string[] | undefined) ?? []).map(
+          (pane_id) => {
+            const index = [...pane_id].reduce(
+              (sum, char) => sum + char.charCodeAt(0),
+              0,
+            );
+            return {
+              pane_id,
+              agent: "claude",
+              session_binding: "reported",
+              quest:
+                index % 2
+                  ? null
+                  : {
+                      quest_version: 1,
+                      source: "todo",
+                      tool: "TodoWrite",
+                      title: "Synthetic quest",
+                      status: "active",
+                      steps: [],
+                      progress: { done: index % 3, total: 3 },
+                      started_at: "2026-01-01T00:00:00Z",
+                      updated_at: "2026-01-01T00:00:01Z",
+                      set_by: null,
+                      helpers: 0,
+                    },
+            };
+          },
+        ),
+      };
     if (method === "agent_conversation.latest")
       return conversationUnavailable
         ? {
@@ -347,101 +388,14 @@ let latestText =
   },
 });
 
-// Uploads answer as the World service does, for the connection asked.
-const uploads: string[] = [];
-/** While set, uploads wait for it, as a slow upload would. */
-let uploadGate: Promise<void> | null = null;
-/** Set to fail the next upload, as a full disk would. */
-let failNextUpload = false;
 /** Set to make every conversation read unavailable. */
 let conversationUnavailable = false;
-async function answerUpload(url: URL): Promise<Response | null> {
-  const match = /^\/api\/connections\/([^/]+)\/terminal-upload$/.exec(
-    url.pathname,
-  );
-  if (!match) return null;
-  const connectionId = decodeURIComponent(match[1]!);
-  uploads.push(connectionId);
-  if (uploadGate) await uploadGate;
-  const headers = {
-    "content-type": "application/json",
-    "X-Herdr-Connection-Id": connectionId,
-    "X-Herdr-Connection-Generation":
-      url.searchParams.get("connection_generation") ?? "",
-  };
-  if (failNextUpload) {
-    failNextUpload = false;
-    return new Response(JSON.stringify({ error: "disk full" }), {
-      status: 507,
-      headers,
-    });
-  }
-  return new Response(
-    JSON.stringify({ path: `/uploads/${url.searchParams.get("filename")}` }),
-    { headers },
-  );
-}
-const realFetch = window.fetch.bind(window);
-window.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
-  const url = new URL(
-    input instanceof Request ? input.url : String(input),
-    window.location.origin,
-  );
-  return (await answerUpload(url)) ?? realFetch(input, init);
-}) as typeof fetch;
-/** Uploads with byte progress use XMLHttpRequest; answer those the same way. */
-class FixtureUploadRequest {
-  upload: { onprogress: ((event: ProgressEvent) => void) | null } = {
-    onprogress: null,
-  };
-  responseType = "";
-  status = 0;
-  statusText = "";
-  response: Blob | null = null;
-  onload: (() => void) | null = null;
-  onerror: (() => void) | null = null;
-  onabort: (() => void) | null = null;
-  private url = new URL(window.location.origin);
-  private headers = "";
-  open(_method: string, url: string | URL) {
-    this.url = new URL(String(url), window.location.origin);
-  }
-  setRequestHeader() {}
-  getAllResponseHeaders() {
-    return this.headers;
-  }
-  send(body: Blob) {
-    this.upload.onprogress?.({
-      loaded: body.size,
-      total: body.size,
-      lengthComputable: true,
-    } as ProgressEvent);
-    void answerUpload(this.url).then(async (response) => {
-      if (!response) {
-        this.onerror?.();
-        return;
-      }
-      this.status = response.status;
-      this.statusText = response.statusText;
-      this.headers = [...response.headers]
-        .map(([name, value]) => `${name}: ${value}`)
-        .join("\r\n");
-      this.response = await response.blob();
-      this.onload?.();
-    });
-  }
-}
-window.XMLHttpRequest =
-  FixtureUploadRequest as unknown as typeof XMLHttpRequest;
 
-async function attachNote(host: HTMLElement, name = "notes.txt") {
-  const picker = host.querySelector<HTMLInputElement>(
-    '.town-reply input[type="file"]',
-  )!;
-  const files = new DataTransfer();
-  files.items.add(new File(["synthetic"], name, { type: "text/plain" }));
-  picker.files = files.files;
-  picker.dispatchEvent(new Event("change", { bubbles: true }));
+/** Show an agent's hover card, as a pointer over its reception entry does. */
+function hoverEntry(entry: Element) {
+  entry.dispatchEvent(
+    new MouseEvent("mouseover", { bubbles: true, relatedTarget: null }),
+  );
 }
 
 function worldFor(connections: WorldRuntimeConnection[]) {
@@ -469,41 +423,6 @@ async function run() {
   herdrTabs = (connectionId) =>
     base.connections.find((c) => c.connectionId === connectionId)?.snapshot
       ?.tabs ?? [];
-  if (!phone && mode === "test") {
-    const world = worldFor(base.connections);
-    const leaf = world.leaves.find((candidate) => candidate.kind === "agent")!;
-    const box = document.createElement("div");
-    box.style.cssText = "position:fixed;top:0;left:0;width:320px;z-index:1000";
-    document.body.append(box);
-    const composerRoot = createRoot(box);
-    composerRoot.render(
-      <TownComposer
-        leaf={leaf}
-        onClose={() => {}}
-        onSent={() => {}}
-        onError={() => {}}
-        onDirect={() => {}}
-      />,
-    );
-    await waitFor(
-      () => !!box.querySelector(".terminal-composer-input"),
-      "desktop Town composer mounts",
-    );
-    const editor = box.querySelector<HTMLTextAreaElement>(
-      ".terminal-composer-input",
-    )!;
-    const direct = box.querySelector<HTMLButtonElement>(
-      '[aria-label="Type directly into the terminal"]',
-    )!;
-    check(
-      editor.getBoundingClientRect().width > 0 &&
-        editor.getBoundingClientRect().height > 0 &&
-        direct.getBoundingClientRect().width > 0,
-      "desktop Town composer keeps its draft and Direct control visible with terminal CSS loaded",
-    );
-    composerRoot.unmount();
-    box.remove();
-  }
   const blocked = base.agentPanes.filter((_, index) => index % 23 === 4);
   for (const pane of blocked) pane.agent_status = "blocked";
   statusOf = (paneId) =>
@@ -512,6 +431,8 @@ async function run() {
   const opened: string[] = [];
   const selected: string[] = [];
   const inspected: [string, string][] = [];
+  /** Windows opened without focusing their pane (the docked Town master). */
+  const unfocusedOpens: string[] = [];
   function Harness() {
     const [world, set] = useState(() => worldFor(base.connections));
     const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -530,10 +451,47 @@ async function run() {
           opened.push(id);
         }}
         floatingTerminals={[]}
-        onOpenInspectorView={(id, view) => inspected.push([id, view])}
+        onOpenInspectorView={(id, view, focus = true) => {
+          inspected.push([id, view]);
+          if (!focus) unfocusedOpens.push(id);
+        }}
       />
     );
   }
+  // Every agent works on one synthetic pull request, so desks show badges.
+  const agents = worldFor(base.connections).leaves.filter(
+    (leaf) => leaf.kind === "agent",
+  );
+  worldSourcesStore.useFetch(async () =>
+    Response.json({
+      observedAt: 1,
+      sources: [],
+      items: [
+        {
+          key: "github:pr:example-org/atlas#7",
+          source: "github",
+          kind: "pull_request",
+          ref: "example-org/atlas#7",
+          title: "Synthetic change",
+          url: "https://github.com/example-org/atlas/pull/7",
+          lane: "green",
+          status: "open",
+          roles: ["author"],
+          updatedAt: 1,
+          number: 7,
+          checks: "pass",
+        },
+      ],
+      links: agents.map((leaf) => ({
+        connectionId: leaf.connectionId,
+        generation: leaf.generation,
+        paneId: leaf.nativeId,
+        sessionFingerprint: leaf.agentSessionFingerprint ?? null,
+        itemKey: "github:pr:example-org/atlas#7",
+        via: "branch",
+      })),
+    }),
+  );
   const root = createRoot(host);
   root.render(
     <StrictMode>
@@ -588,20 +546,35 @@ async function run() {
     `default level is ${diagnostics.level}, expected overview`,
   );
   check(
+    diagnostics.animation.quests === 0,
+    "quest markers must not float over the overview's room cards",
+  );
+  check(
     (diagnostics.layout?.buildings ?? 0) === 3,
     "town did not lay out three buildings",
   );
+  const narrowTown = diagnostics.layout?.formFactor === "narrow";
   const roomCards = host.querySelectorAll(".town-room-card");
   const totalRooms = base.connections.reduce(
     (sum, c) => sum + (c.snapshot?.workspaces.length ?? 0),
     0,
   );
+  // Wide screens show every building at home. A phone stacks buildings and
+  // their rooms in one column, so it draws the buildings in view.
+  const drawnRooms = host.querySelectorAll(".town-room").length;
   check(
-    roomCards.length === totalRooms,
-    `expected ${totalRooms} room cards, found ${roomCards.length}`,
+    narrowTown ? drawnRooms > 0 : drawnRooms === totalRooms,
+    `expected ${totalRooms} rooms drawn, found ${drawnRooms}`,
+  );
+  check(
+    roomCards.length === drawnRooms,
+    `expected ${drawnRooms} room cards, found ${roomCards.length}`,
   );
   const receptions = host.querySelectorAll(".town-reception");
-  check(receptions.length === 3, "every host needs one reception board");
+  check(
+    narrowTown ? receptions.length > 0 : receptions.length === 3,
+    "every host in view needs one reception board",
+  );
   const waitingEntries = host.querySelectorAll(".town-reception-entry").length;
   check(waitingEntries > 0, "blocked agents did not appear at reception");
   const deskTargets = host.querySelectorAll(
@@ -616,7 +589,7 @@ async function run() {
     `expected ${totalTabs} desk targets, found ${deskTargets}`,
   );
   check(
-    host.querySelectorAll('[aria-label^="Rename room"]').length === totalRooms,
+    host.querySelectorAll('[aria-label^="Rename room"]').length === drawnRooms,
     "every room needs a rename action",
   );
   // Room actions hidden at the overview must not take a tap.
@@ -653,282 +626,144 @@ async function run() {
     `rail should list ${blockedCount} waiting agents`,
   );
 
-  // A reception entry opens a peek on that agent's live question.
+  // Tapping an agent opens its one window, World's Inspector, on Chat; no
+  // peek card opens. The card is only a preview on hover.
   const entry = host.querySelector<HTMLButtonElement>(".town-reception-entry")!;
   entry.click();
   await waitFor(
-    () =>
-      host
-        .querySelector(".town-peek-screen")
-        ?.textContent?.includes("Do you want") === true,
-    "peek did not show the agent's question",
+    () => inspected.length === 1,
+    "tapping an agent did not open its window",
   );
-  check(selected.length === 0, "a peek must not select or open an Inspector");
-  const answers = host.querySelectorAll<HTMLButtonElement>(
-    ".town-peek .town-answers button",
-  );
-  check(answers.length === 3, `expected 3 answers, found ${answers.length}`);
-  answers[0]!.click();
-  await waitFor(() => sent.length === 1, "answer was not sent");
   check(
-    sent[0]!.text === "1" && sent[0]!.keys.length === 0,
-    `answer sent ${JSON.stringify(sent[0])}`,
+    inspected[0]![1] === "history" && host.querySelector(".town-peek") === null,
+    `a tap should open the agent's window on Chat, not a card (${JSON.stringify(inspected)})`,
   );
-  const peekPane = sent[0]!.paneId;
-  check(
-    base.agentPanes.some(
-      (p) => p.pane_id === peekPane && p.agent_status === "blocked",
-    ),
-    "answer went to a pane that is not waiting",
-  );
+  inspected.length = 0;
 
-  const peekConnection = base.connections.find((connection) =>
-    connection.snapshot?.panes.some((pane) => pane.pane_id === peekPane),
-  )?.connectionId;
-  // The message is the agent's latest from Chat's conversation read model.
-  await waitFor(
-    () =>
-      host
-        .querySelector(".town-peek-screen")
-        ?.textContent?.includes("I'll sort the reception queue") === true,
-    "peek did not show the agent's latest message",
-  );
-  // The message is rendered as Chat renders it, never as terminal text.
-  check(
-    host.querySelector(".town-peek-screen table") !== null &&
-      !(host.querySelector(".town-peek-screen")?.textContent ?? "").includes(
-        "|---",
-      ),
-    "the peek should render the message's markdown table",
-  );
-  // The peek watches the pane as Chat does and rereads only on a push.
-  check(
-    conversationCalls.some(
-      (call) =>
-        call.method === "agent_conversation.watch" && call.paneId === peekPane,
-    ),
-    "the peek did not ask the service to watch its pane",
-  );
-  const readsBefore = conversationCalls.filter(
-    (call) => call.method === "agent_conversation.latest",
-  ).length;
-  await new Promise((resolve) => setTimeout(resolve, 4_500));
-  check(
-    conversationCalls.filter(
-      (call) => call.method === "agent_conversation.latest",
-    ).length === readsBefore,
-    "the peek reread its conversation without a push",
-  );
-  latestText = "The queue now keeps the oldest agent first.";
-  pushConversation(peekConnection!, peekPane);
-  await waitFor(
-    () =>
-      host
-        .querySelector(".town-peek-screen")
-        ?.textContent?.includes("keeps the oldest agent first") === true,
-    "a pushed change did not refresh the peek",
-  );
-  // The question sits in its own box above the answers.
-  check(
-    (
-      host.querySelector(".town-peek .town-question")?.textContent ?? ""
-    ).startsWith("Do you want"),
-    "the peek should box the agent's question",
-  );
-  // The reply line: desktop types in the card; the phone layout grows World's
-  // composer inside the peek. Either way Send reaches that pane only.
+  // Hovering an agent shows its card with the live question.
   if (!phone) {
-    const reply = host.querySelector<HTMLInputElement>(
-      ".town-reply input:not([type])",
-    )!;
-    Object.getOwnPropertyDescriptor(
-      HTMLInputElement.prototype,
-      "value",
-    )!.set!.call(reply, "Use the newest file");
-    reply.dispatchEvent(new Event("input", { bubbles: true }));
-    await settle();
-    host
-      .querySelector<HTMLButtonElement>('.town-reply button[type="submit"]')!
-      .click();
-    await waitFor(() => sent.length === 2, "reply was not sent");
-    check(
-      sent[1]!.paneId === peekPane &&
-        sent[1]!.text.includes("Use the newest file") &&
-        sent[1]!.keys.includes("enter"),
-      `reply sent ${JSON.stringify(sent[1])}`,
-    );
-    check(opened.length === 0, "replying must not open the full terminal");
-    // 📎 uploads through the pane's own connection into the reply line.
-    await attachNote(host);
+    hoverEntry(entry);
     await waitFor(
       () =>
         host
-          .querySelector<HTMLInputElement>(".town-reply input:not([type])")
-          ?.value.includes("/uploads/notes.txt") === true,
-      "attachment did not reach the reply line",
+          .querySelector(".town-peek-screen")
+          ?.textContent?.includes("Do you want") === true,
+      "peek did not show the agent's question",
     );
+    check(selected.length === 0, "a peek must not select or open an Inspector");
+    const answers = host.querySelectorAll<HTMLButtonElement>(
+      '.town-peek [aria-label="Answers"] button',
+    );
+    check(answers.length === 3, `expected 3 answers, found ${answers.length}`);
+    answers[0]!.click();
+    await waitFor(() => sent.length === 1, "answer was not sent");
     check(
-      uploads.length === 1 && uploads[0] === peekConnection,
-      `attachment uploaded through ${JSON.stringify(uploads)}`,
+      sent[0]!.text === "1" && sent[0]!.keys.length === 0,
+      `answer sent ${JSON.stringify(sent[0])}`,
     );
+    const peekPane = sent[0]!.paneId;
     check(
-      host.querySelector('.town-peek .attachment-chip[data-status="done"]') !==
-        null,
-      "the uploaded file should show a done chip",
+      base.agentPanes.some(
+        (p) => p.pane_id === peekPane && p.agent_status === "blocked",
+      ),
+      "answer went to a pane that is not waiting",
     );
-    // A failed upload shows a failed chip with Retry; retrying delivers it.
-    failNextUpload = true;
-    await attachNote(host, "retry.txt");
-    await waitFor(
-      () =>
-        host.querySelector(
-          '.town-peek .attachment-chip[data-status="failed"]',
-        ) !== null,
-      "a failed upload did not show a failed chip",
-    );
-    host
-      .querySelector<HTMLButtonElement>(
-        '.town-peek [aria-label="Retry retry.txt"]',
-      )!
-      .click();
+
+    const peekConnection = base.connections.find((connection) =>
+      connection.snapshot?.panes.some((pane) => pane.pane_id === peekPane),
+    )?.connectionId;
+    // The message is the agent's latest from Chat's conversation read model.
     await waitFor(
       () =>
         host
-          .querySelector<HTMLInputElement>(".town-reply input:not([type])")
-          ?.value.includes("/uploads/retry.txt") === true,
-      "the retried upload did not reach the reply line",
+          .querySelector(".town-peek-screen")
+          ?.textContent?.includes("I'll sort the reception queue") === true,
+      "peek did not show the agent's latest message",
     );
-    uploads.length = 1;
-    // A number key pressed on another control never answers the agent.
-    const zoomIn = host.querySelector<HTMLButtonElement>(
-      '[aria-label="Zoom in"]',
-    )!;
-    zoomIn.focus();
-    zoomIn.dispatchEvent(
-      new KeyboardEvent("keydown", { key: "1", bubbles: true }),
+    // The message is rendered as Chat renders it, never as terminal text.
+    check(
+      host.querySelector(".town-peek-screen table") !== null &&
+        !(host.querySelector(".town-peek-screen")?.textContent ?? "").includes(
+          "|---",
+        ),
+      "the peek should render the message's markdown table",
     );
-    await settle();
-    check(sent.length === 2, "a number key outside the peek sent an answer");
-    // An upload that finishes after switching agents stays with its agent.
-    let release!: () => void;
-    uploadGate = new Promise<void>((resolve) => (release = resolve));
-    await attachNote(host);
-    const firstCard = host.querySelector<HTMLElement>(".town-peek");
-    const firstAgentKey = firstCard?.dataset.agentKey ?? "";
+    // The peek watches the pane as Chat does and rereads only on a push.
+    check(
+      conversationCalls.some(
+        (call) =>
+          call.method === "agent_conversation.watch" &&
+          call.paneId === peekPane,
+      ),
+      "the peek did not ask the service to watch its pane",
+    );
+    const readsBefore = conversationCalls.filter(
+      (call) => call.method === "agent_conversation.latest",
+    ).length;
+    await new Promise((resolve) => setTimeout(resolve, 4_500));
+    check(
+      conversationCalls.filter(
+        (call) => call.method === "agent_conversation.latest",
+      ).length === readsBefore,
+      "the peek reread its conversation without a push",
+    );
+    latestText = "The queue now keeps the oldest agent first.";
+    pushConversation(peekConnection!, peekPane);
+    await waitFor(
+      () =>
+        host
+          .querySelector(".town-peek-screen")
+          ?.textContent?.includes("keeps the oldest agent first") === true,
+      "a pushed change did not refresh the peek",
+    );
+    // The question sits in its own box above the answers.
+    check(
+      (
+        host.querySelector(".town-peek .town-question")?.textContent ?? ""
+      ).startsWith("Do you want"),
+      "the peek should box the agent's question",
+    );
+    // The card is a preview: no reply line and no attachments of its own.
+    // Open chat opens the agent's one window on Chat, where replies go.
+    check(
+      host.querySelector(".town-peek input, .town-peek textarea") === null &&
+        host.querySelector('.town-peek input[type="file"]') === null,
+      "the hover card should have no reply line or attachments",
+    );
+    inspected.length = 0;
+    [
+      ...host.querySelectorAll<HTMLButtonElement>(
+        '.town-peek [aria-label="Chat"] button',
+      ),
+    ]
+      .find((button) => button.textContent === "Open chat")!
+      .click();
+    await waitFor(
+      () =>
+        inspected.length === 1 &&
+        inspected[0]![1] === "history" &&
+        host.querySelector(".town-peek") === null,
+      "Open chat did not open the agent's window on Chat",
+    );
+    check(opened.length === 0, "Open chat must not open the full terminal");
+    // Next on the card opens the next waiting agent's window.
+    hoverEntry(entry);
+    await waitFor(
+      () => host.querySelector(".town-peek") !== null,
+      "the card did not show for Next",
+    );
+    inspected.length = 0;
     [...host.querySelectorAll<HTMLButtonElement>(".town-peek-foot button")]
       .find((button) => button.textContent?.startsWith("Next"))!
       .click();
-    // Each agent session gets its own card.
     await waitFor(
       () =>
-        host.querySelector(".town-peek") !== null &&
-        host.querySelector(".town-peek") !== firstCard,
-      "Next did not move to another agent",
+        inspected.length === 1 &&
+        inspected[0]![1] === "history" &&
+        host.querySelector(".town-peek") === null,
+      "Next did not open the next agent's window",
     );
-    release();
-    uploadGate = null;
-    await settle();
-    await settle();
-    check(
-      !host
-        .querySelector<HTMLInputElement>(".town-reply input:not([type])")
-        ?.value.includes("/uploads/"),
-      "an earlier agent's upload landed in the next agent's reply",
-    );
-    // It lands in that agent's reply line when its peek opens again: the
-    // path is kept for the pane, not for the card that started the upload.
-    host.querySelector<HTMLButtonElement>(".town-peek-close")!.click();
-    await settle();
-    host
-      .querySelector<HTMLButtonElement>(
-        `.world-semantic-target[data-kind="agent"][data-target-key="${CSS.escape(firstAgentKey)}"]`,
-      )!
-      .click();
-    await waitFor(
-      () =>
-        host.querySelector<HTMLElement>(".town-peek")?.dataset.agentKey ===
-        firstAgentKey,
-      "the first agent's peek did not reopen",
-    );
-    await settle();
-    const reopened =
-      host.querySelector<HTMLInputElement>(".town-reply input:not([type])")
-        ?.value ?? "";
-    check(
-      reopened.includes("/uploads/notes.txt"),
-      `an upload finished while its peek was closed was lost (${JSON.stringify(reopened)})`,
-    );
-    check(
-      host.querySelector('.town-peek .attachment-chip[data-status="done"]') !==
-        null,
-      "the reopened peek should show the finished upload's chip",
-    );
-  } else {
-    // 📎 uploads through the pane's own connection into World's composer.
-    await attachNote(host);
-    await waitFor(
-      () =>
-        host
-          .querySelector<HTMLTextAreaElement>(
-            ".town-peek .terminal-composer-input",
-          )
-          ?.value.includes("/uploads/notes.txt") === true,
-      "attachment did not reach the composer",
-    );
-    check(
-      host.querySelector(".town-peek .terminal-composer .attachment-chip") !==
-        null,
-      "the composer should show the upload's chip",
-    );
-    check(
-      uploads.length === 1 && uploads[0] === peekConnection,
-      `attachment uploaded through ${JSON.stringify(uploads)}`,
-    );
-    await waitFor(
-      () => host.querySelector(".town-peek .terminal-composer-input") !== null,
-      "Reply did not open the composer in the peek",
-    );
-    const composer = host.querySelector<HTMLTextAreaElement>(
-      ".town-peek .terminal-composer-input",
-    )!;
-    const setValue = Object.getOwnPropertyDescriptor(
-      HTMLTextAreaElement.prototype,
-      "value",
-    )!.set!;
-    setValue.call(composer, "Use the newest file");
-    composer.dispatchEvent(new Event("input", { bubbles: true }));
-    await settle();
-    host
-      .querySelector<HTMLButtonElement>(
-        '.town-peek [aria-label="Send draft to the terminal"]',
-      )!
-      .click();
-    await waitFor(() => sent.length === 2, "composer message was not sent");
-    check(
-      sent[1]!.paneId === peekPane &&
-        sent[1]!.text.includes("Use the newest file") &&
-        sent[1]!.keys.includes("enter"),
-      `composer sent ${JSON.stringify(sent[1])}`,
-    );
-    check(opened.length === 0, "chatting must not open the full terminal");
-    const chatScreen =
-      host.querySelector(".town-peek-screen")?.textContent ?? "";
-    check(
-      chatScreen.includes("keeps the oldest agent first") &&
-        chatScreen.includes("Do you want"),
-      "chat should show the agent's messages and its question",
-    );
-    // Direct typing happens in the full terminal.
-    host
-      .querySelector<HTMLButtonElement>(
-        '.town-peek button[aria-label="Type directly into the terminal"]',
-      )!
-      .click();
-    await waitFor(
-      () => opened.length === 1,
-      "Direct did not open the terminal",
-    );
-    opened.length = 0;
+    inspected.length = 0;
   }
 
   // A desk with more panes than seats lists every pane.
@@ -968,79 +803,61 @@ async function run() {
   check(document.activeElement === crowded, "focus did not return to the desk");
   opened.length = 0;
 
-  // On the phone, Back closes the composer, then the peek, before Town.
-  if (phone) {
-    host.querySelector<HTMLButtonElement>(".town-reception-entry")!.click();
+  if (!phone) {
+    const card = () =>
+      host.querySelector<HTMLButtonElement>(".town-reception-entry")!;
+    // The card's Inspector opens World's Inspector on Files for that agent.
+    inspected.length = 0;
+    hoverEntry(card());
     await waitFor(
-      () => host.querySelector(".town-message-box") !== null,
-      "peek did not open for Back",
+      () => host.querySelector(".town-peek") !== null,
+      "the card did not show again",
     );
-    host.querySelector<HTMLButtonElement>(".town-message-box")!.click();
+    [...host.querySelectorAll<HTMLButtonElement>(".town-peek-foot button")]
+      .find((button) => button.textContent === "Inspector")!
+      .click();
+    await settle();
+    check(
+      inspected.length === 1 && inspected[0]![1] === "files",
+      `Inspector opened ${JSON.stringify(inspected)}`,
+    );
+    check(
+      selected.length === 0,
+      "Inspector must not change the selection path",
+    );
+
+    // Open terminal, in the card's header, opens the agent's terminal.
+    hoverEntry(card());
     await waitFor(
-      () => host.querySelector(".town-peek .terminal-composer-input") !== null,
-      "composer did not open for Back",
+      () => host.querySelector(".town-peek-head .town-peek-terminal") !== null,
+      "the card's header has no Open terminal",
     );
-    history.back();
+    opened.length = 0;
+    host
+      .querySelector<HTMLButtonElement>(".town-peek-head .town-peek-terminal")!
+      .click();
+    await waitFor(() => opened.length === 1, "Open terminal did not open it");
+    check(
+      host.querySelector(".town-peek") === null,
+      "Open terminal should close the card",
+    );
+    opened.length = 0;
+
+    // An unreadable conversation shows Chat's reason, not the screen.
+    conversationUnavailable = true;
+    hoverEntry(card());
     await waitFor(
       () =>
-        host.querySelector(".town-peek .terminal-composer-input") === null &&
-        host.querySelector(".town-peek") !== null,
-      "Back did not close the composer first",
+        host
+          .querySelector(".town-peek-screen")
+          ?.textContent?.includes("No saved session for this agent yet.") ===
+        true,
+      "the card did not show why the conversation is unavailable",
     );
-    history.back();
-    await waitFor(
-      () => host.querySelector(".town-peek") === null,
-      "Back did not close the peek",
-    );
+    conversationUnavailable = false;
+    host.querySelector<HTMLButtonElement>(".town-peek-close")!.click();
+    await settle();
   }
-
-  // Inspector opens World's Inspector on Files for that agent.
-  host.querySelector<HTMLButtonElement>(".town-reception-entry")!.click();
-  await waitFor(
-    () => host.querySelector(".town-peek") !== null,
-    "peek did not reopen",
-  );
-  [...host.querySelectorAll<HTMLButtonElement>(".town-peek-foot button")]
-    .find((button) => button.textContent === "Inspector")!
-    .click();
-  await settle();
-  check(
-    inspected.length === 1 && inspected[0]![1] === "files",
-    `Inspector opened ${JSON.stringify(inspected)}`,
-  );
-  check(selected.length === 0, "Inspector must not change the selection path");
-
-  // Open terminal, in the peek's header, opens the agent's terminal.
-  host.querySelector<HTMLButtonElement>(".town-reception-entry")!.click();
-  await waitFor(
-    () => host.querySelector(".town-peek-head .town-peek-terminal") !== null,
-    "the peek header has no Open terminal",
-  );
-  opened.length = 0;
-  host
-    .querySelector<HTMLButtonElement>(".town-peek-head .town-peek-terminal")!
-    .click();
-  await waitFor(() => opened.length === 1, "Open terminal did not open it");
-  check(
-    host.querySelector(".town-peek") === null,
-    "Open terminal should close the peek",
-  );
-  opened.length = 0;
-
-  // An unreadable conversation shows Chat's reason, not the screen.
-  conversationUnavailable = true;
-  host.querySelector<HTMLButtonElement>(".town-reception-entry")!.click();
-  await waitFor(
-    () =>
-      host
-        .querySelector(".town-peek-screen")
-        ?.textContent?.includes("No saved session for this agent yet.") ===
-      true,
-    "the peek did not show why the conversation is unavailable",
-  );
-  conversationUnavailable = false;
-  host.querySelector<HTMLButtonElement>(".town-peek-close")!.click();
-  await settle();
 
   // Tapping the desk of an agent waiting at reception opens its chat.
   const waitingAgent = [
@@ -1051,7 +868,7 @@ async function run() {
     target.getAttribute("aria-label")?.includes(", needs input, desk "),
   );
   check(waitingAgent !== undefined, "no waiting agent has a target");
-  const [waitingName, , deskName, roomName, hostName] = waitingAgent!
+  const [, , deskName, roomName, hostName] = waitingAgent!
     .getAttribute("aria-label")!
     .split(", ");
   const waitingDesk = [
@@ -1065,16 +882,18 @@ async function run() {
       .includes(`${deskName}, ${roomName}, ${hostName},`.toLowerCase()),
   );
   check(waitingDesk !== undefined, "the waiting agent's desk has no target");
+  inspected.length = 0;
   waitingDesk?.click();
   await waitFor(
-    () =>
-      host.querySelector(`.town-peek[aria-label="${waitingName} peek"]`) !==
-        null && host.querySelector(".town-peek .town-pill-blocked") !== null,
-    "tapping a desk did not open its waiting agent's chat",
+    () => inspected.length === 1 && inspected[0]![1] === "history",
+    "tapping a desk did not open its waiting agent's window on Chat",
   );
   check(opened.length === 0, "tapping a desk in Chat mode opened a terminal");
-  host.querySelector<HTMLButtonElement>(".town-peek-close")!.click();
-  await settle();
+  check(
+    host.querySelector(".town-peek") === null,
+    "tapping a desk should open the window, not a card",
+  );
+  inspected.length = 0;
 
   const waitingKey = waitingAgent?.dataset.targetKey ?? "";
   await waitFor(
@@ -1147,27 +966,75 @@ async function run() {
   await settle();
   opened.length = 0;
 
-  // Opening a desk's terminal on desktop must leave its keys to the terminal:
-  // no hidden composer may be requested.
+  // The Town master's chat (FirstMate's) is docked from the start on wide
+  // screens: once per visit, on Chat, without moving the pane's focus.
+  inspected.length = 0;
+  writeOfficePreferences(worldLocalStorage, {
+    ...readOfficePreferences(worldLocalStorage),
+    townMaster: "codex",
+  });
+  window.dispatchEvent(new Event(WORLD_OFFICE_PREFERENCES_CHANGED_EVENT));
+  if (!phone) {
+    await waitFor(
+      () => inspected.length === 1 && unfocusedOpens.length === 1,
+      "the Town master's chat was not docked",
+    );
+    check(
+      inspected[0]![1] === "history",
+      "the Town master's chat should open on Chat",
+    );
+  } else {
+    await settle();
+    await settle();
+    check(
+      inspected.length === 0,
+      "a phone must not open the Town master's chat by itself",
+    );
+  }
+  // Changing views and back does not reopen it in the same visit.
+  writeOfficePreferences(worldLocalStorage, {
+    ...readOfficePreferences(worldLocalStorage),
+    townMaster: "",
+  });
+  window.dispatchEvent(new Event(WORLD_OFFICE_PREFERENCES_CHANGED_EVENT));
+  await settle();
+  writeOfficePreferences(worldLocalStorage, {
+    ...readOfficePreferences(worldLocalStorage),
+    townMaster: "codex",
+  });
+  window.dispatchEvent(new Event(WORLD_OFFICE_PREFERENCES_CHANGED_EVENT));
+  await settle();
+  await settle();
+  check(
+    inspected.length === (phone ? 0 : 1),
+    "the Town master's chat opened again in the same visit",
+  );
+  writeOfficePreferences(worldLocalStorage, {
+    ...readOfficePreferences(worldLocalStorage),
+    townMaster: "",
+  });
+  window.dispatchEvent(new Event(WORLD_OFFICE_PREFERENCES_CHANGED_EVENT));
+  inspected.length = 0;
+
+  // Activating an agent's desk opens its window on Chat, not its terminal,
+  // and on desktop requests no hidden composer.
   if (!phone) {
     let composerRequests = 0;
     const countRequest = () => (composerRequests += 1);
     window.addEventListener(TERMINAL_COMPOSER_REQUEST_EVENT, countRequest);
-    [
-      ...host.querySelectorAll<HTMLButtonElement>(
-        '.world-semantic-target[data-kind="desk"]',
-      ),
-    ]
-      .find(
-        (target) => !target.getAttribute("aria-label")?.endsWith(", 6 panes"),
-      )!
-      .dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
-    await waitFor(() => opened.length === 1, "desk did not open its terminal");
+    inspected.length = 0;
+    waitingDesk!.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+    await waitFor(
+      () => inspected.length >= 1 && inspected[0]![1] === "history",
+      "activating a desk did not open its agent's window on Chat",
+    );
     window.removeEventListener(TERMINAL_COMPOSER_REQUEST_EVENT, countRequest);
+    check(opened.length === 0, "activating a desk opened a terminal");
     check(
       composerRequests === 0,
-      "desktop terminals must not open World's composer",
+      "desktop activation must not open World's composer",
     );
+    inspected.length = 0;
     opened.length = 0;
   }
 
@@ -1200,6 +1067,23 @@ async function run() {
     "zoomed room stayed at overview",
   );
   check(selected.length === 0, "a room tap must not open an Inspector");
+  // Seated agents with a quest show its progress over their desks.
+  await waitFor(
+    () => window.__HERDR_TOWN_RENDERER__!.animation.quests > 0,
+    "no quest marker over any desk in the zoomed room",
+  );
+  await waitFor(
+    () => host.querySelector(".town-desk-badge") !== null,
+    "desks of agents with a pull request show its badge",
+  );
+  const badge = host.querySelector<HTMLAnchorElement>(".town-desk-badge")!;
+  check(
+    badge.textContent === "#7 ✓" &&
+      badge.dataset.tone === "pass" &&
+      badge.target === "_blank" &&
+      badge.rel.includes("noopener"),
+    `a desk badge links its pull request (${badge.textContent})`,
+  );
 
   // From the keyboard, M on a desk lists the host's other rooms; choosing one
   // asks the service to move that desk there.
@@ -1498,9 +1382,56 @@ async function run() {
       moved = true;
       break;
     }
+    if (!moved) {
+      // A phone stacks rooms in one column, so the other rooms are out of
+      // view: held at the bottom edge, the desk scrolls the town until
+      // another room is under it.
+      const ghost = () => host.querySelector<HTMLElement>(".town-drag-ghost");
+      const otherRoom = () => {
+        // Only a move to another room reads "Move … to <room>"; its own
+        // room offers "… place" or "Put … last".
+        const label = ghost()?.textContent ?? "";
+        return ghost()?.dataset.valid === "true" && /^Move .+ to /.test(label);
+      };
+      press("pointerdown", at(fromDesk));
+      await waitFor(() => ghost() !== null, "holding a desk did not lift it");
+      // Nudge at the edge, then step back out of it so the town is still
+      // when we look and drop.
+      // The town's own bottom edge (a tray may cover the window's), and
+      // up to about 30 s of scrolling: the 100-desk room is tall on a phone
+      // and a slow runner draws few frames.
+      const stage = canvasHost.getBoundingClientRect();
+      const x = stage.left + stage.width / 2;
+      const edge = [x, stage.bottom - 20] as const;
+      const still = [x, stage.bottom - 110] as const;
+      const until = performance.now() + 30_000;
+      while (!otherRoom() && performance.now() < until) {
+        press("pointermove", edge);
+        await new Promise((resolve) => setTimeout(resolve, 250));
+        press("pointermove", still);
+        await settle();
+      }
+      check(
+        otherRoom(),
+        "holding a desk at the edge never scrolled another room under it",
+      );
+      const before = moves.length;
+      const drawn = { ...drags() };
+      press("pointerup", still);
+      await waitFor(
+        () => moves.length === before + 1,
+        "dropping a desk in a room scrolled into view did not move it",
+      );
+      check(
+        moves[before]!.method === "town.move_desk",
+        `an edge-scrolled drop sent ${JSON.stringify(moves[before])}`,
+      );
+      await landed(drawn, "a desk moved to a room scrolled into view");
+      moved = true;
+    }
     check(
       moved,
-      `no visible room took a carried desk (${rooms.length} visible; ${tried.join("; ")})`,
+      `no room took a carried desk (${rooms.length} visible; ${tried.join("; ")})`,
     );
   } else check(false, "no two visible desks share a room");
 
@@ -1537,6 +1468,162 @@ async function run() {
     diagnostics.lastError === null,
     `renderer error: ${diagnostics.lastError}`,
   );
+
+  if (scale === "extended") {
+    // Rooms extend: every tab has a desk, the newest included, and zooming
+    // into the 100-desk room opens at its first desks.
+    const tabs = base.connections.flatMap((c) => c.snapshot?.tabs ?? []);
+    check(
+      diagnostics.desks === tabs.length,
+      `an extended town drew ${diagnostics.desks} of ${tabs.length} desks`,
+    );
+    // Earlier checks leave the camera at a desk; step out until the 100-desk
+    // room's card shows (on a phone, Zoom out returns to the first building).
+    const orbitCard = () =>
+      [...host.querySelectorAll<HTMLButtonElement>(".town-room-card")].find(
+        (card) => card.textContent?.includes("orbit"),
+      );
+    for (let step = 0; step < 6 && !orbitCard(); step += 1) {
+      host.querySelector<HTMLButtonElement>('[aria-label="Zoom out"]')!.click();
+      await new Promise((resolve) => setTimeout(resolve, 900));
+    }
+    const roomCard = orbitCard();
+    check(
+      roomCard !== undefined,
+      `the 100-desk room has no card (level ${diagnostics.level}, zoom ${diagnostics.zoom.toFixed(2)}, ${host.querySelectorAll(".town-room-card").length} cards)`,
+    );
+    roomCard?.click();
+    const first = () =>
+      [
+        ...host.querySelectorAll<HTMLElement>(
+          '.world-semantic-target[data-kind="desk"]',
+        ),
+      ].find(
+        (target) =>
+          JSON.parse(target.dataset.targetKey!)[2] === "local-orbit-tab-0",
+      );
+    await waitFor(() => {
+      const box = first()?.getBoundingClientRect();
+      return (
+        !!box &&
+        box.width > 0 &&
+        box.top >= 0 &&
+        box.left >= 0 &&
+        box.bottom <= window.innerHeight &&
+        box.right <= window.innerWidth
+      );
+    }, "zooming into the 100-desk room did not show its first desk");
+    const newest = [
+      ...host.querySelectorAll<HTMLElement>(
+        '.world-semantic-target[data-kind="desk"]',
+      ),
+    ].some(
+      (target) =>
+        JSON.parse(target.dataset.targetKey!)[2] === "local-orbit-tab-99",
+    );
+    check(newest, "the 100-desk room's newest desk has no target");
+    check(
+      diagnostics.lastError === null,
+      `renderer error at scale: ${diagnostics.lastError}`,
+    );
+
+    // The town takes its shape from its container: phones and portrait
+    // screens stack buildings and rooms grow downward; wide screens use
+    // columns of rooms on one street.
+    const stage = host.querySelector("canvas")!.parentElement!;
+    const expected = townShapeFor(stage.clientWidth, stage.clientHeight);
+    const shown = diagnostics.layout!;
+    check(
+      shown.formFactor === expected.formFactor &&
+        shown.roomColumns === expected.roomColumns &&
+        shown.deskColumns === expected.deskColumns,
+      `the town's shape ${JSON.stringify(shown)} does not fit a ${stage.clientWidth}x${stage.clientHeight} container`,
+    );
+    // Half-width windows sit in between: portrait or medium, both two
+    // columns of rooms.
+    const fits =
+      window.innerWidth < 640
+        ? [TOWN_SHAPES.phone]
+        : window.innerHeight > window.innerWidth * 1.3
+          ? [TOWN_SHAPES.portrait]
+          : window.innerWidth >= 1200
+            ? [TOWN_SHAPES.wide]
+            : [TOWN_SHAPES.portrait, TOWN_SHAPES.medium];
+    check(
+      fits.some((shape) => shape === expected),
+      `a ${window.innerWidth}x${window.innerHeight} window got ${JSON.stringify(expected)}`,
+    );
+
+    // A room that grows while the user holds the town waits to reflow until
+    // they let go and pause; then every new desk is drawn.
+    const before = diagnostics.layout!.geometry;
+    const press = (type: string) =>
+      stage.dispatchEvent(
+        new PointerEvent(type, {
+          bubbles: true,
+          pointerId: 51,
+          pointerType: "mouse",
+          button: 0,
+          buttons: type === "pointerup" ? 0 : 1,
+          clientX: 20,
+          clientY: stage.clientHeight - 20,
+        }),
+      );
+    press("pointerdown");
+    const snapshot = base.connections[0]!.snapshot!;
+    const grown = "local-meadow";
+    for (let index = 24; index < 64; index += 1) {
+      const tabId = `${grown}-tab-${index}`;
+      snapshot.tabs.push({
+        tab_id: tabId,
+        workspace_id: grown,
+        number: index + 1,
+        label: `task ${index + 1}`,
+        focused: false,
+        pane_count: 1,
+        agent_status: "unknown",
+      });
+      snapshot.panes.push({
+        pane_id: `${tabId}-pane-0`,
+        terminal_id: `${tabId}-terminal-0`,
+        workspace_id: grown,
+        tab_id: tabId,
+        focused: false,
+        agent: "",
+        agent_status: "",
+        revision: 1,
+      });
+    }
+    setWorld(
+      worldFor(
+        base.connections.map((connection) => ({
+          ...connection,
+          snapshot: connection.snapshot && {
+            ...connection.snapshot,
+            tabs: [...connection.snapshot.tabs],
+            panes: [...connection.snapshot.panes],
+          },
+        })),
+      ),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    check(
+      diagnostics.layout!.geometry === before,
+      "the town reflowed while the user held it",
+    );
+    press("pointerup");
+    const tabs2 = base.connections.flatMap((c) => c.snapshot?.tabs ?? []);
+    await waitFor(
+      () =>
+        diagnostics.layout!.geometry !== before &&
+        diagnostics.desks === tabs2.length,
+      "the grown room never reflowed after the user let go",
+    );
+    check(
+      diagnostics.lastError === null,
+      `renderer error after a reflow: ${diagnostics.lastError}`,
+    );
+  }
 
   // StrictMode mounts twice; exactly one renderer and canvas must survive.
   check(

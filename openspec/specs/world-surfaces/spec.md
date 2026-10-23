@@ -1107,7 +1107,16 @@ from Herdr's tab list order within each workspace, which Herdr keeps when a tab
 moves (a tab's number is not its position). Desk slot i of a room SHALL be the
 room's i-th drawn tab, in reading order, so a reorder in Herdr, Spaces or Town
 moves desks. A room's capacity SHALL step through a
-bounded set of grid sizes that always leaves at least one free desk spot. While a
+bounded set of grid sizes that always leaves at least one free desk spot: a room
+grows square until it reaches its shape's width (four desks on a phone, six on
+portrait and mid-width screens, eight on wide screens) and then extends
+downward, up to 127 drawn desks, and its building grows around it, so a room of
+real size shows every desk. Only a room with more tabs than that SHALL leave
+desks undrawn: it SHALL keep the selected desk and the three newest tabs, then
+desks whose agents need the user, are working or are unknown, then finished
+ones, hiding idle and empty desks first, and SHALL count every hidden desk on
+the room. Zooming into a room taller or wider than the usable view, from its
+card or with Zoom in, SHALL open at its first desks. While a
 scene is live, a topology change SHALL NOT reorder rooms or move a desk to
 another room: a tab Herdr adds last SHALL take the first free spot of its room
 without moving other desks, and a closed tab SHALL leave no gap: the desks after
@@ -1116,8 +1125,18 @@ before it keep their spots. A room that reaches a new capacity step MAY shift
 later rooms and rows of the same building without reordering rooms, and its
 desks MAY reflow to the step's columns; it SHALL keep its size step when desks
 close. Room placement SHALL be re-derived from native order when the scene is
-rebuilt. Desktop SHALL lay out
-buildings in one row; phones SHALL stack buildings in one vertical column.
+rebuilt. Town SHALL take its shape from its container's size rather than one
+breakpoint: on a phone, rooms SHALL stack in one column and buildings in one
+vertical column; on a portrait screen or a half-width window, rooms SHALL form
+two columns and buildings SHALL stack (or share a street when the window is
+landscape); on a wide screen, rooms SHALL form three columns and buildings
+SHALL share one street. Rooms SHALL fill their building's columns in workspace
+order, and while a scene is live each room SHALL keep its column, so a room
+that grows moves only the rooms below it in that column. The lounge SHALL stay
+above the rooms, and the lobby and reception below them. A reflow that would move rooms
+or buildings SHALL wait while the user presses, scrolls or zooms and until a
+short pause after, and the camera SHALL then follow the room in view so it
+stays where it was.
 
 #### Scenario: A tab is created while the user watches
 
@@ -1136,6 +1155,19 @@ buildings in one row; phones SHALL stack buildings in one vertical column.
 - **WHEN** a room's last free spot is taken
 - **THEN** the room grows to the next capacity step with a free spot, rooms keep
   their order, and desks keep their room and their order
+
+#### Scenario: Agents fill a room past its old size
+
+- **WHEN** a room has 24, 50 or 100 tabs
+- **THEN** the room extends and draws a desk for every tab, the newest included,
+  on a phone, a half-width window, a wide screen and a portrait monitor
+
+#### Scenario: A room grows while the user watches
+
+- **WHEN** a room gains enough tabs to grow while the user holds the town
+- **THEN** no room or building moves until the user lets go and pauses, and
+  then the rooms below it in its column move down while the room in view stays
+  where it was
 
 #### Scenario: Tabs are reordered outside Town
 
@@ -1233,6 +1265,43 @@ pane target wherever it stands.
 - **THEN** it walks to its host's reception behind any waiting agents and shows a
   completion marker, and inspecting it does not change Herdr state
 
+### Requirement: Pinned Town desks
+
+The user SHALL be able to pin and unpin a Town desk from its agent window's
+menu. A pin SHALL be a World view setting saved on the World service with the
+terminal colours, keyed by the desk's tab, so every device sees it; it SHALL NOT
+change Herdr and SHALL be separate from Spaces' browser-local tab pins. A pinned
+desk SHALL show a pin and keep its cell in its room through tab reorders,
+capacity steps and rebuilt scenes; the room SHALL grow to hold the cell, and
+the other desks SHALL take the free cells in tab order. A pinned desk SHALL NOT
+be picked up for a drag, nor be a reorder target, until unpinned. An agent at
+a pinned desk SHALL NOT go to the lounge: it SHALL leave its seat only for
+reception, when blocked or done and not yet checked, and SHALL return to its
+seat once checked or answered. A pin SHALL follow its tab to another workspace
+and SHALL be dropped when its tab closes. When a room has more desks than Town
+presents, its pinned desks and the selected desk, with their agents, SHALL
+still be presented, even past the bound, and other desks SHALL be omitted
+instead; only pins beyond the 127 desks a room can draw MAY go undrawn.
+
+#### Scenario: A pinned agent finishes and is seen
+
+- **WHEN** an agent at a pinned desk finishes and the user checks it
+- **THEN** it waits at reception until checked and then walks back to its seat,
+  never to the lounge
+
+#### Scenario: A pinned desk in a crowded room
+
+- **WHEN** a room's tabs exceed Town's desk bound and more of its tabs are
+  pinned than the bound, with another desk selected
+- **THEN** every pinned desk, the selected desk and their agents stay
+  presented, and only unpinned desks are omitted
+
+#### Scenario: A room reflows around a pinned desk
+
+- **WHEN** tabs are added or reordered in a room with a pinned desk
+- **THEN** the pinned desk keeps its cell and the other desks fill the free
+  cells in tab order
+
 ### Requirement: Town attention rail
 
 Town SHALL present the agents that need the user in the same order as Desk
@@ -1241,9 +1310,9 @@ desktop the list SHALL be a left rail grouped by host and then room, with
 collapsible host groups, and the user SHALL be able to hide it to a count and
 restore it; this choice SHALL persist per browser. On phones the list SHALL be a
 bottom tray that remains reachable while a peek or card is open. Hovering an
-entry SHALL open its peek, and activating an entry SHALL open that peek pinned,
-where its reply line takes a reply. A keyboard command SHALL open the next agent that
-needs the user.
+entry SHALL show its card, and activating an entry SHALL open that agent's
+window on Chat, where replies go. A keyboard command SHALL open the next agent
+that needs the user.
 The rail SHALL list a bounded number of entries and count the rest.
 
 #### Scenario: Work through waiting agents on desktop
@@ -1266,9 +1335,18 @@ when it is waiting), answer options only when the pane's latest lines present a
 numbered menu or a yes/no prompt, and actions to reply, open the Inspector, open
 the terminal from the peek's header and go to the next waiting agent. Tapping an
 agent, or the table of an agent away at reception or in the lounge, SHALL open
-what the Town opens preference names: the agent's peek (Chat, the default) or
-its terminal; it SHALL NOT open an Inspector, and tapping a room SHALL only zoom
-to it. A table SHALL stand for its agent that needs the user (waiting, then
+what the Town opens preference names: the agent's one window, World's
+Inspector, on its Chat view (the default), or its terminal; tapping a room SHALL
+only zoom to it. Activating an agent or its table, the needs-you list, N and
+Next SHALL open the same window on Chat; no separate peek chat window SHALL
+exist, and the peek card SHALL only preview an agent on hover. In Town the
+Inspector SHALL dock right by default and keep the dock each window was left
+with. Its top selector SHALL list Chat, Terminal, Changes and Files (Commits
+last) and follow the window's own width: labelled from 640px, icons below, and
+below 360px the active view with the others under ⋯. On a phone the Chat view
+SHALL show one composer and no terminal key bar. The Town master's chat, named
+by a setting, SHALL open docked on Chat once per visit on wide screens without
+focusing its pane. A table SHALL stand for its agent that needs the user (waiting, then
 finished) before the agent seated there. An agent opened this way, with either
 preference, SHALL walk back to its desk and stay there until its status
 changes, after which its status places it again; the tap SHALL NOT mark its
@@ -1306,8 +1384,8 @@ Opening the terminal from a peek SHALL follow the Inspector presentation prefere
 
 - **WHEN** Town opens Chat and the user taps the table of an agent that is
   waiting at reception
-- **THEN** that agent's peek opens, the agent walks back to its desk, and no
-  terminal opens
+- **THEN** that agent's window opens on Chat, the agent walks back to its desk,
+  and no terminal or peek card opens
 
 #### Scenario: Town opens Terminal
 
@@ -1331,15 +1409,12 @@ service reports the conversation changed, sharing Chat's watch rather than
 polling. It SHALL NOT show terminal
 screen text as the message; when the conversation is unavailable it SHALL show
 Chat's reason. A waiting agent's question, read from the pane's latest lines,
-SHALL be set apart below the message, with its answers as one-tap buttons. The peek SHALL end
-with a reply line and Send. On desktop the reply line SHALL be typed in the peek
-itself and typing while a peek is pinned SHALL go to it. On the phone layout
-tapping the reply line SHALL grow World's own terminal composer in place, with
-its keys, attachments and the draft it shares with the pane's terminal, and the
-composer SHALL stay visible above the keyboard while the screen lines shrink.
-The peek's Open terminal action, and the composer's Direct mode, SHALL open the
-pane's full terminal. Attaching files in the peek, the phone composer, Spaces or
-Chat SHALL show one chip per file: uploading with byte progress where the
+SHALL be set apart below the message, with its answers as one-tap buttons. The
+peek is a read-only preview: it SHALL have no reply line and no attachments of
+its own, and its Open chat (Follow up for a finished agent) SHALL open the
+agent's window on Chat. The peek's Open terminal action SHALL open the pane's
+full terminal. Attaching files in the phone composer, Spaces or Chat SHALL show
+one chip per file: uploading with byte progress where the
 transport reports it, then done or failed, with Retry and Remove for a failed
 file; picking a failed file again SHALL retry it. Send SHALL wait for uploads,
 and a file picked again while it uploads SHALL NOT be uploaded twice. A path
@@ -1351,17 +1426,11 @@ using the same path as the shell's Actions menu. Answers and replies SHALL be
 sent only to the exact qualified pane, and the result SHALL be confirmed by a
 short notice; a finished agent SHALL announce itself once.
 
-#### Scenario: Reply from a desktop peek
+#### Scenario: Reply from the peek
 
-- **WHEN** the user types in a waiting agent's peek and presses Send
-- **THEN** the text and Enter reach that agent's pane and the terminal does not
-  open
-
-#### Scenario: Reply to a waiting agent on a phone
-
-- **WHEN** the user taps the reply line in a waiting agent's peek
-- **THEN** the peek shows World's composer for that pane without opening the
-  terminal, and the keyboard does not cover the message field or Send
+- **WHEN** the user chooses Open chat in an agent's peek
+- **THEN** the agent's window opens on Chat, where the reply is written; the
+  peek offers no reply line or attachments of its own
 
 #### Scenario: The peek renders the latest message
 
@@ -1387,7 +1456,9 @@ dragging with a mouse, by holding and then dragging on touch, and from the
 keyboard by pressing M on a focused desk or agent target, which opens a list of
 destinations. Town SHALL NOT add visible move controls to the scene. While a
 drag is in progress Town SHALL show where the desk or agent would land, or why
-it cannot. A picked-up desk or agent SHALL lift off and follow the pointer;
+it cannot, and holding the carried desk or agent near the edge of the usable
+view SHALL scroll the town toward that edge, so rooms out of view can be
+reached. A picked-up desk or agent SHALL lift off and follow the pointer;
 every move Herdr confirms, within a room or to another room, SHALL land on its
 target with a puff of dust, and a refused move SHALL return to where it was.
 Under reduced motion or calm motion the carried desk or agent SHALL stay under
@@ -1713,6 +1784,14 @@ place them into free space. Tidy SHALL rearrange the selected workspace's tabs,
 or the whole board when nothing is selected, and SHALL offer an undo that
 restores the previous positions. A pinned card SHALL keep its board position and
 SHALL NOT follow its workspace.
+
+#### Scenario: Pin a card
+
+- **WHEN** the user pins a selected card from its bar (on a phone, from its
+  terminal's header) and then tidies its workspace
+- **THEN** the card shows a pin badge and keeps its position while the other
+  cards are rearranged, and unpinning it lets it belong where it is beside its
+  workspace again
 
 #### Scenario: Drag a workspace
 

@@ -23,6 +23,52 @@ The helper places `agent/<slug>` below the primary checkout's `.agents/worktrees
 directory and rejects unsafe names or unknown refs. `bun run agent:worktree -- list`
 is read-only. Do not move, clean or reuse another agent's worktree.
 
+### Keep the disk healthy
+
+Many worktrees on one machine fill its disk quickly, and checks that run out of
+space fail halfway and leave debris. These rules keep each worktree small:
+
+- `bun run agent:worktree -- prune [--dry-run]` removes worktrees whose work is
+  merged and that are clean.
+  - **Removed:** the branch has commits of its own (a commit in its reflog, not
+    just a fast-forward or reset) that `origin/main` now contains, or the worktree
+    is a detached review checkout of a commit in `origin/main` that has been idle
+    for 12 hours. The merged local branch is deleted with it.
+  - **Stripped:** if processes only sit in such a worktree (an idle shell in an
+    agent's pane, say), only its build output goes: `node_modules`, `dist`,
+    `web/dist`, `server/public`, the `server/herdr-world` binary and
+    `.agents/verification`.
+  - **Kept in use:** a worktree a running process uses in any other way (its
+    executable, an open file, a path in its command line like a preview
+    server's `--directory`, or the working directory of anything but a shell,
+    like a dev server) is not touched.
+  - **Kept with work:** ignored files other than regenerable build output
+    (evidence under `.agents/`, `.env*`, keys, notes) keep the worktree; the
+    decision names them.
+  - **Never touched:** unmerged, dirty, locked, freshly created or current worktrees.
+    Protect a worktree a long-running preview or instance serves with
+    `git worktree lock --reason "<why>" <path>`.
+  - **Dry run:** `--dry-run` prints the decisions without acting.
+- Behavioral verification's checker (about 190 MB) is downloaded once per user into
+  `$XDG_CACHE_HOME/herdr-world/verification` (or `~/.cache/…`;
+  `HERDR_WORLD_VERIFICATION_CACHE` moves it). Every worktree reads it there after
+  checking its digests. Each worktree keeps only its newest four verification runs
+  under `.agents/verification/runs`.
+- `bun install` hardlinks packages from `~/.bun/install/cache`, so a worktree's
+  `node_modules` costs almost nothing when it is on the same filesystem as the cache
+  (`agent:worktree -- create` warns when it is not). Do not clear
+  `~/.bun/install/cache` (`bun pm cache rm`): every worktree would then hold full
+  copies.
+- Test runs give tests and test Chrome their own `TMPDIR` (`/tmp/hwt-*`), and
+  remove it with any process still using it, however the run ends. A direct
+  `bun test` gets the same treatment through `bunfig.toml`. Runs killed outright
+  are swept by the next run once their owner process is gone. Other programs'
+  scratch directories, such as a desktop Chrome's, are never touched.
+- `check:changed`, `check:delivery`, `test:browser` and the World browser suites
+  refuse to start, with a message, when the worktree's filesystem or the temporary
+  directory has less than 3 GB free. Set `HERDR_WORLD_MIN_FREE_GB` to change the
+  floor (`0` turns it off); CI skips the guard.
+
 ## Deliver a change
 
 Start from the owner's requested outcome and inspect existing behavior before editing.

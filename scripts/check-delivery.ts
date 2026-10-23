@@ -10,6 +10,7 @@ import {
   type Affected,
 } from "./affected";
 import { acquireCheckSlot, type CheckClass, heldEnv } from "./check-lock";
+import { guardDiskSpace } from "./disk-guard";
 import { worldBrowserSuites, worldTimedSuites } from "./world-browser-suites";
 
 /**
@@ -206,6 +207,10 @@ async function runLaneCommands(lane: Lane, log: string): Promise<Result> {
   };
 }
 
+guardDiskSpace(
+  browserOnly ? "the browser checks" : full ? "the full gate" : "the gate",
+  root,
+);
 const selection = scope();
 const { busy, quiet, verification } = plan(selection);
 const lanes = [...verification, ...busy, ...quiet];

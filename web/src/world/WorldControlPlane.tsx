@@ -1,33 +1,132 @@
-import {
-  floatingTerminalGeometryId,
-  writeFloatingTerminalGeometry,
-} from "./floatingTerminalPreferences";
-import { WindowSurface } from "./windows/WindowSurface";
-import { WindowFrame } from "./windows/WindowFrame";
-import { Suspense } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { worldLocalStorage } from "../browserStorage";
-import { ConfirmDialog } from "../components/ModalDialogs";
 import { CreateWorkspaceDialog } from "../components/CreateWorkspaceDialog";
+import { ConfirmDialog } from "../components/ModalDialogs";
 import { lazyWithReload } from "../lazyWithReload";
 import { connectionSnapshot, store } from "../store";
 import { WORKSPACE_INSPECTOR_CLOSE_EVENT } from "../workspaceResource";
-import WorldIntentProfile from "./WorldIntentProfile";
-import WorldInspectorConversationView from "./WorldInspectorConversation";
-import { WorldConnectionRequired } from "./WorldStatus";
-import { DeskView } from "./DeskView";
-import { worldInspectorWindowId } from "./worldTerminalPresentation";
 import {
-  worldNodeForInspectorPaneFocus,
-  activateWorldNodeHost,
-} from "./worldInspectorSelection";
-import { type WorldControlPlaneProps } from "./worldControlPlaneContract";
+  type LaunchTarget,
+  WORLD_AGENT_LAUNCH_EVENT,
+  WORLD_AGENT_PROFILES_EVENT,
+} from "./agentProfiles";
+import { DeskView } from "./DeskView";
+import {
+  floatingTerminalGeometryId,
+  writeFloatingTerminalDock,
+  writeFloatingTerminalGeometry,
+} from "./floatingTerminalPreferences";
+import { terminalColorKey } from "./terminalColor";
+import { setDeskPinned, useDeskPins } from "./useDeskPins";
+import { useTerminalColorChoices } from "./useTerminalColors";
 import { useWorldInspectorController } from "./useWorldInspectorController";
 import { useWorldVisualActions } from "./useWorldVisualActions";
-import { useTerminalColorChoices } from "./useTerminalColors";
+import WorldInspectorConversationView from "./WorldInspectorConversation";
+import WorldIntentProfile from "./WorldIntentProfile";
+import { WorldConnectionRequired } from "./WorldStatus";
+import { WindowFrame } from "./windows/WindowFrame";
+import { WindowSurface } from "./windows/WindowSurface";
+import { type WorldControlPlaneProps } from "./worldControlPlaneContract";
+import {
+  activateWorldNodeHost,
+  worldNodeForInspectorPaneFocus,
+} from "./worldInspectorSelection";
+import type {
+  WorldAgentStatus,
+  WorldLeafObject,
+  WorldObject,
+  WorldObjectNode,
+} from "./worldObject";
 import type { WorldInspectorConversation } from "./worldTerminalPresentation";
+import { worldInspectorWindowId } from "./worldTerminalPresentation";
+
+/** Switch to lists the agents waiting on you, then finished ones, then the rest. */
+function switchToRank(status: WorldAgentStatus) {
+  return status === "blocked" ? 0 : status === "done" ? 1 : 2;
+}
 
 const TownView = lazyWithReload("world-town", () => import("./TownView"));
 const BoardView = lazyWithReload("world-board", () => import("./BoardView"));
+
+const AgentLauncherDialog = lazyWithReload("world-agent-launcher", () =>
+  import("./AgentLauncherDialog").then((module) => ({
+    default: module.AgentLauncherDialog,
+  })),
+);
+const ProfileEditor = lazyWithReload("world-profile-editor", () =>
+  import("./ProfileEditor").then((module) => ({
+    default: module.ProfileEditor,
+  })),
+);
+
+/**
+ * The launcher and the profile editor, opened from any view by their events
+ * (agentProfiles.ts). They see every host's rooms.
+ */
+function AgentDialogs({
+  world,
+  onOpenTerminal,
+}: {
+  world: WorldObject;
+  onOpenTerminal(nodeId: string): void;
+}) {
+  const [launch, setLaunch] = useState<
+    (Partial<LaunchTarget> & { profileId?: string }) | null
+  >(null);
+  const [editing, setEditing] = useState<{ profileId?: string } | null>(null);
+  // A launched agent or login terminal opens once World's snapshot shows it.
+  const [pendingOpen, setPendingOpen] = useState<{
+    connectionId: string;
+    terminalId: string;
+  } | null>(null);
+  useEffect(() => {
+    if (!pendingOpen) return;
+    const leaf = world.leaves.find(
+      (candidate) =>
+        candidate.connectionId === pendingOpen.connectionId &&
+        candidate.terminalId === pendingOpen.terminalId,
+    );
+    if (!leaf) return;
+    setPendingOpen(null);
+    onOpenTerminal(leaf.id);
+  }, [world, pendingOpen, onOpenTerminal]);
+  useEffect(() => {
+    const onLaunch = (event: Event) =>
+      setLaunch({ ...(event as CustomEvent<LaunchTarget>).detail });
+    const onProfiles = (event: Event) =>
+      setEditing({ profileId: (event as CustomEvent<string>).detail });
+    window.addEventListener(WORLD_AGENT_LAUNCH_EVENT, onLaunch);
+    window.addEventListener(WORLD_AGENT_PROFILES_EVENT, onProfiles);
+    return () => {
+      window.removeEventListener(WORLD_AGENT_LAUNCH_EVENT, onLaunch);
+      window.removeEventListener(WORLD_AGENT_PROFILES_EVENT, onProfiles);
+    };
+  }, []);
+  return (
+    <Suspense fallback={null}>
+      {editing ? (
+        <ProfileEditor
+          world={world}
+          initialId={editing.profileId}
+          onLaunch={(profileId) =>
+            setLaunch((current) => ({ ...current, profileId }))
+          }
+          onClose={() => setEditing(null)}
+        />
+      ) : null}
+      {launch ? (
+        <AgentLauncherDialog
+          key={launch.profileId ?? ""}
+          world={world}
+          initial={launch}
+          onOpen={setPendingOpen}
+          onEditProfiles={() => setEditing({})}
+          onClose={() => setLaunch(null)}
+        />
+      ) : null}
+    </Suspense>
+  );
+}
 
 const WorldIntentConnector = lazyWithReload(
   "world-intent-connector",
@@ -94,16 +193,28 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
     retireInspectors,
     showSelectionProfile,
     applySelection,
+    openInBackground,
   } = controller;
+  /**
+   * Only Town reads where a window was left docked, so only Town writes it:
+   * snapping or floating a window in Desk never changes where it opens in
+   * Town.
+   */
+  const rememberTownDock = (
+    ...args: Parameters<typeof writeFloatingTerminalDock>
+  ) => {
+    if (view === "town") writeFloatingTerminalDock(...args);
+  };
   const {
     workspaceCreationOpen,
     setWorkspaceCreationOpen,
     workspaceCreationDestination,
   } = useWorldVisualActions(controller);
   const colorChoice = useTerminalColorChoices();
-  const inspectorColor = (conversation: WorldInspectorConversation) =>
+  const deskPins = useDeskPins();
+  const inspectorTab = (conversation: WorldInspectorConversation) =>
     conversation.tabId
-      ? colorChoice({
+      ? {
           connectionId: conversation.connectionId,
           workspaceId: conversation.workspaceId,
           tabId: conversation.tabId,
@@ -114,8 +225,22 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
               )
               .map((space) => space.nativeId),
           ),
-        })
+        }
       : null;
+  const inspectorColor = (conversation: WorldInspectorConversation) => {
+    const tab = inspectorTab(conversation);
+    return tab ? colorChoice(tab) : null;
+  };
+  // An agent window pins its agent's desk in Town.
+  const inspectorPin = (conversation: WorldInspectorConversation) => {
+    const tab = inspectorTab(conversation);
+    return tab
+      ? {
+          pinned: Boolean(deskPins[terminalColorKey(tab)]),
+          onPin: (pinned: boolean) => void setDeskPinned(tab, pinned),
+        }
+      : null;
+  };
 
   return (
     <main
@@ -123,6 +248,10 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
       id="world"
       data-active={active ? "true" : "false"}
     >
+      <AgentDialogs
+        world={aggregateWorld}
+        onOpenTerminal={(nodeId) => void openTerminalById(nodeId)}
+      />
       <CreateWorkspaceDialog
         open={workspaceCreationOpen}
         initialDestination={workspaceCreationDestination}
@@ -188,9 +317,12 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
                     >
                       <TownView
                         world={presentedWorld}
-                        onOpenInspectorView={(id, view) =>
-                          void applySelection(id, view)
-                        }
+                        onOpenInspectorView={(id, view, focus = true) => {
+                          // An unfocused open (the docked Town master) stays
+                          // in the background: no selection, not raised.
+                          if (focus) void applySelection(id, view);
+                          else openInBackground(id, view);
+                        }}
                         toolbarPortal={viewToolbarPortal}
                         selectedId={selectedId}
                         onSelect={selectNode}
@@ -306,7 +438,11 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
                   zIndex={zIndex}
                   active={windowActive}
                   compact={compactArrangement}
-                  className="world-floating-terminal"
+                  // Town draws its one window in the Town prototype's look;
+                  // Board and Desk keep the calm shell look.
+                  className={`world-floating-terminal ${
+                    view === "town" ? "is-town-skin theme-scope-dark" : ""
+                  }`}
                   onTerminalActivate={(paneId) => {
                     const snapshot = connectionSnapshot(
                       store.get(),
@@ -342,11 +478,21 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
                       floatingTerminalGeometryId(conversation),
                       rect,
                     );
+                    rememberTownDock(
+                      worldLocalStorage,
+                      floatingTerminalGeometryId(conversation),
+                      "float",
+                    );
                     windowCommand({ type: "place", id: entry.id, rect });
                   }}
-                  onSnap={(target) =>
-                    windowCommand({ type: "snap", id: entry.id, target })
-                  }
+                  onSnap={(target) => {
+                    rememberTownDock(
+                      worldLocalStorage,
+                      floatingTerminalGeometryId(conversation),
+                      target,
+                    );
+                    windowCommand({ type: "snap", id: entry.id, target });
+                  }}
                   onMaximize={() =>
                     windowCommand({ type: "maximize", id: entry.id })
                   }
@@ -456,20 +602,62 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
                   id: worldInspectorWindowId(conversation),
                 }),
               onClose: () => closeInspector(conversation),
-              onSnap: (target) =>
+              onSnap: (target) => {
+                rememberTownDock(
+                  worldLocalStorage,
+                  floatingTerminalGeometryId(conversation),
+                  target,
+                );
                 windowCommand({
                   type: "snap",
                   id: worldInspectorWindowId(conversation),
                   target,
-                }),
-              onFloat: () =>
+                });
+              },
+              onFloat: () => {
+                rememberTownDock(
+                  worldLocalStorage,
+                  floatingTerminalGeometryId(conversation),
+                  "float",
+                );
                 windowCommand({
                   type: "float",
                   id: worldInspectorWindowId(conversation),
-                }),
-              color: inspectorColor(conversation),
+                });
+              },
+              pin: inspectorPin(conversation),
+              // The colour is chosen from the swatch beside the name.
+              back: view === "town" ? { label: "Back to Town" } : undefined,
+              // A phone switches between agents and terminals from ⋯, as
+              // its terminal does: agents open on Chat, terminals on Terminal.
+              // The list is the hosts the filter shows, live ones only, those
+              // that need you first; the menu scrolls rather than cutting.
+              switchTo: compactArrangement
+                ? presentedWorld.nodes
+                    .filter(
+                      (node: WorldObjectNode): node is WorldLeafObject =>
+                        (node.kind === "agent" || node.kind === "terminal") &&
+                        node.actionable &&
+                        !node.stale &&
+                        node.id !== conversation.nodeId,
+                    )
+                    .sort(
+                      (a, b) => switchToRank(a.status) - switchToRank(b.status),
+                    )
+                    .map((node) => ({
+                      id: node.id,
+                      label: node.label,
+                      detail: `${node.stateLabels[node.status] ?? node.status} · ${node.spaceLabel}`,
+                      onSelect: () =>
+                        void applySelection(
+                          node.id,
+                          node.kind === "agent" ? "history" : "terminal",
+                        ),
+                    }))
+                : undefined,
             }}
             terminalColor={inspectorColor(conversation)}
+            townSkin={view === "town"}
             onResourceFocus={() => {
               intentRequestRef.current++;
               const id = worldInspectorWindowId(conversation);

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { availableParallelism, totalmem } from "node:os";
 import { dirname, relative, resolve } from "node:path";
 import { randomUUID } from "node:crypto";
@@ -25,6 +25,35 @@ type CaseEvidence = {
   elapsedMs: number;
   maxRSSBytes?: number;
 };
+
+/** Earlier runs kept beside a new one; each holds hundreds of megabytes. */
+export const VERIFICATION_RUNS_KEPT = 4;
+
+/**
+ * Keep only the newest runs. Run directories are named by start time and
+ * nothing reads an earlier run back, so older ones are only disk use; CI
+ * uploads the current run before its runner disappears.
+ */
+export async function pruneVerificationRuns(
+  runs: string,
+  keep = VERIFICATION_RUNS_KEPT,
+) {
+  let names: string[];
+  try {
+    names = await readdir(runs);
+  } catch {
+    return [];
+  }
+  const dated = names.filter((name) => /^\d{4}-\d\d-\d\dT/.test(name)).sort();
+  const old = dated.slice(0, Math.max(0, dated.length - keep));
+  await Promise.all(
+    old.map((name) =>
+      rm(resolve(runs, name), { recursive: true, force: true }),
+    ),
+  );
+  return old;
+}
+
 export async function aggregateVerificationEvidence(
   root: string,
   records: CaseEvidence[],
@@ -125,9 +154,10 @@ export async function runParallelVerification(
     "Invalid verification execution deadlines",
   );
   const workers = Math.min(execution.workers, availableParallelism());
+  const runs = resolve(root, ".agents/verification/runs");
+  await pruneVerificationRuns(runs);
   const output = resolve(
-    root,
-    ".agents/verification/runs",
+    runs,
     `${new Date().toISOString().replaceAll(":", "-")}-parallel-${randomUUID()}`,
   );
   await mkdir(output, { recursive: true });

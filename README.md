@@ -66,8 +66,10 @@ recorded Pi review.
 
 ## Quick start
 
-1. Install and start [Herdr](https://herdr.dev), or let Herdr World install and
-   start it later with `herdr-world herdr setup`.
+1. Herdr World runs on [Herdr](https://herdr.dev). The standalone installer and
+   Homebrew install Herdr too, or upgrade an older one; with npm or a Windows
+   archive, run `herdr-world herdr upgrade --install` once. `herdr-world herdr setup`
+   starts Herdr as a user service.
 2. On Linux or macOS, install Herdr World with the standalone installer:
 
    ```bash
@@ -91,6 +93,10 @@ service owns every connection and the browser stays on that World origin. Hosts
 filters Town, Board, Desk, the navigator, counts and search; it never
 connects or disconnects a profile. Terminals and Inspectors on different ready hosts can
 operate together. Global creation visibly confirms one destination host.
+
+Your GitHub pull requests and Jira tickets appear beside the agents working on
+them (Board's **Work** lens and Town desk badges). GitHub works once `gh auth
+login` is done for the user running World; add Jira in **Settings → Sources**.
 
 See [deployment](./docs/DEPLOYMENT.md) for checksums, profiles, authentication,
 updates, and services.

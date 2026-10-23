@@ -272,7 +272,7 @@ function registerDomTests() {
     });
   });
 
-  test("Inspector restores Files, preserves newer selections, and limits PR/MR banners to Git views", async () => {
+  test("Inspector restores Files, preserves newer selections, and shows no PR/MR banner above any view", async () => {
     let deleteFixture = () => {};
     mock.module("./FileExplorerDialog", () => ({
       FileExplorerPanel: ({
@@ -408,7 +408,7 @@ function registerDomTests() {
     await act(async () =>
       container
         .querySelector<HTMLButtonElement>(
-          '.workspace-inspector-tabs [role="tab"]',
+          '.workspace-inspector-tabs [role="tab"][aria-label="Files"]',
         )!
         .click(),
     );
@@ -462,9 +462,8 @@ function registerDomTests() {
           }),
         ),
       );
-      expect(container.querySelectorAll(".pull-request-card").length).toBe(
-        view === "changes" || view === "commits" ? 1 : 0,
-      );
+      // PR status is in the bar's repository popover, not above any view.
+      expect(container.querySelectorAll(".pull-request-card").length).toBe(0);
     }
   });
 }

@@ -40,12 +40,13 @@ const workflow = Bun.YAML.parse(
 ) as {
   on: {
     pull_request: { types: string[] };
+    push: { branches: string[] };
     workflow_dispatch: {
       inputs: Record<string, { type: string; default: unknown }>;
     };
   };
   permissions: { actions: string };
-  concurrency: { "cancel-in-progress": string };
+  concurrency: { group: string; "cancel-in-progress": string };
   jobs: Record<string, WorkflowJob>;
 };
 
@@ -104,6 +105,15 @@ test("CI exposes the protected delivery gate and runs the complete repository ch
   expect(workflow.permissions.actions).toBe("read");
   expect(workflow.concurrency["cancel-in-progress"]).toContain(
     "github.event.action != 'edited'",
+  );
+  // Post-merge gate: main pushes share one group that never cancels the
+  // running check, so a batch of merges is tested once at its newest commit.
+  expect(workflow.on.push).toEqual({ branches: ["main"] });
+  expect(workflow.concurrency.group).toContain(
+    "(github.event_name == 'push' && 'main-push')",
+  );
+  expect(workflow.concurrency["cancel-in-progress"]).toContain(
+    "github.event_name == 'pull_request'",
   );
   const delivery = workflow.jobs.delivery;
 
@@ -432,4 +442,34 @@ test("CI checks native plugin compatibility on Windows and both macOS architectu
       step.run?.includes("cp server/herdr-world server/herdr-world-plugin.exe"),
     ),
   ).toBe(true);
+});
+
+test("red main runs open one alert and an unmerged revert; green runs resolve it", async () => {
+  const gate = Bun.YAML.parse(
+    await Bun.file(
+      new URL("../.github/workflows/main-gate.yml", import.meta.url),
+    ).text(),
+  ) as {
+    on: {
+      workflow_run: {
+        workflows: string[];
+        types: string[];
+        branches: string[];
+      };
+    };
+    jobs: Record<string, WorkflowJob>;
+  };
+  expect(gate.on.workflow_run).toEqual({
+    workflows: ["CI"],
+    types: ["completed"],
+    branches: ["main"],
+  });
+  const alert = gate.jobs.alert!;
+  // Only push runs on main count; PR runs whose head branch is named main do not.
+  expect(alert.if).toBe(
+    "github.event.workflow_run.event == 'push' && (github.event.workflow_run.conclusion == 'failure' || github.event.workflow_run.conclusion == 'success')",
+  );
+  const script = alert.steps.at(-1)!;
+  expect(script.run).toContain("bun scripts/main-gate.ts");
+  expect(script.run).not.toContain("gh pr merge");
 });

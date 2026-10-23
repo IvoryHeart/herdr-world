@@ -11,6 +11,7 @@ import {
   ExternalLink,
   Focus,
   Activity,
+  GitPullRequest,
   Keyboard,
   LogOut,
   Palette,
@@ -23,6 +24,7 @@ import {
   MessageSquare,
   Wind,
   Bug,
+  Shirt,
 } from "lucide-react";
 import { APP_VERSION } from "../version";
 import { worldLocalStorage } from "../browserStorage";
@@ -30,7 +32,13 @@ import { logoutBrowserSession } from "../api";
 import { connectionHttpPath } from "../connectionHttp";
 import { useLayoutPreferences } from "../layoutPreferences";
 import { shortcutLabel, useShortcutPreferences } from "../shortcutPreferences";
-import { shallowEqual, store, useStoreSelector } from "../store";
+import {
+  herdrUpgradeMenuEntry,
+  herdrUpgradeOffered,
+  shallowEqual,
+  store,
+  useStoreSelector,
+} from "../store";
 import { useConnectionClient } from "../useConnectionClient";
 import type {
   ConfigurationProps,
@@ -66,15 +74,22 @@ export function reloadApplicationPage(
 
 type ConfigMenuProps = ConfigurationProps & {
   zenMode: boolean;
+  /** False where Zen would change nothing, such as a phone's terminal. */
+  zenAvailable?: boolean;
   onZenModeChange: (zenMode: boolean) => void;
   onOpenOfficeMetrics?: () => void;
+  onOpenAgentProfiles?: () => void;
+  onOpenSources?: () => void;
   onShowShortcuts: () => void;
 };
 
 export function ConfigMenu({
   zenMode,
+  zenAvailable = true,
   onZenModeChange,
   onOpenOfficeMetrics,
+  onOpenAgentProfiles,
+  onOpenSources,
   onShowShortcuts,
   ...configuration
 }: ConfigMenuProps) {
@@ -87,6 +102,7 @@ export function ConfigMenu({
       status: state.status,
       updateInfo: state.updateInfo,
       updateInstalling: state.updateInstalling,
+      herdrUpgrading: state.herdrUpgrading,
     }),
     shallowEqual,
   );
@@ -124,6 +140,14 @@ export function ConfigMenu({
     protocol: number;
   } | null>(null);
   const [herdrUnavailable, setHerdrUnavailable] = useState(false);
+  // Offered only on the default connection: the upgrade concerns this
+  // machine's Herdr.
+  const [herdrUpgrade, setHerdrUpgrade] = useState<{
+    label: string;
+    description: string;
+  } | null>(null);
+  const onDefaultConnection =
+    !s.connectionPaused && s.activeConnectionId === s.defaultConnectionId;
   const ref = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const closeMenu = () => {
@@ -141,7 +165,19 @@ export function ConfigMenu({
     setHealth(null);
     setHerdrInfo(null);
     setHerdrUnavailable(false);
+    setHerdrUpgrade(null);
     setOfficePreferences(readOfficePreferences(worldLocalStorage));
+    if (onDefaultConnection)
+      fetch("/api/herdr/status", {
+        credentials: "same-origin",
+        cache: "no-store",
+      })
+        .then((r) => (r.ok ? r.json() : null))
+        .catch(() => null)
+        .then((status) => {
+          if (cancelled || !herdrUpgradeOffered(status)) return;
+          setHerdrUpgrade(herdrUpgradeMenuEntry(status));
+        });
     fetch("/api/health", { credentials: "same-origin", cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
       .catch(() => null)
@@ -170,7 +206,7 @@ export function ConfigMenu({
     return () => {
       cancelled = true;
     };
-  }, [connectionClient, open]);
+  }, [connectionClient, onDefaultConnection, open]);
   // A layer on the shared stack: Escape, a press outside (the terminal
   // included) and Back close it, and focus returns to what had it.
   useLayer(open, () => setOpen(false), { element: () => ref.current });
@@ -265,7 +301,7 @@ export function ConfigMenu({
                     }}
                   />
                 )}
-                {layout.mobile ? null : (
+                {zenAvailable ? (
                   <div className="config-preference-row">
                     <span className="config-item-icon">
                       <Focus size={15} />
@@ -273,8 +309,10 @@ export function ConfigMenu({
                     <div className="config-item-copy">
                       <strong>Zen mode</strong>
                       <span>
-                        {zenMode ? "Enabled" : "Disabled"} ·{" "}
-                        {shortcutLabel("zen.toggle")}
+                        {zenMode ? "Enabled" : "Disabled"}
+                        {layout.mobile
+                          ? ""
+                          : ` · ${shortcutLabel("zen.toggle")}`}
                       </span>
                     </div>
                     <button
@@ -291,7 +329,7 @@ export function ConfigMenu({
                       <span />
                     </button>
                   </div>
-                )}
+                ) : null}
               </div>
               <div className="config-section config-section-tiles-3">
                 <div className="config-title">Views</div>
@@ -340,6 +378,34 @@ export function ConfigMenu({
                     <option value="chat">Chat</option>
                     <option value="terminal">Terminal</option>
                   </select>
+                </label>
+                <label className="config-preference-row">
+                  <span className="config-item-icon">
+                    <MessageSquare size={15} />
+                  </span>
+                  <span className="config-item-copy">
+                    <strong>Town master</strong>
+                    <span>
+                      The agent whose chat Town docks from the start; empty
+                      docks none
+                    </span>
+                  </span>
+                  <input
+                    className="config-preference-select"
+                    aria-label="Town master"
+                    defaultValue={officePreferences.townMaster}
+                    maxLength={64}
+                    spellCheck={false}
+                    autoComplete="off"
+                    onBlur={(event) =>
+                      updateOfficePreferences({
+                        townMaster: event.currentTarget.value,
+                      })
+                    }
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") event.currentTarget.blur();
+                    }}
+                  />
                 </label>
                 <div className="config-preference-row">
                   <span className="config-item-icon">
@@ -392,6 +458,30 @@ export function ConfigMenu({
                       <span />
                     </button>
                   </div>
+                ) : null}
+                {onOpenAgentProfiles ? (
+                  <ConfigMenuItem
+                    icon={<Shirt size={15} />}
+                    label="Agent profiles"
+                    className="config-menu-item-row"
+                    description="Name, brain, skills, brief and look for new agents"
+                    onClick={() => {
+                      setOpen(false);
+                      onOpenAgentProfiles();
+                    }}
+                  />
+                ) : null}
+                {onOpenSources ? (
+                  <ConfigMenuItem
+                    icon={<GitPullRequest size={15} />}
+                    label="Sources"
+                    className="config-menu-item-row"
+                    description="GitHub pull requests and Jira tickets beside your agents"
+                    onClick={() => {
+                      setOpen(false);
+                      onOpenSources();
+                    }}
+                  />
                 ) : null}
                 {onOpenOfficeMetrics ? (
                   <ConfigMenuItem
@@ -508,6 +598,23 @@ export function ConfigMenu({
                       : "-"}
                   </code>
                 </div>
+                {herdrUpgrade ? (
+                  <ConfigMenuItem
+                    icon={<Download size={15} />}
+                    label={
+                      s.herdrUpgrading
+                        ? "Updating Herdr..."
+                        : herdrUpgrade.label
+                    }
+                    description={herdrUpgrade.description}
+                    primary
+                    disabled={s.herdrUpgrading}
+                    onClick={() => {
+                      setOpen(false);
+                      void store.upgradeHerdr();
+                    }}
+                  />
+                ) : null}
                 {herdrUnavailable ? (
                   <HerdrSetupCard
                     key={connectionClient.connectionId}

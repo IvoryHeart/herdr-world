@@ -1,5 +1,10 @@
 import { expect, test } from "bun:test";
-import { TownCamera, townLevel, townZoomLimits } from "./townCamera";
+import {
+  TownCamera,
+  townLevel,
+  townRoomFocus,
+  townZoomLimits,
+} from "./townCamera";
 import { layoutTown } from "./townLayout";
 
 const input = {
@@ -116,4 +121,41 @@ test("a town with too many rooms for cards opens at roof level", () => {
   expect(townLevel(limits.card, limits)).toBe("room");
   expect(limits.roof).toBeLessThan(limits.card);
   expect(limits.min).toBeLessThan(limits.home);
+});
+
+test("a room that fits is centred; an extended room opens at its first desks", () => {
+  const small = { x: 10, y: 10, w: 16, h: 11 };
+  const tall = { x: 10, y: 10, w: 41, h: 81 };
+  const views = [
+    {
+      width: 390,
+      height: 700,
+      inset: { top: 60, right: 0, bottom: 100, left: 0 },
+    },
+    // A docked panel on the right and a rail on the left.
+    {
+      width: 700,
+      height: 700,
+      inset: { top: 0, right: 300, bottom: 0, left: 16 },
+    },
+  ];
+  for (const view of views) {
+    const camera = new TownCamera();
+    // A town large enough that its edges never clamp the camera here.
+    camera.configure(layoutTown(input, "wide").layout, view);
+    const z = 0.9;
+    // Fitting: the room's centre sits at the usable area's centre.
+    const centre = townRoomFocus(small, view, 1);
+    expect(centre).toEqual({ x: (10 + 8) * 16, y: (10 + 5.5) * 16 });
+    // Too big: its top-left corner (with its margin) sits at the usable
+    // area's top-left, whatever chrome is docked.
+    const focus = townRoomFocus(tall, view, z);
+    camera.jumpTo(focus.x, focus.y, z);
+    const corner = camera.toScreen(10 * 16 - 20, 10 * 16 - 24);
+    expect(corner.x).toBeCloseTo(view.inset.left, 3);
+    expect(corner.y).toBeCloseTo(view.inset.top, 3);
+    const firstDesk = camera.toScreen(10 * 16, 11 * 16);
+    expect(firstDesk.x).toBeGreaterThanOrEqual(view.inset.left);
+    expect(firstDesk.y).toBeGreaterThanOrEqual(view.inset.top);
+  }
 });

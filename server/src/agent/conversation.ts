@@ -1,5 +1,7 @@
 import type { ConversationDelivery } from "./conversation-delivery";
+import type { PendingPrompt } from "./pending-prompt";
 import type { ConversationIdentity } from "./conversation-watch";
+import type { AgentQuest, Quest } from "./quest";
 import type { HistoryEntry } from "./session-history";
 
 // The conversation read model is the one contract Chat and other consumers
@@ -51,15 +53,32 @@ export type Conversation = {
   session_fingerprint: string | null;
   /** A plain name for the session shown, such as "claude session <id>". */
   session_label: string | null;
+  /**
+   * What the harness shows as its terminal title, such as the task it is on.
+   * Null when Herdr reports none.
+   */
+  terminal_title: string | null;
+  /**
+   * The tool call the agent has started and not finished: a call in the
+   * transcript with no result yet. Null when none is open.
+   */
+  running_tool: RunningTool | null;
   updated_at: string | null;
   messages: ConversationMessage[];
   latest: ConversationMessage | null;
+  /** What the agent is working through, from its own todos, plan or goal. */
+  quest: Quest | null;
   /**
    * Messages Chat sent from this pane that are not yet settled: pending ones
    * belong to the conversation whose fingerprint they carry; misdelivered and
    * unverified ones are notices for the pane until dismissed.
    */
   deliveries: ConversationDelivery[];
+  /**
+   * The question the agent is waiting on, read from its screen while Herdr
+   * reports it blocked; null otherwise.
+   */
+  pending_prompt: PendingPrompt | null;
 } & (
   | { status: "ok"; unavailable: null }
   | {
@@ -74,6 +93,63 @@ export type Conversation = {
 );
 
 export type ConversationLatest = Omit<Conversation, "messages">;
+
+export type RunningTool = {
+  /** The harness's tool-call ID. */
+  id: string;
+  name: string;
+  /** Its description, command or path, when the call names one. */
+  summary: string | null;
+  started_at: string;
+};
+
+const SUMMARY_FIELDS = [
+  "description",
+  "command",
+  "file_path",
+  "path",
+  "pattern",
+  "url",
+  "query",
+];
+
+/**
+ * The newest tool call with no result after it. A harness writes the call
+ * when it starts and the result when it ends, so this is the step running
+ * now. Reads the whole projection, not the visible window.
+ */
+export function runningTool(
+  entries: readonly HistoryEntry[],
+): RunningTool | null {
+  const finished = new Set<string>();
+  for (let index = entries.length - 1; index >= 0; index -= 1) {
+    const entry = entries[index]!;
+    if (!entry.source_call_id) continue;
+    if (entry.kind === "tool_result") {
+      finished.add(entry.source_call_id);
+      continue;
+    }
+    if (entry.kind !== "tool_call" || finished.has(entry.source_call_id))
+      continue;
+    let summary: string | null = null;
+    try {
+      const input = JSON.parse(entry.text) as Record<string, unknown>;
+      const field = SUMMARY_FIELDS.find(
+        (name) => typeof input?.[name] === "string" && input[name],
+      );
+      if (field) summary = String(input[field]).split("\n")[0]!.slice(0, 160);
+    } catch {
+      // Arguments that are not JSON name nothing.
+    }
+    return {
+      id: entry.source_call_id,
+      name: entry.tool_name || "tool",
+      summary,
+      started_at: entry.sent_at,
+    };
+  }
+  return null;
+}
 
 export type ConversationSendResult =
   | { status: "sent"; delivery: ConversationDelivery }
@@ -90,6 +166,43 @@ export type ConversationSendResult =
     };
 
 export type ConversationTarget = { pane_id: string };
+export type { AgentQuest };
+
+/**
+ * What kept an answer from being acknowledged: Herdr no longer reports the
+ * agent, the pane has another session, Herdr's status is not one that shows
+ * progress (such as "unknown"), the screen could not be read, or the same
+ * question still shows.
+ */
+export type AnswerUnconfirmedReason =
+  | "agent_missing"
+  | "session_changed"
+  | "unknown_status"
+  | "unreadable"
+  | "still_showing";
+
+export type ConversationAnswerResult =
+  | {
+      /** The key was pressed in the pane. */
+      status: "sent";
+      key: string;
+      number: string;
+      label: string;
+      /**
+       * Herdr showed this agent move on from this prompt after the key: the
+       * same session, and a status other than blocked or a new question.
+       */
+      acknowledged: boolean;
+      /** Why the answer is not acknowledged; null when it is. */
+      unconfirmed_reason: AnswerUnconfirmedReason | null;
+      prompt_fingerprint: string;
+    }
+  | {
+      status: "refused";
+      reason: "not_blocked" | "changed" | "unknown_option";
+      message: string;
+      pending_prompt: PendingPrompt | null;
+    };
 
 export interface ConversationSource {
   readonly id: string;
@@ -99,6 +212,11 @@ export interface ConversationSource {
   identity(target: ConversationTarget): Promise<ConversationIdentity>;
   /** Latest for the named panes, or for every agent the source sees. */
   latestAll(paneIds?: readonly string[]): Promise<ConversationLatest[]>;
+  /**
+   * Quests for the named panes, or every agent the source sees, without
+   * settling deliveries or projecting messages.
+   */
+  quests(paneIds?: readonly string[]): Promise<AgentQuest[]>;
   send(
     target: ConversationTarget & {
       text: string;
@@ -109,6 +227,13 @@ export interface ConversationSource {
   ): Promise<ConversationSendResult>;
   /** Forget a delivery notice the user has seen. */
   dismiss(target: ConversationTarget & { delivery_id: string }): boolean;
+  /**
+   * Answer the agent's pending prompt by pressing one option's key, only if
+   * the agent is still blocked on that same prompt.
+   */
+  answer(
+    target: ConversationTarget & { key: string; prompt_fingerprint: string },
+  ): Promise<ConversationAnswerResult>;
 }
 
 function plural(name: string, calls: number) {

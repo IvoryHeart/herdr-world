@@ -1,103 +1,119 @@
 import {
   ChevronDown,
   ChevronUp,
-  Trash2,
   EllipsisVertical,
+  GitPullRequest,
   Maximize2,
   Minus,
+  Pin,
   Plus,
   Sparkles,
+  Trash2,
 } from "lucide-react";
 import {
+  type CSSProperties,
   lazy,
-  startTransition,
+  type PointerEvent as ReactPointerEvent,
   Suspense,
-  useDeferredValue,
+  startTransition,
   useCallback,
+  useDeferredValue,
   useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
   useState,
-  type CSSProperties,
-  type PointerEvent as ReactPointerEvent,
 } from "react";
 import { createPortal } from "react-dom";
 import { worldLocalStorage } from "../browserStorage";
+import { QuestChip } from "../components/QuestLog";
+import {
+  harnessLabel,
+  type LauncherCatalog,
+  launchAgent,
+  launcherCatalog,
+  openProfileEditor,
+  profilesSnapshot,
+  readinessNote,
+  useAgentProfiles,
+} from "./agentProfiles";
+import { useAgentQuests } from "./agentQuests";
 import {
   anchorFor,
   confirmed,
   nextWitness,
   targetOf,
 } from "./board/boardAnchors";
+import { publishBoardCardPins } from "./board/boardCardPins";
 import {
-  NOTE_COLORS,
-  CARD_COLORS,
-  type CardColor,
-  sharedBoardStore,
-  useBoardDocument,
+  type BoardAnchor,
   type BoardDocumentStore,
   type BoardEnd,
-  type BoardAnchor,
   type BoardNote,
   type BoardOp,
   type BoardString,
+  CARD_COLORS,
+  type CardColor,
+  NOTE_COLORS,
+  sharedBoardStore,
+  useBoardDocument,
 } from "./board/boardDocument";
 import {
-  boardStatusOrder,
-  projectBoard,
+  createDraftStore,
+  KEPT_DRAFTS_KEY,
+  type KeptDraft,
+  useKeptDrafts,
+} from "./board/boardDrafts";
+import {
+  type GestureEffect,
+  type GestureEvent,
+  type GestureTarget,
+  HOLD_MS,
+  initialGesture,
+  stepGesture,
+  waitsForHold,
+} from "./board/boardGesture";
+import {
   type BoardHost,
   type BoardModel,
   type BoardPane,
   type BoardTab,
   type BoardWorkspace,
+  boardStatusOrder,
+  projectBoard,
 } from "./board/boardModel";
 import {
-  HOLD_MS,
-  initialGesture,
-  stepGesture,
-  waitsForHold,
-  type GestureEffect,
-  type GestureEvent,
-  type GestureTarget,
-} from "./board/boardGesture";
-import { createFrameLoop, type FrameLoop } from "./board/boardScheduler";
-import { worldMotionPreference } from "./worldFrameScheduler";
-import { DEVTOOLS, NO_TRACE } from "./devtools/flag";
-import { openTrace, rememberTrace, traceGesture } from "./devtools/trace";
-import { TraceOverlay } from "./devtools/TraceOverlay";
-import {
-  KEPT_DRAFTS_KEY,
-  createDraftStore,
-  useKeptDrafts,
-  type KeptDraft,
-} from "./board/boardDrafts";
-import {
   cool,
-  stepPhysics,
-  warm,
   type PhysicsCard,
   type PhysicsState,
+  stepPhysics,
+  warm,
 } from "./board/boardPhysics";
 import {
-  DEFAULT_SIZE,
+  type BoardLayout,
   clearSpots,
   cloneLayout,
+  DEFAULT_SIZE,
   emptyLayout,
+  type Point,
   placeNew,
   positions,
-  rectAt,
-  tidy,
-  type BoardLayout,
-  type Point,
   type Rect,
+  rectAt,
   type Size,
+  tidy,
 } from "./board/boardPlacement";
-import type { WorldAgentStatus, WorldObject } from "./worldObject";
-import type { WorldCanvasAnchor } from "./worldConnectorGeometry";
+import { createFrameLoop, type FrameLoop } from "./board/boardScheduler";
+import { WorkLens } from "./board/WorkLens";
+import { DEVTOOLS, NO_TRACE } from "./devtools/flag";
+import { TraceOverlay } from "./devtools/TraceOverlay";
+import { openTrace, rememberTrace, traceGesture } from "./devtools/trace";
+import { defaultTerminalColor, TERMINAL_COLOR_HEX } from "./terminalColor";
 import { WorldSearchResults } from "./WorldSearchResults";
 import { WorldViewToolbar } from "./WorldViewToolbar";
-import { defaultTerminalColor, TERMINAL_COLOR_HEX } from "./terminalColor";
+import type { WorldCanvasAnchor } from "./worldConnectorGeometry";
+import { worldMotionPreference } from "./worldFrameScheduler";
+import type { WorldAgentStatus, WorldObject } from "./worldObject";
 import "./board/board.css";
 
 /**
@@ -235,26 +251,35 @@ async function createTabThroughStore(
     };
   }
 }
+/** A start choice is a kind the host supports or `profile:<id>`. */
+const PROFILE_CHOICE = "profile:";
 async function startAgentThroughService(
   space: BoardWorkspace,
   kind: string,
   name: string,
   text: string,
 ) {
-  const { bridge } = await import("../api");
-  return (await bridge
-    .connection(space.connectionId, space.generation)
-    .call(
-      "board.start_agent",
-      { workspace_id: space.nativeId, kind, name, text },
-      120_000,
-    )) as StartOutcome;
+  // The shared launcher (agent/launch.ts), as Town and Spaces use.
+  const profileId = kind.startsWith(PROFILE_CHOICE)
+    ? kind.slice(PROFILE_CHOICE.length)
+    : undefined;
+  return (await launchAgent(
+    {
+      connectionId: space.connectionId,
+      generation: space.generation,
+      workspaceId: space.nativeId,
+      workspaceLabel: space.label,
+    },
+    { profileId, kind: profileId ? undefined : kind, label: name, text },
+  )) as StartOutcome;
 }
-/** Agents Board offers to start; Herdr validates the kind. */
-const START_KINDS = [
-  { kind: "claude", label: "Claude" },
-  { kind: "codex", label: "Codex" },
-];
+function startLabel(kind: string) {
+  if (!kind.startsWith(PROFILE_CHOICE)) return harnessLabel(kind);
+  const id = kind.slice(PROFILE_CHOICE.length);
+  return profilesSnapshot()?.profiles.find((p) => p.id === id)?.name ?? id;
+}
+/** Until the host answers, the kinds every Herdr World release has offered. */
+const FALLBACK_KINDS = ["claude", "codex"];
 async function checkAnchorThroughService(host: BoardHost, anchor: BoardAnchor) {
   const { bridge } = await import("../api");
   return (await bridge
@@ -438,6 +463,8 @@ export default function BoardView({
   // never holds up typing in a terminal.
   const shownWorld = useDeferredValue(world);
   const fullModel = useMemo(() => projectBoard(shownWorld), [shownWorld]);
+  // Each agent's quest, as a progress chip on its card.
+  const quests = useAgentQuests(shownWorld.leaves);
   // A large board's first render is only the frame; its cards follow in a
   // transition, which yields to input while it builds.
   const [built, setBuilt] = useState(
@@ -493,8 +520,21 @@ export default function BoardView({
   const renderKeysRef = useRef<Set<string> | null>(null);
   const selectedKeysRef = useRef<ReadonlySet<string>>(new Set());
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
+  /** Cards pinned in place (layout.pinned), for their badge and the bar. */
+  const [pinnedKeys, setPinnedKeys] = useState<ReadonlySet<string>>(new Set());
+  const togglePinRef = useRef<(key: string) => void>(() => {});
+  // A phone's full-screen terminal pins its card from its header.
+  useEffect(() => {
+    publishBoardCardPins({
+      pinned: pinnedKeys,
+      toggle: (key) => togglePinRef.current(key),
+    });
+  }, [pinnedKeys]);
+  useEffect(() => () => publishBoardCardPins(null), []);
   const [query, setQuery] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
+  const [workOpen, setWorkOpen] = useState(false);
+  const workButtonRef = useRef<HTMLButtonElement | null>(null);
   /** The pane chooser: to pick a pane, or to finish a string to one. */
   const [chooser, setChooser] = useState<{
     tabKey: string;
@@ -836,6 +876,7 @@ export default function BoardView({
         { phone: isPhone(), sizeOf },
       );
       travelToLayout(model);
+      setPinnedKeys(new Set(layout.current.pinned.keys()));
       const folded = new Set(saved.layout.folded);
       if (
         folded.size !== latest.current.collapsed.size ||
@@ -865,6 +906,7 @@ export default function BoardView({
         }
       }
       setCollapsed(new Set(saved.layout.folded));
+      setPinnedKeys(new Set(layout.current.pinned.keys()));
       fit(true);
     }
     invalidate("change");
@@ -1592,7 +1634,7 @@ export default function BoardView({
   /* ---------- Pointer input ---------- */
   /** What a pointer landed on; null for controls and text being edited. */
   function classify(target: HTMLElement): GestureTarget | null {
-    if (target.closest("[contenteditable='true']")) return null;
+    if (target.closest("[contenteditable='true'], .work-lens")) return null;
     if (
       target.closest("button, input, a, label") &&
       !target.closest(".board-card")
@@ -1972,6 +2014,8 @@ export default function BoardView({
   }
 
   const onWheel = useCallback((event: WheelEvent) => {
+    // The Work lens scrolls its own columns.
+    if ((event.target as Element | null)?.closest?.(".work-lens")) return;
     event.preventDefault();
     camGoal.current = null;
     panVelocity.current = null;
@@ -2218,6 +2262,7 @@ export default function BoardView({
         window.clearTimeout(tidyFit.current);
         layout.current = before;
         travelToLayout(latest.current.model);
+        setPinnedKeys(new Set(layout.current.pinned.keys()));
         placeNotes(notesWere);
         setToast({ text: "Restored" });
       },
@@ -2685,13 +2730,14 @@ export default function BoardView({
       }
       return;
     }
-    setToast({ text: `Starting ${kind} in ${space.label}…` });
+    const label = startLabel(kind);
+    setToast({ text: `Starting ${label} in ${space.label}…` });
     try {
-      const outcome = await startAgent(space, kind, name || kind, "");
+      const outcome = await startAgent(space, kind, name || label, "");
       setToast({
         text:
           outcome.status === "started"
-            ? `Started ${kind} in ${space.label}`
+            ? `Started ${label} in ${space.label}`
             : (outcome.message ?? "The agent was not started."),
       });
     } catch (error) {
@@ -2706,7 +2752,7 @@ export default function BoardView({
   ) => {
     setStartFor(null);
     const name = chosenName || noteTabName(note);
-    setToast({ text: `Starting ${kind} in ${space.label}…` });
+    setToast({ text: `Starting ${startLabel(kind)} in ${space.label}…` });
     try {
       const outcome = await startAgent(space, kind, name, note.text);
       // String the note to the new pane whenever one was created, so the
@@ -2845,6 +2891,24 @@ export default function BoardView({
   }, [noteSelected, colorKey]);
   const setCardColor = (key: string, color: CardColor | null) =>
     void report(boardStore.patch([{ op: "card.color", key, color }]));
+  /**
+   * Pin a card where it is, or unpin it. A pinned card never moves on its
+   * own: placement, tidying and settling leave it; only a drag moves it.
+   * Unpinned, it belongs where it is beside its owner.
+   */
+  const togglePin = (key: string) => {
+    const card = cards.current.get(key);
+    if (!card) return;
+    if (layout.current.pinned.has(key)) {
+      layout.current.pinned.delete(key);
+      keepWhereItIs(key, model);
+    } else {
+      layout.current.pinned.set(key, { x: card.x, y: card.y });
+      scheduleSave();
+    }
+    setPinnedKeys(new Set(layout.current.pinned.keys()));
+  };
+  togglePinRef.current = togglePin;
 
   const toolbar = (
     <WorldViewToolbar
@@ -2927,7 +2991,7 @@ export default function BoardView({
           if (
             card ||
             target.closest(
-              ".board-controls, .board-zone-label, .board-notebar, .board-chooser, .board-cut, .board-toast, .board-trace, .board-banner, .board-tray",
+              ".board-controls, .board-zone-label, .board-notebar, .board-chooser, .board-cut, .board-toast, .board-trace, .board-banner, .board-tray, .work-lens",
             )
           )
             return;
@@ -3025,6 +3089,7 @@ export default function BoardView({
                   }}
                 >
                   <div className="board-row">
+                    {pinnedKeys.has(space.key) ? <PinBadge /> : null}
                     <span className="board-label">{space.label}</span>
                     <button
                       type="button"
@@ -3137,6 +3202,10 @@ export default function BoardView({
                       <span className="board-dot" />
                     )}
                     <span className="board-label">{tab.label}</span>
+                    {pinnedKeys.has(tab.key) ? <PinBadge /> : null}
+                    {!multi && pane?.isAgent && quests.get(pane.leaf.id) ? (
+                      <QuestChip quest={quests.get(pane.leaf.id)!} />
+                    ) : null}
                     <span className="board-who">
                       {multi
                         ? `${tab.panes.length} panes`
@@ -3167,6 +3236,9 @@ export default function BoardView({
                           <span className="board-pane-name">
                             {paneName(row)}
                           </span>
+                          {row.isAgent && quests.get(row.leaf.id) ? (
+                            <QuestChip quest={quests.get(row.leaf.id)!} />
+                          ) : null}
                           <span className="board-pane-state">
                             {row.isAgent ? STATUS_LABEL[row.status] : "shell"}
                           </span>
@@ -3492,6 +3564,8 @@ export default function BoardView({
                 model.tabByKey.has(colorKey) ? "Default colour" : "No colour"
               }
               onColor={(color) => setCardColor(colorKey, color)}
+              pinned={pinnedKeys.has(colorKey)}
+              onPin={() => togglePin(colorKey)}
             />
           ) : null}
           {noteSelected && saved?.notes.find((n) => n.id === noteSelected) ? (
@@ -3639,6 +3713,15 @@ export default function BoardView({
               {detached.length}
             </button>
           ) : null}
+          <button
+            ref={workButtonRef}
+            type="button"
+            aria-label="Work: pull requests and tickets"
+            aria-pressed={workOpen}
+            onClick={() => setWorkOpen(!workOpen)}
+          >
+            <GitPullRequest size={15} aria-hidden="true" />
+          </button>
           <div className="board-menu-wrap">
             <button
               type="button"
@@ -3673,6 +3756,21 @@ export default function BoardView({
             ) : null}
           </div>
         </div>
+        {workOpen ? (
+          <WorkLens
+            world={world}
+            anchor={() => workButtonRef.current}
+            onClose={() => setWorkOpen(false)}
+            onSelectAgent={(id) => {
+              setWorkOpen(false);
+              const tab = model.tabs.find((entry) =>
+                entry.panes.some((pane) => pane.leaf.id === id),
+              );
+              if (tab) focusWorkspace(tab.workspaceKey);
+              onSelect(id);
+            }}
+          />
+        ) : null}
         {DEVTOOLS && tracing ? (
           <TraceOverlay
             view="board"
@@ -3814,11 +3912,42 @@ function NewTabDialog({
   // null is a plain terminal; a note always starts an agent.
   const [kind, setKind] = useState<string | null | undefined>(undefined);
   const [name, setName] = useState("");
-  const kinds: { kind: string | null; label: string }[] = [
-    ...(note ? [] : [{ kind: null, label: "Terminal" }]),
-    ...START_KINDS,
-  ];
   const space = workspaces.find((s) => s.key === workspace);
+  const { document: profileDocument } = useAgentProfiles();
+  // The kinds the chosen workspace's host supports, and their readiness.
+  const [catalog, setCatalog] = useState<LauncherCatalog | null>(null);
+  const spaceConnection = space?.connectionId;
+  const spaceGeneration = space?.generation;
+  const spaceWorkspace = space?.nativeId;
+  useEffect(() => {
+    setCatalog(null);
+    if (!spaceConnection || spaceGeneration === undefined || !spaceWorkspace)
+      return;
+    let current = true;
+    launcherCatalog({
+      connectionId: spaceConnection,
+      generation: spaceGeneration,
+      workspaceId: spaceWorkspace,
+    })
+      .then((next) => current && next.kinds.length && setCatalog(next))
+      .catch(() => {});
+    return () => {
+      current = false;
+    };
+  }, [spaceConnection, spaceGeneration, spaceWorkspace]);
+  const kinds: { kind: string | null; label: string; note?: string }[] = [
+    ...(note ? [] : [{ kind: null, label: "Terminal" }]),
+    ...(profileDocument?.profiles ?? []).map((profile) => ({
+      kind: PROFILE_CHOICE + profile.id,
+      label: profile.name,
+      note: readinessNote(profile.harness, catalog)?.text,
+    })),
+    ...(catalog?.kinds ?? FALLBACK_KINDS).map((choice) => ({
+      kind: choice,
+      label: harnessLabel(choice),
+      note: readinessNote(choice, catalog)?.text,
+    })),
+  ];
   const title = note
     ? "Start an agent with this note"
     : `New tab${space ? ` in ${space.label}` : ""}`;
@@ -3861,16 +3990,24 @@ function NewTabDialog({
           <div className="board-kinds" role="radiogroup">
             {kinds.map((choice) => (
               <button
-                key={choice.label}
+                key={choice.kind ?? "terminal"}
                 type="button"
                 role="radio"
                 aria-checked={kind === choice.kind}
+                title={choice.note}
                 onClick={() => setKind(choice.kind)}
               >
                 {choice.label}
               </button>
             ))}
           </div>
+          <button
+            type="button"
+            className="board-link"
+            onClick={() => openProfileEditor()}
+          >
+            Edit profiles
+          </button>
         </fieldset>
         <label className="board-field">
           <span>Tab name (optional)</span>
@@ -4010,17 +4147,30 @@ const tintStyle = (color: CardColor | undefined) =>
     ? ({ "--tint": TERMINAL_COLOR_HEX[color] } as CSSProperties)
     : undefined;
 
+/** Marks a card pinned in place. */
+function PinBadge() {
+  return (
+    <span className="board-pin" role="img" aria-label="Pinned" title="Pinned">
+      <Pin size={12} aria-hidden="true" />
+    </span>
+  );
+}
+
 /** The selected workspace or tab's colour: the user's choice, never a status. */
 function CardBar({
   label,
   color,
   resetLabel,
   onColor,
+  pinned,
+  onPin,
 }: {
   label: string;
   color: CardColor | null;
   resetLabel: string;
   onColor(color: CardColor | null): void;
+  pinned: boolean;
+  onPin(): void;
 }) {
   return (
     <div
@@ -4045,6 +4195,20 @@ function CardBar({
         onClick={() => onColor(null)}
       >
         {resetLabel}
+      </button>
+      <button
+        type="button"
+        className="board-pin-toggle"
+        aria-pressed={pinned}
+        title={
+          pinned
+            ? "Let it move with auto-layout again"
+            : "Keep it here: auto-layout and grouping leave it"
+        }
+        onClick={onPin}
+      >
+        <Pin size={14} aria-hidden="true" />
+        {pinned ? "Unpin" : "Pin"}
       </button>
     </div>
   );

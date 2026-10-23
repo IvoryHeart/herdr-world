@@ -71,10 +71,10 @@ import {
   visibleDiffEntryKey,
 } from "./diffContentState";
 import { diffSyntaxLanguageForPath } from "./diffSyntaxHighlighting";
+import { useViewTheme } from "../themeScope";
 import "./DiffContentView.css";
 
 type DiffViewMode = "split" | "unified";
-type AppTheme = "dark" | "light";
 type PierreDiffOptions = NonNullable<
   ComponentProps<typeof FileDiff<DiffReviewAnnotation>>["options"]
 >;
@@ -270,27 +270,6 @@ function loadMobileDiffWrap() {
 
 function loadDesktopDiffWrap() {
   return worldLocalStorage.getItem(DESKTOP_DIFF_WRAP_KEY) !== "false";
-}
-
-function currentDocumentTheme(): AppTheme {
-  return document.documentElement.dataset.theme === "light" ? "light" : "dark";
-}
-
-function useDocumentTheme() {
-  const [theme, setTheme] = useState<AppTheme>(() => currentDocumentTheme());
-
-  useEffect(() => {
-    const observer = new MutationObserver(() => {
-      setTheme(currentDocumentTheme());
-    });
-    observer.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ["data-theme"],
-    });
-    return () => observer.disconnect();
-  }, []);
-
-  return theme;
 }
 
 function diffEntryKey(entry: GitDiffEntry) {
@@ -945,7 +924,7 @@ export function DiffContentView({
   const [manualCollapseStates, setManualCollapseStates] = useState<
     ReadonlyMap<string, boolean>
   >(() => new Map(readDiffCollapseState(resourceKey)));
-  const theme = useDocumentTheme();
+  const theme = useViewTheme();
   const effectiveViewMode: DiffViewMode = mobile ? "unified" : viewMode;
   const wrapEnabled = mobile ? mobileWrap : desktopWrap;
   const activeEntryKey = entry ? diffEntryKey(entry) : "";
