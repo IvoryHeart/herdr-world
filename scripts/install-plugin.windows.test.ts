@@ -230,7 +230,8 @@ test.skipIf(process.platform !== "win32")(
           name !== ".plugin-install-recent"
         )
           utimesSync(join(server, name), hourAgo, hourAgo);
-      const sweep = Bun.spawnSync(
+      // Async: the installer downloads from this process's own Bun.serve fixture.
+      const sweep = Bun.spawn(
         [
           powershell,
           "-NoProfile",
@@ -245,9 +246,15 @@ test.skipIf(process.platform !== "win32")(
             ...installerEnv,
             HERDR_WORLD_RELEASE_BASE_URL: `http://127.0.0.1:${host.port}`,
           },
+          stdout: "ignore",
+          stderr: "pipe",
         },
       );
-      expect(sweep.exitCode, sweep.stderr.toString()).toBe(0);
+      const [sweepCode, sweepError] = await Promise.all([
+        sweep.exited,
+        new Response(sweep.stderr).text(),
+      ]);
+      expect(sweepCode, sweepError).toBe(0);
       expect(readdirSync(server)).toEqual([
         ".plugin-install-recent",
         "herdr-world-plugin.exe",
