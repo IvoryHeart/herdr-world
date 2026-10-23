@@ -69,14 +69,11 @@ export function TownQuestPennant({
     <button
       type="button"
       ref={(pennant) => {
+        if (button.current) pennants.delete(button.current);
         button.current = pennant;
         if (!pennant) return;
         pennants.add(pennant);
         markAway(pennant, renderer.current);
-        return () => {
-          pennants.delete(pennant);
-          button.current = null;
-        };
       }}
       className={`town-quest${top ? " town-quest-top" : ""}`}
       data-agent={agentKey}
