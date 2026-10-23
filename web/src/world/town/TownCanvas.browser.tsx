@@ -2157,13 +2157,30 @@ async function run() {
       diagnostics.lastError === null,
       `renderer error at scale: ${diagnostics.lastError}`,
     );
-    // Fold restores the target of 24 while retaining every attention desk.
+    // Seen marks and questions can change during the checks above: fold must
+    // use the current attention set, not the initial protected-desk count.
+    const expandedDesks = diagnostics.desks;
     host
       .querySelector<HTMLButtonElement>('button[aria-label^="Fold room orbit"]')
       ?.click();
+    const foldedPlaque = () =>
+      host.querySelector<HTMLButtonElement>(
+        'button[aria-label^="Expand room orbit"]',
+      );
     await waitFor(
-      () => diagnostics.desks === drawn(null),
-      `folding the 100-desk room drew ${diagnostics.desks} of ${drawn(null)} desks`,
+      () => diagnostics.desks < expandedDesks && foldedPlaque() !== null,
+      "fold did not restore the room's current attention desks",
+    );
+    const orbitDesks = [
+      ...host.querySelectorAll<HTMLElement>(
+        '.world-semantic-target[data-kind="desk"]',
+      ),
+    ].filter((target) =>
+      JSON.parse(target.dataset.targetKey!)[2].startsWith("local-orbit-tab-"),
+    ).length;
+    check(
+      foldedPlaque()!.textContent?.trim() === `+${100 - orbitDesks}`,
+      "fold plaque counts a visible attention desk as hidden",
     );
 
     // The town takes its shape from its container: phones and portrait
