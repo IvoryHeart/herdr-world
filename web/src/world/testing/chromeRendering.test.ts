@@ -4,9 +4,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   chromeRenderingFlags,
+  classifyProbe,
   GPU_FLAGS,
   type GpuProbe,
   isHardwareRenderer,
+  probeGpu,
   SWIFTSHADER_FLAGS,
 } from "./chromeRendering";
 
@@ -31,10 +33,71 @@ test("hardware renderers are told apart from software and missing WebGL", () => 
     SWIFTSHADER_RENDERER,
     "no-webgl",
     "llvmpipe (LLVM 17.0.6, 256 bits)",
-    "Chrome did not report a renderer",
     "",
   ])
-    expect(isHardwareRenderer(renderer)).toBe(renderer.startsWith("Chrome"));
+    expect(isHardwareRenderer(renderer)).toBe(false);
+});
+
+test("only a completed probe that reports a hardware renderer selects the GPU", async () => {
+  const dump = (renderer: string) =>
+    `<html><head></head><body>RENDERER=${renderer}</body></html>`;
+  expect(
+    classifyProbe({ output: dump(RADV), exitCode: 0, timedOut: false }),
+  ).toMatchObject({ mode: "gpu", renderer: RADV });
+  for (const [run, renderer] of [
+    [
+      { output: dump(SWIFTSHADER_RENDERER), exitCode: 0, timedOut: false },
+      SWIFTSHADER_RENDERER,
+    ],
+    [
+      { output: "", exitCode: 0, timedOut: false },
+      "Chrome did not report a renderer",
+    ],
+    [
+      { output: "<html><body>partial", exitCode: 0, timedOut: false },
+      "Chrome did not report a renderer",
+    ],
+    [
+      { output: dump(""), exitCode: 0, timedOut: false },
+      "Chrome did not report a renderer",
+    ],
+    [
+      { output: dump(RADV), exitCode: 1, timedOut: false },
+      "Chrome exited with 1",
+    ],
+    [
+      { output: "", exitCode: null, timedOut: true },
+      "Chrome did not finish in 20s",
+    ],
+    [new Error("ENOENT"), "Chrome did not start: ENOENT"],
+  ] as const)
+    expect(classifyProbe(run)).toMatchObject({ mode: "swiftshader", renderer });
+
+  // A Chrome that cannot be spawned falls back instead of throwing.
+  const spawnFails = async () => {
+    throw new Error("spawn failed");
+  };
+  expect(await probeGpu("chrome", spawnFails)).toMatchObject({
+    mode: "swiftshader",
+    renderer: "Chrome did not start: spawn failed",
+  });
+});
+
+test("a probe that throws falls back to SwiftShader", async () => {
+  const logs: string[] = [];
+  expect(
+    await chromeRenderingFlags("chrome", {
+      env: { HERDR_WORLD_TEST_GPU: "1" },
+      probe: async () => {
+        throw new Error("boom");
+      },
+      cacheFile: cacheFile(),
+      log: (message) => logs.push(message),
+    }),
+  ).toEqual(SWIFTSHADER_FLAGS);
+  expect(logs).toEqual([
+    "[gpu] HERDR_WORLD_TEST_GPU=1 but the GPU path failed (probe failed: boom); using SwiftShader",
+  ]);
 });
 
 test("SwiftShader by default and always in CI, without probing", async () => {

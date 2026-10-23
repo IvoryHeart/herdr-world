@@ -18,7 +18,7 @@ import { join } from "node:path";
  *
  * The GPU path is probed once per test run: a headless Chrome reports its
  * WebGL renderer, and anything but a hardware renderer (no WebGL, SwiftShader,
- * llvmpipe, a failed start) falls back to SwiftShader with one log line.
+ * llvmpipe, a failed start, a timeout or no renderer report) falls back to SwiftShader with one log line.
  */
 
 export const SWIFTSHADER_FLAGS = [
@@ -50,36 +50,81 @@ export function isHardwareRenderer(renderer: string): boolean {
   );
 }
 
-export async function probeGpu(chrome: string): Promise<GpuProbe> {
-  const profile = mkdtempSync(join(tmpdir(), "herdr-gpu-probe-"));
+/** What one probe Chrome did: its DOM dump and how it ended. */
+export type ProbeRun = {
+  output: string;
+  exitCode: number | null;
+  timedOut: boolean;
+};
+
+const PROBE_TIMEOUT_MS = 20_000;
+
+async function runProbeChrome(chrome: string, profile: string) {
+  const child = Bun.spawn(
+    [
+      chrome,
+      "--headless=new",
+      "--no-first-run",
+      "--no-default-browser-check",
+      `--user-data-dir=${profile}`,
+      ...GPU_FLAGS,
+      "--dump-dom",
+      PROBE_PAGE,
+    ],
+    { stdout: "pipe", stderr: "ignore" },
+  );
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    child.kill("SIGKILL");
+  }, PROBE_TIMEOUT_MS);
   try {
-    const child = Bun.spawn(
-      [
-        chrome,
-        "--headless=new",
-        "--no-first-run",
-        "--no-default-browser-check",
-        `--user-data-dir=${profile}`,
-        ...GPU_FLAGS,
-        "--dump-dom",
-        PROBE_PAGE,
-      ],
-      { stdout: "pipe", stderr: "ignore" },
-    );
-    const timer = setTimeout(() => child.kill("SIGKILL"), 20_000);
-    const [output] = await Promise.all([
+    const [output, exitCode] = await Promise.all([
       new Response(child.stdout).text(),
       child.exited,
     ]);
+    return { output, exitCode, timedOut };
+  } finally {
     clearTimeout(timer);
-    const renderer =
-      /<body>RENDERER=([^<]*)/.exec(output)?.[1]?.trim() ||
-      "Chrome did not report a renderer";
-    return {
-      mode: isHardwareRenderer(renderer) ? "gpu" : "swiftshader",
-      renderer,
-      at: Date.now(),
-    };
+  }
+}
+
+/**
+ * GPU mode only when Chrome ran to completion and reported a hardware
+ * renderer. A failed start, a timeout, a nonzero exit or a missing renderer
+ * line all mean SwiftShader.
+ */
+export function classifyProbe(run: ProbeRun | Error): GpuProbe {
+  const failed = (renderer: string): GpuProbe => ({
+    mode: "swiftshader",
+    renderer,
+    at: Date.now(),
+  });
+  if (run instanceof Error)
+    return failed(`Chrome did not start: ${run.message}`);
+  if (run.timedOut)
+    return failed(`Chrome did not finish in ${PROBE_TIMEOUT_MS / 1000}s`);
+  if (run.exitCode !== 0) return failed(`Chrome exited with ${run.exitCode}`);
+  const renderer = /<body>RENDERER=([^<]*)/.exec(run.output)?.[1]?.trim();
+  if (!renderer) return failed("Chrome did not report a renderer");
+  return {
+    mode: isHardwareRenderer(renderer) ? "gpu" : "swiftshader",
+    renderer,
+    at: Date.now(),
+  };
+}
+
+export async function probeGpu(
+  chrome: string,
+  run: (chrome: string, profile: string) => Promise<ProbeRun> = runProbeChrome,
+): Promise<GpuProbe> {
+  const profile = mkdtempSync(join(tmpdir(), "herdr-gpu-probe-"));
+  try {
+    return classifyProbe(
+      await run(chrome, profile).catch((error: unknown) =>
+        error instanceof Error ? error : new Error(String(error)),
+      ),
+    );
   } finally {
     rmSync(profile, { recursive: true, force: true });
   }
@@ -113,7 +158,13 @@ export function chromeRenderingFlags(
       // No probe yet in this run.
     }
     if (!probe) {
-      probe = await (options.probe ?? probeGpu)(chrome);
+      probe = await (options.probe ?? probeGpu)(chrome).catch(
+        (error: unknown): GpuProbe => ({
+          mode: "swiftshader",
+          renderer: `probe failed: ${error instanceof Error ? error.message : String(error)}`,
+          at: Date.now(),
+        }),
+      );
       const staged = `${cacheFile}.${process.pid}`;
       writeFileSync(staged, JSON.stringify(probe));
       renameSync(staged, cacheFile);
