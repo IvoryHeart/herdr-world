@@ -33,12 +33,14 @@ test("colours are derived only while something can inherit", () => {
       ]),
     ]),
   ).toBe(true);
-  // A saved claim counts only while one of its terminals is listed.
+  // A saved claim counts only while both of its terminals are listed.
   const saved = { spawns: [claim], groups: [] };
   expect(mayInherit(saved, [shell])).toBe(false);
+  const child = { pane_id: "w1:p2", terminal_id: "term_child" };
+  expect(mayInherit(saved, [connection([child])])).toBe(false);
   expect(
     mayInherit(saved, [
-      connection([{ pane_id: "w1:p2", terminal_id: "term_child" }]),
+      connection([child, { pane_id: "w1:p1", terminal_id: "term_parent" }]),
     ]),
   ).toBe(true);
 });

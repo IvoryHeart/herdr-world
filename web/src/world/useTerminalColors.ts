@@ -20,12 +20,13 @@ import {
   type TerminalColorTarget,
 } from "./terminalColor";
 import {
+  anyRelation,
   NO_RELATIONS,
   relationsDeriver,
   runtimeRelationInputs,
   withInheritedColors,
 } from "./relations";
-import { terminalKey, type RelationsDocument } from "../../../shared/relations";
+import type { RelationsDocument } from "../../../shared/relations";
 import { worldRuntimeStore } from "./runtimeStore";
 import type { WorldObject } from "./worldObject";
 
@@ -35,32 +36,22 @@ const NONE: TerminalColors = Object.freeze({});
 
 type Connections = ReturnType<typeof worldRuntimeStore.get>["connections"];
 
-/**
- * Whether anything can inherit: a pane carries a spawn stamp
- * (shared/relations.ts tokens), or a saved claim names a terminal that is
- * still listed. The service drops claims whose terminals closed; this also
- * covers a claim saved before that ran.
- */
+/** Whether a child can inherit: a stamp, or a claim between listed terminals. */
 export function mayInherit(
   relations: RelationsDocument,
   connections: Connections,
 ) {
-  const listed = relations.spawns.length ? new Set<string>() : null;
-  for (const connection of connections)
-    for (const pane of connection.snapshot?.panes ?? []) {
-      const tokens = (pane as { tokens?: Record<string, unknown> }).tokens;
-      if (tokens?.spawned_by || tokens?.spawned_by_terminal) return true;
-      listed?.add(
-        terminalKey({
-          connection_id: connection.connectionId,
-          terminal_id: pane.terminal_id,
-        }),
-      );
-    }
-  return relations.spawns.some(
-    (claim) =>
-      listed!.has(terminalKey(claim.child)) ||
-      listed!.has(terminalKey(claim.parent)),
+  return anyRelation(
+    { spawns: relations.spawns, groups: [] },
+    (function* () {
+      for (const connection of connections)
+        for (const pane of connection.snapshot?.panes ?? [])
+          yield {
+            connection_id: connection.connectionId,
+            terminal_id: pane.terminal_id,
+            tokens: (pane as { tokens?: unknown }).tokens,
+          };
+    })(),
   );
 }
 

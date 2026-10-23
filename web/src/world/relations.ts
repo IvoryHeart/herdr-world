@@ -231,6 +231,31 @@ export function relationsDeriver() {
   };
 }
 
+/**
+ * Whether there is anything to derive: a pane carries a spawn stamp, or a
+ * saved claim or group has two terminals still listed. A view draws a
+ * relation, and a child inherits a colour, only between listed terminals, so
+ * claims and groups whose agents closed cost nothing while large snapshots
+ * refresh.
+ */
+export function anyRelation(
+  relations: RelationsDocument,
+  terminals: Iterable<TerminalRef & { tokens?: unknown }>,
+): boolean {
+  const saved = relations.spawns.length > 0 || relations.groups.length > 0;
+  const listed = new Set<string>();
+  for (const terminal of terminals) {
+    const tokens = terminal.tokens as Record<string, unknown> | undefined;
+    if (tokens?.spawned_by || tokens?.spawned_by_terminal) return true;
+    if (saved) listed.add(terminalKey(terminal));
+  }
+  const has = (ref: TerminalRef) => listed.has(terminalKey(ref));
+  return (
+    relations.spawns.some((claim) => has(claim.child) && has(claim.parent)) ||
+    relations.groups.some((group) => group.members.filter(has).length > 1)
+  );
+}
+
 /** Relations for a World view, kept current from Board's store. */
 export function useRelations(
   world: Pick<WorldObject, "hosts">,
@@ -244,19 +269,24 @@ export function useRelations(
   const derive = useRef(relationsDeriver()).current;
   const hosts = world.hosts;
   const relations = document?.relations ?? NO_RELATIONS;
-  // Nothing saved and no stamp on any pane: nothing to derive.
-  const anything =
-    relations.spawns.length > 0 ||
-    relations.groups.length > 0 ||
-    hosts.some((host) =>
-      host.spaces.some((space) =>
-        space.children.some((leaf) => {
-          const tokens = (leaf.pane as { tokens?: Record<string, unknown> })
-            ?.tokens;
-          return Boolean(tokens?.spawned_by || tokens?.spawned_by_terminal);
-        }),
+  const anything = useMemo(
+    () =>
+      anyRelation(
+        relations,
+        (function* () {
+          for (const host of hosts)
+            for (const space of host.spaces)
+              for (const leaf of space.children)
+                yield {
+                  connection_id: host.connectionId,
+                  terminal_id: leaf.terminalId,
+                  tokens: (leaf.pane as { tokens?: unknown } | undefined)
+                    ?.tokens,
+                };
+        })(),
       ),
-    );
+    [relations, hosts],
+  );
   const inputs = useMemo(
     () => (anything ? worldRelationInputs({ hosts }) : null),
     [anything, hosts],
