@@ -30,18 +30,20 @@ const unavailableObservability = {
 };
 
 test.skipIf(!chrome).each([
-  [1440, 900, "typical"],
-  [390, 900, "typical"],
-  [1440, 900, "max"],
+  [1440, 900, "typical", 0],
+  [390, 900, "typical", 0],
+  [1440, 900, "max", 0],
   // Extended rooms (100, 50 and 24 desks) on a phone, half-width, wide and
   // portrait screens: the town's shape follows the container.
-  [390, 844, "extended"],
-  [960, 1080, "extended"],
-  [1440, 900, "extended"],
-  [1080, 1920, "extended"],
+  [390, 844, "extended", 0],
+  [960, 1080, "extended", 0],
+  [1440, 900, "extended", 0],
+  [1080, 1920, "extended", 0],
+  // Regress fixed-delay zoom-out retries on a slow software renderer.
+  [1080, 1920, "extended", 300],
 ])(
-  "the Office town renders, queues blocked agents and zooms into rooms at %ipx by %ipx (%s)",
-  async (width, height, scale) => {
+  "the Office town renders, queues blocked agents and zooms into rooms at %ipx by %ipx (%s, %ims zoom frames)",
+  async (width, height, scale, flightFrameDelay) => {
     const dir = await mkdtemp(join(tmpdir(), "office-town-test-"));
     const assets = new Map<string, Blob>();
     const result = Promise.withResolvers<unknown>();
@@ -90,7 +92,7 @@ test.skipIf(!chrome).each([
           "--no-first-run",
           "--no-default-browser-check",
           `--user-data-dir=${join(dir, "profile")}`,
-          `${server.url.href}?mode=test&scale=${scale}`,
+          `${server.url.href}?mode=test&scale=${scale}&flightFrameDelay=${flightFrameDelay}`,
         ],
         { stdout: "ignore", stderr: Bun.file(browserLog) },
       );

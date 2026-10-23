@@ -21,16 +21,10 @@ import {
   worldMotionPreference,
   type WorldFrames,
 } from "../worldFrameScheduler";
-import { diagnostics } from "./townDiagnostics";
+import { diagnostics, type TownFrameTrace } from "./townDiagnostics";
+export type { TownFrameTrace } from "./townDiagnostics";
 import { DEVTOOLS } from "../devtools/flag";
 
-/** Why Town drew a frame and what it asked for next (development trace). */
-export type TownFrameTrace = {
-  reasons: string[];
-  next: "state" | "motion" | null;
-  /** What keeps a state frame coming: the camera, actors, a drag… */
-  causes: string[];
-};
 import { TownActors, townActorWorld, type TownActor } from "./townActors";
 import {
   stepTownDrag,
@@ -1237,6 +1231,7 @@ export async function createTownRenderer(
     app.renderer.render(app.stage);
     stats.level = level;
     stats.zoom = camera.z;
+    stats.flying = camera.flying;
     stats.actors = actors.actors.size;
     stats.walking = [...actors.actors.values()].filter(
       (a) => a.mode === "walk",
