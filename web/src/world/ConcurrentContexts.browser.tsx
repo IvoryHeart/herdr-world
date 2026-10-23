@@ -1,5 +1,7 @@
 import { createRoot } from "react-dom/client";
+import { Profiler } from "react";
 import { Terminal } from "@xterm/xterm";
+import { FitAddon } from "@xterm/addon-fit";
 import { decodeWorldSnapshot } from "../worldSnapshotDecode";
 import {
   bridge,
@@ -54,6 +56,12 @@ const measurements = {
   projectionMs: 0,
   renderMs: 0,
   longestTaskMs: 0,
+  terminalWorkByPhase: {} as Record<string, Record<string, number>>,
+  boardObserverWorkByPhase: {} as Record<string, Record<string, number>>,
+  boardRenderByPhase: {} as Record<
+    string,
+    { commits: number; totalMs: number; maxMs: number }
+  >,
   decodeMs: 0,
   validationMs: 0,
   worldBuildMs: 0,
@@ -69,6 +77,55 @@ const measurements = {
   officeProjectionMs: 0,
 };
 let stressPhase: string | null = null;
+function recordBoardRender(_id: string, _phase: string, duration: number) {
+  const counts = (measurements.boardRenderByPhase[
+    stressPhase ?? "outside-stress"
+  ] ??= {
+    commits: 0,
+    totalMs: 0,
+    maxMs: 0,
+  });
+  counts.commits++;
+  counts.totalMs += duration;
+  counts.maxMs = Math.max(counts.maxMs, duration);
+}
+function recordTerminalWork(action: string) {
+  const phase = stressPhase ?? "outside-stress";
+  const counts = (measurements.terminalWorkByPhase[phase] ??= {});
+  counts[action] = (counts[action] ?? 0) + 1;
+}
+for (const action of ["open", "dispose"] as const) {
+  const original = Terminal.prototype[action];
+  Terminal.prototype[action] = function (...args: Parameters<typeof original>) {
+    recordTerminalWork(action);
+    return (original as (...args: unknown[]) => void).apply(this, args);
+  };
+}
+const fitTerminal = FitAddon.prototype.fit;
+FitAddon.prototype.fit = function () {
+  recordTerminalWork("fit");
+  return fitTerminal.call(this);
+};
+const observeCard = ResizeObserver.prototype.observe;
+ResizeObserver.prototype.observe = function (...args) {
+  if (args[0].classList.contains("board-card")) {
+    const counts = (measurements.boardObserverWorkByPhase[
+      stressPhase ?? "outside-stress"
+    ] ??= {});
+    counts.observe = (counts.observe ?? 0) + 1;
+  }
+  return observeCard.apply(this, args);
+};
+const unobserveCard = ResizeObserver.prototype.unobserve;
+ResizeObserver.prototype.unobserve = function (...args) {
+  if (args[0].classList.contains("board-card")) {
+    const counts = (measurements.boardObserverWorkByPhase[
+      stressPhase ?? "outside-stress"
+    ] ??= {});
+    counts.unobserve = (counts.unobserve ?? 0) + 1;
+  }
+  return unobserveCard.apply(this, args);
+};
 let trustedStressKey = false;
 const stressReceipts: {
   phase: string;
@@ -95,6 +152,7 @@ const longTasks = new PerformanceObserver((list) => {
 longTasks.observe({ type: "longtask", buffered: true });
 async function beginStress(phase: string) {
   stressPhase = phase;
+  performance.mark(`stress:${phase}:begin`);
   await fetch(`/input-ready?phase=${phase}`);
 }
 async function finishStress() {
@@ -106,6 +164,7 @@ async function finishStress() {
       stressReceipts.filter((receipt) => receipt.phase === stressPhase)
         .length === count,
   );
+  performance.mark(`stress:${stressPhase}:end`);
   stressPhase = null;
 }
 const check = (condition: unknown, message: string) => {
@@ -505,16 +564,18 @@ async function run() {
   await beginStress("render");
   const renderStart = performance.now();
   denseRoot.render(
-    <div data-dense-revision={1}>
-      <BoardView
-        world={world}
-        selectedId={null}
-        onSelect={() => {}}
-        onOpenTerminal={() => {}}
-        onSelectedAnchorChange={() => {}}
-        onNodeAnchorsChange={() => {}}
-      />
-    </div>,
+    <Profiler id="dense-board" onRender={recordBoardRender}>
+      <div data-dense-revision={1}>
+        <BoardView
+          world={world}
+          selectedId={null}
+          onSelect={() => {}}
+          onOpenTerminal={() => {}}
+          onSelectedAnchorChange={() => {}}
+          onNodeAnchorsChange={() => {}}
+        />
+      </div>
+    </Profiler>,
   );
   await waitForDom(
     () =>
@@ -524,6 +585,26 @@ async function run() {
   measurements.renderMs = performance.now() - renderStart;
   await finishStress();
   await beginStress("refresh");
+  // Exercise the mounted terminals' own store as well as the aggregate Board.
+  // A status observation must not change their instance or viewport geometry.
+  const beforeStatusRefresh = store.get();
+  __storeTesting.replaceState({
+    ...beforeStatusRefresh,
+    sessionsByConnectionId: Object.fromEntries(
+      Object.entries(beforeStatusRefresh.sessionsByConnectionId).map(
+        ([id, session]) => [
+          id,
+          {
+            ...session,
+            panes: session.panes.map((p) => ({
+              ...p,
+              agent_status: "working" as const,
+            })),
+          },
+        ],
+      ),
+    ),
+  });
   const refreshedConnections = observed.connections.map((connection) => ({
     ...connection,
     snapshot: connection.snapshot && {
@@ -545,22 +626,36 @@ async function run() {
   await prepareWorldOffice(refreshedWorld);
   await prepareWorldBoard(refreshedWorld);
   denseRoot.render(
-    <div data-dense-revision={2}>
-      <BoardView
-        world={refreshedWorld}
-        selectedId={null}
-        onSelect={() => {}}
-        onOpenTerminal={() => {}}
-        onSelectedAnchorChange={() => {}}
-        onNodeAnchorsChange={() => {}}
-      />
-    </div>,
+    <Profiler id="dense-board" onRender={recordBoardRender}>
+      <div data-dense-revision={2}>
+        <BoardView
+          world={refreshedWorld}
+          selectedId={null}
+          onSelect={() => {}}
+          onOpenTerminal={() => {}}
+          onSelectedAnchorChange={() => {}}
+          onNodeAnchorsChange={() => {}}
+        />
+      </div>
+    </Profiler>,
   );
   await yieldWorldTask();
   await waitForDom(
-    () => !!scene.querySelector('[data-dense-revision="2"] .board-card'),
+    () =>
+      scene
+        .querySelector('[data-dense-revision="2"] .board-counts')
+        ?.textContent?.includes("working") ?? false,
   );
   await finishStress();
+  check(
+    Object.keys(measurements.terminalWorkByPhase.refresh ?? {}).length === 0,
+    `status refresh touched terminal layout: ${JSON.stringify(measurements.terminalWorkByPhase.refresh)}`,
+  );
+  check(
+    Object.keys(measurements.boardObserverWorkByPhase.refresh ?? {}).length ===
+      0,
+    `status refresh re-registered Board card observers: ${JSON.stringify(measurements.boardObserverWorkByPhase.refresh)}`,
+  );
   const attachesBeforeFocus = calls.filter(
     (call) => call.method === "terminal.attach",
   ).length;
