@@ -21,6 +21,46 @@ const handlers = [
 ];
 
 describe("RPC namespace admission", () => {
+  test("history paging reaches the request-aware service after namespace dispatch", async () => {
+    const params = {
+      pane_id: "example-pane",
+      workspace_id: "Example",
+      tab_id: "example-tab",
+      agent: "claude",
+      before: "message-40",
+      limit: 20,
+    };
+    const page = { epoch: "example-epoch", entries: [], has_more: true };
+    const requests: unknown[] = [];
+    const replies: unknown[] = [];
+    await handleAgentRpc({
+      method: "agent_history.get",
+      id: "page-request",
+      params,
+      services: {},
+      connection: {
+        agentSessions: {
+          readHistory: async () => {
+            throw new Error("Paging must use the request-aware history reader");
+          },
+          readHistoryRequest: async (request: unknown) => {
+            requests.push(request);
+            return page;
+          },
+        },
+      },
+      sendReply: (reply: unknown) => {
+        replies.push(reply);
+        return true;
+      },
+      sendError: (_context: string, error: unknown) => {
+        throw error;
+      },
+    } as unknown as ConnectionRpcContext);
+    expect(requests).toEqual([params]);
+    expect(replies).toEqual([{ id: "page-request", result: page }]);
+  });
+
   test("pass-through and pre-step methods decline synchronously without reading a runtime", () => {
     for (const method of [
       "workspace.list",

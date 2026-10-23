@@ -313,6 +313,48 @@ describe("Claude Code", () => {
     ).toMatchObject({ source: "loop", status: "done", set_by: "w2" });
   });
 
+  test("a ScheduleWakeup loop ends once its wake-up has run and none follows", () => {
+    const wake = (second: number, id: string) =>
+      claudeTool(second, id, "ScheduleWakeup", {
+        delaySeconds: 60,
+        reason: "resume 21:51",
+      });
+    const reply = (second: number, text: string) => ({
+      type: "assistant",
+      timestamp: at(second),
+      message: { role: "assistant", content: [{ type: "text", text }] },
+    });
+    // Waiting for the wake-up: still running.
+    expect(quest("claude", [wake(1, "w1"), reply(2, "Waiting")])).toMatchObject(
+      { source: "loop", status: "active" },
+    );
+    // The wake-up arrives and its turn is still working.
+    expect(
+      quest("claude", [
+        wake(1, "w1"),
+        claudeUser(70, "<scheduled-wakeup>resume</scheduled-wakeup>"),
+        claudeTool(71, "b1", "Bash", { command: "ls" }),
+      ]),
+    ).toMatchObject({ status: "active" });
+    // That turn ends without scheduling another: the loop is over.
+    expect(
+      quest("claude", [
+        wake(1, "w1"),
+        claudeUser(70, "<scheduled-wakeup>resume</scheduled-wakeup>"),
+        reply(71, "Resumed and finished."),
+      ]),
+    ).toMatchObject({ source: "loop", status: "done" });
+    // It schedules the next one: still running.
+    expect(
+      quest("claude", [
+        wake(1, "w1"),
+        claudeUser(70, "<scheduled-wakeup>resume</scheduled-wakeup>"),
+        wake(71, "w2"),
+        reply(72, "Next check scheduled."),
+      ]),
+    ).toMatchObject({ status: "active", iterations: 2 });
+  });
+
   test("counts spawned helper agents", () => {
     const result = quest("claude", [
       claudeTool(1, "c1", "TodoWrite", {

@@ -29,13 +29,25 @@ export type ConversationDelivery = {
   id: string;
   text: string;
   sent_at: string;
+  /**
+   * The send time on the transcript host's clock (this service's time plus
+   * the measured offset), for placing it among the transcript's turns.
+   */
+  transcript_at: string;
   state: "pending" | "matched" | "misdelivered" | "uncertain" | "unverified";
   /** The session Chat showed when the message was sent. */
   expected: string;
   /** That session's fingerprint; a pending message shows only there. */
   fingerprint: string;
-  /** matched: the transcript message with the same words. */
+  /** matched: the transcript message taken for this send. */
   matched_id?: string;
+  /**
+   * matched: how. `words`: the same words. `order`: no turn had them; this
+   * was the first user turn in its session after the send that its harness
+   * could have rewritten it into (a paste or image placeholder, or words
+   * around the typed ones). An inference, labelled as one.
+   */
+  matched_by?: "words" | "order";
   /** misdelivered: the session the evidence names. */
   delivered_to?: string;
   /** misdelivered: Herdr's prompt reply, or another session's transcript. */
@@ -95,9 +107,39 @@ const TIMESTAMP_ROUNDING_MS = 1000;
 export const RECEIPTS_PER_PANE = 20;
 const SEEN_PER_RECEIPT = 4;
 
-// Harnesses may trim what was typed; inner whitespace is kept, so prompts
-// that differ only in spacing stay distinct.
-const typedText = (text: string) => text.trim();
+// An attachment as Chat sends it (an uploaded file's path, bare or quoted)
+// or as a harness records it: Claude Code turns an image path into
+// "[Image #N]" and long or multi-line input into "[Pasted text #N ...]".
+const ATTACHMENT =
+  /\[(?:Image|Pasted text) #\d+[^\]]*\]|(['"]?)[^\s'"]*herdr-world-uploads-[^\s'"]*\1/g;
+
+// Harnesses trim, rewrap and rewrite what was typed, so words are compared
+// without attachments and with whitespace collapsed.
+// Claude Code wraps pasted and multi-line input in a pasted_content tag
+// pair carrying one id; the words inside are what was typed.
+const PASTED_WRAPPER = /<\/?pasted_content(?: id="[^"]*")?>/g;
+
+export const typedText = (text: string) =>
+  text
+    .replace(PASTED_WRAPPER, " ")
+    .replace(ATTACHMENT, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+// A harness's placeholder for what it rewrote: a paste or an image.
+const PLACEHOLDER = /\[(?:Image|Pasted text) #\d+[^\]]*\]/;
+
+/**
+ * Whether a turn can be what was typed, rewritten by its harness: it holds a
+ * paste or image placeholder, or its words contain the typed words or are
+ * contained in them. Any other later prompt (another client, the terminal)
+ * is not taken for this send by order alone.
+ */
+function rewrittenFrom(text: string, typed: string) {
+  if (PLACEHOLDER.test(text)) return true;
+  const words = typedText(text);
+  return !!words && !!typed && (words.includes(typed) || typed.includes(words));
+}
 
 const userMessages = (messages: readonly ConversationMessage[]) =>
   messages.filter(
@@ -176,6 +218,7 @@ export function createDeliveryLedger() {
         id: randomUUID(),
         text: send.text,
         sent_at: new Date(send.startedAt).toISOString(),
+        transcript_at: new Date(send.startedAt + offsetMs).toISOString(),
         state: send.switchedTo ? "misdelivered" : "pending",
         expected: send.expected,
         fingerprint: send.fingerprint,
@@ -245,7 +288,7 @@ export function createDeliveryLedger() {
               Date.parse(message.sent_at) >= receipt.near,
           );
         const same = (message: ConversationMessage) =>
-          message.text.trim() === receipt.typed;
+          typedText(message.text) === receipt.typed;
         let unclear: { view: DeliveryView; id: string } | null = null;
         // Its own session: a copy written clearly after the send matches it.
         let match: { view: DeliveryView; id: string } | null = null;
@@ -267,7 +310,12 @@ export function createDeliveryLedger() {
         // words typed there later, or already there, are not.
         let evidence: { view: DeliveryView; id: string } | null = null;
         for (const view of views) {
-          if (view.fingerprint === receipt.fingerprint || !view.messages)
+          // An attachment alone has no words to tell sessions apart.
+          if (
+            view.fingerprint === receipt.fingerprint ||
+            !view.messages ||
+            !receipt.typed
+          )
             continue;
           const first = candidates(view)[0];
           if (!first || !same(first)) continue;
@@ -300,6 +348,7 @@ export function createDeliveryLedger() {
           claim(match);
           receipt.state = "matched";
           receipt.matched_id = match.id;
+          receipt.matched_by = "words";
           continue;
         }
         if (receipt.state !== "pending") continue;
@@ -309,6 +358,37 @@ export function createDeliveryLedger() {
           receipt.detail = `The same words appeared in ${unclear.view.label || receipt.expected} at about the time you sent them, so Chat cannot tell whether that was this message.`;
           continue;
         }
+      }
+      // A send no turn matched by its words takes the first user turn in its
+      // own session written clearly after it that its harness could have
+      // rewritten it into (a paste or image placeholder, or words around the
+      // typed ones), oldest send first. Order alone never settles a send
+      // against an unrelated prompt from elsewhere: until such a turn
+      // appears, the send stays pending ("waiting").
+      for (const receipt of list) {
+        if (receipt.state !== "pending" || !open(receipt, now)) continue;
+        const own = views.find(
+          (view) => view.fingerprint === receipt.fingerprint,
+        );
+        const next = userMessages(own?.messages ?? []).find(
+          (message) =>
+            !claimed.has(claimKey(paneId, receipt.fingerprint, message.id)) &&
+            !receipt.baseline.has(message.id) &&
+            Date.parse(message.sent_at) >= receipt.after &&
+            Date.parse(message.sent_at) <= receipt.until &&
+            rewrittenFrom(message.text, receipt.typed),
+        );
+        if (!next) continue;
+        claimed.add(claimKey(paneId, receipt.fingerprint, next.id));
+        receipt.state = "matched";
+        receipt.matched_id = next.id;
+        receipt.matched_by = "order";
+      }
+      for (const receipt of list) {
+        if (receipt.state !== "pending" || !open(receipt, now)) continue;
+        const own = views.find(
+          (view) => view.fingerprint === receipt.fingerprint,
+        );
         if (now - receipt.sentAtMs > DELIVERY_CHECK_MS) expireOne(receipt);
         else if (current !== receipt.fingerprint && own?.messages === null) {
           receipt.state = "unverified";
@@ -348,10 +428,12 @@ function publicDelivery(receipt: Receipt): ConversationDelivery {
     id: receipt.id,
     text: receipt.text,
     sent_at: receipt.sent_at,
+    transcript_at: receipt.transcript_at,
     state: receipt.state,
     expected: receipt.expected,
     fingerprint: receipt.fingerprint,
     ...(receipt.matched_id ? { matched_id: receipt.matched_id } : {}),
+    ...(receipt.matched_by ? { matched_by: receipt.matched_by } : {}),
     ...(receipt.delivered_to ? { delivered_to: receipt.delivered_to } : {}),
     ...(receipt.evidence ? { evidence: receipt.evidence } : {}),
     ...(receipt.detail ? { detail: receipt.detail } : {}),

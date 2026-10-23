@@ -14,6 +14,7 @@ import {
   useAttachmentUploads,
 } from "../attachmentUploads";
 import { terminalUploadedPathsText } from "../terminalFileDrop";
+import { shortcutMatches, shortcutTitle } from "../shortcutPreferences";
 import {
   uploadTerminalFile,
   uploadTerminalImage,
@@ -27,6 +28,7 @@ import { AgentMessageDialog } from "./AgentMessageDialog";
 import type { HistoryEntry } from "./agentHistory";
 import { groupHistoryChatItems } from "./agentHistoryView";
 import { useAgentHistoryWindow } from "./useAgentHistoryWindow";
+import { matchedTurns, placedSends } from "./chat/pendingSends";
 import { AttachmentChips } from "./AttachmentChips";
 import { CodexSessionLink } from "./CodexSessionLink";
 import { QuestLog } from "./QuestLog";
@@ -424,17 +426,7 @@ export function AgentChat({
       delivery.state === "pending" &&
       delivery.fingerprint === conversation?.session_fingerprint,
   );
-  const matchedIds = new Set(
-    deliveries
-      .filter(
-        (delivery) =>
-          delivery.state === "matched" &&
-          delivery.fingerprint === conversation?.session_fingerprint,
-      )
-      .flatMap((delivery) =>
-        delivery.matched_id ? [delivery.matched_id] : [],
-      ),
-  );
+  const matched = matchedTurns(deliveries, conversation?.session_fingerprint);
   // Sent to a session the pane has since left: still checked there.
   const elsewhere = deliveries.filter(
     (delivery) =>
@@ -657,8 +649,17 @@ export function AgentChat({
             followKey={pane.pane_id}
             toolLoading={history.toolEntryLoading}
             onLoadTool={history.loadToolEntry}
+            placed={placedSends(
+              pending,
+              conversation?.agent ?? pane.agent ?? "the agent",
+              dismiss,
+            )}
+            hasOlder={history.hasOlder}
+            olderLoading={history.olderLoading}
+            onLoadOlder={history.loadOlder}
+            onAtLatest={history.dropOlder}
             onOpen={setExpanded}
-            matchedIds={matchedIds}
+            matchedIds={matched}
             stepEvidence={stepEvidence}
             after={[
               running ? (
@@ -681,27 +682,6 @@ export function AgentChat({
                   ) : null}
                 </div>
               ) : null,
-              ...pending.map((delivery) => (
-                <article
-                  key={delivery.id}
-                  className="agent-history-chat-message is-user is-pending"
-                  data-delivery="pending"
-                >
-                  <div className="agent-history-chat-bubble">
-                    <p>{delivery.text}</p>
-                  </div>
-                  <div className="agent-history-chat-meta">
-                    Sent; not yet seen in this conversation{" "}
-                    <button
-                      type="button"
-                      className="agent-chat-pending-dismiss"
-                      onClick={() => dismiss(delivery.id)}
-                    >
-                      Stop checking
-                    </button>
-                  </div>
-                </article>
-              )),
               answered ? (
                 <p key="answered" className="agent-chat-answered" role="status">
                   {answered.acknowledged ? "You answered" : "Sent"}{" "}
@@ -797,15 +777,17 @@ export function AgentChat({
                 event.preventDefault();
                 attach(files);
               }}
+              // As in World's terminal composer: Enter starts a new line, and
+              // the composer's send shortcut (Ctrl/Cmd+Enter) sends.
               onKeyDown={(event) => {
                 if (
-                  event.key === "Enter" &&
-                  !event.shiftKey &&
-                  !event.nativeEvent.isComposing
-                ) {
-                  event.preventDefault();
-                  void send();
-                }
+                  event.nativeEvent.isComposing ||
+                  event.keyCode === 229 ||
+                  !shortcutMatches(event.nativeEvent, "composer.send")
+                )
+                  return;
+                event.preventDefault();
+                void send();
               }}
             />
             <button
@@ -819,7 +801,7 @@ export function AgentChat({
                   ? "Dismiss the notice about the other session first"
                   : uploading
                     ? "Waiting for uploads"
-                    : "Send (Enter)"
+                    : shortcutTitle("Send", "composer.send")
               }
             >
               <Send size={14} />

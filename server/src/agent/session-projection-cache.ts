@@ -4,6 +4,8 @@ import type { AgentSessionResolved, SessionFile } from "./session-types";
 import { conversationMessagesFromTrajectory } from "./session-messages";
 import { projectAgentTrajectory } from "./session-trajectory";
 import {
+  allHistoryEntriesFromTrajectory,
+  historyEntriesBefore,
   historyEntriesFromTrajectory,
   historyUpdate,
   type HistoryEntry,
@@ -58,6 +60,10 @@ export async function readSessionProjection(
 }
 
 type Projection = Awaited<ReturnType<typeof readSessionProjection>>;
+
+// The whole transcript's entries, built only when someone scrolls back past
+// the window, and dropped with the projection.
+const allEntries = new WeakMap<Projection, HistoryEntry[]>();
 type Cached = {
   projection: Projection;
   signature: string;
@@ -138,6 +144,13 @@ export function createSessionProjectionCache(
   // Quests are small, so many more are kept than projections: an agent's
   // quest can be shown without rereading a transcript that has not changed.
   const quests = new Map<string, { signature: string; quest: Quest | null }>();
+  // A session file's paging identity, kept even when its projection is too
+  // large to retain, so its epoch and revision stay stable across reads.
+  type Identity = Pick<
+    Cached,
+    "signature" | "epoch" | "revision" | "fallbackTime"
+  > & { identity: unknown; size: number; createdAtMs: number | undefined };
+  const identities = new Map<string, Identity>();
   let retainedBytes = 0;
   function remove(key: string) {
     const old = cache.get(key);
@@ -149,6 +162,8 @@ export function createSessionProjectionCache(
     for (const key of cache.keys()) if (key.startsWith(prefix)) remove(key);
     for (const key of quests.keys())
       if (key.startsWith(prefix)) quests.delete(key);
+    for (const key of identities.keys())
+      if (key.startsWith(prefix)) identities.delete(key);
     for (const key of pending.keys())
       if (key.startsWith(prefix)) pending.delete(key);
   }
@@ -176,19 +191,28 @@ export function createSessionProjectionCache(
         return old;
       }
       let projection: Projection | undefined;
+      const base: Identity | undefined = old
+        ? {
+            signature: old.signature,
+            epoch: old.epoch,
+            revision: old.revision,
+            fallbackTime: old.fallbackTime,
+            identity: old.projection.file.identity,
+            size: old.projection.file.size ?? 0,
+            createdAtMs: old.projection.file.createdAtMs,
+          }
+        : identities.get(key);
       const isReset = () =>
-        !old ||
-        old.projection.file.identity !== current.identity ||
-        (current.size ?? 0) < (old.projection.file.size ?? 0);
+        !base ||
+        base.identity !== current.identity ||
+        (current.size ?? 0) < base.size;
       let fallbackTime = current.createdAtMs ?? current.mtimeMs;
       for (let attempt = 0; attempt < 3; attempt++) {
         // Keep synthetic timestamps stable on append, but respect explicit
         // corrections (including removal) of the descriptor's creation time.
         fallbackTime =
-          !isReset() &&
-          old &&
-          old.projection.file.createdAtMs === current.createdAtMs
-            ? old.fallbackTime
+          !isReset() && base && base.createdAtMs === current.createdAtMs
+            ? base.fallbackTime
             : (current.createdAtMs ?? current.mtimeMs);
         projection = await readSessionProjection(
           resolved.agent,
@@ -208,16 +232,22 @@ export function createSessionProjectionCache(
           "Session file changed while reading; retry on the next refresh",
         );
       const reset = isReset();
-      const revision = reset ? 1 : old!.revision + 1;
-      const versions = reset
-        ? new Map<number, HistoryEntry[]>()
-        : new Map(old!.versions);
+      // An unretained projection read again unchanged keeps its revision.
+      const revision = reset
+        ? 1
+        : base!.signature === signature(current)
+          ? base!.revision
+          : base!.revision + 1;
+      const versions =
+        reset || !old
+          ? new Map<number, HistoryEntry[]>()
+          : new Map(old.versions);
       versions.set(revision, projection.entries);
       while (versions.size > 4) versions.delete(versions.keys().next().value!);
       const value: Cached = {
         projection,
         signature: signature(current),
-        epoch: reset ? randomUUID() : old!.epoch,
+        epoch: reset ? randomUUID() : base!.epoch,
         revision,
         versions,
         bytes: 0,
@@ -228,6 +258,18 @@ export function createSessionProjectionCache(
         limits.bytes,
       );
       if (!isCurrent()) return value;
+      identities.delete(key);
+      identities.set(key, {
+        signature: value.signature,
+        epoch: value.epoch,
+        revision,
+        fallbackTime,
+        identity: current.identity,
+        size: current.size ?? 0,
+        createdAtMs: current.createdAtMs,
+      });
+      while (identities.size > (limits.quests ?? 256))
+        identities.delete(identities.keys().next().value!);
       quests.delete(key);
       quests.set(key, { signature: value.signature, quest: projection.quest });
       while (quests.size > (limits.quests ?? 256))
@@ -251,6 +293,17 @@ export function createSessionProjectionCache(
       if (pending.get(key) === task) pending.delete(key);
     }
   }
+  function everyEntry(cached: Cached) {
+    let entries = allEntries.get(cached.projection);
+    if (!entries) {
+      entries = allHistoryEntriesFromTrajectory(
+        { ...cached.projection.file, mtimeMs: cached.fallbackTime },
+        cached.projection.trajectory,
+      );
+      allEntries.set(cached.projection, entries);
+    }
+    return entries;
+  }
   return {
     invalidate,
     async get(resolved: AgentSessionResolved) {
@@ -266,6 +319,25 @@ export function createSessionProjectionCache(
       if (known && stat && known.signature === signature({ ...file, ...stat }))
         return known.quest;
       return (await load(resolved)).projection.quest;
+    },
+    /** The page before an entry, for scrolling back past the window. */
+    async older(
+      resolved: AgentSessionResolved,
+      beforeId: string,
+      limit: number,
+    ) {
+      const cached = await load(resolved);
+      return {
+        epoch: cached.epoch,
+        page: historyEntriesBefore(everyEntry(cached), beforeId, limit),
+      };
+    },
+    /** One entry, in the window or older. */
+    async entry(resolved: AgentSessionResolved, entryId: string) {
+      const cached = await load(resolved);
+      const find = (entries: readonly HistoryEntry[]) =>
+        entries.find((entry) => entry.id === entryId);
+      return find(cached.projection.entries) ?? find(everyEntry(cached));
     },
     async history(resolved: AgentSessionResolved, cursor: unknown) {
       const cached = await load(resolved);

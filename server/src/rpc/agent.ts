@@ -38,7 +38,7 @@ async function dispatchAgentRpc(
   const { herdr } = connection;
   const {
     readEntry: readAgentHistoryEntry,
-    readHistory: readAgentMessageHistory,
+    readHistoryRequest: readAgentMessageHistory,
     readSummary: readAgentSessionSummary,
     readTurn: readAgentTurn,
   } = connection.agentSessions;

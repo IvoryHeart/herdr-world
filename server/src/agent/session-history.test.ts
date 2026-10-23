@@ -2,6 +2,8 @@ import { expect, test } from "bun:test";
 import {
   HISTORY_WINDOW_LIMIT,
   type HistoryEntry,
+  allHistoryEntriesFromTrajectory,
+  historyEntriesBefore,
   historyEntriesFromTrajectory,
   historyUpdate,
   historyTextHash,
@@ -302,6 +304,51 @@ test("window counts conversation entries only; tool entries ride along", () => {
   );
   expect(entries[0].text).toBe("turn 5");
   expect(entries[1].kind).toBe("tool_call");
+});
+
+test("older pages continue the window with the same IDs, back to the first turn", () => {
+  const records = [];
+  for (let index = 0; index < HISTORY_WINDOW_LIMIT + 5; index++) {
+    records.push({
+      type: "message",
+      message: {
+        role: "user",
+        content: [{ type: "text", text: `turn ${index}` }],
+      },
+    });
+    records.push({
+      type: "message",
+      message: {
+        role: "assistant",
+        content: [
+          {
+            type: "toolCall",
+            id: `call-${index}`,
+            name: "bash",
+            arguments: { command: `echo ${index}` },
+          },
+        ],
+      },
+    });
+  }
+  const trajectory = projectAgentTrajectory("pi", file, records);
+  const window = historyEntriesFromTrajectory(file, trajectory);
+  const all = allHistoryEntriesFromTrajectory(file, trajectory);
+  // The window is the tail of the whole transcript, entry for entry.
+  expect(all.slice(all.length - window.length)).toEqual(window);
+  const first = historyEntriesBefore(all, window[0]!.id, 3)!;
+  // Turns 2-4, each with its tool call, right before the window's turn 5.
+  expect(
+    first.entries.map((entry) =>
+      entry.kind === "message" ? entry.text : entry.source_call_id,
+    ),
+  ).toEqual(["turn 2", "call-2", "turn 3", "call-3", "turn 4", "call-4"]);
+  expect(first.has_more).toBe(true);
+  const last = historyEntriesBefore(all, first.entries[0]!.id, 3)!;
+  expect(last.entries[0]!.text).toBe("turn 0");
+  expect(last.entries).toHaveLength(4);
+  expect(last.has_more).toBe(false);
+  expect(historyEntriesBefore(all, "gone", 3)).toBeNull();
 });
 
 test("redaction strips tool payloads but keeps metadata for on-demand fetches", () => {
