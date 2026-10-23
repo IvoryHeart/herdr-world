@@ -803,7 +803,7 @@ async function run() {
   );
   check(
     ![...document.querySelectorAll(".workspace-inspector-agent-identity")].some(
-      (identity) => identity.textContent?.includes("terminal"),
+      (identity) => identity.getAttribute("data-kind") === "terminal",
     ),
     "pending browser-local created-seat focus opened an unadmitted Inspector",
   );
@@ -815,7 +815,7 @@ async function run() {
       store.get().selectedPaneId === "created-pane-3" &&
       [
         ...document.querySelectorAll(".workspace-inspector-agent-identity"),
-      ].some((identity) => identity.textContent?.includes("terminal")),
+      ].some((identity) => identity.getAttribute("data-kind") === "terminal"),
     "browser-local created seat exact Inspector after transient focus rejection",
   );
   check(
@@ -1856,9 +1856,16 @@ async function run() {
   const mobileHeader = mobileInspector.querySelector<HTMLElement>(
     ".workspace-inspector-head",
   )!;
+  // On a phone the window looks like the terminal: its own bar (name,
+  // status and ⋯) is the only bar, and the app's topbar slides away.
   check(
-    mobileHeader.getBoundingClientRect().height === 0,
-    "mobile terminal title and resource bars consume no terminal height",
+    mobileHeader.getBoundingClientRect().height > 0 &&
+      mobileHeader.getBoundingClientRect().height <= 72 &&
+      !mobileInspector
+        .querySelector(".workspace-inspector-tabs:not([hidden])")
+        ?.getClientRects().length &&
+      document.querySelector(".topbar")?.classList.contains("is-zen") === true,
+    "the phone terminal window shows one bar of its own and no topbar above it",
   );
   const mobileInput = mobileInspector.querySelector<HTMLTextAreaElement>(
     "textarea.terminal-composer-input",
@@ -2068,15 +2075,12 @@ async function run() {
   const selectSnap = async (label: string, target: string) => {
     document
       .querySelector<HTMLButtonElement>(
-        `[aria-label="${label} Inspector"] button[aria-label="Snap Inspector window"]`,
+        `[aria-label="${label} Inspector"] button[aria-label="More actions for Inspector window"]`,
       )!
       .click();
     await until(
-      () =>
-        document.querySelector(
-          '[aria-label="Snap Inspector window"] [role="menuitem"]',
-        ) || document.querySelector(".world-window-snap-menu"),
-      "snap menu opens",
+      () => document.querySelector(".world-window-snap-menu"),
+      "window menu opens",
     );
     [
       ...document.querySelectorAll<HTMLButtonElement>(
@@ -2087,7 +2091,66 @@ async function run() {
       .click();
     await settle();
   };
+  // One bar per window: identity, the view selector and the window's
+  // actions share a single row, with no repository row or PR card below.
+  const builderHead = document.querySelector<HTMLElement>(
+    '[aria-label="Builder Inspector"] .workspace-inspector-head',
+  )!;
+  const rowTop = (selector: string) =>
+    builderHead.querySelector(selector)?.getBoundingClientRect();
+  const headRows = [
+    rowTop(".workspace-inspector-identity"),
+    rowTop(".workspace-inspector-tabs"),
+    rowTop(".world-window-controls"),
+  ];
+  check(
+    headRows.every(
+      (rect) =>
+        rect &&
+        Math.abs(
+          rect.top +
+            rect.height / 2 -
+            (headRows[0]!.top + headRows[0]!.height / 2),
+        ) < 4,
+    ) &&
+      builderHead.getBoundingClientRect().height <= 72 &&
+      !builderHead.querySelector(".workspace-inspector-repository-action") &&
+      !document.querySelector(
+        '[aria-label="Builder Inspector"] .pull-request-card',
+      ),
+    `the Inspector's bar was not one row: ${JSON.stringify(headRows)}`,
+  );
+  // A crowded bar moves its views into ⋯ rather than squeezing the name or
+  // pushing a control past the window's edge.
+  const checkBarFits = (label: string) => {
+    const frame = document.querySelector<HTMLElement>(
+      `[aria-label="${label} Inspector"]`,
+    )!;
+    const head = frame.querySelector<HTMLElement>(".workspace-inspector-head")!;
+    const bounds = frame.getBoundingClientRect();
+    const name = head
+      .querySelector<HTMLElement>(
+        ".workspace-inspector-agent-identity, .workspace-inspector-identity",
+      )!
+      .getBoundingClientRect().width;
+    const outside = [...head.querySelectorAll<HTMLElement>("button")]
+      .filter((button) => {
+        const rect = button.getBoundingClientRect();
+        return (
+          rect.width > 0 &&
+          (rect.left < bounds.left - 1 || rect.right > bounds.right + 1)
+        );
+      })
+      .map((button) => button.getAttribute("aria-label"));
+    check(
+      outside.length === 0 &&
+        (name >= 120 || head.hasAttribute("data-views-in-menu")),
+      `the ${label} bar overflowed: ${JSON.stringify({ outside, name, width: bounds.width })}`,
+    );
+  };
+  checkBarFits("Builder");
   await selectSnap("Builder", "Left half");
+  checkBarFits("Builder");
   const focusedDock = document.querySelector<HTMLElement>(
     '[aria-label="Builder Inspector"]',
   )!;
@@ -4165,8 +4228,8 @@ async function run() {
     () => `three Inspectors in narrow Columns: ${narrowLayoutDiagnostic()}`,
   );
   await settle();
-  // Every view stays one tap away: as a tab, or under the narrowest
-  // window's ⋯ More views.
+  // Every view stays one tap away: as a tab, or, in the narrowest window,
+  // under the window's one ⋯ menu beside its actions.
   check(
     [
       ...document.querySelectorAll<HTMLElement>(
@@ -4180,7 +4243,9 @@ async function run() {
           ),
         ].every((tab) => tab.getClientRects().length > 0) ||
         (window
-          .querySelector<HTMLElement>(".workspace-inspector-tabs-more")
+          .querySelector<HTMLElement>(
+            'button[aria-label="More actions for Inspector window"]',
+          )
           ?.getClientRects().length ?? 0) > 0,
     ),
     "a narrow Inspector hid views without offering More views",

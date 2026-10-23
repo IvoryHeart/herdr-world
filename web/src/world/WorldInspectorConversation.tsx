@@ -1,3 +1,4 @@
+import type { ManagedWindowControls } from "./windows/WindowControls";
 import {
   Suspense,
   useCallback,
@@ -8,22 +9,24 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
-import type { Interest } from "../../../shared/interest";
 import {
   createReviewAnnotation,
-  type NewReviewAnnotation,
-  type ReviewAnnotation,
   reanchorDiffReviewAnnotations,
   reanchorFileReviewAnnotations,
+  type NewReviewAnnotation,
+  type ReviewAnnotation,
 } from "../annotations";
 import { worldLocalStorage } from "../browserStorage";
 import { type ActiveDiffSelection } from "../components/DiffViewerPanel";
-import type { ActiveFilePreviewSelection } from "../components/FilePreviewContent";
 import { requestFilePreview } from "../components/fileExplorerResources";
+import type { ActiveFilePreviewSelection } from "../components/FilePreviewContent";
+import type { Interest } from "../../../shared/interest";
 import { WorkspaceInspectorHost } from "../components/WorkspaceInspectorHost";
+import { setAgentInterest, useAgentInterest } from "./useAgentInterest";
+import { ThemeScope } from "../themeScope";
 import {
-  connectionSnapshot,
   OperationalContext,
+  connectionSnapshot,
   shallowEqual,
   store,
   useStoreSelector,
@@ -35,28 +38,27 @@ import {
 } from "../useConnectionClient";
 import { useReviewAnnotationDraft } from "../useReviewAnnotationDraft";
 import {
-  type InspectorDock,
-  type InspectorView,
   readResourceFileSelection,
   resourceScopeForWorkspace,
   resourceStateKey,
-  WORKSPACE_ANNOTATION_REQUEST_EVENT,
-  type WorkspaceAnnotationRequest,
-  type WorkspaceInspectorState,
   writeInspectorPreferences,
   writeResourceFileSelection,
+  type InspectorDock,
+  type InspectorView,
+  type WorkspaceInspectorState,
+  WORKSPACE_ANNOTATION_REQUEST_EVENT,
+  type WorkspaceAnnotationRequest,
 } from "../workspaceResource";
 import {
-  INSPECTOR_TERMINAL_FILE_EVENT,
-  type InspectorTerminalFileRequest,
-  inspectorTerminalFileAdmitted,
-} from "./inspectorTerminalHandoff";
-import { setAgentInterest, useAgentInterest } from "./useAgentInterest";
-import type { ManagedWindowControls } from "./windows/WindowControls";
-import {
-  type WorldInspectorConversation,
   worldInspectorWindowId,
+  type WorldInspectorConversation,
 } from "./worldTerminalPresentation";
+import {
+  INSPECTOR_TERMINAL_FILE_EVENT,
+  inspectorTerminalFileAdmitted,
+  type InspectorTerminalFileRequest,
+} from "./inspectorTerminalHandoff";
+import { townPortrait } from "./town/townSprites";
 
 const emptyDiff = (): ActiveDiffSelection => ({
   entry: null,
@@ -105,6 +107,7 @@ function InspectorResources({
   onResourceFocus,
   windowControls,
   terminalColor,
+  townSkin = false,
   onWindowMaximize,
   windowMaximized = false,
   onTerminalPortalChange,
@@ -122,6 +125,8 @@ function InspectorResources({
   onResourceFocus(): void;
   windowControls?: ManagedWindowControls;
   terminalColor?: ManagedWindowControls["color"];
+  /** Town draws the agent with its Town portrait, as the town shows it. */
+  townSkin?: boolean;
   onWindowMaximize?(): void;
   windowMaximized?: boolean;
   onTerminalPortalChange(element: HTMLDivElement | null): void;
@@ -529,7 +534,14 @@ function InspectorResources({
                 setDiffSelection(emptyDiff());
               }
             }}
-            context={conversation.context}
+            context={
+              townSkin && conversation.context.kind === "agent"
+                ? {
+                    ...conversation.context,
+                    portrait: townPortrait(conversation.nodeId),
+                  }
+                : conversation.context
+            }
             agentCheckout={
               conversation.view === "changes" &&
               conversation.context.kind === "agent" &&
@@ -548,7 +560,12 @@ function InspectorResources({
   );
 
   return createPortal(
-    content,
+    // Town's window is always the dark panel, so its code viewers are too.
+    // The provider stays in the tree in every view, so switching views does
+    // not remount the Inspector.
+    <ThemeScope.Provider value={townSkin ? "dark" : null}>
+      {content}
+    </ThemeScope.Provider>,
     portalOwner,
     worldInspectorWindowId(conversation),
   );

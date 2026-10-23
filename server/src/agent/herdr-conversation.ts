@@ -612,11 +612,24 @@ export function createHerdrConversationSource(args: {
           if (MOVED_ON.has(status)) return null;
           if (status !== "blocked") return "unknown_status";
           // Read under the checked state, so only what the screen shows
-          // counts as a different question.
+          // counts as a different question. A form's next question can
+          // follow with no new Herdr state; a new state with a changed
+          // screen is the agent's next prompt.
           const shown = await readPrompt(pane_id, before);
           if (!shown) return "unreadable";
-          return shown.fingerprint !== prompt.fingerprint &&
-            info.state_change_seq !== before?.state_change_seq
+          const asks = (asked: PendingPrompt) =>
+            JSON.stringify([
+              asked.question,
+              asked.request,
+              asked.options.map((option) => option.label),
+            ]);
+          // Only a recognised menu is a next question; a partial or
+          // unrecognised screen (no options) proves nothing, whether or not
+          // Herdr's state moved.
+          if (!shown.options.length) return "still_showing";
+          return asks(shown) !== asks(prompt) ||
+            (shown.fingerprint !== prompt.fingerprint &&
+              info.state_change_seq !== before?.state_change_seq)
             ? null
             : "still_showing";
         })
