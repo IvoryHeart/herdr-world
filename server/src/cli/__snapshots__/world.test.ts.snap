@@ -57,6 +57,8 @@ Targets are on your own host; add --connection ID for another one.
   result ls [--task ID]
   spawned-by PARENT_PANE   stamp your pane as spawned by PARENT_PANE
          (display-only Herdr pane metadata, so no --herdr)
+  stamp CHILD_PANE PARENT_PANE
+         the same stamp, written by a harness that started CHILD_PANE
 
 The CLI never merges, deletes panes, tabs or workspaces, or sends anything
 outside World.

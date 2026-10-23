@@ -233,9 +233,13 @@ The command reads both panes, then reports two tokens on the child with source
 `spawned_by_terminal` (its terminal, which survives a move of the parent).
 Another tool can write the same tokens. World saves the last claim it sees on
 a live snapshot, qualified by connection and runtime generation, so the
-relation outlives its tokens. Herdr issues new terminal IDs when it restarts
-(pane IDs are reused), so a claim or group from before a restart stays
-visible but stale; stamp the restored agents again to relate them. A stamp
+relation outlives a token cleared while both agents run. Herdr issues new
+terminal IDs when it restarts (pane IDs are reused), so a claim or group from
+before a restart can never match again: once a current snapshot that lists
+every pane of the connection shows its terminals closed, the service drops it
+(an offline host keeps it, shown stale). Stamp the restored agents again to
+relate them. Groups never span connections; the service refuses one that
+would. A stamp
 with `spawned_by_terminal` is resolved only by that terminal, never by a pane
 ID that may since name another pane. Inside an agent pane `HERDR_SOCKET_PATH` selects
 that pane's own Herdr ahead of `--session`; pass `--socket-path` to target

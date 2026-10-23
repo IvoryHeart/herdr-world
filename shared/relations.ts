@@ -5,8 +5,9 @@
  *
  * - `spawned`: a spawner stamped the child pane's Herdr metadata with
  *   `spawned_by` (Herdr is the record while the token lives). World keeps the
- *   last claim it saw in Board's saved document, which stays the record after
- *   a Herdr restart drops the token.
+ *   last claim it saw in Board's saved document, which stays the record when
+ *   the token is cleared while both terminals run. A Herdr restart issues new
+ *   terminals, so the old claim can never match again and is dropped.
  * - `manual`: the user grouped desks or cards; World's saved document is the
  *   record.
  *
@@ -14,7 +15,9 @@
  * issued anew when Herdr restarts (pane IDs are reused), so they are the
  * identity. Evidence is current only while both terminals are in a
  * current (not cached, not stale) snapshot of their connection; otherwise it
- * is kept and shown as stale. The service and the browser share these rules.
+ * is kept and shown as stale until a complete current snapshot shows the
+ * terminals closed (`closedRelations`). A relation never crosses
+ * connections. The service and the browser share these rules.
  */
 
 /** The child pane's token naming its parent pane. */
@@ -61,6 +64,8 @@ export type RelationObservation = {
   generation: number;
   /** A live snapshot of the current runtime, not cached topology. */
   current: boolean;
+  /** Every pane the runtime has is listed (World's snapshot is bounded). */
+  complete?: boolean;
   panes: readonly {
     pane_id: string;
     terminal_id: string;
@@ -333,6 +338,13 @@ export function joinGroup(
       members.findIndex((entry) => sameRef(entry, member)) === index,
   );
   if (!joining.length || !target.length) return [...groups];
+  const connection = target[0]!.connection_id;
+  if (
+    [...joining, ...target].some(
+      (member) => member.connection_id !== connection,
+    )
+  )
+    throw new Error("a group cannot span connections");
   const host = groups.find((group) =>
     group.members.some((member) =>
       target.some((entry) => sameRef(entry, member)),
@@ -367,4 +379,32 @@ export function joinGroup(
       `a group holds at most ${RELATION_LIMITS.members} terminals`,
     );
   return [...rest, group];
+}
+
+/**
+ * Saved relations no runtime can show again: claims whose child and parent
+ * are both closed, and closed group members. A terminal is closed when a
+ * current snapshot that lists every pane of its connection lacks it, since a
+ * runtime never reissues a terminal ID and a restarted Herdr issues new ones.
+ * Connections that are offline, cached or truncated keep everything.
+ */
+export function closedRelations(
+  document: RelationsDocument,
+  observations: readonly RelationObservation[],
+): { children: TerminalRef[]; members: TerminalRef[] } {
+  const live = new Map<string, Set<string>>();
+  for (const observation of observations)
+    if (observation.current && observation.complete)
+      live.set(
+        observation.connection_id,
+        new Set(observation.panes.map((pane) => pane.terminal_id)),
+      );
+  const closed = (ref: TerminalRef) =>
+    live.get(ref.connection_id)?.has(ref.terminal_id) === false;
+  return {
+    children: document.spawns
+      .filter((claim) => closed(claim.child) && closed(claim.parent))
+      .map((claim) => claim.child),
+    members: document.groups.flatMap((group) => group.members.filter(closed)),
+  };
 }

@@ -34,10 +34,14 @@ import { WORLD_OBSERVABILITY_UPDATED_EVENT } from "../workspaceResource";
 import { TownCanvas } from "./town/TownCanvas";
 import { townDeskColorTarget } from "./town/townModel";
 import { resolveTerminal, type TerminalColor } from "./terminalColor";
-import { setTerminalColor, useTerminalColors } from "./useTerminalColors";
+import {
+  setTerminalColor,
+  useTerminalColors,
+  useWorldColorSource,
+} from "./useTerminalColors";
 import { groupTerminals, ungroupTerminals, useRelations } from "./relations";
 import { inheritedColorKey } from "../../../shared/terminalColor";
-import type { TerminalRef } from "../../../shared/relations";
+import { terminalKey, type TerminalRef } from "../../../shared/relations";
 import type { OfficeDesk } from "./herdrOfficeProjection";
 import { terminalColorKey } from "./terminalColor";
 import {
@@ -632,7 +636,11 @@ export default function TownView({
     const entry = agentByKey.get(agentKey);
     return entry ? `${entry.roomLabel} · ${entry.hostLabel}` : "";
   };
-  const terminalColors = useTerminalColors();
+  // Colours and team walls read the same World, so they agree on each relation.
+  const terminalColors = useTerminalColors(
+    undefined,
+    useWorldColorSource(world),
+  );
   const relations = useRelations(world);
   const deviceByKey = useMemo(
     () => lazyIndex(office.paneRoster, (entry) => entry.device.key),
@@ -700,6 +708,7 @@ export default function TownView({
   /** A desk or agent move being chosen: what to move, then where. */
   const [moveFlow, setMoveFlow] = useState<
     | { step: "room"; deskKey: string }
+    | { step: "group"; deskKey: string }
     | { step: "desk"; agentKey: string }
     | null
   >(null);
@@ -810,6 +819,7 @@ export default function TownView({
   const runGroupDesk = async (
     deskKey: string,
     targetKey: string,
+    allowCloseRoom = false,
   ): Promise<TownMoveResult> => {
     const desk = deskForKey(deskKey);
     const target = deskForKey(targetKey);
@@ -820,6 +830,20 @@ export default function TownView({
       toast("error", `${desk.displayLabel} was not grouped: no terminals seen`);
       return "returned";
     }
+    // Joining brings the desk to the team's room: ask before grouping when
+    // that closes its own, so cancelling leaves it as it was.
+    const source = roomForKey(desk.roomKey);
+    if (
+      !allowCloseRoom &&
+      desk.roomKey !== target.roomKey &&
+      (source?.observedDeskCount ?? 2) <= 1
+    ) {
+      setMoveConfirm({
+        message: `“${desk.displayLabel}” is the last desk in “${source?.displayLabel}”. Joining “${target.displayLabel}” moves it and closes that room.`,
+        run: () => void runGroupDesk(deskKey, targetKey, true),
+      });
+      return "returned";
+    }
     const problem = await groupTerminals(members, with_);
     if (problem) {
       toast("error", `${desk.displayLabel} was not grouped: ${problem}`);
@@ -828,7 +852,7 @@ export default function TownView({
     toast("ok", `${desk.displayLabel} joined ${target.displayLabel}`);
     // Bring it to the team's room and next to its teammate, through Herdr.
     if (desk.roomKey !== target.roomKey)
-      return runDeskMove(deskKey, target.roomKey, false, (tabId) =>
+      return runDeskMove(deskKey, target.roomKey, allowCloseRoom, (tabId) =>
         seatBeside(desk, tabId, target),
       );
     await seatBeside(desk, desk.tabRef.nativeId, target);
@@ -1011,6 +1035,40 @@ export default function TownView({
             ]
           : []),
       ];
+      // Teams without a drag: join another desk's, or leave a manual one.
+      const terminals = desk ? deskTerminals(desk) : [];
+      const grouped = relations.relations.some(
+        (relation) =>
+          relation.evidence.some((entry) => entry.kind === "manual") &&
+          terminals.some(
+            (ref) =>
+              terminalKey(ref) === terminalKey(relation.a) ||
+              terminalKey(ref) === terminalKey(relation.b),
+          ),
+      );
+      const teamEntries = desk
+        ? [
+            {
+              key: `${flow.deskKey}:group`,
+              label: "Group with…",
+              detail: "Join another desk's team",
+              onChoose: () => setMoveFlow({ step: "group", deskKey: desk.key }),
+            },
+            ...(grouped
+              ? [
+                  {
+                    key: `${flow.deskKey}:ungroup`,
+                    label: "Leave the team",
+                    detail: "Stay here, outside the team",
+                    onChoose: () => {
+                      setMoveFlow(null);
+                      void runUngroupDesk(desk.key);
+                    },
+                  },
+                ]
+              : []),
+          ]
+        : [];
       return {
         title: `Move ${desk?.displayLabel ?? "desk"}`,
         detail:
@@ -1028,7 +1086,36 @@ export default function TownView({
               void runDeskMove(flow.deskKey, room.key);
             },
           })),
+          ...teamEntries,
         ],
+      };
+    }
+    if (flow.step === "group") {
+      const desk = deskForKey(flow.deskKey);
+      const mates = desk
+        ? office.deskRoster
+            .map(({ desk: other }) => other)
+            .filter(
+              (other) =>
+                other.key !== desk.key &&
+                other.hostKey === desk.hostKey &&
+                other.tabRef.connectionId === desk.tabRef.connectionId,
+            )
+        : [];
+      return {
+        title: `Group ${desk?.displayLabel ?? "desk"} with…`,
+        detail: mates.length
+          ? "Choose a desk on this host; the desk joins its room"
+          : "No other desk on this host",
+        entries: mates.map((other) => ({
+          key: other.key,
+          label: other.displayLabel,
+          detail: roomForKey(other.roomKey)?.displayLabel ?? "",
+          onChoose: () => {
+            setMoveFlow(null);
+            void runGroupDesk(flow.deskKey, other.key);
+          },
+        })),
       };
     }
     const agent = agentByKey.get(flow.agentKey)?.agent;

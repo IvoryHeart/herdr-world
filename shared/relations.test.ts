@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  closedRelations,
   joinGroup,
   leaveGroups,
   observedSpawnClaims,
@@ -298,5 +299,42 @@ describe("review fixes", () => {
     expect(() => joinGroup(groups, [ref("d")], [ref("c")], "g1", 2)).toThrow(
       "already exists",
     );
+  });
+});
+
+describe("closed terminals and connections", () => {
+  test("a group never spans connections", () => {
+    expect(() => joinGroup([], [ref("b", "lab")], [ref("a")], "g1", 1)).toThrow(
+      "cannot span connections",
+    );
+    const groups = joinGroup([], [ref("b")], [ref("a")], "g1", 1);
+    expect(() =>
+      joinGroup(groups, [ref("c", "lab")], [ref("b")], "g2", 2),
+    ).toThrow("cannot span connections");
+  });
+
+  test("only a complete current snapshot shows terminals closed", () => {
+    const document = {
+      spawns: [claim("b", "a"), claim("d", "c"), claim("f", "e")],
+      groups: joinGroup([], [ref("x")], [ref("b")], "g1", 1),
+    };
+    // "b" and "a" are gone, so is "x"; "c" still runs, "e" and "f" do not.
+    const panes = [pane("w1:p1", "c")];
+    expect(
+      closedRelations(document, [host(panes, { complete: true })]),
+    ).toEqual({
+      children: [ref("b"), ref("f")],
+      members: [ref("b"), ref("x")],
+    });
+    for (const overrides of [
+      {},
+      { complete: false },
+      { complete: true, current: false },
+      { complete: true, connection_id: "lab" },
+    ])
+      expect(closedRelations(document, [host(panes, overrides)])).toEqual({
+        children: [],
+        members: [],
+      });
   });
 });

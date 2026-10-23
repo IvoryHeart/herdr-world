@@ -1210,6 +1210,7 @@ export function TownCanvas({
       >
         <TownTeamsLayer teams={teams} />
         <TownWorldLayer
+          teams={teams}
           model={model}
           layout={layout}
           visible={visible}
@@ -1455,6 +1456,7 @@ const TownTeamsLayer = memo(function TownTeamsLayer({
 const TownWorldLayer = memo(function TownWorldLayer({
   model,
   layout,
+  teams,
   selectedKey,
   blockedSince,
   roomActions,
@@ -1468,6 +1470,7 @@ const TownWorldLayer = memo(function TownWorldLayer({
 }: {
   model: TownModel;
   layout: TownLayout;
+  teams: TownTeams;
   visible: TownVisible;
   onHoverEntry(key: string | null, rect?: DOMRect): void;
   selectedKey: string | null;
@@ -1479,7 +1482,10 @@ const TownWorldLayer = memo(function TownWorldLayer({
   onActivateRoom(key: string): void;
   onFocusTarget(target: TownTarget): void;
 }) {
-  const targets = useMemo(() => townTargets(model, layout), [model, layout]);
+  const targets = useMemo(
+    () => townTargets(model, layout, teams.deskTeams),
+    [model, layout, teams.deskTeams],
+  );
   const attention = townAttention(model, blockedSince);
   const now = Date.now();
   const [, tick] = useState(0);
@@ -1924,6 +1930,7 @@ const TownTargetButton = memo(function TownTargetButton({
       type="button"
       data-kind={target.kind}
       data-target-key={target.key}
+      data-color={target.color}
       aria-label={target.label}
       aria-pressed={selected}
       title={target.label}
@@ -1982,6 +1989,7 @@ function sameTargetButton(
     a.key === b.key &&
     a.kind === b.kind &&
     a.label === b.label &&
+    a.color === b.color &&
     a.canActivate === b.canActivate &&
     a.rect.x === b.rect.x &&
     a.rect.y === b.rect.y &&
