@@ -663,9 +663,9 @@ async function run() {
     () => window.__HERDR_TOWN_RENDERER__?.ready === true,
     "Town renderer",
   );
-  // Town opens full-bleed in Zen, with the views one choice away beside
+  // World opens full-bleed in Zen, with the views one choice away beside
   // Exit Zen. The rest of this fixture drives the bars, so it leaves Zen the
-  // way a user would, which also records Town's own choice.
+  // way a user would, which also records World's one Zen choice.
   await until(
     () =>
       document.querySelector(".app")?.classList.contains("zen") === true &&
@@ -675,8 +675,8 @@ async function run() {
     "Town opening in Zen with the view picker",
   );
   check(
-    worldLocalStorage.getItem("zenMode.town") === null,
-    "Town's default Zen was stored as if the user had chosen it",
+    worldLocalStorage.getItem("zenMode.world") === null,
+    "World's default Zen was stored as if the user had chosen it",
   );
   document.querySelector<HTMLButtonElement>(".zen-dock .zen-island")?.click();
   await until(
@@ -684,8 +684,8 @@ async function run() {
     "leaving Town's default Zen",
   );
   check(
-    worldLocalStorage.getItem("zenMode.town") === "0",
-    "leaving Zen in Town did not keep Town's own choice",
+    worldLocalStorage.getItem("zenMode.world") === "0",
+    "leaving Zen did not keep World's Zen choice",
   );
   await until(() => {
     const seat = document.querySelector<HTMLButtonElement>(
