@@ -13,6 +13,7 @@ export const GROUP_ACTIONS = [
   "show",
   "delete",
   "promote",
+  "import",
 ];
 const BASE = {
   json: { type: "boolean" },
@@ -59,7 +60,11 @@ export function parseGroupArgs(word: string, args: string[]) {
       maximum = 33;
       break;
     case "list":
+      extra = { markdown: { type: "boolean" } };
       maximum = 0;
+      break;
+    case "import":
+      extra = { mapping: { type: "string" }, yes: { type: "boolean" } };
       break;
     case "show":
       break;
@@ -90,6 +95,8 @@ export function parseGroupArgs(word: string, args: string[]) {
     throw new UsageError("create needs --kind pod|team or a pod/team alias");
   if (values.replace === true && values.yes !== true)
     throw new UsageError("an exclusive role transfer needs --replace --yes");
+  if (values.markdown === true && values.json === true)
+    throw new UsageError("choose --markdown or --json");
   const params: Record<string, unknown> = {
     ...(kind !== undefined ? { kind } : {}),
     ...(values.connection !== undefined
@@ -105,6 +112,17 @@ export function parseGroupArgs(word: string, args: string[]) {
       if (!Number.isSafeInteger(limit) || limit < 0)
         throw new UsageError("--open-pr-limit takes a nonnegative integer");
       params.open_pr_limit = limit;
+    }
+  } else if (verb === "import") {
+    params.file = required(positionals[0], "Markdown file");
+    if (values.mapping !== undefined) {
+      try {
+        params.mapping = JSON.parse(String(values.mapping));
+      } catch {
+        throw new UsageError(
+          "import --mapping takes a JSON object from table names to addresses",
+        );
+      }
     }
   } else if (verb !== "list")
     params.group = required(positionals[0], "group ID or name");
@@ -132,7 +150,14 @@ export function parseGroupArgs(word: string, args: string[]) {
     if (!Array.isArray(params.mapping))
       throw new UsageError("--mapping takes a JSON array");
   }
-  return { command: `group ${verb}`, params, json: values.json === true };
+  return {
+    command: `group ${verb}`,
+    params: {
+      ...params,
+      ...(values.markdown === true ? { markdown_output: true } : {}),
+    },
+    json: values.json === true,
+  };
 }
 
 const title = (group: { kind: string; name?: string; id: string }) =>
@@ -155,8 +180,11 @@ export function groupHuman(result: unknown): string {
     deleted?: string;
     changes?: GroupChange[];
     summary?: string;
+    imported?: Group[];
   } & Partial<GroupView>;
   if (value.summary) return value.summary;
+  if (value.imported)
+    return `Imported ${value.imported.length} Pods. World is now the source of record; the file is not synchronized.`;
   if (value.group) return `${title(value.group)} [${value.group.id}]`;
   if (value.deleted) return `Deleted group ${value.deleted}`;
   if (!value.id || !value.kind) return JSON.stringify(result);

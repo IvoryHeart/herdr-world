@@ -15,6 +15,9 @@ import { isLoopbackAddress } from "../workspace/file-manager";
 import { readServiceAccess, readServiceSetup } from "./service-context";
 import { WORLD_SKILL } from "./world-skill";
 import { GROUP_ACTIONS, groupHuman, parseGroupArgs } from "./world-groups";
+import { renderGroupMarkdown } from "../../../shared/groupMarkdown";
+import type { GroupView } from "../../../shared/groupViews";
+import { readFileSync } from "node:fs";
 
 /**
  * The agent CLI: `herdr-world board|town|colour|ask|result|spawned-by|whoami|
@@ -468,6 +471,20 @@ export async function runWorldCommand(
     return EXIT_OK;
   }
   const { command, params, json } = parseWorldArgs(word, args);
+  const markdown = params.markdown_output === true;
+  delete params.markdown_output;
+  if (command === "group import") {
+    if (params.confirmed !== true)
+      throw new UsageError("one-time Pod import needs --yes");
+    try {
+      params.markdown = readFileSync(String(params.file), "utf8");
+    } catch {
+      throw new UsageError("could not read the Markdown import file");
+    }
+    delete params.file;
+    if (String(params.markdown).length > 48_000)
+      throw new UsageError("Pod import is limited to 48000 characters");
+  }
   const asJson = json === true || !isTty;
   const wait = params.wait === true;
   const timeoutMs = Math.max(0, Number(params.timeout) || 0) * 1000;
@@ -526,7 +543,9 @@ export async function runWorldCommand(
       }
     }
   }
-  if (asJson) context.log(JSON.stringify(reply));
+  if (markdown && reply.ok)
+    context.log(renderGroupMarkdown(reply.result as GroupView[]));
+  else if (asJson) context.log(JSON.stringify(reply));
   else if (reply.ok) context.log(human(command, reply));
   else context.error(`herdr-world ${word}: ${reply.error ?? "failed"}`);
   return reply.ok ? EXIT_OK : (CODE_EXIT[reply.code ?? ""] ?? EXIT_FAILURE);

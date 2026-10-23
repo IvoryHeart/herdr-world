@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { parsePodMarkdown } from "../../../shared/groupMarkdown";
 import {
   agentAddress,
   groupRefKey,
@@ -34,6 +35,7 @@ export const GROUP_CLI_COMMANDS = [
   "group show",
   "group delete",
   "group promote",
+  "group import",
 ] as const;
 export type GroupMoveRequest = {
   connection_id: string;
@@ -268,6 +270,94 @@ export async function runGroupCommand(
     return {
       revision: document.revision,
       group: document.relations.groups.find((group) => group.id === id),
+    };
+  }
+  if (command === "group import") {
+    if (params.confirmed !== true)
+      return fail(
+        "refused",
+        "one-time Pod import needs --yes; this never synchronizes the file",
+      );
+    if (params.kind !== undefined && params.kind !== "pod")
+      return fail("refused", "Markdown import creates Pods only");
+    let rows: ReturnType<typeof parsePodMarkdown>;
+    try {
+      rows = parsePodMarkdown(
+        typeof params.markdown === "string" ? params.markdown : "",
+      );
+    } catch (error) {
+      return fail(
+        "usage",
+        error instanceof Error ? error.message : "invalid Pod table",
+      );
+    }
+    const mapping = params.mapping ?? {};
+    if (!mapping || typeof mapping !== "object" || Array.isArray(mapping))
+      return fail(
+        "usage",
+        "import --mapping is a JSON object from table names to explicit agent:// addresses",
+      );
+    const ops: GroupOp[] = [];
+    const ids: string[] = [];
+    for (const row of rows) {
+      if (
+        before.relations.groups.some(
+          (group) => group.kind === "pod" && group.name === row.name,
+        )
+      )
+        return fail(
+          "refused",
+          `Pod ${row.name} already exists; import never overwrites or resynchronizes it`,
+        );
+      const id = randomUUID();
+      ids.push(id);
+      const members = new Map<string, { ref: GroupRef; roles: string[] }>();
+      for (const [role, targets] of [
+        ["lead", row.lead],
+        ["builder", row.builders],
+        ["reviewer", row.reviewers],
+      ] as const) {
+        for (const target of targets) {
+          const mapped = Object.hasOwn(mapping, target);
+          const explicit = mapped
+            ? (mapping as Record<string, unknown>)[target]
+            : target;
+          if (
+            mapped &&
+            (typeof explicit !== "string" || !explicit.startsWith("agent://"))
+          )
+            return fail(
+              "usage",
+              `mapping for ${target} needs an explicit agent:// address`,
+            );
+          const ref = resolveRef(
+            explicit,
+            undefined,
+            observations,
+            params,
+            context,
+          );
+          const key = groupRefKey(ref);
+          const member = members.get(key) ?? { ref, roles: [] };
+          if (!member.roles.includes(role)) member.roles.push(role);
+          members.set(key, member);
+        }
+      }
+      ops.push({
+        op: "group.create",
+        id,
+        kind: "pod",
+        name: row.name,
+        attrs: { queue: row.now },
+        members: [...members.values()],
+      });
+    }
+    const document = context.patch(ops);
+    return {
+      revision: document.revision,
+      imported: document.relations.groups.filter((group) =>
+        ids.includes(group.id),
+      ),
     };
   }
   const view = chooseGroup(views, params);

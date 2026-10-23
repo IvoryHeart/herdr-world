@@ -97,7 +97,7 @@ lead/builder transfers need explicit confirmation, and promotion requires every
 terminal-to-address mapping. `world-cli-groups.test.ts` exercises the actual
 service edits, retained deletion attribution and role preservation;
 `cli/world-groups.test.ts` checks parser intent and preview-before-mutation output.
-These edits have recent Group attribution rather than Board ledger undo.
+These edits have recent Group attribution rather than Board ledger undo. Markdown tests add explicit table parsing/escaped rendering and actual service all-or-none import, existing-name refusal, role-conflict rollback and sender attribution; the CLI test proves only the selected file is read and piped Markdown stays Markdown. No file watcher or resynchronization is introduced.
 
 `group-move.test.ts` drives the real native move orchestration and the actual CLI
 HTTP service. A controlled queue blocker demonstrates the same injected queue as

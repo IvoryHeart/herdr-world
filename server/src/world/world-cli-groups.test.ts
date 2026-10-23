@@ -237,3 +237,43 @@ test("Team promotion keeps identity and requires an explicit full mapping", asyn
     created_at: before.created_at,
   });
 });
+
+test("explicit one-time import is atomic, attributed and never overwrites existing Pods", async () => {
+  const { board, run } = setup();
+  const markdown =
+    "| Pod | Lead | Builders | Reviewers | Now |\n|---|---|---|---|---|\n| Chat | one | one, two | away | Review |";
+  const mapping = { away: agentAddress("connection-b", "away") };
+  expect(await run("group import", { markdown, mapping })).toMatchObject({
+    ok: false,
+    code: "refused",
+  });
+  expect(board.get().relations.groups).toHaveLength(0);
+  const imported = result(
+    await run("group import", { markdown, mapping, confirmed: true }),
+  ) as { imported: { members: { roles: string[] }[] }[] };
+  expect(imported.imported[0]!.members[0]!.roles).toEqual(["builder", "lead"]);
+  expect(board.get().relations.group_changes?.at(-1)?.sender.via).toBe("cli");
+  const before = board.get();
+  expect(
+    await run("group import", { markdown, mapping, confirmed: true }),
+  ).toMatchObject({ ok: false, code: "refused" });
+  expect(board.get()).toEqual(before);
+});
+
+test("one unresolved name or exclusive-role conflict rolls back the entire import", async () => {
+  const { board, run } = setup();
+  const header =
+    "| Pod | Lead | Builders | Reviewers | Now |\n|---|---|---|---|---|\n";
+  for (const second of ["missing", "one"]) {
+    const before = board.get();
+    expect(
+      await run("group import", {
+        markdown:
+          header +
+          `| Chat | one | | two | Review |\n| Platform | ${second} | | two | Ship |`,
+        confirmed: true,
+      }),
+    ).toMatchObject({ ok: false, code: "refused" });
+    expect(board.get()).toEqual(before);
+  }
+});

@@ -446,6 +446,9 @@ when piped, with stable exit codes:
   move: Room moves the whole desk and prints every affected agent first; Desk
   moves one pane. Results report confirmed Done/Partly done/Not done/Unknown
   outcomes and locations, with no automatic retry on Unknown.
+  `group import FILE --yes` migrates one Pod table atomically and never overwrites
+  existing Pods; explicit address mappings handle away or annotated names.
+  `group list --kind pod --markdown` renders the roster; files are never synchronized.
 
 World checks who is calling: the CLI sends its `HERDR_PANE_ID`, and the
 service accepts it only when the calling process runs in that pane of a local

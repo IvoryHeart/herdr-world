@@ -1879,6 +1879,13 @@ automatically.
 - **THEN** the CLI returns Unknown with a nonzero exit, preserves known evidence
   and makes no automatic retry
 
+#### Scenario: Explicit one-time crew-table migration
+
+- **WHEN** a caller imports one Pod table with confirmation
+- **THEN** World resolves names without guessing, accepts explicit address mappings,
+  creates all Pods atomically or none, and refuses existing Pod names
+- **AND** later Markdown export is a rendering; no two-way file synchronization exists
+
 ### Requirement: Terminal colour
 
 Every Herdr tab SHALL have one terminal colour from a fixed palette, shown as

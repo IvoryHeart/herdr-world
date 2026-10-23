@@ -376,6 +376,16 @@ There is no caller identity allowlist or authenticated role gate. The actual
 CLI actor supplies the reported/inferred sender claim, or unknown when absent.
 Group changes use bounded `relations.group_changes`, outside Board CLI undo.
 
+`group import FILE --yes` reads one explicit Pod table on the CLI side (48000
+characters, at most 32 rows), with Lead/Builders/Reviewers and optional Now. It
+resolves names under the selected connection or accepts a caller-supplied JSON
+name-to-address mapping for away/annotated names. All creates are one Board
+transaction; existing Pod names, unresolved names, caps or exclusivity conflicts
+refuse the entire import. No existing Group is overwritten and no background
+file watcher or synchronization exists. `group list --kind pod --markdown`
+renders qualified role refs and ordered Now items with escaped table content.
+Derived PR counts are display-only; this rendering is not a full Board backup.
+
 Rooms/Desks remain unpersisted. Their create/delete/role edits are refused.
 `group add DESTINATION AGENT --herdr` reads a complete effect from the captured
 connection/generation before moving. Room moves print the whole desk and every

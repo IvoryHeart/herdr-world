@@ -437,6 +437,14 @@ Use `--allow-close-room` only when you also agree to close the source room when 
 The result reports Done, Partly done, Not done or Unknown and observed locations.
 On Unknown, inspect Herdr before deciding what to do; never retry automatically.
 
+To migrate an existing crew table once, use `herdr-world group import pods.md
+--connection connection-a --yes`. The table needs Pod, Lead, Builders and
+Reviewers columns, with optional Now. If a name is away, ambiguous or annotated,
+supply `--mapping` as a JSON object from that exact table name to its qualified
+`agent://` address. The import is atomic and refuses existing Pod names. From
+then on, edit World through the CLI and render the table with `herdr-world group
+list --kind pod --markdown`; there is no two-way file synchronization.
+
 ### Use Desk: answer, review and follow work
 
 <a id="desk"></a>

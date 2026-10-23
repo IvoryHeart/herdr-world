@@ -6,6 +6,9 @@ import {
   type WorldCliTransport,
 } from "./world";
 import type { CliContext } from "./command";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 test("group verbs and pod/team aliases preserve explicit kind and intent", () => {
   expect(parseWorldArgs("pod", ["create", "Chat"])).toMatchObject({
@@ -165,4 +168,63 @@ test("an unavailable preview never sends a mutation", async () => {
     ),
   ).toBe(3);
   expect(calls).toBe(1);
+});
+
+test("Markdown export remains Markdown when piped and import reads only its explicit file", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "group-import-"));
+  try {
+    const file = join(directory, "pods.md");
+    const markdown =
+      "| Pod | Lead | Builders | Reviewers |\n|---|---|---|---|\n| Chat | a | b | c |";
+    writeFileSync(file, markdown);
+    const out: string[] = [];
+    const context = {
+      log: (line: string) => out.push(line),
+      error: () => {},
+    } as unknown as CliContext;
+    const sent: unknown[] = [];
+    const transport: WorldCliTransport = async (command, params) => {
+      sent.push({ command, params });
+      return {
+        ok: true,
+        result: command === "group list" ? [] : { imported: [] },
+      };
+    };
+    expect(
+      await runWorldCommand(
+        "group",
+        ["list", "--kind", "pod", "--markdown"],
+        context,
+        transport,
+        false,
+      ),
+    ).toBe(0);
+    expect(out[0]).toStartWith("| Pod | Lead |");
+    expect(
+      await runWorldCommand(
+        "pod",
+        ["import", file, "--yes", "--connection", "connection-a"],
+        context,
+        transport,
+        true,
+      ),
+    ).toBe(0);
+    expect(sent[1]).toEqual({
+      command: "group import",
+      params: {
+        kind: "pod",
+        confirmed: true,
+        connection: "connection-a",
+        markdown,
+      },
+    });
+    await expect(
+      runWorldCommand("pod", ["import", file], context, transport, true),
+    ).rejects.toThrow("--yes");
+    expect(() =>
+      parseWorldArgs("pod", ["list", "--markdown", "--json"]),
+    ).toThrow("choose");
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
 });

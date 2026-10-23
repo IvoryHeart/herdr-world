@@ -65,11 +65,14 @@ Targets are on your own host; add --connection ID for another one.
   stamp CHILD_PANE PARENT_PANE
          the same stamp, written by a harness that started CHILD_PANE
   group create NAME --kind pod|team [--open-pr-limit N]
-  group list [--kind pod|team|room|desk] | group show GROUP
+  group list [--kind pod|team|room|desk] [--json|--markdown] | group show GROUP
   group add GROUP AGENT [--role builder|lead|reviewer]
   group remove GROUP AGENT
   group lead GROUP AGENT | group reviewers GROUP [AGENT...]
   group now GROUP [ITEM...] | group delete GROUP --yes
+  group import FILE --yes [--connection ID] [--mapping JSON]
+         one-time Pod table import, no overwrite or file synchronization
+         mapping is {"table name":"agent://CONNECTION/ENCODED_NAME"}
   group promote TEAM --name POD_NAME --mapping JSON
          complete explicit [{from:{connection_id,terminal_id},to:"agent://...",
          roles:["builder"]}] mapping, preserving the group ID
@@ -98,6 +101,15 @@ Transferring an exclusive role requires --replace --yes, never silently
 displaces it, and preserves other roles. PR counts come from current source
 links and the Pod's limit defaults to 2; excess is a warning, not a gate.
 PR action verbs remain browser UI/RPC only.
+
+For one-time migration, import a table with Pod, Lead, Builders, Reviewers and
+optional Now columns. Names must resolve uniquely on the chosen connection;
+map away or annotated names explicitly to agent:// addresses. The whole table
+is atomic: missing/ambiguous names, role conflicts or existing Pod names refuse
+it without partial edits. Limits: 48000 characters, 32 rows, existing member
+and Now caps. Afterwards World owns the roster; export with group list --kind
+pod --markdown. This is a human rendering, not a full Board backup or two-way
+sync. Edit through the CLI; never reimport to update existing Pods.
 
 The CLI never merges PRs or exposes PR actions. It does not directly delete
 Herdr panes, tabs or workspaces; moving the last pane can close an empty tab

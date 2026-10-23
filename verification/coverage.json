@@ -1671,6 +1671,7 @@
         "shared/relations.test.ts",
         "shared/groups.test.ts",
         "shared/groupViews.test.ts",
+        "shared/groupMarkdown.test.ts",
         "shared/groupObservations.test.ts",
         "server/src/world/board-groups.test.ts",
         "server/src/world/relations.test.ts",
