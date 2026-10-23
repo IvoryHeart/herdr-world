@@ -1,3 +1,4 @@
+import "./TerminalComposerPalette.css";
 import { X } from "lucide-react";
 import type { RefObject, KeyboardEvent, MouseEvent } from "react";
 import type { ComposerCommand } from "../terminalComposerCommands";

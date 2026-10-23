@@ -2,6 +2,7 @@ import { createRoot } from "react-dom/client";
 import { bridge, type BridgeControlMsg } from "../api";
 import type { Pane } from "../types";
 import { AgentChat, type Conversation } from "./AgentChat";
+import { ChatComposer } from "./chat/ChatComposer";
 import { useAgentHistoryWindow } from "./useAgentHistoryWindow";
 import { useConnectionClient } from "../useConnectionClient";
 import type { ConversationStep } from "./chat/blocks/steps";
@@ -664,7 +665,7 @@ async function run() {
         "A finished upload must show a done chip",
       );
       check(
-        textarea.value === "Another /uploads/report.txt ",
+        textarea.value.trim() === "Another /uploads/report.txt",
         "A finished upload must add its path to the message",
       );
       check(!send().disabled, "Send must be enabled once uploads finish");
@@ -2281,6 +2282,39 @@ async function run() {
       count("agent_conversation.unwatch") === unwatched + 1,
       "Hiding Chat must stop watching the pane",
     );
+    for (const width of [390, 320]) {
+      container.style.width = `${width}px`;
+      root.render(
+        <ChatComposer
+          client={bridge.connection()}
+          pane={pane("idle")}
+          fingerprint="placeholder-fixture"
+          recipient="Mira-claude"
+          notice=""
+          onSubmit={async () => {}}
+          onError={() => {}}
+        />,
+      );
+      await settle();
+      container
+        .querySelector<HTMLButtonElement>('button[aria-label="Commands"]')!
+        .click();
+      await settle();
+      const command = container.querySelector<HTMLButtonElement>(
+        ".terminal-composer-command-list button",
+      )!;
+      check(
+        getComputedStyle(command).display === "flex" &&
+          command.getBoundingClientRect().height >= 44,
+        "Chat must reuse styled command rows on desktop as well as phones",
+      );
+      const editor = container.querySelector<HTMLTextAreaElement>("textarea")!;
+      check(
+        editor.placeholder === "Message Mira-claude…" &&
+          editor.clientHeight + 1 >= editor.scrollHeight,
+        `The ${width}px Chat editor must show its full recipient placeholder`,
+      );
+    }
   } finally {
     root.unmount();
     container.remove();

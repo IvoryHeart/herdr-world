@@ -178,7 +178,8 @@ changes what you see and does not disconnect hosts or retarget open terminals.
    (or pick it again) or remove it. **Send** waits for uploads. Uploads go to
    the selected pane's host; review the message and attached paths before
    sending. The window's **Files** and **Changes** use the same agent worktree,
-   rather than its launch checkout. Open the location line for **Worktree**:
+   rather than its launch checkout. Open the location line for **Worktree**
+   (a bottom sheet on phones):
    the source mark explains the evidence, and radio choices switch both views.
    If choices are ambiguous or stale, use **Choose a worktree** and **Refresh**;
    resource access waits for a current selection. **Open terminal** is for

@@ -339,7 +339,7 @@ export function TerminalComposer({
       return;
     }
     const measure = () => {
-      if (!text) {
+      if (!text && surface !== "chat") {
         textarea.style.height = "";
         return;
       }
@@ -347,10 +347,15 @@ export function TerminalComposer({
       textarea.style.minHeight = "0px";
       textarea.style.height = "0px";
       const contentHeight = textarea.scrollHeight;
-      textarea.style.minHeight = previousMinHeight;
-      textarea.style.height = `${contentHeight}px`;
-      if (!editorFocused || !open || expanded) return;
       const style = window.getComputedStyle(textarea);
+      const borderHeight =
+        style.boxSizing === "border-box"
+          ? Number.parseFloat(style.borderTopWidth) +
+            Number.parseFloat(style.borderBottomWidth)
+          : 0;
+      textarea.style.minHeight = previousMinHeight;
+      textarea.style.height = `${contentHeight + borderHeight}px`;
+      if (!text || !editorFocused || !open || expanded) return;
       const oneRow =
         Number.parseFloat(style.lineHeight) +
         Number.parseFloat(style.paddingTop) +
@@ -370,7 +375,7 @@ export function TerminalComposer({
     });
     observer.observe(textarea);
     return () => observer.disconnect();
-  }, [text, mode, open, editorFocused, expanded]);
+  }, [text, mode, open, editorFocused, expanded, surface, recipient, agent]);
 
   // Restore the shared selection after a programmatic insertion. The shared
   // value belongs to the draft key, so an upload started by an older mount can

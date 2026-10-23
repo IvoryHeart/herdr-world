@@ -1256,6 +1256,16 @@ async function run() {
     () => !document.querySelector(".config-dropdown"),
     "Town settings closed before shell Actions",
   );
+  function reviewerInspectorActive() {
+    const frame = document.querySelector<HTMLElement>(
+      ".world-managed-window.is-active",
+    );
+    return (
+      frame?.dataset.windowId ===
+        JSON.stringify(["local", 7, "studio", "review"]) &&
+      Boolean(frame.querySelector(".workspace-inspector-agent-identity"))
+    );
+  }
   const floatingPreferenceNavigatorRow = () =>
     [...document.querySelectorAll<HTMLElement>(".sidebar .agent-row")].find(
       (row) => row.getAttribute("aria-label")?.startsWith("claude pane"),
@@ -1263,11 +1273,7 @@ async function run() {
   flushSync(() => floatingPreferenceNavigatorRow()?.click());
   await until(
     () =>
-      document
-        .querySelector(
-          ".world-managed-window.is-active .workspace-inspector-agent-identity",
-        )
-        ?.textContent?.includes("Reviewer") &&
+      reviewerInspectorActive() &&
       document.querySelectorAll('[role="dialog"][aria-label$=" Inspector"]')
         .length === 1,
     "shared navigator opens a managed Inspector",
@@ -2390,11 +2396,7 @@ async function run() {
   flushSync(() => reviewerNavigatorRow?.click());
   await settle();
   check(
-    !document
-      .querySelector(
-        ".world-managed-window.is-active .workspace-inspector-agent-identity",
-      )
-      ?.textContent?.includes("Reviewer"),
+    !reviewerInspectorActive(),
     "shared navigator admitted Reviewer before its exact focus completed",
   );
   check(
@@ -2405,11 +2407,7 @@ async function run() {
   delayedPaneGet = null;
   await until(
     () =>
-      document
-        .querySelector(
-          ".world-managed-window.is-active .workspace-inspector-agent-identity",
-        )
-        ?.textContent?.includes("Reviewer") &&
+      reviewerInspectorActive() &&
       store.get().selectedPaneId === "reviewer-pane",
     "shared navigator exact Reviewer focus",
   );
@@ -2448,11 +2446,7 @@ async function run() {
   reviewerTopTab?.click();
   await until(
     () =>
-      document
-        .querySelector(
-          ".world-managed-window.is-active .workspace-inspector-agent-identity",
-        )
-        ?.textContent?.includes("Reviewer") &&
+      reviewerInspectorActive() &&
       store.get().selectedPaneId === "reviewer-pane",
     "top workspace tab exact Reviewer Inspector",
   );
@@ -2504,11 +2498,7 @@ async function run() {
     "created-seat admission deadline",
   );
   check(
-    document
-      .querySelector(
-        ".world-managed-window.is-active .workspace-inspector-agent-identity",
-      )
-      ?.textContent?.includes("Reviewer") === true,
+    reviewerInspectorActive() === true,
     "created-seat deadline replaced the prior Reviewer Inspector",
   );
   rejectNextPaneGetId = null;
@@ -2516,11 +2506,7 @@ async function run() {
   delayedPaneGet = null;
   await settle();
   check(
-    document
-      .querySelector(
-        ".world-managed-window.is-active .workspace-inspector-agent-identity",
-      )
-      ?.textContent?.includes("Reviewer") === true &&
+    reviewerInspectorActive() === true &&
       calls.filter(
         ({ method, params }) =>
           method === "pane.get" && params.pane_id === "created-pane-3",
@@ -2731,15 +2717,7 @@ async function run() {
   );
 
   await openAgent("Reviewer");
-  await until(
-    () =>
-      document
-        .querySelector(
-          ".world-managed-window.is-active .workspace-inspector-agent-identity",
-        )
-        ?.textContent?.includes("Reviewer"),
-    "Reviewer Inspector",
-  );
+  await until(() => reviewerInspectorActive(), "Reviewer Inspector");
   const builderWindow = document.querySelector<HTMLElement>(
     '[role="dialog"][aria-label="Builder Inspector"]',
   )!;
@@ -3064,12 +3042,7 @@ async function run() {
 
   await openAgent("Reviewer");
   await until(
-    () =>
-      document
-        .querySelector(
-          ".world-managed-window.is-active .workspace-inspector-agent-identity",
-        )
-        ?.textContent?.includes("Reviewer"),
+    () => reviewerInspectorActive(),
     "Reviewer replacement Inspector",
   );
   check(
@@ -3248,12 +3221,7 @@ async function run() {
   await until(() => boardTarget("Reviewer"), "Reviewer Board target");
   flushSync(() => boardTarget("Reviewer")!.click());
   await until(
-    () =>
-      document
-        .querySelector(
-          ".world-managed-window.is-active .workspace-inspector-agent-identity",
-        )
-        ?.textContent?.includes("Reviewer"),
+    () => reviewerInspectorActive(),
     "Reviewer docked Inspector before Spaces handoff",
   );
   // Chat reads the Reviewer's harness, so Board opens it on Chat.
@@ -3600,6 +3568,15 @@ async function run() {
       [...worktreeChoices].every((radio) => !radio.checked),
     "Ambiguous worktrees must offer two unselected native radio choices",
   );
+  if (document.documentElement.dataset.layout === "mobile")
+    check(
+      Boolean(
+        document.querySelector(
+          '.workspace-inspector-location-sheet[aria-modal="true"] .mobile-sheet-handle',
+        ),
+      ),
+      "The phone location chooser must use the shared dialog/handle sheet pattern",
+    );
   const worktreeRequestsStart = calls.length;
   (worktreeChoices[0] as HTMLInputElement).click();
   await until(
@@ -3872,13 +3849,7 @@ async function run() {
   viewSelect.value = "board";
   viewSelect.dispatchEvent(new Event("change", { bubbles: true }));
   await until(
-    () =>
-      document.querySelector(".board") &&
-      document
-        .querySelector(
-          ".world-managed-window.is-active .workspace-inspector-agent-identity",
-        )
-        ?.textContent?.includes("Reviewer"),
+    () => document.querySelector(".board") && reviewerInspectorActive(),
     "qualified Inspector conversations after Spaces handoff",
   );
   await settle();
@@ -3900,12 +3871,7 @@ async function run() {
   await until(() => boardTarget("Reviewer"), "Reviewer before retirement");
   flushSync(() => boardTarget("Reviewer")!.click());
   await until(
-    () =>
-      document
-        .querySelector(
-          ".world-managed-window.is-active .workspace-inspector-agent-identity",
-        )
-        ?.textContent?.includes("Reviewer"),
+    () => reviewerInspectorActive(),
     "selected Reviewer before retirement",
   );
   await settle();
@@ -3920,6 +3886,14 @@ async function run() {
     () => reviewerInspector.getAttribute("data-view") === "files",
     "Reviewer Files state before session replacement",
   );
+  const worktreeBeforeReplacement = calls.length;
+  const replacementSession = {
+    source: "herdr:claude",
+    agent: "claude",
+    kind: "id",
+    value: "review-b",
+  };
+  Object.assign(panes[1]!, { agent_session: replacementSession });
   panes[1]!.display_agent = "Reviewer Next";
   agents = [
     {
@@ -3928,7 +3902,7 @@ async function run() {
       agent: "claude",
       display_agent: "Reviewer Next",
       task_summary: "Reviewing the replacement session",
-      agent_session: { agent: "claude", kind: "id", value: "review-b" },
+      agent_session: replacementSession,
     },
   ];
   worldRevision += 1;
@@ -3948,10 +3922,18 @@ async function run() {
     "reconciled replacement Reviewer session",
   );
   check(
-    document
-      .querySelector(".world-managed-window.is-active .workspace-inspector")
-      ?.textContent?.includes("Reviewing the replacement session") === true,
-    "replacement session did not refresh the Inspector context",
+    calls.slice(worktreeBeforeReplacement).some(({ method, params }) => {
+      const subject = params.subject as
+        | { paneId?: string; sessionFingerprint?: string | null }
+        | undefined;
+      return (
+        method === "agent_worktree.get" &&
+        subject?.paneId === "reviewer-pane" &&
+        typeof subject.sessionFingerprint === "string" &&
+        /^[a-f0-9]{64}$/u.test(subject.sessionFingerprint)
+      );
+    }),
+    "replacement session did not refresh its qualified worktree context",
   );
 
   const splitBuilderWindow = document.querySelector<HTMLElement>(

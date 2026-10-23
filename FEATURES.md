@@ -486,7 +486,8 @@ checkout report, then its branch matched in a scoped `git worktree list`.
 The location line names the selected tree and branch; its source mark explains
 **Live pane**, **Session cwd**, **Agent report** or **Branch match**.
 
-Open that location popover for **Worktree** candidates and **Refresh**. Pick a
+Open that location popover for **Worktree** candidates and **Refresh**; phones
+use the same choices in a bottom sheet. Pick a
 radio choice to apply it to Files and Changes together. Repository-listed
 alternatives are viewing choices, never branch ownership claims. Equal-rank
 matches need a choice; stale or replaced-session evidence stops resource access
