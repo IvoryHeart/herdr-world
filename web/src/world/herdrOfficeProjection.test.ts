@@ -70,6 +70,8 @@ describe("Pixel Office projection", () => {
     // Town calls an agent by its Herdr name, not its harness.
     expect(agent.displayLabel).toBe("firstmate");
     expect(agent.agentName).toBe("firstmate");
+    // Its harness still picks its artwork, whatever its name.
+    expect(agent.harness).toBe("claude");
   });
 
   test("a reception chip names the waiting agent by its Herdr name", () => {
