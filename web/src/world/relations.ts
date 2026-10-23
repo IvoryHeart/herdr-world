@@ -240,15 +240,38 @@ export function relationsDeriver() {
  */
 export function anyRelation(
   relations: RelationsDocument,
-  terminals: Iterable<TerminalRef & { tokens?: unknown }>,
+  /** Calls `see` for each terminal until it returns true. */
+  each: (
+    see: (connectionId: string, terminalId: string, tokens: unknown) => boolean,
+  ) => void,
 ): boolean {
-  const saved = relations.spawns.length > 0 || relations.groups.length > 0;
-  const listed = new Set<string>();
-  for (const terminal of terminals) {
-    const tokens = terminal.tokens as Record<string, unknown> | undefined;
-    if (tokens?.spawned_by || tokens?.spawned_by_terminal) return true;
-    if (saved) listed.add(terminalKey(terminal));
+  // Only the saved terminals are looked up, by terminal ID, so a large
+  // snapshot costs no key per pane.
+  const wanted = new Map<string, Set<string>>();
+  const want = (ref: TerminalRef) => {
+    let connections = wanted.get(ref.terminal_id);
+    if (!connections) wanted.set(ref.terminal_id, (connections = new Set()));
+    connections.add(ref.connection_id);
+  };
+  for (const claim of relations.spawns) {
+    want(claim.child);
+    want(claim.parent);
   }
+  for (const group of relations.groups) group.members.forEach(want);
+  const listed = new Set<string>();
+  let stamped = false;
+  each((connectionId, terminalId, tokens) => {
+    const stamp = tokens as Record<string, unknown> | undefined;
+    if (stamp?.spawned_by || stamp?.spawned_by_terminal)
+      return (stamped = true);
+    if (wanted.get(terminalId)?.has(connectionId))
+      listed.add(
+        terminalKey({ connection_id: connectionId, terminal_id: terminalId }),
+      );
+    return false;
+  });
+  if (stamped) return true;
+  if (!listed.size) return false;
   const has = (ref: TerminalRef) => listed.has(terminalKey(ref));
   return (
     relations.spawns.some((claim) => has(claim.child) && has(claim.parent)) ||
@@ -271,20 +294,19 @@ export function useRelations(
   const relations = document?.relations ?? NO_RELATIONS;
   const anything = useMemo(
     () =>
-      anyRelation(
-        relations,
-        (function* () {
-          for (const host of hosts)
-            for (const space of host.spaces)
-              for (const leaf of space.children)
-                yield {
-                  connection_id: host.connectionId,
-                  terminal_id: leaf.terminalId,
-                  tokens: (leaf.pane as { tokens?: unknown } | undefined)
-                    ?.tokens,
-                };
-        })(),
-      ),
+      anyRelation(relations, (see) => {
+        for (const host of hosts)
+          for (const space of host.spaces)
+            for (const leaf of space.children)
+              if (
+                see(
+                  host.connectionId,
+                  leaf.terminalId,
+                  (leaf.pane as { tokens?: unknown } | undefined)?.tokens,
+                )
+              )
+                return;
+      }),
     [relations, hosts],
   );
   const inputs = useMemo(
