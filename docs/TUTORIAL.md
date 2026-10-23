@@ -111,7 +111,9 @@ changes what you see and does not disconnect hosts or retarget open terminals.
 
 <a id="town"></a>
 
-1. Open **Town** from the view switcher, or return to the World root URL. Each
+1. Open **Town** from the view switcher, or return to the World root URL. Town
+   opens in Zen, full-bleed: use the view picker at the top edge (on a phone,
+   the corner button) to switch views, or **Exit Zen** to show the bars. Each
    host is a building, each workspace a room, each tab a table and each pane a
    seat. Plain terminal panes show a prompt rather than an agent character.
 2. Use **+** and **−** to move between town, building, room and desk detail;
@@ -139,6 +141,10 @@ changes what you see and does not disconnect hosts or retarget open terminals.
    status changes. To open terminals instead, set **Menu → Town opens** to
    **Terminal**; that tap also brings the agent back and, like the chat, does
    not mark its work reviewed.
+   Zoom into a room: an agent with a quest (its own todo list, plan, Codex goal
+   or `/loop`) shows a flag and progress bar at its seat. Open its chat to
+   read the quest log above the conversation: each objective as pending,
+   active, done or blocked.
 5. Read the question before using an answer button: it sends the offered key to
    that live pane. When no supported choices appear, use **Open chat** to reply
    in the agent's window, or **Open terminal** in the card's header (or the
@@ -228,6 +234,8 @@ on your phone and desktop.
    shells looks like a small terminal. A working agent's tab pulses (as does the
    selected tab); idle, finished and waiting tabs stay still, and the **⋯** menu
    turns the pulses off. Each workspace card counts its agents by status.
+   An agent's card shows a ⚑ chip with its quest progress, such as 2/5; hover
+   the chip for the quest and its current step.
    The round **+** on a workspace's right edge (shown on hover or selection)
    opens **New tab**: choose a Terminal, Claude or Codex, optionally name the
    tab, and press **Create**; **+** beside a host's name creates a workspace. Select a workspace or

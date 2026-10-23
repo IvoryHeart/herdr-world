@@ -128,6 +128,7 @@ async function run() {
     message("a1", "assistant", "It describes the **demo** project."),
   ]);
   let sendResult: unknown = { status: "sent" };
+  let answerAcknowledged = false;
   bridge.connection = () => ({
     connectionId: "test",
     generation: 1,
@@ -137,6 +138,15 @@ async function run() {
     call: async (method: string, params: Record<string, unknown> = {}) => {
       calls.push({ method, params });
       if (method === "agent_conversation.send") return sendResult;
+      if (method === "agent_conversation.answer")
+        return {
+          status: "sent",
+          number: "2",
+          label: "Yes, always",
+          acknowledged: answerAcknowledged,
+          unconfirmed_reason: answerAcknowledged ? null : "session_changed",
+          prompt_fingerprint: params.prompt_fingerprint,
+        };
       if (method === "pane.send_input") return {};
       if (method === "agent_conversation.get") return reply;
       if (
@@ -677,6 +687,150 @@ async function run() {
       "A missing integration must offer to copy its command and refresh",
     );
 
+    // A blocked agent's question becomes an ask card with its whole
+    // request. A number answers only while that card has focus; Chat then
+    // says it sent the key, and that it was answered once the agent moved on.
+    const asking = {
+      question: ["Do you want to proceed?"],
+      request: ["Bash command", "echo safe", "git push -u origin agent/demo"],
+      options: [
+        { number: "1", label: "Yes", key: "1" },
+        { number: "2", label: "Yes, always", key: "2" },
+        { number: "3", label: "No, and tell the agent what to do", key: "3" },
+      ],
+      fingerprint: "f1",
+    };
+    reply = {
+      ...conversation([message("u7", "user", "Push it")], "blocked"),
+      pending_prompt: asking,
+    };
+    render("blocked", true, 50);
+    push();
+    await settle();
+    const card = container.querySelector<HTMLElement>(".agent-chat-ask")!;
+    check(
+      card.querySelector("pre")?.textContent ===
+        "Bash command\necho safe\ngit push -u origin agent/demo" &&
+        card.textContent?.includes("Do you want to proceed?") === true &&
+        card.querySelectorAll(".agent-chat-ask-options button").length === 3,
+      "A blocked agent's question must show its whole request and options",
+    );
+    const answers = () =>
+      calls.filter((call) => call.method === "agent_conversation.answer");
+    // Outside the card, a number answers nothing.
+    container
+      .querySelector<HTMLElement>(".agent-chat-list")!
+      .dispatchEvent(new KeyboardEvent("keydown", { key: "2", bubbles: true }));
+    await settle();
+    check(answers().length === 0, "A number outside the card must not answer");
+    // A held key repeats nothing.
+    card.focus();
+    card.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "2", bubbles: true, repeat: true }),
+    );
+    await settle();
+    check(answers().length === 0, "A repeated key must not answer");
+    card.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "2", bubbles: true }),
+    );
+    await settle();
+    check(
+      answers().length === 1 &&
+        answers()[0]!.params.key === "2" &&
+        answers()[0]!.params.prompt_fingerprint === "f1",
+      `A number on the focused card must answer with the prompt's fingerprint (${JSON.stringify(answers()[0]?.params)})`,
+    );
+    check(
+      (
+        container.querySelector(".agent-chat-answered")?.textContent ?? ""
+      ).startsWith("Sent 2 · Yes, always") &&
+        !container.querySelector(".agent-chat-ask"),
+      "A sent answer must replace the card with what was sent",
+    );
+    check(
+      (
+        container.querySelector(".agent-chat-answered")?.textContent ?? ""
+      ).includes("another session now, so the key may have reached it"),
+      "An unconfirmed answer must say why Chat cannot confirm it",
+    );
+    // The receipt survives the transcript moving on.
+    reply = {
+      ...reply,
+      messages: [...reply.messages, message("a7", "assistant", "Pushed.")],
+      pending_prompt: null,
+    };
+    push();
+    await settle();
+    check(
+      container.querySelector(".agent-chat-answered") !== null,
+      "The answer's receipt must stay after the transcript updates",
+    );
+    // A prompt Chat cannot read safely offers the Terminal, never a guess.
+    reply = {
+      ...reply,
+      pending_prompt: {
+        question: ["Here is the plan:", "1. Inspect", "2. Test"],
+        request: [],
+        options: [],
+        fingerprint: "f2",
+      },
+    };
+    push();
+    await settle();
+    check(
+      container.querySelectorAll(".agent-chat-ask-options button").length ===
+        0 &&
+        (
+          container.querySelector(".agent-chat-ask")?.textContent ?? ""
+        ).includes("Answer in the Terminal"),
+      "An unreadable prompt must offer the Terminal and no answers",
+    );
+    // Two Chats with questions: a key on one card never answers the other.
+    reply = {
+      ...reply,
+      pending_prompt: { ...asking, fingerprint: "f3" },
+    };
+    root.render(
+      <div>
+        <AgentChat
+          pane={pane("blocked", 51)}
+          active
+          onOpenTerminal={() => {}}
+          onClose={() => {}}
+        />
+        <AgentChat
+          pane={{ ...pane("blocked", 51), pane_id: "q" }}
+          active
+          onOpenTerminal={() => {}}
+          onClose={() => {}}
+        />
+      </div>,
+    );
+    await settle();
+    await settle();
+    const cards = container.querySelectorAll<HTMLElement>(".agent-chat-ask");
+    const before = answers().length;
+    // This time the agent moves on, so the receipt says it was answered.
+    answerAcknowledged = true;
+    cards[0]!.focus();
+    cards[0]!.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "1", bubbles: true }),
+    );
+    await settle();
+    check(
+      cards.length === 2 &&
+        answers().length === before + 1 &&
+        answers()[before]!.params.pane_id === "p",
+      `One key must answer only the focused Chat (${answers().length - before})`,
+    );
+    check(
+      (
+        container.querySelector(".agent-chat-answered")?.textContent ?? ""
+      ).startsWith("You answered 2 · Yes, always"),
+      "An answer the agent moved on from must say it was answered",
+    );
+    render("working", true, 52);
+    await settle();
     // The Now bar: Herdr's status, the task from the terminal title and the
     // time since the status changed; the step running now has its own timer.
     reply = {

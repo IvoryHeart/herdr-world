@@ -1,7 +1,6 @@
 import {
   ChevronDown,
   ChevronUp,
-  Trash2,
   EllipsisVertical,
   GitPullRequest,
   Maximize2,
@@ -9,99 +8,102 @@ import {
   Pin,
   Plus,
   Sparkles,
+  Trash2,
 } from "lucide-react";
 import {
+  type CSSProperties,
   lazy,
-  startTransition,
+  type PointerEvent as ReactPointerEvent,
   Suspense,
-  useDeferredValue,
+  startTransition,
   useCallback,
+  useDeferredValue,
   useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
   useState,
-  type CSSProperties,
-  type PointerEvent as ReactPointerEvent,
 } from "react";
 import { createPortal } from "react-dom";
 import { worldLocalStorage } from "../browserStorage";
+import { QuestChip } from "../components/QuestLog";
+import { useAgentQuests } from "./agentQuests";
 import {
   anchorFor,
   confirmed,
   nextWitness,
   targetOf,
 } from "./board/boardAnchors";
+import { publishBoardCardPins } from "./board/boardCardPins";
 import {
-  NOTE_COLORS,
-  CARD_COLORS,
-  type CardColor,
-  sharedBoardStore,
-  useBoardDocument,
+  type BoardAnchor,
   type BoardDocumentStore,
   type BoardEnd,
-  type BoardAnchor,
   type BoardNote,
   type BoardOp,
   type BoardString,
+  CARD_COLORS,
+  type CardColor,
+  NOTE_COLORS,
+  sharedBoardStore,
+  useBoardDocument,
 } from "./board/boardDocument";
 import {
-  boardStatusOrder,
-  projectBoard,
+  createDraftStore,
+  KEPT_DRAFTS_KEY,
+  type KeptDraft,
+  useKeptDrafts,
+} from "./board/boardDrafts";
+import {
+  type GestureEffect,
+  type GestureEvent,
+  type GestureTarget,
+  HOLD_MS,
+  initialGesture,
+  stepGesture,
+  waitsForHold,
+} from "./board/boardGesture";
+import {
   type BoardHost,
   type BoardModel,
   type BoardPane,
   type BoardTab,
   type BoardWorkspace,
+  boardStatusOrder,
+  projectBoard,
 } from "./board/boardModel";
 import {
-  HOLD_MS,
-  initialGesture,
-  stepGesture,
-  waitsForHold,
-  type GestureEffect,
-  type GestureEvent,
-  type GestureTarget,
-} from "./board/boardGesture";
-import { createFrameLoop, type FrameLoop } from "./board/boardScheduler";
-import { worldMotionPreference } from "./worldFrameScheduler";
-import { DEVTOOLS, NO_TRACE } from "./devtools/flag";
-import { openTrace, rememberTrace, traceGesture } from "./devtools/trace";
-import { TraceOverlay } from "./devtools/TraceOverlay";
-import {
-  KEPT_DRAFTS_KEY,
-  createDraftStore,
-  useKeptDrafts,
-  type KeptDraft,
-} from "./board/boardDrafts";
-import {
   cool,
-  stepPhysics,
-  warm,
   type PhysicsCard,
   type PhysicsState,
+  stepPhysics,
+  warm,
 } from "./board/boardPhysics";
 import {
-  DEFAULT_SIZE,
+  type BoardLayout,
   clearSpots,
   cloneLayout,
+  DEFAULT_SIZE,
   emptyLayout,
+  type Point,
   placeNew,
   positions,
-  rectAt,
-  tidy,
-  type BoardLayout,
-  type Point,
   type Rect,
+  rectAt,
   type Size,
+  tidy,
 } from "./board/boardPlacement";
-import type { WorldAgentStatus, WorldObject } from "./worldObject";
-import type { WorldCanvasAnchor } from "./worldConnectorGeometry";
+import { createFrameLoop, type FrameLoop } from "./board/boardScheduler";
+import { WorkLens } from "./board/WorkLens";
+import { DEVTOOLS, NO_TRACE } from "./devtools/flag";
+import { TraceOverlay } from "./devtools/TraceOverlay";
+import { openTrace, rememberTrace, traceGesture } from "./devtools/trace";
+import { defaultTerminalColor, TERMINAL_COLOR_HEX } from "./terminalColor";
 import { WorldSearchResults } from "./WorldSearchResults";
 import { WorldViewToolbar } from "./WorldViewToolbar";
-import { defaultTerminalColor, TERMINAL_COLOR_HEX } from "./terminalColor";
-import { publishBoardCardPins } from "./board/boardCardPins";
-import { WorkLens } from "./board/WorkLens";
+import type { WorldCanvasAnchor } from "./worldConnectorGeometry";
+import { worldMotionPreference } from "./worldFrameScheduler";
+import type { WorldAgentStatus, WorldObject } from "./worldObject";
 import "./board/board.css";
 
 /**
@@ -442,6 +444,8 @@ export default function BoardView({
   // never holds up typing in a terminal.
   const shownWorld = useDeferredValue(world);
   const fullModel = useMemo(() => projectBoard(shownWorld), [shownWorld]);
+  // Each agent's quest, as a progress chip on its card.
+  const quests = useAgentQuests(shownWorld.leaves);
   // A large board's first render is only the frame; its cards follow in a
   // transition, which yields to input while it builds.
   const [built, setBuilt] = useState(
@@ -3179,6 +3183,9 @@ export default function BoardView({
                     )}
                     <span className="board-label">{tab.label}</span>
                     {pinnedKeys.has(tab.key) ? <PinBadge /> : null}
+                    {!multi && pane?.isAgent && quests.get(pane.leaf.id) ? (
+                      <QuestChip quest={quests.get(pane.leaf.id)!} />
+                    ) : null}
                     <span className="board-who">
                       {multi
                         ? `${tab.panes.length} panes`
@@ -3209,6 +3216,9 @@ export default function BoardView({
                           <span className="board-pane-name">
                             {paneName(row)}
                           </span>
+                          {row.isAgent && quests.get(row.leaf.id) ? (
+                            <QuestChip quest={quests.get(row.leaf.id)!} />
+                          ) : null}
                           <span className="board-pane-state">
                             {row.isAgent ? STATUS_LABEL[row.status] : "shell"}
                           </span>

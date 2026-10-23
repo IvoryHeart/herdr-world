@@ -3,8 +3,10 @@
 //   bun scripts/chat-conformance.ts [--limit N] [--json]
 //
 // Runs every harness reader over the real transcripts on this machine and
-// prints pass/fail counts per harness and harness version. It never prints
-// transcript content, file paths or session IDs: only counts, harness names,
+// prints pass/fail counts per harness and harness version, and how many
+// transcripts have a quest from each source (todo, plan, goal or loop). It
+// never prints transcript content, file paths or session IDs: only counts,
+// harness names,
 // check names and canonical numeric versions (any other version string is
 // counted as "other"). Reader errors are counted, not printed.
 //
@@ -36,6 +38,7 @@ import {
 import { readSessionProjection } from "../server/src/agent/session-projection-cache";
 import { piAgentDirectory } from "../server/src/agent/session-resolver";
 import type { SessionFile } from "../server/src/agent/session-types";
+import type { QuestSource } from "../server/src/agent/quest";
 
 type Harness = {
   agent: string;
@@ -188,6 +191,8 @@ type Tally = {
   subagent: number;
   failures: Partial<Record<ConformanceCheck, number>>;
   notes: Partial<Record<ConformanceNote, number>>;
+  /** Transcripts whose quest came from each source, or had none. */
+  quests: Partial<Record<QuestSource | "none", number>>;
 };
 
 async function run() {
@@ -201,6 +206,7 @@ async function run() {
       let version = "unknown";
       let result: ReturnType<typeof conformance>;
       let subagent = false;
+      let quest: QuestSource | "none" | null = null;
       try {
         const file = harness.describe
           ? await harness.describe(path)
@@ -214,6 +220,7 @@ async function run() {
         version = versionToken(projection.trajectory.agent.version);
         subagent = (await harness.isSubagent?.(path)) ?? false;
         result = conformance(conversationMessages(projection.entries));
+        quest = projection.quest?.source ?? "none";
       } catch {
         result = { failures: ["read"], notes: [] };
       }
@@ -223,10 +230,12 @@ async function run() {
         subagent: 0,
         failures: {},
         notes: {},
+        quests: {},
       });
       tally.files += 1;
       if (subagent) tally.subagent += 1;
       if (result.failures.length === 0) tally.pass += 1;
+      if (quest) tally.quests[quest] = (tally.quests[quest] ?? 0) + 1;
       for (const failure of result.failures)
         tally.failures[failure] = (tally.failures[failure] ?? 0) + 1;
       // A subagent thread has no person in it, so no exchange is expected.
@@ -255,6 +264,7 @@ async function run() {
           .map(([name, count]) => `${name} ${count}`)
           .join(", ");
       const failed = list(tally.failures);
+      const quests = list(tally.quests);
       const noted = list({
         ...(tally.subagent ? { subagent_threads: tally.subagent } : {}),
         ...tally.notes,
@@ -262,7 +272,8 @@ async function run() {
       console.log(
         `${agent} ${version}: ${tally.pass}/${tally.files} pass` +
           (failed ? `; failed: ${failed}` : "") +
-          (noted ? `; noted: ${noted}` : ""),
+          (noted ? `; noted: ${noted}` : "") +
+          (quests ? `; quests: ${quests}` : ""),
       );
     }
   }
