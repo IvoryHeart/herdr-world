@@ -23,11 +23,15 @@ export type OfficePresentationBounds = {
   readonly [K in keyof typeof OFFICE_PRESENTATION_BOUNDS]: number;
 };
 
-/** Town rooms render more desks; every other bound matches Office. */
+/**
+ * Town rooms extend to fit real rooms (townLayout's TOWN_MAX_RENDERED_DESKS),
+ * and seat every agent at those desks; every other bound matches Office.
+ */
 export const TOWN_PRESENTATION_BOUNDS: OfficePresentationBounds = Object.freeze(
   {
     ...OFFICE_PRESENTATION_BOUNDS,
-    desksPerRoom: 19,
+    desksPerRoom: 127,
+    roomAgentsPerRoom: 127 * 4,
   },
 );
 
@@ -503,14 +507,14 @@ export function projectWorldOffice(
       ),
     );
   const rooms = presentedRooms.map((entry) => {
-    const selectedDesk = (desk: OfficeDesk) =>
-      entry.source.id === selectedSpaceId &&
-      desk.tabRef.nativeId === selectedLeaf?.tabId;
-    const desks = boundedWithPriority(
+    const desks = boundedDesks(
       entry.desks,
+      entry.agents,
       bounds.desksPerRoom,
-      (desk) => selectedDesk(desk) || pinned(desk),
-      selectedDesk,
+      (desk) =>
+        entry.source.id === selectedSpaceId &&
+        desk.tabRef.nativeId === selectedLeaf?.tabId,
+      pinned,
     ).map((desk) => {
       const devices = boundedWithPriority(
         projectPaneDevices(entry.source.children, desk),
@@ -1230,6 +1234,61 @@ function boundedWithPriority<T>(
   );
   return values.filter((value) => admitted.has(value));
 }
+
+/**
+ * A room's desks within its bound, in tab order. When a room has more, the
+ * selected desk, then pinned desks, then the newest tabs (Herdr appends new tabs) always stay, then
+ * desks whose agents need the user, are working or are unknown, then finished
+ * ones; idle and empty desks are hidden first, and among equals newer tabs
+ * stay. With more busy desks than the bound, the oldest of them are hidden
+ * too; every hidden desk is counted on its room (`omittedDeskCount`).
+ */
+function boundedDesks(
+  desks: readonly OfficeDesk[],
+  agents: readonly {
+    deskKey: string | null;
+    semanticStatus: WorldAgentStatus;
+  }[],
+  limit: number,
+  selected: (desk: OfficeDesk) => boolean,
+  pinned: (desk: OfficeDesk) => boolean,
+) {
+  if (desks.length <= limit) return [...desks];
+  const need = new Map<string, number>();
+  for (const agent of agents) {
+    if (!agent.deskKey) continue;
+    const rank = DESK_STATUS_RANK[agent.semanticStatus];
+    need.set(agent.deskKey, Math.min(need.get(agent.deskKey) ?? 9, rank));
+  }
+  const newest = desks.length - NEWEST_DESKS_KEPT;
+  const rank = (desk: OfficeDesk, index: number) =>
+    selected(desk)
+      ? -3
+      : pinned(desk)
+        ? -2
+        : index >= newest
+          ? -1
+          : (need.get(desk.key) ?? DESK_STATUS_RANK.idle);
+  const admitted = new Set(
+    desks
+      .map((desk, index) => ({ desk, index, rank: rank(desk, index) }))
+      .sort((left, right) => left.rank - right.rank || right.index - left.index)
+      .slice(0, limit)
+      .map(({ desk }) => desk),
+  );
+  return desks.filter((desk) => admitted.has(desk));
+}
+
+/** Past the bound, this many newest tabs always keep a desk. */
+const NEWEST_DESKS_KEPT = 3;
+
+const DESK_STATUS_RANK: Record<WorldAgentStatus, number> = {
+  blocked: 0,
+  working: 1,
+  unknown: 2,
+  done: 3,
+  idle: 4,
+};
 
 function compareAgents(left: OfficeAgent, right: OfficeAgent) {
   return left.key.localeCompare(right.key);
