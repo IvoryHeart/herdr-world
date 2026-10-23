@@ -13,8 +13,9 @@ staging="$(mktemp -d "$plugin_root/server/.plugin-install.XXXXXX")"
 trap 'rm -rf "$staging"' EXIT
 trap 'exit 1' HUP INT TERM
 
+# Herdr runs this build, so the plugin never upgrades Herdr from inside it.
 HERDR_WORLD_VERSION="$version" HERDR_WORLD_INSTALL_DIR="$staging" \
-  sh "$plugin_root/scripts/install-herdr-world.sh"
+  HERDR_WORLD_SKIP_HERDR=1 sh "$plugin_root/scripts/install-herdr-world.sh"
 if ! native_version="$("$staging/herdr-world" plugin version)" ||
   [ "$native_version" != "herdr-world $version" ]; then
   printf 'Herdr World plugin: this release has no native plugin commands. Build an unreleased checkout with `bun scripts/world-plugin.ts build-source`, then `herdr plugin link .`, or select a published tag that includes native plugin support.\n' >&2

@@ -7,14 +7,51 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  renameSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { rm } from "node:fs/promises";
 import { setTimeout as delay } from "node:timers/promises";
 import { basename, delimiter, join, resolve } from "node:path";
+import { VERIFIED_HERDR_VERSION } from "../server/src/herdr/release";
 
 const repository = "IvoryHeart/herdr-world";
+
+/**
+ * Every full CI run installs the latest stable release as the upgrade baseline
+ * on six platforms. Fetching it from the public release each time counted about
+ * a dozen downloads per run, which drowned real usage in the release's download
+ * counts. CI keeps one copy per tag and platform in its cache directory; this
+ * loopback mirror serves it to the baseline's own installer (which still checks
+ * the published checksum), and only a cache miss fetches from the release.
+ */
+export function releaseMirror(
+  cacheDir: string,
+  upstream: string,
+  download: (url: string) => Promise<Response> = fetch,
+) {
+  mkdirSync(cacheDir, { recursive: true });
+  return Bun.serve({
+    hostname: "127.0.0.1",
+    port: 0,
+    async fetch(request) {
+      const name = new URL(request.url).pathname.slice(1);
+      if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(name))
+        return new Response("missing", { status: 404 });
+      const path = join(cacheDir, name);
+      if (!existsSync(path)) {
+        const response = await download(`${upstream}/${name}`);
+        if (!response.ok)
+          return new Response("missing", { status: response.status });
+        const staged = `${path}.${process.pid}.part`;
+        writeFileSync(staged, new Uint8Array(await response.arrayBuffer()));
+        renameSync(staged, path);
+      }
+      return new Response(Bun.file(path));
+    },
+  });
+}
 
 // Windows may retain executable/file handles briefly after child exit. Yield
 // during bounded retries; a persistent lock still fails the required job.
@@ -408,12 +445,20 @@ export async function verify() {
       build.length > 0,
       "Baseline must have an applicable plugin installer",
     );
-    for (const entry of build)
-      await command(entry.command, upgrade, {
-        ...state.env,
-        PATH: process.env.PATH,
-        HERDR_WORLD_RELEASE_BASE_URL: `https://github.com/${repository}/releases/download/${tag}`,
-      });
+    const mirror = releaseMirror(
+      process.env.INSTALLER_BASELINE_ASSETS ?? join(root, "baseline-assets"),
+      `https://github.com/${repository}/releases/download/${tag}`,
+    );
+    try {
+      for (const entry of build)
+        await command(entry.command, upgrade, {
+          ...state.env,
+          PATH: process.env.PATH,
+          HERDR_WORLD_RELEASE_BASE_URL: mirror.url.origin,
+        });
+    } finally {
+      mirror.stop(true);
+    }
     const binary = join(upgrade, "server", executable);
     const launcher = join(upgrade, "server/herdr-world-plugin.exe");
     assert.equal(
@@ -502,6 +547,9 @@ export async function verify() {
         ...state.env,
         HERDR_WORLD_VERSION: version,
         HERDR_WORLD_INSTALL_DIR: directory,
+        // The Herdr step is covered by fakes in unit tests; this job proves
+        // the World replacement without downloading a real Herdr.
+        HERDR_WORLD_SKIP_HERDR: "1",
       };
       copyFileSync(previousBinary, join(directory, executable));
       assert.equal(
@@ -528,6 +576,10 @@ export async function verify() {
       assert.equal(digest(join(directory, executable)), digest(binary));
       report.cases.push("standalone shell installer replacement without Bun");
     }
+    await exerciseHerdrStep(root, binary, version, tag, environment);
+    report.cases.push(
+      "candidate herdr upgrade pins the World plugin and installs harness integrations through a fake Herdr",
+    );
     report.status = "passed";
   } finally {
     host.stop(true);
@@ -538,6 +590,98 @@ export async function verify() {
     await removeInstallerFixture(root);
   }
   console.info(JSON.stringify(report, null, 2));
+}
+
+/**
+ * A fake `herdr` for the Herdr step: it reports the verified version (so no
+ * real Herdr is downloaded), records every call, and answers `integration
+ * status` and `plugin list --json` from the fixture environment. Compiled with
+ * the harness's Bun so it is a native executable on every runner, including
+ * Windows.
+ */
+const FAKE_HERDR_SOURCE = `
+import { appendFileSync } from "node:fs";
+const args = process.argv.slice(2);
+appendFileSync(process.env.FAKE_HERDR_LOG, JSON.stringify(args) + "\\n");
+const verb = args.join(" ");
+if (verb === "--version") console.log("herdr " + process.env.FAKE_HERDR_VERSION);
+else if (verb === "integration status")
+  console.log(["codex: current (v8) (fake)", "claude: outdated (v9 < v10) (fake)", "pi: not installed (fake)"].join("\\n"));
+else if (verb === "plugin list --json")
+  console.log(JSON.stringify({ result: { plugins: [{ plugin_id: "ivoryheart.herdr-world", version: process.env.FAKE_HERDR_PLUGIN_VERSION, source: { kind: "github" } }] } }));
+`;
+
+/**
+ * Real: the candidate herdr-world executable, its CLI, configuration, process
+ * spawning and report on this native platform. Faked: the Herdr binary, the
+ * harness commands (codex and claude present, pi absent) and the plugin
+ * registry, so nothing is installed into a real Herdr or fetched from GitHub.
+ */
+export async function exerciseHerdrStep(
+  root: string,
+  world: string,
+  version: string,
+  tag: string,
+  environment: (directory: string) => { env: NodeJS.ProcessEnv },
+) {
+  const directory = join(root, "herdr-step");
+  const harnesses = join(directory, "harnesses");
+  mkdirSync(harnesses, { recursive: true });
+  const fakeSource = join(directory, "fake-herdr.ts");
+  writeFileSync(fakeSource, FAKE_HERDR_SOURCE);
+  const herdr = join(
+    directory,
+    process.platform === "win32" ? "herdr.exe" : "herdr",
+  );
+  await command(
+    [process.execPath, "build", "--compile", fakeSource, "--outfile", herdr],
+    directory,
+    process.env,
+  );
+  for (const harness of ["codex", "claude"])
+    writeFileSync(
+      join(
+        harnesses,
+        process.platform === "win32" ? `${harness}.cmd` : harness,
+      ),
+      "",
+      { mode: 0o755 },
+    );
+  const log = join(directory, "herdr-calls.jsonl");
+  const { env } = environment(directory);
+  const output = await command(
+    [world, "herdr", "upgrade", "--json"],
+    directory,
+    {
+      ...env,
+      PATH: `${harnesses}${delimiter}${env.PATH}`,
+      HERDR_BIN_PATH: herdr,
+      FAKE_HERDR_LOG: log,
+      FAKE_HERDR_VERSION: VERIFIED_HERDR_VERSION,
+      FAKE_HERDR_PLUGIN_VERSION: tag.slice(1),
+    },
+  );
+  const result = JSON.parse(output.split("\n").at(-1)!);
+  assert.deepEqual(result.integrations, [
+    { target: "codex", action: "current" },
+    { target: "claude", action: "updated" },
+  ]);
+  assert.deepEqual(result.plugin, {
+    target: "ivoryheart.herdr-world",
+    action: "updated",
+    detail: `v${version}`,
+  });
+  const calls = readFileSync(log, "utf8")
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line) as string[])
+    .filter((args) => args[0] !== "--version");
+  assert.deepEqual(calls, [
+    ["integration", "status"],
+    ["integration", "install", "claude"],
+    ["plugin", "list", "--json"],
+    ["plugin", "install", repository, "--ref", `v${version}`, "--yes"],
+  ]);
 }
 
 if (import.meta.main) {

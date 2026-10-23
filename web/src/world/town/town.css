@@ -585,6 +585,35 @@
   transform-origin: 0 0;
 }
 
+/* The pull request or ticket its agent works on (World sources), after the
+   desk's name on its nameplate; the name gives way first. */
+.town-desk-tag:has(.town-desk-badge) {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+.town-desk-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.town-desk-tags .town-desk-badge {
+  flex: none;
+  font-weight: 700;
+  text-decoration: none;
+  color: #d8dde6;
+  pointer-events: auto;
+}
+.town-desk-badge[data-tone="pass"] {
+  color: #7be08f;
+}
+.town-desk-badge[data-tone="fail"] {
+  color: #ff8a78;
+}
+.town-desk-badge[data-tone="pending"] {
+  color: #6fc3ff;
+}
+
 /* A desk or agent being dragged: a label that follows the pointer. */
 .town-drag-ghost {
   position: absolute;

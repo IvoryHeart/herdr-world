@@ -21,6 +21,7 @@ import {
   leaveGroups,
   observedSpawnClaims,
 } from "../../../shared/relations";
+import { worldSourcesStore } from "./worldSources";
 import "./world.css";
 
 /*
@@ -35,6 +36,91 @@ Object.defineProperty(Crypto.prototype, "randomUUID", {
   value: undefined,
   configurable: true,
 });
+// A synthetic sources service: one failing pull request on the "login fix"
+// agent's branch and one ticket.
+worldSourcesStore.useFetch(async () =>
+  Response.json({
+    observedAt: 1,
+    sources: [
+      {
+        id: "github",
+        label: "GitHub",
+        enabled: true,
+        state: "connected",
+        detail: "GitHub is connected: 1 item.",
+        checkedAt: 1,
+        lastSuccessAt: 1,
+        itemCount: 1,
+        config: { kind: "github" },
+      },
+      {
+        id: "jira",
+        label: "Jira",
+        enabled: true,
+        state: "not_connected",
+        detail: "Add your Jira site, email and API token in Sources settings.",
+        checkedAt: 1,
+        lastSuccessAt: null,
+        itemCount: 0,
+        config: {
+          kind: "jira",
+          site: null,
+          email: null,
+          jql: "",
+          tokenSet: false,
+        },
+      },
+    ],
+    items: [
+      {
+        key: "github:pr:example-org/web-app#42",
+        source: "github",
+        kind: "pull_request",
+        ref: "example-org/web-app#42",
+        title: "Fix the login form",
+        url: "https://github.com/example-org/web-app/pull/42",
+        lane: "fixing",
+        status: "open",
+        roles: ["author"],
+        updatedAt: 1,
+        number: 42,
+        repo: "example-org/web-app",
+        checks: "fail",
+      },
+      {
+        key: "jira:WEB-7",
+        source: "jira",
+        kind: "ticket",
+        ref: "WEB-7",
+        title: "Login form rejects valid emails",
+        url: "https://example.atlassian.net/browse/WEB-7",
+        lane: "doing",
+        status: "In Progress",
+        roles: ["assignee"],
+        updatedAt: 1,
+      },
+    ],
+    links: [
+      {
+        connectionId: "studio",
+        generation: 1,
+        paneId: "w1:p1",
+        sessionFingerprint: null,
+        itemKey: "github:pr:example-org/web-app#42",
+        via: "branch",
+      },
+      // Made for the same pane ID in an earlier runtime: not this agent.
+      {
+        connectionId: "studio",
+        generation: 0,
+        paneId: "w1:p1",
+        sessionFingerprint: null,
+        itemKey: "jira:WEB-7",
+        via: "branch",
+      },
+    ],
+  }),
+);
 const params = new URL(location.href).searchParams;
 const mode = params.get("mode") ?? "test";
 const theme = params.get("theme");
@@ -549,6 +635,84 @@ async function seedStrungNote() {
 
 /** Board scenarios, each on a fresh board (see fresh()); run in order. */
 const scenarios: [name: string, run: () => Promise<void>][] = [
+  [
+    "work lens shows pull requests and tickets and jumps to the agent",
+    async () => {
+      const toggle = host.querySelector<HTMLButtonElement>(
+        'button[aria-label="Work: pull requests and tickets"]',
+      )!;
+      check(Boolean(toggle), "Board controls offer the Work lens");
+      toggle.click();
+      await waitFor(
+        () => Boolean(host.querySelector(".work-lens .work-card")),
+        "the Work lens shows the pull request",
+      );
+      const fixing = host.querySelector(
+        '.work-lens-column[data-lane="fixing"]',
+      );
+      check(
+        Boolean(fixing?.textContent?.includes("#42 ✗")) &&
+          Boolean(fixing?.textContent?.includes("checks failing")),
+        "a failing pull request is in Fixing with its checks",
+      );
+      check(
+        host.querySelector(".work-lens-setup")?.textContent === "Set up Jira" &&
+          !host.querySelector('.work-lens-note[role="status"]'),
+        "a source never set up is a quiet hint, not a problem",
+      );
+      const link = fixing?.querySelector<HTMLAnchorElement>(".work-card-ref");
+      check(
+        link?.target === "_blank" && link.rel.includes("noopener"),
+        "the card opens the pull request in a new tab",
+      );
+      host
+        .querySelector<HTMLButtonElement>(
+          '.work-lens [role="tab"]:nth-child(2)',
+        )!
+        .click();
+      await waitFor(
+        () =>
+          Boolean(
+            host
+              .querySelector('.work-lens-column[data-lane="doing"]')
+              ?.textContent?.includes("WEB-7"),
+          ),
+        "tickets are grouped by status",
+      );
+      check(
+        !host.querySelector(
+          '.work-lens-column[data-lane="doing"] .work-card-agents',
+        ),
+        "a link from an earlier runtime names no agent",
+      );
+      host
+        .querySelector<HTMLButtonElement>(
+          '.work-lens [role="tab"]:nth-child(1)',
+        )!
+        .click();
+      await settle(100);
+      const before = selected.length;
+      host
+        .querySelector<HTMLButtonElement>(".work-card-agents button")!
+        .click();
+      await settle(100);
+      check(
+        selected.slice(before).includes("leaf:studio:w1:p1"),
+        `the linked agent is selected on Board (${selected.slice(before)})`,
+      );
+      check(!host.querySelector(".work-lens"), "the lens closes on the jump");
+      toggle.click();
+      await waitFor(
+        () => Boolean(host.querySelector(".work-lens")),
+        "the lens opens again",
+      );
+      window.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+      );
+      await settle(100);
+      check(!host.querySelector(".work-lens"), "Escape closes the lens");
+    },
+  ],
   [
     "renders, places and drags",
     async () => {

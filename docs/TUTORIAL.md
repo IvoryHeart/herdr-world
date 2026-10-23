@@ -48,9 +48,13 @@ older World or Roamgate installation.
 ### Open your first workspace: about 5 minutes
 
 1. If Herdr is already installed, start it with a trusted project open. See
-   [herdr.dev](https://herdr.dev) for setup. If it is not installed, complete the
-   **standalone World installation in step 2 first**, then run
-   `herdr-world herdr setup` to install and start Herdr before step 3.
+   [herdr.dev](https://herdr.dev) for setup. If it is not installed, do step 2
+   first: the standalone installer and Homebrew install the Herdr version this
+   World release verified (with npm or a Windows archive, run
+   `herdr-world herdr upgrade --install`). Then run `herdr-world herdr setup` to
+   start Herdr before step 3. Later World updates upgrade Herdr and the Herdr
+   integrations for the Codex, Claude and Pi harnesses on the machine too; see
+   [Herdr installation and upgrades](./DEPLOYMENT.md#herdr-installation-and-upgrades).
 2. [Install Herdr World](./DEPLOYMENT.md#install-a-release). Standalone needs no Bun;
    Windows supports npm (`npm install --global @ivoryheart/herdr-world`,
    Node.js 22.14.0 or newer) or the matching x64/ARM64 archive and
@@ -107,7 +111,9 @@ changes what you see and does not disconnect hosts or retarget open terminals.
 
 <a id="town"></a>
 
-1. Open **Town** from the view switcher, or return to the World root URL. Each
+1. Open **Town** from the view switcher, or return to the World root URL. Town
+   opens in Zen, full-bleed: use the view picker at the top edge (on a phone,
+   the corner button) to switch views, or **Exit Zen** to show the bars. Each
    host is a building, each workspace a room, each tab a table and each pane a
    seat. Plain terminal panes show a prompt rather than an agent character.
 2. Use **+** and **−** to move between town, building, room and desk detail;
@@ -135,6 +141,10 @@ changes what you see and does not disconnect hosts or retarget open terminals.
    status changes. To open terminals instead, set **Menu → Town opens** to
    **Terminal**; that tap also brings the agent back and, like the chat, does
    not mark its work reviewed.
+   Zoom into a room: an agent with a quest (its own todo list, plan, Codex goal
+   or `/loop`) shows a flag and progress bar at its seat. Open its chat to
+   read the quest log above the conversation: each objective as pending,
+   active, done or blocked.
 5. Read the question before using an answer button: it sends the offered key to
    that live pane. When no supported choices appear, use **Open chat** to reply
    in the agent's window, or **Open terminal** in the card's header (or the
@@ -156,7 +166,8 @@ changes what you see and does not disconnect hosts or retarget open terminals.
 7. To move a table to another room, zoom in until you see tables, then drag it
    with the mouse, or hold it for a moment on a phone and then drag. Drop it on
    another room of the same building; the plaque under your pointer says where
-   it will land, or why it cannot. The table lifts off and swings along behind
+   it will land, or why it cannot. Hold it near the edge of the view to scroll
+   the town toward rooms out of sight, as on a phone where rooms stack. The table lifts off and swings along behind
    your pointer with its agents aboard, then drops onto its new spot in a puff
    of dust; if the move is refused, it shakes and springs back. To move one
    agent, drag it onto another table instead: it dangles by the scruff on the
@@ -171,8 +182,13 @@ changes what you see and does not disconnect hosts or retarget open terminals.
 8. Tables sit in the order of their tabs, left to right and then row by row.
    To change the order, drag a table onto another table in the same room: it
    takes that table's place, and the tables in between shift along. Drop it on
-   the room's free spot to put it last of the tables shown (a room with more
-   tabs than tables keeps the rest hidden behind its count). Town moves the tab in Herdr, so Spaces
+   the room's free spot to put it last of the tables shown. A room grows as
+   tabs open and shows up to 127 tables: up to eight tables wide on a wide
+   screen, six on a portrait or half-width screen and four on a phone, then
+   row by row. Rooms sit in columns that suit your screen (one on a phone),
+   and a growing room pushes down only the rooms below it, once you let go of
+   the town. Only a room with more than 127 tabs keeps some idle tables
+   hidden behind its count. Town moves the tab in Herdr, so Spaces
    shows the new order too, and moving a tab in Spaces moves its table. The
    tables move once Herdr reports the new order, and agents stay with their
    table.
@@ -221,6 +237,8 @@ on your phone and desktop.
    shells looks like a small terminal. A working agent's tab pulses (as does the
    selected tab); idle, finished and waiting tabs stay still, and the **⋯** menu
    turns the pulses off. Each workspace card counts its agents by status.
+   An agent's card shows a ⚑ chip with its quest progress, such as 2/5; hover
+   the chip for the quest and its current step.
    The round **+** on a workspace's right edge (shown on hover or selection)
    opens **New tab**: choose a Terminal, Claude or Codex, optionally name the
    tab, and press **Create**; **+** beside a host's name creates a workspace. Select a workspace or
@@ -265,6 +283,20 @@ on your phone and desktop.
    phone, hold the tab still for a moment first; a quick swipe pans). Board
    asks first, with **Don't ask again**, and always asks before moving a
    workspace's last tab, which closes that workspace. Strings follow the move.
+
+9. Press the pull request button in Board's controls to open **Work**: your
+   GitHub pull requests in columns from **In review** through **Fixing**,
+   **Green** and **Ready to merge** to **Merged**, and on the **Tickets** tab
+   your Jira tickets and assigned issues by status. A card names the agents
+   working on it; tap one to close Work and jump to its card. Escape or a
+   press outside also closes Work. **Green** means checks pass while a
+   required review is pending; **Ready to merge** means approved, or passing
+   in a repository that requires no review. The same pull
+   request appears as a badge on the agent's desk in Town, such as `#42 ✓`.
+   If Work shows **Set up Jira** or says no source is connected, open
+   **Settings → Sources**: sign
+   in to GitHub with `gh auth login` as the user that runs World, or add your
+   Jira site, account email and an API token there.
 
 After Herdr restarts, Board cannot prove that a workspace or agent is the one a
 string was made with, so it draws those strings dashed and asks once per host:

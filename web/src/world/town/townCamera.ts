@@ -73,6 +73,35 @@ export function townZoomLimits(
   };
 }
 
+/**
+ * Where to centre the camera on a room at zoom `z`: its middle when it fits
+ * the usable view, else its top-left corner (name tag and first desks) at the
+ * view's top-left, so an extended room opens at its first desks.
+ */
+export function townRoomFocus(
+  room: { x: number; y: number; w: number; h: number },
+  viewport: TownViewport,
+  z: number,
+) {
+  // The world point for the centre of the usable area (flyTo and jumpTo
+  // place it there, minding the chrome), so the room's top-left corner lands
+  // at the usable area's top-left when the room does not fit.
+  const { width, height, inset } = viewport;
+  const left = room.x * TOWN_TILE - 20;
+  const top = room.y * TOWN_TILE - 24;
+  const roomWidth = room.w * TOWN_TILE + 40;
+  const roomHeight = room.h * TOWN_TILE + 48;
+  const usableWidth = (width - inset.left - inset.right) / z;
+  const usableHeight = (height - inset.top - inset.bottom) / z;
+  return {
+    x: roomWidth <= usableWidth ? left + roomWidth / 2 : left + usableWidth / 2,
+    y:
+      roomHeight <= usableHeight
+        ? top + roomHeight / 2
+        : top + usableHeight / 2,
+  };
+}
+
 export function townLevel(z: number, limits: TownZoomLimits): TownLevel {
   if (z < limits.roof) return "town";
   if (z < limits.card) return "overview";
