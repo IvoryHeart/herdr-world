@@ -4,7 +4,9 @@ import { bridge, type BridgeControlMsg, type ConnectionStatus } from "../api";
 /**
  * Questions agents ask the owner with `herdr-world ask` (the service's World
  * ledger, server/src/world/world-ledger.ts). Town's attention list shows the
- * open ones, and the owner's answer goes back through `world.ask.answer`.
+ * open ones, fetched alone (`world.asks.get`) only when a change notice
+ * carries a newer revision, and the owner's answer goes back through
+ * `world.ask.answer`.
  */
 
 export type WorldAsk = {
@@ -17,7 +19,8 @@ export type WorldAsk = {
   answer?: { text: string; at: number; by: string };
 };
 
-type Ledger = { revision: number; asks: WorldAsk[] };
+/** The open questions at a ledger revision (`world.asks.get`). */
+type OpenAsks = { revision: number; asks: WorldAsk[] };
 
 export type AsksClient = {
   call(method: string, params?: Record<string, unknown>): Promise<unknown>;
@@ -47,8 +50,11 @@ export class WorldAsksStore {
     if (this.unlisten.length) return;
     this.unlisten = [
       this.client.onControl((control) => {
+        // Most ledger changes are Board moves and results: fetch only
+        // when a question was asked or answered.
         if (
           control.type === "world_ledger_changed" &&
+          control.asks === true &&
           (control.revision ?? 0) > this.revision
         )
           void this.refresh();
@@ -71,8 +77,8 @@ export class WorldAsksStore {
     this.unlisten = [];
   }
 
-  private take(ledger: unknown) {
-    const next = ledger as Ledger | null;
+  private take(asks: unknown) {
+    const next = asks as OpenAsks | null;
     if (!next || !Array.isArray(next.asks) || next.revision < this.revision)
       return;
     this.revision = next.revision;
@@ -82,7 +88,7 @@ export class WorldAsksStore {
 
   async refresh() {
     try {
-      this.take(await this.client.call("world.ledger.get"));
+      this.take(await this.client.call("world.asks.get"));
     } catch {
       // Questions come back with the next change or reconnect.
     }

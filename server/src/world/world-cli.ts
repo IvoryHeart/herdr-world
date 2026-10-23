@@ -12,7 +12,12 @@ import {
   TERMINAL_COLOR_NAMES,
 } from "../../../shared/terminalColor";
 import type { BoardDocument, BoardOp, BoardPoint } from "./board-store";
-import { runsInPane, type CallerProcess } from "./caller-identity";
+import {
+  paneRoots,
+  runsInPane,
+  type CallerLocator,
+  type PaneProcessInfo,
+} from "./caller-identity";
 import type { WorldSnapshotResult } from "./snapshot";
 import {
   LEDGER_LIMITS,
@@ -52,7 +57,8 @@ export type WorldCliDeps = {
   defaultConnectionId(): string | null;
   snapshot(): Promise<WorldSnapshotResult>;
   publishBoard(revision: number): void;
-  publishLedger(revision: number): void;
+  /** Tell World's pages; `asks` when a question was asked or answered. */
+  publishLedger(revision: number, asks?: boolean): void;
   now?: () => number;
 };
 
@@ -113,27 +119,38 @@ export type WorldCliCommand = (typeof WORLD_CLI_COMMANDS)[number];
 
 /* ---------- Identity ---------- */
 
-export const OWNER_TERMINAL = "owner's terminal";
+/**
+ * A caller that named no pane. Any process can leave HERDR_PANE_ID unset, so
+ * this is not the owner, only a terminal that did not say where it runs.
+ */
+export const NO_PANE = "terminal with no pane";
+
+/** Herdr pane IDs, such as "w1:p2"; anything else is refused before use. */
+const PANE_ID = /^[A-Za-z0-9_-]{1,32}:[A-Za-z0-9_-]{1,32}$/;
 
 /**
- * Who is calling. Without HERDR_PANE_ID the caller is a plain shell, shown as
- * the owner's terminal. With one, the claim is verified only when the calling
- * process runs in that pane of a local Herdr; otherwise it is labelled
- * unverified and acts on the default host.
+ * Who is calling. Without HERDR_PANE_ID the caller is unverified with no
+ * pane. With one, the claim is verified only when the calling process runs
+ * in that pane of a local Herdr (searched for among the pane's own
+ * processes); otherwise it is labelled unverified and acts on the default host.
  */
 export async function identifyCaller(
   hosts: readonly CliHost[],
   paneId: string | undefined,
-  chain: readonly CallerProcess[] | null,
+  locate: CallerLocator | null,
 ): Promise<{ actor: CliActor; host?: CliHost }> {
-  if (!paneId) return { actor: { label: OWNER_TERMINAL, verified: false } };
-  if (chain?.length)
+  if (!paneId) return { actor: { label: NO_PANE, verified: false } };
+  if (locate)
     for (const host of hosts) {
       if (!host.local) continue;
-      const info = (await host
-        .call("pane.process_info", { pane_id: paneId })
-        .catch(() => null)) as { process_info?: unknown } | null;
-      if (!runsInPane(chain, info?.process_info as never)) continue;
+      const info = (
+        (await host
+          .call("pane.process_info", { pane_id: paneId })
+          .catch(() => null)) as { process_info?: PaneProcessInfo } | null
+      )?.process_info;
+      const roots = paneRoots(info);
+      const chain = roots.length ? locate(roots) : null;
+      if (!chain || !runsInPane(chain, info)) continue;
       const pane = (
         (await host
           .call("pane.get", { pane_id: paneId })
@@ -616,7 +633,7 @@ export function createWorldCli(deps: WorldCliDeps) {
       }
       case "undo": {
         const id = typeof params.id === "string" ? params.id : usage("undo ID");
-        const change = deps.ledger.get().changes.find((c) => c.id === id);
+        const change = deps.ledger.change(id);
         if (!change) notFound(`no change ${id}`);
         if (change!.undone_by)
           refused(`${id} was already undone by ${change!.undone_by}`);
@@ -712,12 +729,18 @@ export function createWorldCli(deps: WorldCliDeps) {
           : [];
         if (options.length > LEDGER_LIMITS.options)
           usage(`at most ${LEDGER_LIMITS.options} options`);
-        const open = deps.ledger.get().asks.filter((entry) => !entry.answer);
+        const open = deps.ledger.openAsks().asks;
         if (open.length >= LEDGER_LIMITS.asks)
           refused("too many open questions; wait for answers");
+        // Verified panes each have their own allowance; unverified callers,
+        // whatever they claim, share one.
+        const bucket = (entry: CliActor) =>
+          entry.verified
+            ? `${entry.connection_id}\u0000${entry.pane_id}`
+            : "unverified";
         if (
-          open.filter((entry) => entry.actor.label === actor.label).length >=
-          LEDGER_LIMITS.asksPerActor
+          open.filter((entry) => bucket(entry.actor) === bucket(actor))
+            .length >= LEDGER_LIMITS.asksPerActor
         )
           refused(
             `you have ${LEDGER_LIMITS.asksPerActor} open questions; wait for answers`,
@@ -734,6 +757,7 @@ export function createWorldCli(deps: WorldCliDeps) {
               owner_only: params.owner_only === true,
             }),
           ),
+          true,
         );
         return { id };
       }
@@ -744,18 +768,18 @@ export function createWorldCli(deps: WorldCliDeps) {
           Math.max(0, Number(params.wait_ms) || 0),
         );
         const until = now() + wait;
-        let ask = deps.ledger.get().asks.find((entry) => entry.id === id);
+        let ask = deps.ledger.ask(id);
         // Hold the call a while (the CLI's --wait asks again), not forever.
         while (ask && !ask.answer && now() < until) {
           await new Promise((resolve) => setTimeout(resolve, 500));
-          ask = deps.ledger.get().asks.find((entry) => entry.id === id);
+          ask = deps.ledger.ask(id);
         }
         return ask ?? notFound(`no question ${id}`);
       }
       case "ask answer": {
         const id = text(params.id, "the question ID");
         const answer = text(params.answer, "the answer");
-        const ask = deps.ledger.get().asks.find((entry) => entry.id === id);
+        const ask = deps.ledger.ask(id);
         if (!ask) notFound(`no question ${id}`);
         if (ask!.owner_only) refused("only the owner answers this, in World");
         // An answer from an agent must come from a pane World has placed,
@@ -770,8 +794,9 @@ export function createWorldCli(deps: WorldCliDeps) {
         if (ask!.answer) refused(`${id} is already answered`);
         deps.publishLedger(
           answerAsk(deps.ledger, id, answer, actor.label, now()),
+          true,
         );
-        return deps.ledger.get().asks.find((entry) => entry.id === id);
+        return deps.ledger.ask(id);
       }
       case "result": {
         const status = (params.status ?? "done") as ResultStatus;
@@ -832,10 +857,10 @@ export function createWorldCli(deps: WorldCliDeps) {
   }
 
   return {
-    /** Handle one CLI request from a caller whose process chain is known (or null). */
+    /** Handle one CLI request; `locate` finds the caller among a pane's processes (null off Linux). */
     async handle(
       request: WorldCliRequest,
-      chain: readonly CallerProcess[] | null,
+      locate: CallerLocator | null,
     ): Promise<WorldCliResponse> {
       let actor: CliActor | undefined;
       try {
@@ -851,7 +876,10 @@ export function createWorldCli(deps: WorldCliDeps) {
           request.caller.pane_id.trim()
             ? request.caller.pane_id.trim()
             : undefined;
-        const identity = await identifyCaller(deps.hosts(), paneId, chain);
+        // The claim becomes a label in the ledger and in World: bound it.
+        if (paneId !== undefined && !PANE_ID.test(paneId))
+          usage("HERDR_PANE_ID is not a Herdr pane ID");
+        const identity = await identifyCaller(deps.hosts(), paneId, locate);
         actor = identity.actor;
         const result = await run(
           command as WorldCliCommand,

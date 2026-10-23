@@ -7,7 +7,7 @@ import type { CallerProcess } from "./caller-identity";
 import type { WorldSnapshotResult } from "./snapshot";
 import {
   createWorldCli,
-  OWNER_TERMINAL,
+  NO_PANE,
   type CliHost,
   type WorldCliResponse,
 } from "./world-cli";
@@ -112,7 +112,7 @@ function setup(
     persist: false,
     now: () => 1_000,
   });
-  const published = { board: 0, ledger: 0 };
+  const published = { board: 0, ledger: 0, asks: 0 };
   const cli = createWorldCli({
     board,
     ledger,
@@ -120,9 +120,14 @@ function setup(
     defaultConnectionId: () => "studio",
     snapshot: async () => snapshot(options.stale, options.ids),
     publishBoard: () => (published.board += 1),
-    publishLedger: () => (published.ledger += 1),
+    publishLedger: (_revision, asks) => {
+      published.ledger += 1;
+      if (asks) published.asks += 1;
+    },
     now: () => 1_000,
   });
+  /** Pane roots the service searched under, per call. */
+  const searched: number[][] = [];
   const run = (
     command: string,
     params: Record<string, unknown> = {},
@@ -131,9 +136,16 @@ function setup(
   ) =>
     cli.handle(
       { command, params, caller: pane ? { pane_id: pane } : {} },
-      chain,
+      // As /proc would: the caller is found only under the pane's processes.
+      chain &&
+        ((roots) => {
+          searched.push([...roots]);
+          return chain.some((entry) => roots.includes(entry.pid))
+            ? chain
+            : null;
+        }),
     );
-  return { board, ledger, published, run };
+  return { board, ledger, published, run, searched };
 }
 
 beforeEach(() => {
@@ -174,12 +186,25 @@ describe("caller identity", () => {
     expect((await remote.run("whoami")).actor?.verified).toBe(false);
   });
 
-  test("a plain shell is the owner's terminal", async () => {
-    const { run } = setup();
-    expect((await run("whoami", {}, null, null)).actor).toEqual({
-      label: OWNER_TERMINAL,
+  test("a caller naming no pane is unverified, and nothing is searched", async () => {
+    const { run, searched } = setup();
+    expect((await run("whoami", {}, null)).actor).toEqual({
+      label: NO_PANE,
       verified: false,
     });
+    expect(searched).toEqual([]);
+    // A claim is searched for only under that pane's own processes.
+    await run("whoami");
+    expect(searched).toEqual([[100]]);
+  });
+
+  test("a pane claim must look like a Herdr pane ID", async () => {
+    const { run } = setup();
+    for (const claim of ["x".repeat(80), "w1:p1\nfake", "<b>w1</b>:p1", "w1"])
+      expect(await run("whoami", {}, claim, null)).toMatchObject({
+        ok: false,
+        code: "usage",
+      });
   });
 
   test("`me` needs a verified pane; spawn claims too", async () => {
@@ -319,7 +344,7 @@ describe("Herdr changes", () => {
 
 describe("questions and results", () => {
   test("an ask waits for its answer; owner-only questions refuse agents", async () => {
-    const { ledger, run } = setup();
+    const { ledger, published, run } = setup();
     const ask = await run("ask", {
       question: "Ship it?",
       options: ["yes", "no"],
@@ -347,6 +372,9 @@ describe("questions and results", () => {
       result: { answer: { text: "studio", by: "codex in w1:p2" } },
     });
     expect(ledger.get().asks[0]!.answer).toBeUndefined();
+    // Pages fetch only the open questions, and only when one changed.
+    expect(ledger.openAsks().asks.map((entry) => entry.id)).toEqual([id]);
+    expect(published.asks).toBe(3);
   });
 
   test("results are kept with their task, status and PR", async () => {
@@ -381,7 +409,7 @@ describe("questions and results", () => {
     await run("colour set", { target: "tab:w1:t2", colour: "red" }, null, null);
     const mine = await run("history", { actor: "w1:p1" });
     expect((resultOf(mine) as unknown[]).length).toBe(1);
-    const owner = await run("history", { actor: OWNER_TERMINAL });
+    const owner = await run("history", { actor: NO_PANE });
     expect(resultOf(owner)).toMatchObject([
       { summary: "coloured studio:w1:t2 red" },
     ]);
@@ -443,6 +471,22 @@ describe("review fixes", () => {
       ok: false,
       code: "refused",
     });
+  });
+
+  test("unverified callers share one allowance, whatever pane they claim", async () => {
+    const { run } = setup();
+    for (let index = 0; index < 20; index += 1)
+      expect(
+        (await run("ask", { question: `q${index}` }, `w9:p${index}`, null)).ok,
+      ).toBe(true);
+    expect(
+      await run("ask", { question: "one more" }, "w9:p99", null),
+    ).toMatchObject({ ok: false, code: "refused" });
+    expect(
+      await run("ask", { question: "one more" }, null, null),
+    ).toMatchObject({ ok: false, code: "refused" });
+    // A verified pane still has its own.
+    expect((await run("ask", { question: "mine" })).ok).toBe(true);
   });
 
   test("`me` never resolves on another host, and points must be numbers", async () => {

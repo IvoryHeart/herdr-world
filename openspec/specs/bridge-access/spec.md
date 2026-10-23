@@ -98,8 +98,8 @@ bearer attempts SHALL receive the login cooldown, counted apart from logins so
 they never block the owner's login. The service SHALL attribute a call to the
 Herdr pane it names only when the calling process, found from its connection,
 or one of its ancestors is that pane's shell or foreground process on a local
-Herdr; otherwise it SHALL label the call unverified, or the owner's terminal
-when no pane is named. Calls SHALL never merge, delete Herdr objects or reach
+Herdr; otherwise it SHALL label the call unverified, as a terminal with no
+pane when none is named, and SHALL refuse a claim that is not a Herdr pane ID. Calls SHALL never merge, delete Herdr objects or reach
 outside World; a change to Herdr's layout SHALL require explicit confirmation
 (display-only spawn metadata excepted), every change SHALL be recorded with
 its actor and time, and an undo SHALL be refused once what it would restore

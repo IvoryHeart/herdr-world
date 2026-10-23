@@ -287,6 +287,8 @@ export interface BridgeControlMsg {
   connection_id?: string;
   connection_generation?: number;
   revision?: number;
+  /** world_ledger_changed: a question was asked or answered. */
+  asks?: boolean;
 }
 
 type Pending = {

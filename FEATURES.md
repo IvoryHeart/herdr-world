@@ -276,8 +276,9 @@ service accepts it only when the calling process runs in that pane of a local
 Herdr (the pane's shell or foreground process is among its ancestors).
 The CLI reaches only a World service on the same machine, with a token
 derived from the service's signing secret that cannot log a browser in.
-Otherwise the change is labelled unverified, or the owner's terminal when no
-pane is named; `me` and `spawned-by` need a verified pane. The CLI never
+Otherwise the change is labelled unverified, or "terminal with no pane" when
+no pane is named, since any process can leave it out; `me` and `spawned-by`
+need a verified pane. The CLI never
 merges, deletes panes, tabs or workspaces, or reaches outside World.
 
 ### Agent checkout context

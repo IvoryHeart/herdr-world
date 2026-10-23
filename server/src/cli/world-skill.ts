@@ -4,8 +4,8 @@ export const WORLD_SKILL = `# herdr-world: change Herdr World from an agent
 Herdr World shows your Herdr panes as Town desks and Board cards. These
 commands let you arrange them, ask the owner questions and report results.
 Run them inside your Herdr pane: World reads HERDR_PANE_ID and checks that
-you really run in that pane. Without a pane you act as the owner's terminal;
-a pane World cannot check is marked unverified. Every change is recorded with
+you really run in that pane. Without a pane, or in a pane World cannot
+check, your changes are marked unverified. Every change is recorded with
 who made it, and World-side changes can be undone.
 
 ## Examples

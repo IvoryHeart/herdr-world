@@ -6,14 +6,14 @@ import type { TerminalRef } from "../../../shared/relations";
 import type { BoardOp } from "./board-store";
 
 /**
- * What agents and the owner's terminals did through the `herdr-world` CLI
+ * What agents and other terminals did through the `herdr-world` CLI
  * (world-cli.ts): every change with its actor and time, and an undo for the
  * World-side ones; questions for the owner; and task results. One small
  * revisioned file, written atomically like Board's.
  */
 
 export type CliActor = {
-  /** How World shows the caller, e.g. "claude in w1:p2" or "owner's terminal". */
+  /** How World shows the caller, e.g. "claude in w1:p2" or "terminal with no pane". */
   label: string;
   /** True only when the service saw the calling process run in that pane. */
   verified: boolean;
@@ -166,6 +166,26 @@ export class WorldLedger {
 
   get(): LedgerDocument {
     return structuredClone(this.document);
+  }
+
+  /** One question, copied without the rest of the document. */
+  ask(id: string): LedgerAsk | undefined {
+    const ask = this.document.asks.find((entry) => entry.id === id);
+    return ask && structuredClone(ask);
+  }
+
+  /** One change, copied without the rest of the document. */
+  change(id: string): LedgerChange | undefined {
+    const change = this.document.changes.find((entry) => entry.id === id);
+    return change && structuredClone(change);
+  }
+
+  /** The unanswered questions, as World's pages show them. */
+  openAsks(): { revision: number; asks: LedgerAsk[] } {
+    return {
+      revision: this.document.revision,
+      asks: structuredClone(this.document.asks.filter((ask) => !ask.answer)),
+    };
   }
 
   /** Change the document and save it; returns the new revision. */

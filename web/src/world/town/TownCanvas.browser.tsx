@@ -400,7 +400,7 @@ const ledger = {
   ],
 };
 worldBridge.call = async (method, params) => {
-  if (method === "world.ledger.get") return structuredClone(ledger);
+  if (method === "world.asks.get") return structuredClone(ledger);
   if (method === "world.board.get") return structuredClone(boardDocument);
   if (method === "world.board.patch") {
     for (const op of (params?.ops ?? []) as {

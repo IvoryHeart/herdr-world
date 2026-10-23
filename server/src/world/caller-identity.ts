@@ -139,7 +139,35 @@ const holderCaches = new WeakMap<
   Map<string, { pid: number; fd: string }>
 >();
 
-function socketHolder(fs: ProcFs, inode: string): number | null {
+/** Processes under `roots`, the roots first, read from each task's children. */
+function descendants(fs: ProcFs, roots: readonly number[]): number[] {
+  const seen = new Set<number>();
+  const queue = roots.filter((pid) => pid > 1);
+  while (queue.length && seen.size < MAX_DESCENDANTS) {
+    const pid = queue.shift()!;
+    if (seen.has(pid)) continue;
+    seen.add(pid);
+    for (const task of safeList(fs, `/proc/${pid}/task`))
+      try {
+        for (const child of fs
+          .read(`/proc/${pid}/task/${task}/children`)
+          .trim()
+          .split(/\s+/))
+          if (/^\d+$/.test(child)) queue.push(Number(child));
+      } catch {
+        // Exited meanwhile.
+      }
+  }
+  return [...seen];
+}
+
+const MAX_DESCENDANTS = 4096;
+
+function socketHolder(
+  fs: ProcFs,
+  inode: string,
+  roots?: readonly number[],
+): number | null {
   const target = `socket:[${inode}]`;
   let holders = holderCaches.get(fs);
   if (!holders) holderCaches.set(fs, (holders = new Map()));
@@ -154,7 +182,10 @@ function socketHolder(fs: ProcFs, inode: string): number | null {
     holders.delete(inode);
   }
   const found: { pid: number; fd: string }[] = [];
-  for (const entry of safeList(fs, "/proc")) {
+  const candidates = roots
+    ? descendants(fs, roots).map(String)
+    : safeList(fs, "/proc");
+  for (const entry of candidates) {
     if (!/^\d+$/.test(entry) || Number(entry) === process.pid) continue;
     for (const fd of safeList(fs, `/proc/${entry}/fd`)) {
       try {
@@ -174,18 +205,27 @@ function socketHolder(fs: ProcFs, inode: string): number | null {
   return found[0]!.pid;
 }
 
+/** Finds the caller among the processes under `roots` (a pane's shell and foreground). */
+export type CallerLocator = (
+  roots: readonly number[],
+) => CallerProcess[] | null;
+
 /**
  * The process holding the client end of a loopback connection to this
  * service, and its ancestors (nearest first). Null when it cannot be found
- * unambiguously, for example off Linux or for another user's process.
+ * unambiguously, for example off Linux or for another user's process. With
+ * `roots`, only those processes and their descendants are searched: the
+ * service then reads a pane's few processes, not every descriptor on the
+ * machine, and a socket shared with a process outside them goes unseen.
  */
 export function callerProcesses(
   peer: { address: string; port: number },
   serverPort: number,
   fs: ProcFs = realProc,
+  roots?: readonly number[],
 ): CallerProcess[] | null {
   const inode = clientSocketInode(fs, peer, serverPort);
-  const owner = inode ? socketHolder(fs, inode) : null;
+  const owner = inode ? socketHolder(fs, inode, roots) : null;
   if (owner === null) return null;
   const chain: CallerProcess[] = [];
   for (let pid = owner; pid > 1 && chain.length < 64; ) {
@@ -212,6 +252,14 @@ export type PaneProcessInfo = {
   foreground_processes?: { pid?: number }[];
 };
 
+/** The pane's shell and foreground processes, where its callers run. */
+export function paneRoots(info: PaneProcessInfo | null | undefined): number[] {
+  return (info?.foreground_processes ?? [])
+    .map((entry) => entry.pid)
+    .concat(info?.shell_pid)
+    .filter((pid): pid is number => typeof pid === "number" && pid > 1);
+}
+
 /**
  * True when the caller or an ancestor is the pane's shell or one of its
  * foreground processes. A shared process group alone is not enough.
@@ -220,12 +268,6 @@ export function runsInPane(
   chain: readonly CallerProcess[],
   info: PaneProcessInfo | null | undefined,
 ): boolean {
-  if (!info) return false;
-  const pids = new Set(
-    (info.foreground_processes ?? [])
-      .map((entry) => entry.pid)
-      .concat(info.shell_pid)
-      .filter((pid): pid is number => typeof pid === "number" && pid > 1),
-  );
+  const pids = new Set(paneRoots(info));
   return chain.some((entry) => pids.has(entry.pid));
 }

@@ -292,7 +292,8 @@ yes,no --wait`). A question shows first in Town's **Needs you** list with the
 agent's name; pick an option or type an answer, and the waiting agent carries
 on. `herdr-world history` shows who changed what, and `herdr-world undo` takes
 back a World-side change. A change marked **unverified** came from a process
-World could not place in the pane it named.
+World could not place in the pane it named, or from a terminal that named no
+pane.
 
 ### Use Desk: answer, review and follow work
 

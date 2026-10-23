@@ -640,9 +640,14 @@ function worldLedger() {
   return worldLedgerStore;
 }
 
-function publishLedgerChanged(revision: number) {
+/** Pages fetch the open questions only when `asks` says they changed. */
+function publishLedgerChanged(revision: number, asks = false) {
   const line = JSON.stringify({
-    control: { type: "world_ledger_changed", revision },
+    control: {
+      type: "world_ledger_changed",
+      revision,
+      ...(asks ? { asks: true } : {}),
+    },
   });
   for (const ws of clients) safeSend(ws, line, "world-ledger");
 }
@@ -1232,8 +1237,8 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
     }
     return;
   }
-  if (method === "world.ledger.get") {
-    sendReply({ id, result: worldLedger().get() }, "world-ledger");
+  if (method === "world.asks.get") {
+    sendReply({ id, result: worldLedger().openAsks() }, "world-asks");
     return;
   }
   if (method === "world.ask.answer") {
@@ -1244,8 +1249,9 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
         throw new Error("an answer needs a question ID and text");
       publishLedgerChanged(
         answerAsk(worldLedger(), p.id, answer, "owner", Date.now()),
+        true,
       );
-      sendReply({ id, result: worldLedger().get() }, "world-ask-answer");
+      sendReply({ id, result: worldLedger().openAsks() }, "world-ask-answer");
     } catch (error) {
       sendError(
         "world-ask-answer",

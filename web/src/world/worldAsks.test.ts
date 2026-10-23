@@ -38,10 +38,19 @@ test("open questions follow the ledger; the owner's answer goes to the service",
     method: "world.ask.answer",
     params: { id: "q-1", answer: "studio" },
   });
-  // A newer ledger revision from another client refreshes the list.
-  ledger = { revision: 3, asks: [ask("q-3")] };
+  // A Board move or a result changes no question: nothing is fetched.
+  const fetched = calls.length;
   control({ type: "world_ledger_changed", revision: 3 });
   await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(calls.length).toBe(fetched);
+  // A new question from another client refreshes the list, alone.
+  ledger = { revision: 4, asks: [ask("q-3")] };
+  control({ type: "world_ledger_changed", revision: 4, asks: true });
+  await new Promise((resolve) => setTimeout(resolve, 0));
   expect(store.get().map((entry) => entry.id)).toEqual(["q-3"]);
+  expect(calls[calls.length - 1]).toEqual({
+    method: "world.asks.get",
+    params: undefined,
+  });
   store.stop();
 });

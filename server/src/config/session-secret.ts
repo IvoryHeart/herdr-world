@@ -132,7 +132,6 @@ function writeSessionSecret(path: string, state: SessionSecretState): void {
   replaceDataFile(path, `${JSON.stringify(state)}\n`);
 }
 
-/** Persist independent signing material, rotating it when login credentials change. */
 /**
  * The agent CLI's bearer token (`/api/world/cli`): derived from the session
  * signing secret, so it rotates with the login credential, and accepted only
@@ -186,6 +185,7 @@ export function revokeSessionSecret(path = sessionSecretPath()): boolean {
   }
 }
 
+/** Persist independent signing material, rotating it when login credentials change. */
 export function loadOrCreateSessionSecret(
   credentials: readonly string[],
   path?: string,

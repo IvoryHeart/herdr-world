@@ -31,8 +31,12 @@ function deps(seen: unknown[] = []) {
   return {
     serverPort: 8790,
     bearerAuth: handlers.bearerAuth,
-    handle: async (body: unknown, chain: unknown) => {
-      seen.push({ body, chain });
+    handle: async (
+      body: unknown,
+      locate: ((roots: readonly number[]) => unknown) | null,
+    ) => {
+      // The caller is searched for only when the service asks, under roots.
+      seen.push({ body, chain: locate?.([8]) ?? null });
       return {
         ok: true as const,
         actor: { label: "x", verified: false },
@@ -40,7 +44,12 @@ function deps(seen: unknown[] = []) {
       };
     },
     platform: "linux",
-    callerChain: () => [{ pid: 9, ppid: 8, pgrp: 9 }],
+    callerChain: (
+      _peer: unknown,
+      _port: number,
+      _fs?: unknown,
+      roots?: readonly number[],
+    ) => (roots?.includes(8) ? [{ pid: 9, ppid: 8, pgrp: 9 }] : null),
   };
 }
 

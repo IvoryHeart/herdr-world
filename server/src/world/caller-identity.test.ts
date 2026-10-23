@@ -46,6 +46,10 @@ function proc(
     "/proc/400/stat": "400 (bun) S 300 300 200",
     "/proc/600/stat": "600 (bash) S 1 600 600",
     "/proc/700/stat": "700 (bun) S 600 700 600",
+    "/proc/200/task/200/children": "300",
+    "/proc/300/task/300/children": "400 ",
+    "/proc/300/task/301/children": "",
+    "/proc/600/task/600/children": "700",
   };
   const fds: Record<string, string> = {
     "/proc/400/fd/3": "socket:[778]",
@@ -62,6 +66,11 @@ function proc(
     list: (path) => {
       if (path === "/proc")
         return ["self", "200", "300", "400", "500", "600", "700"];
+      const tasks = path.match(/^\/proc\/(\d+)\/task$/)?.[1];
+      if (tasks)
+        return Object.keys(files)
+          .filter((key) => key.startsWith(`/proc/${tasks}/task/`))
+          .map((key) => key.split("/")[4]!);
       const pid = path.match(/^\/proc\/(\d+)\/fd$/)?.[1];
       return Object.keys(fds)
         .filter((key) => key.startsWith(`/proc/${pid}/fd/`))
@@ -136,6 +145,24 @@ describe("the calling process", () => {
     expect(
       callerProcesses(peer("127.0.0.1", 51000), SERVER_PORT, shared),
     ).toBeNull();
+  });
+
+  test("under a pane's processes, only their descendants are searched", () => {
+    const listed: string[] = [];
+    const fs = proc([row(LOOP, 51000, LOOP, SERVER_PORT, "778")]);
+    const watched: ProcFs = {
+      ...fs,
+      list: (path) => {
+        listed.push(path);
+        return fs.list(path);
+      },
+    };
+    const call = peer("127.0.0.1", 51000);
+    expect(callerProcesses(call, SERVER_PORT, watched, [200])).toEqual(CHAIN);
+    expect(listed).not.toContain("/proc");
+    expect(listed).not.toContain("/proc/700/fd");
+    // Another pane's shell has no such descendant.
+    expect(callerProcesses(call, SERVER_PORT, fs, [600])).toBeNull();
   });
 
   test("an IPv6 loopback connection is read from tcp6", () => {
