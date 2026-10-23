@@ -18,6 +18,7 @@ import {
   X,
 } from "lucide-react";
 import { useStoreSelector } from "../store";
+import { paneAgentTitle } from "../agentName";
 import { copyTextWithFeedback } from "../copyText";
 import {
   connectionClientScopeKey,
@@ -756,7 +757,7 @@ export function AgentHistoryDrawer({
                 ) : null}
               </strong>
               <span title={workspaceLabel}>
-                {workspaceLabel} · {pane.agent ?? "Agent"} ·{" "}
+                {workspaceLabel} · {paneAgentTitle(pane) || "Agent"} ·{" "}
                 {shortId(pane.pane_id)}
               </span>
             </div>
