@@ -1,12 +1,19 @@
-import { useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
-import { measuredFixedPositionScale } from "../../fixedPositionScale";
-import { Columns2, Maximize2, Minimize2, Minus, Pin, X } from "lucide-react";
 import {
-  ColorSwatchButton,
+  ChevronLeft,
+  Maximize2,
+  Minimize2,
+  MoreHorizontal,
+  Pin,
+  X,
+} from "lucide-react";
+import { Fragment, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import {
   type ColorChoice,
+  ColorSwatchButton,
   type ColorValue,
 } from "../../components/ColorSwatch";
+import { measuredFixedPositionScale } from "../../fixedPositionScale";
 import { useLayer } from "../../layerStack";
 import type { SnapTarget } from "./windowManager";
 import "./windows.css";
@@ -27,7 +34,49 @@ export type ManagedWindowControls = {
   } | null;
   /** An agent window's Town desk pin (useDeskPins.ts), toggled in its menu. */
   pin?: { pinned: boolean; onPin(pinned: boolean): void } | null;
+  /** Close is shown as Back at the start of the bar, as Town's window does. */
+  back?: { label: string };
+  /** A narrow window: maximize joins ⋯ so the bar still fits. */
+  narrow?: boolean;
+  /** On a phone, the window's views live in ⋯ instead of the bar. */
+  views?: readonly {
+    id: string;
+    label: string;
+    checked: boolean;
+    onSelect(): void;
+  }[];
+  /** Other agents and terminals this window can switch to. */
+  switchTo?: readonly {
+    id: string;
+    label: string;
+    detail?: string;
+    onSelect(): void;
+  }[];
 };
+
+/** Close presented as Back, for the leading edge of a window bar. */
+export function WindowBackButton({
+  controls,
+  label = "window",
+}: {
+  controls: ManagedWindowControls;
+  label?: string;
+}) {
+  if (!controls.back) return null;
+  // It closes the window, so it keeps the window's Close name; the tooltip
+  // says where Back leads.
+  return (
+    <button
+      type="button"
+      className="world-window-back"
+      aria-label={`Close ${label}`}
+      title={controls.back.label}
+      onClick={controls.onClose}
+    >
+      <ChevronLeft size={18} aria-hidden="true" />
+    </button>
+  );
+}
 const choices: { target: SnapTarget; label: string }[] = [
   { target: "left", label: "Left half" },
   { target: "right", label: "Right half" },
@@ -38,6 +87,21 @@ const choices: { target: SnapTarget; label: string }[] = [
   { target: "bottom-left", label: "Bottom left" },
   { target: "bottom-right", label: "Bottom right" },
 ];
+type MenuItem = {
+  key?: string;
+  label: string;
+  detail?: string;
+  checked?: boolean;
+  /** A setting turned on and off (the desk pin), not a choice among views. */
+  toggle?: boolean;
+  section?: string;
+  run(): void;
+};
+
+/**
+ * The window bar keeps maximise and close as buttons. The rarer actions
+ * (minimise, snap, float and the colour) share ⋯.
+ */
 export function WindowControls({
   controls,
   label = "window",
@@ -46,6 +110,65 @@ export function WindowControls({
   label?: string;
 }) {
   const [open, setOpen] = useState(false);
+  const items: MenuItem[] = [
+    ...(controls.views ?? []).map((view, index) => ({
+      key: `view:${view.id}`,
+      label: view.label,
+      checked: view.checked,
+      section: index === 0 ? "View" : undefined,
+      run: view.onSelect,
+    })),
+    ...(controls.switchTo ?? []).map((target, index) => ({
+      key: `switch:${target.id}`,
+      label: target.label,
+      detail: target.detail,
+      section: index === 0 ? "Switch to" : undefined,
+      run: target.onSelect,
+    })),
+    ...(controls.narrow
+      ? [
+          {
+            label: controls.maximized ? "Restore" : "Maximize",
+            section:
+              controls.views?.length || controls.switchTo?.length
+                ? "Window"
+                : undefined,
+            run: controls.onMaximize,
+          },
+        ]
+      : []),
+    {
+      label: "Minimize",
+      section: controls.narrow
+        ? undefined
+        : controls.views?.length || controls.switchTo?.length
+          ? "Window"
+          : undefined,
+      run: controls.onMinimize,
+    },
+    ...(controls.compact
+      ? []
+      : [
+          ...choices.map(({ target, label }) => ({
+            label,
+            run: () => controls.onSnap(target),
+          })),
+          { label: "Float window", run: controls.onFloat },
+        ]),
+    ...(controls.pin
+      ? [
+          {
+            key: "pin",
+            label: controls.pin.pinned
+              ? "Unpin desk in Town"
+              : "Pin desk in Town",
+            checked: controls.pin.pinned,
+            toggle: true,
+            run: () => controls.pin?.onPin(!controls.pin.pinned),
+          },
+        ]
+      : []),
+  ];
   const host = useRef<HTMLDivElement>(null);
   const menu = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
@@ -55,9 +178,13 @@ export function WindowControls({
   });
   useEffect(() => {
     if (!open) return;
-    menu.current
-      ?.querySelector<HTMLButtonElement>('[role="menuitem"]')
-      ?.focus();
+    // The checked item (the current view) first, else the first item.
+    const items = menu.current;
+    (
+      items?.querySelector<HTMLButtonElement>(
+        '[role="menuitemradio"][aria-checked="true"]',
+      ) ?? items?.querySelector<HTMLButtonElement>('[role^="menuitem"]')
+    )?.focus();
   }, [open]);
   const scale = open ? measuredFixedPositionScale() : 1;
   const anchor = trigger.current?.getBoundingClientRect();
@@ -76,10 +203,7 @@ export function WindowControls({
             8,
             Math.min(
               anchor.bottom + 4,
-              window.innerHeight -
-                (210 + (controls.color ? 40 : 0) + (controls.pin ? 40 : 0)) *
-                  scale -
-                8,
+              window.innerHeight - (controls.color ? 290 : 250) * scale - 8,
             ),
           ) / scale,
       }
@@ -96,7 +220,7 @@ export function WindowControls({
           event.stopPropagation();
           const items = Array.from(
             menu.current?.querySelectorAll<HTMLButtonElement>(
-              '[role="menuitem"], [role="menuitemcheckbox"], .color-swatch-button',
+              '[role^="menuitem"], .color-swatch-button',
             ) ?? [],
           );
           const index = items.indexOf(
@@ -109,43 +233,18 @@ export function WindowControls({
         }
       }}
     >
-      {!controls.compact && (
-        <button
-          ref={trigger}
-          type="button"
-          aria-label={`Snap ${label}`}
-          title="Snap window"
-          aria-haspopup="menu"
-          aria-expanded={open}
-          onClick={() => setOpen((value) => !value)}
-        >
-          <Columns2 size={15} />
-        </button>
-      )}
-      {controls.compact && controls.pin && (
-        // A compact window has no menu, so its desk pin is a toggle here.
-        <button
-          type="button"
-          className="world-window-pin-toggle"
-          aria-label={
-            controls.pin.pinned ? "Unpin desk in Town" : "Pin desk in Town"
-          }
-          aria-pressed={controls.pin.pinned}
-          title="A pinned desk keeps its place in Town, and its agents stay at it"
-          onClick={() => controls.pin?.onPin(!controls.pin.pinned)}
-        >
-          <Pin size={15} />
-        </button>
-      )}
       <button
+        ref={trigger}
         type="button"
-        aria-label={`Minimize ${label}`}
-        title="Minimize window"
-        onClick={controls.onMinimize}
+        aria-label={`More actions for ${label}`}
+        title="More window actions"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen((value) => !value)}
       >
-        <Minus size={15} />
+        <MoreHorizontal size={16} />
       </button>
-      {!controls.compact && (
+      {!controls.compact && !controls.narrow && (
         <button
           type="button"
           aria-label={`${controls.maximized ? "Restore" : "Maximize"} ${label}`}
@@ -159,64 +258,77 @@ export function WindowControls({
           )}
         </button>
       )}
-      <button
-        type="button"
-        aria-label={`Close ${label}`}
-        title="Close window"
-        onClick={controls.onClose}
-      >
-        <X size={16} />
-      </button>
+      {controls.back ? null : (
+        <button
+          type="button"
+          aria-label={`Close ${label}`}
+          title="Close window"
+          onClick={controls.onClose}
+        >
+          <X size={16} />
+        </button>
+      )}
       {open &&
         createPortal(
           <div
             ref={menu}
-            style={position}
-            className="world-window-snap-menu"
+            style={{
+              ...position,
+              maxHeight: `calc(100dvh - ${(position.top ?? 8) + 8}px)`,
+            }}
+            // The menu is portaled out of the window, so it carries the
+            // window's dark scope (Town) with it.
+            className={`world-window-snap-menu ${
+              host.current?.closest(".theme-scope-dark")
+                ? "theme-scope-dark"
+                : ""
+            }`}
             role="menu"
-            aria-label="Window placement"
+            aria-label="Window actions"
           >
-            {choices.map(({ target, label }) => (
-              <button
-                key={target}
-                type="button"
-                role="menuitem"
-                onClick={() => {
-                  controls.onSnap(target);
-                  setOpen(false);
-                }}
-              >
-                {label}
-              </button>
+            {items.map((item) => (
+              <Fragment key={item.key ?? item.label}>
+                {item.section ? (
+                  <div
+                    className="world-window-menu-section"
+                    role="presentation"
+                  >
+                    {item.section}
+                  </div>
+                ) : null}
+                <button
+                  type="button"
+                  className={
+                    item.toggle
+                      ? "is-wide world-window-pin"
+                      : item.key
+                        ? "is-wide"
+                        : undefined
+                  }
+                  title={
+                    item.toggle
+                      ? "A pinned desk keeps its place in Town, and its agents stay at it"
+                      : undefined
+                  }
+                  role={
+                    item.checked === undefined
+                      ? "menuitem"
+                      : item.toggle
+                        ? "menuitemcheckbox"
+                        : "menuitemradio"
+                  }
+                  aria-checked={item.checked}
+                  onClick={() => {
+                    item.run();
+                    setOpen(false);
+                  }}
+                >
+                  {item.toggle ? <Pin size={14} aria-hidden="true" /> : null}
+                  <span>{item.label}</span>
+                  {item.detail ? <small>{item.detail}</small> : null}
+                </button>
+              </Fragment>
             ))}
-            <button
-              type="button"
-              role="menuitem"
-              onClick={() => {
-                controls.onFloat();
-                setOpen(false);
-              }}
-            >
-              Float window
-            </button>
-            {controls.pin ? (
-              <button
-                type="button"
-                role="menuitemcheckbox"
-                aria-checked={controls.pin.pinned}
-                className="world-window-pin"
-                title="A pinned desk keeps its place in Town, and its agents stay at it"
-                onClick={() => {
-                  controls.pin?.onPin(!controls.pin.pinned);
-                  setOpen(false);
-                }}
-              >
-                <Pin size={14} aria-hidden="true" />
-                {controls.pin.pinned
-                  ? "Unpin desk in Town"
-                  : "Pin desk in Town"}
-              </button>
-            ) : null}
             {controls.color ? (
               <ColorSwatchButton
                 className="world-window-color"

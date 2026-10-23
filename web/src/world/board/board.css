@@ -1313,6 +1313,47 @@
   list-style: none;
   overflow-y: auto;
 }
+.work-lens-days {
+  flex: 1;
+  min-height: 0;
+  padding: 0 8px 8px;
+  overflow-y: auto;
+}
+.work-lens-days ul {
+  padding: 0 0 4px;
+  overflow: visible;
+}
+.work-lens-day {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  margin-top: 6px;
+  padding: 6px 4px;
+  border: 0;
+  border-bottom: 1px solid var(--board-line);
+  background: color-mix(in srgb, var(--board-card) 45%, var(--board-ground));
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  text-align: left;
+  cursor: pointer;
+}
+.work-lens-day span {
+  margin-left: auto;
+  color: var(--board-soft);
+  font-weight: 400;
+}
+.work-lens-day svg {
+  transition: transform 120ms ease;
+}
+.work-lens-day[aria-expanded="true"] svg {
+  transform: rotate(90deg);
+}
 .work-card {
   margin-top: 8px;
   padding: 10px 11px;

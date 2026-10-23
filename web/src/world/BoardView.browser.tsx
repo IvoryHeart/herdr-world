@@ -32,7 +32,24 @@ Object.defineProperty(Crypto.prototype, "randomUUID", {
   configurable: true,
 });
 // A synthetic sources service: one failing pull request on the "login fix"
-// agent's branch and one ticket.
+// agent's branch, a busy week of 150 merged ones and one ticket.
+const SOURCES_NOW = Date.now();
+const mergedWeek = Array.from({ length: 150 }, (_, index) => ({
+  key: `github:pr:example-org/web-app#${1_000 + index}`,
+  source: "github",
+  kind: "pull_request",
+  ref: `example-org/web-app#${1_000 + index}`,
+  title: `Synthetic merged change ${1_000 + index}`,
+  url: `https://github.com/example-org/web-app/pull/${1_000 + index}`,
+  lane: "merged",
+  status: "merged",
+  roles: ["author"],
+  updatedAt: SOURCES_NOW,
+  finishedAt: SOURCES_NOW - (index % 5) * 86_400_000,
+  number: 1_000 + index,
+  repo: "example-org/web-app",
+  checks: "pass",
+}));
 worldSourcesStore.useFetch(async () =>
   Response.json({
     observedAt: 1,
@@ -46,7 +63,7 @@ worldSourcesStore.useFetch(async () =>
         checkedAt: 1,
         lastSuccessAt: 1,
         itemCount: 1,
-        config: { kind: "github" },
+        config: { kind: "github", mergedDays: 7 },
       },
       {
         id: "jira",
@@ -82,6 +99,7 @@ worldSourcesStore.useFetch(async () =>
         repo: "example-org/web-app",
         checks: "fail",
       },
+      ...mergedWeek,
       {
         key: "jira:WEB-7",
         source: "jira",
@@ -635,6 +653,28 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
         host.querySelector(".work-lens-setup")?.textContent === "Set up Jira" &&
           !host.querySelector('.work-lens-note[role="status"]'),
         "a source never set up is a quiet hint, not a problem",
+      );
+      const merged = host.querySelector(
+        '.work-lens-column[data-lane="merged"]',
+      )!;
+      const days = [
+        ...merged.querySelectorAll<HTMLButtonElement>(".work-lens-day"),
+      ];
+      check(
+        merged.querySelector("h3")?.textContent?.includes("150") === true &&
+          days.length === 5 &&
+          days[0]!.textContent?.startsWith("Today") === true &&
+          days.map((day) => day.getAttribute("aria-expanded")).join() ===
+            "true,false,false,false,false" &&
+          merged.querySelectorAll(".work-card").length === 30,
+        `150 merged pull requests group by day, newest open (${days.map((day) => day.textContent)})`,
+      );
+      days[1]!.click();
+      await settle(50);
+      check(
+        merged.querySelectorAll(".work-card").length === 60 &&
+          !merged.querySelector(".work-card-facts"),
+        "opening a day shows its compact cards",
       );
       const link = fixing?.querySelector<HTMLAnchorElement>(".work-card-ref");
       check(

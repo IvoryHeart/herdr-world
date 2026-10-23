@@ -1,6 +1,7 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { availableParallelism, tmpdir } from "node:os";
 import { join } from "node:path";
+import { warmChrome } from "./chrome-warmup";
 import {
   assertWebBrowserInventory,
   assertWorldBrowserInventory,
@@ -53,6 +54,11 @@ console.info(
   `[test-runner] ${testArgs.filter((arg) => arg.startsWith("--")).join(" ")}`,
 );
 const directory = mkdtempSync(join(tmpdir(), "hwt-"));
+// Once per CI job: nested runners inherit the flag.
+const chrome =
+  Bun.env.CHROME_BIN || Bun.which("google-chrome") || Bun.which("chromium");
+const warm = process.env.CI === "true" && process.env.HERDR_CHROME_WARM !== "1";
+if (warm && chrome) await warmChrome(chrome);
 
 try {
   const commands = [[process.execPath, "test", ...testArgs]];
@@ -68,6 +74,7 @@ try {
         TMPDIR: directory,
         TMP: directory,
         TEMP: directory,
+        ...(warm ? { HERDR_CHROME_WARM: "1" } : {}),
       },
     });
     const interrupt = () => child.kill("SIGINT");

@@ -128,8 +128,8 @@ changes what you see and does not disconnect hosts or retarget open terminals.
 4. Tap an agent or its table to open its window on **Chat**: World's Inspector,
    with **Chat**, **Terminal**, **Changes** and **Files** in its top selector.
    In Town it docks on the right; drag its title to undock it. Chat shows the
-   whole conversation, scrolls back, and offers **Jump to latest**; the composer
-   is at the bottom. The **NEEDS YOU** list provides another route to waiting
+   conversation's latest 200 entries, scrolls back inside the window, and
+   offers **Jump to latest**; the composer stays at the bottom. The **NEEDS YOU** list provides another route to waiting
    agents and becomes a bottom tray on phones; it hides when no agent is
    blocked. The Town master's chat (**Menu → Town master**, `firstmate` by
    default) opens docked once per visit on wide screens. Hover an agent for a
@@ -285,7 +285,10 @@ on your phone and desktop.
    GitHub pull requests in columns from **In review** through **Fixing**,
    **Green** and **Ready to merge** to **Merged**, and on the **Tickets** tab
    your Jira tickets and assigned issues by status. A card names the agents
-   working on it; tap one to close Work and jump to its card. Escape or a
+   working on it; tap one to close Work and jump to its card. **Merged**
+   groups the week's pull requests you opened by the day they merged, with
+   today open; tap a day to open
+   it, and change how many days it covers in **Settings → Sources**. Escape or a
    press outside also closes Work. **Green** means checks pass while a
    required review is pending; **Ready to merge** means approved, or passing
    in a repository that requires no review. The same pull

@@ -1,13 +1,13 @@
 import { useState } from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
+import { useWindowManager } from "./useWindowManager";
+import { WindowControls } from "./WindowControls";
 import { WindowFrame } from "./WindowFrame";
 import { WindowSurface } from "./WindowSurface";
-import { WindowControls } from "./WindowControls";
 import { WindowSwitcher } from "./WindowSwitcher";
-import { useWindowManager } from "./useWindowManager";
-import { snapGeometry, windowGeometry, type Size } from "./windowManager";
 import { RESIZE_EDGES, resizeWindow } from "./windowInteraction";
+import { type Size, snapGeometry, windowGeometry } from "./windowManager";
 
 const initialInputs = ["A", "B"].map((id, index) => ({
   id,
@@ -222,7 +222,15 @@ async function run() {
     "cancel lost the maximize or snap state",
   );
   frame()
-    .querySelector<HTMLButtonElement>('[aria-label="Minimize A"]')!
+    .querySelector<HTMLButtonElement>('[aria-label="More actions for A"]')!
+    .click();
+  await settle();
+  [
+    ...document.querySelectorAll<HTMLButtonElement>(
+      '[role="menu"][aria-label="Window actions"] button',
+    ),
+  ]
+    .find((button) => button.textContent === "Minimize")!
     .click();
   await settle();
   check(!frame(), "minimized window remained visible");
@@ -276,23 +284,27 @@ async function run() {
     Boolean(document.querySelector(".world-window-divider")),
     "viewport resize lost shared divider",
   );
-  // The desk pin is a menu item on desktop and a header toggle when compact.
-  flushSync(() =>
-    document.querySelector<HTMLButtonElement>('[aria-label="Snap A"]')!.click(),
-  );
-  const pinItem = document.querySelector<HTMLButtonElement>(
-    '.world-window-snap-menu [role="menuitemcheckbox"]',
-  );
+  // The desk pin is an item in ⋯, on desktop and in a compact window alike.
+  const pinItem = async () => {
+    flushSync(() =>
+      document
+        .querySelector<HTMLButtonElement>('[aria-label="More actions for A"]')!
+        .click(),
+    );
+    return document.querySelector<HTMLButtonElement>(
+      '.world-window-snap-menu [role="menuitemcheckbox"]',
+    );
+  };
+  let item = await pinItem();
   check(
-    pinItem?.textContent === "Pin desk in Town" &&
-      pinItem.getAttribute("aria-checked") === "false",
+    item?.textContent === "Pin desk in Town" &&
+      item.getAttribute("aria-checked") === "false",
     "window menu lacks the desk pin item",
   );
-  flushSync(() => pinItem!.click());
+  flushSync(() => item!.click());
   check(
     harness.pins.A === true &&
-      !document.querySelector(".world-window-snap-menu") &&
-      !document.querySelector(".world-window-pin-toggle"),
+      !document.querySelector(".world-window-snap-menu"),
     "menu pin item did not pin the desk and close the menu",
   );
   const desktop = JSON.stringify(harness.state.windows);
@@ -302,20 +314,15 @@ async function run() {
       !document.querySelector("[data-window-resize]"),
     "compact mode exposed desktop frames or handles",
   );
-  const pinToggle = document.querySelector<HTMLButtonElement>(
-    ".world-window-pin-toggle",
-  );
-  const pressed = pinToggle?.getAttribute("aria-pressed");
-  const pinsBefore = JSON.stringify(harness.pins);
-  flushSync(() => pinToggle?.click());
+  item = await pinItem();
   check(
-    Boolean(pinToggle) &&
-      JSON.stringify(harness.pins) !== pinsBefore &&
-      document
-        .querySelector(".world-window-pin-toggle")
-        ?.getAttribute("aria-pressed") === String(pressed !== "true"),
-    "compact window desk pin toggle did not toggle the pin",
+    item?.textContent === "Unpin desk in Town" &&
+      item.getAttribute("aria-checked") === "true" &&
+      document.activeElement !== item,
+    "a compact window's menu lacks the pinned desk's item, or focused it",
   );
+  flushSync(() => item!.click());
+  check(harness.pins.A === false, "compact window menu did not unpin the desk");
   flushSync(() => harness.setCompact(false));
   check(
     JSON.stringify(harness.state.windows) === desktop,

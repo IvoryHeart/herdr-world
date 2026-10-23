@@ -1,6 +1,9 @@
 import { test } from "bun:test";
 import { resolve } from "node:path";
-import { verifyPostExitCancellation } from "./verification-resources";
+import {
+  verifyPostExitCancellation,
+  verifyTimeoutAccounting,
+} from "./verification-resources";
 
 // The required resource command explicitly selects its systemd manager and runs
 // these real-cgroup regressions. Ordinary unit runs report the missing prerequisite.
@@ -14,6 +17,17 @@ test
       resolve(import.meta.dir, ".."),
       manager === "system",
       boundary,
+    );
+  },
+  20000,
+);
+
+test.skipIf(manager !== "user" && manager !== "system").serial(
+  "a run past its deadline is measured, drained and reported as a timeout",
+  async () => {
+    await verifyTimeoutAccounting(
+      resolve(import.meta.dir, ".."),
+      manager === "system",
     );
   },
   20000,
