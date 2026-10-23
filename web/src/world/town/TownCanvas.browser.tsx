@@ -971,13 +971,65 @@ async function run() {
     "town did not lay out three buildings",
   );
   const narrowTown = diagnostics.layout?.formFactor === "narrow";
-  const roomCards = host.querySelectorAll(".town-room-card");
   const totalRooms = base.connections.reduce(
     (sum, c) => sum + (c.snapshot?.workspaces.length ?? 0),
     0,
   );
   // Wide screens show every building at home. A phone stacks buildings and
-  // their rooms in one column, so it draws the buildings in view.
+  // their rooms in one column, so it draws the buildings in view. Under load
+  // the room overlays can follow the renderer by a frame or more: wait.
+  await waitFor(
+    () =>
+      narrowTown
+        ? host.querySelectorAll(".town-room").length > 0
+        : host.querySelectorAll(".town-room").length === totalRooms,
+    "the town's rooms were never drawn",
+  );
+  // Phones show the Town board as a compact chip that opens the full board;
+  // wider screens show the board itself.
+  {
+    const chip = host.querySelector<HTMLButtonElement>(".town-board-chip")!;
+    const board = host.querySelector<HTMLElement>(".town-board")!;
+    const shown = (element: HTMLElement) =>
+      getComputedStyle(element).display !== "none";
+    if (window.innerWidth <= 640) {
+      check(
+        shown(chip) && !shown(board),
+        "a phone shows the Town board chip, not the board",
+      );
+      chip.click();
+      await waitFor(() => shown(board), "the chip did not open the Town board");
+      check(
+        chip.getAttribute("aria-expanded") === "true",
+        "the open chip is not marked expanded",
+      );
+      chip.click();
+      await waitFor(() => !shown(board), "the chip did not close the board");
+      chip.focus({ preventScroll: true });
+      chip.click();
+      await waitFor(
+        () => shown(board),
+        "the focused chip did not reopen the board",
+      );
+      chip.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+      );
+      await waitFor(
+        () => !shown(board),
+        "Escape on the focused chip did not close the board",
+      );
+      check(
+        chip.getAttribute("aria-expanded") === "false" &&
+          document.activeElement === chip,
+        "Escape should collapse the board and keep focus on its chip",
+      );
+    } else
+      check(
+        !shown(chip) && shown(board),
+        "a wide screen shows the Town board, not its chip",
+      );
+  }
+  const roomCards = host.querySelectorAll(".town-room-card");
   const drawnRooms = host.querySelectorAll(".town-room").length;
   check(
     narrowTown ? drawnRooms > 0 : drawnRooms === totalRooms,
@@ -1966,14 +2018,56 @@ async function run() {
       [...host.querySelectorAll<HTMLButtonElement>(".town-room-card")].find(
         (card) => card.textContent?.includes("orbit"),
       );
-    for (let step = 0; step < 6 && !orbitCard(); step += 1) {
-      host.querySelector<HTMLButtonElement>('[aria-label="Zoom out"]')!.click();
-      await new Promise((resolve) => setTimeout(resolve, 900));
+    const frameDelay = Number(params.get("flightFrameDelay") ?? 0);
+    const actualRAF = window.requestAnimationFrame.bind(window);
+    if (frameDelay > 0) {
+      await waitFor(
+        () => !diagnostics.flying,
+        "initial camera flight did not finish",
+      );
+      for (let into = 0; into < 3 && diagnostics.level !== "desk"; into += 1) {
+        const before = diagnostics.frames;
+        host
+          .querySelector<HTMLButtonElement>('[aria-label="Zoom in"]')!
+          .click();
+        await waitFor(
+          () => diagnostics.frames > before && !diagnostics.flying,
+          "desk-entry camera flight did not finish",
+        );
+      }
+      check(
+        diagnostics.level === "desk",
+        "slow-frame check did not enter desk level",
+      );
+      window.requestAnimationFrame = (callback) =>
+        actualRAF(() => {
+          setTimeout(() => callback(performance.now()), frameDelay);
+        });
+    }
+    const zoomSteps: { frames: number; zoom: number; flying: boolean }[] = [];
+    try {
+      for (let step = 0; step < 6 && !orbitCard(); step += 1) {
+        const beforeFrames = diagnostics.frames;
+        host
+          .querySelector<HTMLButtonElement>('[aria-label="Zoom out"]')!
+          .click();
+        await waitFor(
+          () => diagnostics.frames > beforeFrames && !diagnostics.flying,
+          "zoom-out camera flight did not finish",
+        );
+        zoomSteps.push({
+          frames: diagnostics.frames - beforeFrames,
+          zoom: diagnostics.zoom,
+          flying: diagnostics.flying,
+        });
+      }
+    } finally {
+      if (frameDelay > 0) window.requestAnimationFrame = actualRAF;
     }
     const roomCard = orbitCard();
     check(
       roomCard !== undefined,
-      `the 100-desk room has no card (level ${diagnostics.level}, zoom ${diagnostics.zoom.toFixed(2)}, ${host.querySelectorAll(".town-room-card").length} cards)`,
+      `the 100-desk room has no card (level ${diagnostics.level}, zoom ${diagnostics.zoom.toFixed(2)}, ${host.querySelectorAll(".town-room-card").length} cards; steps ${JSON.stringify(zoomSteps)})`,
     );
     roomCard?.click();
     const first = () =>
