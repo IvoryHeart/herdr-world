@@ -11,6 +11,7 @@ import {
   type BoardDocumentStore,
 } from "./board/boardDocument";
 import {
+  placeColor,
   resolveTerminal,
   TERMINAL_COLOR_PALETTE,
   TERMINAL_COLORS,
@@ -224,6 +225,43 @@ export function useTerminalColorChoices(): (
         onColor: (id) =>
           void setTerminalColor(
             target,
+            TERMINAL_COLORS.includes(id as TerminalColor)
+              ? (id as TerminalColor)
+              : null,
+          ),
+      };
+    },
+    [colors],
+  );
+}
+
+/** Choose a workspace's or host's colour (see placeColor), or reset it. */
+export function setPlaceColor(
+  key: string,
+  color: TerminalColor | null,
+  store: BoardDocumentStore = sharedBoardStore(),
+) {
+  return store.patch([{ op: "card.color", key, color }]);
+}
+
+/**
+ * Place colours for the shared picker: a function from a workspace's or
+ * host's colour key to its chosen colour (or "default") and how to change it.
+ */
+export function usePlaceColorChoices(): (key: string) => TerminalColorChoice {
+  const colors = useTerminalColors();
+  return useCallback(
+    (key) => {
+      const own = placeColor(colors, key);
+      return {
+        palette: TERMINAL_COLOR_PALETTE,
+        current: {
+          id: own ?? "default",
+          custom: own !== null,
+        } as TerminalColorChoice["current"],
+        onColor: (id) =>
+          void setPlaceColor(
+            key,
             TERMINAL_COLORS.includes(id as TerminalColor)
               ? (id as TerminalColor)
               : null,
