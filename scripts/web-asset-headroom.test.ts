@@ -1,5 +1,11 @@
 import { expect, test } from "bun:test";
-import { judge, parseDelta } from "./web-asset-headroom";
+import {
+  CONTEXT,
+  judge,
+  mainDescription,
+  parseDelta,
+  parseMain,
+} from "./web-asset-headroom";
 
 const MiB = 1024 * 1024;
 const budget = { files: 150, bytes: 13.25 * MiB };
@@ -38,6 +44,10 @@ test("the recorded delta round-trips through the status description", () => {
   );
   expect(parseDelta(description)).toEqual({ files: -2, bytes: -4096 });
   expect(parseDelta("something else")).toBeUndefined();
+  // Main's own record is not a PR delta, and round-trips separately.
+  const main = mainDescription({ files: 144, bytes: 13937949 });
+  expect(parseDelta(main)).toBeUndefined();
+  expect(parseMain(main)).toEqual({ files: 144, bytes: 13937949 });
 });
 
 test("the workflow judges PRs and re-judges them on every main push", async () => {
@@ -53,4 +63,13 @@ test("the workflow judges PRs and re-judges them on every main push", async () =
   expect(runs).toContain("bun scripts/web-asset-headroom.ts main");
   // The PR job compares the merge with its first parent, the base.
   expect(workflow.jobs.headroom.steps[0].with["fetch-depth"]).toBe(2);
+  // The job must not share the status's name, or requiring that name could
+  // be satisfied by a job that exited 0.
+  expect(workflow.jobs.headroom.name).not.toBe(CONTEXT);
+  const pr = workflow.jobs.headroom.steps.find(
+    (step: any) => step.run === "bun scripts/web-asset-headroom.ts pr",
+  );
+  expect(pr.env.PR_FROM_FORK).toContain(
+    "head.repo.full_name != github.repository",
+  );
 });

@@ -19,7 +19,9 @@ concurrency:
 
 jobs:
   headroom:
-    name: Web asset headroom
+    # Not the status's name: require the "Web asset headroom" status, which a
+    # main push can update after this job has finished.
+    name: Measure web asset headroom
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -36,6 +38,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_FROM_FORK: ${{ github.event.pull_request.head.repo.full_name != github.repository }}
         run: bun scripts/web-asset-headroom.ts pr
       - name: Re-judge open PRs against the new main
         if: github.event_name == 'push'
