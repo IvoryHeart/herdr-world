@@ -68,6 +68,12 @@ Start with [the synchronization helper](../scripts/upstream-sync.ts) and its
 The [local worker launcher](../scripts/upstream-local.ts) uses cached Codex
 subscription sign-in and serializes scheduled runs on the user's machine.
 
+The [file size ratchet](../scripts/file-size-ratchet.ts) with its
+[exceptions](../scripts/file-size-exceptions.json) and the
+[move-only check](../scripts/move-check.ts) keep big files from regrowing and
+splits honest; see their [ratchet](../scripts/file-size-ratchet.test.ts) and
+[move](../scripts/move-check.test.ts) tests.
+
 [Development verification](development.md#verification) describes local and CI
 runner settings. [CI](../.github/workflows/ci.yml) runs on pull requests and on
 every push to main; [Main gate](../.github/workflows/main-gate.yml) turns a red
