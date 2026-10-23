@@ -1,6 +1,7 @@
 import type { ConversationDelivery } from "./conversation-delivery";
 import type { PendingPrompt } from "./pending-prompt";
 import type { ConversationIdentity } from "./conversation-watch";
+import type { ConversationStep } from "./conversation-steps";
 import type { AgentQuest, Quest } from "./quest";
 import type { HistoryEntry } from "./session-history";
 
@@ -225,6 +226,13 @@ export interface ConversationSource {
       baseline?: readonly string[];
     },
   ): Promise<ConversationSendResult>;
+  /**
+   * The step model for the named tool calls, by the harness's call ID, read
+   * from the same transcript as `read`. Calls it cannot find are left out.
+   */
+  steps(
+    target: ConversationTarget & { call_ids: readonly string[] },
+  ): Promise<ConversationStep[]>;
   /** Forget a delivery notice the user has seen. */
   dismiss(target: ConversationTarget & { delivery_id: string }): boolean;
   /**

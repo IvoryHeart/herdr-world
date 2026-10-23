@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
+import { paneAgentName } from "../agentName";
 import { ChevronDown, EllipsisVertical, Pin, SquareStack } from "lucide-react";
 import { useStoreSelector } from "../store";
 import type { Pane, Tab } from "../types";
@@ -139,7 +140,7 @@ export function MobileTerminalIdentity({
       .map((workspace) => workspace.workspace_id)
       .join("\n"),
   );
-  const agent = pane?.display_agent?.trim() || pane?.agent?.trim() || "";
+  const agent = pane ? paneAgentName(pane) : "";
   const status = agentStateKind(pane?.agent_status);
   const workspaceId = pane?.workspace_id ?? "";
   // Mounted terminals can sit hidden behind another view (Spaces under a
