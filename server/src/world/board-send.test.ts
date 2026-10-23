@@ -262,6 +262,7 @@ describe("the saved link a Send relies on", () => {
       folded: [],
       colors: {},
       desk_pins: {},
+      interest: {},
     },
     relations: { spawns: [], groups: [] },
     notes: [

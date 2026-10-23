@@ -77,13 +77,28 @@ quieter. Lane logs are kept in `.agents/delivery/lanes/`.
 Heavy local checks share one machine-wide queue (`scripts/check-lock.ts`) across
 all worktrees and clones: one browser lane (World browser suites, Chrome-driven
 tests, timed suites) and one behavioral verification at a time, and at most two
-light lanes (static checks, unit tests). `bun run check:changed`,
-`check:delivery`, `test:browser` and `scripts/run-world-tests.ts` all queue, and a
-waiting lane prints `waiting for <worktree> <lane> (pid, since)`. Slots are
+light lanes (static checks, unit tests). The quiet lane's timed (latency) suites
+need the whole machine: they take every slot, waiting for running heavy lanes, and
+nothing heavy starts beside them. They reserve admission while waiting, so later
+ordinary requests cannot starve them. Canonical paths, directory selectors,
+filters and ambiguous options in direct test runs are queued conservatively.
+Admission is reserved before heavy slots drain, so even otherwise-free light
+slots wait while a whole-machine request is pending; this can take minutes.
+Direct runs containing timed suites (including the default full run and
+`test:world --shard=latency`) also take every slot. Unknown selectors take that
+same conservative quiet lane; known browser selections without timed suites
+take only the browser slot.
+Known value-taking flags such as `-t` and `--timeout` leave explicit file
+selection intact; a flags-only invocation still selects the full run.
+`bun run check:changed`, `check:delivery`,
+`test:browser`, `scripts/run-world-tests.ts` and any `bun run test` that includes a
+Chrome-driven suite all queue, and a waiting lane prints `waiting for <worktree>
+<lane> (pid, since)`. Slots are
 `flock(2)` locks under `$XDG_RUNTIME_DIR/herdr-world-checks` (or the temporary
 directory), released by the kernel when their holder exits however it exits, so a
-crashed gate never leaves a stale lock. A process holds one slot at a time, and its
-children run inside it, so gates cannot deadlock. CI does not queue.
+crashed gate never leaves a stale lock. A lane holds one slot, or all of them taken
+in one fixed order, and its children run inside it, so gates cannot deadlock. CI
+does not queue.
 
 Test Chrome renders WebGL with SwiftShader, the software renderer that CI's pixel
 and visual comparisons are calibrated against. Locally, `HERDR_WORLD_TEST_GPU=1`
@@ -261,6 +276,12 @@ failing test is rerun once first, and alerts only if it fails again. Rerun the
 failed jobs first when the failure is a known flake; otherwise merge the revert,
 revert the merge that broke it, or land a fix. Later red commits are added to the open issue, not to new ones, and the next
 green main run at or after the red commit closes the issue and its revert PR.
+
+The **Web asset headroom** status on a PR projects its web asset delta onto
+current main and fails if together they would exceed the bundle budgets in
+`scripts/check-web-assets.mjs`; it warns above 95 %. Every push to main re-judges
+open PRs, so a PR that fit an older main turns red once main has grown. Trim, or
+raise the budget in a reviewed change, before merging.
 
 Source files may not regrow. `bun run check:size` (part of `check` and the
 static lane) allows at most 1000 lines per non-test source file; larger files are

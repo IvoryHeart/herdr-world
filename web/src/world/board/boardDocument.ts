@@ -8,6 +8,7 @@ import type {
   RelationsDocument,
   TerminalRef,
 } from "../../../../shared/relations";
+import type { StoredInterest } from "../../../../shared/interest";
 
 /**
  * The browser's view of Board's saved state in the World service
@@ -87,6 +88,8 @@ export type BoardDocument = {
     colors?: Record<string, CardColor>;
     /** Town desks pinned by tab card key; absent before desk pins. */
     desk_pins?: Record<string, DeskPin>;
+    /** Terminal key to muted or focused; absent from older services. */
+    interest?: Record<string, StoredInterest>;
   };
   notes: BoardNote[];
   strings: BoardString[];
@@ -125,6 +128,7 @@ export type BoardOp =
   | { op: "desk.pin"; key: string; cell: DeskCell | null }
   | { op: "desk.unpin"; key: string }
   | { op: "desk.place"; key: string; cell: DeskCell }
+  | { op: "interest.set"; key: string; interest: StoredInterest | null }
   | {
       op: "anchor.witness";
       string_id: string;
