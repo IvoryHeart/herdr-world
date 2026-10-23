@@ -10,6 +10,7 @@ import {
   gitChanges,
   type Affected,
 } from "./affected";
+import { guardDiskSpace } from "./disk-guard";
 import { worldBrowserSuites, worldTimedSuites } from "./world-browser-suites";
 
 /**
@@ -221,6 +222,10 @@ async function lock() {
   }
 }
 
+guardDiskSpace(
+  browserOnly ? "the browser checks" : full ? "the full gate" : "the gate",
+  root,
+);
 const selection = scope();
 const { busy, quiet, verification } = plan(selection);
 const lanes = [...verification, ...busy, ...quiet];

@@ -261,6 +261,7 @@ describe("the saved link a Send relies on", () => {
       pinned: {},
       folded: [],
       colors: {},
+      desk_pins: {},
       interest: {},
     },
     notes: [

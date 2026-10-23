@@ -1265,6 +1265,43 @@ pane target wherever it stands.
 - **THEN** it walks to its host's reception behind any waiting agents and shows a
   completion marker, and inspecting it does not change Herdr state
 
+### Requirement: Pinned Town desks
+
+The user SHALL be able to pin and unpin a Town desk from its agent window's
+menu. A pin SHALL be a World view setting saved on the World service with the
+terminal colours, keyed by the desk's tab, so every device sees it; it SHALL NOT
+change Herdr and SHALL be separate from Spaces' browser-local tab pins. A pinned
+desk SHALL show a pin and keep its cell in its room through tab reorders,
+capacity steps and rebuilt scenes; the room SHALL grow to hold the cell, and
+the other desks SHALL take the free cells in tab order. A pinned desk SHALL NOT
+be picked up for a drag, nor be a reorder target, until unpinned. An agent at
+a pinned desk SHALL NOT go to the lounge: it SHALL leave its seat only for
+reception, when blocked or done and not yet checked, and SHALL return to its
+seat once checked or answered. A pin SHALL follow its tab to another workspace
+and SHALL be dropped when its tab closes. When a room has more desks than Town
+presents, its pinned desks and the selected desk, with their agents, SHALL
+still be presented, even past the bound, and other desks SHALL be omitted
+instead; only pins beyond the 127 desks a room can draw MAY go undrawn.
+
+#### Scenario: A pinned agent finishes and is seen
+
+- **WHEN** an agent at a pinned desk finishes and the user checks it
+- **THEN** it waits at reception until checked and then walks back to its seat,
+  never to the lounge
+
+#### Scenario: A pinned desk in a crowded room
+
+- **WHEN** a room's tabs exceed Town's desk bound and more of its tabs are
+  pinned than the bound, with another desk selected
+- **THEN** every pinned desk, the selected desk and their agents stay
+  presented, and only unpinned desks are omitted
+
+#### Scenario: A room reflows around a pinned desk
+
+- **WHEN** tabs are added or reordered in a room with a pinned desk
+- **THEN** the pinned desk keeps its cell and the other desks fill the free
+  cells in tab order
+
 ### Requirement: Town attention rail
 
 Town SHALL present the agents that need the user in the same order as Desk
@@ -1772,6 +1809,14 @@ place them into free space. Tidy SHALL rearrange the selected workspace's tabs,
 or the whole board when nothing is selected, and SHALL offer an undo that
 restores the previous positions. A pinned card SHALL keep its board position and
 SHALL NOT follow its workspace.
+
+#### Scenario: Pin a card
+
+- **WHEN** the user pins a selected card from its bar (on a phone, from its
+  terminal's header) and then tidies its workspace
+- **THEN** the card shows a pin badge and keeps its position while the other
+  cards are rearranged, and unpinning it lets it belong where it is beside its
+  workspace again
 
 #### Scenario: Drag a workspace
 

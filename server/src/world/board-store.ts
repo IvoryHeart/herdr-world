@@ -72,9 +72,17 @@ export type BoardLayoutDocument = {
   folded: string[];
   /** Card key to the colour the user chose for it. */
   colors: Record<string, CardColor>;
+  /**
+   * Town desks the user pinned, by their tab's card key: a pinned desk keeps
+   * its cell (null until Town first places it), and its agents stay at it.
+   */
+  desk_pins: Record<string, DeskPin>;
   /** Terminal key (shared/interest.ts) to the viewer's muted or focused. */
   interest: Record<string, StoredInterest>;
 };
+/** A desk's cell in its Town room: column and row, from the top left. */
+export type DeskCell = { col: number; row: number };
+export type DeskPin = { cell: DeskCell | null };
 export type BoardDocument = {
   version: 1;
   revision: number;
@@ -123,6 +131,11 @@ export type BoardOp =
       replace?: boolean;
     }
   | { op: "card.color"; key: string; color: CardColor | null }
+  /** Pin a Town desk; a null cell is filled in by Town (`desk.place`). */
+  | { op: "desk.pin"; key: string; cell: DeskCell | null }
+  | { op: "desk.unpin"; key: string }
+  /** Record where Town put a pinned desk; only a desk still pinned, unplaced. */
+  | { op: "desk.place"; key: string; cell: DeskCell }
   /** Mute or focus an agent's terminal, or return it to watching with null. */
   | { op: "interest.set"; key: string; interest: StoredInterest | null }
   | {
@@ -234,6 +247,7 @@ export function emptyBoardDocument(): BoardDocument {
       pinned: {},
       folded: [],
       colors: {},
+      desk_pins: {},
       interest: {},
     },
     notes: [],
@@ -291,6 +305,28 @@ function colors(value: unknown): Record<string, CardColor> {
     text(key, "colors key", BOARD_LIMITS.key);
     if (!CARD_COLORS.includes(entry as CardColor)) fail("card colour");
     out[key] = entry as CardColor;
+  }
+  return out;
+}
+/** Town rooms are at most this many cells across or down. */
+const DESK_CELL_MAX = 64;
+function deskCell(value: unknown): DeskCell {
+  const index = (entry: unknown) =>
+    Number.isSafeInteger(entry) &&
+    (entry as number) >= 0 &&
+    (entry as number) < DESK_CELL_MAX;
+  if (!isObject(value) || !index(value.col) || !index(value.row))
+    fail("desk cell");
+  return { col: value.col as number, row: value.row as number };
+}
+function deskPins(value: unknown): Record<string, DeskPin> {
+  if (value === undefined) return {};
+  if (!isObject(value)) fail("desk_pins must be an object");
+  const out: Record<string, DeskPin> = {};
+  for (const [key, entry] of Object.entries(value)) {
+    text(key, "desk_pins key", BOARD_LIMITS.key);
+    if (!isObject(entry)) fail("desk pin");
+    out[key] = { cell: entry.cell === null ? null : deskCell(entry.cell) };
   }
   return out;
 }
@@ -373,6 +409,8 @@ export function parseBoardDocument(value: unknown): BoardDocument {
       folded: keys(layout.folded, "folded"),
       // Boards saved before card colours have none.
       colors: colors(layout.colors),
+      // Boards saved before desk pins have none.
+      desk_pins: deskPins(layout.desk_pins),
       // Boards saved before interest have none: every agent is watched.
       interest: interests(layout.interest),
     },
@@ -401,6 +439,7 @@ function checkBounds(document: BoardDocument) {
     Object.keys(layout.pinned).length +
     layout.folded.length +
     Object.keys(layout.colors).length +
+    Object.keys(layout.desk_pins).length +
     Object.keys(layout.interest).length;
   if (entries > BOARD_LIMITS.layoutEntries)
     fail(`at most ${BOARD_LIMITS.layoutEntries} layout entries`);
@@ -553,6 +592,24 @@ function applyOp(next: BoardDocument, op: BoardOp, current: BoardDocument) {
       else fail("card colour");
       return;
     }
+    case "desk.pin": {
+      const key = text(op.key, "desk key", BOARD_LIMITS.key);
+      next.layout.desk_pins[key] = {
+        cell: op.cell === null ? null : deskCell(op.cell),
+      };
+      return;
+    }
+    case "desk.unpin":
+      delete next.layout.desk_pins[text(op.key, "desk key", BOARD_LIMITS.key)];
+      return;
+    case "desk.place": {
+      // Never re-pins a desk unpinned meanwhile, nor moves a placed one.
+      const pin =
+        next.layout.desk_pins[text(op.key, "desk key", BOARD_LIMITS.key)];
+      const cell = deskCell(op.cell);
+      if (pin && !pin.cell) pin.cell = cell;
+      return;
+    }
     case "interest.set": {
       const key = text(op.key, "interest key", BOARD_LIMITS.key);
       if (op.interest === null) delete next.layout.interest[key];
@@ -634,9 +691,32 @@ export function moveFollowOps(
     if (from !== string.from || to !== string.to)
       ops.push({ op: "string.put", string: { ...string, from, to } });
   }
-  if (movedTab && colors)
+  if (movedTab && colors) {
     ops.push(...colorFollowOps(connectionId, movedTab, moved, colors));
+    ops.push(...pinFollowOps(document, connectionId, movedTab, moved, colors));
+  }
   return ops;
+}
+
+/**
+ * A pinned desk stays pinned when its tab moves to another workspace: the pin
+ * takes the tab's new key, and Town places it afresh in its new room.
+ */
+function pinFollowOps(
+  document: BoardDocument,
+  connectionId: string,
+  movedTab: string,
+  moved: { tab_id: string; workspace_id?: string },
+  { workspaceIds }: MoveColors,
+): BoardOp[] {
+  const previousKey = tabCardKey(connectionId, movedTab, workspaceIds);
+  const nextKey = tabCardKey(connectionId, moved.tab_id, workspaceIds);
+  if (previousKey === nextKey || !document.layout.desk_pins[previousKey])
+    return [];
+  return [
+    { op: "desk.pin", key: nextKey, cell: null },
+    { op: "desk.unpin", key: previousKey },
+  ];
 }
 
 /**
@@ -685,11 +765,12 @@ export type MoveColors = {
 };
 
 /**
- * After Herdr closes a tab on the current runtime, its saved colour goes. The
+ * After Herdr closes a tab on the current runtime, its saved colour and desk
+ * pin go. The
  * plain key is dropped only when no workspace holds that ID (older Herdr can
  * reuse one), which the caller checks with Herdr as Board's detach does.
  */
-export function tabClosedColorOps(
+export function tabClosedOps(
   document: BoardDocument,
   connectionId: string,
   tabId: string,
@@ -697,9 +778,14 @@ export function tabClosedColorOps(
 ): BoardOp[] {
   const keys = [cardKey(connectionId, `tab:${tabId}`)];
   if (workspaceAbsent) keys.push(cardKey(connectionId, tabId));
-  return keys
-    .filter((key) => document.layout.colors[key])
-    .map((key) => ({ op: "card.color", key, color: null }));
+  return keys.flatMap((key): BoardOp[] => [
+    ...(document.layout.colors[key]
+      ? [{ op: "card.color" as const, key, color: null }]
+      : []),
+    ...(document.layout.desk_pins[key]
+      ? [{ op: "desk.unpin" as const, key }]
+      : []),
+  ]);
 }
 
 /**

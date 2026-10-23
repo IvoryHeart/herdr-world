@@ -196,6 +196,13 @@ changes what you see and does not disconnect hosts or retarget open terminals.
    shows the new order too, and moving a tab in Spaces moves its table. The
    tables move once Herdr reports the new order, and agents stay with their
    table.
+9. To keep a table where it is, open one of its agents (its window) and choose
+   **Pin desk in Town** from the window's **⋯** menu, on a phone too. The
+   table wears a pin, stays put
+   when tabs are reordered or the room grows, and its agents stay at it rather
+   than taking breaks in the lounge; they still go to reception when they need
+   you or finish, and come straight back once seen. Choose **Unpin desk in
+   Town** to let it follow the tab order again.
 
 A table with more panes than drawn seats shows the count and offers a chooser
 for every pane. When a table closes, the tables after it close up so the room
@@ -285,7 +292,10 @@ on your phone and desktop.
    The chevron on a workspace's top-left corner folds its tabs behind a count, and tapping the count opens
    them into free space. The sparkle button tidies the selected workspace, or
    the whole board, and offers **Undo**; notes strung to cards move with them,
-   and notes left on a card move to free space.
+   and notes left on a card move to free space. Select a card and press
+   **Pin** in its bar to keep it where it is: a pinned card shows a pin, and
+   placement, tidying and settling leave it until you **Unpin** it (you can
+   still drag it). On a phone, tap the pin in the card's terminal header.
 4. Tap a workspace, tab or pane row to open its Inspector with Terminal, Files,
    Changes and Chat; a line joins each Inspector window to its card. Double-click a tab to open its terminal.
 5. Double-click (or double-tap) empty board to pin a note and type; double-click

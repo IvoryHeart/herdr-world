@@ -347,6 +347,7 @@ describe("desk moves", () => {
         pinned: {},
         folded: [],
         colors: {},
+        desk_pins: {},
         interest: {},
       },
       notes: [{ id: "n1", text: "Note", color: "yellow", x: 0, y: 0, rev: 1 }],
