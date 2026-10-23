@@ -938,6 +938,7 @@ export default function App({
   onInspectorViewChange,
   onTerminalPopOut,
   inspectorContext = null,
+  topbarHidden = false,
   zenScope,
   zenDefault = false,
   zenOnMobile = false,
@@ -973,6 +974,8 @@ export default function App({
   onInspectorViewChange?: (view: InspectorView) => void;
   onTerminalPopOut?: () => void;
   inspectorContext?: WorkspaceInspectorContext | null;
+  /** Slides the topbar away while the host's own window bar stands in. */
+  topbarHidden?: boolean;
   /** Keeps a separate Zen choice for this surface, e.g. one World view. */
   zenScope?: string;
   /** Zen for a scope the user has not toggled yet. */
@@ -4212,7 +4215,7 @@ export default function App({
     </button>
   );
   const topbar = (
-    <header className={`topbar ${zenActive ? "is-zen" : ""}`}>
+    <header className={`topbar ${zenActive || topbarHidden ? "is-zen" : ""}`}>
       <div className="topbar-start">
         {!mobile ? (
           <div className="brand">

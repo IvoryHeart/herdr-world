@@ -131,6 +131,37 @@
 .world-window-snap-menu > button:focus {
   background: var(--accent-soft);
 }
+.world-window-snap-menu {
+  overflow-y: auto;
+}
+.world-window-menu-section {
+  grid-column: 1 / -1;
+  padding: 6px 8px 2px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.world-window-snap-menu > button.is-wide {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-height: 40px;
+}
+.world-window-snap-menu > button small {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+}
+.world-window-snap-menu > button[aria-checked="true"] {
+  background: var(--accent-soft);
+  color: var(--text-strong);
+  font-weight: 600;
+}
 .world-window-snap-menu > .world-window-color {
   grid-column: 1 / -1;
   justify-content: flex-start;
@@ -329,6 +360,231 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.world-window-back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+}
+/* Town draws the agent's window as the Town prototype's chat panel: a dark
+   translucent panel with a 2px edge, chunky targets and a pixel name. The
+   look comes from the shell's own tokens, so every view inside follows. */
+.world-managed-window.is-town-skin {
+  --viewer-panel-bg: transparent;
+  --viewer-header-bg: transparent;
+  --viewer-content-bg: rgba(0, 0, 0, 0.25);
+  --viewer-border: rgba(255, 255, 255, 0.08);
+  --text: #f1efe6;
+  --text-strong: #f1efe6;
+  --muted: #a9b2a4;
+  --accent: #ffd166;
+  --accent-soft: rgba(255, 209, 102, 0.16);
+  --town-button: #273141;
+  --town-button-on: #3a4459;
+  --town-edge: #090c11;
+  /* The 2px edge is a ring, so the window's content still fills it. */
+  border: 0;
+  border-radius: 12px;
+  background: rgba(17, 21, 29, 0.92);
+  box-shadow:
+    0 0 0 2px var(--town-edge),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.07),
+    0 10px 30px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(8px);
+  color: var(--text);
+  font-family: "Rubik", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+.world-managed-window.is-town-skin.is-active {
+  box-shadow:
+    0 0 0 2px var(--town-edge),
+    inset 0 0 0 1px rgba(255, 209, 102, 0.35),
+    0 10px 30px rgba(0, 0, 0, 0.35);
+}
+.is-town-skin .workspace-inspector-head {
+  gap: 8px;
+  padding: 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+.is-town-skin .workspace-inspector-checkout {
+  font:
+    700 17px / 1.1 "Pixelify Sans",
+    ui-monospace,
+    monospace;
+  letter-spacing: 0.01em;
+}
+.is-town-skin .workspace-inspector-location {
+  font-size: 12px;
+}
+.is-town-skin
+  :is(
+    .world-window-back,
+    .world-window-controls > button,
+    .workspace-inspector-tabs-more
+  ) {
+  min-width: 40px;
+  min-height: 40px;
+  border: 2px solid var(--town-edge);
+  border-radius: 9px;
+  background: var(--town-button);
+  box-shadow:
+    inset 0 -3px 0 rgba(0, 0, 0, 0.35),
+    inset 0 2px 0 rgba(255, 255, 255, 0.07);
+  color: var(--text);
+  font-weight: 600;
+}
+.is-town-skin .world-window-back {
+  width: 40px;
+  height: 40px;
+}
+.is-town-skin .world-window-controls {
+  gap: 6px;
+}
+.is-town-skin .workspace-inspector-tabs {
+  padding: 3px;
+  border: 0;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.25);
+}
+.is-town-skin .workspace-inspector-tabs > button {
+  min-height: 34px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.is-town-skin .workspace-inspector-tabs > button.is-active {
+  background: var(--town-button-on);
+  color: var(--text-strong);
+  box-shadow:
+    inset 0 -2px 0 rgba(0, 0, 0, 0.35),
+    0 0 0 1px rgba(255, 255, 255, 0.14);
+}
+/* Town names the agent as its peek does: the Town portrait, the pixel name,
+   and the status as a coloured pill before the location. */
+.is-town-skin .workspace-inspector-agent-identity {
+  grid-template-columns: 32px minmax(0, 1fr);
+  column-gap: 10px;
+}
+.is-town-skin .workspace-inspector-agent-avatar {
+  width: 32px;
+  height: 44px;
+  border: 0;
+  border-radius: 6px;
+  background: #1b2230;
+}
+.workspace-inspector-portrait {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+.is-town-skin .workspace-inspector-state {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  background: #222b39;
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 600;
+}
+.is-town-skin .workspace-inspector-state[data-tone="working"] {
+  color: #6fc3ff;
+}
+.is-town-skin .workspace-inspector-state[data-tone="blocked"] {
+  color: #ffb547;
+}
+.is-town-skin .workspace-inspector-state[data-tone="done"] {
+  color: #7be08f;
+}
+.is-town-skin .workspace-inspector-state[data-tone="idle"] {
+  color: #d9c39b;
+}
+/* Chat in Town reads like the Town peek: message cards on the terminal
+   dark, a reply row with a 2px edge, and chunky buttons. The header already
+   shows the status pill, so Chat's own copy of it stays out. */
+.is-town-skin .agent-chat {
+  --input-bg: #0d1117;
+  --border-soft: rgba(255, 255, 255, 0.08);
+  --accent-soft: #2a3446;
+}
+.is-town-skin .agent-chat-toolbar {
+  border-bottom-color: rgba(255, 255, 255, 0.07);
+}
+.is-town-skin .agent-chat-status {
+  display: none;
+}
+.is-town-skin .agent-chat-bubble {
+  color: #c9d1c3;
+  border: 0;
+  border-radius: 8px;
+}
+.is-town-skin .agent-chat-message.is-user .agent-chat-bubble {
+  color: var(--text);
+  border: 0;
+  border-radius: 8px;
+}
+.is-town-skin .agent-chat-composer {
+  border-top-color: rgba(255, 255, 255, 0.07);
+}
+.is-town-skin .agent-chat-composer textarea {
+  min-height: 40px;
+  border: 2px solid var(--town-edge);
+  border-radius: 9px;
+  font-size: 14px;
+}
+.is-town-skin .agent-chat-composer button {
+  width: auto;
+  min-width: 40px;
+  height: 40px;
+  padding: 0 12px;
+  color: var(--text);
+  background: var(--town-button);
+  border: 2px solid var(--town-edge);
+  border-radius: 9px;
+  box-shadow:
+    inset 0 -3px 0 rgba(0, 0, 0, 0.35),
+    inset 0 2px 0 rgba(255, 255, 255, 0.07);
+}
+/* A phone-width window gives the name room: tighter gaps and narrower view
+   icons, while every button stays a 40px target. */
+@container workspace-inspector (max-width: 399px) {
+  .is-town-skin .workspace-inspector-head {
+    gap: 4px;
+    padding-inline: 6px;
+  }
+  .is-town-skin .workspace-inspector-tabs {
+    gap: 0;
+    padding: 2px;
+  }
+  .is-town-skin .workspace-inspector-tabs > button {
+    padding: 0 6px;
+  }
+  .is-town-skin .workspace-inspector-agent-identity {
+    column-gap: 6px;
+  }
+  .is-town-skin .workspace-inspector-where {
+    display: none;
+  }
+}
+:where(html[data-layout="mobile"]) .world-managed-window.is-town-skin,
+:where(html[data-layout="mobile"])
+  .world-managed-window.is-town-skin.is-active {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+:where(html[data-layout="mobile"]) .is-town-skin .workspace-inspector-head {
+  gap: 6px;
+  padding: 8px;
+}
+.is-town-skin :is(button, [role="tab"]):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 .world-managed-window .workspace-inspector {
   border: 0;
   border-radius: inherit;

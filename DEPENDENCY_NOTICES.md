@@ -81,6 +81,8 @@ are reproduced in `DEPENDENCY_LICENSES.md`.
 | @floating-ui/dom | 1.7.6 | MIT |
 | @floating-ui/react-dom | 2.1.8 | MIT |
 | @floating-ui/utils | 0.2.11 | MIT |
+| @fontsource/jetbrains-mono | 5.3.0 | OFL-1.1 |
+| @fontsource/pixelify-sans | 5.3.0 | OFL-1.1 |
 | @google/genai | 2.21.0 | Apache-2.0 |
 | @inquirer/ansi | 2.0.8 | MIT |
 | @inquirer/checkbox | 5.2.5 | MIT |
