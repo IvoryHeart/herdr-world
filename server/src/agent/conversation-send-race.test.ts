@@ -851,6 +851,37 @@ describe("the delivery ledger", () => {
     });
   });
 
+  test("an unrelated later prompt never settles a send by order", () => {
+    const ledger = createDeliveryLedger();
+    ledger.record("p", { ...send, text: "Run all tests" });
+    const view = (messages: ReturnType<typeof said>[]) => [
+      { fingerprint: "A", label: "session A", messages },
+    ];
+    // Another client types something else in the same session.
+    ledger.evaluate(
+      "p",
+      "A",
+      view([said("Summarize the README instead", send.endedAt + 2000)]),
+      send.endedAt + 3000,
+    );
+    expect(ledger.list("p")[0]?.state).toBe("pending");
+    // A harness that trims or wraps the words still matches, by order.
+    ledger.evaluate(
+      "p",
+      "A",
+      view([
+        said("Summarize the README instead", send.endedAt + 2000),
+        said("Please: Run all tests now", send.endedAt + 4000),
+      ]),
+      send.endedAt + 5000,
+    );
+    expect(ledger.list("p")[0]).toMatchObject({
+      state: "matched",
+      matched_by: "order",
+      matched_id: `Please: Run all tests now:${send.endedAt + 4000}`,
+    });
+  });
+
   test("two sends take their turns by words first, then in order", () => {
     const ledger = createDeliveryLedger();
     ledger.record("p", { ...send, text: "first\nmulti" });

@@ -37,9 +37,10 @@ export type ConversationDelivery = {
   /** matched: the transcript message taken for this send. */
   matched_id?: string;
   /**
-   * matched: how. `words`: the same words. `order`: no turn had them, and
-   * this was the first user turn in its session written after the send
-   * (harnesses rewrite multi-line input, pastes and attachments).
+   * matched: how. `words`: the same words. `order`: no turn had them; this
+   * was the first user turn in its session after the send that its harness
+   * could have rewritten it into (a paste or image placeholder, or words
+   * around the typed ones). An inference, labelled as one.
    */
   matched_by?: "words" | "order";
   /** misdelivered: the session the evidence names. */
@@ -119,6 +120,21 @@ export const typedText = (text: string) =>
     .replace(ATTACHMENT, " ")
     .replace(/\s+/g, " ")
     .trim();
+
+// A harness's placeholder for what it rewrote: a paste or an image.
+const PLACEHOLDER = /\[(?:Image|Pasted text) #\d+[^\]]*\]/;
+
+/**
+ * Whether a turn can be what was typed, rewritten by its harness: it holds a
+ * paste or image placeholder, or its words contain the typed words or are
+ * contained in them. Any other later prompt (another client, the terminal)
+ * is not taken for this send by order alone.
+ */
+function rewrittenFrom(text: string, typed: string) {
+  if (PLACEHOLDER.test(text)) return true;
+  const words = typedText(text);
+  return !!words && !!typed && (words.includes(typed) || typed.includes(words));
+}
 
 const userMessages = (messages: readonly ConversationMessage[]) =>
   messages.filter(
@@ -338,10 +354,11 @@ export function createDeliveryLedger() {
         }
       }
       // A send no turn matched by its words takes the first user turn in its
-      // own session written clearly after it, oldest send first. Harnesses
-      // rewrite multi-line input, pastes and attachments, and a busy one
-      // writes a queued message only when the agent takes it up; until a
-      // turn appears, the send stays pending ("waiting").
+      // own session written clearly after it that its harness could have
+      // rewritten it into (a paste or image placeholder, or words around the
+      // typed ones), oldest send first. Order alone never settles a send
+      // against an unrelated prompt from elsewhere: until such a turn
+      // appears, the send stays pending ("waiting").
       for (const receipt of list) {
         if (receipt.state !== "pending" || !open(receipt, now)) continue;
         const own = views.find(
@@ -352,7 +369,8 @@ export function createDeliveryLedger() {
             !claimed.has(claimKey(paneId, receipt.fingerprint, message.id)) &&
             !receipt.baseline.has(message.id) &&
             Date.parse(message.sent_at) >= receipt.after &&
-            Date.parse(message.sent_at) <= receipt.until,
+            Date.parse(message.sent_at) <= receipt.until &&
+            rewrittenFrom(message.text, receipt.typed),
         );
         if (!next) continue;
         claimed.add(claimKey(paneId, receipt.fingerprint, next.id));

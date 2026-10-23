@@ -189,7 +189,7 @@ Each send leaves a receipt for the pane, bound to the session it was sent to:
 | State | Meaning | Shown |
 | --- | --- | --- |
 | `pending` | Herdr took it, but it is not yet in the session's transcript (a busy harness writes a queued message only when the agent takes it up) | In that session's conversation at its send time, never below replies written since, as "Delivered · waiting for <agent>" with grey ticks. After the pane moves on, as a line "Still checking <session>". Both have **Stop checking** |
-| `matched` | The same words appeared in its own session clearly after the send; or, when none did, the first user turn written there after the send | That transcript message is marked with blue ticks, "Sent from Chat; matched by its words", or "Sent from Chat" when matched by order |
+| `matched` | The same words appeared in its own session clearly after the send; or, when none did, the first user turn written there after the send that its harness could have rewritten it into (a paste or image placeholder, or words around the typed ones) | That transcript message is marked with blue ticks, "Sent from Chat; matched by its words", or "Sent from Chat; matched by order". Both show order, not cause |
 | `misdelivered` | Evidence of a switch after the send | A red notice naming both sessions; Send is paused until it is dismissed |
 | `uncertain` | The same words appeared at about the time of the send, or both in its own session and first in the session the pane moved to | A notice saying Chat cannot tell, with **Dismiss** |
 | `unverified` | Chat can no longer check | A notice saying why, with **Dismiss** |
@@ -206,7 +206,10 @@ switch to another one. Claude Code wraps multi-line and pasted input in
 `pasted_content` tags; Chat compares and shows the words inside, marking the
 turn **Pasted**. A send that no turn matches by its words, after every send
 has had that chance, takes the first unclaimed user turn in its own session
-written clearly after it, oldest send first.
+written clearly after it that its harness could have rewritten it into: one
+with a paste or image placeholder, or whose words contain the typed ones or
+are contained in them. An unrelated prompt from another client or the
+terminal never settles a send; the send stays pending until its turn appears.
 
 - A receipt becomes `matched` when its own session's transcript has a user
   message with the same text that Chat did not show before the send

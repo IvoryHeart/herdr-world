@@ -115,13 +115,13 @@ const ChatBubble = memo(function ChatBubble({
             title={
               matched === "words"
                 ? "Chat sent the same words just before this appeared; it cannot prove this is that message."
-                : "The first message in this conversation after Chat sent one; the harness rewrote its words."
+                : "Inferred: the first message here after Chat sent one, in a form its harness rewrites (a paste or image placeholder, or added words)."
             }
           >
             <CheckCheck size={13} aria-hidden="true" />
             {matched === "words"
               ? "Sent from Chat; matched by its words"
-              : "Sent from Chat"}
+              : "Sent from Chat; matched by order"}
           </span>
         ) : null}
         <button
