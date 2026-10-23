@@ -35,6 +35,8 @@ import { AgentHistoryDrawer } from "./AgentHistoryDrawer";
 import { AttachmentChips } from "./AttachmentChips";
 import { CodexSessionLink } from "./CodexSessionLink";
 import { MarkdownPreview } from "./markdown";
+import { QuestLog } from "./QuestLog";
+import type { Quest } from "../../../server/src/agent/quest";
 import "./AgentChat.css";
 
 // Mirrors the server's conversation read model (server/src/agent/conversation.ts).
@@ -56,6 +58,15 @@ export type Conversation = {
   session_binding: "reported" | "title" | "guessed" | null;
   session_fingerprint: string | null;
   session_label: string | null;
+  /** The harness's terminal title, such as the task it is on. */
+  terminal_title?: string | null;
+  /** The tool call started and not yet finished, from the transcript. */
+  running_tool?: {
+    id: string;
+    name: string;
+    summary: string | null;
+    started_at: string;
+  } | null;
   status: "ok" | "unavailable";
   unavailable: {
     reason: string;
@@ -65,11 +76,55 @@ export type Conversation = {
   } | null;
   messages: ConversationMessage[];
   latest: ConversationMessage | null;
+  /** The agent's quest: its todos, plan, goal or loop. */
+  quest?: Quest | null;
   /**
    * Sends not yet seen in this conversation, sends with evidence they went
    * elsewhere, and sends Chat can no longer check.
    */
   deliveries?: ConversationDelivery[];
+  /** The question a blocked agent is waiting on, read from its screen. */
+  pending_prompt?: PendingPrompt | null;
+};
+
+export type PendingPrompt = {
+  question: string[];
+  /** The complete request asked about: a command, or a file and its edit. */
+  request: string[];
+  options: { number: string; label: string; key: string }[];
+  fingerprint: string;
+};
+
+type AnswerResult =
+  | {
+      status: "sent";
+      number: string;
+      label: string;
+      acknowledged: boolean;
+      unconfirmed_reason: UnconfirmedReason | null;
+      prompt_fingerprint: string;
+    }
+  | { status: "refused"; reason: string; message: string };
+
+// Mirrors AnswerUnconfirmedReason in server/src/agent/conversation.ts.
+type UnconfirmedReason =
+  | "agent_missing"
+  | "session_changed"
+  | "unknown_status"
+  | "unreadable"
+  | "still_showing";
+
+const UNCONFIRMED: Record<UnconfirmedReason, string> = {
+  still_showing:
+    "the question is still showing; check the Terminal if it does not move on.",
+  session_changed:
+    "the pane has another session now, so the key may have reached it. Check the Terminal.",
+  unknown_status:
+    "Herdr does not say what the agent is doing now, so Chat cannot confirm the answer. Check the Terminal.",
+  agent_missing:
+    "Herdr no longer reports the agent, so Chat cannot confirm the answer. Check the Terminal.",
+  unreadable:
+    "Chat could not read the screen to confirm the answer. Check the Terminal.",
 };
 
 export type ConversationDelivery = {
@@ -93,6 +148,127 @@ const FOLLOW_THRESHOLD_PX = 48;
 
 const preview = (text: string) =>
   text.length > 80 ? `${text.slice(0, 79)}…` : text;
+
+/**
+ * The agent's own question, with its options as buttons. The options are read
+ * from the agent's prompt and each presses that option's key; when none can be
+ * read, Chat shows the question and the way to the Terminal instead of
+ * guessing.
+ */
+function AskCard({
+  agent,
+  prompt,
+  answering,
+  notice,
+  onAnswer,
+  onOpenTerminal,
+}: {
+  agent: string;
+  prompt: PendingPrompt;
+  answering: boolean;
+  notice: string;
+  onAnswer(key: string): void;
+  onOpenTerminal?: () => void;
+}) {
+  const terminal = onOpenTerminal ? (
+    <button type="button" onClick={onOpenTerminal}>
+      <SquareTerminal size={13} /> Answer in the Terminal
+    </button>
+  ) : null;
+  return (
+    <section
+      className="agent-chat-ask"
+      aria-label={`${agent} is waiting`}
+      // Keys answer only while this card has focus, and a held key repeats
+      // nothing: another Chat's question is never answered from here.
+      tabIndex={0}
+      onKeyDown={(event) => {
+        if (
+          event.repeat ||
+          event.defaultPrevented ||
+          event.metaKey ||
+          event.ctrlKey ||
+          event.altKey ||
+          answering
+        )
+          return;
+        const option = prompt.options.find(
+          (candidate) => candidate.number === event.key,
+        );
+        if (!option) return;
+        event.preventDefault();
+        onAnswer(option.key);
+      }}
+    >
+      <h3>{agent} is waiting on you</h3>
+      {prompt.request.length ? <pre>{prompt.request.join("\n")}</pre> : null}
+      {prompt.question.map((line, index) => (
+        <p key={index}>{line}</p>
+      ))}
+      {prompt.options.length ? (
+        <>
+          <div
+            className="agent-chat-ask-options"
+            role="group"
+            aria-label="Answers"
+          >
+            {prompt.options.map((option, index) => (
+              <button
+                key={option.number}
+                type="button"
+                className={index === 0 ? "is-primary" : undefined}
+                disabled={answering}
+                onClick={() => onAnswer(option.key)}
+              >
+                <kbd>{option.number}</kbd>
+                <span>{option.label}</span>
+              </button>
+            ))}
+          </div>
+          <p className="agent-chat-ask-fine">
+            Options read from {agent}'s own prompt. Chat checks the question
+            again just before it presses the one you pick, but Herdr cannot hold
+            it still: if it changes in that instant, the key reaches the new
+            one. With this card focused, its number picks it too.
+          </p>
+        </>
+      ) : (
+        <p className="agent-chat-ask-fine">
+          Chat cannot read the choices in this prompt safely, so it does not
+          answer it. {terminal}
+        </p>
+      )}
+      {notice ? (
+        <p className="agent-chat-ask-notice" role="alert">
+          {notice} {terminal}
+        </p>
+      ) : null}
+    </section>
+  );
+}
+
+/** Harnesses where Esc interrupts the current turn without quitting. */
+const STOPS_WITH_ESCAPE = new Set(["claude", "codex", "pi"]);
+/** Two presses of Esc this close together stop the agent. */
+const DOUBLE_ESCAPE_MS = 700;
+
+function elapsed(ms: number) {
+  const seconds = Math.max(0, Math.floor(ms / 1000));
+  return seconds < 60
+    ? `${seconds}s`
+    : `${Math.floor(seconds / 60)}m ${String(seconds % 60).padStart(2, "0")}s`;
+}
+
+/** The task a harness names in its title, without its spinner glyph. */
+const titleTask = (title: string | null | undefined) =>
+  title?.replace(/^[^\p{L}\p{N}]+/u, "").trim() || null;
+
+const STATUS_WORDS: Record<string, string> = {
+  working: "Working",
+  blocked: "Needs you",
+  done: "Done",
+  idle: "Idle",
+};
 
 const ChatMessage = memo(function ChatMessage({
   message,
@@ -327,6 +503,145 @@ export function AgentChat({
     [connectionClient, load, pane.pane_id],
   );
 
+  // The agent's question: answered by pressing one option's key in its pane,
+  // only when the user picks it. The service checks the agent still shows
+  // this same question just before the key goes.
+  const prompt = conversation?.pending_prompt ?? null;
+  const [answering, setAnswering] = useState(false);
+  // The answer sent for a question, shown in its place until another
+  // question appears.
+  const [answered, setAnswered] = useState<{
+    fingerprint: string;
+    question: string[];
+    number: string;
+    label: string;
+    acknowledged: boolean;
+    unconfirmed_reason: UnconfirmedReason | null;
+  } | null>(null);
+  const [askNotice, setAskNotice] = useState("");
+  const answer = useCallback(
+    async (key: string) => {
+      if (!prompt || answering) return;
+      setAnswering(true);
+      setAskNotice("");
+      try {
+        const result = (await connectionClient.call(
+          "agent_conversation.answer",
+          {
+            pane_id: pane.pane_id,
+            key,
+            prompt_fingerprint: prompt.fingerprint,
+          },
+        )) as AnswerResult;
+        if (result.status === "sent")
+          setAnswered({
+            fingerprint: result.prompt_fingerprint,
+            question: prompt.question,
+            number: result.number,
+            label: result.label,
+            acknowledged: result.acknowledged,
+            unconfirmed_reason: result.unconfirmed_reason,
+          });
+        else setAskNotice(result.message);
+      } catch (reason) {
+        setAskNotice(reason instanceof Error ? reason.message : String(reason));
+      } finally {
+        setAnswering(false);
+        load();
+      }
+    },
+    [answering, connectionClient, load, pane.pane_id, prompt],
+  );
+  // A different question replaces the last answer's receipt.
+  const showAsk =
+    prompt !== null && prompt.fingerprint !== answered?.fingerprint;
+  useEffect(() => {
+    if (prompt && prompt.fingerprint !== answered?.fingerprint) {
+      setAskNotice("");
+      setAnswered(null);
+    }
+    // Only a new question resets the receipt.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prompt?.fingerprint]);
+  // The Now bar: Herdr's status (newer than the last read), the task in the
+  // terminal title, and time since this view saw the status change. A
+  // display clock ticks only while something is running; nothing is polled.
+  const liveStatus = pane.agent_status || conversation?.agent_status || "";
+  const [statusSince, setStatusSince] = useState<number | null>(null);
+  const seenStatus = useRef(liveStatus);
+  useEffect(() => {
+    if (seenStatus.current === liveStatus) return;
+    seenStatus.current = liveStatus;
+    setStatusSince(Date.now());
+  }, [liveStatus]);
+  // An open call is running only while Herdr says the agent works: a call
+  // waiting for approval, or one cut off by an interrupt or crash, is not.
+  const running =
+    liveStatus === "working" ? (conversation?.running_tool ?? null) : null;
+  const ticking = liveStatus === "working";
+  const [clock, setClock] = useState(() => Date.now());
+  useEffect(() => {
+    if (!ticking) return;
+    const timer = window.setInterval(() => setClock(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [ticking]);
+  // Stop presses Esc in the agent's pane, only when the user asks: the Stop
+  // button, or Esc twice while Chat has focus.
+  const agentName = conversation?.agent ?? pane.agent ?? "";
+  const canStop = liveStatus === "working" && STOPS_WITH_ESCAPE.has(agentName);
+  const [stopNote, setStopNote] = useState("");
+  const stop = useCallback(async () => {
+    try {
+      await connectionClient.call("pane.send_input", {
+        pane_id: pane.pane_id,
+        text: "",
+        keys: ["escape"],
+      });
+      setStopNote(`Pressed Esc in ${agentName || "the agent"}'s terminal.`);
+    } catch (reason) {
+      setStopNote(reason instanceof Error ? reason.message : String(reason));
+    }
+  }, [agentName, connectionClient, pane.pane_id]);
+  const firstEscape = useRef(0);
+  useEffect(() => {
+    if (!canStop) return;
+    let expire = 0;
+    const keydown = (event: KeyboardEvent) => {
+      if (
+        event.key !== "Escape" ||
+        event.defaultPrevented ||
+        event.isComposing ||
+        !(event.target instanceof HTMLElement) ||
+        !event.target.closest(".agent-chat")
+      )
+        return;
+      const now = Date.now();
+      window.clearTimeout(expire);
+      if (now - firstEscape.current < DOUBLE_ESCAPE_MS) {
+        firstEscape.current = 0;
+        void stop();
+      } else {
+        firstEscape.current = now;
+        const note = `Press Esc again to stop ${agentName || "the agent"}.`;
+        setStopNote(note);
+        // The note holds only while a second Esc would stop.
+        expire = window.setTimeout(
+          () => setStopNote((current) => (current === note ? "" : current)),
+          DOUBLE_ESCAPE_MS,
+        );
+      }
+    };
+    window.addEventListener("keydown", keydown);
+    return () => {
+      window.clearTimeout(expire);
+      window.removeEventListener("keydown", keydown);
+    };
+  }, [agentName, canStop, stop]);
+  // A new turn clears the last stop note.
+  useEffect(() => {
+    if (liveStatus !== "working") setStopNote("");
+  }, [liveStatus]);
+
   if (details) {
     return (
       <div className="agent-chat is-details">
@@ -382,11 +697,47 @@ export function AgentChat({
     conversation?.status === "ok" && !!conversation.session_fingerprint;
   return (
     <div className="agent-chat">
-      <div className="agent-chat-toolbar">
-        <span className={`agent-chat-status is-${status.toLowerCase()}`}>
-          {status}
+      <div className="agent-chat-toolbar agent-chat-now">
+        {/* Only the status and task are announced; the clocks are not. */}
+        <span className="agent-chat-now-live" aria-live="polite">
+          <span className={`agent-chat-status is-${liveStatus.toLowerCase()}`}>
+            {liveStatus === "working" ? (
+              <span className="agent-chat-spinner" aria-hidden="true" />
+            ) : null}
+            {STATUS_WORDS[liveStatus] ?? status}
+          </span>
+          <span
+            className="agent-chat-now-title"
+            title={conversation?.terminal_title ?? ""}
+          >
+            {titleTask(conversation?.terminal_title)}
+          </span>
         </span>
-        <span className="agent-chat-toolbar-spacer" />
+        {stopNote ? (
+          <span className="agent-chat-now-note" role="status">
+            {stopNote}
+          </span>
+        ) : null}
+        {statusSince !== null && ticking ? (
+          <span className="agent-chat-now-time" aria-hidden="true">
+            {elapsed(clock - statusSince)}
+          </span>
+        ) : null}
+        {canStop ? (
+          <button
+            type="button"
+            className="agent-chat-stop"
+            title={
+              // A touch screen has no Esc key to point to.
+              window.matchMedia?.("(pointer: coarse)").matches
+                ? "Interrupt this turn in the agent's terminal"
+                : "Press Esc in the agent's terminal to interrupt this turn (or press Esc twice)"
+            }
+            onClick={() => void stop()}
+          >
+            ■ Stop <kbd>Esc</kbd>
+          </button>
+        ) : null}
         <button
           type="button"
           onClick={load}
@@ -405,6 +756,7 @@ export function AgentChat({
           <ListTree size={13} /> Details
         </button>
       </div>
+      <QuestLog quest={conversation?.quest} />
       {misdelivered.map((delivery) => (
         <div key={delivery.id} className="agent-chat-misdelivered" role="alert">
           {delivery.evidence === "herdr" ? (
@@ -561,6 +913,22 @@ export function AgentChat({
                 matched={matchedIds.has(message.id)}
               />
             ))}
+            {running ? (
+              <div className="agent-chat-running" data-call-id={running.id}>
+                <span className="agent-chat-spinner" aria-hidden="true" />
+                {/* Announced when the step starts, not as its clock ticks. */}
+                <span className="agent-chat-running-label" role="status">
+                  <b>{running.name}</b>
+                  {running.summary ? <code>{running.summary}</code> : null}
+                </span>
+                {Number.isFinite(Date.parse(running.started_at)) &&
+                clock >= Date.parse(running.started_at) ? (
+                  <span className="agent-chat-now-time" aria-hidden="true">
+                    {elapsed(clock - Date.parse(running.started_at))}
+                  </span>
+                ) : null}
+              </div>
+            ) : null}
             {pending.map((delivery) => (
               <article
                 key={delivery.id}
@@ -583,6 +951,30 @@ export function AgentChat({
                 </div>
               </article>
             ))}
+            {answered ? (
+              <p className="agent-chat-answered" role="status">
+                {answered.acknowledged ? "You answered" : "Sent"}{" "}
+                <b>
+                  {answered.number} · {answered.label}
+                </b>
+                {answered.acknowledged
+                  ? null
+                  : ` · ${UNCONFIRMED[answered.unconfirmed_reason ?? "still_showing"]}`}
+                <span className="agent-chat-answered-question">
+                  {answered.question.join(" ")}
+                </span>
+              </p>
+            ) : null}
+            {showAsk && prompt ? (
+              <AskCard
+                agent={conversation?.agent ?? "The agent"}
+                prompt={prompt}
+                answering={answering}
+                notice={askNotice}
+                onAnswer={(key) => void answer(key)}
+                onOpenTerminal={onOpenTerminal}
+              />
+            ) : null}
           </div>
         </div>
       )}

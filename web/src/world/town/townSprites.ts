@@ -772,6 +772,52 @@ export function townScreen(state: string, frame: number) {
   );
 }
 
+/** What a desk's quest marker shows: progress through the agent's quest. */
+export type TownQuestMark = {
+  done: number;
+  total: number;
+  status: "active" | "done" | "blocked" | "paused";
+};
+
+const QUEST_COLORS: Record<TownQuestMark["status"], string> = {
+  active: "#6fc3ff",
+  done: "#7be08f",
+  blocked: "#ffb547",
+  paused: "#a9b2a4",
+};
+const questBars = new Map<string, TownCanvas>();
+
+/**
+ * A quest marker over a desk: a gold flag beside a bar filled with the
+ * quest's progress. A quest with no steps (a goal or loop) shows the flag.
+ */
+export function townQuestBar(mark: TownQuestMark) {
+  const width = 20;
+  const filled =
+    mark.total > 0
+      ? Math.round((Math.min(mark.done, mark.total) / mark.total) * width)
+      : 0;
+  const key = `${mark.status}:${filled}:${mark.total > 0}`;
+  const cached = questBars.get(key);
+  if (cached) return cached;
+  const canvas = townSprite(mark.total > 0 ? width + 6 : 4, 6, (R) => {
+    // The flag: a pole and a pennant in the quest's colour.
+    R(0, 0, 1, 6, "#d9c39b");
+    R(
+      1,
+      0,
+      3,
+      3,
+      mark.status === "active" ? "#ffd166" : QUEST_COLORS[mark.status],
+    );
+    if (mark.total === 0) return;
+    R(6, 1, width, 4, "#11161d");
+    if (filled) R(6, 1, filled, 4, QUEST_COLORS[mark.status]);
+  });
+  questBars.set(key, canvas);
+  return canvas;
+}
+
 const portraits = new Map<string, string>();
 /** A standing, front-facing portrait of an agent as an image URL. */
 export function townPortrait(key: string) {

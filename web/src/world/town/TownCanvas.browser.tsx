@@ -6,6 +6,7 @@ import type { Pane, Tab, Workspace } from "../../types";
 import type { WorldRuntimeConnection } from "../runtimeStore";
 import { buildWorldObject, type WorldObject } from "../worldObject";
 import TownView from "../TownView";
+import { TOWN_SHAPES, townShapeFor } from "./townLayout";
 import "../../components/TerminalView.css";
 import "../../components/MobileControls.css";
 import { requestTrace } from "../devtools/trace";
@@ -16,6 +17,7 @@ import {
   type ConnectionClient,
 } from "../../api";
 import { readCompletionSeen } from "../completionSeenState";
+import { worldSourcesStore } from "../worldSources";
 import "../world.css";
 import { worldLocalStorage } from "../../browserStorage";
 import {
@@ -149,8 +151,15 @@ function topology(seed: number): Topology {
     const panes: Pane[] = [];
     roomNames.forEach((roomName, roomIndex) => {
       const workspaceId = `${host.id}-${roomName}`;
-      const deskCount =
-        scale === "max"
+      // Extended rooms: agents spawning agents fill the first rooms far past
+      // the owner's 2026-10-17 estimate of 11-15 desks.
+      const extended =
+        scale === "extended" && host === HOSTS[0]
+          ? [100, 50, 24][roomIndex]
+          : 0;
+      const deskCount = extended
+        ? extended
+        : scale === "max"
           ? 11 + Math.floor(r() * 5)
           : 3 + Math.floor(r() * r() * 13);
       let paneTotal = 0;
@@ -292,6 +301,39 @@ let latestText =
       method === "agent_conversation.unwatch"
     )
       return { ok: true };
+    if (method === "agent_quest.list")
+      return {
+        // A quest belongs to its pane, whatever order the panes are asked in.
+        quests: ((params?.pane_ids as string[] | undefined) ?? []).map(
+          (pane_id) => {
+            const index = [...pane_id].reduce(
+              (sum, char) => sum + char.charCodeAt(0),
+              0,
+            );
+            return {
+              pane_id,
+              agent: "claude",
+              session_binding: "reported",
+              quest:
+                index % 2
+                  ? null
+                  : {
+                      quest_version: 1,
+                      source: "todo",
+                      tool: "TodoWrite",
+                      title: "Synthetic quest",
+                      status: "active",
+                      steps: [],
+                      progress: { done: index % 3, total: 3 },
+                      started_at: "2026-01-01T00:00:00Z",
+                      updated_at: "2026-01-01T00:00:01Z",
+                      set_by: null,
+                      helpers: 0,
+                    },
+            };
+          },
+        ),
+      };
     if (method === "agent_conversation.latest")
       return conversationUnavailable
         ? {
@@ -416,6 +458,40 @@ async function run() {
       />
     );
   }
+  // Every agent works on one synthetic pull request, so desks show badges.
+  const agents = worldFor(base.connections).leaves.filter(
+    (leaf) => leaf.kind === "agent",
+  );
+  worldSourcesStore.useFetch(async () =>
+    Response.json({
+      observedAt: 1,
+      sources: [],
+      items: [
+        {
+          key: "github:pr:example-org/atlas#7",
+          source: "github",
+          kind: "pull_request",
+          ref: "example-org/atlas#7",
+          title: "Synthetic change",
+          url: "https://github.com/example-org/atlas/pull/7",
+          lane: "green",
+          status: "open",
+          roles: ["author"],
+          updatedAt: 1,
+          number: 7,
+          checks: "pass",
+        },
+      ],
+      links: agents.map((leaf) => ({
+        connectionId: leaf.connectionId,
+        generation: leaf.generation,
+        paneId: leaf.nativeId,
+        sessionFingerprint: leaf.agentSessionFingerprint ?? null,
+        itemKey: "github:pr:example-org/atlas#7",
+        via: "branch",
+      })),
+    }),
+  );
   const root = createRoot(host);
   root.render(
     <StrictMode>
@@ -470,20 +546,35 @@ async function run() {
     `default level is ${diagnostics.level}, expected overview`,
   );
   check(
+    diagnostics.animation.quests === 0,
+    "quest markers must not float over the overview's room cards",
+  );
+  check(
     (diagnostics.layout?.buildings ?? 0) === 3,
     "town did not lay out three buildings",
   );
+  const narrowTown = diagnostics.layout?.formFactor === "narrow";
   const roomCards = host.querySelectorAll(".town-room-card");
   const totalRooms = base.connections.reduce(
     (sum, c) => sum + (c.snapshot?.workspaces.length ?? 0),
     0,
   );
+  // Wide screens show every building at home. A phone stacks buildings and
+  // their rooms in one column, so it draws the buildings in view.
+  const drawnRooms = host.querySelectorAll(".town-room").length;
   check(
-    roomCards.length === totalRooms,
-    `expected ${totalRooms} room cards, found ${roomCards.length}`,
+    narrowTown ? drawnRooms > 0 : drawnRooms === totalRooms,
+    `expected ${totalRooms} rooms drawn, found ${drawnRooms}`,
+  );
+  check(
+    roomCards.length === drawnRooms,
+    `expected ${drawnRooms} room cards, found ${roomCards.length}`,
   );
   const receptions = host.querySelectorAll(".town-reception");
-  check(receptions.length === 3, "every host needs one reception board");
+  check(
+    narrowTown ? receptions.length > 0 : receptions.length === 3,
+    "every host in view needs one reception board",
+  );
   const waitingEntries = host.querySelectorAll(".town-reception-entry").length;
   check(waitingEntries > 0, "blocked agents did not appear at reception");
   const deskTargets = host.querySelectorAll(
@@ -498,7 +589,7 @@ async function run() {
     `expected ${totalTabs} desk targets, found ${deskTargets}`,
   );
   check(
-    host.querySelectorAll('[aria-label^="Rename room"]').length === totalRooms,
+    host.querySelectorAll('[aria-label^="Rename room"]').length === drawnRooms,
     "every room needs a rename action",
   );
   // Room actions hidden at the overview must not take a tap.
@@ -976,6 +1067,23 @@ async function run() {
     "zoomed room stayed at overview",
   );
   check(selected.length === 0, "a room tap must not open an Inspector");
+  // Seated agents with a quest show its progress over their desks.
+  await waitFor(
+    () => window.__HERDR_TOWN_RENDERER__!.animation.quests > 0,
+    "no quest marker over any desk in the zoomed room",
+  );
+  await waitFor(
+    () => host.querySelector(".town-desk-badge") !== null,
+    "desks of agents with a pull request show its badge",
+  );
+  const badge = host.querySelector<HTMLAnchorElement>(".town-desk-badge")!;
+  check(
+    badge.textContent === "#7 ✓" &&
+      badge.dataset.tone === "pass" &&
+      badge.target === "_blank" &&
+      badge.rel.includes("noopener"),
+    `a desk badge links its pull request (${badge.textContent})`,
+  );
 
   // From the keyboard, M on a desk lists the host's other rooms; choosing one
   // asks the service to move that desk there.
@@ -1265,7 +1373,54 @@ async function run() {
       moved = true;
       break;
     }
-    check(moved, "no visible room took a carried desk");
+    if (!moved) {
+      // A phone stacks rooms in one column, so the other rooms are out of
+      // view: held at the bottom edge, the desk scrolls the town until
+      // another room is under it.
+      const ghost = () => host.querySelector<HTMLElement>(".town-drag-ghost");
+      const otherRoom = () => {
+        // Only a move to another room reads "Move … to <room>"; its own
+        // room offers "… place" or "Put … last".
+        const label = ghost()?.textContent ?? "";
+        return ghost()?.dataset.valid === "true" && /^Move .+ to /.test(label);
+      };
+      press("pointerdown", at(fromDesk));
+      await waitFor(() => ghost() !== null, "holding a desk did not lift it");
+      // Nudge at the edge, then step back out of it so the town is still
+      // when we look and drop.
+      // The town's own bottom edge (a tray may cover the window's), and
+      // up to about 30 s of scrolling: the 100-desk room is tall on a phone
+      // and a slow runner draws few frames.
+      const stage = canvasHost.getBoundingClientRect();
+      const x = stage.left + stage.width / 2;
+      const edge = [x, stage.bottom - 20] as const;
+      const still = [x, stage.bottom - 110] as const;
+      const until = performance.now() + 30_000;
+      while (!otherRoom() && performance.now() < until) {
+        press("pointermove", edge);
+        await new Promise((resolve) => setTimeout(resolve, 250));
+        press("pointermove", still);
+        await settle();
+      }
+      check(
+        otherRoom(),
+        "holding a desk at the edge never scrolled another room under it",
+      );
+      const before = moves.length;
+      const drawn = { ...drags() };
+      press("pointerup", still);
+      await waitFor(
+        () => moves.length === before + 1,
+        "dropping a desk in a room scrolled into view did not move it",
+      );
+      check(
+        moves[before]!.method === "town.move_desk",
+        `an edge-scrolled drop sent ${JSON.stringify(moves[before])}`,
+      );
+      await landed(drawn, "a desk moved to a room scrolled into view");
+      moved = true;
+    }
+    check(moved, "no room took a carried desk");
   } else check(false, "no two visible desks share a room");
 
   // Town shows no move icons; moving is by drag, hold or the keyboard.
@@ -1301,6 +1456,162 @@ async function run() {
     diagnostics.lastError === null,
     `renderer error: ${diagnostics.lastError}`,
   );
+
+  if (scale === "extended") {
+    // Rooms extend: every tab has a desk, the newest included, and zooming
+    // into the 100-desk room opens at its first desks.
+    const tabs = base.connections.flatMap((c) => c.snapshot?.tabs ?? []);
+    check(
+      diagnostics.desks === tabs.length,
+      `an extended town drew ${diagnostics.desks} of ${tabs.length} desks`,
+    );
+    // Earlier checks leave the camera at a desk; step out until the 100-desk
+    // room's card shows (on a phone, Zoom out returns to the first building).
+    const orbitCard = () =>
+      [...host.querySelectorAll<HTMLButtonElement>(".town-room-card")].find(
+        (card) => card.textContent?.includes("orbit"),
+      );
+    for (let step = 0; step < 6 && !orbitCard(); step += 1) {
+      host.querySelector<HTMLButtonElement>('[aria-label="Zoom out"]')!.click();
+      await new Promise((resolve) => setTimeout(resolve, 900));
+    }
+    const roomCard = orbitCard();
+    check(
+      roomCard !== undefined,
+      `the 100-desk room has no card (level ${diagnostics.level}, zoom ${diagnostics.zoom.toFixed(2)}, ${host.querySelectorAll(".town-room-card").length} cards)`,
+    );
+    roomCard?.click();
+    const first = () =>
+      [
+        ...host.querySelectorAll<HTMLElement>(
+          '.world-semantic-target[data-kind="desk"]',
+        ),
+      ].find(
+        (target) =>
+          JSON.parse(target.dataset.targetKey!)[2] === "local-orbit-tab-0",
+      );
+    await waitFor(() => {
+      const box = first()?.getBoundingClientRect();
+      return (
+        !!box &&
+        box.width > 0 &&
+        box.top >= 0 &&
+        box.left >= 0 &&
+        box.bottom <= window.innerHeight &&
+        box.right <= window.innerWidth
+      );
+    }, "zooming into the 100-desk room did not show its first desk");
+    const newest = [
+      ...host.querySelectorAll<HTMLElement>(
+        '.world-semantic-target[data-kind="desk"]',
+      ),
+    ].some(
+      (target) =>
+        JSON.parse(target.dataset.targetKey!)[2] === "local-orbit-tab-99",
+    );
+    check(newest, "the 100-desk room's newest desk has no target");
+    check(
+      diagnostics.lastError === null,
+      `renderer error at scale: ${diagnostics.lastError}`,
+    );
+
+    // The town takes its shape from its container: phones and portrait
+    // screens stack buildings and rooms grow downward; wide screens use
+    // columns of rooms on one street.
+    const stage = host.querySelector("canvas")!.parentElement!;
+    const expected = townShapeFor(stage.clientWidth, stage.clientHeight);
+    const shown = diagnostics.layout!;
+    check(
+      shown.formFactor === expected.formFactor &&
+        shown.roomColumns === expected.roomColumns &&
+        shown.deskColumns === expected.deskColumns,
+      `the town's shape ${JSON.stringify(shown)} does not fit a ${stage.clientWidth}x${stage.clientHeight} container`,
+    );
+    // Half-width windows sit in between: portrait or medium, both two
+    // columns of rooms.
+    const fits =
+      window.innerWidth < 640
+        ? [TOWN_SHAPES.phone]
+        : window.innerHeight > window.innerWidth * 1.3
+          ? [TOWN_SHAPES.portrait]
+          : window.innerWidth >= 1200
+            ? [TOWN_SHAPES.wide]
+            : [TOWN_SHAPES.portrait, TOWN_SHAPES.medium];
+    check(
+      fits.some((shape) => shape === expected),
+      `a ${window.innerWidth}x${window.innerHeight} window got ${JSON.stringify(expected)}`,
+    );
+
+    // A room that grows while the user holds the town waits to reflow until
+    // they let go and pause; then every new desk is drawn.
+    const before = diagnostics.layout!.geometry;
+    const press = (type: string) =>
+      stage.dispatchEvent(
+        new PointerEvent(type, {
+          bubbles: true,
+          pointerId: 51,
+          pointerType: "mouse",
+          button: 0,
+          buttons: type === "pointerup" ? 0 : 1,
+          clientX: 20,
+          clientY: stage.clientHeight - 20,
+        }),
+      );
+    press("pointerdown");
+    const snapshot = base.connections[0]!.snapshot!;
+    const grown = "local-meadow";
+    for (let index = 24; index < 64; index += 1) {
+      const tabId = `${grown}-tab-${index}`;
+      snapshot.tabs.push({
+        tab_id: tabId,
+        workspace_id: grown,
+        number: index + 1,
+        label: `task ${index + 1}`,
+        focused: false,
+        pane_count: 1,
+        agent_status: "unknown",
+      });
+      snapshot.panes.push({
+        pane_id: `${tabId}-pane-0`,
+        terminal_id: `${tabId}-terminal-0`,
+        workspace_id: grown,
+        tab_id: tabId,
+        focused: false,
+        agent: "",
+        agent_status: "",
+        revision: 1,
+      });
+    }
+    setWorld(
+      worldFor(
+        base.connections.map((connection) => ({
+          ...connection,
+          snapshot: connection.snapshot && {
+            ...connection.snapshot,
+            tabs: [...connection.snapshot.tabs],
+            panes: [...connection.snapshot.panes],
+          },
+        })),
+      ),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    check(
+      diagnostics.layout!.geometry === before,
+      "the town reflowed while the user held it",
+    );
+    press("pointerup");
+    const tabs2 = base.connections.flatMap((c) => c.snapshot?.tabs ?? []);
+    await waitFor(
+      () =>
+        diagnostics.layout!.geometry !== before &&
+        diagnostics.desks === tabs2.length,
+      "the grown room never reflowed after the user let go",
+    );
+    check(
+      diagnostics.lastError === null,
+      `renderer error after a reflow: ${diagnostics.lastError}`,
+    );
+  }
 
   // StrictMode mounts twice; exactly one renderer and canvas must survive.
   check(
