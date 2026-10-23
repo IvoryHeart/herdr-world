@@ -248,6 +248,18 @@ test("only known infrastructure flakes are rerun before alerting", () => {
       },
     ]),
   ).toBe(false);
+  // An annotation with an unfamiliar message is a failure even without "error".
+  expect(
+    onlyInfraFlakes([
+      {
+        name: "Behavioral verification",
+        log: jobLog(
+          "AssertionError: Invalid control group (ActiveState=inactive)",
+          "##[error]ENOENT",
+        ),
+      },
+    ]),
+  ).toBe(false);
   // The Windows staging lock is a product bug (#254), not a runner flake.
   expect(
     onlyInfraFlakes([

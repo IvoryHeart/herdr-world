@@ -43,8 +43,7 @@ const ERRORISH = /error|exceed|fail|assert|panic|refus|denied|mismatch/i;
 
 /**
  * The output of every failed step: each `##[group]Run` section holding an
- * `##[error]` line (a script's exit, or an action's own error), with that
- * annotation prefix removed so its message is judged like any other line.
+ * `##[error]` line (a script's exit, or an action's own error).
  */
 export function failedStepOutputs(log: string): string[][] {
   const steps: string[][] = [[]];
@@ -53,9 +52,9 @@ export function failedStepOutputs(log: string): string[][] {
     if (line.startsWith("##[group]Run ")) steps.push([]);
     steps.at(-1)!.push(line);
   }
-  return steps
-    .filter((step) => step.some((line) => line.startsWith("##[error]")))
-    .map((step) => step.map((line) => line.replace(/^##\[error\]/, "")));
+  return steps.filter((step) =>
+    step.some((line) => line.startsWith("##[error]")),
+  );
 }
 
 /**
@@ -82,12 +81,18 @@ export function onlyInfraFlakes(
           const flake = step.some((line) =>
             INFRA_FLAKES.some((pattern) => pattern.test(line)),
           );
-          const other = step.some(
-            (line) =>
-              !line.startsWith("##[group]") &&
-              ERRORISH.test(line) &&
-              !INFRA_FLAKES.some((pattern) => pattern.test(line)) &&
-              !NEUTRAL.some((pattern) => pattern.test(line)),
+          const known = (line: string) =>
+            INFRA_FLAKES.some((pattern) => pattern.test(line)) ||
+            NEUTRAL.some((pattern) => pattern.test(line));
+          // An error annotation is a failure whatever its wording, so its
+          // message must be the flake or neutral; other lines count only
+          // when they read as an error.
+          const other = step.some((line) =>
+            line.startsWith("##[error]")
+              ? !known(line.slice("##[error]".length))
+              : !line.startsWith("##[group]") &&
+                ERRORISH.test(line) &&
+                !known(line),
           );
           return flake && tests.size <= 1 && !other;
         })
