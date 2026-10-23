@@ -43,17 +43,21 @@ import {
   formatOfficeUsage,
   type OfficeObservability,
 } from "../officeObservability";
-import type { TownLevel } from "./townCamera";
+import { townRoomFocus, type TownLevel } from "./townCamera";
 import { townHitKey, townHitTest } from "./townHitTest";
 import {
   layoutTown,
   TOWN_FACADE,
   TOWN_TILE as T,
   townDeskSlots,
+  townGeometryKey,
+  townReflowShift,
   townSeat,
-  type TownFormFactor,
+  townShapeFor,
+  townShapeKey,
   type TownLayout,
   type TownPlacementMemory,
+  type TownShape,
 } from "./townLayout";
 import {
   townAttention,
@@ -118,10 +122,13 @@ export type TownRoomActions = {
 };
 
 /** Camera kept across Office visits within one page session. */
-const savedCameras = new Map<
-  TownFormFactor,
-  { x: number; y: number; z: number }
->();
+const savedCameras = new Map<string, { x: number; y: number; z: number }>();
+
+/**
+ * A reflow that moves rooms or buildings waits this long after the user's last
+ * press, scroll or zoom, so the town does not shift under a hand or eye.
+ */
+const REFLOW_IDLE_MS = 1200;
 
 const portrait = townPortrait;
 const NO_COLORS: TerminalColors = {};
@@ -194,16 +201,14 @@ export function TownCanvas({
     if (!sameTownBadges(next, badgesRef.current)) badgesRef.current = next;
     return badgesRef.current;
   }, [projection, sources]);
-  const [formFactor, setFormFactor] = useState<TownFormFactor>(() =>
-    typeof window !== "undefined" && window.innerWidth < 640
-      ? "narrow"
-      : "wide",
+  // The town's shape follows its container, measured on every resize.
+  const [shape, setShape] = useState<TownShape>(() =>
+    typeof window !== "undefined"
+      ? townShapeFor(window.innerWidth, window.innerHeight)
+      : townShapeFor(1440, 900),
   );
-  const memoryRef = useRef<{
-    formFactor: TownFormFactor;
-    memory: TownPlacementMemory;
-  }>({
-    formFactor,
+  const memoryRef = useRef<{ shape: string; memory: TownPlacementMemory }>({
+    shape: townShapeKey(shape),
     memory: new Map(),
   });
   const topology = useMemo(
@@ -224,16 +229,45 @@ export function TownCanvas({
       lastDeskColors.current = next;
     return { ...topology, deskColors: lastDeskColors.current };
   }, [topology, projection, terminalColors]);
-  const layout = useMemo(() => {
+  const placed = useMemo(() => {
+    const key = townShapeKey(shape);
     const previous =
-      memoryRef.current.formFactor === formFactor
-        ? memoryRef.current.memory
-        : new Map();
-    const result = layoutTown(model.input, formFactor, previous);
-    memoryRef.current = { formFactor, memory: result.memory };
+      memoryRef.current.shape === key ? memoryRef.current.memory : new Map();
+    const result = layoutTown(model.input, shape, previous);
+    memoryRef.current = { shape: key, memory: result.memory };
     return result.layout;
     // Placement depends only on topology, not on agent status.
-  }, [model.input, formFactor]);
+  }, [model.input, shape]);
+  // While the user presses, scrolls or zooms, a reflow that would move rooms
+  // or buildings waits until they pause (then the camera follows the room in
+  // view). A held layout must still name only desks the model has.
+  const inputAt = useRef(0);
+  const pressing = useRef(false);
+  const shownLayout = useRef<TownLayout | null>(null);
+  const [, wakeReflow] = useState(0);
+  const held = shownLayout.current;
+  const holding =
+    held !== null &&
+    held !== placed &&
+    townShapeKey(held.shape) === townShapeKey(placed.shape) &&
+    (pressing.current ||
+      performance.now() - inputAt.current < REFLOW_IDLE_MS) &&
+    townGeometryKey(held) !== townGeometryKey(placed) &&
+    held.buildings.every((b) =>
+      b.rooms.every((r) =>
+        r.cells.every((c) => !c.deskKey || model.desks.has(c.deskKey)),
+      ),
+    );
+  const layout = holding ? held : placed;
+  shownLayout.current = layout;
+  useEffect(() => {
+    if (!holding) return;
+    const timer = window.setTimeout(
+      () => wakeReflow((n) => n + 1),
+      REFLOW_IDLE_MS / 3,
+    );
+    return () => window.clearTimeout(timer);
+  });
   const blockedSince = useRef(new Map<string, number>());
   const [hover, setHover] = useState<string | null>(null);
   const latest = useRef({
@@ -427,7 +461,7 @@ export function TownCanvas({
     const signature = `${camera.x.toFixed(1)},${camera.y.toFixed(1)},${camera.z.toFixed(4)}`;
     if (signature !== lastCamera.current) {
       lastCamera.current = signature;
-      savedCameras.set(latest.current.layout.formFactor, {
+      savedCameras.set(townShapeKey(latest.current.layout.shape), {
         x: camera.x,
         y: camera.y,
         z: camera.z,
@@ -551,7 +585,7 @@ export function TownCanvas({
         const { model: m, layout: l } = latest.current;
         renderer.setScene(m, l, sceneState());
         renderer.camera.configure(l, viewport());
-        const saved = savedCameras.get(l.formFactor);
+        const saved = savedCameras.get(townShapeKey(l.shape));
         if (saved) {
           renderer.camera.x = saved.x;
           renderer.camera.y = saved.y;
@@ -582,7 +616,8 @@ export function TownCanvas({
       const renderer = rendererRef.current;
       if (!renderer || !hostRef.current) return;
       const next = viewport();
-      setFormFactor(next.width < 640 ? "narrow" : "wide");
+      const fit = townShapeFor(next.width, next.height);
+      setShape((was) => (townShapeKey(was) === townShapeKey(fit) ? was : fit));
       renderer.setViewport(next);
     });
     observer.observe(host);
@@ -602,20 +637,68 @@ export function TownCanvas({
   useEffect(() => {
     const renderer = rendererRef.current;
     if (!renderer) return;
-    const formFactorChanged =
-      renderer.camera.limits !== null &&
-      layout.formFactor !== lastFormFactor.current;
+    const shapeKey = townShapeKey(layout.shape);
+    const shapeChanged =
+      renderer.camera.limits !== null && shapeKey !== lastShape.current;
+    const previous = lastLayout.current;
     renderer.setScene(model, layout, sceneState());
     renderer.camera.configure(layout, viewport());
-    if (formFactorChanged) {
-      const saved = savedCameras.get(layout.formFactor);
+    if (shapeChanged) {
+      const saved = savedCameras.get(shapeKey);
       if (saved) renderer.camera.jumpTo(saved.x, saved.y, saved.z);
       else frameHome(renderer, layout, false);
+    } else if (
+      previous &&
+      previous !== layout &&
+      !renderer.camera.flying &&
+      townGeometryKey(previous) !== townGeometryKey(layout)
+    ) {
+      // Rooms moved: follow the room in view, so it stays where it was.
+      const camera = renderer.camera;
+      const focus = camera.focusPoint();
+      const shift = townReflowShift(
+        previous,
+        layout,
+        camera.toWorld(focus.x, focus.y),
+      );
+      if (shift.x || shift.y) {
+        const at = camera.toWorld(focus.x, focus.y);
+        camera.jumpTo(at.x + shift.x, at.y + shift.y, camera.z);
+        renderer.invalidate("reflow");
+      }
     }
-    lastFormFactor.current = layout.formFactor;
+    lastShape.current = shapeKey;
+    lastLayout.current = layout;
     scheduleAnchors();
   }, [model, layout]);
-  const lastFormFactor = useRef<TownFormFactor>(layout.formFactor);
+  // Presses, scrolls and zooms on the town hold back a reflow (see above).
+  useEffect(() => {
+    const host = hostRef.current;
+    if (!host) return;
+    const touch = () => {
+      inputAt.current = performance.now();
+    };
+    const down = () => {
+      pressing.current = true;
+      touch();
+    };
+    const up = () => {
+      pressing.current = false;
+      touch();
+    };
+    host.addEventListener("pointerdown", down, true);
+    window.addEventListener("pointerup", up, true);
+    window.addEventListener("pointercancel", up, true);
+    host.addEventListener("wheel", touch, { capture: true, passive: true });
+    return () => {
+      host.removeEventListener("pointerdown", down, true);
+      window.removeEventListener("pointerup", up, true);
+      window.removeEventListener("pointercancel", up, true);
+      host.removeEventListener("wheel", touch, true);
+    };
+  }, []);
+  const lastShape = useRef(townShapeKey(layout.shape));
+  const lastLayout = useRef<TownLayout | null>(null);
 
   useEffect(() => {
     rendererRef.current?.setState(sceneState());
@@ -672,8 +755,54 @@ export function TownCanvas({
         world.y,
       );
     };
+    // Where the carried desk or agent is, and the frame that pans the town
+    // while it is held near an edge (rooms stack out of view on a phone).
+    let carryAt: { x: number; y: number } | null = null;
+    let edgeFrame = 0;
+    /** Show where the carry would land at screen point `at`. */
+    const carryTo = (at: { x: number; y: number }) => {
+      const renderer = rendererRef.current;
+      if (!carrying || !renderer) return;
+      carryAt = at;
+      const target = townDropTarget(
+        carrying,
+        hitAt(at.x, at.y),
+        latest.current.model,
+      );
+      carrying.target = target;
+      ghost.textContent = target.label;
+      ghost.dataset.valid = String(target.key !== null);
+      ghost.style.transform = `translate(${at.x}px, ${at.y}px)`;
+      const world = renderer.camera.toWorld(at.x, at.y);
+      renderer.moveDrag(world.x, world.y, target.key);
+    };
+    const EDGE = 56;
+    const EDGE_SPEED = 14;
+    const edgePan = () => {
+      edgeFrame = 0;
+      const renderer = rendererRef.current;
+      if (!carrying || !carryAt || !renderer) return;
+      const { width, height, inset } = renderer.camera.viewport;
+      const push = (p: number, low: number, high: number) =>
+        p < low + EDGE
+          ? Math.min(1, (low + EDGE - p) / EDGE) * EDGE_SPEED
+          : p > high - EDGE
+            ? -Math.min(1, (p - high + EDGE) / EDGE) * EDGE_SPEED
+            : 0;
+      const dx = push(carryAt.x, inset.left, width - inset.right);
+      const dy = push(carryAt.y, inset.top, height - inset.bottom);
+      if (dx || dy) {
+        renderer.camera.panBy(dx, dy);
+        renderer.invalidate("edge-pan");
+        carryTo(carryAt);
+      }
+      edgeFrame = requestAnimationFrame(edgePan);
+    };
     const startDrag = (drag: TownDrag, at: { x: number; y: number }) => {
       carrying = drag;
+      carryAt = at;
+      cancelAnimationFrame(edgeFrame);
+      edgeFrame = requestAnimationFrame(edgePan);
       latest.current.onHover?.(null);
       ghost.textContent = drag.label;
       ghost.dataset.valid = "false";
@@ -687,6 +816,9 @@ export function TownCanvas({
     };
     const endDrag = () => {
       ghost.remove();
+      cancelAnimationFrame(edgeFrame);
+      edgeFrame = 0;
+      carryAt = null;
       const drag = carrying;
       carrying = null;
       return drag;
@@ -755,21 +887,9 @@ export function TownCanvas({
           startDrag(effect.target.drag, effect.at);
           if (effect.held) navigator.vibrate?.(12);
           return;
-        case "moveCard": {
-          if (!carrying) return;
-          const target = townDropTarget(
-            carrying,
-            hitAt(effect.at.x, effect.at.y),
-            latest.current.model,
-          );
-          carrying.target = target;
-          ghost.textContent = target.label;
-          ghost.dataset.valid = String(target.key !== null);
-          ghost.style.transform = `translate(${effect.at.x}px, ${effect.at.y}px)`;
-          const at = renderer.camera.toWorld(effect.at.x, effect.at.y);
-          renderer.moveDrag(at.x, at.y, target.key);
+        case "moveCard":
+          carryTo(effect.at);
           return;
-        }
         case "dropCard": {
           const drag = endDrag();
           const targetKey = drag?.target?.key;
@@ -943,6 +1063,7 @@ export function TownCanvas({
     host.addEventListener("wheel", wheel, { passive: false });
     return () => {
       window.clearTimeout(holdTimer);
+      cancelAnimationFrame(edgeFrame);
       ghost.remove();
       host.removeEventListener("pointerdown", down);
       host.removeEventListener("pointermove", move);
@@ -1060,13 +1181,12 @@ export function TownCanvas({
         ? [
             {
               z: roomZoom(camera, room),
-              go: (z: number) =>
-                camera.flyTo(
-                  (room.x + room.w / 2) * T,
-                  (room.y + room.h / 2) * T,
-                  z,
-                  0.6,
-                ),
+              // A room larger than the view opens at its first desks, as
+              // when its card is chosen.
+              go: (z: number) => {
+                const focus = townRoomFocus(room, camera.viewport, z);
+                camera.flyTo(focus.x, focus.y, z, 0.6);
+              },
             },
           ]
         : []),
@@ -1246,7 +1366,8 @@ function zoomToRoom(
   if (!room) return;
   const camera = renderer.camera;
   const z = roomZoom(camera, room);
-  camera.flyTo((room.x + room.w / 2) * T, (room.y + room.h / 2) * T, z, 0.6);
+  const focus = townRoomFocus(room, camera.viewport, z);
+  camera.flyTo(focus.x, focus.y, z, 0.6);
   renderer.invalidate("room");
 }
 
