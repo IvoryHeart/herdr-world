@@ -321,6 +321,8 @@ export function useWorldInspectorWindows({
         onInspectorConversationsChangeRef.current([]);
         onDockedInspectorIdChange(null);
         setSelection(null);
+        // Panels close through their owners, like their own Back.
+        for (const panel of panels) panel.onClose();
         return;
       }
       if (command === "restore") windowCommand({ type: "restore-layout" });
@@ -337,6 +339,7 @@ export function useWorldInspectorWindows({
       windowCommand,
       world,
       availableWindowTabs,
+      panels,
     ],
   );
   const visualArrangementControl = useMemo<WindowArrangementControl>(() => {
@@ -354,7 +357,7 @@ export function useWorldInspectorWindows({
           : terminalWindowArrangementReason(
               preset,
               { left: 0, top: 0, ...windowStage },
-              windowInputs
+              managedInputs
                 .filter((input) => !managedWindows.windows[input.id]?.minimized)
                 .map((input) => ({
                   ...input,
@@ -367,7 +370,7 @@ export function useWorldInspectorWindows({
     }
     if (!managedWindows.baseline)
       disabledReasons.restore = "No arranged positions to restore.";
-    if (!windowInputs.length)
+    if (!managedInputs.length)
       disabledReasons["close-all"] = "No windows are open.";
     if (!availableWindowTabs.size)
       disabledReasons["open-all"] =
@@ -386,7 +389,8 @@ export function useWorldInspectorWindows({
           : (managedWindows.layout?.preset ?? null),
       disabledReasons,
       onSelect: selectVisualArrangement,
-      windows: windowInputs.map((input) => ({
+      // Panels are listed too, so a minimized one can be restored.
+      windows: managedInputs.map((input) => ({
         id: input.id,
         tab: (() => {
           const conversation = inspectorConversations.find(
@@ -419,7 +423,7 @@ export function useWorldInspectorWindows({
   }, [
     compactArrangement,
     windowStage,
-    windowInputs,
+    managedInputs,
     managedWindows,
     activeInspectorId,
     intentRequestRef,
