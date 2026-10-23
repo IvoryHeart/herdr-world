@@ -98,7 +98,9 @@ export function taskPushPayload(task: PushNotification) {
       task.title ??
       (task.kind === "blocked"
         ? "Herdr World agent needs input"
-        : "Herdr World task completed"),
+        : task.kind === "message"
+          ? "Herdr World message for you"
+          : "Herdr World task completed"),
     body:
       task.paneId && !task.agentSessionId
         ? `${task.body ?? fallbackBody} · Original agent session identity is unavailable; open the app to inspect current work.`
@@ -118,7 +120,10 @@ function notificationPreference(task: PushNotification): keyof PushPreferences {
     ? task.status === "succeeded"
       ? "completed"
       : "blocked"
-    : task.kind;
+    : // A message for the owner follows the completed switch, as before.
+      task.kind === "message"
+      ? "completed"
+      : task.kind;
 }
 
 /** Only browser push providers are valid outbound destinations, never arbitrary URLs. */

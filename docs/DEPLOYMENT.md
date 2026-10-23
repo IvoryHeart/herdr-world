@@ -320,7 +320,10 @@ Codex. Profiles are stored atomically, with owner-only permissions, in
 `~/.config/herdr-world/agent-profiles.json` on Unix or
 `%APPDATA%\herdr-world\agent-profiles.json` on Windows; override the path
 with `HERDR_WORLD_AGENT_PROFILES_PATH`. Profiles refuse text that looks like a
-credential and never hold one.
+credential and never hold one. The same file keeps your chime settings and who
+the Town master is; a device's own chime switch and volume stay in that
+browser. Herdr reports `herdr notification show` without a pane, so World
+can't say which agent sent it.
 
 To show whether a harness is installed and logged in, the service runs each
 harness's own status command on the room's host (locally, or over the
