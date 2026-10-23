@@ -25,6 +25,7 @@ import {
   PROMPT_SCREEN_LINES,
   type PendingPrompt,
 } from "./pending-prompt";
+import { stepsFromEntries, type ConversationStep } from "./conversation-steps";
 import { codexHome, type AgentSessionFileAccess } from "./session-file-access";
 import type { SessionProjectionCache } from "./session-projection-cache";
 import {
@@ -508,6 +509,29 @@ export function createHerdrConversationSource(args: {
   const latest = async (target: { pane_id: string }) =>
     withoutMessages(await read(target));
 
+  // Steps per projection, so repeated asks while nothing changed do not
+  // rebuild them.
+  const projectedSteps = new WeakMap<object, Map<string, ConversationStep>>();
+  const steps = async ({
+    pane_id,
+    call_ids,
+  }: {
+    pane_id: string;
+    call_ids: readonly string[];
+  }): Promise<ConversationStep[]> => {
+    const step = await resolve(pane_id);
+    if (!("resolved" in step) || !step.resolved.file) return [];
+    const projection = await args.cache.get(step.resolved);
+    let byCall = projectedSteps.get(projection);
+    if (!byCall) {
+      byCall = new Map();
+      for (const item of stepsFromEntries(projection.entries))
+        if (item.call_id) byCall.set(item.call_id, item);
+      projectedSteps.set(projection, byCall);
+    }
+    return call_ids.flatMap((id) => byCall.get(id) ?? []);
+  };
+
   /** Run `each` for the named panes, or every agent pane, four at a time. */
   const eachPane = async <T>(
     paneIds: readonly string[] | undefined,
@@ -654,6 +678,7 @@ export function createHerdrConversationSource(args: {
     },
     read,
     latest,
+    steps,
     identity: async ({ pane_id }) => {
       // Watching runs on every Herdr event; it need not search Codex
       // transcripts again for a title it already resolved, while creations

@@ -1,4 +1,6 @@
 import {
+  hostColorKey,
+  workspaceColorKey,
   defaultTerminalColorFor,
   resolveTerminalColor,
   tabCardKey,
@@ -64,3 +66,17 @@ export const terminalColor = (
   colors: TerminalColors,
   target: TerminalColorTarget,
 ): TerminalColor => resolveTerminal(colors, target).color;
+
+export { hostColorKey, workspaceColorKey };
+
+/**
+ * A workspace's or host's chosen colour, or null when it has none (it then
+ * shows its own default: Town's carpet or roof, no tint on Board).
+ */
+export const placeColor = (
+  colors: TerminalColors,
+  key: string,
+): TerminalColor | null => {
+  const color = colors[key];
+  return color && TERMINAL_COLORS.includes(color) ? color : null;
+};
