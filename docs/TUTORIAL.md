@@ -125,10 +125,15 @@ changes what you see and does not disconnect hosts or retarget open terminals.
 3. Look at reception for blocked agents waiting for input, oldest first. Finished
    agents also wait there until you open their terminal or mark that completion
    reviewed, then join idle agents in the lounge. These locations visualize
-   status; they do not move the underlying pane or change its host.
-   On a phone, tap the counts chip under search to open the Town board with
-   working, needs-you and finished counts and spend. Tap it again or press
-   Escape to close the board.
+   status; they do not move the underlying pane or change its host. For the
+   whole picture, press **Summary** on the Town board (on a phone, tap the
+   counts chip under the search bar): the **Town summary** window lists who
+   needs you (blocked agents and open questions), unreviewed finishes and when each was last active, each host's
+   rooms with their counts, and spend. Answer a question from its offered
+   options or type a reply. A blocked agent that also asked a question counts
+   as two items needing you. Tap a room to show it in Town; on a phone, Summary
+   closes first. Press **Summary** again to restore its minimized window or bring
+   it to the front. Use **Back** to close the summary.
 4. Tap an agent or its table to open its window on **Chat**: World's Inspector,
    with **Chat**, **Terminal**, **Changes** and **Files** in its top selector.
    In Town it docks on the right at a readable width; drag its left edge to
@@ -204,12 +209,16 @@ changes what you see and does not disconnect hosts or retarget open terminals.
    To change the order, drag a table onto another table in the same room: it
    takes that table's place, and the tables in between shift along. Drop it on
    the room's free spot to put it last of the tables shown. A room grows as
-   tabs open and shows up to 127 tables: up to eight tables wide on a wide
-   screen, six on a portrait or half-width screen and four on a phone, then
-   row by row. Rooms sit in columns that suit your screen (one on a phone),
-   and a growing room pushes down only the rooms below it, once you let go of
-   the town. Only a room with more than 127 tabs keeps some idle tables
-   hidden behind its count. Town moves the tab in Herdr, so Spaces
+   tabs open, up to eight tables wide on a wide screen, six on a portrait or
+   half-width screen and four on a phone, then row by row. A folded room normally
+   shows up to 24 tables. Selected and pinned tables, blocked agents, unreviewed
+   finishes and verified agents with open questions stay visible beyond that
+   count. Press **+N** on its plaque to expand it to a normal limit of 127 tables;
+   the same tables stay visible beyond that limit. **+N** counts only hidden tables.
+   **Fold** remains available after tabs close; press it to shrink the room back.
+   Rooms sit in columns that suit your screen
+   (one on a phone), and a growing room pushes down only the rooms below it,
+   once you let go of the town. Town moves the tab in Herdr, so Spaces
    shows the new order too, and moving a tab in Spaces moves its table. The
    tables move once Herdr reports the new order, and agents stay with their
    table.

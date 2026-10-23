@@ -32,10 +32,18 @@ import { DEVTOOLS, NO_TRACE, type ViewTrace } from "../devtools/flag";
 import { traceGesture } from "../devtools/trace";
 import { EllipsisVertical } from "lucide-react";
 import { useMobileControls } from "../../components/MobileControls";
-import { Bot, Pencil, Plus, Trash2 } from "lucide-react";
-import type {
-  HerdrOfficeProjection,
-  OfficeAgent,
+import {
+  Bot,
+  ChevronsDown,
+  ChevronsUp,
+  Pencil,
+  Plus,
+  Trash2,
+} from "lucide-react";
+import {
+  TOWN_PRESENTATION_BOUNDS,
+  type HerdrOfficeProjection,
+  type OfficeAgent,
 } from "../herdrOfficeProjection";
 import type {
   WorldCanvasAnchor,
@@ -81,6 +89,7 @@ import {
   townRoomCounts,
   type TownModel,
 } from "./townModel";
+import type { TownSummary } from "./townSummary";
 import { townCarpetFor, townCarpetOf } from "./townPaint";
 import { ColorSwatchButton } from "../../components/ColorSwatch";
 import {
@@ -108,12 +117,12 @@ import {
 } from "./townBadges";
 import { DeskWorkBadge } from "./DeskWorkBadge";
 import "./town.css";
-import "./townBoard.css";
 import {
   markAway,
   TownQuestPennant,
   type TownQuestMark,
 } from "./townQuestPennant";
+import "./townBoard.css";
 import "./townTeams.css";
 
 /** A place's colour in the shared picker (ColorSwatch.tsx). */
@@ -163,6 +172,8 @@ export type TownRoomActions = {
   ): Promise<TownMoveResult>;
   /** An agent dragged onto another desk; resolves how the move ended. */
   onDropAgent(agentKey: string, deskKey: string): Promise<TownMoveResult>;
+  /** Grow a folded room to show all its desks, or fold it back. */
+  onToggleFold?(roomKey: string): void;
   /** A desk dragged onto another desk: join its team (townTeams.ts). */
   onGroupDesk(deskKey: string, targetDeskKey: string): Promise<TownMoveResult>;
   /** A grouped desk dropped on its own room's floor: leave its team. */
@@ -206,6 +217,9 @@ export function TownCanvas({
   roomActions,
   selectedRoomKey,
   observability,
+  summaryCounts,
+  onOpenSummary,
+  roomFocus = null,
   calm = false,
   terminalColors = NO_COLORS,
   relations = NO_RELATIONS,
@@ -219,6 +233,15 @@ export function TownCanvas({
     places: ReadonlyMap<string, TerminalPlace>;
   };
   observability: OfficeObservability;
+  /**
+   * The Town summary's shared counts (townSummary.ts): the board sign shows
+   * the same needs-you and finished counts as the call rail and reception.
+   */
+  summaryCounts?: TownSummary["counts"];
+  /** Open the Town summary window from the board sign or the phone chip. */
+  onOpenSummary?: () => void;
+  /** A room to move the camera to (a new `seq` asks again), as from the summary. */
+  roomFocus?: { roomKey: string; seq: number } | null;
   /** Town's event trace (development builds only; see world/devtools). */
   trace?: ViewTrace;
   calm?: boolean;
@@ -1410,6 +1433,22 @@ export function TownCanvas({
     const renderer = rendererRef.current;
     if (renderer) zoomToRoom(renderer, latest.current.layout, roomKey);
   };
+  // A request waits for renderer setup and its admitted layout, then runs once.
+  const consumedRoomFocus = useRef<number | null>(null);
+  useEffect(() => {
+    if (!roomFocus || !ready || consumedRoomFocus.current === roomFocus.seq)
+      return;
+    const renderer = rendererRef.current;
+    if (
+      !renderer ||
+      !layout.buildings.some((building) =>
+        building.rooms.some((room) => room.key === roomFocus.roomKey),
+      )
+    )
+      return;
+    zoomToRoom(renderer, layout, roomFocus.roomKey);
+    consumedRoomFocus.current = roomFocus.seq;
+  }, [roomFocus, ready, layout]);
 
   return (
     <div className="town-shell" ref={shellRef}>
@@ -1459,7 +1498,12 @@ export function TownCanvas({
           pennants={pennants.current}
         />
       </div>
-      <TownBoard model={model} observability={observability} />
+      <TownBoard
+        model={model}
+        observability={observability}
+        summaryCounts={summaryCounts}
+        onOpenSummary={onOpenSummary}
+      />
       <div className="town-zoom" role="group" aria-label="Camera">
         <button type="button" aria-label="Zoom in" onClick={() => stepZoom(1)}>
           +
@@ -1996,6 +2040,33 @@ const TownWorldLayer = memo(function TownWorldLayer({
                         !{c.blocked}
                       </span>
                     ) : null}
+                    {room.deskFold && roomActions.onToggleFold ? (
+                      <button
+                        className="world-room-overlay-action town-plaque-action town-plaque-agent"
+                        type="button"
+                        aria-expanded={room.deskFold === "expanded"}
+                        aria-label={
+                          room.deskFold === "folded"
+                            ? `Expand room ${label} toward ${Math.min(room.observedDeskCount, TOWN_PRESENTATION_BOUNDS.desksPerRoom)} desks`
+                            : `Fold room ${label} to its busiest desks`
+                        }
+                        title={
+                          room.deskFold === "folded"
+                            ? `Expand toward ${Math.min(room.observedDeskCount, TOWN_PRESENTATION_BOUNDS.desksPerRoom)} desks; protected desks stay visible`
+                            : "Show only the busiest desks"
+                        }
+                        onClick={() => roomActions.onToggleFold?.(room.key)}
+                      >
+                        {room.deskFold === "folded" ? (
+                          <ChevronsDown size={12} aria-hidden="true" />
+                        ) : (
+                          <ChevronsUp size={12} aria-hidden="true" />
+                        )}
+                        <span>
+                          {room.deskFold === "folded" ? `+${overflow}` : "Fold"}
+                        </span>
+                      </button>
+                    ) : null}
                     {roomColor ? (
                       <ColorSwatchButton
                         className="town-plaque-action town-place-color"
@@ -2355,12 +2426,22 @@ function ReceptionEntry({
 function TownBoard({
   model,
   observability,
+  summaryCounts,
+  onOpenSummary,
 }: {
   model: TownModel;
   observability: OfficeObservability;
+  summaryCounts?: TownSummary["counts"];
+  onOpenSummary?: () => void;
 }) {
   const counts = { working: 0, blocked: 0, done: 0, idle: 0, unknown: 0 };
   for (const agent of model.agents.values()) counts[agent.semanticStatus] += 1;
+  // The shared summary's counts, when Town provides them (see townSummary).
+  if (summaryCounts) {
+    counts.working = summaryCounts.working;
+    counts.blocked = summaryCounts.needsYou;
+    counts.done = summaryCounts.finished;
+  }
   const available =
     observability.health !== "unavailable" && observability.sourceCount > 0;
   // Phones show a compact chip; it opens the full board in place.
@@ -2377,11 +2458,21 @@ function TownBoard({
       <button
         type="button"
         className="town-board-chip"
-        aria-expanded={open}
-        aria-controls="town-board"
-        aria-label={`Town board: ${summary}`}
-        title={open ? "Hide the Town board" : "Show the Town board"}
-        onClick={() => setOpen((value) => !value)}
+        // With a summary to open, the chip opens it; otherwise the board.
+        {...(onOpenSummary
+          ? { "aria-haspopup": "dialog" as const }
+          : { "aria-expanded": open, "aria-controls": "town-board" })}
+        aria-label={`${onOpenSummary ? "Town summary" : "Town board"}: ${summary}`}
+        title={
+          onOpenSummary
+            ? "Open the Town summary"
+            : open
+              ? "Hide the Town board"
+              : "Show the Town board"
+        }
+        onClick={() =>
+          onOpenSummary ? onOpenSummary() : setOpen((value) => !value)
+        }
         onKeyDown={closeOnEscape}
       >
         <span data-status="working">{counts.working}</span>
@@ -2396,7 +2487,18 @@ function TownBoard({
         aria-label="Town board"
         onKeyDown={closeOnEscape}
       >
-        <div className="town-board-title">TOWN BOARD</div>
+        <div className="town-board-title">
+          TOWN BOARD
+          {onOpenSummary ? (
+            <button
+              type="button"
+              className="town-board-open"
+              onClick={onOpenSummary}
+            >
+              Summary
+            </button>
+          ) : null}
+        </div>
         <dl>
           <div>
             <dt>Working</dt>

@@ -809,20 +809,6 @@
 
 /* ---------- Town HUD: needs-you rail, peek, chat dock, toasts ---------- */
 
-.town-view-shell {
-  --town-panel: rgba(17, 21, 29, 0.94);
-  --town-edge: #090c11;
-  --town-text: #f1efe6;
-  --town-muted: #a9b2a4;
-  --town-accent: #ffd166;
-  --town-work: #6fc3ff;
-  --town-wait: #ffb547;
-  --town-done: #7be08f;
-  --town-idle: #d9c39b;
-  --town-btn: #273141;
-  --town-term: #0d1117;
-}
-
 .town-view-shell .town-rail,
 .town-peek,
 .town-toast {

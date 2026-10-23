@@ -66,6 +66,22 @@
   color: #c9b79a;
 }
 
+.town-board-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.town-board-open {
+  padding: 2px 8px;
+  border: 1px solid #7a5536;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.25);
+  color: #e7c48a;
+  font: inherit;
+  cursor: pointer;
+}
+
 .town-board-chip {
   display: none;
 }

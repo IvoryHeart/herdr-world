@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { useWindowManager } from "./useWindowManager";
@@ -9,14 +9,39 @@ import {
   WorldPanelWindow,
   WorldPanelsContext,
   useWorldPanelRegistry,
+  useWorldPanelFocus,
+  type WorldPanelEntry,
 } from "./WorldPanel";
+import type { WindowCommand, WindowManagerState } from "./windowManager";
 
 const stage = { width: 1000, height: 600 };
 let harness: {
   setOpen(value: boolean): void;
   setCount(value: number): void;
   closes: number;
+  launch(): void;
+  focus(id: string): void;
+  setLate(names: string[]): void;
+  dispatch(command: WindowCommand): void;
+  state: WindowManagerState;
+  delivered: string[];
+  register(entry: WorldPanelEntry): () => void;
+  setDelivering(value: boolean): void;
+  panels: readonly WorldPanelEntry[];
 };
+
+function FocusConsumer({
+  registry,
+  state,
+  dispatch,
+}: {
+  registry: ReturnType<typeof useWorldPanelRegistry>;
+  state: WindowManagerState;
+  dispatch(command: WindowCommand): void;
+}) {
+  useWorldPanelFocus(registry, state, dispatch);
+  return null;
+}
 
 function Fixture() {
   const registry = useWorldPanelRegistry();
@@ -24,17 +49,48 @@ function Fixture() {
   const [open, setOpen] = useState(true);
   const [count, setCount] = useState(1);
   const [closes, setCloses] = useState(0);
+  const [focusKey, setFocusKey] = useState(0);
+  const [late, setLate] = useState<string[]>([]);
+  const delivered = useRef<string[]>([]);
+  const [delivering, setDelivering] = useState(true);
   const { state, dispatch } = useWindowManager(
     panels.map(({ id, label }) => ({ id, label })),
     stage,
   );
-  harness = { setOpen, setCount, closes };
+  const deliver = useCallback(
+    (command: WindowCommand) => {
+      if (command.type === "focus") delivered.current.push(command.id);
+      dispatch(command);
+    },
+    [dispatch],
+  );
+  harness = {
+    setOpen,
+    setCount,
+    closes,
+    launch: () => {
+      setOpen(true);
+      setFocusKey((key) => key + 1);
+    },
+    focus: registry.focus,
+    setLate,
+    dispatch,
+    state,
+    delivered: delivered.current,
+    register: registry.register,
+    setDelivering,
+    panels,
+  };
   return (
     <WorldPanelsContext.Provider value={registry}>
+      {delivering ? (
+        <FocusConsumer registry={registry} state={state} dispatch={deliver} />
+      ) : null}
       {open ? (
         <WorldPanel
           name="summary"
           label="Summary"
+          focusKey={focusKey}
           onClose={() => {
             setCloses((value) => value + 1);
             setOpen(false);
@@ -43,6 +99,18 @@ function Fixture() {
           <p className="summary-content">Agents: {count}</p>
         </WorldPanel>
       ) : null}
+      {late.map((name) => (
+        <WorldPanel
+          key={name}
+          name={name}
+          label={name}
+          onClose={() =>
+            setLate((current) => current.filter((entry) => entry !== name))
+          }
+        >
+          <p>{name}</p>
+        </WorldPanel>
+      ))}
       <WindowSurface
         state={state}
         dispatch={dispatch}
@@ -146,6 +214,131 @@ async function run() {
     panelWindow()?.querySelector(".summary-content"),
     "a reopened panel did not open its window again",
   );
+  flushSync(() => harness.dispatch({ type: "minimize", id: "panel:summary" }));
+  await settle();
+  check(
+    harness.state.windows["panel:summary"]?.minimized,
+    "the setup did not minimize Summary",
+  );
+  flushSync(() => harness.launch());
+  await settle();
+  await settle();
+  check(
+    !harness.state.windows["panel:summary"]?.minimized &&
+      harness.state.activeId === "panel:summary",
+    "launching an open Summary did not restore it",
+  );
+  flushSync(() => harness.setLate(["cover"]));
+  await settle();
+  await settle();
+  check(
+    harness.state.activeId === "panel:cover",
+    "the setup did not cover Summary",
+  );
+  flushSync(() => harness.launch());
+  await settle();
+  await settle();
+  check(
+    harness.state.activeId === "panel:summary" &&
+      harness.state.stack[harness.state.stack.length - 1] === "panel:summary",
+    "launching Summary did not raise it above the covering window",
+  );
+  flushSync(() => {
+    harness.setOpen(false);
+    harness.setLate([]);
+  });
+  await settle();
+  await settle();
+  const before = harness.delivered.length;
+  flushSync(() => {
+    harness.focus("panel:late-a");
+    harness.focus("panel:late-b");
+  });
+  flushSync(() => harness.setLate(["late-a"]));
+  await settle();
+  await settle();
+  check(
+    harness.delivered.length === before,
+    "a superseded request focused late A",
+  );
+  flushSync(() => harness.setLate(["late-a", "late-b"]));
+  await settle();
+  await settle();
+  check(
+    harness.delivered.slice(before).join() === "panel:late-b" &&
+      harness.state.activeId === "panel:late-b",
+    "the newest pre-registration request did not focus B once",
+  );
+  flushSync(() => harness.setLate(["late-a"]));
+  await settle();
+  await settle();
+  flushSync(() => harness.setLate(["late-a", "late-b"]));
+  await settle();
+  await settle();
+  check(
+    harness.delivered.length === before + 1,
+    "registration replayed a consumed focus request",
+  );
+  flushSync(() => harness.setDelivering(false));
+  await settle();
+  flushSync(() => harness.setDelivering(true));
+  await settle();
+  await settle();
+  check(
+    harness.delivered.length === before + 1,
+    "remount replayed a consumed focus request",
+  );
+  flushSync(() => {
+    harness.focus("panel:late-b");
+    harness.setLate(["late-a"]);
+  });
+  await settle();
+  await settle();
+  flushSync(() => harness.setLate(["late-a", "late-b"]));
+  await settle();
+  await settle();
+  check(
+    harness.delivered.length === before + 1,
+    "a stale request survived unregister/re-register",
+  );
+  let removeOld = () => {},
+    removeNew = () => {};
+  flushSync(() => {
+    removeOld = harness.register({
+      id: "panel:replace",
+      label: "Old",
+      onClose: () => {},
+    });
+  });
+  flushSync(() => {
+    removeNew = harness.register({
+      id: "panel:replace",
+      label: "New",
+      onClose: () => {},
+    });
+    removeOld();
+  });
+  await settle();
+  check(
+    harness.panels.find((panel) => panel.id === "panel:replace")?.label ===
+      "New",
+    "an obsolete cleanup removed the replacement registration",
+  );
+  flushSync(() => harness.focus("panel:replace"));
+  await settle();
+  await settle();
+  check(
+    harness.delivered[harness.delivered.length - 1] === "panel:replace" &&
+      harness.state.activeId === "panel:replace",
+    "the current replacement registration could not receive focus",
+  );
+  flushSync(() => removeNew());
+  flushSync(() => {
+    harness.setLate([]);
+    harness.setOpen(true);
+  });
+  await settle();
+  await settle();
   flushSync(() => harness.setOpen(false));
   await settle();
   await settle();
