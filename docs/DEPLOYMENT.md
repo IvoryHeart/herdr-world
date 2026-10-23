@@ -237,9 +237,13 @@ connection's OpenSSH destination): `claude auth status` and
 login method; the commands' other output, which can name the account, is
 discarded. It also lists `SKILL.md` folders by name. A service whose `PATH`
 lacks the harness still finds it in the usual install folders (such as
-`~/.local/bin`). **Log in** types the harness's fixed login command
-(`claude auth login`, `codex login --device-auth`) into a new tab, where you
-finish the login yourself. Windows hosts are not probed.
+`~/.local/bin`). **Log in** opens a new tab and, once that tab's shell is at
+its prompt, types the harness's fixed login command (`claude auth login`,
+`codex login --device-auth`), run through `sh -c` with the executable found the
+same way. You finish the login there yourself. If the shell never settles at
+its prompt, nothing is typed and the launcher offers to open the tab. Windows
+hosts are not probed: their harnesses show no status, and every agent kind
+their Herdr supports stays available. Log in is not offered there.
 
 ## Optional cost metrics
 

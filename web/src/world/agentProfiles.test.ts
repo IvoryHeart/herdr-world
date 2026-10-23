@@ -4,6 +4,8 @@ import {
   harnessLabel,
   profileLookFor,
   readinessNote,
+  retainedOutcome,
+  type LaunchTarget,
   type ProfilesDocument,
 } from "./agentProfiles";
 
@@ -48,5 +50,30 @@ describe("Agent profiles in the browser", () => {
     expect(readinessNote("claude", null)).toBeNull();
     expect(harnessLabel("claude")).toBe("Claude");
     expect(harnessLabel("opencode")).toBe("Opencode");
+  });
+
+  test("a retained outcome keeps the host its launch ran on", () => {
+    const hostA: LaunchTarget = {
+      connectionId: "host-a",
+      generation: 2,
+      workspaceId: "w1",
+      workspaceLabel: "api",
+    };
+    const outcome = retainedOutcome(hostA, {
+      status: "uncertain",
+      message: "It may still be starting.",
+      terminal_id: "term_7",
+    });
+    // The room then changes to host B; the outcome still opens A's terminal.
+    expect(outcome).toEqual({
+      message: "It may still be starting.",
+      failed: false,
+      terminal: { connectionId: "host-a", terminalId: "term_7" },
+    });
+    expect(retainedOutcome(hostA, { status: "failed" })).toEqual({
+      message: "",
+      failed: true,
+      terminal: null,
+    });
   });
 });

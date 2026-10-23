@@ -162,8 +162,13 @@ fields; it SHALL NOT read credentials or forward the command's output. Harness
 commands SHALL be data per harness, not logic. The launcher and the profile
 editor SHALL show a missing or logged-out harness, and SHALL offer Log in, which
 opens a new tab in the room running the harness's own fixed login command for
-the user to complete; World SHALL then re-check on request. Windows hosts SHALL
-NOT be probed.
+the user to complete; World SHALL then re-check on request. The login command
+SHALL use the executable readiness found, by the same lookup on that host, and
+SHALL be typed only once that new terminal's shell holds the foreground and its
+prompt has settled, while the host's runtime is unchanged; otherwise nothing
+SHALL be typed and World SHALL say so and offer to open the tab. Windows hosts
+SHALL NOT be probed; they SHALL report no readiness, which blocks no kind their
+Herdr supports.
 
 #### Scenario: Logged out
 
@@ -174,3 +179,13 @@ NOT be probed.
 
 - **WHEN** a harness's status output includes the account's email address
 - **THEN** World reports only whether it is logged in and the method, never the address
+
+#### Scenario: The login tab's shell is not ready
+
+- **WHEN** the user chooses Log in and the new tab's shell never settles at its prompt within the bound
+- **THEN** World types nothing, says so and offers to open the tab
+
+#### Scenario: A Windows host
+
+- **WHEN** New agent targets a room on a Windows host whose Herdr supports Claude
+- **THEN** World does not probe the host and still offers Claude

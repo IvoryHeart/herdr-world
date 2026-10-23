@@ -1518,6 +1518,10 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
         {
           workspace_id: String(p.workspace_id ?? ""),
           kind: String(p.kind ?? ""),
+          windows: sshHost()
+            ? connection.remotePlatform === "windows"
+            : process.platform === "win32",
+          isCurrent: requestIsCurrent,
         },
       );
       sendReply({ id, result }, method);

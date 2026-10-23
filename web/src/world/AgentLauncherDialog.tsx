@@ -12,10 +12,11 @@ import {
   launchAgent,
   launcherCatalog,
   readinessNote,
+  retainedOutcome,
   openHarnessLogin,
   useAgentProfiles,
-  type LaunchOutcome,
   type LaunchTarget,
+  type RetainedOutcome,
   type LauncherCatalog,
 } from "./agentProfiles";
 import { ProfileSprite } from "./ProfileSprite";
@@ -75,7 +76,7 @@ export function AgentLauncherDialog({
   const [catalogError, setCatalogError] = useState<string | null>(null);
   const [checks, setChecks] = useState(0);
   const [busy, setBusy] = useState<string | null>(null);
-  const [outcome, setOutcome] = useState<LaunchOutcome | null>(null);
+  const [outcome, setOutcome] = useState<RetainedOutcome | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const connectionId = room?.connectionId;
@@ -138,7 +139,7 @@ export function AgentLauncherDialog({
         onClose();
         return;
       }
-      setOutcome(result);
+      setOutcome(retainedOutcome(target, result));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
@@ -148,14 +149,19 @@ export function AgentLauncherDialog({
 
   const logIn = async (kind: string) => {
     if (!target) return;
+    setOutcome(null);
     setError(null);
     try {
       const opened = await openHarnessLogin(target, kind);
-      onOpen({
-        connectionId: target.connectionId,
-        terminalId: opened.terminal_id,
-      });
-      onClose();
+      if (opened.status === "opened") {
+        onOpen({
+          connectionId: target.connectionId,
+          terminalId: opened.terminal_id,
+        });
+        onClose();
+        return;
+      }
+      setOutcome(retainedOutcome(target, opened));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     }
@@ -301,21 +307,14 @@ export function AgentLauncherDialog({
             </p>
           ) : null}
           {outcome ? (
-            <p
-              className={
-                outcome.status === "failed" ? "agent-launcher-error" : undefined
-              }
-            >
+            <p className={outcome.failed ? "agent-launcher-error" : undefined}>
               {outcome.message}
-              {outcome.terminal_id && target ? (
+              {outcome.terminal ? (
                 <button
                   type="button"
                   className="agent-launcher-login"
                   onClick={() => {
-                    onOpen({
-                      connectionId: target.connectionId,
-                      terminalId: outcome.terminal_id!,
-                    });
+                    onOpen(outcome.terminal!);
                     onClose();
                   }}
                 >

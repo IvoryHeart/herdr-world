@@ -120,6 +120,27 @@ export type LaunchOutcome = {
   agent_name?: string;
 };
 
+/**
+ * What a launch or login that did not open its terminal leaves in the
+ * dialog: the reason and the terminal it created, qualified by the host it
+ * ran on, so opening it later never reads another room's host.
+ */
+export type RetainedOutcome = {
+  message: string;
+  failed: boolean;
+  terminal: { connectionId: string; terminalId: string } | null;
+};
+export const retainedOutcome = (
+  target: LaunchTarget,
+  result: { status: string; message?: string; terminal_id?: string },
+): RetainedOutcome => ({
+  message: result.message ?? "",
+  failed: result.status === "failed",
+  terminal: result.terminal_id
+    ? { connectionId: target.connectionId, terminalId: result.terminal_id }
+    : null,
+});
+
 export type HarnessReadiness = {
   kind: string;
   installed: boolean;
@@ -169,7 +190,14 @@ export async function openHarnessLogin(target: LaunchTarget, kind: string) {
       "launcher.login",
       { workspace_id: target.workspaceId, kind },
       30_000,
-    )) as { tab_id: string; pane_id: string; terminal_id: string };
+    )) as {
+    /** opened: the login command was typed into the tab's ready shell. */
+    status: "opened" | "uncertain" | "failed";
+    message?: string;
+    tab_id: string;
+    pane_id: string;
+    terminal_id: string;
+  };
 }
 
 export async function launchAgent(

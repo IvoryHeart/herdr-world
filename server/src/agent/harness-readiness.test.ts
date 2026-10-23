@@ -3,7 +3,11 @@ import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runProcessWithCodeTimeout, shQuote } from "../utils/process-utils";
-import { harnessReadiness, openHarnessLogin } from "./harness-readiness";
+import {
+  harnessReadiness,
+  loginCommand,
+  openHarnessLogin,
+} from "./harness-readiness";
 
 /** A host with fake harnesses: some on PATH, one in a default location. */
 function host(
@@ -23,18 +27,76 @@ function host(
     write(join(bin, name), body);
   for (const [name, body] of Object.entries(inHome))
     write(join(home, ".local", "bin", name), body);
-  return (kinds: string[]) =>
-    harnessReadiness({
-      kinds,
-      windows: false,
-      shQuote,
-      run: (argv, timeout) =>
-        runProcessWithCodeTimeout(
-          ["env", "-i", `HOME=${home}`, `PATH=${bin}:/usr/bin:/bin`, ...argv],
-          timeout,
-        ),
-    });
+  const env = ["env", "-i", `HOME=${home}`, `PATH=${bin}:/usr/bin:/bin`];
+  return Object.assign(
+    (kinds: string[]) =>
+      harnessReadiness({
+        kinds,
+        windows: false,
+        shQuote,
+        run: (argv, timeout) =>
+          runProcessWithCodeTimeout([...env, ...argv], timeout),
+      }),
+    {
+      /** Run a line as a login shell on this host would. */
+      type: (line: string) =>
+        runProcessWithCodeTimeout([...env, "sh", "-c", line], 10_000),
+    },
+  );
 }
+
+/**
+ * A fake Herdr for one login tab. `screens` are successive visible reads;
+ * `front` says whether the shell holds the foreground at each step.
+ */
+function loginHerdr(options: {
+  screens: string[];
+  front?: (step: number) => boolean;
+  terminal?: (step: number) => string;
+}) {
+  const calls: [string, Record<string, unknown>][] = [];
+  let step = 0;
+  const call = async (method: string, params: Record<string, unknown>) => {
+    calls.push([method, params]);
+    if (method === "tab.create")
+      return {
+        tab: { tab_id: "w1:t3" },
+        root_pane: { pane_id: "w1:p3", terminal_id: "term_3" },
+      };
+    if (method === "pane.get")
+      return {
+        pane: {
+          pane_id: "w1:p3",
+          terminal_id: options.terminal?.(step) ?? "term_3",
+        },
+      };
+    if (method === "pane.process_info") {
+      const front = options.front?.(step) ?? true;
+      return {
+        process_info: {
+          shell_pid: 40,
+          foreground_process_group_id: front ? 40 : 41,
+        },
+      };
+    }
+    if (method === "pane.read")
+      return {
+        read: { text: options.screens[step] ?? options.screens.at(-1) },
+      };
+    return {};
+  };
+  let clock = 0;
+  const timing = {
+    now: () => clock,
+    sleep: async (ms: number) => {
+      clock += ms;
+      step += 1;
+    },
+  };
+  return { call, calls, timing };
+}
+const typed = (calls: [string, Record<string, unknown>][]) =>
+  calls.filter(([method]) => method === "pane.send_input");
 
 describe("Harness readiness", () => {
   test("reads each harness's own status without forwarding its output", async () => {
@@ -72,7 +134,9 @@ describe("Harness readiness", () => {
     ]);
   });
 
-  test("a Windows host is not probed", async () => {
+  test("a Windows host is not probed and reports nothing", async () => {
+    // Nothing known blocks no kind: the launcher keeps every kind Herdr
+    // supports there.
     expect(
       await harnessReadiness({
         kinds: ["claude"],
@@ -82,39 +146,129 @@ describe("Harness readiness", () => {
           throw new Error("probed");
         },
       }),
-    ).toEqual([
-      { kind: "claude", installed: false, logged_in: null, can_log_in: false },
-    ]);
+    ).toEqual([]);
   });
 
-  test("login opens a tab running the harness's own login command", async () => {
-    const calls: [string, Record<string, unknown>][] = [];
-    let reads = 0;
-    const opened = await openHarnessLogin(
-      async (method, params) => {
-        calls.push([method, params]);
-        if (method === "tab.create")
-          return {
-            tab: { tab_id: "w1:t3" },
-            root_pane: { pane_id: "w1:p3", terminal_id: "term_3" },
-          };
-        if (method === "pane.read")
-          return { read: { text: ++reads > 2 ? "$ " : "" } };
-        return {};
-      },
-      { workspace_id: "w1", kind: "codex", sleep: async () => {} },
-    );
+  test("login types the harness's own login once the shell's prompt settles", async () => {
+    const herdr = loginHerdr({ screens: ["", "Welcome", "$ ", "$ "] });
+    const opened = await openHarnessLogin(herdr.call, {
+      workspace_id: "w1",
+      kind: "codex",
+      windows: false,
+      isCurrent: () => true,
+      ...herdr.timing,
+    });
     expect(opened).toEqual({
+      status: "opened",
       tab_id: "w1:t3",
       pane_id: "w1:p3",
       terminal_id: "term_3",
     });
-    expect(calls.at(-1)).toEqual([
-      "pane.send_input",
-      { pane_id: "w1:p3", text: "codex login --device-auth", keys: ["Enter"] },
+    expect(typed(herdr.calls)).toEqual([
+      [
+        "pane.send_input",
+        { pane_id: "w1:p3", text: loginCommand("codex"), keys: ["Enter"] },
+      ],
     ]);
     await expect(
-      openHarnessLogin(async () => ({}), { workspace_id: "w1", kind: "pi" }),
+      openHarnessLogin(herdr.call, {
+        workspace_id: "w1",
+        kind: "pi",
+        windows: false,
+        isCurrent: () => true,
+      }),
     ).rejects.toThrow(/no login command/);
+    await expect(
+      openHarnessLogin(herdr.call, {
+        workspace_id: "w1",
+        kind: "codex",
+        windows: true,
+        isCurrent: () => true,
+      }),
+    ).rejects.toThrow(/Windows/);
+  });
+
+  test("login types nothing into a shell that never reaches its prompt", async () => {
+    const cases = {
+      // Every read is empty.
+      neverReady: loginHerdr({ screens: [""] }),
+      // A banner, with the shell's startup still in front of it.
+      bannerOnly: loginHerdr({
+        screens: ["Last login: Mon", "Last login: Mon"],
+        front: () => false,
+      }),
+    };
+    for (const herdr of Object.values(cases)) {
+      const outcome = await openHarnessLogin(herdr.call, {
+        workspace_id: "w1",
+        kind: "claude",
+        windows: false,
+        isCurrent: () => true,
+        ...herdr.timing,
+      });
+      expect(outcome).toMatchObject({
+        status: "uncertain",
+        terminal_id: "term_3",
+        message: expect.stringMatching(/nothing was typed/),
+      });
+      expect(typed(herdr.calls)).toEqual([]);
+    }
+  });
+
+  test("login stops when the tab changes or the host reconnects", async () => {
+    const changed = loginHerdr({
+      screens: ["$ "],
+      terminal: (step) => (step === 0 ? "term_3" : "term_9"),
+    });
+    expect(
+      await openHarnessLogin(changed.call, {
+        workspace_id: "w1",
+        kind: "claude",
+        windows: false,
+        isCurrent: () => true,
+        ...changed.timing,
+      }),
+    ).toMatchObject({
+      status: "failed",
+      message: expect.stringMatching(/tab changed/),
+    });
+    expect(typed(changed.calls)).toEqual([]);
+
+    let current = true;
+    const reconnect = loginHerdr({ screens: ["$ "] });
+    const outcome = await openHarnessLogin(reconnect.call, {
+      workspace_id: "w1",
+      kind: "claude",
+      windows: false,
+      isCurrent: () => current,
+      now: reconnect.timing.now,
+      sleep: async (ms) => {
+        await reconnect.timing.sleep(ms);
+        current = false;
+      },
+    });
+    expect(outcome).toMatchObject({
+      status: "failed",
+      message: expect.stringMatching(/reconnected/),
+    });
+    expect(typed(reconnect.calls)).toEqual([]);
+  });
+
+  test("login runs an install found only in its default location", async () => {
+    // Not on the shell's PATH: only in ~/.local/bin, as readiness finds it.
+    const fake = host(
+      {},
+      {
+        claude: `case "$1 $2" in "auth status") echo '{"loggedIn": false}'; exit 1;; "auth login") echo "LOGIN FLOW";; esac`,
+      },
+    );
+    expect(await fake(["claude"])).toMatchObject([
+      { kind: "claude", installed: true, logged_in: false, can_log_in: true },
+    ]);
+    const login = await fake.type(loginCommand("claude")!);
+    expect(login.stdout.trim()).toBe("LOGIN FLOW");
+    const missing = await host({}).type(loginCommand("codex")!);
+    expect(missing.code).toBe(127);
+    expect(missing.stdout).toContain("codex is not installed here.");
   });
 });
