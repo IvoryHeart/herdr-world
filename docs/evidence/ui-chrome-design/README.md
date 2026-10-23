@@ -50,7 +50,7 @@ only on desktop. `App.tsx` gates it on `!mobile`, so on phone it changes nothing
 | 1 | Dock side, expand, pop-out terminal | rare | ⋯ menu |
 | 1 | Colour swatch (#261) | rare | ⋯ → Colour; shown as the avatar ring or swatch |
 | 1 | Repository status icon | sometimes | Location popover (it duplicated bar 3) |
-| 2 | Terminal · Files · Changes · Commits · Chat | constant | One top selector in the bar, phone included (Commits stays in Changes' own toolbar) |
+| 2 | Terminal · Files · Changes · Commits · Chat | constant | One top selector in the bar on desktop; on a phone the views are in ⋯ (Commits stays in Changes' own toolbar) |
 | 3 | Branch-link row | rare | Removed; the location popover covers it |
 | 3 | PR card on Changes and Commits | sometimes | Pill in the Changes toolbar, plus the popover |
 
@@ -94,7 +94,7 @@ VS Code, Warp, Zed and iTerm2's compact theme.
 
 | Viewport | Town dock | Window bar | Tray and camera |
 | --- | --- | --- | --- |
-| Phone | The window covers the screen; Back returns to the map; FirstMate is the other tab | ‹, avatar, name, the 4-icon selector and ⋯ (Next is in ⋯) | Bottom strip; view picker at bottom left; one 44px camera button; no bottom nav in Zen |
+| Phone | The window covers the screen; Back returns to the map; FirstMate is the other tab | ‹, avatar, name and status, and ⋯, which holds the views, the agents and terminals to switch to, and Next | Bottom strip; view picker at bottom left; one 44px camera button; no bottom nav in Zen |
 | Mac laptop | Right dock, `min(520px, 40vw)`; FirstMate and the agent are avatar tabs in the bar | Icon chips | Left rail; camera beside the dock |
 | Half-width Linux | Right dock, 508px, with avatar tabs | As laptop | Left rail; hosts shown as an icon |
 | Wide Linux | Right dock of 520px with avatar tabs; undock a tab to float it beside the dock | Icon chips; labels at 640px or wider | Left rail |
@@ -148,8 +148,8 @@ state (working, needs you, on a break, finished, unknown and shell):
 
 | Place | Holds | Never holds |
 | --- | --- | --- |
-| Header (one bar) | Avatar (its ring is the colour), name, status and location line, the selector `[Chat \| Terminal \| Changes \| Files]`, Next ›, ⋯, close or Back | A second row of actions |
-| ⋯ menu | Colour, Mark reviewed (when finished), minimise, snap and float or Position, open in Spaces | Navigation between views (except the "More views" overflow under 360px) |
+| Header (one bar) | Avatar (its ring is the colour), name, status and location line, the selector `[Chat \| Terminal \| Changes \| Files]` (not on a phone), Next ›, ⋯, close or Back | A second row of actions |
+| ⋯ menu | On a phone or under 360px of window width: the views and, on a phone, the agents and terminals to switch to. Always: colour, Mark reviewed (when finished), minimise, snap and float or Position, open in Spaces | Navigation between views on a desktop window 360px wide or more |
 | Chat body (`AgentChat`) | The conversation; a waiting agent's question with its answers as chips at the end of the conversation, numbered 1–3 for the keyboard | Cards duplicating the latest message |
 | State chips (Chat only, above the composer) | At most one slim row, 32px high, that scrolls sideways and appears only when the state has actions. Finished: `✓ Mark reviewed` and `↩ Follow up` (Follow up focuses the composer). Needs you without listed answers: `Open terminal`. | Full-width buttons, Inspector, Colour, Next |
 | Composer (Chat only) | Attach, reply box, send. There is exactly one. | The global phone composer, the terminal key bar |
@@ -229,20 +229,25 @@ retired chat window.
     reskinned for Town through tokens rather than built as a new component.
   - The bottom holds Chat's composer (attach, reply box, send), only in Chat.
     No button rows, no bottom tab strip and no thumb row.
-  - **Phone header** at 390px: `‹ · avatar · name/status · [💬 ▣ ± 📁] · ⋯`.
-    The selector is four 40px icon targets in the top bar. Next moves into ⋯,
+  - **Phone header** at 390px: `‹ · avatar · name/status · ⋯`, the same
+    bar as the terminal's. There is no selector in the bar: ⋯ lists View
+    (Chat, Terminal, Changes, Files), Switch to (the other agents and
+    terminals) and Window. This later owner direction replaces the earlier
+    four-icon phone selector. Next moves into ⋯,
     because the need-you pill already covers it.
   - **Desktop header:** `‹ · tab avatars · name/location · [💬 ▣ ±2 📁] · Next › · ⋯`.
     Chip labels appear at 640px of window width or more.
 
 - **Header breakpoints (the window's own width, via container queries).** The
-  same rule applies docked, floating and on phones:
+  same rule applies to docked and floating windows. A phone does not use this
+  table: its bar never shows the selector, and the views are always in ⋯ (see
+  the phone header above).
 
 | Window width | Selector and actions |
 | --- | --- |
 | 640px and up | Icon and label for Chat, Terminal, Changes and Files; labelled actions ("Next (1) ›") |
 | 360–639px | Icons only, each with a tooltip and an aria-label; Next shows "(1) ›" |
-| Under 360px | Active view chip only; the other views are at the top of ⋯ |
+| Under 360px | Active view chip only; every view, then Maximize, is at the top of ⋯ |
 
   This supersedes the earlier composer-row options (A, B and C).
 
