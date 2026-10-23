@@ -14,6 +14,7 @@ import {
   useAttachmentUploads,
 } from "../attachmentUploads";
 import { terminalUploadedPathsText } from "../terminalFileDrop";
+import { shortcutMatches, shortcutTitle } from "../shortcutPreferences";
 import {
   uploadTerminalFile,
   uploadTerminalImage,
@@ -1026,15 +1027,17 @@ export function AgentChat({
                 event.preventDefault();
                 attach(files);
               }}
+              // As in World's terminal composer: Enter starts a new line, and
+              // the composer's send shortcut (Ctrl/Cmd+Enter) sends.
               onKeyDown={(event) => {
                 if (
-                  event.key === "Enter" &&
-                  !event.shiftKey &&
-                  !event.nativeEvent.isComposing
-                ) {
-                  event.preventDefault();
-                  void send();
-                }
+                  event.nativeEvent.isComposing ||
+                  event.keyCode === 229 ||
+                  !shortcutMatches(event.nativeEvent, "composer.send")
+                )
+                  return;
+                event.preventDefault();
+                void send();
               }}
             />
             <button
@@ -1048,7 +1051,7 @@ export function AgentChat({
                   ? "Dismiss the notice about the other session first"
                   : uploading
                     ? "Waiting for uploads"
-                    : "Send (Enter)"
+                    : shortcutTitle("Send", "composer.send")
               }
             >
               <Send size={14} />

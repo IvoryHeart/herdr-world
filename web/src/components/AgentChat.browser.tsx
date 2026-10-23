@@ -324,10 +324,42 @@ async function run() {
     };
     type("Run the tests");
     await settle();
-    textarea.dispatchEvent(
-      new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
-    );
+    // As in World's composer, Enter is a new line: it neither sends nor is
+    // held back from the textarea.
+    const enter = new KeyboardEvent("keydown", {
+      key: "Enter",
+      bubbles: true,
+      cancelable: true,
+    });
+    textarea.dispatchEvent(enter);
     await settle();
+    check(
+      !enter.defaultPrevented &&
+        !calls.some((call) => call.method === "agent_conversation.send"),
+      "Enter must start a new line, not send",
+    );
+    check(
+      /^Send \((Ctrl|Meta|Cmd|⌘)/.test(
+        container
+          .querySelector<HTMLButtonElement>('button[aria-label="Send"]')
+          ?.getAttribute("title") ?? "",
+      ),
+      "The Send button must name its keyboard shortcut",
+    );
+    // The composer's send shortcut (Ctrl+Enter, Cmd+Enter on a Mac) sends.
+    for (const modifier of ["ctrlKey", "metaKey"] as const) {
+      if (calls.some((call) => call.method === "agent_conversation.send"))
+        break;
+      textarea.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          bubbles: true,
+          cancelable: true,
+          [modifier]: true,
+        }),
+      );
+      await settle();
+    }
     const sent = calls.find(
       (call) => call.method === "agent_conversation.send",
     );
@@ -336,7 +368,7 @@ async function run() {
         sent.params.session_fingerprint === "a".repeat(64) &&
         sent.params.pane_id === "p" &&
         JSON.stringify(sent.params.baseline) === JSON.stringify(["u1", "u2"]),
-      "Enter must send the draft with the session it was written for",
+      "The send shortcut must send the draft with the session it was written for",
     );
     check(textarea.value === "", "A sent draft must clear");
 

@@ -93,6 +93,9 @@ view that you open on purpose.
 - When the conversation is unavailable, Chat shows the reason and the action it
   names: the integration command to copy, the Codex session link, **Refresh**
   and **Open Terminal**. It offers no composer then.
+- In the composer, Enter starts a new line. **Send**, or the terminal
+  composer's send shortcut (`Ctrl+Enter`, `Cmd+Enter` on a Mac, as set in
+  shortcuts), sends.
 - The paperclip (or a paste) attaches files. Each uploads to the pane's host
   with a progress chip, and its path joins the message; **Send** waits for
   uploads. A path that finishes after Chat closed joins the message when Chat

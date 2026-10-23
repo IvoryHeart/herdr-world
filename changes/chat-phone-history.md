@@ -3,6 +3,11 @@
 - Chat loads earlier messages as you scroll back past the latest 200, a page
   at a time, keeping your place; **Load earlier messages** does the same.
 
+### Changed
+
+- In Chat's composer, Enter starts a new line, as in the terminal composer;
+  **Send** or `Ctrl+Enter` (`Cmd+Enter` on a Mac) sends.
+
 ### Fixed
 
 - Chat no longer runs off the right edge on phones: a long path, command,

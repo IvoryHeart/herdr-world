@@ -149,7 +149,8 @@ changes what you see and does not disconnect hosts or retarget open terminals.
    that live pane. When no supported choices appear, use **Open chat** to reply
    in the agent's window, or **Open terminal** in the card's header (or the
    window's **Terminal** view). The window's **Chat** composer sends with
-   Herdr's agent prompt.
+   Herdr's agent prompt. As in the terminal composer, Enter starts a new line;
+   **Send** or `Ctrl+Enter` (`Cmd+Enter` on a Mac) sends.
 6. Use the paperclip in the window's **Chat** composer to attach files. Each
    file shows a chip while it uploads, then done or failed; retry a failed one
    (or pick it again) or remove it. **Send** waits for uploads. Uploads go to
