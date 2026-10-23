@@ -25,7 +25,6 @@ export type TownRendererDiagnostics = {
     characters: number;
     monitors: number;
     statuses: number;
-    quests: number;
   };
   layout: null | {
     width: number;
@@ -72,7 +71,7 @@ export function diagnostics(): TownRendererDiagnostics {
     walking: 0,
     summoned: [],
     desks: 0,
-    animation: { characters: 0, monitors: 0, statuses: 0, quests: 0 },
+    animation: { characters: 0, monitors: 0, statuses: 0 },
     layout: null,
     drags: { lifts: 0, landings: 0, returns: 0, dust: 0 },
   };
