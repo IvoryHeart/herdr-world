@@ -5,6 +5,7 @@ import type {
   WorldObject,
   WorldSpaceObject,
 } from "./worldObject";
+import { boundedDesks } from "./officeDesks";
 import { stableNumber } from "./stableNumber";
 import { boundedOptionalText, yieldWorldTask } from "./worldObject";
 import { tabCardKey } from "../../../shared/terminalColor";
@@ -12,6 +13,8 @@ import { tabCardKey } from "../../../shared/terminalColor";
 export const OFFICE_PRESENTATION_BOUNDS = Object.freeze({
   rooms: 128,
   desksPerRoom: 8,
+  /** Desks a room shows until it is expanded (Town); Office never folds. */
+  foldedDesksPerRoom: 8,
   roomAgentsPerRoom: 16,
   receptionDesks: 6,
   waitingAgentsPerReception: 8,
@@ -32,6 +35,7 @@ export const TOWN_PRESENTATION_BOUNDS: OfficePresentationBounds = Object.freeze(
   {
     ...OFFICE_PRESENTATION_BOUNDS,
     desksPerRoom: 127,
+    foldedDesksPerRoom: 24,
     roomAgentsPerRoom: 127 * 4,
   },
 );
@@ -146,6 +150,11 @@ export type OfficeRoom = {
   omittedAgentCount: number;
   observedDeskCount: number;
   observedAgentCount: number;
+  /**
+   * Set when the room has more desks than it shows folded: "folded" shows
+   * the busiest `foldedDesksPerRoom`, "expanded" shows up to `desksPerRoom`.
+   */
+  deskFold?: "folded" | "expanded";
 };
 
 export type OfficeReception = {
@@ -247,6 +256,7 @@ type ProjectedRoom = {
     | "omittedAgentCount"
     | "observedDeskCount"
     | "observedAgentCount"
+    | "deskFold"
   >;
   desks: OfficeDesk[];
   agents: OfficeAgent[];
@@ -270,6 +280,7 @@ export function createOfficeProjector(
   let previousWorld: WorldObject | null = null;
   let previous: HerdrOfficeProjection | null = null;
   let previousSelected: string | null = null;
+  let previousExpanded: ReadonlySet<string> = NO_EXPANDED_ROOMS;
   let previousPinned: ReadonlySet<string> = NO_PINNED_TABS;
   const intern = <T extends { key: string }>(next: T[], prior: T[]) => {
     const byKey = new Map(prior.map((item) => [item.key, item]));
@@ -287,13 +298,17 @@ export function createOfficeProjector(
     generatedAt: number,
     selectedId: string | null,
     pinnedTabs: ReadonlySet<string> = NO_PINNED_TABS,
+    expandedRooms: ReadonlySet<string> = NO_EXPANDED_ROOMS,
   ): HerdrOfficeProjection => {
     let next: HerdrOfficeProjection | null = null;
     const inputs = previous && projectionInputs.get(previous);
-    // Pinned desks are admitted first, so a pin change admits desks again.
-    const samePins = pinnedTabs === previousPinned;
+    // Pinned desks are admitted first, and expanding or folding a room changes
+    // its bound, so either change admits desks again.
+    const samePins =
+      pinnedTabs === previousPinned && expandedRooms === previousExpanded;
     if (
       previous &&
+      inputs &&
       previousWorld === world &&
       selectedId === previousSelected &&
       samePins
@@ -325,7 +340,7 @@ export function createOfficeProjector(
         )
         .every(
           (entry) =>
-            entry.desks.length <= bounds.desksPerRoom &&
+            entry.desks.length <= bounds.foldedDesksPerRoom &&
             entry.agents.filter((agent) => agent.destination === "room")
               .length <= bounds.roomAgentsPerRoom &&
             entry.desks.every(
@@ -412,6 +427,7 @@ export function createOfficeProjector(
         selectedId,
         bounds,
         pinnedTabs,
+        expandedRooms,
       );
     if (previous && next.rooms !== previous.rooms) {
       // Compare content once at projection admission, never once per canvas frame.
@@ -422,6 +438,7 @@ export function createOfficeProjector(
     }
     previousWorld = world;
     previousSelected = selectedId;
+    previousExpanded = expandedRooms;
     previousPinned = pinnedTabs;
     previous = next;
     return next;
@@ -441,6 +458,8 @@ export function projectWorldOffice(
   selectedId: string | null = null,
   bounds: OfficePresentationBounds = OFFICE_PRESENTATION_BOUNDS,
   pinnedTabs: ReadonlySet<string> = NO_PINNED_TABS,
+  /** Rooms the user expanded past `foldedDesksPerRoom` (room keys). */
+  expandedRooms: ReadonlySet<string> = NO_EXPANDED_ROOMS,
 ): HerdrOfficeProjection {
   const selection = selectedId ? world.nodeById.get(selectedId) : undefined;
   const selectedSpaceId =
@@ -514,10 +533,12 @@ export function projectWorldOffice(
       ),
     );
   const rooms = presentedRooms.map((entry) => {
+    const expanded = expandedRooms.has(entry.room.key);
+    const folds = entry.desks.length > bounds.foldedDesksPerRoom;
     const desks = boundedDesks(
       entry.desks,
       entry.agents,
-      bounds.desksPerRoom,
+      expanded ? bounds.desksPerRoom : bounds.foldedDesksPerRoom,
       (desk) =>
         entry.source.id === selectedSpaceId &&
         desk.tabRef.nativeId === selectedLeaf?.tabId,
@@ -567,6 +588,9 @@ export function projectWorldOffice(
       desks,
       roomAgents: shownAgents,
       omittedDeskCount: Math.max(0, entry.source.coverage.tabs - desks.length),
+      ...(folds
+        ? { deskFold: expanded ? ("expanded" as const) : ("folded" as const) }
+        : {}),
       omittedAgentCount: Math.max(
         0,
         entry.source.coverage.status.working +
@@ -1249,67 +1273,7 @@ function boundedWithPriority<T>(
   return values.filter((value) => admitted.has(value));
 }
 
-/**
- * A room's desks within its bound, in tab order. When a room has more, the
- * selected desk, then pinned desks, then the newest tabs (Herdr appends new tabs) always stay, then
- * desks whose agents need the user, are working or are unknown, then finished
- * ones; idle and empty desks are hidden first, and among equals newer tabs
- * stay. With more busy desks than the bound, the oldest of them are hidden
- * too; every hidden desk is counted on its room (`omittedDeskCount`).
- */
-function boundedDesks(
-  desks: readonly OfficeDesk[],
-  agents: readonly {
-    deskKey: string | null;
-    semanticStatus: WorldAgentStatus;
-  }[],
-  limit: number,
-  selected: (desk: OfficeDesk) => boolean,
-  pinned: (desk: OfficeDesk) => boolean,
-) {
-  if (desks.length <= limit) return [...desks];
-  const need = new Map<string, number>();
-  for (const agent of agents) {
-    if (!agent.deskKey) continue;
-    const rank = DESK_STATUS_RANK[agent.semanticStatus];
-    need.set(agent.deskKey, Math.min(need.get(agent.deskKey) ?? 9, rank));
-  }
-  const newest = desks.length - NEWEST_DESKS_KEPT;
-  const rank = (desk: OfficeDesk, index: number) =>
-    selected(desk)
-      ? -3
-      : pinned(desk)
-        ? -2
-        : index >= newest
-          ? -1
-          : (need.get(desk.key) ?? DESK_STATUS_RANK.idle);
-  const admitted = new Set(
-    desks
-      .map((desk, index) => ({ desk, index, rank: rank(desk, index) }))
-      .sort((left, right) => left.rank - right.rank || right.index - left.index)
-      // The selected and pinned desks stay even past the bound.
-      .slice(
-        0,
-        Math.max(
-          limit,
-          desks.filter((desk) => selected(desk) || pinned(desk)).length,
-        ),
-      )
-      .map(({ desk }) => desk),
-  );
-  return desks.filter((desk) => admitted.has(desk));
-}
-
-/** Past the bound, this many newest tabs always keep a desk. */
-const NEWEST_DESKS_KEPT = 3;
-
-const DESK_STATUS_RANK: Record<WorldAgentStatus, number> = {
-  blocked: 0,
-  working: 1,
-  unknown: 2,
-  done: 3,
-  idle: 4,
-};
+const NO_EXPANDED_ROOMS: ReadonlySet<string> = new Set();
 
 function compareAgents(left: OfficeAgent, right: OfficeAgent) {
   return left.key.localeCompare(right.key);

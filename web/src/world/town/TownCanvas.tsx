@@ -31,7 +31,14 @@ import { DEVTOOLS, NO_TRACE, type ViewTrace } from "../devtools/flag";
 import { traceGesture } from "../devtools/trace";
 import { EllipsisVertical } from "lucide-react";
 import { useMobileControls } from "../../components/MobileControls";
-import { Bot, Pencil, Plus, Trash2 } from "lucide-react";
+import {
+  Bot,
+  ChevronsDown,
+  ChevronsUp,
+  Pencil,
+  Plus,
+  Trash2,
+} from "lucide-react";
 import type {
   HerdrOfficeProjection,
   OfficeAgent,
@@ -157,6 +164,8 @@ export type TownRoomActions = {
   ): Promise<TownMoveResult>;
   /** An agent dragged onto another desk; resolves how the move ended. */
   onDropAgent(agentKey: string, deskKey: string): Promise<TownMoveResult>;
+  /** Grow a folded room to show all its desks, or fold it back. */
+  onToggleFold?(roomKey: string): void;
   /** A desk dragged onto another desk: join its team (townTeams.ts). */
   onGroupDesk(deskKey: string, targetDeskKey: string): Promise<TownMoveResult>;
   /** A grouped desk dropped on its own room's floor: leave its team. */
@@ -2006,6 +2015,33 @@ const TownWorldLayer = memo(function TownWorldLayer({
                       <span className="town-room-plaque-badge">
                         !{c.blocked}
                       </span>
+                    ) : null}
+                    {room.deskFold && roomActions.onToggleFold ? (
+                      <button
+                        className="world-room-overlay-action town-plaque-action town-plaque-agent"
+                        type="button"
+                        aria-expanded={room.deskFold === "expanded"}
+                        aria-label={
+                          room.deskFold === "folded"
+                            ? `Expand room ${label} to show all ${room.observedDeskCount} desks`
+                            : `Fold room ${label} to its busiest desks`
+                        }
+                        title={
+                          room.deskFold === "folded"
+                            ? `Show all ${room.observedDeskCount} desks`
+                            : "Show only the busiest desks"
+                        }
+                        onClick={() => roomActions.onToggleFold?.(room.key)}
+                      >
+                        {room.deskFold === "folded" ? (
+                          <ChevronsDown size={12} aria-hidden="true" />
+                        ) : (
+                          <ChevronsUp size={12} aria-hidden="true" />
+                        )}
+                        <span>
+                          {room.deskFold === "folded" ? `+${overflow}` : "Fold"}
+                        </span>
+                      </button>
                     ) : null}
                     {roomColor ? (
                       <ColorSwatchButton

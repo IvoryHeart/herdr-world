@@ -730,18 +730,30 @@ describe("Pixel Office projection", () => {
     });
   });
 
-  test("Town shows every desk of a real room and, past its bound, hides idle and older desks first", () => {
-    const shown = (count: number, panes: (tabs: Tab[]) => Pane[]) => {
+  test("Town folds a room past 24 desks to its busiest, and an expanded room shows the rest", () => {
+    const shown = (
+      count: number,
+      panes: (tabs: Tab[]) => Pane[],
+      expand = false,
+    ) => {
       const tabs = Array.from({ length: count }, (_, index) =>
         tab(`tab-${index}`, index + 1),
       );
-      const office = projectWorldOffice(
-        buildWorldObject([connection("local", tabs, panes(tabs))], "local"),
-        1,
-        null,
-        TOWN_PRESENTATION_BOUNDS,
+      const world = buildWorldObject(
+        [connection("local", tabs, panes(tabs))],
+        "local",
       );
-      return office.rooms[0]!;
+      const project = (expanded?: ReadonlySet<string>) =>
+        projectWorldOffice(
+          world,
+          1,
+          null,
+          TOWN_PRESENTATION_BOUNDS,
+          new Set(),
+          expanded,
+        );
+      const room = project().rooms[0]!;
+      return expand ? project(new Set([room.key])).rooms[0]! : room;
     };
     // A 24-tab room with an agent at every desk shows them all, seated.
     const real = shown(24, (tabs) =>
@@ -749,18 +761,56 @@ describe("Pixel Office projection", () => {
     );
     expect(real.desks.length).toBe(24);
     expect(real.omittedDeskCount).toBe(0);
+    expect(real.deskFold).toBeUndefined();
     expect(
       real.roomAgents.filter(({ placement }) => placement === "seated").length,
     ).toBe(24);
 
-    // Past the bound: the old desk that needs the user and the working one
-    // stay, the newest tab stays, and the oldest idle desks give way.
-    const limit = TOWN_PRESENTATION_BOUNDS.desksPerRoom;
-    const crowded = shown(limit + 13, (tabs) => [
+    // Past 24, a folded room keeps the desk that needs the user, the working
+    // one and the newest tabs; the oldest idle desks wait for Expand.
+    const folded = TOWN_PRESENTATION_BOUNDS.foldedDesksPerRoom;
+    const many = (tabs: Tab[]) => [
       pane(tabs[0]!.tab_id, "blocked", "asks"),
       pane(tabs[1]!.tab_id, "working", "busy"),
       ...tabs.slice(2).map((entry) => pane(entry.tab_id, "idle", "rests")),
-    ]);
+    ];
+    const room = shown(40, many);
+    const visible = room.desks.map((desk) => desk.tabRef.nativeId);
+    expect(room.deskFold).toBe("folded");
+    expect(visible.length).toBe(folded);
+    expect(room.omittedDeskCount).toBe(40 - folded);
+    expect(visible.slice(0, 2)).toEqual(["tab-0", "tab-1"]);
+    for (const newest of ["tab-37", "tab-38", "tab-39"])
+      expect(visible).toContain(newest);
+    expect(visible).not.toContain("tab-2");
+    const open = shown(40, many, true);
+    expect(open.deskFold).toBe("expanded");
+    expect(open.desks.length).toBe(40);
+    expect(open.omittedDeskCount).toBe(0);
+
+    // The cached projector admits desks again when a room expands or folds.
+    const tabs = Array.from({ length: 40 }, (_, index) =>
+      tab(`tab-${index}`, index + 1),
+    );
+    const world = buildWorldObject(
+      [connection("local", tabs, many(tabs))],
+      "local",
+    );
+    const projector = createOfficeProjector(TOWN_PRESENTATION_BOUNDS);
+    const first = projector(world, 1, null).rooms[0]!;
+    expect(first.desks.length).toBe(folded);
+    const expanded = new Set([first.key]);
+    expect(
+      projector(world, 2, null, new Set(), expanded).rooms[0]!.desks.length,
+    ).toBe(40);
+    expect(
+      projector(world, 3, null, new Set(), new Set()).rooms[0]!.desks.length,
+    ).toBe(folded);
+
+    // Expanded past its bound: the old desk that needs the user and the
+    // working one stay, the newest tab stays, and the oldest idle desks give way.
+    const limit = TOWN_PRESENTATION_BOUNDS.desksPerRoom;
+    const crowded = shown(limit + 13, many, true);
     const ids = crowded.desks.map((desk) => desk.tabRef.nativeId);
     expect(ids.length).toBe(limit);
     expect(crowded.omittedDeskCount).toBe(13);
@@ -772,10 +822,13 @@ describe("Pixel Office projection", () => {
 
     // Even when every older desk is busy, the newest tabs keep a desk: here
     // 127 working tabs and three new idle ones.
-    const busy = shown(limit + 3, (tabs) =>
-      tabs.map((entry, index) =>
-        pane(entry.tab_id, index < limit ? "working" : "idle", `a${index}`),
-      ),
+    const busy = shown(
+      limit + 3,
+      (tabs) =>
+        tabs.map((entry, index) =>
+          pane(entry.tab_id, index < limit ? "working" : "idle", `a${index}`),
+        ),
+      true,
     );
     const kept = busy.desks.map((desk) => desk.tabRef.nativeId);
     for (const index of [limit, limit + 1, limit + 2])

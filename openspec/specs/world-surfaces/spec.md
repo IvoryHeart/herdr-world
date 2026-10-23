@@ -1110,12 +1110,13 @@ moves desks. A room's capacity SHALL step through a
 bounded set of grid sizes that always leaves at least one free desk spot: a room
 grows square until it reaches its shape's width (four desks on a phone, six on
 portrait and mid-width screens, eight on wide screens) and then extends
-downward, up to 127 drawn desks, and its building grows around it, so a room of
-real size shows every desk. Only a room with more tabs than that SHALL leave
-desks undrawn: it SHALL keep the selected desk and the three newest tabs, then
-desks whose agents need the user, are working or are unknown, then finished
-ones, hiding idle and empty desks first, and SHALL count every hidden desk on
-the room. Zooming into a room taller or wider than the usable view, from its
+downward, and its building grows around it. A room SHALL draw at most 24 desks
+until the user expands it; an expanded room SHALL draw up to 127, and Fold SHALL
+return it to 24. A room with more tabs than it draws SHALL keep the selected
+desk and the three newest tabs, then desks whose agents need the user, are
+working or are unknown, then finished ones, hiding idle and empty desks first,
+SHALL count every hidden desk on the room, and SHALL offer Expand on its plaque
+while it is folded. Zooming into a room taller or wider than the usable view, from its
 card or with Zoom in, SHALL open at its first desks. While a
 scene is live, a topology change SHALL NOT reorder rooms or move a desk to
 another room: a tab Herdr adds last SHALL take the first free spot of its room
@@ -1159,8 +1160,12 @@ stays where it was.
 #### Scenario: Agents fill a room past its old size
 
 - **WHEN** a room has 24, 50 or 100 tabs
-- **THEN** the room extends and draws a desk for every tab, the newest included,
-  on a phone, a half-width window, a wide screen and a portrait monitor
+- **THEN** a 24-tab room draws a desk for every tab, and a larger room draws its
+  24 busiest and newest desks with Expand on its plaque
+- **AND WHEN** the user expands the 100-tab room
+- **THEN** it extends and draws a desk for every tab, the newest included, on a
+  phone, a half-width window, a wide screen and a portrait monitor, and Fold
+  returns it to 24
 
 #### Scenario: A room grows while the user watches
 

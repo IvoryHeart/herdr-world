@@ -35,6 +35,7 @@ import {
 } from "../store";
 import { WORLD_OBSERVABILITY_UPDATED_EVENT } from "../workspaceResource";
 import { useTownSummary } from "./town/TownSummaryPanel";
+import { useTownOffice } from "./town/useTownOffice";
 import { TownCanvas } from "./town/TownCanvas";
 import { townDeskColorTarget, townRoomColorKey } from "./town/townModel";
 import { resolveTerminal, type TerminalColor } from "./terminalColor";
@@ -51,7 +52,6 @@ import { inheritedColorKey } from "../../../shared/terminalColor";
 import type { OfficeDesk } from "./herdrOfficeProjection";
 import { hostColorKey, terminalColorKey } from "./terminalColor";
 import { TOWN_HOST_THEMES } from "./town/townPaint";
-import { useDeskPins } from "./useDeskPins";
 import {
   sendTownReply,
   townChoices,
@@ -79,12 +79,7 @@ import type {
 } from "./worldConnectorGeometry";
 import { OfficeCanvasCallout } from "./OfficeCanvasCallout";
 export { OfficeObservabilityDialog } from "./OfficeObservabilityDialog";
-import {
-  createOfficeProjector,
-  TOWN_PRESENTATION_BOUNDS,
-  type OfficeAgent,
-  type HerdrOfficeProjection,
-} from "./herdrOfficeProjection";
+import type { OfficeAgent } from "./herdrOfficeProjection";
 import {
   EMPTY_OFFICE_OBSERVABILITY,
   fetchOfficeObservability,
@@ -170,23 +165,12 @@ export default function TownView({
     anchors: Record<string, WorldCanvasAnchor> | null,
   ): void;
 }) {
-  const projectOffice = useMemo(
-    () => createOfficeProjector(TOWN_PRESENTATION_BOUNDS),
-    [],
-  );
   const layoutPreferences = useLayoutPreferences();
-  const deskPins = useDeskPins();
-  // Only which tabs are pinned matters to admission, not their cells.
-  const pinnedTabKeys = Object.keys(deskPins).sort().join("\n");
-  const pinnedTabs = useMemo(
-    () => new Set(pinnedTabKeys ? pinnedTabKeys.split("\n") : []),
-    [pinnedTabKeys],
-  );
-  const observedOffice = useMemo(
-    (): HerdrOfficeProjection =>
-      projectOffice(world, Date.now(), selectedId, pinnedTabs),
-    [world, selectedId, projectOffice, pinnedTabs],
-  );
+  const {
+    office: observedOffice,
+    deskPins,
+    toggleRoomFold,
+  } = useTownOffice(world, selectedId);
   const townFinished = useTownFinished(observedOffice);
   // Terminal frames and unrelated store updates must not reconcile the scene.
   // These are exactly the inputs read by endpointCreationReason below.
@@ -1389,6 +1373,7 @@ export default function TownView({
               right: 0,
             }}
             roomActions={{
+              onToggleFold: toggleRoomFold,
               onDropDesk: (deskKey, roomKey) => runDeskMove(deskKey, roomKey),
               onGroupDesk: (deskKey, targetKey) =>
                 teams.runGroupDesk(deskKey, targetKey),
