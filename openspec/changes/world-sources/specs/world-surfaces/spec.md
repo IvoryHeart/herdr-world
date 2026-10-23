@@ -41,8 +41,8 @@ desk.
   again
 
 #### Scenario: A busy merged window
-- **WHEN** the user merged more than a hundred pull requests in the merged
-  window (seven days unless changed in Sources settings)
+- **WHEN** more than a hundred pull requests the user authored were merged
+  in the merged window (seven days unless changed in Sources settings)
 - **THEN** the Work lens shows every one, grouped by the day it merged with
   only the newest day open, up to GitHub's 1,000-result search limit
 

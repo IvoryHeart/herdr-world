@@ -44,7 +44,7 @@ const mergedWeek = Array.from({ length: 150 }, (_, index) => ({
   status: "merged",
   roles: ["author"],
   updatedAt: SOURCES_NOW,
-  mergedAt: SOURCES_NOW - (index % 5) * 86_400_000,
+  finishedAt: SOURCES_NOW - (index % 5) * 86_400_000,
   number: 1_000 + index,
   repo: "example-org/web-app",
   checks: "pass",

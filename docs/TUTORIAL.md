@@ -270,7 +270,8 @@ on your phone and desktop.
    **Green** and **Ready to merge** to **Merged**, and on the **Tickets** tab
    your Jira tickets and assigned issues by status. A card names the agents
    working on it; tap one to close Work and jump to its card. **Merged**
-   groups the week's pull requests by day with today open; tap a day to open
+   groups the week's pull requests you opened by the day they merged, with
+   today open; tap a day to open
    it, and change how many days it covers in **Settings → Sources**. Escape or a
    press outside also closes Work. **Green** means checks pass while a
    required review is pending; **Ready to merge** means approved, or passing

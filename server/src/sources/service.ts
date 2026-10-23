@@ -257,7 +257,9 @@ export class SourcesService {
       ...this.#settings,
       github: { ...this.#settings.github, ...patch },
     });
-    this.#reset("github");
+    // A new merged window is the same account: keep showing the current
+    // items until the new read completes, and keep them if it fails.
+    this.#reset("github", patch.enabled === undefined);
     return this.snapshot(true);
   }
 
@@ -308,18 +310,20 @@ export class SourcesService {
     this.#settings = settings;
   }
 
-  #reset(id: WorldSourceId) {
+  /** Invalidate in-flight reads; unless `keepItems`, forget what was read. */
+  #reset(id: WorldSourceId, keepItems = false) {
     this.#epoch += 1;
     this.#cycling = null;
     const source = this.#sources[id];
     source.generation += 1;
     source.refreshing = null;
+    source.checkedAt = 0;
+    this.#linkedAt = 0;
+    if (keepItems) return;
     source.items = [];
     source.state = "not_connected";
     source.detail = "Checking…";
-    source.checkedAt = 0;
     source.lastSuccessAt = null;
-    this.#linkedAt = 0;
   }
 
   async #refresh(id: WorldSourceId, force: boolean) {

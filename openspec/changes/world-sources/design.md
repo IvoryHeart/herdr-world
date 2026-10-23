@@ -44,7 +44,7 @@ Ideas only were taken from these Herdr plugins; no code was copied.
   a public endpoint. Links are recomputed at most every 15 seconds.
 - **GitHub through `gh`.** One `gh api graphql` request reads open PRs the
   user authored, was asked to review or is assigned, the first hundred PRs
-  merged in the merged window and assigned issues, each with review decision,
+  they authored that were merged in the merged window and assigned issues, each with review decision,
   mergeability and the head commit's check rollup. Further merged PRs follow
   a hundred per request until the window is exhausted, at most ten pages
   (GitHub search's 1,000-result limit), every request under one minute's
@@ -61,7 +61,7 @@ Ideas only were taken from these Herdr plugins; no code was copied.
 - **Jira Cloud only.** `GET /rest/api/3/myself` checks the credentials and
   tells assigned tickets; `watches.isWatching` tells watched ones (a ticket a
   broad filter returns may be neither); `POST /rest/api/3/search/jql` reads up
-  to 100 tickets. The default filter is assigned or watched tickets that are
+  to 100 tickets with their resolution and status-category dates. The default filter is assigned or watched tickets that are
   not done or changed in the last week.
 - **Secrets stay on the service.** The Jira token is written to a private
   0600 file, named per settings file like the session signing state. The
@@ -80,7 +80,8 @@ Ideas only were taken from these Herdr plugins; no code was copied.
   agent-reported
   PR URL links directly. A ticket links when the branch names its key.
 - **Views.** Merged and Done columns group cards by the day they finished
-  (Today, Yesterday, then dates), newest day open and older days collapsed,
+  (Today, Yesterday, then dates): a PR's merge time, a Done ticket's Jira
+  resolution date, else the date it entered Done, else its last update, newest day open and older days collapsed,
   with compact cards, so a busy week stays readable. Board's Work lens is an overlay with its own scrolling, outside
   Board's gestures, and a layer on the shared stack (Escape, Back or a press
   outside closes it); the Sources dialog is a layer too. Town's badge is part

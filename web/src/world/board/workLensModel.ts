@@ -33,7 +33,7 @@ export type WorkLensColumn = {
 /** Lanes that only grow; a busy week fills them, so they group by day. */
 const HISTORY_LANES = new Set<WorkItem["lane"]>(["merged", "done"]);
 
-const finishedAt = (item: WorkItem) => item.mergedAt ?? item.updatedAt;
+const finishedAt = (item: WorkItem) => item.finishedAt ?? item.updatedAt;
 
 function localDay(time: number) {
   const date = new Date(time);

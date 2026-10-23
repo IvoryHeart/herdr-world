@@ -90,8 +90,8 @@ export type WorkItem = {
   status: string;
   roles: WorkRole[];
   updatedAt: number;
-  /** Merged pull requests only. */
-  mergedAt?: number;
+  /** When it finished: a pull request merged, a Done ticket resolved. */
+  finishedAt?: number;
   /** Pull requests only. */
   number?: number;
   repo?: string;

@@ -223,7 +223,9 @@ function pullRequestItem(node: Record<string, unknown>): WorkItem | null {
     status: merged ? "merged" : draft ? "draft" : "open",
     roles: [],
     updatedAt: time(node.updatedAt),
-    ...(merged && time(node.mergedAt) ? { mergedAt: time(node.mergedAt) } : {}),
+    ...(merged && time(node.mergedAt)
+      ? { finishedAt: time(node.mergedAt) }
+      : {}),
     number: number as number,
     repo,
     // A branch whose head repository is gone (a deleted fork) cannot be

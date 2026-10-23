@@ -155,9 +155,9 @@ export function SourcesDialog({ onClose }: { onClose(): void }) {
                 <p className="world-observability-field-help">
                   Uses the GitHub CLI signed in as the user that runs World:
                   pull requests you opened, were asked to review or are
-                  assigned, every one you merged in the window below, and issues
-                  assigned to you. Each agent's desk shows the pull request for
-                  its branch.
+                  assigned, every one you opened that was merged in the window
+                  below, and issues assigned to you. Each agent's desk shows the
+                  pull request for its branch.
                 </p>
                 <label className="form-field">
                   <span>Merged pull requests</span>

@@ -190,7 +190,7 @@ function parseItem(value: unknown): WorkItem | null {
     ...optionalText("repo"),
     ...optionalText("branch"),
     ...optionalText("headRepo"),
-    ...(number(item.mergedAt) ? { mergedAt: number(item.mergedAt) } : {}),
+    ...(number(item.finishedAt) ? { finishedAt: number(item.finishedAt) } : {}),
     ...(typeof item.draft === "boolean" ? { draft: item.draft } : {}),
     ...(["pass", "fail", "pending", "none"].includes(item.checks as string)
       ? { checks: item.checks as WorkItem["checks"] }

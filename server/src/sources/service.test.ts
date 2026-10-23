@@ -360,6 +360,32 @@ describe("World sources service", () => {
     expect(saved).toHaveLength(1);
   });
 
+  test("a new merged window keeps the current items if its read fails", async () => {
+    let fail = false;
+    const run: RunProcess = async (argv) => {
+      if (argv[0] !== "gh") return { code: 0, stdout: "", stderr: "" };
+      if (argv[1] === "auth") return { code: 0, stdout: "", stderr: "" };
+      return fail
+        ? { code: 1, stdout: "", stderr: "" }
+        : { code: 0, stdout: JSON.stringify(graphql), stderr: "" };
+    };
+    const { service } = setup({ run });
+    expect((await service.snapshot()).items.map((item) => item.ref)).toEqual([
+      "example-org/widgets#5",
+    ]);
+    fail = true;
+    const after = await service.configureGitHub({ mergedDays: 30 });
+    expect(after.items.map((item) => item.ref)).toEqual([
+      "example-org/widgets#5",
+    ]);
+    expect(after.sources[0]).toMatchObject({ state: "error", itemCount: 1 });
+    // Switching a source off and on still starts from nothing.
+    await service.configureGitHub({ enabled: false });
+    expect((await service.configureGitHub({ enabled: true })).items).toEqual(
+      [],
+    );
+  });
+
   test("settings round-trip through settings.json's custom block", () => {
     const base: GuiSettings = {
       version: 1,

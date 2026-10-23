@@ -171,7 +171,7 @@ describe("World sources in the browser", () => {
         status: "merged",
         // A comment after merging moves updatedAt, not the day it merged.
         updatedAt: now,
-        mergedAt: at(10 - (index % 5), 9),
+        finishedAt: at(10 - (index % 5), 9),
       }),
     );
     const [column] = workLensColumns(
@@ -192,6 +192,17 @@ describe("World sources in the browser", () => {
       "Today",
       "Yesterday",
     ]);
+    // A Done ticket groups by when it was resolved, not its last comment.
+    const done = workLensColumns(
+      snapshot(
+        [{ ...ticket, lane: "done", updatedAt: now, finishedAt: at(8, 9) }],
+        [],
+      ),
+      world,
+      "tickets",
+      now,
+    ).find((entry) => entry.lane === "done")!;
+    expect(done.days!.map((day) => day.key)).toEqual(["2026-03-08"]);
     const open = workLensColumns(
       snapshot(merged, []),
       world,

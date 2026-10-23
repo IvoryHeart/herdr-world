@@ -190,7 +190,7 @@ describe("GitHub source", () => {
     const items = result.ok ? result.items : [];
     expect(items.filter((item) => item.lane === "merged")).toHaveLength(250);
     expect(items[0]).toMatchObject({
-      mergedAt: Date.parse("2026-03-09T08:00:00Z"),
+      finishedAt: Date.parse("2026-03-09T08:00:00Z"),
     });
     expect(queries).toHaveLength(3);
     expect(queries[1]).toContain('after: "page-1"');
