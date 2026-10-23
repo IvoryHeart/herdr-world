@@ -73,6 +73,8 @@ export function reloadApplicationPage(
 
 type ConfigMenuProps = ConfigurationProps & {
   zenMode: boolean;
+  /** False where Zen would change nothing, such as a phone's terminal. */
+  zenAvailable?: boolean;
   onZenModeChange: (zenMode: boolean) => void;
   onOpenOfficeMetrics?: () => void;
   onOpenSources?: () => void;
@@ -81,6 +83,7 @@ type ConfigMenuProps = ConfigurationProps & {
 
 export function ConfigMenu({
   zenMode,
+  zenAvailable = true,
   onZenModeChange,
   onOpenOfficeMetrics,
   onOpenSources,
@@ -295,7 +298,7 @@ export function ConfigMenu({
                     }}
                   />
                 )}
-                {layout.mobile ? null : (
+                {zenAvailable ? (
                   <div className="config-preference-row">
                     <span className="config-item-icon">
                       <Focus size={15} />
@@ -303,8 +306,10 @@ export function ConfigMenu({
                     <div className="config-item-copy">
                       <strong>Zen mode</strong>
                       <span>
-                        {zenMode ? "Enabled" : "Disabled"} ·{" "}
-                        {shortcutLabel("zen.toggle")}
+                        {zenMode ? "Enabled" : "Disabled"}
+                        {layout.mobile
+                          ? ""
+                          : ` · ${shortcutLabel("zen.toggle")}`}
                       </span>
                     </div>
                     <button
@@ -321,7 +326,7 @@ export function ConfigMenu({
                       <span />
                     </button>
                   </div>
-                )}
+                ) : null}
               </div>
               <div className="config-section config-section-tiles-3">
                 <div className="config-title">Views</div>
