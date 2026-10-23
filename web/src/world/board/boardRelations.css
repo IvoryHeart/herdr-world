@@ -1,0 +1,8 @@
+/* Terminals that know each other: drawn by World, not cut like strings. */
+.board-relation {
+  stroke: color-mix(in srgb, var(--board-yarn) 55%, transparent);
+  stroke-width: 2;
+}
+.board-relation[data-kind="manual"] {
+  stroke-dasharray: 2 6;
+}
