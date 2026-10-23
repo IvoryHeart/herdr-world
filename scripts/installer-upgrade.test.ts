@@ -46,6 +46,7 @@ const legacyCleanupError = (version = "0.2.6") =>
       "    + CategoryInfo          : WriteError: (herdr-world.exe:FileInfo) [Remove-Item], IOException",
       "    + FullyQualifiedErrorId : RemoveFileSystemItemIOError,Microsoft.PowerShell.Commands.RemoveItemCommand",
     ].join("\r\n"),
+    "C:\\fixture\\upgrade",
   );
 
 test("only Windows v0.2.6-and-older baseline post-success staging locks are tolerated", () => {
@@ -75,7 +76,10 @@ test("baseline checksum, version, download, promotion and unrelated cleanup erro
   const original = legacyCleanupError();
   const changed = (
     patch: Partial<
-      Pick<InstallerCommandError, "argv" | "exitCode" | "stdout" | "stderr">
+      Pick<
+        InstallerCommandError,
+        "argv" | "exitCode" | "stdout" | "stderr" | "cwd"
+      >
     >,
   ) =>
     new InstallerCommandError(
@@ -83,10 +87,12 @@ test("baseline checksum, version, download, promotion and unrelated cleanup erro
       patch.exitCode ?? original.exitCode,
       patch.stdout ?? original.stdout,
       patch.stderr ?? original.stderr,
+      patch.cwd ?? original.cwd,
     );
   const errors: unknown[] = [
     new Error(original.message),
     changed({ exitCode: 2 }),
+    changed({ cwd: "C:\\another-fixture" }),
     changed({ argv: ["powershell.exe", "-File", "scripts/other.ps1"] }),
     changed({ stdout: "" }),
     changed({ stdout: "Installed Herdr World plugin binary 0.2.5" }),
@@ -116,7 +122,24 @@ test("baseline checksum, version, download, promotion and unrelated cleanup erro
     changed({
       stderr: original.stderr + "\r\n    + FullyQualifiedErrorId : OtherError",
     }),
+    changed({
+      stderr: original.stderr.replace(
+        "    + FullyQualifiedErrorId",
+        "Package checksum mismatch\r\n    + FullyQualifiedErrorId",
+      ),
+    }),
   ];
+  const lines = original.stderr.split("\r\n");
+  for (let at = 0; at <= lines.length; at++)
+    errors.push(
+      changed({
+        stderr: [
+          ...lines.slice(0, at),
+          "Package checksum mismatch",
+          ...lines.slice(at),
+        ].join("\r\n"),
+      }),
+    );
   for (const error of errors)
     expect(legacyBaselineStagingLock(error, "v0.2.6", "win32")).toBe(false);
 });

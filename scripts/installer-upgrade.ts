@@ -24,6 +24,7 @@ export class InstallerCommandError extends Error {
     readonly exitCode: number,
     readonly stdout: string,
     readonly stderr: string,
+    readonly cwd: string,
   ) {
     super(
       `${basename(argv[0])} ${argv.slice(1).join(" ")} exited ${exitCode}\n${stdout.slice(-2000)}\n${stderr.slice(-2000)}`,
@@ -32,6 +33,7 @@ export class InstallerCommandError extends Error {
     Object.defineProperties(this, {
       stdout: { enumerable: false },
       stderr: { enumerable: false },
+      cwd: { enumerable: false },
     });
   }
 }
@@ -59,20 +61,21 @@ export function legacyBaselineStagingLock(
       `Installed Herdr World plugin binary ${tag.slice(1)}`
   )
     return false;
-  const stderr = error.stderr.trim();
-  return (
-    /^Remove-Item\s*:\s*Cannot remove item\b/.test(stderr) &&
-    /[\\/]server[\\/]\.plugin-install-[^\\/\s]+[\\/]herdr-world-windows-(?:arm64|x64)[\\/]herdr-world\.exe\b/.test(
-      stderr,
-    ) &&
-    /because it is being used by another process\./.test(stderr) &&
-    /\+\s+Remove-Item -LiteralPath \$staging -Recurse -Force/.test(stderr) &&
-    /CategoryInfo\s*:\s*WriteError:[\s\S]*?\bIOException\b/.test(stderr) &&
-    stderr.match(/FullyQualifiedErrorId\s*:/g)?.length === 1 &&
-    /FullyQualifiedErrorId\s*:\s*RemoveFileSystemItemIOError,Microsoft\.PowerShell\.Commands\.RemoveItemCommand\s*$/.test(
-      stderr,
-    )
-  );
+  // PowerShell wraps paths and aligns fields. Ignore only that whitespace,
+  // then require the complete record and this command's own fixture paths.
+  const normalized = (text: string) =>
+    text.replaceAll("\\", "/").replace(/\s+/g, " ").trim();
+  const root = normalized(error.cwd)
+    .replace(/\/$/, "")
+    .replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const record = [
+    String.raw`^Remove-Item : Cannot remove item ${root}/server/\.plugin-install-[a-z0-9]+\.[a-z0-9]+/herdr-world-windows-(?:arm64|x64)/herdr-world\.exe: `,
+    String.raw`The process cannot access the file 'herdr-world\.exe' because it is being used by another process\. `,
+    String.raw`At ${root}/scripts/install-plugin\.ps1:\d+ char:\d+ \+ Remove-Item -LiteralPath \$staging -Recurse -Force \+ ~+ `,
+    String.raw`\+ CategoryInfo : WriteError: \(herdr-world\.exe:FileInfo\) \[Remove-Item\], IOException `,
+    String.raw`\+ FullyQualifiedErrorId : RemoveFileSystemItemIOError,Microsoft\.PowerShell\.Commands\.RemoveItemCommand$`,
+  ].join("");
+  return new RegExp(record).test(normalized(error.stderr));
 }
 
 export async function baselineBuild(
@@ -247,7 +250,7 @@ export async function command(
     ]);
     assert(!timedOut, `${basename(argv[0])} exceeded its command deadline`);
     if (!(success ? code === 0 : code !== 0))
-      throw new InstallerCommandError(argv, code, out, err);
+      throw new InstallerCommandError(argv, code, out, err, cwd);
     return success ? out.trim() : `${out}\n${err}`.trim();
   } finally {
     clearTimeout(timeout);
