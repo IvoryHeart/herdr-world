@@ -112,7 +112,17 @@ export function storedSourceSettings(
   const jira = part("jira");
   const text = (entry: unknown) => (typeof entry === "string" ? entry : null);
   return {
-    ...(github ? { github: { enabled: github.enabled !== false } } : {}),
+    ...(github
+      ? {
+          github: {
+            enabled: github.enabled !== false,
+            // The service validates it again and falls back to the default.
+            ...(typeof github.mergedDays === "number"
+              ? { mergedDays: github.mergedDays }
+              : {}),
+          },
+        }
+      : {}),
     ...(jira
       ? {
           jira: {

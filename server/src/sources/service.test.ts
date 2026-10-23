@@ -374,11 +374,17 @@ describe("World sources service", () => {
       "example-org/widgets#5",
     ]);
     fail = true;
-    const after = await service.configureGitHub({ mergedDays: 30 });
-    expect(after.items.map((item) => item.ref)).toEqual([
-      "example-org/widgets#5",
-    ]);
-    expect(after.sources[0]).toMatchObject({ state: "error", itemCount: 1 });
+    // Also a combined patch that leaves GitHub on.
+    for (const patch of [
+      { mergedDays: 30 },
+      { enabled: true, mergedDays: 14 },
+    ]) {
+      const after = await service.configureGitHub(patch);
+      expect(after.items.map((item) => item.ref)).toEqual([
+        "example-org/widgets#5",
+      ]);
+      expect(after.sources[0]).toMatchObject({ state: "error", itemCount: 1 });
+    }
     // Switching a source off and on still starts from nothing.
     await service.configureGitHub({ enabled: false });
     expect((await service.configureGitHub({ enabled: true })).items).toEqual(
@@ -428,7 +434,7 @@ describe("World sources service", () => {
       custom: { other: 1 },
     };
     const next = withSourceSettings(base, {
-      github: { enabled: false },
+      github: { enabled: false, mergedDays: 30 },
       jira: {
         enabled: true,
         site: "https://example.atlassian.net",
@@ -438,7 +444,7 @@ describe("World sources service", () => {
     });
     expect(next.custom.other).toBe(1);
     expect(storedSourceSettings(next)).toEqual({
-      github: { enabled: false },
+      github: { enabled: false, mergedDays: 30 },
       jira: {
         enabled: true,
         site: "https://example.atlassian.net",
@@ -449,6 +455,14 @@ describe("World sources service", () => {
     expect(
       storedSourceSettings({ custom: { [WORLD_SOURCES_SETTINGS_KEY]: "bad" } }),
     ).toEqual({});
+    // A restarted service keeps the saved window; a bad one falls back.
+    expect(
+      setup({ settings: storedSourceSettings(next) }).service.mergedDays(),
+    ).toBe(30);
+    const tampered = withSourceSettings(base, { github: { mergedDays: 500 } });
+    expect(
+      setup({ settings: storedSourceSettings(tampered) }).service.mergedDays(),
+    ).toBe(7);
   });
 });
 

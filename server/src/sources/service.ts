@@ -253,13 +253,14 @@ export class SourcesService {
       } catch (cause) {
         throw new SourceSettingsError((cause as Error).message);
       }
+    const wasEnabled = this.enabled("github");
     await this.#save({
       ...this.#settings,
       github: { ...this.#settings.github, ...patch },
     });
-    // A new merged window is the same account: keep showing the current
-    // items until the new read completes, and keep them if it fails.
-    this.#reset("github", patch.enabled === undefined);
+    // While it stays on, a new merged window is the same account: keep the
+    // current items until the new read completes, and keep them if it fails.
+    this.#reset("github", wasEnabled && this.enabled("github"));
     return this.snapshot(true);
   }
 
