@@ -12,6 +12,15 @@ The active service-side Herdr socket adapter lives in [server/src/bridge/](../se
 The retired browser-federated/Rust bridge and remote bridge URL are separate from
 this active adapter; browser traffic stays on the one World origin.
 
+The agent History/session resolver owns Codex binding.
+[Daemon observation](../server/src/agent/codex-app-server.ts) implements bounded
+read-only JSON-RPC on the selected runtime, and
+[inference](../server/src/agent/codex-daemon-binding.ts) checks unique panes and
+threads, unchanged evidence and recent matching activity. Their
+[protocol tests](../server/src/agent/codex-app-server.test.ts) and
+[binding tests](../server/src/agent/codex-daemon-binding.test.ts) cover transport
+failure, collisions, connection isolation and refusal of inferred input authority.
+
 ## Process and request path
 
 ```text

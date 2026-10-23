@@ -25,6 +25,7 @@ import {
   findAntigravitySessionForCwd,
 } from "./antigravity-session";
 import { findMuseSession, type MuseMetadataCache } from "./muse-session";
+import { codexPanes, inferCodexDaemonThread } from "./codex-daemon-binding";
 import {
   integrationInstallCommand,
   isRecord,
@@ -389,6 +390,34 @@ function parseAgentSession(agentInfo: Record<string, unknown> | null) {
   } satisfies AgentSessionInfo;
 }
 
+/** A daemon hook can report its starter pane's ID for another TUI's thread. */
+export async function codexReportContradicted(
+  paneId: string,
+  info: Record<string, unknown>,
+  herdrCall: HerdrCall,
+  listed?: readonly Record<string, unknown>[],
+) {
+  const session = parseAgentSession(info);
+  if (!session || codexIdsFromTitle(stringValue(info.terminal_title)).length)
+    return false;
+  try {
+    const panes = await codexPanes(herdrCall, listed);
+    if (!panes) return false; // No contradiction has been observed.
+    if (!panes.some((pane) => pane.pane_id === paneId)) return true;
+    return panes.some(
+      (pane) =>
+        pane.pane_id !== paneId &&
+        (parseAgentSession(pane)?.value === session.value ||
+          (session.kind === "id" &&
+            codexIdsFromTitle(stringValue(pane.terminal_title)).some((id) =>
+              session.value.toLowerCase().startsWith(id.prefix),
+            ))),
+    );
+  } catch {
+    return false;
+  }
+}
+
 export async function resolveAgentSession(
   rawParams: Record<string, unknown>,
   herdrCall: HerdrCall,
@@ -404,6 +433,7 @@ export async function resolveAgentSession(
     parseAgentInfo(result),
     files,
     context,
+    { herdrCall },
   );
 }
 
@@ -414,7 +444,11 @@ export async function resolveAgentSessionInfo(
   files: AgentSessionFileAccess,
   context: AgentSessionResolverContext,
   /** Change detection may reuse a remembered Codex title match. */
-  options: { reuseCodexTitle?: boolean } = {},
+  options: {
+    reuseCodexTitle?: boolean;
+    herdrCall?: HerdrCall;
+    listedCodexPanes?: readonly Record<string, unknown>[];
+  } = {},
 ): Promise<AgentSessionResolved> {
   const params = normalizeParams(rawParams);
   if (!params.pane_id) throw new Error("agent session requires pane_id");
@@ -472,6 +506,43 @@ export async function resolveAgentSessionInfo(
         session: null,
         file: null,
       };
+    } else if (
+      agentInfo &&
+      options.herdrCall &&
+      (await codexReportContradicted(
+        params.pane_id,
+        agentInfo,
+        options.herdrCall,
+        options.listedCodexPanes,
+      ))
+    ) {
+      return {
+        ...base,
+        status: "missing_session",
+        reason: "ambiguous",
+        detail:
+          "Conflicting Codex panes claim this session. Add Thread ID in /title or link the intended session explicitly.",
+        updated_at: new Date(0).toISOString(),
+        path: "",
+        session: null,
+        file: null,
+      };
+    } else if (!resolvedSession && agentInfo && options.herdrCall) {
+      const thread = await inferCodexDaemonThread({
+        paneId: params.pane_id,
+        info: agentInfo,
+        files,
+        herdrCall: options.herdrCall,
+      });
+      if (thread) {
+        // Inference is never reported back to Herdr or promoted to Send authority.
+        resolvedSession = {
+          source: "codex-daemon",
+          agent: "codex",
+          kind: "id",
+          value: thread.id,
+        };
+      }
     }
   }
   if (agent === "grok" && !resolvedSession && !files.remote) {

@@ -42,7 +42,33 @@ overlapping requests. Cards cap default DOM content at 4,000 characters; full
 tool details open as escaped text. Names/call IDs associate results without
 moving them from their transcript positions.
 
-## Chat and explicit Codex links
+## Chat and Codex session binding
+
+<a id="chat-and-explicit-codex-links"></a>
+
+Codex title IDs remain the strongest evidence: add **Thread ID** with `/title`
+to identify the conversation even when shared-daemon hooks report the wrong
+pane. A title never falls back to an older report while its ID is unresolved.
+Conflicting reports from multiple panes are withheld.
+
+Without a title or reported session, World queries the selected runtime's
+existing Codex app-server through `codex app-server proxy`. It never starts a
+daemon, resumes a thread or changes a session. It reads active thread metadata
+from `thread/list` with state-store-only lookup and complete bounded pagination.
+The directory must match exactly, with just one Codex pane in that directory
+and one loaded interactive thread. The thread's creation/update times must be
+valid, its activity must be within ten minutes, and its runtime status must
+agree with the pane. Changed pane evidence, another claimant, incomplete results,
+unavailable daemons and ambiguous matches show no inferred conversation.
+
+This evidence is a **guess**, never proof of client identity. History records
+`session.source: codex-daemon`; Chat records its confidence as
+`session_binding: guessed`, with no session fingerprint, composer or answer
+buttons. Every snapshot recomputes the inference, and World never persists it
+as a link. To reply, use the Terminal, add the thread ID to the title, or make
+an explicit link below. Local and Unix SSH discovery use only their captured
+runtime; a failed remote lookup never searches this machine's daemon or files.
+Older Codex versions without `proxy` retain title and explicit-link support.
 
 Chat presents conversations with paired tool calls/results and the same minimap
 as Ranger. Timeline retains individual records and filters. Both use the bounded

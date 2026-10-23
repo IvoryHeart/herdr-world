@@ -526,6 +526,10 @@ See [resource ownership](docs/ARCHITECTURE.md#workspace-resource-ownership).
   and confirm its association with the foreground Codex pane. This replaces the
   existing link for all viewers. Codex lookup searches active and archived records
   on the selected local/Unix SSH runtime; Windows SSH history remains unavailable.
+  For shared-daemon Codex panes without a session report or thread title, one
+  matching pane and one loaded thread can provide a recent, read-only guess.
+  Ambiguity shows no conversation. Add **Thread ID** with `/title`, link the
+  session explicitly, or use the Terminal to reply or answer permissions.
 - Open Details with independent User/Agent/Tool filters (User/Agent enabled,
   Tool hidden initially), a message minimap, and on-demand tool details. The recent window
   counts 200 conversation entries, not associated tools; exports remain complete.

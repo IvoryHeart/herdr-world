@@ -3,6 +3,10 @@ import { homedir } from "node:os";
 import { basename, join, resolve } from "node:path";
 import { sshCommandArgv } from "../bridge/ssh-command";
 import type { SessionFile } from "./session-types";
+import {
+  listCodexDaemonThreads,
+  type CodexDaemonThread,
+} from "./codex-app-server";
 
 const SESSION_FILE_TIMEOUT_MS = 15_000;
 
@@ -24,6 +28,8 @@ export type AgentSessionFileAccess = {
   readDownloadBody(path: string): Promise<BodyInit>;
   findPiSessionById(id: string): Promise<SessionFile | null>;
   findCodexSessionById(id: string): Promise<SessionFile | null>;
+  /** Complete loaded-thread evidence from this runtime's existing daemon. */
+  listCodexThreads?(cwd: string): Promise<CodexDaemonThread[] | null>;
   /** The one transcript whose ID starts with `prefix`, if exactly one does. */
   findCodexSessionByPrefix(
     prefix: string,
@@ -132,6 +138,7 @@ export const localAgentSessionFiles: AgentSessionFileAccess = {
   },
   findCodexSessionById: findLocalCodexSession,
   findCodexSessionByPrefix: findLocalCodexSessionByPrefix,
+  listCodexThreads: listCodexDaemonThreads,
 };
 
 function parseRemoteFileMetadata(stdout: string): SessionFile | null {
@@ -207,6 +214,7 @@ printf '%s\\t%s\\t%s\\t%s\\t%s\\n' "$size" "$mtime" "$path64" "$identity" "$chan
 
   return {
     remote: true,
+    listCodexThreads: (cwd) => listCodexDaemonThreads(cwd, { sshHost: host }),
     statFile,
     async clockOffset() {
       const before = Date.now();

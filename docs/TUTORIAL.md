@@ -150,6 +150,10 @@ changes what you see and does not disconnect hosts or retarget open terminals.
    in the agent's window, or **Open terminal** in the card's header (or the
    window's **Terminal** view). The window's **Chat** composer sends with
    Herdr's agent prompt.
+   A Codex conversation inferred from its shared daemon is read-only: Chat
+   offers no composer or answer buttons. In Codex's Terminal, run `/title` and
+   add **Thread ID**, or use **Details → Link Codex session** to preview and
+   confirm the intended thread. Ambiguous panes or threads stay unbound.
 6. Use the paperclip in the window's **Chat** composer to attach files. Each
    file shows a chip while it uploads, then done or failed; retry a failed one
    (or pick it again) or remove it. **Send** waits for uploads. Uploads go to

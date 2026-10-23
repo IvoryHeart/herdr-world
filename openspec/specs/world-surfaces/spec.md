@@ -2778,6 +2778,27 @@ Herdr retained it. Remote lookup SHALL NOT fall back to local transcripts.
 The external runtime does not offer an atomic process-and-link operation; this
 contract does not exclude a process change during the final report RPC.
 
+Codex title IDs SHALL take precedence over hook reports. A report contradicted
+by another pane claiming or naming its thread SHALL NOT bind a conversation.
+Without a title or report, World MAY infer a read-only conversation from the
+selected runtime's existing app-server only when exactly one Codex pane and one
+loaded interactive thread share an exact directory, recent activity and matching
+status. Inference SHALL require complete bounded discovery and unchanged pane
+evidence, SHALL be recomputed per snapshot, and SHALL NOT persist a session link.
+Chat SHALL label this evidence `guessed`, with no session fingerprint, Send or
+answer keys. Missing, stale, conflicting or ambiguous evidence SHALL yield no
+inferred conversation; remote discovery SHALL NOT fall back to a local daemon.
+
+#### Scenario: Shared daemon with one eligible pane and thread
+
+- **WHEN** an unlinked Codex pane uniquely matches one loaded thread on its own runtime by directory and recent matching activity
+- **THEN** Chat and History read that thread as a guess, without granting message or answer authority
+
+#### Scenario: A second pane or thread makes inference ambiguous
+
+- **WHEN** another Codex pane or loaded thread shares the directory, or the evidence changes during discovery
+- **THEN** the next snapshot withholds the inferred conversation, including any previously inferred match
+
 #### Scenario: A pane changes after preview
 
 - **WHEN** the captured runtime, terminal, foreground Codex process, existing
