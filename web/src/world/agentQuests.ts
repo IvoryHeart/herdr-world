@@ -83,6 +83,16 @@ export function useAgentQuests(
   const latest = useRef(leaves);
   latest.current = leaves;
   const lastRead = useRef(0);
+  // A read that started for earlier leaves still answers for those leaves,
+  // so a change of leaves does not discard it (only unmounting does);
+  // otherwise every change during a read would wait out QUEST_MIN_GAP_MS.
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
   useEffect(() => {
     if (!active) return;
     let cancelled = false;
@@ -151,7 +161,7 @@ export function useAgentQuests(
             }
           }),
         );
-        if (!cancelled)
+        if (mounted.current)
           setQuests((current) =>
             JSON.stringify([...current]) === JSON.stringify([...next])
               ? current

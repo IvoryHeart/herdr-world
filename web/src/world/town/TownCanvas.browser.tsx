@@ -294,28 +294,35 @@ let latestText =
       return { ok: true };
     if (method === "agent_quest.list")
       return {
+        // A quest belongs to its pane, whatever order the panes are asked in.
         quests: ((params?.pane_ids as string[] | undefined) ?? []).map(
-          (pane_id, index) => ({
-            pane_id,
-            agent: "claude",
-            session_binding: "reported",
-            quest:
-              index % 2
-                ? null
-                : {
-                    quest_version: 1,
-                    source: "todo",
-                    tool: "TodoWrite",
-                    title: "Synthetic quest",
-                    status: "active",
-                    steps: [],
-                    progress: { done: index % 3, total: 3 },
-                    started_at: "2026-01-01T00:00:00Z",
-                    updated_at: "2026-01-01T00:00:01Z",
-                    set_by: null,
-                    helpers: 0,
-                  },
-          }),
+          (pane_id) => {
+            const index = [...pane_id].reduce(
+              (sum, char) => sum + char.charCodeAt(0),
+              0,
+            );
+            return {
+              pane_id,
+              agent: "claude",
+              session_binding: "reported",
+              quest:
+                index % 2
+                  ? null
+                  : {
+                      quest_version: 1,
+                      source: "todo",
+                      tool: "TodoWrite",
+                      title: "Synthetic quest",
+                      status: "active",
+                      steps: [],
+                      progress: { done: index % 3, total: 3 },
+                      started_at: "2026-01-01T00:00:00Z",
+                      updated_at: "2026-01-01T00:00:01Z",
+                      set_by: null,
+                      helpers: 0,
+                    },
+            };
+          },
         ),
       };
     if (method === "agent_conversation.latest")
