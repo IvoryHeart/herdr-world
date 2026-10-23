@@ -779,7 +779,7 @@ async function run() {
   );
   check(
     ![...document.querySelectorAll(".workspace-inspector-agent-identity")].some(
-      (identity) => identity.textContent?.includes("terminal"),
+      (identity) => identity.getAttribute("data-kind") === "terminal",
     ),
     "pending browser-local created-seat focus opened an unadmitted Inspector",
   );
@@ -791,7 +791,7 @@ async function run() {
       store.get().selectedPaneId === "created-pane-3" &&
       [
         ...document.querySelectorAll(".workspace-inspector-agent-identity"),
-      ].some((identity) => identity.textContent?.includes("terminal")),
+      ].some((identity) => identity.getAttribute("data-kind") === "terminal"),
     "browser-local created seat exact Inspector after transient focus rejection",
   );
   check(

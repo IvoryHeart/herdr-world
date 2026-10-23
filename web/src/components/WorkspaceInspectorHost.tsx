@@ -573,7 +573,10 @@ export function WorkspaceInspectorHost({
           />
         ) : null}
         {agentContext ? (
-          <div className="workspace-inspector-identity workspace-inspector-agent-identity">
+          <div
+            className="workspace-inspector-identity workspace-inspector-agent-identity"
+            data-kind={agentContext.kind}
+          >
             <span
               className="workspace-inspector-agent-avatar"
               aria-hidden="true"
