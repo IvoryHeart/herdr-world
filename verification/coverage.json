@@ -757,7 +757,8 @@
       "properties": "Focus references a live window; minimize/restore preserves geometry; closed windows cannot regain focus",
       "existingTests": [
         "web/src/world/windows/windowManager.test.ts",
-        "web/src/world/windows/WindowFrame.test.ts"
+        "web/src/world/windows/WindowFrame.test.ts",
+        "web/src/world/windows/WorldPanel.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/155",
       "technique": "window-state",
@@ -771,7 +772,8 @@
         "tests": [
           "web/src/world/windows/windowOrdering.test.ts",
           "web/src/world/windows/windowManager.test.ts",
-          "web/src/world/windows/WindowFrame.test.ts"
+          "web/src/world/windows/WindowFrame.test.ts",
+          "web/src/world/windows/WorldPanel.test.ts"
         ],
         "checks": ["bun run check"],
         "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
