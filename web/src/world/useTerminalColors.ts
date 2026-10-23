@@ -25,11 +25,59 @@ import {
   runtimeRelationInputs,
   withInheritedColors,
 } from "./relations";
+import type { RelationsDocument } from "../../../shared/relations";
 import { worldRuntimeStore } from "./runtimeStore";
 
 /** Terminal colours as World's service keeps them (see terminalColor.ts). */
 
 const NONE: TerminalColors = Object.freeze({});
+
+type Connections = ReturnType<typeof worldRuntimeStore.get>["connections"];
+
+/** Whether any pane carries a spawn stamp (shared/relations.ts tokens). */
+function anySpawnToken(connections: Connections) {
+  for (const connection of connections)
+    for (const pane of connection.snapshot?.panes ?? []) {
+      const tokens = (pane as { tokens?: Record<string, unknown> }).tokens;
+      if (tokens?.spawned_by || tokens?.spawned_by_terminal) return true;
+    }
+  return false;
+}
+
+/**
+ * Saved colours plus inherited ones, derived once per change for every
+ * view that colours terminals. Spaces refreshes large snapshots often, so
+ * with no spawn claim saved and no stamp on any pane nothing is derived.
+ */
+const inherited = (() => {
+  const derive = relationsDeriver();
+  let last: {
+    colors: TerminalColors;
+    relations: RelationsDocument;
+    connections: Connections;
+    result: TerminalColors;
+  } | null = null;
+  return (
+    colors: TerminalColors,
+    relations: RelationsDocument,
+    connections: Connections,
+  ): TerminalColors => {
+    if (
+      last &&
+      last.colors === colors &&
+      last.relations === relations &&
+      last.connections === connections
+    )
+      return last.result;
+    let result = colors;
+    if (relations.spawns.length || anySpawnToken(connections)) {
+      const derived = derive(relations, runtimeRelationInputs(connections));
+      result = withInheritedColors(colors, derived.relations, derived.places);
+    }
+    last = { colors, relations, connections, result };
+    return result;
+  };
+})();
 
 /** The previous colours while no colour changed, so their identity is stable. */
 export function keepColors(
@@ -60,10 +108,7 @@ export function useTerminalColors(
     store.start();
     return () => store.stop();
   }, [store]);
-  const derive = useRef(relationsDeriver()).current;
   const last = useRef<TerminalColors>(NONE);
-  const lastConnections = useRef<unknown>(null);
-  const inputs = useRef(runtimeRelationInputs([]));
   const subscribe = useCallback(
     (listener: () => void) => {
       const offStore = store.subscribe(listener);
@@ -77,18 +122,13 @@ export function useTerminalColors(
   );
   const snapshot = () => {
     const document = store.get().document;
-    const { connections } = runtime.get();
-    if (connections !== lastConnections.current) {
-      lastConnections.current = connections;
-      inputs.current = runtimeRelationInputs(connections);
-    }
-    const { relations, places } = derive(
-      document?.relations ?? NO_RELATIONS,
-      inputs.current,
-    );
     last.current = keepColors(
       last.current,
-      withInheritedColors(document?.layout.colors ?? NONE, relations, places),
+      inherited(
+        document?.layout.colors ?? NONE,
+        document?.relations ?? NO_RELATIONS,
+        runtime.get().connections,
+      ),
     );
     return last.current;
   };
