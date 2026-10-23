@@ -6,6 +6,13 @@ import { OperationalContext } from "../store";
 import type { InspectorView } from "../workspaceResource";
 import type { WorldObject, WorldObjectNode } from "./worldObject";
 import { projectWorldTree } from "./treeProjection";
+import { ColorSwatchButton } from "../components/ColorSwatch";
+import {
+  WorkspaceColorContext,
+  type WorkspaceColorControl,
+} from "../components/workspaceColor";
+import { hostColorKey, workspaceColorKey } from "./terminalColor";
+import { usePlaceColorChoices } from "./useTerminalColors";
 
 export function WorldNavigator({
   world,
@@ -30,6 +37,15 @@ export function WorldNavigator({
         );
     }
   };
+  // Workspace and host colours, kept with terminal colours (see placeColor).
+  const placeChoices = usePlaceColorChoices();
+  const workspaceColorsFor = (connectionId: string): WorkspaceColorControl => ({
+    palette: placeChoices(hostColorKey(connectionId)).palette,
+    colorOf: (workspaceId) =>
+      placeChoices(workspaceColorKey(connectionId, workspaceId)).current,
+    onColor: (workspaceId, id) =>
+      placeChoices(workspaceColorKey(connectionId, workspaceId)).onColor(id),
+  });
   const { mobile, preferences } = useLayoutPreferences();
   const agentsFirst =
     (mobile
@@ -58,30 +74,37 @@ export function WorldNavigator({
             key={host.source.id}
             data-world-navigator-host={host.source.connectionId}
           >
-            <button
-              type="button"
-              className="world-navigator-host tree-row"
-              aria-expanded={!collapsed.has(host.source.id)}
-              onClick={() =>
-                setCollapsed((current) => {
-                  const next = new Set(current);
-                  if (next.has(host.source.id)) next.delete(host.source.id);
-                  else next.add(host.source.id);
-                  return next;
-                })
-              }
-            >
-              {collapsed.has(host.source.id) ? (
-                <ChevronRight size={14} />
-              ) : (
-                <ChevronDown size={14} />
-              )}
-              <Server size={14} />
-              <span className="ws-label">{host.source.label}</span>
-              <span className="muted">
-                {host.source.stale ? "stale" : host.source.connection.state}
-              </span>
-            </button>
+            <div className="world-navigator-host-row">
+              <button
+                type="button"
+                className="world-navigator-host tree-row"
+                aria-expanded={!collapsed.has(host.source.id)}
+                onClick={() =>
+                  setCollapsed((current) => {
+                    const next = new Set(current);
+                    if (next.has(host.source.id)) next.delete(host.source.id);
+                    else next.add(host.source.id);
+                    return next;
+                  })
+                }
+              >
+                {collapsed.has(host.source.id) ? (
+                  <ChevronRight size={14} />
+                ) : (
+                  <ChevronDown size={14} />
+                )}
+                <Server size={14} />
+                <span className="ws-label">{host.source.label}</span>
+                <span className="muted">
+                  {host.source.stale ? "stale" : host.source.connection.state}
+                </span>
+              </button>
+              <ColorSwatchButton
+                className="world-navigator-host-color"
+                label={`Colour of ${host.source.label}`}
+                {...placeChoices(hostColorKey(host.source.connectionId))}
+              />
+            </div>
             {!host.source.connection.snapshot ? (
               <p>Observation unavailable · counts unknown</p>
             ) : null}
@@ -93,46 +116,50 @@ export function WorldNavigator({
                   runtimeGeneration: host.source.generation,
                 }}
               >
-                <div
-                  className="world-navigator-tree"
-                  ref={(element) => {
-                    if (element) element.inert = !host.source.actionable;
-                  }}
+                <WorkspaceColorContext.Provider
+                  value={workspaceColorsFor(host.source.connectionId)}
                 >
-                  <WorkspaceTree
-                    includeTerminals
-                    agentsFirst={agentsFirst}
-                    focusOnSelect={false}
-                    observedTopology={{
-                      workspaces: host.spaces.map(
-                        ({ source }) => source.workspace,
-                      ),
-                      tabs: host.spaces.flatMap(({ source }) => source.tabs),
-                      panes: host.spaces.flatMap(({ children }) =>
-                        children.map((leaf) => leaf.pane),
-                      ),
+                  <div
+                    className="world-navigator-tree"
+                    ref={(element) => {
+                      if (element) element.inert = !host.source.actionable;
                     }}
-                    onSelect={(workspace) =>
-                      selectWorkspace(workspace.workspace_id)
-                    }
-                    onSelectAgent={(pane) => selectPane(pane.pane_id)}
-                    onBrowseFiles={(workspace) =>
-                      selectWorkspace(workspace.workspace_id, "files")
-                    }
-                    onReviewChanges={(workspace) =>
-                      selectWorkspace(workspace.workspace_id, "changes")
-                    }
-                    onBrowseFilesForAgent={(pane) =>
-                      selectPane(pane.pane_id, "files")
-                    }
-                    onReviewChangesForAgent={(pane) =>
-                      selectPane(pane.pane_id, "changes")
-                    }
-                    onViewAgentHistory={(pane) =>
-                      selectPane(pane.pane_id, "history")
-                    }
-                  />
-                </div>
+                  >
+                    <WorkspaceTree
+                      includeTerminals
+                      agentsFirst={agentsFirst}
+                      focusOnSelect={false}
+                      observedTopology={{
+                        workspaces: host.spaces.map(
+                          ({ source }) => source.workspace,
+                        ),
+                        tabs: host.spaces.flatMap(({ source }) => source.tabs),
+                        panes: host.spaces.flatMap(({ children }) =>
+                          children.map((leaf) => leaf.pane),
+                        ),
+                      }}
+                      onSelect={(workspace) =>
+                        selectWorkspace(workspace.workspace_id)
+                      }
+                      onSelectAgent={(pane) => selectPane(pane.pane_id)}
+                      onBrowseFiles={(workspace) =>
+                        selectWorkspace(workspace.workspace_id, "files")
+                      }
+                      onReviewChanges={(workspace) =>
+                        selectWorkspace(workspace.workspace_id, "changes")
+                      }
+                      onBrowseFilesForAgent={(pane) =>
+                        selectPane(pane.pane_id, "files")
+                      }
+                      onReviewChangesForAgent={(pane) =>
+                        selectPane(pane.pane_id, "changes")
+                      }
+                      onViewAgentHistory={(pane) =>
+                        selectPane(pane.pane_id, "history")
+                      }
+                    />
+                  </div>
+                </WorkspaceColorContext.Provider>
               </OperationalContext.Provider>
             ) : null}
             {host.omittedSpaceCount ? (

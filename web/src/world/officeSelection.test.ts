@@ -19,6 +19,7 @@ function projection(): HerdrOfficeProjection {
     hosts: [
       {
         key: "host-a",
+        connectionId: "host-a",
         displayLabel: "Office A",
         displayOrder: 0,
         connectionState: "active",

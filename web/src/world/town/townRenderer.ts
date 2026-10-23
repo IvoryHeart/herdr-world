@@ -58,7 +58,7 @@ import {
   type TownLayout,
 } from "./townLayout";
 import type { TownModel } from "./townModel";
-import type { TerminalColor } from "../terminalColor";
+import { TERMINAL_COLOR_HEX, type TerminalColor } from "../terminalColor";
 import { profileLookFor, profilesSnapshot } from "../agentProfiles";
 import {
   paintTownFacade,
@@ -66,6 +66,8 @@ import {
   paintTownInterior,
   paintTownRoof,
   TOWN_HOST_THEMES,
+  townCarpetOf,
+  townRoofOf,
   type TownHostTheme,
 } from "./townPaint";
 import {
@@ -393,10 +395,20 @@ export async function createTownRenderer(
 
   const themeFor = (hostKey: string): TownHostTheme => {
     const host = model?.hosts.get(hostKey);
-    return TOWN_HOST_THEMES[
-      (host?.deterministicSkin.themeIndex ?? townHash(hostKey)) %
-        TOWN_HOST_THEMES.length
-    ]!;
+    const theme =
+      TOWN_HOST_THEMES[
+        (host?.deterministicSkin.themeIndex ?? townHash(hostKey)) %
+          TOWN_HOST_THEMES.length
+      ]!;
+    // A host's chosen colour is its roof; walls and floors keep the theme.
+    const chosen = model?.placeColors.hosts.get(hostKey);
+    return chosen
+      ? { ...theme, roof: townRoofOf(TERMINAL_COLOR_HEX[chosen]) }
+      : theme;
+  };
+  const carpetFor = (roomKey: string) => {
+    const chosen = model?.placeColors.rooms.get(roomKey);
+    return chosen ? townCarpetOf(TERMINAL_COLOR_HEX[chosen]) : undefined;
   };
 
   const buildScene = () => {
@@ -525,6 +537,7 @@ export async function createTownRenderer(
             chair: sprites.chair,
             chairBack: sprites.chairBack,
             colorFor: deskColor,
+            carpetFor,
           }),
         ),
       );
@@ -1652,9 +1665,11 @@ export async function createTownRenderer(
     },
     setScene(nextModel, nextLayout, nextState) {
       const layoutChanged = nextLayout !== layout;
-      // Tables are baked with their desk's colour, so a new colour rebuilds.
+      // Tables, carpets and roofs are baked with their colours (and tables
+      // with their pins), so a new colour or pin rebuilds.
       const colorsChanged =
         nextModel.deskColors !== model?.deskColors ||
+        nextModel.placeColors !== model?.placeColors ||
         nextModel.deskPins !== model?.deskPins;
       const first = !layout;
       model = nextModel;
@@ -1667,7 +1682,8 @@ export async function createTownRenderer(
         request("scene");
         return;
       }
-      const key = `${nextLayout.width}x${nextLayout.height}:${nextLayout.buildings.map((b) => `${b.hostKey}@${b.x},${b.y},${b.w},${b.h}:${b.rooms.map((r) => r.cells.map((c) => (c.deskKey ? `${c.deskKey}#${c.seats}#${deskColor(c.deskKey)}${model!.deskPins.has(c.deskKey) ? "#pin" : ""}` : "-")).join(",")).join("|")}`).join(";")}`;
+      const places = nextModel.placeColors;
+      const key = `${[...places.rooms].join(",")}/${[...places.hosts].join(",")}/${nextLayout.width}x${nextLayout.height}:${nextLayout.buildings.map((b) => `${b.hostKey}@${b.x},${b.y},${b.w},${b.h}:${b.rooms.map((r) => r.cells.map((c) => (c.deskKey ? `${c.deskKey}#${c.seats}#${deskColor(c.deskKey)}${model!.deskPins.has(c.deskKey) ? "#pin" : ""}` : "-")).join(",")).join("|")}`).join(";")}`;
       if (key !== sceneKey) {
         sceneKey = key;
         buildScene();
