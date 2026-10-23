@@ -64,6 +64,13 @@ and Delivery checks includes both macOS lifecycle results. See the
 [pipeline ownership guide](docs/ci-pipelines.md) for the job boundaries and
 failure diagnosis.
 
+`check:commit` names the hook's format/lint guard. Release workflows use
+`check:source` for the guard, asset-building type check and tests; `precommit`
+remains its compatibility alias. `check` delegates static validation to the same
+lane used by local delivery, then runs tests. That lane checks source types and
+builds production assets once, instead of building the web app during both type
+checking and compilation.
+
 A push that only merges `origin/main` into the already-pushed branch runs
 `bun run check:static` (the static lane alone): both sides were tested and CI runs
 the full gate on the merge. `scripts/merge-push.ts` decides this conservatively.

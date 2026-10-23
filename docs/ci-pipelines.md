@@ -8,7 +8,7 @@ for compatibility with branch rules.
 
 | Entry point | Responsibility | Deliberate boundary |
 | --- | --- | --- |
-| Local pre-commit | Read-only formatting and lint | Quick feedback before a commit; not a delivery gate |
+| Local pre-commit | `check:commit`: read-only formatting and lint | Quick feedback before a commit; not a delivery gate |
 | Local pre-push | `check:changed`, expanding to the full gate for configuration or tooling changes | Affected tests save local work; CI remains authoritative |
 | CI on a PR | Validate the proposed merge; check its description and changelog policy | One shared scope decision; native platforms and browser shards keep separate runners |
 | CI on main | Validate the integrated main tree | PR success cannot prove the result of later merges |
@@ -18,6 +18,26 @@ for compatibility with branch rules.
 | Publish Release and Release | Require reviewed, green main; create the tag; validate and package the tagged source before publishing | Publication and archive smoke tests cover artifacts beyond source checks |
 | Deploy Pages | Build and publish the documentation site and film | Site publication is separate from application release acceptance |
 | Upstream automation | Detect a frozen source release, request local integration and independently review it | External runtime adoption remains a separate decision |
+
+## Check commands
+
+| Command | Coverage and definition |
+| --- | --- |
+| `check:commit` | Formatting and lint; shared by the Git hook, source checks and static lane |
+| `check:source` | Commit guard, asset-building type check and tests; release preparation and tag validation |
+| `precommit` | Compatibility alias for `check:source`; not the Git pre-commit hook |
+| `check:static` | Notices, fragments, size, commit guard, all three source type checks, Bun type checks, production build, site and specs; defined once in `scripts/check-delivery.ts` |
+| `check` | Static lane followed by tests; CI separates browsers through its existing environment selection |
+| `check:changed` | Static lane plus affected tests and behavioral verification when required |
+| `check:delivery` | Static lane plus all test lanes and behavioral verification |
+| `check:docs` | Notices, fragments, formatting, site and specs for qualifying Markdown changes |
+
+The static lane uses `typecheck:quick` because its production build follows.
+It retains all three TypeScript projects and production asset checks while
+avoiding the second web build previously triggered by server's `pretypecheck`.
+Standalone `typecheck` and release source checks retain that asset-building hook.
+`scripts/gate-commands.test.ts` executes the entry points with stubbed leaf
+commands to verify coverage, ordering and failure propagation without rebuilding.
 
 ## Scope and scheduling
 

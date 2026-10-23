@@ -145,6 +145,9 @@ test("CI exposes the protected delivery gate and runs the complete repository ch
   });
   const validation = workflow.jobs.validation;
   expect(validation?.needs).toBe("validation-scope");
+  // Browser jobs stay parallel with repository validation after the shared
+  // scope decision; consolidating commands must not serialize these lanes.
+  expect(workflow.jobs["world-browser"].needs).toBe(validation?.needs);
   expect(
     validation?.steps.find((step) => step.run === "bun run check"),
   ).toMatchObject({
