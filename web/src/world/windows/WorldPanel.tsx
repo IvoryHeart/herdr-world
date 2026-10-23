@@ -2,6 +2,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -14,7 +15,11 @@ import {
   WindowControls,
   type ManagedWindowControls,
 } from "./WindowControls";
-import type { SnapTarget } from "./windowManager";
+import type {
+  SnapTarget,
+  WindowCommand,
+  WindowManagerState,
+} from "./windowManager";
 import { useSystemBack } from "../../systemBack";
 
 /**
@@ -29,11 +34,16 @@ export type WorldPanelEntry = {
   onClose(): void;
 };
 
+type PanelFocusRequest = { id: string; seq: number };
+
 type WorldPanels = {
   panels: readonly WorldPanelEntry[];
   register(entry: WorldPanelEntry): () => void;
   bodies: Readonly<Record<string, HTMLElement | null>>;
   panelBodyRef(id: string): (element: HTMLDivElement | null) => void;
+  focusRequest?: PanelFocusRequest | null;
+  focus?(id: string): void;
+  deliverFocus?(request: PanelFocusRequest, deliver: () => void): void;
 };
 
 export const WorldPanelsContext = createContext<WorldPanels | null>(null);
@@ -43,6 +53,9 @@ const NO_PANELS: WorldPanels = {
   register: () => () => {},
   bodies: {},
   panelBodyRef: () => () => {},
+  focusRequest: null,
+  focus: () => {},
+  deliverFocus: () => {},
 };
 
 /** The open panel windows; none outside a World shell. */
@@ -56,17 +69,52 @@ export function useWorldPanels(): WorldPanels {
  */
 export function useWorldPanelRegistry() {
   const [panels, setPanels] = useState<readonly WorldPanelEntry[]>([]);
+  const registered = useRef(new Map<string, WorldPanelEntry>());
+  const sequence = useRef(0);
+  const pending = useRef<PanelFocusRequest | null>(null);
+  const [focusRequest, setFocusRequest] = useState<PanelFocusRequest | null>(
+    null,
+  );
+  const publishFocus = useCallback((request: PanelFocusRequest | null) => {
+    pending.current = request;
+    setFocusRequest(request);
+  }, []);
   const [bodies, setBodies] = useState<
     Readonly<Record<string, HTMLElement | null>>
   >({});
-  const register = useCallback((entry: WorldPanelEntry) => {
-    setPanels((current) => [
-      ...current.filter((panel) => panel.id !== entry.id),
-      entry,
-    ]);
-    return () =>
-      setPanels((current) => current.filter((panel) => panel.id !== entry.id));
-  }, []);
+  const register = useCallback(
+    (entry: WorldPanelEntry) => {
+      if (registered.current.has(entry.id) && pending.current?.id === entry.id)
+        publishFocus(null);
+      registered.current.set(entry.id, entry);
+      setPanels([...registered.current.values()]);
+      return () => {
+        if (registered.current.get(entry.id) !== entry) return;
+        registered.current.delete(entry.id);
+        setPanels([...registered.current.values()]);
+        if (pending.current?.id === entry.id) publishFocus(null);
+      };
+    },
+    [publishFocus],
+  );
+  const focus = useCallback(
+    (id: string) => {
+      publishFocus({ id, seq: ++sequence.current });
+    },
+    [publishFocus],
+  );
+  const deliverFocus = useCallback(
+    (request: PanelFocusRequest, deliver: () => void) => {
+      if (
+        pending.current?.seq !== request.seq ||
+        !registered.current.has(request.id)
+      )
+        return;
+      deliver();
+      if (pending.current?.seq === request.seq) publishFocus(null);
+    },
+    [publishFocus],
+  );
   const refs = useRef<Record<string, (element: HTMLDivElement | null) => void>>(
     {},
   );
@@ -79,9 +127,37 @@ export function useWorldPanelRegistry() {
     [],
   );
   return useMemo(
-    () => ({ panels, register, bodies, panelBodyRef }),
-    [panels, register, bodies, panelBodyRef],
+    () => ({
+      panels,
+      register,
+      bodies,
+      panelBodyRef,
+      focusRequest,
+      focus,
+      deliverFocus,
+    }),
+    [panels, register, bodies, panelBodyRef, focusRequest, focus, deliverFocus],
   );
+}
+
+/** Deliver the newest launch intent once its registered window exists. */
+export function useWorldPanelFocus(
+  registry: WorldPanels,
+  state: WindowManagerState,
+  dispatch: (command: WindowCommand) => void,
+) {
+  const { focusRequest: request, deliverFocus } = registry;
+  const ready = Boolean(
+    request &&
+      state.windows[request.id] &&
+      registry.panels.some((panel) => panel.id === request.id),
+  );
+  useEffect(() => {
+    if (request && ready)
+      deliverFocus?.(request, () =>
+        dispatch({ type: "focus", id: request.id }),
+      );
+  }, [request, ready, deliverFocus, dispatch]);
 }
 
 /** Panel window ids share one prefix so they never collide with Inspectors. */
@@ -98,12 +174,15 @@ export function WorldPanel({
   name,
   label,
   initialSnap,
+  focusKey,
   onClose,
   children,
 }: {
   name: string;
   label: string;
   initialSnap?: SnapTarget;
+  /** A launcher increments this to restore and raise an already-open panel. */
+  focusKey?: number;
   onClose(): void;
   children: ReactNode;
 }) {
@@ -112,6 +191,7 @@ export function WorldPanel({
   close.current = onClose;
   const id = worldPanelWindowId(name);
   const register = panels?.register;
+  const focus = panels?.focus;
   useLayoutEffect(
     () =>
       register?.({
@@ -122,6 +202,9 @@ export function WorldPanel({
       }),
     [register, id, label, initialSnap],
   );
+  useLayoutEffect(() => {
+    if (focusKey !== undefined) focus?.(id);
+  }, [focus, id, focusKey]);
   // On a phone a panel is a detail screen: the system Back closes it first,
   // before any Inspector beneath it.
   useSystemBack(Boolean(register), () => close.current(), "panel");

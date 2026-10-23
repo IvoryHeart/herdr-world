@@ -78,6 +78,7 @@ function projection(): HerdrOfficeProjection {
     presentationBounds: {
       rooms: 128,
       desksPerRoom: 8,
+      foldedDesksPerRoom: 8,
       roomAgentsPerRoom: 16,
       receptionDesks: 6,
       waitingAgentsPerReception: 8,

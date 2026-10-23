@@ -653,3 +653,7 @@
     background: var(--blue);
   }
 }
+.workspace-inspector-agent-settings-link {
+  justify-self: start;
+  min-height: 28px;
+}
