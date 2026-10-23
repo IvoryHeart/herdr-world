@@ -79,7 +79,10 @@ all worktrees and clones: one browser lane (World browser suites, Chrome-driven
 tests, timed suites) and one behavioral verification at a time, and at most two
 light lanes (static checks, unit tests). The quiet lane's timed (latency) suites
 need the whole machine: they take every slot, waiting for running heavy lanes, and
-nothing heavy starts beside them. `bun run check:changed`, `check:delivery`,
+nothing heavy starts beside them. They reserve admission while waiting, so later
+ordinary requests cannot starve them. Canonical paths, directory selectors,
+filters and ambiguous options in direct test runs are queued conservatively.
+`bun run check:changed`, `check:delivery`,
 `test:browser`, `scripts/run-world-tests.ts` and any `bun run test` that includes a
 Chrome-driven suite all queue, and a waiting lane prints `waiting for <worktree>
 <lane> (pid, since)`. Slots are

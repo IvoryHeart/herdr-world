@@ -181,4 +181,19 @@ test("a run that includes a Chrome-driven suite is recognised for the browser sl
   expect(includesBrowserSuites(["web/src/world/"])).toBe(true);
   expect(includesBrowserSuites(["scripts/check-lock.test.ts"])).toBe(false);
   expect(includesBrowserSuites(["server/src/http"])).toBe(false);
+  expect(includesBrowserSuites(["./web/src/uiScale.test.ts"])).toBe(true);
+  expect(
+    includesBrowserSuites([join(process.cwd(), "web/src/uiScale.test.ts")]),
+  ).toBe(true);
+  expect(includesBrowserSuites(["./web/src/world"])).toBe(true);
+  expect(includesBrowserSuites(["."])).toBe(true);
+  expect(includesBrowserSuites(["uiScale"])).toBe(true);
+  expect(includesBrowserSuites(["--timeout", "30000"])).toBe(true);
+  expect(
+    includesBrowserSuites([
+      "--test-name-pattern",
+      "scripts/check-lock.test.ts",
+    ]),
+  ).toBe(true);
+  expect(includesBrowserSuites(["./scripts/check-lock.test.ts"])).toBe(false);
 });

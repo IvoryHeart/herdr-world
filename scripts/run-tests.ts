@@ -59,9 +59,7 @@ console.info(
 sweepStaleRunTemps();
 // A run that includes Chrome-driven suites takes the machine-wide browser
 // slot, like the gate's browser lane (a whole run includes the web suites).
-const usesBrowser =
-  !excludeWorld &&
-  includesBrowserSuites(args.filter((arg) => !arg.startsWith("-")));
+const usesBrowser = !excludeWorld && includesBrowserSuites(args);
 const releaseSlot = usesBrowser
   ? await acquireCheckSlot("browser", { lane: "browser tests" })
   : () => {};

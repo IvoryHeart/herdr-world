@@ -20,7 +20,8 @@ import { basename, join } from "node:path";
  *
  * Timed (latency) suites need the whole machine, so they take every slot of
  * every class (acquireAllCheckSlots), in one fixed order: they wait for the
- * running heavy lanes to finish, and nothing heavy starts beside them.
+ * running heavy lanes to finish, and nothing heavy starts beside them. An
+ * exclusive admission lock prevents later ordinary arrivals overtaking them.
  *
  * The kernel releases a lock when its holder exits, however it exits, so a
  * dead process never leaves a stale lock behind; the holder note beside each
@@ -45,6 +46,7 @@ export const CHECK_SLOTS: Record<CheckClass, number> = {
 export const HELD_ENV = "HERDR_WORLD_CHECK_LOCK";
 
 const LOCK_EX = 2;
+const LOCK_SH = 1;
 const LOCK_NB = 4;
 
 type Flock = (fd: number, operation: number) => number;
@@ -190,25 +192,47 @@ async function acquire(
   if (!all) {
     const paths = slotPaths(names[0]!);
     for (;;) {
-      for (const path of paths) {
-        const release = take(path);
-        if (release) return release;
+      // Hold admission only while trying a slot, never while waiting for one.
+      const intent = join(dir, "all.intent");
+      const admission = openSync(`${intent}.lock`, "a");
+      const admitted = lock(admission, LOCK_SH | LOCK_NB) === 0;
+      try {
+        if (admitted)
+          for (const path of paths) {
+            const release = take(path);
+            if (release) return release;
+          }
+      } finally {
+        closeSync(admission);
       }
-      await wait(paths);
+      await wait(admitted ? paths : [intent]);
     }
   }
-  // Every slot, one at a time in the fixed order, so whole-machine lanes
-  // never deadlock with each other.
+  // Reserve admission before waiting for any slot. Existing work can finish,
+  // but later ordinary requests cannot keep stealing newly freed slots.
   const held: Release[] = [];
-  for (const name of names)
-    for (const path of slotPaths(name)) {
-      let release = take(path);
-      while (!release) {
-        await wait([path]);
-        release = take(path);
-      }
-      held.push(release);
+  const intent = join(dir, "all.intent");
+  try {
+    let release = take(intent);
+    while (!release) {
+      await wait([intent]);
+      release = take(intent);
     }
+    held.push(release);
+    // One fixed order also prevents cycles between whole-machine waiters.
+    for (const name of names)
+      for (const path of slotPaths(name)) {
+        let release = take(path);
+        while (!release) {
+          await wait([path]);
+          release = take(path);
+        }
+        held.push(release);
+      }
+  } catch (error) {
+    for (const release of held.reverse()) release();
+    throw error;
+  }
   return () => {
     for (const release of held.reverse()) release();
   };

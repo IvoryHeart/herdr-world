@@ -173,6 +173,12 @@ and one behavioral verification at a time, two light lanes, and the timed
 `[queue] <lane> waiting for <worktree> <lane> (pid, since)`. Do not bypass the
 hook because a gate is queued; the wait is shorter than the contention it avoids.
 
+Direct test runs recognise canonical file and directory paths, including `./`,
+absolute paths and symlinks. Filters and ambiguous option selections conservatively
+take the browser slot. A pending whole-machine lane reserves admission before
+waiting for running work, so later ordinary arrivals cannot continually overtake
+it. Process exit releases both admission and slots through the kernel.
+
 On a machine with a usable GPU, set `HERDR_WORLD_TEST_GPU=1` (for example in the
 shell that runs `git push`) so World browser suites render WebGL on the GPU instead
 of SwiftShader; each suite then uses a fraction of the CPU. A failed GPU probe falls

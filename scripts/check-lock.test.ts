@@ -205,3 +205,83 @@ test("children of a whole-machine holder do not queue again", async () => {
   });
   release();
 });
+
+test("later light arrivals cannot overtake a pending whole-machine request", async () => {
+  const dir = join(scratch(), "locks");
+  const options = { dir, env: {}, log: () => {}, pollMs: 1 };
+  const first = await acquireCheckSlot("light", {
+    ...options,
+    lane: "running one",
+  });
+  const second = await acquireCheckSlot("light", {
+    ...options,
+    lane: "running two",
+  });
+  const order: string[] = [];
+  let announced!: () => void;
+  const waiting = new Promise<void>((resolve) => {
+    announced = resolve;
+  });
+  const exclusive = acquireAllCheckSlots({
+    ...options,
+    lane: "timed",
+    pollMs: 100,
+    log: () => announced(),
+  }).then((release) => {
+    order.push("timed");
+    release();
+  });
+  await waiting;
+  // A continuing stream, rather than a fixed group of initial contenders.
+  const arrivals = (async () => {
+    for (let index = 0; index < 12; index++) {
+      const release = await acquireCheckSlot("light", {
+        ...options,
+        lane: `later ${index}`,
+      });
+      order.push(`later ${index}`);
+      release();
+      await Bun.sleep(5);
+    }
+  })();
+  first();
+  second();
+  await Promise.all([exclusive, arrivals]);
+  expect(order).toHaveLength(13);
+  expect(order[0]).toBe("timed");
+});
+
+test("killing a partly acquired whole-machine request releases its admission and slots", async () => {
+  const root = scratch();
+  const block = await acquireCheckSlot("light", {
+    lane: "running",
+    dir: join(root, "locks"),
+    env: {},
+  });
+  const hold = holderScript(root);
+  const victim = hold("all", "victim-all", 60000);
+  try {
+    const reader = victim.stdout.getReader();
+    const { value } = await reader.read();
+    expect(new TextDecoder().decode(value)).toContain(
+      "[queue] victim-all waiting",
+    );
+    reader.releaseLock();
+    victim.kill("SIGKILL");
+    await victim.exited;
+    block();
+    const next = hold("all", "after-kill", 0);
+    const timeout = setTimeout(() => next.kill("SIGKILL"), 2000);
+    try {
+      expect(await next.exited).toBe(0);
+    } finally {
+      clearTimeout(timeout);
+      next.kill("SIGKILL");
+      await next.exited;
+    }
+  } finally {
+    block();
+    victim.kill("SIGKILL");
+    await victim.exited;
+  }
+});

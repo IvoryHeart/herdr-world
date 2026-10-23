@@ -1,4 +1,5 @@
-import { join } from "node:path";
+import { existsSync, realpathSync } from "node:fs";
+import { join, relative, resolve, sep } from "node:path";
 
 /**
  * Suites that assert wall-clock budgets (input latency, frame counts). They
@@ -134,21 +135,29 @@ export async function assertWebBrowserInventory(root = process.cwd()) {
 }
 
 /**
- * Whether a test run over `paths` (files or directories; none means every
- * test) includes a Chrome-driven suite, and so needs the machine-wide browser
- * slot.
+ * Whether Bun selectors can include Chrome. Unknown filters and options are
+ * conservatively queued: option values are not necessarily test paths.
  */
-export function includesBrowserSuites(paths: readonly string[]): boolean {
+export function includesBrowserSuites(
+  args: readonly string[],
+  root = process.cwd(),
+): boolean {
+  if (args.length === 0) return true;
   const suites = [...webBrowserSuites, ...worldBrowserSuites];
-  return (
-    paths.length === 0 ||
-    paths.some((path) =>
-      suites.some(
-        (suite) =>
-          suite === path ||
-          suite.endsWith(`/${path}`) ||
-          suite.startsWith(`${path.replace(/\/$/, "")}/`),
-      ),
-    )
-  );
+  return args.some((arg) => {
+    if (arg.startsWith("-")) return true;
+    const absolute = resolve(root, arg);
+    if (!existsSync(absolute)) return true;
+    try {
+      const path = relative(realpathSync(root), realpathSync(absolute))
+        .split(sep)
+        .join("/");
+      if (!path || path === ".." || path.startsWith("../")) return true;
+      return suites.some(
+        (suite) => suite === path || suite.startsWith(`${path}/`),
+      );
+    } catch {
+      return true;
+    }
+  });
 }
