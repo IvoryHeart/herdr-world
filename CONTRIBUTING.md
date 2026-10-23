@@ -172,6 +172,30 @@ bun run build:site
 The build adds content versions to local CSS and JavaScript URLs so a new page
 loads its matching assets rather than a cached stylesheet from a previous deploy.
 
+The film at `site/film/` draws its Town with the app's own Town code:
+`site/film/town-art.ts` re-exports the layout, painting and sprite functions from
+`web/src/world/town/`, and the build bundles it into `film/town-art.js`, so open the
+film from `.pages-dist/`, not from `site/`. Changes to Town's art reach the film on the
+next site build, and the Pages workflow redeploys when Town's art changes.
+`scripts/pages-film.test.ts` renders every frame in headless Chrome, with and without
+reduced motion, so a Town change that breaks the film fails the gate.
+`/film/` plays a video recorded from the live film; `?live` draws it in the browser,
+and the page falls back to drawing it live when the video is missing (a plain
+`build:site`). `bun run film:render` records the video after `bun run build:site`: it
+plays the film frame by frame in headless Chrome, renders the score offline and
+encodes `film/media/herdr-world-film.webm` (VP9/Opus, 1080p), `.mp4` (H.264/AAC, 720p)
+and `.vtt` captions with ffmpeg, about 7 MiB in all. The video is a generated output,
+so it is never committed: the Pages workflow renders it on every deploy. Use
+`--keep <dir>` to reuse a capture while tuning encoder settings, and `--update-poster`
+to regenerate `site/assets/herdr-world-film-poster.jpg`, the video poster and social
+card. `film/?t=<seconds>` opens the live film at a frame, and `?render` drops the page
+chrome for 1920×1080 captures.
+
+`YOUTUBE_ID` in `site/film/index.html` is empty. If the owner uploads the film, setting
+it replaces the video with a click-to-load YouTube facade: no request reaches
+`youtube-nocookie.com` until the viewer clicks, and the page's Content Security Policy
+allows only that frame origin.
+
 Serve `.pages-dist/` locally and check the homepage and `/tutorial/`, narrow screens, keyboard
 navigation, and JavaScript-disabled reading. Production canonical URLs, social
 images, and the sitemap use <https://herdr.world/>. Do not commit `.pages-dist/`.
@@ -196,6 +220,13 @@ validates it. CI requires a fragment from every PR that is not documentation-onl
 A PR with nothing user-facing (tests, CI, contributor tooling) instead puts
 `Changelog: none — <specific reason>` in its description. PR links in entries are
 optional; do not push again solely to add one after the PR opens.
+
+After a merge, CI runs the full check again on the new main commit. If it fails,
+the Main gate workflow opens one `main-red` issue that names the merge commit and
+its PR, and prepares a revert PR, which it never merges. Rerun the failed jobs
+first when the failure is a known flake; otherwise merge the revert or land a
+fix. Later red commits are added to the open issue, not to new ones, and the next
+green main run at or after the red commit closes the issue and its revert PR.
 
 Unlabeled PRs get `documentation` (docs-only), `dependencies` (dependency updates),
 `bug` (fix titles), or `enhancement` (other code). Release preparation gets

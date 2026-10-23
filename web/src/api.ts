@@ -280,6 +280,7 @@ export interface BridgeControlMsg {
     | "world_invalidated"
     | "world_watchlist_changed"
     | "world_board_changed"
+    | "world_profiles_changed"
     | "agent_conversation_changed";
   reason?: string;
   pane_id?: string;

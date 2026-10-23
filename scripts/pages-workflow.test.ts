@@ -39,7 +39,12 @@ test("Pages deploys on main pushes or manual dispatch and checks installer avail
       "site/**",
       "docs/TUTORIAL.md",
       "docs/images/**",
+      // The film bundles Town's art (site/film/town-art.ts).
+      "web/src/world/town/**",
+      "web/src/world/terminalColor.ts",
+      "shared/terminalColor.ts",
       "scripts/build-pages.ts",
+      "scripts/film-render.ts",
       "scripts/pages-content.ts",
       "scripts/pages-*.test.ts",
       ".github/workflows/pages.yml",
@@ -47,6 +52,16 @@ test("Pages deploys on main pushes or manual dispatch and checks installer avail
   });
   expect(gateIndex).toBeGreaterThan(-1);
   expect(gateIndex).toBeLessThan(
+    steps.findIndex((step) =>
+      step.uses?.startsWith("actions/upload-pages-artifact@"),
+    ),
+  );
+  // The film's video is rendered into the built site before upload.
+  const named = (name: string) => steps.findIndex((step) => step.name === name);
+  expect(named("Render the film video")).toBeGreaterThan(
+    named("Build landing page and tutorial"),
+  );
+  expect(named("Render the film video")).toBeLessThan(
     steps.findIndex((step) =>
       step.uses?.startsWith("actions/upload-pages-artifact@"),
     ),

@@ -40,6 +40,12 @@ desk.
 - **THEN** Board and Town show no item for that pane until World links it
   again
 
+#### Scenario: A busy merged window
+- **WHEN** more than a hundred pull requests the user authored were merged
+  in the merged window (seven days unless changed in Sources settings)
+- **THEN** the Work lens shows every one, grouped by the day it merged with
+  only the newest day open, up to GitHub's 1,000-result search limit
+
 #### Scenario: Jira site or account changed
 - **WHEN** the user changes the Jira site or email without entering a token
 - **THEN** the service removes the saved token and never sends it to the new
