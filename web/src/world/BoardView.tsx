@@ -105,9 +105,8 @@ import {
   hostColorKey,
   placeColor,
   TERMINAL_COLOR_HEX,
-  TERMINAL_COLOR_PALETTE,
 } from "./terminalColor";
-import { ColorSwatchButton } from "../components/ColorSwatch";
+import { BoardZoneColor } from "./board/BoardZoneColor";
 import { WorkLens } from "./board/WorkLens";
 import "./board/board.css";
 
@@ -2862,6 +2861,14 @@ export default function BoardView({
   }, [noteSelected, colorKey]);
   const setCardColor = (key: string, color: CardColor | null) =>
     void report(boardStore.patch([{ op: "card.color", key, color }]));
+  // Stable, so zones whose colour is unchanged skip rendering their pickers.
+  const setCardColorRef = useRef(setCardColor);
+  setCardColorRef.current = setCardColor;
+  const setZoneColor = useCallback(
+    (key: string, color: CardColor | null) =>
+      setCardColorRef.current(key, color),
+    [],
+  );
 
   const toolbar = (
     <WorldViewToolbar
@@ -2988,23 +2995,11 @@ export default function BoardView({
                   data-world-node-anchor={host.id}
                   title="Drag to move the whole host"
                 >
-                  <ColorSwatchButton
-                    className="board-zone-color"
-                    defaultHex="var(--board-zone)"
-                    label={`Colour of ${host.label}`}
-                    palette={TERMINAL_COLOR_PALETTE}
-                    current={{
-                      id: hostColor ?? "default",
-                      custom: !!hostColor,
-                    }}
-                    onColor={(id) =>
-                      setCardColor(
-                        hostKey,
-                        CARD_COLORS.includes(id as CardColor)
-                          ? (id as CardColor)
-                          : null,
-                      )
-                    }
+                  <BoardZoneColor
+                    colorKey={hostKey}
+                    hostLabel={host.label}
+                    color={hostColor}
+                    onColor={setZoneColor}
                   />
                   {host.label}
                   {host.stale ? (

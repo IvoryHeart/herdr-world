@@ -61,6 +61,7 @@ export function ColorSwatchButton({
   text,
   className,
   defaultHex,
+  defaultOpen = false,
 }: {
   palette: readonly ColorChoice[];
   current: ColorValue;
@@ -71,8 +72,10 @@ export function ColorSwatchButton({
   /** Visible text beside the colour, as in a menu; the dot alone otherwise. */
   text?: string;
   className?: string;
+  /** Open on mount, for a caller that mounts the picker only when asked. */
+  defaultOpen?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   const hex =
     palette.find((entry) => entry.id === current.id)?.hex ?? defaultHex;
   return (
