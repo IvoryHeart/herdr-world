@@ -160,7 +160,8 @@ changes what you see and does not disconnect hosts or retarget open terminals.
 7. To move a table to another room, zoom in until you see tables, then drag it
    with the mouse, or hold it for a moment on a phone and then drag. Drop it on
    another room of the same building; the plaque under your pointer says where
-   it will land, or why it cannot. The table lifts off and swings along behind
+   it will land, or why it cannot. Hold it near the edge of the view to scroll
+   the town toward rooms out of sight, as on a phone where rooms stack. The table lifts off and swings along behind
    your pointer with its agents aboard, then drops onto its new spot in a puff
    of dust; if the move is refused, it shakes and springs back. To move one
    agent, drag it onto another table instead: it dangles by the scruff on the
@@ -175,8 +176,13 @@ changes what you see and does not disconnect hosts or retarget open terminals.
 8. Tables sit in the order of their tabs, left to right and then row by row.
    To change the order, drag a table onto another table in the same room: it
    takes that table's place, and the tables in between shift along. Drop it on
-   the room's free spot to put it last of the tables shown (a room with more
-   tabs than tables keeps the rest hidden behind its count). Town moves the tab in Herdr, so Spaces
+   the room's free spot to put it last of the tables shown. A room grows as
+   tabs open and shows up to 127 tables: up to eight tables wide on a wide
+   screen, six on a portrait or half-width screen and four on a phone, then
+   row by row. Rooms sit in columns that suit your screen (one on a phone),
+   and a growing room pushes down only the rooms below it, once you let go of
+   the town. Only a room with more than 127 tabs keeps some idle tables
+   hidden behind its count. Town moves the tab in Herdr, so Spaces
    shows the new order too, and moving a tab in Spaces moves its table. The
    tables move once Herdr reports the new order, and agents stay with their
    table.
@@ -256,6 +262,20 @@ on your phone and desktop.
    phone, hold the tab still for a moment first; a quick swipe pans). Board
    asks first, with **Don't ask again**, and always asks before moving a
    workspace's last tab, which closes that workspace. Strings follow the move.
+
+9. Press the pull request button in Board's controls to open **Work**: your
+   GitHub pull requests in columns from **In review** through **Fixing**,
+   **Green** and **Ready to merge** to **Merged**, and on the **Tickets** tab
+   your Jira tickets and assigned issues by status. A card names the agents
+   working on it; tap one to close Work and jump to its card. Escape or a
+   press outside also closes Work. **Green** means checks pass while a
+   required review is pending; **Ready to merge** means approved, or passing
+   in a repository that requires no review. The same pull
+   request appears as a badge on the agent's desk in Town, such as `#42 ✓`.
+   If Work shows **Set up Jira** or says no source is connected, open
+   **Settings → Sources**: sign
+   in to GitHub with `gh auth login` as the user that runs World, or add your
+   Jira site, account email and an API token there.
 
 After Herdr restarts, Board cannot prove that a workspace or agent is the one a
 string was made with, so it draws those strings dashed and asks once per host:
