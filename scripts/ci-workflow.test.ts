@@ -106,6 +106,9 @@ test("CI exposes the protected delivery gate and runs the complete repository ch
   expect(workflow.concurrency["cancel-in-progress"]).toContain(
     "github.event.action != 'edited'",
   );
+  expect(workflow.concurrency["cancel-in-progress"]).toContain(
+    "github.event.action != 'labeled'",
+  );
   // Post-merge gate: main pushes share one group that never cancels the
   // running check, so a batch of merges is tested once at its newest commit.
   expect(workflow.on.push).toEqual({ branches: ["main"] });
@@ -125,6 +128,7 @@ test("CI exposes the protected delivery gate and runs the complete repository ch
     "behavioral",
     "plugin-windows",
     "installer-upgrade",
+    "launchd",
   ]);
   expect(delivery?.if).toBe("always()");
   expect(
@@ -348,13 +352,17 @@ test("CI exercises the real plugin-managed launchd lifecycle on both protected a
       (step) =>
         step.name === "Exercise the real plugin-managed launchd lifecycle",
     )?.if,
-  ).toBe(
-    "steps.scope.outputs.mode != 'docs' && steps.scope.outputs.mode != 'reuse'",
-  );
+  ).toBe("needs.validation-scope.outputs.mode == 'full'");
+  expect(launchd?.needs).toBe("validation-scope");
   expect(
-    launchd?.steps.find((step) => step.name === "Determine validation scope")
-      ?.run,
-  ).toBe("bun scripts/ci-reuse-full-check.ts");
+    launchd?.steps.some(
+      (step) => step.run === "bun scripts/ci-reuse-full-check.ts",
+    ),
+  ).toBe(false);
+  for (const step of workflow.jobs.delivery.steps.filter(
+    (step) => step.run === "bun scripts/ci-delivery-result.ts",
+  ))
+    expect(step.env?.LAUNCHD_RESULT).toBe("${{ needs.launchd.result }}");
 });
 
 test("accepted behavioral evidence is an unfiltered protected delivery dependency", async () => {

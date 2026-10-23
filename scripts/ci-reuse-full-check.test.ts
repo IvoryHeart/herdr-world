@@ -7,6 +7,7 @@ import {
   canReuseFullCheck,
   isDocsOnlyChange,
   isDocumentationPath,
+  selectValidationMode,
 } from "./ci-reuse-full-check";
 
 const base = "a".repeat(40);
@@ -42,6 +43,34 @@ const verify = (
     "Run full repository check",
     async (id) => jobs[id] ?? [],
   );
+
+test("metadata events reuse proof while code events always validate", async () => {
+  for (const action of ["edited", "labeled"]) {
+    expect(await selectValidationMode(action, false, async () => true)).toBe(
+      "reuse",
+    );
+    expect(await selectValidationMode(action, false, async () => false)).toBe(
+      "full",
+    );
+    expect(
+      await selectValidationMode(action, false, async () => {
+        throw new Error("API unavailable");
+      }),
+    ).toBe("full");
+  }
+  for (const action of ["opened", "synchronize", "reopened", undefined]) {
+    expect(
+      await selectValidationMode(action, false, async () => {
+        throw new Error("must not query reuse");
+      }),
+    ).toBe("full");
+  }
+  expect(
+    await selectValidationMode("labeled", true, async () => {
+      throw new Error("must not query reuse");
+    }),
+  ).toBe("docs");
+});
 
 test("metadata edits reuse the latest successful full check on the exact base and head", async () => {
   expect(

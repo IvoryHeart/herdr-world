@@ -111,6 +111,24 @@ async function githubJson<T>(path: string, token: string): Promise<T> {
   return (await response.json()) as T;
 }
 
+/** Code events validate; metadata events may reuse exact-revision proof. */
+export async function selectValidationMode(
+  action: string | undefined,
+  docsOnly: boolean,
+  reuse: () => Promise<boolean>,
+): Promise<"docs" | "reuse" | "full"> {
+  if (docsOnly) return "docs";
+  if (action !== "edited" && action !== "labeled") return "full";
+  try {
+    return (await reuse()) ? "reuse" : "full";
+  } catch (error) {
+    console.error(
+      `Cannot reuse validation: ${error instanceof Error ? error.message : String(error)}`,
+    );
+    return "full";
+  }
+}
+
 if (import.meta.main) {
   const repo = process.env.GITHUB_REPOSITORY;
   const token = process.env.GITHUB_TOKEN;
@@ -136,19 +154,19 @@ if (import.meta.main) {
 
   let mode = "full";
   try {
-    if (isDocsOnlyChange(baseSha, headSha)) {
-      mode = "docs";
-    } else if (process.env.PR_ACTION === "edited") {
-      const query = new URLSearchParams({
-        head_sha: headSha,
-        event: "pull_request",
-        per_page: "100",
-      });
-      const { workflow_runs: runs } = await githubJson<{
-        workflow_runs: Run[];
-      }>(`/repos/${repo}/actions/workflows/ci.yml/runs?${query}`, token);
-      if (
-        await canReuseFullCheck(
+    mode = await selectValidationMode(
+      process.env.PR_ACTION,
+      isDocsOnlyChange(baseSha, headSha),
+      async () => {
+        const query = new URLSearchParams({
+          head_sha: headSha,
+          event: "pull_request",
+          per_page: "100",
+        });
+        const { workflow_runs: runs } = await githubJson<{
+          workflow_runs: Run[];
+        }>(`/repos/${repo}/actions/workflows/ci.yml/runs?${query}`, token);
+        return canReuseFullCheck(
           runs,
           currentRunId,
           prNumber,
@@ -163,10 +181,9 @@ if (import.meta.main) {
                 token,
               )
             ).jobs,
-        )
-      )
-        mode = "reuse";
-    }
+        );
+      },
+    );
   } catch (error) {
     console.error(
       `Cannot shorten validation: ${error instanceof Error ? error.message : String(error)}`,

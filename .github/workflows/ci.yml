@@ -35,7 +35,9 @@ concurrency:
     # keeps only the latest pending run). Main gate names every merge since the
     # last green commit when that run fails.
     group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || (github.event_name == 'push' && 'main-push') || github.ref }}
-    cancel-in-progress: ${{ github.event_name == 'pull_request' && github.event.action != 'edited' }}
+    # Metadata runs queue behind active validation and reuse its exact-revision
+    # result. A label must not cancel the check it needs as evidence.
+    cancel-in-progress: ${{ github.event_name == 'pull_request' && github.event.action != 'edited' && github.event.action != 'labeled' }}
 
 jobs:
     browser-diagnostics:
@@ -183,7 +185,7 @@ jobs:
 
     delivery:
         name: Delivery checks
-        needs: [validation-scope, validation, world-browser, behavioral, plugin-windows, installer-upgrade]
+        needs: [validation-scope, validation, world-browser, behavioral, plugin-windows, installer-upgrade, launchd]
         if: always()
         runs-on: ubuntu-latest
         steps:
@@ -208,6 +210,7 @@ jobs:
                   BEHAVIORAL_RESULT: ${{ needs.behavioral.result }}
                   WINDOWS_PLUGIN_RESULT: ${{ needs.plugin-windows.result }}
                   INSTALLER_RESULT: ${{ needs.installer-upgrade.result }}
+                  LAUNCHD_RESULT: ${{ needs.launchd.result }}
               run: bun scripts/ci-delivery-result.ts
             - name: Verify documentation or reused results
               if: needs.validation-scope.outputs.mode != 'full'
@@ -219,6 +222,7 @@ jobs:
                   BEHAVIORAL_RESULT: ${{ needs.behavioral.result }}
                   WINDOWS_PLUGIN_RESULT: ${{ needs.plugin-windows.result }}
                   INSTALLER_RESULT: ${{ needs.installer-upgrade.result }}
+                  LAUNCHD_RESULT: ${{ needs.launchd.result }}
               run: bun scripts/ci-delivery-result.ts
 
     # Packaging jobs run for full validation only: docs mode admits only
@@ -230,6 +234,7 @@ jobs:
 
     launchd:
         name: macOS launchd plugin lifecycle (${{ matrix.arch }})
+        needs: validation-scope
         runs-on: ${{ matrix.runner }}
         timeout-minutes: 20
         strategy:
@@ -244,38 +249,25 @@ jobs:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
               with:
                   persist-credentials: false
-                  fetch-depth: 0
             - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
               with:
                   bun-version: "1.4.3"
                   no-cache: true
-            - name: Determine validation scope
-              if: github.event_name == 'pull_request'
-              id: scope
-              env:
-                  GITHUB_TOKEN: ${{ github.token }}
-                  PR_NUMBER: ${{ github.event.pull_request.number }}
-                  PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
-                  PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-                  PR_ACTION: ${{ github.event.action }}
-                  REQUIRED_JOB_NAME: macOS launchd plugin lifecycle (${{ matrix.arch }})
-                  REQUIRED_FULL_STEP: Exercise the real plugin-managed launchd lifecycle
-              run: bun scripts/ci-reuse-full-check.ts
             - run: bun install --frozen-lockfile
-              if: steps.scope.outputs.mode != 'docs' && steps.scope.outputs.mode != 'reuse'
+              if: needs.validation-scope.outputs.mode == 'full'
             - name: Build the native World service
-              if: steps.scope.outputs.mode != 'docs' && steps.scope.outputs.mode != 'reuse'
+              if: needs.validation-scope.outputs.mode == 'full'
               run: bun run build
             - name: Compile the standalone plugin launcher
-              if: steps.scope.outputs.mode != 'docs' && steps.scope.outputs.mode != 'reuse'
+              if: needs.validation-scope.outputs.mode == 'full'
               run: bun scripts/world-plugin.ts compile-launcher
             - name: Verify Bun-free installation and prepare the native compatibility launcher
-              if: steps.scope.outputs.mode != 'docs' && steps.scope.outputs.mode != 'reuse'
+              if: needs.validation-scope.outputs.mode == 'full'
               run: |
                   bun test scripts/install-plugin.test.ts scripts/plugin-native.test.ts server/src/config/plugin-command.test.ts
                   cp server/herdr-world server/herdr-world-plugin.exe
             - name: Exercise the real plugin-managed launchd lifecycle
-              if: steps.scope.outputs.mode != 'docs' && steps.scope.outputs.mode != 'reuse'
+              if: needs.validation-scope.outputs.mode == 'full'
               shell: bash
               run: |
                   set -euo pipefail

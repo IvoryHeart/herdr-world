@@ -247,6 +247,28 @@ async function git(args: string[]) {
   return (await child.exited) === 0;
 }
 
+/** Fetch raw logs: gh can reject ANSI sequences before classification sees them. */
+export async function readJobLog(
+  repo: string,
+  jobId: number,
+  token: string,
+  request: (url: string, options: RequestInit) => Promise<Response> = fetch,
+): Promise<string> {
+  const response = await request(
+    `https://api.github.com/repos/${repo}/actions/jobs/${jobId}/logs`,
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/vnd.github+json",
+      },
+      signal: AbortSignal.timeout(30_000),
+    },
+  );
+  if (!response.ok)
+    throw new Error(`Cannot read job log: HTTP ${response.status}`);
+  return response.text();
+}
+
 async function run() {
   const repo = Bun.env.GITHUB_REPOSITORY!;
   const sha = Bun.env.HEAD_SHA!;
@@ -265,10 +287,7 @@ async function run() {
     for (const job of jobs)
       failed.push({
         name: job.name,
-        log: await gh([
-          "api",
-          `repos/${repo}/actions/jobs/${job.id}/logs`,
-        ]).catch(() => ""),
+        log: await readJobLog(repo, job.id, Bun.env.GH_TOKEN!).catch(() => ""),
       });
     if (onlyInfraFlakes(failed)) {
       // The rerun's completion runs this gate again, as attempt 2.
