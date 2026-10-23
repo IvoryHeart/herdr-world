@@ -1,3 +1,4 @@
+import { requestAgentLaunch } from "./agentProfiles";
 import { questMark, useAgentQuests } from "./agentQuests";
 import type { TownQuestMark } from "./town/townSprites";
 import {
@@ -1439,6 +1440,17 @@ export default function TownView({
               canCreateSeat,
               createSeatReason,
               onCreateSeat: (roomKey) => void createSeat(roomKey),
+              onNewAgent: (roomKey) => {
+                const room = roomForKey(roomKey);
+                if (!room || !canCreateSeat(roomKey)) return;
+                setPeek(null);
+                requestAgentLaunch({
+                  connectionId: room.workspaceRef.connectionId,
+                  generation: room.observedGeneration,
+                  workspaceId: room.workspaceRef.nativeId,
+                  workspaceLabel: room.displayLabel,
+                });
+              },
               showCreateRoom,
               canCreateRoom,
               createRoomReason,

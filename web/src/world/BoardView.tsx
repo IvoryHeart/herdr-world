@@ -27,6 +27,16 @@ import {
 import { createPortal } from "react-dom";
 import { worldLocalStorage } from "../browserStorage";
 import { QuestChip } from "../components/QuestLog";
+import {
+  harnessLabel,
+  type LauncherCatalog,
+  launchAgent,
+  launcherCatalog,
+  openProfileEditor,
+  profilesSnapshot,
+  readinessNote,
+  useAgentProfiles,
+} from "./agentProfiles";
 import { useAgentQuests } from "./agentQuests";
 import {
   anchorFor,
@@ -241,26 +251,35 @@ async function createTabThroughStore(
     };
   }
 }
+/** A start choice is a kind the host supports or `profile:<id>`. */
+const PROFILE_CHOICE = "profile:";
 async function startAgentThroughService(
   space: BoardWorkspace,
   kind: string,
   name: string,
   text: string,
 ) {
-  const { bridge } = await import("../api");
-  return (await bridge
-    .connection(space.connectionId, space.generation)
-    .call(
-      "board.start_agent",
-      { workspace_id: space.nativeId, kind, name, text },
-      120_000,
-    )) as StartOutcome;
+  // The shared launcher (agent/launch.ts), as Town and Spaces use.
+  const profileId = kind.startsWith(PROFILE_CHOICE)
+    ? kind.slice(PROFILE_CHOICE.length)
+    : undefined;
+  return (await launchAgent(
+    {
+      connectionId: space.connectionId,
+      generation: space.generation,
+      workspaceId: space.nativeId,
+      workspaceLabel: space.label,
+    },
+    { profileId, kind: profileId ? undefined : kind, label: name, text },
+  )) as StartOutcome;
 }
-/** Agents Board offers to start; Herdr validates the kind. */
-const START_KINDS = [
-  { kind: "claude", label: "Claude" },
-  { kind: "codex", label: "Codex" },
-];
+function startLabel(kind: string) {
+  if (!kind.startsWith(PROFILE_CHOICE)) return harnessLabel(kind);
+  const id = kind.slice(PROFILE_CHOICE.length);
+  return profilesSnapshot()?.profiles.find((p) => p.id === id)?.name ?? id;
+}
+/** Until the host answers, the kinds every Herdr World release has offered. */
+const FALLBACK_KINDS = ["claude", "codex"];
 async function checkAnchorThroughService(host: BoardHost, anchor: BoardAnchor) {
   const { bridge } = await import("../api");
   return (await bridge
@@ -2711,13 +2730,14 @@ export default function BoardView({
       }
       return;
     }
-    setToast({ text: `Starting ${kind} in ${space.label}…` });
+    const label = startLabel(kind);
+    setToast({ text: `Starting ${label} in ${space.label}…` });
     try {
-      const outcome = await startAgent(space, kind, name || kind, "");
+      const outcome = await startAgent(space, kind, name || label, "");
       setToast({
         text:
           outcome.status === "started"
-            ? `Started ${kind} in ${space.label}`
+            ? `Started ${label} in ${space.label}`
             : (outcome.message ?? "The agent was not started."),
       });
     } catch (error) {
@@ -2732,7 +2752,7 @@ export default function BoardView({
   ) => {
     setStartFor(null);
     const name = chosenName || noteTabName(note);
-    setToast({ text: `Starting ${kind} in ${space.label}…` });
+    setToast({ text: `Starting ${startLabel(kind)} in ${space.label}…` });
     try {
       const outcome = await startAgent(space, kind, name, note.text);
       // String the note to the new pane whenever one was created, so the
@@ -3892,11 +3912,42 @@ function NewTabDialog({
   // null is a plain terminal; a note always starts an agent.
   const [kind, setKind] = useState<string | null | undefined>(undefined);
   const [name, setName] = useState("");
-  const kinds: { kind: string | null; label: string }[] = [
-    ...(note ? [] : [{ kind: null, label: "Terminal" }]),
-    ...START_KINDS,
-  ];
   const space = workspaces.find((s) => s.key === workspace);
+  const { document: profileDocument } = useAgentProfiles();
+  // The kinds the chosen workspace's host supports, and their readiness.
+  const [catalog, setCatalog] = useState<LauncherCatalog | null>(null);
+  const spaceConnection = space?.connectionId;
+  const spaceGeneration = space?.generation;
+  const spaceWorkspace = space?.nativeId;
+  useEffect(() => {
+    setCatalog(null);
+    if (!spaceConnection || spaceGeneration === undefined || !spaceWorkspace)
+      return;
+    let current = true;
+    launcherCatalog({
+      connectionId: spaceConnection,
+      generation: spaceGeneration,
+      workspaceId: spaceWorkspace,
+    })
+      .then((next) => current && next.kinds.length && setCatalog(next))
+      .catch(() => {});
+    return () => {
+      current = false;
+    };
+  }, [spaceConnection, spaceGeneration, spaceWorkspace]);
+  const kinds: { kind: string | null; label: string; note?: string }[] = [
+    ...(note ? [] : [{ kind: null, label: "Terminal" }]),
+    ...(profileDocument?.profiles ?? []).map((profile) => ({
+      kind: PROFILE_CHOICE + profile.id,
+      label: profile.name,
+      note: readinessNote(profile.harness, catalog)?.text,
+    })),
+    ...(catalog?.kinds ?? FALLBACK_KINDS).map((choice) => ({
+      kind: choice,
+      label: harnessLabel(choice),
+      note: readinessNote(choice, catalog)?.text,
+    })),
+  ];
   const title = note
     ? "Start an agent with this note"
     : `New tab${space ? ` in ${space.label}` : ""}`;
@@ -3939,16 +3990,24 @@ function NewTabDialog({
           <div className="board-kinds" role="radiogroup">
             {kinds.map((choice) => (
               <button
-                key={choice.label}
+                key={choice.kind ?? "terminal"}
                 type="button"
                 role="radio"
                 aria-checked={kind === choice.kind}
+                title={choice.note}
                 onClick={() => setKind(choice.kind)}
               >
                 {choice.label}
               </button>
             ))}
           </div>
+          <button
+            type="button"
+            className="board-link"
+            onClick={() => openProfileEditor()}
+          >
+            Edit profiles
+          </button>
         </fieldset>
         <label className="board-field">
           <span>Tab name (optional)</span>

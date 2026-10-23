@@ -142,7 +142,12 @@ import {
 import { linkedNoteText, sendNote } from "./world/board-send";
 import { checkAnchor } from "./world/board-anchor";
 import { herdrEventName } from "./utils/herdr-events";
-import { startFromNote } from "./world/board-start";
+import { agentKinds, launchAgent } from "./agent/launch";
+import { profileLaunch } from "./agent/profile-launch";
+import { ProfileStore } from "./agent/profile-store";
+import { discoverSkills } from "./agent/skills";
+import { harnessReadiness, openHarnessLogin } from "./agent/harness-readiness";
+import { tabCardKey } from "../../shared/terminalColor";
 import {
   createOfficeObservabilityHttpHandler,
   resolveOfficeObservabilityBootstrap,
@@ -516,6 +521,21 @@ function board() {
     log: (message) => console.warn(message),
   });
   return boardStore;
+}
+
+let profileStore: ProfileStore | null = null;
+/** Opened on first use, like Board's store. */
+function profiles() {
+  profileStore ??= new ProfileStore(undefined, {
+    log: (message) => console.warn(message),
+  });
+  return profileStore;
+}
+function publishProfilesChanged(revision: number) {
+  const line = JSON.stringify({
+    control: { type: "world_profiles_changed", revision },
+  });
+  for (const ws of clients) safeSend(ws, line, "world-profiles");
 }
 
 /**
@@ -1254,6 +1274,28 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
     }
     return;
   }
+  if (method === "world.profiles.get") {
+    try {
+      sendReply({ id, result: profiles().get() }, "world-profiles-get");
+    } catch (error) {
+      sendError("world-profiles-get-error", error);
+    }
+    return;
+  }
+  if (method === "world.profiles.save" || method === "world.profiles.delete") {
+    try {
+      const p = (params ?? {}) as Record<string, unknown>;
+      const result =
+        method === "world.profiles.save"
+          ? profiles().save(p.profile)
+          : profiles().delete(String(p.id ?? ""));
+      publishProfilesChanged(result.revision);
+      sendReply({ id, result }, "world-profiles-write");
+    } catch (error) {
+      sendError("world-profiles-write-error", error);
+    }
+    return;
+  }
   if (method === "world.watchlist.list") {
     sendReply({ id, result: worldWatchlist.list() }, "world-watchlist-list");
     return;
@@ -1518,16 +1560,41 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
 
   // Town desk and agent moves: several confirmed pane moves on this exact
   // connection and runtime generation, with rollback (see world/desk-move).
-  if (method === "board.start_agent") {
+  // The launcher: kinds and skills on this host, and a new agent in a new
+  // tab, from a profile or a quick pick of a kind (agent/launch.ts).
+  // Installed and logged in, per supported harness, from each harness's own
+  // status command (agent/harness-readiness.ts). Onboarding uses it too.
+  if (method === "launcher.readiness") {
+    try {
+      const kinds = await agentKinds((rpc, rpcParams) =>
+        herdr.call(rpc, rpcParams, 10_000),
+      );
+      const readiness = await harnessReadiness({
+        kinds,
+        host: sshHost(),
+        windows: sshHost()
+          ? connection.remotePlatform === "windows"
+          : process.platform === "win32",
+        run: runProcessWithCodeTimeout,
+        shQuote,
+      });
+      sendReply({ id, result: { readiness } }, method);
+    } catch (error) {
+      sendError(`${method}-error`, error);
+    }
+    return;
+  }
+  if (method === "launcher.login") {
     try {
       const p = (params ?? {}) as Record<string, unknown>;
-      const result = await startFromNote(
-        (rpc, rpcParams) => herdr.call(rpc, rpcParams, 70_000),
+      const result = await openHarnessLogin(
+        (rpc, rpcParams) => herdr.call(rpc, rpcParams, 10_000),
         {
           workspace_id: String(p.workspace_id ?? ""),
           kind: String(p.kind ?? ""),
-          name: String(p.name ?? "").slice(0, 64) || "note",
-          text: String(p.text ?? ""),
+          windows: sshHost()
+            ? connection.remotePlatform === "windows"
+            : process.platform === "win32",
           isCurrent: requestIsCurrent,
         },
       );
@@ -1535,8 +1602,101 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
     } catch (error) {
       sendError(`${method}-error`, error);
     } finally {
-      // Starting an agent in a new tab need not raise a Herdr event after
-      // the tab appears, so the World views would keep showing a shell.
+      if (route.scope === "connection" && route.isCurrent())
+        publishWorldInvalidation(route.connectionId, route.generation);
+    }
+    return;
+  }
+  if (method === "launcher.catalog") {
+    try {
+      const p = (params ?? {}) as Record<string, unknown>;
+      const call = (rpc: string, rpcParams: Record<string, unknown>) =>
+        herdr.call(rpc, rpcParams, 10_000);
+      const workspaceId = String(p.workspace_id ?? "");
+      let cwd = "";
+      if (workspaceId) {
+        const listed = (await call("pane.list", {}).catch(() => null)) as {
+          panes?: Record<string, unknown>[];
+        } | null;
+        const pane = listed?.panes?.find((x) => x.workspace_id === workspaceId);
+        cwd = String(pane?.foreground_cwd || pane?.cwd || "");
+      }
+      const host = {
+        host: sshHost(),
+        windows: sshHost()
+          ? connection.remotePlatform === "windows"
+          : process.platform === "win32",
+        run: runProcessWithCodeTimeout,
+        shQuote,
+      };
+      const kinds = await agentKinds(call);
+      const [skills, readiness] = await Promise.all([
+        discoverSkills({ cwd, ...host }).catch(() => []),
+        harnessReadiness({ kinds, ...host }).catch(() => []),
+      ]);
+      sendReply({ id, result: { kinds, skills, readiness } }, method);
+    } catch (error) {
+      sendError(`${method}-error`, error);
+    }
+    return;
+  }
+  if (method === "launcher.start") {
+    try {
+      const p = (params ?? {}) as Record<string, unknown>;
+      const profileId = typeof p.profile_id === "string" ? p.profile_id : "";
+      const profile = profileId ? profiles().profile(profileId) : null;
+      if (profileId && !profile)
+        throw new Error("That profile no longer exists.");
+      const call = (rpc: string, rpcParams: Record<string, unknown>) =>
+        herdr.call(rpc, rpcParams, 70_000);
+      const result = await launchAgent(call, {
+        workspace_id: String(p.workspace_id ?? ""),
+        ...profileLaunch(profile ?? null, {
+          kind: String(p.kind ?? ""),
+          label: String(p.label ?? "")
+            .trim()
+            .slice(0, 64),
+          text: String(p.text ?? "").slice(0, 16_000),
+        }),
+        isCurrent: requestIsCurrent,
+      });
+      if (profile && result.terminal_id && route.scope === "connection") {
+        try {
+          publishProfilesChanged(
+            profiles().assign({
+              connection_id: route.connectionId,
+              terminal_id: result.terminal_id,
+              profile_id: profile.id,
+            }).revision,
+          );
+          if (profile.color && result.tab_id) {
+            const workspaceIds = await moveWorkspaceIds(call, {
+              workspace_id: String(p.workspace_id ?? ""),
+            });
+            publishBoardChanged(
+              board().patch([
+                {
+                  op: "card.color",
+                  key: tabCardKey(
+                    route.connectionId,
+                    result.tab_id,
+                    workspaceIds,
+                  ),
+                  color: profile.color,
+                },
+              ]).revision,
+            );
+          }
+        } catch (error) {
+          logger.warn("A launched agent kept no profile record", {
+            detail: String(error),
+          });
+        }
+      }
+      sendReply({ id, result }, method);
+    } catch (error) {
+      sendError(`${method}-error`, error);
+    } finally {
       if (route.scope === "connection" && route.isCurrent())
         publishWorldInvalidation(route.connectionId, route.generation);
     }

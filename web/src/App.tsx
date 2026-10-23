@@ -3,6 +3,7 @@ import {
   type NotificationTarget,
 } from "./taskNotifications";
 import { preferencesStorageKey } from "./workspaceResource";
+import { openProfileEditor } from "./world/agentProfiles";
 import { useMobileControlsDrag } from "./components/useMobileControlsDrag";
 import {
   MOBILE_CONTROLS_PLACEMENT_STORAGE_KEY,
@@ -4323,6 +4324,7 @@ export default function App({
                   new Event(WORLD_OBSERVABILITY_SETTINGS_EVENT),
                 )
               }
+              onOpenAgentProfiles={() => openProfileEditor()}
               onOpenSources={() =>
                 window.dispatchEvent(new Event(WORLD_SOURCES_SETTINGS_EVENT))
               }
