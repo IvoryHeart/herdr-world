@@ -9,7 +9,14 @@ import {
   boundedDesks,
   boundedWithPriority,
   boundedSorted,
+  prioritizeRoomRoster,
+  priorityCandidates,
 } from "./officeDesks";
+import {
+  createOfficeReadModel,
+  setOfficeReadModel,
+  withOfficeReadModel,
+} from "./officeReadModel";
 import { stableNumber } from "./stableNumber";
 import { boundedOptionalText, yieldWorldTask } from "./worldObject";
 import { tabCardKey } from "../../../shared/terminalColor";
@@ -436,8 +443,10 @@ export function createOfficeProjector(
         };
       }
     }
-    if (next && inputs) projectionInputs.set(next, inputs);
-    else
+    if (next && inputs) {
+      projectionInputs.set(next, inputs);
+      withOfficeReadModel(previous!, next);
+    } else
       next = projectWorldOffice(
         world,
         generatedAt,
@@ -850,6 +859,17 @@ export function projectWorldOffice(
     roster,
     prepared,
   });
+  const read =
+    prepared?.readModel ??
+    createOfficeReadModel(
+      world.hosts,
+      (key) => roster[agentIndex.get(key) ?? -1]?.agent,
+      (key) => paneRoster[paneIndex.get(key) ?? -1]?.device,
+    );
+  if (!prepared)
+    for (const entry of allRooms)
+      read.addRoom(entry.room.key, entry.source.coverage.status);
+  setOfficeReadModel(result, read.model);
   return result;
 }
 
@@ -913,6 +933,7 @@ type PreparedOffice = {
   paneIndex: Map<string, number>;
   terminalPresentationKeys: Map<string, string>;
   waiting: Map<string, OfficeAgent[]>;
+  readModel: ReturnType<typeof createOfficeReadModel>;
 };
 const preparedOffice = new WeakMap<WorldObject, PreparedOffice>();
 /** Prepared alongside the complete roster, outside React's synchronous render. */
@@ -933,25 +954,6 @@ export function preparedOfficePresentationKey(
   return prepared.terminalPresentationKeys.get(key) ?? key;
 }
 
-function prioritizeRoomRoster<T>(
-  items: T[],
-  range: [number, number] | undefined,
-): T[] {
-  if (!range || range[0] === 0 || range[0] === range[1]) return items;
-  return [
-    ...items.slice(range[0], range[1]),
-    ...items.slice(0, range[0]),
-    ...items.slice(range[1]),
-  ];
-}
-function priorityCandidates(
-  top: OfficeAgent[],
-  selected: OfficeAgent | undefined,
-) {
-  return selected && !top.some((agent) => agent.key === selected.key)
-    ? [...top, selected]
-    : top;
-}
 const preparedBarAgents = new WeakMap<WorldObject, OfficeAgent[]>();
 
 const preparedRooms = new WeakMap<WorldSpaceObject, ProjectedRoom>();
@@ -997,6 +999,11 @@ export async function prepareWorldOffice(
     paneIndex: new Map(),
     terminalPresentationKeys: new Map(),
     waiting: new Map(),
+    readModel: createOfficeReadModel(
+      world.hosts,
+      (key) => observation.roster[observation.agentIndex.get(key) ?? -1]?.agent,
+      (key) => observation.panes[observation.paneIndex.get(key) ?? -1]?.device,
+    ),
   };
   const orderedSpaces = [...world.spaces].sort(
     (left, right) =>
@@ -1014,6 +1021,7 @@ export async function prepareWorldOffice(
     const room = buildRoom(space, hosts.get(space.parentId)!);
     preparedRooms.set(space, room);
     const canonical = canonicalRoomRoster(room);
+    observation.readModel.addRoom(room.room.key, space.coverage.status);
     const range = {
       agents: [observation.roster.length, 0] as [number, number],
       desks: [observation.desks.length, 0] as [number, number],

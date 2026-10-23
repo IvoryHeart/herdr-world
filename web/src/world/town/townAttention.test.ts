@@ -6,7 +6,7 @@ import type {
 } from "../herdrOfficeProjection";
 import type { WorldAsk } from "../worldAsks";
 import { townAttentionDesks } from "./townAttention";
-import { townCalls, unseenTownCompletions } from "./TownRail";
+import { townCalls, unseenTownCompletions, type TownCall } from "./TownRail";
 import { withTownFinished } from "./townFinished";
 
 function entry(
@@ -41,6 +41,20 @@ const ask = (key: string, verified = true, connection = "alpha"): WorldAsk => ({
   question: "Continue?",
   options: [],
   owner_only: true,
+});
+
+test("no verified asking identity needs no roster scan, while calls still protect desks", () => {
+  const roster = new Proxy([] as OfficeRosterEntry[], {
+    get(target, key, receiver) {
+      if (key === Symbol.iterator) throw Error("unnecessary roster scan");
+      return Reflect.get(target, key, receiver);
+    },
+  });
+  const calls = [{ agent: entry("blocked", "blocked").agent }] as TownCall[];
+  expect([...townAttentionDesks(calls, [], roster)]).toEqual(["desk-blocked"]);
+  expect([
+    ...townAttentionDesks(calls, [ask("unverified", false)], roster),
+  ]).toEqual(["desk-blocked"]);
 });
 
 test("admission uses the shared calls, completion overlay and qualified asks, then releases removed items", () => {

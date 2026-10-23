@@ -3,9 +3,9 @@ import type {
   OfficeAgent,
 } from "../herdrOfficeProjection";
 import type { OfficeObservability } from "../officeObservability";
-import type { WorldAgentStatus } from "../worldObject";
 import type { TownCall } from "./TownRail";
 import type { WorldAsk } from "../worldAsks";
+import { officeReadModel, type OfficeStatusCounts } from "../officeReadModel";
 
 /**
  * The Town summary: one read model behind the Town board sign, the phone
@@ -69,14 +69,6 @@ export type TownSummarySpend =
       models: readonly { model: string; costUsd: number | null }[];
     };
 
-const COUNT_OF: Record<WorldAgentStatus, keyof TownSummaryCounts> = {
-  blocked: "needsYou",
-  working: "working",
-  done: "finished",
-  idle: "quiet",
-  unknown: "unknown",
-};
-
 const emptyCounts = (): TownSummaryCounts => ({
   needsYou: 0,
   working: 0,
@@ -84,6 +76,57 @@ const emptyCounts = (): TownSummaryCounts => ({
   quiet: 0,
   unknown: 0,
 });
+
+const roomContributions = new WeakMap<OfficeStatusCounts, TownSummaryCounts>();
+const topologies = new WeakMap<
+  HerdrOfficeProjection,
+  { hosts: TownSummaryHost[]; working: number }
+>();
+
+function summaryTopology(office: HerdrOfficeProjection) {
+  const previous = topologies.get(office);
+  if (previous) return previous;
+  const read = officeReadModel(office);
+  const byHost = new Map<string, TownSummaryHost["rooms"][number][]>();
+  let working = 0;
+  for (const room of office.roomRoster) {
+    const raw = read.roomCounts.get(room.key);
+    let counts = raw ? roomContributions.get(raw) : undefined;
+    if (!counts) {
+      counts = raw
+        ? {
+            needsYou: raw.blocked,
+            working: raw.working,
+            finished: raw.done,
+            quiet: raw.idle,
+            unknown: raw.unknown,
+          }
+        : emptyCounts();
+      if (raw) roomContributions.set(raw, counts);
+    }
+    working += counts.working;
+    let rooms = byHost.get(room.hostKey);
+    if (!rooms) byHost.set(room.hostKey, (rooms = []));
+    rooms.push({ key: room.key, label: room.displayLabel, counts });
+  }
+  const hosts = office.hosts.map((host): TownSummaryHost => {
+    const rooms = byHost.get(host.key) ?? [];
+    const counts = emptyCounts();
+    for (const room of rooms)
+      for (const key of Object.keys(counts) as (keyof TownSummaryCounts)[])
+        counts[key] += room.counts[key];
+    return {
+      key: host.key,
+      label: host.accessibleLabel ?? host.displayLabel,
+      stale: host.stale,
+      counts,
+      rooms,
+    };
+  });
+  const result = { hosts, working };
+  topologies.set(office, result);
+  return result;
+}
 
 export function townSummary(
   office: HerdrOfficeProjection,
@@ -107,35 +150,9 @@ export function townSummary(
     .filter((call) => call.kind === "done")
     .map((call) => item(call, activityOf(call.agent) ?? null))
     .sort((left, right) => (right.since ?? 0) - (left.since ?? 0));
-  // Room and host counts come from the whole roster, not the drawn desks.
-  const roomCounts = new Map<string, TownSummaryCounts>();
-  let working = 0;
-  for (const { agent, roomKey } of office.roster) {
-    const counts = roomCounts.get(roomKey) ?? emptyCounts();
-    counts[COUNT_OF[agent.semanticStatus]] += 1;
-    roomCounts.set(roomKey, counts);
-    if (agent.semanticStatus === "working") working += 1;
-  }
-  const hosts = office.hosts.map((host): TownSummaryHost => {
-    const rooms = office.roomRoster
-      .filter((room) => room.hostKey === host.key)
-      .map((room) => ({
-        key: room.key,
-        label: room.displayLabel,
-        counts: roomCounts.get(room.key) ?? emptyCounts(),
-      }));
-    const counts = emptyCounts();
-    for (const room of rooms)
-      for (const key of Object.keys(counts) as (keyof TownSummaryCounts)[])
-        counts[key] += room.counts[key];
-    return {
-      key: host.key,
-      label: host.accessibleLabel ?? host.displayLabel,
-      stale: host.stale,
-      counts,
-      rooms,
-    };
-  });
+  // Complete room contributions were counted cooperatively before publication.
+  // Asks, metrics and the display clock do not recount raw agent topology.
+  const { hosts, working } = summaryTopology(office);
   const available =
     observability.health !== "unavailable" && observability.sourceCount > 0;
   return {

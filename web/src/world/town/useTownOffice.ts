@@ -10,6 +10,7 @@ import type { WorldAsk } from "../worldAsks";
 import { withTownFinished } from "./townFinished";
 import { useDeskPins } from "../useDeskPins";
 import type { WorldObject } from "../worldObject";
+import { officeReadModel } from "../officeReadModel";
 
 /**
  * The Office projection Town shows: pinned desks admitted first, and rooms
@@ -137,11 +138,19 @@ export function useTownPresentation(
   seen: ReadonlySet<string>,
 ) {
   const desks = useMemo(
-    () => townAttentionDesks(calls, asks, office.roster),
-    [calls, asks, office.roster],
+    () =>
+      townAttentionDesks(calls, asks, office.roster, (connection, pane) =>
+        officeReadModel(office).agentForPane(connection, pane),
+      ),
+    [calls, asks, office],
   );
-  return useMemo(
-    () => withTownFinished(present(desks), finished, seen),
-    [present, desks, finished, seen],
-  );
+  return useMemo(() => {
+    // The semantic projection already has the same focus/pins/fold admission.
+    // Attention needs another admission only when one of its desks is omitted.
+    const shown = new Set(
+      office.rooms.flatMap((room) => room.desks.map((desk) => desk.key)),
+    );
+    if ([...desks].every((key) => shown.has(key))) return office;
+    return withTownFinished(present(desks), finished, seen);
+  }, [office, present, desks, finished, seen]);
 }

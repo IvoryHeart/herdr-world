@@ -2,12 +2,17 @@ import { expect, test } from "bun:test";
 import type { Pane, Tab, Workspace } from "../../types";
 import {
   projectWorldOffice,
+  prepareWorldOffice,
+  createOfficeProjector,
   TOWN_PRESENTATION_BOUNDS,
 } from "../herdrOfficeProjection";
 import type { OfficeAgent } from "../herdrOfficeProjection";
 import type { OfficeObservability } from "../officeObservability";
 import type { WorldRuntimeConnection } from "../runtimeStore";
-import { buildWorldObject } from "../worldObject";
+import { buildWorldObject, worldObjectForHosts } from "../worldObject";
+import { officeReadModel } from "../officeReadModel";
+import { withTownFinished } from "./townFinished";
+import { townAttentionDesks } from "./townAttention";
 import type { TownCall } from "./TownRail";
 import type { WorldAsk } from "../worldAsks";
 import { townSummary, townSummaryAge } from "./townSummary";
@@ -74,8 +79,190 @@ function office(statuses: Record<string, string[]>) {
     const leaf = world.nodeById.get(agent.nodeId);
     return leaf && "lastActivityAt" in leaf ? leaf.lastActivityAt : undefined;
   };
-  return Object.assign(projection, { activityOf });
+  return Object.assign(projection, { activityOf, world, connection });
 }
+
+test("Summary reads prepared room totals without rescanning agents for asks or spend", async () => {
+  const { world } = office({ alpha: ["working", "blocked"], beta: ["idle"] });
+  await prepareWorldOffice(world);
+  const projection = projectWorldOffice(
+    world,
+    1,
+    null,
+    TOWN_PRESENTATION_BOUNDS,
+  );
+  projection.roster = new Proxy(projection.roster, {
+    get(target, key, receiver) {
+      if (key === Symbol.iterator) throw Error("unnecessary agent recount");
+      return Reflect.get(target, key, receiver);
+    },
+  });
+  const first = townSummary(projection, [], NO_METRICS);
+  expect(first.counts.working).toBe(1);
+  expect(first.hosts[0]!.counts.needsYou).toBe(1);
+  expect(first.hosts[0]!.counts.quiet).toBe(1);
+  const refreshed = townSummary(projection, [], {
+    ...NO_METRICS,
+    observedAt: 9,
+  });
+  expect(refreshed.hosts).toBe(first.hosts);
+});
+
+test("Summary reuses unchanged room contributions and removes closed rooms on refresh", async () => {
+  const initial = office({ alpha: ["idle"], beta: ["working"] });
+  await prepareWorldOffice(initial.world);
+  const project = createOfficeProjector(TOWN_PRESENTATION_BOUNDS);
+  const firstOffice = project(initial.world, 1, null);
+  const first = townSummary(firstOffice, [], NO_METRICS);
+  const unchanged = townSummary(
+    project(initial.world, 2, null),
+    [],
+    NO_METRICS,
+  );
+  expect(unchanged.hosts[0]!.rooms.map((room) => room.counts)).toEqual(
+    first.hosts[0]!.rooms.map((room) => room.counts),
+  );
+  expect(unchanged.hosts[0]!.rooms[1]!.counts).toBe(
+    first.hosts[0]!.rooms[1]!.counts,
+  );
+
+  const changed = office({ alpha: ["blocked"], beta: ["working"] });
+  const host = {
+    ...changed.world.hosts[0]!,
+    label: "Renamed studio",
+    stale: true,
+    spaces: [changed.world.spaces[0]!, initial.world.spaces[1]!],
+  };
+  const world = worldObjectForHosts({ ...changed.world, hosts: [host] }, [
+    "studio",
+  ]);
+  await prepareWorldOffice(world);
+  const second = townSummary(project(world, 3, null), [], NO_METRICS);
+  expect(second.hosts[0]!.label).toBe("Renamed studio");
+  expect(second.hosts[0]!.stale).toBe(true);
+  expect(second.hosts[0]!.counts).toEqual({
+    needsYou: 1,
+    working: 1,
+    finished: 0,
+    quiet: 0,
+    unknown: 0,
+  });
+  expect(second.hosts[0]!.rooms[1]!.counts).toBe(
+    first.hosts[0]!.rooms[1]!.counts,
+  );
+
+  const removed = office({ alpha: ["blocked"] });
+  await prepareWorldOffice(removed.world);
+  const last = townSummary(project(removed.world, 4, null), [], NO_METRICS);
+  expect(last.hosts[0]!.rooms.map((room) => room.label)).toEqual(["alpha"]);
+  expect(last.hosts[0]!.counts.working).toBe(0);
+  expect(last.hosts[0]!.counts.needsYou).toBe(1);
+});
+
+test("finish and seen deltas update prepared Summary totals without changing the raw snapshot", async () => {
+  const { world } = office({ alpha: ["idle", "done"], beta: ["working"] });
+  await prepareWorldOffice(world);
+  const base = projectWorldOffice(world, 1, null, TOWN_PRESENTATION_BOUNDS);
+  const idle = base.roster.find(
+    ({ agent }) => agent.semanticStatus === "idle",
+  )!.agent;
+  const done = base.roster.find(
+    ({ agent }) => agent.semanticStatus === "done",
+  )!.agent;
+  const finished = withTownFinished(base, new Set([idle.key]), new Set());
+  const reviewed = withTownFinished(base, new Set(), new Set([done.key]));
+  expect(townSummary(finished, [], NO_METRICS).hosts[0]!.counts.finished).toBe(
+    2,
+  );
+  expect(townSummary(reviewed, [], NO_METRICS).hosts[0]!.counts.finished).toBe(
+    0,
+  );
+  expect(townSummary(base, [], NO_METRICS).hosts[0]!.counts.finished).toBe(1);
+  expect(officeReadModel(finished).agentOf(idle.key)?.semanticStatus).toBe(
+    "done",
+  );
+  expect(
+    officeReadModel(finished).agentForPane(
+      idle.currentPaneRef.connectionId,
+      idle.currentPaneRef.nativeId,
+    )?.semanticStatus,
+  ).toBe("done");
+  expect(officeReadModel(finished).roomCounts.get(base.rooms[1]!.key)).toBe(
+    officeReadModel(base).roomCounts.get(base.rooms[1]!.key),
+  );
+});
+
+test("verified asks use snapshot-qualified indexes across host collisions and generation turnover", async () => {
+  const { connection } = office({ alpha: ["idle"] });
+  const world = buildWorldObject([
+    connection,
+    { ...connection, connectionId: "other" },
+  ]);
+  await prepareWorldOffice(world);
+  const project = createOfficeProjector(TOWN_PRESENTATION_BOUNDS);
+  const base = project(world, 1, null);
+  const agent = base.roster.find(
+    ({ agent }) => agent.currentPaneRef.connectionId === "other",
+  )!.agent;
+  const ask: WorldAsk = {
+    id: "qualified",
+    at: 1,
+    question: "Continue?",
+    options: [],
+    owner_only: true,
+    actor: {
+      label: "Synthetic asker",
+      verified: true,
+      connection_id: "other",
+      pane_id: agent.currentPaneRef.nativeId,
+      terminal_id: agent.currentTerminalRef.nativeId,
+    },
+  };
+  const cached = project(world, 2, null);
+  cached.roster = new Proxy(cached.roster, {
+    get(target, key, receiver) {
+      if (key === Symbol.iterator) throw Error("ask scanned the roster");
+      return Reflect.get(target, key, receiver);
+    },
+  });
+  const resolve = officeReadModel(cached).agentForPane;
+  expect([...townAttentionDesks([], [ask], cached.roster, resolve)]).toEqual([
+    agent.deskKey!,
+  ]);
+  expect([...townAttentionDesks([], [], cached.roster, resolve)]).toEqual([]);
+  const withAsk = townSummary(cached, [], NO_METRICS, undefined, [ask]);
+  expect(withAsk.counts.needsYou).toBe(1);
+  expect(townSummary(cached, [], NO_METRICS).hosts).toBe(withAsk.hosts);
+  expect(townSummary(cached, [], NO_METRICS).counts.needsYou).toBe(0);
+
+  const replacement = buildWorldObject([
+    {
+      ...connection,
+      connectionId: "other",
+      generation: 2,
+      snapshotGeneration: 2,
+      snapshot: {
+        ...connection.snapshot!,
+        panes: connection.snapshot!.panes.map((pane) => ({
+          ...pane,
+          terminal_id: "replacement-terminal",
+          agent_status: "working",
+        })),
+      },
+    },
+  ]);
+  await prepareWorldOffice(replacement);
+  const current = project(replacement, 3, null);
+  const lookup = officeReadModel(current).agentForPane;
+  expect([...townAttentionDesks([], [ask], current.roster, lookup)]).toEqual(
+    [],
+  );
+  expect(
+    lookup("other", agent.currentPaneRef.nativeId)?.observedGeneration,
+  ).toBe(2);
+  expect(lookup("studio", agent.currentPaneRef.nativeId)).toBeUndefined();
+  expect(townSummary(current, [], NO_METRICS).counts.working).toBe(1);
+});
 
 const NO_METRICS: OfficeObservability = {
   health: "unavailable",

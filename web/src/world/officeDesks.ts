@@ -1,5 +1,26 @@
-import type { OfficeDesk } from "./herdrOfficeProjection";
+import type { OfficeAgent, OfficeDesk } from "./herdrOfficeProjection";
 import type { WorldAgentStatus } from "./worldObject";
+
+export function prioritizeRoomRoster<T>(
+  items: T[],
+  range: [number, number] | undefined,
+): T[] {
+  if (!range || range[0] === 0 || range[0] === range[1]) return items;
+  return [
+    ...items.slice(range[0], range[1]),
+    ...items.slice(0, range[0]),
+    ...items.slice(range[1]),
+  ];
+}
+
+export function priorityCandidates(
+  top: OfficeAgent[],
+  selected: OfficeAgent | undefined,
+) {
+  return selected && !top.some((agent) => agent.key === selected.key)
+    ? [...top, selected]
+    : top;
+}
 
 /**
  * A room's desks within its bound, in tab order. When a room has more, the
