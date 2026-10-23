@@ -75,7 +75,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   See the [Town exercise](./docs/TUTORIAL.md#town).
 - **New agent and agent profiles.** **New agent** starts an agent in a new
   tab of a room you choose, from a profile (one tap) or from any agent kind the
-  host's Herdr supports. It is in Town's toolbar and on each room's plaque (on
+  host's Herdr supports. It is in the Actions menu of Town and Board, on each
+  Town room's plaque (on
   phones, tap a room, then **New agent**), beside **+** in Spaces' tab bar,
   and in Board's New tab dialog. World creates the tab, starts the harness
   through Herdr, waits until it is ready, then sends the first prompt; if the
@@ -86,7 +87,7 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     `codex login status`; Pi reports only whether it is installed). **Log in**
     opens a small tab running the harness's own login command; World never
     sees or stores credentials.
-  - **Agent profiles** (Menu → Agent profiles, the shirt in Town's toolbar, or
+  - **Agent profiles** (Menu → Agent profiles, Actions → Agent profiles, or
     Edit profiles in the launcher and Board) set a name, home room, role,
     colour, brain (harness, model, Codex reasoning effort, permission mode),
     skills (the room's and host's `SKILL.md` folders), tools, a starting brief

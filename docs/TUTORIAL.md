@@ -204,7 +204,7 @@ and open its terminal or Inspector without losing its workspace context.
 A profile is a ready-made agent: a name, a harness and model, a role, skills,
 a starting brief and a look in Town. World starts it in a new tab for you.
 
-1. Open **Menu → Agent profiles** (or the shirt button in Town's toolbar). The
+1. Open **Menu → Agent profiles** (or **Actions → Agent profiles**). The
    starters are Reviewer (Codex), Builder, Designer and FirstMate (Claude
    Code). Pick one, or press **New profile** or **Duplicate**.
 2. On **Who**, set the name, home room, role and colour. On **Brain**, choose a
@@ -215,7 +215,7 @@ a starting brief and a look in Town. World starts it in a new tab for you.
    `{{task}}` is filled with what you type when you launch. On **Look**, dress
    the character and watch it walk, turn and sit in the preview. **What a
    launch runs** shows the exact Herdr command. Press **Save**.
-3. Open **New agent**: the robot button in Town's toolbar, **New agent** on a
+3. Open **New agent**: **Actions → New agent**, **New agent** on a
    room's plaque (on a phone, tap the room first), or the robot beside **+** in
    Spaces' tab bar. Choose the room, optionally type a task, and tap a profile,
    or tap a kind under **Quick start** for a plain agent.

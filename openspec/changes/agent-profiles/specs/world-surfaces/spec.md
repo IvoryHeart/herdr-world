@@ -84,7 +84,7 @@ the service. A profile SHALL NOT hold credentials: text that looks like a key
 or token SHALL be refused. World SHALL seed editable starter profiles (Reviewer,
 Builder, Designer, FirstMate) once; deleting one SHALL NOT bring it back.
 
-The profile editor SHALL be reachable from World settings, Town and Board, show
+The profile editor SHALL be reachable from World settings, the Actions menu, the launcher and Board, show
 a live preview of the look with Town's sprites and the exact launch the profile
 maps to. At launch World SHALL map a profile to its harness's own configuration:
 for Claude Code an inline subagent definition (description, prompt, tools,
@@ -111,8 +111,10 @@ An empty choice SHALL leave the harness's default.
 
 ### Requirement: New agent from a profile or a kind
 
-Town (its toolbar and each actionable room, including on phones), Spaces (beside
-New tab) and Board SHALL offer New agent. It SHALL name a destination room on a
+The shell's Actions menu in the visual views, each actionable Town room
+(including on phones), Spaces (beside New tab) and Board's New tab dialog SHALL
+offer New agent; like other view actions, it SHALL NOT add buttons to a view's
+toolbar. It SHALL name a destination room on a
 ready host and start, in one tap, a profile or an agent kind. The kinds SHALL be
 those the host's Herdr reports as supported (its agent manifests); a Herdr that
 reports none SHALL be offered Claude and Codex, and Herdr SHALL validate the
