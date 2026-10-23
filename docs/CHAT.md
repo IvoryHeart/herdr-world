@@ -69,6 +69,10 @@ view that you open on purpose.
   the state sequence, and any difference refuses with nothing sent. Then it
   presses that option's key.
 - Codex conversations inferred from the shared daemon are read-only guesses.
+  World cannot see every client sharing that daemon: another Herdr session or
+  an outside terminal can make the guess wrong. Recent unloaded threads count
+  as competitors; `/title` with **Thread ID** or an explicit link gives stronger
+  identity evidence.
   Chat shows no answer card for them, and the service rejects answer requests
   without an exact title or uncontradicted reported binding. Use the Terminal
   to answer, or identify the thread with `/title` or an explicit session link.

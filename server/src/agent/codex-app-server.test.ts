@@ -39,7 +39,7 @@ for await (const chunk of Bun.stdin.stream()) {
     let result;
     if (message.method === 'initialize') result = {};
     else if (message.method === 'thread/list' &&
-      message.params.cwd === '/work/demo' &&
+      (message.params.cwd === undefined || message.params.cwd === '/work/demo') &&
       message.params.useStateDbOnly === true &&
       message.params.archived === false &&
       JSON.stringify(message.params.sourceKinds) === '["cli","vscode"]') {
@@ -76,6 +76,14 @@ describe("Codex daemon observation", () => {
       ]),
     });
     expect(result).toEqual([
+      {
+        id: ID,
+        cwd: "/work/demo",
+        createdAt: 1000000,
+        updatedAt: 1100000,
+        status: "notLoaded",
+        waiting: false,
+      },
       {
         id: ID.replace(/6$/, "7"),
         cwd: "/work/demo",
@@ -115,6 +123,29 @@ describe("Codex daemon observation", () => {
         { status: "active", waiting: true },
       ],
     );
+  });
+
+  test("one whole-runtime listing retains different directories and unloaded competitors", async () => {
+    const result = await listCodexDaemonThreads(undefined, {
+      argv: peer([
+        {
+          data: [
+            thread,
+            {
+              ...thread,
+              id: ID.replace(/6$/, "7"),
+              cwd: "/work/other",
+              status: { type: "notLoaded" },
+            },
+          ],
+          nextCursor: null,
+        },
+      ]),
+    });
+    expect(result?.map(({ cwd, status }) => ({ cwd, status }))).toEqual([
+      { cwd: "/work/demo", status: "active" },
+      { cwd: "/work/other", status: "notLoaded" },
+    ]);
   });
 
   test.each([

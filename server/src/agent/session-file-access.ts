@@ -28,8 +28,8 @@ export type AgentSessionFileAccess = {
   readDownloadBody(path: string): Promise<BodyInit>;
   findPiSessionById(id: string): Promise<SessionFile | null>;
   findCodexSessionById(id: string): Promise<SessionFile | null>;
-  /** Complete loaded-thread evidence from this runtime's existing daemon. */
-  listCodexThreads?(cwd: string): Promise<CodexDaemonThread[] | null>;
+  /** Complete interactive-thread evidence; omit cwd for one whole-runtime snapshot. */
+  listCodexThreads?(cwd?: string): Promise<CodexDaemonThread[] | null>;
   /** The one transcript whose ID starts with `prefix`, if exactly one does. */
   findCodexSessionByPrefix(
     prefix: string,

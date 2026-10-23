@@ -36,6 +36,10 @@ import type { AgentSessionResolved, HerdrCall } from "./session-types";
 import { isRecord, normalizeAgentName, stringValue } from "./session-utils";
 
 import { paneBinding, sessionLabel } from "./conversation-binding";
+import {
+  prepareCodexInferenceBatch,
+  type CodexInferenceBatch,
+} from "./codex-daemon-binding";
 export { paneBinding, sessionLabel } from "./conversation-binding";
 
 export const CODEX_DAEMON_ISSUE =
@@ -204,6 +208,7 @@ export function createHerdrConversationSource(args: {
     listed?: {
       info: Record<string, unknown> | null;
       agents?: readonly Record<string, unknown>[];
+      inference?: CodexInferenceBatch;
     },
   ) => {
     const info = listed ? listed.info : await agentInfo(paneId);
@@ -271,6 +276,7 @@ export function createHerdrConversationSource(args: {
         reuseCodexTitle,
         herdrCall: args.herdrCall,
         listedCodexPanes: listed?.agents,
+        codexInferenceBatch: listed?.inference,
       },
     );
     // A session found by searching the pane's directory may belong to
@@ -620,6 +626,7 @@ export function createHerdrConversationSource(args: {
       deadlines.clear();
       codexWatch?.close();
       codexWatch = null;
+      args.context.codexDiscovery.clear();
     },
     read,
     latest,
@@ -723,6 +730,12 @@ export function createHerdrConversationSource(args: {
         listFailed = true;
       }
       const listedAgents = [...listed.values()];
+      const inference = await prepareCodexInferenceBatch({
+        listed: listedAgents,
+        files: args.files,
+        herdrCall: args.herdrCall,
+        discovery: args.context.codexDiscovery,
+      });
       return eachPane(
         paneIds ?? [...listed.keys()],
         async (pane_id): Promise<AgentQuest> => {
@@ -739,6 +752,7 @@ export function createHerdrConversationSource(args: {
             step = await resolve(pane_id, true, {
               info: listed.get(pane_id) ?? null,
               agents: listedAgents,
+              inference,
             });
           } catch {
             return { ...empty, read_failed: true };

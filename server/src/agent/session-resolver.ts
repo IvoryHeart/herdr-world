@@ -25,7 +25,15 @@ import {
   findAntigravitySessionForCwd,
 } from "./antigravity-session";
 import { findMuseSession, type MuseMetadataCache } from "./muse-session";
-import { codexPanes, inferCodexDaemonThread } from "./codex-daemon-binding";
+import {
+  codexPanes,
+  inferCodexDaemonThread,
+  type CodexInferenceBatch,
+} from "./codex-daemon-binding";
+import {
+  createCodexDiscoveryCache,
+  type CodexDiscoveryScope,
+} from "./codex-discovery-cache";
 import {
   integrationInstallCommand,
   isRecord,
@@ -49,15 +57,19 @@ export type AgentSessionResolverContext = {
   museMetadata: MuseMetadataCache;
   /** Codex title ID (or prefix) → the one transcript it resolved to. */
   codexTitles: Map<string, { id: string; path: string }>;
+  codexDiscovery: ReturnType<typeof createCodexDiscoveryCache>;
 };
 
 const DEFAULT_RESOLVER_CONTEXT = createAgentSessionResolverContext();
 
-export function createAgentSessionResolverContext(): AgentSessionResolverContext {
+export function createAgentSessionResolverContext(
+  scope?: CodexDiscoveryScope,
+): AgentSessionResolverContext {
   return {
     pathCache: new Map(),
     museMetadata: new Map(),
     codexTitles: new Map(),
+    codexDiscovery: createCodexDiscoveryCache(scope),
   };
 }
 
@@ -448,6 +460,7 @@ export async function resolveAgentSessionInfo(
     reuseCodexTitle?: boolean;
     herdrCall?: HerdrCall;
     listedCodexPanes?: readonly Record<string, unknown>[];
+    codexInferenceBatch?: CodexInferenceBatch;
   } = {},
 ): Promise<AgentSessionResolved> {
   const params = normalizeParams(rawParams);
@@ -533,6 +546,8 @@ export async function resolveAgentSessionInfo(
         info: agentInfo,
         files,
         herdrCall: options.herdrCall,
+        discovery: context.codexDiscovery,
+        batch: options.codexInferenceBatch,
       });
       if (thread) {
         // Inference is never reported back to Herdr or promoted to Send authority.

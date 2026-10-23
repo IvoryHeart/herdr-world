@@ -18,7 +18,12 @@ reported/title fingerprints and session labels for the Herdr source.
 [Daemon observation](../server/src/agent/codex-app-server.ts) implements bounded
 read-only JSON-RPC on the selected runtime, and
 [inference](../server/src/agent/codex-daemon-binding.ts) checks unique panes and
-threads, unchanged evidence and recent matching activity. Their
+threads, unchanged evidence and recent matching activity. A
+runtime-owned [discovery cache](../server/src/agent/codex-discovery-cache.ts)
+shares in-flight reads and backs off failures; quest batches retain successful
+metadata only until their final pane check and snapshot finish. Recent unloaded
+threads remain competitors, and unseen daemon clients remain an explicit limit.
+The
 [protocol tests](../server/src/agent/codex-app-server.test.ts) and
 [binding tests](../server/src/agent/codex-daemon-binding.test.ts) cover transport
 failure, collisions, connection isolation and refusal of inferred input authority.

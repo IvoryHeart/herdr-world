@@ -37,6 +37,7 @@ function fixture(remote = false) {
     ] as CodexDaemonThread[] | null,
     lookups: [] as string[],
     listCalls: 0,
+    daemonCalls: 0,
     sends: [] as string[],
     onThreads: () => {},
   };
@@ -83,7 +84,8 @@ function fixture(remote = false) {
       };
     },
     async listCodexThreads(cwd) {
-      expect(cwd).toBe("/work/demo");
+      if (cwd !== undefined) expect(cwd).toBe("/work/demo");
+      state.daemonCalls++;
       state.onThreads();
       return state.threads;
     },
@@ -119,10 +121,104 @@ function fixture(remote = false) {
       context,
       cache: createSessionProjectionCache(files),
     });
-  return { state, files, resolve, source };
+  return { state, files, resolve, source, context };
 }
 
 describe("Codex shared-daemon inference", () => {
+  test("a recently unloaded own thread prevents borrowing another client's loaded thread", async () => {
+    const { state, resolve } = fixture();
+    state.pane.agent_status = "idle";
+    state.threads = [
+      { ...state.threads![0]!, status: "notLoaded" },
+      { ...state.threads![0]!, id: OTHER, status: "idle" },
+    ];
+    expect((await resolve()).session).toBeNull();
+    expect(state.lookups).toEqual([]);
+  });
+
+  test("only valid old unloaded threads can leave the competing set", async () => {
+    const { state, resolve } = fixture();
+    state.threads!.push({
+      ...state.threads![0]!,
+      id: OTHER,
+      status: "notLoaded",
+      createdAt: Date.now() - 30 * 60_000,
+      updatedAt: Date.now() - 20 * 60_000,
+    });
+    expect((await resolve()).session?.value).toBe(ID);
+    state.threads![1]!.createdAt = Date.now();
+    expect((await resolve()).session).toBeNull();
+  });
+
+  test("quests share one whole-runtime discovery and a final pane snapshot, then refresh", async () => {
+    const { state, source } = fixture();
+    state.panes.push({ ...state.pane, pane_id: "w1:p2", cwd: "/work/other" });
+    state.threads!.push({
+      ...state.threads![0]!,
+      id: OTHER,
+      cwd: "/work/other",
+    });
+    const chat = source();
+    try {
+      expect((await chat.quests()).map((item) => item.session_binding)).toEqual(
+        ["guessed", "guessed"],
+      );
+      expect(state.listCalls).toBe(2);
+      expect(state.daemonCalls).toBe(1);
+      state.threads!.shift();
+      expect((await chat.quests()).map((item) => item.session_binding)).toEqual(
+        [null, "guessed"],
+      );
+      expect(state.listCalls).toBe(4);
+      expect(state.daemonCalls).toBe(2);
+    } finally {
+      chat.dispose();
+    }
+  });
+
+  test("quest inference rechecks panes after the shared daemon read", async () => {
+    const { state, source } = fixture();
+    state.onThreads = () => {
+      state.pane.agent_status = "blocked";
+    };
+    const chat = source();
+    try {
+      expect((await chat.quests())[0]?.session_binding).toBeNull();
+    } finally {
+      chat.dispose();
+    }
+  });
+
+  test("unavailable discovery backs off across snapshots without caching a guess", async () => {
+    const { state, source } = fixture();
+    state.threads = null;
+    const chat = source();
+    try {
+      await chat.quests();
+      await chat.quests();
+      expect(state.daemonCalls).toBe(1);
+      expect(state.listCalls).toBe(2);
+    } finally {
+      chat.dispose();
+    }
+  });
+
+  test("discovery backoff cannot replace fresh reported binding evidence", async () => {
+    const { state, resolve } = fixture();
+    state.threads = null;
+    expect((await resolve()).session).toBeNull();
+    state.pane.agent_session = {
+      source: "herdr:codex",
+      agent: "codex",
+      kind: "id",
+      value: ID,
+    };
+    expect((await resolve()).session).toMatchObject({
+      source: "herdr:codex",
+      value: ID,
+    });
+    expect(state.daemonCalls).toBe(1);
+  });
   test.each([false, true])(
     "unique pane and loaded thread work on their selected runtime (remote=%s)",
     async (remote) => {

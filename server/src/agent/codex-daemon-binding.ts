@@ -1,6 +1,7 @@
 import type { CodexDaemonThread } from "./codex-app-server";
 import type { AgentSessionFileAccess } from "./session-file-access";
 import type { HerdrCall } from "./session-types";
+import type { CodexDiscoveryCache } from "./codex-discovery-cache";
 import { isRecord, normalizeAgentName, stringValue } from "./session-utils";
 
 const RECENT_MS = 10 * 60_000;
@@ -40,6 +41,61 @@ function witness(info: Record<string, unknown>) {
   ]);
 }
 
+export type CodexInferenceBatch = {
+  before: Record<string, unknown>[] | null;
+  after: Record<string, unknown>[] | null;
+  threads: CodexDaemonThread[] | null;
+  clock: { offsetMs: number; uncertaintyMs: number } | null;
+};
+
+/** Two phases: finish the single daemon read before taking the final pane set. */
+export async function prepareCodexInferenceBatch(args: {
+  listed: readonly Record<string, unknown>[];
+  files: AgentSessionFileAccess;
+  herdrCall: HerdrCall;
+  discovery: CodexDiscoveryCache;
+}): Promise<CodexInferenceBatch> {
+  const initial = await codexPanes(args.herdrCall, args.listed);
+  const before = initial?.map((pane) => structuredClone(pane)) ?? null;
+  const batch: CodexInferenceBatch = {
+    before,
+    after: null,
+    threads: null,
+    clock: null,
+  };
+  if (
+    !before ||
+    before.some((pane) => !codexPaneCwd(pane)) ||
+    !args.files.listCodexThreads
+  )
+    return batch;
+  const eligible = before.some(
+    (pane) =>
+      pane.agent_session == null &&
+      !/[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{5,12}/i.test(
+        stringValue(pane.terminal_title),
+      ) &&
+      before.filter((other) => codexPaneCwd(other) === codexPaneCwd(pane))
+        .length === 1,
+  );
+  if (!eligible) return batch;
+  try {
+    batch.threads = await args.discovery.read(
+      undefined,
+      JSON.stringify(before.map(witness).sort()),
+      () => args.files.listCodexThreads!(),
+    );
+    if (batch.threads === null) return batch;
+    batch.clock = args.files.clockOffset
+      ? await args.files.clockOffset()
+      : null;
+    batch.after = await codexPanes(args.herdrCall);
+  } catch {
+    batch.threads = null;
+  }
+  return batch;
+}
+
 /**
  * Inference is read-only and ephemeral. Both sides must be unique, and pane
  * evidence must remain unchanged while querying this connection's daemon.
@@ -49,25 +105,50 @@ export async function inferCodexDaemonThread(args: {
   info: Record<string, unknown>;
   files: AgentSessionFileAccess;
   herdrCall: HerdrCall;
+  discovery: CodexDiscoveryCache;
+  batch?: CodexInferenceBatch;
 }): Promise<CodexDaemonThread | null> {
   const { files, herdrCall, info, paneId } = args;
   const cwd = codexPaneCwd(info);
   if (!cwd || !files.listCodexThreads) return null;
   try {
-    const before = await codexPanes(herdrCall);
+    const before = args.batch ? args.batch.before : await codexPanes(herdrCall);
     if (before?.some((pane) => !codexPaneCwd(pane))) return null;
     const candidates = before?.filter((pane) => codexPaneCwd(pane) === cwd);
     if (candidates?.length !== 1 || candidates[0]!.pane_id !== paneId)
       return null;
     const original = witness({ ...info, pane_id: paneId });
     if (witness(candidates[0]!) !== original) return null;
-    const threads = await files.listCodexThreads(cwd);
-    // Count all loaded candidates before considering recency or status. An old
-    // or idle competitor must never disappear just to manufacture uniqueness.
-    if (threads?.length !== 1) return null;
-    const thread = threads[0]!;
-    const clock = files.clockOffset ? await files.clockOffset() : null;
-    const after = await codexPanes(herdrCall);
+    const threads = args.batch
+      ? args.batch.threads
+      : await args.discovery.read(
+          cwd,
+          JSON.stringify(before!.map(witness).sort()),
+          () => files.listCodexThreads!(cwd),
+        );
+    if (!threads) return null;
+    const clock = args.batch
+      ? args.batch.clock
+      : files.clockOffset
+        ? await files.clockOffset()
+        : null;
+    const now = Date.now() + (clock?.offsetMs ?? 0);
+    const uncertainty = clock?.uncertaintyMs ?? 0;
+    // Keep every loaded contender, and recent or malformed unloaded evidence.
+    // Only a valid, old unloaded thread can be excluded from the count.
+    const contenders = threads.filter(
+      (thread) =>
+        thread.cwd === cwd &&
+        (thread.status !== "notLoaded" ||
+          thread.createdAt <= 0 ||
+          thread.updatedAt < thread.createdAt ||
+          thread.updatedAt > now + FUTURE_SKEW_MS - uncertainty ||
+          now - thread.updatedAt + uncertainty <= RECENT_MS),
+    );
+    if (contenders.length !== 1 || contenders[0]!.status === "notLoaded")
+      return null;
+    const thread = contenders[0]!;
+    const after = args.batch ? args.batch.after : await codexPanes(herdrCall);
     if (after?.some((pane) => !codexPaneCwd(pane))) return null;
     const current = after?.filter((pane) => codexPaneCwd(pane) === cwd);
     if (
@@ -89,8 +170,6 @@ export async function inferCodexDaemonThread(args: {
       )
     )
       return null;
-    const now = Date.now() + (clock?.offsetMs ?? 0);
-    const uncertainty = clock?.uncertaintyMs ?? 0;
     if (
       thread.cwd !== cwd ||
       thread.createdAt <= 0 ||

@@ -2783,11 +2783,19 @@ by another pane claiming or naming its thread SHALL NOT bind a conversation.
 Without a title or report, World MAY infer a read-only conversation from the
 selected runtime's existing app-server only when exactly one Codex pane and one
 loaded interactive thread share an exact directory, recent activity and matching
-status. Inference SHALL require complete bounded discovery and unchanged pane
+status, with no recently updated unloaded interactive competitor. Inference SHALL require complete bounded discovery and unchanged pane
 evidence, SHALL be recomputed per snapshot, and SHALL NOT persist a session link.
 Chat SHALL label this evidence `guessed`, with no session fingerprint, Send or
 answer keys. Missing, stale, conflicting or ambiguous evidence SHALL yield no
 inferred conversation; remote discovery SHALL NOT fall back to a local daemon.
+Uniqueness covers visible panes in the selected connection, not every client
+sharing that daemon or Codex home. An unseen client MAY make a guess incorrect;
+this evidence SHALL remain read-only. Quest snapshots SHALL share discovery and
+take a final pane snapshot after the daemon read. Successful metadata SHALL NOT
+survive the snapshot; unavailable discovery MAY suppress guesses for 60 seconds.
+Discovery state SHALL belong to one connection ID and runtime generation and
+SHALL be discarded on generation replacement. Exact/reported binding and Send
+SHALL NOT depend on this cached metadata.
 
 #### Scenario: Shared daemon with one eligible pane and thread
 
@@ -2798,6 +2806,16 @@ inferred conversation; remote discovery SHALL NOT fall back to a local daemon.
 
 - **WHEN** another Codex pane or loaded thread shares the directory, or the evidence changes during discovery
 - **THEN** the next snapshot withholds the inferred conversation, including any previously inferred match
+
+#### Scenario: The pane's own recently active thread has been unloaded
+
+- **WHEN** one visible idle pane shares its directory with a recent unloaded interactive thread and another client's loaded idle thread
+- **THEN** both threads count as competitors and World shows no inferred conversation
+
+#### Scenario: A daemon client is outside the selected connection
+
+- **WHEN** an unseen client shares the daemon and visible metadata leaves one eligible thread
+- **THEN** any inferred conversation remains an explicitly fallible guess with no message or answer authority
 
 #### Scenario: A pane changes after preview
 

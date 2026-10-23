@@ -7,7 +7,7 @@ export type CodexDaemonThread = {
   cwd: string;
   createdAt: number;
   updatedAt: number;
-  status: "idle" | "active";
+  status: "idle" | "active" | "notLoaded";
   waiting: boolean;
 };
 
@@ -59,7 +59,7 @@ export function codexDaemonProxyArgv(sshHost?: string) {
  * The same transport runs on the selected SSH host; there is no local fallback.
  */
 export async function listCodexDaemonThreads(
-  cwd: string,
+  cwd: string | undefined,
   options: { sshHost?: string; argv?: string[]; timeoutMs?: number } = {},
 ): Promise<CodexDaemonThread[] | null> {
   let child;
@@ -172,6 +172,7 @@ export async function listCodexDaemonThreads(
               THREAD_ID.test(item.parentThreadId))
           ) ||
           typeof item.cwd !== "string" ||
+          !item.cwd ||
           typeof item.createdAt !== "number" ||
           !Number.isFinite(item.createdAt) ||
           typeof item.updatedAt !== "number" ||
@@ -182,11 +183,14 @@ export async function listCodexDaemonThreads(
           return null;
         seen.add(item.id.toLowerCase());
         if (seen.size > MAX_THREADS) return null;
-        if (item.cwd !== cwd) return null;
+        if (cwd !== undefined && item.cwd !== cwd) return null;
         const interactive = interactiveSource(item.source);
         if (interactive === null) return null;
-        if (item.status.type === "notLoaded") continue;
-        if (item.status.type !== "idle" && item.status.type !== "active")
+        if (
+          item.status.type !== "idle" &&
+          item.status.type !== "active" &&
+          item.status.type !== "notLoaded"
+        )
           return null;
         // A child thread is not the conversation a TUI displays.
         if (item.parentThreadId !== null || !interactive) continue;
