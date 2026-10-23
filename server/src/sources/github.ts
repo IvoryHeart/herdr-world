@@ -1,4 +1,12 @@
 import {
+  DETAIL_BATCH,
+  detailQuery,
+  detailsDue,
+  detailStamp,
+  parseDetails,
+  type CachedDetail,
+} from "./pullRequestDetail";
+import {
   pullRequestLane,
   type WorkChecks,
   type WorkItem,
@@ -43,7 +51,7 @@ const GITHUB_FAILED =
   "GitHub did not answer. World keeps the last pull requests and tries again shortly.";
 
 const PR_FIELDS = `
-  number title url isDraft state updatedAt mergedAt headRefName reviewDecision mergeable
+  number title url isDraft state updatedAt mergedAt headRefName headRefOid baseRefName reviewDecision mergeable
   repository { nameWithOwner }
   headRepository { nameWithOwner }
   commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }`;
@@ -104,6 +112,8 @@ export async function refreshGitHub(
   now: number,
   mergedDays = DEFAULT_MERGED_DAYS,
   clock: () => number = Date.now,
+  /** Your open pull requests read in detail, kept between refreshes. */
+  details: Map<string, CachedDetail> = new Map(),
 ): Promise<SourceRefresh> {
   const deadline = clock() + DEADLINE_MS;
   let auth: ProcessResult;
@@ -154,14 +164,53 @@ export async function refreshGitHub(
       merged.push(...nodes(next));
       page = record(next.pageInfo);
     }
-    return {
-      ok: true,
-      items: parseGitHubResponse({
-        data: { ...data, merged: { nodes: merged } },
-      }),
-    };
+    const items = parseGitHubResponse({
+      data: { ...data, merged: { nodes: merged } },
+    });
+    await readDetails(items, details, query, now);
+    return { ok: true, items };
   } catch {
     return { ok: false, state: "error", detail: GITHUB_FAILED };
+  }
+}
+
+/**
+ * Read your open pull requests in detail where due, then attach each detail
+ * that still describes the pull request. A failed batch leaves its pull
+ * requests without detail (their rules show unknown); the list stands.
+ */
+async function readDetails(
+  items: WorkItem[],
+  cache: Map<string, CachedDetail>,
+  query: (text: string) => Promise<Record<string, unknown>>,
+  now: number,
+) {
+  const own = items.filter(
+    (item) =>
+      item.kind === "pull_request" &&
+      item.lane !== "merged" &&
+      item.roles.includes("author"),
+  );
+  const keys = new Set(own.map((item) => item.key));
+  for (const key of cache.keys()) if (!keys.has(key)) cache.delete(key);
+  const due = detailsDue(own, cache, now);
+  for (let index = 0; index < due.length; index += DETAIL_BATCH) {
+    const batch = due.slice(index, index + DETAIL_BATCH);
+    let parsed: ReturnType<typeof parseDetails>;
+    try {
+      parsed = parseDetails(batch, await query(detailQuery(batch)));
+    } catch {
+      break;
+    }
+    for (const item of batch) {
+      const detail = parsed.get(item.key);
+      if (detail)
+        cache.set(item.key, { stamp: detailStamp(item), readAt: now, detail });
+    }
+  }
+  for (const item of own) {
+    const known = cache.get(item.key);
+    if (known && known.stamp === detailStamp(item)) item.pr = known.detail;
   }
 }
 
@@ -238,6 +287,14 @@ function pullRequestItem(node: Record<string, unknown>): WorkItem | null {
     checks,
     review,
     mergeable,
+    ...(!merged && typeof node.baseRefName === "string" && node.baseRefName
+      ? { base: node.baseRefName }
+      : {}),
+    ...(!merged &&
+    typeof node.headRefOid === "string" &&
+    /^[0-9a-f]{40}$/u.test(node.headRefOid)
+      ? { headSha: node.headRefOid }
+      : {}),
   };
 }
 
