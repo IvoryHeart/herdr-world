@@ -40,13 +40,27 @@ view that you open on purpose.
   never stops an agent by itself.
 - Answers the agent's own question. When Herdr reports the agent blocked, Chat
   reads the bottom of its screen and recognises only the menus of supported
-  harnesses: Claude Code's whole permission box (a question ending in "?",
-  numbered options, the ❯ cursor on one; a digit selects) and Codex's approval
-  menu (options ending in their key hints such as "(y)" or "(esc)", the ›
-  cursor on one; the hint key selects). It shows an ask card with the complete
-  request (the whole command, or the file and its edit), the question and each
+  harnesses:
+  - Claude Code's whole permission box: a question ending in "?", numbered
+    options, the ❯ cursor on one. A digit selects.
+  - Claude Code's questions and plan approval: a numbered menu below a rule
+    and above its footer of controls ("Enter to select · … · Esc to cancel",
+    or the plan's "ctrl+g to edit"), with the question ending in "?" and the ❯
+    cursor on one option. A digit selects. Each choice shows the description
+    under it. Options that open a text box ("Type something.", "Chat about
+    this", "Tell Claude what to change") are not offered. A form with several
+    questions is answered one tab at a time, then its "Ready to submit your
+    answers?" review. Plan approval shows the whole plan Claude drew between
+    its dashed edges as the request, and the fingerprint covers it; a plan
+    cut off by the capture is left to the Terminal.
+  - Codex's approval menu: options ending in their key hints such as "(y)" or
+    "(esc)", the › cursor on one. The hint key selects.
+
+  It shows an ask card with the complete request (the whole command, the file
+  and its edit, or a form's header and answers so far), the question and each
   option. Anything else gets no options and **Answer in the Terminal**: plain
-  numbered output, a y/n line, a box cut off by the capture, or a request the
+  numbered output, a y/n line, an unnumbered menu (such as Claude Code's
+  folder trust), a box or form cut off by the capture, or a request the
   harness shows shortened.
 - Picking an option, or pressing its number while that card has focus, calls
   `agent_conversation.answer`. The service checks Herdr's state, rereads the
@@ -63,14 +77,17 @@ view that you open on purpose.
   [#284](https://github.com/IvoryHeart/herdr-world/issues/284). Closing the
   gap needs an input Herdr applies only while the prompt is unchanged.
 - Chat replaces the card with what it sent. "You answered 2 · …" needs
-  evidence that this agent left this prompt: the same session, and either a
-  status that shows progress (`working`, `idle` or `done`), or a new state with a different question on a
-  readable screen. Otherwise the receipt reads "Sent 2 · …" with the reason
-  (`unconfirmed_reason`): the question still shows (`still_showing`), the pane
-  has another session (`session_changed`, and the key may have reached it),
-  Herdr reports a status such as `unknown` (`unknown_status`),
-  Herdr no longer reports the agent (`agent_missing`), or the screen could not
-  be read (`unreadable`). Chat answers only when you pick an option.
+  evidence that this agent left this prompt: the same session, and then a
+  status that shows progress (`working`, `idle` or `done`), or a recognised
+  menu on a readable screen that is a different question (a form's next tab
+  keeps Herdr's state) or comes with a new Herdr state. A partial or
+  unrecognised screen never counts. Otherwise the receipt reads "Sent 2 · …"
+  with the reason (`unconfirmed_reason`): the question still shows
+  (`still_showing`), the pane has another session (`session_changed`, and the
+  key may have reached it), Herdr reports a status such as `unknown`
+  (`unknown_status`), Herdr no longer reports the agent (`agent_missing`), or
+  the screen could not be read (`unreadable`). Chat answers only when you
+  pick an option.
 - Keeps the last good conversation when a read fails, for example while the
   transcript is being written, and says that it could not refresh.
 - When the conversation is unavailable, Chat shows the reason and the action it
@@ -100,6 +117,7 @@ projection cache as History ([History synchronization](HISTORY.md)).
 | `agent_conversation.send` | `pane_id`, `text`, `session_fingerprint`, optional `baseline` (IDs of the user messages Chat showed) | `{ status: "sent", delivery }` or `{ status: "refused", reason, message }` |
 | `agent_conversation.dismiss` | `pane_id`, `delivery_id` | `{ dismissed }`; forgets a delivery notice |
 | `agent_conversation.answer` | `pane_id`, `key`, `prompt_fingerprint` | `{ status: "sent", number, label, acknowledged, unconfirmed_reason, prompt_fingerprint }` or `{ status: "refused", reason, message, pending_prompt }` |
+| `agent_conversation.steps` | `pane_id`, `call_ids` (at most 500) | `{ steps }`: the step model for those tool calls, by the harness's call ID; calls it cannot find are left out |
 | `agent_conversation.watch` / `.unwatch` | `pane_id` | `{ ok: true }`; see [Refresh](#refresh) |
 | `agent_quest.list` | `pane_ids`, or nothing for every agent | `{ quests }`: per pane, `agent`, `session_binding`, `session_fingerprint` and `quest`; see [Quests](#quests) |
 
@@ -122,10 +140,14 @@ assistant message), `quest` (see [Quests](#quests)) and a `status` of `ok` or
   and added (40 at most between them, with `omitted` counting the rest), and
   for a test run its pass and fail counts (bun, vitest, jest, pytest and cargo
   summaries). The label, summary, output and diff all have credential-shaped
-  values redacted. Chat folds runs of reads into one card. A step opens while
-  it runs or when it fails and folds when it finishes, unless you opened or
-  folded it yourself; a cut diff says how many lines are left out and points
-  to Changes.
+  values redacted. Chat's list is History's: each of History's tool rows
+  takes its step by the call ID and shows the step's label, its time and a
+  test run's pass or fail badge. A run whose tests failed reads as failed,
+  and a call cut off without a result as interrupted. Opening the row shows
+  the test strip with its first failure, the edit's diff (a cut diff says how
+  many lines are left out and points to Changes) or the end of its output,
+  above the call's own arguments and output. The History drawer shows the
+  plain rows.
 - `activity`: one line for each run of tool calls between messages, such as
   "Used Read, Bash ×2", for consumers that want a summary instead of steps.
 - `notice`: an event in the conversation, such as "Conversation compacted" or a
@@ -269,9 +291,16 @@ Codex thread switch through the title is seen. For a transcript on this
 machine, it also watches the file, so messages written during a long turn
 appear without a status change. When the pane's session, title thread,
 transcript size or time, status, or the task in the terminal title (not its
-spinner glyph) changes, the service pushes
-`agent_conversation_changed` to the watching browser, which rereads. Transcripts
-on an SSH host are rechecked on Herdr events only.
+spinner glyph) changes, the service pushes `agent_conversation_changed` to the
+watching browser. Chat then reads the conversation without its messages
+(`agent_conversation.latest`, for status, binding, the running step, the
+terminal title and delivery receipts) and History's window from its cursor
+(`agent_history.get`), which brings only the entries that changed. A burst of
+pushes runs at most one more read of each. Chat renders History's bubbles and
+collapsed tool cards, which load their text only when opened, so a long, busy
+transcript is never reread or redrawn whole. The window is kept per pane for
+the page, so a Chat that remounts, docks or reopens shows its conversation at
+once. Transcripts on an SSH host are rechecked on Herdr events only.
 
 Once a truncated Codex title ID has matched one transcript, rechecks on this
 machine stat that transcript instead of searching again. That is safe only

@@ -1,20 +1,11 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  memo,
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from "react";
-import {
-  ArrowDown,
   Copy,
   ListTree,
   Paperclip,
   RefreshCw,
   Send,
   SquareTerminal,
-  Wrench,
 } from "lucide-react";
 import { watchConversation } from "../conversationWatch";
 import {
@@ -29,19 +20,17 @@ import {
 } from "../terminalImageUpload";
 import { copyTextWithFeedback } from "../copyText";
 import type { Pane } from "../types";
-import { formatUiDateTime } from "../uiLocale";
 import { useConnectionClient } from "../useConnectionClient";
 import { AgentHistoryDrawer } from "./AgentHistoryDrawer";
+import { AgentHistoryChat } from "./AgentHistoryChat";
+import { AgentMessageDialog } from "./AgentMessageDialog";
+import type { HistoryEntry } from "./agentHistory";
+import { groupHistoryChatItems } from "./agentHistoryView";
+import { useAgentHistoryWindow } from "./useAgentHistoryWindow";
 import { AttachmentChips } from "./AttachmentChips";
 import { CodexSessionLink } from "./CodexSessionLink";
-import { MarkdownPreview } from "./markdown";
-import {
-  readsFiles,
-  StepCard,
-  StepGroup,
-  type ConversationStep,
-} from "./StepCard";
 import { QuestLog } from "./QuestLog";
+import type { ConversationStep } from "./chat/blocks/steps";
 import type { Quest } from "../../../server/src/agent/quest";
 import "./AgentChat.css";
 
@@ -82,7 +71,8 @@ export type Conversation = {
     command?: string;
     issue?: string;
   } | null;
-  messages: ConversationMessage[];
+  /** Only in a full read; Chat reads the summary and History's window. */
+  messages?: ConversationMessage[];
   latest: ConversationMessage | null;
   /** The agent's quest: its todos, plan, goal or loop. */
   quest?: Quest | null;
@@ -99,7 +89,12 @@ export type PendingPrompt = {
   question: string[];
   /** The complete request asked about: a command, or a file and its edit. */
   request: string[];
-  options: { number: string; label: string; key: string }[];
+  options: {
+    number: string;
+    label: string;
+    key: string;
+    description?: string;
+  }[];
   fingerprint: string;
 };
 
@@ -152,35 +147,8 @@ type SendResult =
   | { status: "sent" }
   | { status: "refused"; reason: string; message: string };
 
-const FOLLOW_THRESHOLD_PX = 48;
-
 const preview = (text: string) =>
   text.length > 80 ? `${text.slice(0, 79)}…` : text;
-
-/** Runs of two or more finished file reads fold into one group. */
-function groupSteps(messages: readonly ConversationMessage[]) {
-  const items: (
-    | { message: ConversationMessage }
-    | { group: ConversationStep[] }
-  )[] = [];
-  let run: ConversationMessage[] = [];
-  const flush = () => {
-    if (run.length > 1)
-      items.push({ group: run.map((message) => message.step!) });
-    else for (const message of run) items.push({ message });
-    run = [];
-  };
-  for (const message of messages) {
-    if (message.kind === "step" && message.step && readsFiles(message.step)) {
-      run.push(message);
-      continue;
-    }
-    flush();
-    items.push({ message });
-  }
-  flush();
-  return items;
-}
 
 /**
  * The agent's own question, with its options as buttons. The options are read
@@ -254,7 +222,12 @@ function AskCard({
                 onClick={() => onAnswer(option.key)}
               >
                 <kbd>{option.number}</kbd>
-                <span>{option.label}</span>
+                <span className="agent-chat-ask-label">
+                  {option.label}
+                  {option.description ? (
+                    <small>{option.description}</small>
+                  ) : null}
+                </span>
               </button>
             ))}
           </div>
@@ -303,75 +276,6 @@ const STATUS_WORDS: Record<string, string> = {
   idle: "Idle",
 };
 
-const ChatMessage = memo(function ChatMessage({
-  message,
-  matched = false,
-}: {
-  message: ConversationMessage;
-  /** Has the same words as a message Chat sent: matched, not proven. */
-  matched?: boolean;
-}) {
-  if (message.kind === "notice") {
-    return (
-      <div className="agent-chat-divider" role="separator">
-        <span>{message.text}</span>
-      </div>
-    );
-  }
-  if (message.kind === "activity") {
-    return (
-      <div className="agent-chat-activity" data-role="tool">
-        <Wrench size={12} aria-hidden />
-        <span>{message.text}</span>
-        {message.failed ? (
-          <span className="agent-chat-activity-failed">
-            {message.failed} failed
-          </span>
-        ) : null}
-      </div>
-    );
-  }
-  const tone = message.kind === "error" ? "is-error" : `is-${message.role}`;
-  return (
-    <article
-      className={`agent-chat-message ${tone}`}
-      data-role={message.role}
-      data-delivery={matched ? "matched" : undefined}
-    >
-      <div className="agent-chat-bubble">
-        {message.role === "user" ? (
-          <p>{message.text}</p>
-        ) : (
-          <MarkdownPreview
-            text={message.text}
-            className="agent-chat-markdown"
-            breaks
-          />
-        )}
-      </div>
-      <div className="agent-chat-meta">
-        <time dateTime={message.sent_at} title={message.sent_at}>
-          {formatUiDateTime(message.sent_at)}
-        </time>
-        {matched ? (
-          <span title="Chat sent the same words just before this appeared; it cannot prove this is that message.">
-            Sent from Chat; matched by its words
-          </span>
-        ) : null}
-        <button
-          type="button"
-          className="agent-chat-copy"
-          onClick={() => void copyTextWithFeedback(message.text)}
-          aria-label="Copy message"
-          title="Copy"
-        >
-          <Copy size={12} />
-        </button>
-      </div>
-    </article>
-  );
-});
-
 /**
  * Chat reads only the conversation read model and sends with Herdr's agent
  * prompt. While Chat shows a pane, the service watches it and pushes
@@ -402,9 +306,6 @@ export function AgentChat({
   const [details, setDetails] = useState(false);
   const seqRef = useRef(0);
   const listRef = useRef<HTMLDivElement>(null);
-  const followRef = useRef(true);
-  // Shown while the reader has scrolled up from the newest message.
-  const [awayFromLatest, setAwayFromLatest] = useState(false);
   const shownRef = useRef<Conversation | null>(null);
   const filePicker = useRef<HTMLInputElement>(null);
   const uploadScope = `agent-chat\u0000${connectionClient.connectionId}\u0000${connectionClient.serverRuntimeGeneration}\u0000${pane.pane_id}`;
@@ -430,16 +331,27 @@ export function AgentChat({
     ),
   );
 
+  // Chat's status, session and receipts come from the conversation summary
+  // (agent_conversation.latest, without messages); the messages themselves
+  // are History's window below, so a long, busy transcript is never re-read
+  // or re-rendered whole. A burst of change pushes runs at most one more read.
+  const inFlightRef = useRef(false);
+  const againRef = useRef(false);
   const load = useCallback(() => {
     if (!connectionClient.isCurrent()) return;
+    if (inFlightRef.current) {
+      againRef.current = true;
+      return;
+    }
+    inFlightRef.current = true;
     const seq = ++seqRef.current;
     setLoading(true);
     connectionClient
-      .call("agent_conversation.get", { pane_id: pane.pane_id })
+      .call("agent_conversation.latest", { pane_id: pane.pane_id })
       .then((result) => {
         if (seq !== seqRef.current || !connectionClient.isCurrent()) return;
         const reply = result as Partial<Conversation> | null;
-        if (!reply || !Array.isArray(reply.messages))
+        if (!reply || (reply.status !== "ok" && reply.status !== "unavailable"))
           throw new Error("World sent an unreadable conversation.");
         const next = reply as Conversation;
         // A transcript caught mid-write must not replace what was readable.
@@ -459,23 +371,97 @@ export function AgentChat({
         setStale(reason instanceof Error ? reason.message : String(reason));
       })
       .finally(() => {
+        inFlightRef.current = false;
         if (seq === seqRef.current) setLoading(false);
+        if (againRef.current) {
+          againRef.current = false;
+          loadRef.current();
+        }
       });
   }, [connectionClient, pane.pane_id]);
+  const loadRef = useRef(load);
+  loadRef.current = load;
+  const history = useAgentHistoryWindow({
+    pane,
+    client: connectionClient,
+    active: active && !details,
+  });
+  const refreshHistory = history.refresh;
+  const [expanded, setExpanded] = useState<HistoryEntry | null>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const chatItems = useMemo(
+    () => groupHistoryChatItems(history.messages),
+    [history.messages],
+  );
+  // The step model's evidence for History's rows, by tool-call ID. Chat
+  // asks only for the calls in History's window that it does not have yet,
+  // or that were still running; a step that did not change keeps its object,
+  // so its row need not redraw.
+  const [stepEvidence, setStepEvidence] = useState<
+    ReadonlyMap<string, ConversationStep>
+  >(() => new Map());
+  const evidenceSession = `${pane.pane_id}\u0000${conversation?.session_fingerprint ?? ""}`;
+  const evidenceSessionRef = useRef(evidenceSession);
+  if (evidenceSessionRef.current !== evidenceSession) {
+    evidenceSessionRef.current = evidenceSession;
+    if (stepEvidence.size) setStepEvidence(new Map());
+  }
+  // Rebuilt whenever History's window changes, which is also when a running
+  // call may have finished.
+  const callIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const entry of history.messages)
+      if (entry.role === "tool" && entry.source_call_id)
+        ids.add(entry.source_call_id);
+    return [...ids];
+  }, [history.messages]);
+  useEffect(() => {
+    if (!active || details) return;
+    const wanted = callIds.filter((id) => {
+      const known = stepEvidence.get(id);
+      return !known || known.state === "running";
+    });
+    if (!wanted.length) return;
+    let current = true;
+    void connectionClient
+      .call("agent_conversation.steps", {
+        pane_id: pane.pane_id,
+        call_ids: wanted,
+      })
+      .then((result) => {
+        const steps = (result as { steps?: ConversationStep[] }).steps ?? [];
+        if (!current || !steps.length) return;
+        setStepEvidence((previous) => {
+          let next: Map<string, ConversationStep> | null = null;
+          for (const step of steps) {
+            if (!step.call_id) continue;
+            const known = previous.get(step.call_id);
+            if (known && JSON.stringify(known) === JSON.stringify(step))
+              continue;
+            next ??= new Map(previous);
+            next.set(step.call_id, step);
+          }
+          return next ?? previous;
+        });
+      })
+      // Evidence is extra; a failed read leaves the plain rows.
+      .catch(() => {});
+    return () => {
+      current = false;
+    };
+  }, [active, callIds, connectionClient, details, pane.pane_id, stepEvidence]);
 
   // While visible, ask the service to watch this pane and reread when it says
   // the conversation changed, or after the connection comes back.
   useEffect(() => {
     if (!active || details) return;
-    const stop = watchConversation(connectionClient, pane.pane_id, load);
+    const stop = watchConversation(connectionClient, pane.pane_id, () => {
+      load();
+      refreshHistory();
+    });
     load();
     return stop;
-  }, [active, connectionClient, details, load, pane.pane_id]);
-
-  useLayoutEffect(() => {
-    const list = listRef.current;
-    if (list && followRef.current) list.scrollTop = list.scrollHeight;
-  }, [conversation]);
+  }, [active, connectionClient, details, load, pane.pane_id, refreshHistory]);
 
   const send = useCallback(async () => {
     const text = draft.trim();
@@ -497,14 +483,14 @@ export function AgentChat({
         text,
         session_fingerprint: conversation.session_fingerprint,
         // What Chat showed: a send checks for the message after these.
-        baseline: conversation.messages
+        baseline: history.messages
           .filter((message) => message.role === "user")
           .map((message) => message.id),
       })) as SendResult;
       if (result.status === "sent") {
         setDraft("");
-        followRef.current = true;
         load();
+        refreshHistory();
       } else {
         setNotice(result.message);
         if (result.reason === "changed") load();
@@ -518,8 +504,10 @@ export function AgentChat({
     connectionClient,
     conversation,
     draft,
+    history.messages,
     load,
     pane.pane_id,
+    refreshHistory,
     sending,
     uploading,
   ]);
@@ -711,7 +699,9 @@ export function AgentChat({
           delivery.state === "matched" &&
           delivery.fingerprint === conversation?.session_fingerprint,
       )
-      .map((delivery) => delivery.matched_id),
+      .flatMap((delivery) =>
+        delivery.matched_id ? [delivery.matched_id] : [],
+      ),
   );
   // Sent to a session the pane has since left: still checked there.
   const elsewhere = deliveries.filter(
@@ -773,7 +763,10 @@ export function AgentChat({
         ) : null}
         <button
           type="button"
-          onClick={load}
+          onClick={() => {
+            load();
+            refreshHistory();
+          }}
           disabled={loading}
           aria-label="Refresh conversation"
           title="Refresh"
@@ -865,6 +858,15 @@ export function AgentChat({
           Could not refresh, so this is the last conversation read. {stale}
         </p>
       ) : null}
+      {/* History's read failed: keep its last good window, if any, and say
+          so; Refresh retries it. */}
+      {!stale && !unavailable && history.error ? (
+        <p className="agent-chat-stale" role="status">
+          {history.history
+            ? `Could not refresh the messages, so these are the last read. ${history.error}`
+            : `Could not read the messages. ${history.error}`}
+        </p>
+      ) : null}
       {unavailable ? (
         <div className="agent-chat-unavailable" role="status">
           <strong>Conversation unavailable</strong>
@@ -906,120 +908,99 @@ export function AgentChat({
           ) : null}
         </div>
       ) : (
-        <div
-          ref={listRef}
-          className="agent-chat-list"
-          onScroll={(event) => {
-            const list = event.currentTarget;
-            if (list.clientHeight === 0) return;
-            followRef.current =
-              list.scrollHeight - list.scrollTop - list.clientHeight <
-              FOLLOW_THRESHOLD_PX;
-            setAwayFromLatest(!followRef.current);
-          }}
-        >
-          {awayFromLatest ? (
-            <button
-              type="button"
-              className="agent-chat-jump"
-              onClick={() => {
-                const list = listRef.current;
-                followRef.current = true;
-                setAwayFromLatest(false);
-                list?.scrollTo({ top: list.scrollHeight });
-              }}
-            >
-              <ArrowDown size={13} aria-hidden="true" /> Jump to latest
-            </button>
+        <div className="agent-chat-list">
+          {history.messages.length === 0 ? (
+            <p className="agent-chat-empty">
+              {history.history
+                ? "No messages yet."
+                : history.error
+                  ? "Messages could not be read. Use Refresh to try again."
+                  : "Loading conversation…"}
+            </p>
           ) : null}
-          <div className="agent-chat-content">
-            {conversation && conversation.messages.length === 0 ? (
-              <p className="agent-chat-empty">No messages yet.</p>
-            ) : null}
-            {!conversation && !stale ? (
-              <p className="agent-chat-empty">Loading conversation…</p>
-            ) : null}
-            {groupSteps(conversation?.messages ?? []).map((item) =>
-              "group" in item ? (
-                <StepGroup key={item.group[0]!.id} steps={item.group} />
-              ) : item.message.kind === "step" && item.message.step ? (
-                <StepCard key={item.message.id} step={item.message.step} />
-              ) : (
-                <ChatMessage
-                  key={item.message.id}
-                  message={item.message}
-                  matched={matchedIds.has(item.message.id)}
-                />
-              ),
-            )}
-            {/* The open call is a step card already; this row is for a
-                conversation read without steps. */}
-            {running &&
-            !conversation?.messages.some(
-              (message) => message.step?.id === running.id,
-            ) ? (
-              <div className="agent-chat-running" data-call-id={running.id}>
-                <span className="agent-chat-spinner" aria-hidden="true" />
-                {/* Announced when the step starts, not as its clock ticks. */}
-                <span className="agent-chat-running-label" role="status">
-                  <b>{running.name}</b>
-                  {running.summary ? <code>{running.summary}</code> : null}
-                </span>
-                {Number.isFinite(Date.parse(running.started_at)) &&
-                clock >= Date.parse(running.started_at) ? (
-                  <span className="agent-chat-now-time" aria-hidden="true">
-                    {elapsed(clock - Date.parse(running.started_at))}
+          <AgentHistoryChat
+            items={chatItems}
+            listRef={listRef}
+            contentRef={contentRef}
+            followKey={pane.pane_id}
+            toolLoading={history.toolEntryLoading}
+            onLoadTool={history.loadToolEntry}
+            onOpen={setExpanded}
+            matchedIds={matchedIds}
+            stepEvidence={stepEvidence}
+            after={[
+              running ? (
+                <div
+                  key="running"
+                  className="agent-chat-running"
+                  data-call-id={running.id}
+                >
+                  <span className="agent-chat-spinner" aria-hidden="true" />
+                  {/* Announced when the step starts, not as its clock ticks. */}
+                  <span className="agent-chat-running-label" role="status">
+                    <b>{running.name}</b>
+                    {running.summary ? <code>{running.summary}</code> : null}
                   </span>
-                ) : null}
-              </div>
-            ) : null}
-            {pending.map((delivery) => (
-              <article
-                key={delivery.id}
-                className="agent-chat-message is-user is-pending"
-                data-role="user"
-                data-delivery="pending"
-              >
-                <div className="agent-chat-bubble">
-                  <p>{delivery.text}</p>
+                  {Number.isFinite(Date.parse(running.started_at)) &&
+                  clock >= Date.parse(running.started_at) ? (
+                    <span className="agent-chat-now-time" aria-hidden="true">
+                      {elapsed(clock - Date.parse(running.started_at))}
+                    </span>
+                  ) : null}
                 </div>
-                <div className="agent-chat-meta">
-                  Sent; not yet seen in this conversation{" "}
-                  <button
-                    type="button"
-                    className="agent-chat-pending-dismiss"
-                    onClick={() => dismiss(delivery.id)}
-                  >
-                    Stop checking
-                  </button>
-                </div>
-              </article>
-            ))}
-            {answered ? (
-              <p className="agent-chat-answered" role="status">
-                {answered.acknowledged ? "You answered" : "Sent"}{" "}
-                <b>
-                  {answered.number} · {answered.label}
-                </b>
-                {answered.acknowledged
-                  ? null
-                  : ` · ${UNCONFIRMED[answered.unconfirmed_reason ?? "still_showing"]}`}
-                <span className="agent-chat-answered-question">
-                  {answered.question.join(" ")}
-                </span>
-              </p>
-            ) : null}
-            {showAsk && prompt ? (
-              <AskCard
-                agent={conversation?.agent ?? "The agent"}
-                prompt={prompt}
-                answering={answering}
-                notice={askNotice}
-                onAnswer={(key) => void answer(key)}
-                onOpenTerminal={onOpenTerminal}
-              />
-            ) : null}
-          </div>
+              ) : null,
+              ...pending.map((delivery) => (
+                <article
+                  key={delivery.id}
+                  className="agent-history-chat-message is-user is-pending"
+                  data-delivery="pending"
+                >
+                  <div className="agent-history-chat-bubble">
+                    <p>{delivery.text}</p>
+                  </div>
+                  <div className="agent-history-chat-meta">
+                    Sent; not yet seen in this conversation{" "}
+                    <button
+                      type="button"
+                      className="agent-chat-pending-dismiss"
+                      onClick={() => dismiss(delivery.id)}
+                    >
+                      Stop checking
+                    </button>
+                  </div>
+                </article>
+              )),
+              answered ? (
+                <p key="answered" className="agent-chat-answered" role="status">
+                  {answered.acknowledged ? "You answered" : "Sent"}{" "}
+                  <b>
+                    {answered.number} · {answered.label}
+                  </b>
+                  {answered.acknowledged
+                    ? null
+                    : ` · ${UNCONFIRMED[answered.unconfirmed_reason ?? "still_showing"]}`}
+                  <span className="agent-chat-answered-question">
+                    {answered.question.join(" ")}
+                  </span>
+                </p>
+              ) : null,
+              showAsk && prompt ? (
+                <AskCard
+                  key="ask"
+                  agent={conversation?.agent ?? "The agent"}
+                  prompt={prompt}
+                  answering={answering}
+                  notice={askNotice}
+                  onAnswer={(key) => void answer(key)}
+                  onOpenTerminal={onOpenTerminal}
+                />
+              ) : null,
+            ]}
+          />
+          <AgentMessageDialog
+            message={expanded}
+            onClose={() => setExpanded(null)}
+          />
         </div>
       )}
       {conversation?.status === "ok" && !canSend ? (

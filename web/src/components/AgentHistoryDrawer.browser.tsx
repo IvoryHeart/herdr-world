@@ -18,6 +18,8 @@ async function settle() {
 async function run() {
   const originalConnection = bridge.connection;
   let toolFetches = 0;
+  /** Replaces agent_session.get's answer while set. */
+  let sessionAnswer: (() => Promise<unknown>) | null = null;
   bridge.connection = () => ({
     connectionId: "test",
     generation: 1,
@@ -26,7 +28,9 @@ async function run() {
     acceptsServerGeneration: () => true,
     call: async (method) =>
       method === "agent_session.get"
-        ? { status: "ok", stats: { turns: 1, records: 3 } }
+        ? sessionAnswer
+          ? sessionAnswer()
+          : { status: "ok", stats: { turns: 1, records: 3 } }
         : method === "agent_history.entry"
           ? (toolFetches++, { text: "Tool output ready" })
           : {
@@ -550,6 +554,44 @@ async function run() {
         ?.getAttribute("aria-pressed") === "false",
       "Session changes must restore history instead of stale details",
     );
+
+    // A session read that answers after a newer one must not replace it.
+    {
+      let releaseOld!: () => void;
+      const oldGate = new Promise<void>((resolve) => (releaseOld = resolve));
+      let reads = 0;
+      sessionAnswer = async () => {
+        reads += 1;
+        if (reads === 1) {
+          await oldGate;
+          return { status: "ok", stats: { turns: 111, records: 3 } };
+        }
+        return { status: "ok", stats: { turns: 222, records: 3 } };
+      };
+      const refresh = () =>
+        container
+          .querySelector<HTMLButtonElement>('[aria-label="Refresh session"]')
+          ?.click();
+      refresh();
+      refresh();
+      await settle();
+      releaseOld();
+      await settle();
+      container
+        .querySelector<HTMLButtonElement>(
+          'button[aria-label="Session details"]',
+        )
+        ?.click();
+      await settle();
+      const overview =
+        container.querySelector('[aria-label="Session overview"]')
+          ?.textContent ?? "";
+      check(
+        reads >= 2 && overview.includes("222") && !overview.includes("111"),
+        `A late session read replaced a newer one: ${overview}`,
+      );
+      sessionAnswer = null;
+    }
   } finally {
     root.unmount();
     container.remove();

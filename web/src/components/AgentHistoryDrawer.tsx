@@ -36,6 +36,7 @@ import { AgentMessageContent } from "./AgentMessageContent";
 import { AgentMessageDialog } from "./AgentMessageDialog";
 import { AgentHistoryCard } from "./AgentHistoryCard";
 import { AgentHistoryChat } from "./AgentHistoryChat";
+import { useAgentHistoryWindow } from "./useAgentHistoryWindow";
 import { AgentHistoryFilters } from "./AgentHistoryFilters";
 import { ConversationMinimap } from "./ConversationMinimap";
 import {
@@ -48,14 +49,10 @@ import {
 import {
   ALL_HISTORY_FILTERS,
   historyEntryLabel,
-  mergeAgentHistory,
   isToolContentPending,
   selectHistoryEntries,
   toolOverlayMatches,
-  type ToolTextOverlay,
   type HistoryFilters,
-  type AgentHistory,
-  type AgentHistoryResponse,
   type HistoryEntry as AgentHistoryEntry,
 } from "./agentHistory";
 import { AgentSessionPreviewDialog } from "./AgentSessionPreviewDialog";
@@ -101,19 +98,11 @@ export function AgentHistoryDrawer({
   const workspaceLabel =
     workspaces.find((workspace) => workspace.workspace_id === pane.workspace_id)
       ?.label ?? pane.workspace_id;
-  const [history, setHistory] = useState<AgentHistory | null>(null);
   const [query, setQuery] = useState("");
-  // Tool entries arrive redacted (metadata only) and are fetched on demand.
   const [filters, setFilters] = useState<HistoryFilters>({
     ...ALL_HISTORY_FILTERS,
     tool: false,
   });
-  const [toolEntryTexts, setToolEntryTexts] = useState<
-    ReadonlyMap<string, ToolTextOverlay>
-  >(() => new Map());
-  const [toolEntryLoading, setToolEntryLoading] = useState<ReadonlySet<string>>(
-    () => new Set(),
-  );
   const [session, setSession] = useState<AgentSessionSummary | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [view, setView] = useState<AgentHistoryView>(readAgentHistoryView);
@@ -125,8 +114,7 @@ export function AgentHistoryDrawer({
   const [previewError, setPreviewError] = useState("");
   const [expandedMessage, setExpandedMessage] =
     useState<AgentHistoryEntry | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [sessionError, setSessionError] = useState("");
   const [highlightedSequence, setHighlightedSequence] = useState<number | null>(
     null,
   );
@@ -140,207 +128,29 @@ export function AgentHistoryDrawer({
   const contentRef = useRef<HTMLDivElement>(null);
   const wideSplitRef = useRef<HTMLDivElement>(null);
   const highlightTimerRef = useRef<number | null>(null);
-  const loadSeqRef = useRef(0);
   const previewSeqRef = useRef(0);
-  const historyRef = useRef<AgentHistory | null>(null);
-  const inFlightRef = useRef<number | null>(null);
-  const paneIdRef = useRef(pane.pane_id);
-  paneIdRef.current = pane.pane_id;
-  // Entries whose content fetch failed; suppresses auto-refetch loops while
-  // keeping the card's manual Load button usable.
-  const toolEntryFailedRef = useRef<Set<string>>(new Set());
-
-  const loadHistory = useCallback(() => {
-    if (
-      !pane.agent ||
-      inFlightRef.current !== null ||
-      !connectionClient.isCurrent()
-    )
-      return;
-    const seq = loadSeqRef.current + 1;
-    loadSeqRef.current = seq;
-    inFlightRef.current = seq;
-    setLoading(!historyRef.current);
-    const requested = historyRef.current?.cursor ?? null;
-    const params = {
-      history_version: 2,
-      cursor: requested,
-      pane_id: pane.pane_id,
-      workspace_id: pane.workspace_id,
-      tab_id: pane.tab_id,
-      agent: pane.agent,
-    };
-    Promise.allSettled([
-      connectionClient.call("agent_history.get", params),
-      connectionClient.call("agent_session.get", {
-        pane_id: pane.pane_id,
-        agent: pane.agent,
-      }),
-    ])
-      .then(([historyResult, sessionResult]) => {
-        if (!connectionClient.isCurrent() || loadSeqRef.current !== seq) return;
-        if (historyResult.status === "fulfilled") {
-          const merged = mergeAgentHistory(
-            historyRef.current,
-            historyResult.value as AgentHistoryResponse,
-            requested,
-          );
-          historyRef.current = merged;
-          setHistory(merged);
-          if (merged) {
-            // Drop on-demand texts for entries that left the window or whose
-            // content changed under the same id (hash or byte-length mismatch).
-            setToolEntryTexts((current) => {
-              if (current.size === 0) return current;
-              const kept = new Map<string, ToolTextOverlay>();
-              for (const message of merged.messages) {
-                const overlay = current.get(message.id);
-                if (
-                  overlay !== undefined &&
-                  toolOverlayMatches(overlay, message)
-                ) {
-                  kept.set(message.id, overlay);
-                }
-              }
-              return kept.size === current.size ? current : kept;
-            });
-            // Failure marks for entries that left the window are dead weight;
-            // drop them so the set cannot grow across refreshes. An entry
-            // reappearing later may retry the fetch once.
-            const windowedIds = new Set(
-              merged.messages.map((message) => message.id),
-            );
-            for (const id of toolEntryFailedRef.current) {
-              if (!windowedIds.has(id)) toolEntryFailedRef.current.delete(id);
-            }
-          }
-          setExpandedMessage((entry) =>
-            entry
-              ? (merged?.messages.find((message) => message.id === entry.id) ??
-                null)
-              : null,
-          );
-        }
-        if (sessionResult.status === "fulfilled")
-          setSession(sessionResult.value as AgentSessionSummary);
-        const errors = [historyResult, sessionResult]
-          .filter((result) => result.status === "rejected")
-          .map((result) =>
-            result.status === "rejected"
-              ? result.reason instanceof Error
-                ? result.reason.message
-                : String(result.reason)
-              : "",
-          )
-          .filter(Boolean);
-        setError(errors.join("\n"));
-      })
-      .finally(() => {
-        if (inFlightRef.current === seq) inFlightRef.current = null;
-        if (connectionClient.isCurrent() && loadSeqRef.current === seq) {
-          setLoading(false);
-        }
-      });
-  }, [
-    connectionClient,
-    pane.agent,
-    pane.pane_id,
-    pane.tab_id,
-    pane.workspace_id,
-  ]);
-
-  useEffect(() => {
-    // Resource-derived state belongs to one pane and one connection lease.
-    // Invalidate old continuations before loading a colliding pane ID from a
-    // switched connection or replacement runtime.
-    loadSeqRef.current += 1;
-    inFlightRef.current = null;
-    historyRef.current = null;
-    previewSeqRef.current += 1;
-    if (highlightTimerRef.current !== null) {
-      window.clearTimeout(highlightTimerRef.current);
-      highlightTimerRef.current = null;
-    }
-    setHighlightedSequence(null);
-    setWideSelectedId(null);
-    setWideListRatio(DEFAULT_INSPECTOR_NAVIGATION_RATIO);
-    setHistory(null);
-    setQuery("");
-    setSession(null);
-    setDetailsOpen(false);
-    setExpandedMessage(null);
-    setToolEntryTexts(new Map());
-    setToolEntryLoading(new Set());
-    toolEntryFailedRef.current.clear();
-    setPreviewPane(null);
-    setPreviewSummary(null);
-    setPreviewLoading(false);
-    setPreviewError("");
-    setLoading(false);
-    setError("");
-  }, [
-    connectionClient,
-    pane.agent,
-    pane.pane_id,
-    pane.workspace_id,
-    pane.tab_id,
-  ]);
-
-  const loadToolEntry = useCallback(
-    (entry: AgentHistoryEntry) => {
-      if (!pane.agent || !connectionClient.isCurrent()) return;
-      const paneId = pane.pane_id;
-      setToolEntryLoading((current) => new Set(current).add(entry.id));
-      connectionClient
-        .call("agent_history.entry", {
-          pane_id: pane.pane_id,
-          workspace_id: pane.workspace_id,
-          tab_id: pane.tab_id,
-          agent: pane.agent,
-          entry_id: entry.id,
-        })
-        .then((result) => {
-          if (!connectionClient.isCurrent() || paneIdRef.current !== paneId)
-            return;
-          toolEntryFailedRef.current.delete(entry.id);
-          const { text, text_hash } = result as {
-            text?: unknown;
-            text_hash?: unknown;
-          };
-          const value = typeof text === "string" ? text : "";
-          setToolEntryTexts((current) =>
-            new Map(current).set(entry.id, {
-              text: value,
-              bytes: new TextEncoder().encode(value).length,
-              hash: typeof text_hash === "string" ? text_hash : undefined,
-            }),
-          );
-        })
-        .catch((value) => {
-          if (!connectionClient.isCurrent() || paneIdRef.current !== paneId)
-            return;
-          toolEntryFailedRef.current.add(entry.id);
-          setError(value instanceof Error ? value.message : String(value));
-        })
-        .finally(() => {
-          setToolEntryLoading((current) => {
-            if (!current.has(entry.id)) return current;
-            const next = new Set(current);
-            next.delete(entry.id);
-            return next;
-          });
-        });
-    },
-    [
-      connectionClient,
-      pane.agent,
-      pane.pane_id,
-      pane.tab_id,
-      pane.workspace_id,
-    ],
-  );
-
-  const messages = useMemo(() => history?.messages ?? [], [history?.messages]);
+  // History's window: the last conversation entries, then only what changed;
+  // tool payloads are fetched on demand (useAgentHistoryWindow, shared with
+  // Chat).
+  const {
+    history,
+    messages: hydratedMessages,
+    loading,
+    error: historyError,
+    refresh: loadHistory,
+    toolEntryTexts,
+    toolEntryLoading,
+    toolEntryFailedRef,
+    loadToolEntry,
+  } = useAgentHistoryWindow({
+    pane,
+    client: connectionClient,
+    active: open,
+    pollMs: 4000,
+  });
+  // One set for the hook's lifetime, updated in place.
+  const toolEntryFailed = toolEntryFailedRef.current;
+  const messages = hydratedMessages;
   // Substitute fetched tool payloads only while they still match the entry.
   const hydrateEntry = useCallback(
     (entry: AgentHistoryEntry): AgentHistoryEntry => {
@@ -351,10 +161,68 @@ export function AgentHistoryDrawer({
     },
     [toolEntryTexts],
   );
-  const hydratedMessages = useMemo(
-    () => (toolEntryTexts.size === 0 ? messages : messages.map(hydrateEntry)),
-    [messages, toolEntryTexts, hydrateEntry],
-  );
+  const error = [historyError, sessionError].filter(Boolean).join("\n");
+  // The session summary refreshes with the history. Only the newest read
+  // for the current pane and connection publishes: a late answer from an
+  // earlier poll, pane or connection is dropped, success or failure.
+  const sessionSeqRef = useRef(0);
+  const loadSession = useCallback(() => {
+    if (!pane.agent || !connectionClient.isCurrent()) return;
+    const seq = ++sessionSeqRef.current;
+    const current = () =>
+      connectionClient.isCurrent() && sessionSeqRef.current === seq;
+    connectionClient
+      .call("agent_session.get", { pane_id: pane.pane_id, agent: pane.agent })
+      .then((value) => {
+        if (!current()) return;
+        setSession(value as AgentSessionSummary);
+        setSessionError("");
+      })
+      .catch((reason: unknown) => {
+        if (!current()) return;
+        setSessionError(
+          reason instanceof Error ? reason.message : String(reason),
+        );
+      });
+  }, [connectionClient, pane.agent, pane.pane_id]);
+  // A new pane, agent or connection drops reads still in flight.
+  useEffect(() => {
+    sessionSeqRef.current += 1;
+  }, [connectionClient, pane.agent, pane.pane_id]);
+  const refreshAll = useCallback(() => {
+    loadHistory();
+    loadSession();
+  }, [loadHistory, loadSession]);
+
+  useEffect(() => {
+    // Resource-derived state belongs to one pane and one connection lease.
+    // Invalidate old continuations before loading a colliding pane ID from a
+    // switched connection or replacement runtime.
+    previewSeqRef.current += 1;
+    if (highlightTimerRef.current !== null) {
+      window.clearTimeout(highlightTimerRef.current);
+      highlightTimerRef.current = null;
+    }
+    setHighlightedSequence(null);
+    setWideSelectedId(null);
+    setWideListRatio(DEFAULT_INSPECTOR_NAVIGATION_RATIO);
+    setQuery("");
+    setSession(null);
+    setDetailsOpen(false);
+    setExpandedMessage(null);
+    setPreviewPane(null);
+    setPreviewSummary(null);
+    setPreviewLoading(false);
+    setPreviewError("");
+    setSessionError("");
+  }, [
+    connectionClient,
+    pane.agent,
+    pane.pane_id,
+    pane.workspace_id,
+    pane.tab_id,
+  ]);
+
   const timelineSelection = useMemo(
     () => selectHistoryEntries(hydratedMessages, filters, query),
     [hydratedMessages, filters, query],
@@ -394,7 +262,7 @@ export function AgentHistoryDrawer({
       !activeMessage ||
       !isToolContentPending(activeMessage) ||
       toolEntryLoading.has(activeMessage.id) ||
-      toolEntryFailedRef.current.has(activeMessage.id)
+      toolEntryFailed.has(activeMessage.id)
     ) {
       return;
     }
@@ -402,20 +270,23 @@ export function AgentHistoryDrawer({
     if (overlay !== undefined && toolOverlayMatches(overlay, activeMessage))
       return;
     loadToolEntry(activeMessage);
-  }, [activeMessage, open, toolEntryTexts, toolEntryLoading, loadToolEntry]);
+  }, [
+    activeMessage,
+    open,
+    toolEntryFailed,
+    toolEntryTexts,
+    toolEntryLoading,
+    loadToolEntry,
+  ]);
 
   useEffect(() => {
     if (!open) return;
-    if (document.visibilityState === "visible") loadHistory();
+    if (document.visibilityState === "visible") loadSession();
     const timer = window.setInterval(() => {
-      if (document.visibilityState === "visible") loadHistory();
+      if (document.visibilityState === "visible") loadSession();
     }, 4000);
-    return () => {
-      window.clearInterval(timer);
-      loadSeqRef.current += 1;
-      inFlightRef.current = null;
-    };
-  }, [loadHistory, open]);
+    return () => window.clearInterval(timer);
+  }, [loadSession, open]);
 
   useEffect(() => {
     if (!open) {
@@ -926,7 +797,7 @@ export function AgentHistoryDrawer({
             <button
               type="button"
               className={`agent-history-icon ${loading ? "is-loading" : ""}`}
-              onClick={loadHistory}
+              onClick={refreshAll}
               aria-label="Refresh session"
               title="Refresh"
               disabled={loading}
@@ -956,7 +827,7 @@ export function AgentHistoryDrawer({
             )}
             paneId={pane.pane_id}
             client={connectionClient}
-            onLinked={loadHistory}
+            onLinked={refreshAll}
           />
         ) : null}
         {unavailable ? (
@@ -980,7 +851,7 @@ export function AgentHistoryDrawer({
             <button
               type="button"
               className="secondary-btn"
-              onClick={loadHistory}
+              onClick={refreshAll}
             >
               <RefreshCw size={13} />
               Retry

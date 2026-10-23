@@ -1,4 +1,7 @@
-:root {
+/* A dark-scoped window (Town's agent window) keeps the whole dark set in
+   either app theme, so every view inside it reads as one panel. */
+:root,
+.theme-scope-dark {
   color-scheme: dark;
   --bg: #1a1b26;
   --topbar: #202331;

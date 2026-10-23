@@ -25,6 +25,7 @@ import {
   PROMPT_SCREEN_LINES,
   type PendingPrompt,
 } from "./pending-prompt";
+import { stepsFromEntries, type ConversationStep } from "./conversation-steps";
 import { codexHome, type AgentSessionFileAccess } from "./session-file-access";
 import type { SessionProjectionCache } from "./session-projection-cache";
 import {
@@ -510,6 +511,29 @@ export function createHerdrConversationSource(args: {
   const latest = async (target: { pane_id: string }) =>
     withoutMessages(await read(target));
 
+  // Steps per projection, so repeated asks while nothing changed do not
+  // rebuild them.
+  const projectedSteps = new WeakMap<object, Map<string, ConversationStep>>();
+  const steps = async ({
+    pane_id,
+    call_ids,
+  }: {
+    pane_id: string;
+    call_ids: readonly string[];
+  }): Promise<ConversationStep[]> => {
+    const step = await resolve(pane_id);
+    if (!("resolved" in step) || !step.resolved.file) return [];
+    const projection = await args.cache.get(step.resolved);
+    let byCall = projectedSteps.get(projection);
+    if (!byCall) {
+      byCall = new Map();
+      for (const item of stepsFromEntries(projection.entries))
+        if (item.call_id) byCall.set(item.call_id, item);
+      projectedSteps.set(projection, byCall);
+    }
+    return call_ids.flatMap((id) => byCall.get(id) ?? []);
+  };
+
   /** Run `each` for the named panes, or every agent pane, four at a time. */
   const eachPane = async <T>(
     paneIds: readonly string[] | undefined,
@@ -614,11 +638,24 @@ export function createHerdrConversationSource(args: {
           if (MOVED_ON.has(status)) return null;
           if (status !== "blocked") return "unknown_status";
           // Read under the checked state, so only what the screen shows
-          // counts as a different question.
+          // counts as a different question. A form's next question can
+          // follow with no new Herdr state; a new state with a changed
+          // screen is the agent's next prompt.
           const shown = await readPrompt(pane_id, before);
           if (!shown) return "unreadable";
-          return shown.fingerprint !== prompt.fingerprint &&
-            info.state_change_seq !== before?.state_change_seq
+          const asks = (asked: PendingPrompt) =>
+            JSON.stringify([
+              asked.question,
+              asked.request,
+              asked.options.map((option) => option.label),
+            ]);
+          // Only a recognised menu is a next question; a partial or
+          // unrecognised screen (no options) proves nothing, whether or not
+          // Herdr's state moved.
+          if (!shown.options.length) return "still_showing";
+          return asks(shown) !== asks(prompt) ||
+            (shown.fingerprint !== prompt.fingerprint &&
+              info.state_change_seq !== before?.state_change_seq)
             ? null
             : "still_showing";
         })
@@ -643,6 +680,7 @@ export function createHerdrConversationSource(args: {
     },
     read,
     latest,
+    steps,
     identity: async ({ pane_id }) => {
       // Watching runs on every Herdr event; it need not search Codex
       // transcripts again for a title it already resolved, while creations

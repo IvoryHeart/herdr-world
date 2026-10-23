@@ -1,7 +1,8 @@
 ### Added
 
-- Chat shows each tool call as a step card instead of "Used Bash ×2": a
-  running step spins, a finished one folds to a one-line receipt with its
-  duration, an edit opens to its diff, and a test run shows a green or red
-  strip with pass and fail counts and the first failing test. Runs of file
-  reads fold into one card.
+- Chat's tool rows show what each call did: a plain label ("Run reconnect
+  tests", "Edit reconnect.ts"), how long it took, and a pass or fail badge for
+  a test run. A run whose tests failed reads as failed, and a call cut off
+  without a result reads as interrupted. Opening a row shows the edit's diff,
+  a green or red test strip with the first failing test, or the end of its
+  output, with credentials redacted.

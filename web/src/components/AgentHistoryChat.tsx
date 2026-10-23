@@ -7,9 +7,10 @@ import {
   useMemo,
   useRef,
   useState,
+  type ReactNode,
   type RefObject,
 } from "react";
-import { Check, ChevronRight, Copy, Wrench, X } from "lucide-react";
+import { ArrowDown, Check, ChevronRight, Copy, Wrench, X } from "lucide-react";
 import { copyTextWithFeedback } from "../copyText";
 import { formatUiDateTime } from "../uiLocale";
 import { HISTORY_PREVIEW_CHARS } from "./AgentHistoryCard";
@@ -31,6 +32,11 @@ import {
 } from "./agentHistoryView";
 import { formatBytes } from "./agentSession";
 import { MarkdownPreview } from "./markdown";
+import {
+  StepDetailEvidence,
+  StepRowEvidence,
+  type ConversationStep,
+} from "./chat/blocks/steps";
 import "./AgentHistoryChat.css";
 
 // Treat the list as pinned while the reader is within this distance of the
@@ -44,11 +50,14 @@ const ChatBubble = memo(function ChatBubble({
   entry,
   sequence,
   highlighted,
+  matched = false,
   onOpen,
 }: {
   entry: HistoryEntry;
   sequence: number;
   highlighted: boolean;
+  /** Has the same words as a message Chat sent: matched, not proven. */
+  matched?: boolean;
   onOpen: (entry: HistoryEntry) => void;
 }) {
   const preview = entry.text.slice(0, HISTORY_PREVIEW_CHARS);
@@ -59,6 +68,7 @@ const ChatBubble = memo(function ChatBubble({
     <article
       className={`agent-history-chat-message ${tone} ${highlighted ? "is-minimap-target" : ""}`}
       data-sequence={sequence}
+      data-delivery={matched ? "matched" : undefined}
     >
       <div className="agent-history-chat-bubble">
         {entry.role === "user" ? (
@@ -84,6 +94,11 @@ const ChatBubble = memo(function ChatBubble({
         <time dateTime={entry.sent_at} title={entry.sent_at}>
           {formatUiDateTime(entry.sent_at)}
         </time>
+        {matched ? (
+          <span title="Chat sent the same words just before this appeared; it cannot prove this is that message.">
+            Sent from Chat; matched by its words
+          </span>
+        ) : null}
         <button
           type="button"
           className="agent-history-copy"
@@ -232,19 +247,33 @@ function ToolStepDetail({
 
 function ToolStepRow({
   step,
+  evidence,
   expanded,
   loader,
   onToggle,
   onOpen,
 }: {
   step: ToolStep;
+  /** What Chat's step model knows about this call, when it is given. */
+  evidence?: ConversationStep;
   expanded: boolean;
   loader: ToolContentLoader;
   onToggle: () => void;
   onOpen: (entry: HistoryEntry) => void;
 }) {
   const { call, result } = step;
-  const status = !result ? "pending" : result.is_error ? "error" : "done";
+  // The step model knows a call whose tests failed, or one cut off without
+  // a result, which the entries alone do not say.
+  const status =
+    evidence?.state === "failed"
+      ? "error"
+      : evidence?.state === "interrupted"
+        ? "interrupted"
+        : !result
+          ? "pending"
+          : result.is_error
+            ? "error"
+            : "done";
   const headline =
     call && !isToolContentPending(call)
       ? toolArgumentHeadline(call.text)
@@ -268,27 +297,49 @@ function ToolStepRow({
         ) : status === "error" ? (
           <X size={12} aria-label="Failed" />
         ) : (
-          <Wrench size={12} aria-label="No output yet" />
+          <Wrench
+            size={12}
+            aria-label={
+              status === "interrupted" ? "Interrupted" : "No output yet"
+            }
+          />
         )}
-        <span className="agent-history-chat-step-name">{step.name}</span>
+        <span className="agent-history-chat-step-name">
+          {evidence?.label ?? step.name}
+        </span>
         <span className="agent-history-chat-step-headline">{headline}</span>
+        {evidence ? <StepRowEvidence step={evidence} /> : null}
       </button>
       {expanded ? (
-        <ToolStepDetail step={step} loader={loader} onOpen={onOpen} />
+        <>
+          {evidence ? <StepDetailEvidence step={evidence} /> : null}
+          <ToolStepDetail step={step} loader={loader} onOpen={onOpen} />
+        </>
       ) : null}
     </li>
   );
+}
+
+/** The step model's entry for a call, by the harness's call ID. */
+function evidenceFor(
+  evidence: ReadonlyMap<string, ConversationStep> | undefined,
+  step: ToolStep,
+) {
+  const callId = step.call?.source_call_id ?? step.result?.source_call_id;
+  return callId ? evidence?.get(callId) : undefined;
 }
 
 // Collapsed by default; the block keeps its open state across polling
 // refreshes because its key follows the first entry's id.
 function ToolBlock({
   entries,
+  stepEvidence,
   loader,
   onToggle,
   onOpen,
 }: {
   entries: HistoryEntry[];
+  stepEvidence?: ReadonlyMap<string, ConversationStep>;
   loader: ToolContentLoader;
   // Called before the reader opens or closes part of the block.
   onToggle: () => void;
@@ -375,6 +426,7 @@ function ToolBlock({
             <ToolStepRow
               key={step.id}
               step={step}
+              evidence={evidenceFor(stepEvidence, step)}
               expanded={expandedStep === step.id}
               loader={loader}
               onToggle={() => {
@@ -403,7 +455,20 @@ export function AgentHistoryChat({
   toolLoading = EMPTY_LOADING,
   onLoadTool = noop,
   onOpen,
+  matchedIds,
+  stepEvidence,
+  after,
 }: {
+  /**
+   * Chat's step model by tool-call ID: each row shows its label, state, test
+   * badge and time, and opened, its diff, test strip or output. Unchanged
+   * steps keep their object across reads. The History drawer passes none.
+   */
+  stepEvidence?: ReadonlyMap<string, ConversationStep>;
+  /** Messages a send from Chat matched by their words. */
+  matchedIds?: ReadonlySet<string>;
+  /** Shown after the newest message (Chat's sends not yet seen). */
+  after?: ReactNode;
   items: HistoryChatItem[];
   listRef: RefObject<HTMLDivElement>;
   contentRef: RefObject<HTMLDivElement>;
@@ -416,6 +481,8 @@ export function AgentHistoryChat({
   onOpen: (entry: HistoryEntry) => void;
 }) {
   const followRef = useRef(true);
+  // Shown while the reader has scrolled back from the newest message.
+  const [away, setAway] = useState(false);
   const queueRef = useRef<HistoryEntry[]>([]);
   const [queueVersion, setQueueVersion] = useState(0);
   const enqueue = useCallback((entry: HistoryEntry) => {
@@ -491,28 +558,55 @@ export function AgentHistoryChat({
         followRef.current =
           list.scrollHeight - list.scrollTop - list.clientHeight <
           FOLLOW_THRESHOLD_PX;
+        setAway(!followRef.current);
       }}
     >
+      {away ? (
+        <button
+          type="button"
+          className="agent-history-chat-jump"
+          onClick={() => {
+            const list = listRef.current;
+            followRef.current = true;
+            setAway(false);
+            list?.scrollTo({ top: list.scrollHeight });
+          }}
+        >
+          <ArrowDown size={13} aria-hidden="true" /> Jump to latest
+        </button>
+      ) : null}
       <div ref={contentRef} className="agent-history-chat-content">
         {items.map((item) =>
-          item.type === "message" ? (
+          // A marker such as a compaction reads as a divider, not a message.
+          item.type === "message" && item.entry.notice ? (
+            <div
+              key={item.entry.id}
+              className="agent-history-chat-divider"
+              role="separator"
+            >
+              <span>{item.entry.notice}</span>
+            </div>
+          ) : item.type === "message" ? (
             <ChatBubble
               key={item.entry.id}
               entry={item.entry}
               sequence={item.sequence}
               highlighted={highlightedSequence === item.sequence}
+              matched={matchedIds?.has(item.entry.id) ?? false}
               onOpen={onOpen}
             />
           ) : (
             <ToolBlock
               key={item.id}
               entries={item.entries}
+              stepEvidence={stepEvidence}
               loader={loader}
               onToggle={pauseFollow}
               onOpen={onOpen}
             />
           ),
         )}
+        {after}
       </div>
     </div>
   );

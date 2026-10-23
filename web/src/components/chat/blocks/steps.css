@@ -1,0 +1,106 @@
+/* A tool call's evidence on its History row: its time and test badge, and
+   opened, the test strip, the edit's diff or the end of its output. */
+.agent-chat-step-time {
+  flex: none;
+  color: var(--muted);
+  font: 500 10.5px var(--font-mono, ui-monospace, monospace);
+  font-variant-numeric: tabular-nums;
+}
+
+.agent-chat-step-badge {
+  flex: none;
+  padding: 0 6px;
+  font-size: 10.5px;
+  font-weight: 600;
+  border-radius: 999px;
+}
+
+.agent-chat-step-badge.is-green,
+.agent-chat-step-strip.is-green {
+  color: var(--success-text, #b8f0c2);
+  background: var(--success-soft, #173a22);
+}
+
+.agent-chat-step-badge.is-red,
+.agent-chat-step-strip.is-red {
+  color: var(--danger-text);
+  background: var(--danger-soft);
+}
+
+.agent-chat-step-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  background: var(--bg);
+  border-top: 1px solid var(--border-soft);
+}
+
+.agent-chat-step-strip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 9px;
+  font-size: 12.5px;
+  font-weight: 600;
+  border-radius: 7px;
+}
+
+.agent-chat-step-bar {
+  flex: 1;
+  height: 6px;
+  overflow: hidden;
+  background: var(--danger-text);
+  border-radius: 3px;
+}
+
+.agent-chat-step-strip.is-green .agent-chat-step-bar {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.agent-chat-step-bar i {
+  display: block;
+  height: 100%;
+  background: var(--success-text, #7be08f);
+}
+
+.agent-chat-step-failure {
+  margin: 0;
+  color: var(--danger-text);
+  font: 12px var(--font-mono, ui-monospace, monospace);
+  overflow-wrap: anywhere;
+}
+
+.agent-chat-step-diff,
+.agent-chat-step-tail {
+  max-height: 260px;
+  margin: 0;
+  overflow: auto;
+  font: 12px / 1.5 var(--font-mono, ui-monospace, monospace);
+}
+
+.agent-chat-step-diff span {
+  display: block;
+  padding: 0 6px;
+  white-space: pre;
+}
+
+.agent-chat-step-diff .is-head {
+  color: var(--muted);
+}
+
+.agent-chat-step-diff .is-removed {
+  color: var(--danger-text);
+  background: var(--danger-soft);
+}
+
+.agent-chat-step-diff .is-added {
+  color: var(--success-text, #b8f0c2);
+  background: var(--success-soft, #1d3a26);
+}
+
+.agent-chat-step-tail {
+  color: var(--text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

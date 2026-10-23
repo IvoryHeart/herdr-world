@@ -69,6 +69,7 @@ import {
   useSystemBack,
 } from "../systemBack";
 import { closeTopLayer } from "../layerStack";
+import "./worldFonts.css";
 import { WorldMobileNav, worldViewLabel } from "./WorldMobileNav";
 import { WorldViewPicker } from "./WorldViewPicker";
 import { WorldControlPlane } from "./WorldControlPlane";
@@ -358,6 +359,9 @@ export default function WorldFoundationApp() {
         <App
           operationalShortcutsEnabled={view === "spaces"}
           shellActionsEnabled
+          // On a phone an open agent window's own bar replaces the topbar:
+          // one bar, with Back, the views and the window's actions.
+          topbarHidden={Boolean(canReturnToView)}
           // Town opens full-bleed: Zen is its default, kept apart from the
           // other views' choice. On a phone, Zen covers the root screens;
           // a terminal or Spaces keeps its bar for Back.

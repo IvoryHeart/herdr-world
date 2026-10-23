@@ -21,17 +21,19 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     (**Chat**, **Terminal**, **Changes**, **Files**, then **Commits**).
     Tapping an agent or its table, activating it (double-click,
     **Shift+Enter**), the needs-you list, **N** and **Next** open that window on
-    **Chat**: the full conversation, which scrolls, with **Jump to latest**
-    when you have scrolled back and the composer at the bottom. In Town it
+    **Chat**: the conversation's latest 200 entries, which scroll inside the
+    window, with **Jump to latest** when you have scrolled back and the
+    composer always at the bottom. Reopening or redocking the window keeps the
+    conversation. In Town it
     docks on the right by default (**Menu → Inspector opening**), can be
     undocked, and keeps the dock it was left with. On a phone, the Chat view
     shows only its own composer, without the terminal key bar.
   - The top selector follows the window's own width, docked, floating or on a
     phone: labelled from 640px, icons (with their names as tooltips) below
     that, and below 360px only the active view, with the others under ⋯.
-  - The Town master's chat (**Menu → Town master**, `firstmate` by default)
-    opens docked on Chat once per visit on wide screens, without moving the
-    pane's focus.
+  - The Town master's chat (**Menu → Town master**, `firstmate` by default,
+    matched against the agent's Herdr name, then its label) opens docked on
+    Chat once per visit on wide screens, without moving the pane's focus.
   - Hovering an agent shows a small card as a preview: its latest message from
     Chat's conversation read model, rendered as Chat renders it (never terminal
     text; an unavailable conversation shows Chat's reason), a question when
@@ -182,7 +184,14 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   none are assigned by default. Layout
   choices that cannot fit explain why.
 - Inspectors and arranged Spaces windows share snap, minimize, maximize/restore,
-  close and all eight resize handles. Opening or focusing a window preserves other
+  close and all eight resize handles. Each window has one bar: its name, a
+  location line, the view selector and **⋯**, maximize and close. **⋯** holds
+  minimize, the snap choices and float. Tapping the location line under the name
+  shows the branch, worktree and PR status, replacing the card above Changes. In
+  Town the window takes the Town look (portrait, pixel name, status pill, chunky
+  buttons, **‹ Back**). On a phone the window fills the screen like the
+  terminal: its bar shows the name and status, and **⋯** switches the view
+  (Chat, Terminal, Changes, Files) or switches to another agent or terminal. Opening or focusing a window preserves other
   placements; snapping into an occupied region overlaps without rearranging it.
   Tiled windows share resizable dividers. **Open windows** restores minimized windows.
   Window close dismisses presentation; native tab closure remains separate.
@@ -437,12 +446,13 @@ See [resource ownership](docs/ARCHITECTURE.md#workspace-resource-ownership).
   A Now bar shows the agent's status, its current task from the terminal title
   and how long it has been at it, with Stop (or Esc twice) for Claude Code,
   Codex and Pi; the step running now shows with its command and timer.
-  When the agent waits on a permission or choice prompt, Chat shows it as an
-  ask card and answers with the option you pick (click or its number key),
-  after checking the question has not changed.
-  Each tool call shows as a step card: reads fold into one line, an edit opens
-  to its diff, and a test run shows a green or red strip with its counts and
-  first failure.
+  When the agent waits on a permission prompt, a question (one or several,
+  with each choice's description) or plan approval, Chat shows it as an ask
+  card and answers with the option you pick (click or its number key), after
+  checking the question has not changed.
+  Each tool call's row in Chat carries its evidence: a plain label, its state
+  and time, a pass or fail badge for a test run, and when opened, the edit's
+  diff, the test strip with its first failure, or the end of its output.
   It refreshes when the service sees the transcript, title or status change,
   without browser polling, and keeps the last good view if a read fails. When
   it cannot read the conversation it shows the reason with the matching action:

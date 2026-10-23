@@ -2,10 +2,11 @@ import { createRoot } from "react-dom/client";
 import { bridge, type BridgeControlMsg } from "../api";
 import type { Pane } from "../types";
 import { AgentChat, type Conversation } from "./AgentChat";
-import type { ConversationStep } from "./StepCard";
+import type { ConversationStep } from "./chat/blocks/steps";
 import "../styles/tokens.css";
 import "../styles/base.css";
 import "../styles/vendor.css";
+import "./WorkspaceInspectorHost.css";
 
 const failures: string[] = [];
 function check(condition: boolean, message: string) {
@@ -15,10 +16,51 @@ async function settle() {
   await new Promise((resolve) => setTimeout(resolve, 80));
 }
 
-const conversation = (
-  messages: Conversation["messages"],
-  status = "idle",
-): Conversation => ({
+type Messages = NonNullable<Conversation["messages"]>;
+
+/** History's window of the same messages, as agent_history.get sends it. */
+let historyRevision = 0;
+const historyOf = (messages: Messages) => ({
+  history_version: 2,
+  mode: "snapshot",
+  cursor: { epoch: "fixture", revision: ++historyRevision },
+  window_limit: 200,
+  agent: "claude",
+  pane_id: "p",
+  workspace_id: "Example",
+  tab_id: "tab",
+  updated_at: "2026-10-22T09:00:00Z",
+  path: "",
+  entries: messages.map((message) =>
+    message.kind === "notice"
+      ? {
+          id: message.id,
+          role: "assistant",
+          kind: "message",
+          text: "",
+          notice: message.text,
+          sent_at: message.sent_at,
+        }
+      : message.kind === "activity"
+        ? {
+            id: message.id,
+            role: "tool",
+            kind: "tool_call",
+            tool_name: message.tools?.[0]?.name ?? "tool",
+            text: "",
+            sent_at: message.sent_at,
+          }
+        : {
+            id: message.id,
+            role: message.role,
+            kind: message.kind === "error" ? "error" : "message",
+            text: message.text,
+            sent_at: message.sent_at,
+          },
+  ),
+});
+
+const conversation = (messages: Messages, status = "idle"): Conversation => ({
   conversation_version: 1,
   pane_id: "p",
   agent: "claude",
@@ -38,7 +80,7 @@ const message = (
   id: string,
   role: "user" | "assistant",
   text: string,
-): Conversation["messages"][number] => ({
+): Messages[number] => ({
   id,
   role,
   kind: "message",
@@ -129,6 +171,9 @@ async function run() {
     message("a1", "assistant", "It describes the **demo** project."),
   ]);
   let sendResult: unknown = { status: "sent" };
+  /** Replaces the snapshot answer for agent_history.get while set. */
+  let historyAnswer: ((params: Record<string, unknown>) => unknown) | null =
+    null;
   let answerAcknowledged = false;
   bridge.connection = () => ({
     connectionId: "test",
@@ -149,7 +194,26 @@ async function run() {
           prompt_fingerprint: params.prompt_fingerprint,
         };
       if (method === "pane.send_input") return {};
-      if (method === "agent_conversation.get") return reply;
+      if (method === "agent_conversation.steps") {
+        const ids = new Set(params.call_ids as string[]);
+        return {
+          steps: (reply.messages ?? [])
+            .map((entry) => entry.step)
+            .filter((step) => step?.call_id && ids.has(step.call_id)),
+        };
+      }
+      if (method === "agent_conversation.latest")
+        return { ...reply, messages: undefined };
+      // A transcript caught mid-write fails History's read too.
+      if (
+        method === "agent_history.get" &&
+        reply.unavailable?.reason === "read_failed"
+      )
+        throw new Error(reply.unavailable.detail);
+      if (method === "agent_history.get")
+        return historyAnswer
+          ? historyAnswer(params)
+          : historyOf(reply.messages ?? []);
       if (
         method === "agent_conversation.watch" ||
         method === "agent_conversation.unwatch"
@@ -189,7 +253,7 @@ async function run() {
     );
   const count = (method: string) =>
     calls.filter((call) => call.method === method).length;
-  const reads = () => count("agent_conversation.get");
+  const reads = () => count("agent_conversation.latest");
   try {
     render("idle", false);
     await settle();
@@ -202,21 +266,29 @@ async function run() {
       count("agent_conversation.watch") === 1,
       "Opening Chat must ask the service to watch the pane",
     );
-    const bubbles = [...container.querySelectorAll(".agent-chat-message")];
+    const bubbles = [
+      ...container.querySelectorAll(
+        ".agent-history-chat-message:not(.is-pending)",
+      ),
+    ];
     check(
-      bubbles.map((node) => node.getAttribute("data-role")).join() ===
-        "user,assistant",
+      bubbles
+        .map((node) =>
+          node.classList.contains("is-user") ? "user" : "assistant",
+        )
+        .join() === "user,assistant",
       "Chat must show user and assistant bubbles in order",
     );
     check(
-      container.querySelector(".agent-chat-message.is-assistant strong")
+      container.querySelector(".agent-history-chat-message.is-assistant strong")
         ?.textContent === "demo",
       "Assistant text must render as Markdown",
     );
     check(
-      container.querySelector(".agent-chat-activity")?.textContent ===
-        "Used Read",
-      "Tool activity must render as one summary line",
+      (
+        container.querySelector(".agent-history-chat-tools")?.textContent ?? ""
+      ).includes("Read"),
+      "Tool activity must render as one collapsed tool block",
     );
     check(
       !container.querySelector(".xterm, canvas, pre.terminal"),
@@ -231,7 +303,7 @@ async function run() {
     check(reads() === 1, "A change to another pane must not reread");
     reply = conversation(
       [
-        ...reply.messages,
+        ...(reply.messages ?? []),
         message("u2", "user", "Thanks"),
         message("a2", "assistant", "You're welcome."),
       ],
@@ -241,7 +313,8 @@ async function run() {
     await settle();
     check(reads() === 2, "A pushed change must reread the conversation");
     check(
-      container.querySelectorAll(".agent-chat-message").length === 4,
+      container.querySelectorAll(".agent-history-chat-message:not(.is-pending)")
+        .length === 4,
       "A reread must show new messages",
     );
 
@@ -571,8 +644,8 @@ async function run() {
     push();
     await settle();
     check(
-      container.querySelectorAll(".agent-chat-message").length === 4 &&
-        !container.querySelector(".agent-chat-unavailable"),
+      container.querySelectorAll(".agent-history-chat-message:not(.is-pending)")
+        .length === 4 && !container.querySelector(".agent-chat-unavailable"),
       "A failed read must keep the last good conversation",
     );
     check(
@@ -627,9 +700,11 @@ async function run() {
     push();
     await settle();
     check(
-      container.querySelector(".agent-chat-divider")?.textContent ===
+      container.querySelector(".agent-history-chat-divider")?.textContent ===
         "Conversation compacted" &&
-        container.querySelectorAll(".agent-chat-message").length === 2,
+        container.querySelectorAll(
+          ".agent-history-chat-message:not(.is-pending)",
+        ).length === 2,
       "A compaction must render as a divider, not a message",
     );
 
@@ -688,155 +763,137 @@ async function run() {
       "A missing integration must offer to copy its command and refresh",
     );
 
-    // Steps: one card per tool call, keyed by its call ID. Reads fold into a
-    // group; an edit opens to its diff; a failed test run starts open with its
-    // strip; a running step spins.
-    const step = (
-      id: string,
-      tool: string,
-      label: string,
-      extra: Partial<ConversationStep> = {},
-    ): Conversation["messages"][number] => ({
-      id,
-      role: "tool",
-      kind: "step",
-      text: label,
-      sent_at: "2026-10-22T09:00:00Z",
-      step: {
+    // Steps: History's tool rows carry the step model's evidence, matched by
+    // the harness's call ID: a plain label, a test badge and its time, and
+    // when a row opens, the edit's diff or the failed run's strip. A run whose
+    // tests failed reads as failed though its result was not an error.
+    {
+      const at = "2026-10-22T09:00:00Z";
+      const step = (
+        id: string,
+        tool: string,
+        label: string,
+        extra: Partial<ConversationStep> = {},
+      ): NonNullable<Conversation["messages"]>[number] => ({
         id,
-        call_id: id,
-        tool,
-        label,
-        input_summary: null,
-        state: "ok",
-        started_at: "2026-10-22T09:00:00Z",
-        ended_at: "2026-10-22T09:00:01Z",
-        result_tail: null,
-        diff: null,
-        test: null,
-        ...extra,
-      },
-    });
-    reply = conversation(
-      [
-        message("u6", "user", "Add backoff"),
-        step("r1", "Read", "Read reconnect.ts", {
-          input_summary: "src/reconnect.ts",
-        }),
-        step("r2", "Read", "Read reconnect.test.ts", {
-          input_summary: "src/reconnect.test.ts",
-        }),
-        step("e1", "Edit", "Edit reconnect.ts", {
-          diff: {
-            file: "src/reconnect.ts",
-            removed: ["  return 1000;"],
-            added: ["  return backoff(attempt);"],
-            truncated: true,
-            omitted: 3,
+        role: "tool",
+        kind: "step",
+        text: label,
+        sent_at: at,
+        step: {
+          id,
+          call_id: id,
+          tool,
+          label,
+          input_summary: null,
+          state: "ok",
+          started_at: at,
+          ended_at: "2026-10-22T09:00:01Z",
+          result_tail: null,
+          diff: null,
+          test: null,
+          ...extra,
+        },
+      });
+      const entry = (
+        id: string,
+        kind: "tool_call" | "tool_result",
+        tool: string,
+      ) => ({
+        id: `${kind}-${id}`,
+        role: "tool",
+        kind,
+        tool_name: tool,
+        source_call_id: id,
+        text: kind === "tool_call" ? "{}" : "done",
+        sent_at: at,
+      });
+      reply = conversation(
+        [
+          message("u6", "user", "Add backoff"),
+          step("e1", "Edit", "Edit reconnect.ts", {
+            diff: {
+              file: "src/reconnect.ts",
+              removed: ["  return 1000;"],
+              added: ["  return backoff(attempt);"],
+              truncated: true,
+              omitted: 3,
+            },
+          }),
+          step("b1", "Bash", "Run reconnect tests", {
+            state: "failed",
+            input_summary: "bun test src",
+            test: {
+              runner: "bun",
+              passed: 12,
+              failed: 1,
+              first_failure: "backs off to the cap",
+            },
+            result_tail: "(fail) backs off to the cap",
+          }),
+        ],
+        "idle",
+      );
+      historyAnswer = () => ({
+        ...historyOf([]),
+        entries: [
+          {
+            id: "u6",
+            role: "user",
+            kind: "message",
+            text: "Add backoff",
+            sent_at: at,
           },
-        }),
-        step("b1", "Bash", "Run reconnect tests", {
-          state: "failed",
-          input_summary: "bun test src",
-          test: {
-            runner: "bun",
-            passed: 12,
-            failed: 1,
-            first_failure: "backs off to the cap",
-          },
-          result_tail: "(fail) backs off to the cap",
-        }),
-        step("b2", "Bash", "Run reconnect tests", {
-          state: "running",
-          ended_at: null,
-          input_summary: "bun test src",
-        }),
-      ],
-      "working",
-    );
-    push();
-    await settle();
-    const group = container.querySelector(".agent-chat-step.is-group");
-    check(
-      group?.textContent?.includes("Read 2 files") === true &&
-        group.textContent.includes("src/reconnect.test.ts"),
-      "Consecutive reads must fold into one group with their files",
-    );
-    const edit = container.querySelector<HTMLElement>('[data-step-id="e1"]')!;
-    check(
-      !edit.querySelector(".agent-chat-step-diff"),
-      "A finished edit must start folded",
-    );
-    edit.querySelector<HTMLButtonElement>(".agent-chat-step-head")!.click();
-    await settle();
-    check(
-      edit.querySelector(".is-removed")?.textContent === "-   return 1000;" &&
-        edit.querySelector(".is-added")?.textContent ===
-          "+   return backoff(attempt);",
-      "Opening an edit must show its diff",
-    );
-    const failed = container.querySelector('[data-step-id="b1"]');
-    check(
-      failed
-        ?.querySelector(".agent-chat-step-strip.is-red")
-        ?.textContent?.includes("12 passed · 1 failed") === true &&
-        failed.textContent?.includes("backs off to the cap") === true,
-      "A failed test run must start open with its red strip and failing test",
-    );
-    check(
-      container.querySelector(
-        '[data-step-id="b2"].is-running .agent-chat-spinner',
-      ) !== null,
-      "A running step must spin",
-    );
-    // The open call already has its step card, so no second running row.
-    reply = {
-      ...reply,
-      running_tool: {
-        id: "b2",
-        name: "Bash",
-        summary: "bun test src",
-        started_at: new Date().toISOString(),
-      },
-    };
-    render("working");
-    push();
-    await settle();
-    check(
-      !container.querySelector(".agent-chat-running") &&
-        container.querySelector('[data-step-id="b2"].is-running') !== null,
-      "An open call shown as a step card must not also show a running row",
-    );
-    check(
-      edit.textContent?.includes("3 more lines; see Changes") === true,
-      "A cut diff must say how much is left out and where to see it",
-    );
-    // Open follows a step's state as it changes, unless the reader chose.
-    reply = {
-      ...reply,
-      messages: reply.messages.map((entry) =>
-        entry.step?.id === "b2"
-          ? {
-              ...entry,
-              step: {
-                ...entry.step,
-                state: "ok" as const,
-                ended_at: "2026-10-22T09:00:09Z",
-                result_tail: " 13 pass",
-              },
-            }
-          : entry,
-      ),
-    };
-    push();
-    await settle();
-    check(
-      container.querySelector('[data-step-id="b2"].is-ok') !== null &&
-        !container.querySelector('[data-step-id="b2"] .agent-chat-step-body') &&
-        edit.isConnected &&
-        edit.querySelector(".agent-chat-step-diff") !== null,
-      "A running step that finishes must fold; one the reader opened stays open",
-    );
+          entry("e1", "tool_call", "Edit"),
+          entry("e1", "tool_result", "Edit"),
+          entry("b1", "tool_call", "Bash"),
+          entry("b1", "tool_result", "Bash"),
+        ],
+      });
+      render("idle", true, 45);
+      push();
+      await settle();
+      await settle();
+      container
+        .querySelector<HTMLButtonElement>(".agent-history-chat-tools-toggle")
+        ?.click();
+      await settle();
+      const rows = [
+        ...container.querySelectorAll<HTMLElement>(".agent-history-chat-step"),
+      ];
+      check(
+        rows.length === 2 &&
+          rows[0]!.querySelector(".agent-history-chat-step-name")
+            ?.textContent === "Edit reconnect.ts" &&
+          rows[0]!.textContent?.includes("1.0s") === true &&
+          rows[1]!.classList.contains("is-error") &&
+          rows[1]!.querySelector(".agent-chat-step-badge.is-red")
+            ?.textContent === "1 failed",
+        `Tool rows must carry their step's label, time and test badge (${rows.map((row) => row.textContent).join(" | ")})`,
+      );
+      rows[0]!
+        .querySelector<HTMLButtonElement>(".agent-history-chat-step-row")!
+        .click();
+      await settle();
+      check(
+        rows[0]!.querySelector(".is-removed")?.textContent ===
+          "-   return 1000;" &&
+          rows[0]!.textContent?.includes("3 more lines; see Changes") === true,
+        "Opening an edit's row must show its diff and what was cut",
+      );
+      rows[1]!
+        .querySelector<HTMLButtonElement>(".agent-history-chat-step-row")!
+        .click();
+      await settle();
+      check(
+        rows[1]!
+          .querySelector(".agent-chat-step-strip.is-red")
+          ?.textContent?.includes("12 passed · 1 failed") === true &&
+          rows[1]!.textContent?.includes("backs off to the cap") === true,
+        "Opening a failed run's row must show its red strip and failing test",
+      );
+      historyAnswer = null;
+    }
     // A blocked agent's question becomes an ask card with its whole
     // request. A number answers only while that card has focus; Chat then
     // says it sent the key, and that it was answered once the agent moved on.
@@ -906,7 +963,10 @@ async function run() {
     // The receipt survives the transcript moving on.
     reply = {
       ...reply,
-      messages: [...reply.messages, message("a7", "assistant", "Pushed.")],
+      messages: [
+        ...(reply.messages ?? []),
+        message("a7", "assistant", "Pushed."),
+      ],
       pending_prompt: null,
     };
     push();
@@ -934,6 +994,36 @@ async function run() {
           container.querySelector(".agent-chat-ask")?.textContent ?? ""
         ).includes("Answer in the Terminal"),
       "An unreadable prompt must offer the Terminal and no answers",
+    );
+    // A question form's choices carry the description shown under each.
+    reply = {
+      ...reply,
+      pending_prompt: {
+        question: ["Which colour should the demo banner be?"],
+        request: ["☐ Banner colour"],
+        options: [
+          {
+            number: "1",
+            label: "Red",
+            key: "1",
+            description: "Set the demo banner to red.",
+          },
+          { number: "2", label: "Green", key: "2" },
+        ],
+        fingerprint: "f2q",
+      },
+    };
+    push();
+    await settle();
+    const choices = [
+      ...container.querySelectorAll(".agent-chat-ask-options button"),
+    ];
+    check(
+      choices.length === 2 &&
+        choices[0]!.querySelector("small")?.textContent ===
+          "Set the demo banner to red." &&
+        !choices[1]!.querySelector("small"),
+      "A question's choices must show their descriptions",
     );
     // Two Chats with questions: a key on one card never answers the other.
     reply = {
@@ -1124,7 +1214,7 @@ async function run() {
       render("idle");
       await settle();
       await settle();
-      const list = container.querySelector<HTMLElement>(".agent-chat-list")!;
+      const list = container.querySelector<HTMLElement>(".agent-history-chat")!;
       check(
         list.scrollHeight > list.clientHeight * 2,
         `a long conversation should scroll at ${width}px`,
@@ -1137,7 +1227,7 @@ async function run() {
       list.dispatchEvent(new Event("scroll"));
       await settle();
       const jump = () =>
-        container.querySelector<HTMLButtonElement>(".agent-chat-jump");
+        container.querySelector<HTMLButtonElement>(".agent-history-chat-jump");
       check(jump() !== null, `Jump to latest should show at ${width}px`);
       reply = conversation([
         ...long,
@@ -1169,6 +1259,315 @@ async function run() {
       );
     }
     container.style.width = "800px";
+
+    // A remounted Chat shows the conversation it had at once, from the kept
+    // window, before the next read answers.
+    {
+      reply = conversation([
+        message("keep-u", "user", "Keep this question"),
+        message("keep-a", "assistant", "Kept answer"),
+      ]);
+      render("idle");
+      push();
+      await settle();
+      await settle();
+      let release!: () => void;
+      const gate = new Promise<void>((resolve) => (release = resolve));
+      historyAnswer = async () => {
+        await gate;
+        return historyOf(reply.messages ?? []);
+      };
+      root.render(<div />);
+      await settle();
+      render("idle");
+      await settle();
+      check(
+        (
+          container.querySelector(".agent-history-chat")?.textContent ?? ""
+        ).includes("Kept answer"),
+        "A remounted Chat lost its conversation while the next read was pending",
+      );
+      release();
+      historyAnswer = null;
+      await settle();
+    }
+
+    // A long, busy transcript stays responsive: History's window arrives once
+    // and each change brings only what changed, so nothing re-reads or
+    // re-renders the whole conversation. No task may block for 200 ms.
+    {
+      const longTasks: number[] = [];
+      const observer = new PerformanceObserver((list) => {
+        for (const entry of list.getEntries()) longTasks.push(entry.duration);
+      });
+      observer.observe({ type: "longtask" });
+      let revision = 1000;
+      const base: Record<string, unknown>[] = [];
+      // 150 messages, so the 20 added below stay within History's window of
+      // 200 conversation entries and every delta's order is the whole window.
+      for (let index = 0; index < 150; index += 1) {
+        base.push({
+          id: `busy-${index}`,
+          role: index % 2 ? "assistant" : "user",
+          kind: "message",
+          text: `Busy message ${index}: **the queue** keeps its order.`,
+          sent_at: "2026-10-22T09:00:00Z",
+        });
+        for (let tool = 0; tool < 15; tool += 1)
+          base.push({
+            id: `busy-${index}-tool-${tool}`,
+            role: "tool",
+            kind: tool % 2 ? "tool_result" : "tool_call",
+            tool_name: "Bash",
+            source_call_id: `busy-${index}-call-${tool >> 1}`,
+            text: "",
+            text_bytes: 5000,
+            text_hash: `h${index}-${tool}`,
+            sent_at: "2026-10-22T09:00:00Z",
+          });
+      }
+      const order = base.map((entry) => entry.id as string);
+      const head = {
+        history_version: 2,
+        window_limit: 200,
+        agent: "claude",
+        pane_id: "p",
+        workspace_id: "Example",
+        tab_id: "tab",
+        updated_at: "2026-10-22T09:00:00Z",
+        path: "",
+      };
+      let added: Record<string, unknown>[] = [];
+      historyAnswer = (params) => {
+        const cursor = params.cursor as { revision: number } | null;
+        if (!cursor || cursor.revision < 1000)
+          return {
+            ...head,
+            mode: "snapshot",
+            cursor: { epoch: "busy", revision },
+            entries: base,
+          };
+        const upserts = added;
+        added = [];
+        const base_revision = revision;
+        revision += 1;
+        return {
+          ...head,
+          mode: "delta",
+          cursor: { epoch: "busy", revision },
+          base_revision,
+          upserts,
+          removed: [],
+          order: [...order],
+        };
+      };
+      // Every call also has its step evidence, as Chat's read gives it.
+      const busySteps: NonNullable<Conversation["messages"]> = [];
+      for (let index = 0; index < 150; index += 1)
+        for (let call = 0; call < 8; call += 1) {
+          const id = `busy-${index}-call-${call}`;
+          busySteps.push({
+            id,
+            role: "tool",
+            kind: "step",
+            text: "Run tests",
+            sent_at: "2026-10-22T09:00:00Z",
+            step: {
+              id,
+              call_id: id,
+              tool: "Bash",
+              label: "Run tests",
+              input_summary: "bun test",
+              state: call % 3 ? "ok" : "failed",
+              started_at: "2026-10-22T09:00:00Z",
+              ended_at: "2026-10-22T09:00:02Z",
+              result_tail: "12 pass",
+              diff: null,
+              test: {
+                runner: "bun",
+                passed: 12,
+                failed: call % 3 ? 0 : 1,
+                first_failure: null,
+              },
+            },
+          });
+        }
+      reply = conversation([
+        message("busy-0", "user", "Busy message 0"),
+        ...busySteps,
+      ]);
+      push();
+      await settle();
+      await settle();
+      longTasks.length = 0;
+      for (let step = 0; step < 20; step += 1) {
+        const id = `busy-new-${step}`;
+        added.push({
+          id,
+          role: "tool",
+          kind: "tool_call",
+          tool_name: "Bash",
+          text: "",
+          text_bytes: 3000,
+          text_hash: `n${step}`,
+          sent_at: "2026-10-22T09:00:00Z",
+        });
+        added.push({
+          id: `${id}-reply`,
+          role: "assistant",
+          kind: "message",
+          text: `Live update ${step}.`,
+          sent_at: "2026-10-22T09:00:00Z",
+        });
+        order.push(id, `${id}-reply`);
+        push();
+        await new Promise((resolve) => setTimeout(resolve, 40));
+      }
+      await settle();
+      await settle();
+      observer.disconnect();
+      check(
+        (
+          container.querySelector(".agent-history-chat")?.textContent ?? ""
+        ).includes("Live update 19."),
+        "The busy conversation did not show its newest message",
+      );
+      check(
+        Math.max(0, ...longTasks) < 200,
+        `A busy conversation blocked the page: long tasks ${JSON.stringify(longTasks.map(Math.round))}`,
+      );
+
+      // In the Inspector's window body, at the body sizes of a phone
+      // (390×844), a laptop (1280×800), a half screen (960×1080), a wide
+      // screen (1920×1080), a portrait screen (1080×1920) and a small floating
+      // window, the long conversation scrolls inside the window and the
+      // composer stays in it.
+      for (const [width, height] of [
+        [390, 660],
+        [480, 525],
+        [480, 800],
+        [560, 800],
+        [560, 1640],
+        [320, 260],
+      ] as const) {
+        root.render(
+          <div
+            className="workspace-inspector-body"
+            style={{ width, height, display: "flex" }}
+          >
+            <div className="workspace-inspector-resource inspector-history-resource">
+              <AgentChat
+                pane={pane("idle")}
+                active
+                onOpenTerminal={() => {}}
+                onClose={() => {}}
+              />
+            </div>
+          </div>,
+        );
+        await settle();
+        await settle();
+        const body = container
+          .querySelector(".workspace-inspector-body")!
+          .getBoundingClientRect();
+        const list = container.querySelector<HTMLElement>(
+          ".agent-history-chat",
+        );
+        const composer = container
+          .querySelector(".agent-chat-composer")
+          ?.getBoundingClientRect();
+        check(
+          !!list &&
+            list.scrollHeight > list.clientHeight &&
+            list.getBoundingClientRect().bottom <= body.bottom + 1,
+          `At ${width}×${height} the conversation does not scroll inside the window`,
+        );
+        check(
+          !!composer &&
+            composer.height > 0 &&
+            composer.top >= body.top &&
+            composer.bottom <= body.bottom + 1,
+          `At ${width}×${height} the composer is outside the window`,
+        );
+      }
+      historyAnswer = null;
+    }
+
+    // History's read fails while the summary reads: Chat says so instead of
+    // loading forever, and Refresh retries History as well.
+    {
+      reply = conversation([message("r1", "assistant", "Recovered answer")]);
+      historyAnswer = () => {
+        throw new Error("History read failed.");
+      };
+      root.render(<div />);
+      await settle();
+      render("idle", true, 99);
+      await settle();
+      await settle();
+      const text = () =>
+        container.querySelector(".agent-chat")?.textContent ?? "";
+      check(
+        text().includes("History read failed.") &&
+          !text().includes("Loading conversation"),
+        `A failed History read was not shown: ${text().slice(0, 200)}`,
+      );
+      historyAnswer = null;
+      container
+        .querySelector<HTMLButtonElement>('[aria-label="Refresh conversation"]')
+        ?.click();
+      await settle();
+      await settle();
+      check(
+        text().includes("Recovered answer") &&
+          !text().includes("History read failed."),
+        "Refresh did not retry History's read",
+      );
+
+      // Loaded, then a failed read, then a retry that succeeds with nothing
+      // new (the same cursor): the warning goes and the messages stay.
+      const refresh = () =>
+        container
+          .querySelector<HTMLButtonElement>(
+            '[aria-label="Refresh conversation"]',
+          )
+          ?.click();
+      historyAnswer = () => {
+        throw new Error("History read failed again.");
+      };
+      refresh();
+      await settle();
+      await settle();
+      check(
+        text().includes("History read failed again.") &&
+          text().includes("Recovered answer"),
+        "A failed History refresh must warn and keep the last window",
+      );
+      let unchanged = 0;
+      historyAnswer = (params) => {
+        unchanged += 1;
+        const cursor = params.cursor as { epoch: string; revision: number };
+        return {
+          ...historyOf([]),
+          mode: "delta",
+          cursor,
+          base_revision: cursor.revision,
+          upserts: [],
+          removed: [],
+          entries: undefined,
+        };
+      };
+      refresh();
+      await settle();
+      await settle();
+      check(
+        unchanged > 0 &&
+          !text().includes("History read failed again.") &&
+          text().includes("Recovered answer"),
+        "A successful History retry with nothing new left the warning up",
+      );
+      historyAnswer = null;
+    }
 
     const unwatched = count("agent_conversation.unwatch");
     render("done", false);

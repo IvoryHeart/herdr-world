@@ -316,6 +316,7 @@ const IMPORTANT_RPC_METHODS = new Set([
   "bridge.pause_others",
   "agent_conversation.get",
   "agent_conversation.latest",
+  "agent_conversation.steps",
   "agent_conversation.send",
   "agent_conversation.dismiss",
   "agent_conversation.answer",
@@ -1727,6 +1728,24 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
         watcher.unwatch(ws, paneId);
       }
       sendReply({ id, result: { ok: true } }, method);
+    } catch (e) {
+      sendError(`${method}-error`, e);
+    }
+    return;
+  }
+  if (method === "agent_conversation.steps") {
+    try {
+      const p = params ?? {};
+      const paneId = typeof p.pane_id === "string" ? p.pane_id : "";
+      if (!paneId) throw new Error(`${method} requires pane_id`);
+      const steps = await connection.agentSessions.conversation.steps({
+        pane_id: paneId,
+        // Bounded: History's window shows at most a few hundred calls.
+        call_ids: (Array.isArray(p.call_ids) ? p.call_ids : [])
+          .filter((callId): callId is string => typeof callId === "string")
+          .slice(0, 500),
+      });
+      sendReply({ id, result: { steps } }, method);
     } catch (e) {
       sendError(`${method}-error`, e);
     }
