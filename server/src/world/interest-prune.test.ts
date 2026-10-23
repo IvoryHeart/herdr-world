@@ -3,8 +3,16 @@ import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { interestKey } from "../../../shared/interest";
+import {
+  ConnectionManager,
+  type ConnectionRuntime,
+} from "../connections/manager";
 import { BoardStore } from "./board-store";
-import { closesTerminals, pruneGoneInterest } from "./interest-prune";
+import {
+  closesTerminals,
+  pruneGoneInterest,
+  reconcileReadyInterest,
+} from "./interest-prune";
 
 let root: string;
 let path: string;
@@ -115,6 +123,93 @@ describe("agent interest", () => {
       },
     });
     expect(asked).toBe(false);
+  });
+
+  test("a listing cannot prune interest added or edited after it began", async () => {
+    for (const ops of [
+      [
+        {
+          op: "interest.set" as const,
+          key: interestKey("conn-a", "term_new"),
+          interest: "focused" as const,
+        },
+      ],
+      [
+        {
+          op: "interest.set" as const,
+          key: muted,
+          interest: "focused" as const,
+        },
+      ],
+      [
+        { op: "interest.set" as const, key: muted, interest: null },
+        { op: "interest.set" as const, key: muted, interest: "muted" as const },
+      ],
+    ]) {
+      const store = seeded();
+      const reply = Promise.withResolvers<unknown>();
+      const live = { ...host(null), call: () => reply.promise };
+      const pruning = pruneGoneInterest(store, "conn-a", live);
+      store.patch(ops);
+      const edited = store.get();
+      reply.resolve({ panes: [{ terminal_id: "term_2" }] });
+      await pruning;
+      expect(store.get()).toEqual(edited);
+      expect(live.revisions).toEqual([]);
+    }
+  });
+
+  test("startup and reconnect reconcile a close missed while disconnected", async () => {
+    const store = seeded();
+    let terminals = ["term_2"];
+    let listings = 0;
+    let reconciliation = Promise.resolve();
+    type Runtime = ConnectionRuntime & { herdr: { call(): Promise<unknown> } };
+    const manager = new ConnectionManager<Runtime>("conn-a", (status) => {
+      if (status.state === "ready")
+        reconciliation = reconcileReadyInterest(
+          store,
+          manager.readyRuntimeLease(status.id),
+          () => {},
+        );
+    });
+    const identity = {
+      id: "conn-a",
+      label: "Example",
+      source: "test" as const,
+    };
+    manager.register({
+      identity,
+      createRuntime: () => ({
+        identity,
+        startTransport: async () => {},
+        startBackground: () => {},
+        stop: async () => {},
+        herdr: {
+          call: async () => {
+            listings += 1;
+            return { panes: terminals.map((terminal_id) => ({ terminal_id })) };
+          },
+        },
+      }),
+    });
+    try {
+      await manager.start("conn-a");
+      await reconciliation;
+      expect(store.get().layout.interest).toEqual({
+        [focused]: "focused",
+        [elsewhere]: "muted",
+      });
+      await manager.stop("conn-a");
+      terminals = [];
+      expect(store.get().layout.interest[focused]).toBe("focused");
+      await manager.start("conn-a");
+      await reconciliation;
+      expect(store.get().layout.interest).toEqual({ [elsewhere]: "muted" });
+      expect(listings).toBe(2);
+    } finally {
+      await manager.stopAll();
+    }
   });
 
   test("closing a pane, tab or workspace triggers a check; other events do not", () => {

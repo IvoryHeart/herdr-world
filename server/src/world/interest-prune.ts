@@ -2,6 +2,32 @@ import { interestKeyPrefix } from "../../../shared/interest";
 import { serverLogger } from "../utils/logger";
 import { type BoardStore, goneInterestOps } from "./board-store";
 
+/** Reconcile missed closes whenever a host becomes ready, including startup. */
+export async function reconcileReadyInterest(
+  board: BoardStore,
+  lease: {
+    connectionId: string;
+    runtime: {
+      herdr: {
+        call(
+          method: string,
+          params: Record<string, unknown>,
+          timeoutMs: number,
+        ): Promise<unknown>;
+      };
+    };
+    isCurrent(): boolean;
+  } | null,
+  changed: (revision: number) => void,
+) {
+  if (!lease) return;
+  await pruneGoneInterest(board, lease.connectionId, {
+    call: (method, params) => lease.runtime.herdr.call(method, params, 10_000),
+    isCurrent: lease.isCurrent,
+    changed,
+  });
+}
+
 /** Herdr events after which a terminal may be gone. */
 const CLOSING_EVENTS = new Set([
   "pane.closed",
@@ -28,7 +54,8 @@ export async function pruneGoneInterest(
   },
 ) {
   const prefix = interestKeyPrefix(connectionId);
-  const stored = Object.keys(board.get().layout.interest);
+  const observed = board.get();
+  const stored = Object.keys(observed.layout.interest);
   if (!stored.some((key) => key.startsWith(prefix))) return;
   try {
     const listed = (await host.call("pane.list", {})) as { panes?: unknown };
@@ -39,7 +66,10 @@ export async function pruneGoneInterest(
       if (typeof terminal !== "string" || !terminal) return;
       terminals.add(terminal);
     }
-    const ops = goneInterestOps(board.get(), connectionId, terminals);
+    // A newer edit (even clearing and restoring the same choice) must never
+    // be removed using a listing that predates it.
+    if (board.get().revision !== observed.revision) return;
+    const ops = goneInterestOps(observed, connectionId, terminals);
     if (ops.length) host.changed(board.patch(ops).revision);
   } catch (error) {
     serverLogger.warn("Board could not drop gone terminals' interest", {

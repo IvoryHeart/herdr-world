@@ -134,6 +134,7 @@ import {
   type BoardOp,
 } from "./world/board-store";
 import { afterHerdrClose } from "./world/board-closing";
+import { reconcileReadyInterest } from "./world/interest-prune";
 import {
   readPaneRecipient,
   recipientOps,
@@ -515,7 +516,6 @@ const readyConnectionGenerations = new Map<string, number>();
 let worldSnapshots: WorldSnapshotService<LegacyConnectionRuntime> | null = null;
 const worldWatchlist = new WorldWatchlistRegistry();
 let boardStore: BoardStore | null = null;
-/** Opened on first use, so a World without Board never touches the file. */
 function board() {
   boardStore ??= new BoardStore(undefined, {
     log: (message) => console.warn(message),
@@ -538,11 +538,6 @@ function publishProfilesChanged(revision: number) {
   for (const ws of clients) safeSend(ws, line, "world-profiles");
 }
 
-/**
- * A tab Herdr closed on the current runtime loses its saved colour, so colours
- * of closed tabs do not accumulate. The tab's plain key could also be an older
- * Herdr workspace's ID; it goes only once Herdr says no such workspace exists.
- */
 /** The host's workspace IDs after a move, with both rooms of the move. */
 async function moveWorkspaceIds(
   call: (method: string, params: Record<string, unknown>) => Promise<unknown>,
@@ -665,6 +660,11 @@ const connectionManager = new ConnectionManager<LegacyConnectionRuntime>(
       return;
     }
     if (status.state !== "ready") return;
+    void reconcileReadyInterest(
+      board(),
+      connectionManager.readyRuntimeLease(status.id),
+      publishBoardChanged,
+    );
     resumeAssistantIfLoaded();
     if (reporter.recovered(fields)) {
       readyConnectionGenerations.set(status.id, status.generation);

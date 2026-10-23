@@ -85,7 +85,7 @@ import { PullRequestCard } from "./PullRequestCard";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { ColorSwatchButton } from "./ColorSwatch";
 import { changedCount, checkoutLabel } from "./inspectorCheckout";
-import { InterestButton, type InterestChoice } from "./InterestButton";
+import { AgentInterestButton } from "./AgentInterestButton";
 import { InspectorSplitResizer } from "./InspectorSplitResizer";
 import "./WorkspaceInspectorHost.css";
 
@@ -153,7 +153,6 @@ export function WorkspaceInspectorHost({
   onExpandedChange,
   windowControls,
   terminalColor,
-  agentInterest,
   onWindowMaximize,
   windowMaximized = false,
   onClose,
@@ -202,8 +201,6 @@ export function WorkspaceInspectorHost({
   windowControls?: ManagedWindowControls;
   /** The terminal's colour, shown and chosen beside its name. */
   terminalColor?: ManagedWindowControls["color"];
-  /** The agent's interest, which gates its chimes. */
-  agentInterest?: InterestChoice | null;
   onWindowMaximize?: () => void;
   windowMaximized?: boolean;
   onClose: () => void;
@@ -700,8 +697,11 @@ export function WorkspaceInspectorHost({
               : null}
           </div>
         )}
-        {agentContext && agentInterest ? (
-          <InterestButton {...agentInterest} />
+        {agentContext ? (
+          <AgentInterestButton
+            connectionId={connectionClient.connectionId}
+            pane={historyPane}
+          />
         ) : null}
         {/* One selector in the window's top bar, Chat first: Chat,
             Terminal, Changes, Files (and Commits). */}

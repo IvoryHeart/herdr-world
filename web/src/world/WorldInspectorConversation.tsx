@@ -20,9 +20,7 @@ import { worldLocalStorage } from "../browserStorage";
 import { type ActiveDiffSelection } from "../components/DiffViewerPanel";
 import { requestFilePreview } from "../components/fileExplorerResources";
 import type { ActiveFilePreviewSelection } from "../components/FilePreviewContent";
-import type { Interest } from "../../../shared/interest";
 import { WorkspaceInspectorHost } from "../components/WorkspaceInspectorHost";
-import { setAgentInterest, useAgentInterest } from "./useAgentInterest";
 import { ThemeScope } from "../themeScope";
 import {
   OperationalContext,
@@ -173,15 +171,6 @@ function InspectorResources({
           candidate.tab_id === conversation.tabId,
       )
     : undefined;
-  const interest = useAgentInterest();
-  const terminalId = historyPane?.agent ? historyPane.terminal_id : undefined;
-  const agentInterest = terminalId
-    ? {
-        current: interest.interestOf(conversation.connectionId, terminalId),
-        onInterest: (next: Interest) =>
-          void setAgentInterest(conversation.connectionId, terminalId, next),
-      }
-    : null;
   const scope = useMemo(
     () =>
       workspace
@@ -517,7 +506,6 @@ function InspectorResources({
             onExpandedChange={changeExpanded}
             windowControls={windowControls}
             terminalColor={terminalColor}
-            agentInterest={agentInterest}
             onWindowMaximize={onWindowMaximize}
             windowMaximized={windowMaximized}
             onDockOut={floating ? undefined : onDockOut}
