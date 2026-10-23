@@ -34,8 +34,12 @@ pushes or full gates. Reconcile existing accepted work instead of rebuilding it.
   #338 (worktree, existing Chat batch), #370 (issue scope/completeness).
   #284 retains the known upstream conditional-input limitation.
 - [ ] 2.0b Verify supported harness versions and native registry/binding modes
-  using isolated synthetic fixtures; cover ambiguity, absent registry, mode and
-  digest changes, permission readiness and next-shift behavior. Reconcile the
+  using isolated synthetic fixtures; distinguish observed behavior from
+  help/schema, installed source and documentation. Cover ambiguity, absent
+  registry, mode/digest changes, permission readiness, install-enable effects,
+  independent installed/enabled/advertised/used/eval claims and per-harness
+  activation boundaries. Current no-model probes do not establish invocation
+  or live reload; verify those before claiming them. Reconcile the
   profile/seat spec's per-harness table and full eval identity. Agent-config UI
   stays held until this contract/evidence is owner-reviewed.
 

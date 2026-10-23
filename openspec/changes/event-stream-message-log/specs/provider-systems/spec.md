@@ -94,8 +94,18 @@ and provenance separately from native installation and observed activation.
 Discovery SHALL report version-qualified supported, unsupported, unavailable
 and unknown capabilities, including supported binding modes. Installation
 SHALL use the harness's declared operation with explicit owner confirmation;
-it SHALL NOT silently grant permissions or attach skills. Desired changes
-SHALL apply next start/shift, not hot-patch a running occupant.
+it SHALL preview scope and known side effects, including enablement and affected
+configuration/sessions, before acting. Unknown effects SHALL NOT be represented
+as install-only behavior. It SHALL NOT silently grant permissions, attach skills
+or substitute file copying for a missing installer capability.
+
+The adapter SHALL declare a version-qualified activation boundary: next session,
+supported reload or verified live update. A selection edit SHALL NOT itself
+trigger automatic reload or live mutation. Explicit apply SHALL respect approved
+permissions and eval policy and retain the effective binding revision and bound
+session/generation. Unverified live/reload behavior SHALL remain pending or
+unsupported, not be represented as applied. Disablement SHALL NOT claim to
+retract instructions already in an ongoing model context.
 
 #### Scenario: Same skill name on another harness
 - **WHEN** a staffing changes harness and the new registry contains the same name
@@ -111,6 +121,44 @@ SHALL apply next start/shift, not hot-patch a running occupant.
 - **WHEN** an adapter can enumerate artifacts but not prove runtime activation
 - **THEN** desired selections and launch snapshot remain separate from an
   unknown activation observation
+
+#### Scenario: Native installation also enables
+- **WHEN** a supported native install/link operation enables its resources
+- **THEN** World previews that effect and scope for confirmation before acting,
+  and records resulting observations separately from desired attachments
+
+#### Scenario: Reload capability lacks execution evidence
+- **WHEN** help or a catalog lists reload but its application boundary has not
+  been verified for the installed adapter version
+- **THEN** World does not claim a live selection change applied; it retains the
+  pending revision and identifies the next supported activation boundary
+
+#### Scenario: Disable after instructions were used
+- **WHEN** the owner disables a binding already used in a running session
+- **THEN** World records the effective disable boundary without claiming earlier
+  instructions were removed from context or erasing historical use
+
+### Requirement: Skill evidence claims remain independent
+
+World SHALL distinguish installed, enabled, advertised, used and eval-passed
+claims, each able to remain unknown and carrying provenance: source, observation time,
+harness/version, binding revision and applicable configuration/session scope.
+An inventory SHALL NOT prove advertisement or invocation; a session catalog
+SHALL NOT prove skill-body use. Used SHALL require actual invocation evidence.
+Eval-passed SHALL refer to the matching evaluation tuple, not imply use by the
+current occupant. Evidence from observed operations, help/schema, installed
+source and external documentation SHALL remain distinguishable. Repository
+source discovery SHALL be version/capability-specific, not assumed universal
+from a shared folder convention.
+
+#### Scenario: Advertised skill has never been invoked
+- **WHEN** a session catalog lists a skill without invocation evidence
+- **THEN** advertised can be confirmed while used remains unknown
+
+#### Scenario: Eval passes before occupant use
+- **WHEN** an isolated eval passes for the current binding tuple before that
+  binding is used by the current occupant
+- **THEN** eval-passed and used retain their independent evidence and scopes
 
 ### Requirement: Eval evidence follows the effective binding
 

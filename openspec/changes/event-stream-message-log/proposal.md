@@ -17,8 +17,9 @@ launch directory.
   REST and OTel first-class and unchanged. New connectors require a CLI or
   standard protocol. MCP/marketplace integration stays later.
 - Separate neutral skill requirements from per-staffing harness/mode/artifact
-  bindings, sourced from native registries with binding-specific evals before
-  agent-config UI proceeds.
+  bindings, sourced from native registries with independent evidence claims,
+  explicit install effects and verified activation boundaries. Binding-specific
+  evals and owner review precede agent-config UI work.
 - Propose capture of qualified source events into a bounded durable log with
   resumable cursors and rebuildable read models.
 - Propose a message log/outbox with explicit threads, attributed senders,

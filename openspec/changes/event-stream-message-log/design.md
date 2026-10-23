@@ -131,16 +131,37 @@ Discovery is bounded and read-only. An adapter declares the installed-version
 support for discovery, install, binding modes and activation verification;
 unsupported, unavailable and unknown are distinct. No registry is not an empty
 successful registry, and folder-name discovery does not prove activation.
-Native installation uses the harness's declared operation and explicit owner
-confirmation; it does not silently grant tools, permissions or attach skills.
+Native installation uses the harness's declared operation with explicit owner
+confirmation. Preview its scope and known side effects first: an install/link
+operation can also enable resources. Include affected configuration/sessions,
+tools and permission effects; do not promise separate native verbs where they
+do not exist. Unknown effects remain unknown and cannot be advertised as a
+safe install-only operation. A missing installer verb never authorizes silent
+file copying or a permission bypass.
 
 Resolve every requested requirement against the selected staffing before start
 or shift. Ambiguous sources, missing bindings or unavailable artifacts block
 that configuration; never pick by name, omit a requested requirement or switch
 binding mode silently. Seat removals explicitly exclude inherited requirements.
 Show desired selections separately from the occupant's immutable launch
-snapshot and observed activation evidence (unknown remains unknown). Profile
-edits apply on the next start/shift, not by hot-patching a live occupant.
+snapshot and subsequent observed applied revisions. The adapter declares its
+version-qualified activation boundary: next session, supported reload or
+verified live update. Selection changes do not automatically reload or mutate
+a live occupant. Any explicit apply operation must respect approved scope,
+permissions and critical-seat evals, and record the binding revision and bound
+session/generation it actually affected. When reload/live application is not
+established, keep the change pending for the next supported boundary. Disablement
+cannot retract instructions already present in a running model context.
+
+Record **installed, enabled, advertised, used and eval-passed** as independent
+claims, not a linear state machine. Each can be unknown and carries source,
+observation time, harness/version, binding revision and applicable config/session
+scope. A package inventory proves neither session advertisement nor invocation;
+a command catalog is not evidence that the skill body was used. Used requires
+actual invocation evidence. An eval pass belongs to the full binding/test tuple
+and may precede use by this occupant. Disablement does not erase historical use
+or a still-matching eval result. None of these observations alone proves overall
+readiness or grants permissions.
 
 Evals apply per binding: effective binding/skill digest, suite digest,
 harness/version, **binding mode**, model, adapter/runner revisions and relevant
@@ -152,10 +173,21 @@ Readiness respects the staffing's approved permission policy, without escalation
 
 Agent-config UI remains held until the owner reviews this contract and each
 supported harness's capability/mode mapping has version-qualified evidence.
-The current per-harness product table is a verification plan, not proof of
-support. Verify in isolated synthetic sessions, including missing registry,
-ambiguous artifacts, changed digests, mode changes, unavailable install and
-cross-harness shifts. This PR authorizes neither those UI builds nor connector
+Installed-version research used isolated synthetic repositories/configuration,
+management operations and session initialization, with no model task. It found
+native skill loaders in Claude Code 2.1.309, Codex 0.164.0, Gemini CLI 0.57.0 and
+pi 0.87.1. Observations are labelled separately from CLI help/schema, installed
+source and external documentation; one does not silently promote another.
+
+In that tested baseline, shared repository `.agents/skills` was discovered
+by Codex/Gemini/pi but not by Claude; the conventional repository location is
+not a universal cross-harness source. Claude plugin install and Gemini extension
+link also enabled their fixtures. These are version/scenario-bounded findings,
+not universal absence or installation guarantees. Package inventory and some
+session catalogs were observed; full skill-body use, live reload and behavioral
+equivalence across harnesses were not established. Those boundaries still need
+isolated evidence, including missing registry, ambiguous artifacts, changed
+digests, mode changes, unavailable install and cross-harness shifts. This PR authorizes neither those UI builds nor connector
 implementation. See the [provider requirements](specs/provider-systems/spec.md).
 
 ### One capture path and two uses of the ledger
