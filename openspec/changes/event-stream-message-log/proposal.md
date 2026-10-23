@@ -10,11 +10,20 @@ launch directory.
 
 - Organize systems of record by domain, served by provider plugins implementing
   one contract per domain: capabilities, provenance claims, verbs and auth/scopes.
-  One provider and its configured instances can serve several domains.
+  One provider and its configured instances can serve several domains; users
+  see Connector and Connection with the same lifecycle for built-ins and later
+  installations. Owners choose authority per scope.
+- Prioritize current Herdr, Claude/Codex and GitHub via `gh`; keep existing Jira
+  REST and OTel first-class and unchanged. New connectors require a CLI or
+  standard protocol. MCP/marketplace integration stays later.
+- Separate neutral skill requirements from per-staffing harness/mode/artifact
+  bindings, sourced from native registries with binding-specific evals before
+  agent-config UI proceeds.
 - Propose capture of qualified source events into a bounded durable log with
   resumable cursors and rebuildable read models.
 - Propose a message log/outbox with explicit threads, attributed senders,
-  conditional recipient bindings and evidence-based delivery receipts.
+  bounded admission, scoped idempotency, conditional recipient bindings and
+  causally correlated delivery receipts.
 - Use target-host harness adapters where their capabilities are established;
   preserve user-versus-peer standing and expose unsupported conditions.
 - Define an evidenced agent-to-worktree read model and a shared, revalidated
@@ -32,7 +41,7 @@ approved implementation is delivered and its deltas are synchronized.
 ### New Capabilities
 
 - `provider-systems`: scoped systems of record, domain contracts, provider
-  instances and the boundary to later plugin/skill marketplaces.
+  instances, connector lifecycle and harness-specific skill bindings.
 - `event-stream-message-log`: qualified capture/replay, durable message intents,
   conditional delivery, shared read models and evidenced worktree bindings.
 

@@ -30,15 +30,79 @@ reset. A source outage SHALL mark observations stale rather than imply deletion.
 
 ### Requirement: Durable message intents
 
-World SHALL acknowledge Sent only after committing the message and its
-per-recipient delivery intents. Each message SHALL carry an idempotency key,
-explicit thread, sender claim, body and recipients. Duplicate submission SHALL
-return the existing intent. Pending intents SHALL survive compaction without
-being expired solely because they have waited.
+World SHALL acknowledge Sent only after committing the message and all
+per-recipient intents atomically. Each message SHALL carry an explicit thread,
+sender claim, body, recipients and requested delivery/target conditions.
+Idempotency SHALL be scoped by World ledger incarnation, service-issued stable
+producer ID and client key; sender labels SHALL NOT define that namespace.
+A canonical fingerprint SHALL compare all request fields, preserving exact
+body content and normalizing the recipient set. An identical retry SHALL
+return the existing message/status without re-resolving recipients. A changed
+payload under the same namespace/key SHALL return `idempotency_conflict`
+without mutation or dispatch. Concurrent submissions SHALL enforce this same
+uniqueness rule transactionally.
 
-#### Scenario: Client retries an accepted send
-- **WHEN** a client resubmits the same idempotency key after losing the response
-- **THEN** World returns the accepted message without creating another delivery
+Accepted key/fingerprint mappings SHALL survive message compaction under a
+finite deduplication budget. Exhaustion SHALL reject new keys rather than
+forget accepted ones. Explicitly retired namespaces SHALL reject stale retries;
+unknown producer IDs SHALL NOT be created implicitly by send or reused.
+Retirement SHALL NOT discard unresolved messages. New registration SHALL NOT
+be treated as an automatic retry of uncertain delivery.
+
+#### Scenario: Client retries an accepted send at capacity
+- **WHEN** a client resubmits the same namespace/key and payload after losing
+  the response, while admission is full
+- **THEN** World returns the accepted message without another delivery or a
+  new-capacity refusal
+
+#### Scenario: Key reused for a different recipient or body
+- **WHEN** an accepted namespace/key is submitted with different content,
+  thread, sender claim, recipients or delivery conditions
+- **THEN** World reports idempotency_conflict and leaves the original message
+  and delivery records unchanged
+
+#### Scenario: Same key in different producer namespaces
+- **WHEN** two registered producers submit the same client key
+- **THEN** each is admitted independently subject to quotas, without collision
+
+#### Scenario: Retry after namespace retirement
+- **WHEN** an old accepted request is retried under a retired producer ID
+- **THEN** World rejects that namespace instead of dispatching a new message
+
+### Requirement: Bounded admission for nonexpiring pending intents
+
+World SHALL enforce finite payload/metadata bytes, recipient fan-out, global
+and per-recipient unresolved count/byte limits, storage headroom and separate
+deduplication limits before acceptance. Held and delivery-unknown intents SHALL
+count toward capacity. Concurrent and multi-recipient admission SHALL check
+and reserve capacity atomically, all-or-nothing. New requests beyond capacity
+SHALL return `outbox_full` with limiting scope, or `message_too_large` for
+payload/fan-out limits, without Sent, partial records or hidden overflow queues.
+Consumers SHALL preserve unsent requests and show capacity pressure without
+an automatic send loop. Capture retention SHALL preserve reserved capacity for
+accepted intents and receipt updates.
+
+Accepted pending intents SHALL survive compaction, restart and quota reductions
+without expiry or silent eviction. Only confirmed terminal outcomes SHALL
+release their pending capacity; cancellation SHALL require no dispatch or a
+confirmed no-side-effect outcome. Unknown delivery SHALL require reconciliation.
+Finite numeric settings and storage reserves SHALL be approved from synthetic
+measurements before persistence implementation; no limit defaults to unbounded.
+
+#### Scenario: Offline recipient fills its pending allowance
+- **WHEN** accepted waiting messages exhaust that recipient's quota
+- **THEN** another send to it is refused before Sent while previous messages
+  remain durable, and another recipient can use remaining global capacity
+
+#### Scenario: Concurrent senders compete for the last slot
+- **WHEN** two new requests together exceed remaining admission capacity
+- **THEN** only capacity-fitting requests commit, and refused multi-recipient
+  requests create no partial deliveries
+
+#### Scenario: Pending messages outlive retention or quota reduction
+- **WHEN** history compacts or limits shrink below current pending usage
+- **THEN** accepted pending messages remain intact and new admission waits for
+  sufficient capacity instead of expiring or evicting accepted messages
 
 ### Requirement: Conditional delivery and standing
 
@@ -67,7 +131,13 @@ visible hold. Uncertain side effects SHALL NOT be automatically resent.
 
 Delivered SHALL require the adapter's documented target-acceptance evidence;
 queue acceptance SHALL be labelled queued. Read SHALL require a matching turn
-in the bound occupant's transcript. Ambiguous text, a working status or missing
+in the bound occupant's transcript. Message-ID correlation SHALL be validated
+by the adapter. Exact-text fallback SHALL require a validated source
+incarnation/session and transcript position or equivalent send-specific causal
+boundary, plus a uniquely attributable eligible occurrence for this delivery.
+Pre-existing or replayed older turns SHALL NOT qualify. Later World ingestion
+or host-clock comparison alone SHALL NOT establish causality. Missing boundary
+or competing identical inputs SHALL leave Read unconfirmed. Ambiguous text, a working status or missing
 evidence SHALL NOT advance a receipt. Confirmed receipt evidence SHALL NOT
 regress because a source disconnects. Viewer seen/reviewed state SHALL remain
 separate from message-consumption receipts.
@@ -75,6 +145,16 @@ separate from message-consumption receipts.
 #### Scenario: Same text cannot be matched uniquely
 - **WHEN** transcript evidence cannot distinguish two deliveries with equal text
 - **THEN** neither ambiguous match is promoted to Read
+
+#### Scenario: Old identical turn arrives after a new delivery
+- **WHEN** a pre-existing or replayed turn uniquely matches a newly sent body
+  but predates its validated source/send boundary, even if ingested later
+- **THEN** World does not promote the new message to Read
+
+#### Scenario: Missing causal boundary or competing matching input
+- **WHEN** the adapter cannot correlate an exact-text occurrence to this send
+  because its source boundary is missing or another identical input is possible
+- **THEN** Read stays unconfirmed despite a matching string
 
 #### Scenario: Agent starts working without receipt evidence
 - **WHEN** the agent becomes working after a send

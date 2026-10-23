@@ -7,7 +7,10 @@
   and the unproven receipt-ID mapping; verify no private identifiers remain.
 - [x] 1.3 Fold systems-of-record/domain provider contracts into proposal, design
   and delta requirements; verify consistency with profile/staffing/seat/eval
-  boundaries and keep marketplaces a later discovery/distribution concern.
+  boundaries; record owner-confirmed Domain, shared connector lifecycle,
+  current-SoR priority, existing-connector preservation and native skill bindings.
+- [x] 1.3a Specify bounded pending admission, scoped idempotency/conflicts and
+  causal receipt boundaries with negative scenarios for the three review findings.
 - [ ] 1.4 Validate the change with OpenSpec strict validation and repository
   checks; obtain independent architecture review before owner acceptance.
 - [ ] 1.5 Obtain owner approval of the design and implementation sequence;
@@ -21,7 +24,22 @@ one batch branch. Use typecheck and focused tests per item, one complete gate
 at batch close, and one commit-by-commit review from the pod's pair. No per-item
 pushes or full gates. Reconcile existing accepted work instead of rebuilding it.
 
-## 2. Worktree read-model batch — coordinate with Chat
+## 2. Current-SoR and skill-contract prerequisites
+
+- [x] 2.0a Rank verified current Herdr, Claude/Codex and GitHub correctness,
+  freshness, health and coverage gaps as issue-backed Platform/Integrations
+  work; reuse existing issues and accepted fixes before proposing new work.
+  Current gap issues: #359 (compressed rollouts), #372 (PR detail freshness),
+  #369 (RESULT parsing), #371 (readiness health), #373 (skill provenance),
+  #338 (worktree, existing Chat batch), #370 (issue scope/completeness).
+  #284 retains the known upstream conditional-input limitation.
+- [ ] 2.0b Verify supported harness versions and native registry/binding modes
+  using isolated synthetic fixtures; cover ambiguity, absent registry, mode and
+  digest changes, permission readiness and next-shift behavior. Reconcile the
+  profile/seat spec's per-harness table and full eval identity. Agent-config UI
+  stays held until this contract/evidence is owner-reviewed.
+
+### Worktree read-model batch — coordinate with Chat
 
 - [ ] 2.1 Reconcile the separately authorized Inspector resolver with the
   qualified subject/candidate/observation envelope; verify foreground, own
@@ -38,13 +56,15 @@ pushes or full gates. Reconcile existing accepted work instead of rebuilding it.
 
 ## 3. Capture and replay batch — Platform
 
-- [ ] 3.0 Confirm domain wording, the initial provider set and packaging scope
-  with the owner; define the common contract plus domain-specific claims/verbs,
-  and verify multi-domain instances, scoped authority, capability absence and
-  credential/verb exposure using synthetic contract fixtures. External plugin
-  execution and marketplace connections require their own accepted scope.
+- [ ] 3.0 Define common lifecycle and domain-specific contracts with fixtures
+  for pre-installed and later installed connectors, scoped owner authority,
+  capability absence, credential exposure and enable/disable/health. Prioritize
+  current Herdr, Claude/Codex and GitHub via gh coverage. Preserve existing Jira
+  REST and OTel exactly as first-class connectors; new connectors require CLI
+  or standard protocol. MCP/marketplace remains later, not this batch.
 - [ ] 3.1 Define bounded retention/payload settings and the initial source set
-  using synthetic workload measurements; record the approved limits and their
+  including pending/deduplication quotas and reserved storage, using synthetic
+  workload measurements; record the approved finite limits and their
   gap/reset behavior before implementing persistence.
 - [ ] 3.2 Implement qualified capture and source deduplication with durable
   cursors; verify duplicate observations, source restart, reordered timestamps,
@@ -58,11 +78,14 @@ pushes or full gates. Reconcile existing accepted work instead of rebuilding it.
 ## 4. Message intent batch — Platform and Integrations
 
 - [ ] 4.1 Persist explicit threads, sender claims, messages and per-recipient
-  outbox records atomically; verify duplicate submissions, crash recovery and
-  retention of pending intents without introducing an expiry timer.
+  outbox records atomically; verify producer namespaces, identical retries,
+  payload conflicts, concurrent admission, per-recipient/global/payload limits,
+  atomic fan-out rejection, dedup budget/retired namespaces, crash recovery and
+  pending retention after quota reduction without expiry or hidden overflow.
 - [ ] 4.2 Add conditional recipient/shift bindings and monotonic evidence
   reduction; verify handover holds, changed targets, lost outcomes, refusal,
-  ambiguous transcript matches and no automatic resend of uncertain effects.
+  ambiguous transcript matches, old/replayed matching turns, missing causal
+  boundaries, concurrent identical inputs and no automatic uncertain resend.
 - [ ] 4.3 Add UI/CLI intent admission using shared service contracts; verify
   sender claim versus authentication and keep ask answers on their own verb.
 - [ ] 4.4 Update relevant contracts, CLI/user documentation and verification

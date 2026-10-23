@@ -28,11 +28,11 @@ receipt. A working-tree observation is not branch or PR ownership.
 
 ### Systems of record, served by provider plugins
 
-**Domain** is PM's proposed wording for the owner's systems-of-record grouping;
-it avoids overloading a thing's kind or a Group's Room/Desk/Team/Pod kind. The
-owner still reviews this wording. A **provider** is a plugin implementing a
-domain contract; a **provider instance** is its configured account, site, host
-or repository scope. One provider can implement several domain contracts.
+**Domain** is the owner-confirmed grouping: Code, Work, Runtime, Observability,
+Docs, and Agents & skills. It does not overload a Thing or Group kind. A
+**provider** implements a domain contract; a **provider instance** is its
+configured account, site, host or repository scope. Users see **Connector**
+and **Connection** respectively. One provider can implement several contracts.
 
 | Domain | Example providers and facts |
 | --- | --- |
@@ -50,8 +50,9 @@ authoritative only for the datasets and facts it owns, not its entire domain.
 For example, a Git checkout and a GitHub PR have different authorities even
 when they refer to the same commit. A telemetry inference does not override
 either. Overlapping providers preserve distinct provenance; neither becomes
-the preferred system of record merely by loading last. Adoption or migration
-of authority is explicit and preserves earlier claims.
+the preferred system of record merely by loading last. The owner chooses the system of record per domain/dataset scope and configures
+where and how it is used. Adoption or migration requires that explicit owner
+choice and preserves earlier claims; installation never assigns authority.
 
 Each domain has one versioned provider contract with the same common surface:
 
@@ -86,19 +87,76 @@ separate observed occupant. Herdr's pane is not that seat. Harness readiness
 is a Runtime health observation; a skill registry supplies content/provenance,
 and an eval runner supplies eval claims.
 
-Marketplaces are later discovery/distribution sources for plugins and skills,
-not grants of runtime authority. Discovery, installation, activation and
-permission approval remain distinct. A marketplace skill still needs matching
-eval evidence for critical seats: skill and suite digests, harness/version,
-model, runner revision and relevant configuration/permissions. Noncritical
-experimental status is explicit. A provider does not redefine a profile or
-silently attach a skill to a seat.
+### Connector lifecycle and scope
 
-Refactor existing built-in integrations only in their touched batches. External
-plugin packaging, a possible process boundary/MCP transport and which new
-provider to prioritize remain owner decisions before that implementation;
-the domain contract does not select an execution protocol. See the
-[short provider contract](specs/provider-systems/spec.md).
+Pre-installed built-ins and later user-installed connectors have the same
+contract: **install → configure → enable → health**. Installation records the
+connector identity/version and declared domains/capabilities; configuration
+creates scoped connections with credential references; enablement permits only
+configured capabilities and verb exposures. Health reports readiness, stale or
+last successful observations, unavailable dependencies and actionable failures.
+Installed, configured, enabled and healthy are distinct; enabling is not proof
+of health. Disablement stops new work and marks observations unavailable/stale
+without deleting provenance or blindly replaying uncertain side effects.
+Herdr host connections become the Herdr connector's connections without changing
+immutable connection IDs or runtime generation boundaries.
+
+The immediate priority is doing the current systems well: Herdr runtime,
+Claude/Codex transcripts/status/skills, and GitHub PRs/issues/checks/reviews via
+`gh`. Built-ins are pre-installed connectors, not a separate API shape. Existing
+Jira REST and OTel support stay unchanged and first-class in Connections; no
+legacy label, replacement requirement or forced migration is introduced here.
+For **new** connectors, eligibility is a CLI or a standard protocol (such as
+OTel); no new bespoke API connectors. Exact CLI command/output contracts and
+protocol versions are adapter-specific and must be verified before enablement.
+MCP and marketplace integration are later considerations, outside this phase.
+World does not operate its own skill marketplace.
+
+### Harness-specific skill requirements and bindings
+
+A persona or seat requests a harness-neutral **skill requirement**. Each named
+staffing variant resolves it to an explicit **binding**: harness, binding mode
+(`native`, `plugin`, or `injected`), source-scoped native artifact and effective
+revision. Mode is part of binding identity, not a display alias. The source
+scope includes target connection and repository/user/native-registry origin;
+the artifact identity includes harness, source, native identifier and effective
+content digest. Referenced resources and the injection recipe contribute to
+the binding digest. Equal names on two harnesses do not establish equivalence.
+A plugin's tools are not silently flattened into portable skill text.
+
+Use each harness's own skill registry/market where it has one, and supported
+repo/user sources where appropriate. World stores requirements, selections,
+bindings and provenance; the harness owns distribution and installation.
+Discovery is bounded and read-only. An adapter declares the installed-version
+support for discovery, install, binding modes and activation verification;
+unsupported, unavailable and unknown are distinct. No registry is not an empty
+successful registry, and folder-name discovery does not prove activation.
+Native installation uses the harness's declared operation and explicit owner
+confirmation; it does not silently grant tools, permissions or attach skills.
+
+Resolve every requested requirement against the selected staffing before start
+or shift. Ambiguous sources, missing bindings or unavailable artifacts block
+that configuration; never pick by name, omit a requested requirement or switch
+binding mode silently. Seat removals explicitly exclude inherited requirements.
+Show desired selections separately from the occupant's immutable launch
+snapshot and observed activation evidence (unknown remains unknown). Profile
+edits apply on the next start/shift, not by hot-patching a live occupant.
+
+Evals apply per binding: effective binding/skill digest, suite digest,
+harness/version, **binding mode**, model, adapter/runner revisions and relevant
+tool/permission configuration, with run/outcome evidence. Changing any relevant
+part invalidates matching evidence. Critical seats and shipped defaults require
+passing evidence for their declared support matrix; other seats can explicitly
+use Experimental bindings, but missing bindings are not an eval exemption.
+Readiness respects the staffing's approved permission policy, without escalation.
+
+Agent-config UI remains held until the owner reviews this contract and each
+supported harness's capability/mode mapping has version-qualified evidence.
+The current per-harness product table is a verification plan, not proof of
+support. Verify in isolated synthetic sessions, including missing registry,
+ambiguous artifacts, changed digests, mode changes, unavailable install and
+cross-harness shifts. This PR authorizes neither those UI builds nor connector
+implementation. See the [provider requirements](specs/provider-systems/spec.md).
 
 ### One capture path and two uses of the ledger
 
@@ -134,12 +192,52 @@ capture their accepted changes rather than migrating them together.
 
 ### Durable messages and conditional delivery
 
-Commit message ID/idempotency key, explicit thread, sender claim, recipients
-and body with the outbox intent before acknowledging Sent. One delivery record
-per recipient captures the exact connection, generation and occupant. A stable
-seat address can locate that occupant, but a shift does not silently retarget
-an already-bound delivery. Hold during handover and reconcile uncertain
-cutovers. FirstMate is a recipient and read-model consumer, not the transport.
+Commit the message and all recipient intents atomically before acknowledging
+Sent. Namespace idempotency by `(World ledger incarnation, service-issued
+producer ID, client key)`; a sender label is not a producer identity or an
+authentication guarantee. The producer namespace survives reconnect/restart.
+Compare a canonical request fingerprint covering explicit thread, sender claim,
+exact body, normalized recipient set and requested target/delivery conditions.
+The namespace/key itself and server-assigned IDs/times are not payload fields.
+Within a namespace, an identical retry returns the original message and current
+status without re-resolving recipients. Different content or targets return
+`idempotency_conflict`, with no mutation or dispatch; corrections need a new
+key. Concurrent submissions serialize on the namespace/key uniqueness rule.
+
+Keep accepted key/fingerprint/message mappings through message compaction,
+including after delivery. Deduplication records have a separate finite storage
+budget: exhaustion refuses new keys, not old retries. To reclaim a producer
+namespace, explicitly retire it; stale submissions to that namespace are
+rejected as retired, never admitted as new messages. Namespace retirement does
+not discard unresolved intents. Unknown producer IDs are never auto-created by
+send, and IDs are never reused. An explicit new registration is a new namespace,
+not a safe automatic retry of an uncertain send.
+
+Nonexpiring pending messages require **bounded admission**, not eviction.
+Before acceptance, transactionally check finite limits for body/metadata bytes,
+recipient fan-out, global and per-recipient unresolved records/bytes, plus
+storage headroom and deduplication budget. Held and delivery-unknown records
+count; multi-recipient admission is all-or-nothing. Existing identical retries
+are looked up before quota admission, so a full outbox still returns the accepted
+message. Reject new excess requests with `outbox_full` and the limiting scope
+(or `message_too_large` for payload/fan-out limits), no Sent acknowledgement,
+partial outbox or hidden overflow queue. UI/CLI preserves the unsent request
+and shows capacity pressure; no automatic send loop. Capture-history retention
+must not consume capacity reserved for accepted intents and receipt updates.
+
+Accepted pending records survive compaction, quota reductions and restart.
+Never silently drop or expire them to free space. Confirmed terminal outcomes
+release pending capacity; explicit cancellation is safe only before dispatch
+or after a confirmed no-side-effect outcome. Unknown delivery requires
+reconciliation and cannot be cancelled into a blind resend. Numeric defaults,
+maximum settings and storage reserve are required measured batch prerequisites;
+there is no unbounded default. Capacity pressure is service health, distinct
+from an ordinary typing/busy hold.
+
+One delivery record per recipient captures the exact connection, generation
+and occupant. A stable seat address can locate that occupant, but a shift does
+not silently retarget an already-bound delivery. Hold during handover and
+reconcile uncertain cutovers. FirstMate consumes messages; it is not transport.
 
 The adapter executes on the target host through its captured runtime. Owner
 messages require user standing; peer messages prefer peer standing. Where a
@@ -161,13 +259,22 @@ idempotent, not a promise of exactly-once external delivery.
 | --- | --- |
 | Sent | World committed the message and its delivery intent |
 | Delivered | Documented acceptance by the target adapter; queue acceptance explicitly says queued |
-| Read | Message ID, or an unambiguous exact-text match, in the bound occupant's recorded turn |
+| Read | Correlated message ID, or causally bounded unambiguous exact-text match, in the bound occupant's recorded turn |
 | Delivery unknown | The side effect might have happened but its outcome was lost |
 | Not sent | Confirmed refusal or failed target condition |
 
 Receipt evidence is monotonic; later execution failure is a separate outcome.
-Read is recorded consumption, not comprehension. A working status is not a
-receipt. Ambiguous text matches do not advance it. Keep the envelope count to
+Read is recorded consumption, not comprehension. Prefer an adapter-validated
+message-ID correlation. Text fallback requires a source incarnation/session and
+transcript position or equivalent send-specific boundary established before
+dispatch, plus evidence that the matching occurrence is causally eligible for
+this delivery. It must be unique among eligible outstanding sends/turns; a
+position alone cannot distinguish simultaneous identical inputs. Pre-existing
+and replayed older turns never qualify, even if World ingests them later. World
+capture time and unsynchronized host clocks cannot establish the boundary.
+If source reset, concurrent input or missing correlation prevents proving it,
+Read remains unconfirmed. A working status is not a receipt. Ambiguous text
+matches do not advance it. Keep the envelope count to
 World-held/unknown messages; confirmed harness-queued messages are delivered.
 Failures and unknown delivery can enter Reception. Missing receipt capability
 is unknown unless positively established, and never earns a read mark.
@@ -282,7 +389,7 @@ receipt evidence for reconciliation. It must not switch an uncertain message
 to another adapter or replay it as a new message. Existing source stores remain
 authoritative throughout.
 
-Before the storage batch, review numeric retention and payload limits against
+Before the storage batch, review finite retention, pending/deduplication admission and payload limits against
 representative synthetic workloads. Before each delivery adapter ships,
 establish its supported version, receipt mapping and admission conditions;
 unsupported cases stay unavailable. These are explicit batch prerequisites,
