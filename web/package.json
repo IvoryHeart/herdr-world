@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "vite --config vite.config.ts",
     "build": "tsc -b && vite --config vite.config.ts build",
+    "build:assets": "vite --config vite.config.ts build",
     "postbuild": "bun ../scripts/check-web-assets.mjs",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit"

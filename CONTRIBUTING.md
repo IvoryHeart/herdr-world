@@ -227,6 +227,12 @@ first when the failure is a known flake; otherwise merge the revert or land a
 fix. Later red commits are added to the open issue, not to new ones, and the next
 green main run at or after the red commit closes the issue and its revert PR.
 
+The **Web asset headroom** status on a PR projects its web asset delta onto
+current main and fails if together they would exceed the bundle budgets in
+`scripts/check-web-assets.mjs`; it warns above 95 %. Every push to main re-judges
+open PRs, so a PR that fit an older main turns red once main has grown. Trim, or
+raise the budget in a reviewed change, before merging.
+
 Unlabeled PRs get `documentation` (docs-only), `dependencies` (dependency updates),
 `bug` (fix titles), or `enhancement` (other code). Release preparation gets
 `skip-changelog`. Override with a `.github/release.yml` category before merging.
