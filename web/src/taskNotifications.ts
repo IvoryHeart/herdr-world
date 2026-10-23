@@ -1,7 +1,7 @@
 export const TASK_NOTIFICATION_ACTIVATE_EVENT =
   "herdr-world:task-notification-activate";
 // Bump when the notification payload contract changes.
-const NOTIFICATION_WORKER = "/task-notifications-sw.js?v=2";
+const NOTIFICATION_WORKER = "/task-notifications-sw.js?v=4";
 const NOTIFICATION_HASH = "#herdr-world-task=";
 
 export interface TaskNotificationTarget {

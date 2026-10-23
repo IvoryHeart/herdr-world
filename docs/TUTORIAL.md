@@ -202,8 +202,9 @@ changes what you see and does not disconnect hosts or retarget open terminals.
    takes that table's place, and the tables in between shift along. Drop it on
    the room's free spot to put it last of the tables shown. A room grows as
    tabs open, up to eight tables wide on a wide screen, six on a portrait or
-   half-width screen and four on a phone, then row by row. It shows up to 24
-   tables, keeping the ones that need you, are working or are newest; press
+   half-width screen and four on a phone, then row by row. A folded room normally
+   shows 24 tables, keeping the ones that need you, are working or are newest;
+   selected and pinned tables stay visible beyond that count. Press
    **+N** on its plaque to expand it into a longer room of up to 127 tables,
    and **Fold** to put it back. Rooms sit in columns that suit your screen
    (one on a phone), and a growing room pushes down only the rooms below it,
@@ -264,8 +265,9 @@ a starting brief and a look in Town. World starts it in a new tab for you.
    a permission mode. On **Skills & tools**, tap the skills (found in the
    room's `.agents/skills` and `.claude/skills` and your harness folders) and,
    for Claude Code, the tools it may use. On **Brief**, write the first prompt;
-   `{{task}}` is filled with what you type when you launch. On **Look**, dress
-   the character and watch it walk, turn and sit in the preview. **What a
+   `{{task}}` is filled with what you type when you launch. On **Look & sound**,
+   dress the character and watch it walk, turn and sit in the preview, and
+   pick its **Chime** (or keep the class default). **What a
    launch runs** shows the exact Herdr command. Press **Save**.
 3. Open **New agent**: **Actions → New agent**, **New agent** on a
    room's plaque (on a phone, tap the room first), or the robot beside **+** in
@@ -283,6 +285,24 @@ a starting brief and a look in Town. World starts it in a new tab for you.
 
 **You are done when:** an agent you started from a profile is answering in its
 own tab, dressed as you chose in Town.
+
+### Hear who needs you
+
+<a id="chimes"></a>
+
+1. Open **Menu → Sounds**. Under **This device**, leave **Play chimes on this
+   device** on and tap **Needs you**, **For you** and **Finished** to hear the
+   three patterns. Turn it off on devices that shouldn't chime; push stays
+   silent too while World is open, including when notifications are first
+   enabled. Open tabs share this device setting, and queued burst sounds
+   follow your latest sound choices.
+2. Under **Town master**, choose your coordinating agent (for example
+   FirstMate) and tap **Make Town master**. Its chime is a sound of its own.
+3. Tap anywhere in World once (browsers start sound only after a tap). When an
+   agent finishes or needs you, World chimes and a toast says who and why.
+
+**You are done when:** an agent finishing in another tab makes a chime and a
+toast naming it.
 
 ### Use Board: notes and strings for your agents
 

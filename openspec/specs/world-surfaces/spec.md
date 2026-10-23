@@ -1110,10 +1110,12 @@ moves desks. A room's capacity SHALL step through a
 bounded set of grid sizes that always leaves at least one free desk spot: a room
 grows square until it reaches its shape's width (four desks on a phone, six on
 portrait and mid-width screens, eight on wide screens) and then extends
-downward, and its building grows around it. A room SHALL draw at most 24 desks
-until the user expands it; an expanded room SHALL draw up to 127, and Fold SHALL
-return it to 24. A room with more tabs than it draws SHALL keep the selected
-desk and the three newest tabs, then desks whose agents need the user, are
+downward, and its building grows around it. A folded room SHALL use a default
+bound of 24 desks, and an expanded room a default bound of 127; Fold SHALL
+restore the 24-desk bound. Selected and pinned desks SHALL remain visible even
+past these bounds, subject to the pinned-desk requirement. A room with more
+tabs than it draws SHALL keep selected and pinned desks and the three newest
+tabs, then desks whose agents need the user, are
 working or are unknown, then finished ones, hiding idle and empty desks first,
 SHALL count every hidden desk on the room, and SHALL offer Expand on its plaque
 while it is folded. Zooming into a room taller or wider than the usable view, from its
