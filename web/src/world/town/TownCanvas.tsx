@@ -76,6 +76,12 @@ import {
   type TerminalColor,
   type TerminalColors,
 } from "../terminalColor";
+import { useWorldSources } from "../worldSources";
+import {
+  sameTownBadges,
+  townDeskBadges,
+  type TownDeskBadge,
+} from "./townBadges";
 import "./town.css";
 
 export type TownRoomActions = {
@@ -181,6 +187,13 @@ export function TownCanvas({
   const rendererRef = useRef<TownRendererHandle | null>(null);
   const [failure, setFailure] = useState(false);
   const [ready, setReady] = useState(false);
+  const sources = useWorldSources();
+  const badgesRef = useRef<ReadonlyMap<string, TownDeskBadge>>(new Map());
+  const deskBadges = useMemo(() => {
+    const next = townDeskBadges(projection, sources);
+    if (!sameTownBadges(next, badgesRef.current)) badgesRef.current = next;
+    return badgesRef.current;
+  }, [projection, sources]);
   const [formFactor, setFormFactor] = useState<TownFormFactor>(() =>
     typeof window !== "undefined" && window.innerWidth < 640
       ? "narrow"
@@ -1161,6 +1174,7 @@ export function TownCanvas({
             zoomToRoomKey(key);
           }}
           onFocusTarget={focusTarget}
+          deskBadges={deskBadges}
         />
       </div>
       <TownBoard model={model} observability={observability} />
@@ -1348,6 +1362,27 @@ function townVisibleHosts(
   };
 }
 
+function TownDeskBadgeLink({
+  badge,
+  deskLabel,
+}: {
+  badge: TownDeskBadge | undefined;
+  deskLabel: string;
+}) {
+  return badge ? (
+    <a
+      className="town-desk-badge"
+      data-tone={badge.tone}
+      href={badge.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label={`${badge.text} at ${deskLabel}`}
+    >
+      {badge.text}
+    </a>
+  ) : null;
+}
+
 const TownWorldLayer = memo(function TownWorldLayer({
   model,
   layout,
@@ -1361,10 +1396,13 @@ const TownWorldLayer = memo(function TownWorldLayer({
   onFocusTarget,
   visible,
   onHoverEntry,
+  deskBadges,
 }: {
   model: TownModel;
   layout: TownLayout;
   visible: TownVisible;
+  /** Pull request or ticket chips for desks (World sources). */
+  deskBadges: ReadonlyMap<string, TownDeskBadge>;
   onHoverEntry(key: string | null, rect?: DOMRect): void;
   selectedKey: string | null;
   blockedSince: ReadonlyMap<string, number>;
@@ -1560,8 +1598,17 @@ const TownWorldLayer = memo(function TownWorldLayer({
                               } as React.CSSProperties
                             }
                           >
-                            <span className="town-desk-tag" aria-hidden="true">
-                              {desk.displayLabel}
+                            <span className="town-desk-tag">
+                              <span
+                                className="town-desk-name"
+                                aria-hidden="true"
+                              >
+                                {desk.displayLabel}
+                              </span>
+                              <TownDeskBadgeLink
+                                badge={deskBadges.get(desk.key)}
+                                deskLabel={desk.displayLabel}
+                              />
                             </span>
                             {desk.observedPaneCount >
                             desk.paneDevices.length ? (

@@ -16,6 +16,7 @@ import {
   type ConnectionClient,
 } from "../../api";
 import { readCompletionSeen } from "../completionSeenState";
+import { worldSourcesStore } from "../worldSources";
 import "../world.css";
 import { worldLocalStorage } from "../../browserStorage";
 import {
@@ -449,6 +450,40 @@ async function run() {
       />
     );
   }
+  // Every agent works on one synthetic pull request, so desks show badges.
+  const agents = worldFor(base.connections).leaves.filter(
+    (leaf) => leaf.kind === "agent",
+  );
+  worldSourcesStore.useFetch(async () =>
+    Response.json({
+      observedAt: 1,
+      sources: [],
+      items: [
+        {
+          key: "github:pr:example-org/atlas#7",
+          source: "github",
+          kind: "pull_request",
+          ref: "example-org/atlas#7",
+          title: "Synthetic change",
+          url: "https://github.com/example-org/atlas/pull/7",
+          lane: "green",
+          status: "open",
+          roles: ["author"],
+          updatedAt: 1,
+          number: 7,
+          checks: "pass",
+        },
+      ],
+      links: agents.map((leaf) => ({
+        connectionId: leaf.connectionId,
+        generation: leaf.generation,
+        paneId: leaf.nativeId,
+        sessionFingerprint: leaf.agentSessionFingerprint ?? null,
+        itemKey: "github:pr:example-org/atlas#7",
+        via: "branch",
+      })),
+    }),
+  );
   const root = createRoot(host);
   root.render(
     <StrictMode>
@@ -1017,6 +1052,18 @@ async function run() {
   await waitFor(
     () => window.__HERDR_TOWN_RENDERER__!.animation.quests > 0,
     "no quest marker over any desk in the zoomed room",
+  );
+  await waitFor(
+    () => host.querySelector(".town-desk-badge") !== null,
+    "desks of agents with a pull request show its badge",
+  );
+  const badge = host.querySelector<HTMLAnchorElement>(".town-desk-badge")!;
+  check(
+    badge.textContent === "#7 ✓" &&
+      badge.dataset.tone === "pass" &&
+      badge.target === "_blank" &&
+      badge.rel.includes("noopener"),
+    `a desk badge links its pull request (${badge.textContent})`,
   );
 
   // From the keyboard, M on a desk lists the host's other rooms; choosing one

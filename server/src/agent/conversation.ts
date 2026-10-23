@@ -52,6 +52,16 @@ export type Conversation = {
   session_fingerprint: string | null;
   /** A plain name for the session shown, such as "claude session <id>". */
   session_label: string | null;
+  /**
+   * What the harness shows as its terminal title, such as the task it is on.
+   * Null when Herdr reports none.
+   */
+  terminal_title: string | null;
+  /**
+   * The tool call the agent has started and not finished: a call in the
+   * transcript with no result yet. Null when none is open.
+   */
+  running_tool: RunningTool | null;
   updated_at: string | null;
   messages: ConversationMessage[];
   latest: ConversationMessage | null;
@@ -77,6 +87,63 @@ export type Conversation = {
 );
 
 export type ConversationLatest = Omit<Conversation, "messages">;
+
+export type RunningTool = {
+  /** The harness's tool-call ID. */
+  id: string;
+  name: string;
+  /** Its description, command or path, when the call names one. */
+  summary: string | null;
+  started_at: string;
+};
+
+const SUMMARY_FIELDS = [
+  "description",
+  "command",
+  "file_path",
+  "path",
+  "pattern",
+  "url",
+  "query",
+];
+
+/**
+ * The newest tool call with no result after it. A harness writes the call
+ * when it starts and the result when it ends, so this is the step running
+ * now. Reads the whole projection, not the visible window.
+ */
+export function runningTool(
+  entries: readonly HistoryEntry[],
+): RunningTool | null {
+  const finished = new Set<string>();
+  for (let index = entries.length - 1; index >= 0; index -= 1) {
+    const entry = entries[index]!;
+    if (!entry.source_call_id) continue;
+    if (entry.kind === "tool_result") {
+      finished.add(entry.source_call_id);
+      continue;
+    }
+    if (entry.kind !== "tool_call" || finished.has(entry.source_call_id))
+      continue;
+    let summary: string | null = null;
+    try {
+      const input = JSON.parse(entry.text) as Record<string, unknown>;
+      const field = SUMMARY_FIELDS.find(
+        (name) => typeof input?.[name] === "string" && input[name],
+      );
+      if (field) summary = String(input[field]).split("\n")[0]!.slice(0, 160);
+    } catch {
+      // Arguments that are not JSON name nothing.
+    }
+    return {
+      id: entry.source_call_id,
+      name: entry.tool_name || "tool",
+      summary,
+      started_at: entry.sent_at,
+    };
+  }
+  return null;
+}
 
 export type ConversationSendResult =
   | { status: "sent"; delivery: ConversationDelivery }

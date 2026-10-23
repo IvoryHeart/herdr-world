@@ -94,6 +94,10 @@ filters Town, Board, Desk, the navigator, counts and search; it never
 connects or disconnects a profile. Terminals and Inspectors on different ready hosts can
 operate together. Global creation visibly confirms one destination host.
 
+Your GitHub pull requests and Jira tickets appear beside the agents working on
+them (Board's **Work** lens and Town desk badges). GitHub works once `gh auth
+login` is done for the user running World; add Jira in **Settings → Sources**.
+
 See [deployment](./docs/DEPLOYMENT.md) for checksums, profiles, authentication,
 updates, and services.
 
