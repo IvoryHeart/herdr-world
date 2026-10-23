@@ -407,7 +407,9 @@ export async function downloadAgentSessionFile(
     headers: {
       "content-type": isDb
         ? "application/vnd.sqlite3"
-        : "application/x-ndjson; charset=utf-8",
+        : resolved.file.path.endsWith(".jsonl.zst")
+          ? "application/zstd"
+          : "application/x-ndjson; charset=utf-8",
       "content-length": String(resolved.file.size ?? 0),
       "content-disposition": contentDispositionFilename(resolved.file.path),
       "x-agent-session-path": encodeURIComponent(resolved.file.path),

@@ -921,6 +921,7 @@
         "server/src/agent/codex-session-link.test.ts",
         "server/src/connections/session-link-routing.test.ts",
         "server/src/agent/codex-session.test.ts",
+        "server/src/agent/codex-compression.test.ts",
         "server/src/agent/codex-app-server.test.ts",
         "server/src/agent/codex-daemon-binding.test.ts",
         "server/src/agent/codex-discovery-cache.test.ts",

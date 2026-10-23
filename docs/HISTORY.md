@@ -19,6 +19,18 @@ incomplete JSONL records wait for later changes. This is not a filesystem
 transaction: later writes appear on the next refresh, and coarse metadata may
 miss same-size in-place rewrites.
 
+## Codex rollout storage
+
+History, Chat, transcript previews and ATIF exports read both Codex JSONL
+rollouts and cold rollouts compressed as `.jsonl.zst`, including archived
+sessions. ID and title discovery treat both forms as one transcript and prefer
+plain JSONL when both exist. Reads follow compression and later materialization
+without changing Codex's files. Original-file downloads retain compressed bytes
+and the `.jsonl.zst` filename; previews and conversation entries are decoded.
+For SSH connections, the World service decodes the selected host's bytes; the
+remote host needs no Python or zstd command. Connection, generation and session
+identity rules remain the same.
+
 ## Version 2 protocol
 
 Send `history_version: 2` to `agent_history.get`, optionally with the last accepted
