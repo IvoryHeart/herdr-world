@@ -231,3 +231,13 @@ test("a selection with a timed suite needs the whole machine; other browser suit
   expect(includesTimedSuites(["web/src/uiScale.test.ts"], root)).toBe(false);
   expect(includesTimedSuites(["scripts/check-lock.test.ts"], root)).toBe(false);
 });
+
+test("World runs with timed suites need the whole machine", async () => {
+  const { includesTimedFiles, selectWorldBrowserShard, worldBrowserSuites } =
+    await import("./world-browser-suites");
+  // test:world --shard=latency, and an unsharded test:world (every suite).
+  expect(includesTimedFiles(selectWorldBrowserShard("latency"))).toBe(true);
+  expect(includesTimedFiles(worldBrowserSuites)).toBe(true);
+  // A numbered shard of untimed suites keeps the browser slot alone.
+  expect(includesTimedFiles(selectWorldBrowserShard("1/6"))).toBe(false);
+});

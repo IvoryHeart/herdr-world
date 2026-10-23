@@ -8,7 +8,7 @@ import {
   assertWorldBrowserInventory,
   selectWorldBrowserShard,
   worldBrowserSuites,
-  worldTimedSuites,
+  includesTimedFiles,
 } from "./world-browser-suites";
 
 // Suites named on the command line replace the shard selection.
@@ -50,7 +50,7 @@ const label = shard
 await mkdir(".agents/delivery", { recursive: true });
 // Timed suites take the whole machine; other World runs take the browser slot.
 // A nested runner already holds its parent's slots and skips acquisition.
-const release = files.some((file) => worldTimedSuites.includes(file))
+const release = includesTimedFiles(files)
   ? await acquireAllCheckSlots({ lane: `world ${label}` })
   : await acquireCheckSlot("browser", { lane: `world ${label}` });
 try {

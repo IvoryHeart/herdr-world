@@ -201,3 +201,8 @@ function includesSuites(
     }
   });
 }
+
+/** Whether a World run's resolved files include a timed (latency) suite. */
+export function includesTimedFiles(files: readonly string[]): boolean {
+  return files.some((file) => worldTimedSuites.includes(file));
+}
