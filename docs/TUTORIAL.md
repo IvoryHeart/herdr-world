@@ -172,6 +172,10 @@ changes what you see and does not disconnect hosts or retarget open terminals.
    name in a terminal's header, the terminal window's menu has **Colour**, and
    in Spaces the tab's menu (right-click or long-press) offers the same palette
    and **Default colour**.
+   In the agent's window, the button beside its name sets its interest:
+   **Muted** stops its chimes, **Focused** lets only focused agents chime, and
+   **Watching** is the default. Its questions and results still arrive in
+   reception.
    **Next** cycles waiting agents, then finished agents when no other agent is
    waiting.
 7. To move a table to another room, zoom in until you see tables, then drag it
