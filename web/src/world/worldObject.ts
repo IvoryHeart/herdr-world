@@ -1,5 +1,6 @@
 import type { Pane, Tab, Workspace } from "../types";
 import type { WorldRuntimeConnection } from "./runtimeStore";
+import { agentTitle } from "../agentName";
 
 export type WorldObjectKind = "host" | "space" | "agent" | "terminal";
 export type WorldAgentStatus =
@@ -842,8 +843,9 @@ function* constructHost(
         parentId: spaceId,
         connectionId: connection.connectionId,
         generation: observedGeneration,
+        // Who, then what runs it: "reviewer · claude" (see agentTitle).
         label: boundedLabel(
-          agentLabel,
+          agentTitle(agentName, agentLabel),
           isAgent ? "Agent" : `Terminal ${pane.pane_id.slice(0, 8)}`,
         ),
         hostLabel,

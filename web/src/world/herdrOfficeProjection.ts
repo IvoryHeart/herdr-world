@@ -1068,7 +1068,7 @@ function projectPaneDevices(
       deskKey: desk.key,
       hostKey: desk.hostKey,
       roomKey: desk.roomKey,
-      displayLabel: `Pane ${order + 1}${leaf.agentLabel ? ` · ${leaf.agentLabel}` : ""}`,
+      displayLabel: `Pane ${order + 1}${leaf.agentName || leaf.agentLabel ? ` · ${leaf.agentName || leaf.agentLabel}` : ""}`,
       order,
       stale: leaf.stale,
       canOpenInSpaces: leaf.capabilities.openSpaces,
@@ -1099,7 +1099,8 @@ function projectAgent(
     observedGeneration: leaf.generation,
     roomKey,
     hostKey,
-    displayLabel: leaf.agentLabel ?? leaf.label,
+    // An agent goes by its Herdr name ("reviewer"), else its harness.
+    displayLabel: leaf.agentName ?? leaf.agentLabel ?? leaf.label,
     ...(leaf.agentName ? { agentName: leaf.agentName } : {}),
     ...(summary ? { taskSummary: summary } : {}),
     semanticStatus: leaf.status,

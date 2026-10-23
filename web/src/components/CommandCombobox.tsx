@@ -1,4 +1,5 @@
 import { useCreationProgress } from "../creationRequests";
+import { paneAgentTitle } from "../agentName";
 import { useCloseGlobalMenuForDialog } from "./useCloseGlobalMenuForDialog";
 import {
   ArrowDown,
@@ -124,7 +125,7 @@ function workspaceName(workspace?: Workspace) {
 
 function agentName(pane: Pane) {
   return [
-    pane.agent || "Agent",
+    paneAgentTitle(pane) || "Agent",
     basename(pane.foreground_cwd || pane.cwd),
     shortId(pane.pane_id),
   ]
@@ -1013,6 +1014,7 @@ function OwnedCommandCombobox({
         "open agent",
         "select agent",
         pane.agent ?? "",
+        pane.agent_name ?? "",
       ],
       run: () => store.focusPane(pane.pane_id),
     });

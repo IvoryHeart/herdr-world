@@ -21,6 +21,7 @@ import {
   type UploadProgress,
 } from "../terminalImageUpload";
 import { PaneDragHandle, PaneMoveMenu } from "./PaneMoveMenu";
+import { paneAgentName } from "../agentName";
 import { MobileTerminalIdentity } from "./MobileControls";
 import { useSystemBack } from "../systemBack";
 import { runTerminalInput, sendTerminalInput } from "../terminalInput";
@@ -4035,8 +4036,8 @@ export function TerminalView({
                 }}
               >
                 <span className="terminal-mobile-message-label">
-                  {pane.agent?.trim()
-                    ? `Message ${pane.agent.trim()}…`
+                  {paneAgentName(pane)
+                    ? `Message ${paneAgentName(pane)}…`
                     : "Type into the terminal…"}
                 </span>
               </button>

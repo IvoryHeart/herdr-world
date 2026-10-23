@@ -249,6 +249,7 @@ const WorkspaceInspectorHost = lazyWithReload("workspace-inspector", () =>
   })),
 );
 
+import { paneAgentTitle } from "./agentName";
 import "./components/AssistantPanel.css";
 import "./components/markdown.css";
 const AssistantPanel = lazyWithReload("assistant", () =>
@@ -1488,7 +1489,8 @@ export default function App({
       tabId,
       paneId: pane.pane_id,
       terminalId: pane.terminal_id,
-      label: pane.display_agent ?? pane.agent ?? "Terminal",
+      label:
+        paneAgentTitle(pane, pane.display_agent ?? pane.agent) || "Terminal",
       hostLabel: s.activeConnectionId,
       spaceLabel: workspace.label ?? `Workspace ${workspace.number}`,
       portal: null,

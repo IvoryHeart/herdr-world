@@ -13,7 +13,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   Each host is a building, each workspace a room, each tab a team table and each
   pane a seat. Plain terminals show prompts. Additional panes beyond the drawn
   seats remain available through the table's count and chooser. Each table
-  carries its tab's name on a nameplate at its front edge.
+  carries its tab's name on a nameplate at its front edge. Agents go by the
+  name Herdr gives them (`firstmate`), else their harness (`claude`); window
+  and Inspector titles put the name first (`firstmate · claude`).
   - Blocked agents queue at reception oldest first. Finished agents wait there
     until you open their terminal or mark that completion reviewed, then join
     idle agents in the lounge. Movement only represents state.
