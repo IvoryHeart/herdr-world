@@ -2,6 +2,7 @@ import { createRoot } from "react-dom/client";
 import { bridge, type BridgeControlMsg } from "../api";
 import type { Pane } from "../types";
 import { AgentChat, type Conversation } from "./AgentChat";
+import type { ConversationStep } from "./chat/blocks/steps";
 import "../styles/tokens.css";
 import "../styles/base.css";
 import "../styles/vendor.css";
@@ -176,6 +177,9 @@ async function run() {
   let answerAcknowledged = false;
   /** Answers agent_history.get for an older page (`before`) while set. */
   let olderAnswer: ((params: Record<string, unknown>) => unknown) | null = null;
+  /** The step model the fixture's agent_conversation.steps answers from. */
+  let fixtureSteps: ConversationStep[] = [];
+  const stepsAsked: string[][] = [];
   bridge.connection = () => ({
     connectionId: "test",
     generation: 1,
@@ -197,6 +201,15 @@ async function run() {
       if (method === "pane.send_input") return {};
       if (method === "agent_history.get" && params.before && olderAnswer)
         return olderAnswer(params);
+      if (method === "agent_conversation.steps") {
+        stepsAsked.push(params.call_ids as string[]);
+        const ids = new Set(params.call_ids as string[]);
+        return {
+          steps: fixtureSteps.filter(
+            (step) => step.call_id && ids.has(step.call_id),
+          ),
+        };
+      }
       if (method === "agent_conversation.latest")
         return { ...reply, messages: undefined };
       // A transcript caught mid-write fails History's read too.
@@ -792,6 +805,184 @@ async function run() {
       "A missing integration must offer to copy its command and refresh",
     );
 
+    // Steps: History's tool rows carry the step model's evidence, matched by
+    // the harness's call ID: a plain label, a test badge and its time, and
+    // when a row opens, the edit's diff or the failed run's strip. A run whose
+    // tests failed reads as failed though its result was not an error.
+    {
+      const at = "2026-10-22T09:00:00Z";
+      const step = (
+        id: string,
+        tool: string,
+        label: string,
+        extra: Partial<ConversationStep> = {},
+      ): ConversationStep => ({
+        id,
+        call_id: id,
+        tool,
+        label,
+        input_summary: null,
+        state: "ok",
+        started_at: at,
+        ended_at: "2026-10-22T09:00:01Z",
+        result_tail: null,
+        diff: null,
+        test: null,
+        ...extra,
+      });
+      const entry = (
+        id: string,
+        kind: "tool_call" | "tool_result",
+        tool: string,
+      ) => ({
+        id: `${kind}-${id}`,
+        role: "tool",
+        kind,
+        tool_name: tool,
+        source_call_id: id,
+        text: kind === "tool_call" ? "{}" : "done",
+        sent_at: at,
+      });
+      reply = conversation([message("u6", "user", "Add backoff")], "idle");
+      fixtureSteps = [
+        step("e1", "Edit", "Edit reconnect.ts", {
+          diff: {
+            file: "src/reconnect.ts",
+            removed: ["  return 1000;"],
+            added: ["  return backoff(attempt);"],
+            truncated: true,
+            omitted: 3,
+          },
+        }),
+        step("b1", "Bash", "Run reconnect tests", {
+          state: "failed",
+          input_summary: "bun test src",
+          test: {
+            runner: "bun",
+            passed: 12,
+            failed: 1,
+            first_failure: "backs off to the cap",
+          },
+          result_tail: "(fail) backs off to the cap",
+        }),
+        step("i1", "Bash", "Watch the logs", {
+          state: "interrupted",
+          ended_at: null,
+        }),
+        // Evidence from an older read: the result has since arrived.
+        step("s1", "Bash", "Print the version", {
+          state: "interrupted",
+          ended_at: null,
+        }),
+      ];
+      let window = [
+        {
+          id: "u6",
+          role: "user",
+          kind: "message",
+          text: "Add backoff",
+          sent_at: at,
+        },
+        entry("e1", "tool_call", "Edit"),
+        entry("e1", "tool_result", "Edit"),
+        entry("b1", "tool_call", "Bash"),
+        entry("b1", "tool_result", "Bash"),
+        entry("i1", "tool_call", "Bash"),
+        entry("s1", "tool_call", "Bash"),
+        entry("s1", "tool_result", "Bash"),
+      ];
+      historyAnswer = () => ({ ...historyOf([]), entries: window });
+      render("idle", true, 45);
+      push();
+      await settle();
+      await settle();
+      check(
+        container.querySelector(".agent-history-chat-tools-errors")
+          ?.textContent === "1 error",
+        "The block's error count must include a run whose tests failed",
+      );
+      container
+        .querySelector<HTMLButtonElement>(".agent-history-chat-tools-toggle")
+        ?.click();
+      await settle();
+      const cut = container.querySelectorAll(".agent-history-chat-step")[2];
+      const arrived = container.querySelectorAll(".agent-history-chat-step")[3];
+      check(
+        cut?.classList.contains("is-interrupted") === true &&
+          cut.textContent?.includes("Interrupted") === true &&
+          arrived?.classList.contains("is-done") === true,
+        "A call cut off must read as interrupted, and one whose result arrived must not",
+      );
+      const rows = [
+        ...container.querySelectorAll<HTMLElement>(".agent-history-chat-step"),
+      ];
+      check(
+        rows.length === 4 &&
+          rows[0]!.querySelector(".agent-history-chat-step-name")
+            ?.textContent === "Edit reconnect.ts" &&
+          rows[0]!.textContent?.includes("1.0s") === true &&
+          rows[1]!.classList.contains("is-error") &&
+          rows[1]!.querySelector(".agent-chat-step-badge.is-red")
+            ?.textContent === "1 failed",
+        `Tool rows must carry their step's label, time and test badge (${rows.map((row) => row.textContent).join(" | ")})`,
+      );
+      rows[0]!
+        .querySelector<HTMLButtonElement>(".agent-history-chat-step-row")!
+        .click();
+      await settle();
+      check(
+        rows[0]!.querySelector(".is-removed")?.textContent ===
+          "-   return 1000;" &&
+          rows[0]!.textContent?.includes("3 more lines; see Changes") === true,
+        "Opening an edit's row must show its diff and what was cut",
+      );
+      rows[1]!
+        .querySelector<HTMLButtonElement>(".agent-history-chat-step-row")!
+        .click();
+      await settle();
+      check(
+        rows[1]!
+          .querySelector(".agent-chat-step-strip.is-red")
+          ?.textContent?.includes("12 passed · 1 failed") === true &&
+          rows[1]!.textContent?.includes("backs off to the cap") === true,
+        "Opening a failed run's row must show its red strip and failing test",
+      );
+      // A call shown as interrupted is asked for again when History changes,
+      // so a late result settles it.
+      fixtureSteps = fixtureSteps.map((item) =>
+        item.call_id === "i1"
+          ? { ...item, state: "ok", ended_at: "2026-10-22T09:00:03Z" }
+          : item,
+      );
+      window = [...window, entry("i1", "tool_result", "Bash")];
+      push();
+      await settle();
+      await settle();
+      const settled = container.querySelectorAll(".agent-history-chat-step")[2];
+      check(
+        settled?.classList.contains("is-done") === true &&
+          settled.textContent?.includes("3.0s") === true,
+        `A late result must settle an interrupted call (${settled?.textContent})`,
+      );
+      // Calls that leave History's window leave Chat's evidence too: one that
+      // comes back is asked for again.
+      const saved = window;
+      window = window.filter((item) => !item.id.endsWith("-e1"));
+      push();
+      await settle();
+      await settle();
+      const before = stepsAsked.length;
+      window = saved;
+      push();
+      await settle();
+      await settle();
+      check(
+        stepsAsked.slice(before).some((ids) => ids.includes("e1")),
+        "Evidence must be kept only for the calls in History's window",
+      );
+      historyAnswer = null;
+      fixtureSteps = [];
+    }
     // A blocked agent's question becomes an ask card with its whole
     // request. A number answers only while that card has focus; Chat then
     // says it sent the key, and that it was answered once the agent moved on.
@@ -1007,13 +1198,13 @@ async function run() {
         ),
       `The Now bar must show the status, task and time (${now?.textContent})`,
     );
-    const step = container.querySelector(".agent-chat-running");
+    const runningRow = container.querySelector(".agent-chat-running");
     check(
-      step?.textContent?.includes("Bash") === true &&
-        step.textContent.includes("bun test server/src/link") &&
-        /[3-9]s$/.test(step.textContent) &&
-        step.getAttribute("data-call-id") === "toolu_8",
-      `The running step must name its tool, command and time (${step?.textContent})`,
+      runningRow?.textContent?.includes("Bash") === true &&
+        runningRow.textContent.includes("bun test server/src/link") &&
+        /[3-9]s$/.test(runningRow.textContent) &&
+        runningRow.getAttribute("data-call-id") === "toolu_8",
+      `The running step must name its tool, command and time (${runningRow?.textContent})`,
     );
     // Stop presses Esc in the pane; so does Esc twice, never once.
     const escapes = () =>
@@ -1217,6 +1408,7 @@ async function run() {
             role: "tool",
             kind: tool % 2 ? "tool_result" : "tool_call",
             tool_name: "Bash",
+            source_call_id: `busy-${index}-call-${tool >> 1}`,
             text: "",
             text_bytes: 5000,
             text_hash: `h${index}-${tool}`,
@@ -1258,6 +1450,30 @@ async function run() {
           order: [...order],
         };
       };
+      // Every call also has its step evidence, as Chat's steps read gives it.
+      fixtureSteps = [];
+      for (let index = 0; index < 150; index += 1)
+        for (let call = 0; call < 8; call += 1) {
+          const id = `busy-${index}-call-${call}`;
+          fixtureSteps.push({
+            id,
+            call_id: id,
+            tool: "Bash",
+            label: "Run tests",
+            input_summary: "bun test",
+            state: call % 3 ? "ok" : "failed",
+            started_at: "2026-10-22T09:00:00Z",
+            ended_at: "2026-10-22T09:00:02Z",
+            result_tail: "12 pass",
+            diff: null,
+            test: {
+              runner: "bun",
+              passed: 12,
+              failed: call % 3 ? 0 : 1,
+              first_failure: null,
+            },
+          });
+        }
       reply = conversation([message("busy-0", "user", "Busy message 0")]);
       push();
       await settle();

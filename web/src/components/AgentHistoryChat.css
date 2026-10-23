@@ -297,6 +297,17 @@
   white-space: nowrap;
 }
 
+/* A call cut off without a result: muted, and says so. */
+.agent-history-chat-step.is-interrupted .agent-history-chat-step-name {
+  color: var(--muted);
+}
+
+.agent-history-chat-step-note {
+  flex: none;
+  color: var(--muted);
+  font-size: 10px;
+}
+
 .agent-history-chat-step-headline {
   min-width: 0;
   flex: 1 1 auto;

@@ -86,6 +86,8 @@ export interface Pane {
   agent_session?: { value?: string };
   /** Optional display-safe agent label supplied by Herdr. */
   display_agent?: string;
+  /** The name Herdr gives this agent ("reviewer"), joined from agent.list. */
+  agent_name?: string;
   /** Optional model metadata; absent when the runtime does not report it. */
   model?: string;
   model_name?: string;

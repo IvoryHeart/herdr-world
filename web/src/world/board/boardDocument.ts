@@ -4,10 +4,15 @@ import {
   type BridgeControlMsg,
   type ConnectionStatus,
 } from "../../api";
+import type {
+  RelationsDocument,
+  TerminalRef,
+} from "../../../../shared/relations";
 
 /**
  * The browser's view of Board's saved state in the World service
- * (server/src/world/board-store.ts): layout, notes and strings.
+ * (server/src/world/board-store.ts): layout, notes, strings and which
+ * terminals know each other.
  */
 
 export type BoardPoint = { x: number; y: number };
@@ -85,6 +90,8 @@ export type BoardDocument = {
   };
   notes: BoardNote[];
   strings: BoardString[];
+  /** Absent from a service older than relations. */
+  relations?: RelationsDocument;
 };
 export type BoardOp =
   | { op: "note.put"; note: Omit<BoardNote, "rev">; rev?: number }
@@ -123,7 +130,14 @@ export type BoardOp =
       string_id: string;
       end: "from" | "to";
       witness: string[];
-    };
+    }
+  | {
+      op: "group.join";
+      id: string;
+      members: TerminalRef[];
+      target: TerminalRef[];
+    }
+  | { op: "group.leave"; members: TerminalRef[] };
 
 export type BoardDocumentState = {
   document: BoardDocument | null;

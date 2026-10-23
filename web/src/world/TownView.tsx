@@ -41,8 +41,14 @@ import {
   setTerminalColor,
   usePlaceColorChoices,
   useTerminalColors,
+  useWorldColorSource,
 } from "./useTerminalColors";
-import { hostColorKey } from "./terminalColor";
+import { useRelations } from "./relations";
+import { townTeamActions } from "./town/townTeamActions";
+import { townMoveMenu, type TownMoveFlow } from "./town/townMoveMenu";
+import { inheritedColorKey } from "../../../shared/terminalColor";
+import type { OfficeDesk } from "./herdrOfficeProjection";
+import { hostColorKey, terminalColorKey } from "./terminalColor";
 import { TOWN_HOST_THEMES } from "./town/townPaint";
 import { useDeskPins } from "./useDeskPins";
 import {
@@ -651,7 +657,12 @@ export default function TownView({
     const entry = agentByKey.get(agentKey);
     return entry ? `${entry.roomLabel} · ${entry.hostLabel}` : "";
   };
-  const terminalColors = useTerminalColors();
+  // Colours and team walls read the same World, so they agree on each relation.
+  const terminalColors = useTerminalColors(
+    undefined,
+    useWorldColorSource(world),
+  );
+  const relations = useRelations(world);
   const placeChoices = usePlaceColorChoices();
   /** A room's or building's colour for the shared picker (see placeColor). */
   const placeColorOf = (kind: "room" | "host", key: string) => {
@@ -734,11 +745,7 @@ export default function TownView({
   /** The desk whose panes are listed, for a desk with more panes than seats. */
   const [chooser, setChooser] = useState<string | null>(null);
   /** A desk or agent move being chosen: what to move, then where. */
-  const [moveFlow, setMoveFlow] = useState<
-    | { step: "room"; deskKey: string }
-    | { step: "desk"; agentKey: string }
-    | null
-  >(null);
+  const [moveFlow, setMoveFlow] = useState<TownMoveFlow | null>(null);
   /** The desk or agent being moved; further moves wait for it. */
   const [movingKey, setMovingKey] = useState<string | null>(null);
   const [moveConfirm, setMoveConfirm] = useState<{
@@ -790,10 +797,36 @@ export default function TownView({
     );
     return townMoveResult(outcome);
   };
+  /** The desk shows its parent's colour rather than one of its own. */
+  const inheritsColor = (desk: OfficeDesk) => {
+    const target = townDeskColorTarget(office, desk);
+    if (!target) return false;
+    const key = terminalColorKey(target);
+    return (
+      !terminalColors[key] && Boolean(terminalColors[inheritedColorKey(key)])
+    );
+  };
+  const teams = townTeamActions({
+    world,
+    office,
+    deskPins,
+    relations: relations.relations,
+    movingKey,
+    deskForKey,
+    roomForKey,
+    toast,
+    confirm: (message, run) => setMoveConfirm({ message, run }),
+    runDeskMove: (deskKey, roomKey, allowCloseRoom, then) =>
+      runDeskMove(deskKey, roomKey, allowCloseRoom, then),
+    closeMenu: () => setMoveFlow(null),
+    openGroupMenu: (deskKey) => setMoveFlow({ step: "group", deskKey }),
+  });
   const runDeskMove = async (
     deskKey: string,
     roomKey: string,
     allowCloseRoom = false,
+    /** After a move: seat the moved tab (its new ID) next to a teammate. */
+    then?: (tabId: string) => Promise<void>,
   ): Promise<TownMoveResult> => {
     const desk = deskForKey(deskKey);
     const room = roomForKey(roomKey);
@@ -803,15 +836,26 @@ export default function TownView({
     if (!allowCloseRoom && (source?.observedDeskCount ?? 2) <= 1) {
       setMoveConfirm({
         message: `“${desk.displayLabel}” is the last desk in “${source?.displayLabel}”. Moving it to “${room.displayLabel}” closes that room.`,
-        run: () => void runDeskMove(deskKey, roomKey, true),
+        run: () => void runDeskMove(deskKey, roomKey, true, then),
       });
       return "returned";
     }
     setMovingKey(desk.key);
     toast("ok", `Moving ${desk.displayLabel} to ${room.displayLabel}…`);
     try {
-      const outcome = await requestDeskMove(desk, room, allowCloseRoom);
-      return reportMove(desk.displayLabel, outcome, desk.tabRef.nativeId);
+      const outcome = await requestDeskMove(
+        desk,
+        room,
+        allowCloseRoom,
+        inheritsColor(desk),
+      );
+      const result = reportMove(
+        desk.displayLabel,
+        outcome,
+        desk.tabRef.nativeId,
+      );
+      if (outcome.status === "moved" && then) await then(outcome.tab_id);
+      return result;
     } catch (cause) {
       toast(
         "error",
@@ -896,99 +940,19 @@ export default function TownView({
       setMovingKey(null);
     }
   };
-  /** The choices for each step of a move. */
-  const moveChooser = (flow: NonNullable<typeof moveFlow>) => {
-    if (flow.step === "room") {
-      const desk = deskForKey(flow.deskKey);
-      const rooms = desk
-        ? office.rooms.filter(
-            (room) =>
-              room.hostKey === desk.hostKey &&
-              room.key !== desk.roomKey &&
-              room.workspaceRef.connectionId === desk.tabRef.connectionId,
-          )
-        : [];
-      // Within its room a desk takes another desk's slot, as in a drag.
-      const home = desk ? roomForKey(desk.roomKey) : null;
-      const slots = home?.desks ?? [];
-      const lastDrawn = slots[slots.length - 1];
-      const reorder = (ontoKey: string | null) => () => {
-        setMoveFlow(null);
-        void runDeskReorder(flow.deskKey, ontoKey);
-      };
-      const places = [
-        ...slots
-          .filter((other) => other.key !== desk?.key)
-          .map((other) => ({
-            key: other.key,
-            label: `${other.displayLabel}’s place`,
-            detail: `Desk ${slots.indexOf(other) + 1} in ${home?.displayLabel}`,
-            onChoose: reorder(other.key),
-          })),
-        // Last means last of the drawn desks: in a room with hidden desks
-        // that is the last drawn desk's place, so the desk stays in view.
-        ...(lastDrawn && lastDrawn.key !== desk?.key
-          ? [
-              {
-                key: `${flow.deskKey}:last`,
-                label: "Last",
-                detail: home?.omittedDeskCount
-                  ? `Last of the desks shown in ${home.displayLabel}`
-                  : `After every desk in ${home?.displayLabel}`,
-                onChoose: reorder(
-                  home?.omittedDeskCount ? lastDrawn.key : null,
-                ),
-              },
-            ]
-          : []),
-      ];
-      return {
-        title: `Move ${desk?.displayLabel ?? "desk"}`,
-        detail:
-          places.length || rooms.length
-            ? "Choose a place in this room or a room on this host"
-            : "No other desk or room on this host",
-        entries: [
-          ...places,
-          ...rooms.map((room) => ({
-            key: room.key,
-            label: room.displayLabel,
-            detail: `${room.observedDeskCount} desks`,
-            onChoose: () => {
-              setMoveFlow(null);
-              void runDeskMove(flow.deskKey, room.key);
-            },
-          })),
-        ],
-      };
-    }
-    const agent = agentByKey.get(flow.agentKey)?.agent;
-    const desks = agent
-      ? office.deskRoster
-          .map(({ desk }) => desk)
-          .filter(
-            (desk) =>
-              desk.hostKey === agent.hostKey &&
-              desk.key !== agent.deskKey &&
-              desk.paneDevices.length > 0,
-          )
-      : [];
-    return {
-      title: `Move ${agent?.displayLabel ?? "agent"}`,
-      detail: desks.length
-        ? "Choose a desk on this host"
-        : "No other desk on this host",
-      entries: desks.map((desk) => ({
-        key: desk.key,
-        label: desk.displayLabel,
-        detail: roomForKey(desk.roomKey)?.displayLabel ?? "",
-        onChoose: () => {
-          setMoveFlow(null);
-          void runAgentMove(flow.agentKey, desk.key);
-        },
-      })),
-    };
-  };
+  /** The choices for each step of a move (townMoveMenu.ts). */
+  const moveChooser = (flow: NonNullable<typeof moveFlow>) =>
+    townMoveMenu(flow, {
+      office,
+      deskForKey,
+      roomForKey,
+      agentOf: (key) => agentByKey.get(key)?.agent,
+      close: () => setMoveFlow(null),
+      runDeskReorder,
+      runDeskMove,
+      runAgentMove,
+      teams,
+    });
   const openReply = (key: string) => {
     // A desk with more panes than seats lists them all rather than guessing.
     if (crowdedDesk(key)) {
@@ -1388,6 +1352,7 @@ export default function TownView({
           <TownCanvas
             trace={trace}
             projection={office}
+            relations={relations}
             terminalColors={terminalColors}
             deskPins={deskPins}
             selectedKey={townSelectedKey}
@@ -1438,6 +1403,9 @@ export default function TownView({
             }}
             roomActions={{
               onDropDesk: (deskKey, roomKey) => runDeskMove(deskKey, roomKey),
+              onGroupDesk: (deskKey, targetKey) =>
+                teams.runGroupDesk(deskKey, targetKey),
+              onUngroupDesk: (deskKey) => teams.runUngroupDesk(deskKey),
               onReorderDesk: (deskKey, ontoKey) =>
                 runDeskReorder(deskKey, ontoKey),
               onDropAgent: (agentKey, deskKey) =>

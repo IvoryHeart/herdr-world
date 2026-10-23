@@ -1,0 +1,339 @@
+import { describe, expect, test } from "bun:test";
+import {
+  codexDaemonProxyArgv,
+  listCodexDaemonThreads,
+  listCodexDaemonThreadBatch,
+} from "./codex-app-server";
+
+const ID = "019f0000-1111-7222-8333-444455556666";
+const thread = {
+  id: ID,
+  cwd: "/work/demo",
+  createdAt: 1000,
+  updatedAt: 1100,
+  source: "vscode",
+  parentThreadId: null,
+  status: { type: "active", activeFlags: [] },
+};
+
+// A disposable protocol peer: only initialize and the read-only list method
+// are accepted. No installed Codex, home directory, daemon or account is used.
+function peer(pages: unknown[], mode = "normal") {
+  return [
+    process.execPath,
+    "-e",
+    `const pages = ${JSON.stringify(pages)};
+const mode = ${JSON.stringify(mode)};
+let page = 0;
+let buffer = '';
+for await (const chunk of Bun.stdin.stream()) {
+  buffer += new TextDecoder().decode(chunk);
+  let newline;
+  while ((newline = buffer.indexOf('\\n')) !== -1) {
+    const message = JSON.parse(buffer.slice(0, newline));
+    buffer = buffer.slice(newline + 1);
+    if (message.method === 'initialized') continue;
+    if (mode === 'hang') continue;
+    if (mode === 'hangSecondDirectory' && message.params?.cwd === '/work/other') continue;
+    if (mode === 'malformedSecondDirectory' && message.params?.cwd === '/work/other') { process.stdout.write('not json\\n'); continue; }
+    if (mode === 'malformed') { process.stdout.write('not json\\n'); continue; }
+    if (mode === 'oversized') { process.stdout.write('x'.repeat(1024 * 1024 + 1)); continue; }
+    if (mode === 'exit') process.exit(1);
+    let result;
+    if (message.method === 'initialize') result = {};
+    else if (message.method === 'thread/list' &&
+      ['/work/demo', '/work/other'].includes(message.params.cwd) &&
+      message.params.useStateDbOnly === true &&
+      message.params.archived === false &&
+      JSON.stringify(message.params.sourceKinds) === '["cli","vscode"]') {
+      result = pages[Math.min(page++, pages.length - 1)];
+    } else process.exit(2);
+    process.stdout.write(JSON.stringify({method:'thread/status/changed',params:{}}) + '\\n');
+    process.stdout.write(JSON.stringify({id:message.id,result}) + '\\n');
+  }
+}`,
+  ];
+}
+
+describe("Codex daemon observation", () => {
+  test("remote discovery uses the selected host's login environment and strict SSH policy", () => {
+    const remote = codexDaemonProxyArgv("operator@example.com");
+    expect(remote.slice(-3)).toEqual([
+      "--",
+      "operator@example.com",
+      "bash -lc 'exec codex app-server proxy'",
+    ]);
+    expect(remote).toContain("BatchMode=yes");
+    expect(remote).toContain("StrictHostKeyChecking=yes");
+    expect(codexDaemonProxyArgv()).toEqual(["codex", "app-server", "proxy"]);
+    expect(() => codexDaemonProxyArgv("-oProxyCommand=unsafe")).toThrow();
+  });
+  test("initializes, filters by cwd and pages without resuming or subscribing", async () => {
+    const result = await listCodexDaemonThreads("/work/demo", {
+      argv: peer([
+        {
+          data: [{ ...thread, status: { type: "notLoaded" } }],
+          nextCursor: "next",
+        },
+        { data: [{ ...thread, id: ID.replace(/6$/, "7") }], nextCursor: null },
+      ]),
+    });
+    expect(result).toEqual([
+      {
+        id: ID,
+        cwd: "/work/demo",
+        createdAt: 1000000,
+        updatedAt: 1100000,
+        status: "notLoaded",
+        waiting: false,
+      },
+      {
+        id: ID.replace(/6$/, "7"),
+        cwd: "/work/demo",
+        createdAt: 1000000,
+        updatedAt: 1100000,
+        status: "active",
+        waiting: false,
+      },
+    ]);
+  });
+
+  test("keeps idle competitors and approval activity; excludes subagents", async () => {
+    const result = await listCodexDaemonThreads("/work/demo", {
+      argv: peer([
+        {
+          data: [
+            { ...thread, status: { type: "idle" } },
+            {
+              ...thread,
+              id: ID.replace(/6$/, "7"),
+              status: { type: "active", activeFlags: ["waitingOnApproval"] },
+            },
+            {
+              ...thread,
+              id: ID.replace(/6$/, "8"),
+              parentThreadId: ID,
+              source: { subAgent: "review" },
+            },
+          ],
+          nextCursor: null,
+        },
+      ]),
+    });
+    expect(result?.map(({ status, waiting }) => ({ status, waiting }))).toEqual(
+      [
+        { status: "idle", waiting: false },
+        { status: "active", waiting: true },
+      ],
+    );
+  });
+
+  test("one proxy shares independent directory listings and retains unloaded competitors", async () => {
+    const result = await listCodexDaemonThreadBatch(
+      ["/work/demo", "/work/other"],
+      {
+        argv: peer([
+          { data: [thread], nextCursor: null },
+          {
+            data: [
+              {
+                ...thread,
+                id: ID.replace(/6$/, "7"),
+                cwd: "/work/other",
+                status: { type: "notLoaded" },
+              },
+            ],
+            nextCursor: null,
+          },
+        ]),
+      },
+    );
+    expect(result.get("/work/demo")?.[0]?.status).toBe("active");
+    expect(result.get("/work/other")?.[0]?.status).toBe("notLoaded");
+  });
+
+  test("a crowded directory does not exhaust another directory's thread budget", async () => {
+    const crowded = Array.from({ length: 500 }, (_, i) => ({
+      ...thread,
+      id: `019f0000-1111-7222-8333-${i.toString(16).padStart(12, "0")}`,
+    }));
+    const result = await listCodexDaemonThreadBatch(
+      ["/work/demo", "/work/other"],
+      {
+        argv: peer([
+          { data: crowded, nextCursor: "more" },
+          { data: [{ ...thread, cwd: "/work/other" }], nextCursor: null },
+        ]),
+      },
+    );
+    expect(result.get("/work/demo")).toBeNull();
+    expect(result.get("/work/other")?.[0]?.id).toBe(ID);
+  });
+
+  test("a thread changing directories during a batch cannot identify two panes", async () => {
+    const result = await listCodexDaemonThreadBatch(
+      ["/work/demo", "/work/other"],
+      {
+        argv: peer([
+          { data: [thread], nextCursor: null },
+          { data: [{ ...thread, cwd: "/work/other" }], nextCursor: null },
+        ]),
+      },
+    );
+    expect(result.get("/work/demo")).toBeNull();
+    expect(result.get("/work/other")).toBeNull();
+  });
+
+  test("the shared deadline retains completed directories and rejects an unfinished directory", async () => {
+    const result = await listCodexDaemonThreadBatch(
+      ["/work/demo", "/work/other"],
+      {
+        argv: peer(
+          [{ data: [thread], nextCursor: null }],
+          "hangSecondDirectory",
+        ),
+        timeoutMs: 1000,
+      },
+    );
+    expect(result.get("/work/demo")?.[0]?.id).toBe(ID);
+    expect(result.get("/work/other")).toBeNull();
+  });
+
+  test("a malformed transport still invalidates every directory", async () => {
+    const result = await listCodexDaemonThreadBatch(
+      ["/work/demo", "/work/other"],
+      {
+        argv: peer(
+          [{ data: [thread], nextCursor: null }],
+          "malformedSecondDirectory",
+        ),
+      },
+    );
+    expect(result.get("/work/demo")).toBeNull();
+    expect(result.get("/work/other")).toBeNull();
+  });
+
+  test.each([
+    { source: undefined },
+    { source: null },
+    { source: 1 },
+    { source: "unknown" },
+    { source: "futureSource" },
+    { source: {} },
+    { source: { custom: 1 } },
+    { source: { subAgent: "futureKind" } },
+    { source: { subAgent: { thread_spawn: {} } } },
+    { source: { subAgent: "review", custom: "ambiguous" } },
+    { parentThreadId: undefined },
+    { parentThreadId: 1 },
+    { parentThreadId: "" },
+    { parentThreadId: {} },
+  ])(
+    "unknown competitor source or lineage makes discovery unavailable %#",
+    async (metadata) => {
+      expect(
+        await listCodexDaemonThreads("/work/demo", {
+          argv: peer([
+            {
+              data: [
+                thread,
+                { ...thread, id: ID.replace(/6$/, "7"), ...metadata },
+              ],
+              nextCursor: null,
+            },
+          ]),
+        }),
+      ).toBeNull();
+    },
+  );
+
+  test("an empty opaque cursor continues discovery and keeps the next competitor", async () => {
+    const result = await listCodexDaemonThreads("/work/demo", {
+      argv: peer([
+        { data: [thread], nextCursor: "" },
+        {
+          data: [
+            { ...thread, id: ID.replace(/6$/, "7"), status: { type: "idle" } },
+          ],
+          nextCursor: null,
+        },
+      ]),
+    });
+    expect(result?.map(({ id }) => id)).toEqual([ID, ID.replace(/6$/, "7")]);
+  });
+
+  test.each([
+    { source: "exec" },
+    { source: "appServer" },
+    { source: { custom: "automation" } },
+    { source: { subAgent: "compact" } },
+    { source: { subAgent: { other: "automation" } } },
+    {
+      source: {
+        subAgent: {
+          thread_spawn: {
+            parent_thread_id: ID,
+            depth: 1,
+            agent_path: null,
+            agent_nickname: null,
+            agent_role: null,
+          },
+        },
+      },
+    },
+    { parentThreadId: ID },
+  ])(
+    "excludes only validated noninteractive or child metadata %#",
+    async (metadata) => {
+      const result = await listCodexDaemonThreads("/work/demo", {
+        argv: peer([
+          {
+            data: [
+              thread,
+              { ...thread, id: ID.replace(/6$/, "7"), ...metadata },
+            ],
+            nextCursor: null,
+          },
+        ]),
+      });
+      expect(result?.map(({ id }) => id)).toEqual([ID]);
+    },
+  );
+
+  test.each([
+    { data: [thread], nextCursor: "repeated" },
+    { data: [], nextCursor: "" },
+    { data: [thread, thread], nextCursor: null },
+    { data: [{ ...thread, cwd: "/work/elsewhere" }], nextCursor: null },
+    {
+      data: [{ ...thread, status: { type: "newUnknownStatus" } }],
+      nextCursor: null,
+    },
+    { data: [{ ...thread, updatedAt: "1100" }], nextCursor: null },
+    { data: [thread] },
+  ])("rejects incomplete or invalid evidence %#", async (page) => {
+    expect(
+      await listCodexDaemonThreads("/work/demo", { argv: peer([page]) }),
+    ).toBeNull();
+  });
+
+  test.each(["malformed", "oversized", "exit", "hang"])(
+    "fails closed on %s and tears down its proxy",
+    async (mode) => {
+      expect(
+        await listCodexDaemonThreads("/work/demo", {
+          argv: peer([], mode),
+          timeoutMs: 150,
+        }),
+      ).toBeNull();
+    },
+  );
+
+  test("missing proxy is unavailable, without starting a daemon", async () => {
+    expect(
+      await listCodexDaemonThreads("/work/demo", {
+        argv: ["/does-not-exist/codex"],
+      }),
+    ).toBeNull();
+  });
+});

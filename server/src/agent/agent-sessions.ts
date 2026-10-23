@@ -28,6 +28,7 @@ import {
 } from "./session-history";
 import { taskSummarySessionFingerprint } from "../herdr/task-summary";
 import { FULL_REPORT_CHARS, latestTurnReceipt } from "./turn-receipt";
+import type { CodexDiscoveryScope } from "./codex-discovery-cache";
 
 const MAX_MESSAGES_PER_AGENT = 200;
 
@@ -35,10 +36,11 @@ export function createAgentSessionHandlers(args: {
   herdrCall: HerdrCall;
   files: AgentSessionFileAccess;
   remotePlatform?: string;
+  runtimeScope?: CodexDiscoveryScope;
   /** A watched pane's conversation changed; tell these owners. */
   onConversationChanged?: (paneId: string, owners: ReadonlySet<object>) => void;
 }) {
-  const resolverContext = createAgentSessionResolverContext();
+  const resolverContext = createAgentSessionResolverContext(args.runtimeScope);
   const cache = createSessionProjectionCache(args.files);
   const linker = createCodexSessionLinker(args.herdrCall, args.files);
   let watcher: ReturnType<typeof createConversationWatcher> | null = null;

@@ -4,6 +4,7 @@ import {
   SERVICE_COMMAND_CONTINUE,
 } from "../config/service-manager";
 import { runHerdrCommand } from "../herdr/cli";
+import { runSpawnStampCommand } from "../herdr/spawn-stamp";
 import { authCommand } from "./auth";
 import {
   type CliCommand,
@@ -65,10 +66,27 @@ const herdrCommand: CliCommand = {
 
 const DELEGATED_HELP = new Set(["service", "herdr"]);
 
+/** `stamp <child> <parent>`: the spawn stamp Town and Board group by. */
+const stampCommand: CliCommand = {
+  name: "stamp",
+  summary: "record that one agent's pane spawned another",
+  flags: ["--session", "--ssh-host", "--socket-path", "--client-socket-path"],
+  help: () => "Run `herdr-world stamp --help`.",
+  async run(args, context) {
+    return (
+      (await runSpawnStampCommand(["stamp", ...args], context.version, {
+        log: context.log,
+        error: context.error,
+      })) ?? EXIT_FAILURE
+    );
+  },
+};
+
 export function cliCommands(): CliCommand[] {
   const commands: CliCommand[] = [
     serviceCommand,
     herdrCommand,
+    stampCommand,
     createDoctorCommand(),
     urlCommand,
     configCommand,

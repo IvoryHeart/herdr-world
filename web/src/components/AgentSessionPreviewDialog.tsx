@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, memo } from "react";
+import { paneAgentTitle } from "../agentName";
 import { createPortal } from "react-dom";
 import {
   Brain,
@@ -165,7 +166,7 @@ export function AgentSessionPreviewDialog({
             <div>
               <h3>Session Inspector</h3>
               <span>
-                {workspaceLabel} · {pane.agent ?? "Agent"} ·{" "}
+                {workspaceLabel} · {paneAgentTitle(pane) || "Agent"} ·{" "}
                 {shortId(pane.pane_id)}
               </span>
             </div>
