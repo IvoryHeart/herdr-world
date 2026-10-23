@@ -1054,9 +1054,9 @@ export async function createTownRenderer(
       }
   };
 
-  // A seated agent's quest progress floats over its head once desks are
-  // drawn (in a room and at a desk, not over the overview's room cards),
-  // above its status bubble when it has one. It leaves with the agent.
+  // A seated agent's quest progress shows on it once desks are drawn (in a
+  // room and at a desk, not over the overview's room cards), clear of its
+  // status bubble. It leaves with the agent.
   const updateQuests = () => {
     const scale = Math.min(3, Math.max(2, Math.round(camera.z * 1.5)));
     const wanted = new Set<string>();
@@ -1067,11 +1067,12 @@ export async function createTownRenderer(
         const cell = seat && layoutCells.get(seat.deskKey);
         if (actor?.mode !== "seat" || !seat || !cell) continue;
         const geometry = townSeat(cell, seat.seat);
+        // Seat tags fill the aisle above a top seat, so its mark sits on
+        // the agent, under its status bubble. A bottom seat's sits on the
+        // table, above its bubble.
         const point = camera.toScreen(
           geometry.cx,
-          geometry.top
-            ? geometry.tableY + 24 - 20 * TOWN_AGENT_SCALE - 8
-            : geometry.tableY + 33,
+          geometry.top ? geometry.tableY + 14 : geometry.tableY + 33,
         );
         if (
           point.x < -60 ||
@@ -1091,7 +1092,7 @@ export async function createTownRenderer(
         }
         sprite.texture = textureOf(townQuestBar(mark));
         sprite.scale.set(scale);
-        const bubble = bubbles.get(key);
+        const bubble = geometry.top ? undefined : bubbles.get(key);
         sprite.position.set(
           Math.round(point.x),
           Math.round(point.y - 2 - (bubble ? bubble.height + 2 : 0)),

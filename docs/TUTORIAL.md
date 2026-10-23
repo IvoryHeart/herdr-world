@@ -136,7 +136,7 @@ changes what you see and does not disconnect hosts or retarget open terminals.
    **Terminal**; that tap also brings the agent back and, like the chat, does
    not mark its work reviewed.
    Zoom into a room: an agent with a quest (its own todo list, plan, Codex goal
-   or `/loop`) shows a flag and progress bar over its head. Open its chat to
+   or `/loop`) shows a flag and progress bar at its seat. Open its chat to
    read the quest log above the conversation: each objective as pending,
    active, done or blocked.
 5. Read the question before using an answer button: it sends the offered key to

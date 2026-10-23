@@ -46,7 +46,7 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     the chat (the default) or the terminal; either way the tap does not mark
     finished work reviewed. **Open terminal** in the peek does, as before.
   - A seated agent with a quest (its own todo list, plan, Codex goal or loop)
-    shows a flag and progress bar over its head in a room or at a desk.
+    shows a flag and progress bar at its seat in a room or at a desk.
   - **Open terminal** in the card's header opens the live pane; **Inspector**
     opens files and changes. **Next** opens the next waiting agent's window,
     then finished agents' if none wait.
