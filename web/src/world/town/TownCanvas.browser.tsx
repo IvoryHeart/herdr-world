@@ -931,6 +931,13 @@ async function run() {
       `protected room plaque ${expand?.textContent?.trim()} disagrees with ${orbit} visible desks of 160`,
     );
     check(
+      expand?.getAttribute("aria-label") ===
+        "Expand room orbit toward 127 desks" &&
+        expand.title.includes("127 desks") &&
+        !expand.title.includes("all 160"),
+      "expansion accessibility text overpromises all 160 desks",
+    );
+    check(
       rendered.lastError === null,
       `protected-room renderer error: ${rendered.lastError}`,
     );

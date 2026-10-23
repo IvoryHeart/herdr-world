@@ -40,9 +40,10 @@ import {
   Plus,
   Trash2,
 } from "lucide-react";
-import type {
-  HerdrOfficeProjection,
-  OfficeAgent,
+import {
+  TOWN_PRESENTATION_BOUNDS,
+  type HerdrOfficeProjection,
+  type OfficeAgent,
 } from "../herdrOfficeProjection";
 import type {
   WorldCanvasAnchor,
@@ -2012,12 +2013,12 @@ const TownWorldLayer = memo(function TownWorldLayer({
                         aria-expanded={room.deskFold === "expanded"}
                         aria-label={
                           room.deskFold === "folded"
-                            ? `Expand room ${label} to show all ${room.observedDeskCount} desks`
+                            ? `Expand room ${label} toward ${Math.min(room.observedDeskCount, TOWN_PRESENTATION_BOUNDS.desksPerRoom)} desks`
                             : `Fold room ${label} to its busiest desks`
                         }
                         title={
                           room.deskFold === "folded"
-                            ? `Show all ${room.observedDeskCount} desks`
+                            ? `Expand toward ${Math.min(room.observedDeskCount, TOWN_PRESENTATION_BOUNDS.desksPerRoom)} desks; protected desks stay visible`
                             : "Show only the busiest desks"
                         }
                         onClick={() => roomActions.onToggleFold?.(room.key)}

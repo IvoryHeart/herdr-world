@@ -86,7 +86,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     and verified agents with open questions stay visible beyond that count.
     Its plaque's **+N** counts only hidden tables and expands the room to a
     normal limit of 127; the same tables stay visible beyond that limit. **Fold**
-    puts it back. A growing room moves only the rooms below it, and never
+    remains available after tabs close and puts it back. A growing room moves
+    only the rooms below it, and never
     while you hold the town. Town asks Herdr to move the tab and
     shows the new order when Herdr reports it; agents stay with their table.
   - **Teams.** Tables whose agents know each other are drawn inside one wall

@@ -225,7 +225,9 @@ test("an explicit Fold shrinks an expanded room while ordinary tab closures pres
       first.layout.buildings[0]!.rooms[0]!.h,
     );
     expect(next.layout.deskCells.size).toBe(24);
-    const closed = layoutTown(town({ a: [2] }), shape, first.memory);
+    const closedInput = town({ a: [2] });
+    closedInput.rooms[0]!.deskFold = "expanded";
+    const closed = layoutTown(closedInput, shape, first.memory);
     expect(closed.layout.buildings[0]!.rooms[0]!.h).toBe(
       first.layout.buildings[0]!.rooms[0]!.h,
     );
