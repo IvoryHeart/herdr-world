@@ -18,7 +18,135 @@ import {
   runtimeEnvironment,
   removeInstallerFixture,
   upgradeCookieStatus,
+  InstallerCommandError,
+  legacyBaselineStagingLock,
+  baselineBuild,
+  command,
 } from "./installer-upgrade";
+
+const legacyCleanupError = (version = "0.2.6") =>
+  new InstallerCommandError(
+    [
+      "powershell.exe",
+      "-NoProfile",
+      "-NonInteractive",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-File",
+      "scripts/install-plugin.ps1",
+    ],
+    1,
+    `Installed Herdr World plugin binary ${version}\r\n`,
+    [
+      "Remove-Item : Cannot remove item C:\\fixture\\upgrade\\server\\.plugin-install-example.tmp\\herdr-world-windows-arm64\\herdr-world.exe: The process cannot",
+      "access the file 'herdr-world.exe' because it is being used by another process.",
+      "At C:\\fixture\\upgrade\\scripts\\install-plugin.ps1:112 char:3",
+      "+   Remove-Item -LiteralPath $staging -Recurse -Force",
+      "+   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
+      "    + CategoryInfo          : WriteError: (herdr-world.exe:FileInfo) [Remove-Item], IOException",
+      "    + FullyQualifiedErrorId : RemoveFileSystemItemIOError,Microsoft.PowerShell.Commands.RemoveItemCommand",
+    ].join("\r\n"),
+  );
+
+test("only Windows v0.2.6-and-older baseline post-success staging locks are tolerated", () => {
+  for (const version of ["0.0.1", "0.1.99", "0.2.0", "0.2.6"])
+    expect(
+      legacyBaselineStagingLock(
+        legacyCleanupError(version),
+        `v${version}`,
+        "win32",
+      ),
+    ).toBe(true);
+  for (const version of ["0.2.7", "0.3.0", "1.0.0", "0.2.6-rc.1", "00.2.6"])
+    expect(
+      legacyBaselineStagingLock(
+        legacyCleanupError(version),
+        `v${version}`,
+        "win32",
+      ),
+    ).toBe(false);
+  for (const platform of ["linux", "darwin"] as const)
+    expect(
+      legacyBaselineStagingLock(legacyCleanupError(), "v0.2.6", platform),
+    ).toBe(false);
+});
+
+test("baseline checksum, version, download, promotion and unrelated cleanup errors stay fatal", () => {
+  const original = legacyCleanupError();
+  const changed = (
+    patch: Partial<
+      Pick<InstallerCommandError, "argv" | "exitCode" | "stdout" | "stderr">
+    >,
+  ) =>
+    new InstallerCommandError(
+      patch.argv ?? original.argv,
+      patch.exitCode ?? original.exitCode,
+      patch.stdout ?? original.stdout,
+      patch.stderr ?? original.stderr,
+    );
+  const errors: unknown[] = [
+    new Error(original.message),
+    changed({ exitCode: 2 }),
+    changed({ argv: ["powershell.exe", "-File", "scripts/other.ps1"] }),
+    changed({ stdout: "" }),
+    changed({ stdout: "Installed Herdr World plugin binary 0.2.5" }),
+    changed({ stdout: original.stdout + "Binary version mismatch" }),
+    changed({ stderr: "Package checksum mismatch" }),
+    changed({ stderr: "Binary version mismatch" }),
+    changed({ stderr: "download failed" }),
+    changed({ stderr: original.stderr.replaceAll("Remove-Item", "Move-Item") }),
+    changed({
+      stderr: original.stderr.replace(
+        ".plugin-install-example.tmp",
+        "installed",
+      ),
+    }),
+    changed({
+      stderr: original.stderr.replace(
+        "being used by another process",
+        "access is denied",
+      ),
+    }),
+    changed({
+      stderr: original.stderr.replace(
+        "RemoveFileSystemItemIOError",
+        "OtherError",
+      ),
+    }),
+    changed({
+      stderr: original.stderr + "\r\n    + FullyQualifiedErrorId : OtherError",
+    }),
+  ];
+  for (const error of errors)
+    expect(legacyBaselineStagingLock(error, "v0.2.6", "win32")).toBe(false);
+});
+
+test("baseline-only tolerance cannot swallow current installers or later validation failures", async () => {
+  const error = legacyCleanupError();
+  const fail = async () => {
+    throw error;
+  };
+  expect(await baselineBuild(fail, "v0.2.6", "win32")).toBe(true);
+  await expect(baselineBuild(fail, "v0.2.7", "win32")).rejects.toBe(error);
+  expect(await baselineBuild(async () => "installed", "v0.2.6", "win32")).toBe(
+    false,
+  );
+  const invalidBinary = new Error("Baseline installed version mismatch");
+  await expect(
+    (async () => {
+      await baselineBuild(fail, "v0.2.6", "win32");
+      throw invalidBinary;
+    })(),
+  ).rejects.toBe(invalidBinary);
+});
+
+test("candidate commands remain strict even with the known legacy cleanup output", async () => {
+  const failure = legacyCleanupError();
+  const script = `console.log(${JSON.stringify(failure.stdout)}); console.error(${JSON.stringify(failure.stderr)}); process.exit(1);`;
+  await expect(
+    command([process.execPath, "--eval", script], process.cwd(), process.env),
+  ).rejects.toBeInstanceOf(InstallerCommandError);
+});
 
 test("native compile commands pass the build-environment wildcard literally through Bun Shell", async () => {
   const root = new URL("../server/", import.meta.url);

@@ -18,6 +18,77 @@ import { VERIFIED_HERDR_VERSION } from "../server/src/herdr/release";
 
 const repository = "IvoryHeart/herdr-world";
 
+export class InstallerCommandError extends Error {
+  constructor(
+    readonly argv: string[],
+    readonly exitCode: number,
+    readonly stdout: string,
+    readonly stderr: string,
+  ) {
+    super(
+      `${basename(argv[0])} ${argv.slice(1).join(" ")} exited ${exitCode}\n${stdout.slice(-2000)}\n${stderr.slice(-2000)}`,
+    );
+    // Keep complete output for classification without dumping it in failures.
+    Object.defineProperties(this, {
+      stdout: { enumerable: false },
+      stderr: { enumerable: false },
+    });
+  }
+}
+
+/** Only the old baseline's post-success staging sharing violation is tolerated. */
+export function legacyBaselineStagingLock(
+  error: unknown,
+  tag: string,
+  platform: NodeJS.Platform = process.platform,
+): boolean {
+  const version = /^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.exec(tag);
+  if (
+    platform !== "win32" ||
+    !version ||
+    BigInt(version[1]!) !== 0n ||
+    BigInt(version[2]!) > 2n ||
+    (BigInt(version[2]!) === 2n && BigInt(version[3]!) > 6n) ||
+    !(error instanceof InstallerCommandError) ||
+    error.exitCode !== 1 ||
+    !/^powershell(?:\.exe)?$/i.test(basename(error.argv[0]!)) ||
+    !error.argv.some((arg) =>
+      /(?:^|[\\/])scripts[\\/]install-plugin\.ps1$/i.test(arg),
+    ) ||
+    error.stdout.trim() !==
+      `Installed Herdr World plugin binary ${tag.slice(1)}`
+  )
+    return false;
+  const stderr = error.stderr.trim();
+  return (
+    /^Remove-Item\s*:\s*Cannot remove item\b/.test(stderr) &&
+    /[\\/]server[\\/]\.plugin-install-[^\\/\s]+[\\/]herdr-world-windows-(?:arm64|x64)[\\/]herdr-world\.exe\b/.test(
+      stderr,
+    ) &&
+    /because it is being used by another process\./.test(stderr) &&
+    /\+\s+Remove-Item -LiteralPath \$staging -Recurse -Force/.test(stderr) &&
+    /CategoryInfo\s*:\s*WriteError:[\s\S]*?\bIOException\b/.test(stderr) &&
+    stderr.match(/FullyQualifiedErrorId\s*:/g)?.length === 1 &&
+    /FullyQualifiedErrorId\s*:\s*RemoveFileSystemItemIOError,Microsoft\.PowerShell\.Commands\.RemoveItemCommand\s*$/.test(
+      stderr,
+    )
+  );
+}
+
+export async function baselineBuild(
+  run: () => Promise<string>,
+  tag: string,
+  platform: NodeJS.Platform = process.platform,
+): Promise<boolean> {
+  try {
+    await run();
+    return false;
+  } catch (error) {
+    if (!legacyBaselineStagingLock(error, tag, platform)) throw error;
+    return true;
+  }
+}
+
 /**
  * Every full CI run installs the latest stable release as the upgrade baseline
  * on six platforms. Fetching it from the public release each time counted about
@@ -156,7 +227,7 @@ export function runtimeEnvironment(home: string): NodeJS.ProcessEnv {
   };
 }
 
-async function command(
+export async function command(
   argv: string[],
   cwd: string,
   env: NodeJS.ProcessEnv,
@@ -175,10 +246,8 @@ async function command(
       new Response(child.stderr).text(),
     ]);
     assert(!timedOut, `${basename(argv[0])} exceeded its command deadline`);
-    assert(
-      success ? code === 0 : code !== 0,
-      `${basename(argv[0])} ${argv.slice(1).join(" ")} exited ${code}\n${out.slice(-2000)}\n${err.slice(-2000)}`,
-    );
+    if (!(success ? code === 0 : code !== 0))
+      throw new InstallerCommandError(argv, code, out, err);
     return success ? out.trim() : `${out}\n${err}`.trim();
   } finally {
     clearTimeout(timeout);
@@ -450,12 +519,25 @@ export async function verify() {
       `https://github.com/${repository}/releases/download/${tag}`,
     );
     try {
-      for (const entry of build)
-        await command(entry.command, upgrade, {
-          ...state.env,
-          PATH: process.env.PATH,
-          HERDR_WORLD_RELEASE_BASE_URL: mirror.url.origin,
-        });
+      for (const entry of build) {
+        const legacyCleanup = await baselineBuild(
+          () =>
+            command(entry.command, upgrade, {
+              ...state.env,
+              PATH: process.env.PATH,
+              HERDR_WORLD_RELEASE_BASE_URL: mirror.url.origin,
+            }),
+          tag,
+        );
+        if (legacyCleanup) {
+          console.warn(
+            `[installer] ${tag} baseline installed; tolerating its known Windows staging cleanup lock. Installed binaries and runtime still require verification.`,
+          );
+          report.cases.push(
+            "legacy Windows baseline post-install staging lock recognized; installation validation remains required",
+          );
+        }
+      }
     } finally {
       mirror.stop(true);
     }
