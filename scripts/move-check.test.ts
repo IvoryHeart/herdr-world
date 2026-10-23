@@ -1,49 +1,154 @@
 import { expect, test } from "bun:test";
-import { diffLines, normalize, unmoved } from "./move-check";
+import { diffHunks, matchMoves, normalize } from "./move-check";
 
 const diff = (...lines: string[]) => lines.join("\n");
+const file = (from: string, to: string, ...body: string[]) => [
+  `diff --git a/${from} b/${to}`,
+  `--- ${from === "/dev/null" ? from : `a/${from}`}`,
+  `+++ b/${to}`,
+  ...body,
+];
 
-test("a pure move with new imports and exports passes", () => {
-  const lines = diffLines(
-    diff(
-      "--- a/web/src/store.ts",
-      "+++ b/web/src/store.ts",
-      "-function helper(value: number) {",
-      "-  return value * 2;",
-      "-}",
-      '+import { helper } from "./storeHelpers";',
-      "--- /dev/null",
-      "+++ b/web/src/storeHelpers.ts",
-      "+import {",
-      "+  type Value,",
-      "+  scale,",
-      '+} from "./values";',
-      "+export function helper(value: number) {",
-      "+  return value * 2;",
-      "+}",
-    ),
-  );
-  expect(unmoved(lines)).toEqual({ lost: [], extra: [] });
-});
-
-test("an edit hidden in a move is reported both ways", () => {
-  const result = unmoved(
-    diffLines(
+test("a split into a new file with new imports and exports is a move", () => {
+  const report = matchMoves(
+    diffHunks(
       diff(
-        "-  return value * 2;",
-        "+  return value * 3;",
-        "-function helper() {",
-        "+function helper() {",
+        ...file(
+          "web/src/store.ts",
+          "web/src/store.ts",
+          "@@ -1,0 +1,1 @@",
+          '+import { helper } from "./storeHelpers";',
+          "@@ -10,4 +11,0 @@",
+          "-function helper(value: number) {",
+          "-  const doubled = value * 2;",
+          "-  return doubled;",
+          "-}",
+        ),
+        ...file(
+          "/dev/null",
+          "web/src/storeHelpers.ts",
+          "@@ -0,0 +1,8 @@",
+          "+import {",
+          "+  type Value,",
+          "+  scale,",
+          '+} from "./values";',
+          "+export function helper(value: number) {",
+          "+  const doubled = value * 2;",
+          "+  return doubled;",
+          "+}",
+        ),
       ),
     ),
   );
-  expect(result.lost).toEqual(["return value * 2;"]);
-  expect(result.extra).toEqual(["return value * 3;"]);
+  expect(report.lost).toEqual([]);
+  expect(report.extra).toEqual([]);
+  expect(report.runs).toEqual([
+    { from: "web/src/store.ts", to: "web/src/storeHelpers.ts", lines: 3 },
+  ]);
 });
 
-test("duplicated lines are counted, not just matched", () => {
-  const result = unmoved(diffLines(diff("-  i++;", "+  i++;", "+  i++;")));
-  expect(result.extra).toEqual(["i++;"]);
+test("reordering statements is not a move", () => {
+  const report = matchMoves(
+    diffHunks(
+      diff(
+        ...file(
+          "web/src/a.ts",
+          "web/src/a.ts",
+          "@@ -1,2 +1,0 @@",
+          "-authorize();",
+          "-write();",
+          "@@ -5,0 +3,2 @@",
+          "+write();",
+          "+authorize();",
+        ),
+      ),
+    ),
+  );
+  expect(report.lost.length + report.extra.length).toBeGreaterThan(0);
+});
+
+test("statements swapped between files are not a move", () => {
+  const report = matchMoves(
+    diffHunks(
+      diff(
+        ...file(
+          "a.ts",
+          "a.ts",
+          "@@ -1,1 +1,1 @@",
+          "-  check(a);",
+          "+  check(b);",
+        ),
+        ...file(
+          "b.ts",
+          "b.ts",
+          "@@ -1,1 +1,1 @@",
+          "-  check(b);",
+          "+  check(a);",
+        ),
+      ),
+    ),
+  );
+  // Single lines are below a run, so each swap is reported.
+  expect(report.lost).toHaveLength(2);
+  expect(report.extra).toHaveLength(2);
+});
+
+test("an import-header hunk does not hide a later edit", () => {
+  const report = matchMoves(
+    diffHunks(
+      diff(
+        ...file(
+          "web/src/a.ts",
+          "web/src/a.ts",
+          "@@ -1,1 +1,1 @@",
+          "-import {",
+          "+import type {",
+          "@@ -40,1 +40,1 @@",
+          "-  return false;",
+          "+  return true;",
+        ),
+      ),
+    ),
+  );
+  expect(report.lost).toEqual([
+    { file: "web/src/a.ts", line: "return false;" },
+  ]);
+  expect(report.extra).toEqual([
+    { file: "web/src/a.ts", line: "return true;" },
+  ]);
+});
+
+test("an edit inside moved code is reported, and each added line counts once", () => {
+  const report = matchMoves(
+    diffHunks(
+      diff(
+        ...file(
+          "a.ts",
+          "a.ts",
+          "@@ -1,4 +1,0 @@",
+          "-one();",
+          "-two();",
+          "-three();",
+          "-four();",
+        ),
+        ...file(
+          "/dev/null",
+          "b.ts",
+          "@@ -0,0 +1,5 @@",
+          "+one();",
+          "+two();",
+          "+three();",
+          "+FOUR();",
+          "+one();",
+        ),
+      ),
+    ),
+  );
+  expect(report.lost).toEqual([{ file: "a.ts", line: "four();" }]);
+  expect(report.extra).toEqual([
+    { file: "b.ts", line: "FOUR();" },
+    { file: "b.ts", line: "one();" },
+  ]);
 });
 
 test("plumbing and blank lines are ignored", () => {

@@ -26,6 +26,31 @@ export function ratcheted(path: string): boolean {
   );
 }
 
+/** The policy file, rejected unless every ceiling is a positive integer. */
+export function parseExceptions(text: string, label: string): Exceptions {
+  const value = JSON.parse(text) as unknown;
+  const object = (item: unknown): item is Record<string, unknown> =>
+    typeof item === "object" && item !== null && !Array.isArray(item);
+  if (
+    !object(value) ||
+    !object(value.limits) ||
+    !object(value.unratcheted) ||
+    Object.keys(value).some((key) => key !== "limits" && key !== "unratcheted")
+  )
+    throw new Error(
+      `${label}: expected { "limits": {...}, "unratcheted": {...} }`,
+    );
+  for (const [path, max] of Object.entries(value.limits))
+    if (!Number.isSafeInteger(max) || (max as number) <= LIMIT)
+      throw new Error(
+        `${label}: ${path} needs an integer ceiling above ${LIMIT}`,
+      );
+  for (const [path, reason] of Object.entries(value.unratcheted))
+    if (typeof reason !== "string" || !reason.trim())
+      throw new Error(`${label}: ${path} needs the reason it is unratcheted`);
+  return value as Exceptions;
+}
+
 /**
  * `baseLines` holds the base revision's size of each file over its limit:
  * growth already on main (or the merge base) is not this change's to answer
@@ -89,6 +114,13 @@ function git(args: string[]) {
   return result.exitCode === 0 ? result.stdout.toString() : undefined;
 }
 
+/** Like git(), but a failure stops the check. */
+function mustGit(args: string[]) {
+  const out = git(args);
+  if (out === undefined) throw new Error(`git ${args.join(" ")} failed`);
+  return out;
+}
+
 function countLines(text: string) {
   return text.length === 0
     ? 0
@@ -96,53 +128,61 @@ function countLines(text: string) {
 }
 
 if (import.meta.main) {
-  const root = resolve(import.meta.dir, "..");
-  process.chdir(root);
-  const lines: Record<string, number> = {};
-  for (const path of git(["ls-files"])!.split("\n"))
-    if (path && ratcheted(path)) {
-      try {
-        lines[path] = countLines(readFileSync(path, "utf8"));
-      } catch {
-        // Deleted in the working tree.
+  try {
+    const root = resolve(import.meta.dir, "..");
+    process.chdir(root);
+    const lines: Record<string, number> = {};
+    for (const path of mustGit(["ls-files"]).split("\n"))
+      if (path && ratcheted(path)) {
+        try {
+          lines[path] = countLines(readFileSync(path, "utf8"));
+        } catch {
+          // Deleted in the working tree.
+        }
       }
-    }
-  const current = JSON.parse(readFileSync(EXCEPTIONS, "utf8")) as Exceptions;
-  // CI checks out one commit: compare with main's tip when there is no merge base.
-  const baseRef =
-    process.argv[2] ??
-    git(["merge-base", "HEAD", "origin/main"])?.trim() ??
-    (git(["fetch", "--quiet", "--no-tags", "--depth=1", "origin", "main"]) !==
-    undefined
-      ? "FETCH_HEAD"
-      : undefined);
-  if (!baseRef)
-    console.warn(
-      "[size] no base revision; the shrink-only rule was not checked",
+    const current = parseExceptions(
+      readFileSync(EXCEPTIONS, "utf8"),
+      EXCEPTIONS,
     );
-  const baseText = baseRef
-    ? git(["show", `${baseRef}:${EXCEPTIONS}`])
-    : undefined;
-  // Base sizes, only for the files over their limit.
-  const baseLines: Record<string, number> = {};
-  if (baseRef)
+    // CI checks out one commit: compare with main's tip when there is no merge base.
+    const baseRef =
+      process.argv[2] ??
+      git(["merge-base", "HEAD", "origin/main"])?.trim() ??
+      (mustGit([
+        "fetch",
+        "--quiet",
+        "--no-tags",
+        "--depth=1",
+        "origin",
+        "main",
+      ]),
+      "FETCH_HEAD");
+    mustGit(["rev-parse", "--verify", "--quiet", `${baseRef}^{commit}`]);
+    // Absent only before this ratchet existed on the base.
+    const baseText = git(["show", `${baseRef}:${EXCEPTIONS}`]);
+    const base = baseText
+      ? parseExceptions(baseText, `${EXCEPTIONS} at ${baseRef.slice(0, 8)}`)
+      : undefined;
+    // Base sizes, only for the files over their limit.
+    const baseLines: Record<string, number> = {};
     for (const [path, count] of Object.entries(lines))
       if (count > (current.limits[path] ?? LIMIT)) {
         const text = git(["show", `${baseRef}:${path}`]);
         if (text !== undefined) baseLines[path] = countLines(text);
       }
-  const problems = checkSizes(
-    lines,
-    current,
-    baseText ? (JSON.parse(baseText) as Exceptions) : undefined,
-    baseLines,
-  );
-  for (const note of slack(lines, current)) console.info(`[size] ${note}`);
-  if (problems.length) {
-    for (const problem of problems) console.error(`[size] ${problem}`);
+    const problems = checkSizes(lines, current, base, baseLines);
+    for (const note of slack(lines, current)) console.info(`[size] ${note}`);
+    if (problems.length) {
+      for (const problem of problems) console.error(`[size] ${problem}`);
+      process.exit(1);
+    }
+    console.info(
+      `[size] ${Object.keys(lines).length} files within the ${LIMIT}-line ratchet`,
+    );
+  } catch (error) {
+    console.error(
+      `[size] ${error instanceof Error ? error.message : String(error)}`,
+    );
     process.exit(1);
   }
-  console.info(
-    `[size] ${Object.keys(lines).length} files within the ${LIMIT}-line ratchet`,
-  );
 }

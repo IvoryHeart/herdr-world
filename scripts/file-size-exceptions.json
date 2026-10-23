@@ -41,7 +41,7 @@
     "web/src/world/worldObject.ts": 1239
   },
   "unratcheted": {
-    "web/src/world/BoardView.tsx": "Owner decision 2026-10-23: joins the ratchet after splits B and C",
-    "web/src/world/town/TownCanvas.tsx": "Owner decision 2026-10-23: joins the ratchet after splits B and C"
+    "web/src/world/BoardView.tsx": "Until split B (pm decision 2026-10-23, so the open Board PRs can land): split B removes this entry and records the post-split size under limits.",
+    "web/src/world/town/TownCanvas.tsx": "Until split C (pm decision 2026-10-23, so the open Town PRs can land): split C removes this entry and records the post-split size under limits."
   }
 }

@@ -1,5 +1,11 @@
 import { expect, test } from "bun:test";
-import { checkSizes, LIMIT, ratcheted, slack } from "./file-size-ratchet";
+import {
+  checkSizes,
+  LIMIT,
+  parseExceptions,
+  ratcheted,
+  slack,
+} from "./file-size-ratchet";
 
 const current = {
   limits: { "web/src/store.ts": 5742 },
@@ -76,4 +82,33 @@ test("tests, fixtures and generated files are outside the ratchet", () => {
     "README.md",
   ])
     expect(ratcheted(path)).toBe(false);
+});
+
+test("a malformed policy fails instead of disabling the ratchet", () => {
+  const parse = (value: unknown) => () =>
+    parseExceptions(JSON.stringify(value), "policy");
+  expect(parse({ limits: { "a.ts": "unlimited" }, unratcheted: {} })).toThrow(
+    "integer ceiling",
+  );
+  expect(parse({ limits: { "a.ts": 5000.5 }, unratcheted: {} })).toThrow(
+    "integer ceiling",
+  );
+  expect(parse({ limits: { "a.ts": 900 }, unratcheted: {} })).toThrow(
+    "above 1000",
+  );
+  expect(parse({ limits: {}, unratcheted: { "a.ts": "" } })).toThrow("reason");
+  expect(parse({ limits: {} })).toThrow("expected");
+  expect(parse({ limits: {}, unratcheted: {}, extra: 1 })).toThrow("expected");
+  expect(parseExceptions(JSON.stringify(current), "policy")).toEqual(current);
+});
+
+test("the unratcheted files each name the split that ends their exemption", async () => {
+  const policy = parseExceptions(
+    await Bun.file(
+      new URL("./file-size-exceptions.json", import.meta.url),
+    ).text(),
+    "policy",
+  );
+  for (const reason of Object.values(policy.unratcheted))
+    expect(reason).toMatch(/^Until split [A-Z]\b.*removes this entry/);
 });
