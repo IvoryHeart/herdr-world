@@ -7,6 +7,7 @@ import {
   useState,
 } from "react";
 import {
+  ArrowDown,
   Copy,
   ListTree,
   Paperclip,
@@ -226,6 +227,8 @@ export function AgentChat({
   const seqRef = useRef(0);
   const listRef = useRef<HTMLDivElement>(null);
   const followRef = useRef(true);
+  // Shown while the reader has scrolled up from the newest message.
+  const [awayFromLatest, setAwayFromLatest] = useState(false);
   const shownRef = useRef<Conversation | null>(null);
   const filePicker = useRef<HTMLInputElement>(null);
   const uploadScope = `agent-chat\u0000${connectionClient.connectionId}\u0000${connectionClient.serverRuntimeGeneration}\u0000${pane.pane_id}`;
@@ -560,8 +563,23 @@ export function AgentChat({
             followRef.current =
               list.scrollHeight - list.scrollTop - list.clientHeight <
               FOLLOW_THRESHOLD_PX;
+            setAwayFromLatest(!followRef.current);
           }}
         >
+          {awayFromLatest ? (
+            <button
+              type="button"
+              className="agent-chat-jump"
+              onClick={() => {
+                const list = listRef.current;
+                followRef.current = true;
+                setAwayFromLatest(false);
+                list?.scrollTo({ top: list.scrollHeight });
+              }}
+            >
+              <ArrowDown size={13} aria-hidden="true" /> Jump to latest
+            </button>
+          ) : null}
           <div className="agent-chat-content">
             {conversation && conversation.messages.length === 0 ? (
               <p className="agent-chat-empty">No messages yet.</p>

@@ -16,6 +16,7 @@ import {
   MessagesSquare,
   Maximize2,
   Minimize2,
+  MoreHorizontal,
   PanelBottom,
   PanelRight,
   PanelRightClose,
@@ -113,6 +114,23 @@ function checkoutLabel(workspace?: Workspace) {
 }
 
 const INSPECTOR_RESOURCE_HORIZONTAL_PADDING = 16;
+
+const INSPECTOR_TAB_LABELS: Partial<Record<InspectorView, string>> = {
+  history: "Chat",
+  terminal: "Terminal",
+  changes: "Changes",
+  files: "Files",
+  commits: "Commits",
+};
+
+/** The Inspector's views as its top selector shows them, Chat first. */
+const INSPECTOR_TAB_ORDER: readonly InspectorView[] = [
+  "history",
+  "terminal",
+  "changes",
+  "files",
+  "commits",
+];
 
 export function WorkspaceInspectorHost({
   state,
@@ -401,6 +419,7 @@ export function WorkspaceInspectorHost({
       setDrillInByView((current) => ({ ...current, files: true }));
   }, [fileSelection.entry, state.view, state.initialDirectory]);
 
+  const [viewsMenuOpen, setViewsMenuOpen] = useState(false);
   const handleTabKeyDown = (event: ReactKeyboardEvent<HTMLButtonElement>) => {
     if (event.key === "ArrowDown" && state.view === "files") {
       const treeItem = hostRef.current?.querySelector<HTMLElement>(
@@ -413,8 +432,10 @@ export function WorkspaceInspectorHost({
       }
       return;
     }
-    const views = availableViews.filter(
-      (view) => view !== "history" || historyAvailable,
+    const views = INSPECTOR_TAB_ORDER.filter(
+      (view) =>
+        availableViews.includes(view) &&
+        (view !== "history" || historyAvailable),
     );
     const currentIndex = Math.max(0, views.indexOf(state.view));
     const nextView: InspectorView | undefined =
@@ -563,71 +584,15 @@ export function WorkspaceInspectorHost({
             ) : null}
           </div>
         )}
+        {/* One selector in the window's top bar, Chat first: Chat,
+            Terminal, Changes, Files (and Commits). */}
         <div className="workspace-inspector-tabs" role="tablist">
-          {terminalAvailable ? (
-            <button
-              ref={terminalTabRef}
-              type="button"
-              role="tab"
-              aria-selected={state.view === "terminal"}
-              tabIndex={state.view === "terminal" ? 0 : -1}
-              className={state.view === "terminal" ? "is-active" : ""}
-              onClick={() => onViewChange("terminal")}
-              onKeyDown={handleTabKeyDown}
-            >
-              <SquareTerminal size={14} /> Terminal
-            </button>
-          ) : null}
-          {filesAvailable ? (
-            <button
-              ref={filesTabRef}
-              type="button"
-              role="tab"
-              aria-selected={state.view === "files"}
-              tabIndex={state.view === "files" ? 0 : -1}
-              className={state.view === "files" ? "is-active" : ""}
-              onClick={() => onViewChange("files")}
-              onKeyDown={handleTabKeyDown}
-            >
-              <FolderTree size={14} /> Files
-            </button>
-          ) : null}
-          {changesAvailable ? (
-            <button
-              ref={changesTabRef}
-              type="button"
-              role="tab"
-              aria-selected={state.view === "changes"}
-              tabIndex={state.view === "changes" ? 0 : -1}
-              className={state.view === "changes" ? "is-active" : ""}
-              onClick={() => onViewChange("changes")}
-              onKeyDown={handleTabKeyDown}
-            >
-              <FileDiff size={14} /> Changes
-              {changeCount > 0 ? (
-                <span className="workspace-inspector-count">{changeCount}</span>
-              ) : null}
-            </button>
-          ) : null}
-          {availableViews.includes("commits") ? (
-            <button
-              ref={commitsTabRef}
-              type="button"
-              role="tab"
-              aria-selected={state.view === "commits"}
-              tabIndex={state.view === "commits" ? 0 : -1}
-              className={state.view === "commits" ? "is-active" : ""}
-              onClick={() => onViewChange("commits")}
-              onKeyDown={handleTabKeyDown}
-            >
-              <GitGraph size={14} /> Commits
-            </button>
-          ) : null}
           {availableViews.includes("history") ? (
             <button
               ref={historyTabRef}
               type="button"
               role="tab"
+              aria-label="Chat"
               aria-selected={state.view === "history"}
               tabIndex={state.view === "history" ? 0 : -1}
               className={state.view === "history" ? "is-active" : ""}
@@ -642,10 +607,121 @@ export function WorkspaceInspectorHost({
               }}
               onKeyDown={handleTabKeyDown}
             >
-              <MessagesSquare size={14} /> Chat
+              <MessagesSquare size={14} aria-hidden="true" />
+              <span className="workspace-inspector-tab-label">Chat</span>
+            </button>
+          ) : null}
+          {terminalAvailable ? (
+            <button
+              ref={terminalTabRef}
+              type="button"
+              role="tab"
+              aria-label="Terminal"
+              title="Terminal"
+              aria-selected={state.view === "terminal"}
+              tabIndex={state.view === "terminal" ? 0 : -1}
+              className={state.view === "terminal" ? "is-active" : ""}
+              onClick={() => onViewChange("terminal")}
+              onKeyDown={handleTabKeyDown}
+            >
+              <SquareTerminal size={14} aria-hidden="true" />
+              <span className="workspace-inspector-tab-label">Terminal</span>
+            </button>
+          ) : null}
+          {changesAvailable ? (
+            <button
+              ref={changesTabRef}
+              type="button"
+              role="tab"
+              aria-label="Changes"
+              title="Changes"
+              aria-selected={state.view === "changes"}
+              tabIndex={state.view === "changes" ? 0 : -1}
+              className={state.view === "changes" ? "is-active" : ""}
+              onClick={() => onViewChange("changes")}
+              onKeyDown={handleTabKeyDown}
+            >
+              <FileDiff size={14} aria-hidden="true" />
+              <span className="workspace-inspector-tab-label">Changes</span>
+              {changeCount > 0 ? (
+                <span className="workspace-inspector-count">{changeCount}</span>
+              ) : null}
+            </button>
+          ) : null}
+          {filesAvailable ? (
+            <button
+              ref={filesTabRef}
+              type="button"
+              role="tab"
+              aria-label="Files"
+              title="Files"
+              aria-selected={state.view === "files"}
+              tabIndex={state.view === "files" ? 0 : -1}
+              className={state.view === "files" ? "is-active" : ""}
+              onClick={() => onViewChange("files")}
+              onKeyDown={handleTabKeyDown}
+            >
+              <FolderTree size={14} aria-hidden="true" />
+              <span className="workspace-inspector-tab-label">Files</span>
+            </button>
+          ) : null}
+          {availableViews.includes("commits") ? (
+            <button
+              ref={commitsTabRef}
+              type="button"
+              role="tab"
+              aria-label="Commits"
+              title="Commits"
+              aria-selected={state.view === "commits"}
+              tabIndex={state.view === "commits" ? 0 : -1}
+              className={state.view === "commits" ? "is-active" : ""}
+              onClick={() => onViewChange("commits")}
+              onKeyDown={handleTabKeyDown}
+            >
+              <GitGraph size={14} aria-hidden="true" />
+              <span className="workspace-inspector-tab-label">Commits</span>
             </button>
           ) : null}
         </div>
+        {/* In the narrowest window only the active view's tab shows; the
+            others are one tap away here. */}
+        <Popover open={viewsMenuOpen} onOpenChange={setViewsMenuOpen}>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              className="workspace-inspector-tabs-more"
+              aria-label="More views"
+              title="More views"
+            >
+              <MoreHorizontal size={15} aria-hidden="true" />
+            </button>
+          </PopoverTrigger>
+          <PopoverContent
+            className="workspace-inspector-tabs-menu"
+            align="end"
+            role="menu"
+            aria-label="Views"
+          >
+            {INSPECTOR_TAB_ORDER.filter(
+              (view) =>
+                availableViews.includes(view) &&
+                view !== state.view &&
+                (view !== "history" || historyAvailable),
+            ).map((view) => (
+              <button
+                key={view}
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setViewsMenuOpen(false);
+                  onViewChange(view);
+                }}
+              >
+                {INSPECTOR_TAB_LABELS[view]}
+              </button>
+            ))}
+          </PopoverContent>
+        </Popover>
         {visible && state.open && workspace ? (
           <Popover
             key={connectionClientScopeKey(

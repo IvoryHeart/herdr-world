@@ -777,6 +777,69 @@ async function run() {
       ) !== null,
       "A running step must spin",
     );
+    // A long conversation scrolls in the window, phone and desktop widths
+    // alike: it opens at the newest message, keeps the reader's place when a
+    // message lands while they read back, and Jump to latest returns.
+    for (const width of [390, 1300]) {
+      container.style.width = `${width}px`;
+      const long = Array.from({ length: 70 }, (_, index) =>
+        message(
+          `long-${width}-${index}`,
+          index % 2 ? "assistant" : "user",
+          `Message ${index}: the reception queue keeps the oldest waiting agent first.`,
+        ),
+      );
+      reply = conversation(long);
+      render("idle", false);
+      await settle();
+      render("idle");
+      await settle();
+      await settle();
+      const list = container.querySelector<HTMLElement>(".agent-chat-list")!;
+      check(
+        list.scrollHeight > list.clientHeight * 2,
+        `a long conversation should scroll at ${width}px`,
+      );
+      check(
+        list.scrollHeight - list.scrollTop - list.clientHeight < 4,
+        `Chat should open at the newest message at ${width}px`,
+      );
+      list.scrollTop = 0;
+      list.dispatchEvent(new Event("scroll"));
+      await settle();
+      const jump = () =>
+        container.querySelector<HTMLButtonElement>(".agent-chat-jump");
+      check(jump() !== null, `Jump to latest should show at ${width}px`);
+      reply = conversation([
+        ...long,
+        message(`long-${width}-new`, "assistant", "A new message lands."),
+      ]);
+      push();
+      await settle();
+      await settle();
+      check(
+        list.scrollTop < 4,
+        `a new message moved a reader who scrolled up at ${width}px`,
+      );
+      jump()!.click();
+      await settle();
+      check(
+        list.scrollHeight - list.scrollTop - list.clientHeight < 4 &&
+          jump() === null,
+        `Jump to latest did not return to the newest message at ${width}px`,
+      );
+      const composer = container
+        .querySelector("textarea")
+        ?.getBoundingClientRect();
+      const box = container.getBoundingClientRect();
+      check(
+        composer !== undefined &&
+          composer.bottom <= box.bottom + 1 &&
+          composer.top >= box.top,
+        `the composer should stay in the window at ${width}px`,
+      );
+    }
+    container.style.width = "800px";
 
     const unwatched = count("agent_conversation.unwatch");
     render("done", false);
