@@ -444,7 +444,7 @@ test("CI checks native plugin compatibility on Windows and both macOS architectu
   ).toBe(true);
 });
 
-test("a red main commit opens one alert and prepares an unmerged revert", async () => {
+test("red main runs open one alert and an unmerged revert; green runs resolve it", async () => {
   const gate = Bun.YAML.parse(
     await Bun.file(
       new URL("../.github/workflows/main-gate.yml", import.meta.url),
@@ -467,7 +467,7 @@ test("a red main commit opens one alert and prepares an unmerged revert", async 
   const alert = gate.jobs.alert!;
   // Only push runs on main count; PR runs whose head branch is named main do not.
   expect(alert.if).toBe(
-    "github.event.workflow_run.event == 'push' && github.event.workflow_run.conclusion == 'failure'",
+    "github.event.workflow_run.event == 'push' && (github.event.workflow_run.conclusion == 'failure' || github.event.workflow_run.conclusion == 'success')",
   );
   const script = alert.steps.at(-1)!;
   expect(script.run).toContain("bun scripts/main-gate.ts");

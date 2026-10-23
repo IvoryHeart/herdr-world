@@ -200,7 +200,8 @@ After a merge, CI runs the full check again on the new main commit. If it fails,
 the Main gate workflow opens one `main-red` issue that names the merge commit and
 its PR, and prepares a revert PR, which it never merges. Rerun the failed jobs
 first when the failure is a known flake; otherwise merge the revert or land a
-fix. Later red commits are added to the open issue, not to new ones.
+fix. Later red commits are added to the open issue, not to new ones, and the next
+green main run at or after the red commit closes the issue and its revert PR.
 
 Unlabeled PRs get `documentation` (docs-only), `dependencies` (dependency updates),
 `bug` (fix titles), or `enhancement` (other code). Release preparation gets
