@@ -8,8 +8,16 @@ const publicRoot = fileURLToPath(new URL("../server/public/", import.meta.url));
 // renderer or layout code; Ranger, commit history and the diff worker add
 // bounded lazy assets. Retiring Office, Tree and Graph (and Office's character
 // sprites) left 129 files and 13.0 MiB, so the budgets keep a little headroom.
-const maxFileCount = 150;
+// File splits (store, Chat) and lazy features add small chunks without adding
+// bytes: 144 files on 2026-10-23, 24 of them under 2 KiB (re-export facades and
+// shared helpers). Merging small shared chunks into one group pulled lazy code
+// into the startup bundle (initial JS 313 -> 686 KiB), so the file count gets
+// headroom instead; total bytes and the initial budgets are what users pay for
+// and stay as they are.
+const maxFileCount = 180;
 const maxTotalBytes = 13.25 * 1024 * 1024;
+/** Whole-bundle budgets, also projected onto current main for open PRs. */
+export const BUNDLE_BUDGET = { files: maxFileCount, bytes: maxTotalBytes };
 const maxInitialJsBytes = 660 * 1024;
 const maxInitialJsGzipBytes = 202 * 1024;
 const maxInitialCssBytes = 196 * 1024;
@@ -87,7 +95,7 @@ export function assertLazyGrammarAssets(manifest) {
   }
 }
 
-async function collectAssetStats(root) {
+export async function collectAssetStats(root = publicRoot) {
   const directories = [root];
   let fileCount = 0;
   let totalBytes = 0;
