@@ -34,6 +34,8 @@ export type StepDiff = {
   added: string[];
   /** More lines changed than are shown. */
   truncated: boolean;
+  /** How many changed lines are not shown. */
+  omitted: number;
 };
 
 export type TestStrip = {
@@ -138,13 +140,21 @@ export function stepDiff(
     added = lines(input.content);
   } else return null;
   if (!removed.length && !added.length) return null;
-  const truncated = removed.length + added.length > DIFF_LINES;
-  const keep = Math.max(1, Math.floor(DIFF_LINES / 2));
+  // One budget for both sides: a side that needs less leaves the rest to
+  // the other, and any line left out marks the diff truncated.
+  const half = Math.floor(DIFF_LINES / 2);
+  const keepRemoved = Math.min(
+    removed.length,
+    Math.max(half, DIFF_LINES - added.length),
+  );
+  const keepAdded = Math.min(added.length, DIFF_LINES - keepRemoved);
+  const omitted = removed.length - keepRemoved + added.length - keepAdded;
   return {
     file,
-    removed: removed.slice(0, keep).map(redactSecrets),
-    added: added.slice(0, truncated ? keep : DIFF_LINES).map(redactSecrets),
-    truncated,
+    removed: removed.slice(0, keepRemoved).map(redactSecrets),
+    added: added.slice(0, keepAdded).map(redactSecrets),
+    truncated: omitted > 0,
+    omitted,
   };
 }
 
@@ -255,7 +265,9 @@ export function stepsFromEntries(
       id: entry.source_call_id ?? `entry:${entry.id}`,
       call_id: entry.source_call_id ?? null,
       tool,
-      label,
+      // A label can quote the command or its description, so it is redacted
+      // like the summary.
+      label: redactSecrets(label),
       input_summary: summary ? redactSecrets(summary) : null,
       state: result
         ? result.is_error || (test?.failed ?? 0) > 0

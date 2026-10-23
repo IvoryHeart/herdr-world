@@ -720,7 +720,8 @@ async function run() {
             file: "src/reconnect.ts",
             removed: ["  return 1000;"],
             added: ["  return backoff(attempt);"],
-            truncated: false,
+            truncated: true,
+            omitted: 3,
           },
         }),
         step("b1", "Bash", "Run reconnect tests", {
@@ -776,6 +777,36 @@ async function run() {
         '[data-step-id="b2"].is-running .agent-chat-spinner',
       ) !== null,
       "A running step must spin",
+    );
+    check(
+      edit.textContent?.includes("3 more lines; see Changes") === true,
+      "A cut diff must say how much is left out and where to see it",
+    );
+    // Open follows a step's state as it changes, unless the reader chose.
+    reply = {
+      ...reply,
+      messages: reply.messages.map((entry) =>
+        entry.step?.id === "b2"
+          ? {
+              ...entry,
+              step: {
+                ...entry.step,
+                state: "ok" as const,
+                ended_at: "2026-10-22T09:00:09Z",
+                result_tail: " 13 pass",
+              },
+            }
+          : entry,
+      ),
+    };
+    push();
+    await settle();
+    check(
+      container.querySelector('[data-step-id="b2"].is-ok') !== null &&
+        !container.querySelector('[data-step-id="b2"] .agent-chat-step-body') &&
+        edit.isConnected &&
+        edit.querySelector(".agent-chat-step-diff") !== null,
+      "A running step that finishes must fold; one the reader opened stays open",
     );
     // A long conversation scrolls in the window, phone and desktop widths
     // alike: it opens at the newest message, keeps the reader's place when a

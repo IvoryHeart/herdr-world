@@ -66,6 +66,7 @@ describe("steps from a transcript", () => {
       removed: ["  return 1000;"],
       added: ["  const base = 500;", "  return base;"],
       truncated: false,
+      omitted: 0,
     });
     expect(steps[2]!.input_summary).toBe("bun test server/src/link");
     expect(steps[2]!.test).toEqual({
@@ -115,6 +116,23 @@ describe("steps from a transcript", () => {
     expect(step!.result_tail).not.toContain("ghp_abcdefghijklmnop");
   });
 
+  test("labels are redacted like the rest of the step", () => {
+    const steps = stepsFromEntries([
+      call("s1", "Bash", {
+        command:
+          "curl -H 'Authorization: Bearer abcdef1234567890abcdef' https://api.example.com",
+      }),
+      call("s2", "Bash", {
+        command: "make deploy",
+        description: "Deploy with API_KEY=abcdef1234567890 set",
+      }),
+    ]);
+    for (const step of steps) {
+      expect(step.label).not.toContain("abcdef1234567890");
+      expect(step.input_summary ?? "").not.toContain("abcdef1234567890");
+    }
+  });
+
   test("a call without an ID still gets a stable step ID", () => {
     const entry = { ...call("x", "Grep", { pattern: "nextDelay" }) };
     delete entry.source_call_id;
@@ -152,6 +170,26 @@ describe("diffs", () => {
     })!;
     expect(diff.truncated).toBe(true);
     expect(diff.removed.length + diff.added.length).toBeLessThanOrEqual(40);
+  });
+
+  test("a one-sided edit uses the whole budget, and any cut says so", () => {
+    const lines = (n: number) =>
+      Array.from({ length: n }, (_, i) => `x${i}`).join("\n");
+    const deletion = stepDiff("Edit", {
+      file_path: "a.ts",
+      old_string: lines(30),
+      new_string: "",
+    })!;
+    expect(deletion).toMatchObject({ truncated: false, omitted: 0 });
+    expect(deletion.removed).toHaveLength(30);
+    const lopsided = stepDiff("Edit", {
+      file_path: "a.ts",
+      old_string: lines(5),
+      new_string: lines(50),
+    })!;
+    expect(lopsided.removed).toHaveLength(5);
+    expect(lopsided.added).toHaveLength(35);
+    expect(lopsided).toMatchObject({ truncated: true, omitted: 15 });
   });
 
   test("other tools have no diff", () => {

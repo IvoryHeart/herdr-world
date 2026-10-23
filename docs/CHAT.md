@@ -66,10 +66,14 @@ assistant message) and a `status` of `ok` or `unavailable`. Each message has a
   the tool, a label ("Read reconnect.ts", "Run tests"), the command or file it
   names, its state (`running` with no result yet, `ok`, `failed`, or
   `interrupted` when the agent moved on without a result), start and end
-  times, the end of its output (12 lines at most, with credential-shaped
-  values redacted), the lines an edit removed and added, and for a test run
-  its pass and fail counts (bun, vitest, jest, pytest and cargo summaries).
-  Chat folds runs of reads into one card and opens running and failed steps.
+  times, the end of its output (12 lines at most), the lines an edit removed
+  and added (40 at most between them, with `omitted` counting the rest), and
+  for a test run its pass and fail counts (bun, vitest, jest, pytest and cargo
+  summaries). The label, summary, output and diff all have credential-shaped
+  values redacted. Chat folds runs of reads into one card. A step opens while
+  it runs or when it fails and folds when it finishes, unless you opened or
+  folded it yourself; a cut diff says how many lines are left out and points
+  to Changes.
 - `activity`: one line for each run of tool calls between messages, such as
   "Used Read, Bash ×2", for consumers that want a summary instead of steps.
 - `notice`: an event in the conversation, such as "Conversation compacted" or a

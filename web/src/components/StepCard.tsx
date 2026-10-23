@@ -1,4 +1,4 @@
-import { memo, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 
 // Mirrors server/src/agent/conversation-steps.ts.
 export type ConversationStep = {
@@ -16,6 +16,7 @@ export type ConversationStep = {
     removed: string[];
     added: string[];
     truncated: boolean;
+    omitted: number;
   } | null;
   test: {
     runner: string;
@@ -64,9 +65,14 @@ export const StepCard = memo(function StepCard({
 }: {
   step: ConversationStep;
 }) {
-  const [open, setOpen] = useState(
-    step.state === "running" || step.state === "failed",
-  );
+  // Open follows the step's state (running and failed open, the rest fold)
+  // until the reader opens or folds it themselves.
+  const opensByDefault = step.state === "running" || step.state === "failed";
+  const [open, setOpen] = useState(opensByDefault);
+  const toggled = useRef(false);
+  useEffect(() => {
+    if (!toggled.current) setOpen(opensByDefault);
+  }, [opensByDefault]);
   const hasBody = Boolean(step.diff || step.test || step.result_tail);
   const took = duration(step);
   return (
@@ -83,7 +89,9 @@ export const StepCard = memo(function StepCard({
         // does not open.
         aria-disabled={hasBody ? undefined : true}
         onClick={() => {
-          if (hasBody) setOpen((value) => !value);
+          if (!hasBody) return;
+          toggled.current = true;
+          setOpen((value) => !value);
         }}
       >
         <span
@@ -152,7 +160,10 @@ export const StepCard = memo(function StepCard({
                 </span>
               ))}
               {step.diff.truncated ? (
-                <span className="is-head">… more in Changes</span>
+                <span className="is-head">
+                  … {step.diff.omitted} more{" "}
+                  {step.diff.omitted === 1 ? "line" : "lines"}; see Changes
+                </span>
               ) : null}
             </pre>
           ) : null}
