@@ -693,7 +693,18 @@ async function run() {
     push();
     await settle();
     render("working", true, 61);
-    await new Promise((resolve) => setTimeout(resolve, 1_200));
+    // The display clock ticks once a second from when it started, so a fixed
+    // wait can read it before its first full second; wait for that instead.
+    for (
+      let waited = 0;
+      waited < 5_000 &&
+      !/^[1-9]\d*s$/.test(
+        container.querySelector(".agent-chat-now .agent-chat-now-time")
+          ?.textContent ?? "",
+      );
+      waited += 100
+    )
+      await new Promise((resolve) => setTimeout(resolve, 100));
     const now = container.querySelector(".agent-chat-now");
     check(
       now?.querySelector(".agent-chat-status")?.textContent === "Working" &&
