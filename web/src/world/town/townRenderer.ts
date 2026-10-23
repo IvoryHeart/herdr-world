@@ -59,6 +59,7 @@ import {
 } from "./townLayout";
 import type { TownModel } from "./townModel";
 import { TERMINAL_COLOR_HEX, type TerminalColor } from "../terminalColor";
+import { profileLookFor, profilesSnapshot } from "../agentProfiles";
 import {
   paintTownFacade,
   paintTownGround,
@@ -842,10 +843,26 @@ export async function createTownRenderer(
     };
   };
 
+  // An agent launched from a profile wears the profile's look; any other
+  // agent's look is derived from its identity.
   const looks = new Map<string, TownLook>();
+  let looksRevision = -1;
   const lookOf = (key: string) => {
-    let look = looks.get(key);
-    if (!look) looks.set(key, (look = townLookFor(key)));
+    const profiles = profilesSnapshot();
+    if ((profiles?.revision ?? -1) !== looksRevision) {
+      looks.clear();
+      looksRevision = profiles?.revision ?? -1;
+    }
+    const terminal = model?.agents.get(key)?.currentTerminalRef;
+    const cacheKey = `${key}|${terminal?.nativeId ?? ""}`;
+    let look = looks.get(cacheKey);
+    if (!look) {
+      look =
+        (terminal &&
+          profileLookFor(profiles, terminal.connectionId, terminal.nativeId)) ||
+        townLookFor(key);
+      looks.set(cacheKey, look);
+    }
     return look;
   };
 
@@ -974,6 +991,7 @@ export async function createTownRenderer(
       const moving = actor.mode === "walk";
       const frame = moving ? Math.floor(actor.walked / 6) % 4 : 0;
       const bob = moving && frame % 2 ? -1 : 0;
+      view.look = lookOf(actor.key);
       view.sprite.texture = textureOf(
         townCharacter(view.look, actor.dir, frame, "stand", blink(actor.key)),
       );

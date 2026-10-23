@@ -21,6 +21,7 @@ import { type ActiveDiffSelection } from "../components/DiffViewerPanel";
 import { requestFilePreview } from "../components/fileExplorerResources";
 import type { ActiveFilePreviewSelection } from "../components/FilePreviewContent";
 import { WorkspaceInspectorHost } from "../components/WorkspaceInspectorHost";
+import { ThemeScope } from "../themeScope";
 import {
   OperationalContext,
   connectionSnapshot,
@@ -55,6 +56,7 @@ import {
   inspectorTerminalFileAdmitted,
   type InspectorTerminalFileRequest,
 } from "./inspectorTerminalHandoff";
+import { townPortrait } from "./town/townSprites";
 
 const emptyDiff = (): ActiveDiffSelection => ({
   entry: null,
@@ -103,6 +105,7 @@ function InspectorResources({
   onResourceFocus,
   windowControls,
   terminalColor,
+  townSkin = false,
   onWindowMaximize,
   windowMaximized = false,
   onTerminalPortalChange,
@@ -120,6 +123,8 @@ function InspectorResources({
   onResourceFocus(): void;
   windowControls?: ManagedWindowControls;
   terminalColor?: ManagedWindowControls["color"];
+  /** Town draws the agent with its Town portrait, as the town shows it. */
+  townSkin?: boolean;
   onWindowMaximize?(): void;
   windowMaximized?: boolean;
   onTerminalPortalChange(element: HTMLDivElement | null): void;
@@ -517,7 +522,14 @@ function InspectorResources({
                 setDiffSelection(emptyDiff());
               }
             }}
-            context={conversation.context}
+            context={
+              townSkin && conversation.context.kind === "agent"
+                ? {
+                    ...conversation.context,
+                    portrait: townPortrait(conversation.nodeId),
+                  }
+                : conversation.context
+            }
             agentCheckout={
               conversation.view === "changes" &&
               conversation.context.kind === "agent" &&
@@ -536,7 +548,12 @@ function InspectorResources({
   );
 
   return createPortal(
-    content,
+    // Town's window is always the dark panel, so its code viewers are too.
+    // The provider stays in the tree in every view, so switching views does
+    // not remount the Inspector.
+    <ThemeScope.Provider value={townSkin ? "dark" : null}>
+      {content}
+    </ThemeScope.Provider>,
     portalOwner,
     worldInspectorWindowId(conversation),
   );

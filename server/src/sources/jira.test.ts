@@ -75,6 +75,42 @@ describe("Jira source", () => {
     expect(items[0]!.url).toBe(`${SITE}/browse/ABC-1`);
   });
 
+  test("a Done ticket finished when resolved, else when it entered Done", () => {
+    const at = (
+      key: string,
+      category: string,
+      extra: Record<string, string>,
+    ) => {
+      const base = issue(key, category);
+      return { ...base, fields: { ...base.fields, ...extra } };
+    };
+    const items = parseJiraIssues(
+      {
+        issues: [
+          at("ABC-1", "done", {
+            resolutiondate: "2026-01-01T09:00:00.000+0000",
+            statuscategorychangedate: "2025-12-31T09:00:00.000+0000",
+          }),
+          at("ABC-2", "done", {
+            statuscategorychangedate: "2025-12-31T09:00:00.000+0000",
+          }),
+          issue("ABC-3", "done"),
+          at("ABC-4", "indeterminate", {
+            statuscategorychangedate: "2025-12-31T09:00:00.000+0000",
+          }),
+        ],
+      },
+      SITE,
+      "acct-me",
+    );
+    expect(items.map((item) => item.finishedAt)).toEqual([
+      Date.parse("2026-01-01T09:00:00Z"),
+      Date.parse("2025-12-31T09:00:00Z"),
+      undefined,
+      undefined,
+    ]);
+  });
+
   test("without a site, email or token it is not connected and sends nothing", async () => {
     let calls = 0;
     const fetchImpl = async () => {

@@ -1645,7 +1645,8 @@
         "web/src/world/board/boardDrafts.test.ts",
         "server/src/world/board-store.test.ts",
         "server/src/world/board-send.test.ts",
-        "server/src/world/board-start.test.ts",
+        "server/src/agent/launch-readiness.test.ts",
+        "server/src/agent/launch.test.ts",
         "web/src/world/BoardView.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/186",
@@ -1669,7 +1670,8 @@
           "web/src/world/board/boardDrafts.test.ts",
           "server/src/world/board-store.test.ts",
           "server/src/world/board-send.test.ts",
-          "server/src/world/board-start.test.ts",
+          "server/src/agent/launch-readiness.test.ts",
+          "server/src/agent/launch.test.ts",
           "web/src/world/BoardView.test.ts"
         ],
         "checks": ["bun run check"],
