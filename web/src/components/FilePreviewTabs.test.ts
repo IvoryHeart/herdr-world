@@ -408,7 +408,7 @@ function registerDomTests() {
     await act(async () =>
       container
         .querySelector<HTMLButtonElement>(
-          '.workspace-inspector-tabs [role="tab"]',
+          '.workspace-inspector-tabs [role="tab"][aria-label="Files"]',
         )!
         .click(),
     );

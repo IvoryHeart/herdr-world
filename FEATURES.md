@@ -17,24 +17,37 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   - Blocked agents queue at reception oldest first. Finished agents wait there
     until you open their terminal or mark that completion reviewed, then join
     idle agents in the lounge. Movement only represents state.
-  - Hover an agent, or tap it or its table, for a peek: the agent's latest
-    message from Chat's conversation read model, rendered as Chat renders it
-    (never terminal text; an unavailable conversation shows Chat's reason), a
-    question when recognized, supported answer buttons, a reply line and file
-    attachments. Answers send the offered key to that pane; reply **Send**
-    submits text. On phones, the reply line opens World's Composer inside the
-    peek, with keys, attachments, Insert and Send.
-  - The peek refreshes when the agent's conversation changes, as Chat does,
-    without polling.
+  - Each agent has one window: World's Inspector, with one top selector
+    (**Chat**, **Terminal**, **Changes**, **Files**, then **Commits**).
+    Tapping an agent or its table, activating it (double-click,
+    **Shift+Enter**), the needs-you list, **N** and **Next** open that window on
+    **Chat**: the full conversation, which scrolls, with **Jump to latest**
+    when you have scrolled back and the composer at the bottom. In Town it
+    docks on the right by default (**Menu → Inspector opening**), can be
+    undocked, and keeps the dock it was left with. On a phone, the Chat view
+    shows only its own composer, without the terminal key bar.
+  - The top selector follows the window's own width, docked, floating or on a
+    phone: labelled from 640px, icons (with their names as tooltips) below
+    that, and below 360px only the active view, with the others under ⋯.
+  - The Town master's chat (**Menu → Town master**, `firstmate` by default)
+    opens docked on Chat once per visit on wide screens, without moving the
+    pane's focus.
+  - Hovering an agent shows a small card as a preview: its latest message from
+    Chat's conversation read model, rendered as Chat renders it (never terminal
+    text; an unavailable conversation shows Chat's reason), a question when
+    recognized and supported answer buttons. It is read-only: **Open chat**
+    (or **Follow up** for a finished agent) opens the agent's window on Chat,
+    where replies and attachments go. The card refreshes when the conversation
+    changes, without polling.
   - Tapping an agent or its table brings the agent back: from reception or the
     lounge it walks to its desk and stays there until its status changes. A
     table stands for an agent that needs you (waiting, then finished) before
     the one seated there. **Menu → Town opens** chooses whether that tap opens
     the chat (the default) or the terminal; either way the tap does not mark
     finished work reviewed. **Open terminal** in the peek does, as before.
-  - **Open terminal** in the peek's header opens the live pane; **Inspector**
-    opens files, changes and history. **Next** cycles other waiting agents, then
-    finished agents if none wait.
+  - **Open terminal** in the card's header opens the live pane; **Inspector**
+    opens files and changes. **Next** opens the next waiting agent's window,
+    then finished agents' if none wait.
     The needs-you list becomes a bottom tray on phones and hides when no agent
     is blocked. Review marks acknowledge a specific completion in this browser,
     without certifying its correctness.
@@ -45,7 +58,10 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     workspace/tab creation and room management on the captured host.
   - Drag a table onto another room of the same host, or an agent onto another
     table, to move it (hold, then drag on phones; **M** on a focused table or
-    agent from the keyboard). The live panes move, agents keep running, a failed
+    agent from the keyboard). A carried table lifts and sways after the
+    pointer, lands with a bounce and a puff of dust, and shakes and springs
+    back when a move is refused; calm and reduced motion keep it under the
+    pointer and end with a short fade. The live panes move, agents keep running, a failed
     move attempts rollback and reports partial or unknown results. Moving a
     room's last table asks first because the room closes. When a table closes, the tables after it close up.
   - Tables sit in Herdr's tab order, left to right and row by row, so moving a
