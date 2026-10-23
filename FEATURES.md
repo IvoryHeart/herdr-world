@@ -45,6 +45,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     the one seated there. **Menu → Town opens** chooses whether that tap opens
     the chat (the default) or the terminal; either way the tap does not mark
     finished work reviewed. **Open terminal** in the peek does, as before.
+  - A seated agent with a quest (its own todo list, plan, Codex goal or loop)
+    shows a flag and progress bar at its seat in a room or at a desk.
   - **Open terminal** in the card's header opens the live pane; **Inspector**
     opens files and changes. **Next** opens the next waiting agent's window,
     then finished agents' if none wait.
@@ -67,7 +69,13 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   - Tables sit in Herdr's tab order, left to right and row by row, so moving a
     tab in Spaces or Herdr moves its table. Drag a table onto another table in
     its room to put it in that place, or onto the room's free spot to put it
-    last of the tables shown (**M** lists the same places). Town asks Herdr to move the tab and
+    last of the tables shown (**M** lists the same places). Rooms extend as
+    tabs open, up to 127 tables: wide screens show three columns of rooms up
+    to eight tables wide, portrait and half-width screens two columns up to
+    six, and phones one column up to four, growing downward. A growing room
+    moves only the rooms below it, and never while you hold the town. A room
+    with more than 127 tabs keeps its three newest and busiest tables and
+    hides idle ones first. Town asks Herdr to move the tab and
     shows the new order when Herdr reports it; agents stay with their table.
   - Cached failed-host buildings stay stale and non-actionable. Search and Hosts
     use the shared aggregate. Reception and lounge positions only show status;
@@ -102,6 +110,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   carries strung notes along. Zoomed out, workspaces show a square per pane.
   - Tabs list each pane as a row; plain-shell tabs look like terminals; only a
     working agent's tab (or the selected one) pulses (a ⋯ setting).
+  - An agent with a quest shows a ⚑ chip with its progress (such as 2/5, or
+    Loop ×3); hover it for the quest and the current step.
   - **+** on a workspace opens New tab (Terminal, Claude or Codex, an optional
     name, then Create; a note's Start an agent uses the same dialog); **+** on a host creates a workspace. Workspace cards count their
     agents by status; tabs show their terminal colour and workspaces take a
@@ -293,8 +303,13 @@ choice. Agent checkout has no Git mutation controls or Clear command.
   the topbar, tab strip, and sidebar and run the terminal flush to the window.
   Hovering the Exit Zen tab slides the topbar back, and it stays while one of its
   menus is open. The sidebar still toggles inside Zen and returns to its prior
-  state on exit; split layouts keep pane borders. Desktop only, stored in this
-  browser; mobile keeps its floating control collapse.
+  state on exit; split layouts keep pane borders. Town opens in Zen and keeps
+  its own choice; the other views share theirs. While Zen is on, a view picker
+  beside Exit Zen switches between Town, Board, Desk and Spaces. On a phone, Zen
+  hides the top bar and bottom navigation on Town, Board and Desk; a corner
+  button opens the views and **Show the bars**, and the settings menu's **Zen
+  mode** switch turns it back on. A terminal and Spaces keep their bar for Back.
+  Stored in this browser.
 
 Herdr 0.9.0 uses **Local navigation** per browser/connection; legacy connections
 use **Shared navigation**. Reconnect preserves live selections; reload starts
@@ -429,11 +444,19 @@ See [resource ownership](docs/ARCHITECTURE.md#workspace-resource-ownership).
   A Now bar shows the agent's status, its current task from the terminal title
   and how long it has been at it, with Stop (or Esc twice) for Claude Code,
   Codex and Pi; the step running now shows with its command and timer.
+  When the agent waits on a permission or choice prompt, Chat shows it as an
+  ask card and answers with the option you pick (click or its number key),
+  after checking the question has not changed.
   It refreshes when the service sees the transcript, title or status change,
   without browser polling, and keeps the last good view if a read fails. When
   it cannot read the conversation it shows the reason with the matching action:
   copy the integration command, link a Codex session, **Refresh** or **Open
   Terminal**. **Details** opens the History view below. See [Chat](docs/CHAT.md).
+- Above the conversation, Chat shows the agent's quest in a foldable log: its
+  title, a progress bar and each objective as pending, active, done or blocked,
+  read without a model from the harness's own todos (Claude Code `TodoWrite` and
+  tasks, Codex `update_plan`, Kimi `SetTodoList`), approved plan, Codex goal or
+  `/loop`. See [Quests](docs/CHAT.md#quests).
 - In Details, switch between **Chat** and **Timeline**. Chat pairs tool calls
   with results and shares Ranger's conversation minimap; Timeline keeps individual
   records available. Use **Link Codex session** to preview a full conversation UUID
@@ -746,7 +769,7 @@ Common defaults (Linux/Android overrides follow the table):
 | Workspace Inspector | `Cmd+Shift+B` | `Ctrl+Alt+Shift+B` |
 | Expand / restore Inspector (desktop) | `Cmd+Option+Enter` | `Ctrl+Alt+Shift+Enter` |
 | Annotations | `Cmd+Option+A` | `Ctrl+Alt+A` |
-| Zen mode (desktop) | `Cmd+Shift+Z` | `Ctrl+Alt+Z` |
+| Zen mode | `Cmd+Shift+Z` | `Ctrl+Alt+Z` |
 | Recent pane switcher | `Ctrl+Tab` | `Ctrl+Alt+J` |
 | Pane Search | `Alt+K` | `Alt+K` |
 | Create / close tab or pane | `Cmd+T` / `Cmd+W` | `Ctrl+Alt+T` / `Ctrl+Alt+W` |

@@ -7,6 +7,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  renameSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -16,6 +17,41 @@ import { basename, delimiter, join, resolve } from "node:path";
 import { VERIFIED_HERDR_VERSION } from "../server/src/herdr/release";
 
 const repository = "IvoryHeart/herdr-world";
+
+/**
+ * Every full CI run installs the latest stable release as the upgrade baseline
+ * on six platforms. Fetching it from the public release each time counted about
+ * a dozen downloads per run, which drowned real usage in the release's download
+ * counts. CI keeps one copy per tag and platform in its cache directory; this
+ * loopback mirror serves it to the baseline's own installer (which still checks
+ * the published checksum), and only a cache miss fetches from the release.
+ */
+export function releaseMirror(
+  cacheDir: string,
+  upstream: string,
+  download: (url: string) => Promise<Response> = fetch,
+) {
+  mkdirSync(cacheDir, { recursive: true });
+  return Bun.serve({
+    hostname: "127.0.0.1",
+    port: 0,
+    async fetch(request) {
+      const name = new URL(request.url).pathname.slice(1);
+      if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(name))
+        return new Response("missing", { status: 404 });
+      const path = join(cacheDir, name);
+      if (!existsSync(path)) {
+        const response = await download(`${upstream}/${name}`);
+        if (!response.ok)
+          return new Response("missing", { status: response.status });
+        const staged = `${path}.${process.pid}.part`;
+        writeFileSync(staged, new Uint8Array(await response.arrayBuffer()));
+        renameSync(staged, path);
+      }
+      return new Response(Bun.file(path));
+    },
+  });
+}
 
 // Windows may retain executable/file handles briefly after child exit. Yield
 // during bounded retries; a persistent lock still fails the required job.
@@ -409,12 +445,20 @@ export async function verify() {
       build.length > 0,
       "Baseline must have an applicable plugin installer",
     );
-    for (const entry of build)
-      await command(entry.command, upgrade, {
-        ...state.env,
-        PATH: process.env.PATH,
-        HERDR_WORLD_RELEASE_BASE_URL: `https://github.com/${repository}/releases/download/${tag}`,
-      });
+    const mirror = releaseMirror(
+      process.env.INSTALLER_BASELINE_ASSETS ?? join(root, "baseline-assets"),
+      `https://github.com/${repository}/releases/download/${tag}`,
+    );
+    try {
+      for (const entry of build)
+        await command(entry.command, upgrade, {
+          ...state.env,
+          PATH: process.env.PATH,
+          HERDR_WORLD_RELEASE_BASE_URL: mirror.url.origin,
+        });
+    } finally {
+      mirror.stop(true);
+    }
     const binary = join(upgrade, "server", executable);
     const launcher = join(upgrade, "server/herdr-world-plugin.exe");
     assert.equal(

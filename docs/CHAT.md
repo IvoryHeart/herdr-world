@@ -38,6 +38,39 @@ view that you open on purpose.
   Now bar, or Esc pressed twice while Chat has focus, presses Esc in the
   agent's pane to interrupt the turn. One Esc only asks for a second; Chat
   never stops an agent by itself.
+- Answers the agent's own question. When Herdr reports the agent blocked, Chat
+  reads the bottom of its screen and recognises only the menus of supported
+  harnesses: Claude Code's whole permission box (a question ending in "?",
+  numbered options, the ❯ cursor on one; a digit selects) and Codex's approval
+  menu (options ending in their key hints such as "(y)" or "(esc)", the ›
+  cursor on one; the hint key selects). It shows an ask card with the complete
+  request (the whole command, or the file and its edit), the question and each
+  option. Anything else gets no options and **Answer in the Terminal**: plain
+  numbered output, a y/n line, a box cut off by the capture, or a request the
+  harness shows shortened.
+- Picking an option, or pressing its number while that card has focus, calls
+  `agent_conversation.answer`. The service checks Herdr's state, rereads the
+  screen, and checks Herdr's state again (status, session, title, state
+  sequence); the prompt's fingerprint covers the shown prompt, the session and
+  the state sequence, and any difference refuses with nothing sent. Then it
+  presses that option's key.
+- **The gap World cannot close.** Herdr has no conditional input
+  ([herdrdev/herdr#4764](https://github.com/herdrdev/herdr/issues/4764)), so
+  the key cannot be made conditional on the prompt. If the prompt or session
+  changes in the instant between the last check and the key, the key reaches
+  the new prompt. The card says so under its options. The owner accepted this
+  risk until Herdr can close it; it is tracked as a known issue in
+  [#284](https://github.com/IvoryHeart/herdr-world/issues/284). Closing the
+  gap needs an input Herdr applies only while the prompt is unchanged.
+- Chat replaces the card with what it sent. "You answered 2 · …" needs
+  evidence that this agent left this prompt: the same session, and either a
+  status that shows progress (`working`, `idle` or `done`), or a new state with a different question on a
+  readable screen. Otherwise the receipt reads "Sent 2 · …" with the reason
+  (`unconfirmed_reason`): the question still shows (`still_showing`), the pane
+  has another session (`session_changed`, and the key may have reached it),
+  Herdr reports a status such as `unknown` (`unknown_status`),
+  Herdr no longer reports the agent (`agent_missing`), or the screen could not
+  be read (`unreadable`). Chat answers only when you pick an option.
 - Keeps the last good conversation when a read fails, for example while the
   transcript is being written, and says that it could not refresh.
 - When the conversation is unavailable, Chat shows the reason and the action it
@@ -66,12 +99,16 @@ projection cache as History ([History synchronization](HISTORY.md)).
 | `agent_conversation.latest` | `pane_id`, or `pane_ids`, or nothing for every agent | A conversation without `messages`, or `{ conversations }` |
 | `agent_conversation.send` | `pane_id`, `text`, `session_fingerprint`, optional `baseline` (IDs of the user messages Chat showed) | `{ status: "sent", delivery }` or `{ status: "refused", reason, message }` |
 | `agent_conversation.dismiss` | `pane_id`, `delivery_id` | `{ dismissed }`; forgets a delivery notice |
+| `agent_conversation.answer` | `pane_id`, `key`, `prompt_fingerprint` | `{ status: "sent", number, label, acknowledged, unconfirmed_reason, prompt_fingerprint }` or `{ status: "refused", reason, message, pending_prompt }` |
 | `agent_conversation.watch` / `.unwatch` | `pane_id` | `{ ok: true }`; see [Refresh](#refresh) |
+| `agent_quest.list` | `pane_ids`, or nothing for every agent | `{ quests }`: per pane, `agent`, `session_binding`, `session_fingerprint` and `quest`; see [Quests](#quests) |
 
 A conversation carries `agent`, `agent_status`, `terminal_title`, `running_tool`
-(the open tool call: its ID, name, summary and start), `session_binding`,
+(the open tool call: its ID, name, summary and start), `pending_prompt` (the
+question a blocked agent is waiting on, or null), `session_binding`,
 `session_fingerprint`, `updated_at`, ordered `messages`, `latest` (the last
-assistant message) and a `status` of `ok` or `unavailable`. Each message has a
+assistant message), `quest` (see [Quests](#quests)) and a `status` of `ok` or
+`unavailable`. Each message has a
 `role` (`user`, `assistant` or `tool`) and a `kind`:
 
 - `message`: user or assistant text.
@@ -231,6 +268,70 @@ rechecks the watched panes, so a second transcript with the same prefix turns
 the title ambiguous. If those directories cannot be watched, or the host is
 remote, every recheck searches. Reads and sends always search.
 
+## Quests
+
+A quest is what an agent is working through, read from its own transcript by
+fixed rules, without a model (`server/src/agent/quest.ts`). It is computed with
+the projection, over the whole transcript rather than Chat's 200-entry window,
+and each connection keeps up to 256 quests, so a quest whose transcript has not
+changed is answered without reading it again. Chat shows the quest log above
+the conversation; Town marks progress at a seated agent; Board puts a chip on
+the agent's card.
+
+A quest has a `title`, a `source` (`todo`, `plan`, `goal` or `loop`), the
+harness `tool` it came from, a `status` (`active`, `done`, `blocked` or
+`paused`), `steps` with a `status` each (`pending`, `active`, `done` or
+`blocked`), `progress` (`done` of `total`), `started_at`, `updated_at`,
+`set_by`, `iterations` for a loop and the number of `helpers` (subagents) the
+agent spawned. A step's `step_ids` are the tool-call IDs the agent made while
+that step was active, and `set_by` is the call that last set the quest. They
+are the IDs Chat's step cards will be keyed by; the quest log does not link to
+step cards yet.
+
+| Harness | Checklist (`todo`) | Plan | Goal | Loop | Helpers |
+| --- | --- | --- | --- | --- | --- |
+| Claude Code | `TodoWrite`; `TaskCreate` and `TaskUpdate` (the harness's task IDs; a pending task waiting on an unfinished one is `blocked`) | `ExitPlanMode` with the plan inline | None recorded | `ScheduleWakeup` (`/loop`), `CronCreate`; `stop` ends it | `Agent`, `Task` |
+| Codex | `update_plan` (its `explanation` titles the quest) | Plan-mode `Plan` item | `thread_goal_updated` (paused, blocked, usage- or budget-limited, complete) | None recorded | `spawn_agent` |
+| Kimi Code | `SetTodoList` | None | None | None | None |
+| Pi | No built-in tool; an extension tool named `todo_write` or `write_todos` that writes the whole list is read | None | None | None | None |
+| Grok Build, Muse Code, Antigravity CLI | A tool with one of the names above is read; no native equivalent is known | None | None | None | None |
+
+The current quest is the Codex goal when there is one, with the checklist's
+steps once the checklist was updated after the goal began; a completed goal
+gives way to a checklist, plan or loop updated after it. Otherwise it is the
+most recently updated of the checklist, the plan and the loop (on equal times
+the loop, then the plan). A checklist made after an approved plan, with no new
+prompt between them, takes the plan's title; otherwise it takes the user's
+last prompt before it (never a turn the harness wrote, such as an
+interruption notice). A list starts a new quest when it shares no step with
+the last list or the last list was finished; an empty list ends the quest.
+Repeated step text stays separate steps. Claude Code tasks keep the IDs its
+results report, and a deleted blocker no longer blocks; a quest is `blocked`
+only when every unfinished step is. Subagent sidechains are left out of the
+projection, so they never set the parent's quest. A quest from a session
+World only guessed from the folder is not shown on desks or cards. When a
+quest cannot be read for a moment (the transcript changed while it was read),
+`agent_quest.list` marks it `read_failed` and names the pane's session
+(`session_fingerprint`). Town and Board keep the last quest only while the pane
+holds the same session: the World's session fingerprint for the pane is
+unchanged and, when the reply names a session, it is the one the quest was read
+from. A pane another session took over never shows the previous quest. When
+reads overlap, only the latest one started is shown. A completed Codex goal
+keeps no steps, so it never shows "Complete" beside an unfinished plan.
+A hidden page reads again when it is shown.
+
+Town and Board read quests when the World changes, at most once every 5
+seconds, and every 15 seconds while an agent is working. One read asks about
+the first 200 agents, one call per connection and runtime generation; the
+service answers it from one `agent.list`, not an `agent.get` for each pane, so
+a busy World does not queue Herdr calls ahead of terminal input. In a World
+with more agents, later ones show no quest yet.
+
+Known gaps: Claude Code builds that keep the plan in a file (the
+`plan_mode_exit` attachment names `~/.claude/plans/…`) are not read, because
+the service reads only the transcript; Claude Code records no goal; loop
+iterations count wake-ups, not finished passes.
+
 ## Harness matrix
 
 Herdr 0.9.3 detects 24 agent kinds. World has a transcript reader for seven.
@@ -272,6 +373,9 @@ numeric version (such as `0.163.0` or `1.2.0-rc.1`); any other value read from
 a transcript, however short, is counted as `other`. Reader errors are counted
 without their message. Run it after a harness upgrade; do not commit its
 output or copy transcripts into the repository.
+
+It also counts, per harness version, how many transcripts have a quest from
+each source (todo, plan, goal or loop) or none, as counts only.
 
 It writes no output files. The one disk exception is Antigravity: its reader,
 here and in the service, reads a copy of each database from a private (0700)

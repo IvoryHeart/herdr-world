@@ -1107,7 +1107,16 @@ from Herdr's tab list order within each workspace, which Herdr keeps when a tab
 moves (a tab's number is not its position). Desk slot i of a room SHALL be the
 room's i-th drawn tab, in reading order, so a reorder in Herdr, Spaces or Town
 moves desks. A room's capacity SHALL step through a
-bounded set of grid sizes that always leaves at least one free desk spot. While a
+bounded set of grid sizes that always leaves at least one free desk spot: a room
+grows square until it reaches its shape's width (four desks on a phone, six on
+portrait and mid-width screens, eight on wide screens) and then extends
+downward, up to 127 drawn desks, and its building grows around it, so a room of
+real size shows every desk. Only a room with more tabs than that SHALL leave
+desks undrawn: it SHALL keep the selected desk and the three newest tabs, then
+desks whose agents need the user, are working or are unknown, then finished
+ones, hiding idle and empty desks first, and SHALL count every hidden desk on
+the room. Zooming into a room taller or wider than the usable view, from its
+card or with Zoom in, SHALL open at its first desks. While a
 scene is live, a topology change SHALL NOT reorder rooms or move a desk to
 another room: a tab Herdr adds last SHALL take the first free spot of its room
 without moving other desks, and a closed tab SHALL leave no gap: the desks after
@@ -1116,8 +1125,18 @@ before it keep their spots. A room that reaches a new capacity step MAY shift
 later rooms and rows of the same building without reordering rooms, and its
 desks MAY reflow to the step's columns; it SHALL keep its size step when desks
 close. Room placement SHALL be re-derived from native order when the scene is
-rebuilt. Desktop SHALL lay out
-buildings in one row; phones SHALL stack buildings in one vertical column.
+rebuilt. Town SHALL take its shape from its container's size rather than one
+breakpoint: on a phone, rooms SHALL stack in one column and buildings in one
+vertical column; on a portrait screen or a half-width window, rooms SHALL form
+two columns and buildings SHALL stack (or share a street when the window is
+landscape); on a wide screen, rooms SHALL form three columns and buildings
+SHALL share one street. Rooms SHALL fill their building's columns in workspace
+order, and while a scene is live each room SHALL keep its column, so a room
+that grows moves only the rooms below it in that column. The lounge SHALL stay
+above the rooms, and the lobby and reception below them. A reflow that would move rooms
+or buildings SHALL wait while the user presses, scrolls or zooms and until a
+short pause after, and the camera SHALL then follow the room in view so it
+stays where it was.
 
 #### Scenario: A tab is created while the user watches
 
@@ -1136,6 +1155,19 @@ buildings in one row; phones SHALL stack buildings in one vertical column.
 - **WHEN** a room's last free spot is taken
 - **THEN** the room grows to the next capacity step with a free spot, rooms keep
   their order, and desks keep their room and their order
+
+#### Scenario: Agents fill a room past its old size
+
+- **WHEN** a room has 24, 50 or 100 tabs
+- **THEN** the room extends and draws a desk for every tab, the newest included,
+  on a phone, a half-width window, a wide screen and a portrait monitor
+
+#### Scenario: A room grows while the user watches
+
+- **WHEN** a room gains enough tabs to grow while the user holds the town
+- **THEN** no room or building moves until the user lets go and pauses, and
+  then the rooms below it in its column move down while the room in view stays
+  where it was
 
 #### Scenario: Tabs are reordered outside Town
 
@@ -1387,7 +1419,9 @@ dragging with a mouse, by holding and then dragging on touch, and from the
 keyboard by pressing M on a focused desk or agent target, which opens a list of
 destinations. Town SHALL NOT add visible move controls to the scene. While a
 drag is in progress Town SHALL show where the desk or agent would land, or why
-it cannot. A picked-up desk or agent SHALL lift off and follow the pointer;
+it cannot, and holding the carried desk or agent near the edge of the usable
+view SHALL scroll the town toward that edge, so rooms out of view can be
+reached. A picked-up desk or agent SHALL lift off and follow the pointer;
 every move Herdr confirms, within a room or to another room, SHALL land on its
 target with a puff of dust, and a refused move SHALL return to where it was.
 Under reduced motion or calm motion the carried desk or agent SHALL stay under

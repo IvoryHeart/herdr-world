@@ -460,4 +460,36 @@ describe("session projection cache and history revisions", () => {
     ).toBe("snapshot");
     expect(f.reads).toBe(5);
   });
+
+  test("quests outlive evicted projections until the transcript changes", async () => {
+    const f = fixture();
+    const todo = (status: string) => ({
+      type: "message",
+      timestamp: "2026-01-01T00:00:01Z",
+      message: {
+        role: "assistant",
+        content: [
+          {
+            type: "toolCall",
+            id: "t1",
+            name: "todo_write",
+            arguments: { todos: [{ content: "Example", status }] },
+          },
+        ],
+      },
+    });
+    f.set([message("hello"), todo("in_progress")]);
+    const cache = createSessionProjectionCache(f.files, {
+      entries: 0,
+      bytes: 1024 * 1024,
+    });
+    expect((await cache.quest(f.resolved))?.status).toBe("active");
+    expect(f.reads).toBe(1);
+    // No projection is retained, but the quest is.
+    expect((await cache.quest(f.resolved))?.status).toBe("active");
+    expect(f.reads).toBe(1);
+    f.set([message("hello"), todo("completed")]);
+    expect((await cache.quest(f.resolved))?.status).toBe("done");
+    expect(f.reads).toBe(2);
+  });
 });
