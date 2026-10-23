@@ -49,12 +49,15 @@ const check = (condition: boolean, message: string) => {
   if (!condition) failures.push(message);
 };
 const settle = () => new Promise((resolve) => setTimeout(resolve, 50));
-async function waitFor(condition: () => boolean, message: string) {
+async function waitFor(
+  condition: () => boolean,
+  message: string | (() => string),
+) {
   for (let index = 0; index < 400; index += 1) {
     if (condition()) return;
     await settle();
   }
-  throw new Error(message);
+  throw new Error(typeof message === "string" ? message : message());
 }
 
 function random(seed: number) {
@@ -502,18 +505,25 @@ async function groupTwoDesks(
       deskColor("task 2") === deskColor("task 3"),
     `the spawned desk does not inherit its parent's colour (${deskColor("task 2")} vs ${deskColor("task 3")})`,
   );
-  // Clear of the edges (and the rail on wide screens), where a carried desk
-  // pans the town and would slide away from the desk it rests on.
-  const margin = 80;
-  const left = phone ? margin : 252 + margin;
+  // Visible, with its centre (where the pointer rests) clear of the edge
+  // zone and the rail on wide screens, where a carried desk pans the town
+  // and would slide away from the desk it rests on.
+  const clear = 64;
+  const left = phone ? clear : 252 + clear;
   const onScreen = (target: HTMLElement) => {
     const box = target.getBoundingClientRect();
+    const x = box.left + box.width / 2;
+    const y = box.top + box.height / 2;
     return (
       box.width > 0 &&
-      box.left > left &&
-      box.top > margin &&
-      box.right < window.innerWidth - margin &&
-      box.bottom < window.innerHeight - margin
+      box.left > 8 &&
+      box.top > 8 &&
+      box.right < window.innerWidth - 8 &&
+      box.bottom < window.innerHeight - 8 &&
+      x > left &&
+      x < window.innerWidth - clear &&
+      y > clear &&
+      y < window.innerHeight - clear
     );
   };
   const desks = [
@@ -523,10 +533,19 @@ async function groupTwoDesks(
   ].filter(onScreen);
   const roomOf = (target: HTMLElement) =>
     target.getAttribute("aria-label")?.split(", ")[1];
-  const from = desks[0];
-  const to = desks.find(
-    (target) => target !== from && roomOf(target) === roomOf(from!),
+  // A desk not yet in a team, and another in its room.
+  const teamless = (target: HTMLElement) =>
+    !target.getAttribute("aria-label")?.includes(", in a team with ");
+  const from = desks.find(
+    (target) =>
+      teamless(target) &&
+      desks.some(
+        (other) => other !== target && roomOf(other) === roomOf(target),
+      ),
   );
+  const to =
+    from &&
+    desks.find((target) => target !== from && roomOf(target) === roomOf(from));
   check(Boolean(from && to), "no two desks of one room on screen to group");
   if (!from || !to) return;
   const walled = () =>
@@ -572,7 +591,8 @@ async function groupTwoDesks(
       host
         .querySelector(".town-drag-ghost")
         ?.textContent?.startsWith("Group with") === true,
-    "a desk resting on another does not offer to group",
+    () =>
+      `a desk resting on another does not offer to group (ghost: ${host.querySelector(".town-drag-ghost")?.textContent ?? "none"}; from ${from.getAttribute("aria-label")} to ${to.getAttribute("aria-label")})`,
   );
   point("pointerup", end.x, end.y);
   await waitFor(
