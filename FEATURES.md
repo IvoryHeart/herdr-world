@@ -165,7 +165,7 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   the card in Board and its table in Town (tabs beyond a room's drawn tables
   show it in Spaces and Board). A tab starts with a stable default colour, or
   its workspace's Board colour; choose another from the agent's icon in its
-  window's header (the icon sits on the colour and opens the agent's settings),
+  window's header (the icon sits on the colour and opens the agent's settings, which also link to the agent's profile),
   the swatch in the phone terminal's app bar, the
   terminal window's menu (**Colour**), the tab's menu in Spaces, the swatch in
   an agent's peek in Town, or the selected card in Board, and reset a tab's own
