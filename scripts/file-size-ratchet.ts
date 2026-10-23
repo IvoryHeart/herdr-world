@@ -26,15 +26,21 @@ export function ratcheted(path: string): boolean {
   );
 }
 
+/**
+ * `baseLines` holds the base revision's size of each file over its limit:
+ * growth already on main (or the merge base) is not this change's to answer
+ * for, so a file is allowed the larger of its limit and its base size.
+ */
 export function checkSizes(
   lines: Record<string, number>,
   current: Exceptions,
   base: Exceptions | undefined,
+  baseLines: Record<string, number> = {},
 ): string[] {
   const problems: string[] = [];
   for (const [path, count] of Object.entries(lines)) {
     if (path in current.unratcheted) continue;
-    const max = current.limits[path] ?? LIMIT;
+    const max = Math.max(current.limits[path] ?? LIMIT, baseLines[path] ?? 0);
     if (count > max)
       problems.push(
         path in current.limits
@@ -117,10 +123,19 @@ if (import.meta.main) {
   const baseText = baseRef
     ? git(["show", `${baseRef}:${EXCEPTIONS}`])
     : undefined;
+  // Base sizes, only for the files over their limit.
+  const baseLines: Record<string, number> = {};
+  if (baseRef)
+    for (const [path, count] of Object.entries(lines))
+      if (count > (current.limits[path] ?? LIMIT)) {
+        const text = git(["show", `${baseRef}:${path}`]);
+        if (text !== undefined) baseLines[path] = countLines(text);
+      }
   const problems = checkSizes(
     lines,
     current,
     baseText ? (JSON.parse(baseText) as Exceptions) : undefined,
+    baseLines,
   );
   for (const note of slack(lines, current)) console.info(`[size] ${note}`);
   if (problems.length) {

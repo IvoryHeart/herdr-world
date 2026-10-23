@@ -19,6 +19,22 @@ test("files stay at the limit unless listed, and listed files cannot grow", () =
   ).toEqual([]);
 });
 
+test("growth already in the base is not this change's to answer for", () => {
+  // main grew App.tsx after its entry was recorded; a PR that leaves it alone passes.
+  const recorded = { limits: { "web/src/App.tsx": 5161 }, unratcheted: {} };
+  expect(
+    checkSizes({ "web/src/App.tsx": 5164 }, recorded, recorded, {
+      "web/src/App.tsx": 5164,
+    }),
+  ).toEqual([]);
+  // Growing it further still fails.
+  expect(
+    checkSizes({ "web/src/App.tsx": 5170 }, recorded, recorded, {
+      "web/src/App.tsx": 5164,
+    })[0],
+  ).toContain("may not grow past 5164");
+});
+
 test("the exception list only shrinks", () => {
   const raised = { ...current, limits: { "web/src/store.ts": 6000 } };
   expect(checkSizes({}, raised, current)[0]).toContain(
