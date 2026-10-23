@@ -421,6 +421,28 @@ crew rule is explanatory, not a principal check. Ambiguous member inspection
 revalidates connection, generation, terminal, pane and session before opening,
 and never persists a tie-break or changes effective membership.
 
+### Group and agent Interest
+
+Board `layout.group_interest` stores Focus/Mute viewer intent by immutable stored
+Team/Pod ID, separate from membership and attrs. Default removes the overlay.
+Projected Room/Desk controls and persistence are refused in v1. Group deletion or
+Team dissolution removes its overlay in the same Board write; transient unresolved
+membership does not. The existing layout-entry cap includes these preferences.
+`board-interest.ts` owns parsing and writes without changing terminal pruning.
+
+Explicit terminal overrides now include watching (force-Watch); null/deletion means
+Default (from groups). Old absent records keep that meaning; no former explicit
+Watch is guessed. At read time an agent override wins, else group Focus beats
+Mute, else watching. `shared/groupInterest.ts` derives from current unambiguous
+members without copying terminal choices or changing status/reception. Focus is
+a union of reachable effective-focused terminals. The cached live reader keeps
+consumer identity for unrelated Board edits and resolves address restarts afresh.
+
+`useChimeHost` installs the live reader into the real chime source, and Inspector
+bells explain the winning claim and overrides. The existing `shouldChime` remains
+decisive: Town-master needs-you bypasses focus only, never mute, device-off,
+motif-off or seen. Reception and needs-you counts remain independent.
+
 ## Agent CLI
 
 `herdr-world --skill` is the agent guide (`server/src/cli/world-skill.ts`).

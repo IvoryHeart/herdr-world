@@ -1978,8 +1978,8 @@ own colour MAY be reset.
 
 ### Requirement: Agent interest
 
-Each agent SHALL have the viewer's interest: watching (the default), muted or
-focused, chosen from a button beside the agent's name in its Inspector header in
+Each agent SHALL have Default (from groups), explicit Watch, Muted or Focused,
+chosen from a button beside the agent's name in its Inspector header in
 every view. Interest SHALL belong to the agent's terminal on its host, without
 the runtime generation, so it follows the terminal through moves and an agent
 restarted in that terminal keeps it, and each agent in a multi-pane tab has its
@@ -1992,7 +1992,22 @@ while a focused agent's terminal is shown on a ready host only focused agents
 and the Town master's needs-you SHALL chime; a focus World cannot reach SHALL
 NOT silence other agents, and SHALL apply again when its host is back. A
 watched agent's control SHALL say when it is quiet because another agent is
-focused. Interest SHALL NOT keep any item out of reception.
+focused. Interest SHALL NOT keep any item out of reception or change needs-you
+counts. An explicit agent choice SHALL override group claims; otherwise Group
+Focus SHALL beat Mute, with Default contributing no claim. Effective Focus SHALL
+be a union and count only currently reachable effective-focused members. Away
+and ambiguous addresses SHALL contribute no group intent. Hover guidance SHALL
+explain the source and overridden claims. Explicit Watch SHALL be stored distinctly
+from Default deletion; no meaning SHALL be inferred for old absent records.
+
+Stored Teams/Pods SHALL have Focus/Mute/Default viewer controls, saved separately
+as Board layout.group_interest by immutable Group ID, without copying member
+terminal preferences or writing membership attrs. Deletion or Team dissolution
+SHALL remove the overlay atomically; unresolved members SHALL retain it. Empty
+or offline Focus SHALL NOT silence everyone and the chip SHALL disclose no members
+online. Projected Room/Desk controls and persisted overlays SHALL be refused in v1.
+The Town-master needs-you exception SHALL bypass focus filtering only, never an
+explicit mute, device-off, motif-off or seen policy.
 
 #### Scenario: Mute an agent
 

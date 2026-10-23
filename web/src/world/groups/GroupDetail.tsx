@@ -7,6 +7,7 @@ import {
 import type { GroupChange } from "../../../../shared/groups";
 import { PullRequestCard } from "../PullRequestCard";
 import { GroupMembers } from "./GroupMembers";
+import { GroupInterestButton } from "./GroupInterestButton";
 import {
   groupPromotion,
   groupPrText,
@@ -45,6 +46,7 @@ export function GroupDetail({
   const [limit, setLimit] = useState(String(group.openPrLimit ?? 2));
   return (
     <div className="group-detail">
+      <GroupInterestButton group={group} onError={onError} />
       <p className="group-status-line">
         <span
           className={`group-status is-${group.status}`}

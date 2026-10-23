@@ -180,7 +180,8 @@ changes what you see and does not disconnect hosts or retarget open terminals.
    and **Default colour**.
    In the agent's window, the button beside its name sets its interest:
    **Muted** stops its chimes, **Focused** lets only focused agents chime, and
-   **Watching** is the default. Its questions and results still arrive in
+   **Default (from groups)** inherits group intent, while **Watch** explicitly
+   overrides a group mute. Its questions and results still arrive in
    reception.
    **Next** cycles waiting agents, then finished agents when no other agent is
    waiting.
@@ -466,6 +467,15 @@ Pod. **Delete…** asks first and leaves agents running. If someone edits the Bo
 while a form or confirmation is open, review the refreshed Group before trying
 again. Recent changes retain sender claims and their basis, or unknown attribution
 when no claim was supplied.
+
+A Team/Pod's Interest button offers **Default**, **Muted** and **Focused**.
+An agent's explicit Watch/Mute/Focus overrides groups; otherwise Group Focus
+wins over Mute. Focus adds reachable members to the other focused agents/groups;
+away or ambiguous members do not activate it. A focused group with no effective
+members online says so. Hover an agent's bell to see the source of its choice.
+Needs-you items and counts still arrive while muted. The Town master's needs-you
+can break the focus filter, while its explicit mute and device/motif switches
+still apply. Room/Desk interest controls are hidden in v1.
 
 ### Use Desk: answer, review and follow work
 

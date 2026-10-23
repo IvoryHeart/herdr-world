@@ -2,6 +2,7 @@ import { useState } from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { bridge } from "../../api";
+import { AgentInterestButton } from "../../components/AgentInterestButton";
 import {
   WorldPanelsContext,
   useWorldPanelRegistry,
@@ -53,6 +54,10 @@ function Fixture({ world }: { world: WorldObject }) {
   return (
     <WorldPanelsContext.Provider value={registry}>
       <p data-inspected={inspected}>Example crew</p>
+      <AgentInterestButton
+        connectionId="connection-a"
+        pane={world.leaves[0]?.pane}
+      />
       <GroupsWindow world={world} onOpenTerminal={setInspected} />
       <WindowSurface
         state={state}
@@ -140,7 +145,7 @@ const buttons = () => [
 ];
 const click = (text: string) => {
   const button = buttons().find(
-    (button) => button.textContent?.trim() === text,
+    (button) => button.textContent?.trim().replace(/^←\s*/, "") === text,
   );
   if (!button) throw new Error(`missing button ${text}`);
   button.click();
@@ -203,6 +208,52 @@ async function run() {
       .querySelector(".group-detail")
       ?.textContent?.includes("membership remains ambiguous"),
     "duplicate names remain ambiguous",
+  );
+  const groupInterest = document.querySelector<HTMLButtonElement>(
+    '[aria-label^="Group interest:"]',
+  )!;
+  groupInterest.click();
+  await waitFor(() =>
+    document.querySelector('[role="group"][aria-label="Group interest"]'),
+  );
+  [
+    ...document.querySelectorAll<HTMLButtonElement>(
+      '[role="group"][aria-label="Group interest"] button',
+    ),
+  ]
+    .find((button) => button.textContent?.startsWith("Focused"))!
+    .click();
+  await waitFor(() =>
+    document.querySelector('[aria-label="Group interest: Focused"]'),
+  );
+  document
+    .querySelector<HTMLButtonElement>('[aria-label^="Interest:"]')!
+    .click();
+  await waitFor(() =>
+    document.querySelector('[role="group"][aria-label="Interest"]'),
+  );
+  check(
+    document.querySelectorAll('[role="group"][aria-label="Interest"] button')
+      .length === 4,
+    "agent interest distinguishes Default and force-Watch",
+  );
+  [
+    ...document.querySelectorAll<HTMLButtonElement>(
+      '[role="group"][aria-label="Interest"] button',
+    ),
+  ]
+    .find((button) => button.querySelector("b")?.textContent === "Watch")!
+    .click();
+  await waitFor(() =>
+    document.querySelector(
+      '[aria-label^="Interest: Watched · individual override"]',
+    ),
+  );
+  check(
+    document
+      .querySelector(".group-status-line")
+      ?.textContent?.includes("1 needs you"),
+    "interest never removes needs-you status/counts",
   );
   await waitFor(() => document.querySelector(".group-pr-pill.is-warning"));
   check(

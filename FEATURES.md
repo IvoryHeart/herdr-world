@@ -174,14 +174,19 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     tab that spawned it (before its workspace's colour), and keeps following it
     when moved. A chosen colour always wins.
 - **Agent interest.** The button beside an agent's name in its Inspector
-  header in Town, Board and Spaces sets **Watching** (the default), **Muted**
-  or **Focused** for that agent, saved by the World service for its terminal on
+  header in Town, Board and Spaces sets **Default (from groups)**, explicit
+  **Watch**, **Muted** or **Focused**, saved by the World service for its terminal on
   every device. Chimes
   read it: a muted agent never chimes, and while a focused agent is reachable
   only focused agents and the Town master's needs-you chime (Watching then
   says it is quiet). A focus on an offline host silences no one until the host
   is back. Interest never hides
-  anything from reception. It follows the terminal through moves, and goes
+  anything from reception. An explicit agent choice wins; otherwise Group Focus
+  beats Group Mute, with Default contributing no claim. Focus combines currently
+  reachable effective-focused agents and Group members. Hover explains the source
+  and any overridden group claim. Team/Pod controls live in Groups; v1 hides them
+  on Room/Desk. Group preferences survive away members and are removed atomically
+  with deletion. Individual interest follows the terminal through moves, and goes
   when its host shows the terminal has closed, including after reconnecting.
   A failed save shows an error and keeps the previous choice; reopen the
   button to retry.

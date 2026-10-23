@@ -36,6 +36,12 @@
   padding: 0;
   border: 0;
 }
+
+.groups-window .group-interest-button {
+  width: auto;
+  min-height: 32px;
+  gap: 6px;
+}
 .group-kind-control button {
   min-height: 22px;
 }

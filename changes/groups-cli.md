@@ -9,3 +9,6 @@
 - Open Actions → Groups for a panel roster and detail with kind filters,
   member/role management, linked PR cards, Now and recent attribution; stale
   confirmations refresh the roster without changing membership.
+- Set Team/Pod Focus or Mute without copying member preferences; agent bells
+  distinguish inherited Default from explicit Watch and explain the winning claim.
+  Focus follows current resolved members, with unchanged reception counts.

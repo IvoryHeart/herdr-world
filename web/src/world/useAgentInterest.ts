@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useSyncExternalStore } from "react";
 import {
   type Interest,
   interestKey,
@@ -9,6 +9,10 @@ import {
   sharedBoardStore,
 } from "./board/boardDocument";
 import { type WorldRuntimeState, worldRuntimeStore } from "./runtimeStore";
+import { buildGroupViews } from "../../../shared/groupViews";
+import { deriveGroupInterest } from "../../../shared/groupInterest";
+import { groupRuntimeObservations } from "./groupObservations";
+import { setChimeInterestSource } from "../chimes/chimeCenter";
 
 /**
  * Each agent's interest as World's service keeps it (shared/interest.ts), for
@@ -19,6 +23,8 @@ type StoredInterests = Readonly<Record<string, StoredInterest>>;
 
 export type AgentInterest = {
   interestOf(connectionId: string, terminalId: string): Interest;
+  overrideOf(connectionId: string, terminalId: string): Interest | null;
+  descriptionOf(connectionId: string, terminalId: string): string;
   /**
    * Whether a focused agent is reachable now, so that only focused agents
    * chime. A focus on a host that is offline or gone does not count; it
@@ -75,14 +81,82 @@ export function agentInterest(
   return {
     interestOf: (connectionId, terminalId) =>
       stored[interestKey(connectionId, terminalId)] ?? "watching",
+    overrideOf: (connectionId, terminalId) =>
+      stored[interestKey(connectionId, terminalId)] ?? null,
+    descriptionOf: (connectionId, terminalId) =>
+      stored[interestKey(connectionId, terminalId)]
+        ? `${stored[interestKey(connectionId, terminalId)]} · individual override`
+        : "Watched · Default (from groups)",
     anyFocused,
   };
 }
 
-/**
- * Every agent's interest, kept current from the World service. It changes only
- * when an interest does, so Board's other edits never re-render its readers.
- */
+/** Cached, current policy shared by UI and the actual chime adapter. */
+export function createAgentInterestReader(
+  store: Pick<BoardDocumentStore, "get" | "subscribe">,
+  runtime: Pick<
+    typeof worldRuntimeStore,
+    "get" | "subscribe"
+  > = worldRuntimeStore,
+) {
+  let previousDocument: ReturnType<typeof store.get>["document"] | undefined;
+  let previousConnections: WorldRuntimeState["connections"] | undefined;
+  let signature = "";
+  let value = agentInterest(NONE, false);
+  const get = () => {
+    const document = store.get().document;
+    const world = runtime.get();
+    if (
+      document === previousDocument &&
+      world.connections === previousConnections
+    )
+      return value;
+    previousDocument = document;
+    previousConnections = world.connections;
+    const stored = document?.layout.interest ?? NONE;
+    const intents = document?.layout.group_interest ?? {};
+    const groups = Object.keys(intents).length
+      ? buildGroupViews(
+          document?.relations?.groups ?? [],
+          groupRuntimeObservations(world.connections),
+        )
+      : [];
+    const derived = deriveGroupInterest(stored, intents, groups);
+    const reachable = liveTerminalKeys(world);
+    const anyFocused = [...derived].some(
+      ([key, interest]) => interest.value === "focused" && reachable.has(key),
+    );
+    const nextSignature = JSON.stringify([
+      Object.entries(stored).sort(),
+      [...derived].sort(),
+      anyFocused,
+    ]);
+    if (nextSignature === signature) return value;
+    signature = nextSignature;
+    value = {
+      interestOf: (connectionId, terminalId) =>
+        derived.get(interestKey(connectionId, terminalId))?.value ?? "watching",
+      overrideOf: (connectionId, terminalId) =>
+        stored[interestKey(connectionId, terminalId)] ?? null,
+      descriptionOf: (connectionId, terminalId) =>
+        derived.get(interestKey(connectionId, terminalId))?.description ??
+        "Watched · Default (from groups)",
+      anyFocused,
+    };
+    return value;
+  };
+  const subscribe = (listener: () => void) => {
+    const offBoard = store.subscribe(listener);
+    const offRuntime = runtime.subscribe(listener);
+    return () => {
+      offBoard();
+      offRuntime();
+    };
+  };
+  return { get, subscribe };
+}
+
+/** Only effective interest changes re-render consumers; Board geometry does not. */
 export function useAgentInterest(
   store: BoardDocumentStore = sharedBoardStore(),
 ): AgentInterest {
@@ -90,37 +164,39 @@ export function useAgentInterest(
     store.start();
     return () => store.stop();
   }, [store]);
-  const last = useRef<StoredInterests>(NONE);
-  const snapshot = () => {
-    last.current = keepInterests(
-      last.current,
-      store.get().document?.layout.interest ?? NONE,
-    );
-    return last.current;
+  const reader = useMemo(() => createAgentInterestReader(store), [store]);
+  return useSyncExternalStore(reader.subscribe, reader.get, reader.get);
+}
+
+/** Connect the live policy to chime decisions, not just to the Inspector chip. */
+export function startAgentChimeInterest(
+  store: BoardDocumentStore = sharedBoardStore(),
+) {
+  store.start();
+  const reader = createAgentInterestReader(store);
+  setChimeInterestSource({
+    interestOf: (connectionId, terminalId) =>
+      reader.get().interestOf(connectionId, terminalId),
+    anyFocused: () => reader.get().anyFocused,
+  });
+  return () => {
+    setChimeInterestSource(null);
+    store.stop();
   };
-  const stored = useSyncExternalStore(store.subscribe, snapshot, snapshot);
-  const reachable = () =>
-    focusReachable(stored, liveTerminalKeys(worldRuntimeStore.get()));
-  const anyFocused = useSyncExternalStore(
-    worldRuntimeStore.subscribe,
-    reachable,
-    reachable,
-  );
-  return useMemo(() => agentInterest(stored, anyFocused), [stored, anyFocused]);
 }
 
 /** Watch, mute or focus an agent's terminal. */
 export function setAgentInterest(
   connectionId: string,
   terminalId: string,
-  interest: Interest,
+  interest: Interest | null,
   store: BoardDocumentStore = sharedBoardStore(),
 ) {
   return store.patch([
     {
       op: "interest.set",
       key: interestKey(connectionId, terminalId),
-      interest: interest === "watching" ? null : interest,
+      interest,
     },
   ]);
 }

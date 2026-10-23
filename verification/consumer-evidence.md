@@ -135,6 +135,23 @@ unmatched namespace decline. Direct finite adapter cases fit this existing atomi
 revision mechanism; actual panel, gesture and device behavior require the browser
 consumer evidence separately.
 
+### Effective Group Interest (Q43)
+
+Requirements supply explicit agent override precedence, Group Focus/Mute/Default,
+current unambiguous resolution and effective reachable-focus union. Direct tests
+exhaust all 36 two-group/agent combinations, away/ambiguity exclusion and source
+explanations. The actual reader covers address restart, force-Watch and stable
+consumer identity on unrelated Board edits. Real Board persistence tests cover
+separate overlays, atomic deletion/dissolution, promotion identity, projection
+refusal and opaque ID safety. A real browser-store/chime-source installer test
+proves an explicit mute reaches actual chime decisions and force-Watch restores
+sound; existing shared shouldChime, chime center, host/device and prune consumers
+retain Town-master, motif, seen, device and current-topology boundaries. The
+registered panel fixture adds Default/Watch controls and unchanged needs-you counts
+for batch-close browser execution. No terminal choice is copied from membership.
+These finite precedence and existing atomic-storage adapters warrant direct
+exhaustive evidence rather than a separate model of the same small table.
+
 ## Review and remaining obligations
 
 Evidence statuses describe concrete decisions; independent acceptance is recorded separately. Review 5516249164 accepts every Q01–Q43 bounded mapping and alternative. Mandatory consumers and excluded claims remain binding. Final implementation/gate/resource acceptance is recorded in [review 5517420140](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5517420140); owner-approved PR #188 merged as `481ca1e8`. Mandatory consumers and excluded claims remain binding. Review must inspect the intended requirement, model/reducer domain, adapter fidelity, actual consumer tests and excluded claims. Q21 has its separate bounded exhaustive contract. Q26–Q28 retain their separately accepted Ranger storage/permission assumptions.
