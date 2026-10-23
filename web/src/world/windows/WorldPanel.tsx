@@ -15,6 +15,7 @@ import {
   type ManagedWindowControls,
 } from "./WindowControls";
 import type { SnapTarget } from "./windowManager";
+import { useSystemBack } from "../../systemBack";
 
 /**
  * A World window that is not an Inspector, such as Town's summary. It lives
@@ -121,6 +122,9 @@ export function WorldPanel({
       }),
     [register, id, label, initialSnap],
   );
+  // On a phone a panel is a detail screen: the system Back closes it first,
+  // before any Inspector beneath it.
+  useSystemBack(Boolean(register), () => close.current(), "panel");
   const body = panels?.bodies[id];
   return body ? createPortal(children, body) : null;
 }
