@@ -33,6 +33,8 @@ import {
   useStoreSelector,
 } from "../store";
 import { WORLD_OBSERVABILITY_UPDATED_EVENT } from "../workspaceResource";
+import { useTownSummary } from "./town/TownSummaryPanel";
+import { useTownOffice, useTownPresentation } from "./town/useTownOffice";
 import { TownCanvas } from "./town/TownCanvas";
 import type { TownQuestMark } from "./town/townQuestPennant";
 import { townDeskColorTarget, townRoomColorKey } from "./town/townModel";
@@ -50,7 +52,6 @@ import { inheritedColorKey } from "../../../shared/terminalColor";
 import type { OfficeDesk } from "./herdrOfficeProjection";
 import { hostColorKey, terminalColorKey } from "./terminalColor";
 import { TOWN_HOST_THEMES } from "./town/townPaint";
-import { useDeskPins } from "./useDeskPins";
 import {
   sendTownReply,
   townChoices,
@@ -66,11 +67,12 @@ import { TownChooser } from "./town/TownChooser";
 import { TownPeek, townStatusText } from "./town/TownPeek";
 import {
   nextTownCall,
+  townCalls,
+  townLocation,
+  unseenTownCompletions,
   readTownRailCollapsed,
   TownRail,
-  type TownCall,
 } from "./town/TownRail";
-import { sharedAsksStore, useWorldAsks } from "./worldAsks";
 import { useNow } from "./handoffs";
 import type {
   WorldCanvasAnchor,
@@ -79,12 +81,7 @@ import type {
 } from "./worldConnectorGeometry";
 import { OfficeCanvasCallout } from "./OfficeCanvasCallout";
 export { OfficeObservabilityDialog } from "./OfficeObservabilityDialog";
-import {
-  createOfficeProjector,
-  TOWN_PRESENTATION_BOUNDS,
-  type OfficeAgent,
-  type HerdrOfficeProjection,
-} from "./herdrOfficeProjection";
+import type { OfficeAgent } from "./herdrOfficeProjection";
 import {
   EMPTY_OFFICE_OBSERVABILITY,
   fetchOfficeObservability,
@@ -169,23 +166,15 @@ export default function TownView({
     anchors: Record<string, WorldCanvasAnchor> | null,
   ): void;
 }) {
-  const projectOffice = useMemo(
-    () => createOfficeProjector(TOWN_PRESENTATION_BOUNDS),
-    [],
-  );
   const layoutPreferences = useLayoutPreferences();
-  const deskPins = useDeskPins();
-  // Only which tabs are pinned matters to admission, not their cells.
-  const pinnedTabKeys = Object.keys(deskPins).sort().join("\n");
-  const pinnedTabs = useMemo(
-    () => new Set(pinnedTabKeys ? pinnedTabKeys.split("\n") : []),
-    [pinnedTabKeys],
-  );
-  const observedOffice = useMemo(
-    (): HerdrOfficeProjection =>
-      projectOffice(world, Date.now(), selectedId, pinnedTabs),
-    [world, selectedId, projectOffice, pinnedTabs],
-  );
+  const {
+    office: observedOffice,
+    deskPins,
+    toggleRoomFold,
+    present,
+    roomFocus,
+    focusRoom,
+  } = useTownOffice(world, selectedId);
   const townFinished = useTownFinished(observedOffice);
   // Terminal frames and unrelated store updates must not reconcile the scene.
   // These are exactly the inputs read by endpointCreationReason below.
@@ -305,22 +294,8 @@ export default function TownView({
   );
   const selectedKey = officePresentationKey(office, selectedId);
   const unseenCompletions = useMemo(
-    () =>
-      office.roster
-        .filter(
-          ({ agent }) =>
-            agent.semanticStatus === "done" &&
-            agent.deskKey !== null &&
-            !completionSeenKeys.has(agent.key),
-        )
-        .map(({ agent }) => agent)
-        .sort(
-          (left, right) =>
-            Number(right.canOpenInSpaces) - Number(left.canOpenInSpaces) ||
-            left.displayLabel.localeCompare(right.displayLabel) ||
-            left.key.localeCompare(right.key),
-        ),
-    [completionSeenKeys, office],
+    () => unseenTownCompletions(office.roster, completionSeenKeys),
+    [completionSeenKeys, office.roster],
   );
   const selectedRoomKey = officeRoomKeyForSelection(world, selectedId);
   const conversationTargets = floatingTerminals.flatMap((terminal) => {
@@ -565,14 +540,6 @@ export default function TownView({
   /* ---------- Town attention, peek, replies and toasts ---------- */
   const now = useNow(5_000);
   const [railCollapsed, setRailCollapsed] = useState(readTownRailCollapsed);
-  const asksStore = sharedAsksStore();
-  const asks = useWorldAsks(asksStore);
-  const [width, setWidth] = useState(() => window.innerWidth);
-  useEffect(() => {
-    const resize = () => setWidth(window.innerWidth);
-    window.addEventListener("resize", resize);
-    return () => window.removeEventListener("resize", resize);
-  }, []);
   const blockedSince = useRef(new Map<string, number>());
   // Built on first use: a dense town's roster is large, and these lookups are
   // only needed by taps, hovers and an open peek.
@@ -614,51 +581,32 @@ export default function TownView({
           : new Map(current).set(key, status),
       );
   };
-  const calls = useMemo((): TownCall[] => {
-    const since = blockedSince.current;
-    const live = new Set<string>();
-    const blocked: TownCall[] = [];
-    for (const entry of office.roster) {
-      const { agent } = entry;
-      if (agent.semanticStatus !== "blocked" || agent.stale) continue;
-      live.add(agent.key);
-      if (!since.has(agent.key)) since.set(agent.key, Date.now());
-      blocked.push({
-        agent,
-        kind: "blocked",
-        since: since.get(agent.key)!,
-        hostKey: entry.hostKey,
-        hostLabel: entry.hostLabel,
-        roomKey: entry.roomKey,
-        roomLabel: entry.roomLabel,
-      });
-    }
-    for (const key of [...since.keys()]) if (!live.has(key)) since.delete(key);
-    blocked.sort(
-      (a, b) => a.since - b.since || a.agent.key.localeCompare(b.agent.key),
-    );
-    const finished = unseenCompletions.flatMap((agent): TownCall[] => {
-      const entry = agentByKey.get(agent.key);
-      return entry
-        ? [
-            {
-              agent,
-              kind: "done",
-              since: Date.now(),
-              hostKey: entry.hostKey,
-              hostLabel: entry.hostLabel,
-              roomKey: entry.roomKey,
-              roomLabel: entry.roomLabel,
-            },
-          ]
-        : [];
-    });
-    return [...blocked, ...finished];
-  }, [office.roster, unseenCompletions, agentByKey]);
-  const whereOfAgent = (agentKey: string) => {
-    const entry = agentByKey.get(agentKey);
-    return entry ? `${entry.roomLabel} · ${entry.hostLabel}` : "";
-  };
+  const calls = useMemo(
+    () =>
+      townCalls(office.roster, blockedSince.current, unseenCompletions, (key) =>
+        agentByKey.get(key),
+      ),
+    [office.roster, unseenCompletions, agentByKey],
+  );
+  const townSummary = useTownSummary({
+    railCollapsed,
+    world,
+    office,
+    calls,
+    observability,
+    now,
+    openAgent: (key) => openChat(key),
+    showRoom: focusRoom,
+  });
+  const presentedOffice = useTownPresentation(
+    present,
+    office,
+    calls,
+    townSummary.summary.asks,
+    townFinished.finished,
+    completionSeenKeys,
+  );
+  const whereOfAgent = (key: string) => townLocation(agentByKey.get(key));
   // Colours and team walls read the same World, so they agree on each relation.
   const terminalColors = useTerminalColors(
     undefined,
@@ -1166,7 +1114,6 @@ export default function TownView({
     window.addEventListener("keydown", keydown);
     return () => window.removeEventListener("keydown", keydown);
   });
-  const whereOf = whereOfAgent;
   /** The peeked agent's desk colour: its terminal's, shared across World. */
   const peekDeskColor = (agentKey: string) => {
     const deskKey = office.paneRoster.find(
@@ -1184,7 +1131,6 @@ export default function TownView({
         void setTerminalColor(target, color),
     };
   };
-  const townSelectedKey = peek?.key ?? selectedKey;
 
   if (!world.hosts.length) {
     return (
@@ -1219,6 +1165,7 @@ export default function TownView({
     <>
       {toolbarPortal ? createPortal(toolbar, toolbarPortal) : toolbar}
       <WorldSearchResults world={world} query={query} onSelect={onSelect} />
+      {townSummary.window}
       <div
         className={`world-office-shell world-stage-shell town-view-shell`}
         onPointerDownCapture={(event) => {
@@ -1234,8 +1181,9 @@ export default function TownView({
           />
         ) : null}
         <TownRail
-          asks={asks}
-          onAnswer={(id, text) => asksStore.answer(id, text)}
+          needsYouCount={townSummary.summary.counts.needsYou}
+          asks={townSummary.summary.asks}
+          onAnswer={townSummary.answerAsk}
           collapsed={railCollapsed}
           onCollapsedChange={setRailCollapsed}
           calls={calls}
@@ -1298,7 +1246,7 @@ export default function TownView({
             // another agent never land in this one.
             key={peekLeaf ? townPaneIdentity(peekLeaf) : peekAgent.key}
             agent={peekAgent}
-            where={whereOf(peekAgent.key)}
+            where={whereOfAgent(peekAgent.key)}
             conversation={peekConversation}
             question={peekQuestion}
             choices={peekChoices}
@@ -1344,11 +1292,11 @@ export default function TownView({
         <div className="town-stage">
           <TownCanvas
             trace={trace}
-            projection={office}
+            projection={presentedOffice}
             relations={relations}
             terminalColors={terminalColors}
             deskPins={deskPins}
-            selectedKey={townSelectedKey}
+            selectedKey={peek?.key ?? selectedKey}
             completionSeenKeys={completionSeenKeys}
             summonedKeys={summonedKeys}
             quests={questMarks}
@@ -1384,17 +1332,16 @@ export default function TownView({
             }}
             selectedRoomKey={selectedRoomKey}
             observability={observability}
+            summaryCounts={townSummary.summary.counts}
+            onOpenSummary={townSummary.open}
+            roomFocus={roomFocus}
             calm={preferences.townCalm}
             chrome={{
-              left:
-                width >= 640 &&
-                !railCollapsed &&
-                calls.some((call) => call.kind === "blocked")
-                  ? 252
-                  : 0,
+              left: townSummary.railInset,
               right: 0,
             }}
             roomActions={{
+              onToggleFold: toggleRoomFold,
               onDropDesk: (deskKey, roomKey) => runDeskMove(deskKey, roomKey),
               onGroupDesk: (deskKey, targetKey) =>
                 teams.runGroupDesk(deskKey, targetKey),

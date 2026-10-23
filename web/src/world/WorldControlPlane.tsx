@@ -28,7 +28,11 @@ import WorldInspectorConversationView from "./WorldInspectorConversation";
 import WorldIntentProfile from "./WorldIntentProfile";
 import { WorldConnectionRequired } from "./WorldStatus";
 import { WindowFrame } from "./windows/WindowFrame";
-import { WorldPanelWindow, useWorldPanels } from "./windows/WorldPanel";
+import {
+  WorldPanelWindow,
+  useWorldPanels,
+  useWorldPanelFocus,
+} from "./windows/WorldPanel";
 import { WindowSurface } from "./windows/WindowSurface";
 import { type WorldControlPlaneProps } from "./worldControlPlaneContract";
 import {
@@ -160,7 +164,8 @@ const WorldViewErrorBoundary = lazyWithReload("world-view-boundary", () =>
 );
 export function WorldControlPlane(props: WorldControlPlaneProps) {
   // Panel windows (not Inspectors) that a view opens with <WorldPanel>.
-  const { panels, panelBodyRef } = useWorldPanels();
+  const panelRegistry = useWorldPanels();
+  const { panels, panelBodyRef } = panelRegistry;
   const controller = useWorldInspectorController(props);
   const {
     view,
@@ -218,6 +223,7 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
     applySelection,
     openInBackground,
   } = controller;
+  useWorldPanelFocus(panelRegistry, managedWindows, windowCommand);
   /**
    * Only Town reads where a window was left docked, so only Town writes it:
    * snapping or floating a window in Desk never changes where it opens in

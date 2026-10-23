@@ -16,9 +16,17 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   carries its tab's name on a nameplate at its front edge. Agents go by the
   name Herdr gives them (`firstmate`), else their harness (`claude`); window
   and Inspector titles put the name first (`firstmate · claude`).
-  - The Town board counts agents working, needing you and done, with spend
-    when a metrics provider is configured. Wide screens show it at the top
-    left; phones show a compact chip under the search bar that opens it.
+  - The Town board counts agents working and finished, plus **items** needing
+    you: blocked agents and open questions, matching the reception tray and
+    call rail. A blocked agent with an open question contributes two items.
+    It shows spend when a metrics provider
+    is configured. Its **Summary** button, or on a phone the compact chip under
+    the search bar, opens the **Town summary** window: blocked agents and
+    questions you can answer in place,
+    unreviewed finishes and when each was last active, every host and room
+    with its counts (tap a room to go there), and spend per model ("No cost
+    data" without a provider). Press **Summary** again to restore its minimized
+    window or bring it to the front.
   - Blocked agents queue at reception oldest first. Finished agents wait there
     until you open their terminal or mark that completion reviewed, then join
     idle agents in the lounge. Movement only represents state.
@@ -96,12 +104,16 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     tab in Spaces or Herdr moves its table. Drag a table onto another table in
     its room to put it in that place, or onto the room's free spot to put it
     last of the tables shown (**M** lists the same places). Rooms extend as
-    tabs open, up to 127 tables: wide screens show three columns of rooms up
-    to eight tables wide, portrait and half-width screens two columns up to
-    six, and phones one column up to four, growing downward. A growing room
-    moves only the rooms below it, and never while you hold the town. A room
-    with more than 127 tabs keeps its three newest and busiest tables and
-    hides idle ones first. Town asks Herdr to move the tab and
+    tabs open: wide screens show three columns of rooms up to eight tables
+    wide, portrait and half-width screens two columns up to six, and phones
+    one column up to four, growing downward. A folded room normally shows up to
+    24 tables. Selected and pinned tables, blocked agents, unreviewed finishes
+    and verified agents with open questions stay visible beyond that count.
+    Its plaque's **+N** counts only hidden tables and expands the room to a
+    normal limit of 127; the same tables stay visible beyond that limit. **Fold**
+    remains available after tabs close and puts it back. A growing room moves
+    only the rooms below it, and never
+    while you hold the town. Town asks Herdr to move the tab and
     shows the new order when Herdr reports it; agents stay with their table.
   - **Teams.** Tables whose agents know each other are drawn inside one wall
     with a connector: a spawned agent is joined to the agent that started it,

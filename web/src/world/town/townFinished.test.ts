@@ -46,15 +46,17 @@ test("Town presents unchecked finishes as done and checked ones as idle", () => 
   const agent = (key: string, semanticStatus: string) => ({
     key,
     semanticStatus,
+    roomKey: "room",
+    currentPaneRef: { connectionId: "synthetic", nativeId: key },
   });
   const office = {
     rooms: [{ roomAgents: [agent("a", "idle"), agent("b", "done")] }],
     receptions: [],
     barAgents: [],
     roster: [
-      { agent: agent("a", "idle") },
-      { agent: agent("b", "done") },
-      { agent: agent("c", "idle") },
+      { roomKey: "room", agent: agent("a", "idle") },
+      { roomKey: "room", agent: agent("b", "done") },
+      { roomKey: "room", agent: agent("c", "idle") },
     ],
   } as unknown as HerdrOfficeProjection;
   const presented = withTownFinished(office, new Set(["a"]), new Set(["b"]));
