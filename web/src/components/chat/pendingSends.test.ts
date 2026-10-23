@@ -13,6 +13,12 @@ test("native queued receipts and unchecked commands never claim delivery", () =>
   expect(html({ state: "unverified", queued: true })).toContain(
     "Sent, not seen in the transcript",
   );
+  expect(
+    html({
+      state: "unverified",
+      detail: "Chat can no longer check this session.",
+    }),
+  ).toContain("Chat can no longer check this session.");
   const command = html({ text: "/compact", kind: "command" });
   expect(command).toContain("agent-chat-command-receipt");
   expect(command).toContain("sent, not checked");

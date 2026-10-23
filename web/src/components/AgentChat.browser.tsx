@@ -352,6 +352,7 @@ async function run() {
         "value",
       )!.set!;
       setter.call(textarea, value);
+      textarea.setSelectionRange(value.length, value.length);
       textarea.dispatchEvent(new Event("input", { bubbles: true }));
     };
     type("Run the tests");
@@ -511,7 +512,7 @@ async function run() {
         sendButton?.disabled === true,
       "A misdelivered send must name the session that got it and pause Send",
     );
-    const unverified = container.querySelector(".is-unverified");
+    const unverified = container.querySelector('[data-delivery="unverified"]');
     check(
       unverified?.textContent?.includes("can no longer check") === true &&
         unverified.textContent.includes("Earlier message"),
@@ -2187,8 +2188,8 @@ async function run() {
         (
           container.querySelector('[data-delivery="pending"]')?.textContent ??
           ""
-        ).includes("Queued · sent to claude"),
-        "An unseen send must read as queued without claiming delivery",
+        ).includes("Sent, not seen in the transcript"),
+        "An unseen send must remain honest without claiming delivery",
       );
       check(
         !(container.textContent ?? "").includes("pasted_content") &&

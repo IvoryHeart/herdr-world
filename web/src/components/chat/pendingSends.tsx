@@ -38,6 +38,9 @@ export function placedSends(
             {delivery.queued && delivery.state === "pending"
               ? `Queued · sent to ${agent}`
               : "Sent, not seen in the transcript"}{" "}
+            {delivery.state === "unverified" ? (
+              <span> · Chat can no longer check. {delivery.detail}</span>
+            ) : null}
             ·{" "}
             <time dateTime={delivery.sent_at}>
               {formatUiDateTime(delivery.sent_at)}
