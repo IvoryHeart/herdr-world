@@ -710,7 +710,7 @@ describe("the delivery ledger", () => {
   });
 
   test("a sent attachment matches the harness's record of it", () => {
-    const upload = "/tmp/herdr-world-uploads-1000/upload-ab12/img-1-x.png";
+    const upload = "/tmp/herdr-world-uploads-test/upload-ab12/img-1-x.png";
     const cases = [
       // Claude Code records an image path as a placeholder.
       [`Look at this ${upload} `, "[Image #16]Look at this"],
