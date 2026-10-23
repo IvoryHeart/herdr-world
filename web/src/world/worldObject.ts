@@ -1,5 +1,6 @@
 import type { Pane, Tab, Workspace } from "../types";
 import type { WorldRuntimeConnection } from "./runtimeStore";
+import { agentListRecord, agentTitle } from "../agentName";
 
 export type WorldObjectKind = "host" | "space" | "agent" | "terminal";
 export type WorldAgentStatus =
@@ -504,30 +505,6 @@ function admittedStateLabels(
   return result;
 }
 
-function matchingAgentMetadata(
-  agents: readonly Record<string, unknown>[],
-  pane: Pane,
-): Record<string, unknown> | null {
-  return (
-    agents.find((candidate) => {
-      if (candidate.pane_id !== pane.pane_id) return false;
-      if (
-        typeof candidate.terminal_id === "string" &&
-        candidate.terminal_id !== pane.terminal_id
-      ) {
-        return false;
-      }
-      if (
-        typeof candidate.agent === "string" &&
-        candidate.agent !== pane.agent
-      ) {
-        return false;
-      }
-      return true;
-    }) ?? null
-  );
-}
-
 const preparedHosts = new WeakMap<
   WorldRuntimeConnection,
   readonly [WorldHostObject, WorldHostObject | undefined]
@@ -788,7 +765,7 @@ function* constructHost(
       const tab = tabsById.get(pane.tab_id);
       const tabLabel = boundedOptionalText(tab?.label, 100);
       const agentMetadata = isAgent
-        ? matchingAgentMetadata(connection.snapshot?.agents ?? [], pane)
+        ? agentListRecord(connection.snapshot?.agents ?? [], pane)
         : null;
       const agentLabel = isAgent
         ? boundedOptionalText(
@@ -843,7 +820,7 @@ function* constructHost(
         connectionId: connection.connectionId,
         generation: observedGeneration,
         label: boundedLabel(
-          agentLabel,
+          agentTitle(agentName, agentLabel),
           isAgent ? "Agent" : `Terminal ${pane.pane_id.slice(0, 8)}`,
         ),
         hostLabel,

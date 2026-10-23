@@ -53,6 +53,7 @@
     "agent:worktree": "bun scripts/agent/worktree.mjs",
     "agent:usage": "bun scripts/agent/pr-usage.ts",
     "agent:await": "bun scripts/agent/await.ts",
+    "agent:stamp": "bun server/src/index.ts stamp",
     "notices:generate": "bun scripts/dependency-notices.ts",
     "notices:check": "bun scripts/dependency-notices.ts --check",
     "format": "biome format --write .",
@@ -92,6 +93,7 @@
     "verification:resources": "bun scripts/verification-resources.ts"
   },
   "devDependencies": {
+    "@babel/parser": "^8.0.8",
     "@biomejs/biome": "2.5.15",
     "@types/web-push": "^3.6.4",
     "bun-types": "1.4.3",

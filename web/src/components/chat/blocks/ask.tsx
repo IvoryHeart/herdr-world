@@ -1,0 +1,119 @@
+import { SquareTerminal } from "lucide-react";
+import type { PendingPrompt, UnconfirmedReason } from "../types";
+import "./ask.css";
+
+export const UNCONFIRMED: Record<UnconfirmedReason, string> = {
+  still_showing:
+    "the question is still showing; check the Terminal if it does not move on.",
+  session_changed:
+    "the pane has another session now, so the key may have reached it. Check the Terminal.",
+  unknown_status:
+    "Herdr does not say what the agent is doing now, so Chat cannot confirm the answer. Check the Terminal.",
+  agent_missing:
+    "Herdr no longer reports the agent, so Chat cannot confirm the answer. Check the Terminal.",
+  unreadable:
+    "Chat could not read the screen to confirm the answer. Check the Terminal.",
+};
+
+/**
+ * The agent's own question, with its options as buttons. The options are read
+ * from the agent's prompt and each presses that option's key; when none can be
+ * read, Chat shows the question and the way to the Terminal instead of
+ * guessing.
+ */
+export function AskCard({
+  agent,
+  prompt,
+  answering,
+  notice,
+  onAnswer,
+  onOpenTerminal,
+}: {
+  agent: string;
+  prompt: PendingPrompt;
+  answering: boolean;
+  notice: string;
+  onAnswer(key: string): void;
+  onOpenTerminal?: () => void;
+}) {
+  const terminal = onOpenTerminal ? (
+    <button type="button" onClick={onOpenTerminal}>
+      <SquareTerminal size={13} /> Answer in the Terminal
+    </button>
+  ) : null;
+  return (
+    <section
+      className="agent-chat-ask"
+      aria-label={`${agent} is waiting`}
+      // Keys answer only while this card has focus, and a held key repeats
+      // nothing: another Chat's question is never answered from here.
+      tabIndex={0}
+      onKeyDown={(event) => {
+        if (
+          event.repeat ||
+          event.defaultPrevented ||
+          event.metaKey ||
+          event.ctrlKey ||
+          event.altKey ||
+          answering
+        )
+          return;
+        const option = prompt.options.find(
+          (candidate) => candidate.number === event.key,
+        );
+        if (!option) return;
+        event.preventDefault();
+        onAnswer(option.key);
+      }}
+    >
+      <h3>{agent} is waiting on you</h3>
+      {prompt.request.length ? <pre>{prompt.request.join("\n")}</pre> : null}
+      {prompt.question.map((line, index) => (
+        <p key={index}>{line}</p>
+      ))}
+      {prompt.options.length ? (
+        <>
+          <div
+            className="agent-chat-ask-options"
+            role="group"
+            aria-label="Answers"
+          >
+            {prompt.options.map((option, index) => (
+              <button
+                key={option.number}
+                type="button"
+                className={index === 0 ? "is-primary" : undefined}
+                disabled={answering}
+                onClick={() => onAnswer(option.key)}
+              >
+                <kbd>{option.number}</kbd>
+                <span className="agent-chat-ask-label">
+                  {option.label}
+                  {option.description ? (
+                    <small>{option.description}</small>
+                  ) : null}
+                </span>
+              </button>
+            ))}
+          </div>
+          <p className="agent-chat-ask-fine">
+            Options read from {agent}'s own prompt. Chat checks the question
+            again just before it presses the one you pick, but Herdr cannot hold
+            it still: if it changes in that instant, the key reaches the new
+            one. With this card focused, its number picks it too.
+          </p>
+        </>
+      ) : (
+        <p className="agent-chat-ask-fine">
+          Chat cannot read the choices in this prompt safely, so it does not
+          answer it. {terminal}
+        </p>
+      )}
+      {notice ? (
+        <p className="agent-chat-ask-notice" role="alert">
+          {notice} {terminal}
+        </p>
+      ) : null}
+    </section>
+  );
+}

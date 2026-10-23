@@ -153,6 +153,10 @@ export function createLegacyConnectionRuntime(args: {
     createAgentSessionHandlers({
       herdrCall: (...args) => herdr.call(...args),
       files: agentSessionFiles,
+      runtimeScope: {
+        connectionId: identity.id,
+        generation: args.connectionGeneration ?? 0,
+      },
       remotePlatform,
       onConversationChanged: (paneId, owners) => {
         const line = JSON.stringify({

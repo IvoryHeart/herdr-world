@@ -13,6 +13,8 @@ export type TownTarget = {
   /** World-pixel rectangle. */
   rect: { x: number; y: number; width: number; height: number };
   canActivate: boolean;
+  /** A desk's colour, its own or the one it inherits, for tests and tools. */
+  color?: string;
 };
 
 const STATUS_TEXT: Record<OfficeAgent["semanticStatus"], string> = {
@@ -49,17 +51,38 @@ export function townRoomLabel(model: TownModel, room: OfficeRoom) {
   return `Room ${room.accessibleLabel ?? room.displayLabel}, ${host}`;
 }
 
-function deskLabel(model: TownModel, desk: OfficeDesk) {
+function deskLabel(
+  model: TownModel,
+  desk: OfficeDesk,
+  teammates: readonly string[] = [],
+) {
   const room = model.rooms.get(desk.roomKey);
   const host = model.hosts.get(desk.hostKey)?.displayLabel ?? "host";
-  return `${desk.occupantAgentKey ? "Desk" : "Empty desk"} ${desk.displayLabel}, ${room?.displayLabel ?? "Office"}, ${host}, ${desk.observedPaneCount} panes`;
+  const team = teammates.length
+    ? `, in a team with ${teammates.join(", ")}`
+    : "";
+  return `${desk.occupantAgentKey ? "Desk" : "Empty desk"} ${desk.displayLabel}, ${room?.displayLabel ?? "Office"}, ${host}, ${desk.observedPaneCount} panes${team}`;
 }
 
-/** Accessible targets for every presented room, desk, pane and seated agent. */
+/**
+ * Accessible targets for every presented room, desk, pane and seated agent.
+ * A desk in a team (townTeams.ts) names its teammates, since the walls and
+ * connectors are drawn only.
+ */
 export function townTargets(
   model: TownModel,
   layout: TownLayout,
+  deskTeams: ReadonlyMap<string, string> = new Map(),
 ): TownTarget[] {
+  const teams = new Map<string, string[]>();
+  for (const [deskKey, team] of deskTeams)
+    teams.set(team, [...(teams.get(team) ?? []), deskKey]);
+  const teammates = (desk: OfficeDesk) =>
+    (teams.get(deskTeams.get(desk.key) ?? "") ?? []).flatMap((key) => {
+      const label =
+        key === desk.key ? null : model.desks.get(key)?.displayLabel;
+      return label ? [label] : [];
+    });
   const targets: TownTarget[] = [];
   for (const building of layout.buildings)
     for (const placed of building.rooms) {
@@ -84,7 +107,8 @@ export function townTargets(
         targets.push({
           key: desk.key,
           kind: "desk",
-          label: deskLabel(model, desk),
+          label: deskLabel(model, desk, teammates(desk)),
+          color: model.deskColors.get(desk.key),
           rect: {
             x: (cell.x + 1) * T,
             y: cell.y * T + 17,
