@@ -16,6 +16,7 @@ import {
 } from "./codex-app-server";
 
 const SESSION_FILE_TIMEOUT_MS = 15_000;
+const COMPRESSED_PREFIX_TRANSFER_LIMIT = 1024 * 1024;
 
 type RunBinaryProcessWithTimeout = (
   argv: string[],
@@ -345,15 +346,27 @@ done
     },
     async readPrefix(path, byteLimit) {
       const actual = await readPath(path);
-      const command = actual.endsWith(".jsonl.zst")
-        ? `cat ${args.shQuote(actual)}`
-        : `head -c ${Math.max(1, Math.floor(byteLimit))} ${args.shQuote(actual)}`;
-      return transcriptPrefix(
-        actual,
-        new Response(Uint8Array.from(await runRemote(`set -eu\n${command}`)))
-          .body!,
-        byteLimit,
+      const compressed = actual.endsWith(".jsonl.zst");
+      const transferLimit = compressed
+        ? COMPRESSED_PREFIX_TRANSFER_LIMIT
+        : Math.max(1, Math.floor(byteLimit));
+      const bytes = await runRemote(
+        `set -eu\nhead -c ${transferLimit} ${args.shQuote(actual)}`,
       );
+      try {
+        return await transcriptPrefix(
+          actual,
+          new Response(Uint8Array.from(bytes)).body!,
+          byteLimit,
+        );
+      } catch (error) {
+        if (compressed && bytes.length === COMPRESSED_PREFIX_TRANSFER_LIMIT)
+          throw new Error(
+            "Compressed transcript prefix exceeds the 1 MiB transfer budget.",
+            { cause: error },
+          );
+        throw error;
+      }
     },
     async readDownloadBody(path) {
       const bytes = await runRemote(`set -eu\ncat ${args.shQuote(path)}`);

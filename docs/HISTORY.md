@@ -30,6 +30,9 @@ and the `.jsonl.zst` filename; previews and conversation entries are decoded.
 For SSH connections, the World service decodes the selected host's bytes; the
 remote host needs no Python or zstd command. Connection, generation and session
 identity rules remain the same.
+Compressed SSH prefix reads transfer at most 1 MiB. If the requested decoded
+prefix cannot be obtained within that budget, the read fails instead of
+fetching the rest of the rollout; full conversation reads remain separate.
 
 ## Version 2 protocol
 

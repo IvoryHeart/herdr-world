@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
+import { randomBytes } from "node:crypto";
 import {
   mkdir,
   mkdtemp,
@@ -110,7 +111,7 @@ async function assertHistoryAndChat(files: AgentSessionFileAccess, title = "") {
   }
 }
 
-async function shellHost() {
+async function shellHost(observeRead?: (bytes: number) => void) {
   const bin = join(root, "bin");
   await mkdir(bin);
   for (const name of ["bash", "find", "stat", "base64", "tr", "cat", "head"])
@@ -130,10 +131,38 @@ async function shellHost() {
         new Response(proc.stderr).text(),
         proc.exited,
       ]);
+      if (command.includes("cat ") || command.includes("head -c"))
+        observeRead?.(stdout.byteLength);
       return { code, stdout: Buffer.from(stdout), stderr };
     },
   });
 }
+
+test("SSH compressed metadata prefixes bound transfer for large cold rollouts", async () => {
+  const text =
+    transcript +
+    JSON.stringify({
+      type: "fixture_noise",
+      data: randomBytes(3 * 1024 * 1024).toString("base64"),
+    }) +
+    "\n";
+  const bytes = Bun.zstdCompressSync(text);
+  expect(bytes.length).toBeGreaterThan(2 * 1024 * 1024);
+  await writeFile(plain + ".zst", bytes);
+  let transferred = 0;
+  const files = await shellHost((size) => {
+    transferred += size;
+  });
+  expect(
+    Buffer.from(await files.readPrefix(plain + ".zst", 37)).toString(),
+  ).toBe(transcript.slice(0, 37));
+  expect(transferred).toBeLessThanOrEqual(1024 * 1024);
+  transferred = 0;
+  await expect(
+    files.readPrefix(plain + ".zst", 4 * 1024 * 1024),
+  ).rejects.toThrow("transfer budget");
+  expect(transferred).toBeLessThanOrEqual(1024 * 1024);
+});
 
 for (const remote of [false, true]) {
   const label = remote ? "SSH without a remote zstd tool" : "local";
