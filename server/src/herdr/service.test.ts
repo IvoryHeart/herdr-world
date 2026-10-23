@@ -13,6 +13,7 @@ import {
   HERDR_SERVICE_MARKER,
   herdrServiceStatus,
   installHerdrService,
+  rebindHerdrWindowsTask,
   renderHerdrLaunchdService,
   renderHerdrSystemdService,
   renderHerdrWindowsTask,
@@ -195,5 +196,43 @@ describe("herdrServiceStatus", () => {
     expect(
       herdrServiceStatus({ platform: "systemd", homeDir, runCommand: () => 0 }),
     ).toEqual({ installed: true, active: true });
+  });
+});
+
+describe("rebindHerdrWindowsTask", () => {
+  test("repoints World's task from the legacy binary without restarting it", () => {
+    const homeDir = scratch();
+    const appDataDir = scratch();
+    const paths = resolveHerdrServicePaths("windows-task", homeDir, appDataDir);
+    const legacy =
+      "C:\\Users\\example\\AppData\\Roaming\\herdr-world\\herdr\\0.9.5\\herdr.exe";
+    const official =
+      "C:\\Users\\example\\AppData\\Local\\Programs\\Herdr\\bin\\herdr.exe";
+    const commands: string[][] = [];
+    const deps = {
+      homeDir,
+      appDataDir,
+      runCommand: (argv: string[]) => {
+        commands.push(argv);
+        return 0;
+      },
+    };
+    // No World task, or one that runs another binary, is left alone.
+    expect(rebindHerdrWindowsTask(legacy, official, deps)).toBe(false);
+    mkdirSync(dirname(paths.definition), { recursive: true });
+    writeFileSync(paths.definition, renderHerdrWindowsTask(official, paths));
+    expect(rebindHerdrWindowsTask(legacy, official, deps)).toBe(false);
+    expect(commands).toEqual([]);
+
+    writeFileSync(paths.definition, renderHerdrWindowsTask(legacy, paths));
+    expect(rebindHerdrWindowsTask(legacy, official, deps)).toBe(true);
+    const definition = readFileSync(paths.definition, "utf8");
+    expect(definition).toContain(`-Execute '${official}'`);
+    expect(definition).not.toContain(legacy);
+    // Registration only: a restart would end the running server's panes.
+    expect(commands).toHaveLength(1);
+    expect(commands[0].join(" ")).not.toMatch(
+      /Start-ScheduledTask|Stop-ScheduledTask|schtasks.*\/run/i,
+    );
   });
 });
