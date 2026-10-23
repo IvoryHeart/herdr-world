@@ -312,6 +312,14 @@ export function useAgentHistoryWindow({
     const anchor = kept?.entries[0] ?? current.messages[0];
     if (!anchor || (kept && !kept.hasMore)) return;
     const epoch = current.cursor.epoch;
+    // Keep what the window drops from now on, not from when the page
+    // arrives: a refresh while it is in flight would otherwise leave a gap
+    // between the page and the window.
+    if (!kept) {
+      const started: Older = { epoch, entries: [], hasMore: true };
+      olderRef.current = started;
+      setOlder(started);
+    }
     const seq = olderSeqRef.current + 1;
     olderSeqRef.current = seq;
     olderInFlightRef.current = true;
@@ -374,6 +382,15 @@ export function useAgentHistoryWindow({
   useLayoutEffect(() => {
     olderInFlightRef.current = false;
   }, [older]);
+  // Back at the newest message, the older pages go: they would otherwise
+  // keep every entry the window drops for as long as the session lasts.
+  const dropOlder = useCallback(() => {
+    if (!olderRef.current || olderInFlightRef.current) return;
+    olderRef.current = null;
+    setOlder(null);
+    const current = historyRef.current;
+    if (key && current) remember(key, current, null);
+  }, [key]);
   useEffect(() => {
     // A new pane or lease drops a page still in flight.
     olderSeqRef.current += 1;
@@ -422,6 +439,7 @@ export function useAgentHistoryWindow({
     hasOlder,
     olderLoading,
     loadOlder,
+    dropOlder,
     toolEntryTexts,
     toolEntryLoading,
     toolEntryFailedRef,

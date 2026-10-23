@@ -448,6 +448,7 @@ export function AgentHistoryChat({
   hasOlder = false,
   olderLoading = false,
   onLoadOlder,
+  onAtLatest,
   placed,
 }: {
   /** Shown among the messages at their time, such as an unseen send. */
@@ -456,6 +457,8 @@ export function AgentHistoryChat({
   hasOlder?: boolean;
   olderLoading?: boolean;
   onLoadOlder?: () => void;
+  /** The reader is back at the newest message. */
+  onAtLatest?: () => void;
   /** Messages a send from Chat matched by their words. */
   matchedIds?: ReadonlyMap<string, "words" | "order">;
   /** Shown after the newest message (Chat's sends not yet seen). */
@@ -598,6 +601,7 @@ export function AgentHistoryChat({
         setAway(!followRef.current);
         heightRef.current = list.scrollHeight;
         if (!followRef.current) loadOlderIfNear(list);
+        else onAtLatest?.();
       }}
     >
       {away ? (

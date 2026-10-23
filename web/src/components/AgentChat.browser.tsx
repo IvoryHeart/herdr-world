@@ -1585,6 +1585,91 @@ async function run() {
       olderAnswer = null;
     }
 
+    // A live refresh while the first older page is in flight: the turns the
+    // window drops meanwhile stay between the page and the window.
+    {
+      const entry = (index: number) => ({
+        id: `race-${index}`,
+        role: index % 2 ? "assistant" : "user",
+        kind: "message",
+        text: `Race ${index} ${"with enough words to wrap a line. ".repeat(3)}`,
+        sent_at: "2026-10-22T09:00:00Z",
+      });
+      const all = Array.from({ length: 70 }, (_, index) => entry(index));
+      let start = 40;
+      let revision = 1;
+      historyAnswer = () => ({
+        history_version: 2,
+        window_limit: 20,
+        mode: "snapshot",
+        cursor: { epoch: "race", revision },
+        agent: "claude",
+        pane_id: "race",
+        workspace_id: "Example",
+        tab_id: "tab",
+        updated_at: "2026-10-22T09:00:00Z",
+        path: "",
+        entries: all.slice(start, start + 20),
+      });
+      const page = Promise.withResolvers<void>();
+      olderAnswer = async (params) => {
+        await page.promise;
+        const end = all.findIndex((item) => item.id === params.before);
+        return {
+          epoch: "race",
+          entries: all.slice(Math.max(0, end - 20), end),
+          has_more: end > 20,
+        };
+      };
+      root.render(<div />);
+      await settle();
+      root.render(
+        <div
+          className="workspace-inspector-body"
+          style={{ width: 390, height: 660, display: "flex", flex: "none" }}
+        >
+          <div className="workspace-inspector-resource inspector-history-resource">
+            <AgentChat
+              pane={{ ...pane("idle"), pane_id: "race" }}
+              active
+              onOpenTerminal={() => {}}
+              onClose={() => {}}
+            />
+          </div>
+        </div>,
+      );
+      await settle();
+      await settle();
+      const list = container.querySelector<HTMLElement>(".agent-history-chat")!;
+      list.scrollTop = 0;
+      list.dispatchEvent(new Event("scroll"));
+      await settle();
+      // The window moves on by ten turns before the page arrives.
+      start = 50;
+      revision = 2;
+      push("race");
+      await settle();
+      await settle();
+      page.resolve();
+      await settle();
+      await settle();
+      const shown = [
+        ...container.querySelectorAll<HTMLElement>(
+          ".agent-history-chat-message p, .agent-history-chat-markdown",
+        ),
+      ]
+        .map((element) => /Race (\d+) /.exec(element.textContent ?? "")?.[1])
+        .filter((value): value is string => !!value)
+        .map(Number);
+      const expected = Array.from({ length: 50 }, (_, index) => index + 20);
+      check(
+        JSON.stringify([...new Set(shown)]) === JSON.stringify(expected),
+        `A refresh during the first older page must not leave a gap: ${JSON.stringify(shown)}`,
+      );
+      historyAnswer = null;
+      olderAnswer = null;
+    }
+
     // Bubbles keep a readable line length in a wide window (design docks
     // Chat at 520 px and lets it widen to 900 px or more).
     {

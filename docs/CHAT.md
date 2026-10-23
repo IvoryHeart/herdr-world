@@ -305,8 +305,11 @@ the page, so a Chat that remounts, docks or reopens shows its conversation at
 once. Scrolling near the top of a full window, or **Load earlier messages**,
 reads the 100 conversation entries before the oldest one shown
 (`agent_history.get` with `before`) and keeps the message being read in place; entries
-the window drops while older ones are shown stay on screen. Transcripts on an
-SSH host are rechecked on Herdr events only.
+the window drops while older ones are shown stay on screen, until the reader
+is back at the newest message, when the older pages are dropped. A transcript
+too large for the service's projection cache is read again for each older
+page, so it pages more slowly. Transcripts on an SSH host are rechecked on
+Herdr events only.
 
 Once a truncated Codex title ID has matched one transcript, rechecks on this
 machine stat that transcript instead of searching again. That is safe only

@@ -133,7 +133,6 @@ export type ConversationDelivery = {
   id: string;
   text: string;
   sent_at: string;
-  /** The send time on the transcript host's clock, for placement. */
   transcript_at?: string;
   state: "pending" | "matched" | "misdelivered" | "uncertain" | "unverified";
   expected: string;
@@ -638,10 +637,7 @@ export function AgentChat({
       delivery.state === "pending" &&
       delivery.fingerprint === conversation?.session_fingerprint,
   );
-  const matchedIds = matchedTurns(
-    deliveries,
-    conversation?.session_fingerprint,
-  );
+  const matched = matchedTurns(deliveries, conversation?.session_fingerprint);
   // Sent to a session the pane has since left: still checked there.
   const elsewhere = deliveries.filter(
     (delivery) =>
@@ -872,8 +868,9 @@ export function AgentChat({
             hasOlder={history.hasOlder}
             olderLoading={history.olderLoading}
             onLoadOlder={history.loadOlder}
+            onAtLatest={history.dropOlder}
             onOpen={setExpanded}
-            matchedIds={matchedIds}
+            matchedIds={matched}
             after={[
               running ? (
                 <div

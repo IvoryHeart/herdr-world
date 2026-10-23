@@ -379,14 +379,20 @@ function InspectorResources({
     );
   }, [fileSelection.entry?.path, scope]);
 
-  // A shown window waiting for its host's session binds once and says it
-  // is loading, instead of an empty frame until the agent is clicked.
+  // A shown window waiting for its host's session binds once that host is
+  // connected (a reload may mount it first), and says it is loading,
+  // instead of an empty frame until the agent is clicked.
+  const connectionStatus = useStoreSelector((snapshot) => snapshot.status);
   const bindRequested = useRef(false);
   useEffect(() => {
+    if (connectionStatus !== "connected") {
+      bindRequested.current = false;
+      return;
+    }
     if (scope || !target || !onBind || bindRequested.current) return;
     bindRequested.current = true;
     onBind();
-  }, [onBind, scope, target]);
+  }, [connectionStatus, onBind, scope, target]);
 
   if (!scope)
     return createPortal(
