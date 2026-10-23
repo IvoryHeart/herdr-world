@@ -1258,7 +1258,7 @@ export default function TownView({
             // another agent never land in this one.
             key={peekLeaf ? townPaneIdentity(peekLeaf) : peekAgent.key}
             agent={peekAgent}
-            where={whereOf(peekAgent.key)}
+            where={whereOfAgent(peekAgent.key)}
             conversation={peekConversation}
             question={peekQuestion}
             choices={peekChoices}
