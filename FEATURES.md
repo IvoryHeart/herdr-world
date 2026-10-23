@@ -21,17 +21,19 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     (**Chat**, **Terminal**, **Changes**, **Files**, then **Commits**).
     Tapping an agent or its table, activating it (double-click,
     **Shift+Enter**), the needs-you list, **N** and **Next** open that window on
-    **Chat**: the full conversation, which scrolls, with **Jump to latest**
-    when you have scrolled back and the composer at the bottom. In Town it
+    **Chat**: the conversation's latest 200 entries, which scroll inside the
+    window, with **Jump to latest** when you have scrolled back and the
+    composer always at the bottom. Reopening or redocking the window keeps the
+    conversation. In Town it
     docks on the right by default (**Menu → Inspector opening**), can be
     undocked, and keeps the dock it was left with. On a phone, the Chat view
     shows only its own composer, without the terminal key bar.
   - The top selector follows the window's own width, docked, floating or on a
     phone: labelled from 640px, icons (with their names as tooltips) below
     that, and below 360px only the active view, with the others under ⋯.
-  - The Town master's chat (**Menu → Town master**, `firstmate` by default)
-    opens docked on Chat once per visit on wide screens, without moving the
-    pane's focus.
+  - The Town master's chat (**Menu → Town master**, `firstmate` by default,
+    matched against the agent's Herdr name, then its label) opens docked on
+    Chat once per visit on wide screens, without moving the pane's focus.
   - Hovering an agent shows a small card as a preview: its latest message from
     Chat's conversation read model, rendered as Chat renders it (never terminal
     text; an unavailable conversation shows Chat's reason), a question when

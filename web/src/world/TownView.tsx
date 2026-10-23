@@ -1068,9 +1068,15 @@ export default function TownView({
   // The Town master's (FirstMate's) chat is docked from the start on wide
   // screens, once per visit: closed, it stays closed until opened again.
   const masterName = preferences.townMaster.trim().toLowerCase();
+  // Herdr's agent name (herdr agent rename) first, then the shown label.
   const masterAgent = masterName
-    ? office.roster.find(
-        ({ agent }) => agent.displayLabel.toLowerCase() === masterName,
+    ? (
+        office.roster.find(
+          ({ agent }) => agent.agentName?.toLowerCase() === masterName,
+        ) ??
+        office.roster.find(
+          ({ agent }) => agent.displayLabel.toLowerCase() === masterName,
+        )
       )?.agent
     : undefined;
   useEffect(() => {

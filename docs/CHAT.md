@@ -204,8 +204,15 @@ Codex thread switch through the title is seen. For a transcript on this
 machine, it also watches the file, so messages written during a long turn
 appear without a status change. When the pane's session, title thread,
 transcript size or time, or status changes, the service pushes
-`agent_conversation_changed` to the watching browser, which rereads. Transcripts
-on an SSH host are rechecked on Herdr events only.
+`agent_conversation_changed` to the watching browser. Chat then reads the
+conversation without its messages (`agent_conversation.latest`, for status,
+binding and delivery receipts) and History's window from its cursor
+(`agent_history.get`), which brings only the entries that changed. A burst of
+pushes runs at most one more read of each. Chat renders History's bubbles and
+collapsed tool cards, which load their text only when opened, so a long, busy
+transcript is never reread or redrawn whole. The window is kept per pane for
+the page, so a Chat that remounts, docks or reopens shows its conversation at
+once. Transcripts on an SSH host are rechecked on Herdr events only.
 
 Once a truncated Codex title ID has matched one transcript, rechecks on this
 machine stat that transcript instead of searching again. That is safe only

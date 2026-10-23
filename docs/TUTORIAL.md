@@ -122,8 +122,8 @@ changes what you see and does not disconnect hosts or retarget open terminals.
 4. Tap an agent or its table to open its window on **Chat**: World's Inspector,
    with **Chat**, **Terminal**, **Changes** and **Files** in its top selector.
    In Town it docks on the right; drag its title to undock it. Chat shows the
-   whole conversation, scrolls back, and offers **Jump to latest**; the composer
-   is at the bottom. The **NEEDS YOU** list provides another route to waiting
+   conversation's latest 200 entries, scrolls back inside the window, and
+   offers **Jump to latest**; the composer stays at the bottom. The **NEEDS YOU** list provides another route to waiting
    agents and becomes a bottom tray on phones; it hides when no agent is
    blocked. The Town master's chat (**Menu → Town master**, `firstmate` by
    default) opens docked once per visit on wide screens. Hover an agent for a

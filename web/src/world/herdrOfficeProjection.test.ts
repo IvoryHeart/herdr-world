@@ -46,6 +46,26 @@ describe("Pixel Office projection", () => {
       expected,
     );
   });
+  test("an agent keeps the name Herdr gives it, for finding the Town master", () => {
+    const source = connection(
+      "alpha",
+      [tab("shared", 1)],
+      [pane("shared", "working", "claude", 0)],
+    );
+    source.snapshot!.agents = [
+      {
+        pane_id: "pane-shared-0",
+        terminal_id: "terminal-shared-0",
+        agent: "claude",
+        name: "firstmate",
+      },
+    ];
+    const office = projectWorldOffice(buildWorldObject([source]), 1);
+    const agent = office.roster[0]!.agent;
+    expect(agent.displayLabel).toBe("claude");
+    expect(agent.agentName).toBe("firstmate");
+  });
+
   test("desks follow Herdr's tab list order, not tab numbers", () => {
     // After tab.move Herdr lists tabs in their new order; numbers stay.
     const world = buildWorldObject([

@@ -5,6 +5,7 @@ import { AgentChat, type Conversation } from "./AgentChat";
 import "../styles/tokens.css";
 import "../styles/base.css";
 import "../styles/vendor.css";
+import "./WorkspaceInspectorHost.css";
 
 const failures: string[] = [];
 function check(condition: boolean, message: string) {
@@ -14,10 +15,51 @@ async function settle() {
   await new Promise((resolve) => setTimeout(resolve, 80));
 }
 
-const conversation = (
-  messages: Conversation["messages"],
-  status = "idle",
-): Conversation => ({
+type Messages = NonNullable<Conversation["messages"]>;
+
+/** History's window of the same messages, as agent_history.get sends it. */
+let historyRevision = 0;
+const historyOf = (messages: Messages) => ({
+  history_version: 2,
+  mode: "snapshot",
+  cursor: { epoch: "fixture", revision: ++historyRevision },
+  window_limit: 200,
+  agent: "claude",
+  pane_id: "p",
+  workspace_id: "Example",
+  tab_id: "tab",
+  updated_at: "2026-10-22T09:00:00Z",
+  path: "",
+  entries: messages.map((message) =>
+    message.kind === "notice"
+      ? {
+          id: message.id,
+          role: "assistant",
+          kind: "message",
+          text: "",
+          notice: message.text,
+          sent_at: message.sent_at,
+        }
+      : message.kind === "activity"
+        ? {
+            id: message.id,
+            role: "tool",
+            kind: "tool_call",
+            tool_name: message.tools?.[0]?.name ?? "tool",
+            text: "",
+            sent_at: message.sent_at,
+          }
+        : {
+            id: message.id,
+            role: message.role,
+            kind: message.kind === "error" ? "error" : "message",
+            text: message.text,
+            sent_at: message.sent_at,
+          },
+  ),
+});
+
+const conversation = (messages: Messages, status = "idle"): Conversation => ({
   conversation_version: 1,
   pane_id: "p",
   agent: "claude",
@@ -37,7 +79,7 @@ const message = (
   id: string,
   role: "user" | "assistant",
   text: string,
-): Conversation["messages"][number] => ({
+): Messages[number] => ({
   id,
   role,
   kind: "message",
@@ -128,6 +170,9 @@ async function run() {
     message("a1", "assistant", "It describes the **demo** project."),
   ]);
   let sendResult: unknown = { status: "sent" };
+  /** Replaces the snapshot answer for agent_history.get while set. */
+  let historyAnswer: ((params: Record<string, unknown>) => unknown) | null =
+    null;
   bridge.connection = () => ({
     connectionId: "test",
     generation: 1,
@@ -137,7 +182,18 @@ async function run() {
     call: async (method: string, params: Record<string, unknown> = {}) => {
       calls.push({ method, params });
       if (method === "agent_conversation.send") return sendResult;
-      if (method === "agent_conversation.get") return reply;
+      if (method === "agent_conversation.latest")
+        return { ...reply, messages: undefined };
+      // A transcript caught mid-write fails History's read too.
+      if (
+        method === "agent_history.get" &&
+        reply.unavailable?.reason === "read_failed"
+      )
+        throw new Error(reply.unavailable.detail);
+      if (method === "agent_history.get")
+        return historyAnswer
+          ? historyAnswer(params)
+          : historyOf(reply.messages ?? []);
       if (
         method === "agent_conversation.watch" ||
         method === "agent_conversation.unwatch"
@@ -177,7 +233,7 @@ async function run() {
     );
   const count = (method: string) =>
     calls.filter((call) => call.method === method).length;
-  const reads = () => count("agent_conversation.get");
+  const reads = () => count("agent_conversation.latest");
   try {
     render("idle", false);
     await settle();
@@ -190,21 +246,29 @@ async function run() {
       count("agent_conversation.watch") === 1,
       "Opening Chat must ask the service to watch the pane",
     );
-    const bubbles = [...container.querySelectorAll(".agent-chat-message")];
+    const bubbles = [
+      ...container.querySelectorAll(
+        ".agent-history-chat-message:not(.is-pending)",
+      ),
+    ];
     check(
-      bubbles.map((node) => node.getAttribute("data-role")).join() ===
-        "user,assistant",
+      bubbles
+        .map((node) =>
+          node.classList.contains("is-user") ? "user" : "assistant",
+        )
+        .join() === "user,assistant",
       "Chat must show user and assistant bubbles in order",
     );
     check(
-      container.querySelector(".agent-chat-message.is-assistant strong")
+      container.querySelector(".agent-history-chat-message.is-assistant strong")
         ?.textContent === "demo",
       "Assistant text must render as Markdown",
     );
     check(
-      container.querySelector(".agent-chat-activity")?.textContent ===
-        "Used Read",
-      "Tool activity must render as one summary line",
+      (
+        container.querySelector(".agent-history-chat-tools")?.textContent ?? ""
+      ).includes("Read"),
+      "Tool activity must render as one collapsed tool block",
     );
     check(
       !container.querySelector(".xterm, canvas, pre.terminal"),
@@ -219,7 +283,7 @@ async function run() {
     check(reads() === 1, "A change to another pane must not reread");
     reply = conversation(
       [
-        ...reply.messages,
+        ...(reply.messages ?? []),
         message("u2", "user", "Thanks"),
         message("a2", "assistant", "You're welcome."),
       ],
@@ -229,7 +293,8 @@ async function run() {
     await settle();
     check(reads() === 2, "A pushed change must reread the conversation");
     check(
-      container.querySelectorAll(".agent-chat-message").length === 4,
+      container.querySelectorAll(".agent-history-chat-message:not(.is-pending)")
+        .length === 4,
       "A reread must show new messages",
     );
 
@@ -559,8 +624,8 @@ async function run() {
     push();
     await settle();
     check(
-      container.querySelectorAll(".agent-chat-message").length === 4 &&
-        !container.querySelector(".agent-chat-unavailable"),
+      container.querySelectorAll(".agent-history-chat-message:not(.is-pending)")
+        .length === 4 && !container.querySelector(".agent-chat-unavailable"),
       "A failed read must keep the last good conversation",
     );
     check(
@@ -615,9 +680,11 @@ async function run() {
     push();
     await settle();
     check(
-      container.querySelector(".agent-chat-divider")?.textContent ===
+      container.querySelector(".agent-history-chat-divider")?.textContent ===
         "Conversation compacted" &&
-        container.querySelectorAll(".agent-chat-message").length === 2,
+        container.querySelectorAll(
+          ".agent-history-chat-message:not(.is-pending)",
+        ).length === 2,
       "A compaction must render as a divider, not a message",
     );
 
@@ -694,7 +761,7 @@ async function run() {
       render("idle");
       await settle();
       await settle();
-      const list = container.querySelector<HTMLElement>(".agent-chat-list")!;
+      const list = container.querySelector<HTMLElement>(".agent-history-chat")!;
       check(
         list.scrollHeight > list.clientHeight * 2,
         `a long conversation should scroll at ${width}px`,
@@ -707,7 +774,7 @@ async function run() {
       list.dispatchEvent(new Event("scroll"));
       await settle();
       const jump = () =>
-        container.querySelector<HTMLButtonElement>(".agent-chat-jump");
+        container.querySelector<HTMLButtonElement>(".agent-history-chat-jump");
       check(jump() !== null, `Jump to latest should show at ${width}px`);
       reply = conversation([
         ...long,
@@ -739,6 +806,204 @@ async function run() {
       );
     }
     container.style.width = "800px";
+
+    // A remounted Chat shows the conversation it had at once, from the kept
+    // window, before the next read answers.
+    {
+      reply = conversation([
+        message("keep-u", "user", "Keep this question"),
+        message("keep-a", "assistant", "Kept answer"),
+      ]);
+      render("idle");
+      push();
+      await settle();
+      await settle();
+      let release!: () => void;
+      const gate = new Promise<void>((resolve) => (release = resolve));
+      historyAnswer = async () => {
+        await gate;
+        return historyOf(reply.messages ?? []);
+      };
+      root.render(<div />);
+      await settle();
+      render("idle");
+      await settle();
+      check(
+        (
+          container.querySelector(".agent-history-chat")?.textContent ?? ""
+        ).includes("Kept answer"),
+        "A remounted Chat lost its conversation while the next read was pending",
+      );
+      release();
+      historyAnswer = null;
+      await settle();
+    }
+
+    // A long, busy transcript stays responsive: History's window arrives once
+    // and each change brings only what changed, so nothing re-reads or
+    // re-renders the whole conversation. No task may block for 200 ms.
+    {
+      const longTasks: number[] = [];
+      const observer = new PerformanceObserver((list) => {
+        for (const entry of list.getEntries()) longTasks.push(entry.duration);
+      });
+      observer.observe({ type: "longtask" });
+      let revision = 1000;
+      const base: Record<string, unknown>[] = [];
+      // 150 messages, so the 20 added below stay within History's window of
+      // 200 conversation entries and every delta's order is the whole window.
+      for (let index = 0; index < 150; index += 1) {
+        base.push({
+          id: `busy-${index}`,
+          role: index % 2 ? "assistant" : "user",
+          kind: "message",
+          text: `Busy message ${index}: **the queue** keeps its order.`,
+          sent_at: "2026-10-22T09:00:00Z",
+        });
+        for (let tool = 0; tool < 15; tool += 1)
+          base.push({
+            id: `busy-${index}-tool-${tool}`,
+            role: "tool",
+            kind: tool % 2 ? "tool_result" : "tool_call",
+            tool_name: "Bash",
+            text: "",
+            text_bytes: 5000,
+            text_hash: `h${index}-${tool}`,
+            sent_at: "2026-10-22T09:00:00Z",
+          });
+      }
+      const order = base.map((entry) => entry.id as string);
+      const head = {
+        history_version: 2,
+        window_limit: 200,
+        agent: "claude",
+        pane_id: "p",
+        workspace_id: "Example",
+        tab_id: "tab",
+        updated_at: "2026-10-22T09:00:00Z",
+        path: "",
+      };
+      let added: Record<string, unknown>[] = [];
+      historyAnswer = (params) => {
+        const cursor = params.cursor as { revision: number } | null;
+        if (!cursor || cursor.revision < 1000)
+          return {
+            ...head,
+            mode: "snapshot",
+            cursor: { epoch: "busy", revision },
+            entries: base,
+          };
+        const upserts = added;
+        added = [];
+        const base_revision = revision;
+        revision += 1;
+        return {
+          ...head,
+          mode: "delta",
+          cursor: { epoch: "busy", revision },
+          base_revision,
+          upserts,
+          removed: [],
+          order: [...order],
+        };
+      };
+      reply = conversation([message("busy-0", "user", "Busy message 0")]);
+      push();
+      await settle();
+      await settle();
+      longTasks.length = 0;
+      for (let step = 0; step < 20; step += 1) {
+        const id = `busy-new-${step}`;
+        added.push({
+          id,
+          role: "tool",
+          kind: "tool_call",
+          tool_name: "Bash",
+          text: "",
+          text_bytes: 3000,
+          text_hash: `n${step}`,
+          sent_at: "2026-10-22T09:00:00Z",
+        });
+        added.push({
+          id: `${id}-reply`,
+          role: "assistant",
+          kind: "message",
+          text: `Live update ${step}.`,
+          sent_at: "2026-10-22T09:00:00Z",
+        });
+        order.push(id, `${id}-reply`);
+        push();
+        await new Promise((resolve) => setTimeout(resolve, 40));
+      }
+      await settle();
+      await settle();
+      observer.disconnect();
+      check(
+        (
+          container.querySelector(".agent-history-chat")?.textContent ?? ""
+        ).includes("Live update 19."),
+        "The busy conversation did not show its newest message",
+      );
+      check(
+        Math.max(0, ...longTasks) < 200,
+        `A busy conversation blocked the page: long tasks ${JSON.stringify(longTasks.map(Math.round))}`,
+      );
+
+      // In the Inspector's window body, at the body sizes of a phone
+      // (390×844), a laptop (1280×800), a half screen (960×1080), a wide
+      // screen (1920×1080), a portrait screen (1080×1920) and a small floating
+      // window, the long conversation scrolls inside the window and the
+      // composer stays in it.
+      for (const [width, height] of [
+        [390, 660],
+        [480, 525],
+        [480, 800],
+        [560, 800],
+        [560, 1640],
+        [320, 260],
+      ] as const) {
+        root.render(
+          <div
+            className="workspace-inspector-body"
+            style={{ width, height, display: "flex" }}
+          >
+            <div className="workspace-inspector-resource inspector-history-resource">
+              <AgentChat
+                pane={pane("idle")}
+                active
+                onOpenTerminal={() => {}}
+                onClose={() => {}}
+              />
+            </div>
+          </div>,
+        );
+        await settle();
+        await settle();
+        const body = container
+          .querySelector(".workspace-inspector-body")!
+          .getBoundingClientRect();
+        const list = container.querySelector<HTMLElement>(
+          ".agent-history-chat",
+        );
+        const composer = container
+          .querySelector(".agent-chat-composer")
+          ?.getBoundingClientRect();
+        check(
+          !!list &&
+            list.scrollHeight > list.clientHeight &&
+            list.getBoundingClientRect().bottom <= body.bottom + 1,
+          `At ${width}×${height} the conversation does not scroll inside the window`,
+        );
+        check(
+          !!composer &&
+            composer.height > 0 &&
+            composer.top >= body.top &&
+            composer.bottom <= body.bottom + 1,
+          `At ${width}×${height} the composer is outside the window`,
+        );
+      }
+      historyAnswer = null;
+    }
 
     const unwatched = count("agent_conversation.unwatch");
     render("done", false);

@@ -1,20 +1,11 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  memo,
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from "react";
-import {
-  ArrowDown,
   Copy,
   ListTree,
   Paperclip,
   RefreshCw,
   Send,
   SquareTerminal,
-  Wrench,
 } from "lucide-react";
 import { watchConversation } from "../conversationWatch";
 import {
@@ -29,12 +20,15 @@ import {
 } from "../terminalImageUpload";
 import { copyTextWithFeedback } from "../copyText";
 import type { Pane } from "../types";
-import { formatUiDateTime } from "../uiLocale";
 import { useConnectionClient } from "../useConnectionClient";
 import { AgentHistoryDrawer } from "./AgentHistoryDrawer";
+import { AgentHistoryChat } from "./AgentHistoryChat";
+import { AgentMessageDialog } from "./AgentMessageDialog";
+import type { HistoryEntry } from "./agentHistory";
+import { groupHistoryChatItems } from "./agentHistoryView";
+import { useAgentHistoryWindow } from "./useAgentHistoryWindow";
 import { AttachmentChips } from "./AttachmentChips";
 import { CodexSessionLink } from "./CodexSessionLink";
-import { MarkdownPreview } from "./markdown";
 import "./AgentChat.css";
 
 // Mirrors the server's conversation read model (server/src/agent/conversation.ts).
@@ -63,7 +57,8 @@ export type Conversation = {
     command?: string;
     issue?: string;
   } | null;
-  messages: ConversationMessage[];
+  /** Only in a full read; Chat reads the summary and History's window. */
+  messages?: ConversationMessage[];
   latest: ConversationMessage | null;
   /**
    * Sends not yet seen in this conversation, sends with evidence they went
@@ -89,79 +84,8 @@ type SendResult =
   | { status: "sent" }
   | { status: "refused"; reason: string; message: string };
 
-const FOLLOW_THRESHOLD_PX = 48;
-
 const preview = (text: string) =>
   text.length > 80 ? `${text.slice(0, 79)}…` : text;
-
-const ChatMessage = memo(function ChatMessage({
-  message,
-  matched = false,
-}: {
-  message: ConversationMessage;
-  /** Has the same words as a message Chat sent: matched, not proven. */
-  matched?: boolean;
-}) {
-  if (message.kind === "notice") {
-    return (
-      <div className="agent-chat-divider" role="separator">
-        <span>{message.text}</span>
-      </div>
-    );
-  }
-  if (message.kind === "activity") {
-    return (
-      <div className="agent-chat-activity" data-role="tool">
-        <Wrench size={12} aria-hidden />
-        <span>{message.text}</span>
-        {message.failed ? (
-          <span className="agent-chat-activity-failed">
-            {message.failed} failed
-          </span>
-        ) : null}
-      </div>
-    );
-  }
-  const tone = message.kind === "error" ? "is-error" : `is-${message.role}`;
-  return (
-    <article
-      className={`agent-chat-message ${tone}`}
-      data-role={message.role}
-      data-delivery={matched ? "matched" : undefined}
-    >
-      <div className="agent-chat-bubble">
-        {message.role === "user" ? (
-          <p>{message.text}</p>
-        ) : (
-          <MarkdownPreview
-            text={message.text}
-            className="agent-chat-markdown"
-            breaks
-          />
-        )}
-      </div>
-      <div className="agent-chat-meta">
-        <time dateTime={message.sent_at} title={message.sent_at}>
-          {formatUiDateTime(message.sent_at)}
-        </time>
-        {matched ? (
-          <span title="Chat sent the same words just before this appeared; it cannot prove this is that message.">
-            Sent from Chat; matched by its words
-          </span>
-        ) : null}
-        <button
-          type="button"
-          className="agent-chat-copy"
-          onClick={() => void copyTextWithFeedback(message.text)}
-          aria-label="Copy message"
-          title="Copy"
-        >
-          <Copy size={12} />
-        </button>
-      </div>
-    </article>
-  );
-});
 
 /**
  * Chat reads only the conversation read model and sends with Herdr's agent
@@ -193,9 +117,6 @@ export function AgentChat({
   const [details, setDetails] = useState(false);
   const seqRef = useRef(0);
   const listRef = useRef<HTMLDivElement>(null);
-  const followRef = useRef(true);
-  // Shown while the reader has scrolled up from the newest message.
-  const [awayFromLatest, setAwayFromLatest] = useState(false);
   const shownRef = useRef<Conversation | null>(null);
   const filePicker = useRef<HTMLInputElement>(null);
   const uploadScope = `agent-chat\u0000${connectionClient.connectionId}\u0000${connectionClient.serverRuntimeGeneration}\u0000${pane.pane_id}`;
@@ -221,16 +142,27 @@ export function AgentChat({
     ),
   );
 
+  // Chat's status, session and receipts come from the conversation summary
+  // (agent_conversation.latest, without messages); the messages themselves
+  // are History's window below, so a long, busy transcript is never re-read
+  // or re-rendered whole. A burst of change pushes runs at most one more read.
+  const inFlightRef = useRef(false);
+  const againRef = useRef(false);
   const load = useCallback(() => {
     if (!connectionClient.isCurrent()) return;
+    if (inFlightRef.current) {
+      againRef.current = true;
+      return;
+    }
+    inFlightRef.current = true;
     const seq = ++seqRef.current;
     setLoading(true);
     connectionClient
-      .call("agent_conversation.get", { pane_id: pane.pane_id })
+      .call("agent_conversation.latest", { pane_id: pane.pane_id })
       .then((result) => {
         if (seq !== seqRef.current || !connectionClient.isCurrent()) return;
         const reply = result as Partial<Conversation> | null;
-        if (!reply || !Array.isArray(reply.messages))
+        if (!reply || (reply.status !== "ok" && reply.status !== "unavailable"))
           throw new Error("World sent an unreadable conversation.");
         const next = reply as Conversation;
         // A transcript caught mid-write must not replace what was readable.
@@ -250,23 +182,40 @@ export function AgentChat({
         setStale(reason instanceof Error ? reason.message : String(reason));
       })
       .finally(() => {
+        inFlightRef.current = false;
         if (seq === seqRef.current) setLoading(false);
+        if (againRef.current) {
+          againRef.current = false;
+          loadRef.current();
+        }
       });
   }, [connectionClient, pane.pane_id]);
+  const loadRef = useRef(load);
+  loadRef.current = load;
+  const history = useAgentHistoryWindow({
+    pane,
+    client: connectionClient,
+    active: active && !details,
+  });
+  const refreshHistory = history.refresh;
+  const [expanded, setExpanded] = useState<HistoryEntry | null>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const chatItems = useMemo(
+    () => groupHistoryChatItems(history.messages),
+    [history.messages],
+  );
 
   // While visible, ask the service to watch this pane and reread when it says
   // the conversation changed, or after the connection comes back.
   useEffect(() => {
     if (!active || details) return;
-    const stop = watchConversation(connectionClient, pane.pane_id, load);
+    const stop = watchConversation(connectionClient, pane.pane_id, () => {
+      load();
+      refreshHistory();
+    });
     load();
     return stop;
-  }, [active, connectionClient, details, load, pane.pane_id]);
-
-  useLayoutEffect(() => {
-    const list = listRef.current;
-    if (list && followRef.current) list.scrollTop = list.scrollHeight;
-  }, [conversation]);
+  }, [active, connectionClient, details, load, pane.pane_id, refreshHistory]);
 
   const send = useCallback(async () => {
     const text = draft.trim();
@@ -288,14 +237,14 @@ export function AgentChat({
         text,
         session_fingerprint: conversation.session_fingerprint,
         // What Chat showed: a send checks for the message after these.
-        baseline: conversation.messages
+        baseline: history.messages
           .filter((message) => message.role === "user")
           .map((message) => message.id),
       })) as SendResult;
       if (result.status === "sent") {
         setDraft("");
-        followRef.current = true;
         load();
+        refreshHistory();
       } else {
         setNotice(result.message);
         if (result.reason === "changed") load();
@@ -309,8 +258,10 @@ export function AgentChat({
     connectionClient,
     conversation,
     draft,
+    history.messages,
     load,
     pane.pane_id,
+    refreshHistory,
     sending,
     uploading,
   ]);
@@ -363,7 +314,9 @@ export function AgentChat({
           delivery.state === "matched" &&
           delivery.fingerprint === conversation?.session_fingerprint,
       )
-      .map((delivery) => delivery.matched_id),
+      .flatMap((delivery) =>
+        delivery.matched_id ? [delivery.matched_id] : [],
+      ),
   );
   // Sent to a session the pane has since left: still checked there.
   const elsewhere = deliveries.filter(
@@ -521,57 +474,33 @@ export function AgentChat({
           ) : null}
         </div>
       ) : (
-        <div
-          ref={listRef}
-          className="agent-chat-list"
-          onScroll={(event) => {
-            const list = event.currentTarget;
-            if (list.clientHeight === 0) return;
-            followRef.current =
-              list.scrollHeight - list.scrollTop - list.clientHeight <
-              FOLLOW_THRESHOLD_PX;
-            setAwayFromLatest(!followRef.current);
-          }}
-        >
-          {awayFromLatest ? (
-            <button
-              type="button"
-              className="agent-chat-jump"
-              onClick={() => {
-                const list = listRef.current;
-                followRef.current = true;
-                setAwayFromLatest(false);
-                list?.scrollTo({ top: list.scrollHeight });
-              }}
-            >
-              <ArrowDown size={13} aria-hidden="true" /> Jump to latest
-            </button>
+        <div className="agent-chat-list">
+          {history.messages.length === 0 ? (
+            <p className="agent-chat-empty">
+              {history.loading || !history.history
+                ? "Loading conversation…"
+                : "No messages yet."}
+            </p>
           ) : null}
-          <div className="agent-chat-content">
-            {conversation && conversation.messages.length === 0 ? (
-              <p className="agent-chat-empty">No messages yet.</p>
-            ) : null}
-            {!conversation && !stale ? (
-              <p className="agent-chat-empty">Loading conversation…</p>
-            ) : null}
-            {conversation?.messages.map((message) => (
-              <ChatMessage
-                key={message.id}
-                message={message}
-                matched={matchedIds.has(message.id)}
-              />
-            ))}
-            {pending.map((delivery) => (
+          <AgentHistoryChat
+            items={chatItems}
+            listRef={listRef}
+            contentRef={contentRef}
+            followKey={pane.pane_id}
+            toolLoading={history.toolEntryLoading}
+            onLoadTool={history.loadToolEntry}
+            onOpen={setExpanded}
+            matchedIds={matchedIds}
+            after={pending.map((delivery) => (
               <article
                 key={delivery.id}
-                className="agent-chat-message is-user is-pending"
-                data-role="user"
+                className="agent-history-chat-message is-user is-pending"
                 data-delivery="pending"
               >
-                <div className="agent-chat-bubble">
+                <div className="agent-history-chat-bubble">
                   <p>{delivery.text}</p>
                 </div>
-                <div className="agent-chat-meta">
+                <div className="agent-history-chat-meta">
                   Sent; not yet seen in this conversation{" "}
                   <button
                     type="button"
@@ -583,7 +512,11 @@ export function AgentChat({
                 </div>
               </article>
             ))}
-          </div>
+          />
+          <AgentMessageDialog
+            message={expanded}
+            onClose={() => setExpanded(null)}
+          />
         </div>
       )}
       {conversation?.status === "ok" && !canSend ? (

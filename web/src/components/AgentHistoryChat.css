@@ -384,3 +384,40 @@
     opacity: 1;
   }
 }
+
+/* Scrolled back from the newest message, a button brings it back. It sits at
+   the bottom of the visible list without taking room from the messages. */
+.agent-history-chat-jump {
+  position: sticky;
+  top: calc(100% - 40px);
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  margin: 0 auto -28px;
+  padding: 0 10px;
+  color: var(--text-strong);
+  font-size: 12px;
+  background: var(--panel);
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  box-shadow: var(--shadow-lg, 0 4px 14px #0004);
+  cursor: pointer;
+}
+
+.agent-history-chat-divider {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.agent-history-chat-divider::before,
+.agent-history-chat-divider::after {
+  content: "";
+  flex: 1;
+  border-top: 1px solid var(--border-soft);
+}

@@ -66,6 +66,8 @@ export type OfficeAgent = {
   roomKey: string;
   hostKey: string;
   displayLabel: string;
+  /** The name Herdr gives the agent (agent.list), when it has one. */
+  agentName?: string;
   taskSummary?: string;
   semanticStatus: WorldAgentStatus;
   stateLabels: Partial<Record<WorldAgentStatus, string>>;
@@ -1089,6 +1091,7 @@ function projectAgent(
     roomKey,
     hostKey,
     displayLabel: leaf.agentLabel ?? leaf.label,
+    ...(leaf.agentName ? { agentName: leaf.agentName } : {}),
     ...(summary ? { taskSummary: summary } : {}),
     semanticStatus: leaf.status,
     stateLabels: leaf.stateLabels,
