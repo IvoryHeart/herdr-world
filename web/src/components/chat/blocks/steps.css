@@ -72,13 +72,6 @@
 }
 
 .agent-chat-step-diff,
-.agent-chat-step-tail {
-  max-height: 260px;
-  margin: 0;
-  overflow: auto;
-  font: 12px / 1.5 var(--font-mono, ui-monospace, monospace);
-}
-
 .agent-chat-step-diff span {
   display: block;
   padding: 0 6px;
@@ -97,10 +90,4 @@
 .agent-chat-step-diff .is-added {
   color: var(--success-text, #b8f0c2);
   background: var(--success-soft, #1d3a26);
-}
-
-.agent-chat-step-tail {
-  color: var(--text);
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
 }

@@ -30,7 +30,8 @@ export type ConversationStep = {
 function duration(step: ConversationStep) {
   if (!step.ended_at) return null;
   const ms = Date.parse(step.ended_at) - Date.parse(step.started_at);
-  if (!Number.isFinite(ms) || ms < 0) return null;
+  // Under a tenth of a second is not worth a label.
+  if (!Number.isFinite(ms) || ms < 100) return null;
   return ms < 60_000
     ? `${(ms / 1000).toFixed(1)}s`
     : `${Math.floor(ms / 60_000)}m ${String(Math.floor(ms / 1000) % 60).padStart(2, "0")}s`;
@@ -64,15 +65,15 @@ export const StepRowEvidence = memo(function StepRowEvidence({
 
 /**
  * An opened row's evidence: the pass and fail counts of a test run with its
- * first failure, the diff of an edit, or the end of its output. Nothing when
- * the step has none.
+ * first failure, or the diff of an edit. History's row already shows the
+ * call's arguments and output below it. Nothing when the step has neither.
  */
 export const StepDetailEvidence = memo(function StepDetailEvidence({
   step,
 }: {
   step: ConversationStep;
 }) {
-  if (!step.diff && !step.test && !step.result_tail) return null;
+  if (!step.diff && !step.test) return null;
   return (
     <div className="agent-chat-step-body">
       {step.test ? (
@@ -118,9 +119,6 @@ export const StepDetailEvidence = memo(function StepDetailEvidence({
             </span>
           ) : null}
         </pre>
-      ) : null}
-      {step.result_tail && !step.diff ? (
-        <pre className="agent-chat-step-tail">{step.result_tail}</pre>
       ) : null}
     </div>
   );
