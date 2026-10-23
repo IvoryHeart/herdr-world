@@ -33,7 +33,8 @@ import {
   useStoreSelector,
 } from "../store";
 import { WORLD_OBSERVABILITY_UPDATED_EVENT } from "../workspaceResource";
-import { TownCanvas, type TownQuestMark } from "./town/TownCanvas";
+import { TownCanvas } from "./town/TownCanvas";
+import type { TownQuestMark } from "./town/townQuestPennant";
 import { townDeskColorTarget } from "./town/townModel";
 import { resolveTerminal, type TerminalColor } from "./terminalColor";
 import { setTerminalColor, useTerminalColors } from "./useTerminalColors";
