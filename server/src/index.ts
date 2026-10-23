@@ -1787,6 +1787,18 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
     }
     return;
   }
+  if (method === "agent_quest.list") {
+    try {
+      const ids = Array.isArray(params?.pane_ids)
+        ? params.pane_ids.filter((id): id is string => typeof id === "string")
+        : undefined;
+      const quests = await connection.agentSessions.conversation.quests(ids);
+      sendReply({ id, result: { quests } }, method);
+    } catch (e) {
+      sendError(`${method}-error`, e);
+    }
+    return;
+  }
   if (method === "agent_history.get") {
     try {
       const result = await readAgentMessageHistory(params ?? {});
