@@ -193,3 +193,11 @@
   stroke: color-mix(in srgb, var(--bg, #0e1116) 86%, transparent);
   stroke-width: 2;
 }
+
+/* A restored window whose host session is still loading. */
+.world-inspector-loading {
+  margin: auto;
+  padding: 24px;
+  color: var(--muted);
+  font-size: 13px;
+}

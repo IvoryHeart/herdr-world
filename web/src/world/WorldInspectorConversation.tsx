@@ -109,7 +109,14 @@ function InspectorResources({
   onWindowMaximize,
   windowMaximized = false,
   onTerminalPortalChange,
+  onBind,
 }: {
+  /**
+   * The window is shown but its host's session has not loaded this
+   * workspace yet (a window restored on page load, on a host not yet opened):
+   * load that host's session, without focusing anything there.
+   */
+  onBind?(): void;
   conversation: WorldInspectorConversation;
   target: Element | null;
   floating: boolean;
@@ -372,7 +379,23 @@ function InspectorResources({
     );
   }, [fileSelection.entry?.path, scope]);
 
-  if (!scope) return null;
+  // A shown window waiting for its host's session binds once and says it
+  // is loading, instead of an empty frame until the agent is clicked.
+  const bindRequested = useRef(false);
+  useEffect(() => {
+    if (scope || !target || !onBind || bindRequested.current) return;
+    bindRequested.current = true;
+    onBind();
+  }, [onBind, scope, target]);
+
+  if (!scope)
+    return createPortal(
+      <p className="world-inspector-loading" role="status">
+        Loading {conversation.label}…
+      </p>,
+      portalOwner,
+      worldInspectorWindowId(conversation),
+    );
 
   const inspectorState: WorkspaceInspectorState = {
     scope,

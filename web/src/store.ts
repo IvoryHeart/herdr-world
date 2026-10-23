@@ -3797,6 +3797,13 @@ export const store = {
     });
   },
 
+  /**
+   * Load a host's workspaces without focusing anything there, for a window
+   * restored on a host this page has not opened yet.
+   */
+  async loadConnectionSession(connectionId: string): Promise<void> {
+    await refreshNow(captureConnectionLease(connectionId), true);
+  },
   async focusQualifiedTarget(target: QualifiedFocusTarget): Promise<boolean> {
     if (!qualifiedRuntimeTargetIsCurrent(target)) return false;
     const lease = captureConnectionLease(target.connectionId);

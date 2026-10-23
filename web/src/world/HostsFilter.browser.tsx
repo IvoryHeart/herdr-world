@@ -4,6 +4,10 @@ import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { bridge, type ConnectionClient } from "../api";
 import { worldLocalStorage } from "../browserStorage";
+import {
+  readOfficePreferences,
+  writeOfficePreferences,
+} from "./officePreferences";
 import { WorktreeLifecycleDialog } from "../components/WorktreeLifecycleDialog";
 import { ContextMenu } from "../components/ContextMenu";
 import { WorktreeOpenDialog } from "../components/WorktreeOpenDialog";
@@ -69,6 +73,7 @@ const requestedView =
   new URLSearchParams(location.search).get("view") ?? "board";
 const coldHost =
   operation === "cold-host" ||
+  operation === "cold-master" ||
   operation === "navigator" ||
   operation === "spaces-navigator" ||
   operation === "bare-navigator" ||
@@ -228,7 +233,18 @@ function snapshot() {
               ],
               tabs: fixtureTabs,
               panes: dense && id === "beta" ? densePanes : fixturePanes,
-              agents: [],
+              // Beta's agent is the Town master, by its Herdr name.
+              agents:
+                operation === "cold-master" && id === "beta"
+                  ? [
+                      {
+                        pane_id: "shared",
+                        terminal_id: "shared",
+                        agent: "codex",
+                        name: "betamaster",
+                      },
+                    ]
+                  : [],
               ...(operation === "watch-unavailable"
                 ? {
                     watch_admission: {
@@ -718,6 +734,26 @@ async function operationalScenario(unmount: () => void) {
     check(
       store.get().activeConnectionId === "alpha",
       "The Office room changed the Spaces owner",
+    );
+    return;
+  }
+  if (operation === "cold-master") {
+    // On load, Town docks its master's window without focusing it. That
+    // host's session has not loaded yet; the window must fill in by itself,
+    // never stay an empty frame until the agent is clicked.
+    await waitFor(
+      () =>
+        !![
+          ...document.querySelectorAll<HTMLElement>(".world-floating-terminal"),
+        ].find((window) => window.querySelector(".workspace-inspector-head")),
+      `The docked master's window stayed empty: ${
+        document.querySelector(".world-floating-terminal")?.textContent ??
+        "no window"
+      }`,
+    );
+    check(
+      store.get().activeConnectionId === "alpha",
+      "Filling in the docked master's window changed the Spaces owner",
     );
     return;
   }
@@ -2054,6 +2090,11 @@ async function run() {
   localStorage.clear();
   // The legacy operational preference must not become an overview filter.
   worldLocalStorage.setItem("worldSelectedConnection", "beta");
+  if (operation === "cold-master")
+    writeOfficePreferences(worldLocalStorage, {
+      ...readOfficePreferences(worldLocalStorage),
+      townMaster: "betamaster",
+    });
   history.replaceState(null, "", "/board");
   initializeLayoutPreferences();
   if (

@@ -640,6 +640,11 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
             }}
             terminalColor={inspectorColor(conversation)}
             townSkin={view === "town"}
+            onBind={() =>
+              void store
+                .loadConnectionSession(conversation.connectionId)
+                .catch(() => undefined)
+            }
             onResourceFocus={() => {
               intentRequestRef.current++;
               const id = worldInspectorWindowId(conversation);

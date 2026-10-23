@@ -63,6 +63,7 @@ export const hostFilterCases = [
     "arrangement-retirement",
     "close-all",
   ].map((operation) => ({ width: 1440, operation, view: "board" })),
+  { width: 1440, operation: "cold-master", view: "town" },
   ...[1440, 390].flatMap((width) =>
     ["town"].flatMap((view) =>
       [
@@ -107,7 +108,8 @@ export type HostFilterCase = (typeof hostFilterCases)[number];
 export function hostFilterGroup({
   operation,
 }: HostFilterCase): HostFilterGroup {
-  if (operation === "worktree-resource-cold") return "cold";
+  if (operation === "worktree-resource-cold" || operation === "cold-master")
+    return "cold";
   if (operation === "pending-inspector-timeout") return "inspector-timeout";
   if (operation === "worktree-resource-timeout") return "timeouts";
   if (operation.startsWith("pending-inspector")) return "pending";
