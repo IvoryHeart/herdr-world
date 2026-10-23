@@ -82,6 +82,9 @@ jobs:
           path: ~/.bun/install/cache
           key: bun-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('bun.lock') }}
       - run: bun install --frozen-lockfile
+      - name: Run native installer harness regressions
+        if: runner.os == 'Windows'
+        run: bun run test ./scripts/installer-upgrade.test.ts
       # The published baseline never changes for a tag: download it once per
       # platform instead of on every run (see releaseMirror).
       - name: Cache the baseline release assets
