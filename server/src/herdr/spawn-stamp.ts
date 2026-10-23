@@ -117,6 +117,34 @@ function stripArgv(args: readonly string[]) {
     process.argv.splice(2, process.argv.length - 2, ...args);
 }
 
+/**
+ * After World launched an agent for a request naming its parent
+ * (`parent_pane_id`, and `parent_terminal_id` when known), stamp the spawn.
+ * A failed stamp is only logged: the agent runs either way.
+ */
+export async function stampLaunchParent(
+  call: Call,
+  params: Record<string, unknown>,
+  childPaneId: string,
+  logger: { warn(message: string, fields: { detail: string }): void },
+) {
+  const parent =
+    typeof params.parent_pane_id === "string" ? params.parent_pane_id : "";
+  if (!parent) return;
+  await stampSpawn(
+    call,
+    childPaneId,
+    parent,
+    typeof params.parent_terminal_id === "string"
+      ? params.parent_terminal_id
+      : undefined,
+  ).catch((error) =>
+    logger.warn("World could not stamp the agent it started", {
+      detail: String(error),
+    }),
+  );
+}
+
 export async function runSpawnStampCommand(
   args: string[],
   appVersion: string,

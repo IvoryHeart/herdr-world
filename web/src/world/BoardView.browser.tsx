@@ -211,6 +211,14 @@ const emptyDocument = (): BoardDocument => ({
   relations: { spawns: [], groups: [] },
 });
 let saved: BoardDocument = emptyDocument();
+// `?colors=demo` (for screenshots) starts with chosen workspace and host colours.
+if (params.get("colors") === "demo")
+  saved.layout.colors = {
+    "studio:w1": "teal",
+    "studio:w2": "pink",
+    "@host:studio": "purple",
+    "@host:build-box": "orange",
+  };
 function apply(ops: BoardOp[]) {
   const next = structuredClone(saved);
   for (const op of ops) {
@@ -1679,6 +1687,49 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
           "a workspace card counts its agents",
         );
       }
+    },
+  ],
+  [
+    "a host's colour tints its zone and is saved under the host",
+    async () => {
+      const label = host.querySelector<HTMLElement>(
+        ".board-zone-label[data-host]",
+      )!;
+      const swatch =
+        label.querySelector<HTMLButtonElement>(".board-zone-color")!;
+      check(Boolean(swatch), "a host's zone label offers its colour");
+      swatch.click();
+      await waitFor(
+        () =>
+          document.querySelector(
+            '.color-swatch-popover [aria-label="Colour purple"]',
+          ) !== null,
+        "the host colour button did not open the palette",
+      );
+      document
+        .querySelector<HTMLButtonElement>(
+          '.color-swatch-popover [aria-label="Colour purple"]',
+        )!
+        .click();
+      await waitFor(
+        () =>
+          Object.entries(saved.layout.colors ?? {}).some(
+            ([key, color]) => key.startsWith("@host:") && color === "purple",
+          ),
+        "choosing a host colour did not save it under the host",
+      );
+      const zone = label.closest<HTMLElement>(".board-zone")!;
+      await waitFor(
+        () => zone.style.getPropertyValue("--board-zone") !== "",
+        "a host's colour does not tint its zone",
+      );
+      // Tabs keep their own colours: a host's is not inherited.
+      check(
+        !Object.keys(saved.layout.colors ?? {}).some(
+          (key) => !key.startsWith("@host:"),
+        ),
+        "choosing a host colour must not colour its workspaces or tabs",
+      );
     },
   ],
   [

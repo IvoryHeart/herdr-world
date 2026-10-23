@@ -55,40 +55,6 @@
   font: inherit;
 }
 
-/* Teams: walls around desks that know each other, and their connectors. */
-.town-teams {
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 1px;
-  height: 1px;
-  overflow: visible;
-  pointer-events: none;
-}
-/* Zoomed out, room cards cover the desks the walls would surround. */
-.town-world[data-level="town"] .town-teams,
-.town-world[data-level="overview"] .town-teams {
-  display: none;
-}
-.town-team-wall {
-  fill: none;
-  stroke-width: calc(2px * max(1, var(--iz)));
-  opacity: 0.9;
-}
-.town-team-link {
-  stroke: rgba(255, 244, 220, 0.85);
-  stroke-width: calc(2px * max(1, var(--iz)));
-  stroke-linecap: round;
-}
-.town-team-link[data-kind="manual"] {
-  stroke-dasharray: 2 6;
-}
-.town-team-wall[data-current="false"],
-.town-team-link[data-current="false"] {
-  stroke-dasharray: 6 6;
-  opacity: 0.4;
-}
-
 /* Constant on-screen size, centred on a world point. */
 .town-building-sign,
 .town-reception,
@@ -1627,4 +1593,18 @@
   background: #1d1708;
   border: 1px solid #5a4410;
   border-radius: 6px;
+}
+
+/* A room's or building's colour, beside its name. */
+.town-place-color {
+  width: 22px;
+  height: 22px;
+  background: rgba(0, 0, 0, 0.25);
+}
+.town-place-color i {
+  width: 11px;
+  height: 11px;
+}
+.town-reception-title .town-place-color {
+  margin-right: 4px;
 }

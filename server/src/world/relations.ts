@@ -65,3 +65,27 @@ export function spawnRecordOps(
     ...(claims.length ? [{ op: "spawn.record" as const, claims }] : []),
   ];
 }
+
+/**
+ * Keep the spawn claims a snapshot shows, and drop the closed ones, in
+ * Board's store; written and published only when something changed. A
+ * failure is logged: the snapshot reply goes out either way.
+ */
+export function recordSpawnClaims(
+  store: {
+    get(): BoardDocument;
+    patch(ops: BoardOp[]): { revision: number };
+  },
+  snapshot: WorldSnapshotResult,
+  publish: (revision: number) => void,
+  logger: { warn(message: string, fields: { detail: string }): void },
+): void {
+  try {
+    const ops = spawnRecordOps(store.get(), snapshot, Date.now());
+    if (ops.length) publish(store.patch(ops).revision);
+  } catch (error) {
+    logger.warn("World could not record spawn claims", {
+      detail: String(error),
+    });
+  }
+}

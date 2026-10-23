@@ -40,7 +40,7 @@ import { readGuiSettings, updateGuiSettings } from "./config/gui-settings";
 import { cliCommands, runCli, topLevelHelp } from "./cli";
 import { CONTINUE_TO_SERVER, defaultCliContext } from "./cli/command";
 import { runTaskSummaryCommand } from "./herdr/task-summary";
-import { stampSpawn } from "./herdr/spawn-stamp";
+import { stampLaunchParent } from "./herdr/spawn-stamp";
 import {
   handleWorldCliEndpoint,
   WORLD_CLI_IDLE_TIMEOUT_SECONDS,
@@ -131,10 +131,7 @@ import {
 import { runProcessWithCodeTimeout, shQuote } from "./utils/process-utils";
 import { rpcLogLevel } from "./utils/rpc-logging";
 import { DOWNLOAD_TIMEOUT_MS } from "./workspace/file-constants";
-import {
-  WorldSnapshotService,
-  type WorldSnapshotResult,
-} from "./world/snapshot";
+import { WorldSnapshotService } from "./world/snapshot";
 import { WorldWatchlistRegistry } from "./world/watchlist";
 import {
   clientBoardOps,
@@ -153,7 +150,8 @@ import {
 import { linkedNoteText, sendNote } from "./world/board-send";
 import { checkAnchor } from "./world/board-anchor";
 import { herdrEventName } from "./utils/herdr-events";
-import { spawnRecordOps } from "./world/relations";
+import { recordSpawnClaims } from "./world/relations";
+import { moveWorkspaceIds } from "./world/move-workspace-ids";
 import { agentKinds, launchAgent } from "./agent/launch";
 import { profileLaunch } from "./agent/profile-launch";
 import { ProfileStore } from "./agent/profile-store";
@@ -552,44 +550,10 @@ function publishProfilesChanged(revision: number) {
 }
 
 /**
- * Keep the spawn claims a snapshot shows (world/relations.ts), so they
- * outlive their Herdr tokens. Written only when a claim is new or changed.
- */
-function recordSpawnClaims(snapshot: WorldSnapshotResult) {
-  try {
-    const ops = spawnRecordOps(board().get(), snapshot, Date.now());
-    if (ops.length) publishBoardChanged(board().patch(ops).revision);
-  } catch (error) {
-    logger.warn("World could not record spawn claims", {
-      detail: String(error),
-    });
-  }
-}
-
-/**
  * A tab Herdr closed on the current runtime loses its saved colour, so colours
  * of closed tabs do not accumulate. The tab's plain key could also be an older
  * Herdr workspace's ID; it goes only once Herdr says no such workspace exists.
  */
-/** The host's workspace IDs after a move, with both rooms of the move. */
-async function moveWorkspaceIds(
-  call: (method: string, params: Record<string, unknown>) => Promise<unknown>,
-  moved: { workspace_id: string; source_workspace_id?: string },
-) {
-  const ids = new Set([moved.workspace_id]);
-  if (moved.source_workspace_id) ids.add(moved.source_workspace_id);
-  try {
-    const listed = (await call("workspace.list", {})) as {
-      workspaces?: { workspace_id?: unknown }[];
-    };
-    for (const entry of listed?.workspaces ?? [])
-      if (typeof entry.workspace_id === "string") ids.add(entry.workspace_id);
-  } catch {
-    // The two rooms of the move are what a colliding tab key usually needs.
-  }
-  return ids;
-}
-
 async function dropClosedTabSettings(
   connectionId: string,
   tabId: string,
@@ -1310,7 +1274,7 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
       )
         transfer = snapshotAdmission.open(ws, id);
       const snapshot = await snapshots.snapshot(params);
-      recordSpawnClaims(snapshot);
+      recordSpawnClaims(board(), snapshot, publishBoardChanged, logger);
       await sendWorldSnapshotReply(
         id,
         snapshot,
@@ -1800,21 +1764,8 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
         }
       }
       // A Board note's agent spawned this one: stamp it so World groups them.
-      const parent =
-        typeof p.parent_pane_id === "string" ? p.parent_pane_id : "";
-      if (parent && result.pane_id && requestIsCurrent())
-        await stampSpawn(
-          (rpc, rpcParams) => herdr.call(rpc, rpcParams, 10_000),
-          result.pane_id,
-          parent,
-          typeof p.parent_terminal_id === "string"
-            ? p.parent_terminal_id
-            : undefined,
-        ).catch((error) =>
-          logger.warn("World could not stamp the agent it started", {
-            detail: String(error),
-          }),
-        );
+      if (result.pane_id && requestIsCurrent())
+        await stampLaunchParent(call, p, result.pane_id, logger);
       sendReply({ id, result }, method);
     } catch (error) {
       sendError(`${method}-error`, error);

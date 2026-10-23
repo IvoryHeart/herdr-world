@@ -51,6 +51,11 @@ export const TOWN_CARPETS = [
 export const townCarpetFor = (roomKey: string) =>
   TOWN_CARPETS[townHash(roomKey) % TOWN_CARPETS.length]!;
 
+/** A room's chosen colour as its carpet: darkened to sit under the tables. */
+export const townCarpetOf = (hex: string) => townShade(hex, -0.38);
+/** A host's chosen colour as its building's roof. */
+export const townRoofOf = (hex: string) => townShade(hex, -0.15);
+
 function ellipse(
   g: CanvasRenderingContext2D,
   cx: number,
@@ -316,6 +321,8 @@ export type TownFurniture = {
   chairBack: TownCanvas;
   /** The desk's terminal colour, which names its table. */
   colorFor: (deskKey: string) => string;
+  /** A room's carpet when its workspace has a chosen colour. */
+  carpetFor?: (roomKey: string) => string | undefined;
 };
 
 export function paintTownInterior(
@@ -392,7 +399,7 @@ export function paintTownInterior(
       (room.y - building.y) * T + 3,
       room.w * T - 6,
       room.h * T - 6,
-      townCarpetFor(room.key),
+      furniture?.carpetFor?.(room.key) ?? townCarpetFor(room.key),
       false,
     );
   const lobby = (building.lobbyY - building.y) * T;

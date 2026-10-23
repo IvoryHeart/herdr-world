@@ -21,7 +21,7 @@ import {
   worldMotionPreference,
   type WorldFrames,
 } from "../worldFrameScheduler";
-import { worldRendererCountersEnabled } from "../devtools/renderer";
+import { diagnostics } from "./townDiagnostics";
 import { DEVTOOLS } from "../devtools/flag";
 
 /** Why Town drew a frame and what it asked for next (development trace). */
@@ -58,7 +58,7 @@ import {
   type TownLayout,
 } from "./townLayout";
 import type { TownModel } from "./townModel";
-import type { TerminalColor } from "../terminalColor";
+import { TERMINAL_COLOR_HEX, type TerminalColor } from "../terminalColor";
 import { profileLookFor, profilesSnapshot } from "../agentProfiles";
 import {
   paintTownFacade,
@@ -66,6 +66,8 @@ import {
   paintTownInterior,
   paintTownRoof,
   TOWN_HOST_THEMES,
+  townCarpetOf,
+  townRoofOf,
   type TownHostTheme,
 } from "./townPaint";
 import {
@@ -81,82 +83,7 @@ import {
   type TownLook,
 } from "./townSprites";
 
-export type TownRendererDiagnostics = {
-  mounts: number;
-  destroys: number;
-  activeApplications: number;
-  activeTickers: number;
-  frames: number;
-  sceneRenders: number;
-  ready: boolean;
-  reducedMotion: boolean;
-  interactionPaused: boolean;
-  lastError: string | null;
-  level: TownLevel | null;
-  zoom: number;
-  actors: number;
-  walking: number;
-  /** Agents opened by the user whose goal is their own desk. */
-  summoned: string[];
-  desks: number;
-  /** Animated node counts, kept compatible with existing browser evidence. */
-  animation: {
-    characters: number;
-    monitors: number;
-    statuses: number;
-    quests: number;
-  };
-  layout: null | {
-    width: number;
-    height: number;
-    buildings: number;
-    rooms: number;
-    /** The container shape: stacked buildings, room and desk columns. */
-    formFactor: string;
-    roomColumns: number;
-    deskColumns: number;
-    /** Room and building placement (townGeometryKey), to see reflows. */
-    geometry: string;
-  };
-  /** Drag outcomes as drawn: lifts, landings (each with its dust), returns. */
-  drags: { lifts: number; landings: number; returns: number; dust: number };
-};
-
-declare global {
-  interface Window {
-    __HERDR_WORLD_FORCE_RENDERER_FAILURE__?: boolean;
-    __HERDR_TOWN_RENDERER__?: TownRendererDiagnostics;
-  }
-}
-
-function diagnostics(): TownRendererDiagnostics {
-  const enabled = worldRendererCountersEnabled();
-  if (enabled && window.__HERDR_TOWN_RENDERER__)
-    return window.__HERDR_TOWN_RENDERER__;
-  const value: TownRendererDiagnostics = {
-    mounts: 0,
-    destroys: 0,
-    activeApplications: 0,
-    activeTickers: 0,
-    frames: 0,
-    sceneRenders: 0,
-    ready: false,
-    reducedMotion: false,
-    interactionPaused: false,
-    lastError: null,
-    level: null,
-    zoom: 1,
-    actors: 0,
-    walking: 0,
-    summoned: [],
-    desks: 0,
-    animation: { characters: 0, monitors: 0, statuses: 0, quests: 0 },
-    layout: null,
-    drags: { lifts: 0, landings: 0, returns: 0, dust: 0 },
-  };
-  if (enabled) window.__HERDR_TOWN_RENDERER__ = value;
-  return value;
-}
+export type { TownRendererDiagnostics } from "./townDiagnostics";
 
 export type TownSceneState = {
   selectedKey: string | null;
@@ -405,10 +332,20 @@ export async function createTownRenderer(
 
   const themeFor = (hostKey: string): TownHostTheme => {
     const host = model?.hosts.get(hostKey);
-    return TOWN_HOST_THEMES[
-      (host?.deterministicSkin.themeIndex ?? townHash(hostKey)) %
-        TOWN_HOST_THEMES.length
-    ]!;
+    const theme =
+      TOWN_HOST_THEMES[
+        (host?.deterministicSkin.themeIndex ?? townHash(hostKey)) %
+          TOWN_HOST_THEMES.length
+      ]!;
+    // A host's chosen colour is its roof; walls and floors keep the theme.
+    const chosen = model?.placeColors.hosts.get(hostKey);
+    return chosen
+      ? { ...theme, roof: townRoofOf(TERMINAL_COLOR_HEX[chosen]) }
+      : theme;
+  };
+  const carpetFor = (roomKey: string) => {
+    const chosen = model?.placeColors.rooms.get(roomKey);
+    return chosen ? townCarpetOf(TERMINAL_COLOR_HEX[chosen]) : undefined;
   };
 
   const buildScene = () => {
@@ -537,6 +474,7 @@ export async function createTownRenderer(
             chair: sprites.chair,
             chairBack: sprites.chairBack,
             colorFor: deskColor,
+            carpetFor,
           }),
         ),
       );
@@ -1725,9 +1663,11 @@ export async function createTownRenderer(
     },
     setScene(nextModel, nextLayout, nextState) {
       const layoutChanged = nextLayout !== layout;
-      // Tables are baked with their desk's colour, so a new colour rebuilds.
+      // Tables, carpets and roofs are baked with their colours (and tables
+      // with their pins), so a new colour or pin rebuilds.
       const colorsChanged =
         nextModel.deskColors !== model?.deskColors ||
+        nextModel.placeColors !== model?.placeColors ||
         nextModel.deskPins !== model?.deskPins;
       const first = !layout;
       model = nextModel;
@@ -1740,7 +1680,8 @@ export async function createTownRenderer(
         request("scene");
         return;
       }
-      const key = `${nextLayout.width}x${nextLayout.height}:${nextLayout.buildings.map((b) => `${b.hostKey}@${b.x},${b.y},${b.w},${b.h}:${b.rooms.map((r) => r.cells.map((c) => (c.deskKey ? `${c.deskKey}#${c.seats}#${deskColor(c.deskKey)}${model!.deskPins.has(c.deskKey) ? "#pin" : ""}` : "-")).join(",")).join("|")}`).join(";")}`;
+      const places = nextModel.placeColors;
+      const key = `${[...places.rooms].join(",")}/${[...places.hosts].join(",")}/${nextLayout.width}x${nextLayout.height}:${nextLayout.buildings.map((b) => `${b.hostKey}@${b.x},${b.y},${b.w},${b.h}:${b.rooms.map((r) => r.cells.map((c) => (c.deskKey ? `${c.deskKey}#${c.seats}#${deskColor(c.deskKey)}${model!.deskPins.has(c.deskKey) ? "#pin" : ""}` : "-")).join(",")).join("|")}`).join(";")}`;
       if (key !== sceneKey) {
         sceneKey = key;
         buildScene();
