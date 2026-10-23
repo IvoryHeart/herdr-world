@@ -562,14 +562,9 @@
   white-space: nowrap;
 }
 
-/* The status stays whole; only the place after it gives way. */
 .workspace-inspector-location-text:has(.workspace-inspector-where) {
   display: flex;
   align-items: center;
-}
-
-.workspace-inspector-state {
-  flex: 0 0 auto;
 }
 
 .workspace-inspector-where {
@@ -580,4 +575,81 @@
 
 .workspace-inspector-location svg {
   flex: 0 0 auto;
+}
+
+/* The agent's icon sits on its terminal colour and opens its settings. */
+.workspace-inspector-agent-avatar.is-settings {
+  padding: 0;
+  background: var(--agent-colour, var(--accent-soft));
+  cursor: pointer;
+}
+.workspace-inspector-agent-avatar.is-settings:hover {
+  filter: brightness(1.12);
+}
+.workspace-inspector-agent-avatar.is-settings:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.workspace-inspector-agent-settings {
+  display: grid;
+  gap: 8px;
+  min-width: 200px;
+  padding: 10px;
+}
+.workspace-inspector-agent-settings-label {
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* The agent's state as a badge on its icon: a tick when done, a spinner while
+   working, ! when it needs you and a grey dot when idle. */
+.workspace-inspector-agent-avatar {
+  position: relative;
+  overflow: visible;
+}
+.workspace-inspector-agent-badge {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  display: grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--viewer-header-bg, var(--panel));
+  border-radius: 50%;
+  background: var(--muted);
+  color: var(--bg);
+  font:
+    800 9px / 1 system-ui,
+    sans-serif;
+  box-sizing: border-box;
+}
+.workspace-inspector-agent-badge[data-tone="done"] {
+  background: var(--green);
+}
+.workspace-inspector-agent-badge[data-tone="blocked"] {
+  background: var(--yellow);
+}
+.workspace-inspector-agent-badge[data-tone="working"] {
+  background: var(--panel);
+  border-color: var(--blue);
+  border-right-color: transparent;
+  animation: workspace-inspector-badge-spin 0.9s linear infinite;
+}
+.workspace-inspector-agent-badge[data-tone="unknown"] {
+  display: none;
+}
+@keyframes workspace-inspector-badge-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .workspace-inspector-agent-badge[data-tone="working"] {
+    animation: none;
+    border-color: var(--blue);
+    background: var(--blue);
+  }
 }
