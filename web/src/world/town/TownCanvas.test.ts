@@ -39,6 +39,8 @@ test.skipIf(!chrome).each([
   [960, 1080, "extended"],
   [1440, 900, "extended"],
   [1080, 1920, "extended"],
+  // Every one of 130 protected desks keeps its browser target past both bounds.
+  [390, 844, "protected"],
 ])(
   "the Office town renders, queues blocked agents and zooms into rooms at %ipx by %ipx (%s)",
   async (width, height, scale) => {
@@ -104,7 +106,7 @@ test.skipIf(!chrome).each([
         }),
         "Office town browser check",
         // Extended towns at large windows paint far more pixels in software.
-        scale === "extended" ? 80_000 : 40_000,
+        scale === "extended" || scale === "protected" ? 80_000 : 40_000,
       );
       expect(failures).toEqual([]);
     } finally {

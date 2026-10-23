@@ -174,8 +174,8 @@ function topology(seed: number): Topology {
       // Extended rooms: agents spawning agents fill the first rooms far past
       // the owner's 2026-10-17 estimate of 11-15 desks.
       const extended =
-        scale === "extended" && host === HOSTS[0]
-          ? [100, 50, 24][roomIndex]
+        (scale === "extended" || scale === "protected") && host === HOSTS[0]
+          ? [scale === "protected" ? 160 : 100, 50, 24][roomIndex]
           : 0;
       const deskCount = extended
         ? extended
@@ -762,6 +762,13 @@ async function run() {
       ?.tabs ?? [];
   const blocked = base.agentPanes.filter((_, index) => index % 23 === 4);
   for (const pane of blocked) pane.agent_status = "blocked";
+  if (scale === "protected")
+    for (const pane of base.agentPanes) {
+      const index = Number(pane.tab_id?.replace("local-orbit-tab-", ""));
+      if (pane.workspace_id === "local-orbit" && index < 130)
+        pane.agent_status = "blocked";
+    }
+
   const asker = base.agentPanes.find(
     (pane) =>
       pane.agent_status === "idle" && pane.workspace_id === "local-orbit",
@@ -873,6 +880,52 @@ async function run() {
       ) !== null,
     "town targets did not finish progressive admission",
   );
+
+  if (scale === "protected" && mode === "test") {
+    const rendered = window.__HERDR_TOWN_RENDERER__!;
+    const visible = new Set(
+      [
+        ...host.querySelectorAll<HTMLElement>(
+          '.world-semantic-target[data-kind="desk"]',
+        ),
+      ].map((target) => JSON.parse(target.dataset.targetKey!)[2] as string),
+    );
+    check(
+      Array.from(
+        { length: 130 },
+        (_, index) => `local-orbit-tab-${index}`,
+      ).every((key) => visible.has(key)),
+      "protected desks past127 lost their browser targets",
+    );
+    const orbit = [...visible].filter((key) =>
+      key.startsWith("local-orbit-tab-"),
+    ).length;
+    check(
+      host
+        .querySelector<HTMLButtonElement>(
+          'button[aria-label^="Expand room orbit"]',
+        )
+        ?.textContent?.trim() === `+${160 - orbit}`,
+      "protected desks are included in the hidden plaque count",
+    );
+    check(
+      rendered.lastError === null,
+      `protected-room renderer error: ${rendered.lastError}`,
+    );
+    check(
+      rendered.activeApplications === 1 &&
+        document.querySelectorAll("canvas[data-office-canvas]").length === 1,
+      "protected-room StrictMode duplicated the renderer",
+    );
+    root.unmount();
+    await settle();
+    check(
+      rendered.activeApplications === 0 &&
+        document.querySelectorAll("canvas[data-office-canvas]").length === 0,
+      "protected-room unmount left a renderer",
+    );
+    return;
+  }
 
   if (mode === "preview") {
     // `&zoom=room`: into the first room, where an agent spawned another.
