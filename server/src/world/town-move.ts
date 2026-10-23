@@ -40,7 +40,11 @@ export type TownMoveContext = {
 /** Shared execution only. RPC and CLI retain their transport and argument rules. */
 export async function executeTownMove(
   context: TownMoveContext,
-  request: TownMoveRequest,
+  prepare:
+    | TownMoveRequest
+    | (() => Promise<
+        TownMoveRequest | Extract<MoveOutcome, { status: "refused" }>
+      >),
 ): Promise<MoveOutcome> {
   let queue = context.queues.get(context.connectionId);
   if (!queue) {
@@ -48,6 +52,7 @@ export async function executeTownMove(
     context.queues.set(context.connectionId, queue);
   }
   let colorsBefore!: BoardDocument["layout"]["colors"];
+  let request: TownMoveRequest;
   const result = await queue(async (): Promise<MoveOutcome> => {
     if (!context.isCurrent())
       return {
@@ -58,6 +63,15 @@ export async function executeTownMove(
     // The move functions reread topology after admission to the queue. Capture
     // colours here too: a preceding move or a close can have changed them.
     colorsBefore = context.board.get().layout.colors;
+    const prepared = typeof prepare === "function" ? await prepare() : prepare;
+    if ("status" in prepared) return prepared;
+    request = prepared;
+    if (!context.isCurrent())
+      return {
+        status: "refused",
+        reason: "stale",
+        message: "The host reconnected. Read Groups again.",
+      };
     return request.kind === "desk"
       ? moveDesk(context.call, { ...request, isCurrent: context.isCurrent })
       : movePane(context.call, { ...request, isCurrent: context.isCurrent });
@@ -72,13 +86,13 @@ export async function executeTownMove(
           ? moveFollowOps(
               context.board.get(),
               context.connectionId,
-              request.kind === "desk" ? request.tab_id : null,
+              request!.kind === "desk" ? request!.tab_id : null,
               result,
-              request.kind === "desk"
+              request!.kind === "desk"
                 ? {
                     before: colorsBefore,
                     workspaceIds: await moveWorkspaceIds(context.call, result),
-                    inherited: request.inherited_color === true,
+                    inherited: request!.inherited_color === true,
                   }
                 : undefined,
             )

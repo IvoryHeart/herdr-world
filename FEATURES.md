@@ -436,6 +436,16 @@ when piped, with stable exit codes:
   is display-only Herdr pane metadata, so it needs no `--herdr`; the parent
   it names is the child's claim.
 - `whoami`, `ls`, `history [--actor]`.
+- `group create|add|remove|lead|reviewers|now|list|show|delete|promote`:
+  World-owned Teams and Pods, with `pod` and `team` aliases. Lead/reviewer
+  edits follow the owner/FirstMate crew rule; sender claims are attribution,
+  not authenticated permission. Exclusive-role transfers need `--replace --yes`,
+  deletion needs `--yes`, and Team promotion needs a complete explicit address mapping.
+  `group show` includes recent sender attribution (128 changes retained globally).
+  Room/Desk groups are projected from Herdr. Adding with `--herdr` reuses Town's
+  move: Room moves the whole desk and prints every affected agent first; Desk
+  moves one pane. Results report confirmed Done/Partly done/Not done/Unknown
+  outcomes and locations, with no automatic retry on Unknown.
 
 World checks who is calling: the CLI sends its `HERDR_PANE_ID`, and the
 service accepts it only when the calling process runs in that pane of a local

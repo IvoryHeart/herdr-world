@@ -354,12 +354,43 @@ terminals are deduplicated across member refs; status rolls up worst first:
 needs you, failed, working, finished, quiet, unknown. Open PRs are deduplicated
 from existing source links matched by connection, generation, pane and session;
 merged/closed PRs are excluded. A Pod defaults to a displayed limit of two,
-and exceeding the limit sets a warning without preventing any edit. The Now
+and exceeding the limit sets a warning without preventing any edit. GitHub's
+source status distinguishes current counts, stale cached work and unavailable
+counts; only current counts produce a limit warning. The Now
 list is the stored ordered queue. This read model copies no source facts into
 the Board and grants no downstream operation lease.
 
-The Groups CLI, roster, frames and one-time import build on this foundation;
-existing user controls are unchanged at this layer.
+The Groups CLI uses this read model; the roster and frames consume the same
+facts rather than duplicating topology or source ownership.
+
+### Group CLI and Herdr membership moves
+
+`herdr-world group` supplies create, add, remove, lead, reviewers, now, list,
+show, delete and promote. `pod`/`team` aliases supply the kind. Names must resolve
+uniquely; explicit addresses preserve away Pod members. Teams require a current
+terminal on their connection. Promotion preserves identity and requires an
+explicit complete terminal-to-address mapping. An exclusive-role transfer needs
+`--replace --yes`; deleting needs `--yes` and never deletes agents.
+Lead/reviewer edits follow the owner/FirstMate crew rule across every verb.
+There is no caller identity allowlist or authenticated role gate. The actual
+CLI actor supplies the reported/inferred sender claim, or unknown when absent.
+Group changes use bounded `relations.group_changes`, outside Board CLI undo.
+
+Rooms/Desks remain unpersisted. Their create/delete/role edits are refused.
+`group add DESTINATION AGENT --herdr` reads a complete effect from the captured
+connection/generation before moving. Room moves print the whole desk and every
+agent; Desk moves print the selected pane and destination. JSON mode sends this
+preview to stderr and retains one JSON result on stdout. Its hash binds the
+qualified identities, names/sessions and destination; queue-entry rereading
+refuses a changed plan, and native move admission checks terminal witnesses.
+`--allow-close-room` separately opts into closing a source room's last desk.
+
+`group-move.ts` uses the same injected service-owned queue as RPC through
+`town-move.ts`, with no default-host fallback or RPC context dependency. The
+existing native rollback, uncertain-step handling and post-queue observed Board
+reconciliation apply unchanged. CLI results retain the real move outcome and
+confirmed locations: Done, Partly done, Not done, or Unknown. Failure returns a
+nonzero exit plus the structured result; Unknown is never automatically retried.
 
 ## Agent CLI
 
@@ -382,7 +413,7 @@ their descendants through `/proc`, and accepts its `HERDR_PANE_ID` only when it
 is found there on a local Herdr (`server/src/world/caller-identity.ts`). A call
 naming no pane is not looked up and is labelled "terminal with no pane"; a
 claim that is not a Herdr pane ID is refused. Unverified callers share one
-allowance of open questions. Changes, questions and results live
+allowance of open questions. Board changes, questions and results live
 in `world-ledger.json` beside the Board file (`HERDR_WORLD_LEDGER_PATH`
 overrides it). To try it against a development service, run the CLI with the
 same `HOME` (or set `HERDR_WORLD_URL` to its loopback URL and

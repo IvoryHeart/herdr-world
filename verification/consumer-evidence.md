@@ -73,7 +73,7 @@ Direct exhaustive and service evidence fits these pure finite validation rules
 and the existing atomic Board write. No new scheduling or authenticated caller
 protocol is introduced. Board/Town browser checks remain necessary for real
 layout and gesture outcomes. This does not prove human-only role editing,
-permanent audit retention, or future Groups CLI/roster behavior.
+permanent audit retention, or untested Groups roster behavior.
 
 ### Shared Town move execution (Q43)
 
@@ -88,6 +88,34 @@ Board following outside the move queue. Existing `desk-move.test.ts` retains
 the full native move/rollback fixtures. The fixture was moved unchanged to a
 shared test helper. These controlled promise schedules and actual transformations
 are direct bounded adapter evidence, not a general temporal progress proof.
+
+### Group CLI and shared Town moves (Q43)
+
+The CLI's allowed/forbidden cases follow the stored/projected Group ownership
+requirements: aliases do not change kind, ambiguous names never choose a member,
+lead/builder transfers need explicit confirmation, and promotion requires every
+terminal-to-address mapping. `world-cli-groups.test.ts` exercises the actual
+service edits, retained deletion attribution and role preservation;
+`cli/world-groups.test.ts` checks parser intent and preview-before-mutation output.
+These edits have recent Group attribution rather than Board ledger undo.
+
+`group-move.test.ts` drives the real native move orchestration and the actual CLI
+HTTP service. A controlled queue blocker demonstrates the same injected queue as
+RPC, changed occupants refuse before any move, retired queued leases make zero
+Herdr calls, and terminal witnesses refuse changes after preflight. Known partial
+failure reconciles Board anchors from observed terminals; lost replies with
+unreadable topology return Unknown without retry. `town-move.test.ts` retains
+queue-versus-Board-follow ordering checks, while native desk/pane tests retain
+rollback, last-room consent and uncertain-step contracts. Source roll-up tests
+distinguish current, stale and unknown work so unavailable counts cannot claim
+a confirmed limit warning.
+
+Direct finite cases and controlled promise schedules are the proportionate
+alternative here: they execute the production transforms and adapters, rather
+than modeling a duplicate CLI parser. This does not authenticate sender claims,
+prove every external Herdr interleaving, or extend the bounded history into an
+audit. The revision-only publisher extraction has no contract impact: it preserves the exact type/revision payload, explicit send context, synchronous error behavior and live client iteration. Full required registry/consumer verification remains a batch-close check.
+
 
 ## Review and remaining obligations
 

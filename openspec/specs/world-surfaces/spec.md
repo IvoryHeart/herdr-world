@@ -1823,6 +1823,8 @@ Away and ambiguous members SHALL contribute neither status nor work. Open PRs
 SHALL derive from existing source links qualified by connection, runtime
 generation, pane and session, with duplicate and merged/closed PRs excluded.
 The open-PR limit SHALL default to two for Pods and warn rather than enforce.
+Readers SHALL distinguish current, stale cached and unavailable source work;
+only a current source count SHALL produce an open-PR-limit warning.
 The Now list SHALL preserve the stored queue order. These derived facts SHALL
 NOT mutate source records or grant downstream action authority.
 
@@ -1840,6 +1842,42 @@ NOT mutate source records or grant downstream action authority.
 
 - **WHEN** a pane's old-generation or old-session work link remains cached
 - **THEN** the replacement occupant's Group does not count that link
+
+### Requirement: Group CLI
+
+The World CLI SHALL expose Group create/add/remove/lead/reviewers/now/list/show/
+delete/promote, with pod/team aliases. Stored create SHALL accept Team/Pod only.
+Names SHALL resolve uniquely; Pod addresses MAY remain away. Promotion SHALL
+require a complete explicit terminal-to-address mapping and preserve the Group
+identity. Exclusive-role transfers SHALL require explicit replacement confirmation.
+Deletion SHALL require confirmation and SHALL NOT delete agents. All edits SHALL
+retain actual sender claims and their basis in bounded recent Group history.
+Lead/reviewer edits SHALL be described as an owner/FirstMate crew rule, without
+claiming authenticated caller authorization. PR actions SHALL remain absent from
+the World CLI and its agent guide.
+
+Room/Desk create/delete/role edits SHALL be refused with Herdr guidance. A
+projected membership add SHALL require `--herdr`, an exact compatible current
+connection/generation, and a complete preview printed before mutation. Room add
+SHALL move the whole desk and name all affected agents; Desk add SHALL move one
+pane. The CLI SHALL use the same service-owned per-connection Town queue and
+native move orchestration as RPC, revalidate the preview at queue admission and
+refuse changed terminal witnesses. Closing the source's last room SHALL require
+separate opt-in. Existing rollback and observed Board reconciliation SHALL apply
+to failed partial moves. Results SHALL retain the actual outcome and confirmed
+locations as Done, Partly done, Not done or Unknown; Unknown SHALL NOT be retried
+automatically.
+
+#### Scenario: Another move or agent changes the printed effect
+
+- **WHEN** a queued Room/Desk CLI move no longer matches its printed preview
+- **THEN** no native move is made and the CLI asks the caller to read Groups again
+
+#### Scenario: A move loses its reply and topology cannot be observed
+
+- **WHEN** Herdr cannot confirm the result or current locations
+- **THEN** the CLI returns Unknown with a nonzero exit, preserves known evidence
+  and makes no automatic retry
 
 ### Requirement: Terminal colour
 

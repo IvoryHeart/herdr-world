@@ -153,12 +153,28 @@ describe("Group read model", () => {
       link("old-session", { sessionFingerprint: "previous-session" }),
       link("other-host", { connectionId: "connection-b" }),
     ];
-    const view = buildGroupViews([group], [connection()], { items, links })[0]!;
+    const view = buildGroupViews([group], [connection()], {
+      items,
+      links,
+      sources: [{ id: "github", state: "connected" }],
+    })[0]!;
     expect(view.openPullRequests.map((item) => item.key)).toEqual(["a", "b"]);
     expect(view.openPrLimit).toBe(1);
     expect(view.overLimit).toBe(true);
     expect(view.now).toEqual(["Review examples", "Ship"]);
     expect(buildGroupViews([pod()], [connection()])[0]?.openPrLimit).toBe(2);
+    for (const state of ["error", "disabled", "not_connected"] as const) {
+      const cached = buildGroupViews([group], [connection()], {
+        items,
+        links,
+        sources: [{ id: "github", state }],
+      })[0]!;
+      expect(cached.overLimit).toBe(false);
+      expect(cached.workState).toBe(state === "error" ? "stale" : "unknown");
+    }
+    expect(buildGroupViews([pod()], [connection()])[0]?.workState).toBe(
+      "unknown",
+    );
   });
 
   test("keeps cached Herdr projections visibly noncurrent without live rollups", () => {

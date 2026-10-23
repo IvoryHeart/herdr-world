@@ -417,10 +417,25 @@ to colour and pin its card, group with the agent that started it, report a
 task result, or ask you a question (`herdr-world ask "Ship it?" --options
 yes,no --wait`). A question shows first in Town's **Needs you** list with the
 agent's name; pick an option or type an answer, and the waiting agent carries
-on. `herdr-world history` shows who changed what, and `herdr-world undo` takes
-back a World-side change. A change marked **unverified** came from a process
+on. `herdr-world history` shows Board edits, and `herdr-world undo` conditionally
+takes back a recorded Board change. A change marked **unverified** came from a process
 World could not place in the pane it named, or from a terminal that named no
 pane.
+
+Use `herdr-world pod create Chat` to create a crew Group, then
+`herdr-world pod add Chat agent://connection-a/builder` to add an agent's
+qualified address. `pod now Chat "Review first" "Ship"` records an ordered
+Now list; `group list` includes World-owned Teams/Pods and Herdr-owned Rooms/Desks.
+Lead/reviewer edits are reserved to you or FirstMate by crew rule; World records
+the sender claim and basis without authenticating that role. `group show Chat`
+shows recent attribution from the latest 128 Group changes, which are separate
+from Board undo. Deleting a Group needs `--yes` and leaves its agents running.
+
+`group add ROOM AGENT --herdr` moves the agent's whole desk: read the printed
+list of every affected agent before the move. Adding to a Desk moves one pane.
+Use `--allow-close-room` only when you also agree to close the source room when its last desk leaves.
+The result reports Done, Partly done, Not done or Unknown and observed locations.
+On Unknown, inspect Herdr before deciding what to do; never retry automatically.
 
 ### Use Desk: answer, review and follow work
 

@@ -5,7 +5,13 @@ import {
   type Group,
   type GroupRef,
 } from "./groups";
-import type { WorkItem, WorkLink } from "./worldSources";
+import type { WorkItem, WorkLink, WorldSourceStatus } from "./worldSources";
+
+export type GroupWorkSources = {
+  items: readonly WorkItem[];
+  links: readonly WorkLink[];
+  sources?: readonly Pick<WorldSourceStatus, "id" | "state">[];
+};
 
 /** Projected refs are display data; they never widen stored GroupRef. */
 export type GroupDeskRef = { connection_id: string; tab_id: string };
@@ -73,6 +79,7 @@ export type GroupView = {
   counts: Record<GroupStatus, number>;
   status: GroupStatus;
   openPullRequests: readonly WorkItem[];
+  workState: "current" | "stale" | "unknown";
   openPrLimit: number | null;
   overLimit: boolean;
   now: readonly string[];
@@ -117,7 +124,7 @@ const seatKey = (
 export function buildGroupViews(
   stored: readonly Group[],
   connections: readonly GroupConnectionObservation[],
-  sources: { items: readonly WorkItem[]; links: readonly WorkLink[] } = {
+  sources: GroupWorkSources = {
     items: [],
     links: [],
   },
@@ -277,6 +284,13 @@ export function buildGroupViews(
     ];
     const openPrLimit =
       base.stored?.attrs?.open_pr_limit ?? (base.kind === "pod" ? 2 : null);
+    const github = sources.sources?.find((source) => source.id === "github");
+    const workState =
+      github?.state === "connected"
+        ? "current"
+        : github?.state === "error"
+          ? "stale"
+          : "unknown";
     return {
       ...base,
       members,
@@ -284,8 +298,12 @@ export function buildGroupViews(
       counts,
       status: STATUS_ORDER.find((status) => counts[status] > 0) ?? "unknown",
       openPullRequests,
+      workState,
       openPrLimit,
-      overLimit: openPrLimit !== null && openPullRequests.length > openPrLimit,
+      overLimit:
+        workState === "current" &&
+        openPrLimit !== null &&
+        openPullRequests.length > openPrLimit,
       now: base.stored?.attrs?.queue ?? [],
     };
   }

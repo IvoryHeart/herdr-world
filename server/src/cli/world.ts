@@ -14,6 +14,7 @@ import { readWorldCliToken, sessionSecretPath } from "../config/session-secret";
 import { isLoopbackAddress } from "../workspace/file-manager";
 import { readServiceAccess, readServiceSetup } from "./service-context";
 import { WORLD_SKILL } from "./world-skill";
+import { GROUP_ACTIONS, groupHuman, parseGroupArgs } from "./world-groups";
 
 /**
  * The agent CLI: `herdr-world board|town|colour|ask|result|spawned-by|whoami|
@@ -161,6 +162,8 @@ export function parseWorldArgs(
   word: string,
   args: string[],
 ): { command: string; params: Record<string, unknown>; json?: boolean } {
+  if (word === "group" || word === "pod" || word === "team")
+    return parseGroupArgs(word, args);
   const need = (value: string | undefined, what: string) => {
     if (!value) throw new UsageError(`missing ${what}`);
     return value;
@@ -433,6 +436,7 @@ export function parseWorldArgs(
 
 /** One line per result for people; agents should prefer --json. */
 function human(command: string, reply: Reply): string {
+  if (command.startsWith("group ")) return groupHuman(reply.result);
   const result = reply.result as Record<string, unknown> | unknown[] | null;
   const who = reply.actor
     ? `${reply.actor.label}${reply.actor.verified ? "" : " (unverified)"}`
@@ -469,7 +473,35 @@ export async function runWorldCommand(
   const timeoutMs = Math.max(0, Number(params.timeout) || 0) * 1000;
   delete params.wait;
   delete params.timeout;
-  let reply = await transport(command, params);
+  let reply: Reply;
+  if (command === "group add" && params.herdr === true) {
+    reply = await transport(command, { ...params, preview: true });
+    if (reply.ok) {
+      const plan = reply.result as {
+        status?: string;
+        plan?: string;
+        summary?: string;
+      };
+      if (
+        plan.status !== "preview" ||
+        typeof plan.plan !== "string" ||
+        typeof plan.summary !== "string"
+      )
+        reply = {
+          ok: false,
+          code: "unavailable",
+          error:
+            "World did not return a complete move preview; no move was made",
+        };
+      else {
+        (asJson ? context.error : context.log)(plan.summary);
+        reply = await transport(command, {
+          ...params,
+          expected_plan: plan.plan,
+        });
+      }
+    }
+  } else reply = await transport(command, params);
   // --wait: ask again until the owner (or an agent) answers.
   if (reply.ok && wait && (command === "ask" || command === "ask get")) {
     const id = String((reply.result as { id?: unknown }).id);
@@ -501,6 +533,17 @@ export async function runWorldCommand(
 }
 
 const WORDS: { name: string; summary: string; actions?: string[] }[] = [
+  {
+    name: "group",
+    summary: "list Groups and edit World-owned Teams and Pods",
+    actions: GROUP_ACTIONS,
+  },
+  { name: "pod", summary: "group alias for kind Pod", actions: GROUP_ACTIONS },
+  {
+    name: "team",
+    summary: "group alias for kind Team",
+    actions: GROUP_ACTIONS,
+  },
   {
     name: "board",
     summary: "agents: move, pin, group or colour Board cards",

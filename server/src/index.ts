@@ -54,6 +54,7 @@ import {
   WORLD_CLI_PATH,
 } from "./http/world-cli-endpoint";
 import { createWorldCliService } from "./world/world-cli-service";
+import { createRevisionPublisher } from "./world/revision-publisher";
 import { parseRpcMeta } from "./http/rpc-meta";
 import { runAgentCheckoutCommand } from "./herdr/agent-checkout";
 import { createWebPushService } from "./notifications/web-push";
@@ -453,12 +454,11 @@ function profiles() {
   });
   return profileStore;
 }
-function publishProfilesChanged(revision: number) {
-  const line = JSON.stringify({
-    control: { type: "world_profiles_changed", revision },
-  });
-  for (const ws of clients) safeSend(ws, line, "world-profiles");
-}
+const revisionPublisher = createRevisionPublisher(clients, safeSend);
+const publishProfilesChanged = revisionPublisher(
+  "world_profiles_changed",
+  "world-profiles",
+);
 
 /**
  * Record which agent each newly strung pane end is for: the agent the
@@ -489,30 +489,28 @@ async function bindBoardRecipients(
   if (recorded.length) publishBoardChanged(board().patch(recorded).revision);
 }
 
-function publishBoardChanged(revision: number) {
-  const line = JSON.stringify({
-    control: { type: "world_board_changed", revision },
-  });
-  for (const ws of clients) safeSend(ws, line, "world-board");
-}
+const publishBoardChanged = revisionPublisher(
+  "world_board_changed",
+  "world-board",
+);
 
 /** The agent CLI (world-cli-service.ts). */
 const worldCli = createWorldCliService({
   board: { get: () => board().get(), patch: (ops) => board().patch(ops) },
   connections: () => connectionManager,
   snapshots: () => worldSnapshots,
+  sources: async () => worldSources.current(),
+  townMoveQueues,
   publishBoard: publishBoardChanged,
   broadcast: (line) => {
     for (const ws of clients) safeSend(ws, line, "world-ledger");
   },
 });
 
-function publishWatchlistChanged(revision: number) {
-  const line = JSON.stringify({
-    control: { type: "world_watchlist_changed", revision },
-  });
-  for (const ws of clients) safeSend(ws, line, "world-watchlist");
-}
+const publishWatchlistChanged = revisionPublisher(
+  "world_watchlist_changed",
+  "world-watchlist",
+);
 
 function publishWorldInvalidation(
   connectionId: string,
