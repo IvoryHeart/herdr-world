@@ -10,7 +10,7 @@ own location. The Homebrew Formula depends on Homebrew's `herdr` where it is
 bottled and installs the verified prebuilt Herdr on Intel Macs. See
 [Herdr installation and upgrades](DEPLOYMENT.md#herdr-installation-and-upgrades).
 
-The web build is limited to 180 files and 13.25 MiB total embedded assets,
+The web build is limited to 150 files and 13.25 MiB total embedded assets,
 including lazy features such as Ranger, commit history, the diff worker and the
 Town and Board views. Startup limits remain 660 KiB
 JavaScript (202 KiB gzip) and 196 KiB CSS. Small highlighting themes share a
