@@ -93,7 +93,12 @@ test("a complete snapshot drops claims and group members whose terminals closed"
   document.relations.groups = [
     {
       id: "g1",
-      members: [gone("term_parent"), gone("term_old")],
+      kind: "team",
+      members: [gone("term_parent"), gone("term_old")].map((ref) => ({
+        ref,
+        roles: [],
+        joined_at: 1,
+      })),
       created_at: 1,
     },
   ];

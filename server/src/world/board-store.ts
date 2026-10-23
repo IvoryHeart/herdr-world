@@ -1,3 +1,14 @@
+import {
+  checkStoredGroups,
+  parseStoredGroup,
+  parseGroupChanges,
+} from "../../../shared/groups";
+import {
+  applyGroupOp,
+  isGroupOp,
+  recordGroupChanges,
+  type GroupOp,
+} from "./board-groups";
 import { existsSync, readFileSync, renameSync } from "node:fs";
 import { join } from "node:path";
 import { dataRoot, replaceDataFile } from "../config/data-paths";
@@ -9,11 +20,9 @@ import {
   tabCardKey,
 } from "../../../shared/terminalColor";
 import {
-  joinGroup,
   leaveGroups,
   RELATION_LIMITS,
   terminalKey,
-  type RelationGroup,
   type RelationsDocument,
   type SpawnClaim,
   type TerminalRef,
@@ -156,14 +165,7 @@ export type BoardOp =
       end: "from" | "to";
       witness: string[];
     }
-  | {
-      /** Group `members` with `target`'s group, or start one (`id`). */
-      op: "group.join";
-      id: string;
-      members: TerminalRef[];
-      target: TerminalRef[];
-    }
-  | { op: "group.leave"; members: TerminalRef[] }
+  | GroupOp
   | {
       /** Service only: the spawn claims it saw on Herdr panes. */
       op: "spawn.record";
@@ -437,11 +439,6 @@ function terminalRef(value: unknown): TerminalRef {
     terminal_id: text(value.terminal_id, "terminal ID", BOARD_LIMITS.key),
   };
 }
-function terminalRefs(value: unknown, what: string): TerminalRef[] {
-  if (!Array.isArray(value) || value.length > RELATION_LIMITS.members)
-    fail(`${what} must be a list of at most ${RELATION_LIMITS.members}`);
-  return value.map(terminalRef);
-}
 function count(value: unknown, what: string) {
   if (!Number.isSafeInteger(value) || (value as number) < 0) fail(what);
   return value as number;
@@ -456,14 +453,6 @@ function spawnClaim(value: unknown): SpawnClaim {
     observed_at: count(value.observed_at, "spawn time"),
   };
 }
-function group(value: unknown): RelationGroup {
-  if (!isObject(value)) fail("group must be an object");
-  return {
-    id: text(value.id, "group id", BOARD_LIMITS.key),
-    members: terminalRefs(value.members, "group members"),
-    created_at: count(value.created_at, "group time"),
-  };
-}
 function relations(value: unknown): RelationsDocument {
   // Boards saved before relations have none.
   if (value === undefined) return { spawns: [], groups: [] };
@@ -472,7 +461,10 @@ function relations(value: unknown): RelationsDocument {
     fail("relations");
   return {
     spawns: value.spawns.map(spawnClaim),
-    groups: value.groups.map(group),
+    groups: value.groups.map(parseStoredGroup),
+    ...(value.group_changes === undefined
+      ? {}
+      : { group_changes: parseGroupChanges(value.group_changes) }),
   };
 }
 
@@ -546,15 +538,13 @@ function checkBounds(document: BoardDocument) {
     fail(`at most ${RELATION_LIMITS.groups} groups`);
   const children = new Set(spawns.map((claim) => terminalKey(claim.child)));
   if (children.size !== spawns.length) fail("one spawn claim per child");
-  const grouped = new Set<string>();
-  for (const entry of groups) {
-    if (entry.members.length < 2) fail("a group has at least two members");
-    for (const member of entry.members) {
-      const key = terminalKey(member);
-      if (grouped.has(key)) fail("a terminal is in one group at a time");
-      grouped.add(key);
-    }
-  }
+  checkStoredGroups(groups);
+  if (
+    document.relations.group_changes?.some(
+      (event) => event.revision > document.revision,
+    )
+  )
+    fail("group event revision is newer than the board");
 }
 
 /* ---------- Store ---------- */
@@ -604,7 +594,8 @@ export class BoardStore {
     if (!Array.isArray(ops) || ops.length > BOARD_LIMITS.ops)
       fail(`1 to ${BOARD_LIMITS.ops} operations`);
     const next = structuredClone(this.document);
-    for (const op of ops) applyOp(next, op, this.document);
+    const now = (this.options.now ?? Date.now)();
+    for (const op of ops) applyOp(next, op, this.document, now);
     next.revision = this.document.revision + 1;
     checkBounds(next);
     const payload = JSON.stringify(next);
@@ -622,8 +613,21 @@ export class BoardStore {
   }
 }
 
-function applyOp(next: BoardDocument, op: BoardOp, current: BoardDocument) {
+function applyOp(
+  next: BoardDocument,
+  op: BoardOp,
+  current: BoardDocument,
+  now: number,
+) {
   if (!isObject(op)) fail("operation must be an object");
+  if (isGroupOp(op)) {
+    try {
+      applyGroupOp(next.relations, op as GroupOp, now, current.revision + 1);
+    } catch (error) {
+      fail((error as Error).message);
+    }
+    return;
+  }
   switch (op.op) {
     case "note.put": {
       const existing = next.notes.findIndex(
@@ -703,29 +707,6 @@ function applyOp(next: BoardDocument, op: BoardOp, current: BoardDocument) {
       else fail("card colour");
       return;
     }
-    case "group.join": {
-      const members = terminalRefs(op.members, "members");
-      const target = terminalRefs(op.target, "target");
-      const id = text(op.id, "group id", BOARD_LIMITS.key);
-      try {
-        next.relations.groups = joinGroup(
-          next.relations.groups,
-          members,
-          target,
-          id,
-          Date.now(),
-        );
-      } catch (error) {
-        fail((error as Error).message);
-      }
-      return;
-    }
-    case "group.leave":
-      next.relations.groups = leaveGroups(
-        next.relations.groups,
-        terminalRefs(op.members, "members"),
-      );
-      return;
     case "spawn.record": {
       if (!Array.isArray(op.claims)) fail("claims must be a list");
       const claims = op.claims.map(spawnClaim);
@@ -749,9 +730,15 @@ function applyOp(next: BoardDocument, op: BoardOp, current: BoardDocument) {
       next.relations.spawns = next.relations.spawns.filter(
         (claim) => !children.has(terminalKey(claim.child)),
       );
-      next.relations.groups = leaveGroups(
-        next.relations.groups,
-        refs(op.members, "members"),
+      const before = next.relations.groups;
+      next.relations.groups = leaveGroups(before, refs(op.members, "members"));
+      recordGroupChanges(
+        next.relations,
+        before,
+        op.op,
+        { basis: "unknown", via: "service" },
+        now,
+        current.revision + 1,
       );
       return;
     }

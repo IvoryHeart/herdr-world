@@ -832,7 +832,11 @@ describe("Relations in the Board store", () => {
     ]);
     const reread = new BoardStore(path).get().relations.groups;
     expect(reread).toMatchObject([
-      { id: "g1", members: [term("a"), term("b"), term("c")] },
+      {
+        id: "g1",
+        kind: "team",
+        members: [{ ref: term("a") }, { ref: term("b") }, { ref: term("c") }],
+      },
     ]);
     store.patch([{ op: "group.leave", members: [term("a"), term("b")] }]);
     expect(store.get().relations.groups).toEqual([]);
@@ -862,7 +866,7 @@ describe("Relations in the Board store", () => {
     store.patch([
       { op: "relations.prune", children: [term("b")], members: [term("a")] },
     ]);
-    expect(new BoardStore(path).get().relations).toEqual({
+    expect(new BoardStore(path).get().relations).toMatchObject({
       spawns: [spawn("d", "c")],
       groups: [],
     });
