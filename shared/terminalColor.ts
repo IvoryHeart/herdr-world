@@ -23,6 +23,17 @@ export const cardKey = (connectionId: string, nativeId: string) =>
   `${connectionId}:${nativeId}`;
 
 /**
+ * Places have colours too, kept with the terminal colours. A workspace's is
+ * saved under its Board card key, and its tabs without a colour of their own
+ * show it. A host's colours only its own chrome (Town's building, Board's
+ * zone, Spaces' host header); it is not inherited, so tabs keep their varied
+ * defaults. Its key cannot be a card key, which always starts with the
+ * connection ID and a colon.
+ */
+export const workspaceColorKey = cardKey;
+export const hostColorKey = (connectionId: string) => `@host:${connectionId}`;
+
+/**
  * A tab's card key. Current Herdr IDs never collide (`w1` and `w1:t1`), so a
  * tab keeps the plain key; older Herdr can give a tab the same ID as a
  * workspace, and then the tab's key is qualified so the two stay distinct.

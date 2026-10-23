@@ -60,17 +60,21 @@ export function ColorSwatchButton({
   label,
   text,
   className,
+  defaultHex,
 }: {
   palette: readonly ColorChoice[];
   current: ColorValue;
   onColor: (id: string | null) => void;
   label: string;
+  /** The dot's colour when `current` is not a palette colour (a default). */
+  defaultHex?: string;
   /** Visible text beside the colour, as in a menu; the dot alone otherwise. */
   text?: string;
   className?: string;
 }) {
   const [open, setOpen] = useState(false);
-  const hex = palette.find((entry) => entry.id === current.id)?.hex;
+  const hex =
+    palette.find((entry) => entry.id === current.id)?.hex ?? defaultHex;
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>

@@ -1452,6 +1452,49 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
     },
   ],
   [
+    "a host's colour tints its zone and is saved under the host",
+    async () => {
+      const label = host.querySelector<HTMLElement>(
+        ".board-zone-label[data-host]",
+      )!;
+      const swatch =
+        label.querySelector<HTMLButtonElement>(".board-zone-color")!;
+      check(Boolean(swatch), "a host's zone label offers its colour");
+      swatch.click();
+      await waitFor(
+        () =>
+          document.querySelector(
+            '.color-swatch-popover [aria-label="Colour purple"]',
+          ) !== null,
+        "the host colour button did not open the palette",
+      );
+      document
+        .querySelector<HTMLButtonElement>(
+          '.color-swatch-popover [aria-label="Colour purple"]',
+        )!
+        .click();
+      await waitFor(
+        () =>
+          Object.entries(saved.layout.colors ?? {}).some(
+            ([key, color]) => key.startsWith("@host:") && color === "purple",
+          ),
+        "choosing a host colour did not save it under the host",
+      );
+      const zone = label.closest<HTMLElement>(".board-zone")!;
+      await waitFor(
+        () => zone.style.getPropertyValue("--board-zone") !== "",
+        "a host's colour does not tint its zone",
+      );
+      // Tabs keep their own colours: a host's is not inherited.
+      check(
+        !Object.keys(saved.layout.colors ?? {}).some(
+          (key) => !key.startsWith("@host:"),
+        ),
+        "choosing a host colour must not colour its workspaces or tabs",
+      );
+    },
+  ],
+  [
     "colours",
     async () => {
       // Colours: the user picks a tab or workspace colour; status keeps its own.

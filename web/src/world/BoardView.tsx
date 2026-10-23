@@ -97,7 +97,14 @@ import type { WorldAgentStatus, WorldObject } from "./worldObject";
 import type { WorldCanvasAnchor } from "./worldConnectorGeometry";
 import { WorldSearchResults } from "./WorldSearchResults";
 import { WorldViewToolbar } from "./WorldViewToolbar";
-import { defaultTerminalColor, TERMINAL_COLOR_HEX } from "./terminalColor";
+import {
+  defaultTerminalColor,
+  hostColorKey,
+  placeColor,
+  TERMINAL_COLOR_HEX,
+  TERMINAL_COLOR_PALETTE,
+} from "./terminalColor";
+import { ColorSwatchButton } from "../components/ColorSwatch";
 import "./board/board.css";
 
 /**
@@ -2945,37 +2952,67 @@ export default function BoardView({
           </div>
         ) : null}
         <div ref={worldRef} className="board-world">
-          {model.hosts.map((host) => (
-            <div
-              key={host.key}
-              className={`board-zone${host.stale ? " board-stale" : ""}`}
-              ref={(el) => {
-                if (el) zoneEls.current.set(host.key, el);
-                else zoneEls.current.delete(host.key);
-              }}
-            >
+          {model.hosts.map((host) => {
+            // A host's chosen colour tints its zone (it is not inherited).
+            const hostKey = hostColorKey(host.connectionId);
+            const hostColor = placeColor(cardColors, hostKey);
+            return (
               <div
-                className="board-zone-label"
-                data-host={host.key}
-                data-world-node-anchor={host.id}
-                title="Drag to move the whole host"
+                key={host.key}
+                className={`board-zone${host.stale ? " board-stale" : ""}`}
+                style={
+                  hostColor
+                    ? ({
+                        "--board-zone": TERMINAL_COLOR_HEX[hostColor],
+                      } as CSSProperties)
+                    : undefined
+                }
+                ref={(el) => {
+                  if (el) zoneEls.current.set(host.key, el);
+                  else zoneEls.current.delete(host.key);
+                }}
               >
-                {host.label}
-                {host.stale ? (
-                  <small>offline</small>
-                ) : (
-                  <button
-                    type="button"
-                    className="board-zone-add"
-                    aria-label={`New workspace on ${host.label}`}
-                    onClick={() => setNewWorkspaceOn(host)}
-                  >
-                    +
-                  </button>
-                )}
+                <div
+                  className="board-zone-label"
+                  data-host={host.key}
+                  data-world-node-anchor={host.id}
+                  title="Drag to move the whole host"
+                >
+                  <ColorSwatchButton
+                    className="board-zone-color"
+                    defaultHex="var(--board-zone)"
+                    label={`Colour of ${host.label}`}
+                    palette={TERMINAL_COLOR_PALETTE}
+                    current={{
+                      id: hostColor ?? "default",
+                      custom: !!hostColor,
+                    }}
+                    onColor={(id) =>
+                      setCardColor(
+                        hostKey,
+                        CARD_COLORS.includes(id as CardColor)
+                          ? (id as CardColor)
+                          : null,
+                      )
+                    }
+                  />
+                  {host.label}
+                  {host.stale ? (
+                    <small>offline</small>
+                  ) : (
+                    <button
+                      type="button"
+                      className="board-zone-add"
+                      aria-label={`New workspace on ${host.label}`}
+                      onClick={() => setNewWorkspaceOn(host)}
+                    >
+                      +
+                    </button>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
           <svg ref={svgRef} className="board-wires" aria-hidden="true" />
           {/* Cards in their own container, new when a large board is built,
               so React appends them as one subtree instead of placing each

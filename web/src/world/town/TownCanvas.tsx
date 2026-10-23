@@ -57,12 +57,17 @@ import {
 } from "./townLayout";
 import {
   townAttention,
+  keepPlaceColors,
+  NO_PLACE_COLORS,
   townDeskColors,
   townModelFromProjection,
+  townPlaceColors,
+  type TownPlaceColors,
   townRoomCounts,
   type TownModel,
 } from "./townModel";
-import { townCarpetFor } from "./townPaint";
+import { townCarpetFor, townCarpetOf } from "./townPaint";
+import { ColorSwatchButton } from "../../components/ColorSwatch";
 import {
   createTownRenderer,
   nextTownTask,
@@ -77,6 +82,15 @@ import {
   type TerminalColors,
 } from "../terminalColor";
 import "./town.css";
+
+/** A place's colour in the shared picker (ColorSwatch.tsx). */
+export type PlaceColorChoice = {
+  palette: readonly { id: string; hex: string }[];
+  current: { id: string; custom: boolean };
+  onColor(id: string | null): void;
+  /** The default's colour, shown while the place has none of its own. */
+  defaultHex?: string;
+};
 
 export type TownRoomActions = {
   showCreateSeat(roomKey: string): boolean;
@@ -97,6 +111,11 @@ export type TownRoomActions = {
   onMoveDesk(deskKey: string): void;
   /** Keyboard move: choose another desk for an agent (key M on its target). */
   onMoveAgent(agentKey: string): void;
+  /**
+   * A room's (workspace's) or building's (host's) colour for the shared
+   * picker; null when it cannot be changed here.
+   */
+  placeColor(kind: "room" | "host", key: string): PlaceColorChoice | null;
   /** A desk dragged onto another room; resolves how the move ended. */
   onDropDesk(deskKey: string, roomKey: string): Promise<TownMoveResult>;
   /**
@@ -196,6 +215,7 @@ export function TownCanvas({
   // Colours ride on the model but not its layout input: a new colour repaints
   // tables without placing the town again.
   const lastDeskColors = useRef<ReadonlyMap<string, TerminalColor>>(new Map());
+  const lastPlaceColors = useRef<TownPlaceColors>(NO_PLACE_COLORS);
   const model = useMemo(() => {
     // The same colours keep the same map, so status updates never rebuild.
     const next = townDeskColors(projection, terminalColors);
@@ -205,7 +225,15 @@ export function TownCanvas({
       [...next].some(([key, color]) => last.get(key) !== color)
     )
       lastDeskColors.current = next;
-    return { ...topology, deskColors: lastDeskColors.current };
+    lastPlaceColors.current = keepPlaceColors(
+      lastPlaceColors.current,
+      townPlaceColors(projection, terminalColors),
+    );
+    return {
+      ...topology,
+      deskColors: lastDeskColors.current,
+      placeColors: lastPlaceColors.current,
+    };
   }, [topology, projection, terminalColors]);
   const layout = useMemo(() => {
     const previous =
@@ -1380,6 +1408,13 @@ const TownWorldLayer = memo(function TownWorldLayer({
   const selectedHost = selectedRoomKey
     ? model.rooms.get(selectedRoomKey)?.hostKey
     : undefined;
+  /** A room's carpet: its workspace's chosen colour, else its own default. */
+  const roomCarpet = (roomKey: string) => {
+    const chosen = model.placeColors.rooms.get(roomKey);
+    return chosen
+      ? townCarpetOf(TERMINAL_COLOR_HEX[chosen])
+      : townCarpetFor(roomKey);
+  };
   const newRoomBuilding =
     layout.buildings.find((b) => b.hostKey === selectedHost) ??
     layout.buildings[0];
@@ -1388,6 +1423,7 @@ const TownWorldLayer = memo(function TownWorldLayer({
       {layout.buildings.map((building) => {
         if (!visible.hosts.has(building.hostKey)) return null;
         const host = model.hosts.get(building.hostKey);
+        const hostColor = roomActions.placeColor("host", building.hostKey);
         const queue = attention.filter(
           (agent) =>
             agent.hostKey === building.hostKey &&
@@ -1444,6 +1480,13 @@ const TownWorldLayer = memo(function TownWorldLayer({
               aria-label={`${host?.displayLabel ?? "Host"} reception, ${queue.length} waiting`}
             >
               <div className="town-reception-title">
+                {hostColor ? (
+                  <ColorSwatchButton
+                    className="town-place-color"
+                    label={`Colour of ${host?.displayLabel ?? "host"}'s building`}
+                    {...hostColor}
+                  />
+                ) : null}
                 <span>
                   {(host?.displayLabel ?? "").toUpperCase()} RECEPTION
                 </span>
@@ -1483,6 +1526,7 @@ const TownWorldLayer = memo(function TownWorldLayer({
               const overflow =
                 room.omittedDeskCount + placed.overflowDeskKeys.length;
               const reason = roomActions.createSeatReason(room.key);
+              const roomColor = roomActions.placeColor("room", room.key);
               return (
                 <div
                   key={room.key}
@@ -1501,7 +1545,7 @@ const TownWorldLayer = memo(function TownWorldLayer({
                       style={
                         {
                           "--room-w": `${placed.w * T}px`,
-                          "--carpet": townCarpetFor(room.key),
+                          "--carpet": roomCarpet(room.key),
                         } as React.CSSProperties
                       }
                       aria-label={`${label}: ${c.desks} desks, ${c.working} working${c.blocked ? `, ${c.blocked} need you` : ""}${c.done ? `, ${c.done} done` : ""}. Zoom in.`}
@@ -1596,6 +1640,14 @@ const TownWorldLayer = memo(function TownWorldLayer({
                       <span className="town-room-plaque-badge">
                         !{c.blocked}
                       </span>
+                    ) : null}
+                    {roomColor ? (
+                      <ColorSwatchButton
+                        className="town-plaque-action town-place-color"
+                        label={`Colour of room ${label}`}
+                        defaultHex={townCarpetFor(room.key)}
+                        {...roomColor}
+                      />
                     ) : null}
                     <button
                       className="world-room-overlay-action world-room-overlay-action-rename town-plaque-action"

@@ -6,6 +6,7 @@ import type { Pane, Tab, Workspace } from "../../types";
 import type { WorldRuntimeConnection } from "../runtimeStore";
 import { buildWorldObject, type WorldObject } from "../worldObject";
 import TownView from "../TownView";
+import type { BoardDocument, BoardOp } from "../board/boardDocument";
 import "../../components/TerminalView.css";
 import "../../components/MobileControls.css";
 import { requestTrace } from "../devtools/trace";
@@ -249,6 +250,42 @@ const SCREENS = {
     "✻ Thinking…",
   ],
 };
+/*
+ * World's board document, where terminal, workspace and host colours are
+ * saved: kept here as the service would, for card.color.
+ */
+let boardDocument: BoardDocument = {
+  version: 1,
+  revision: 0,
+  layout: { anchors: {}, offsets: {}, pinned: {}, folded: [], colors: {} },
+  notes: [],
+  strings: [],
+};
+const bridgeCall = bridge.call.bind(bridge);
+(bridge as unknown as { call: typeof bridge.call }).call = (async (
+  method: string,
+  params?: unknown,
+  ...rest: unknown[]
+) => {
+  if (method === "world.board.get") return structuredClone(boardDocument);
+  if (method !== "world.board.patch")
+    return (bridgeCall as (...args: unknown[]) => unknown)(
+      method,
+      params,
+      ...rest,
+    );
+  const next = structuredClone(boardDocument);
+  for (const op of (params as { ops: BoardOp[] }).ops)
+    if (op.op === "card.color") {
+      const colors = (next.layout.colors ??= {});
+      if (op.color) colors[op.key] = op.color;
+      else delete colors[op.key];
+    }
+  next.revision += 1;
+  boardDocument = next;
+  return { document: structuredClone(next) };
+}) as typeof bridge.call;
+
 // The service's conversation pushes, delivered as the bridge delivers them.
 const controls = new Set<(control: BridgeControlMsg) => void>();
 bridge.onControl = (handler) => {
@@ -976,6 +1013,76 @@ async function run() {
     "zoomed room stayed at overview",
   );
   check(selected.length === 0, "a room tap must not open an Inspector");
+
+  // A room takes its workspace's colour, chosen beside its name; a building
+  // takes its host's, chosen on its reception board. Both are saved with the
+  // terminal colours, and a room's carpet shows its colour.
+  {
+    const pick = async (trigger: HTMLButtonElement, color: string) => {
+      trigger.click();
+      await waitFor(
+        () =>
+          document.querySelector(
+            `.color-swatch-popover [aria-label="Colour ${color}"]`,
+          ) !== null,
+        `${trigger.getAttribute("aria-label")} did not open the palette`,
+      );
+      document
+        .querySelector<HTMLButtonElement>(
+          `.color-swatch-popover [aria-label="Colour ${color}"]`,
+        )!
+        .click();
+    };
+    const roomSwatch = host.querySelector<HTMLButtonElement>(
+      'button[aria-label^="Colour of room "]',
+    );
+    check(roomSwatch !== null, "a room offers its colour beside its name");
+    if (roomSwatch) {
+      await pick(roomSwatch, "teal");
+      await waitFor(
+        () => Object.values(boardDocument.layout.colors ?? {}).includes("teal"),
+        "choosing a room colour did not save it",
+      );
+      const [key] = Object.entries(boardDocument.layout.colors ?? {}).find(
+        ([, color]) => color === "teal",
+      )!;
+      check(
+        /^[^@:][^:]*:[^:]+$/.test(key) && !key.includes(":tab:"),
+        `a room colour is saved under its workspace's card key (${key})`,
+      );
+      const card = roomSwatch
+        .closest(".town-room")!
+        .querySelector<HTMLElement>(".town-room-card");
+      await waitFor(
+        () =>
+          host
+            .querySelector<HTMLButtonElement>(
+              'button[aria-label^="Colour of room "]',
+            )
+            ?.getAttribute("aria-label")
+            ?.endsWith(": teal") === true,
+        "the room's swatch does not show its new colour",
+      );
+      check(
+        !card || card.style.getPropertyValue("--carpet") !== "",
+        "the room card has a carpet colour",
+      );
+    }
+    const buildingSwatch = host.querySelector<HTMLButtonElement>(
+      'button[aria-label$="\'s building"], button[aria-label*="\'s building:"]',
+    );
+    check(buildingSwatch !== null, "a building offers its colour on reception");
+    if (buildingSwatch) {
+      await pick(buildingSwatch, "pink");
+      await waitFor(
+        () =>
+          Object.entries(boardDocument.layout.colors ?? {}).some(
+            ([key, color]) => key.startsWith("@host:") && color === "pink",
+          ),
+        "choosing a building colour did not save it under its host",
+      );
+    }
+  }
 
   // From the keyboard, M on a desk lists the host's other rooms; choosing one
   // asks the service to move that desk there.
