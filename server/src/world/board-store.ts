@@ -10,6 +10,7 @@ import {
 } from "../../../shared/terminalColor";
 import {
   interestKeyPrefix,
+  isInterestKey,
   STORED_INTERESTS,
   type StoredInterest,
 } from "../../../shared/interest";
@@ -619,6 +620,7 @@ function applyOp(next: BoardDocument, op: BoardOp, current: BoardDocument) {
     }
     case "interest.set": {
       const key = text(op.key, "interest key", BOARD_LIMITS.key);
+      if (!isInterestKey(key)) fail("interest key");
       if (op.interest === null) delete next.layout.interest[key];
       else if (STORED_INTERESTS.includes(op.interest))
         next.layout.interest[key] = op.interest;

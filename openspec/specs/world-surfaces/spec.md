@@ -1762,8 +1762,11 @@ device, and SHALL NOT write it to Herdr. When a complete pane listing from a
 host's current runtime no longer shows a terminal, World SHALL drop that
 terminal's interest; it SHALL NOT drop interest on a failed, stale or partial
 listing. Interest SHALL only gate chimes: a muted agent SHALL NOT chime, and
-while any agent is focused only focused agents and the Town master's needs-you
-SHALL chime. Interest SHALL NOT keep any item out of reception.
+while a focused agent's terminal is shown on a ready host only focused agents
+and the Town master's needs-you SHALL chime; a focus World cannot reach SHALL
+NOT silence other agents, and SHALL apply again when its host is back. A
+watched agent's control SHALL say when it is quiet because another agent is
+focused. Interest SHALL NOT keep any item out of reception.
 
 #### Scenario: Mute an agent
 

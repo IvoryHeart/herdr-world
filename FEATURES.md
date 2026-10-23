@@ -152,8 +152,10 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   header in Town, Board and Spaces sets **Watching** (the default), **Muted**
   or **Focused** for that agent, saved by the World service for its terminal on
   every device. Chimes
-  read it: a muted agent never chimes, and while any agent is focused only
-  focused agents and the Town master's needs-you chime. Interest never hides
+  read it: a muted agent never chimes, and while a focused agent is reachable
+  only focused agents and the Town master's needs-you chime (Watching then
+  says it is quiet). A focus on an offline host silences no one until the host
+  is back. Interest never hides
   anything from reception. It follows the terminal through moves, and goes
   when its host shows the terminal has closed, including after reconnecting.
   A failed save shows an error and keeps the previous choice; reopen the

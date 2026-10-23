@@ -70,3 +70,8 @@
   background: var(--panel-2);
   box-shadow: inset 2px 0 0 var(--accent);
 }
+
+/* Watching, but quiet while another agent is focused. */
+.interest-button[data-quiet] {
+  opacity: 0.55;
+}

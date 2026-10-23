@@ -14,6 +14,8 @@ import "./InterestButton.css";
 export type InterestChoice = {
   current: Interest;
   onInterest(next: Interest): void;
+  /** Another agent is focused, so a watched agent stays quiet for now. */
+  quiet?: boolean;
 };
 
 const CHOICES: { id: Interest; label: string; hint: string }[] = [
@@ -27,11 +29,15 @@ const ICONS = { watching: Eye, muted: BellOff, focused: Crosshair };
 export function InterestButton({
   current,
   onInterest,
+  quiet = false,
   className,
 }: InterestChoice & { className?: string }) {
   const [open, setOpen] = useState(false);
   const Icon = ICONS[current];
-  const label = CHOICES.find((choice) => choice.id === current)!.label;
+  const held = quiet && current === "watching";
+  const label = `${CHOICES.find((choice) => choice.id === current)!.label}${
+    held ? ", quiet while an agent is focused" : ""
+  }`;
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -39,6 +45,7 @@ export function InterestButton({
           type="button"
           className={cn("interest-button", className)}
           data-interest={current}
+          data-quiet={held || undefined}
           aria-label={`Interest: ${label}`}
           aria-haspopup="dialog"
           title={`Interest: ${label}`}
@@ -68,7 +75,11 @@ export function InterestButton({
                 <ChoiceIcon size={15} aria-hidden="true" />
                 <span>
                   <b>{choice.label}</b>
-                  <small>{choice.hint}</small>
+                  <small>
+                    {quiet && choice.id === "watching"
+                      ? "Quiet while an agent is focused"
+                      : choice.hint}
+                  </small>
                 </span>
               </button>
             );

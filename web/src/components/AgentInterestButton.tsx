@@ -17,6 +17,7 @@ export function AgentInterestButton({
   return (
     <InterestButton
       current={interest.interestOf(connectionId, terminalId)}
+      quiet={interest.anyFocused}
       onInterest={async (next) => {
         const error = await setAgentInterest(connectionId, terminalId, next);
         if (error)

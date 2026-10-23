@@ -68,6 +68,15 @@ describe("agent interest", () => {
     ).toThrow("interest");
   });
 
+  test("interest is saved only for a host's terminal key", () => {
+    const store = new BoardStore(path);
+    for (const key of ["conn-a", "conn-a:terminal:", ":terminal:term_1"])
+      expect(() =>
+        store.patch([{ op: "interest.set", key, interest: "focused" }]),
+      ).toThrow("interest key");
+    expect(store.get().layout.interest).toEqual({});
+  });
+
   test("a board saved before interest loads with every agent watched", () => {
     writeFileSync(
       path,

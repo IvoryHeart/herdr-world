@@ -17,6 +17,12 @@ export const STORED_INTERESTS: readonly StoredInterest[] = ["muted", "focused"];
 export const interestKey = (connectionId: string, terminalId: string) =>
   `${connectionId}:terminal:${terminalId}`;
 
+/** Whether a stored key names a terminal on a host, as `interestKey` makes. */
+export function isInterestKey(key: string) {
+  const at = key.indexOf(":terminal:");
+  return at > 0 && at + ":terminal:".length < key.length;
+}
+
 /** The stored keys for one host, so its gone terminals can be found. */
 export const interestKeyPrefix = (connectionId: string) =>
   `${connectionId}:terminal:`;
