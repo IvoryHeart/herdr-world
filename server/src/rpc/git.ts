@@ -7,7 +7,32 @@ import {
 import type { ConnectionRpcContext } from "./context";
 
 /** Git and worktree methods on one connection (git.*, worktree.*). */
-export async function handleGitRpc(
+export function handleGitRpc(
+  rpc: ConnectionRpcContext,
+): false | Promise<false | void> {
+  const { method } = rpc;
+  if (
+    !(
+      method === "git.diff_summary" ||
+      method === "git.pull_request" ||
+      method === "git.diff_file" ||
+      method === "git.commits" ||
+      method === "git.commit" ||
+      method === "git.commit_file" ||
+      method === "git.commit_preview" ||
+      method === "git.pull" ||
+      method === "git.file_action" ||
+      method === "git.repo_action" ||
+      method === "worktree.create" ||
+      method === "worktree.open" ||
+      method === "worktree.remove"
+    )
+  )
+    return false;
+  return dispatchGitRpc(rpc);
+}
+
+async function dispatchGitRpc(
   rpc: ConnectionRpcContext,
 ): Promise<false | void> {
   const {

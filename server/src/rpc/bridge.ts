@@ -1,9 +1,23 @@
 import type { BridgeRpcContext } from "./context";
 
 /** Bridge-global methods: ping, status, assistant and pausing other clients. */
-export async function handleBridgeRpc(
+export function handleBridgeRpc(
   rpc: BridgeRpcContext,
-): Promise<false | void> {
+): false | Promise<false | void> {
+  const { method } = rpc;
+  if (
+    !(
+      method === "bridge.ping" ||
+      method === "bridge.status" ||
+      method.startsWith("bridge.assistant.") ||
+      method === "bridge.pause_others"
+    )
+  )
+    return false;
+  return dispatchBridgeRpc(rpc);
+}
+
+async function dispatchBridgeRpc(rpc: BridgeRpcContext): Promise<false | void> {
   const { id, method, params, sendError, sendReply, ws } = rpc;
   const {
     clients,

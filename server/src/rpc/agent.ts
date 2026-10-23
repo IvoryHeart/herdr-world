@@ -6,7 +6,30 @@ import { dispatchAgentSessionLink } from "../connections/rpc-routing";
 import type { ConnectionRpcContext } from "./context";
 
 /** Agent sessions, conversations, quests and history on one connection. */
-export async function handleAgentRpc(
+export function handleAgentRpc(
+  rpc: ConnectionRpcContext,
+): false | Promise<false | void> {
+  const { method } = rpc;
+  if (
+    !(
+      method === "agent.list" ||
+      method === "agent_conversation.watch" ||
+      method === "agent_conversation.unwatch" ||
+      CONVERSATION_RPC_METHODS.has(method) ||
+      method === "agent_history.get" ||
+      method === "agent_history.entry" ||
+      method === "agent_session.get" ||
+      method === "agent_turn.get" ||
+      method === "agent_checkout.get" ||
+      method === "agent_session.link_preview" ||
+      method === "agent_session.link"
+    )
+  )
+    return false;
+  return dispatchAgentRpc(rpc);
+}
+
+async function dispatchAgentRpc(
   rpc: ConnectionRpcContext,
 ): Promise<false | void> {
   const { id, method, params, route, sendError, sendReply, ws, connection } =

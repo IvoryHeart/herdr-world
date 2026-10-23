@@ -6,7 +6,23 @@ import { createMoveQueue, moveDesk, movePane } from "../world/desk-move";
 import type { ConnectionRpcContext } from "./context";
 
 /** Board and Town actions on one connection (board.*, town.*). */
-export async function handleBoardTownRpc(
+export function handleBoardTownRpc(
+  rpc: ConnectionRpcContext,
+): false | Promise<false | void> {
+  const { method } = rpc;
+  if (
+    !(
+      method === "board.check_anchor" ||
+      method === "board.send_note" ||
+      method === "town.move_desk" ||
+      method === "town.move_pane"
+    )
+  )
+    return false;
+  return dispatchBoardTownRpc(rpc);
+}
+
+async function dispatchBoardTownRpc(
   rpc: ConnectionRpcContext,
 ): Promise<false | void> {
   const {

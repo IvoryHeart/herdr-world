@@ -1079,8 +1079,14 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
     sendError,
     services: rpcServices,
   };
-  for (const handle of [handleBridgeRpc, handleConnectionsRpc, handleWorldRpc])
-    if ((await handle(rpc)) !== false) return;
+  for (const handle of [
+    handleBridgeRpc,
+    handleConnectionsRpc,
+    handleWorldRpc,
+  ]) {
+    const result = handle(rpc);
+    if (result !== false && (await result) !== false) return;
+  }
   if (route.scope === "bridge") {
     sendError(
       "unknown-bridge-method",
@@ -1175,8 +1181,10 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
     handleAgentRpc,
     handleFilesRpc,
     handleGitRpc,
-  ])
-    if ((await handle(connectionRpc)) !== false) return;
+  ]) {
+    const result = handle(connectionRpc);
+    if (result !== false && (await result) !== false) return;
+  }
   if (method.startsWith("terminal.")) {
     return terminalBridge.handleTerminalRpc(
       ws,

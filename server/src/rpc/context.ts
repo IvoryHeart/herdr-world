@@ -12,7 +12,8 @@ type RpcRoute = ReturnType<typeof resolveRpcRoute<LegacyConnectionRuntime>>;
 
 /**
  * What one browser RPC hands to a namespace handler (see index.ts handleRpc).
- * Handlers return false when no branch of theirs matched the method.
+ * Handlers return false synchronously when no branch matches, so dispatch
+ * never yields before entering the matching handler on the captured runtime.
  */
 export type BridgeRpcContext = {
   ws: ServerWebSocket<unknown>;

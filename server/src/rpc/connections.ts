@@ -2,7 +2,15 @@ import { sanitizeConnectionError } from "../connections/manager";
 import type { BridgeRpcContext } from "./context";
 
 /** Connection profile methods (connections.*). */
-export async function handleConnectionsRpc(
+export function handleConnectionsRpc(
+  rpc: BridgeRpcContext,
+): false | Promise<false | void> {
+  const { method } = rpc;
+  if (!method.startsWith("connections.")) return false;
+  return dispatchConnectionsRpc(rpc);
+}
+
+async function dispatchConnectionsRpc(
   rpc: BridgeRpcContext,
 ): Promise<false | void> {
   const { id, method, params, sendReply, ws } = rpc;

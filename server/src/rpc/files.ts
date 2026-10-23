@@ -1,7 +1,26 @@
 import type { ConnectionRpcContext } from "./context";
 
 /** Workspace file methods on one connection (file.*). */
-export async function handleFilesRpc(
+export function handleFilesRpc(
+  rpc: ConnectionRpcContext,
+): false | Promise<false | void> {
+  const { method } = rpc;
+  if (
+    !(
+      method === "file.list" ||
+      method === "file.resolve" ||
+      method === "file.mkdir" ||
+      method === "file.move" ||
+      method === "file.read" ||
+      method === "file.search" ||
+      method === "file.reveal"
+    )
+  )
+    return false;
+  return dispatchFilesRpc(rpc);
+}
+
+async function dispatchFilesRpc(
   rpc: ConnectionRpcContext,
 ): Promise<false | void> {
   const { id, method, params, sendError, sendReply, ws, connection } = rpc;

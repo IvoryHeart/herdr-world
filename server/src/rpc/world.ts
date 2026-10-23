@@ -5,9 +5,15 @@ import { BoardConflictError, clientBoardOps } from "../world/board-store";
 import type { BridgeRpcContext } from "./context";
 
 /** Aggregate World methods: snapshot, board document, profiles and watchlist (world.*). */
-export async function handleWorldRpc(
+export function handleWorldRpc(
   rpc: BridgeRpcContext,
-): Promise<false | void> {
+): false | Promise<false | void> {
+  const { method } = rpc;
+  if (!method.startsWith("world.")) return false;
+  return dispatchWorldRpc(rpc);
+}
+
+async function dispatchWorldRpc(rpc: BridgeRpcContext): Promise<false | void> {
   const { id, method, params, req, sendError, sendReply, ws } = rpc;
   const {
     bindBoardRecipients,

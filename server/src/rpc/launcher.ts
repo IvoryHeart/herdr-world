@@ -9,7 +9,23 @@ import { runProcessWithCodeTimeout, shQuote } from "../utils/process-utils";
 import type { ConnectionRpcContext } from "./context";
 
 /** The launcher on one connection: harness readiness, login, catalog and start (launcher.*). */
-export async function handleLauncherRpc(
+export function handleLauncherRpc(
+  rpc: ConnectionRpcContext,
+): false | Promise<false | void> {
+  const { method } = rpc;
+  if (
+    !(
+      method === "launcher.readiness" ||
+      method === "launcher.login" ||
+      method === "launcher.catalog" ||
+      method === "launcher.start"
+    )
+  )
+    return false;
+  return dispatchLauncherRpc(rpc);
+}
+
+async function dispatchLauncherRpc(
   rpc: ConnectionRpcContext,
 ): Promise<false | void> {
   const {
