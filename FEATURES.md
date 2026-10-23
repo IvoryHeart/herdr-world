@@ -382,6 +382,9 @@ See [resource ownership](docs/ARCHITECTURE.md#workspace-resource-ownership).
   says so, or that it cannot tell when the same words appeared at about the
   same time. Slash commands, and Claude Code's `!` and `#`, go through the
   Terminal.
+  A Now bar shows the agent's status, its current task from the terminal title
+  and how long it has been at it, with Stop (or Esc twice) for Claude Code,
+  Codex and Pi; the step running now shows with its command and timer.
   It refreshes when the service sees the transcript, title or status change,
   without browser polling, and keeps the last good view if a read fails. When
   it cannot read the conversation it shows the reason with the matching action:

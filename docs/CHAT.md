@@ -24,6 +24,20 @@ view that you open on purpose.
   with a path, such as `/var/log/app.log fails`, is sent.
 - Refreshes when the service says the conversation changed (see
   [Refresh](#refresh)). The browser has no timer. **Refresh** rereads on demand.
+- Shows what is happening now. The Now bar at the top has Herdr's status, the
+  task the harness names in its terminal title (such as "Running tests"), and
+  the time since Chat saw the status change. The step running now (a tool call
+  in the transcript with no result yet) shows at the end of the conversation
+  with its command or file and its own timer. Harnesses write transcripts per
+  message or tool call, not per token, so this is what moves during a long
+  step; it is never terminal output. The step and the clocks show only while
+  Herdr reports the agent working: a call waiting for your approval, or one
+  an interrupt or crash left without a result, is not shown as running.
+  Screen readers hear the status and task change, not the clocks.
+- Stops the agent when you ask. For Claude Code, Codex and Pi, **Stop** in the
+  Now bar, or Esc pressed twice while Chat has focus, presses Esc in the
+  agent's pane to interrupt the turn. One Esc only asks for a second; Chat
+  never stops an agent by itself.
 - Keeps the last good conversation when a read fails, for example while the
   transcript is being written, and says that it could not refresh.
 - When the conversation is unavailable, Chat shows the reason and the action it
@@ -54,7 +68,8 @@ projection cache as History ([History synchronization](HISTORY.md)).
 | `agent_conversation.dismiss` | `pane_id`, `delivery_id` | `{ dismissed }`; forgets a delivery notice |
 | `agent_conversation.watch` / `.unwatch` | `pane_id` | `{ ok: true }`; see [Refresh](#refresh) |
 
-A conversation carries `agent`, `agent_status`, `session_binding`,
+A conversation carries `agent`, `agent_status`, `terminal_title`, `running_tool`
+(the open tool call: its ID, name, summary and start), `session_binding`,
 `session_fingerprint`, `updated_at`, ordered `messages`, `latest` (the last
 assistant message) and a `status` of `ok` or `unavailable`. Each message has a
 `role` (`user`, `assistant` or `tool`) and a `kind`:
@@ -203,7 +218,8 @@ reports and `pane.updated`, which Herdr sends when a pane's title changes, so a
 Codex thread switch through the title is seen. For a transcript on this
 machine, it also watches the file, so messages written during a long turn
 appear without a status change. When the pane's session, title thread,
-transcript size or time, or status changes, the service pushes
+transcript size or time, status, or the task in the terminal title (not its
+spinner glyph) changes, the service pushes
 `agent_conversation_changed` to the watching browser, which rereads. Transcripts
 on an SSH host are rechecked on Herdr events only.
 
