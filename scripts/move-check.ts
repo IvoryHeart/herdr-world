@@ -1,8 +1,8 @@
 /**
  * Checks that a split is a move: code removed in one place reappears, in the
- * same order, somewhere else, and nothing else changes. Every removed hunk must
- * be covered by runs of at least MIN_RUN consecutive lines that appear, in that
- * order, inside one added hunk (a hunk shorter than that must reappear whole).
+ * same order, somewhere else, and nothing else changes. Runs of at least MIN_RUN
+ * consecutive lines establish a mapping between two files. Shorter fragments
+ * may join an established mapping only at a unique, order-preserving location.
  * Each added line may be used once. Lines are compared trimmed; blank lines,
  * import/export plumbing and an `export ` prefix gained by a moved declaration
  * are ignored, with parser state reset at every hunk and file boundary.
@@ -143,6 +143,7 @@ export type Run = {
   toLine: number;
   lines: number;
   first: string;
+  anchored?: true;
 };
 export type MoveReport = {
   lost: Array<{ file: string; line: string }>;
@@ -156,24 +157,73 @@ export type MoveReport = {
  * the other runs between the same two files, is a reorder, not a move.
  */
 export function matchMoves(hunks: Hunk[]): MoveReport {
+  const removed = hunks.filter((hunk) => hunk.sign === "-");
   const added = hunks.filter((hunk) => hunk.sign === "+");
   const used = added.map((hunk) => hunk.lines.map(() => false));
+  const moved = removed.map((hunk) => hunk.lines.map(() => false));
   const report: MoveReport = { lost: [], extra: [], runs: [] };
-  const candidates: Array<{
+  type Candidate = {
     run: Run;
     removed: Line[];
+    source: number;
+    start: number;
     hunk: number;
     at: number;
-  }> = [];
-  for (const removed of hunks.filter((hunk) => hunk.sign === "-")) {
-    const lines = removed.lines;
+  };
+  const candidates: Candidate[] = [];
+  const mappings = new Map<string, Candidate[]>();
+  const pair = (from: string, to: string) => `${from}\0${to}`;
+  const candidate = (
+    source: number,
+    start: number,
+    hunk: number,
+    at: number,
+    length: number,
+  ): Candidate => ({
+    run: {
+      from: removed[source]!.file,
+      fromLine: removed[source]!.lines[start]!.at,
+      to: added[hunk]!.file,
+      toLine: added[hunk]!.lines[at]!.at,
+      lines: length,
+      first: removed[source]!.lines[start]!.text,
+    },
+    removed: removed[source]!.lines.slice(start, start + length),
+    source,
+    start,
+    hunk,
+    at,
+  });
+  const sourceEnd = (c: Candidate) => c.removed.at(-1)!.at;
+  const targetEnd = (c: Candidate) =>
+    added[c.hunk]!.lines[c.at + c.run.lines - 1]!.at;
+  const fits = (c: Candidate, anchors: Candidate[]) =>
+    anchors.every((anchor) =>
+      sourceEnd(c) < anchor.run.fromLine
+        ? targetEnd(c) < anchor.run.toLine
+        : sourceEnd(anchor) < c.run.fromLine &&
+          targetEnd(anchor) < c.run.toLine,
+    );
+  const accept = (c: Candidate) => {
+    for (let k = 0; k < c.run.lines; k++) {
+      used[c.hunk]![c.at + k] = true;
+      moved[c.source]![c.start + k] = true;
+    }
+    const key = pair(c.run.from, c.run.to);
+    const anchors = mappings.get(key) ?? [];
+    anchors.push(c);
+    mappings.set(key, anchors);
+    report.runs.push(c.run);
+  };
+  for (let source = 0; source < removed.length; source++) {
+    const lines = removed[source]!.lines;
     let i = 0;
     while (i < lines.length) {
       // Longest unused in-order run starting at lines[i], within one added
       // hunk of another file.
       let best = { length: 0, hunk: -1, at: -1 };
       added.forEach((target, h) => {
-        if (target.file === removed.file) return;
+        if (target.file === removed[source]!.file) return;
         for (let at = 0; at < target.lines.length; at++) {
           let length = 0;
           while (
@@ -189,45 +239,78 @@ export function matchMoves(hunks: Hunk[]): MoveReport {
       if (best.length >= MIN_RUN) {
         for (let k = 0; k < best.length; k++)
           used[best.hunk]![best.at + k] = true;
-        const target = added[best.hunk]!;
-        candidates.push({
-          run: {
-            from: removed.file,
-            fromLine: lines[i]!.at,
-            to: target.file,
-            toLine: target.lines[best.at]!.at,
-            lines: best.length,
-            first: lines[i]!.text,
-          },
-          removed: lines.slice(i, i + best.length),
-          hunk: best.hunk,
-          at: best.at,
-        });
+        candidates.push(candidate(source, i, best.hunk, best.at, best.length));
         i += best.length;
       } else {
-        report.lost.push({ file: removed.file, line: lines[i]!.text });
         i++;
       }
     }
   }
   // Between the same two files, runs keep their source order.
-  const lastTo = new Map<string, number>();
   candidates.sort(
     (a, b) =>
       a.run.from.localeCompare(b.run.from) || a.run.fromLine - b.run.fromLine,
   );
   for (const candidate of candidates) {
-    const pair = `${candidate.run.from}\0${candidate.run.to}`;
-    if (candidate.run.toLine < (lastTo.get(pair) ?? 0)) {
-      for (const line of candidate.removed)
-        report.lost.push({ file: candidate.run.from, line: line.text });
+    const anchors =
+      mappings.get(pair(candidate.run.from, candidate.run.to)) ?? [];
+    if (!fits(candidate, anchors)) {
       for (let k = 0; k < candidate.run.lines; k++)
         used[candidate.hunk]![candidate.at + k] = false;
       continue;
     }
-    lastTo.set(pair, candidate.run.toLine);
-    report.runs.push(candidate.run);
+    accept(candidate);
   }
+
+  // Small pieces are evidence only within a mapping established above. Search
+  // every remaining eligible destination, including other hunks and files;
+  // ambiguous matches stay in the inventory. Accepted pieces also constrain
+  // later pieces, so shorts cannot cross each other between the full runs.
+  for (let source = 0; source < removed.length; source++) {
+    const origin = removed[source]!;
+    for (let i = 0; i < origin.lines.length; i++) {
+      if (moved[source]![i]) continue;
+      let best: Candidate | undefined;
+      let ambiguous = false;
+      for (let h = 0; h < added.length; h++) {
+        const target = added[h]!;
+        const anchors = mappings.get(pair(origin.file, target.file));
+        if (!anchors || origin.file === target.file) continue;
+        for (let at = 0; at < target.lines.length; at++) {
+          let length = 0;
+          while (
+            length < MIN_RUN - 1 &&
+            i + length < origin.lines.length &&
+            at + length < target.lines.length &&
+            !moved[source]![i + length] &&
+            !used[h]![at + length] &&
+            origin.lines[i + length]!.text === target.lines[at + length]!.text
+          )
+            length++;
+          if (!length) continue;
+          const c = candidate(source, i, h, at, length);
+          if (!fits(c, anchors)) continue;
+          if (!best || length > best.run.lines) {
+            best = c;
+            ambiguous = false;
+          } else if (length === best.run.lines) ambiguous = true;
+        }
+      }
+      if (best && !ambiguous) {
+        best.run.anchored = true;
+        accept(best);
+        i += best.run.lines - 1;
+      }
+    }
+  }
+  removed.forEach((hunk, h) =>
+    hunk.lines.forEach((line, k) => {
+      if (!moved[h]![k]) report.lost.push({ file: hunk.file, line: line.text });
+    }),
+  );
+  report.runs.sort(
+    (a, b) => a.from.localeCompare(b.from) || a.fromLine - b.fromLine,
+  );
   added.forEach((hunk, h) =>
     hunk.lines.forEach((line, k) => {
       if (!used[h]![k]) report.extra.push({ file: hunk.file, line: line.text });
@@ -256,6 +339,7 @@ if (import.meta.main) {
     const diff = git([
       "diff",
       "--no-color",
+      "--diff-algorithm=histogram",
       "-U0",
       "--find-renames",
       `${base}...HEAD`,
@@ -310,7 +394,7 @@ if (import.meta.main) {
     );
     for (const run of runs)
       console.info(
-        `  ${run.from}:${run.fromLine} -> ${run.to}:${run.toLine} (${run.lines} lines) ${run.first.slice(0, 80)}`,
+        `  ${run.from}:${run.fromLine} -> ${run.to}:${run.toLine} (${run.lines} lines${run.anchored ? ", anchored fragment" : ""}) ${run.first.slice(0, 80)}`,
       );
     for (const [file, lines] of ignored) {
       console.info(

@@ -1741,18 +1741,18 @@ from a live host's label MAY open World's New workspace dialog.
 ### Requirement: Agent relations
 
 World SHALL relate two terminals of one connection when either a spawn or a
-manual group says so, and SHALL show each relation with its evidence: its
+manual Team says so, and SHALL show each relation with its evidence: its
 source, whether it holds now and its system of record. A spawn is the child
 pane's Herdr metadata token `spawned_by` (the parent pane) or
 `spawned_by_terminal` (the parent terminal, which wins), which any tool may
 write; Herdr is its record while the token lives, and World's saved claim,
 recorded by the service only from a live snapshot of the connection's current
-runtime, is the record after the token is cleared. A manual group is joined or
+runtime, is the record after the token is cleared. A manual Team is joined or
 left by the user in Town or Board, or by the World service's clients, and World
 is its record. A relation SHALL NOT cross connections, and the service SHALL
-refuse a group that would. Evidence whose terminals are not in a current
+refuse a Team that would. Evidence whose terminals are not in a current
 snapshot SHALL be shown as stale, and the service SHALL drop a saved claim or
-group member once a current snapshot that lists every pane of its connection
+Team member once a current snapshot that lists every pane of its connection
 shows its terminals closed. Herdr SHALL remain the record for layout: a group
 moves a tab only through Herdr's own tab moves.
 
@@ -1771,7 +1771,7 @@ moves a tab only through Herdr's own tab moves.
 - **WHEN** the connection holding a related terminal is cached after a failure
 - **THEN** the relation is kept and shown as stale
 
-#### Scenario: A group across connections
+#### Scenario: A Team across connections
 
 - **WHEN** a client asks to group terminals of two connections
 - **THEN** the service refuses and saves nothing
@@ -1780,6 +1780,73 @@ moves a tab only through Herdr's own tab moves.
 
 - **WHEN** a complete current snapshot no longer lists a saved claim's terminals
 - **THEN** the service drops the claim, and a new stamp makes a new one
+
+### Requirement: Stored Groups
+
+World SHALL persist Groups in `relations.groups` with kind, optional name,
+role-carrying members, optional intent attributes and creation time. Existing
+terminal groups SHALL migrate in place to Team without a read-time write or
+revision change. Team members SHALL use terminal refs on one connection, have
+no group roles, and be pruned only from a complete current snapshot. An unnamed
+Team with fewer than two members SHALL be removed; named Teams MAY remain empty.
+Only Teams SHALL participate in magnetic relations, terminal grouping and its
+existing undo. Spawn claims SHALL remain separate from Group membership.
+
+Pods SHALL be named and use canonical agent addresses, MAY span connections,
+and SHALL retain members until explicitly removed. An unresolved or stale
+address SHALL be away; multiple current matches SHALL be ambiguous. Resolution
+SHALL NOT guess another connection, name or occupant. Custom kinds SHALL have
+no implicit pruning or role exclusivity. Room and Desk SHALL remain Herdr-owned
+projections and SHALL be rejected on every persisted creation/kind-change path.
+
+Lead and builder SHALL be pooled exclusive roles within kind Pod: a ref MAY
+hold either or both in only one Pod total. Reviewer MAY span Pods. Conflicting
+join, role or promotion operations SHALL fail atomically unless an explicitly
+confirmed transfer is supplied; a transfer SHALL preserve other roles. Explicit
+Team-to-Pod promotion SHALL preserve group identity and creation time and
+require a complete, unambiguous terminal-to-address mapping. No other operation
+SHALL silently change a group's kind.
+
+World SHALL bound groups, members, participating Pods per connection, roles,
+attributes and recent attribution. Intent attributes such as the open-PR limit
+and Now list SHALL NOT enforce work policy. World SHALL retain up to 128 recent
+Group change events, including deletion attribution, atomically with the Board
+revision. Every retained event SHALL carry the actual sender claim/basis or
+explicit unknown attribution, with complete member diffs bounded by the 32
+members before plus 32 after an edit. No-op edits SHALL add no events. This
+retained tail SHALL NOT be represented as a complete audit or message ledger.
+Lead/reviewer editing SHALL remain an owner/FirstMate crew rule, not an
+authenticated-principal guarantee; a sender name SHALL NOT grant authority.
+
+#### Scenario: Existing Team survives the schema migration
+
+- **WHEN** World reads a saved terminal group
+- **THEN** its ID, creation time and members survive as a Team with empty roles, without rewriting the file or revision
+
+#### Scenario: A Pod member restarts or becomes ambiguous
+
+- **WHEN** a member's address has no current match, a new current terminal, or two current matches
+- **THEN** World resolves it respectively as away, the new exact occupant, or ambiguous without pruning or guessing
+
+#### Scenario: Pooled exclusive roles require a confirmed move
+
+- **WHEN** a lead in Pod A is assigned builder in Pod B without transfer confirmation
+- **THEN** the whole patch, including attribution, is refused; an explicitly confirmed transfer preserves reviewer membership
+
+#### Scenario: Promotion maps every member explicitly
+
+- **WHEN** a Team is promoted with a missing, duplicate or ambiguous mapping
+- **THEN** World refuses the whole patch; a complete mapping preserves ID and creation time and records every changed ref
+
+#### Scenario: Group deletion keeps recent attribution
+
+- **WHEN** a Group is deleted
+- **THEN** the Group is removed while a bounded deletion event with its ID, revision and sender claim remains
+
+#### Scenario: Projected membership is never stored
+
+- **WHEN** a client creates or changes a persisted group to Room or Desk
+- **THEN** World refuses it without changing the document or its history
 
 ### Requirement: Terminal colour
 

@@ -200,6 +200,14 @@ Its ten suites take about 32 s locally, down from roughly 330 s on CI.
 on test time `WorldControlPlane` re-renders without end. The latency-budget suites
 above stay on real time, because real time is what they measure.
 
+When a fixture models a healthy terminal with a real `TerminalView`, emit a
+qualified full `TerminalPush` for each successful `terminal.attach`, using its
+connection and runtime generation, terminal ID and requested dimensions. The no-frame watchdog
+treats an acknowledgement without a first frame as an unresponsive stream and
+retries, resetting terminal input. [The pane-switcher fixture](../paneJump.browser.tsx)
+provides those frames and checks that its terminals finished loading. Wait for a
+dialog's focused control before sending its next keyboard command.
+
 ## Inspector and windows
 
 | Task | Open these owners | Focused evidence |
