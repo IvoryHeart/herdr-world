@@ -661,6 +661,13 @@ load asynchronously; editing the name takes precedence over a late suggestion.
 - Manage a user service from the CLI; check releases and run checksum-verified
   one-click standalone updates under a supported supervisor. Probe `/health` or
   `/healthz`. See [services](docs/DEPLOYMENT.md#user-service).
+- Keep Herdr on the version this World release verified: installs and updates
+  bring Herdr, the Codex/Claude/Pi harness integrations and the Herdr World plugin up to
+  date, and **Menu → Runtime → Upgrade Herdr** (or **Update Herdr integrations**)
+  appears when something is behind. A running server keeps its panes through a
+  live handoff when World can prove nothing supervises it (Linux); otherwise World says a restart is
+  needed. See
+  [Herdr installation and upgrades](docs/DEPLOYMENT.md#herdr-installation-and-upgrades).
 
 **All listeners require login**, including loopback. World generates a persistent
 token unless an 8–1024-character password is configured; 15+ characters are

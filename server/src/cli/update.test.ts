@@ -80,6 +80,35 @@ describe("herdr-world update", () => {
     expect(cli.output).toContain(
       `Installed herdr-world 1.3.0 at ${cli.context.runtime.execPath}.`,
     );
+    // The new release brings Herdr up to the version it declares.
+    expect(fake.calls[2]).toEqual([
+      cli.context.runtime.execPath,
+      "herdr",
+      "upgrade",
+    ]);
+  });
+
+  test("a Herdr upgrade problem leaves the World update in place", async () => {
+    cli = createTestCli();
+    const fake = fakeProcess("1.3.0");
+    const runProcess = async (argv: string[]) =>
+      argv[1] === "herdr"
+        ? {
+            code: 1,
+            stdout: "Upgraded Herdr 0.9.3 -> 0.9.5 at /example/herdr.",
+            stderr: "Integration codex: failed",
+          }
+        : fake.runProcess(argv);
+    expect(await createUpdateCommand({ runProcess }).run([], cli.context)).toBe(
+      EXIT_OK,
+    );
+    expect(cli.output).toEqual(
+      expect.arrayContaining([
+        "Upgraded Herdr 0.9.3 -> 0.9.5 at /example/herdr.",
+        "Integration codex: failed",
+        "Herdr was not fully upgraded; run `herdr-world herdr upgrade` to retry.",
+      ]),
+    );
   });
 
   test("reports installer failures and refuses source checkouts", async () => {

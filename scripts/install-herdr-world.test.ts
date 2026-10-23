@@ -50,7 +50,15 @@ function createInstallerFixture(checksumName?: string) {
   const binary = join(packagePath, product);
   writeFileSync(
     binary,
-    `#!/bin/sh\n[ "\${1:-}" = "--version" ] && { echo "${product} 9.8.7"; exit 0; }\nexit 1\n`,
+    `#!/bin/sh
+[ "\${1:-}" = "--version" ] && { echo "${product} 9.8.7"; exit 0; }
+if [ "\${1:-}" = "herdr" ]; then
+  echo "$*" >> "$HERDR_STEP_LOG"
+  echo "Installed Herdr 0.9.5."
+  exit "\${HERDR_STEP_CODE:-0}"
+fi
+exit 1
+`,
     { mode: 0o755 },
   );
   writeFileSync(join(packagePath, "VERSION"), `${product} 9.8.7 ${platform}\n`);
@@ -94,7 +102,14 @@ cp "$FIXTURE_DIR/\${url##*/}" "$out"
   );
   chmodSync(fakeCurl, 0o755);
 
-  return { root, assets, fakeBin, installDir, product };
+  return {
+    root,
+    assets,
+    fakeBin,
+    installDir,
+    product,
+    herdrStepLog: join(root, "herdr-step.log"),
+  };
 }
 
 function runInstaller(
@@ -112,6 +127,8 @@ function runInstaller(
         HERDR_WORLD_RELEASE_BASE_URL: releaseBaseUrl,
         HERDR_WORLD_INSTALL_DIR: fixture.installDir,
         HERDR_WORLD_VERSION: "",
+        HERDR_WORLD_SKIP_HERDR: undefined,
+        HERDR_STEP_LOG: fixture.herdrStepLog,
         ...environment,
       },
       stdout: "pipe",
@@ -255,5 +272,36 @@ describe("release installer", () => {
     expect(result.stderr.toString()).toContain(
       "release base URL must use HTTPS unless the mirror is loopback",
     );
+  });
+
+  test("installs or upgrades Herdr with the release it just installed", () => {
+    const fixture = createInstallerFixture();
+    const result = runInstaller(fixture);
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout.toString()).toContain("Installed Herdr 0.9.5.");
+    expect(readFileSync(fixture.herdrStepLog, "utf8")).toBe(
+      "herdr upgrade --install\n",
+    );
+  });
+
+  test("HERDR_WORLD_SKIP_HERDR=1 leaves Herdr alone", () => {
+    const fixture = createInstallerFixture();
+    const result = runInstaller(fixture, undefined, {
+      HERDR_WORLD_SKIP_HERDR: "1",
+    });
+    expect(result.exitCode).toBe(0);
+    expect(existsSync(join(fixture.installDir, "herdr-world"))).toBe(true);
+    expect(existsSync(fixture.herdrStepLog)).toBe(false);
+  });
+
+  test("a Herdr failure is reported without undoing the World install", () => {
+    const fixture = createInstallerFixture();
+    const result = runInstaller(fixture, undefined, { HERDR_STEP_CODE: "1" });
+    expect(result.exitCode).toBe(0);
+    expect(existsSync(join(fixture.installDir, "herdr-world"))).toBe(true);
+    expect(result.stderr.toString()).toContain(
+      "Herdr was not fully installed or upgraded",
+    );
+    expect(result.stderr.toString()).toContain("herdr upgrade --install");
   });
 });

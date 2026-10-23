@@ -29,7 +29,18 @@ subprocess receives isolated synthetic state and a PATH that cannot resolve Bun.
 The v0.2.3 upgrade must reject legacy password-signed cookies and allow re-login;
 new sessions must survive candidate restart. Later baselines require session
 preservation across upgrade as well. Bun remains the build/test driver; this is a no-Bun execution environment, not a claim
-that the entire runner has no Bun files. No live service or external Herdr is managed.
+that the entire runner has no Bun files. No live service or external Herdr is managed:
+the standalone upgrade sets `HERDR_WORLD_SKIP_HERDR=1`. A separate case runs the
+candidate's real `herdr-world herdr upgrade --json` on each native platform against
+a fake `herdr`, a small Bun-compiled executable. The fake reports the verified Herdr
+version (so nothing is downloaded), records its calls and answers
+`integration status` and `plugin list`. The case asserts that only the present,
+outdated harness integration is installed (codex and claude present, pi absent) and
+that the GitHub plugin is reinstalled with `--ref v<candidate>`. Real: the
+candidate executable, its CLI, configuration and process handling on that
+platform. Faked: Herdr, the harness commands and the plugin registry. Binary
+replacement, live handoff and Windows migration are covered by unit tests with fake
+binaries, installers and servers.
 
 Reports identify the baseline/candidate revisions, native platform, archive digest
 and completed scenarios. Compact JSON evidence is retained for one day; archives
@@ -96,6 +107,23 @@ a local archive URL for the current architecture, creates a local
 and `brew untap herdrworld/preview`. It conflicts with installed stable or RC
 Formulae because they provide the same command. The published URL and tap flow
 are checked again during the RC release workflow.
+
+## Bumping the verified Herdr
+
+Each release pins the Herdr it installs and upgrades to
+(`server/src/herdr/release.ts`). To move to a new Herdr release:
+
+1. Confirm its protocol is in `server/src/bridge/protocol-compat.ts` and exercise
+   World against it.
+2. Copy the version, protocol and per-target SHA-256 values from
+   `https://herdr.dev/latest.json`. Download `distribution/install.ps1` at the new
+   tag and record its SHA-256 too.
+3. Note any integration or plugin behaviour the new Herdr changes in the changelog;
+   the upgrade step reinstalls the Codex, Claude and Pi harness integrations after every
+   Herdr upgrade.
+
+The Homebrew Formula's Intel Mac Herdr resource reads the same table, so it moves
+with the bump. Users receive the new Herdr with the World release that declares it.
 
 ## Publishing a candidate or stable release
 
