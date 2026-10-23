@@ -523,7 +523,12 @@ export function AgentChat({
           <button
             type="button"
             className="agent-chat-stop"
-            title="Press Esc in the agent's terminal to interrupt this turn (or press Esc twice)"
+            title={
+              // A touch screen has no Esc key to point to.
+              window.matchMedia?.("(pointer: coarse)").matches
+                ? "Interrupt this turn in the agent's terminal"
+                : "Press Esc in the agent's terminal to interrupt this turn (or press Esc twice)"
+            }
             onClick={() => void stop()}
           >
             ■ Stop <kbd>Esc</kbd>
