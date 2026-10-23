@@ -264,11 +264,14 @@ bridge.connection = (id) => {
     },
   };
 };
+let chatScaleShown: number | null = null;
 function Harness() {
   const [theme, setTheme] = useState<"light" | "dark" | "system">("dark");
   const [scale, setScale] = useState(
     Number(new URLSearchParams(location.search).get("scale") ?? 100),
   );
+  const [chatScale, setChatScale] = useState<number | null>(null);
+  chatScaleShown = chatScale;
   document.documentElement.dataset.theme = theme;
   document.documentElement.style.zoom = String(scale / 100);
   document.documentElement.style.setProperty("--ui-scale", String(scale / 100));
@@ -290,6 +293,8 @@ function Harness() {
       onTerminalFontNameChange={() => {}}
       terminalFontScale={100}
       onTerminalFontScaleChange={() => {}}
+      chatTextScale={chatScale}
+      onChatTextScaleChange={setChatScale}
       zenMode={false}
       mobileTerminalShortcuts={[[], []]}
       mobileTerminalSideShortcuts={[]}
@@ -667,6 +672,24 @@ async function run() {
   check(
     document.documentElement.dataset.theme === "light",
     "theme preference stopped working",
+  );
+  // Chat text follows the terminal size until set on its own; its value
+  // button links it back.
+  check(
+    chatScaleShown === null &&
+      !!document.querySelector(
+        '[aria-label="Chat text size follows the terminal, currently 100%"]',
+      ),
+    "Chat text must start linked to the terminal font size",
+  );
+  click("Increase Chat text size");
+  await settle();
+  check(chatScaleShown === 105, `Chat text did not unlink (${chatScaleShown})`);
+  click("Link Chat text size to the terminal, currently 105%");
+  await settle();
+  check(
+    chatScaleShown === null,
+    "Chat text did not link to the terminal again",
   );
   for (let i = 0; i < (innerWidth <= 320 ? 10 : 5); i++)
     click("Increase interface scale");

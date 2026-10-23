@@ -33,9 +33,10 @@
 
 .agent-history-chat-message {
   min-width: 0;
-  /* About 75 characters of the bubbles' 12px text a line, however wide the
-     window: longer lines are hard to follow. */
-  max-width: min(88%, 460px);
+  /* Chat's text size (Configuration > Chat text), and about 75 characters a
+     line at any size or window width: longer lines are hard to follow. */
+  font-size: var(--chat-font-size, 13px);
+  max-width: min(88%, 36em);
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -52,7 +53,6 @@
   max-width: 100%;
   padding: 8px 11px;
   color: var(--text);
-  font-size: 12px;
   line-height: 1.5;
   overflow-wrap: anywhere;
   background: var(--input-bg);

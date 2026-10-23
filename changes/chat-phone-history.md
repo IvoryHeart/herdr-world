@@ -1,5 +1,8 @@
 ### Added
 
+- **Chat text** in Configuration sets Chat's text size. It follows the
+  terminal font size until set on its own, and Chat's text is a step larger
+  than before (13px).
 - Chat loads earlier messages as you scroll back past the latest 200, a page
   at a time, keeping your place; **Load earlier messages** does the same.
 
@@ -13,6 +16,8 @@
 
 ### Fixed
 
+- A docked Chat window restored on page load, for an agent on a host the page
+  had not opened yet, no longer stays blank until the agent is clicked.
 - Chat no longer runs off the right edge on phones: a long path, command,
   link or title wraps or scrolls inside its own bubble, and wide tables
   scroll instead of squeezing every cell to one letter a line.

@@ -8,6 +8,7 @@ import {
   Keyboard,
   LayoutDashboard,
   Minus,
+  MessageSquareText,
   Moon,
   Palette,
   Plus,
@@ -19,7 +20,11 @@ import type { Theme } from "../App";
 import {
   ACCENT_OPTIONS,
   type AccentColor,
+  clampTerminalFontScale,
   clampUiScale,
+  TERMINAL_FONT_SCALE_MAX,
+  TERMINAL_FONT_SCALE_MIN,
+  TERMINAL_FONT_SCALE_STEP,
   UI_SCALE_DEFAULT,
   UI_SCALE_MAX,
   UI_SCALE_MIN,
@@ -85,6 +90,9 @@ export type ConfigurationProps = {
   onAccentColorChange: (accentColor: AccentColor) => void;
   onUiScaleChange: (scale: number) => void;
   onTerminalFontScaleChange: (scale: number) => void;
+  /** Chat's text scale; null follows the terminal font scale. */
+  chatTextScale?: number | null;
+  onChatTextScaleChange?: (scale: number | null) => void;
   onTerminalFontNameChange: (name: string) => void;
   onMobileTerminalShortcutsChange: (rows: MobileTerminalShortcutRows) => void;
   onMobileTerminalSideShortcutsChange: (
@@ -400,6 +408,13 @@ export function ConfigurationDialog({
                   </button>
                 </div>
               </div>
+              {props.onChatTextScaleChange ? (
+                <ChatTextRow
+                  scale={props.chatTextScale ?? null}
+                  terminalFontScale={props.terminalFontScale}
+                  onChange={props.onChatTextScaleChange}
+                />
+              ) : null}
               <button
                 type="button"
                 className="config-menu-item"
@@ -684,5 +699,76 @@ export function ConfigurationDialog({
         onClose={() => setDetail(null)}
       />
     </>
+  );
+}
+
+/**
+ * Chat's text size: linked to the terminal font scale until changed here;
+ * the value button links it again.
+ */
+function ChatTextRow({
+  scale,
+  terminalFontScale,
+  onChange,
+}: {
+  scale: number | null;
+  terminalFontScale: number;
+  onChange: (scale: number | null) => void;
+}) {
+  const shown = scale ?? terminalFontScale;
+  return (
+    <div className="config-preference-row">
+      <span className="config-item-icon">
+        <MessageSquareText size={15} />
+      </span>
+      <div className="config-item-copy">
+        <strong>Chat text</strong>
+        <span>
+          {scale === null
+            ? "Follows the terminal font size"
+            : "Set on its own; the value links it to the terminal again"}
+        </span>
+      </div>
+      <div
+        className="config-scale-control"
+        role="group"
+        aria-label="Chat text size"
+      >
+        <button
+          type="button"
+          aria-label="Decrease Chat text size"
+          disabled={shown <= TERMINAL_FONT_SCALE_MIN}
+          onClick={() =>
+            onChange(clampTerminalFontScale(shown - TERMINAL_FONT_SCALE_STEP))
+          }
+        >
+          <Minus size={14} />
+        </button>
+        <button
+          type="button"
+          className="config-scale-value"
+          aria-label={
+            scale === null
+              ? `Chat text size follows the terminal, currently ${shown}%`
+              : `Link Chat text size to the terminal, currently ${shown}%`
+          }
+          aria-pressed={scale === null}
+          disabled={scale === null}
+          onClick={() => onChange(null)}
+        >
+          {scale === null ? `Terminal · ${shown}%` : `${shown}%`}
+        </button>
+        <button
+          type="button"
+          aria-label="Increase Chat text size"
+          disabled={shown >= TERMINAL_FONT_SCALE_MAX}
+          onClick={() =>
+            onChange(clampTerminalFontScale(shown + TERMINAL_FONT_SCALE_STEP))
+          }
+        >
+          <Plus size={14} />
+        </button>
+      </div>
+    </div>
   );
 }

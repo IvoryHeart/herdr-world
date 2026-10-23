@@ -141,7 +141,7 @@
   padding: 8px 10px;
   color: var(--text);
   font: inherit;
-  font-size: 13px;
+  font-size: var(--chat-font-size, 13px);
   background: var(--input-bg);
   border: 1px solid var(--border-soft);
   border-radius: 10px;

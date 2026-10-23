@@ -131,7 +131,9 @@ Interface scale uses root CSS zoom. Terminal surfaces cancel that zoom and
 apply a separately saved terminal font scale, so cell measurements, selection,
 mouse input, and IME positioning stay in viewport CSS pixels. Radix popovers
 also cancel zoom around their positioning wrapper and reapply it to the
-content; their viewport limits convert back to content units.
+content; their viewport limits convert back to content units. Chat's text
+uses `--chat-font-size`: 13px times its own saved scale, or the terminal font
+scale while linked.
 
 Backend selection uses the verified protocol allowlist, not browser version
 inference. See [Herdr compatibility](./DEPLOYMENT.md#herdr-compatibility) for
