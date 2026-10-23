@@ -32,8 +32,11 @@ export const BURST_MS = 3_000;
 export type ChimeDevice = { on: boolean; volume: number };
 const DEVICE_KEY = "chimeDevice";
 const DEFAULT_DEVICE: ChimeDevice = { on: true, volume: 0.6 };
+export const CHIME_DEVICE_CHANGED_EVENT = "herdr-world:chime-device-changed";
+let deviceOverride: ChimeDevice | null = null;
 
 export function chimeDevice(): ChimeDevice {
+  if (deviceOverride) return { ...deviceOverride };
   try {
     const stored = JSON.parse(
       worldLocalStorage.getItem(DEVICE_KEY) ?? "null",
@@ -54,13 +57,14 @@ export function chimeDevice(): ChimeDevice {
 export function setChimeDevice(device: ChimeDevice) {
   try {
     worldLocalStorage.setItem(DEVICE_KEY, JSON.stringify(device));
+    deviceOverride = null;
   } catch {
     // Storage may be unavailable; the setting then lasts for this page.
+    deviceOverride = { ...device };
   }
-  deviceOverride = device;
+  if (typeof window !== "undefined")
+    window.dispatchEvent(new Event(CHIME_DEVICE_CHANGED_EVENT));
 }
-let deviceOverride: ChimeDevice | null = null;
-const currentDevice = () => deviceOverride ?? chimeDevice();
 
 /** The viewer's interest, from layers' Interest once it lands. */
 type InterestSource = {
@@ -106,7 +110,7 @@ type Deps = {
 const browserDeps: Deps = {
   now: () => Date.now(),
   document: profilesSnapshot,
-  device: currentDevice,
+  device: chimeDevice,
   ready: chimeAudioReady,
   play: playChime,
   setTimer: (run, ms) => setTimeout(run, ms),
@@ -117,7 +121,7 @@ export function senderOf(
   document: ProfilesDocument | null,
   change: Pick<Change, "connectionId" | "terminalId" | "agent">,
 ): (ChimeSender & { name: string }) | null {
-  if (!change.terminalId) return null;
+  if (!change.terminalId || !change.agent) return null;
   const master = document?.town_master;
   const profile = profileFor(document, change.connectionId, change.terminalId);
   return {
@@ -136,21 +140,15 @@ export function createChimeCenter(deps: Deps = browserDeps) {
     start: number;
     reasons: string[];
     played: number | null;
-    pending: { timbre: Timbre; motif: Motif; priority: number } | null;
+    pending: { change: Change; priority: number } | null;
   } | null = null;
 
-  function announce(change: Change): Announcement {
+  function soundFor(change: Change) {
     const document = deps.document();
     const settings = document?.chimes ?? DEFAULT_CHIMES;
     const device = deps.device();
     const sender = senderOf(document, change);
     const motif = motifFor(change.kind);
-    const reason = chimeReason({
-      // Herdr's own agent label still names a pane World hasn't listed yet.
-      who: sender?.name ?? change.agent,
-      motif,
-      detail: change.detail,
-    });
     const townMaster = sender?.townMaster ?? false;
     const wanted =
       device.on &&
@@ -172,6 +170,17 @@ export function createChimeCenter(deps: Deps = browserDeps) {
       });
     const timbre = timbreFor(sender, settings);
     const priority = chimePriority(motif, townMaster);
+    return { device, sender, motif, wanted, timbre, priority };
+  }
+
+  function announce(change: Change): Announcement {
+    const { device, sender, motif, wanted, timbre, priority } =
+      soundFor(change);
+    const reason = chimeReason({
+      who: sender?.name ?? change.agent,
+      motif,
+      detail: change.detail,
+    });
     const now = deps.now();
     if (!burst || now - burst.start >= BURST_MS)
       burst = { start: now, reasons: [], played: null, pending: null };
@@ -192,12 +201,18 @@ export function createChimeCenter(deps: Deps = browserDeps) {
             () => {
               const pending = current.pending;
               current.pending = null;
-              if (pending)
-                deps.play(pending.timbre, pending.motif, deps.device().volume);
+              if (!pending) return;
+              const latest = soundFor(pending.change);
+              if (
+                latest.wanted &&
+                deps.ready() &&
+                latest.priority > (current.played ?? -1)
+              )
+                deps.play(latest.timbre, latest.motif, latest.device.volume);
             },
             current.start + BURST_MS - now,
           );
-        current.pending = { timbre, motif, priority };
+        current.pending = { change: { ...change }, priority };
         chimed = true;
       } else chimed = true; // Covered by the burst's chime.
     }
@@ -208,7 +223,7 @@ export function createChimeCenter(deps: Deps = browserDeps) {
           : reason,
       reasons: [...current.reasons],
       chimed,
-      silent: device.on ? deps.ready() : true,
+      silent: !wanted || chimed,
     };
   }
   return {

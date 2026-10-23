@@ -1,6 +1,7 @@
 import { EndpointClient } from "../bridge/endpoint-client";
 import type { SemanticNotification } from "../bridge/semantic-notification";
 import type { TaskEvent } from "./task-events";
+import { notificationSender } from "../../../shared/notificationSender";
 
 /**
  * Where task notifications come from.
@@ -50,6 +51,7 @@ export function taskEventFromSemanticNotification(
   return {
     kind,
     agent: notification.agent ?? "Agent",
+    sender: notificationSender(notification.agent),
     title: notification.title,
     ...(notification.body ? { body: notification.body } : {}),
     ...(notification.workspaceId

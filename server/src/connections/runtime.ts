@@ -428,6 +428,7 @@ export function createLegacyConnectionRuntime(args: {
           type: "herdr-world.task_notification",
           kind: event.kind,
           agent: event.agent,
+          sender: event.sender ?? { known: false },
           title:
             event.title ??
             (event.kind === "blocked"

@@ -1,6 +1,9 @@
 self.addEventListener("install", (event) => {
   event.waitUntil(self.skipWaiting());
 });
+self.addEventListener("activate", (event) => {
+  event.waitUntil(self.clients.claim());
+});
 
 function validNotificationTarget(target) {
   if (!target || typeof target !== "object" || Array.isArray(target))
@@ -27,19 +30,32 @@ function validNotificationTarget(target) {
   );
 }
 
-// A World page that plays its own chimes says so every few seconds; while
-// it does, push notifications are silent so the owner hears one sound. If the
-// worker restarts and forgets, the OS sound plays again.
-let chimesActiveUntil = 0;
+// Any fresh playing or muted page silences push. Track each page separately,
+// so a suspended tab cannot override another tab that owns the sound.
+const chimePolicies = new Map();
 self.addEventListener("message", (event) => {
   const data = event.data;
   if (
-    data?.type === "herdr-world:chimes-active" &&
+    (data?.type === "herdr-world:chimes-active" ||
+      (data?.type === "herdr-world:chime-policy" &&
+        ["playing", "muted", "fallback"].includes(data.mode))) &&
     Number.isFinite(data.until) &&
     data.until <= Date.now() + 60_000
-  )
-    chimesActiveUntil = data.until;
+  ) {
+    const key = event.source?.id ?? "legacy";
+    chimePolicies.set(key, {
+      until: data.until,
+      silent: data.mode !== "fallback",
+    });
+  }
 });
+
+function pushIsSilent() {
+  const now = Date.now();
+  for (const [key, policy] of chimePolicies)
+    if (policy.until <= now) chimePolicies.delete(key);
+  return [...chimePolicies.values()].some((policy) => policy.silent);
+}
 
 self.addEventListener("push", (event) => {
   event.waitUntil(
@@ -63,7 +79,7 @@ self.addEventListener("push", (event) => {
               : "Open Herdr World to check your agents.",
           tag:
             typeof message?.tag === "string" ? message.tag : "herdr-world-task",
-          silent: chimesActiveUntil > Date.now(),
+          silent: pushIsSilent(),
           data: {
             type: "herdr-world:task-notification-activate",
             target: valid ? target : null,

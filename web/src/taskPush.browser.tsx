@@ -55,7 +55,7 @@ Object.defineProperty(navigator, "serviceWorker", {
     getRegistration: async () => ({
       active: {
         state: "activated",
-        scriptURL: location.origin + "/task-notifications-sw.js?v=3",
+        scriptURL: location.origin + "/task-notifications-sw.js?v=4",
       },
       showNotification() {
         failures.push("push mode invoked local delivery");

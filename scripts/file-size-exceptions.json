@@ -29,7 +29,7 @@
     "web/src/components/TerminalView.tsx": 4300,
     "web/src/components/WorkspaceInspectorHost.tsx": 1409,
     "web/src/components/WorkspaceTree.tsx": 1311,
-    "web/src/store.ts": 5742,
+    "web/src/store.ts": 5740,
     "web/src/styles/layout/app.css": 1083,
     "web/src/world/DeskView.tsx": 1217,
     "web/src/world/TownView.tsx": 1554,

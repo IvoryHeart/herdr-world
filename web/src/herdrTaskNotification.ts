@@ -1,3 +1,8 @@
+import {
+  parseNotificationSender,
+  type NotificationSender,
+} from "../../shared/notificationSender";
+
 /** Server-relayed Herdr SemanticNotification (`herdr-world.task_notification`). */
 export interface HerdrTaskNotification {
   sessionIdentityUnavailable?: true;
@@ -7,6 +12,7 @@ export interface HerdrTaskNotification {
   /** Herdr's agent label; absent when Herdr named none. */
   agent: string;
   agentKnown?: boolean;
+  sender: NotificationSender;
   title: string;
   body: string | null;
   workspaceId: string | null;
@@ -27,10 +33,14 @@ export function parseHerdrTaskNotification(
     !title
   )
     return null;
+  const sender = parseNotificationSender(data.sender);
   return {
     kind,
-    agent: optionalEventText(data.agent) ?? "Agent",
-    ...(optionalEventText(data.agent) ? { agentKnown: true } : {}),
+    agent: sender.known
+      ? sender.agent
+      : (optionalEventText(data.agent) ?? "Agent"),
+    agentKnown: sender.known,
+    sender,
     title,
     body: optionalEventText(data.body),
     workspaceId: optionalEventText(data.workspace_id),

@@ -793,6 +793,10 @@ load asynchronously; editing the name takes precedence over a late suggestion.
   and no `--sound`. While World chimes, its notifications are silent; Herdr's
   own client may still play its sound (`[ui.sound] enabled = false` turns it
   off).
+  Muting this device also silences push while World is open, including just
+  after enabling notifications. Changes to device settings apply across open
+  tabs, and queued burst sounds obey your current sound settings.
+  Missing sender metadata stays unknown and uses the crew sound.
 - Multiple browsers receive pushed events. Pause/resume yours, see client counts,
   or pause others. Herdr semantic task alerts use the relevant pane when Herdr
   supplies one; pane-less alerts open World without guessing a target. Older

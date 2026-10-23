@@ -6,6 +6,10 @@
   Sounds** sets this device's chimes, the shared sounds and patterns, and the
   Town master, whose needs-you chime breaks Focus. Profiles get a **Chime**.
   Bursts share one chime; World's notifications go silent while it chimes.
+  Queued sounds follow current settings, intentional silence stays silent
+  during OS fallback, and device mute silences push while World is open.
+  First-install notification control works without reloading; unknown senders
+  keep the crew sound through the server relay.
 
 ### Changed
 

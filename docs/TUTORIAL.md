@@ -267,7 +267,10 @@ own tab, dressed as you chose in Town.
 
 1. Open **Menu → Sounds**. Under **This device**, leave **Play chimes on this
    device** on and tap **Needs you**, **For you** and **Finished** to hear the
-   three patterns. Turn it off on devices that shouldn't chime.
+   three patterns. Turn it off on devices that shouldn't chime; push stays
+   silent too while World is open, including when notifications are first
+   enabled. Open tabs share this device setting, and queued burst sounds
+   follow your latest sound choices.
 2. Under **Town master**, choose your coordinating agent (for example
    FirstMate) and tap **Make Town master**. Its chime is a sound of its own.
 3. Tap anywhere in World once (browsers start sound only after a tap). When an

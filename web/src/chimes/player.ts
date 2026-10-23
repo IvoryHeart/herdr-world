@@ -1,4 +1,5 @@
 import type { Motif, Timbre } from "../../../shared/chimes";
+export const CHIME_AUDIO_STATE_EVENT = "herdr-world:chime-audio-state";
 
 /**
  * World's chimes, synthesised with Web Audio: no sound files. A timbre is a
@@ -194,6 +195,10 @@ function audioContext() {
   if (!Context) return null;
   try {
     context = new Context();
+    const publish = () =>
+      window.dispatchEvent(new Event(CHIME_AUDIO_STATE_EVENT));
+    context.addEventListener("statechange", publish);
+    publish();
   } catch {
     return null;
   }

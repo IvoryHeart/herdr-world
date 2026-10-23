@@ -55,7 +55,7 @@ async function withBrowser(
 function registration() {
   return {
     active: {
-      scriptURL: origin + "/task-notifications-sw.js?v=3",
+      scriptURL: origin + "/task-notifications-sw.js?v=4",
       state: "activated",
     },
     showNotification: mock(async () => {}),
@@ -109,7 +109,7 @@ describe("task notification transport", () => {
       await Promise.resolve();
       await Promise.resolve();
       expect(active.showNotification).not.toHaveBeenCalled();
-      expect(register).toHaveBeenCalledWith("/task-notifications-sw.js?v=3", {
+      expect(register).toHaveBeenCalledWith("/task-notifications-sw.js?v=4", {
         updateViaCache: "none",
       });
       pending.active = active.active;
@@ -428,6 +428,15 @@ describe("notification service worker clicks", () => {
     });
     expect(await pushAgain()).toMatchObject({ silent: true });
     listeners.message({
+      source: { id: "another-page" },
+      data: {
+        type: "herdr-world:chime-policy",
+        mode: "fallback",
+        until: Date.now() + 30_000,
+      },
+    });
+    expect(await pushAgain()).toMatchObject({ silent: true });
+    listeners.message({
       data: { type: "herdr-world:chimes-active", until: Date.now() - 1 },
     });
     expect(await pushAgain()).toMatchObject({ silent: false });
@@ -495,6 +504,7 @@ describe("notification service worker clicks", () => {
       },
     );
     expect(Object.keys(listeners).sort()).toEqual([
+      "activate",
       "install",
       "message",
       "notificationclick",

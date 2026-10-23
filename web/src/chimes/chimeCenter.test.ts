@@ -11,7 +11,12 @@ import {
   type Change,
   createChimeCenter,
   setChimeInterestSource,
+  announceChange,
+  chimeDevice,
+  setChimeDevice,
+  resetChimeBursts,
 } from "./chimeCenter";
+import { worldLocalStorage } from "../browserStorage";
 
 const document: ProfilesDocument = {
   version: 1,
@@ -27,13 +32,15 @@ const document: ProfilesDocument = {
   town_master: { connection_id: "local", terminal_id: "term_f" },
 };
 
-function harness(options: { ready?: boolean; on?: boolean } = {}) {
+function harness(
+  options: { ready?: boolean; on?: boolean; document?: ProfilesDocument } = {},
+) {
   let clock = 1_000;
   const played: [Timbre, Motif][] = [];
   const timers: { at: number; run: () => void }[] = [];
   const { announce } = createChimeCenter({
     now: () => clock,
-    document: () => document,
+    document: () => options.document ?? document,
     device: () => ({ on: options.on ?? true, volume: 0.5 }),
     ready: () => options.ready ?? true,
     play: (timbre, motif) => {
@@ -63,6 +70,103 @@ const change = (patch: Partial<Change>): Change => ({
 });
 
 describe("Chime center", () => {
+  test.each(["device", "motif", "muted", "focus", "audio"])(
+    "queued escalation rechecks %s",
+    (policy) => {
+      const options = {
+        ready: true,
+        on: true,
+        document: structuredClone(document),
+      };
+      const h = harness(options);
+      let muted = false;
+      let focused = false;
+      setChimeInterestSource({
+        interestOf: () => (muted ? "muted" : "watching"),
+        anyFocused: () => focused,
+      });
+      try {
+        h.announce(change({}));
+        h.advance(500);
+        h.announce(change({ kind: "blocked" }));
+        if (policy === "device") options.on = false;
+        if (policy === "motif")
+          options.document.chimes!.motifs.needs_you = false;
+        if (policy === "muted") muted = true;
+        if (policy === "focus") focused = true;
+        if (policy === "audio") options.ready = false;
+        h.advance(BURST_MS);
+        expect(h.played).toEqual([["marimba", "finished"]]);
+      } finally {
+        setChimeInterestSource(null);
+      }
+    },
+  );
+
+  test.each(["motif", "muted", "focus"])(
+    "OS fallback stays silent for %s suppression",
+    (policy) => {
+      const current = structuredClone(document);
+      if (policy === "motif") current.chimes!.motifs.finished = false;
+      setChimeInterestSource({
+        interestOf: () => (policy === "muted" ? "muted" : "watching"),
+        anyFocused: () => policy === "focus",
+      });
+      try {
+        expect(
+          harness({ ready: false, document: current }).announce(change({})),
+        ).toMatchObject({ chimed: false, silent: true });
+      } finally {
+        setChimeInterestSource(null);
+      }
+    },
+  );
+
+  test("an unknown sender cannot borrow a known terminal's profile or master timbre", () => {
+    const h = harness();
+    const result = h.announce(
+      change({ kind: "message", terminalId: "term_f", agent: null }),
+    );
+    expect(result.message).toBe("For you · sender unknown");
+    expect(h.played).toEqual([["marimba", "for_you"]]);
+  });
+
+  test("successful device writes follow another tab and failed writes share one fallback", () => {
+    const previous = Object.getOwnPropertyDescriptor(
+      globalThis,
+      "localStorage",
+    );
+    const values = new Map<string, string>();
+    let fail = false;
+    Object.defineProperty(globalThis, "localStorage", {
+      configurable: true,
+      value: {
+        getItem: (key: string) => values.get(key) ?? null,
+        setItem: (key: string, value: string) => {
+          if (fail) throw new Error("storage unavailable");
+          values.set(key, value);
+        },
+      },
+    });
+    try {
+      setChimeDevice({ on: true, volume: 0.5 });
+      worldLocalStorage.setItem(
+        "chimeDevice",
+        JSON.stringify({ on: false, volume: 0.3 }),
+      );
+      expect(chimeDevice().on).toBe(false);
+      expect(announceChange(change({})).silent).toBe(true);
+      fail = true;
+      setChimeDevice({ on: true, volume: 0.7 });
+      expect(chimeDevice()).toEqual({ on: true, volume: 0.7 });
+    } finally {
+      fail = false;
+      setChimeDevice({ on: true, volume: 0.6 });
+      resetChimeBursts();
+      if (previous) Object.defineProperty(globalThis, "localStorage", previous);
+      else Reflect.deleteProperty(globalThis, "localStorage");
+    }
+  });
   test("names the sender and plays its timbre", () => {
     const h = harness();
     expect(

@@ -1365,9 +1365,7 @@ function notifyHerdrTask(
     kind: notification.kind,
     connectionId,
     terminalId: pane?.terminal_id || null,
-    agent: notification.agentKnown
-      ? notification.agent
-      : (pane?.display_agent ?? pane?.agent ?? null),
+    agent: notification.agentKnown ? notification.agent : null,
     // Without a pane, Herdr's title is all that says what it is.
     detail: message || !paneId ? notification.title : null,
   });

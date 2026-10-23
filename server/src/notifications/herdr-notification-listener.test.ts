@@ -28,6 +28,7 @@ describe("taskEventFromSemanticNotification", () => {
     expect(taskEventFromSemanticNotification(notification())).toEqual({
       kind: "completed",
       agent: "claude",
+      sender: { known: true, agent: "claude" },
       title: "claude finished",
       body: "cvision",
       workspaceId: "w1",
@@ -54,7 +55,12 @@ describe("taskEventFromSemanticNotification", () => {
       taskEventFromSemanticNotification(
         notification({ ...custom, title: "codex idle", sound: "done" }),
       ),
-    ).toEqual({ kind: "completed", agent: "Agent", title: "codex idle" });
+    ).toEqual({
+      kind: "completed",
+      agent: "Agent",
+      sender: { known: false },
+      title: "codex idle",
+    });
     expect(
       taskEventFromSemanticNotification(
         notification({ ...custom, title: "codex asks", sound: "request" }),

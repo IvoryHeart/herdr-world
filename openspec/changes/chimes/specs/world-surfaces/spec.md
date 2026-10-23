@@ -20,6 +20,12 @@ once more at the window's end. Every chime SHALL come with a toast whose reason
 line names the sender, or says the sender is unknown, and why; a burst's toast
 SHALL read "N changes" with each reason. World SHALL NOT guess a sender from
 notification text.
+Sender claims SHALL travel explicitly through the service relay; missing or
+invalid sender metadata SHALL remain unknown, including with a known pane or
+profile. Unknown senders SHALL retain the crew timbre and the mapped motif.
+Queued escalations SHALL recheck the current sound and interest policy before
+playing. Intentionally suppressed page notifications SHALL stay silent when
+Web Audio is unavailable.
 
 The owner's class timbres and motif switches, each profile's chime and the
 Town master SHALL be kept by the service and shared by every browser. The
@@ -30,8 +36,10 @@ that offers the role SHALL be suggested, never assigned. Whether this device
 plays chimes, and how loud, SHALL be the device's own setting.
 
 When World plays the sound on a page, it SHALL mark that page's notifications
-silent, and push notifications SHALL be silent while such a page has said so
-within the last minute; otherwise the OS sound SHALL play.
+silent, and push notifications SHALL be silent while a page has reported
+playing chimes or muting this device within the last minute. This SHALL work
+on first installation without reloading, and one page's OS fallback SHALL NOT
+override another page's current silence policy; otherwise the OS sound SHALL play.
 
 #### Scenario: The Town master needs you during Focus
 
