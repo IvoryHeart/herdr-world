@@ -1279,8 +1279,9 @@ a pinned desk SHALL NOT go to the lounge: it SHALL leave its seat only for
 reception, when blocked or done and not yet checked, and SHALL return to its
 seat once checked or answered. A pin SHALL follow its tab to another workspace
 and SHALL be dropped when its tab closes. When a room has more desks than Town
-presents, pinned desks and their agents SHALL be presented ahead of every
-other desk but the selected one.
+presents, its pinned desks and the selected desk, with their agents, SHALL
+still be presented, even past the bound, and other desks SHALL be omitted
+instead; only pins beyond the 127 desks a room can draw MAY go undrawn.
 
 #### Scenario: A pinned agent finishes and is seen
 
@@ -1290,10 +1291,10 @@ other desk but the selected one.
 
 #### Scenario: A pinned desk in a crowded room
 
-- **WHEN** a room's tabs exceed Town's desk bound and one of its later tabs is
-  pinned
-- **THEN** that desk and its agents stay presented, and an unpinned desk is
-  omitted instead
+- **WHEN** a room's tabs exceed Town's desk bound and more of its tabs are
+  pinned than the bound, with another desk selected
+- **THEN** every pinned desk, the selected desk and their agents stay
+  presented, and only unpinned desks are omitted
 
 #### Scenario: A room reflows around a pinned desk
 

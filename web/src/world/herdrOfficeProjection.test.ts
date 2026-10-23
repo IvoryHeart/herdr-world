@@ -183,6 +183,62 @@ describe("Pixel Office projection", () => {
       ),
     );
   });
+  test("more pinned desks than the bound, and another selected, all stay", async () => {
+    const limit = OFFICE_PRESENTATION_BOUNDS.desksPerRoom;
+    const tabs = Array.from({ length: limit + 3 }, (_, index) =>
+      tab(`tab-${index}`, index + 1),
+    );
+    const world = buildWorldObject([
+      connection(
+        "alpha",
+        tabs,
+        tabs.flatMap((entry, index) => [
+          pane(entry.tab_id, "working", `Synthetic ${index}`, 0),
+          pane(entry.tab_id, "working", `Synthetic ${index}b`, 1),
+        ]),
+      ),
+    ]);
+    await prepareWorldOffice(world);
+    // The oldest limit + 1 tabs are pinned; the newest tab is selected.
+    const pinnedIds = tabs.slice(0, limit + 1).map((entry) => entry.tab_id);
+    const pinned = new Set(
+      pinnedIds.map((id) => tabCardKey("alpha", id, new Set(["workspace"]))),
+    );
+    const selected = world.leaves.find(
+      (leaf) => leaf.tabId === tabs[tabs.length - 1]!.tab_id,
+    )!.id;
+    const room = projectWorldOffice(
+      world,
+      1,
+      selected,
+      OFFICE_PRESENTATION_BOUNDS,
+      pinned,
+    ).rooms[0]!;
+    const shown = room.desks.map((desk) => desk.tabRef.nativeId);
+    expect(shown).toEqual([...pinnedIds, tabs[tabs.length - 1]!.tab_id]);
+    const pinnedDesks = new Set(
+      room.desks
+        .filter((desk) => pinnedIds.includes(desk.tabRef.nativeId))
+        .map((desk) => desk.key),
+    );
+    expect(
+      room.roomAgents.filter(
+        (agent) => agent.deskKey && pinnedDesks.has(agent.deskKey),
+      ),
+    ).toHaveLength(pinnedIds.length * 2);
+    expect(room.roomAgents.map((agent) => agent.key)).toContain(selected);
+    const project = createOfficeProjector();
+    project(world, 1, null, pinned);
+    expect(project(world, 2, selected, pinned)).toEqual(
+      projectWorldOffice(
+        world,
+        2,
+        selected,
+        OFFICE_PRESENTATION_BOUNDS,
+        pinned,
+      ),
+    );
+  });
   test("selecting an admitted terminal preserves desk, device and standing-agent positions", () => {
     const tabs = Array.from({ length: 3 }, (_, index) =>
       tab(`tab-${index}`, index + 1),

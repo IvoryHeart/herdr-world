@@ -535,6 +535,9 @@ export function projectWorldOffice(
     const deskOrder = new Map(desks.map((desk, index) => [desk.key, index]));
     // A pinned desk keeps its agents too.
     const pinnedDesks = new Set(desks.filter(pinned).map((desk) => desk.key));
+    const keptAgent = (agent: { key: string; deskKey: string | null }) =>
+      agent.key === selectedId ||
+      (agent.deskKey !== null && pinnedDesks.has(agent.deskKey));
     const roomAgents = entry.agents
       .filter(({ destination }) => destination === "room")
       .map((agent) => ({
@@ -544,23 +547,24 @@ export function projectWorldOffice(
           : ("standing" as const),
       }))
       .sort((left, right) => compareRoomAgents(left, right, deskOrder));
+    // Like their desks, the selected and pinned desks' agents stay past the
+    // bound.
+    const shownAgents = boundedWithPriority(
+      roomAgents,
+      Math.max(bounds.roomAgentsPerRoom, roomAgents.filter(keptAgent).length),
+      keptAgent,
+      (agent) => agent.key === selectedId,
+    );
     return {
       ...entry.room,
       desks,
-      roomAgents: boundedWithPriority(
-        roomAgents,
-        bounds.roomAgentsPerRoom,
-        (agent) =>
-          agent.key === selectedId ||
-          (agent.deskKey !== null && pinnedDesks.has(agent.deskKey)),
-        (agent) => agent.key === selectedId,
-      ),
+      roomAgents: shownAgents,
       omittedDeskCount: Math.max(0, entry.source.coverage.tabs - desks.length),
       omittedAgentCount: Math.max(
         0,
         entry.source.coverage.status.working +
           entry.source.coverage.status.unknown -
-          Math.min(roomAgents.length, bounds.roomAgentsPerRoom),
+          shownAgents.length,
       ),
       observedDeskCount: entry.source.coverage.tabs,
       observedAgentCount: entry.source.coverage.agents,
@@ -1273,7 +1277,14 @@ function boundedDesks(
     desks
       .map((desk, index) => ({ desk, index, rank: rank(desk, index) }))
       .sort((left, right) => left.rank - right.rank || right.index - left.index)
-      .slice(0, limit)
+      // The selected and pinned desks stay even past the bound.
+      .slice(
+        0,
+        Math.max(
+          limit,
+          desks.filter((desk) => selected(desk) || pinned(desk)).length,
+        ),
+      )
       .map(({ desk }) => desk),
   );
   return desks.filter((desk) => admitted.has(desk));

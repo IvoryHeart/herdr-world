@@ -80,7 +80,7 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     pinned table wears a pin and keeps its place: tab reorders, a room growing
     or Town's own placement leave it, and it cannot be dragged until you unpin
     it (other tables fill the free places in tab order). In a room with more
-    tabs than Town shows, pinned tables are always among those shown. Its agents stay at it:
+    tabs than Town shows, pinned tables (and their agents) are always shown, before the newest and busiest. Its agents stay at it:
     they never go to the lounge, leave only to wait at reception (blocked, or
     finished and not yet seen) and walk straight back once you have seen them.
     The pin is a World view setting, saved on the World service beside
