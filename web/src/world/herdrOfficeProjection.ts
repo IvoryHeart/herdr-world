@@ -28,8 +28,8 @@ export type OfficePresentationBounds = {
 };
 
 /**
- * Town rooms extend to fit real rooms (townLayout's TOWN_MAX_RENDERED_DESKS),
- * and seat every agent at those desks; every other bound matches Office.
+ * Town rooms normally expand to 127 desks; protected desks can exceed it.
+ * Layout grows for every admitted desk; other bounds match Office.
  */
 export const TOWN_PRESENTATION_BOUNDS: OfficePresentationBounds = Object.freeze(
   {

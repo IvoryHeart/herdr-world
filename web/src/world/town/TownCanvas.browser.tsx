@@ -2247,6 +2247,7 @@ async function run() {
     // Seen marks and questions can change during the checks above: fold must
     // use the current attention set, not the initial protected-desk count.
     const expandedDesks = diagnostics.desks;
+    const expandedGeometry = diagnostics.layout!.geometry;
     host
       .querySelector<HTMLButtonElement>('button[aria-label^="Fold room orbit"]')
       ?.click();
@@ -2255,7 +2256,10 @@ async function run() {
         'button[aria-label^="Expand room orbit"]',
       );
     await waitFor(
-      () => diagnostics.desks < expandedDesks && foldedPlaque() !== null,
+      () =>
+        diagnostics.desks < expandedDesks &&
+        diagnostics.layout!.geometry !== expandedGeometry &&
+        foldedPlaque() !== null,
       "fold did not restore the room's current attention desks",
     );
     const orbitDesks = [

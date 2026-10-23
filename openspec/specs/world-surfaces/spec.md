@@ -1112,7 +1112,9 @@ grows square until it reaches its shape's width (four desks on a phone, six on
 portrait and mid-width screens, eight on wide screens) and then extends
 downward, and its building grows around it. A folded room SHALL use a default
 bound of 24 desks, and an expanded room a default bound of 127; Fold SHALL
-restore the 24-desk bound. Selected and pinned desks, every desk represented
+restore the 24-desk bound and allow the room to shrink, while retaining pinned
+cells and its building column. Ordinary tab closures SHALL keep the live size
+step. Selected and pinned desks, every desk represented
 by the shared Town call list (blocked agents and unreviewed finishes), and the
 desk of a verified, qualified asking agent with an open question SHALL remain
 visible past either bound. Admission SHALL consume desk keys from that shared
@@ -1292,7 +1294,8 @@ seat once checked or answered. A pin SHALL follow its tab to another workspace
 and SHALL be dropped when its tab closes. When a room has more desks than Town
 presents, its pinned desks and the selected desk, with their agents, SHALL
 still be presented, even past the bound, and other desks SHALL be omitted
-instead; only pins beyond the 127 desks a room can draw MAY go undrawn.
+instead. Layout SHALL extend for every admitted pinned or selected desk,
+even beyond the normal 127-desk expanded target.
 
 #### Scenario: A pinned agent finishes and is seen
 
