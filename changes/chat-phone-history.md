@@ -5,6 +5,9 @@
 
 ### Changed
 
+- Town's hover card no longer has an **Inspector** button: **Open chat** and
+  **Open terminal** open the agent's window, whose Files and Changes views
+  hold the rest.
 - In Chat's composer, Enter starts a new line, as in the terminal composer;
   **Send** or `Ctrl+Enter` (`Cmd+Enter` on a Mac) sends.
 

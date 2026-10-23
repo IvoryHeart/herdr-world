@@ -806,24 +806,18 @@ async function run() {
   if (!phone) {
     const card = () =>
       host.querySelector<HTMLButtonElement>(".town-reception-entry")!;
-    // The card's Inspector opens World's Inspector on Files for that agent.
-    inspected.length = 0;
+    // Open chat and Open terminal cover the window; the card has no
+    // separate Inspector button.
     hoverEntry(card());
     await waitFor(
       () => host.querySelector(".town-peek") !== null,
       "the card did not show again",
     );
-    [...host.querySelectorAll<HTMLButtonElement>(".town-peek-foot button")]
-      .find((button) => button.textContent === "Inspector")!
-      .click();
-    await settle();
     check(
-      inspected.length === 1 && inspected[0]![1] === "files",
-      `Inspector opened ${JSON.stringify(inspected)}`,
-    );
-    check(
-      selected.length === 0,
-      "Inspector must not change the selection path",
+      ![...host.querySelectorAll<HTMLButtonElement>(".town-peek button")].some(
+        (button) => button.textContent === "Inspector",
+      ),
+      "the card must not offer a separate Inspector button",
     );
 
     // Open terminal, in the card's header, opens the agent's terminal.

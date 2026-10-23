@@ -155,8 +155,8 @@ changes what you see and does not disconnect hosts or retarget open terminals.
    file shows a chip while it uploads, then done or failed; retry a failed one
    (or pick it again) or remove it. **Send** waits for uploads. Uploads go to
    the selected pane's host; review the message and attached paths before
-   sending. Choose **Inspector** for files and changes, or **Open terminal**
-   for direct work.
+   sending. The window's **Files** and **Changes** views hold its files and
+   changes; **Open terminal** is for direct work.
    The colour swatch beside the agent's name changes the colour of its table;
    it is the tab's colour everywhere in World. The same swatch sits beside the
    name in a terminal's header, the terminal window's menu has **Colour**, and

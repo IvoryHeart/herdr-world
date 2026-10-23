@@ -49,8 +49,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     finished work reviewed. **Open terminal** in the peek does, as before.
   - A seated agent with a quest (its own todo list, plan, Codex goal or loop)
     shows a flag and progress bar at its seat in a room or at a desk.
-  - **Open terminal** in the card's header opens the live pane; **Inspector**
-    opens files and changes. **Next** opens the next waiting agent's window,
+  - **Open terminal** in the card's header opens the live pane; **Open chat**
+    opens the agent's window, whose Files and Changes views hold the rest.
+    **Next** opens the next waiting agent's window,
     then finished agents' if none wait.
     The needs-you list becomes a bottom tray on phones and hides when no agent
     is blocked. Review marks acknowledge a specific completion in this browser,

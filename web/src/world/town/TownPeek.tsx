@@ -45,7 +45,6 @@ export function TownPeek({
   onAnswer,
   onChat,
   onTerminal,
-  onInspector,
   onNext,
   onClose,
   onHold,
@@ -64,7 +63,6 @@ export function TownPeek({
   question: readonly string[];
   /** Check a finished agent's work, which sends it for a break. */
   onReviewed(): void;
-  onInspector(): void;
   agent: OfficeAgent;
   where: string;
   choices: readonly TownChoice[];
@@ -250,13 +248,6 @@ export function TownPeek({
         ) : null}
       </div>
       <div className="town-peek-foot">
-        <button
-          type="button"
-          title="Files, changes and history"
-          onClick={onInspector}
-        >
-          Inspector
-        </button>
         {onNext ? (
           <button type="button" onClick={onNext}>
             Next ›
