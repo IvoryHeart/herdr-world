@@ -5,6 +5,7 @@ import type {
   WorldObject,
   WorldSpaceObject,
 } from "./worldObject";
+import { stableNumber } from "./stableNumber";
 import { boundedOptionalText, yieldWorldTask } from "./worldObject";
 import { tabCardKey } from "../../../shared/terminalColor";
 
@@ -74,6 +75,8 @@ export type OfficeAgent = {
   displayLabel: string;
   /** The name Herdr gives the agent (agent.list), when it has one. */
   agentName?: string;
+  /** Its harness ("claude", "codex"), which picks its artwork. */
+  harness?: string;
   taskSummary?: string;
   semanticStatus: WorldAgentStatus;
   stateLabels: Partial<Record<WorldAgentStatus, string>>;
@@ -1125,7 +1128,7 @@ function projectPaneDevices(
       deskKey: desk.key,
       hostKey: desk.hostKey,
       roomKey: desk.roomKey,
-      displayLabel: `Pane ${order + 1}${leaf.agentLabel ? ` · ${leaf.agentLabel}` : ""}`,
+      displayLabel: `Pane ${order + 1}${leaf.agentName || leaf.agentLabel ? ` · ${leaf.agentName || leaf.agentLabel}` : ""}`,
       order,
       stale: leaf.stale,
       canOpenInSpaces: leaf.capabilities.openSpaces,
@@ -1156,8 +1159,9 @@ function projectAgent(
     observedGeneration: leaf.generation,
     roomKey,
     hostKey,
-    displayLabel: leaf.agentLabel ?? leaf.label,
+    displayLabel: leaf.agentName ?? leaf.agentLabel ?? leaf.label,
     ...(leaf.agentName ? { agentName: leaf.agentName } : {}),
+    ...(leaf.agentLabel ? { harness: leaf.agentLabel } : {}),
     ...(summary ? { taskSummary: summary } : {}),
     semanticStatus: leaf.status,
     stateLabels: leaf.stateLabels,
@@ -1345,13 +1349,4 @@ function compareBarAgents(left: OfficeAgent, right: OfficeAgent) {
 
 function roomStatusOrder(status: WorldAgentStatus) {
   return status === "working" ? 0 : status === "unknown" ? 1 : 2;
-}
-
-function stableNumber(value: string) {
-  let hash = 0x811c9dc5;
-  for (const character of value) {
-    hash ^= character.codePointAt(0) ?? 0;
-    hash = Math.imul(hash, 0x01000193);
-  }
-  return hash >>> 0;
 }
