@@ -66,8 +66,10 @@ recorded Pi review.
 
 ## Quick start
 
-1. Install and start [Herdr](https://herdr.dev), or let Herdr World install and
-   start it later with `herdr-world herdr setup`.
+1. Herdr World runs on [Herdr](https://herdr.dev). The standalone installer and
+   Homebrew install Herdr too, or upgrade an older one; with npm or a Windows
+   archive, run `herdr-world herdr upgrade --install` once. `herdr-world herdr setup`
+   starts Herdr as a user service.
 2. On Linux or macOS, install Herdr World with the standalone installer:
 
    ```bash
