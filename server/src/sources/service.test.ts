@@ -386,6 +386,40 @@ describe("World sources service", () => {
     );
   });
 
+  test("without git, or outside a repository, pull requests show and only desk links are absent", async () => {
+    for (const git of ["missing", "not a repository"] as const) {
+      let gitCalls = 0;
+      const run: RunProcess = async (argv) => {
+        if (argv[0] === "gh")
+          return argv[1] === "auth"
+            ? { code: 0, stdout: "", stderr: "" }
+            : { code: 0, stdout: JSON.stringify(graphql), stderr: "" };
+        gitCalls += 1;
+        if (git === "missing")
+          throw Object.assign(new Error("spawn git"), { code: "ENOENT" });
+        return {
+          code: 128,
+          stdout: "",
+          stderr: "fatal: not a git repository",
+        };
+      };
+      const { service, advance } = setup({ run });
+      const snapshot = await service.snapshot();
+      expect(snapshot.items.map((item) => item.ref)).toEqual([
+        "example-org/widgets#5",
+      ]);
+      expect(snapshot.sources[0]).toMatchObject({ state: "connected" });
+      expect(snapshot.links).toEqual([]);
+      expect(JSON.stringify(snapshot)).not.toContain("fatal");
+      // The failed lookup is cached, not retried on every request.
+      const calls = gitCalls;
+      expect(calls).toBeGreaterThan(0);
+      advance(20_000);
+      await service.snapshot();
+      expect(gitCalls).toBe(calls);
+    }
+  });
+
   test("settings round-trip through settings.json's custom block", () => {
     const base: GuiSettings = {
       version: 1,

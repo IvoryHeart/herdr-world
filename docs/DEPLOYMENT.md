@@ -364,7 +364,10 @@ else its pane's directory, else its workspace's worktree. It runs `git` locally
 for local profiles and over the profile's SSH destination for SSH profiles;
 Windows hosts are not read. At most 32 checkouts are read per refresh and each
 is cached for two minutes. A pull request an agent reports with `--pr` links
-directly.
+directly. Without `git` on that host, or for a directory that is not a
+repository, pull requests and tickets still show; only that agent's desk link
+is missing, and World reports no error for it. If GitHub or Jira is down,
+that source shows an error and keeps its last items.
 
 ## Herdr plugin
 
