@@ -15,10 +15,12 @@
  *   bun run check:move [base]   (default: merge-base with origin/main)
  */
 
+import { parse } from "@babel/parser";
+
 export const MIN_RUN = 3;
 
 const PLUMBING =
-  /^(import\b|export \{|export \* from|export type \{|\} from ["']|["'][^"']+["'];?$|\};?$)/;
+  /^(import\s+(?:type\s+)?[\w*{]|export \{|export \* from|export type \{|\} from ["']|["'][^"']+["'];?$|\};?$)/;
 
 /** A diff line's comparable text, or undefined when it is plumbing. */
 export function normalize(line: string): string | undefined {
@@ -27,13 +29,58 @@ export function normalize(line: string): string | undefined {
   return text.replace(/^export (default )?/, "");
 }
 
+/**
+ * 1-based line numbers of a file's import and export-list statements,
+ * including every member line of a multi-line `import { … } from`. A -U0 diff
+ * can change one member without showing the statement around it, so plumbing
+ * is decided from the file itself.
+ */
+export function statementLines(text: string, file = "source.ts"): Set<number> {
+  const found = new Set<number>();
+  if (!/\.[cm]?[jt]sx?$/.test(file)) return found;
+  try {
+    const { program } = parse(text, {
+      sourceType: "unambiguous",
+      allowUndeclaredExports: true,
+      plugins: /\.[cm]?tsx?$/.test(file)
+        ? /\.tsx$/.test(file)
+          ? ["typescript", "jsx"]
+          : ["typescript"]
+        : ["jsx"],
+    });
+    const code = new Set<number>();
+    for (const node of [...program.body, ...program.directives]) {
+      if (!node.loc) continue;
+      const plumbing =
+        (node.type === "ImportDeclaration" && node.specifiers.length > 0) ||
+        node.type === "TSImportEqualsDeclaration" ||
+        node.type === "ExportAllDeclaration" ||
+        (node.type === "ExportNamedDeclaration" && !node.declaration);
+      const lines = plumbing ? found : code;
+      for (let line = node.loc.start.line; line <= node.loc.end.line; line++)
+        lines.add(line);
+    }
+    // A diff is line-based: never hide executable code sharing an import line.
+    for (const line of code) found.delete(line);
+  } catch {
+    // Unsupported or invalid syntax must not turn code into ignored plumbing.
+    found.clear();
+  }
+  return found;
+}
+
+/** Whether a removed or added line of `file` is import/export plumbing. */
+export type Plumbing = (file: string, sign: "-" | "+", line: number) => boolean;
+
 export type Line = { text: string; at: number };
 export type Hunk = { file: string; sign: "-" | "+"; lines: Line[] };
 
 /** Removed and added hunks of a unified diff, plumbing skipped, with line numbers. */
-export function diffHunks(diff: string): Hunk[] {
+export function diffHunks(diff: string, plumbing?: Plumbing): Hunk[] {
   const hunks: Hunk[] = [];
   let file = "";
+  let oldFile = "";
+  let newFile = "";
   let current: Hunk | undefined;
   let inBlock = false;
   let oldLine = 0;
@@ -51,28 +98,36 @@ export function diffHunks(diff: string): Hunk[] {
       continue;
     }
     if (raw.startsWith("+++ ")) {
-      file = raw.slice(4).replace(/^b\//, "");
+      newFile = raw.slice(4).replace(/^b\//, "");
+      file = newFile === "/dev/null" ? oldFile : newFile;
       continue;
     }
     if (raw.startsWith("--- ")) {
-      if (raw !== "--- /dev/null") file = raw.slice(4).replace(/^a\//, "");
+      oldFile = raw.slice(4).replace(/^a\//, "");
+      if (raw !== "--- /dev/null") file = oldFile;
       continue;
     }
     const sign = raw[0];
     if (sign !== "-" && sign !== "+") continue;
     const at = sign === "-" ? oldLine++ : newLine++;
     if (current && current.sign !== sign) close();
+    if (plumbing?.(sign === "-" ? oldFile : newFile, sign, at)) continue;
     const text = raw.slice(1).trim();
     // Members of a multi-line import/export list, within this hunk only.
-    if (inBlock) {
+    if (!plumbing && inBlock) {
       if (/^\} from |^\};?$/.test(text)) inBlock = false;
       continue;
     }
-    if (/^(import|export)( type)? \{[^}]*$/.test(text)) {
+    if (!plumbing && /^(import|export)( type)? \{[^}]*$/.test(text)) {
       inBlock = true;
       continue;
     }
-    const normal = normalize(raw.slice(1));
+    // Full-file syntax is authoritative; do not reapply the lossy diff heuristic.
+    const normal = plumbing
+      ? text
+        ? text.replace(/^export (default )?/, "")
+        : undefined
+      : normalize(raw.slice(1));
     if (normal === undefined) continue;
     current ??= { file, sign, lines: [] };
     current.lines.push({ text: normal, at });
@@ -209,7 +264,36 @@ if (import.meta.main) {
       ":(exclude)*.md",
       ":(exclude)scripts/file-size-exceptions.json",
     ]);
-    const { lost, extra, runs } = matchMoves(diffHunks(diff));
+    // Import/export statements per file version, read from the files; the
+    // diff's removed side is the merge base of base and HEAD.
+    const from = git(["merge-base", base, "HEAD"]).trim();
+    const ranges = new Map<
+      string,
+      { statements: Set<number>; lines: string[] }
+    >();
+    const ignored = new Map<string, string[]>();
+    const plumbing: Plumbing = (file, sign, line) => {
+      if (file === "/dev/null") return false;
+      const key = `${sign}${file}`;
+      if (!ranges.has(key)) {
+        const result = Bun.spawnSync(
+          ["git", "show", `${sign === "-" ? from : "HEAD"}:${file}`],
+          { stdout: "pipe", stderr: "pipe" },
+        );
+        const text = result.exitCode === 0 ? result.stdout.toString() : "";
+        ranges.set(key, {
+          statements: statementLines(text, file),
+          lines: text.split("\n"),
+        });
+      }
+      const version = ranges.get(key)!;
+      if (!version.statements.has(line)) return false;
+      const lines = ignored.get(file) ?? [];
+      lines.push(`${sign}${line}: ${version.lines[line - 1]!.trim()}`);
+      ignored.set(file, lines);
+      return true;
+    };
+    const { lost, extra, runs } = matchMoves(diffHunks(diff, plumbing));
     const show = (
       title: string,
       list: Array<{ file: string; line: string }>,
@@ -228,6 +312,13 @@ if (import.meta.main) {
       console.info(
         `  ${run.from}:${run.fromLine} -> ${run.to}:${run.toLine} (${run.lines} lines) ${run.first.slice(0, 80)}`,
       );
+    for (const [file, lines] of ignored) {
+      console.info(
+        `Ignored import/export plumbing in ${file} (${lines.length}):`,
+      );
+      for (const line of lines.slice(0, 40)) console.info(`  ${line}`);
+      if (lines.length > 40) console.info(`  … and ${lines.length - 40} more`);
+    }
     show("Removed and not moved", lost);
     show("Added without a moved original", extra);
     if (lost.length || extra.length) process.exit(1);
