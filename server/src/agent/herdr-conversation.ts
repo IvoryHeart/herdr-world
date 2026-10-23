@@ -1,7 +1,5 @@
-import { createHash } from "node:crypto";
 import { existsSync, type FSWatcher, watch } from "node:fs";
 import { basename, join } from "node:path";
-import { taskSummarySessionFingerprint } from "../herdr/task-summary";
 import {
   conversationMessages,
   runningTool,
@@ -9,7 +7,6 @@ import {
   type AgentQuest,
   type AnswerUnconfirmedReason,
   type Conversation,
-  type ConversationBinding,
   type ConversationLatest,
   type ConversationSource,
   type ConversationUnavailableReason,
@@ -30,7 +27,7 @@ import { codexHome, type AgentSessionFileAccess } from "./session-file-access";
 import type { SessionProjectionCache } from "./session-projection-cache";
 import {
   SESSION_AGENTS,
-  codexTitleBinding,
+  codexReportContradicted,
   searchCodexTitle,
   resolveAgentSessionInfo,
   type AgentSessionResolverContext,
@@ -38,89 +35,20 @@ import {
 import type { AgentSessionResolved, HerdrCall } from "./session-types";
 import { isRecord, normalizeAgentName, stringValue } from "./session-utils";
 
+import { paneBinding, sessionLabel } from "./conversation-binding";
+import {
+  prepareCodexInferenceBatch,
+  type CodexInferenceBatch,
+} from "./codex-daemon-binding";
+export { paneBinding, sessionLabel } from "./conversation-binding";
+
 export const CODEX_DAEMON_ISSUE =
   "https://github.com/IvoryHeart/herdr-world/issues/250";
 
 type Unavailable = Extract<Conversation, { status: "unavailable" }>;
 
-/**
- * The session Herdr ties to a pane, from its `agent.get` reply alone: the
- * thread a Codex title names, else the session the integration reported.
- * Directory guesses are never a binding. No file access, so a send can check
- * it immediately before prompting. A Codex title binds a complete thread ID
- * only: a truncated ID this context has not resolved to one transcript, or a
- * title naming two threads, binds the pane to its title with no fingerprint,
- * so nothing can be sent.
- */
-export function paneBinding(
-  agent: string,
-  info: Record<string, unknown>,
-  context: AgentSessionResolverContext,
-  /** Title prefixes searched just now; remembered matches are ignored. */
-  verified?: ReadonlyMap<string, string>,
-): {
-  binding: Exclude<ConversationBinding, "guessed">;
-  fingerprint: string | null;
-} | null {
-  if (agent === "codex") {
-    const title = codexTitleBinding(
-      stringValue(info.terminal_title),
-      context,
-      verified,
-    );
-    if (title.kind === "id")
-      return {
-        binding: "title",
-        fingerprint: createHash("sha256")
-          .update(JSON.stringify(["codex-title", title.id]))
-          .digest("hex"),
-      };
-    // The title decides whenever it names a thread.
-    if (title.kind !== "none") return { binding: "title", fingerprint: null };
-  }
-  const session = isRecord(info.agent_session) ? info.agent_session : null;
-  if (
-    !session ||
-    ["source", "agent", "kind", "value"].some(
-      (key) => typeof session[key] !== "string" || !session[key],
-    )
-  )
-    return null;
-  return {
-    binding: "reported",
-    fingerprint: taskSummarySessionFingerprint(
-      session as { source: string; agent: string; kind: string; value: string },
-    ),
-  };
-}
-
 /** Herdr statuses that show an agent moved on from a prompt. */
 const MOVED_ON = new Set(["working", "idle", "done"]);
-
-/** A plain name for the session a pane's `agent.get` reply describes. */
-export function sessionLabel(
-  agent: string,
-  info: Record<string, unknown>,
-  context: AgentSessionResolverContext,
-  verified?: ReadonlyMap<string, string>,
-) {
-  if (agent === "codex") {
-    const title = codexTitleBinding(
-      stringValue(info.terminal_title),
-      context,
-      verified,
-    );
-    if (title.kind === "id") return `Codex thread ${title.id}`;
-    if (title.kind !== "none")
-      return "a Codex thread its title does not identify";
-  }
-  const session = isRecord(info.agent_session) ? info.agent_session : null;
-  const value = stringValue(session?.value);
-  if (!value) return "a session Herdr does not identify";
-  // A reported transcript path is named by its file.
-  const name = session?.kind === "path" ? basename(value) : value;
-  return `${agent || "agent"} session ${name}`;
-}
 
 function withoutMessages(conversation: Conversation): ConversationLatest {
   const latest: Partial<Conversation> = { ...conversation };
@@ -277,7 +205,11 @@ export function createHerdrConversationSource(args: {
     paneId: string,
     reuseCodexTitle = false,
     // An agent record already listed (`agent.list`), or null for none.
-    listed?: { info: Record<string, unknown> | null },
+    listed?: {
+      info: Record<string, unknown> | null;
+      agents?: readonly Record<string, unknown>[];
+      inference?: CodexInferenceBatch;
+    },
   ) => {
     const info = listed ? listed.info : await agentInfo(paneId);
     const agent = normalizeAgentName(stringValue(info?.agent));
@@ -340,13 +272,22 @@ export function createHerdrConversationSource(args: {
       info,
       args.files,
       args.context,
-      { reuseCodexTitle },
+      {
+        reuseCodexTitle,
+        herdrCall: args.herdrCall,
+        listedCodexPanes: listed?.agents,
+        codexInferenceBatch: listed?.inference,
+      },
     );
     // A session found by searching the pane's directory may belong to
     // another agent in the same folder: show it, but never send to it.
-    const bound = resolved.session?.source.endsWith("-local")
-      ? null
-      : paneBinding(agent, info, args.context);
+    const inferred = resolved.session?.source === "codex-daemon";
+    const bound =
+      inferred ||
+      resolved.reason === "ambiguous" ||
+      resolved.session?.source.endsWith("-local")
+        ? null
+        : paneBinding(agent, info, args.context);
     return {
       base: {
         ...base,
@@ -494,7 +435,9 @@ export function createHerdrConversationSource(args: {
     await settle(pane_id, shown);
     // A blocked agent's question is on its screen, not in its transcript.
     const pending_prompt =
-      shown.agent_status === "blocked"
+      shown.agent_status === "blocked" &&
+      shown.session_binding !== "guessed" &&
+      (shown.agent !== "codex" || Boolean(shown.session_fingerprint))
         ? await agentInfo(pane_id)
             .then((info) =>
               stringValue(info?.agent_status) === "blocked"
@@ -581,6 +524,14 @@ export function createHerdrConversationSource(args: {
           "not_blocked",
           "The agent is no longer waiting on a question. Nothing was sent.",
         );
+      if (normalizeAgentName(stringValue(before?.agent)) === "codex") {
+        const step = await resolve(pane_id);
+        if (!("resolved" in step) || !step.base.session_fingerprint)
+          return refuse(
+            "changed",
+            "This Codex conversation is not tied to the pane. Answer in the Terminal.",
+          );
+      }
       const prompt = await readPrompt(pane_id, before);
       if (!prompt || prompt.fingerprint !== prompt_fingerprint)
         return refuse(
@@ -675,6 +626,7 @@ export function createHerdrConversationSource(args: {
       deadlines.clear();
       codexWatch?.close();
       codexWatch = null;
+      args.context.codexDiscovery.clear();
     },
     read,
     latest,
@@ -777,6 +729,13 @@ export function createHerdrConversationSource(args: {
         if (!paneIds) throw error;
         listFailed = true;
       }
+      const listedAgents = [...listed.values()];
+      const inference = await prepareCodexInferenceBatch({
+        listed: listedAgents,
+        files: args.files,
+        herdrCall: args.herdrCall,
+        discovery: args.context.codexDiscovery,
+      });
       return eachPane(
         paneIds ?? [...listed.keys()],
         async (pane_id): Promise<AgentQuest> => {
@@ -792,6 +751,8 @@ export function createHerdrConversationSource(args: {
           try {
             step = await resolve(pane_id, true, {
               info: listed.get(pane_id) ?? null,
+              agents: listedAgents,
+              inference,
             });
           } catch {
             return { ...empty, read_failed: true };
@@ -905,6 +866,11 @@ export function createHerdrConversationSource(args: {
           args.files,
           args.context,
         );
+        if (
+          info &&
+          (await codexReportContradicted(pane_id, info, args.herdrCall))
+        )
+          return changed;
         info = await agentInfo(pane_id);
       }
       const agent = normalizeAgentName(stringValue(info?.agent));

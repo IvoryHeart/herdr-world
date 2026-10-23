@@ -2,12 +2,13 @@ import { mkdtemp, rm, mkdir } from "node:fs/promises";
 import { availableParallelism, tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildWorldBrowserBundle } from "../web/src/world/testing/browserBundles";
-import { acquireCheckSlot, heldEnv } from "./check-lock";
+import { acquireAllCheckSlots, acquireCheckSlot, heldEnv } from "./check-lock";
 import { guardDiskSpace } from "./disk-guard";
 import {
   assertWorldBrowserInventory,
   selectWorldBrowserShard,
   worldBrowserSuites,
+  includesTimedFiles,
 } from "./world-browser-suites";
 
 // Suites named on the command line replace the shard selection.
@@ -47,9 +48,11 @@ const label = shard
   ? `shard-${shard.replace("/", "-of-")}`
   : (Bun.env.HERDR_WORLD_TEST_LABEL ?? "local");
 await mkdir(".agents/delivery", { recursive: true });
-// One World browser run per machine; under the delivery gate this process
-// already runs inside the gate's browser slot and skips the wait.
-const release = await acquireCheckSlot("browser", { lane: `world ${label}` });
+// Timed suites take the whole machine; other World runs take the browser slot.
+// A nested runner already holds its parent's slots and skips acquisition.
+const release = includesTimedFiles(files)
+  ? await acquireAllCheckSlots({ lane: `world ${label}` })
+  : await acquireCheckSlot("browser", { lane: `world ${label}` });
 try {
   const began = performance.now();
   await buildWorldBrowserBundle("HostsFilter", directory);
