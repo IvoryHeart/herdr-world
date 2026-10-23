@@ -9,12 +9,20 @@ import {
   STARTER_PROFILES,
   parseProfile,
 } from "../../../shared/agentProfile";
+import {
+  type ChimeSettings,
+  ChimeError,
+  DEFAULT_CHIMES,
+  TIMBRE_LABELS,
+  parseChimeSettings,
+} from "../../../shared/chimes";
 
 /**
  * The World service's agent profiles, plus which launched terminal came from
- * which profile so Town can dress it. One revisioned document, bounded and
- * written atomically. Starter profiles are seeded once and are then the
- * owner's to edit or delete.
+ * which profile so Town can dress it, the owner's chime settings and who
+ * holds the Town master role. One revisioned document, bounded and written
+ * atomically. Starter profiles are seeded once and are then the owner's to
+ * edit or delete.
  */
 
 export type ProfileAssignment = {
@@ -22,11 +30,20 @@ export type ProfileAssignment = {
   terminal_id: string;
   profile_id: string;
 };
+/** A terminal on a host, as assignments key it. */
+export type TerminalKey = { connection_id: string; terminal_id: string };
 export type ProfilesDocument = {
   version: 1;
   revision: number;
   profiles: AgentProfile[];
   assignments: ProfileAssignment[];
+  chimes: ChimeSettings;
+  /**
+   * The one agent holding the Town master role, or null. Only the owner
+   * assigns it; like assignments it names a terminal, so it ends with the
+   * terminal (a Herdr restart).
+   */
+  town_master: TerminalKey | null;
 };
 
 export const MAX_ASSIGNMENTS = 256;
@@ -43,6 +60,8 @@ function seeded(): ProfilesDocument {
     revision: 0,
     profiles: structuredClone(STARTER_PROFILES),
     assignments: [],
+    chimes: structuredClone(DEFAULT_CHIMES),
+    town_master: null,
   };
 }
 
@@ -63,6 +82,28 @@ function parseAssignment(value: unknown): ProfileAssignment | null {
       }
     : null;
 }
+function parseTerminalKey(value: unknown): TerminalKey | null {
+  const v = value as Record<string, unknown> | null;
+  return v &&
+    typeof v.connection_id === "string" &&
+    typeof v.terminal_id === "string" &&
+    ID.test(v.connection_id) &&
+    ID.test(v.terminal_id)
+    ? { connection_id: v.connection_id, terminal_id: v.terminal_id }
+    : null;
+}
+const sameTerminal = (a: TerminalKey, b: TerminalKey) =>
+  a.connection_id === b.connection_id && a.terminal_id === b.terminal_id;
+
+/** The Town master's timbre is its own: no crew default or profile uses it. */
+function checkChimes(document: ProfilesDocument) {
+  const master = document.chimes.timbres.town_master;
+  const taken = document.profiles.find((p) => p.chime === master);
+  if (taken)
+    throw new ProfileError(
+      `${TIMBRE_LABELS[master]} is the Town master's chime; ${taken.name} can't use it`,
+    );
+}
 
 export function parseProfilesDocument(value: unknown): ProfilesDocument {
   const v = value as Record<string, unknown> | null;
@@ -73,7 +114,13 @@ export function parseProfilesDocument(value: unknown): ProfilesDocument {
     .map(parseProfile);
   if (new Set(profiles.map((p) => p.id)).size !== profiles.length)
     throw new ProfileError("profile IDs repeat");
-  return {
+  let chimes: ChimeSettings;
+  try {
+    chimes = parseChimeSettings(v.chimes);
+  } catch {
+    chimes = structuredClone(DEFAULT_CHIMES);
+  }
+  const document: ProfilesDocument = {
     version: 1,
     revision: Number.isSafeInteger(v.revision) ? (v.revision as number) : 0,
     profiles,
@@ -81,7 +128,14 @@ export function parseProfilesDocument(value: unknown): ProfilesDocument {
       .map(parseAssignment)
       .filter((a): a is ProfileAssignment => a !== null)
       .slice(-MAX_ASSIGNMENTS),
+    chimes,
+    town_master: parseTerminalKey(v.town_master),
   };
+  // A profile that took the master's chime before falls back to its class's.
+  const master = chimes.timbres.town_master;
+  for (const profile of document.profiles)
+    if (profile.chime === master) profile.chime = null;
+  return document;
 }
 
 export class ProfileStore {
@@ -149,6 +203,44 @@ export class ProfileStore {
         );
       next.profiles.push(profile);
     }
+    checkChimes(next);
+    return this.commit(next);
+  }
+
+  /** Replace the owner's chime settings. */
+  saveChimes(value: unknown): ProfilesDocument {
+    let chimes: ChimeSettings;
+    try {
+      chimes = parseChimeSettings(value);
+    } catch (error) {
+      if (error instanceof ChimeError) throw new ProfileError(error.message);
+      throw error;
+    }
+    const next = structuredClone(this.document);
+    next.chimes = chimes;
+    checkChimes(next);
+    return this.commit(next);
+  }
+
+  /**
+   * Give the Town master role to a terminal, or clear it with null. Moving it
+   * from another holder needs `replace`, so the owner is asked first.
+   */
+  setTownMaster(
+    value: unknown,
+    options: { replace?: boolean } = {},
+  ): ProfilesDocument {
+    const next = structuredClone(this.document);
+    if (value === null) {
+      next.town_master = null;
+      return this.commit(next);
+    }
+    const key = parseTerminalKey(value);
+    if (!key) throw new ProfileError("the Town master must be a terminal");
+    const current = next.town_master;
+    if (current && !sameTerminal(current, key) && !options.replace)
+      throw new ProfileError("another agent is the Town master");
+    next.town_master = key;
     return this.commit(next);
   }
 
@@ -174,4 +266,26 @@ export class ProfileStore {
     ].slice(-MAX_ASSIGNMENTS);
     return this.commit(next);
   }
+}
+
+type Write = (
+  store: ProfileStore,
+  p: Record<string, unknown>,
+) => ProfilesDocument;
+/** The RPCs that write the profiles document, which also holds the chimes and the Town master. */
+const WRITES: Record<string, Write> = {
+  "world.profiles.save": (store, p) => store.save(p.profile),
+  "world.profiles.delete": (store, p) => store.delete(String(p.id ?? "")),
+  "world.chimes.save": (store, p) => store.saveChimes(p.chimes),
+  "world.town_master.set": (store, p) =>
+    store.setTownMaster(p.terminal ?? null, { replace: p.replace === true }),
+};
+
+/** The write an RPC method performs on the profiles document, if any. */
+export function profileWrite(method: string) {
+  const write = Object.hasOwn(WRITES, method) ? WRITES[method] : undefined;
+  return write
+    ? (store: ProfileStore, params: unknown) =>
+        write(store, (params ?? {}) as Record<string, unknown>)
+    : null;
 }

@@ -23,6 +23,15 @@ CI caches the baseline's published assets per tag and platform and serves them t
 that installer from a loopback mirror, so each tag is downloaded once per platform
 rather than on every run; otherwise CI dominated the releases' download counts.
 
+On Windows, baselines at `v0.2.6` or older can finish installing and then fail
+only because `Remove-Item` encounters a sharing lock on the extracted staging
+executable ([#254](https://github.com/IvoryHeart/herdr-world/pull/254),
+[#291](https://github.com/IvoryHeart/herdr-world/pull/291)). The harness recognizes
+only that exact post-success cleanup failure and records the exception. Baseline
+binary versions, launcher and runtime checks still run. Other baseline failures,
+newer baselines and every candidate installation remain strict. The published
+installer and general CI rerun policy are unchanged.
+
 The matrix verifies fresh plugin installation, latest-stable plugin upgrade, frozen
 cached action argv, executable versions, HTTP health, login, embedded browser assets,
 configuration and session migration, runtime restart, and checksum

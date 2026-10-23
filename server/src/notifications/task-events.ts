@@ -1,7 +1,12 @@
 import { herdrEventName } from "../utils/herdr-events";
+import {
+  notificationSender,
+  type NotificationSender,
+} from "../../../shared/notificationSender";
 
 export interface TaskEvent {
-  kind: "completed" | "blocked";
+  /** `message`: a Herdr custom notification addressed to the owner. */
+  kind: "completed" | "blocked" | "message";
   /** Absent for Herdr notifications that are not tied to a pane. */
   workspaceId?: string;
   paneId?: string;
@@ -10,6 +15,7 @@ export interface TaskEvent {
   workspaceLabel?: string;
   tabLabel?: string;
   agent: string;
+  sender?: NotificationSender;
   /** Herdr-rendered text; status-derived events leave these unset. */
   title?: string;
   body?: string;
@@ -71,16 +77,15 @@ export function createTaskEventTracker(notify: (event: TaskEvent) => void) {
     const status = pane.agent_status;
     if (status !== "blocked" && status !== "done" && status !== "idle") return;
     const agentSessionId = agentSessionIdentity(pane);
+    const agent = typeof pane.agent === "string" ? pane.agent : previous.agent;
     notify({
       kind: status === "blocked" ? "blocked" : "completed",
       workspaceId: pane.workspace_id,
       paneId: pane.pane_id,
       ...(agentSessionId ? { agentSessionId } : {}),
       tabId: typeof pane.tab_id === "string" ? pane.tab_id : undefined,
-      agent:
-        typeof pane.agent === "string"
-          ? pane.agent
-          : (previous.agent ?? "Agent"),
+      agent: agent ?? "Agent",
+      sender: notificationSender(agent),
     });
   }
   return {

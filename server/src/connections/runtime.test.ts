@@ -2,6 +2,8 @@ import { expect, test } from "bun:test";
 import { silentLogger } from "../utils/logger";
 import { createLastStepBaselineStore } from "../workspace/git-diff";
 import { createLegacyConnectionRuntime } from "./runtime";
+import { parseHerdrTaskNotification } from "../../../web/src/herdrTaskNotification";
+import { createChimeCenter } from "../../../web/src/chimes/chimeCenter";
 
 test("legacy runtime exposes and reports its configured connection identity", async () => {
   const events: Array<{ event: unknown; connectionId: string }> = [];
@@ -403,17 +405,17 @@ test("herdr notification source relays SemanticNotification and silences the sta
     w.string(JSON.stringify(data));
     return encodeFrame(w.toBuffer());
   };
-  const notification = () => {
+  const notification = (unknownSender = false) => {
     const w = new BinWriter();
     w.variant(14);
-    w.variant(1); // Finished
-    w.string("claude finished");
-    w.option("cvision", (v) => w.string(v));
-    w.option(0, (v) => w.variant(v)); // Done
-    w.option("claude", (v) => w.string(v));
-    w.option("w1", (v) => w.string(v));
-    w.option("w1:t1", (v) => w.string(v));
-    w.option("w1:p1", (v) => w.string(v));
+    w.variant(unknownSender ? 3 : 1); // Custom or Finished
+    w.string(unknownSender ? "Review ready" : "claude finished");
+    w.option(unknownSender ? null : "cvision", (v) => w.string(v));
+    w.option(unknownSender ? null : 0, (v) => w.variant(v)); // Done
+    w.option(unknownSender ? null : "claude", (v) => w.string(v));
+    w.option(unknownSender ? null : "w1", (v) => w.string(v));
+    w.option(unknownSender ? null : "w1:t1", (v) => w.string(v));
+    w.option(unknownSender ? null : "w1:p1", (v) => w.string(v));
     w.option(null, () => undefined);
     return encodeFrame(w.toBuffer());
   };
@@ -454,6 +456,7 @@ test("herdr notification source relays SemanticNotification and silences the sta
   const taskEvents: unknown[] = [];
   const browserEvents: unknown[] = [];
   const relayed = Promise.withResolvers<void>();
+  const customRelayed = Promise.withResolvers<Record<string, unknown>>();
   const runtime = createLegacyConnectionRuntime({
     identity: { id: "local", label: "Local", source: "test" },
     config: {
@@ -470,6 +473,8 @@ test("herdr notification source relays SemanticNotification and silences the sta
     markRpcError: () => undefined,
     onEvent: (event) => {
       browserEvents.push(event);
+      const data = (event as { data?: Record<string, unknown> }).data;
+      if (data?.title === "Review ready") customRelayed.resolve(data);
       if (
         (event as { event?: string }).event === "herdr-world.task_notification"
       )
@@ -497,6 +502,7 @@ test("herdr notification source relays SemanticNotification and silences the sta
       {
         kind: "completed",
         agent: "claude",
+        sender: { known: true, agent: "claude" },
         title: "claude finished",
         body: "cvision",
         workspaceId: "w1",
@@ -510,6 +516,7 @@ test("herdr notification source relays SemanticNotification and silences the sta
         type: "herdr-world.task_notification",
         kind: "completed",
         agent: "claude",
+        sender: { known: true, agent: "claude" },
         title: "claude finished",
         body: "cvision",
         workspace_id: "w1",
@@ -526,6 +533,28 @@ test("herdr notification source relays SemanticNotification and silences the sta
       });
     }
     expect(taskEvents).toHaveLength(1);
+    for (const socket of sockets) socket.write(notification(true));
+    const data = await customRelayed.promise;
+    expect(data.sender).toEqual({ known: false });
+    const parsed = parseHerdrTaskNotification(data)!;
+    expect(parsed.sender).toEqual({ known: false });
+    const center = createChimeCenter({
+      now: () => 0,
+      document: () => null,
+      device: () => ({ on: false, volume: 0.5 }),
+      ready: () => false,
+      play: () => false,
+      setTimer: () => {},
+    });
+    expect(
+      center.announce({
+        kind: parsed.kind,
+        connectionId: "local",
+        terminalId: null,
+        agent: parsed.agentKnown ? parsed.agent : null,
+        detail: parsed.title,
+      }).message,
+    ).toBe("For you · sender unknown: Review ready");
   } finally {
     await runtime.stop();
     for (const socket of sockets) socket.destroy();
@@ -598,6 +627,7 @@ test("herdr notification source falls back to agent status on legacy Herdr", asy
         paneId: "w1:p1",
         tabId: "w1:t1",
         agent: "codex",
+        sender: { known: true, agent: "codex" },
         workspaceLabel: "Agents",
         tabLabel: "Peter",
       },
@@ -613,6 +643,7 @@ test("herdr notification source falls back to agent status on legacy Herdr", asy
           type: "herdr-world.task_notification",
           kind: "blocked",
           agent: "codex",
+          sender: { known: true, agent: "codex" },
           title: "Agent needs input",
           body: "Agents \u00b7 Peter",
           workspace_id: "w1",

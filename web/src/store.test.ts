@@ -19,7 +19,6 @@ import {
   nextRecentPaneIds,
   noticeAutoDismissDelay,
   numberedCreatedTabRename,
-  parseHerdrTaskNotification,
   reconcileConnectionCatalogSessions,
   stabilizeRefreshPatch,
   type ServerSessionState,
@@ -33,6 +32,7 @@ import {
   taskNotificationTargetIsCurrent,
   worktreeRemovalCompletionNotice,
 } from "./store";
+import { parseHerdrTaskNotification } from "./herdrTaskNotification";
 import type { Pane } from "./types";
 import { removeTemporaryWorkspaceSafely } from "./worktreeLifecycle";
 import { registerTerminalConnectionDisposer } from "./terminalConnection";
@@ -1375,7 +1375,7 @@ describe("independent qualified operational sessions", () => {
       await store.refresh();
       status = "done";
       await store.refresh();
-      expect(store.get().notice?.message).toBe("Task completed");
+      expect(store.get().notice?.message).toBe("alpha · finished");
       expect(store.get().notice?.actionPaneId).toBeUndefined();
       expect(store.get().notice?.detail).toContain(
         "session identity is unavailable",
@@ -3395,6 +3395,7 @@ describe("Herdr task notifications", () => {
         kind: "blocked",
         agent: "claude",
         title: "claude needs attention",
+        sender: { known: true, agent: "claude" },
         body: "",
         workspace_id: "w1",
         pane_id: "w1:p2",
@@ -3403,6 +3404,8 @@ describe("Herdr task notifications", () => {
     ).toEqual({
       kind: "blocked",
       agent: "claude",
+      agentKnown: true,
+      sender: { known: true, agent: "claude" },
       title: "claude needs attention",
       body: null,
       workspaceId: "w1",
@@ -3438,7 +3441,7 @@ describe("Herdr task notifications", () => {
           session_identity_unavailable: true,
         }),
       );
-      expect(store.get().notice?.message).toBe("Synthetic task finished");
+      expect(store.get().notice?.message).toBe("Finished · sender unknown");
       expect(store.get().notice?.actionPaneId).toBeUndefined();
       expect(store.get().notice?.detail).toContain(
         "session identity is unavailable",
@@ -3456,6 +3459,7 @@ describe("Herdr task notifications", () => {
           kind: "completed",
           agent: "claude",
           title: "claude finished",
+          sender: { known: true, agent: "claude" },
           body: "cvision",
           workspace_id: "w1",
           pane_id: "w1:p9",
@@ -3463,7 +3467,7 @@ describe("Herdr task notifications", () => {
       );
       expect(store.get().notice).toMatchObject({
         kind: "success",
-        message: "claude finished",
+        message: "claude · finished",
         detail: "cvision",
         actionLabel: "Open agent",
         actionConnectionId: "alpha",
@@ -3476,10 +3480,12 @@ describe("Herdr task notifications", () => {
         herdrEvent({ kind: "blocked", title: "codex needs input" }),
       );
       const notice = store.get().notice;
+      // Within the burst window both changes share one toast.
       expect(notice).toMatchObject({
         kind: "info",
-        message: "codex needs input",
-        detail: "Agent",
+        message: "2 changes",
+        detail:
+          "claude · finished · Needs you · sender unknown: codex needs input",
       });
       expect(notice?.actionPaneId).toBeUndefined();
     } finally {
