@@ -37,6 +37,12 @@ export default defineConfig(({ mode }) => {
               },
             ]),
         {
+          find: /^shiki\/wasm$/,
+          replacement: fileURLToPath(
+            new URL("./src/shikiWasm.ts", import.meta.url),
+          ),
+        },
+        {
           find: /^shiki$/,
           replacement: fileURLToPath(
             new URL("./src/shiki.ts", import.meta.url),
