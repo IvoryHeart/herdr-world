@@ -1,23 +1,23 @@
-import { StrictMode, useState } from "react";
-import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
-import type { Interest } from "../../shared/interest";
+import { flushSync } from "react-dom";
+import { StrictMode, useState } from "react";
 import { bridge, type ConnectionClient } from "./api";
-import { ColorSwatchButton } from "./components/ColorSwatch";
-import { InterestButton } from "./components/InterestButton";
-import { TerminalView } from "./components/TerminalView";
-import { ThemedSelect } from "./components/ThemedSelect";
-import { WindowArrangementMenu } from "./components/WindowArrangementMenu";
-import { openLayerCount } from "./layerStack";
+import { __storeTesting, store } from "./store";
 import {
   initializeLayoutPreferences,
   updateLayoutPreferences,
 } from "./layoutPreferences";
-import { __storeTesting, store } from "./store";
 import { rememberTerminalInputMode } from "./terminalInputMode";
-import type { Pane } from "./types";
-import { TERMINAL_COLOR_PALETTE } from "./world/terminalColor";
+import { openLayerCount } from "./layerStack";
+import { TerminalView } from "./components/TerminalView";
+import { ThemedSelect } from "./components/ThemedSelect";
+import { WindowArrangementMenu } from "./components/WindowArrangementMenu";
+import { ColorSwatchButton } from "./components/ColorSwatch";
+import { InterestButton } from "./components/InterestButton";
+import type { Interest } from "../../shared/interest";
 import { WindowControls } from "./world/windows/WindowControls";
+import { TERMINAL_COLOR_PALETTE } from "./world/terminalColor";
+import type { Pane } from "./types";
 import "./styles/tokens.css";
 import "./styles/base.css";
 import "./styles/layout/app.css";

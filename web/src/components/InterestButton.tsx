@@ -17,7 +17,7 @@ export type InterestChoice = {
 };
 
 const CHOICES: { id: Interest; label: string; hint: string }[] = [
-  { id: "watching", label: "Watching", hint: "Chimes when it needs you" },
+  { id: "watching", label: "Watching", hint: "Chimes as usual" },
   { id: "muted", label: "Muted", hint: "No chimes; still in reception" },
   { id: "focused", label: "Focused", hint: "Only focused agents chime" },
 ];

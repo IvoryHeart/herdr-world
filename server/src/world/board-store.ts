@@ -1,18 +1,18 @@
 import { existsSync, readFileSync, renameSync } from "node:fs";
 import { join } from "node:path";
-import {
-  interestKeyPrefix,
-  STORED_INTERESTS,
-  type StoredInterest,
-} from "../../../shared/interest";
+import { dataRoot, replaceDataFile } from "../config/data-paths";
+import { worldEnv } from "../config/environment";
+import { RECIPIENT_MAX, type ObservedAgent } from "./board-recipient";
 import {
   cardKey,
   resolveTerminalColor,
   tabCardKey,
 } from "../../../shared/terminalColor";
-import { dataRoot, replaceDataFile } from "../config/data-paths";
-import { worldEnv } from "../config/environment";
-import { type ObservedAgent, RECIPIENT_MAX } from "./board-recipient";
+import {
+  interestKeyPrefix,
+  STORED_INTERESTS,
+  type StoredInterest,
+} from "../../../shared/interest";
 
 /**
  * Board's saved state: layout, notes and strings. One document for the World
