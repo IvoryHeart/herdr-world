@@ -465,7 +465,7 @@ export function AgentChat({
           </span>
         </span>
         {stopNote ? (
-          <span className="agent-chat-now-note" role="status">
+          <span className="agent-chat-now-note" role="status" title={stopNote}>
             {stopNote}
           </span>
         ) : null}

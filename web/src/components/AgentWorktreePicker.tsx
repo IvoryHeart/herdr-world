@@ -79,6 +79,7 @@ export function AgentWorktreePicker({ view }: { view: AgentWorktreeView }) {
               type="radio"
               name={name}
               value={candidate.candidateId}
+              aria-label={`${candidate.canonicalRoot} · ${AGENT_WORKTREE_SOURCE_LABELS[candidate.source]}`}
               checked={view.selected?.candidateId === candidate.candidateId}
               disabled={stale || view.observation?.state === "unavailable"}
               onChange={() => view.select(candidate.candidateId)}
@@ -88,7 +89,7 @@ export function AgentWorktreePicker({ view }: { view: AgentWorktreeView }) {
                 className="agent-worktree-choice-path"
                 title={candidate.canonicalRoot}
               >
-                {middleEllipsis(candidate.canonicalRoot, 56)}
+                {middleEllipsis(candidate.canonicalRoot, 36)}
               </span>
               <small>
                 {AGENT_WORKTREE_SOURCE_LABELS[candidate.source]}

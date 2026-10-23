@@ -11,6 +11,7 @@ import "../styles/tokens.css";
 import "../styles/base.css";
 import "../styles/vendor.css";
 import "./WorkspaceInspectorHost.css";
+import "../world/windows/windows.css";
 
 const failures: string[] = [];
 function check(condition: boolean, message: string) {
@@ -1252,7 +1253,7 @@ async function run() {
       await new Promise((resolve) => setTimeout(resolve, 100));
     const now = container.querySelector(".agent-chat-now");
     check(
-      now?.querySelector(".agent-chat-status")?.textContent === "Working" &&
+      now?.querySelector(".agent-chat-state-word")?.textContent === "Working" &&
         now.querySelector('.agent-chat-state-circle[title="Working"]') !==
           null &&
         now.querySelector(".agent-chat-now-title")?.textContent ===
@@ -1262,6 +1263,27 @@ async function run() {
         ),
       `The Now bar must show the status, task and time (${now?.textContent})`,
     );
+    container.style.width = "390px";
+    container.classList.add("is-town-skin");
+    await settle();
+    const nowButtons = [
+      ...now!.querySelectorAll<HTMLButtonElement>("button"),
+    ].map((button) => button.getBoundingClientRect());
+    check(
+      nowButtons.every(
+        (rect) =>
+          Math.abs(
+            rect.top +
+              rect.height / 2 -
+              (nowButtons[0]!.top + nowButtons[0]!.height / 2),
+          ) < 2,
+      ) &&
+        getComputedStyle(now!.querySelector(".agent-chat-state-circle")!)
+          .display !== "none",
+      "Town's phone Now row must keep its circle, Stop, refresh and Details on one line",
+    );
+    container.classList.remove("is-town-skin");
+    container.style.width = "800px";
     const runningRow = container.querySelector(".agent-chat-running");
     check(
       runningRow?.textContent?.includes("Bash") === true &&

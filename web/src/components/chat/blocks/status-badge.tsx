@@ -5,7 +5,7 @@ export function ChatStatusBadge({ status }: { status: string }) {
   const label = STATUS_WORDS[status] ?? status;
   return (
     <span
-      className={`agent-chat-status agent-chat-state-circle is-${status.toLowerCase()}`}
+      className={`agent-chat-state-circle is-${status.toLowerCase()}`}
       title={label}
     >
       <span className="agent-chat-state-glyph" aria-hidden="true">

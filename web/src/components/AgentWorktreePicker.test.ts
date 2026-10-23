@@ -97,3 +97,22 @@ test("a stale view keeps attributed candidates visible without mounting resource
   ).toContain("Files");
   expect(resourceReads).toBe(1);
 });
+
+test("a truncated candidate keeps the full path in its accessible radio name", () => {
+  const path =
+    "/project/lantern-notes/.agents/worktrees/agent-worktree-with-a-long-name";
+  const long = {
+    ...view,
+    observation: {
+      ...view.observation!,
+      candidates: [
+        { ...view.observation!.candidates[0]!, canonicalRoot: path },
+      ],
+    },
+  };
+  const html = renderToStaticMarkup(
+    createElement(AgentWorktreePicker, { view: long }),
+  );
+  expect(html).toContain(`aria-label="${path} · Branch match"`);
+  expect(html).toContain(`title="${path}"`);
+});

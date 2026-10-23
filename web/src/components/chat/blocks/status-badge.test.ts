@@ -18,5 +18,6 @@ test("Now status has a title and hidden word, with a circle for every agent stat
     expect(html).toContain(`agent-chat-state-word">${label}</span>`);
     expect(html).toContain(`is-${status}`);
     expect(html).toContain('aria-hidden="true"');
+    expect(html).not.toContain("agent-chat-status ");
   }
 });

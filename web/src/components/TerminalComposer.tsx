@@ -347,15 +347,17 @@ export function TerminalComposer({
       textarea.style.minHeight = "0px";
       textarea.style.height = "0px";
       const contentHeight = textarea.scrollHeight;
-      const style = window.getComputedStyle(textarea);
+      const chatStyle =
+        surface === "chat" ? window.getComputedStyle(textarea) : null;
       const borderHeight =
-        style.boxSizing === "border-box"
-          ? Number.parseFloat(style.borderTopWidth) +
-            Number.parseFloat(style.borderBottomWidth)
+        chatStyle?.boxSizing === "border-box"
+          ? Number.parseFloat(chatStyle.borderTopWidth) +
+            Number.parseFloat(chatStyle.borderBottomWidth)
           : 0;
       textarea.style.minHeight = previousMinHeight;
       textarea.style.height = `${contentHeight + borderHeight}px`;
       if (!text || !editorFocused || !open || expanded) return;
+      const style = chatStyle ?? window.getComputedStyle(textarea);
       const oneRow =
         Number.parseFloat(style.lineHeight) +
         Number.parseFloat(style.paddingTop) +
