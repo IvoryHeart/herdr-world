@@ -56,6 +56,7 @@ import {
   townSeat,
   townShapeFor,
   townShapeKey,
+  townPinCell,
   type TownLayout,
   type TownPlacementMemory,
   type TownShape,
@@ -63,7 +64,10 @@ import {
 import {
   townAttention,
   townDeskColors,
+  townDeskPins,
   townModelFromProjection,
+  townPinnedCells,
+  type TownDeskPin,
   townRoomCounts,
   type TownModel,
 } from "./townModel";
@@ -81,6 +85,7 @@ import {
   type TerminalColor,
   type TerminalColors,
 } from "../terminalColor";
+import { placeDeskPin, type DeskPins } from "../useDeskPins";
 import { useWorldSources } from "../worldSources";
 import {
   sameTownBadges,
@@ -135,6 +140,7 @@ const REFLOW_IDLE_MS = 1200;
 
 const portrait = townPortrait;
 const NO_COLORS: TerminalColors = {};
+const NO_PINS: DeskPins = {};
 const NO_KEYS: ReadonlySet<string> = new Set();
 /** What a seat's quest pennant shows: the agent's quest and its progress. */
 export type TownQuestMark = {
@@ -171,6 +177,7 @@ export function TownCanvas({
   observability,
   calm = false,
   terminalColors = NO_COLORS,
+  deskPins = NO_PINS,
   chrome = NO_CHROME,
   trace = NO_TRACE,
 }: {
@@ -198,6 +205,8 @@ export function TownCanvas({
   selectedRoomKey: string | null;
   /** Saved terminal colours (useTerminalColors); desks use their tab's. */
   terminalColors?: TerminalColors;
+  /** Saved desk pins (useDeskPins); a pinned desk keeps its cell. */
+  deskPins?: DeskPins;
 }) {
   const shellRef = useRef<HTMLDivElement | null>(null);
   const traceRef = useRef(trace);
@@ -231,7 +240,7 @@ export function TownCanvas({
   // Colours ride on the model but not its layout input: a new colour repaints
   // tables without placing the town again.
   const lastDeskColors = useRef<ReadonlyMap<string, TerminalColor>>(new Map());
-  const model = useMemo(() => {
+  const colouredModel = useMemo(() => {
     // The same colours keep the same map, so status updates never rebuild.
     const next = townDeskColors(projection, terminalColors);
     const last = lastDeskColors.current;
@@ -242,15 +251,39 @@ export function TownCanvas({
       lastDeskColors.current = next;
     return { ...topology, deskColors: lastDeskColors.current };
   }, [topology, projection, terminalColors]);
+  // Pins ride on the model too; the same pins keep the same map.
+  const lastDeskPins = useRef<ReadonlyMap<string, TownDeskPin>>(new Map());
+  const model = useMemo(() => {
+    const next = townDeskPins(projection, deskPins);
+    const last = lastDeskPins.current;
+    if (
+      next.size !== last.size ||
+      [...next].some(([key, pin]) => {
+        const was = last.get(key);
+        return (
+          !was ||
+          was.key !== pin.key ||
+          was.cell?.col !== pin.cell?.col ||
+          was.cell?.row !== pin.cell?.row
+        );
+      })
+    )
+      lastDeskPins.current = next;
+    return { ...colouredModel, deskPins: lastDeskPins.current };
+  }, [colouredModel, projection, deskPins]);
+  const pinnedCells = useMemo(
+    () => townPinnedCells(model.deskPins),
+    [model.deskPins],
+  );
   const placed = useMemo(() => {
     const key = townShapeKey(shape);
     const previous =
       memoryRef.current.shape === key ? memoryRef.current.memory : new Map();
-    const result = layoutTown(model.input, shape, previous);
+    const result = layoutTown(model.input, shape, previous, pinnedCells);
     memoryRef.current = { shape: key, memory: result.memory };
     return result.layout;
-    // Placement depends only on topology, not on agent status.
-  }, [model.input, shape]);
+    // Placement depends only on topology and pins, not on agent status.
+  }, [model.input, shape, pinnedCells]);
   // While the user presses, scrolls or zooms, a reflow that would move rooms
   // or buildings waits until they pause (then the camera follows the room in
   // view). A held layout must still name only desks the model has.
@@ -281,6 +314,19 @@ export function TownCanvas({
     );
     return () => window.clearTimeout(timer);
   });
+  // A desk just pinned keeps the cell it has; save it so it stays there.
+  const placing = useRef(new Set<string>());
+  useEffect(() => {
+    for (const [deskKey, pin] of model.deskPins) {
+      if (pin.cell || placing.current.has(pin.key)) continue;
+      const cell = townPinCell(layout, placed, deskKey);
+      if (!cell) continue;
+      placing.current.add(pin.key);
+      void placeDeskPin(pin.key, { col: cell.col, row: cell.row }).finally(() =>
+        placing.current.delete(pin.key),
+      );
+    }
+  }, [layout, placed, model.deskPins]);
   const blockedSince = useRef(new Map<string, number>());
   const [hover, setHover] = useState<string | null>(null);
   const latest = useRef({

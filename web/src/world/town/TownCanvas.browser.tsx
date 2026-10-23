@@ -1375,13 +1375,22 @@ async function run() {
       return [box.left + box.width / 2, box.bottom + 24] as const;
     };
     let moved = false;
+    const tried: string[] = [];
     for (const room of rooms) {
       const ghost = () => host.querySelector<HTMLElement>(".town-drag-ghost");
       press("pointerdown", at(fromDesk));
       await waitFor(() => ghost() !== null, "holding a desk did not lift it");
       press("pointermove", floor(room));
-      await settle();
+      // The ghost judges the drop target on a later frame, whose timing
+      // depends on the renderer (SwiftShader or the GPU); give it a few.
+      for (let frame = 0; frame < 10; frame += 1) {
+        await settle();
+        if (ghost()?.dataset.valid === "true") break;
+      }
       const label = ghost()?.textContent ?? "";
+      tried.push(
+        `${room.dataset.id ?? room.getAttribute("aria-label") ?? "room"}: ${ghost()?.dataset.valid ?? "no ghost"} ${JSON.stringify(label)}`,
+      );
       if (
         ghost()?.dataset.valid !== "true" ||
         label.includes("’s place") ||
@@ -1455,7 +1464,10 @@ async function run() {
       await landed(drawn, "a desk moved to a room scrolled into view");
       moved = true;
     }
-    check(moved, "no room took a carried desk");
+    check(
+      moved,
+      `no room took a carried desk (${rooms.length} visible; ${tried.join("; ")})`,
+    );
   } else check(false, "no two visible desks share a room");
 
   // Town shows no move icons; moving is by drag, hold or the keyboard.
