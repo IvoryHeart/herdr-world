@@ -7,7 +7,12 @@ import {
 } from "../officeObservability";
 import { WorldPanel } from "../windows/WorldPanel";
 import type { WorldObject } from "../worldObject";
-import { TownAsk, townRailInset, type TownCall } from "./TownRail";
+import {
+  TownAsk,
+  townRailInset,
+  townLocation,
+  type TownCall,
+} from "./TownRail";
 import { sharedAsksStore, useWorldAsks } from "../worldAsks";
 import {
   townSummary,
@@ -170,11 +175,11 @@ function SummaryItem({
         <strong>
           {item.agent.displayLabel}
           {item.agent.semanticStatus === "blocked"
-            ? " · blocked: needs input"
+            ? ` · blocked: ${item.agent.stateLabels.blocked?.trim() || "needs input"}`
             : ""}
         </strong>
         <small>
-          {item.roomLabel} · {item.hostLabel} · {detail}
+          {townLocation(item)} · {detail}
         </small>
       </div>
       <button
@@ -224,6 +229,7 @@ export function useTownSummary({
   observability,
   now,
   openAgent,
+  showRoom,
 }: {
   railCollapsed: boolean;
   world: WorldObject;
@@ -232,12 +238,12 @@ export function useTownSummary({
   observability: OfficeObservability;
   now: number;
   openAgent(agentKey: string): void;
+  showRoom(roomKey: string): void;
 }): {
   summary: TownSummaryModel;
   railInset: number;
   answerAsk(id: string, text: string): Promise<string | null>;
   open(): void;
-  roomFocus: { roomKey: string; seq: number } | null;
   window: ReactNode;
 } {
   const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth);
@@ -266,10 +272,7 @@ export function useTownSummary({
     [world, office, calls, observability, asks],
   );
   const [isOpen, setOpen] = useState(false);
-  const [roomFocus, setRoomFocus] = useState<{
-    roomKey: string;
-    seq: number;
-  } | null>(null);
+  const [focusKey, setFocusKey] = useState(0);
   return {
     summary,
     railInset: townRailInset(
@@ -278,12 +281,15 @@ export function useTownSummary({
       summary.counts.needsYou,
     ),
     answerAsk,
-    open: () => setOpen(true),
-    roomFocus,
+    open: () => {
+      setOpen(true);
+      setFocusKey((key) => key + 1);
+    },
     window: isOpen ? (
       <WorldPanel
         name="town-summary"
         label="Town summary"
+        focusKey={focusKey}
         onClose={() => setOpen(false)}
       >
         <TownSummaryPanel
@@ -293,7 +299,7 @@ export function useTownSummary({
           onAnswer={answerAsk}
           onShowRoom={(roomKey) => {
             if (viewportWidth <= 640) setOpen(false);
-            setRoomFocus((last) => ({ roomKey, seq: (last?.seq ?? 0) + 1 }));
+            showRoom(roomKey);
           }}
         />
       </WorldPanel>

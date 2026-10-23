@@ -181,6 +181,22 @@ test("open asks and blocked agents are separate needs-you items", () => {
   ).toBe(1);
 });
 
+test("Summary lists and counts every room beyond presentation admission", () => {
+  const projection = office(
+    Object.fromEntries(
+      Array.from({ length: 129 }, (_, index) => [`room-${index}`, ["working"]]),
+    ),
+  );
+  expect(projection.rooms).toHaveLength(128);
+  const summary = townSummary(projection, [], NO_METRICS);
+  expect(summary.hosts[0]!.rooms).toHaveLength(129);
+  expect(summary.hosts[0]!.counts.working).toBe(129);
+  expect(summary.counts.working).toBe(129);
+  expect(new Set(summary.hosts[0]!.rooms.map((room) => room.key)).size).toBe(
+    129,
+  );
+});
+
 test("spend says there is no cost data rather than zero", () => {
   const projection = office({ alpha: ["working"] });
   expect(townSummary(projection, [], NO_METRICS).spend).toEqual({
@@ -271,4 +287,26 @@ test("the summary panel reads in attention order and never shows zero spend", as
   expect(html).toContain("Show room alpha in Town");
   expect(html).toContain("No cost data");
   expect(html).not.toContain("$0.00");
+});
+
+test("blocked rows show supplied reasons and fall back for missing or blank labels", async () => {
+  const { renderToStaticMarkup } = await import("react-dom/server");
+  const { createElement } = await import("react");
+  const { TownSummaryPanel } = await import("./TownSummaryPanel");
+  const projection = office({ alpha: ["blocked", "blocked", "blocked"] });
+  const calls = callsOf(projection);
+  calls[0]!.agent.stateLabels.blocked = "Approve the synthetic change";
+  calls[1]!.agent.stateLabels.blocked = "  ";
+  delete calls[2]!.agent.stateLabels.blocked;
+  const html = renderToStaticMarkup(
+    createElement(TownSummaryPanel, {
+      summary: townSummary(projection, calls, NO_METRICS),
+      now: 1000,
+      onOpenAgent: () => {},
+      onShowRoom: () => {},
+      onAnswer: async () => null,
+    }),
+  );
+  expect(html).toContain("blocked: Approve the synthetic change");
+  expect(html.match(/blocked: needs input/g)).toHaveLength(2);
 });

@@ -117,11 +117,11 @@ export function townSummary(
     if (agent.semanticStatus === "working") working += 1;
   }
   const hosts = office.hosts.map((host): TownSummaryHost => {
-    const rooms = office.rooms
+    const rooms = office.roomRoster
       .filter((room) => room.hostKey === host.key)
       .map((room) => ({
         key: room.key,
-        label: room.accessibleLabel ?? room.displayLabel,
+        label: room.displayLabel,
         counts: roomCounts.get(room.key) ?? emptyCounts(),
       }));
     const counts = emptyCounts();

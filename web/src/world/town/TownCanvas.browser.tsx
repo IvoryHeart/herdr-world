@@ -167,9 +167,13 @@ function topology(seed: number): Topology {
   const agentPanes: Pane[] = [];
   const connections = HOSTS.map((host): WorldRuntimeConnection => {
     const roomNames =
-      scale === "max"
-        ? host.rooms
-        : host.rooms.slice(0, 5 + Math.floor(r() * 4));
+      scale === "navigation"
+        ? host === HOSTS[0]
+          ? Array.from({ length: 128 }, (_, index) => `focus-room-${index}`)
+          : [`${host.id}-destination`]
+        : scale === "max"
+          ? host.rooms
+          : host.rooms.slice(0, 5 + Math.floor(r() * 4));
     const workspaces: Workspace[] = [];
     const tabs: Tab[] = [];
     const panes: Pane[] = [];
@@ -181,11 +185,14 @@ function topology(seed: number): Topology {
         (scale === "extended" || scale === "protected") && host === HOSTS[0]
           ? [scale === "protected" ? 160 : 100, 50, 24][roomIndex]
           : 0;
-      const deskCount = extended
-        ? extended
-        : scale === "max"
-          ? 11 + Math.floor(r() * 5)
-          : 3 + Math.floor(r() * r() * 13);
+      const deskCount =
+        scale === "navigation"
+          ? 1
+          : extended
+            ? extended
+            : scale === "max"
+              ? 11 + Math.floor(r() * 5)
+              : 3 + Math.floor(r() * r() * 13);
       let paneTotal = 0;
       for (let d = 0; d < deskCount; d += 1) {
         const tabId = `${workspaceId}-tab-${d}`;
@@ -802,7 +809,13 @@ async function run() {
   const unfocusedOpens: string[] = [];
   function Harness() {
     const [world, set] = useState(() => worldFor(base.connections));
-    const [selectedId, setSelectedId] = useState<string | null>(null);
+    const [selectedId, setSelectedId] = useState<string | null>(() =>
+      scale === "navigation"
+        ? worldFor(base.connections).leaves.find(
+            (leaf) => leaf.connectionId === "local",
+          )!.id
+        : null,
+    );
     useEffect(() => {
       setWorld = set;
     }, []);
@@ -907,6 +920,22 @@ async function run() {
     },
     bodies: { "panel:town-summary": panelBody },
   };
+  let releaseRenderer: (() => void) | null = null;
+  if (scale === "navigation") {
+    const { Application } = await import("pixi.js");
+    const original = Application.prototype.init;
+    const held = Promise.withResolvers<void>();
+    Application.prototype.init = async function (
+      ...args: Parameters<typeof original>
+    ) {
+      await held.promise;
+      return original.apply(this, args);
+    };
+    releaseRenderer = () => {
+      Application.prototype.init = original;
+      held.resolve();
+    };
+  }
   const root = createRoot(host);
   root.render(
     <StrictMode>
@@ -915,6 +944,124 @@ async function run() {
       </WorldPanelsContext.Provider>
     </StrictMode>,
   );
+  if (scale === "navigation") {
+    const summaryButton = () =>
+      window.innerWidth <= 640
+        ? host.querySelector<HTMLButtonElement>(".town-board-chip")
+        : host.querySelector<HTMLButtonElement>(".town-board-open");
+    await waitFor(
+      () => summaryButton() !== null,
+      "Summary launcher is missing before renderer setup",
+    );
+    summaryButton()!.click();
+    await waitFor(
+      () => panelBody.querySelectorAll(".town-summary-room").length === 130,
+      "Summary omitted rooms past presentation admission",
+    );
+    const destination =
+      base.connections[base.connections.length - 1]!.snapshot!.workspaces[0]!;
+    const roomButton = () =>
+      panelBody.querySelector<HTMLButtonElement>(
+        `button[aria-label="Show room ${destination.label} in Town"]`,
+      );
+    const desk = (nativeId: string) =>
+      [
+        ...host.querySelectorAll<HTMLElement>(
+          '.world-semantic-target[data-kind="desk"]',
+        ),
+      ].find((target) => JSON.parse(target.dataset.targetKey!)[2] === nativeId);
+    const targetId = `${destination.workspace_id}-tab-0`;
+    const selectedDeskId = `${base.connections[0]!.snapshot!.workspaces[0]!.workspace_id}-tab-0`;
+    check(
+      window.__HERDR_TOWN_RENDERER__?.ready !== true,
+      "the delayed-setup probe already has a renderer",
+    );
+    roomButton()!.click();
+    if (window.innerWidth <= 640)
+      await waitFor(
+        () => panelBody.querySelector(".town-summary") === null,
+        "phone navigation did not close Summary before setup",
+      );
+    releaseRenderer!();
+    await waitFor(
+      () => window.__HERDR_TOWN_RENDERER__?.ready === true,
+      "delayed renderer never initialized",
+    );
+    const diagnostics = window.__HERDR_TOWN_RENDERER__!;
+    const focused = () => {
+      const rect = desk(targetId)?.getBoundingClientRect();
+      return Boolean(
+        !diagnostics.flying &&
+          diagnostics.zoom > 1.2 &&
+          rect &&
+          rect.left >= 0 &&
+          rect.right <= window.innerWidth &&
+          rect.top >= 0 &&
+          rect.bottom <= window.innerHeight,
+      );
+    };
+    await waitFor(
+      focused,
+      "the room request was lost before renderer/layout readiness",
+    );
+    check(
+      desk(selectedDeskId) !== undefined,
+      "preferred room admission displaced the selected desk",
+    );
+    host
+      .querySelector<HTMLButtonElement>('[aria-label="Show the whole town"]')!
+      .click();
+    await waitFor(
+      () => !diagnostics.flying && diagnostics.zoom < 1,
+      "navigation repeat setup did not return to overview",
+    );
+    if (window.innerWidth <= 640) summaryButton()!.click();
+    await waitFor(
+      () => roomButton() !== null,
+      "Summary did not reopen for the repeated room request",
+    );
+    roomButton()!.click();
+    await waitFor(
+      focused,
+      "a repeated room request did not move the camera again",
+    );
+    setWorld(worldFor(base.connections.slice(0, -1)));
+    await waitFor(
+      () => desk(targetId) === undefined,
+      "removed room remained admitted",
+    );
+    await settle();
+    const restored = {
+      ...base.connections[base.connections.length - 1]!,
+      generation: 4,
+      snapshotGeneration: 4,
+    };
+    const beforeFrames = diagnostics.frames;
+    setWorld(worldFor([...base.connections.slice(0, -1), restored]));
+    await waitFor(
+      () => diagnostics.frames > beforeFrames,
+      "restored topology never rendered",
+    );
+    check(
+      !diagnostics.flying,
+      "removed room navigation replayed on a new generation",
+    );
+    check(
+      desk(selectedDeskId) !== undefined,
+      "room removal displaced the selected desk",
+    );
+    check(
+      diagnostics.lastError === null,
+      `room navigation renderer error: ${diagnostics.lastError}`,
+    );
+    root.unmount();
+    await settle();
+    check(
+      diagnostics.activeApplications === 0,
+      "room navigation unmount leaked a renderer",
+    );
+    return;
+  }
   await waitFor(
     () => window.__HERDR_TOWN_RENDERER__?.ready === true,
     "town renderer did not become ready",

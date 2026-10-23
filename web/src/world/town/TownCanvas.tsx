@@ -1433,13 +1433,22 @@ export function TownCanvas({
     const renderer = rendererRef.current;
     if (renderer) zoomToRoom(renderer, latest.current.layout, roomKey);
   };
-  // The summary asks for a room; each request's seq moves the camera once.
+  // A request waits for renderer setup and its admitted layout, then runs once.
+  const consumedRoomFocus = useRef<number | null>(null);
   useEffect(() => {
-    if (!roomFocus) return;
+    if (!roomFocus || !ready || consumedRoomFocus.current === roomFocus.seq)
+      return;
     const renderer = rendererRef.current;
-    if (renderer)
-      zoomToRoom(renderer, latest.current.layout, roomFocus.roomKey);
-  }, [roomFocus]);
+    if (
+      !renderer ||
+      !layout.buildings.some((building) =>
+        building.rooms.some((room) => room.key === roomFocus.roomKey),
+      )
+    )
+      return;
+    zoomToRoom(renderer, layout, roomFocus.roomKey);
+    consumedRoomFocus.current = roomFocus.seq;
+  }, [roomFocus, ready, layout]);
 
   return (
     <div className="town-shell" ref={shellRef}>

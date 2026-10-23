@@ -43,6 +43,9 @@ test.skipIf(!chrome).each([
   [1080, 1920, "extended", 300],
   // Every one of 130 protected desks keeps its browser target past both bounds.
   [390, 844, "protected", 0],
+  // Request a room beyond admission while renderer initialization is held.
+  [390, 844, "navigation", 0],
+  [1440, 900, "navigation", 0],
 ])(
   "the Office town renders, queues blocked agents and zooms into rooms at %ipx by %ipx (%s, %ims zoom frames)",
   async (width, height, scale, flightFrameDelay) => {

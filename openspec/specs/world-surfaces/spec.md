@@ -1353,12 +1353,18 @@ questions SHALL NOT acquire a guessed host or room. The board sign SHALL show
 agents working and finished, items needing the user, and spend when a metrics
 provider reports it. Its Summary action, and
 on phones its counts chip, SHALL open a Town summary window in the shared
-window frame that lists, in this order: open questions using the rail's Ask
+window frame. Launching an already-open Summary SHALL restore and raise it
+through the shared window manager. It lists, in this order: open questions using the rail's Ask
 cards and answer action, then blocked agents with their reason, waiting age
 and one action; unreviewed finishes with when each was last
 active when Herdr reports activity times, never presented as the finish time; every host with its rooms and their counts (needing
 the user, working, finished, quiet, unknown), where activating a room moves the
-Town camera to it; and spend per model with its source and age. Without a
+Town camera to it, admitting the qualified requested room while preserving the
+selected room. A room request SHALL wait for renderer setup and its admitted
+layout, be consumed once, and retrigger for a later click on the same room.
+The list SHALL use the complete room roster, including rooms outside the current
+presentation bound. Blocked entries SHALL show the supplied state label, with
+"needs input" only as a fallback. Spend lists each model with its source and age. Without a
 metrics provider the summary SHALL say there is no cost data and SHALL NOT show
 zero spend.
 

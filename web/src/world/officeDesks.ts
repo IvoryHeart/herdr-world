@@ -76,8 +76,30 @@ export function boundedWithPriority<T>(
     [
       ...values.filter(first),
       ...values.filter((value) => !first(value) && priority(value)),
-      ...values.filter((value) => !priority(value)),
+      ...values.filter((value) => !first(value) && !priority(value)),
     ].slice(0, limit),
   );
   return values.filter((value) => admitted.has(value));
+}
+
+export function boundedSorted<T>(
+  values: readonly T[],
+  limit: number,
+  compare: (left: T, right: T) => number,
+): T[] {
+  const kept: T[] = [];
+  for (const value of values) {
+    if (kept.length === limit && compare(value, kept[limit - 1]!) >= 0)
+      continue;
+    let low = 0,
+      high = kept.length;
+    while (low < high) {
+      const middle = (low + high) >>> 1;
+      if (compare(value, kept[middle]!) < 0) high = middle;
+      else low = middle + 1;
+    }
+    kept.splice(low, 0, value);
+    if (kept.length > limit) kept.pop();
+  }
+  return kept;
 }

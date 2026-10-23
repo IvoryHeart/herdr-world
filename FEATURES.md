@@ -25,7 +25,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     questions you can answer in place,
     unreviewed finishes and when each was last active, every host and room
     with its counts (tap a room to go there), and spend per model ("No cost
-    data" without a provider).
+    data" without a provider). Press **Summary** again to restore its minimized
+    window or bring it to the front.
   - Blocked agents queue at reception oldest first. Finished agents wait there
     until you open their terminal or mark that completion reviewed, then join
     idle agents in the lounge. Movement only represents state.

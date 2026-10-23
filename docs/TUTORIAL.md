@@ -131,7 +131,9 @@ changes what you see and does not disconnect hosts or retarget open terminals.
    needs you (blocked agents and open questions), unreviewed finishes and when each was last active, each host's
    rooms with their counts, and spend. Answer a question from its offered
    options or type a reply. A blocked agent that also asked a question counts
-   as two items needing you. Use **Back** to close the summary.
+   as two items needing you. Tap a room to show it in Town; on a phone, Summary
+   closes first. Press **Summary** again to restore its minimized window or bring
+   it to the front. Use **Back** to close the summary.
 4. Tap an agent or its table to open its window on **Chat**: World's Inspector,
    with **Chat**, **Terminal**, **Changes** and **Files** in its top selector.
    In Town it docks on the right; drag its title to undock it. Chat shows the

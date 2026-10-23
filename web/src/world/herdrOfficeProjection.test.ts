@@ -15,6 +15,106 @@ import { layoutTown, TOWN_SHAPES } from "./town/townLayout";
 import { tabCardKey } from "../../../shared/terminalColor";
 
 describe("Pixel Office projection", () => {
+  test("preferred room admission preserves selected desks, distinct slots and unchanged-input cache", async () => {
+    const sources = Array.from({ length: 9 }, (_, index) =>
+      boundedConnection(index),
+    );
+    const world = buildWorldObject(sources, "host-0");
+    await prepareWorldOffice(world);
+    const project = createOfficeProjector(TOWN_PRESENTATION_BOUNDS);
+    const pins = new Set<string>();
+    const expanded = new Set<string>();
+    const attention = new Set<string>();
+    const selected = world.leaves.find(
+      (leaf) => leaf.connectionId === "host-0",
+    )!.id;
+    const baseline = project(world, 1, selected, pins, expanded, attention);
+    const preferred = baseline.roomRoster.find(
+      (room) => room.workspaceRef.connectionId === "host-8",
+    )!;
+    expect(baseline.rooms.some((room) => room.key === preferred.key)).toBe(
+      false,
+    );
+    const shown = project(
+      world,
+      2,
+      selected,
+      pins,
+      expanded,
+      attention,
+      preferred.key,
+    );
+    expect(shown.rooms.some((room) => room.key === preferred.key)).toBe(true);
+    expect(shown.rooms).toHaveLength(128);
+    expect(new Set(shown.rooms.map((room) => room.key)).size).toBe(128);
+    expect(
+      shown.paneRoster.find(({ device }) => device.nodeId === selected)
+        ?.presented,
+    ).toBe(true);
+    expect(
+      project(world, 3, selected, pins, expanded, attention, preferred.key)
+        .rooms,
+    ).toBe(shown.rooms);
+    const alternate = world.spaces.find(
+      (space) => space.connectionId === "host-7",
+    )!;
+    const reselection = project(
+      world,
+      4,
+      alternate.id,
+      pins,
+      expanded,
+      attention,
+      preferred.key,
+    );
+    expect(reselection.rooms.some((room) => room.key === preferred.key)).toBe(
+      true,
+    );
+    expect(
+      reselection.rooms.some(
+        (room) => room.workspaceRef.worldId === alternate.id,
+      ),
+    ).toBe(true);
+    expect(new Set(reselection.rooms.map((room) => room.key)).size).toBe(128);
+    const cleared = project(
+      world,
+      5,
+      selected,
+      pins,
+      expanded,
+      attention,
+      null,
+    );
+    expect(cleared.rooms.some((room) => room.key === preferred.key)).toBe(
+      false,
+    );
+    expect(
+      project(
+        world,
+        5,
+        selected,
+        pins,
+        expanded,
+        attention,
+        "unverified-room",
+      ).rooms.map((room) => room.key),
+    ).toEqual(cleared.rooms.map((room) => room.key));
+    const removedWorld = buildWorldObject(sources.slice(0, -1), "host-0");
+    const removed = project(
+      removedWorld,
+      6,
+      selected,
+      pins,
+      expanded,
+      attention,
+      preferred.key,
+    );
+    expect(removed.rooms.some((room) => room.key === preferred.key)).toBe(
+      false,
+    );
+    expect(new Set(removed.rooms.map((room) => room.key)).size).toBe(128);
+  });
+
   test("prepared presentation lookup matches complete roster resolution and canonical-key priority", async () => {
     const world = buildWorldObject([
       connection(

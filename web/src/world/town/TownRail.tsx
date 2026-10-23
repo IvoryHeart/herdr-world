@@ -5,6 +5,13 @@ import type { WorldAsk } from "../worldAsks";
 import { townPortrait } from "./townSprites";
 import "./townAsks.css";
 
+/** The same room/host wording in Town's peek and Summary. */
+export function townLocation(
+  entry: Pick<OfficeRosterEntry, "roomLabel" | "hostLabel"> | undefined,
+) {
+  return entry ? `${entry.roomLabel} · ${entry.hostLabel}` : "";
+}
+
 export type TownCall = {
   agent: OfficeAgent;
   kind: "blocked" | "done";

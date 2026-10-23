@@ -68,6 +68,7 @@ import { TownPeek, townStatusText } from "./town/TownPeek";
 import {
   nextTownCall,
   townCalls,
+  townLocation,
   unseenTownCompletions,
   readTownRailCollapsed,
   TownRail,
@@ -172,6 +173,8 @@ export default function TownView({
     deskPins,
     toggleRoomFold,
     present,
+    roomFocus,
+    focusRoom,
   } = useTownOffice(world, selectedId);
   const townFinished = useTownFinished(observedOffice);
   // Terminal frames and unrelated store updates must not reconcile the scene.
@@ -586,7 +589,6 @@ export default function TownView({
       ),
     [office.roster, unseenCompletions, agentByKey],
   );
-  // The Town summary: board sign, phone chip and window (pm's phase 1).
   const townSummary = useTownSummary({
     railCollapsed,
     world,
@@ -595,6 +597,7 @@ export default function TownView({
     observability,
     now,
     openAgent: (key) => openChat(key),
+    showRoom: focusRoom,
   });
   const presentedOffice = useTownPresentation(
     present,
@@ -604,10 +607,7 @@ export default function TownView({
     townFinished.finished,
     completionSeenKeys,
   );
-  const whereOfAgent = (agentKey: string) => {
-    const entry = agentByKey.get(agentKey);
-    return entry ? `${entry.roomLabel} · ${entry.hostLabel}` : "";
-  };
+  const whereOfAgent = (key: string) => townLocation(agentByKey.get(key));
   // Colours and team walls read the same World, so they agree on each relation.
   const terminalColors = useTerminalColors(
     undefined,
@@ -1352,7 +1352,7 @@ export default function TownView({
             observability={observability}
             summaryCounts={townSummary.summary.counts}
             onOpenSummary={townSummary.open}
-            roomFocus={townSummary.roomFocus}
+            roomFocus={roomFocus}
             calm={preferences.townCalm}
             chrome={{
               left: townSummary.railInset,
