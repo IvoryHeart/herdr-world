@@ -70,6 +70,7 @@ import {
   TownRail,
   type TownCall,
 } from "./town/TownRail";
+import { sharedAsksStore, useWorldAsks } from "./worldAsks";
 import { useNow } from "./handoffs";
 import type {
   WorldCanvasAnchor,
@@ -565,6 +566,8 @@ export default function TownView({
   /* ---------- Town attention, peek, replies and toasts ---------- */
   const now = useNow(5_000);
   const [railCollapsed, setRailCollapsed] = useState(readTownRailCollapsed);
+  const asksStore = sharedAsksStore();
+  const asks = useWorldAsks(asksStore);
   const [width, setWidth] = useState(() => window.innerWidth);
   useEffect(() => {
     const resize = () => setWidth(window.innerWidth);
@@ -1243,6 +1246,8 @@ export default function TownView({
           />
         ) : null}
         <TownRail
+          asks={asks}
+          onAnswer={(id, text) => asksStore.answer(id, text)}
           collapsed={railCollapsed}
           onCollapsedChange={setRailCollapsed}
           calls={calls}

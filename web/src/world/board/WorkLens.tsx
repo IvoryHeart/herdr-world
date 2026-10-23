@@ -1,4 +1,5 @@
 import { ChevronRight, ExternalLink, Settings2, X } from "lucide-react";
+import "./workLensCards.css";
 import { useMemo, useRef, useState } from "react";
 import type { WorldSourceStatus } from "../../../../shared/worldSources";
 import { useLayer } from "../../layerStack";
@@ -6,6 +7,9 @@ import { workBadgeText } from "../../../../shared/worldSources";
 import { WORLD_SOURCES_SETTINGS_EVENT } from "../../workspaceResource";
 import type { WorldObject } from "../worldObject";
 import { useWorldSources } from "../worldSources";
+import { actionablePullRequest } from "../../../../shared/pullRequests";
+import { PullRequestCard } from "../PullRequestCard";
+import { usePullRequestAttention } from "../pullRequestAttention";
 import {
   workCardFacts,
   workLensColumns,
@@ -57,6 +61,11 @@ export function WorkLens({
   const columns = useMemo(
     () => workLensColumns(snapshot, world, group),
     [snapshot, world, group],
+  );
+  const attention = usePullRequestAttention(
+    columns.flatMap((column) =>
+      column.cards.map((card) => ({ item: card.item, authors: card.agents })),
+    ),
   );
   const connected = snapshot.sources.filter(
     (source) => source.state === "connected",
@@ -188,13 +197,24 @@ export function WorkLens({
               </div>
             ) : (
               <ul>
-                {column.cards.map((card) => (
-                  <WorkCard
-                    key={card.item.key}
-                    card={card}
-                    onSelectAgent={onSelectAgent}
-                  />
-                ))}
+                {column.cards.map((card) =>
+                  actionablePullRequest(card.item) ? (
+                    <li key={card.item.key} className="work-card-pr">
+                      <PullRequestCard
+                        item={card.item}
+                        agents={card.agents}
+                        attention={attention.get(card.item.key) ?? null}
+                        onSelectAgent={onSelectAgent}
+                      />
+                    </li>
+                  ) : (
+                    <WorkCard
+                      key={card.item.key}
+                      card={card}
+                      onSelectAgent={onSelectAgent}
+                    />
+                  ),
+                )}
               </ul>
             )}
           </div>
