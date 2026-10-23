@@ -35,9 +35,23 @@ import { CREATED_PANE_ADMISSION_TIMEOUT_MS } from "./officeRoomActions";
 import { worldRuntimeStore } from "./runtimeStore";
 import WorldFoundationApp from "./WorldFoundationApp";
 import { worldInspectorWindowId } from "./worldTerminalPresentation";
+import type { BoardDocument, BoardOp } from "./board/boardDocument";
+import { interestKey } from "../../../shared/interest";
+import {
+  WORKSPACE_INSPECTOR_REQUEST_EVENT,
+  WORKSPACE_INSPECTOR_CLOSE_EVENT,
+} from "../workspaceResource";
 
 const failures: string[] = [];
 const calls: Array<{ method: string; params: Record<string, unknown> }> = [];
+const boardDocument: BoardDocument = {
+  version: 1,
+  revision: 0,
+  layout: { anchors: {}, offsets: {}, pinned: {}, folded: [], interest: {} },
+  notes: [],
+  strings: [],
+};
+let failInterestPatch = false;
 const check = (condition: boolean, message: string) => {
   if (!condition) failures.push(message);
 };
@@ -265,6 +279,17 @@ const client: ConnectionClient = {
   acceptsServerGeneration: (generation) => generation === 7,
   call: async (method, params = {}) => {
     calls.push({ method, params });
+    if (method === "world.board.get") return structuredClone(boardDocument);
+    if (method === "world.board.patch") {
+      if (failInterestPatch) throw new Error("Synthetic Interest save failure");
+      for (const op of params.ops as BoardOp[]) {
+        if (op.op !== "interest.set") continue;
+        if (op.interest) boardDocument.layout.interest![op.key] = op.interest;
+        else delete boardDocument.layout.interest![op.key];
+      }
+      boardDocument.revision += 1;
+      return { document: structuredClone(boardDocument) };
+    }
     if (method === "agent_session.get" && !params.agent)
       return { session: { value: notificationSessionId } };
     if (method === "world.snapshot") {
@@ -3626,6 +3651,80 @@ async function run() {
       ),
     "Spaces handoff did not reuse a live source or attach an absent source exactly once",
   );
+  // Exercise App's actual Spaces Inspector, separate from the retained World
+  // Inspector. Both must read and save the terminal's same Interest choice.
+  window.dispatchEvent(
+    new CustomEvent(WORKSPACE_INSPECTOR_REQUEST_EVENT, {
+      cancelable: true,
+      detail: {
+        connectionId: "local",
+        generation: client.generation,
+        workspaceId: "studio",
+        originPaneId: "reviewer-pane",
+        view: "history",
+      },
+    }),
+  );
+  const spacesInspector = () =>
+    document.querySelector<HTMLElement>(
+      ".workspace-inspector-slot .workspace-inspector",
+    );
+  await until(
+    () => spacesInspector()?.querySelector('[aria-label="Interest: Watching"]'),
+    "Spaces Inspector Interest control",
+  );
+  spacesInspector()!
+    .querySelector<HTMLButtonElement>('[aria-label="Interest: Watching"]')!
+    .click();
+  await until(
+    () => document.querySelector(".interest-choices"),
+    "Spaces Interest choices",
+  );
+  [...document.querySelectorAll<HTMLButtonElement>(".interest-choice")]
+    .find((button) => button.textContent?.startsWith("Muted"))!
+    .click();
+  await until(
+    () => spacesInspector()?.querySelector('[aria-label="Interest: Muted"]'),
+    "Spaces saves Muted",
+  );
+  check(
+    boardDocument.layout.interest?.[
+      interestKey("local", "reviewer-terminal")
+    ] === "muted",
+    "Spaces Interest saves the owning terminal",
+  );
+  check(
+    Boolean(
+      persistentReviewerInspector?.querySelector(
+        '[aria-label="Interest: Muted"]',
+      ),
+    ),
+    "World Inspector shares Spaces Interest",
+  );
+  failInterestPatch = true;
+  spacesInspector()!
+    .querySelector<HTMLButtonElement>('[aria-label="Interest: Muted"]')!
+    .click();
+  await until(
+    () => document.querySelector(".interest-choices"),
+    "Spaces Interest retry choices",
+  );
+  [...document.querySelectorAll<HTMLButtonElement>(".interest-choice")]
+    .find((button) => button.textContent?.startsWith("Focused"))!
+    .click();
+  await until(
+    () => store.get().notice?.message === "Agent interest could not be saved",
+    "Interest save failure notice",
+  );
+  check(
+    store.get().notice?.detail === "Synthetic Interest save failure" &&
+      Boolean(
+        spacesInspector()?.querySelector('[aria-label="Interest: Muted"]'),
+      ),
+    "failed Interest save explains the error and keeps the saved policy",
+  );
+  failInterestPatch = false;
+  window.dispatchEvent(new CustomEvent(WORKSPACE_INSPECTOR_CLOSE_EVENT));
   viewSelect.value = "board";
   viewSelect.dispatchEvent(new Event("change", { bubbles: true }));
   await until(

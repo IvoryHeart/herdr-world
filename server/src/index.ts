@@ -134,11 +134,12 @@ import {
   clientBoardOps,
   moveFollowOps,
   reconcileOps,
-  tabClosedOps,
   BoardConflictError,
   BoardStore,
   type BoardOp,
 } from "./world/board-store";
+import { afterHerdrClose } from "./world/board-closing";
+import { reconcileReadyInterest } from "./world/interest-prune";
 import {
   readPaneRecipient,
   recipientOps,
@@ -523,7 +524,6 @@ const readyConnectionGenerations = new Map<string, number>();
 let worldSnapshots: WorldSnapshotService<LegacyConnectionRuntime> | null = null;
 const worldWatchlist = new WorldWatchlistRegistry();
 let boardStore: BoardStore | null = null;
-/** Opened on first use, so a World without Board never touches the file. */
 function board() {
   boardStore ??= new BoardStore(undefined, {
     log: (message) => console.warn(message),
@@ -544,41 +544,6 @@ function publishProfilesChanged(revision: number) {
     control: { type: "world_profiles_changed", revision },
   });
   for (const ws of clients) safeSend(ws, line, "world-profiles");
-}
-
-/**
- * A tab Herdr closed on the current runtime loses its saved colour, so colours
- * of closed tabs do not accumulate. The tab's plain key could also be an older
- * Herdr workspace's ID; it goes only once Herdr says no such workspace exists.
- */
-async function dropClosedTabSettings(
-  connectionId: string,
-  tabId: string,
-  call: (method: string, params: Record<string, unknown>) => Promise<unknown>,
-  isCurrent: () => boolean,
-) {
-  try {
-    const { colors, desk_pins: pins } = board().get().layout;
-    const saved = (key: string) => Boolean(colors[key] || pins[key]);
-    const plain = saved(`${connectionId}:${tabId}`);
-    if (!plain && !saved(`${connectionId}:tab:${tabId}`)) return;
-    const absent =
-      plain &&
-      (
-        await checkAnchor(call, {
-          kind: "workspace",
-          native_id: tabId,
-          isCurrent,
-        })
-      ).state === "absent";
-    if (!isCurrent()) return;
-    const ops = tabClosedOps(board().get(), connectionId, tabId, absent);
-    if (ops.length) publishBoardChanged(board().patch(ops).revision);
-  } catch (error) {
-    logger.warn("Board could not drop a closed tab's colour or pin", {
-      detail: String(error),
-    });
-  }
 }
 
 /**
@@ -684,6 +649,11 @@ const connectionManager = new ConnectionManager<LegacyConnectionRuntime>(
       return;
     }
     if (status.state !== "ready") return;
+    void reconcileReadyInterest(
+      board(),
+      connectionManager.readyRuntimeLease(status.id),
+      publishBoardChanged,
+    );
     resumeAssistantIfLoaded();
     if (reporter.recovered(fields)) {
       readyConnectionGenerations.set(status.id, status.generation);
@@ -853,17 +823,18 @@ function runtimeFactoryForProfile(
         onEvent: (event, eventIdentity) => {
           if (!context.isCurrent()) return;
           publishWorldInvalidation(eventIdentity.id, context.generation);
-          const closedTab =
-            herdrEventName(event)?.replaceAll("_", ".") === "tab.closed"
-              ? (event as { data?: { tab_id?: unknown } }).data?.tab_id
-              : undefined;
-          if (typeof closedTab === "string" && closedTab)
-            void dropClosedTabSettings(
-              eventIdentity.id,
-              closedTab,
-              (rpc, rpcParams) => runtime.herdr.call(rpc, rpcParams, 10_000),
-              context.isCurrent,
-            );
+          afterHerdrClose(
+            board(),
+            eventIdentity.id,
+            herdrEventName(event),
+            event,
+            {
+              call: (rpc, rpcParams) =>
+                runtime.herdr.call(rpc, rpcParams, 10_000),
+              isCurrent: context.isCurrent,
+              changed: publishBoardChanged,
+            },
+          );
           logger.debug("Herdr event", {
             connection: eventIdentity.id,
             detail: summarizeHerdrEvent(event),
