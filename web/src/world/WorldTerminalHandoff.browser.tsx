@@ -16,7 +16,6 @@ import {
   shortcutLabel,
   updateShortcut,
 } from "../shortcutPreferences";
-import { worldLocalStorage } from "../browserStorage";
 import { __storeTesting, store } from "../store";
 import { worldLocalStorage } from "../browserStorage";
 import {
