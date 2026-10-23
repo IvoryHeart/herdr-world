@@ -11,12 +11,10 @@ import {
   writeMobileControlsPlacement,
   type MobileControlsPlacement,
 } from "./mobileControlsPlacement";
-import { subscribeLocalStorage } from "./browserStorage";
 import {
   isRangerTaskNotificationTarget,
   type RangerTaskNotificationTarget,
 } from "./taskNotifications";
-import { flushSync } from "react-dom";
 import { useCreationSources } from "./creationRequests";
 import { useReviewAnnotationDraft } from "./useReviewAnnotationDraft";
 import { bridge } from "./api";
@@ -33,7 +31,7 @@ import {
   type NewReviewAnnotation,
   type ReviewAnnotation,
 } from "./annotations";
-import { worldLocalStorage } from "./browserStorage";
+import { subscribeLocalStorage, worldLocalStorage } from "./browserStorage";
 import { useLayoutPreferences } from "./layoutPreferences";
 import {
   shortcutMatches,
@@ -75,7 +73,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { createPortal } from "react-dom";
+import { createPortal, flushSync } from "react-dom";
 import type { ITheme } from "@xterm/xterm";
 import { APP_VERSION } from "./version";
 import { WorkspaceInspectorPortal } from "./components/WorkspaceInspectorPortal";
@@ -87,7 +85,9 @@ import {
   terminalFontFamilyStack,
   normalizeThemePreference,
   normalizeUiScale,
-  normalizeZenMode,
+  loadZenMode,
+  zenCovers,
+  zenModeKey,
   serializeZenMode,
   UI_SCALE_DEFAULT,
   type ResolvedTheme,
@@ -250,6 +250,7 @@ const WorkspaceInspectorHost = lazyWithReload("workspace-inspector", () =>
   })),
 );
 
+import { paneAgentTitle } from "./agentName";
 import "./components/AssistantPanel.css";
 import "./components/markdown.css";
 const AssistantPanel = lazyWithReload("assistant", () =>
@@ -281,7 +282,6 @@ const ACCENT_COLOR_KEY = "accentColor";
 const UI_SCALE_KEY = "uiScale";
 const TERMINAL_FONT_SCALE_KEY = "terminalFontScale";
 const TERMINAL_FONT_FAMILY_KEY = "terminalFontFamily";
-const ZEN_MODE_KEY = "zenMode";
 const LazyTerminalView = lazyWithReload("terminal-view", () =>
   import("./components/TerminalView").then((module) => ({
     default: module.TerminalView,
@@ -449,17 +449,6 @@ function loadTerminalFontFamily(): string {
   return normalizeTerminalFontFamily(
     worldLocalStorage.getItem(TERMINAL_FONT_FAMILY_KEY),
   );
-}
-
-// A scoped surface keeps its own Zen choice, and starts from its default
-// until the user picks one.
-function zenModeKey(scope: string | undefined) {
-  return scope ? `${ZEN_MODE_KEY}.${scope}` : ZEN_MODE_KEY;
-}
-
-function loadZenMode(key = ZEN_MODE_KEY, fallback = false): boolean {
-  const value = worldLocalStorage.getItem(key);
-  return value === null ? fallback : normalizeZenMode(value);
 }
 
 function loadTerminalThemeSelection(): TerminalThemeSelection {
@@ -944,6 +933,7 @@ export default function App({
   zenScope,
   zenDefault = false,
   zenOnMobile = false,
+  zenOnMobileList = false,
   renderZenControl,
   onZenActiveChange,
 }: {
@@ -984,6 +974,8 @@ export default function App({
   zenDefault?: boolean;
   /** Lets Zen hide the topbar on a phone, where it is otherwise desktop-only. */
   zenOnMobile?: boolean;
+  /** Lets Zen hide the topbar over the phone's workspace list (a root screen). */
+  zenOnMobileList?: boolean;
   /** Extra Zen controls, shown with Exit Zen while Zen is on. */
   renderZenControl?: (exitZen: () => void) => ReactNode;
   onZenActiveChange?: (active: boolean) => void;
@@ -1489,7 +1481,8 @@ export default function App({
       tabId,
       paneId: pane.pane_id,
       terminalId: pane.terminal_id,
-      label: pane.display_agent ?? pane.agent ?? "Terminal",
+      label:
+        paneAgentTitle(pane, pane.display_agent ?? pane.agent) || "Terminal",
       hostLabel: s.activeConnectionId,
       spaceLabel: workspace.label ?? `Workspace ${workspace.number}`,
       portal: null,
@@ -4166,7 +4159,8 @@ export default function App({
   ) : null;
   const desktopSidebarHidden = !mobile && (sidebarHidden || zenMode);
   // Zen applies on desktop, and on a phone only where its host allows it.
-  const zenActive = zenMode && (!mobile || zenOnMobile);
+  const zenActive =
+    zenMode && zenCovers(mobile, zenOnMobile, zenOnMobileList, mobileView);
   const onZenActiveChangeRef = useRef(onZenActiveChange);
   onZenActiveChangeRef.current = onZenActiveChange;
   useEffect(() => onZenActiveChangeRef.current?.(zenActive), [zenActive]);
@@ -4310,7 +4304,7 @@ export default function App({
                 setTerminalFontName(normalizeTerminalFontFamily(name))
               }
               zenMode={zenMode}
-              zenAvailable={!mobile || zenOnMobile}
+              zenAvailable={!mobile || zenOnMobile || zenOnMobileList}
               onZenModeChange={chooseZenMode}
               onShowShortcuts={openShortcutCheatSheet}
               onMobileTerminalShortcutsChange={setMobileTerminalShortcuts}

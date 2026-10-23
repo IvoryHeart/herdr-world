@@ -93,6 +93,7 @@
     "verification:resources": "bun scripts/verification-resources.ts"
   },
   "devDependencies": {
+    "@babel/parser": "^8.0.8",
     "@biomejs/biome": "2.5.15",
     "@types/web-push": "^3.6.4",
     "bun-types": "1.4.3",

@@ -12,7 +12,30 @@ import {
   worldBrowserShards,
   worldBrowserSuites,
   worldTimedSuites,
+  includesTimedSuites,
 } from "./world-browser-suites";
+
+test("timed selections and unknown selectors require a quiet direct run", () => {
+  expect(includesTimedSuites([])).toBe(true);
+  expect(includesTimedSuites([worldTimedSuites[0]!])).toBe(true);
+  expect(includesTimedSuites(["./web/src/world"])).toBe(true);
+  expect(includesTimedSuites(["--timeout", "30000"])).toBe(true);
+  expect(includesTimedSuites(["ProductionContexts"])).toBe(true);
+  expect(includesTimedSuites(["scripts/world-browser-suites.test.ts"])).toBe(
+    false,
+  );
+  expect(includesTimedSuites(["web/src/uiScale.test.ts"])).toBe(false);
+  expect(includesTimedSuites(["web/src/uiScale.test.ts", "-t", "name"])).toBe(
+    false,
+  );
+  expect(
+    includesTimedSuites(["web/src/uiScale.test.ts", "--timeout", "30000"]),
+  ).toBe(false);
+  expect(
+    includesTimedSuites(["web/src/uiScale.test.ts", "--timeout=30000"]),
+  ).toBe(false);
+  expect(includesTimedSuites([worldTimedSuites[0]!, "-t", "name"])).toBe(true);
+});
 
 test("six shards and the latency group partition the complete World browser inventory without omissions or duplicates", async () => {
   await assertWorldBrowserInventory();
@@ -170,4 +193,51 @@ test("an unassigned web browser suite fails inventory validation", async () => {
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test("a run that includes a Chrome-driven suite is recognised for the browser slot", async () => {
+  const { includesBrowserSuites } = await import("./world-browser-suites");
+  expect(includesBrowserSuites([])).toBe(true);
+  expect(includesBrowserSuites(["web/src/uiScale.test.ts"])).toBe(true);
+  expect(includesBrowserSuites(["uiScale.test.ts"])).toBe(true);
+  expect(includesBrowserSuites(["web/src/world"])).toBe(true);
+  expect(includesBrowserSuites(["web/src/world/"])).toBe(true);
+  expect(includesBrowserSuites(["scripts/check-lock.test.ts"])).toBe(false);
+  expect(includesBrowserSuites(["server/src/http"])).toBe(false);
+  expect(includesBrowserSuites(["./web/src/uiScale.test.ts"])).toBe(true);
+  expect(
+    includesBrowserSuites([join(process.cwd(), "web/src/uiScale.test.ts")]),
+  ).toBe(true);
+  expect(includesBrowserSuites(["./web/src/world"])).toBe(true);
+  expect(includesBrowserSuites(["."])).toBe(true);
+  expect(includesBrowserSuites(["uiScale"])).toBe(true);
+  expect(includesBrowserSuites(["--timeout", "30000"])).toBe(true);
+  expect(
+    includesBrowserSuites([
+      "--test-name-pattern",
+      "scripts/check-lock.test.ts",
+    ]),
+  ).toBe(true);
+  expect(includesBrowserSuites(["./scripts/check-lock.test.ts"])).toBe(false);
+});
+
+test("a selection with a timed suite needs the whole machine; other browser suites do not", async () => {
+  const { includesTimedSuites, worldTimedSuites } = await import(
+    "./world-browser-suites"
+  );
+  const root = new URL("..", import.meta.url).pathname;
+  expect(includesTimedSuites([worldTimedSuites[0]!], root)).toBe(true);
+  expect(includesTimedSuites([], root)).toBe(true);
+  expect(includesTimedSuites(["web/src/uiScale.test.ts"], root)).toBe(false);
+  expect(includesTimedSuites(["scripts/check-lock.test.ts"], root)).toBe(false);
+});
+
+test("World runs with timed suites need the whole machine", async () => {
+  const { includesTimedFiles, selectWorldBrowserShard, worldBrowserSuites } =
+    await import("./world-browser-suites");
+  // test:world --shard=latency, and an unsharded test:world (every suite).
+  expect(includesTimedFiles(selectWorldBrowserShard("latency"))).toBe(true);
+  expect(includesTimedFiles(worldBrowserSuites)).toBe(true);
+  // A numbered shard of untimed suites keeps the browser slot alone.
+  expect(includesTimedFiles(selectWorldBrowserShard("1/6"))).toBe(false);
 });

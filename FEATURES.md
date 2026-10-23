@@ -13,7 +13,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   Each host is a building, each workspace a room, each tab a team table and each
   pane a seat. Plain terminals show prompts. Additional panes beyond the drawn
   seats remain available through the table's count and chooser. Each table
-  carries its tab's name on a nameplate at its front edge.
+  carries its tab's name on a nameplate at its front edge. Agents go by the
+  name Herdr gives them (`firstmate`), else their harness (`claude`); window
+  and Inspector titles put the name first (`firstmate · claude`).
   - Blocked agents queue at reception oldest first. Finished agents wait there
     until you open their terminal or mark that completion reviewed, then join
     idle agents in the lounge. Movement only represents state.
@@ -428,13 +430,13 @@ choice. Agent checkout has no Git mutation controls or Clear command.
   the topbar, tab strip, and sidebar and run the terminal flush to the window.
   Hovering the Exit Zen tab slides the topbar back, and it stays while one of its
   menus is open. The sidebar still toggles inside Zen and returns to its prior
-  state on exit; split layouts keep pane borders. Town opens in Zen and keeps
-  its own choice; the other views share theirs. While Zen is on, a view picker
-  beside Exit Zen switches between Town, Board, Desk and Spaces. On a phone, Zen
-  hides the top bar and bottom navigation on Town, Board and Desk; a corner
-  button opens the views and **Show the bars**, and the settings menu's **Zen
-  mode** switch turns it back on. A terminal and Spaces keep their bar for Back.
-  Stored in this browser.
+  state on exit; split layouts keep pane borders. Every World view opens in
+  Zen by default, with one choice shared by Town, Board, Desk and Spaces; the
+  settings menu's **Zen mode** switch turns it off or back on. While Zen is on,
+  a view picker beside Exit Zen switches between the views. On a phone, Zen
+  hides the top bar and bottom navigation on every root screen, Spaces' list
+  included; a corner button opens the views and **Show the bars**. A terminal is
+  a detail screen and keeps its own bar, with Back. Stored in this browser.
 
 Herdr 0.9.0 uses **Local navigation** per browser/connection; legacy connections
 use **Shared navigation**. Reconnect preserves live selections; reload starts
@@ -573,6 +575,9 @@ See [resource ownership](docs/ARCHITECTURE.md#workspace-resource-ownership).
   with each choice's description) or plan approval, Chat shows it as an ask
   card and answers with the option you pick (click or its number key), after
   checking the question has not changed.
+  Each tool call's row in Chat carries its evidence: a plain label, its state
+  and time, a pass or fail badge for a test run, and when opened, the edit's
+  diff, the test strip with its first failure, or the end of its output.
   It refreshes when the service sees the transcript, title or status change,
   without browser polling, and keeps the last good view if a read fails. When
   it cannot read the conversation it shows the reason with the matching action:
@@ -589,6 +594,10 @@ See [resource ownership](docs/ARCHITECTURE.md#workspace-resource-ownership).
   and confirm its association with the foreground Codex pane. This replaces the
   existing link for all viewers. Codex lookup searches active and archived records
   on the selected local/Unix SSH runtime; Windows SSH history remains unavailable.
+  For shared-daemon Codex panes without a session report or thread title, one
+  matching pane and one loaded thread can provide a recent, read-only guess.
+  Ambiguity shows no conversation. Add **Thread ID** with `/title`, link the
+  session explicitly, or use the Terminal to reply or answer permissions.
 - Open Details with independent User/Agent/Tool filters (User/Agent enabled,
   Tool hidden initially), a message minimap, and on-demand tool details. The recent window
   counts 200 conversation entries, not associated tools; exports remain complete.

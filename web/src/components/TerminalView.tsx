@@ -21,6 +21,7 @@ import {
   type UploadProgress,
 } from "../terminalImageUpload";
 import { PaneDragHandle, PaneMoveMenu } from "./PaneMoveMenu";
+import { paneAgentName } from "../agentName";
 import { MobileTerminalIdentity } from "./MobileControls";
 import { useSystemBack } from "../systemBack";
 import { runTerminalInput, sendTerminalInput } from "../terminalInput";
@@ -30,8 +31,7 @@ import {
 } from "@xterm/addon-clipboard";
 import { FitAddon } from "@xterm/addon-fit";
 import { UnicodeGraphemesAddon } from "@xterm/addon-unicode-graphemes";
-import type { IBufferRange, ITheme } from "@xterm/xterm";
-import { Terminal } from "@xterm/xterm";
+import { type IBufferRange, type ITheme, Terminal } from "@xterm/xterm";
 import { installTerminalCompositionRepair } from "../terminalComposition";
 import {
   Columns2,
@@ -4035,8 +4035,8 @@ export function TerminalView({
                 }}
               >
                 <span className="terminal-mobile-message-label">
-                  {pane.agent?.trim()
-                    ? `Message ${pane.agent.trim()}…`
+                  {paneAgentName(pane)
+                    ? `Message ${paneAgentName(pane)}…`
                     : "Type into the terminal…"}
                 </span>
               </button>
