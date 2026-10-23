@@ -19,10 +19,18 @@ export type WindowInput = {
   label: string;
   initialGeometry?: Rect;
   initialSnap?: SnapTarget;
+  /** A left or right dock's width; see {@link SnapDock}. */
+  initialSnapDock?: SnapDock;
 };
+/**
+ * A left or right snap can be an edge dock of its own width instead of half
+ * the work area. `upToHalf` keeps a default width from taking more than half
+ * of a narrow work area; a width the user dragged to is kept as it is.
+ */
+export type SnapDock = { width: number; upToHalf?: boolean };
 type Placement =
   | { kind: "floating"; rect: Rect; canvas?: Size }
-  | { kind: "snap"; target: SnapTarget }
+  | { kind: "snap"; target: SnapTarget; dock?: SnapDock }
   | { kind: "tile"; rect: Rect }
   | { kind: "cascade"; rect: Rect };
 export type ManagedWindow = {
@@ -142,7 +150,14 @@ export function reconcileWindows(
     windows[input.id] = {
       id: input.id,
       placement: input.initialSnap
-        ? { kind: "snap", target: input.initialSnap }
+        ? {
+            kind: "snap",
+            target: input.initialSnap,
+            ...(input.initialSnapDock &&
+            (input.initialSnap === "left" || input.initialSnap === "right")
+              ? { dock: input.initialSnapDock }
+              : {}),
+          }
         : { kind: "floating", rect },
       floating: rect,
       minimized: false,
@@ -188,9 +203,25 @@ export function reconcileWindows(
       : null,
   };
 }
-export function snapGeometry(target: SnapTarget, size: Size): Rect {
+export function snapGeometry(
+  target: SnapTarget,
+  size: Size,
+  dock?: SnapDock,
+): Rect {
   const halfWidth = Math.max(0, (size.width - GAP) / 2);
   const halfHeight = Math.max(0, (size.height - GAP) / 2);
+  if (dock && (target === "left" || target === "right")) {
+    const width = Math.max(
+      Math.min(WINDOW_MINIMUM.width, size.width),
+      Math.min(dock.upToHalf ? halfWidth : size.width, dock.width),
+    );
+    return {
+      left: target === "right" ? size.width - width : 0,
+      top: 0,
+      width,
+      height: size.height,
+    };
+  }
   const horizontal = target.includes("left") || target.includes("right");
   const vertical = target.includes("top") || target.includes("bottom");
   return {
@@ -276,7 +307,7 @@ export function windowGeometry(
   if (compact || entry.maximized || state.focusMode)
     return { left: 0, top: 0, ...size };
   if (entry.placement.kind === "snap")
-    return snapGeometry(entry.placement.target, size);
+    return snapGeometry(entry.placement.target, size, entry.placement.dock);
   if (entry.placement.kind === "floating" && !entry.placement.canvas)
     return fitWindow(entry.placement.rect, size);
   const canvas = windowCanvas(state, size);
@@ -526,6 +557,32 @@ export function reduceWindowManager(
       action.id,
       true,
     );
+  // Resizing a left or right dock from its inner edge keeps it docked at
+  // the new width; moving it anywhere else floats it.
+  const dockWidth =
+    action.type === "place"
+      ? dockedWidthAfterPlace(entry, action.rect, size)
+      : null;
+  if (
+    action.type === "place" &&
+    dockWidth !== null &&
+    entry.placement.kind === "snap"
+  )
+    return focus(
+      {
+        ...update(state, action.id, {
+          placement: {
+            kind: "snap",
+            target: entry.placement.target,
+            dock: { width: dockWidth },
+          },
+          maximized: false,
+        }),
+        focusMode: false,
+      },
+      action.id,
+      true,
+    );
   const movementCanvas = windowCanvas(state, size);
   const canvas =
     action.type === "place" &&
@@ -551,6 +608,30 @@ export function reduceWindowManager(
     action.id,
     true,
   );
+}
+
+/**
+ * The new width when a rect still fills a left or right dock's edge: the
+ * full height, against the same side. Otherwise null, and the window floats.
+ */
+export function dockedWidthAfterPlace(
+  entry: ManagedWindow,
+  rect: Rect,
+  size: Size,
+): number | null {
+  if (
+    entry.placement.kind !== "snap" ||
+    (entry.placement.target !== "left" && entry.placement.target !== "right")
+  )
+    return null;
+  const near = (a: number, b: number) => Math.abs(a - b) <= 2;
+  const edge =
+    entry.placement.target === "left"
+      ? near(rect.left, 0)
+      : near(rect.left + rect.width, size.width);
+  return edge && near(rect.top, 0) && near(rect.height, size.height)
+    ? Math.round(rect.width)
+    : null;
 }
 
 export function windowDividers(

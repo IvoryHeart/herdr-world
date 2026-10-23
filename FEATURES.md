@@ -30,7 +30,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     window, with **Jump to latest** when you have scrolled back and the
     composer always at the bottom. Reopening or redocking the window keeps the
     conversation. In Town it
-    docks on the right by default (**Menu → Inspector opening**), can be
+    docks on the right by default (**Menu → Inspector opening**), 520px wide
+    (at most half the screen) so Town stays in view and lines stay readable.
+    Drag its inner edge to resize it; Town remembers the width. It can be
     undocked, and keeps the dock it was left with. On a phone, the Chat view
     shows only its own composer, without the terminal key bar.
   - The top selector follows the window's own width, docked, floating or on a
@@ -56,8 +58,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     shows a blue pennant (green when done, amber when blocked) beside it in
     a room or at a desk, with a progress bar when the quest has steps; the
     pennant leaves with the agent. Hover or tap the pennant for **Quest**, its title and progress.
-  - **Open terminal** in the card's header opens the live pane; **Inspector**
-    opens files and changes. **Next** opens the next waiting agent's window,
+  - **Open terminal** in the card's header opens the live pane; **Open chat**
+    opens the agent's window, whose Files and Changes views hold the rest.
+    **Next** opens the next waiting agent's window,
     then finished agents' if none wait.
     The needs-you list becomes a bottom tray on phones and hides when no agent
     is blocked. Review marks acknowledge a specific completion in this browser,
@@ -149,8 +152,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
 - **Terminal colours.** Every tab has one colour, shown as the tab in Spaces,
   the card in Board and its table in Town (tabs beyond a room's drawn tables
   show it in Spaces and Board). A tab starts with a stable default colour, or
-  its workspace's Board colour; choose another from the swatch beside the
-  terminal's name in its header (desktop window or phone app bar), the
+  its workspace's Board colour; choose another from the agent's icon in its
+  window's header (the icon sits on the colour and opens the agent's settings),
+  the swatch in the phone terminal's app bar, the
   terminal window's menu (**Colour**), the tab's menu in Spaces, the swatch in
   an agent's peek in Town, or the selected card in Board, and reset a tab's own
   colour with **Default colour** the same way. Herdr has no tab colour, so the World service
@@ -276,11 +280,14 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   choices that cannot fit explain why.
 - Inspectors and arranged Spaces windows share snap, minimize, maximize/restore,
   close and all eight resize handles. Each window has one bar: its name, a
-  location line, the view selector and **⋯**, maximize and close. **⋯** holds
+  location line, the view selector and **⋯**, maximize and close. An agent is
+  named `<name>-<harness>` (for example `otter-claude`), shortened in the middle
+  past 14 characters, and its state is a badge on its icon: a tick when done, a
+  spinner while working, **!** when it needs you and a grey dot when idle. **⋯** holds
   minimize, the snap choices and float. Tapping the location line under the name
   shows the branch, worktree and PR status, replacing the card above Changes. In
-  Town the window takes the Town look (portrait, pixel name, status pill, chunky
-  buttons, **‹ Back**). On a phone the window fills the screen like the
+  Town the window takes the Town look (portrait, pixel name, chunky buttons,
+  **‹ Back**). On a phone the window fills the screen like the
   terminal: its bar shows the name and status, and **⋯** switches the view
   (Chat, Terminal, Changes, Files) or switches to another agent or terminal. Opening or focusing a window preserves other
   placements; snapping into an occupied region overlaps without rearranging it.
@@ -535,7 +542,9 @@ commit a search selection. Press K in the recent switcher to convert it to searc
   composer closed joins the draft when that composer opens again.
 - Drag a file or directory path from the File Explorer into a terminal to
   insert its quoted host path. Terminal font size is adjustable independently
-  of interface scale in **Menu → Appearance**.
+  of interface scale in **Menu → Appearance**. **Chat text** there sets Chat's
+  text size: it follows the terminal font size until changed, and its value
+  button links it back.
 - Show Herdr session popup panes over the active workspace when a plugin opens
   a modal interaction.
 - Relay terminal OSC 52 clipboard writes. Herdr 0.9.0 follows the foreground

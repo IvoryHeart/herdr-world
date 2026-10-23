@@ -33,6 +33,7 @@ test("pre-push checks what changed and blocks a failed check", () => {
         encoding: "utf8",
         env: {
           ...process.env,
+          HERDR_WORLD_PREPUSH: "",
           PATH: `${root}:${process.env.PATH ?? ""}`,
           HOOK_ARGS_FILE: argsPath,
           HOOK_ENV_FILE: envPath,
@@ -104,6 +105,7 @@ test("pre-push compares with the pushed branch, and uses the docs gate only afte
         encoding: "utf8",
         env: {
           ...process.env,
+          HERDR_WORLD_PREPUSH: "",
           PATH: `${root}:${process.env.PATH ?? ""}`,
           HOOK_ARGS_FILE: argsPath,
           HOOK_EXIT_CODE: String(exitCode),
@@ -166,6 +168,7 @@ test("pre-push compares with the pushed branch, and uses the docs gate only afte
       encoding: "utf8",
       env: {
         ...process.env,
+        HERDR_WORLD_PREPUSH: "",
         PATH: `${root}:${process.env.PATH ?? ""}`,
         HOOK_ARGS_FILE: argsPath,
         HOOK_EXIT_CODE: "0",
@@ -216,6 +219,7 @@ test("a push that only merges main runs static checks; a code resolution runs th
         encoding: "utf8",
         env: {
           ...process.env,
+          HERDR_WORLD_PREPUSH: "",
           PATH: `${root}:${process.env.PATH ?? ""}`,
           HOOK_ARGS_FILE: argsPath,
           REAL_BUN: process.execPath,

@@ -37,6 +37,13 @@ provider representation changes; synthetic timestamps remain stable within a
 cached file generation. Clients accept replies only against the request cursor
 and current pane/connection lease.
 
+`agent_history.get` with `before` (an entry ID) and an optional `limit` (1–200
+conversation entries, default 200) reads older entries instead. It returns the
+page just before that entry, cut like the window and redacted like it:
+`{ epoch, entries, has_more }`. Clients keep a page only while `epoch` matches
+their cursor's. An entry that is gone is an error; refresh and try again.
+`agent_history.entry` reads entries older than the window too.
+
 History refreshes every four seconds only while open and visible, without
 overlapping requests. Cards cap default DOM content at 4,000 characters; full
 tool details open as escaped text. Names/call IDs associate results without
@@ -94,7 +101,8 @@ Older Codex versions without `proxy` retain title and explicit-link support.
 
 Chat presents conversations with paired tool calls/results and the same minimap
 as Ranger. Timeline retains individual records and filters. Both use the bounded
-History window; the minimap does not fetch older records. Inspector navigation
+History window; Chat loads older pages as you scroll back, while the minimap
+and Timeline do not fetch older records. Inspector navigation
 closes before Composer panels and terminal screens, while transient menus close
 before navigation.
 
