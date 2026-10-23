@@ -130,7 +130,11 @@ bounds unadmitted chunk batches on each browser socket independently of terminal
 replies. Old transports retain the ordinary chunk protocol.
 `web/src/world/worldObject.ts` qualifies every node by connection. Mutations and terminal
 attachments use captured operational contexts and independently addressable sessions
-in `web/src/store.ts`. The persisted `hostsFilter.ts` affects visibility only;
+through the public `web/src/store.ts` entry, with
+[qualified commands](../web/src/store/operations.ts),
+[session transitions](../web/src/store/sessions.ts) and
+[React bindings](../web/src/store/react.ts) in its internal slices.
+The persisted `hostsFilter.ts` affects visibility only;
 `spaceAdmission.ts` shares the navigator's capacity fairly and `WorldSearchResults.tsx`
 pages full-observation matches beyond renderer bounds.
 
