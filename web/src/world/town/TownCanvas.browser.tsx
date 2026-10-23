@@ -178,8 +178,8 @@ function topology(seed: number): Topology {
       // Extended rooms: agents spawning agents fill the first rooms far past
       // the owner's 2026-10-17 estimate of 11-15 desks.
       const extended =
-        scale === "extended" && host === HOSTS[0]
-          ? [100, 50, 24][roomIndex]
+        (scale === "extended" || scale === "protected") && host === HOSTS[0]
+          ? [scale === "protected" ? 160 : 100, 50, 24][roomIndex]
           : 0;
       const deskCount = extended
         ? extended
@@ -774,6 +774,13 @@ async function run() {
       ?.tabs ?? [];
   const blocked = base.agentPanes.filter((_, index) => index % 23 === 4);
   for (const pane of blocked) pane.agent_status = "blocked";
+  if (scale === "protected")
+    for (const pane of base.agentPanes) {
+      const index = Number(pane.tab_id?.replace("local-orbit-tab-", ""));
+      if (pane.workspace_id === "local-orbit" && index < 130)
+        pane.agent_status = "blocked";
+    }
+
   const asker = base.agentPanes.find(
     (pane) =>
       pane.agent_status === "idle" && pane.workspace_id === "local-orbit",
@@ -919,6 +926,52 @@ async function run() {
       ) !== null,
     "town targets did not finish progressive admission",
   );
+
+  if (scale === "protected" && mode === "test") {
+    const rendered = window.__HERDR_TOWN_RENDERER__!;
+    const visible = new Set(
+      [
+        ...host.querySelectorAll<HTMLElement>(
+          '.world-semantic-target[data-kind="desk"]',
+        ),
+      ].map((target) => JSON.parse(target.dataset.targetKey!)[2] as string),
+    );
+    check(
+      Array.from(
+        { length: 130 },
+        (_, index) => `local-orbit-tab-${index}`,
+      ).every((key) => visible.has(key)),
+      "protected desks past127 lost their browser targets",
+    );
+    const orbit = [...visible].filter((key) =>
+      key.startsWith("local-orbit-tab-"),
+    ).length;
+    check(
+      host
+        .querySelector<HTMLButtonElement>(
+          'button[aria-label^="Expand room orbit"]',
+        )
+        ?.textContent?.trim() === `+${160 - orbit}`,
+      "protected desks are included in the hidden plaque count",
+    );
+    check(
+      rendered.lastError === null,
+      `protected-room renderer error: ${rendered.lastError}`,
+    );
+    check(
+      rendered.activeApplications === 1 &&
+        document.querySelectorAll("canvas[data-office-canvas]").length === 1,
+      "protected-room StrictMode duplicated the renderer",
+    );
+    root.unmount();
+    await settle();
+    check(
+      rendered.activeApplications === 0 &&
+        document.querySelectorAll("canvas[data-office-canvas]").length === 0,
+      "protected-room unmount left a renderer",
+    );
+    return;
+  }
 
   if (mode === "preview") {
     // `&zoom=room`: into the first room, where an agent spawned another.
@@ -2201,14 +2254,56 @@ async function run() {
       [...host.querySelectorAll<HTMLButtonElement>(".town-room-card")].find(
         (card) => card.textContent?.includes("orbit"),
       );
-    for (let step = 0; step < 6 && !orbitCard(); step += 1) {
-      host.querySelector<HTMLButtonElement>('[aria-label="Zoom out"]')!.click();
-      await new Promise((resolve) => setTimeout(resolve, 900));
+    const frameDelay = Number(params.get("flightFrameDelay") ?? 0);
+    const actualRAF = window.requestAnimationFrame.bind(window);
+    if (frameDelay > 0) {
+      await waitFor(
+        () => !diagnostics.flying,
+        "initial camera flight did not finish",
+      );
+      for (let into = 0; into < 3 && diagnostics.level !== "desk"; into += 1) {
+        const before = diagnostics.frames;
+        host
+          .querySelector<HTMLButtonElement>('[aria-label="Zoom in"]')!
+          .click();
+        await waitFor(
+          () => diagnostics.frames > before && !diagnostics.flying,
+          "desk-entry camera flight did not finish",
+        );
+      }
+      check(
+        diagnostics.level === "desk",
+        "slow-frame check did not enter desk level",
+      );
+      window.requestAnimationFrame = (callback) =>
+        actualRAF(() => {
+          setTimeout(() => callback(performance.now()), frameDelay);
+        });
+    }
+    const zoomSteps: { frames: number; zoom: number; flying: boolean }[] = [];
+    try {
+      for (let step = 0; step < 6 && !orbitCard(); step += 1) {
+        const beforeFrames = diagnostics.frames;
+        host
+          .querySelector<HTMLButtonElement>('[aria-label="Zoom out"]')!
+          .click();
+        await waitFor(
+          () => diagnostics.frames > beforeFrames && !diagnostics.flying,
+          "zoom-out camera flight did not finish",
+        );
+        zoomSteps.push({
+          frames: diagnostics.frames - beforeFrames,
+          zoom: diagnostics.zoom,
+          flying: diagnostics.flying,
+        });
+      }
+    } finally {
+      if (frameDelay > 0) window.requestAnimationFrame = actualRAF;
     }
     const roomCard = orbitCard();
     check(
       roomCard !== undefined,
-      `the 100-desk room has no card (level ${diagnostics.level}, zoom ${diagnostics.zoom.toFixed(2)}, ${host.querySelectorAll(".town-room-card").length} cards)`,
+      `the 100-desk room has no card (level ${diagnostics.level}, zoom ${diagnostics.zoom.toFixed(2)}, ${host.querySelectorAll(".town-room-card").length} cards; steps ${JSON.stringify(zoomSteps)})`,
     );
     roomCard?.click();
     const first = () =>
