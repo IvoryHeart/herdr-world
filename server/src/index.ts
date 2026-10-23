@@ -746,20 +746,39 @@ function resumeAssistantIfLoaded() {
     });
 }
 
-const { handleHerdrStatus, handleHerdrSetup } = createHerdrSetupHandlers({
+function defaultConnectionProfile() {
+  return connectionProfiles
+    .list()
+    .find((profile) => profile.id === connectionManager.defaultId());
+}
+
+const {
+  handleHerdrStatus,
+  handleHerdrSetup,
+  handleHerdrUpgrade,
+  handleHerdrUpgradeStatus,
+} = createHerdrSetupHandlers({
   ping: () => {
     const runtime = connectionManager.defaultReadyRuntime();
     return runtime
       ? runtime.herdr.ping()
       : new HerdrClient(config.socketPath).ping();
   },
-  guard: () =>
-    herdrSetupGuardForProfile(
-      config,
-      connectionProfiles
-        .list()
-        .find((profile) => profile.id === connectionManager.defaultId()),
-    ),
+  guard: () => herdrSetupGuardForProfile(config, defaultConnectionProfile()),
+  upgrade: {
+    worldVersion: APP_VERSION,
+    server: () => {
+      const profile = defaultConnectionProfile();
+      if (profile?.type !== "local") return undefined;
+      const client = () => new HerdrClient(profile.control_socket_path);
+      return {
+        socketPath: profile.control_socket_path,
+        ping: () => client().ping(),
+        call: (method, params, timeoutMs) =>
+          client().call(method, params, timeoutMs),
+      };
+    },
+  },
 });
 
 function runtimeFactoryForProfile(
@@ -2343,6 +2362,10 @@ function main() {
             // Herdr download plus service start shares the update budget.
             server.timeout(req, UPDATE_HTTP_IDLE_TIMEOUT_SECONDS);
             return handleHerdrSetup(req);
+          }
+          if (url.pathname === "/api/herdr/upgrade") {
+            if (req.method === "POST") return handleHerdrUpgrade(req);
+            if (req.method === "GET") return handleHerdrUpgradeStatus();
           }
           const officeObservabilityResponse = await handleOfficeObservability(
             req,

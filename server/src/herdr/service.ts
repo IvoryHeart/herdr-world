@@ -291,6 +291,34 @@ export function installHerdrService(
   return paths;
 }
 
+/**
+ * Point World's Windows Herdr task from one binary to another without
+ * restarting it. Re-registering updates the definition only; the running
+ * server and its panes continue until the next logon or explicit restart.
+ * Returns false when no World-generated task runs fromPath.
+ */
+export function rebindHerdrWindowsTask(
+  fromPath: string,
+  toPath: string,
+  deps: HerdrServiceDeps = {},
+): boolean {
+  const { homeDir, appDataDir, runCommand } = resolveDeps(deps);
+  const paths = resolveHerdrServicePaths("windows-task", homeDir, appDataDir);
+  if (!existsSync(paths.definition)) return false;
+  const current = readFileSync(paths.definition, "utf8");
+  if (
+    !current.includes(HERDR_SERVICE_MARKER) ||
+    !current.includes(`-Execute ${powershellSingleQuotedString(fromPath)} `)
+  )
+    return false;
+  writeHerdrDefinition(paths.definition, renderHerdrWindowsTask(toPath, paths));
+  assertRunSucceeded(
+    registerWindowsTask(paths.definition, runCommand),
+    "scheduled task registration",
+  );
+  return true;
+}
+
 export function herdrServiceStatus(deps: HerdrServiceDeps = {}): {
   installed: boolean;
   active: boolean;
