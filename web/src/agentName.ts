@@ -1,4 +1,5 @@
 import type { Pane } from "./types";
+import { basename, shortId } from "./utils";
 
 /**
  * A title that names who you are talking to before what runs it:
@@ -37,4 +38,35 @@ export function paneAgentTitle(
   harness: string | undefined = pane.agent,
 ): string {
   return agentTitle(pane.agent_name, harness);
+}
+
+/** An agent pane in a list: "reviewer · claude · repo · 1a2b3c4d". */
+export function paneAgentListing(pane: Pane): string {
+  return [
+    paneAgentTitle(pane) || "Agent",
+    basename(pane.foreground_cwd || pane.cwd),
+    shortId(pane.pane_id),
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+/**
+ * The agent.list record for a pane: the same pane, and the same terminal and
+ * harness when the record names them, so a replacement agent's record (and
+ * its name) never lands on another pane.
+ */
+export function agentListRecord(
+  agents: readonly Record<string, unknown>[],
+  pane: Pick<Pane, "pane_id" | "terminal_id" | "agent">,
+): Record<string, unknown> | null {
+  return (
+    agents.find(
+      (candidate) =>
+        candidate.pane_id === pane.pane_id &&
+        (typeof candidate.terminal_id !== "string" ||
+          candidate.terminal_id === pane.terminal_id) &&
+        (typeof candidate.agent !== "string" || candidate.agent === pane.agent),
+    ) ?? null
+  );
 }

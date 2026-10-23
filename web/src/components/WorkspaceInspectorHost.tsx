@@ -1,6 +1,5 @@
 import { useEffectCallback } from "../useEffectCallback";
 import { preferencesStorageKey } from "../workspaceResource";
-import { subscribeLocalStorage } from "../browserStorage";
 import { useLayoutPreferences } from "../layoutPreferences";
 import { connectionClientScopeKey } from "../useConnectionClient";
 import {
@@ -39,7 +38,7 @@ import {
   type ReactNode,
 } from "react";
 import type { ConnectionClient } from "../api";
-import { worldLocalStorage } from "../browserStorage";
+import { subscribeLocalStorage, worldLocalStorage } from "../browserStorage";
 import {
   type NewReviewAnnotation,
   type ReviewAnnotation,

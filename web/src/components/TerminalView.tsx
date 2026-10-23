@@ -31,8 +31,7 @@ import {
 } from "@xterm/addon-clipboard";
 import { FitAddon } from "@xterm/addon-fit";
 import { UnicodeGraphemesAddon } from "@xterm/addon-unicode-graphemes";
-import type { IBufferRange, ITheme } from "@xterm/xterm";
-import { Terminal } from "@xterm/xterm";
+import { type IBufferRange, type ITheme, Terminal } from "@xterm/xterm";
 import { installTerminalCompositionRepair } from "../terminalComposition";
 import {
   Columns2,

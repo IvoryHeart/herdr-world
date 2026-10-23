@@ -11,12 +11,10 @@ import {
   writeMobileControlsPlacement,
   type MobileControlsPlacement,
 } from "./mobileControlsPlacement";
-import { subscribeLocalStorage } from "./browserStorage";
 import {
   isRangerTaskNotificationTarget,
   type RangerTaskNotificationTarget,
 } from "./taskNotifications";
-import { flushSync } from "react-dom";
 import { useCreationSources } from "./creationRequests";
 import { useReviewAnnotationDraft } from "./useReviewAnnotationDraft";
 import { bridge } from "./api";
@@ -33,7 +31,7 @@ import {
   type NewReviewAnnotation,
   type ReviewAnnotation,
 } from "./annotations";
-import { worldLocalStorage } from "./browserStorage";
+import { subscribeLocalStorage, worldLocalStorage } from "./browserStorage";
 import { useLayoutPreferences } from "./layoutPreferences";
 import {
   shortcutMatches,
@@ -75,7 +73,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { createPortal } from "react-dom";
+import { createPortal, flushSync } from "react-dom";
 import type { ITheme } from "@xterm/xterm";
 import { APP_VERSION } from "./version";
 import { WorkspaceInspectorPortal } from "./components/WorkspaceInspectorPortal";
