@@ -15,4 +15,6 @@
   unknown".
 - A loop the agent scheduled once (`ScheduleWakeup`) no longer shows as in
   progress after its wake-up has run and no further one was scheduled.
+- An agent's window header shows the name given with `herdr agent rename`
+  instead of the harness name, as Board and Desk do.
 - Chat's message bubbles keep to about 75 characters a line in wide windows.
