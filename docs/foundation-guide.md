@@ -13,6 +13,8 @@ The retired browser-federated/Rust bridge and remote bridge URL are separate fro
 this active adapter; browser traffic stays on the one World origin.
 
 The agent History/session resolver owns Codex binding.
+[Conversation binding](../server/src/agent/conversation-binding.ts) derives
+reported/title fingerprints and session labels for the Herdr source.
 [Daemon observation](../server/src/agent/codex-app-server.ts) implements bounded
 read-only JSON-RPC on the selected runtime, and
 [inference](../server/src/agent/codex-daemon-binding.ts) checks unique panes and
