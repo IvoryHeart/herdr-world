@@ -80,8 +80,20 @@ export async function settleVerdict(options: {
   let verdict = judge(against.size, options.delta);
   for (let round = 0; ; round++) {
     await options.post(verdict.state, verdict.description);
-    // Out of rounds: the verdict just posted is the newest one computed.
-    if (round + 1 >= (options.rounds ?? 5)) break;
+    if (round + 1 >= (options.rounds ?? 5)) {
+      // Out of rounds while main still moves: fail closed. The description
+      // keeps the delta first, so main's own run re-judges it correctly.
+      if ((await options.readTip()) !== against.sha) {
+        const note = " — main kept moving; re-run";
+        verdict = {
+          ...verdict,
+          state: "failure",
+          description: `${verdict.description.slice(0, 140 - note.length)}${note}`,
+        };
+        await options.post(verdict.state, verdict.description);
+      }
+      break;
+    }
     const tip = await options.readTip();
     if (tip === against.sha) break;
     const size = await options.readMainSize(tip);

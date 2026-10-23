@@ -134,6 +134,11 @@ test("when main keeps moving, the newest verdict computed is the one posted last
     },
     rounds: 3,
   });
-  expect(posts).toHaveLength(3);
+  // Main was still moving when the rounds ran out: the check fails closed,
+  // and the posted delta stays readable for main's own re-judging.
+  expect(posts).toHaveLength(4);
   expect(posts.at(-1)).toBe(verdict.description);
+  expect(verdict.state).toBe("failure");
+  expect(verdict.description).toEndWith("main kept moving; re-run");
+  expect(parseDelta(verdict.description)).toEqual({ files: 0, bytes: 0 });
 });
