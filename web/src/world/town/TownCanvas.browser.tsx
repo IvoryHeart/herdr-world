@@ -929,6 +929,29 @@ async function run() {
 
   if (scale === "protected" && mode === "test") {
     const rendered = window.__HERDR_TOWN_RENDERER__!;
+    const orbitCard = () =>
+      [...host.querySelectorAll<HTMLButtonElement>(".town-room-card")].find(
+        (card) => card.textContent?.includes("orbit"),
+      );
+    await waitFor(
+      () => orbitCard() !== undefined,
+      "protected room has no overview card",
+    );
+    const beforeFrames = rendered.frames;
+    orbitCard()!.click();
+    await waitFor(
+      () => rendered.frames > beforeFrames && !rendered.flying,
+      "protected room focus never settled",
+    );
+    await waitFor(
+      () =>
+        host.querySelectorAll('.world-semantic-target[data-kind="desk"]')
+          .length === rendered.desks &&
+        host.querySelector(
+          '.world-semantic-targets-overlay[aria-busy="false"]',
+        ) !== null,
+      "protected targets never finished admission after focus",
+    );
     const visible = new Set(
       [
         ...host.querySelectorAll<HTMLElement>(
@@ -941,18 +964,17 @@ async function run() {
         { length: 130 },
         (_, index) => `local-orbit-tab-${index}`,
       ).every((key) => visible.has(key)),
-      "protected desks past127 lost their browser targets",
+      "protected desks beyond 127 lost their browser targets",
     );
     const orbit = [...visible].filter((key) =>
       key.startsWith("local-orbit-tab-"),
     ).length;
+    const expand = host.querySelector<HTMLButtonElement>(
+      'button[aria-label^="Expand room orbit"]',
+    );
     check(
-      host
-        .querySelector<HTMLButtonElement>(
-          'button[aria-label^="Expand room orbit"]',
-        )
-        ?.textContent?.trim() === `+${160 - orbit}`,
-      "protected desks are included in the hidden plaque count",
+      expand?.textContent?.trim() === `+${160 - orbit}`,
+      `protected room plaque ${expand?.textContent?.trim()} disagrees with ${orbit} visible desks of 160`,
     );
     check(
       rendered.lastError === null,
