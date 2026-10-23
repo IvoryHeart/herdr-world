@@ -42,12 +42,11 @@ import { CONTINUE_TO_SERVER, defaultCliContext } from "./cli/command";
 import { runTaskSummaryCommand } from "./herdr/task-summary";
 import { stampLaunchParent } from "./herdr/spawn-stamp";
 import {
-  handleWorldCliEndpoint,
   WORLD_CLI_IDLE_TIMEOUT_SECONDS,
   WORLD_CLI_PATH,
 } from "./http/world-cli-endpoint";
-import { answerAsk, CliError, createWorldCli } from "./world/world-cli";
-import { WorldLedger } from "./world/world-ledger";
+import { createWorldCliService } from "./world/world-cli-service";
+import { parseRpcMeta } from "./http/rpc-meta";
 import { runAgentCheckoutCommand } from "./herdr/agent-checkout";
 import { createWebPushService } from "./notifications/web-push";
 import { enrichIntegrationVersions } from "./herdr/integration-versions";
@@ -384,34 +383,6 @@ function logDetail(value: string): string {
     .slice(0, 300);
 }
 
-function parseRpcMeta(raw: string): {
-  id: string | null;
-  method: string | null;
-  connectionId: unknown;
-  connectionGeneration: unknown;
-} {
-  try {
-    const msg = JSON.parse(raw);
-    return {
-      id: typeof msg?.id === "string" ? msg.id : null,
-      method: typeof msg?.method === "string" ? msg.method : null,
-      connectionId: Object.hasOwn(msg ?? {}, "connection_id")
-        ? msg.connection_id
-        : undefined,
-      connectionGeneration: Object.hasOwn(msg ?? {}, "connection_generation")
-        ? msg.connection_generation
-        : undefined,
-    };
-  } catch {
-    return {
-      id: null,
-      method: null,
-      connectionId: undefined,
-      connectionGeneration: undefined,
-    };
-  }
-}
-
 function rpcOutcomeKey(ws: ServerWebSocket<unknown>, id: string) {
   return `${clientLabel(ws)}\0${id}`;
 }
@@ -620,57 +591,15 @@ function publishBoardChanged(revision: number) {
   for (const ws of clients) safeSend(ws, line, "world-board");
 }
 
-let worldLedgerStore: WorldLedger | null = null;
-/** The agent CLI's change log, questions and results (world-ledger.ts). */
-function worldLedger() {
-  worldLedgerStore ??= new WorldLedger(undefined, {
-    log: (message) => console.warn(message),
-  });
-  return worldLedgerStore;
-}
-
-/** Pages fetch the open questions only when `asks` says they changed. */
-function publishLedgerChanged(revision: number, asks = false) {
-  const line = JSON.stringify({
-    control: {
-      type: "world_ledger_changed",
-      revision,
-      ...(asks ? { asks: true } : {}),
-    },
-  });
-  for (const ws of clients) safeSend(ws, line, "world-ledger");
-}
-
-const worldCli = createWorldCli({
-  board: {
-    get: () => board().get(),
-    patch: (ops) => board().patch(ops),
-  },
-  get ledger() {
-    return worldLedger();
-  },
-  hosts: () =>
-    connectionManager.list().flatMap((status) => {
-      const lease = connectionManager.readyRuntimeLease(status.id);
-      if (!lease?.isCurrent()) return [];
-      return [
-        {
-          connection_id: lease.connectionId,
-          generation: lease.generation,
-          local: !lease.runtime.sshHost(),
-          call: (method: string, params: Record<string, unknown>) =>
-            lease.runtime.herdr.call(method, params, 5_000),
-        },
-      ];
-    }),
-  defaultConnectionId: () => connectionManager.defaultId(),
-  snapshot: async () => {
-    if (!worldSnapshots)
-      throw new Error("World snapshot service is unavailable");
-    return worldSnapshots.snapshot({});
-  },
+/** The agent CLI (world-cli-service.ts). */
+const worldCli = createWorldCliService({
+  board: { get: () => board().get(), patch: (ops) => board().patch(ops) },
+  connections: () => connectionManager,
+  snapshots: () => worldSnapshots,
   publishBoard: publishBoardChanged,
-  publishLedger: publishLedgerChanged,
+  broadcast: (line) => {
+    for (const ws of clients) safeSend(ws, line, "world-ledger");
+  },
 });
 
 function publishWatchlistChanged(revision: number) {
@@ -1290,26 +1219,11 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
     }
     return;
   }
-  if (method === "world.asks.get") {
-    sendReply({ id, result: worldLedger().openAsks() }, "world-asks");
-    return;
-  }
-  if (method === "world.ask.answer") {
+  if (method === "world.asks.get" || method === "world.ask.answer") {
     try {
-      const p = (params ?? {}) as Record<string, unknown>;
-      const answer = typeof p.answer === "string" ? p.answer.trim() : "";
-      if (typeof p.id !== "string" || !answer || answer.length > 4000)
-        throw new Error("an answer needs a question ID and text");
-      publishLedgerChanged(
-        answerAsk(worldLedger(), p.id, answer, "owner", Date.now()),
-        true,
-      );
-      sendReply({ id, result: worldLedger().openAsks() }, "world-ask-answer");
+      sendReply({ id, result: worldCli.rpc(method, params) }, method);
     } catch (error) {
-      sendError(
-        "world-ask-answer",
-        error instanceof CliError ? new Error(error.message) : error,
-      );
+      sendError(`${method}-error`, error);
     }
     return;
   }
@@ -2623,11 +2537,12 @@ function main() {
             // `ask --wait` holds a call for up to 20 s; Bun's default idle
             // timeout (10 s) would cut it.
             server.timeout(req, WORLD_CLI_IDLE_TIMEOUT_SECONDS);
-            return handleWorldCliEndpoint(req, server.requestIP(req), {
-              serverPort: server.port ?? config.port,
+            return worldCli.http(
+              req,
+              server.requestIP(req),
+              server.port ?? config.port,
               bearerAuth,
-              handle: (body, chain) => worldCli.handle(body as never, chain),
-            });
+            );
           }
 
           // Loopback listeners retain World's trusted local access policy.

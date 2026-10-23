@@ -3,6 +3,7 @@ import { worldLocalStorage } from "../../browserStorage";
 import type { OfficeAgent } from "../herdrOfficeProjection";
 import type { WorldAsk } from "../worldAsks";
 import { townPortrait } from "./townSprites";
+import "./townAsks.css";
 
 export type TownCall = {
   agent: OfficeAgent;

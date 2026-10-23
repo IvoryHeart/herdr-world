@@ -1,0 +1,129 @@
+import { handleWorldCliEndpoint } from "../http/world-cli-endpoint";
+import {
+  answerAsk,
+  CliError,
+  createWorldCli,
+  type WorldCliDeps,
+} from "./world-cli";
+import { WorldLedger } from "./world-ledger";
+import type { WorldSnapshotResult } from "./snapshot";
+
+/**
+ * The agent CLI inside the running service: its ledger, the notices World's
+ * pages get when it changes, the `/api/world/cli` route, and the two methods
+ * pages call for questions (`world.asks.get`, `world.ask.answer`).
+ */
+/** A ready runtime of one connection, as the connection manager leases it. */
+type Lease = {
+  isCurrent(): boolean;
+  connectionId: string;
+  generation: number;
+  runtime: {
+    sshHost(): unknown;
+    herdr: {
+      call(
+        method: string,
+        params: Record<string, unknown>,
+        timeoutMs: number,
+      ): Promise<unknown>;
+    };
+  };
+};
+
+export function createWorldCliService(deps: {
+  board: WorldCliDeps["board"];
+  /** Read when a call arrives, so the service may be built first. */
+  connections(): {
+    list(): { id: string }[];
+    readyRuntimeLease(id: string): Lease | null | undefined;
+    defaultId(): string | null;
+  };
+  snapshots(): {
+    snapshot(params: Record<string, never>): Promise<WorldSnapshotResult>;
+  } | null;
+  publishBoard(revision: number): void;
+  /** Send one control line to every connected page. */
+  broadcast(line: string): void;
+}) {
+  let ledgerStore: WorldLedger | null = null;
+  const ledger = () =>
+    (ledgerStore ??= new WorldLedger(undefined, {
+      log: (message) => console.warn(message),
+    }));
+  /** Pages fetch the open questions only when `asks` says they changed. */
+  const publishLedger = (revision: number, asks = false) =>
+    deps.broadcast(
+      JSON.stringify({
+        control: {
+          type: "world_ledger_changed",
+          revision,
+          ...(asks ? { asks: true } : {}),
+        },
+      }),
+    );
+  const cli = createWorldCli({
+    board: deps.board,
+    get ledger() {
+      return ledger();
+    },
+    // Herdr on this machine can be checked for the caller's processes.
+    hosts: () =>
+      deps
+        .connections()
+        .list()
+        .flatMap((status) => {
+          const lease = deps.connections().readyRuntimeLease(status.id);
+          if (!lease?.isCurrent()) return [];
+          return [
+            {
+              connection_id: lease.connectionId,
+              generation: lease.generation,
+              local: !lease.runtime.sshHost(),
+              call: (method: string, params: Record<string, unknown>) =>
+                lease.runtime.herdr.call(method, params, 5_000),
+            },
+          ];
+        }),
+    defaultConnectionId: () => deps.connections().defaultId(),
+    snapshot: async () => {
+      const snapshots = deps.snapshots();
+      if (!snapshots) throw new Error("World snapshot service is unavailable");
+      return snapshots.snapshot({});
+    },
+    publishBoard: deps.publishBoard,
+    publishLedger,
+  });
+  return {
+    /** A page's question method; undefined when `method` is not one. */
+    rpc(method: string, params: unknown): unknown {
+      if (method === "world.asks.get") return ledger().openAsks();
+      if (method !== "world.ask.answer") return undefined;
+      const p = (params ?? {}) as Record<string, unknown>;
+      const answer = typeof p.answer === "string" ? p.answer.trim() : "";
+      if (typeof p.id !== "string" || !answer || answer.length > 4000)
+        throw new Error("an answer needs a question ID and text");
+      try {
+        publishLedger(
+          answerAsk(ledger(), p.id, answer, "owner", Date.now()),
+          true,
+        );
+      } catch (error) {
+        throw error instanceof CliError ? new Error(error.message) : error;
+      }
+      return ledger().openAsks();
+    },
+    /** `/api/world/cli`, for `herdr-world` on this machine. */
+    http(
+      req: Request,
+      peer: { address: string; port: number } | null,
+      serverPort: number,
+      bearerAuth: (req: Request, ip: string) => true | Response | null,
+    ) {
+      return handleWorldCliEndpoint(req, peer, {
+        serverPort,
+        bearerAuth,
+        handle: (body, locate) => cli.handle(body as never, locate),
+      });
+    },
+  };
+}
