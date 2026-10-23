@@ -1428,6 +1428,12 @@ conversation, collapsed to a title/progress row. Its keyboard-reachable expand
 button SHALL expose aria-expanded and reveal objectives inline. The row SHALL
 repeat no agent identity or status and SHALL NOT be sticky.
 
+While the reader is scrolled away, the existing floating catch-up button SHALL
+count only new agent messages, excluding own sends, queued bubbles, tool activity
+and transcript notices. Reaching the bottom or changing sessions SHALL clear it.
+Older-page loading SHALL NOT increment the count. Focused answer keys and the
+existing double-Escape stop SHALL retain their existing scope.
+
 #### Scenario: A command intentionally switches sessions
 
 - **WHEN** a bound Chat sends a slash command and the harness switches sessions

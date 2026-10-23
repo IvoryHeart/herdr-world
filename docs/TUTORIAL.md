@@ -152,6 +152,8 @@ changes what you see and does not disconnect hosts or retarget open terminals.
    title. Open its chat to see a slim quest title and progress row in the conversation.
    Expand it to read each objective as pending, active, done or blocked; the
    row scrolls with the messages.
+   While you scroll back in Chat, **Jump to latest** counts new agent messages;
+   reach the bottom to clear the count.
    Chat's Now circle has the status word on hover: blue for working, yellow
    for needs you, green for done and grey for idle.
 5. Read the question before using an answer button: it sends the offered key to

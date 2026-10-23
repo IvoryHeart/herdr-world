@@ -11,3 +11,5 @@
   working-state sends show queued bubbles until their transcript receipt.
 - The current quest takes one slim title/progress row inside the conversation;
   expand it for objectives without adding a fixed toolbar.
+- While reading back in Chat, the existing catch-up button counts new agent
+  messages and clears at the bottom. Own messages and queued bubbles do not count.

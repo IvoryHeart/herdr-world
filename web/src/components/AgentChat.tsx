@@ -649,7 +649,13 @@ export function AgentChat({
             items={chatItems}
             listRef={listRef}
             contentRef={contentRef}
-            followKey={pane.pane_id}
+            followKey={JSON.stringify([
+              connectionClient.connectionId,
+              connectionClient.serverRuntimeGeneration,
+              pane.pane_id,
+              conversation?.session_fingerprint,
+            ])}
+            countNewAgentMessages
             toolLoading={history.toolEntryLoading}
             onLoadTool={history.loadToolEntry}
             placed={[

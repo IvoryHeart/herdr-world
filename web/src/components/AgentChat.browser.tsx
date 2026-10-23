@@ -356,10 +356,10 @@ async function run() {
     };
     type("Run the tests");
     await settle();
-    // As in World's composer, Enter is a new line: it neither sends nor is
-    // held back from the textarea.
+    // Shift+Enter keeps native multiline editing; Enter sends in Chat.
     const enter = new KeyboardEvent("keydown", {
       key: "Enter",
+      shiftKey: true,
       bubbles: true,
       cancelable: true,
     });
@@ -368,15 +368,12 @@ async function run() {
     check(
       !enter.defaultPrevented &&
         !calls.some((call) => call.method === "agent_conversation.send"),
-      "Enter must start a new line, not send",
+      "Shift+Enter must start a new line, not send",
     );
     check(
-      /^Send \((Ctrl|Meta|Cmd|⌘)/.test(
-        container
-          .querySelector<HTMLButtonElement>('button[aria-label="Send"]')
-          ?.getAttribute("title") ?? "",
-      ),
-      "The Send button must name its keyboard shortcut",
+      container.querySelector<HTMLButtonElement>('button[aria-label="Send"]')
+        ?.title === "Send message (Enter)",
+      "The shared Chat Send button must name Enter",
     );
     // The composer's send shortcut (Ctrl+Enter, Cmd+Enter on a Mac) sends.
     for (const modifier of ["ctrlKey", "metaKey"] as const) {
@@ -1394,6 +1391,24 @@ async function run() {
         list.scrollTop < 4,
         `a new message moved a reader who scrolled up at ${width}px`,
       );
+      check(
+        jump()?.textContent?.includes("1 new") === true,
+        "Catch-up must count a new agent message while reading back",
+      );
+      reply = conversation([
+        ...long,
+        message(`long-${width}-new`, "assistant", "A new message lands."),
+        message(`long-${width}-mine`, "user", "My follow-up"),
+        message(`long-${width}-notice`, "assistant", "Compacted"),
+      ]);
+      reply.messages![reply.messages!.length - 1]!.kind = "notice";
+      push();
+      await settle();
+      check(
+        jump()?.textContent?.includes("1 new") === true,
+        "Own messages and compaction notices must not inflate catch-up",
+      );
+
       jump()!.click();
       await settle();
       check(

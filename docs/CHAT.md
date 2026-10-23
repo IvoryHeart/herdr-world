@@ -128,6 +128,11 @@ view that you open on purpose.
   scheduling; World keeps no second queue. Without a transcript receipt it
   remains **Sent, not seen in the transcript** when checking ends. Blocked
   sends remain refused with their reason and keep the draft.
+- While you read back, the existing floating **Jump to latest** shows **3 new**
+  when three agent messages arrive. Your own messages, queued sends, tool
+  activity and transcript notices do not count. Reaching the bottom clears it;
+  opening another session starts fresh. Answer numbers remain scoped to the
+  focused question card; no global answer keys or extra key bar are added.
 - **Details** opens the earlier History view: Timeline, tool output, transcript
   preview and export.
 

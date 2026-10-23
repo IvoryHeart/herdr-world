@@ -48,6 +48,7 @@ import {
   type HistoryDecorator,
   type HistoryDecoration,
 } from "./historyDecoration";
+import { useHistoryCatchUp } from "./useHistoryCatchUp";
 import "./AgentHistoryChat.css";
 
 // Treat the list as pinned while the reader is within this distance of the
@@ -561,7 +562,9 @@ export function AgentHistoryChat({
   onLoadOlder,
   onAtLatest,
   placed,
+  countNewAgentMessages = false,
 }: {
+  countNewAgentMessages?: boolean;
   /** Shown among the messages at their time, such as an unseen send. */
   placed?: readonly { key: string; at: string; node: ReactNode }[];
   /** Entries older than the shown ones exist; onLoadOlder fetches a page. */
@@ -592,6 +595,12 @@ export function AgentHistoryChat({
   onOpen: (entry: HistoryEntry) => void;
 }) {
   const followRef = useRef(true);
+  const { unread, clear: clearUnread } = useHistoryCatchUp(
+    items,
+    followKey,
+    followRef,
+    countNewAgentMessages,
+  );
   // Shown while the reader has scrolled back from the newest message.
   const [away, setAway] = useState(false);
   const queueRef = useRef<HistoryEntry[]>([]);
@@ -634,7 +643,9 @@ export function AgentHistoryChat({
 
   useLayoutEffect(() => {
     followRef.current = true;
-  }, [followKey]);
+    setAway(false);
+    clearUnread();
+  }, [followKey, clearUnread]);
 
   // Older entries arrive above the reader: keep the same distance from the
   // bottom, so the message being read stays put.
@@ -718,21 +729,31 @@ export function AgentHistoryChat({
         setAway(!followRef.current);
         heightRef.current = list.scrollHeight;
         if (!followRef.current) loadOlderIfNear(list);
-        else onAtLatest?.();
+        else {
+          clearUnread();
+          onAtLatest?.();
+        }
       }}
     >
       {away ? (
         <button
           type="button"
           className="agent-history-chat-jump"
+          aria-label={
+            unread > 0
+              ? `${unread} new agent messages; jump to latest`
+              : "Jump to latest"
+          }
           onClick={() => {
             const list = listRef.current;
             followRef.current = true;
             setAway(false);
+            clearUnread();
             list?.scrollTo({ top: list.scrollHeight });
           }}
         >
-          <ArrowDown size={13} aria-hidden="true" /> Jump to latest
+          <ArrowDown size={13} aria-hidden="true" />{" "}
+          {unread > 0 ? `${unread} new` : "Jump to latest"}
         </button>
       ) : null}
       <div ref={contentRef} className="agent-history-chat-content">

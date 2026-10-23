@@ -27,7 +27,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     Tapping an agent or its table, activating it (double-click,
     **Shift+Enter**), the needs-you list, **N** and **Next** open that window on
     **Chat**: the conversation's latest 200 entries, which scroll inside the
-    window, with **Jump to latest** when you have scrolled back and the
+    window, with **Jump to latest** when you have scrolled back (counting new
+    agent messages until you reach the bottom) and the
     composer always at the bottom. Reopening or redocking the window keeps the
     conversation. In Town it
     docks on the right by default (**Menu → Inspector opening**), 520px wide
