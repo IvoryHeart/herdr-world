@@ -178,7 +178,11 @@ export function loginCommand(kind: string) {
 }
 
 export type LoginOutcome = {
-  status: "opened" | "uncertain" | "failed";
+  /**
+   * typed: the login command waits on the tab's command line for the user's
+   * Enter. Herdr reports no prompt state, so World never presses Enter itself.
+   */
+  status: "typed" | "uncertain" | "failed";
   message?: string;
   tab_id: string;
   pane_id: string;
@@ -189,10 +193,14 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value) && typeof value === "object" && !Array.isArray(value);
 
 /**
- * Open a small Herdr tab in the workspace and type the harness's own login
- * command into it, only once that same terminal's shell is at its prompt: the
- * shell holds the foreground and its screen has settled. Otherwise nothing is
- * typed and the outcome says so.
+ * Open a small Herdr tab in the workspace and put the harness's own login
+ * command on its command line, without Enter: the user reads it and presses
+ * Enter. Herdr does not say whether a shell is at its prompt or a startup
+ * script is waiting in `read`, and the same screen fits both, so World never
+ * runs the command itself. It still waits for the shell to hold the
+ * foreground with a settled screen, so typing doesn't land in a starting
+ * shell's output, and checks the host and tab again right before typing.
+ * Otherwise nothing is typed and the outcome says so.
  */
 export async function openHarnessLogin(
   call: HerdrCall,
@@ -230,28 +238,33 @@ export async function openHarnessLogin(
     pane_id: paneId,
     terminal_id: terminalId,
   };
-  const deadline = now() + (request.timeoutMs ?? 15_000);
-  let settled: string | null = null;
-  while (now() < deadline) {
+  /** Why the tab can no longer take the command, or null while it can. */
+  const lost = async (): Promise<LoginOutcome | null> => {
     if (!request.isCurrent())
       return {
         status: "failed",
-        message:
-          "The host reconnected before the login tab was ready; nothing was typed.",
+        message: "The host reconnected; nothing was typed in the login tab.",
         ...tab,
       };
     const live = await call("pane.get", { pane_id: paneId }).catch(() => null);
     if (
       !isRecord(live) ||
       !isRecord(live.pane) ||
-      live.pane.terminal_id !== terminalId
+      live.pane.terminal_id !== terminalId ||
+      !request.isCurrent()
     )
       return {
         status: "failed",
-        message:
-          "The login tab changed before its shell was ready; nothing was typed.",
+        message: "The login tab changed; nothing was typed.",
         ...tab,
       };
+    return null;
+  };
+  const deadline = now() + (request.timeoutMs ?? 15_000);
+  let settled: string | null = null;
+  while (now() < deadline) {
+    const gone = await lost();
+    if (gone) return gone;
     const info = await call("pane.process_info", { pane_id: paneId }).catch(
       () => null,
     );
@@ -268,15 +281,12 @@ export async function openHarnessLogin(
         )) as { read?: { text?: string }; text?: string } | null)
       : null;
     const screen = (read?.read?.text ?? read?.text ?? "").trim();
-    // A prompt is a nonblank screen that stays the same while the shell
-    // waits in front; a banner printed by a still-starting shell changes.
     if (screen && screen === settled) {
-      await call("pane.send_input", {
-        pane_id: paneId,
-        text: command,
-        keys: ["Enter"],
-      });
-      return { status: "opened", ...tab };
+      // The reads above were awaited: check the host and tab again.
+      const changed = await lost();
+      if (changed) return changed;
+      await call("pane.send_text", { pane_id: paneId, text: command });
+      return { status: "typed", ...tab };
     }
     settled = screen || null;
     await sleep(250);
@@ -284,7 +294,7 @@ export async function openHarnessLogin(
   return {
     status: "uncertain",
     message:
-      "The login tab's shell did not reach its prompt; nothing was typed. Open the tab and run the harness's login there.",
+      "The login tab's shell did not settle; nothing was typed. Open the tab and run the harness's login there.",
     ...tab,
   };
 }

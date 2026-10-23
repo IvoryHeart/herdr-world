@@ -191,8 +191,8 @@ export async function openHarnessLogin(target: LaunchTarget, kind: string) {
       { workspace_id: target.workspaceId, kind },
       30_000,
     )) as {
-    /** opened: the login command was typed into the tab's ready shell. */
-    status: "opened" | "uncertain" | "failed";
+    /** typed: the login command waits on the tab's line for the user's Enter. */
+    status: "typed" | "uncertain" | "failed";
     message?: string;
     tab_id: string;
     pane_id: string;

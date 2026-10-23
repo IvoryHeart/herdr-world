@@ -153,7 +153,7 @@ export function AgentLauncherDialog({
     setError(null);
     try {
       const opened = await openHarnessLogin(target, kind);
-      if (opened.status === "opened") {
+      if (opened.status === "typed") {
         onOpen({
           connectionId: target.connectionId,
           terminalId: opened.terminal_id,
@@ -224,6 +224,7 @@ export function AgentLauncherDialog({
                 <button
                   type="button"
                   className="agent-launcher-login"
+                  title={`Opens a tab with ${harnessLabel(kind)}'s login command ready; press Enter there`}
                   onClick={() => void logIn(kind)}
                 >
                   <LogIn size={13} aria-hidden="true" /> Log in

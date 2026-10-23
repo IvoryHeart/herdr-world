@@ -220,8 +220,9 @@ a starting brief and a look in Town. World starts it in a new tab for you.
    Spaces' tab bar. Choose the room, optionally type a task, and tap a profile,
    or tap a kind under **Quick start** for a plain agent.
 4. If a harness is logged out on that host, the launcher says so: **Log in**
-   opens a small tab running the harness's own login (`claude auth login`,
-   `codex login --device-auth`). Finish it there, then **Check again**.
+   opens a small tab with the harness's own login ready on its line
+   (`claude auth login`, `codex login --device-auth`). Press Enter, finish it
+   there, then **Check again**.
 5. World creates the tab, starts the agent, waits until it is ready and sends
    the brief, then opens its terminal. The tab takes the profile's colour and
    the agent wears the profile's look in Town. If the agent stops on a question

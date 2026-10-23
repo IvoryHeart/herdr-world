@@ -95,8 +95,11 @@ function loginHerdr(options: {
   };
   return { call, calls, timing };
 }
+/** Anything World typed or pressed in the login tab. */
 const typed = (calls: [string, Record<string, unknown>][]) =>
-  calls.filter(([method]) => method === "pane.send_input");
+  calls.filter(
+    ([method]) => method === "pane.send_input" || method === "pane.send_text",
+  );
 
 describe("Harness readiness", () => {
   test("reads each harness's own status without forwarding its output", async () => {
@@ -149,7 +152,7 @@ describe("Harness readiness", () => {
     ).toEqual([]);
   });
 
-  test("login types the harness's own login once the shell's prompt settles", async () => {
+  test("login puts the harness's own login on the line once the shell settles, never pressing Enter", async () => {
     const herdr = loginHerdr({ screens: ["", "Welcome", "$ ", "$ "] });
     const opened = await openHarnessLogin(herdr.call, {
       workspace_id: "w1",
@@ -159,16 +162,13 @@ describe("Harness readiness", () => {
       ...herdr.timing,
     });
     expect(opened).toEqual({
-      status: "opened",
+      status: "typed",
       tab_id: "w1:t3",
       pane_id: "w1:p3",
       terminal_id: "term_3",
     });
     expect(typed(herdr.calls)).toEqual([
-      [
-        "pane.send_input",
-        { pane_id: "w1:p3", text: loginCommand("codex"), keys: ["Enter"] },
-      ],
+      ["pane.send_text", { pane_id: "w1:p3", text: loginCommand("codex") }],
     ]);
     await expect(
       openHarnessLogin(herdr.call, {
@@ -252,6 +252,47 @@ describe("Harness readiness", () => {
       message: expect.stringMatching(/reconnected/),
     });
     expect(typed(reconnect.calls)).toEqual([]);
+
+    // The host reconnects during the last awaited read before typing.
+    let live = true;
+    let reads = 0;
+    const late = loginHerdr({ screens: ["$ "] });
+    const lateOutcome = await openHarnessLogin(
+      async (method, params) => {
+        const result = await late.call(method, params);
+        if (method === "pane.read" && ++reads === 2) live = false;
+        return result;
+      },
+      {
+        workspace_id: "w1",
+        kind: "claude",
+        windows: false,
+        isCurrent: () => live,
+        ...late.timing,
+      },
+    );
+    expect(lateOutcome).toMatchObject({ status: "failed" });
+    expect(typed(late.calls)).toEqual([]);
+  });
+
+  test("a startup question in front of the shell never gets an answer", async () => {
+    // A startup script waiting in `read` looks like a prompt to Herdr's
+    // reports: the shell is in front and the screen is stable. World only
+    // places the command; the user sees it and decides whether to press Enter.
+    const herdr = loginHerdr({ screens: ["Set up now? [y/N]"] });
+    expect(
+      await openHarnessLogin(herdr.call, {
+        workspace_id: "w1",
+        kind: "claude",
+        windows: false,
+        isCurrent: () => true,
+        ...herdr.timing,
+      }),
+    ).toMatchObject({ status: "typed" });
+    const input = typed(herdr.calls);
+    expect(input.map(([method]) => method)).toEqual(["pane.send_text"]);
+    expect(JSON.stringify(input)).not.toContain("Enter");
+    expect(String(input[0]?.[1].text)).not.toContain("\n");
   });
 
   test("login runs an install found only in its default location", async () => {
