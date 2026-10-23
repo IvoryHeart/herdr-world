@@ -14,6 +14,38 @@ export type CodexDaemonThread = {
 const TIMEOUT_MS = 3000;
 const MAX_BYTES = 1024 * 1024;
 const MAX_THREADS = 500;
+const THREAD_ID = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
+
+/** null means the source cannot safely exclude a potential TUI competitor. */
+function interactiveSource(source: unknown): boolean | null {
+  if (source === "cli" || source === "vscode") return true;
+  if (source === "exec" || source === "appServer") return false;
+  if (!isRecord(source) || Object.keys(source).length !== 1) return null;
+  if (typeof source.custom === "string") return false;
+  const subagent = source.subAgent;
+  if (
+    subagent === "review" ||
+    subagent === "compact" ||
+    subagent === "memory_consolidation"
+  )
+    return false;
+  if (!isRecord(subagent) || Object.keys(subagent).length !== 1) return null;
+  if (typeof subagent.other === "string") return false;
+  const spawned = subagent.thread_spawn;
+  if (
+    isRecord(spawned) &&
+    typeof spawned.parent_thread_id === "string" &&
+    THREAD_ID.test(spawned.parent_thread_id) &&
+    typeof spawned.depth === "number" &&
+    Number.isSafeInteger(spawned.depth) &&
+    spawned.depth >= 0 &&
+    [spawned.agent_path, spawned.agent_nickname, spawned.agent_role].every(
+      (value) => value === null || typeof value === "string",
+    )
+  )
+    return false;
+  return null;
+}
 
 export function codexDaemonProxyArgv(sshHost?: string) {
   return sshHost
@@ -133,7 +165,12 @@ export async function listCodexDaemonThreads(
         if (
           !isRecord(item) ||
           typeof item.id !== "string" ||
-          !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(item.id) ||
+          !THREAD_ID.test(item.id) ||
+          !(
+            item.parentThreadId === null ||
+            (typeof item.parentThreadId === "string" &&
+              THREAD_ID.test(item.parentThreadId))
+          ) ||
           typeof item.cwd !== "string" ||
           typeof item.createdAt !== "number" ||
           !Number.isFinite(item.createdAt) ||
@@ -146,13 +183,13 @@ export async function listCodexDaemonThreads(
         seen.add(item.id.toLowerCase());
         if (seen.size > MAX_THREADS) return null;
         if (item.cwd !== cwd) return null;
+        const interactive = interactiveSource(item.source);
+        if (interactive === null) return null;
         if (item.status.type === "notLoaded") continue;
         if (item.status.type !== "idle" && item.status.type !== "active")
           return null;
         // A child thread is not the conversation a TUI displays.
-        if (item.parentThreadId != null || typeof item.source !== "string")
-          continue;
-        if (item.source !== "cli" && item.source !== "vscode") continue;
+        if (item.parentThreadId !== null || !interactive) continue;
         if (
           item.status.type === "active" &&
           (!Array.isArray(item.status.activeFlags) ||
@@ -177,12 +214,12 @@ export async function listCodexDaemonThreads(
       }
       cursor = result.nextCursor;
       if (
-        cursor &&
+        cursor !== null &&
         (cursors.has(cursor) || cursors.size >= 5 || seen.size >= MAX_THREADS)
       )
         return null;
-      if (cursor) cursors.add(cursor);
-    } while (cursor);
+      if (cursor !== null) cursors.add(cursor);
+    } while (cursor !== null);
     return threads;
   } catch {
     return null;

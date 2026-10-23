@@ -60,6 +60,9 @@ and one loaded interactive thread. The thread's creation/update times must be
 valid, its activity must be within ten minutes, and its runtime status must
 agree with the pane. Changed pane evidence, another claimant, incomplete results,
 unavailable daemons and ambiguous matches show no inferred conversation.
+Unknown source or parent metadata makes discovery unavailable; only validated
+noninteractive or child threads are excluded. Pagination completes only at a
+null cursor, including when an opaque cursor is an empty string.
 
 This evidence is a **guess**, never proof of client identity. History records
 `session.source: codex-daemon`; Chat records its confidence as

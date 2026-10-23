@@ -118,7 +118,95 @@ describe("Codex daemon observation", () => {
   });
 
   test.each([
+    { source: undefined },
+    { source: null },
+    { source: 1 },
+    { source: "unknown" },
+    { source: "futureSource" },
+    { source: {} },
+    { source: { custom: 1 } },
+    { source: { subAgent: "futureKind" } },
+    { source: { subAgent: { thread_spawn: {} } } },
+    { source: { subAgent: "review", custom: "ambiguous" } },
+    { parentThreadId: undefined },
+    { parentThreadId: 1 },
+    { parentThreadId: "" },
+    { parentThreadId: {} },
+  ])(
+    "unknown competitor source or lineage makes discovery unavailable %#",
+    async (metadata) => {
+      expect(
+        await listCodexDaemonThreads("/work/demo", {
+          argv: peer([
+            {
+              data: [
+                thread,
+                { ...thread, id: ID.replace(/6$/, "7"), ...metadata },
+              ],
+              nextCursor: null,
+            },
+          ]),
+        }),
+      ).toBeNull();
+    },
+  );
+
+  test("an empty opaque cursor continues discovery and keeps the next competitor", async () => {
+    const result = await listCodexDaemonThreads("/work/demo", {
+      argv: peer([
+        { data: [thread], nextCursor: "" },
+        {
+          data: [
+            { ...thread, id: ID.replace(/6$/, "7"), status: { type: "idle" } },
+          ],
+          nextCursor: null,
+        },
+      ]),
+    });
+    expect(result?.map(({ id }) => id)).toEqual([ID, ID.replace(/6$/, "7")]);
+  });
+
+  test.each([
+    { source: "exec" },
+    { source: "appServer" },
+    { source: { custom: "automation" } },
+    { source: { subAgent: "compact" } },
+    { source: { subAgent: { other: "automation" } } },
+    {
+      source: {
+        subAgent: {
+          thread_spawn: {
+            parent_thread_id: ID,
+            depth: 1,
+            agent_path: null,
+            agent_nickname: null,
+            agent_role: null,
+          },
+        },
+      },
+    },
+    { parentThreadId: ID },
+  ])(
+    "excludes only validated noninteractive or child metadata %#",
+    async (metadata) => {
+      const result = await listCodexDaemonThreads("/work/demo", {
+        argv: peer([
+          {
+            data: [
+              thread,
+              { ...thread, id: ID.replace(/6$/, "7"), ...metadata },
+            ],
+            nextCursor: null,
+          },
+        ]),
+      });
+      expect(result?.map(({ id }) => id)).toEqual([ID]);
+    },
+  );
+
+  test.each([
     { data: [thread], nextCursor: "repeated" },
+    { data: [], nextCursor: "" },
     { data: [thread, thread], nextCursor: null },
     { data: [{ ...thread, cwd: "/work/elsewhere" }], nextCursor: null },
     {
