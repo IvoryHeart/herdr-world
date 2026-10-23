@@ -1329,12 +1329,6 @@ export default function TownView({
               setPeek(null);
               openOfficeTerminal(peekAgent.key);
             }}
-            onInspector={() => {
-              setPeek(null);
-              if (onOpenInspectorView)
-                onOpenInspectorView(peekAgent.nodeId, "files");
-              else void onSelect(peekAgent.nodeId);
-            }}
             onNext={
               nextCall(peekAgent.key)
                 ? () => openChat(nextCall(peekAgent.key)!.agent.key)

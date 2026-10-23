@@ -1,9 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import {
+  chatTextSize,
   clampTerminalFontScale,
   clampUiScale,
   MAX_TERMINAL_FONT_NAME_LENGTH,
   normalizeAccentColor,
+  normalizeChatTextScale,
   normalizeTerminalFontFamily,
   normalizeTerminalFontScale,
   normalizeThemePreference,
@@ -194,4 +196,14 @@ describe("zen mode", () => {
     expect(normalizeZenMode(serializeZenMode(true))).toBe(true);
     expect(normalizeZenMode(serializeZenMode(false))).toBe(false);
   });
+});
+
+test("Chat text follows the terminal font scale until set on its own", () => {
+  expect(normalizeChatTextScale(null)).toBeNull();
+  expect(normalizeChatTextScale("linked")).toBeNull();
+  expect(normalizeChatTextScale("123")).toBe(125);
+  expect(normalizeChatTextScale("999")).toBe(TERMINAL_FONT_SCALE_MAX);
+  expect(chatTextSize(null, 100)).toBe("13px");
+  expect(chatTextSize(null, 120)).toBe("15.6px");
+  expect(chatTextSize(150, 100)).toBe("19.5px");
 });

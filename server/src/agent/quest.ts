@@ -160,6 +160,15 @@ type Loop = {
   title: string;
   iterations: number;
   stopped: boolean;
+  /**
+   * When a ScheduleWakeup is due; null for a recurring CronCreate. A wake-up
+   * fires once: a user turn at or after it is that wake-up arriving.
+   */
+  due: number | null;
+  /** Whether the wake-up has arrived. */
+  woke: boolean;
+  /** Prompts after the wake-up arrived; the loop ended if one came. */
+  after: number;
 };
 
 type Goal = {
@@ -219,6 +228,12 @@ export function questFromSession(
 
   for (const step of trajectory.steps) {
     const at = step.timestamp ?? "";
+    if (step.source === "user" && !step.tool_calls?.length) {
+      const current = loop as Loop | null;
+      if (current?.woke) current.after += 1;
+      else if (current && current.due !== null && timeOf(at) >= current.due)
+        current.woke = true;
+    }
     if (
       step.source === "user" &&
       !step.tool_calls?.length &&
@@ -348,6 +363,7 @@ export function questFromSession(
           current && !current.stopped && current.title === title
             ? current
             : null;
+        const delay = Number(args.delaySeconds);
         loop = {
           tool: name,
           set_by: id,
@@ -356,6 +372,12 @@ export function questFromSession(
           title: title || "Loop",
           iterations: same ? same.iterations + 1 : 1,
           stopped: false,
+          due:
+            name === "ScheduleWakeup" && Number.isFinite(delay)
+              ? timeOf(at) + delay * 1000
+              : null,
+          woke: false,
+          after: 0,
         };
         continue;
       }
@@ -549,6 +571,13 @@ export function questFromSession(
   }
   const running = loop as Loop | null;
   if (!running) return null;
+  // A wake-up that arrived and was not scheduled again ended the loop once
+  // that turn finished: a final answer, or another prompt after it.
+  const last = trajectory.steps[trajectory.steps.length - 1];
+  const ended =
+    running.woke &&
+    (running.after > 0 ||
+      (last?.source === "agent" && !last.tool_calls?.length));
   return finish(
     {
       source: "loop",
@@ -560,6 +589,6 @@ export function questFromSession(
       set_by: running.set_by,
       iterations: running.iterations,
     },
-    running.stopped ? "done" : "active",
+    running.stopped || ended ? "done" : "active",
   );
 }

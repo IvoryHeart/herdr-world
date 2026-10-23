@@ -101,6 +101,9 @@ view that you open on purpose.
 - When the conversation is unavailable, Chat shows the reason and the action it
   names: the integration command to copy, the Codex session link, **Refresh**
   and **Open Terminal**. It offers no composer then.
+- In the composer, Enter starts a new line. **Send**, or the terminal
+  composer's send shortcut (`Ctrl+Enter`, `Cmd+Enter` on a Mac, as set in
+  shortcuts), sends.
 - The paperclip (or a paste) attaches files. Each uploads to the pane's host
   with a progress chip, and its path joins the message; **Send** waits for
   uploads. A path that finishes after Chat closed joins the message when Chat
@@ -220,18 +223,35 @@ Each send leaves a receipt for the pane, bound to the session it was sent to:
 
 | State | Meaning | Shown |
 | --- | --- | --- |
-| `pending` | Not yet seen in the session it was sent to | In that session's conversation as "Sent; not yet seen"; after the pane moves on, as a line "Still checking <session>". Both have **Stop checking** |
-| `matched` | The same words appeared in its own session clearly after the send | That transcript message is marked "Sent from Chat; matched by its words" |
+| `pending` | Herdr took it, but it is not yet in the session's transcript (a busy harness writes a queued message only when the agent takes it up) | In that session's conversation at its send time, never below replies written since, as "Delivered · waiting for <agent>" with grey ticks. After the pane moves on, as a line "Still checking <session>". Both have **Stop checking** |
+| `matched` | The same words appeared in its own session clearly after the send; or, when none did, the first user turn written there after the send that its harness could have rewritten it into (a paste or image placeholder, or words around the typed ones) | That transcript message is marked with blue ticks, "Sent from Chat; matched by its words", or "Sent from Chat; matched by order". Both show order, not cause |
 | `misdelivered` | Evidence of a switch after the send | A red notice naming both sessions; Send is paused until it is dismissed |
 | `uncertain` | The same words appeared at about the time of the send, or both in its own session and first in the session the pane moved to | A notice saying Chat cannot tell, with **Dismiss** |
 | `unverified` | Chat can no longer check | A notice saying why, with **Dismiss** |
+
+Each receipt carries `sent_at` (this service's clock, for display) and
+`transcript_at` (the same moment on the transcript host's clock, using the
+measured SSH offset), by which Chat places a pending send among the turns.
 
 Transcript times are sorted into three bands around the send: before it,
 about the time of it (the clock's uncertainty plus one second, for
 transcripts that round), and clearly after it.
 
+Texts are compared with whitespace collapsed and without attachments: an
+uploaded file's path as Chat sends it, and the `[Image #N]` and
+`[Pasted text #N …]` placeholders Claude Code records, are removed. A message that is only
+an attachment can match in its own session but is never evidence of a
+switch to another one. Claude Code wraps multi-line and pasted input in
+`pasted_content` tags; Chat compares and shows the words inside, marking the
+turn **Pasted**. A send that no turn matches by its words, after every send
+has had that chance, takes the first unclaimed user turn in its own session
+written clearly after it that its harness could have rewritten it into: one
+with a paste or image placeholder, or whose words contain the typed ones or
+are contained in them. An unrelated prompt from another client or the
+terminal never settles a send; the send stays pending until its turn appears.
+
 - A receipt becomes `matched` when its own session's transcript has a user
-  message with the same text (trimmed) that Chat did not show before the send
+  message with the same text that Chat did not show before the send
   and that is stamped clearly after it. That proves order, not cause: another
   client or person could have typed the same words, so Chat never calls it
   delivered and keeps checking the other sessions the pane showed until the
@@ -317,7 +337,14 @@ pushes runs at most one more read of each. Chat renders History's bubbles and
 collapsed tool cards, which load their text only when opened, so a long, busy
 transcript is never reread or redrawn whole. The window is kept per pane for
 the page, so a Chat that remounts, docks or reopens shows its conversation at
-once. Transcripts on an SSH host are rechecked on Herdr events only.
+once. Scrolling near the top of a full window, or **Load earlier messages**,
+reads the 100 conversation entries before the oldest one shown
+(`agent_history.get` with `before`) and keeps the message being read in place; entries
+the window drops while older ones are shown stay on screen, until the reader
+is back at the newest message, when the older pages are dropped. A transcript
+too large for the service's projection cache is read again for each older
+page, so it pages more slowly. Transcripts on an SSH host are rechecked on
+Herdr events only.
 
 Once a truncated Codex title ID has matched one transcript, rechecks on this
 machine stat that transcript instead of searching again. That is safe only
@@ -349,7 +376,7 @@ step cards yet.
 
 | Harness | Checklist (`todo`) | Plan | Goal | Loop | Helpers |
 | --- | --- | --- | --- | --- | --- |
-| Claude Code | `TodoWrite`; `TaskCreate` and `TaskUpdate` (the harness's task IDs; a pending task waiting on an unfinished one is `blocked`) | `ExitPlanMode` with the plan inline | None recorded | `ScheduleWakeup` (`/loop`), `CronCreate`; `stop` ends it | `Agent`, `Task` |
+| Claude Code | `TodoWrite`; `TaskCreate` and `TaskUpdate` (the harness's task IDs; a pending task waiting on an unfinished one is `blocked`) | `ExitPlanMode` with the plan inline | None recorded | `ScheduleWakeup` (`/loop`), `CronCreate`; `stop` ends it, and so does a `ScheduleWakeup` whose wake-up arrived and whose turn ended (or was followed by another prompt) without scheduling another | `Agent`, `Task` |
 | Codex | `update_plan` (its `explanation` titles the quest) | Plan-mode `Plan` item | `thread_goal_updated` (paused, blocked, usage- or budget-limited, complete) | None recorded | `spawn_agent` |
 | Kimi Code | `SetTodoList` | None | None | None | None |
 | Pi | No built-in tool; an extension tool named `todo_write` or `write_todos` that writes the whole list is read | None | None | None | None |
