@@ -1,42 +1,45 @@
+import { Suspense, useEffect, useState } from "react";
+import { worldLocalStorage } from "../browserStorage";
+import { CreateWorkspaceDialog } from "../components/CreateWorkspaceDialog";
+import { ConfirmDialog } from "../components/ModalDialogs";
+import { lazyWithReload } from "../lazyWithReload";
+import { connectionSnapshot, store } from "../store";
+import { WORKSPACE_INSPECTOR_CLOSE_EVENT } from "../workspaceResource";
+import {
+  type LaunchTarget,
+  WORLD_AGENT_LAUNCH_EVENT,
+  WORLD_AGENT_PROFILES_EVENT,
+} from "./agentProfiles";
+import { DeskView } from "./DeskView";
 import {
   floatingTerminalGeometryId,
   writeFloatingTerminalDock,
   writeFloatingTerminalGeometry,
 } from "./floatingTerminalPreferences";
-import { WindowSurface } from "./windows/WindowSurface";
-import { WindowFrame } from "./windows/WindowFrame";
-import { Suspense, useEffect, useState } from "react";
-import {
-  WORLD_AGENT_LAUNCH_EVENT,
-  WORLD_AGENT_PROFILES_EVENT,
-  type LaunchTarget,
-} from "./agentProfiles";
-import type { WorldObject } from "./worldObject";
-import { worldLocalStorage } from "../browserStorage";
-import { ConfirmDialog } from "../components/ModalDialogs";
-import { CreateWorkspaceDialog } from "../components/CreateWorkspaceDialog";
-import { lazyWithReload } from "../lazyWithReload";
-import { connectionSnapshot, store } from "../store";
-import { WORKSPACE_INSPECTOR_CLOSE_EVENT } from "../workspaceResource";
-import WorldIntentProfile from "./WorldIntentProfile";
-import WorldInspectorConversationView from "./WorldInspectorConversation";
-import { WorldConnectionRequired } from "./WorldStatus";
-import { DeskView } from "./DeskView";
-import { worldInspectorWindowId } from "./worldTerminalPresentation";
-import {
-  worldNodeForInspectorPaneFocus,
-  activateWorldNodeHost,
-} from "./worldInspectorSelection";
-import { type WorldControlPlaneProps } from "./worldControlPlaneContract";
+import { terminalColorKey } from "./terminalColor";
+import { setDeskPinned, useDeskPins } from "./useDeskPins";
+import { useTerminalColorChoices } from "./useTerminalColors";
 import { useWorldInspectorController } from "./useWorldInspectorController";
 import { useWorldVisualActions } from "./useWorldVisualActions";
-import { useTerminalColorChoices } from "./useTerminalColors";
-import type { WorldInspectorConversation } from "./worldTerminalPresentation";
+import WorldInspectorConversationView from "./WorldInspectorConversation";
+import WorldIntentProfile from "./WorldIntentProfile";
+import { WorldConnectionRequired } from "./WorldStatus";
+import { WindowFrame } from "./windows/WindowFrame";
+import { WorldPanelWindow, useWorldPanels } from "./windows/WorldPanel";
+import { WindowSurface } from "./windows/WindowSurface";
+import { type WorldControlPlaneProps } from "./worldControlPlaneContract";
+import {
+  activateWorldNodeHost,
+  worldNodeForInspectorPaneFocus,
+} from "./worldInspectorSelection";
 import type {
   WorldAgentStatus,
   WorldLeafObject,
+  WorldObject,
   WorldObjectNode,
 } from "./worldObject";
+import type { WorldInspectorConversation } from "./worldTerminalPresentation";
+import { worldInspectorWindowId } from "./worldTerminalPresentation";
 
 /** Switch to lists the agents waiting on you, then finished ones, then the rest. */
 function switchToRank(status: WorldAgentStatus) {
@@ -137,6 +140,8 @@ const WorldViewErrorBoundary = lazyWithReload("world-view-boundary", () =>
   })),
 );
 export function WorldControlPlane(props: WorldControlPlaneProps) {
+  // Panel windows (not Inspectors) that a view opens with <WorldPanel>.
+  const { panels, panelBodyRef } = useWorldPanels();
   const controller = useWorldInspectorController(props);
   const {
     view,
@@ -209,9 +214,10 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
     workspaceCreationDestination,
   } = useWorldVisualActions(controller);
   const colorChoice = useTerminalColorChoices();
-  const inspectorColor = (conversation: WorldInspectorConversation) =>
+  const deskPins = useDeskPins();
+  const inspectorTab = (conversation: WorldInspectorConversation) =>
     conversation.tabId
-      ? colorChoice({
+      ? {
           connectionId: conversation.connectionId,
           workspaceId: conversation.workspaceId,
           tabId: conversation.tabId,
@@ -222,8 +228,22 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
               )
               .map((space) => space.nativeId),
           ),
-        })
+        }
       : null;
+  const inspectorColor = (conversation: WorldInspectorConversation) => {
+    const tab = inspectorTab(conversation);
+    return tab ? colorChoice(tab) : null;
+  };
+  // An agent window pins its agent's desk in Town.
+  const inspectorPin = (conversation: WorldInspectorConversation) => {
+    const tab = inspectorTab(conversation);
+    return tab
+      ? {
+          pinned: Boolean(deskPins[terminalColorKey(tab)]),
+          onPin: (pinned: boolean) => void setDeskPinned(tab, pinned),
+        }
+      : null;
+  };
 
   return (
     <main
@@ -399,6 +419,73 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
               zIndex,
               active: windowActive,
             }) => {
+              const panel = panels.find(
+                (candidate) => candidate.id === entry.id,
+              );
+              if (panel)
+                return (
+                  <WindowFrame
+                    key={entry.id}
+                    id={entry.id}
+                    label={`${panel.label} window`}
+                    geometry={geometry}
+                    restoreGeometry={
+                      entry.maximized ||
+                      entry.placement.kind !== "floating" ||
+                      managedWindows.focusMode
+                        ? entry.floating
+                        : undefined
+                    }
+                    stage={stage}
+                    workArea={workArea}
+                    zIndex={zIndex}
+                    active={windowActive}
+                    compact={compactArrangement}
+                    // In Town a panel takes the Town window look, as the
+                    // Inspector does.
+                    className={`world-panel-frame ${
+                      view === "town" ? "is-town-skin theme-scope-dark" : ""
+                    }`}
+                    onRaise={() =>
+                      windowCommand({ type: "raise", id: entry.id })
+                    }
+                    onPlace={(rect) =>
+                      windowCommand({ type: "place", id: entry.id, rect })
+                    }
+                    onSnap={(target) =>
+                      windowCommand({ type: "snap", id: entry.id, target })
+                    }
+                    onMaximize={() =>
+                      windowCommand({ type: "maximize", id: entry.id })
+                    }
+                  >
+                    <WorldPanelWindow
+                      label={panel.label}
+                      onBody={panelBodyRef(entry.id)}
+                      controls={{
+                        compact: compactArrangement,
+                        maximized: entry.maximized || managedWindows.focusMode,
+                        onMinimize: () =>
+                          windowCommand({ type: "minimize", id: entry.id }),
+                        onMaximize: () =>
+                          windowCommand({ type: "maximize", id: entry.id }),
+                        onClose: panel.onClose,
+                        onSnap: (target) =>
+                          windowCommand({
+                            type: "snap",
+                            id: entry.id,
+                            target,
+                          }),
+                        onFloat: () =>
+                          windowCommand({ type: "float", id: entry.id }),
+                        // A panel is a detail of its view: Back closes it.
+                        back: {
+                          label: `Back to ${view[0]!.toUpperCase()}${view.slice(1)}`,
+                        },
+                      }}
+                    />
+                  </WindowFrame>
+                );
               const conversation = inspectorConversations.find(
                 (candidate) => worldInspectorWindowId(candidate) === entry.id,
               );
@@ -608,6 +695,7 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
                   id: worldInspectorWindowId(conversation),
                 });
               },
+              pin: inspectorPin(conversation),
               // The colour is chosen from the swatch beside the name.
               back: view === "town" ? { label: "Back to Town" } : undefined,
               // A phone switches between agents and terminals from ⋯, as

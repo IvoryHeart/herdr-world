@@ -1,3 +1,13 @@
+import type { BridgeRpcContext, ConnectionRpcContext } from "./rpc/context";
+import { handleAgentRpc } from "./rpc/agent";
+import { handleBoardTownRpc } from "./rpc/board-town";
+import { handleBridgeRpc } from "./rpc/bridge";
+import { handleConnectionsRpc } from "./rpc/connections";
+import { handleFilesRpc } from "./rpc/files";
+import { handleGitRpc } from "./rpc/git";
+import { handleLauncherRpc } from "./rpc/launcher";
+import { handleWorldRpc } from "./rpc/world";
+
 import { runPluginCommand } from "./config/plugin-command";
 import { createMoveQueue } from "./world/desk-move";
 
@@ -39,6 +49,12 @@ import { readGuiSettings, updateGuiSettings } from "./config/gui-settings";
 import { cliCommands, runCli, topLevelHelp } from "./cli";
 import { CONTINUE_TO_SERVER, defaultCliContext } from "./cli/command";
 import { runTaskSummaryCommand } from "./herdr/task-summary";
+import {
+  WORLD_CLI_IDLE_TIMEOUT_SECONDS,
+  WORLD_CLI_PATH,
+} from "./http/world-cli-endpoint";
+import { createWorldCliService } from "./world/world-cli-service";
+import { parseRpcMeta } from "./http/rpc-meta";
 import { runAgentCheckoutCommand } from "./herdr/agent-checkout";
 import { createWebPushService } from "./notifications/web-push";
 import { enrichIntegrationVersions } from "./herdr/integration-versions";
@@ -119,21 +135,18 @@ import {
   serverLogger,
 } from "./utils/logger";
 import { runProcessWithCodeTimeout, shQuote } from "./utils/process-utils";
-import { rpcLogLevel } from "./utils/rpc-logging";
+import { rpcLogLevel, shouldLogRpc } from "./utils/rpc-logging";
 import { DOWNLOAD_TIMEOUT_MS } from "./workspace/file-constants";
 import { WorldSnapshotService } from "./world/snapshot";
 import { WorldWatchlistRegistry } from "./world/watchlist";
-import {
-  tabClosedColorOps,
-  BoardStore,
-  type BoardOp,
-} from "./world/board-store";
+import { BoardStore, type BoardOp } from "./world/board-store";
+import { afterHerdrClose } from "./world/board-closing";
+import { reconcileReadyInterest } from "./world/interest-prune";
 import {
   readPaneRecipient,
   recipientOps,
   type ObservedAgent,
 } from "./world/board-recipient";
-import { checkAnchor } from "./world/board-anchor";
 import { herdrEventName } from "./utils/herdr-events";
 import { ProfileStore } from "./agent/profile-store";
 import {
@@ -150,15 +163,6 @@ import {
 import { SourcesService } from "./sources/service";
 import { CheckoutResolver } from "./sources/links";
 import { readSourceSecrets, writeSourceSecrets } from "./sources/secrets";
-import type { BridgeRpcContext, ConnectionRpcContext } from "./rpc/context";
-import { handleAgentRpc } from "./rpc/agent";
-import { handleBoardTownRpc } from "./rpc/board-town";
-import { handleBridgeRpc } from "./rpc/bridge";
-import { handleConnectionsRpc } from "./rpc/connections";
-import { handleFilesRpc } from "./rpc/files";
-import { handleGitRpc } from "./rpc/git";
-import { handleLauncherRpc } from "./rpc/launcher";
-import { handleWorldRpc } from "./rpc/world";
 
 const snapshotAdmission = new WorldSnapshotAdmission();
 const APP_VERSION = currentBuildVersion(
@@ -273,6 +277,7 @@ const {
   handlePinLogin,
   handleLogout,
   loginPage,
+  bearerAuth,
 } = createAuthHandlers({
   authRequired: config.authRequired,
   password: config.password,
@@ -310,40 +315,6 @@ const conversationWatchers = new WeakMap<
 
 const rpcOutcomes = new Map<string, { status: "error"; detail?: string }>();
 
-const IMPORTANT_RPC_METHODS = new Set([
-  "bridge.pause_others",
-  "agent_conversation.get",
-  "agent_conversation.latest",
-  "agent_conversation.send",
-  "agent_conversation.dismiss",
-  "agent_conversation.answer",
-  "agent_conversation.watch",
-  "agent_conversation.unwatch",
-  "agent_history.get",
-  "agent_history.entry",
-  "agent_session.get",
-  "agent_turn.get",
-  "agent_checkout.get",
-  "agent_session.link_preview",
-  "agent_session.link",
-  "file.read",
-  "git.diff_file",
-  "git.commit_file",
-  "git.commit_preview",
-  "git.file_action",
-  "git.pull",
-  "git.repo_action",
-  "settings.update_repo",
-  "settings.workspace_auto_sync.get",
-  "settings.workspace_auto_sync.list",
-  "settings.workspace_auto_sync.update",
-  "settings.workspace_auto_sync.update_key",
-  "settings.worktree_hooks.get",
-  "worktree.create",
-  "worktree.open",
-  "worktree.remove",
-]);
-const SLOW_RPC_LOG_MS = 750;
 const legacyRoutingLogger = createLegacyRoutingLogger({
   log: (message) =>
     logger.warn("deprecated request routing", { detail: message }),
@@ -366,34 +337,6 @@ function logDetail(value: string): string {
     .slice(0, 300);
 }
 
-function parseRpcMeta(raw: string): {
-  id: string | null;
-  method: string | null;
-  connectionId: unknown;
-  connectionGeneration: unknown;
-} {
-  try {
-    const msg = JSON.parse(raw);
-    return {
-      id: typeof msg?.id === "string" ? msg.id : null,
-      method: typeof msg?.method === "string" ? msg.method : null,
-      connectionId: Object.hasOwn(msg ?? {}, "connection_id")
-        ? msg.connection_id
-        : undefined,
-      connectionGeneration: Object.hasOwn(msg ?? {}, "connection_generation")
-        ? msg.connection_generation
-        : undefined,
-    };
-  } catch {
-    return {
-      id: null,
-      method: null,
-      connectionId: undefined,
-      connectionGeneration: undefined,
-    };
-  }
-}
-
 function rpcOutcomeKey(ws: ServerWebSocket<unknown>, id: string) {
   return `${clientLabel(ws)}\0${id}`;
 }
@@ -413,19 +356,6 @@ function takeRpcOutcome(ws: ServerWebSocket<unknown>, id: string | null) {
   const outcome = rpcOutcomes.get(key) ?? null;
   rpcOutcomes.delete(key);
   return outcome;
-}
-
-function shouldLogRpc(
-  method: string | null,
-  elapsedMs: number,
-  failed: boolean,
-) {
-  if (!method) return failed;
-  if (failed) return true;
-  if (method === "bridge.ping" || method === "bridge.status") return false;
-  if (method === "terminal.input" || method === "terminal.scroll") return false;
-  if (method === "terminal.resize" && elapsedMs < SLOW_RPC_LOG_MS) return false;
-  return IMPORTANT_RPC_METHODS.has(method) || elapsedMs >= SLOW_RPC_LOG_MS;
 }
 
 function logRpc(
@@ -508,7 +438,6 @@ const readyConnectionGenerations = new Map<string, number>();
 let worldSnapshots: WorldSnapshotService<LegacyConnectionRuntime> | null = null;
 const worldWatchlist = new WorldWatchlistRegistry();
 let boardStore: BoardStore | null = null;
-/** Opened on first use, so a World without Board never touches the file. */
 function board() {
   boardStore ??= new BoardStore(undefined, {
     log: (message) => console.warn(message),
@@ -529,59 +458,6 @@ function publishProfilesChanged(revision: number) {
     control: { type: "world_profiles_changed", revision },
   });
   for (const ws of clients) safeSend(ws, line, "world-profiles");
-}
-
-/**
- * A tab Herdr closed on the current runtime loses its saved colour, so colours
- * of closed tabs do not accumulate. The tab's plain key could also be an older
- * Herdr workspace's ID; it goes only once Herdr says no such workspace exists.
- */
-/** The host's workspace IDs after a move, with both rooms of the move. */
-async function moveWorkspaceIds(
-  call: (method: string, params: Record<string, unknown>) => Promise<unknown>,
-  moved: { workspace_id: string; source_workspace_id?: string },
-) {
-  const ids = new Set([moved.workspace_id]);
-  if (moved.source_workspace_id) ids.add(moved.source_workspace_id);
-  try {
-    const listed = (await call("workspace.list", {})) as {
-      workspaces?: { workspace_id?: unknown }[];
-    };
-    for (const entry of listed?.workspaces ?? [])
-      if (typeof entry.workspace_id === "string") ids.add(entry.workspace_id);
-  } catch {
-    // The two rooms of the move are what a colliding tab key usually needs.
-  }
-  return ids;
-}
-
-async function dropClosedTabColor(
-  connectionId: string,
-  tabId: string,
-  call: (method: string, params: Record<string, unknown>) => Promise<unknown>,
-  isCurrent: () => boolean,
-) {
-  try {
-    const colors = board().get().layout.colors;
-    const plain = Boolean(colors[`${connectionId}:${tabId}`]);
-    if (!plain && !colors[`${connectionId}:tab:${tabId}`]) return;
-    const absent =
-      plain &&
-      (
-        await checkAnchor(call, {
-          kind: "workspace",
-          native_id: tabId,
-          isCurrent,
-        })
-      ).state === "absent";
-    if (!isCurrent()) return;
-    const ops = tabClosedColorOps(board().get(), connectionId, tabId, absent);
-    if (ops.length) publishBoardChanged(board().patch(ops).revision);
-  } catch (error) {
-    logger.warn("Board could not drop a closed tab's colour", {
-      detail: String(error),
-    });
-  }
 }
 
 /**
@@ -619,6 +495,17 @@ function publishBoardChanged(revision: number) {
   });
   for (const ws of clients) safeSend(ws, line, "world-board");
 }
+
+/** The agent CLI (world-cli-service.ts). */
+const worldCli = createWorldCliService({
+  board: { get: () => board().get(), patch: (ops) => board().patch(ops) },
+  connections: () => connectionManager,
+  snapshots: () => worldSnapshots,
+  publishBoard: publishBoardChanged,
+  broadcast: (line) => {
+    for (const ws of clients) safeSend(ws, line, "world-ledger");
+  },
+});
 
 function publishWatchlistChanged(revision: number) {
   const line = JSON.stringify({
@@ -687,6 +574,11 @@ const connectionManager = new ConnectionManager<LegacyConnectionRuntime>(
       return;
     }
     if (status.state !== "ready") return;
+    void reconcileReadyInterest(
+      board(),
+      connectionManager.readyRuntimeLease(status.id),
+      publishBoardChanged,
+    );
     resumeAssistantIfLoaded();
     if (reporter.recovered(fields)) {
       readyConnectionGenerations.set(status.id, status.generation);
@@ -856,17 +748,18 @@ function runtimeFactoryForProfile(
         onEvent: (event, eventIdentity) => {
           if (!context.isCurrent()) return;
           publishWorldInvalidation(eventIdentity.id, context.generation);
-          const closedTab =
-            herdrEventName(event)?.replaceAll("_", ".") === "tab.closed"
-              ? (event as { data?: { tab_id?: unknown } }).data?.tab_id
-              : undefined;
-          if (typeof closedTab === "string" && closedTab)
-            void dropClosedTabColor(
-              eventIdentity.id,
-              closedTab,
-              (rpc, rpcParams) => runtime.herdr.call(rpc, rpcParams, 10_000),
-              context.isCurrent,
-            );
+          afterHerdrClose(
+            board(),
+            eventIdentity.id,
+            herdrEventName(event),
+            event,
+            {
+              call: (rpc, rpcParams) =>
+                runtime.herdr.call(rpc, rpcParams, 10_000),
+              isCurrent: context.isCurrent,
+              changed: publishBoardChanged,
+            },
+          );
           logger.debug("Herdr event", {
             connection: eventIdentity.id,
             detail: summarizeHerdrEvent(event),
@@ -1025,7 +918,6 @@ const rpcServices = {
   getAssistantService,
   logger,
   markRpcError,
-  moveWorkspaceIds,
   profiles,
   publishBoardChanged,
   publishProfilesChanged,
@@ -1035,6 +927,7 @@ const rpcServices = {
   snapshotAdmission,
   townMoveQueues,
   worldWatchlist,
+  worldCli,
   get worldSnapshots() {
     return worldSnapshots;
   },
@@ -1210,6 +1103,7 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
   }
   const { sshHost, herdr, worktreeParents, handleSettingsRpc, terminalBridge } =
     connection;
+
   const { enrichWorkspacesWithGitStatus } = connection.status;
 
   if (
@@ -1523,6 +1417,18 @@ function main() {
               }
             }
             return response;
+          }
+
+          if (url.pathname === WORLD_CLI_PATH) {
+            // `ask --wait` holds a call for up to 20 s; Bun's default idle
+            // timeout (10 s) would cut it.
+            server.timeout(req, WORLD_CLI_IDLE_TIMEOUT_SECONDS);
+            return worldCli.http(
+              req,
+              server.requestIP(req),
+              server.port ?? config.port,
+              bearerAuth,
+            );
           }
 
           // Loopback listeners retain World's trusted local access policy.

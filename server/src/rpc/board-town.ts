@@ -1,3 +1,4 @@
+import { moveWorkspaceIds } from "../world/move-workspace-ids";
 import { checkAnchor } from "../world/board-anchor";
 import { linkedNoteText, sendNote } from "../world/board-send";
 import { moveFollowOps, reconcileOps } from "../world/board-store";
@@ -18,13 +19,7 @@ export async function handleBoardTownRpc(
     sendReply,
     connection,
   } = rpc;
-  const {
-    board,
-    logger,
-    moveWorkspaceIds,
-    publishBoardChanged,
-    townMoveQueues,
-  } = rpc.services;
+  const { board, logger, publishBoardChanged, townMoveQueues } = rpc.services;
   const { herdr } = connection;
   // Town desk and agent moves: several confirmed pane moves on this exact
   // connection and runtime generation, with rollback (see world/desk-move).
@@ -160,6 +155,7 @@ export async function handleBoardTownRpc(
                     ? {
                         before: colorsBefore,
                         workspaceIds: await moveWorkspaceIds(call, result),
+                        inherited: p.inherited_color === true,
                       }
                     : undefined,
                 )

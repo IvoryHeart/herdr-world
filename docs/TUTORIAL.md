@@ -111,9 +111,10 @@ changes what you see and does not disconnect hosts or retarget open terminals.
 
 <a id="town"></a>
 
-1. Open **Town** from the view switcher, or return to the World root URL. Town
-   opens in Zen, full-bleed: use the view picker at the top edge (on a phone,
-   the corner button) to switch views, or **Exit Zen** to show the bars. Each
+1. Open **Town** from the view switcher, or return to the World root URL.
+   Every view opens in Zen, full-bleed: use the view picker at the top edge (on
+   a phone, the corner button) to switch views, or **Exit Zen** to show the
+   bars. Each
    host is a building, each workspace a room, each tab a table and each pane a
    seat. Plain terminal panes show a prompt rather than an agent character.
 2. Use **+** and **−** to move between town, building, room and desk detail;
@@ -150,17 +151,30 @@ changes what you see and does not disconnect hosts or retarget open terminals.
    in the agent's window, or **Open terminal** in the card's header (or the
    window's **Terminal** view). The window's **Chat** composer sends with
    Herdr's agent prompt.
+   A Codex conversation inferred from its shared daemon is read-only: Chat
+   offers no composer or answer buttons. In Codex's Terminal, run `/title` and
+   add **Thread ID**, or use **Details → Link Codex session** to preview and
+   confirm the intended thread. Ambiguous panes or threads stay unbound.
 6. Use the paperclip in the window's **Chat** composer to attach files. Each
    file shows a chip while it uploads, then done or failed; retry a failed one
    (or pick it again) or remove it. **Send** waits for uploads. Uploads go to
    the selected pane's host; review the message and attached paths before
    sending. Choose **Inspector** for files and changes, or **Open terminal**
    for direct work.
+   The swatch beside a room's name colours that workspace (its carpet here,
+   its card in Board and a dot in the Spaces sidebar), and the swatch on a
+   building's reception board colours the host (its roof, Board zone and
+   Spaces header). A workspace's colour shows on its tables that have no colour
+   of their own; a host's does not.
    The colour swatch beside the agent's name changes the colour of its table;
    it is the tab's colour everywhere in World. The same swatch sits beside the
    name in a terminal's header, the terminal window's menu has **Colour**, and
    in Spaces the tab's menu (right-click or long-press) offers the same palette
    and **Default colour**.
+   In the agent's window, the button beside its name sets its interest:
+   **Muted** stops its chimes, **Focused** lets only focused agents chime, and
+   **Watching** is the default. Its questions and results still arrive in
+   reception.
    **Next** cycles waiting agents, then finished agents when no other agent is
    waiting.
 7. To move a table to another room, zoom in until you see tables, then drag it
@@ -192,6 +206,23 @@ changes what you see and does not disconnect hosts or retarget open terminals.
    shows the new order too, and moving a tab in Spaces moves its table. The
    tables move once Herdr reports the new order, and agents stay with their
    table.
+9. To group tables, drag one onto another table and rest it there a moment:
+   it snaps to that table and the plaque says **Group with …**; let go. The
+   two get one wall, and Town brings the table to that room and beside the
+   other in Herdr's tab order. An agent started by another agent is grouped
+   automatically, with a solid connector to its parent and the parent's
+   colour. To take a table you grouped out of its group, drag it onto its own
+   room's bare floor, away from the free spot (**Leave the team**); a spawn
+   link stays. Without a drag, focus a table and press **M**: **Group with…**
+   lists the tables to join, and **Leave the team** takes it out. A table's
+   name for screen readers says who its team is.
+10. To keep a table where it is, open one of its agents (its window) and choose
+   **Pin desk in Town** from the window's **⋯** menu, on a phone too. The
+   table wears a pin, stays put
+   when tabs are reordered or the room grows, and its agents stay at it rather
+   than taking breaks in the lounge; they still go to reception when they need
+   you or finish, and come straight back once seen. Choose **Unpin desk in
+   Town** to let it follow the tab order again.
 
 A table with more panes than drawn seats shows the count and offers a chooser
 for every pane. When a table closes, the tables after it close up so the room
@@ -269,8 +300,11 @@ on your phone and desktop.
    the host supports, optionally name the tab, and press **Create**; **+** beside a host's name creates a workspace. Select a workspace or
    tab to give it a colour of your own; status keeps its own colours. A tab's
    colour is its terminal colour, the same one Spaces and Town show: it starts
-   as a stable default (or its workspace's colour, if you gave the workspace
-   one), and **Default colour** returns to it.
+   as a stable default (the colour of the agent that spawned it, or its
+   workspace's colour, if you gave the workspace one), and **Default colour**
+   returns to it. A faint string joins tabs whose agents know each other.
+   Drag a tab onto another tab to group them, or select a tab, press
+   **Group…** and tap the other; a grouped tab's bar offers **Ungroup**.
 2. Scroll or pinch to zoom, drag empty board to pan, or use the controls at the
    bottom right. Zoomed out, each workspace shows a square per pane (hollow for
    shells); tap a workspace there to zoom in on it.
@@ -281,7 +315,10 @@ on your phone and desktop.
    The chevron on a workspace's top-left corner folds its tabs behind a count, and tapping the count opens
    them into free space. The sparkle button tidies the selected workspace, or
    the whole board, and offers **Undo**; notes strung to cards move with them,
-   and notes left on a card move to free space.
+   and notes left on a card move to free space. Select a card and press
+   **Pin** in its bar to keep it where it is: a pinned card shows a pin, and
+   placement, tidying and settling leave it until you **Unpin** it (you can
+   still drag it). On a phone, tap the pin in the card's terminal header.
 4. Tap a workspace, tab or pane row to open its Inspector with Terminal, Files,
    Changes and Chat; a line joins each Inspector window to its card. Double-click a tab to open its terminal.
 5. Double-click (or double-tap) empty board to pin a note and type; double-click
@@ -315,7 +352,14 @@ on your phone and desktop.
    press outside also closes Work. **Green** means checks pass while a
    required review is pending; **Ready to merge** means approved, or passing
    in a repository that requires no review. The same pull
-   request appears as a badge on the agent's desk in Town, such as `#42 ✓`.
+   request appears as a badge on the agent's desk in Town, such as `#42 ✓`;
+   for one of your open pull requests, tap the badge to open the same card.
+   Your own open pull requests get a fuller card: CI dots, each rev agent's
+   result and **Ready ✓** when your merge rules hold. **Details** shows each
+   rule, the failing checks and the reviewers' comments. **Merge…**,
+   **Close…** and **Mark ready…** ask first and say exactly what happens;
+   while GitHub still requires a review, use **Open on GitHub** or **Copy
+   merge command** and merge it yourself.
    If Work shows **Set up Jira** or says no source is connected, open
    **Settings → Sources**: sign
    in to GitHub with `gh auth login` as the user that runs World, or add your
@@ -339,6 +383,18 @@ The Town and Board screenshots use real shell panes in disposable projects.
 The phone Board close-up focuses one workspace, its tabs and a strung note.
 Their empty agent counts are intentional; the notes are sample planning text,
 not reports of completed agent work.
+
+### Let agents arrange World
+
+Agents can use World too. Tell an agent to run `herdr-world --skill`: it learns
+to colour and pin its card, group with the agent that started it, report a
+task result, or ask you a question (`herdr-world ask "Ship it?" --options
+yes,no --wait`). A question shows first in Town's **Needs you** list with the
+agent's name; pick an option or type an answer, and the waiting agent carries
+on. `herdr-world history` shows who changed what, and `herdr-world undo` takes
+back a World-side change. A change marked **unverified** came from a process
+World could not place in the pane it named, or from a terminal that named no
+pane.
 
 ### Use Desk: answer, review and follow work
 

@@ -4,6 +4,7 @@ import {
   SERVICE_COMMAND_CONTINUE,
 } from "../config/service-manager";
 import { runHerdrCommand } from "../herdr/cli";
+import { runSpawnStampCommand } from "../herdr/spawn-stamp";
 import { authCommand } from "./auth";
 import {
   type CliCommand,
@@ -25,6 +26,8 @@ import { serviceRuntime } from "./service-context";
 import { runServiceLogs } from "./service-logs";
 import { createUpdateCommand, rollbackCommand } from "./update";
 import { urlCommand } from "./url";
+import { worldCommands } from "./world";
+import { WORLD_SKILL } from "./world-skill";
 
 // The existing command families keep their own parsers, help and exit codes;
 // the router only adds dispatch, discovery and completion metadata.
@@ -65,10 +68,27 @@ const herdrCommand: CliCommand = {
 
 const DELEGATED_HELP = new Set(["service", "herdr"]);
 
+/** `stamp <child> <parent>`: the spawn stamp Town and Board group by. */
+const stampCommand: CliCommand = {
+  name: "stamp",
+  summary: "record that one agent's pane spawned another",
+  flags: ["--session", "--ssh-host", "--socket-path", "--client-socket-path"],
+  help: () => "Run `herdr-world stamp --help`.",
+  async run(args, context) {
+    return (
+      (await runSpawnStampCommand(["stamp", ...args], context.version, {
+        log: context.log,
+        error: context.error,
+      })) ?? EXIT_FAILURE
+    );
+  },
+};
+
 export function cliCommands(): CliCommand[] {
   const commands: CliCommand[] = [
     serviceCommand,
     herdrCommand,
+    stampCommand,
     createDoctorCommand(),
     urlCommand,
     configCommand,
@@ -77,6 +97,7 @@ export function cliCommands(): CliCommand[] {
     createPushCommand(),
     createUpdateCommand(),
     rollbackCommand,
+    ...worldCommands(),
   ];
   commands.push(createCompletionCommand(() => commands));
   return commands;
@@ -96,6 +117,7 @@ Commands:
 ${lines.join("\n")}
 
 Run \`herdr-world <command> --help\` or \`herdr-world help <command>\` for details.
+Agents: run \`herdr-world --skill\` for the World CLI guide.
 
 ${serverOptionsHelp()}`;
 }
@@ -110,6 +132,10 @@ export async function runCli(
   commands: readonly CliCommand[] = cliCommands(),
 ): Promise<CommandResult | null> {
   const first = argv[0];
+  if (first === "--skill") {
+    context.log(WORLD_SKILL);
+    return EXIT_OK;
+  }
   if (first === undefined || first.startsWith("-")) return null;
   if (first === "help") {
     const topic = argv[1];

@@ -15,9 +15,10 @@ import {
   BoardConflictError,
   BoardStore,
   clientBoardOps,
+  parseBoardDocument,
   moveFollowOps,
   reconcileOps,
-  tabClosedColorOps,
+  tabClosedOps,
   type BoardAnchor,
 } from "./board-store";
 import {
@@ -582,6 +583,71 @@ describe("Board store", () => {
     });
   });
 
+  test("desk pins: pin, place once, unpin, and validation", () => {
+    const store = new BoardStore(path);
+    store.patch([{ op: "desk.pin", key: "alpha:w1:t1", cell: null }]);
+    store.patch([
+      { op: "desk.place", key: "alpha:w1:t1", cell: { col: 2, row: 1 } },
+    ]);
+    // Placed once: a later place from another browser does not move it.
+    store.patch([
+      { op: "desk.place", key: "alpha:w1:t1", cell: { col: 0, row: 0 } },
+    ]);
+    expect(store.get().layout.desk_pins).toEqual({
+      "alpha:w1:t1": { cell: { col: 2, row: 1 } },
+    });
+    // Unpinned: a place still in flight does not pin it again.
+    store.patch([{ op: "desk.unpin", key: "alpha:w1:t1" }]);
+    store.patch([
+      { op: "desk.place", key: "alpha:w1:t1", cell: { col: 1, row: 0 } },
+    ]);
+    expect(store.get().layout.desk_pins).toEqual({});
+    for (const cell of [{ col: -1, row: 0 }, { col: 0.5, row: 0 }, null]) {
+      expect(() =>
+        store.patch([
+          {
+            op: "desk.place",
+            key: "k",
+            cell: cell as { col: number; row: number },
+          },
+        ]),
+      ).toThrow("desk cell");
+    }
+    // Pins survive a reload, and a board saved before pins loads with none.
+    store.patch([
+      { op: "desk.pin", key: "alpha:w2:t3", cell: { col: 1, row: 2 } },
+    ]);
+    expect(new BoardStore(path).get().layout.desk_pins).toEqual({
+      "alpha:w2:t3": { cell: { col: 1, row: 2 } },
+    });
+    const old = store.get() as unknown as { layout: Record<string, unknown> };
+    delete old.layout.desk_pins;
+    expect(parseBoardDocument(old).layout.desk_pins).toEqual({});
+  });
+
+  test("a pinned desk moved to another workspace stays pinned, placed afresh", () => {
+    const store = new BoardStore(path);
+    store.patch([
+      { op: "desk.pin", key: "alpha:w1:t1", cell: { col: 1, row: 0 } },
+    ]);
+    const ops = moveFollowOps(
+      store.get(),
+      "alpha",
+      "w1:t1",
+      {
+        tab_id: "w2:t4",
+        workspace_id: "w2",
+        source_workspace_id: "w1",
+        panes: [],
+      },
+      { before: {}, workspaceIds: new Set(["w1", "w2"]) },
+    );
+    store.patch(ops);
+    expect(store.get().layout.desk_pins).toEqual({
+      "alpha:w2:t4": { cell: null },
+    });
+  });
+
   test("a closed tab's colour goes; a plain key only when no workspace holds it", () => {
     const store = new BoardStore(path);
     store.patch([
@@ -589,11 +655,13 @@ describe("Board store", () => {
       { op: "card.color", key: "alpha:w2", color: "green" },
       { op: "card.color", key: "alpha:tab:w2", color: "pink" },
     ]);
-    expect(tabClosedColorOps(store.get(), "alpha", "w1:t1", true)).toEqual([
+    store.patch([{ op: "desk.pin", key: "alpha:w1:t1", cell: null }]);
+    expect(tabClosedOps(store.get(), "alpha", "w1:t1", true)).toEqual([
       { op: "card.color", key: "alpha:w1:t1", color: null },
+      { op: "desk.unpin", key: "alpha:w1:t1" },
     ]);
     // Older Herdr: tab w2 closed while workspace w2 still exists.
-    expect(tabClosedColorOps(store.get(), "alpha", "w2", false)).toEqual([
+    expect(tabClosedOps(store.get(), "alpha", "w2", false)).toEqual([
       { op: "card.color", key: "alpha:tab:w2", color: null },
     ]);
   });
@@ -709,6 +777,151 @@ describe("Board store", () => {
         { terminal_id: "term_1", pane_id: "w1:p5", tab_id: "w1:t1" },
         { terminal_id: "term_2", pane_id: "w2:p1", tab_id: "w2:t1" },
       ]).map((op) => op.op === "string.put" && op.string.id),
+    ).toEqual([]);
+  });
+});
+
+describe("Relations in the Board store", () => {
+  const term = (terminal_id: string) => ({
+    connection_id: "studio",
+    terminal_id,
+  });
+  const spawn = (child: string, parent: string, generation = 1) => ({
+    child: term(child),
+    parent: term(parent),
+    source: "herdr:spawned_by",
+    generation,
+    observed_at: 5,
+  });
+
+  test("a board saved before relations reads with none", () => {
+    mkdirSync(join(root, "herdr-world", "boards"), { recursive: true });
+    writeFileSync(
+      path,
+      JSON.stringify({
+        version: 1,
+        revision: 4,
+        layout: { anchors: {}, offsets: {}, pinned: {}, folded: [] },
+        notes: [],
+        strings: [],
+      }),
+    );
+    expect(new BoardStore(path).get().relations).toEqual({
+      spawns: [],
+      groups: [],
+    });
+  });
+
+  test("manual groups persist, join and leave", () => {
+    const store = new BoardStore(path);
+    store.patch([
+      {
+        op: "group.join",
+        id: "g1",
+        members: [term("b")],
+        target: [term("a")],
+      },
+    ]);
+    store.patch([
+      {
+        op: "group.join",
+        id: "g2",
+        members: [term("c")],
+        target: [term("b")],
+      },
+    ]);
+    const reread = new BoardStore(path).get().relations.groups;
+    expect(reread).toMatchObject([
+      { id: "g1", members: [term("a"), term("b"), term("c")] },
+    ]);
+    store.patch([{ op: "group.leave", members: [term("a"), term("b")] }]);
+    expect(store.get().relations.groups).toEqual([]);
+  });
+
+  test("spawn claims are the service's to record, one per child", () => {
+    expect(() =>
+      clientBoardOps([{ op: "spawn.record", claims: [spawn("b", "a")] }]),
+    ).toThrow("unknown operation");
+    const store = new BoardStore(path);
+    store.patch([{ op: "spawn.record", claims: [spawn("b", "a")] }]);
+    store.patch([{ op: "spawn.record", claims: [spawn("b", "z", 2)] }]);
+    expect(new BoardStore(path).get().relations.spawns).toEqual([
+      spawn("b", "z", 2),
+    ]);
+  });
+
+  test("the service prunes closed terminals; a client cannot", () => {
+    const store = new BoardStore(path);
+    store.patch([
+      { op: "spawn.record", claims: [spawn("b", "a"), spawn("d", "c")] },
+      { op: "group.join", id: "g1", members: [term("b")], target: [term("a")] },
+    ]);
+    expect(() =>
+      clientBoardOps([{ op: "relations.prune", children: [], members: [] }]),
+    ).toThrow("unknown operation");
+    store.patch([
+      { op: "relations.prune", children: [term("b")], members: [term("a")] },
+    ]);
+    expect(new BoardStore(path).get().relations).toEqual({
+      spawns: [spawn("d", "c")],
+      groups: [],
+    });
+  });
+
+  test("a group across connections is refused", () => {
+    const store = new BoardStore(path);
+    expect(() =>
+      store.patch([
+        {
+          op: "group.join",
+          id: "g1",
+          members: [{ connection_id: "lab", terminal_id: "b" }],
+          target: [term("a")],
+        },
+      ]),
+    ).toThrow("cannot span connections");
+  });
+
+  test("malformed relations are refused and change nothing", () => {
+    const store = new BoardStore(path);
+    expect(() =>
+      store.patch([
+        {
+          op: "group.join",
+          id: "g1",
+          members: [{ connection_id: "studio" } as never],
+          target: [term("a")],
+        },
+      ]),
+    ).toThrow("terminal ID");
+    expect(() =>
+      store.patch([
+        {
+          op: "spawn.record",
+          claims: [{ ...spawn("b", "a"), generation: -1 }],
+        },
+      ]),
+    ).toThrow("spawn generation");
+    expect(store.get().revision).toBe(0);
+  });
+
+  test("a moved tab whose colour is inherited does not freeze it", () => {
+    const document = new BoardStore(path).get();
+    const moved = {
+      tab_id: "w2:t9",
+      workspace_id: "w2",
+      source_workspace_id: "w1",
+      panes: [],
+    };
+    const colors = { before: {}, workspaceIds: new Set(["w1", "w2"]) };
+    expect(
+      moveFollowOps(document, "studio", "w1:t1", moved, colors),
+    ).toMatchObject([{ op: "card.color", key: "studio:w2:t9" }]);
+    expect(
+      moveFollowOps(document, "studio", "w1:t1", moved, {
+        ...colors,
+        inherited: true,
+      }),
     ).toEqual([]);
   });
 });

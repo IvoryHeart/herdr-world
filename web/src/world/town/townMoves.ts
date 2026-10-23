@@ -6,7 +6,8 @@
 
 import { bridge } from "../../api";
 import { operationalStore } from "../../store";
-import { tabMoveInsertIndex } from "../../tabReorder";
+import { deskReorderIndex } from "../../../../shared/tabOrder";
+export { deskReorderIndex };
 import type { Tab } from "../../types";
 import type {
   OfficeDesk,
@@ -85,6 +86,8 @@ export async function requestDeskMove(
   desk: OfficeDesk,
   room: OfficeRoom,
   allowCloseRoom: boolean,
+  /** The desk shows its parent's colour, which follows it on its own. */
+  inheritedColor = false,
 ): Promise<TownMoveOutcome> {
   if (!sameOwner(desk.tabRef, room.workspaceRef))
     return {
@@ -103,6 +106,7 @@ export async function requestDeskMove(
         tab_id: desk.tabRef.nativeId,
         workspace_id: room.workspaceRef.nativeId,
         allow_close_room: allowCloseRoom,
+        ...(inheritedColor ? { inherited_color: true } : {}),
       },
       moveTimeoutMs,
     ),
@@ -114,23 +118,6 @@ const TAB_MOVE_UNSUPPORTED: TownMoveOutcome = {
   reason: "tab_move_unsupported",
   message: "This host's Herdr cannot reorder tabs. Herdr 0.7.2 or later can.",
 };
-
-/**
- * Herdr's tab.move index that puts `tabId` into `ontoId`'s slot of a room's
- * tab order (or last when `ontoId` is null): null when it is already there,
- * undefined when either tab is not in the order.
- */
-export function deskReorderIndex(
-  order: readonly string[],
-  tabId: string,
-  ontoId: string | null,
-): number | null | undefined {
-  const slot = ontoId === null ? order.length - 1 : order.indexOf(ontoId);
-  if (slot < 0 || !order.includes(tabId)) return undefined;
-  const next = order.filter((id) => id !== tabId);
-  next.splice(slot, 0, tabId);
-  return tabMoveInsertIndex(order, tabId, next);
-}
 
 /**
  * Reorder a desk within its room: it takes `onto`'s slot, as a tab dragged

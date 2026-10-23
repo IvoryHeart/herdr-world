@@ -68,6 +68,14 @@ view that you open on purpose.
   sequence); the prompt's fingerprint covers the shown prompt, the session and
   the state sequence, and any difference refuses with nothing sent. Then it
   presses that option's key.
+- Codex conversations inferred from the shared daemon are read-only guesses.
+  World cannot see every client sharing that daemon: another Herdr session or
+  an outside terminal can make the guess wrong. Recent unloaded threads count
+  as competitors; `/title` with **Thread ID** or an explicit link gives stronger
+  identity evidence.
+  Chat shows no answer card for them, and the service rejects answer requests
+  without an exact title or uncontradicted reported binding. Use the Terminal
+  to answer, or identify the thread with `/title` or an explicit session link.
 - **The gap World cannot close.** Herdr has no conditional input
   ([herdrdev/herdr#4764](https://github.com/herdrdev/herdr/issues/4764)), so
   the key cannot be made conditional on the prompt. If the prompt or session
@@ -106,8 +114,9 @@ view that you open on purpose.
 Each connection owns one conversation source. Herdr is the first source; another
 runtime, such as ACP, can implement the same interface
 (`server/src/agent/conversation.ts`) without changing Chat or other consumers.
-The Herdr source uses the agent and session Herdr reports for the pane, or the
-Codex thread named in the pane's title, through the same session resolver and
+The Herdr source uses the agent and session Herdr reports for the pane, the
+Codex thread named in the pane's title, or an unambiguous read-only daemon
+inference, through the same session resolver and
 projection cache as History ([History synchronization](HISTORY.md)).
 
 | RPC | Parameters | Reply |
@@ -117,6 +126,7 @@ projection cache as History ([History synchronization](HISTORY.md)).
 | `agent_conversation.send` | `pane_id`, `text`, `session_fingerprint`, optional `baseline` (IDs of the user messages Chat showed) | `{ status: "sent", delivery }` or `{ status: "refused", reason, message }` |
 | `agent_conversation.dismiss` | `pane_id`, `delivery_id` | `{ dismissed }`; forgets a delivery notice |
 | `agent_conversation.answer` | `pane_id`, `key`, `prompt_fingerprint` | `{ status: "sent", number, label, acknowledged, unconfirmed_reason, prompt_fingerprint }` or `{ status: "refused", reason, message, pending_prompt }` |
+| `agent_conversation.steps` | `pane_id`, `call_ids` (at most 500) | `{ steps }`: the step model for those tool calls, by the harness's call ID; calls it cannot find are left out |
 | `agent_conversation.watch` / `.unwatch` | `pane_id` | `{ ok: true }`; see [Refresh](#refresh) |
 | `agent_quest.list` | `pane_ids`, or nothing for every agent | `{ quests }`: per pane, `agent`, `session_binding`, `session_fingerprint` and `quest`; see [Quests](#quests) |
 
@@ -131,9 +141,28 @@ assistant message), `quest` (see [Quests](#quests)) and a `status` of `ok` or
 - `message`: user or assistant text.
 - `error`: an error the harness recorded.
 - `activity`: one line for each run of tool calls between messages, such as
-  "Used Read, Bash ×2", with per-tool counts and the number of failed results.
+  "Used Read, Bash ×2", for consumers that want a summary instead of steps.
 - `notice`: an event in the conversation, such as "Conversation compacted" or a
   Claude Code background task update.
+
+**Steps.** `agent_conversation.steps` gives the step model for the tool calls
+Chat names by the harness's call ID (the same ID other views such as Quests
+link to). Each step has the tool, a label ("Read reconnect.ts", "Run
+tests"), the command or file it names, its state (`running` with no result
+yet, `ok`, `failed`, or `interrupted` when the agent moved on without a
+result), start and end times, the end of its output (12 lines at most), the
+lines an edit removed and added (40 at most between them, with `omitted`
+counting the rest), and for a test run its pass and fail counts and first
+failing test (bun, vitest, jest, pytest and cargo summaries). The label,
+summary, output, failing test and diff all have credential-shaped values
+redacted. Chat's list is History's: Chat asks only for the calls in
+History's window, again for any not yet finished, and keeps only those. Each
+tool row shows its step's label, time and a test run's pass or fail badge; a
+run whose tests failed reads as failed, and a call cut off without a result
+as interrupted until its result arrives. Opening the row shows the test
+strip with its first failure or the edit's diff (a cut diff says how many
+lines are left out and points to Changes), above the call's own arguments
+and output. The History drawer shows the plain rows.
 
 User messages are what the person wrote. The readers drop text the harness
 injects as user turns: Codex repository instructions (`# AGENTS.md
@@ -155,6 +184,12 @@ message.
 | `reported` | The harness's Herdr integration reported the session | Yes |
 | `title` | The Codex pane title names the thread (Thread ID in `/title`) | Only once the title gives a complete thread ID: a full UUID, or a truncated one that matched exactly one saved transcript |
 | `guessed` | World found the newest Grok Build, Antigravity or Muse session in the pane's folder | No; two agents in one folder would see the same guess |
+| `guessed` (Codex) | One pane and one loaded daemon thread share an exact folder, recent activity and matching status; [full inference rules](HISTORY.md#chat-and-codex-session-binding) | No composer or answer keys; inference grants no input authority |
+
+Codex title IDs take precedence over reports and guesses. A reported session
+claimed by another pane (including its thread title) is discarded. Daemon
+inference is recomputed for every snapshot and disappears on ambiguity or
+changed evidence; it is never saved as a session link.
 
 `session_fingerprint` identifies a reported session or a complete Codex thread
 ID, and is null otherwise. Codex shows 29 characters of the thread ID in its

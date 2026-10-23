@@ -8,7 +8,13 @@ import {
   useState,
 } from "react";
 import type { TownMoveResult } from "./townMoves";
-import { townDragFor, townDropTarget, type TownDrag } from "./townDrag";
+import {
+  TOWN_MAGNET_MS,
+  townDragFor,
+  townDropTarget,
+  townMagnetDesk,
+  type TownDrag,
+} from "./townDrag";
 import {
   initialGesture,
   stepGesture,
@@ -44,7 +50,7 @@ import {
   type OfficeObservability,
 } from "../officeObservability";
 import { townRoomFocus, type TownLevel } from "./townCamera";
-import { townHitKey, townHitTest } from "./townHitTest";
+import { townHitKey, townHitTest, type TownHit } from "./townHitTest";
 import {
   layoutTown,
   TOWN_FACADE,
@@ -55,18 +61,27 @@ import {
   townSeat,
   townShapeFor,
   townShapeKey,
+  townPinCell,
   type TownLayout,
   type TownPlacementMemory,
   type TownShape,
 } from "./townLayout";
 import {
   townAttention,
+  keepPlaceColors,
+  NO_PLACE_COLORS,
   townDeskColors,
+  townDeskPins,
   townModelFromProjection,
+  townPlaceColors,
+  type TownPlaceColors,
+  townPinnedCells,
+  type TownDeskPin,
   townRoomCounts,
   type TownModel,
 } from "./townModel";
-import { townCarpetFor } from "./townPaint";
+import { townCarpetFor, townCarpetOf } from "./townPaint";
+import { ColorSwatchButton } from "../../components/ColorSwatch";
 import {
   createTownRenderer,
   nextTownTask,
@@ -80,13 +95,28 @@ import {
   type TerminalColor,
   type TerminalColors,
 } from "../terminalColor";
+import { townTeams, type TownTeams } from "./townTeams";
+import type { Relation } from "../../../../shared/relations";
+import type { TerminalPlace } from "../relations";
+import { placeDeskPin, type DeskPins } from "../useDeskPins";
 import { useWorldSources } from "../worldSources";
 import {
   sameTownBadges,
   townDeskBadges,
   type TownDeskBadge,
 } from "./townBadges";
+import { DeskWorkBadge } from "./DeskWorkBadge";
 import "./town.css";
+import "./townTeams.css";
+
+/** A place's colour in the shared picker (ColorSwatch.tsx). */
+export type PlaceColorChoice = {
+  palette: readonly { id: string; hex: string }[];
+  current: { id: string; custom: boolean };
+  onColor(id: string | null): void;
+  /** The default's colour, shown while the place has none of its own. */
+  defaultHex?: string;
+};
 
 export type TownRoomActions = {
   showCreateSeat(roomKey: string): boolean;
@@ -109,6 +139,11 @@ export type TownRoomActions = {
   onMoveDesk(deskKey: string): void;
   /** Keyboard move: choose another desk for an agent (key M on its target). */
   onMoveAgent(agentKey: string): void;
+  /**
+   * A room's (workspace's) or building's (host's) colour for the shared
+   * picker; null when it cannot be changed here.
+   */
+  placeColor(kind: "room" | "host", key: string): PlaceColorChoice | null;
   /** A desk dragged onto another room; resolves how the move ended. */
   onDropDesk(deskKey: string, roomKey: string): Promise<TownMoveResult>;
   /**
@@ -121,6 +156,10 @@ export type TownRoomActions = {
   ): Promise<TownMoveResult>;
   /** An agent dragged onto another desk; resolves how the move ended. */
   onDropAgent(agentKey: string, deskKey: string): Promise<TownMoveResult>;
+  /** A desk dragged onto another desk: join its team (townTeams.ts). */
+  onGroupDesk(deskKey: string, targetDeskKey: string): Promise<TownMoveResult>;
+  /** A grouped desk dropped on its own room's floor: leave its team. */
+  onUngroupDesk(deskKey: string): Promise<TownMoveResult>;
 };
 
 /** Camera kept across Office visits within one page session. */
@@ -134,6 +173,8 @@ const REFLOW_IDLE_MS = 1200;
 
 const portrait = townPortrait;
 const NO_COLORS: TerminalColors = {};
+const NO_RELATIONS = { relations: [], places: new Map() };
+const NO_PINS: DeskPins = {};
 const NO_KEYS: ReadonlySet<string> = new Set();
 const NO_QUESTS: ReadonlyMap<string, TownQuestMark> = new Map();
 
@@ -160,9 +201,16 @@ export function TownCanvas({
   observability,
   calm = false,
   terminalColors = NO_COLORS,
+  relations = NO_RELATIONS,
+  deskPins = NO_PINS,
   chrome = NO_CHROME,
   trace = NO_TRACE,
 }: {
+  /** Which terminals know each other (world/relations.ts). */
+  relations?: {
+    relations: readonly Relation[];
+    places: ReadonlyMap<string, TerminalPlace>;
+  };
   observability: OfficeObservability;
   /** Town's event trace (development builds only; see world/devtools). */
   trace?: ViewTrace;
@@ -187,6 +235,8 @@ export function TownCanvas({
   selectedRoomKey: string | null;
   /** Saved terminal colours (useTerminalColors); desks use their tab's. */
   terminalColors?: TerminalColors;
+  /** Saved desk pins (useDeskPins); a pinned desk keeps its cell. */
+  deskPins?: DeskPins;
 }) {
   const shellRef = useRef<HTMLDivElement | null>(null);
   const traceRef = useRef(trace);
@@ -220,7 +270,8 @@ export function TownCanvas({
   // Colours ride on the model but not its layout input: a new colour repaints
   // tables without placing the town again.
   const lastDeskColors = useRef<ReadonlyMap<string, TerminalColor>>(new Map());
-  const model = useMemo(() => {
+  const lastPlaceColors = useRef<TownPlaceColors>(NO_PLACE_COLORS);
+  const colouredModel = useMemo(() => {
     // The same colours keep the same map, so status updates never rebuild.
     const next = townDeskColors(projection, terminalColors);
     const last = lastDeskColors.current;
@@ -229,17 +280,49 @@ export function TownCanvas({
       [...next].some(([key, color]) => last.get(key) !== color)
     )
       lastDeskColors.current = next;
-    return { ...topology, deskColors: lastDeskColors.current };
+    lastPlaceColors.current = keepPlaceColors(
+      lastPlaceColors.current,
+      townPlaceColors(projection, terminalColors),
+    );
+    return {
+      ...topology,
+      deskColors: lastDeskColors.current,
+      placeColors: lastPlaceColors.current,
+    };
   }, [topology, projection, terminalColors]);
+  // Pins ride on the model too; the same pins keep the same map.
+  const lastDeskPins = useRef<ReadonlyMap<string, TownDeskPin>>(new Map());
+  const model = useMemo(() => {
+    const next = townDeskPins(projection, deskPins);
+    const last = lastDeskPins.current;
+    if (
+      next.size !== last.size ||
+      [...next].some(([key, pin]) => {
+        const was = last.get(key);
+        return (
+          !was ||
+          was.key !== pin.key ||
+          was.cell?.col !== pin.cell?.col ||
+          was.cell?.row !== pin.cell?.row
+        );
+      })
+    )
+      lastDeskPins.current = next;
+    return { ...colouredModel, deskPins: lastDeskPins.current };
+  }, [colouredModel, projection, deskPins]);
+  const pinnedCells = useMemo(
+    () => townPinnedCells(model.deskPins),
+    [model.deskPins],
+  );
   const placed = useMemo(() => {
     const key = townShapeKey(shape);
     const previous =
       memoryRef.current.shape === key ? memoryRef.current.memory : new Map();
-    const result = layoutTown(model.input, shape, previous);
+    const result = layoutTown(model.input, shape, previous, pinnedCells);
     memoryRef.current = { shape: key, memory: result.memory };
     return result.layout;
-    // Placement depends only on topology, not on agent status.
-  }, [model.input, shape]);
+    // Placement depends only on topology and pins, not on agent status.
+  }, [model.input, shape, pinnedCells]);
   // While the user presses, scrolls or zooms, a reflow that would move rooms
   // or buildings waits until they pause (then the camera follows the room in
   // view). A held layout must still name only desks the model has.
@@ -270,12 +353,30 @@ export function TownCanvas({
     );
     return () => window.clearTimeout(timer);
   });
+  const teams = useMemo(
+    () => townTeams(model, layout, relations.relations, relations.places),
+    [model, layout, relations],
+  );
+  // A desk just pinned keeps the cell it has; save it so it stays there.
+  const placing = useRef(new Set<string>());
+  useEffect(() => {
+    for (const [deskKey, pin] of model.deskPins) {
+      if (pin.cell || placing.current.has(pin.key)) continue;
+      const cell = townPinCell(layout, placed, deskKey);
+      if (!cell) continue;
+      placing.current.add(pin.key);
+      void placeDeskPin(pin.key, { col: cell.col, row: cell.row }).finally(() =>
+        placing.current.delete(pin.key),
+      );
+    }
+  }, [layout, placed, model.deskPins]);
   const blockedSince = useRef(new Map<string, number>());
   const [hover, setHover] = useState<string | null>(null);
   const latest = useRef({
     chrome,
     model,
     layout,
+    teams,
     selectedKey,
     hover,
     calm,
@@ -296,6 +397,7 @@ export function TownCanvas({
     calm,
     model,
     layout,
+    teams,
     selectedKey,
     hover,
     completionSeenKeys,
@@ -721,6 +823,12 @@ export function TownCanvas({
     let holdTimer = 0;
     /** The desk or agent being carried, and where it would land. */
     let carrying: TownDrag | null = null;
+    /** A desk the carried desk rests on: after a moment it snaps (groups). */
+    let magnet: { key: string; timer: number; on: boolean } | null = null;
+    const clearMagnet = () => {
+      if (magnet) window.clearTimeout(magnet.timer);
+      magnet = null;
+    };
     const ghost = document.createElement("div");
     ghost.className = "town-drag-ghost";
     ghost.setAttribute("aria-hidden", "true");
@@ -761,22 +869,29 @@ export function TownCanvas({
     // while it is held near an edge (rooms stack out of view on a phone).
     let carryAt: { x: number; y: number } | null = null;
     let edgeFrame = 0;
-    /** Show where the carry would land at screen point `at`. */
+    /**
+     * Show where the carry would land at screen point `at`. Resting on
+     * another desk starts the magnet: after a moment it snaps (groups).
+     */
     const carryTo = (at: { x: number; y: number }) => {
-      const renderer = rendererRef.current;
-      if (!carrying || !renderer) return;
+      if (!carrying || !rendererRef.current) return;
       carryAt = at;
-      const target = townDropTarget(
-        carrying,
-        hitAt(at.x, at.y),
-        latest.current.model,
-      );
-      carrying.target = target;
-      ghost.textContent = target.label;
-      ghost.dataset.valid = String(target.key !== null);
-      ghost.style.transform = `translate(${at.x}px, ${at.y}px)`;
-      const world = renderer.camera.toWorld(at.x, at.y);
-      renderer.moveDrag(world.x, world.y, target.key);
+      const hit = hitAt(at.x, at.y);
+      const under = townMagnetDesk(carrying, hit, latest.current.model);
+      if (under !== magnet?.key) {
+        clearMagnet();
+        if (under)
+          magnet = {
+            key: under,
+            on: false,
+            timer: window.setTimeout(() => {
+              if (!magnet || !carrying || !carryAt) return;
+              magnet.on = true;
+              aim(hitAt(carryAt.x, carryAt.y), carryAt);
+            }, TOWN_MAGNET_MS),
+          };
+      }
+      aim(hit, at);
     };
     const EDGE = 56;
     const EDGE_SPEED = 14;
@@ -818,12 +933,38 @@ export function TownCanvas({
     };
     const endDrag = () => {
       ghost.remove();
+      clearMagnet();
       cancelAnimationFrame(edgeFrame);
       edgeFrame = 0;
       carryAt = null;
       const drag = carrying;
       carrying = null;
       return drag;
+    };
+    /** Show where the carried desk or agent would land, and snap to it. */
+    const aim = (hit: TownHit | null, at: { x: number; y: number }) => {
+      const renderer = rendererRef.current;
+      if (!carrying || !renderer) return;
+      const target = townDropTarget(
+        carrying,
+        hit,
+        latest.current.model,
+        latest.current.teams.deskTeams,
+        magnet?.on ? magnet.key : null,
+        latest.current.teams.groupedDesks,
+      );
+      carrying.target = target;
+      ghost.textContent = target.label;
+      ghost.dataset.valid = String(target.key !== null);
+      ghost.dataset.action = target.action ?? "";
+      ghost.style.transform = `translate(${at.x}px, ${at.y}px)`;
+      const world = renderer.camera.toWorld(at.x, at.y);
+      renderer.moveDrag(
+        world.x,
+        world.y,
+        target.key,
+        target.action === "group",
+      );
     };
     const tap = (target: TownGestureTarget) => {
       const renderer = rendererRef.current;
@@ -902,15 +1043,20 @@ export function TownCanvas({
           // Wait at the target while Herdr moves it, then land or spring back.
           renderer.endDrag("park");
           const actions = latest.current.roomActions;
+          const action = drag.target?.action;
           void (
             drag.kind === "agent"
               ? actions.onDropAgent(drag.key, targetKey)
-              : drag.target?.reorder
-                ? actions.onReorderDesk(
-                    drag.key,
-                    targetKey === drag.from ? null : targetKey,
-                  )
-                : actions.onDropDesk(drag.key, targetKey)
+              : action === "group"
+                ? actions.onGroupDesk(drag.key, targetKey)
+                : action === "ungroup"
+                  ? actions.onUngroupDesk(drag.key)
+                  : action === "reorder"
+                    ? actions.onReorderDesk(
+                        drag.key,
+                        targetKey === drag.from ? null : targetKey,
+                      )
+                    : actions.onDropDesk(drag.key, targetKey)
           )
             .catch((): TownMoveResult => "uncertain")
             .then((result) => rendererRef.current?.finishMove(result));
@@ -1280,7 +1426,9 @@ export function TownCanvas({
         data-level="overview"
         aria-hidden={!ready}
       >
+        <TownTeamsLayer teams={teams} />
         <TownWorldLayer
+          teams={teams}
           model={model}
           layout={layout}
           visible={visible}
@@ -1485,30 +1633,49 @@ function townVisibleHosts(
   };
 }
 
-function TownDeskBadgeLink({
-  badge,
-  deskLabel,
+/** Team walls and connectors, under the world layer's cards. */
+const TownTeamsLayer = memo(function TownTeamsLayer({
+  teams,
 }: {
-  badge: TownDeskBadge | undefined;
-  deskLabel: string;
+  teams: TownTeams;
 }) {
-  return badge ? (
-    <a
-      className="town-desk-badge"
-      data-tone={badge.tone}
-      href={badge.url}
-      target="_blank"
-      rel="noopener noreferrer"
-      aria-label={`${badge.text} at ${deskLabel}`}
-    >
-      {badge.text}
-    </a>
-  ) : null;
-}
-
+  if (!teams.walls.length && !teams.links.length) return null;
+  return (
+    <svg className="town-teams" aria-hidden="true" data-testid="town-teams">
+      {teams.walls.map((wall) => (
+        <rect
+          key={wall.key}
+          className="town-team-wall"
+          data-team={wall.team}
+          data-current={String(wall.current)}
+          data-desks={wall.desks}
+          x={wall.x}
+          y={wall.y}
+          width={wall.w}
+          height={wall.h}
+          rx={10}
+          style={{ stroke: TERMINAL_COLOR_HEX[wall.color] }}
+        />
+      ))}
+      {teams.links.map((link) => (
+        <line
+          key={link.key}
+          className="town-team-link"
+          data-kind={link.kind}
+          data-current={String(link.current)}
+          x1={link.x1}
+          y1={link.y1}
+          x2={link.x2}
+          y2={link.y2}
+        />
+      ))}
+    </svg>
+  );
+});
 const TownWorldLayer = memo(function TownWorldLayer({
   model,
   layout,
+  teams,
   selectedKey,
   blockedSince,
   roomActions,
@@ -1523,6 +1690,7 @@ const TownWorldLayer = memo(function TownWorldLayer({
 }: {
   model: TownModel;
   layout: TownLayout;
+  teams: TownTeams;
   visible: TownVisible;
   /** Pull request or ticket chips for desks (World sources). */
   deskBadges: ReadonlyMap<string, TownDeskBadge>;
@@ -1536,7 +1704,10 @@ const TownWorldLayer = memo(function TownWorldLayer({
   onActivateRoom(key: string): void;
   onFocusTarget(target: TownTarget): void;
 }) {
-  const targets = useMemo(() => townTargets(model, layout), [model, layout]);
+  const targets = useMemo(
+    () => townTargets(model, layout, teams.deskTeams),
+    [model, layout, teams.deskTeams],
+  );
   const attention = townAttention(model, blockedSince);
   const now = Date.now();
   const [, tick] = useState(0);
@@ -1548,6 +1719,13 @@ const TownWorldLayer = memo(function TownWorldLayer({
   const selectedHost = selectedRoomKey
     ? model.rooms.get(selectedRoomKey)?.hostKey
     : undefined;
+  /** A room's carpet: its workspace's chosen colour, else its own default. */
+  const roomCarpet = (roomKey: string) => {
+    const chosen = model.placeColors.rooms.get(roomKey);
+    return chosen
+      ? townCarpetOf(TERMINAL_COLOR_HEX[chosen])
+      : townCarpetFor(roomKey);
+  };
   const newRoomBuilding =
     layout.buildings.find((b) => b.hostKey === selectedHost) ??
     layout.buildings[0];
@@ -1556,6 +1734,7 @@ const TownWorldLayer = memo(function TownWorldLayer({
       {layout.buildings.map((building) => {
         if (!visible.hosts.has(building.hostKey)) return null;
         const host = model.hosts.get(building.hostKey);
+        const hostColor = roomActions.placeColor("host", building.hostKey);
         const queue = attention.filter(
           (agent) =>
             agent.hostKey === building.hostKey &&
@@ -1612,6 +1791,13 @@ const TownWorldLayer = memo(function TownWorldLayer({
               aria-label={`${host?.displayLabel ?? "Host"} reception, ${queue.length} waiting`}
             >
               <div className="town-reception-title">
+                {hostColor ? (
+                  <ColorSwatchButton
+                    className="town-place-color"
+                    label={`Colour of ${host?.displayLabel ?? "host"}'s building`}
+                    {...hostColor}
+                  />
+                ) : null}
                 <span>
                   {(host?.displayLabel ?? "").toUpperCase()} RECEPTION
                 </span>
@@ -1651,6 +1837,7 @@ const TownWorldLayer = memo(function TownWorldLayer({
               const overflow =
                 room.omittedDeskCount + placed.overflowDeskKeys.length;
               const reason = roomActions.createSeatReason(room.key);
+              const roomColor = roomActions.placeColor("room", room.key);
               return (
                 <div
                   key={room.key}
@@ -1669,7 +1856,7 @@ const TownWorldLayer = memo(function TownWorldLayer({
                       style={
                         {
                           "--room-w": `${placed.w * T}px`,
-                          "--carpet": townCarpetFor(room.key),
+                          "--carpet": roomCarpet(room.key),
                         } as React.CSSProperties
                       }
                       aria-label={`${label}: ${c.desks} desks, ${c.working} working${c.blocked ? `, ${c.blocked} need you` : ""}${c.done ? `, ${c.done} done` : ""}. Zoom in.`}
@@ -1728,7 +1915,7 @@ const TownWorldLayer = memo(function TownWorldLayer({
                               >
                                 {desk.displayLabel}
                               </span>
-                              <TownDeskBadgeLink
+                              <DeskWorkBadge
                                 badge={deskBadges.get(desk.key)}
                                 deskLabel={desk.displayLabel}
                               />
@@ -1773,6 +1960,14 @@ const TownWorldLayer = memo(function TownWorldLayer({
                       <span className="town-room-plaque-badge">
                         !{c.blocked}
                       </span>
+                    ) : null}
+                    {roomColor ? (
+                      <ColorSwatchButton
+                        className="town-plaque-action town-place-color"
+                        label={`Colour of room ${label}`}
+                        defaultHex={townCarpetFor(room.key)}
+                        {...roomColor}
+                      />
                     ) : null}
                     <button
                       className="world-room-overlay-action town-plaque-action town-plaque-agent"
@@ -2004,6 +2199,7 @@ const TownTargetButton = memo(function TownTargetButton({
       type="button"
       data-kind={target.kind}
       data-target-key={target.key}
+      data-color={target.color}
       aria-label={target.label}
       aria-pressed={selected}
       title={target.label}
@@ -2062,6 +2258,7 @@ function sameTargetButton(
     a.key === b.key &&
     a.kind === b.kind &&
     a.label === b.label &&
+    a.color === b.color &&
     a.canActivate === b.canActivate &&
     a.rect.x === b.rect.x &&
     a.rect.y === b.rect.y &&

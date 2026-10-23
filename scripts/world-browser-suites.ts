@@ -1,10 +1,11 @@
-import { join } from "node:path";
+import { existsSync, realpathSync } from "node:fs";
+import { join, relative, resolve, sep } from "node:path";
 
 /**
  * Suites that assert wall-clock budgets (input latency, frame counts). They
  * fail when other work competes for the CPU, so they run on their own: on CI
  * in the dedicated, quiet "latency" job, one at a time, and locally in the
- * gate's quiet lane.
+ * quiet lane for both gate and direct runs.
  */
 export const worldTimedSuites = [
   "ProductionContexts",
@@ -29,7 +30,12 @@ export const worldBrowserShards = [
     "BoardView",
     "useSpacesTabWindowArrangement.browser",
   ], // 60
-  ["HostsFilter.creation", "HostsFilter.arrangement", "windows/WindowFrame"], // 58
+  [
+    "HostsFilter.creation",
+    "HostsFilter.arrangement",
+    "windows/WindowFrame",
+    "windows/WorldPanel",
+  ], // 60
   ["HostsFilter.navigation", "town/TownCanvas", "HostsFilter.pending"], // 59
 ].map((shard) => shard.map((name) => `web/src/world/${name}.test.ts`));
 
@@ -131,4 +137,77 @@ export async function assertWebBrowserInventory(root = process.cwd()) {
       `Web browser inventory mismatch: unassigned=${missing.join(",")}; missing=${nonexistent.join(",")}`,
     );
   }
+}
+
+/**
+ * Whether Bun selectors can include Chrome. Unknown filters and options are
+ * conservatively queued: option values are not necessarily test paths.
+ */
+export function includesBrowserSuites(
+  args: readonly string[],
+  root = process.cwd(),
+): boolean {
+  return includesSuites(
+    args,
+    [...webBrowserSuites, ...worldBrowserSuites],
+    root,
+  );
+}
+
+/** Unknown selections may include a timed suite and require the quiet lane. */
+export function includesTimedSuites(
+  args: readonly string[],
+  root = process.cwd(),
+): boolean {
+  return includesSuites(args, worldTimedSuites, root);
+}
+
+function includesSuites(
+  args: readonly string[],
+  suites: readonly string[],
+  root: string,
+): boolean {
+  const valueFlags = new Set([
+    "-t",
+    "--test-name-pattern",
+    "--timeout",
+    "--max-concurrency",
+    "--reporter",
+    "--reporter-outfile",
+    "--seed",
+    "--rerun-each",
+    "--retry",
+  ]);
+  const paths: string[] = [];
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i]!;
+    if (!arg.startsWith("-")) {
+      paths.push(arg);
+      continue;
+    }
+    if (!valueFlags.has(arg.split("=", 1)[0]!)) return true;
+    if (!arg.includes("=") && ++i >= args.length) return true;
+  }
+  // No path means Bun's default full run, even when only flags were supplied.
+  if (paths.length === 0) return true;
+  return paths.some((arg) => {
+    const absolute = resolve(root, arg);
+    if (!existsSync(absolute)) return true;
+    try {
+      const path = relative(realpathSync(root), realpathSync(absolute))
+        .split(sep)
+        .join("/");
+      if (!path || path === ".." || path.startsWith("../")) return true;
+      return suites.some(
+        (suite) => suite === path || suite.startsWith(`${path}/`),
+      );
+    } catch {
+      return true;
+    }
+  });
+}
+
+/** Whether a World run's resolved files include a timed (latency) suite. */
+export function includesTimedFiles(files: readonly string[]): boolean {
+  return files.some((file) => worldTimedSuites.includes(file));
 }

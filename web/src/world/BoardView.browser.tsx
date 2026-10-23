@@ -15,6 +15,13 @@ import {
   type FixtureSpace,
 } from "./board/boardFixture";
 import { defaultTerminalColor } from "./terminalColor";
+import { worldRelationInputs } from "./relations";
+import {
+  joinGroup,
+  leaveGroups,
+  observedSpawnClaims,
+} from "../../../shared/relations";
+import { currentBoardCardPins } from "./board/boardCardPins";
 import { worldSourcesStore } from "./worldSources";
 import "./world.css";
 
@@ -49,90 +56,159 @@ const mergedWeek = Array.from({ length: 150 }, (_, index) => ({
   repo: "example-org/web-app",
   checks: "pass",
 }));
-worldSourcesStore.useFetch(async () =>
-  Response.json({
-    observedAt: 1,
-    sources: [
+// Your own open pull requests, read in detail: one ready to merge, one that
+// GitHub still holds for a review.
+const prHead = (digit: string) => digit.repeat(40);
+const detailedPr = (number: number, fields: Record<string, unknown> = {}) => ({
+  key: `github:pr:example-org/web-app#${number}`,
+  source: "github",
+  kind: "pull_request",
+  ref: `example-org/web-app#${number}`,
+  title: `Synthetic card change ${number}`,
+  url: `https://github.com/example-org/web-app/pull/${number}`,
+  lane: "ready",
+  status: "open",
+  roles: ["author"],
+  updatedAt: 2,
+  number,
+  repo: "example-org/web-app",
+  base: "main",
+  headSha: prHead(String(number % 10)),
+  draft: false,
+  checks: "pass",
+  review: "approved",
+  mergeable: "mergeable",
+  pr: {
+    baseRef: "main",
+    behindBy: 2,
+    checks: [
+      { name: "Unit tests", state: "pass", required: true },
+      { name: "Browser suite", state: "pass", required: false },
+    ],
+    checksTruncated: false,
+    reviewers: [
       {
-        id: "github",
-        label: "GitHub",
-        enabled: true,
-        state: "connected",
-        detail: "GitHub is connected: 1 item.",
-        checkedAt: 1,
-        lastSuccessAt: 1,
-        itemCount: 1,
-        config: { kind: "github", mergedDays: 7 },
-      },
-      {
-        id: "jira",
-        label: "Jira",
-        enabled: true,
-        state: "not_connected",
-        detail: "Add your Jira site, email and API token in Sources settings.",
-        checkedAt: 1,
-        lastSuccessAt: null,
-        itemCount: 0,
-        config: {
-          kind: "jira",
-          site: null,
-          email: null,
-          jql: "",
-          tokenSet: false,
-        },
+        reviewer: "rev2",
+        url: `https://github.com/example-org/web-app/pull/${number}#issuecomment-1`,
+        at: 1,
+        outcome: "confirmed",
+        line: "2/2 resolved, 0 new.",
+        commit: prHead(String(number % 10)),
+        commitsSince: 0,
       },
     ],
-    items: [
-      {
-        key: "github:pr:example-org/web-app#42",
-        source: "github",
-        kind: "pull_request",
-        ref: "example-org/web-app#42",
-        title: "Fix the login form",
-        url: "https://github.com/example-org/web-app/pull/42",
-        lane: "fixing",
-        status: "open",
-        roles: ["author"],
-        updatedAt: 1,
-        number: 42,
-        repo: "example-org/web-app",
-        checks: "fail",
+    uiChange: true,
+    images: 5,
+  },
+  ...fields,
+});
+/** #43's head; a scenario moves it to show a push while a sheet is open. */
+let head43 = prHead("3");
+/** Verb requests the cards sent, and GitHub's (synthetic) answer. */
+const verbPosts: Record<string, unknown>[] = [];
+const sourcesBody = () => ({
+  observedAt: 1,
+  sources: [
+    {
+      id: "github",
+      label: "GitHub",
+      enabled: true,
+      state: "connected",
+      detail: "GitHub is connected: 1 item.",
+      checkedAt: 1,
+      lastSuccessAt: 1,
+      itemCount: 1,
+      config: { kind: "github", mergedDays: 7 },
+    },
+    {
+      id: "jira",
+      label: "Jira",
+      enabled: true,
+      state: "not_connected",
+      detail: "Add your Jira site, email and API token in Sources settings.",
+      checkedAt: 1,
+      lastSuccessAt: null,
+      itemCount: 0,
+      config: {
+        kind: "jira",
+        site: null,
+        email: null,
+        jql: "",
+        tokenSet: false,
       },
-      ...mergedWeek,
-      {
-        key: "jira:WEB-7",
-        source: "jira",
-        kind: "ticket",
-        ref: "WEB-7",
-        title: "Login form rejects valid emails",
-        url: "https://example.atlassian.net/browse/WEB-7",
-        lane: "doing",
-        status: "In Progress",
-        roles: ["assignee"],
-        updatedAt: 1,
+    },
+  ],
+  items: [
+    {
+      key: "github:pr:example-org/web-app#42",
+      source: "github",
+      kind: "pull_request",
+      ref: "example-org/web-app#42",
+      title: "Fix the login form",
+      url: "https://github.com/example-org/web-app/pull/42",
+      lane: "fixing",
+      status: "open",
+      roles: ["author"],
+      updatedAt: 1,
+      number: 42,
+      repo: "example-org/web-app",
+      checks: "fail",
+    },
+    detailedPr(43, { headSha: head43 }),
+    detailedPr(44, { lane: "green", review: "review_required" }),
+    ...mergedWeek,
+    {
+      key: "jira:WEB-7",
+      source: "jira",
+      kind: "ticket",
+      ref: "WEB-7",
+      title: "Login form rejects valid emails",
+      url: "https://example.atlassian.net/browse/WEB-7",
+      lane: "doing",
+      status: "In Progress",
+      roles: ["assignee"],
+      updatedAt: 1,
+    },
+  ],
+  links: [
+    {
+      connectionId: "studio",
+      generation: 1,
+      paneId: "w1:p1",
+      sessionFingerprint: null,
+      itemKey: "github:pr:example-org/web-app#42",
+      via: "branch",
+    },
+    // Made for the same pane ID in an earlier runtime: not this agent.
+    {
+      connectionId: "studio",
+      generation: 0,
+      paneId: "w1:p1",
+      sessionFingerprint: null,
+      itemKey: "jira:WEB-7",
+      via: "branch",
+    },
+  ],
+});
+worldSourcesStore.useFetch(async (input, init) => {
+  if (String(input).endsWith("/github/pull-request")) {
+    const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+    verbPosts.push(body);
+    return Response.json({
+      action: {
+        verb: body.verb,
+        itemKey: body.key,
+        ref: "example-org/web-app#43",
+        at: 3,
+        outcome: "failed",
+        detail: "Pull request is not mergeable: synthetic conflict",
+        sender: { basis: "reported", via: "browser" },
       },
-    ],
-    links: [
-      {
-        connectionId: "studio",
-        generation: 1,
-        paneId: "w1:p1",
-        sessionFingerprint: null,
-        itemKey: "github:pr:example-org/web-app#42",
-        via: "branch",
-      },
-      // Made for the same pane ID in an earlier runtime: not this agent.
-      {
-        connectionId: "studio",
-        generation: 0,
-        paneId: "w1:p1",
-        sessionFingerprint: null,
-        itemKey: "jira:WEB-7",
-        via: "branch",
-      },
-    ],
-  }),
-);
+      snapshot: sourcesBody(),
+    });
+  }
+  return Response.json(sourcesBody());
+});
 const params = new URL(location.href).searchParams;
 const mode = params.get("mode") ?? "test";
 const theme = params.get("theme");
@@ -201,8 +277,17 @@ const emptyDocument = (): BoardDocument => ({
   layout: { anchors: {}, offsets: {}, pinned: {}, folded: [] },
   notes: [],
   strings: [],
+  relations: { spawns: [], groups: [] },
 });
 let saved: BoardDocument = emptyDocument();
+// `?colors=demo` (for screenshots) starts with chosen workspace and host colours.
+if (params.get("colors") === "demo")
+  saved.layout.colors = {
+    "studio:w1": "teal",
+    "studio:w2": "pink",
+    "@host:studio": "purple",
+    "@host:build-box": "orange",
+  };
 function apply(ops: BoardOp[]) {
   const next = structuredClone(saved);
   for (const op of ops) {
@@ -248,6 +333,13 @@ function apply(ops: BoardOp[]) {
       if (op.color) colors[op.key] = op.color;
       else delete colors[op.key];
       next.layout.colors = colors;
+    } else if (op.op === "group.join" || op.op === "group.leave") {
+      const relations = next.relations ?? { spawns: [], groups: [] };
+      relations.groups =
+        op.op === "group.join"
+          ? joinGroup(relations.groups, op.members, op.target, op.id, 1)
+          : leaveGroups(relations.groups, op.members);
+      next.relations = relations;
     } else if (op.op === "layout.set") {
       if (op.replace)
         next.layout = { ...next.layout, anchors: {}, offsets: {}, pinned: {} };
@@ -529,6 +621,17 @@ const variant = (
       })),
     })),
   );
+/** Save the claims the service would for the world's spawn stamps. */
+const recordSpawns = (shown: ReturnType<typeof variant>) => {
+  saved = {
+    ...saved,
+    relations: {
+      groups: saved.relations?.groups ?? [],
+      spawns: observedSpawnClaims(worldRelationInputs(shown).observations, 1),
+    },
+  };
+  return shown;
+};
 const strungPane = () => {
   const end = saved.strings[0]!.to;
   return "anchor" in end ? end.anchor : null;
@@ -726,6 +829,125 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
       );
       await settle(100);
       check(!host.querySelector(".work-lens"), "Escape closes the lens");
+    },
+  ],
+  [
+    "a pull request card shows readiness and acts only after its sheet confirms",
+    async () => {
+      host
+        .querySelector<HTMLButtonElement>(
+          'button[aria-label="Work: pull requests and tickets"]',
+        )!
+        .click();
+      const card = (number: number) =>
+        host.querySelector<HTMLElement>(
+          `.work-lens article[aria-label="Pull request example-org/web-app#${number}"]`,
+        );
+      await waitFor(() => Boolean(card(43)), "the Work lens shows the card");
+      const ready = card(43)!;
+      check(
+        Boolean(ready.closest('[data-lane="ready"]')) &&
+          ready
+            .querySelector(".pr-card-summary")
+            ?.textContent?.includes("rev2 confirmed") === true &&
+          ready.textContent?.includes("Ready ✓") === true &&
+          ready.querySelector('[role="img"]')?.getAttribute("aria-label") ===
+            "CI: 2 passed",
+        `a ready pull request shows CI, its reviewer and Ready (${ready.textContent})`,
+      );
+      // GitHub still requires a review: no Merge, the plain command instead.
+      const held = card(44)!;
+      check(
+        held.querySelector(".pr-card-command code")?.textContent ===
+          "gh pr merge 44 --repo example-org/web-app --merge" &&
+          held.textContent?.includes(
+            "GitHub requires a review; merge on GitHub.",
+          ) === true &&
+          ![...held.querySelectorAll("button")].some((button) =>
+            button.textContent?.startsWith("Merge"),
+          ) &&
+          held
+            .querySelector<HTMLAnchorElement>(".pr-card-command a")
+            ?.href.endsWith("/pull/44") === true,
+        "a pull request held for review offers Open on GitHub and the command",
+      );
+      const button = (root: HTMLElement, text: string) =>
+        [...root.querySelectorAll<HTMLButtonElement>("button")].find(
+          (entry) => entry.textContent === text,
+        )!;
+      button(ready, "Merge…").click();
+      await settle(50);
+      check(
+        ready.querySelector(".pr-card-sheet p")?.textContent ===
+          "Merge #43 into main with a merge commit. Head 3333333 must still be the head. The branch is kept." &&
+          verbPosts.length === 0,
+        "the sheet says exactly what happens, and nothing runs yet",
+      );
+      button(ready, "Merge").click();
+      await waitFor(
+        () => Boolean(ready.querySelector('[role="alert"]')),
+        "GitHub's answer shows on the card",
+      );
+      check(
+        JSON.stringify(verbPosts) ===
+          JSON.stringify([
+            {
+              key: "github:pr:example-org/web-app#43",
+              verb: "merge",
+              headSha: prHead("3"),
+            },
+          ]) &&
+          ready.querySelector('[role="alert"]')?.textContent ===
+            "Pull request is not mergeable: synthetic conflict",
+        `merge sends the head seen; a refusal is GitHub's words (${JSON.stringify(verbPosts)})`,
+      );
+      button(ready, "Details").click();
+      await settle(50);
+      check(
+        ready.querySelectorAll('[aria-label="Readiness"] li[data-state="pass"]')
+          .length === 5 &&
+          ready.textContent?.includes(
+            "GitHub doesn't let you approve your own PR.",
+          ) === true &&
+          ready.textContent?.includes("per rev2's comment") === true &&
+          ready.textContent?.includes("2 behind main") === true,
+        "details show each rule, the reviewer's provenance and the head",
+      );
+      button(ready, "Close…").click();
+      await settle(50);
+      check(
+        ready.querySelector(".pr-card-sheet p")?.textContent ===
+          "Close #43 without merging. The branch is kept." &&
+          Boolean(ready.querySelector(".pr-card-sheet textarea")),
+        "closing asks first, with an optional comment",
+      );
+      button(ready, "Cancel").click();
+      await settle(50);
+      check(
+        !ready.querySelector(".pr-card-sheet") && verbPosts.length === 1,
+        "cancel runs nothing",
+      );
+      // A push while the merge sheet is open withdraws it.
+      button(ready, "Merge…").click();
+      await settle(50);
+      head43 = prHead("9");
+      await worldSourcesStore.refresh(true);
+      await waitFor(
+        () =>
+          ready.querySelector('[role="alert"]')?.textContent ===
+          "Head changed: review again.",
+        "a new head withdraws the open merge sheet",
+      );
+      check(
+        !ready.querySelector(".pr-card-sheet") && verbPosts.length === 1,
+        "nothing merges on a head the user did not see",
+      );
+      head43 = prHead("3");
+      await worldSourcesStore.refresh(true);
+      window.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+      );
+      await settle(100);
     },
   ],
   [
@@ -1656,6 +1878,49 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
     },
   ],
   [
+    "a host's colour tints its zone and is saved under the host",
+    async () => {
+      const label = host.querySelector<HTMLElement>(
+        ".board-zone-label[data-host]",
+      )!;
+      const swatch =
+        label.querySelector<HTMLButtonElement>(".board-zone-color")!;
+      check(Boolean(swatch), "a host's zone label offers its colour");
+      swatch.click();
+      await waitFor(
+        () =>
+          document.querySelector(
+            '.color-swatch-popover [aria-label="Colour purple"]',
+          ) !== null,
+        "the host colour button did not open the palette",
+      );
+      document
+        .querySelector<HTMLButtonElement>(
+          '.color-swatch-popover [aria-label="Colour purple"]',
+        )!
+        .click();
+      await waitFor(
+        () =>
+          Object.entries(saved.layout.colors ?? {}).some(
+            ([key, color]) => key.startsWith("@host:") && color === "purple",
+          ),
+        "choosing a host colour did not save it under the host",
+      );
+      const zone = label.closest<HTMLElement>(".board-zone")!;
+      await waitFor(
+        () => zone.style.getPropertyValue("--board-zone") !== "",
+        "a host's colour does not tint its zone",
+      );
+      // Tabs keep their own colours: a host's is not inherited.
+      check(
+        !Object.keys(saved.layout.colors ?? {}).some(
+          (key) => !key.startsWith("@host:"),
+        ),
+        "choosing a host colour must not colour its workspaces or tabs",
+      );
+    },
+  ],
+  [
     "colours",
     async () => {
       // Colours: the user picks a tab or workspace colour; status keeps its own.
@@ -1761,9 +2026,192 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
           () => !saved.layout.colors?.[tabKey],
           "Default colour clears it",
         );
+        // Pin: the card stays where it is through Tidy, with a badge.
+        const pinButton = () =>
+          host.querySelector<HTMLButtonElement>(
+            '[aria-label="Colour of review"] .board-pin-toggle',
+          )!;
+        check(!card(tabKey)!.querySelector(".board-pin"), "no badge unpinned");
+        pinButton().click();
+        await waitFor(
+          () => Boolean(saved.layout.pinned[tabKey]),
+          "the pin is saved",
+        );
+        check(
+          Boolean(
+            card(tabKey)!.querySelector('.board-pin[aria-label="Pinned"]'),
+          ) && pinButton().getAttribute("aria-pressed") === "true",
+          "a pinned card shows its badge and the bar says Unpin",
+        );
+        // Push the pinned card's neighbour onto it, then tidy its workspace:
+        // auto-layout moves the others, never the pinned card.
+        const pinnedAt = at(tabKey)!;
+        host
+          .querySelector<HTMLButtonElement>(
+            '[aria-label="Tidy this workspace\'s tabs"], [aria-label="Tidy the board"]',
+          )!
+          .click();
+        await rest();
+        {
+          const now = at(tabKey)!;
+          check(
+            Math.hypot(now.x - pinnedAt.x, now.y - pinnedAt.y) < 2,
+            "Tidy leaves a pinned card where it is",
+          );
+        }
+        pinButton().click();
+        await waitFor(
+          () => !saved.layout.pinned[tabKey],
+          "Unpin removes the pin",
+        );
+        check(!card(tabKey)!.querySelector(".board-pin"), "unpinned, no badge");
+        // A phone's full-screen terminal pins the card from its header,
+        // through what Board publishes for it.
+        check(
+          !currentBoardCardPins().pinned.has(tabKey),
+          "Board publishes the card unpinned",
+        );
+        currentBoardCardPins().toggle!(tabKey);
+        await waitFor(
+          () =>
+            Boolean(saved.layout.pinned[tabKey]) &&
+            currentBoardCardPins().pinned.has(tabKey) &&
+            Boolean(card(tabKey)!.querySelector(".board-pin")),
+          "the window header pins the card",
+        );
+        currentBoardCardPins().toggle!(tabKey);
+        await waitFor(
+          () =>
+            !saved.layout.pinned[tabKey] &&
+            !currentBoardCardPins().pinned.has(tabKey),
+          "the window header unpins it",
+        );
         mount(2, world, null);
         await settle(50);
       }
+    },
+  ],
+  [
+    "teams: spawned cards are strung and tabs group magnetically",
+    async () => {
+      // review (w1:p2) was spawned by login fix (w1:p1).
+      const spawned = variant((leaf) =>
+        leaf.connectionId === "studio" && leaf.nativeId === "w1:p2"
+          ? {
+              ...leaf,
+              pane: {
+                tokens: { spawned_by: "w1:p1" },
+              } as unknown as typeof leaf.pane,
+            }
+          : leaf,
+      );
+      const leafOf = (tabId: string) =>
+        spawned.leaves.find(
+          (leaf) => leaf.connectionId === "studio" && leaf.tabId === tabId,
+        )!;
+      mount(2, recordSpawns(spawned), null);
+      await rest();
+      await bringIntoView(() => card("studio:w1:t2")!);
+      await waitFor(
+        () =>
+          host.querySelector('path.board-relation[data-kind="spawned"]') !==
+          null,
+        "a spawned tab is not strung to its parent",
+      );
+      const parentKey = "studio:w1:t1",
+        childKey = "studio:w1:t2";
+      check(
+        defaultTerminalColor(parentKey) !== defaultTerminalColor(childKey) &&
+          getComputedStyle(card(childKey)!).backgroundColor ===
+            getComputedStyle(card(parentKey)!).backgroundColor,
+        "a spawned tab shows its parent's colour, not its own default",
+      );
+      const groups = () => saved.relations?.groups ?? [];
+      const moving = "studio:w2:t1",
+        mate = "studio:w1:t4";
+      if (innerWidth > 720) {
+        // Drag one tab onto another: the other glows, and the drop groups.
+        await bringIntoView(() => card(mate)!);
+        let to = centre(card(mate)!);
+        const carry = async () => {
+          const from = centre(card(moving)!.querySelector(".board-label")!);
+          to = centre(card(mate)!);
+          pointer(card(moving)!, "pointerdown", from.x, from.y, 17);
+          for (let i = 1; i <= 10; i++) {
+            pointer(
+              card(moving)!,
+              "pointermove",
+              from.x + ((to.x - from.x) * i) / 10,
+              from.y + ((to.y - from.y) * i) / 10,
+              17,
+            );
+            await settle(16);
+          }
+        };
+        await carry();
+        check(
+          card(mate)!.classList.contains("board-glue"),
+          "the tab a tab is over glows",
+        );
+        pointer(card(moving)!, "pointerup", to.x, to.y, 17);
+        await waitFor(
+          () => groups().length === 1,
+          "dropping a tab on a tab did not group them",
+        );
+        check(
+          movedTabs.length === 0,
+          "grouping two tabs moves no tab between workspaces",
+        );
+        const members = groups()[0]!.members.map((ref) => ref.terminal_id);
+        check(
+          members.length === 2 &&
+            members[0] === leafOf("w1:t4").terminalId &&
+            members[1] === leafOf("w2:t1").terminalId,
+          `the group holds one terminal per tab, led by the tab dropped on (${members.join(", ")})`,
+        );
+        await waitFor(
+          () =>
+            host.querySelector('path.board-relation[data-kind="manual"]') !==
+            null,
+          "grouped tabs are not strung together",
+        );
+        // Ungroup from the tab's bar.
+        mount(2, spawned, leafOf("w2:t1").id);
+        await waitFor(
+          () =>
+            [...host.querySelectorAll("button")].some(
+              (b) => b.textContent === "Ungroup",
+            ),
+          "a grouped tab offers Ungroup",
+        );
+        [...host.querySelectorAll<HTMLButtonElement>("button")]
+          .find((b) => b.textContent === "Ungroup")!
+          .click();
+        await waitFor(() => groups().length === 0, "Ungroup did not ungroup");
+      }
+      // Select and group, at any width: Group… on one tab, then tap another.
+      mount(2, spawned, leafOf("w2:t1").id);
+      await waitFor(
+        () =>
+          [...host.querySelectorAll("button")].some(
+            (b) => b.textContent === "Group…",
+          ),
+        "a tab offers Group…",
+      );
+      [...host.querySelectorAll<HTMLButtonElement>("button")]
+        .find((b) => b.textContent === "Group…")!
+        .click();
+      await settle(50);
+      await bringIntoView(() => card(mate)!);
+      const tapAt = centre(card(mate)!.querySelector(".board-label")!);
+      pointer(card(mate)!, "pointerdown", tapAt.x, tapAt.y, 18);
+      pointer(card(mate)!, "pointerup", tapAt.x, tapAt.y, 18);
+      await waitFor(
+        () => groups().length === 1,
+        "Group… then a tap did not group the tabs",
+      );
+      mount(2, world, null);
+      await settle(50);
     },
   ],
   [
@@ -2640,6 +3088,33 @@ async function run() {
   }
   current = "";
 }
+
+// `?mode=preview`: the synthetic board with one spawn, for screenshots.
+if (mode === "preview")
+  void fresh().then(async () => {
+    mount(
+      2,
+      recordSpawns(
+        variant((leaf) =>
+          leaf.connectionId === "studio" && leaf.nativeId === "w1:p2"
+            ? {
+                ...leaf,
+                pane: {
+                  tokens: { spawned_by: "w1:p1" },
+                } as unknown as typeof leaf.pane,
+              }
+            : leaf,
+        ),
+      ),
+      null,
+    );
+    // Fixture time is manual: run it so the board settles, then fit it.
+    for (let frame = 0; frame < 120; frame += 1) await clock.advance(16);
+    document
+      .querySelector<HTMLButtonElement>('[aria-label="Fit everything"]')
+      ?.click();
+    for (let frame = 0; frame < 120; frame += 1) await clock.advance(16);
+  });
 
 if (mode === "test")
   run()

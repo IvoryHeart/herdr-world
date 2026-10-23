@@ -4,6 +4,7 @@ import {
   TOWN_MAX_RENDERED_DESKS,
   TOWN_ROOM_TIERS,
   townDeskSlots,
+  townPinCell,
   townSeat,
   townRoomTiers,
   TOWN_SHAPES,
@@ -332,6 +333,70 @@ test("a desk's furniture follows its panes", () => {
   expect(townDeskSlots(3).length).toBe(4);
 });
 
+test("a pinned desk keeps its cell through reflow and reorder; others fill around it", () => {
+  const keys = desks("a/room-0", 3);
+  // 3 desks: a 2×2 room; pin tab-2 at column 1, row 1 (its cell there).
+  const pins = new Map([[keys[2]!, { col: 1, row: 1 }]]);
+  const first = layoutTown(town({ a: [3] }), "wide", new Map(), pins);
+  expect(cellOf(first.layout, keys[2]!)).toMatchObject({ col: 1, row: 1 });
+  // The room reflows to 3 columns, and Herdr moves tab-2 to the front: the
+  // pinned desk stays; the others take the free cells in tab order.
+  const input = town({ a: [6] });
+  const order = [
+    keys[2]!,
+    ...input.rooms[0]!.deskKeys.filter((k) => k !== keys[2]),
+  ];
+  const second = layoutTown(
+    { ...input, rooms: [{ ...input.rooms[0]!, deskKeys: order }] },
+    "wide",
+    first.memory,
+    pins,
+  );
+  const room = second.layout.buildings[0]!.rooms[0]!;
+  expect(room.cols).toBe(3);
+  expect(cellOf(second.layout, keys[2]!)).toMatchObject({ col: 1, row: 1 });
+  const others = room.cells
+    .filter((cell) => cell.deskKey && cell.deskKey !== keys[2])
+    .map((cell) => cell.deskKey);
+  expect(others).toEqual(order.slice(1));
+  // Unpinned, it follows tab order again.
+  const unpinned = layoutTown(
+    { ...input, rooms: [{ ...input.rooms[0]!, deskKeys: order }] },
+    "wide",
+    second.memory,
+  );
+  expect(cellOf(unpinned.layout, keys[2]!)).toMatchObject({ col: 0, row: 0 });
+});
+
+test("a room grows to hold a pinned desk's cell, and a new pin keeps the cell it has", () => {
+  const keys = desks("a/room-0", 2);
+  const far = layoutTown(
+    town({ a: [2] }),
+    "wide",
+    new Map(),
+    new Map([[keys[0]!, { col: 3, row: 2 }]]),
+  );
+  const room = far.layout.buildings[0]!.rooms[0]!;
+  expect(room.cols).toBeGreaterThan(3);
+  expect(room.rows).toBeGreaterThan(2);
+  expect(cellOf(far.layout, keys[0]!)).toMatchObject({ col: 3, row: 2 });
+  // Just pinned (no saved cell): it keeps this scene's cell.
+  const live = layoutTown(town({ a: [5] }), "wide");
+  const at = cellOf(live.layout, "a/room-0/tab-4")!;
+  const input = town({ a: [5] });
+  const reordered = [...input.rooms[0]!.deskKeys].reverse();
+  const next = layoutTown(
+    { ...input, rooms: [{ ...input.rooms[0]!, deskKeys: reordered }] },
+    "wide",
+    live.memory,
+    new Map([["a/room-0/tab-4", null]]),
+  );
+  expect(cellOf(next.layout, "a/room-0/tab-4")).toMatchObject({
+    col: at.col,
+    row: at.row,
+  });
+});
+
 test("the container's size picks the shape, not one breakpoint", () => {
   expect(townShapeFor(390, 844)).toBe(TOWN_SHAPES.phone);
   expect(townShapeFor(1080, 1920)).toBe(TOWN_SHAPES.portrait);
@@ -434,4 +499,28 @@ test("reception, queue and lounge stay on walkable floor in every shape", () => 
         ).toBe(false);
     }
   }
+});
+
+test("a desk pinned during a held reflow keeps the cell the user sees", () => {
+  const keys = desks("a/room-0", 3);
+  // The visible (held) layout has tab-2 in tab order; the pending one has
+  // moved it to column 1, row 1.
+  const visible = layoutTown(town({ a: [3] }), "wide").layout;
+  const pending = layoutTown(
+    town({ a: [3] }),
+    "wide",
+    new Map(),
+    new Map([[keys[2]!, { col: 1, row: 1 }]]),
+  ).layout;
+  const seen = cellOf(visible, keys[2]!)!;
+  expect(cellOf(pending, keys[2]!)).toMatchObject({ col: 1, row: 1 });
+  expect(seen.col === 1 && seen.row === 1).toBe(false);
+  expect(townPinCell(visible, pending, keys[2]!)).toEqual({
+    col: seen.col,
+    row: seen.row,
+  });
+  // A desk the visible layout lacks takes its pending cell.
+  const before = layoutTown(town({ a: [2] }), "wide").layout;
+  expect(townPinCell(before, pending, keys[2]!)).toEqual({ col: 1, row: 1 });
+  expect(townPinCell(before, before, keys[2]!)).toBeNull();
 });

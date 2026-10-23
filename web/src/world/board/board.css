@@ -808,6 +808,21 @@
   font-size: 13px;
   cursor: pointer;
 }
+/* A pinned card's badge, and the bar's Pin toggle. */
+.board-pin {
+  flex: none;
+  display: inline-flex;
+  color: var(--board-accent);
+}
+.board-notebar .board-pin-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.board-notebar .board-pin-toggle[aria-pressed="true"] {
+  border-color: var(--board-accent);
+  color: var(--board-accent);
+}
 /* The swatches show their colour: more specific than the bar's buttons. */
 .board-notebar .board-swatch.board-note-yellow {
   background: var(--note-yellow);
@@ -1401,4 +1416,11 @@
   font: inherit;
   font-size: 11px;
   cursor: pointer;
+}
+
+/* A host's colour, which tints its zone. */
+.board-zone-label .board-zone-color {
+  pointer-events: auto;
+  width: 22px;
+  height: 22px;
 }

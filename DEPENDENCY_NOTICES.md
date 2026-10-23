@@ -31,7 +31,11 @@ are reproduced in `DEPENDENCY_LICENSES.md`.
 | @aws-sdk/types | 3.974.6 | Apache-2.0 |
 | @aws-sdk/xml-builder | 3.972.41 | Apache-2.0 |
 | @aws/lambda-invoke-store | 0.3.0 | Apache-2.0 |
+| @babel/helper-string-parser | 8.0.8 | MIT |
+| @babel/helper-validator-identifier | 8.0.6 | MIT |
+| @babel/parser | 8.0.8 | MIT |
 | @babel/runtime | 7.29.7 | MIT |
+| @babel/types | 8.0.8 | MIT |
 | @biomejs/biome | 2.5.15 | MIT OR Apache-2.0 |
 | @bramus/specificity | 2.4.3 | MIT |
 | @codemirror/autocomplete | 6.20.3 | MIT |

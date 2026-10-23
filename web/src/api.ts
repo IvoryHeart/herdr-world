@@ -1,3 +1,4 @@
+import { isValidPopupPayload } from "./popupPayload";
 import {
   isAssistantSnapshot,
   isAssistantTaskNotification,
@@ -244,29 +245,6 @@ export interface PopupStatePush {
   } | null;
 }
 
-function isValidPopupSize(value: unknown): boolean {
-  if (value === null) return true;
-  if (!value || typeof value !== "object") return false;
-  const size = value as Record<string, unknown>;
-  return (
-    (size.kind === "cells" || size.kind === "percent") &&
-    typeof size.value === "number"
-  );
-}
-
-function isValidPopupPayload(value: unknown): boolean {
-  if (value === null) return true;
-  if (!value || typeof value !== "object") return false;
-  const popup = value as Record<string, unknown>;
-  return (
-    typeof popup.terminal_id === "string" &&
-    popup.terminal_id.length > 0 &&
-    typeof popup.title === "string" &&
-    isValidPopupSize(popup.width) &&
-    isValidPopupSize(popup.height)
-  );
-}
-
 export interface TerminalClosedPush {
   connection_id: string;
   connection_generation?: number;
@@ -280,6 +258,7 @@ export interface BridgeControlMsg {
     | "world_invalidated"
     | "world_watchlist_changed"
     | "world_board_changed"
+    | "world_ledger_changed"
     | "world_profiles_changed"
     | "agent_conversation_changed";
   reason?: string;
@@ -287,6 +266,8 @@ export interface BridgeControlMsg {
   connection_id?: string;
   connection_generation?: number;
   revision?: number;
+  /** world_ledger_changed: a question was asked or answered. */
+  asks?: boolean;
 }
 
 type Pending = {

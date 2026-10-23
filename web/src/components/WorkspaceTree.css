@@ -263,3 +263,13 @@
   display: inline-block;
   color: var(--muted);
 }
+
+/* A workspace's chosen colour, before its name (World keeps it). */
+.ws-color {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  margin-right: 5px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.25);
+}

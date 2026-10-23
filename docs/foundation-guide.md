@@ -12,6 +12,22 @@ The active service-side Herdr socket adapter lives in [server/src/bridge/](../se
 The retired browser-federated/Rust bridge and remote bridge URL are separate from
 this active adapter; browser traffic stays on the one World origin.
 
+The agent History/session resolver owns Codex binding.
+[Conversation binding](../server/src/agent/conversation-binding.ts) derives
+reported/title fingerprints and session labels for the Herdr source.
+[Daemon observation](../server/src/agent/codex-app-server.ts) implements bounded
+read-only JSON-RPC on the selected runtime, and
+[inference](../server/src/agent/codex-daemon-binding.ts) checks unique panes and
+threads, unchanged evidence and recent matching activity. A
+runtime-owned [discovery cache](../server/src/agent/codex-discovery-cache.ts)
+shares in-flight reads and backs off failures; quest batches retain successful
+metadata only until their final pane check and snapshot finish. Recent unloaded
+threads remain competitors, and unseen daemon clients remain an explicit limit.
+The
+[protocol tests](../server/src/agent/codex-app-server.test.ts) and
+[binding tests](../server/src/agent/codex-daemon-binding.test.ts) cover transport
+failure, collisions, connection isolation and refusal of inferred input authority.
+
 ## Process and request path
 
 ```text
@@ -48,6 +64,19 @@ They share existing connection/session admission and store interfaces.
 lifetime; Board draws DOM cards from [BoardView](../web/src/world/BoardView.tsx). The [component routes](../web/src/world/README.md#shell-and-source-ownership)
 identify each owner and its regression evidence. Shared styles load through the
 ordered [World style manifest](../web/src/world/world.css).
+
+Browser RPC admission and routing stay in `server/src/index.ts`. After those
+checks, [namespace handlers](../server/src/rpc/) handle bridge, connection profile,
+World, launcher, Board/Town, agent, file and Git/worktree methods. They receive the
+captured request and service dependencies through [context.ts](../server/src/rpc/context.ts);
+no handler imports service startup at runtime. The entry retains Windows guards,
+workspace/tab creation pre-steps, terminal/settings forwarding and Herdr pass-through.
+`rpc/world.ts` reuses the CLI service for asks; `rpc/agent.ts` reuses the conversation
+dispatcher. PR actions retain their existing Sources HTTP path. Add RPC branches to
+the owning namespace and keep admission, lifetime and response publication in the
+entry. Existing [routing tests](../server/src/connections/protocol.test.ts) and
+[session-link tests](../server/src/connections/session-link-routing.test.ts) cover
+captured connection identity and stale-generation rejection.
 
 ## Service ownership
 

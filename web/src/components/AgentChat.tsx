@@ -30,248 +30,33 @@ import { useAgentHistoryWindow } from "./useAgentHistoryWindow";
 import { AttachmentChips } from "./AttachmentChips";
 import { CodexSessionLink } from "./CodexSessionLink";
 import { QuestLog } from "./QuestLog";
-import type { Quest } from "../../../server/src/agent/quest";
+import { useStepEvidence } from "./chat/useStepEvidence";
+import {
+  DOUBLE_ESCAPE_MS,
+  elapsed,
+  STATUS_WORDS,
+  STOPS_WITH_ESCAPE,
+  titleTask,
+} from "./chat/blocks/now";
 import "./AgentChat.css";
+import { AskCard, UNCONFIRMED } from "./chat/blocks/ask";
+import type {
+  AnswerResult,
+  Conversation,
+  SendResult,
+  UnconfirmedReason,
+} from "./chat/types";
+import "./chat/blocks/now.css";
 
-// Mirrors the server's conversation read model (server/src/agent/conversation.ts).
-export type ConversationMessage = {
-  id: string;
-  role: "user" | "assistant" | "tool";
-  kind: "message" | "error" | "activity" | "notice";
-  text: string;
-  sent_at: string;
-  tools?: { name: string; calls: number }[];
-  failed?: number;
-};
-
-export type Conversation = {
-  conversation_version: 1;
-  pane_id: string;
-  agent: string | null;
-  agent_status: string | null;
-  session_binding: "reported" | "title" | "guessed" | null;
-  session_fingerprint: string | null;
-  session_label: string | null;
-  /** The harness's terminal title, such as the task it is on. */
-  terminal_title?: string | null;
-  /** The tool call started and not yet finished, from the transcript. */
-  running_tool?: {
-    id: string;
-    name: string;
-    summary: string | null;
-    started_at: string;
-  } | null;
-  status: "ok" | "unavailable";
-  unavailable: {
-    reason: string;
-    detail: string;
-    command?: string;
-    issue?: string;
-  } | null;
-  /** Only in a full read; Chat reads the summary and History's window. */
-  messages?: ConversationMessage[];
-  latest: ConversationMessage | null;
-  /** The agent's quest: its todos, plan, goal or loop. */
-  quest?: Quest | null;
-  /**
-   * Sends not yet seen in this conversation, sends with evidence they went
-   * elsewhere, and sends Chat can no longer check.
-   */
-  deliveries?: ConversationDelivery[];
-  /** The question a blocked agent is waiting on, read from its screen. */
-  pending_prompt?: PendingPrompt | null;
-};
-
-export type PendingPrompt = {
-  question: string[];
-  /** The complete request asked about: a command, or a file and its edit. */
-  request: string[];
-  options: {
-    number: string;
-    label: string;
-    key: string;
-    description?: string;
-  }[];
-  fingerprint: string;
-};
-
-type AnswerResult =
-  | {
-      status: "sent";
-      number: string;
-      label: string;
-      acknowledged: boolean;
-      unconfirmed_reason: UnconfirmedReason | null;
-      prompt_fingerprint: string;
-    }
-  | { status: "refused"; reason: string; message: string };
-
-// Mirrors AnswerUnconfirmedReason in server/src/agent/conversation.ts.
-type UnconfirmedReason =
-  | "agent_missing"
-  | "session_changed"
-  | "unknown_status"
-  | "unreadable"
-  | "still_showing";
-
-const UNCONFIRMED: Record<UnconfirmedReason, string> = {
-  still_showing:
-    "the question is still showing; check the Terminal if it does not move on.",
-  session_changed:
-    "the pane has another session now, so the key may have reached it. Check the Terminal.",
-  unknown_status:
-    "Herdr does not say what the agent is doing now, so Chat cannot confirm the answer. Check the Terminal.",
-  agent_missing:
-    "Herdr no longer reports the agent, so Chat cannot confirm the answer. Check the Terminal.",
-  unreadable:
-    "Chat could not read the screen to confirm the answer. Check the Terminal.",
-};
-
-export type ConversationDelivery = {
-  id: string;
-  text: string;
-  sent_at: string;
-  state: "pending" | "matched" | "misdelivered" | "uncertain" | "unverified";
-  expected: string;
-  fingerprint: string;
-  matched_id?: string;
-  delivered_to?: string;
-  evidence?: "herdr" | "transcript";
-  detail?: string;
-};
-
-type SendResult =
-  | { status: "sent" }
-  | { status: "refused"; reason: string; message: string };
+export type {
+  Conversation,
+  ConversationDelivery,
+  ConversationMessage,
+  PendingPrompt,
+} from "./chat/types";
 
 const preview = (text: string) =>
   text.length > 80 ? `${text.slice(0, 79)}…` : text;
-
-/**
- * The agent's own question, with its options as buttons. The options are read
- * from the agent's prompt and each presses that option's key; when none can be
- * read, Chat shows the question and the way to the Terminal instead of
- * guessing.
- */
-function AskCard({
-  agent,
-  prompt,
-  answering,
-  notice,
-  onAnswer,
-  onOpenTerminal,
-}: {
-  agent: string;
-  prompt: PendingPrompt;
-  answering: boolean;
-  notice: string;
-  onAnswer(key: string): void;
-  onOpenTerminal?: () => void;
-}) {
-  const terminal = onOpenTerminal ? (
-    <button type="button" onClick={onOpenTerminal}>
-      <SquareTerminal size={13} /> Answer in the Terminal
-    </button>
-  ) : null;
-  return (
-    <section
-      className="agent-chat-ask"
-      aria-label={`${agent} is waiting`}
-      // Keys answer only while this card has focus, and a held key repeats
-      // nothing: another Chat's question is never answered from here.
-      tabIndex={0}
-      onKeyDown={(event) => {
-        if (
-          event.repeat ||
-          event.defaultPrevented ||
-          event.metaKey ||
-          event.ctrlKey ||
-          event.altKey ||
-          answering
-        )
-          return;
-        const option = prompt.options.find(
-          (candidate) => candidate.number === event.key,
-        );
-        if (!option) return;
-        event.preventDefault();
-        onAnswer(option.key);
-      }}
-    >
-      <h3>{agent} is waiting on you</h3>
-      {prompt.request.length ? <pre>{prompt.request.join("\n")}</pre> : null}
-      {prompt.question.map((line, index) => (
-        <p key={index}>{line}</p>
-      ))}
-      {prompt.options.length ? (
-        <>
-          <div
-            className="agent-chat-ask-options"
-            role="group"
-            aria-label="Answers"
-          >
-            {prompt.options.map((option, index) => (
-              <button
-                key={option.number}
-                type="button"
-                className={index === 0 ? "is-primary" : undefined}
-                disabled={answering}
-                onClick={() => onAnswer(option.key)}
-              >
-                <kbd>{option.number}</kbd>
-                <span className="agent-chat-ask-label">
-                  {option.label}
-                  {option.description ? (
-                    <small>{option.description}</small>
-                  ) : null}
-                </span>
-              </button>
-            ))}
-          </div>
-          <p className="agent-chat-ask-fine">
-            Options read from {agent}'s own prompt. Chat checks the question
-            again just before it presses the one you pick, but Herdr cannot hold
-            it still: if it changes in that instant, the key reaches the new
-            one. With this card focused, its number picks it too.
-          </p>
-        </>
-      ) : (
-        <p className="agent-chat-ask-fine">
-          Chat cannot read the choices in this prompt safely, so it does not
-          answer it. {terminal}
-        </p>
-      )}
-      {notice ? (
-        <p className="agent-chat-ask-notice" role="alert">
-          {notice} {terminal}
-        </p>
-      ) : null}
-    </section>
-  );
-}
-
-/** Harnesses where Esc interrupts the current turn without quitting. */
-const STOPS_WITH_ESCAPE = new Set(["claude", "codex", "pi"]);
-/** Two presses of Esc this close together stop the agent. */
-const DOUBLE_ESCAPE_MS = 700;
-
-function elapsed(ms: number) {
-  const seconds = Math.max(0, Math.floor(ms / 1000));
-  return seconds < 60
-    ? `${seconds}s`
-    : `${Math.floor(seconds / 60)}m ${String(seconds % 60).padStart(2, "0")}s`;
-}
-
-/** The task a harness names in its title, without its spinner glyph. */
-const titleTask = (title: string | null | undefined) =>
-  title?.replace(/^[^\p{L}\p{N}]+/u, "").trim() || null;
-
-const STATUS_WORDS: Record<string, string> = {
-  working: "Working",
-  blocked: "Needs you",
-  done: "Done",
-  idle: "Idle",
-};
 
 /**
  * Chat reads only the conversation read model and sends with Herdr's agent
@@ -390,6 +175,13 @@ export function AgentChat({
     () => groupHistoryChatItems(history.messages),
     [history.messages],
   );
+  const stepEvidence = useStepEvidence({
+    client: connectionClient,
+    paneId: pane.pane_id,
+    sessionFingerprint: conversation?.session_fingerprint ?? null,
+    entries: history.messages,
+    enabled: active && !details,
+  });
 
   // While visible, ask the service to watch this pane and reread when it says
   // the conversation changed, or after the connection comes back.
@@ -867,6 +659,7 @@ export function AgentChat({
             onLoadTool={history.loadToolEntry}
             onOpen={setExpanded}
             matchedIds={matchedIds}
+            stepEvidence={stepEvidence}
             after={[
               running ? (
                 <div

@@ -13,7 +13,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   Each host is a building, each workspace a room, each tab a team table and each
   pane a seat. Plain terminals show prompts. Additional panes beyond the drawn
   seats remain available through the table's count and chooser. Each table
-  carries its tab's name on a nameplate at its front edge.
+  carries its tab's name on a nameplate at its front edge. Agents go by the
+  name Herdr gives them (`firstmate`), else their harness (`claude`); window
+  and Inspector titles put the name first (`firstmate · claude`).
   - Blocked agents queue at reception oldest first. Finished agents wait there
     until you open their terminal or mark that completion reviewed, then join
     idle agents in the lounge. Movement only represents state.
@@ -79,6 +81,31 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     with more than 127 tabs keeps its three newest and busiest tables and
     hides idle ones first. Town asks Herdr to move the tab and
     shows the new order when Herdr reports it; agents stay with their table.
+  - **Teams.** Tables whose agents know each other are drawn inside one wall
+    with a connector: a spawned agent is joined to the agent that started it,
+    and a manual group with dotted lines; stale links are faded while a host
+    is offline, and dropped once its agents have closed.
+    Drag a table onto another table and hold it there a moment: it snaps to
+    that table (**Group with …**), and dropping groups them. Town moves it to
+    that room if needed and seats its tab beside the other's in Herdr. A quick
+    drop keeps meaning a move or a reorder, so the gestures stay separate.
+    Drop a table you grouped on its own room's bare floor (not the free spot)
+    to leave its group; a spawn link stays, since Herdr's stamp records it.
+    **M** on a focused table offers the same as **Group with…** and **Leave
+    the team**, and the table's accessible name lists its teammates. A
+    pinned table joins a team only in its own room, and keeps its place.
+  - **Pin a desk** from its agent window's **⋯** menu (**Pin desk in Town**),
+    on a phone too. A
+    pinned table wears a pin and keeps its place: tab reorders, a room growing
+    or Town's own placement leave it, and it cannot be dragged until you unpin
+    it (other tables fill the free places in tab order). In a room with more
+    tabs than Town shows, pinned tables (and their agents) are always shown, before the newest and busiest. Its agents stay at it:
+    they never go to the lounge, leave only to wait at reception (blocked, or
+    finished and not yet seen) and walk straight back once you have seen them.
+    The pin is a World view setting, saved on the World service beside
+    terminal colours, so every device sees it; Herdr is unchanged, and
+    Spaces' tab pins (close protection in this browser) are separate. A pin
+    follows its tab when the tab moves to another room and goes when it closes.
   - Cached failed-host buildings stay stale and non-actionable. Search and Hosts
     use the shared aggregate. Reception and lounge positions only show status;
     only an explicit move changes Herdr's layout, always within one host.
@@ -124,9 +151,31 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   colour with **Default colour** the same way. Herdr has no tab colour, so the World service
   saves the choice keyed by host and Herdr tab ID, the same on every device. A
   closed tab's saved colour is dropped.
+  - Workspaces and hosts have colours too. A workspace's colour is its Town
+    room's carpet (swatch beside the room's name), its Board card and a dot in
+    the Spaces sidebar (its menu offers the palette); its tabs without a colour
+    of their own take it. A host's colour is its Town building's roof (swatch on
+    its reception board), its Board zone (swatch on the zone label) and its
+    Spaces header; it is not passed on to tabs. **Default colour** returns a
+    place to its own default.
   - A desk moved to another room keeps the colour it showed, even a default or
     its old room's, saved as its own colour: it no longer follows its room's
     colour, and **Default colour** resets it to its new tab's default.
+  - A spawned agent's tab without a colour of its own takes the colour of the
+    tab that spawned it (before its workspace's colour), and keeps following it
+    when moved. A chosen colour always wins.
+- **Agent interest.** The button beside an agent's name in its Inspector
+  header in Town, Board and Spaces sets **Watching** (the default), **Muted**
+  or **Focused** for that agent, saved by the World service for its terminal on
+  every device. Chimes
+  read it: a muted agent never chimes, and while a focused agent is reachable
+  only focused agents and the Town master's needs-you chime (Watching then
+  says it is quiet). A focus on an offline host silences no one until the host
+  is back. Interest never hides
+  anything from reception. It follows the terminal through moves, and goes
+  when its host shows the terminal has closed, including after reconnecting.
+  A failed save shows an error and keeps the previous choice; reopen the
+  button to retry.
 
 - **Board** (`/board`) shows hosts as zones, workspaces as cards and tabs as
   cards around their workspace, beside your notes. Cards are elastic while you
@@ -134,6 +183,11 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   pans the board, as in Town) and settle within a second; workspaces fold into a count and open
   into free space; Tidy (with Undo) rearranges a workspace or the board and
   carries strung notes along. Zoomed out, workspaces show a square per pane.
+  - **Pin** in a selected card's bar keeps the card where it is: it shows a
+    pin, and placement, Tidy and settling leave it until **Unpin** (a drag
+    still moves it). On a phone, where the card's terminal covers Board, the
+    pin in the terminal's header pins its card. Pins are saved with the board
+    on the World service.
   - Tabs list each pane as a row; plain-shell tabs look like terminals; only a
     working agent's tab (or the selected one) pulses (a ⋯ setting).
   - An agent with a quest shows a ⚑ chip with its progress (such as 2/5, or
@@ -286,6 +340,25 @@ each source's state, switch it off or configure it.
   on its nameplate (`#123 ✓`, `#123 ✗`, `#123 ●` or `ABC-12`), and Board's Work
   lens names it on the card. A link holds only for the agent session and
   Herdr runtime it was made in.
+- **Your open pull requests** get a card in Work with CI on the head (a dot
+  per check), each rev agent's latest result ("per rev4's comment", read from
+  its `RESULT #N: …` line; GitHub can't take your own approval, so reviews are
+  comments) and your merge rules: not a draft, every finding confirmed, CI
+  green on the head, mergeable, and screenshots for a change to the web app
+  or site. Each rule shows ✓, ✗ or ? (World can't tell; a confirmation of an
+  older head is ?). **Details** lists the failing checks with links, the
+  reviewers, the head commit and how far it is behind its base. A card says
+  **Ready to merge** when every rule holds, and **Stalled** when CI failed on
+  the head and its agent is idle.
+- **Merge…**, **Close…** and **Mark ready…** (for a draft) open a sheet that
+  says exactly what happens; nothing runs until you confirm. Merge makes a
+  merge commit, keeps the branch and refuses if anyone pushed since you
+  looked; failing rules make it **Merge despite N failing rules**. GitHub's
+  answer, or its reason for refusing, shows on the card. World never bypasses
+  branch protection: while GitHub requires a review, the card offers **Open
+  on GitHub** and **Copy merge command** instead of Merge. The same card
+  opens from the pull request's badge on its agent's Town desk (a sheet on a
+  phone).
 - A source that is not signed in or configured says how to connect it (Work
   shows a quiet **Set up** button for one you never set up); the views work
   without it. The service refreshes at most once a minute while a visible
@@ -314,6 +387,53 @@ Herdr pane. The Inspector shows it only while the current
 agent session matches the report. Herdr owns expiry; the command does not infer work,
 assign tasks, or provide a Clear operation.
 
+### Teams and spawn stamps
+
+World groups terminals that know each other. Each relation lists its evidence,
+one entry per source, with the source's system of record and whether it holds
+now: a **spawn** (Herdr pane metadata while it lives, then World's saved copy)
+or a **manual group** (saved by World). Evidence for a terminal that is gone or
+on a stale host is shown as stale, not dropped. Herdr records no creator for a
+tab or pane, so a spawner stamps the child:
+`herdr-world stamp CHILD_PANE PARENT_PANE` (`bun run agent:stamp --` in a
+checkout). Board's **Start an agent** stamps the new agent when its note is
+strung to one pane. Town draws teams as walls and connectors; Board strings
+related cards and groups a tab dropped on another tab, or chosen with
+**Group…** and a tap; **Ungroup** undoes it.
+
+### Agent CLI (`herdr-world --skill`)
+
+Agents change World objects themselves from their pane, through the running
+World service. `herdr-world --skill` prints the guide; commands answer in JSON
+when piped, with stable exit codes:
+
+- `colour set|reset`, `board card pin|unpin|move|group|ungroup|colour`: Board
+  cards and tab or workspace colours. Recorded with the agent and time;
+  `history` lists changes and `undo <change>` takes one back.
+- `town desk move … --herdr`: reorder a desk in its room with Herdr's tab
+  order, as a drag in Town does. It needs `--herdr` because it changes Herdr,
+  and World cannot undo it.
+- `ask "…" [--options a,b] [--owner-only] [--wait]`: a question for you. It
+  appears first in Town's **Needs you** list, where you pick an option or
+  type an answer; `--wait` blocks until then. Another verified agent (never
+  the one that asked) may answer a question that is not owner-only.
+- `result --task ID "…" [--pr N] [--status done|blocked|failed]` and
+  `result ls`: task results kept by World, instead of terminal scraping.
+- `spawned-by <parent-pane>`: the spawn stamp, made by the child itself. It
+  is display-only Herdr pane metadata, so it needs no `--herdr`; the parent
+  it names is the child's claim.
+- `whoami`, `ls`, `history [--actor]`.
+
+World checks who is calling: the CLI sends its `HERDR_PANE_ID`, and the
+service accepts it only when the calling process runs in that pane of a local
+Herdr (the pane's shell or foreground process is among its ancestors).
+The CLI reaches only a World service on the same machine, with a token
+derived from the service's signing secret that cannot log a browser in.
+Otherwise the change is labelled unverified, or "terminal with no pane" when
+no pane is named, since any process can leave it out; `me` and `spawned-by`
+need a verified pane. The CLI never
+merges, deletes panes, tabs or workspaces, or reaches outside World.
+
 ### Agent checkout context
 
 An active agent can report its exact checkout once with `herdr-world
@@ -341,13 +461,13 @@ choice. Agent checkout has no Git mutation controls or Clear command.
   the topbar, tab strip, and sidebar and run the terminal flush to the window.
   Hovering the Exit Zen tab slides the topbar back, and it stays while one of its
   menus is open. The sidebar still toggles inside Zen and returns to its prior
-  state on exit; split layouts keep pane borders. Town opens in Zen and keeps
-  its own choice; the other views share theirs. While Zen is on, a view picker
-  beside Exit Zen switches between Town, Board, Desk and Spaces. On a phone, Zen
-  hides the top bar and bottom navigation on Town, Board and Desk; a corner
-  button opens the views and **Show the bars**, and the settings menu's **Zen
-  mode** switch turns it back on. A terminal and Spaces keep their bar for Back.
-  Stored in this browser.
+  state on exit; split layouts keep pane borders. Every World view opens in
+  Zen by default, with one choice shared by Town, Board, Desk and Spaces; the
+  settings menu's **Zen mode** switch turns it off or back on. While Zen is on,
+  a view picker beside Exit Zen switches between the views. On a phone, Zen
+  hides the top bar and bottom navigation on every root screen, Spaces' list
+  included; a corner button opens the views and **Show the bars**. A terminal is
+  a detail screen and keeps its own bar, with Back. Stored in this browser.
 
 Herdr 0.9.0 uses **Local navigation** per browser/connection; legacy connections
 use **Shared navigation**. Reconnect preserves live selections; reload starts
@@ -486,6 +606,9 @@ See [resource ownership](docs/ARCHITECTURE.md#workspace-resource-ownership).
   with each choice's description) or plan approval, Chat shows it as an ask
   card and answers with the option you pick (click or its number key), after
   checking the question has not changed.
+  Each tool call's row in Chat carries its evidence: a plain label, its state
+  and time, a pass or fail badge for a test run, and when opened, the edit's
+  diff, the test strip with its first failure, or the end of its output.
   It refreshes when the service sees the transcript, title or status change,
   without browser polling, and keeps the last good view if a read fails. When
   it cannot read the conversation it shows the reason with the matching action:
@@ -502,6 +625,10 @@ See [resource ownership](docs/ARCHITECTURE.md#workspace-resource-ownership).
   and confirm its association with the foreground Codex pane. This replaces the
   existing link for all viewers. Codex lookup searches active and archived records
   on the selected local/Unix SSH runtime; Windows SSH history remains unavailable.
+  For shared-daemon Codex panes without a session report or thread title, one
+  matching pane and one loaded thread can provide a recent, read-only guess.
+  Ambiguity shows no conversation. Add **Thread ID** with `/title`, link the
+  session explicitly, or use the Terminal to reply or answer permissions.
 - Open Details with independent User/Agent/Tool filters (User/Agent enabled,
   Tool hidden initially), a message minimap, and on-demand tool details. The recent window
   counts 200 conversation entries, not associated tools; exports remain complete.

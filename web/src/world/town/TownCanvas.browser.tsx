@@ -6,6 +6,7 @@ import type { Pane, Tab, Workspace } from "../../types";
 import type { WorldRuntimeConnection } from "../runtimeStore";
 import { buildWorldObject, type WorldObject } from "../worldObject";
 import TownView from "../TownView";
+import type { BoardDocument, BoardOp } from "../board/boardDocument";
 import { TOWN_SHAPES, townShapeFor } from "./townLayout";
 import "../../components/TerminalView.css";
 import "../../components/MobileControls.css";
@@ -19,6 +20,15 @@ import {
 import { readCompletionSeen } from "../completionSeenState";
 import { worldSourcesStore } from "../worldSources";
 import "../world.css";
+import {
+  joinGroup,
+  leaveGroups,
+  observedSpawnClaims,
+  type RelationGroup,
+  type SpawnClaim,
+  type TerminalRef,
+} from "../../../../shared/relations";
+import { relationObservations } from "../relations";
 import { worldLocalStorage } from "../../browserStorage";
 import {
   readOfficePreferences,
@@ -40,12 +50,15 @@ const check = (condition: boolean, message: string) => {
   if (!condition) failures.push(message);
 };
 const settle = () => new Promise((resolve) => setTimeout(resolve, 50));
-async function waitFor(condition: () => boolean, message: string) {
+async function waitFor(
+  condition: () => boolean,
+  message: string | (() => string),
+) {
   for (let index = 0; index < 400; index += 1) {
     if (condition()) return;
     await settle();
   }
-  throw new Error(message);
+  throw new Error(typeof message === "string" ? message : message());
 }
 
 function random(seed: number) {
@@ -214,6 +227,15 @@ function topology(seed: number): Topology {
         agent_status: "working",
       });
     });
+    // An agent in the first room spawned the one at the next desk.
+    const [first] = workspaces;
+    const child = panes.find(
+      (pane) => pane.pane_id === `${first?.workspace_id}-tab-1-pane-0`,
+    );
+    if (child)
+      (child as Pane & { tokens?: Record<string, string> }).tokens = {
+        spawned_by: `${first!.workspace_id}-tab-2-pane-0`,
+      };
     return {
       connectionId: host.id,
       label: host.label,
@@ -224,7 +246,25 @@ function topology(seed: number): Topology {
       snapshotGeneration: 3,
       stale: false,
       actionable: true,
-      snapshot: { workspaces, tabs, panes, agents: [] },
+      snapshot: {
+        workspaces,
+        tabs,
+        panes,
+        // Screenshots only (?names=demo): Herdr names for every agent.
+        agents:
+          typeof location !== "undefined" &&
+          new URLSearchParams(location.search).get("names") === "demo"
+            ? panes
+                .filter((pane) => pane.agent)
+                .map((pane) => ({
+                  pane_id: pane.pane_id,
+                  terminal_id: pane.terminal_id,
+                  agent: pane.agent,
+                  agent_status: pane.agent_status,
+                  name: pane.task_summary?.split(" ")[0]?.toLowerCase(),
+                }))
+            : [],
+      },
     };
   });
   return { connections, agentPanes };
@@ -258,6 +298,7 @@ const SCREENS = {
     "✻ Thinking…",
   ],
 };
+
 // The service's conversation pushes, delivered as the bridge delivers them.
 const controls = new Set<(control: BridgeControlMsg) => void>();
 bridge.onControl = (handler) => {
@@ -388,6 +429,103 @@ let latestText =
   },
 });
 
+/*
+ * World's Board store, as the service keeps it: terminal, workspace and host
+ * colours (card.color), groups joined with the shared rules, and every patch
+ * recorded.
+ */
+const boardPatches: { op: string; [key: string]: unknown }[] = [];
+let boardDocument: BoardDocument = {
+  version: 1,
+  revision: 1,
+  layout: { anchors: {}, offsets: {}, pinned: {}, folded: [], colors: {} },
+  notes: [],
+  strings: [],
+  relations: { spawns: [] as SpawnClaim[], groups: [] as RelationGroup[] },
+};
+// `?colors=demo` (for screenshots) starts with chosen room and host colours.
+if (params.get("colors") === "demo")
+  boardDocument.layout.colors = {
+    "local:local-orbit": "teal",
+    "local:local-harbor": "pink",
+    "@host:local": "purple",
+    "@host:build": "orange",
+  };
+const boardListeners = new Set<
+  (control: { type: string; revision?: number }) => void
+>();
+const worldBridge = bridge as unknown as {
+  call(method: string, params?: Record<string, unknown>): Promise<unknown>;
+  onControl(listener: (control: { type: string }) => void): () => void;
+};
+const bridgeCall = worldBridge.call.bind(bridge);
+/** One open question from an agent (`herdr-world ask`), as the service keeps it. */
+const ledger = {
+  version: 1,
+  revision: 1,
+  changes: [],
+  results: [],
+  asks: [
+    {
+      id: "q-synthetic-1",
+      at: Date.now() - 90_000,
+      actor: { label: "claude in w1:p2", verified: true },
+      question: "Ship the reception fix now, or wait for review?",
+      options: ["Ship", "Wait"],
+      owner_only: true,
+    },
+  ],
+};
+worldBridge.call = async (method, params) => {
+  if (method === "world.asks.get") return structuredClone(ledger);
+  if (method === "world.board.get") return structuredClone(boardDocument);
+  if (method === "world.board.patch") {
+    for (const op of (params?.ops ?? []) as {
+      op: string;
+      id: string;
+      members: TerminalRef[];
+      target: TerminalRef[];
+      key: string;
+      color: Extract<BoardOp, { op: "card.color" }>["color"];
+    }[]) {
+      boardPatches.push(op);
+      if (op.op === "card.color") {
+        const colors = (boardDocument.layout.colors ??= {});
+        if (op.color) colors[op.key] = op.color;
+        else delete colors[op.key];
+      }
+      const relations = (boardDocument.relations ??= {
+        spawns: [],
+        groups: [],
+      });
+      const groups = relations.groups;
+      relations.groups =
+        op.op === "group.join"
+          ? joinGroup(groups, op.members, op.target, op.id, Date.now())
+          : op.op === "group.leave"
+            ? leaveGroups(groups, op.members)
+            : groups;
+    }
+    boardDocument = { ...boardDocument, revision: boardDocument.revision + 1 };
+    for (const listener of boardListeners)
+      listener({
+        type: "world_board_changed",
+        revision: boardDocument.revision,
+      });
+    return { document: structuredClone(boardDocument) };
+  }
+  return bridgeCall(method, params);
+};
+const bridgeOnControl = worldBridge.onControl.bind(bridge);
+worldBridge.onControl = (listener) => {
+  boardListeners.add(listener);
+  const off = bridgeOnControl(listener);
+  return () => {
+    boardListeners.delete(listener);
+    off();
+  };
+};
+
 /** Set to make every conversation read unavailable. */
 let conversationUnavailable = false;
 
@@ -395,6 +533,183 @@ let conversationUnavailable = false;
 function hoverEntry(entry: Element) {
   entry.dispatchEvent(
     new MouseEvent("mouseover", { bubbles: true, relatedTarget: null }),
+  );
+}
+
+/**
+ * Teams: the fixture's spawn token draws a connector; dragging one desk onto
+ * another in its room groups them (a mouse on wide screens, a held touch on
+ * phones), seats its tab after the other's in Herdr and walls them in.
+ */
+async function groupTwoDesks(
+  host: HTMLElement,
+  canvasHost: HTMLElement,
+  room: string,
+) {
+  await waitFor(
+    () => host.querySelector('.town-team-link[data-kind="spawned"]') !== null,
+    "a spawned agent's desk has no connector to its parent's",
+  );
+  // The spawned desk ("task 2") wears its parent's ("task 3") colour.
+  const deskColor = (name: string) =>
+    host
+      .querySelector<HTMLElement>(
+        `.world-semantic-target[data-kind="desk"][aria-label^="Desk ${name}, ${room},"]`,
+      )
+      ?.getAttribute("data-color");
+  await waitFor(
+    () =>
+      Boolean(deskColor("task 3")) &&
+      deskColor("task 2") === deskColor("task 3"),
+    `the spawned desk does not inherit its parent's colour (${deskColor("task 2")} vs ${deskColor("task 3")})`,
+  );
+  // Visible, with its centre (where the pointer rests) clear of the edge
+  // zone and the rail on wide screens, where a carried desk pans the town
+  // and would slide away from the desk it rests on.
+  const clear = 64;
+  const left = phone ? clear : 252 + clear;
+  const onScreen = (target: HTMLElement) => {
+    const box = target.getBoundingClientRect();
+    const x = box.left + box.width / 2;
+    const y = box.top + box.height / 2;
+    return (
+      box.width > 0 &&
+      box.left > 8 &&
+      box.top > 8 &&
+      box.right < window.innerWidth - 8 &&
+      box.bottom < window.innerHeight - 8 &&
+      x > left &&
+      x < window.innerWidth - clear &&
+      y > clear &&
+      y < window.innerHeight - clear
+    );
+  };
+  const desks = [
+    ...host.querySelectorAll<HTMLElement>(
+      '.world-semantic-target[data-kind="desk"]',
+    ),
+  ].filter(onScreen);
+  const roomOf = (target: HTMLElement) =>
+    target.getAttribute("aria-label")?.split(", ")[1];
+  // A desk not yet in a team, and another in its room.
+  const teamless = (target: HTMLElement) =>
+    !target.getAttribute("aria-label")?.includes(", in a team with ");
+  const from = desks.find(
+    (target) =>
+      teamless(target) &&
+      desks.some(
+        (other) => other !== target && roomOf(other) === roomOf(target),
+      ),
+  );
+  const to =
+    from &&
+    desks.find((target) => target !== from && roomOf(target) === roomOf(from));
+  check(Boolean(from && to), "no two desks of one room on screen to group");
+  if (!from || !to) return;
+  const walled = () =>
+    [...host.querySelectorAll<SVGElement>(".town-team-wall")].reduce(
+      (sum, wall) => sum + Number(wall.dataset.desks ?? 0),
+      0,
+    );
+  const walls = walled();
+  const kind = phone ? "touch" : "mouse";
+  const point = (type: string, x: number, y: number) =>
+    canvasHost.dispatchEvent(
+      new PointerEvent(type, {
+        bubbles: true,
+        pointerId: 31,
+        pointerType: kind,
+        button: 0,
+        buttons: type === "pointerup" ? 0 : 1,
+        clientX: x,
+        clientY: y,
+      }),
+    );
+  const a = from.getBoundingClientRect();
+  const b = to.getBoundingClientRect();
+  const start = { x: a.left + a.width / 2, y: a.top + a.height / 2 };
+  const end = { x: b.left + b.width / 2, y: b.top + b.height / 2 };
+  point("pointerdown", start.x, start.y);
+  if (phone)
+    await waitFor(
+      () => host.querySelector(".town-drag-ghost") !== null,
+      "holding a desk did not lift it to group",
+    );
+  for (let step = 1; step <= 8; step += 1) {
+    point(
+      "pointermove",
+      start.x + ((end.x - start.x) * step) / 8,
+      start.y + ((end.y - start.y) * step) / 8,
+    );
+    await settle();
+  }
+  // Resting on the other desk snaps to it: the plaque offers to group.
+  await waitFor(
+    () =>
+      host
+        .querySelector(".town-drag-ghost")
+        ?.textContent?.startsWith("Group with") === true,
+    () =>
+      `a desk resting on another does not offer to group (ghost: ${host.querySelector(".town-drag-ghost")?.textContent ?? "none"}; from ${from.getAttribute("aria-label")} to ${to.getAttribute("aria-label")})`,
+  );
+  point("pointerup", end.x, end.y);
+  await waitFor(
+    () => boardPatches.some((op) => op.op === "group.join"),
+    "dropping a desk on another did not group them",
+  );
+  const join = boardPatches.find((op) => op.op === "group.join") as unknown as {
+    members: TerminalRef[];
+    target: TerminalRef[];
+  };
+  const tabOf = (ref: TerminalRef) => ref.terminal_id.split("-terminal-")[0];
+  check(
+    join.members.length === 1 &&
+      join.target.length === 1 &&
+      tabOf(join.members[0]!) !== tabOf(join.target[0]!),
+    `group.join sent one terminal per desk (${JSON.stringify(join)})`,
+  );
+  await waitFor(
+    () => moves.some((move) => move.method === "tab.move"),
+    "grouping did not seat the desk next to its teammate in Herdr",
+  );
+  const seat = moves.find((move) => move.method === "tab.move")!;
+  check(
+    seat.params.tab_id === tabOf(join.members[0]!) &&
+      Number.isInteger(seat.params.insert_index),
+    `tab.move seats the grouped tab (${JSON.stringify(seat)})`,
+  );
+  await waitFor(() => walled() > walls, "the grouped desks have no team wall");
+  // Walls are drawn only; the desk's name says who its team is.
+  const fromKey = from.dataset.targetKey;
+  await waitFor(
+    () =>
+      host
+        .querySelector<HTMLElement>(
+          `.world-semantic-target[data-target-key="${CSS.escape(fromKey ?? "")}"]`,
+        )
+        ?.getAttribute("aria-label")
+        ?.includes(", in a team with ") === true,
+    "a grouped desk's label does not name its team",
+  );
+  // Without a drag: M on the desk offers to group it or take it out.
+  host
+    .querySelector<HTMLElement>(
+      `.world-semantic-target[data-target-key="${CSS.escape(fromKey ?? "")}"]`,
+    )
+    ?.dispatchEvent(new KeyboardEvent("keydown", { key: "m", bubbles: true }));
+  const choices = () =>
+    [...host.querySelectorAll(".town-chooser-list button > span")].map(
+      (entry) => entry.textContent,
+    );
+  await waitFor(
+    () =>
+      choices().includes("Group with…") && choices().includes("Leave the team"),
+    `a grouped desk's move menu has no team actions (${choices().join(", ")})`,
+  );
+  host.querySelector<HTMLElement>(".town-chooser .town-peek-close")?.click();
+  await waitFor(
+    () => host.querySelector(".town-chooser") === null,
+    "the desk's move menu did not close",
   );
 }
 
@@ -420,6 +735,15 @@ async function run() {
   layoutShell.append(host);
   document.body.append(layoutShell);
   const base = topology(7);
+  // The service saves a claim for each spawn stamp it sees.
+  boardDocument.relations = {
+    groups: boardDocument.relations?.groups ?? [],
+    spawns: [],
+  };
+  boardDocument.relations.spawns = observedSpawnClaims(
+    relationObservations(base.connections),
+    1,
+  );
   herdrTabs = (connectionId) =>
     base.connections.find((c) => c.connectionId === connectionId)?.snapshot
       ?.tabs ?? [];
@@ -458,7 +782,8 @@ async function run() {
       />
     );
   }
-  // Every agent works on one synthetic pull request, so desks show badges.
+  // Every agent works on one synthetic pull request of yours, read in detail,
+  // so desks show badges that open its card.
   const agents = worldFor(base.connections).leaves.filter(
     (leaf) => leaf.kind === "agent",
   );
@@ -479,7 +804,22 @@ async function run() {
           roles: ["author"],
           updatedAt: 1,
           number: 7,
+          repo: "example-org/atlas",
+          base: "main",
+          headSha: "7".repeat(40),
+          draft: false,
           checks: "pass",
+          review: "review_required",
+          mergeable: "mergeable",
+          pr: {
+            baseRef: "main",
+            behindBy: 0,
+            checks: [{ name: "Unit tests", state: "pass", required: true }],
+            checksTruncated: false,
+            reviewers: [],
+            uiChange: false,
+            images: 0,
+          },
         },
       ],
       links: agents.map((leaf) => ({
@@ -511,6 +851,63 @@ async function run() {
   );
 
   if (mode === "preview") {
+    // `&zoom=room`: into the first room, where an agent spawned another.
+    if (params.get("zoom") === "room") {
+      const label = base.connections[0]?.snapshot?.workspaces[0]?.label;
+      const card = () =>
+        [...host.querySelectorAll<HTMLElement>(".town-room-card")].find(
+          (entry) =>
+            entry.getAttribute("aria-label")?.startsWith(`${String(label)}:`),
+        );
+      const canvas = host.querySelector<HTMLElement>(".town-canvas-host");
+      // Double-tap the room's floor twice: each one zooms in 2x there.
+      for (let zoom = 0; canvas && zoom < 2; zoom += 1) {
+        const box = card()?.getBoundingClientRect();
+        if (!box) break;
+        const point = {
+          clientX: box.left + box.width / 2,
+          clientY: box.bottom + 30,
+        };
+        for (const type of [
+          "pointerdown",
+          "pointerup",
+          "pointerdown",
+          "pointerup",
+        ])
+          canvas.dispatchEvent(
+            new PointerEvent(type, {
+              bubbles: true,
+              pointerId: 41,
+              pointerType: "mouse",
+              button: 0,
+              buttons: type === "pointerdown" ? 1 : 0,
+              ...point,
+            }),
+          );
+        await new Promise((resolve) => setTimeout(resolve, 900));
+      }
+      // Then pan with the arrow keys until the room's top is in view.
+      for (let step = 0; canvas && step < 12; step += 1) {
+        const top =
+          [
+            ...host.querySelectorAll<HTMLElement>(
+              '.world-semantic-target[data-kind="room"]',
+            ),
+          ]
+            .find((target) =>
+              target
+                .getAttribute("aria-label")
+                ?.toLowerCase()
+                .includes(String(label).toLowerCase()),
+            )
+            ?.getBoundingClientRect().top ?? 100;
+        if (top >= 70) break;
+        canvas.dispatchEvent(
+          new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true }),
+        );
+        await new Promise((resolve) => setTimeout(resolve, 150));
+      }
+    }
     // Keep the town alive: flip a few statuses every couple of seconds.
     const r = random(99);
     window.setInterval(() => {
@@ -539,6 +936,18 @@ async function run() {
     }, 2500);
     return;
   }
+
+  // An agent's question leads the Needs you list, with its options.
+  await waitFor(
+    () => host.querySelector(".town-ask") !== null,
+    "an agent's question is missing from the Needs you list",
+  );
+  check(
+    [...host.querySelectorAll(".town-ask-options button")].some(
+      (button) => button.textContent === "Ship",
+    ),
+    "the question's options are not offered",
+  );
 
   const diagnostics = window.__HERDR_TOWN_RENDERER__!;
   check(
@@ -1076,13 +1485,38 @@ async function run() {
     () => host.querySelector(".town-desk-badge") !== null,
     "desks of agents with a pull request show its badge",
   );
-  const badge = host.querySelector<HTMLAnchorElement>(".town-desk-badge")!;
+  const badge = host.querySelector<HTMLButtonElement>(".town-desk-badge")!;
   check(
     badge.textContent === "#7 ✓" &&
       badge.dataset.tone === "pass" &&
-      badge.target === "_blank" &&
-      badge.rel.includes("noopener"),
-    `a desk badge links its pull request (${badge.textContent})`,
+      badge.tagName === "BUTTON",
+    `a desk badge of your pull request is a button (${badge.textContent})`,
+  );
+  badge.click();
+  await waitFor(
+    () => document.querySelector(".town-badge-popover .pr-card") !== null,
+    "the badge opens the pull request card",
+  );
+  const popover = document.querySelector<HTMLElement>(".town-badge-popover")!;
+  check(
+    popover.querySelector(".pr-card-command code")?.textContent ===
+      "gh pr merge 7 --repo example-org/atlas --merge" &&
+      popover
+        .querySelector<HTMLAnchorElement>(".pr-card-command a")
+        ?.href.endsWith("/pull/7") === true &&
+      selected.length === 0,
+    "the card offers Open on GitHub and the merge command, not an Inspector",
+  );
+  check(
+    popover.contains(document.activeElement),
+    "focus moves into the card, so a keyboard reaches its actions",
+  );
+  window.dispatchEvent(
+    new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+  );
+  await waitFor(
+    () => document.querySelector(".town-badge-popover") === null,
+    "Escape closes the pull request card",
   );
 
   // From the keyboard, M on a desk lists the host's other rooms; choosing one
@@ -1180,6 +1614,11 @@ async function run() {
     touch("pointerup", 22, box.left + 4, box.top + 4);
     touch("pointerup", 21, box.left + box.width / 2, box.top + box.height / 2);
     check(moves.length === 1, "a cancelled drag must not move anything");
+    await groupTwoDesks(
+      host,
+      canvasHost,
+      String(base.connections[0]?.snapshot?.workspaces[0]?.label),
+    );
     // The exported trace holds the gesture (input, transitions, effects) and
     // the frames it asked for, with their reasons, once they are drawn.
     const drawn = window.__HERDR_TOWN_RENDERER__?.frames ?? 0;
@@ -1340,19 +1779,30 @@ async function run() {
       return [box.left + box.width / 2, box.bottom + 24] as const;
     };
     let moved = false;
+    const tried: string[] = [];
     for (const room of rooms) {
       const ghost = () => host.querySelector<HTMLElement>(".town-drag-ghost");
       press("pointerdown", at(fromDesk));
       await waitFor(() => ghost() !== null, "holding a desk did not lift it");
       press("pointermove", floor(room));
-      await settle();
+      // The ghost judges the drop target on a later frame, whose timing
+      // depends on the renderer (SwiftShader or the GPU); give it a few.
+      for (let frame = 0; frame < 10; frame += 1) {
+        await settle();
+        if (ghost()?.dataset.valid === "true") break;
+      }
       const label = ghost()?.textContent ?? "";
+      tried.push(
+        `${room.dataset.id ?? room.getAttribute("aria-label") ?? "room"}: ${ghost()?.dataset.valid ?? "no ghost"} ${JSON.stringify(label)}`,
+      );
       if (
         ghost()?.dataset.valid !== "true" ||
         label.includes("’s place") ||
-        label.includes("last of")
+        label.includes("last of") ||
+        label === "Leave the team"
       ) {
-        // Not another room here: carry it back home and let it go.
+        // Not another room here (its own floor, where a grouped desk would
+        // leave its team): carry it back home and let it go.
         press("pointermove", at(fromDesk));
         press("pointerup", [-10, -10]);
         await waitFor(() => ghost() === null, "a cancelled carry stayed up");
@@ -1420,7 +1870,10 @@ async function run() {
       await landed(drawn, "a desk moved to a room scrolled into view");
       moved = true;
     }
-    check(moved, "no room took a carried desk");
+    check(
+      moved,
+      `no room took a carried desk (${rooms.length} visible; ${tried.join("; ")})`,
+    );
   } else check(false, "no two visible desks share a room");
 
   // Town shows no move icons; moving is by drag, hold or the keyboard.
@@ -1611,6 +2064,76 @@ async function run() {
       diagnostics.lastError === null,
       `renderer error after a reflow: ${diagnostics.lastError}`,
     );
+  }
+
+  // Last, as picking moves focus and the camera: a room takes its workspace's colour, chosen beside its name; a building
+  // takes its host's, chosen on its reception board. Both are saved with the
+  // terminal colours, and a room's carpet shows its colour.
+  {
+    const pick = async (trigger: HTMLButtonElement, color: string) => {
+      trigger.click();
+      await waitFor(
+        () =>
+          document.querySelector(
+            `.color-swatch-popover [aria-label="Colour ${color}"]`,
+          ) !== null,
+        `${trigger.getAttribute("aria-label")} did not open the palette`,
+      );
+      document
+        .querySelector<HTMLButtonElement>(
+          `.color-swatch-popover [aria-label="Colour ${color}"]`,
+        )!
+        .click();
+    };
+    const roomSwatch = host.querySelector<HTMLButtonElement>(
+      'button[aria-label^="Colour of room "]',
+    );
+    check(roomSwatch !== null, "a room offers its colour beside its name");
+    if (roomSwatch) {
+      await pick(roomSwatch, "teal");
+      await waitFor(
+        () => Object.values(boardDocument.layout.colors ?? {}).includes("teal"),
+        "choosing a room colour did not save it",
+      );
+      const [key] = Object.entries(boardDocument.layout.colors ?? {}).find(
+        ([, color]) => color === "teal",
+      )!;
+      check(
+        /^[^@:][^:]*:[^:]+$/.test(key) && !key.includes(":tab:"),
+        `a room colour is saved under its workspace's card key (${key})`,
+      );
+      const card = roomSwatch
+        .closest(".town-room")!
+        .querySelector<HTMLElement>(".town-room-card");
+      await waitFor(
+        () =>
+          host
+            .querySelector<HTMLButtonElement>(
+              'button[aria-label^="Colour of room "]',
+            )
+            ?.getAttribute("aria-label")
+            ?.endsWith(": teal") === true,
+        "the room's swatch does not show its new colour",
+      );
+      check(
+        !card || card.style.getPropertyValue("--carpet") !== "",
+        "the room card has a carpet colour",
+      );
+    }
+    const buildingSwatch = host.querySelector<HTMLButtonElement>(
+      'button[aria-label$="\'s building"], button[aria-label*="\'s building:"]',
+    );
+    check(buildingSwatch !== null, "a building offers its colour on reception");
+    if (buildingSwatch) {
+      await pick(buildingSwatch, "pink");
+      await waitFor(
+        () =>
+          Object.entries(boardDocument.layout.colors ?? {}).some(
+            ([key, color]) => key.startsWith("@host:") && color === "pink",
+          ),
+        "choosing a building colour did not save it under its host",
+      );
+    }
   }
 
   // StrictMode mounts twice; exactly one renderer and canvas must survive.

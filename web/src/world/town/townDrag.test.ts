@@ -1,9 +1,9 @@
 import { expect, test } from "bun:test";
-import { townDragFor, townDropTarget } from "./townDrag";
+import { townDragFor, townDropTarget, townMagnetDesk } from "./townDrag";
 import type { TownModel } from "./townModel";
 
 /** Two hosts: host a has rooms r1 (desks d1, d2) and r2 (d3); host b has r3 (d4). */
-function model() {
+function model(pinned: string[] = []) {
   const desk = (key: string, hostKey: string, roomKey: string) => [
     key,
     { key, hostKey, roomKey, displayLabel: key, canOpenInSpaces: true },
@@ -49,6 +49,9 @@ function model() {
       ],
     ] as never),
     agentSeats: new Map([["ag", { deskKey: "d1", seat: 0 }]]),
+    deskPins: new Map(
+      pinned.map((key) => [key, { key: `pin:${key}`, cell: null }]),
+    ),
   } as unknown as TownModel;
 }
 
@@ -76,9 +79,14 @@ test("a desk lands on another room of its host, never its own or another host's"
   const drag = townDragFor({ kind: "desk", key: "d1" }, m, "room")!;
   expect(townDropTarget(drag, { kind: "room", key: "r2" }, m)).toMatchObject({
     key: "r2",
+    action: "move",
   });
-  // Dropping on a desk means that desk's room.
+  // Dropping at once on a desk means that desk's room.
   expect(townDropTarget(drag, { kind: "desk", key: "d3" }, m).key).toBe("r2");
+  // Its own room's floor: nothing, while it is in no team.
+  expect(townDropTarget(drag, { kind: "room", key: "r1" }, m).key).toBeNull();
+  // Its own desk is neither a slot nor a teammate.
+  expect(townDropTarget(drag, { kind: "desk", key: "d1" }, m).key).toBeNull();
   expect(townDropTarget(drag, { kind: "room", key: "r3" }, m)).toMatchObject({
     key: null,
     label: "Desks move only within one host",
@@ -94,20 +102,78 @@ test("an agent lands on another desk of its host", () => {
   expect(townDropTarget(drag, { kind: "desk", key: "d4" }, m).key).toBeNull();
 });
 
+test("a desk resting on another desk snaps to it and groups, in any room of its host", () => {
+  const m = model();
+  const drag = townDragFor({ kind: "desk", key: "d1" }, m, "room")!;
+  expect(townMagnetDesk(drag, { kind: "desk", key: "d2" }, m)).toBe("d2");
+  expect(townMagnetDesk(drag, { kind: "desk", key: "d1" }, m)).toBeNull();
+  expect(townMagnetDesk(drag, { kind: "room", key: "r1" }, m)).toBeNull();
+  const teams = new Map<string, string>();
+  expect(
+    townDropTarget(drag, { kind: "desk", key: "d2" }, m, teams, "d2"),
+  ).toMatchObject({ key: "d2", action: "group", label: "Group with d2" });
+  // On a seat or an agent at that desk, too; across rooms the desk moves.
+  expect(
+    townDropTarget(
+      drag,
+      { kind: "pane", key: "p", deskKey: "d3" },
+      m,
+      teams,
+      "d3",
+    ),
+  ).toMatchObject({ key: "d3", action: "group" });
+  // The magnet holds only while the pointer stays on that desk.
+  expect(
+    townDropTarget(drag, { kind: "room", key: "r2" }, m, teams, "d3"),
+  ).toMatchObject({ key: "r2", action: "move" });
+  expect(
+    townDropTarget(drag, { kind: "desk", key: "d4" }, m, teams, "d4"),
+  ).toMatchObject({ key: null, label: "Desks group only within one host" });
+});
+
+test("a grouped desk leaves its team on its own floor; teammates do not regroup", () => {
+  const m = model();
+  const teams = new Map([
+    ["d1", "d1"],
+    ["d2", "d1"],
+  ]);
+  const drag = townDragFor({ kind: "desk", key: "d1" }, m, "room")!;
+  // Only a manual group can be left; a spawn is Herdr's record, not a choice.
+  expect(
+    townDropTarget(drag, { kind: "room", key: "r1" }, m, teams),
+  ).toMatchObject({ key: null });
+  expect(
+    townDropTarget(
+      drag,
+      { kind: "room", key: "r1" },
+      m,
+      teams,
+      null,
+      new Set(["d1"]),
+    ),
+  ).toMatchObject({ key: "r1", action: "ungroup", label: "Leave the team" });
+  expect(
+    townDropTarget(drag, { kind: "desk", key: "d2" }, m, teams, "d2"),
+  ).toMatchObject({ key: null, label: "Move d1: already in this team" });
+  expect(
+    townDropTarget(drag, { kind: "desk", key: "d3" }, m, teams, "d3"),
+  ).toMatchObject({ key: "d3", action: "group" });
+});
+
 test("a desk dropped in its own room is reordered, as a tab in Spaces", () => {
   const m = model();
   const drag = townDragFor({ kind: "desk", key: "d1" }, m, "room")!;
   // Onto another desk: take its slot.
   expect(townDropTarget(drag, { kind: "desk", key: "d2" }, m)).toMatchObject({
     key: "d2",
-    reorder: true,
+    action: "reorder",
   });
   expect(townDropTarget(drag, { kind: "agent", key: "ag" }, m).key).toBeNull();
   // Onto the free spot: go last.
   const cell = { kind: "cell", roomKey: "r1", cellIndex: 2 } as const;
   expect(townDropTarget(drag, cell, m)).toMatchObject({
     key: "r1",
-    reorder: true,
+    action: "reorder",
   });
   expect(townDropTarget(drag, { kind: "room", key: "r1" }, m).key).toBeNull();
   // Already last: nothing to do.
@@ -118,7 +184,7 @@ test("a desk dropped in its own room is reordered, as a tab in Spaces", () => {
   (m.rooms.get("r1") as { omittedDeskCount: number }).omittedDeskCount = 3;
   expect(townDropTarget(drag, cell, m)).toMatchObject({
     key: "d2",
-    reorder: true,
+    action: "reorder",
   });
   expect(townDropTarget(lastDrag, cell, m).key).toBeNull();
 });
@@ -129,9 +195,23 @@ test("a standing agent does not stand for its desk's slot", () => {
   // ag sits at d1: a seated hit is d1's slot, a lounge or queue hit is not.
   expect(townDropTarget(drag, { kind: "agent", key: "ag" }, m)).toMatchObject({
     key: "d1",
-    reorder: true,
+    action: "reorder",
   });
   expect(
     townDropTarget(drag, { kind: "agent", key: "ag", standing: true }, m).key,
   ).toBeNull();
+});
+
+test("a pinned desk is not picked up, and no desk takes its place", () => {
+  const m = model(["d2"]);
+  expect(townDragFor({ kind: "desk", key: "d2" }, m, "room")).toBeNull();
+  // Its agents can still be moved; the pin is the desk's.
+  expect(
+    townDragFor({ kind: "agent", key: "ag" }, model(["d1"]), "desk"),
+  ).not.toBeNull();
+  const drag = townDragFor({ kind: "desk", key: "d1" }, m, "room")!;
+  expect(townDropTarget(drag, { kind: "desk", key: "d2" }, m)).toMatchObject({
+    key: null,
+    label: "d2 is pinned: unpin it to take its place",
+  });
 });

@@ -218,6 +218,68 @@ lifetime is 900,000 ms; `--ttl-ms` accepts 1 through 86,400,000 milliseconds. He
 expires both tokens together. There is no `--clear`, because an old hook could erase
 a newer session's report.
 
+## Harness spawn stamps
+
+Herdr has no creator field, so a harness or skill that starts another agent
+stamps the child pane with its parent; World then groups the two:
+
+```bash
+herdr-world stamp w1:p2 w1:p1   # child, then parent
+bun run agent:stamp -- w1:p2 w1:p1   # from a checkout
+```
+
+The command reads both panes, then reports two tokens on the child with source
+`herdr-world:spawn` and no TTL: `spawned_by` (the parent's pane ID) and
+`spawned_by_terminal` (its terminal, which survives a move of the parent).
+Another tool can write the same tokens. World saves the last claim it sees on
+a live snapshot, qualified by connection and runtime generation, so the
+relation outlives a token cleared while both agents run. Herdr issues new
+terminal IDs when it restarts (pane IDs are reused), so a claim or group from
+before a restart can never match again: once a current snapshot that lists
+every pane of the connection shows its terminals closed, the service drops it
+(an offline host keeps it, shown stale). Stamp the restored agents again to
+relate them. Groups never span connections; the service refuses one that
+would. The service saves a claim for every stamp in a snapshot before sending
+it, so the browser derives relations from saved claims and groups alone and
+never scans panes for stamps. A stamp
+with `spawned_by_terminal` is resolved only by that terminal, never by a pane
+ID that may since name another pane. Inside an agent pane `HERDR_SOCKET_PATH` selects
+that pane's own Herdr ahead of `--session`; pass `--socket-path` to target
+another. Experiment only in a throwaway `herdr --session`.
+
+From inside the child pane, `herdr-world spawned-by w1:p1` makes the same
+stamp through the running World service, which first checks that the caller
+runs in that pane.
+
+## Agent CLI
+
+`herdr-world --skill` is the agent guide (`server/src/cli/world-skill.ts`).
+The verbs (`server/src/cli/world.ts`) POST to `/api/world/cli` on the running
+service (`server/src/http/world-cli-endpoint.ts`): loopback only, no browser
+Origin, and a bearer token derived from the session signing secret
+(`worldCliToken`), so it rotates with the login credential and cannot log a
+browser in. Wrong tokens get the login throttle, counted apart from logins so
+they never lock the owner out. One call holds at most 20 s for `ask --wait`.
+World's pages fetch only the open questions (`world.asks.get`), and only when
+a ledger notice says a question changed. Behind a reverse proxy on
+loopback every peer looks local, so "loopback only" is a transport rule, not
+proof of locality: the token itself stays in the service's private data
+directory, and attribution still needs the caller's process on this machine.
+When a call names a pane, the service asks Herdr for that pane's shell and
+foreground processes (`pane.process_info`), looks for the caller's TCP
+connection (address and port, failing closed on any ambiguity) among them and
+their descendants through `/proc`, and accepts its `HERDR_PANE_ID` only when it
+is found there on a local Herdr (`server/src/world/caller-identity.ts`). A call
+naming no pane is not looked up and is labelled "terminal with no pane"; a
+claim that is not a Herdr pane ID is refused. Unverified callers share one
+allowance of open questions. Changes, questions and results live
+in `world-ledger.json` beside the Board file (`HERDR_WORLD_LEDGER_PATH`
+overrides it). To try it against a development service, run the CLI with the
+same `HOME` (or set `HERDR_WORLD_URL` to its loopback URL and
+`HERDR_WORLD_TOKEN` to its CLI token), and point the service at a
+throwaway `herdr --session` with explicit `--socket-path` and
+`--client-socket-path`.
+
 ## Harness agent checkouts
 
 An active agent harness can report its own checkout without starting the World web

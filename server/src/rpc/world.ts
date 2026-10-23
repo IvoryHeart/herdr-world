@@ -1,3 +1,4 @@
+import { recordSpawnClaims } from "../world/relations";
 import { WorldSnapshotAdmission } from "../bridge/world-snapshot-admission";
 import { sendWorldSnapshotReply } from "../bridge/world-snapshot-reply";
 import { BoardConflictError, clientBoardOps } from "../world/board-store";
@@ -23,6 +24,7 @@ export async function handleWorldRpc(
     snapshotAdmission,
     worldSnapshots,
     worldWatchlist,
+    worldCli,
   } = rpc.services;
   if (method === "world.snapshot") {
     let transfer: ReturnType<WorldSnapshotAdmission["open"]> | undefined;
@@ -34,9 +36,11 @@ export async function handleWorldRpc(
         req.accept_world_snapshot_chunk_admission === true
       )
         transfer = snapshotAdmission.open(ws, id);
+      const snapshot = await snapshots.snapshot(params);
+      recordSpawnClaims(board(), snapshot, publishBoardChanged, logger);
       await sendWorldSnapshotReply(
         id,
-        await snapshots.snapshot(params),
+        snapshot,
         req.accept_world_snapshot_chunks === true,
         (payload) => safeSend(ws, payload, "world-snapshot"),
         () => clients.has(ws),
@@ -46,6 +50,14 @@ export async function handleWorldRpc(
       sendError("world-snapshot-error", error);
     } finally {
       transfer?.close();
+    }
+    return;
+  }
+  if (method === "world.asks.get" || method === "world.ask.answer") {
+    try {
+      sendReply({ id, result: worldCli.rpc(method, params) }, method);
+    } catch (error) {
+      sendError(`${method}-error`, error);
     }
     return;
   }
