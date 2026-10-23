@@ -39,8 +39,9 @@ space fail halfway and leave debris. These rules keep each worktree small:
     `web/dist`, `server/public`, the `server/herdr-world` binary and
     `.agents/verification`.
   - **Kept in use:** a worktree a running process uses in any other way (its
-    executable, an open file, or a path in its command line, like a preview
-    server's `--directory`) is not touched.
+    executable, an open file, a path in its command line like a preview
+    server's `--directory`, or the working directory of anything but a shell,
+    like a dev server) is not touched.
   - **Kept with work:** ignored files other than regenerable build output
     (evidence under `.agents/`, `.env*`, keys, notes) keep the worktree; the
     decision names them.

@@ -15,7 +15,8 @@ import { join } from "node:path";
 type Action = { path: string; action: string; reason: string };
 type Use = { cwds: string[]; uses: string[]; commands: string[] };
 const modulePath: string = "./worktree.mjs";
-const { pruneWorktrees } = (await import(modulePath)) as {
+const { pruneWorktrees, processUse } = (await import(modulePath)) as {
+  processUse: () => Use;
   pruneWorktrees: (options: {
     cwd: string;
     dryRun?: boolean;
@@ -256,3 +257,31 @@ test("paths are compared after resolving symlinks", () => {
     action: "strip",
   });
 });
+
+test.skipIf(process.platform !== "linux")(
+  "only a shell's working directory counts as idle presence",
+  async () => {
+    const root = mkdtempSync(join(tmpdir(), "worktree-use-"));
+    roots.push(root);
+    const shellDir = join(root, "shell");
+    const serverDir = join(root, "server");
+    mkdirSync(shellDir);
+    mkdirSync(serverDir);
+    // An idle shell waiting for input, and a non-shell process (a server, say).
+    const shell = Bun.spawn(["sh"], { cwd: shellDir, stdin: "pipe" });
+    const server = Bun.spawn(["sleep", "30"], { cwd: serverDir });
+    try {
+      await Bun.sleep(200);
+      const use = processUse();
+      const real = (path: string) => realpathSync(path);
+      expect(use.cwds).toContain(real(shellDir));
+      expect(use.uses).not.toContain(real(shellDir));
+      expect(use.uses).toContain(real(serverDir));
+      expect(use.cwds).not.toContain(real(serverDir));
+    } finally {
+      shell.kill();
+      server.kill();
+      await Promise.all([shell.exited, server.exited]);
+    }
+  },
+);

@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 import {
   existsSync,
+  readFileSync,
   readdirSync,
   readlinkSync,
   realpathSync,
@@ -182,10 +183,14 @@ const real = (path) => {
   }
 };
 
+/** Interactive shells: the only processes whose cwd alone allows stripping. */
+const SHELLS = new Set(["bash", "zsh", "fish", "sh", "dash"]);
+
 /**
- * How this user's processes touch the file system: working directories (an
- * idle shell in an agent pane, say) and everything else they use (their
- * executable, open files, and command lines naming a path).
+ * How this user's processes touch the file system: working directories of
+ * shells (an idle agent pane, say) and everything else they use (their
+ * executable, open files, command lines naming a path, and the working
+ * directory of any process that is not a shell, like a dev server).
  */
 export function processUse() {
   const cwds = new Set();
@@ -195,7 +200,9 @@ export function processUse() {
     for (const pid of readdirSync("/proc")) {
       if (!/^\d+$/.test(pid) || Number(pid) === process.pid) continue;
       try {
-        cwds.add(readlinkSync(`/proc/${pid}/cwd`));
+        const cwd = readlinkSync(`/proc/${pid}/cwd`);
+        const comm = readFileSync(`/proc/${pid}/comm`, "utf8").trim();
+        (SHELLS.has(comm) ? cwds : uses).add(cwd);
         uses.add(readlinkSync(`/proc/${pid}/exe`));
         for (const fd of readdirSync(`/proc/${pid}/fd`)) {
           try {
@@ -212,7 +219,7 @@ export function processUse() {
     try {
       const listing = execFileSync(
         "lsof",
-        ["-a", "-u", String(process.getuid()), "-Ffn"],
+        ["-a", "-u", String(process.getuid()), "-Fcfn"],
         {
           encoding: "utf8",
           stdio: ["ignore", "pipe", "ignore"],
@@ -220,10 +227,12 @@ export function processUse() {
         },
       );
       let fd = "";
+      let shell = false;
       for (const line of listing.split("\n")) {
-        if (line.startsWith("f")) fd = line.slice(1);
+        if (line.startsWith("c")) shell = SHELLS.has(line.slice(1));
+        else if (line.startsWith("f")) fd = line.slice(1);
         else if (line.startsWith("n"))
-          (fd === "cwd" ? cwds : uses).add(line.slice(1));
+          (fd === "cwd" && shell ? cwds : uses).add(line.slice(1));
       }
     } catch {
       // Without lsof, treat every worktree as in use.
