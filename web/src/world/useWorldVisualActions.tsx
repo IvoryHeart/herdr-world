@@ -4,17 +4,14 @@ import {
 } from "../creationRequests";
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
-  Bot,
   FolderOpen,
   History,
   LayoutGrid,
   MessagesSquare,
   Pin,
   PinOff,
-  Shirt,
   Terminal,
 } from "lucide-react";
-import { openProfileEditor, requestAgentLaunch } from "./agentProfiles";
 import type { CommandExtension } from "../components/CommandCombobox";
 import { connectionSnapshot, endpointCreationReason, store } from "../store";
 import {
@@ -301,40 +298,6 @@ export function useWorldVisualActions(controller: WorldInspectorController) {
               }),
             );
         },
-      },
-      {
-        key: "visual-new-agent",
-        icon: <Bot size={15} />,
-        title: "New agent",
-        detail: resolved.node
-          ? visualRouteTargetLabel(resolved.node)
-          : "From a profile or an agent kind",
-        keywords: ["new", "start", "agent", "profile", "launch"],
-        // The launcher names its own room, so it never needs a selection.
-        run: () => {
-          const node =
-            resolved.node && resolved.node.kind !== "host"
-              ? resolved.node
-              : null;
-          requestAgentLaunch(
-            node
-              ? {
-                  connectionId: node.connectionId,
-                  generation: node.generation,
-                  workspaceId:
-                    node.kind === "space" ? node.nativeId : node.workspaceId,
-                }
-              : {},
-          );
-        },
-      },
-      {
-        key: "visual-agent-profiles",
-        icon: <Shirt size={15} />,
-        title: "Agent profiles",
-        detail: "Name, brain, skills, brief and look",
-        keywords: ["profile", "persona", "character", "dress", "agent"],
-        run: () => openProfileEditor(),
       },
     ];
     const pinNode =

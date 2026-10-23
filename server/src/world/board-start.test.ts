@@ -1,12 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { launchAgent, type HerdrCall } from "./launch";
-
-/** Board's note start: the tab is named from the note. */
-type NoteStart = Omit<Parameters<typeof launchAgent>[1], "label"> & {
-  name: string;
-};
-const startFromNote = (call: HerdrCall, { name, ...request }: NoteStart) =>
-  launchAgent(call, { ...request, label: name });
+import { startFromNote, type HerdrCall } from "./board-start";
 
 /** A fake Herdr whose agent becomes interactive after `readyAfter` checks. */
 function herdr(
@@ -24,7 +17,6 @@ function herdr(
   let checks = 0;
   const call: HerdrCall = async (method, params) => {
     calls.push(method);
-    if (method === "agent.list") return { agents: [] };
     if (method === "tab.create")
       return {
         tab: { tab_id: "w1:t9" },
@@ -82,7 +74,7 @@ function request(patch: Partial<Parameters<typeof startFromNote>[1]> = {}) {
   };
 }
 
-describe("Launch readiness and the first prompt", () => {
+describe("Starting an agent from a note", () => {
   test("creates a tab, starts the agent, waits until it is ready and prompts it once", async () => {
     const h = herdr({ readyAfter: 3 });
     expect(await startFromNote(h.call, request())).toEqual({
@@ -90,7 +82,6 @@ describe("Launch readiness and the first prompt", () => {
       tab_id: "w1:t9",
       pane_id: "w1:p9",
       terminal_id: "term_new",
-      agent_name: "plan",
     });
     expect(h.calls.filter((m) => m === "agent.start")).toHaveLength(1);
     expect(h.calls.filter((m) => m === "agent.prompt")).toHaveLength(1);
@@ -154,19 +145,18 @@ describe("Launch readiness and the first prompt", () => {
     expect(h.calls).toEqual([]);
   });
 
-  test("with no text the agent is started, waited on and sent nothing", async () => {
+  test("with no text the agent is started and nothing is sent", async () => {
     const h = herdr();
     expect(await startFromNote(h.call, request({ text: "  " }))).toEqual({
       status: "started",
       tab_id: "w1:t9",
       pane_id: "w1:p9",
       terminal_id: "term_new",
-      agent_name: "plan",
     });
-    expect(h.calls).not.toContain("agent.prompt");
+    expect(h.calls).toEqual(["tab.create", "agent.start"]);
     const lost = herdr({ lostStart: true });
     expect(await startFromNote(lost.call, request({ text: "" }))).toMatchObject(
-      { status: "started", pane_id: "w1:p9" },
+      { status: "uncertain", pane_id: "w1:p9" },
     );
     expect(lost.calls.filter((m) => m === "agent.start")).toHaveLength(1);
   });

@@ -798,15 +798,15 @@ test("production dispatcher isolates two local profiles and profile CRUD", async
 
     // Explicitly retain old-client compatibility for both RPC and HTTP while
     // proving generation-bound current requests reach only the replacement.
-    // Launching an agent invalidates World when it finishes, whatever
-    // happened, since Herdr need not report the agent starting.
+    // Starting an agent from a note invalidates World when it finishes,
+    // whatever happened, since Herdr need not report the agent starting.
     const controlsBeforeStart = browserB.controls.length;
     await browserA.raw(
-      "launcher.start",
+      "board.start_agent",
       {
         workspace_id: "shared-workspace",
         kind: "claude",
-        label: "note",
+        name: "note",
         text: "Synthetic note",
       },
       "alpha",
