@@ -919,6 +919,9 @@
         "server/src/agent/codex-session-link.test.ts",
         "server/src/connections/session-link-routing.test.ts",
         "server/src/agent/codex-session.test.ts",
+        "server/src/agent/codex-app-server.test.ts",
+        "server/src/agent/codex-daemon-binding.test.ts",
+        "server/src/agent/codex-discovery-cache.test.ts",
         "web/src/components/AgentHistoryChat.test.ts",
         "web/src/components/ConversationMinimap.test.ts",
         "server/src/agent/checkout-context.test.ts",
@@ -941,6 +944,9 @@
           "server/src/agent/codex-session-link.test.ts",
           "server/src/connections/session-link-routing.test.ts",
           "server/src/agent/codex-session.test.ts",
+          "server/src/agent/codex-app-server.test.ts",
+          "server/src/agent/codex-daemon-binding.test.ts",
+          "server/src/agent/codex-discovery-cache.test.ts",
           "web/src/components/AgentHistoryChat.test.ts",
           "web/src/components/ConversationMinimap.test.ts",
           "server/src/agent/checkout-context.test.ts",
@@ -949,7 +955,7 @@
         "checks": ["bun run check", "bun run verification:check"],
         "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."
       },
-      "evidenceDecision": "Captured runtime authority applies to checkout report reads. Real history/task parsers and checkout tests check transcript order and exact live session identity.",
+      "evidenceDecision": "Captured runtime authority applies to checkout report reads. Real history/task parsers and checkout tests check transcript order and exact live session identity. Direct Codex protocol and inference fixtures check bounded complete discovery, title precedence, contradictory reports, two-sided uniqueness, freshness, changing evidence, connection isolation and refusal of guessed message/answer input; inferred evidence never establishes client identity.",
       "promotion": {
         "decision": "accepted",
         "review": "https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164",
