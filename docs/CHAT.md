@@ -41,11 +41,13 @@ view that you open on purpose.
   the state sequence, and any difference refuses with nothing sent. Then it
   presses that option's key.
 - **The gap World cannot close.** Herdr has no conditional input
-  (herdr#4764), so the key cannot be made conditional on the prompt. If the
-  prompt or session changes in the instant between the last check and the
-  key, the key reaches the new prompt. The card says so under its options.
-  Closing the gap needs an input Herdr applies only while the prompt is
-  unchanged.
+  ([herdrdev/herdr#4764](https://github.com/herdrdev/herdr/issues/4764)), so
+  the key cannot be made conditional on the prompt. If the prompt or session
+  changes in the instant between the last check and the key, the key reaches
+  the new prompt. The card says so under its options. The owner accepted this
+  risk until Herdr can close it; it is tracked as a known issue in
+  [#284](https://github.com/IvoryHeart/herdr-world/issues/284). Closing the
+  gap needs an input Herdr applies only while the prompt is unchanged.
 - Chat replaces the card with what it sent. "You answered 2 · …" needs
   evidence that this agent left this prompt: the same session, and either a
   status that shows progress (`working`, `idle` or `done`), or a new state with a different question on a
