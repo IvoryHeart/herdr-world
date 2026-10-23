@@ -94,7 +94,7 @@ export type WorkItem = {
   number?: number;
   repo?: string;
   branch?: string;
-  /** A fork's repository, when the branch lives outside `repo`. */
+  /** The repository the branch lives in (a fork's, for a fork's PR); absent when GitHub no longer knows it. */
   headRepo?: string;
   draft?: boolean;
   checks?: WorkChecks;

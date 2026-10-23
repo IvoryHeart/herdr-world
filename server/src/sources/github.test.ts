@@ -63,7 +63,7 @@ describe("GitHub source", () => {
       review: "review_required",
       mergeable: "mergeable",
     });
-    expect(items[1]).not.toHaveProperty("headRepo");
+    expect(items[1]).toMatchObject({ headRepo: "example-org/widgets" });
   });
 
   test("records a fork's head repository and drops malformed nodes", () => {
@@ -86,6 +86,7 @@ describe("GitHub source", () => {
       response({ authored: [pr(3, { headRepository: null })] }),
     );
     expect(item).not.toHaveProperty("branch");
+    expect(item).not.toHaveProperty("headRepo");
   });
 
   test("lanes run review, fixing, green, ready and merged", () => {

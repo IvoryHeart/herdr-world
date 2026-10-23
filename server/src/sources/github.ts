@@ -165,7 +165,7 @@ function pullRequestItem(node: Record<string, unknown>): WorkItem | null {
     ...(headRepo && typeof node.headRefName === "string" && node.headRefName
       ? { branch: node.headRefName }
       : {}),
-    ...(headRepo && headRepo !== repo ? { headRepo } : {}),
+    ...(headRepo ? { headRepo } : {}),
     draft,
     checks,
     review,

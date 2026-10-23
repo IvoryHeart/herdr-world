@@ -36,6 +36,7 @@ const pullRequest = (
   updatedAt: number,
   number,
   repo: "example-org/widgets",
+  headRepo: "example-org/widgets",
   branch,
   ...fields,
 });
@@ -177,6 +178,37 @@ describe("work links", () => {
         (entry) => entry.itemKey,
       ),
     ).toEqual([fork.key]);
+  });
+
+  test("a pull request without a known head repository links only when reported", async () => {
+    const orphan = pullRequest(5, "feature/login");
+    delete orphan.headRepo;
+    const { run } = fakeGit({
+      "/work/widgets": gitOutput("feature/login"),
+    });
+    const resolver = new CheckoutResolver(run, () => ({ kind: "local" }));
+    const panes = (reported?: string) => [
+      connection("local-1", [
+        {
+          pane_id: "p1",
+          agent: "claude",
+          agent_session: session,
+          cwd: "/work/widgets",
+          ...(reported
+            ? {
+                tokens: agentCheckoutTokens(session, "/work/widgets", reported),
+              }
+            : {}),
+        },
+      ]),
+    ];
+    // The base repository is no proof that an upstream branch is the PR's.
+    expect(await linkWorkItems(panes(), [orphan], resolver)).toEqual([]);
+    expect(
+      (await linkWorkItems(panes(orphan.url), [orphan], resolver)).map(
+        (entry) => [entry.itemKey, entry.via],
+      ),
+    ).toEqual([[orphan.key, "reported"]]);
   });
 
   test("an agent's reported pull request wins, and its reported path is used", async () => {

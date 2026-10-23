@@ -216,13 +216,15 @@ export async function linkWorkItems(
       : null;
     if (!checkout) continue;
     // The branch must live in one of the checkout's remotes: a fork's PR
-    // shares its base repository with every upstream checkout. Open pull
+    // shares its base repository with every upstream checkout, so a PR
+    // without a known head repository links only when reported. Open pull
     // requests first, so a reused branch links its live one.
     const matches = pullRequests
       .filter(
         (item) =>
           item.branch === checkout.branch &&
-          checkout.repos.includes(item.headRepo ?? item.repo ?? ""),
+          item.headRepo !== undefined &&
+          checkout.repos.includes(item.headRepo),
       )
       .sort(
         (a, b) =>
