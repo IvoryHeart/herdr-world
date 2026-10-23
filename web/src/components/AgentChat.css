@@ -391,6 +391,114 @@
   overflow-wrap: anywhere;
 }
 
+/* The agent's own question, answered with one of its options. */
+.agent-chat-ask {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  color: var(--text);
+  background: var(--warning-soft, var(--input-bg));
+  border: 2px solid var(--warning-text, var(--accent));
+  border-radius: 12px;
+}
+
+.agent-chat-ask h3 {
+  margin: 0;
+  color: var(--warning-text, var(--accent));
+  font-size: 14px;
+}
+
+.agent-chat-ask p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.agent-chat-ask pre {
+  margin: 0;
+  padding: 7px 9px;
+  font: 12.5px / 1.5 var(--font-mono, ui-monospace, monospace);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  background: var(--bg);
+  border-radius: 7px;
+}
+
+.agent-chat-ask-options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.agent-chat-ask-options button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 6px 10px;
+  color: var(--text);
+  font-size: 13px;
+  text-align: left;
+  background: var(--input-bg);
+  border: 1px solid var(--border-soft);
+  border-radius: 9px;
+  cursor: pointer;
+}
+
+.agent-chat-ask-options button.is-primary {
+  color: var(--bg);
+  background: var(--accent);
+  border-color: transparent;
+}
+
+.agent-chat-ask-options button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.agent-chat-ask-options kbd {
+  min-width: 1.4em;
+  font: 600 11px var(--font-mono, ui-monospace, monospace);
+  text-align: center;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  opacity: 0.75;
+}
+
+.agent-chat-ask-fine {
+  color: var(--muted);
+  font-size: 11.5px;
+}
+
+.agent-chat-ask-fine button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  color: var(--text);
+  font-size: 12px;
+  background: transparent;
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.agent-chat-ask-notice {
+  color: var(--danger-text);
+  font-size: 12.5px;
+}
+
+.agent-chat-answered {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+.agent-chat-answered b {
+  color: var(--text);
+}
+
 /* The Now bar: status, the task in the terminal title, time, and Stop. */
 .agent-chat-now {
   flex-wrap: wrap;
