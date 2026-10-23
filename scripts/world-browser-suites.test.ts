@@ -12,7 +12,30 @@ import {
   worldBrowserShards,
   worldBrowserSuites,
   worldTimedSuites,
+  includesTimedSuites,
 } from "./world-browser-suites";
+
+test("timed selections and unknown selectors require a quiet direct run", () => {
+  expect(includesTimedSuites([])).toBe(true);
+  expect(includesTimedSuites([worldTimedSuites[0]!])).toBe(true);
+  expect(includesTimedSuites(["./web/src/world"])).toBe(true);
+  expect(includesTimedSuites(["--timeout", "30000"])).toBe(true);
+  expect(includesTimedSuites(["ProductionContexts"])).toBe(true);
+  expect(includesTimedSuites(["scripts/world-browser-suites.test.ts"])).toBe(
+    false,
+  );
+  expect(includesTimedSuites(["web/src/uiScale.test.ts"])).toBe(false);
+  expect(includesTimedSuites(["web/src/uiScale.test.ts", "-t", "name"])).toBe(
+    false,
+  );
+  expect(
+    includesTimedSuites(["web/src/uiScale.test.ts", "--timeout", "30000"]),
+  ).toBe(false);
+  expect(
+    includesTimedSuites(["web/src/uiScale.test.ts", "--timeout=30000"]),
+  ).toBe(false);
+  expect(includesTimedSuites([worldTimedSuites[0]!, "-t", "name"])).toBe(true);
+});
 
 test("six shards and the latency group partition the complete World browser inventory without omissions or duplicates", async () => {
   await assertWorldBrowserInventory();

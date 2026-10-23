@@ -82,6 +82,14 @@ need the whole machine: they take every slot, waiting for running heavy lanes, a
 nothing heavy starts beside them. They reserve admission while waiting, so later
 ordinary requests cannot starve them. Canonical paths, directory selectors,
 filters and ambiguous options in direct test runs are queued conservatively.
+Admission is reserved before heavy slots drain, so even otherwise-free light
+slots wait while a whole-machine request is pending; this can take minutes.
+Direct runs containing timed suites (including the default full run and
+`test:world --shard=latency`) also take every slot. Unknown selectors take that
+same conservative quiet lane; known browser selections without timed suites
+take only the browser slot.
+Known value-taking flags such as `-t` and `--timeout` leave explicit file
+selection intact; a flags-only invocation still selects the full run.
 `bun run check:changed`, `check:delivery`,
 `test:browser`, `scripts/run-world-tests.ts` and any `bun run test` that includes a
 Chrome-driven suite all queue, and a waiting lane prints `waiting for <worktree>

@@ -174,10 +174,16 @@ and one behavioral verification at a time, two light lanes, and the timed
 hook because a gate is queued; the wait is shorter than the contention it avoids.
 
 Direct test runs recognise canonical file and directory paths, including `./`,
-absolute paths and symlinks. Filters and ambiguous option selections conservatively
-take the browser slot. A pending whole-machine lane reserves admission before
+absolute paths and symlinks. A pending whole-machine lane reserves admission before
 waiting for running work, so later ordinary arrivals cannot continually overtake
-it. Process exit releases both admission and slots through the kernel.
+it. This reserves admission before heavy slots drain: light work also waits,
+even with free light slots, and can wait minutes behind a running heavy lane.
+Direct runs containing timed suites take every slot, including the default
+full test run and `test:world --shard=latency`. Unknown selections conservatively
+take the quiet lane; known browser-only selections take the browser slot.
+Known value-taking flags such as `-t` and `--timeout` do not widen an explicit
+file selection; a flags-only invocation still selects Bun's full test run.
+Process exit releases both admission and slots through the kernel.
 
 On a machine with a usable GPU, set `HERDR_WORLD_TEST_GPU=1` (for example in the
 shell that runs `git push`) so World browser suites render WebGL on the GPU instead

@@ -5,7 +5,7 @@ import { join, relative, resolve, sep } from "node:path";
  * Suites that assert wall-clock budgets (input latency, frame counts). They
  * fail when other work competes for the CPU, so they run on their own: on CI
  * in the dedicated, quiet "latency" job, one at a time, and locally in the
- * gate's quiet lane.
+ * quiet lane for both gate and direct runs.
  */
 export const worldTimedSuites = [
   "ProductionContexts",
@@ -142,10 +142,50 @@ export function includesBrowserSuites(
   args: readonly string[],
   root = process.cwd(),
 ): boolean {
-  if (args.length === 0) return true;
-  const suites = [...webBrowserSuites, ...worldBrowserSuites];
-  return args.some((arg) => {
-    if (arg.startsWith("-")) return true;
+  return includesSuites(
+    args,
+    [...webBrowserSuites, ...worldBrowserSuites],
+    root,
+  );
+}
+
+/** Unknown selections may include a timed suite and require the quiet lane. */
+export function includesTimedSuites(
+  args: readonly string[],
+  root = process.cwd(),
+): boolean {
+  return includesSuites(args, worldTimedSuites, root);
+}
+
+function includesSuites(
+  args: readonly string[],
+  suites: readonly string[],
+  root: string,
+): boolean {
+  const valueFlags = new Set([
+    "-t",
+    "--test-name-pattern",
+    "--timeout",
+    "--max-concurrency",
+    "--reporter",
+    "--reporter-outfile",
+    "--seed",
+    "--rerun-each",
+    "--retry",
+  ]);
+  const paths: string[] = [];
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i]!;
+    if (!arg.startsWith("-")) {
+      paths.push(arg);
+      continue;
+    }
+    if (!valueFlags.has(arg.split("=", 1)[0]!)) return true;
+    if (!arg.includes("=") && ++i >= args.length) return true;
+  }
+  // No path means Bun's default full run, even when only flags were supplied.
+  if (paths.length === 0) return true;
+  return paths.some((arg) => {
     const absolute = resolve(root, arg);
     if (!existsSync(absolute)) return true;
     try {
