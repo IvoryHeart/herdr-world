@@ -150,6 +150,10 @@ changes what you see and does not disconnect hosts or retarget open terminals.
    in the agent's window, or **Open terminal** in the card's header (or the
    window's **Terminal** view). The window's **Chat** composer sends with
    Herdr's agent prompt.
+   A Codex conversation inferred from its shared daemon is read-only: Chat
+   offers no composer or answer buttons. In Codex's Terminal, run `/title` and
+   add **Thread ID**, or use **Details → Link Codex session** to preview and
+   confirm the intended thread. Ambiguous panes or threads stay unbound.
 6. Use the paperclip in the window's **Chat** composer to attach files. Each
    file shows a chip while it uploads, then done or failed; retry a failed one
    (or pick it again) or remove it. **Send** waits for uploads. Uploads go to
@@ -201,7 +205,17 @@ changes what you see and does not disconnect hosts or retarget open terminals.
    shows the new order too, and moving a tab in Spaces moves its table. The
    tables move once Herdr reports the new order, and agents stay with their
    table.
-9. To keep a table where it is, open one of its agents (its window) and choose
+9. To group tables, drag one onto another table and rest it there a moment:
+   it snaps to that table and the plaque says **Group with …**; let go. The
+   two get one wall, and Town brings the table to that room and beside the
+   other in Herdr's tab order. An agent started by another agent is grouped
+   automatically, with a solid connector to its parent and the parent's
+   colour. To take a table you grouped out of its group, drag it onto its own
+   room's bare floor, away from the free spot (**Leave the team**); a spawn
+   link stays. Without a drag, focus a table and press **M**: **Group with…**
+   lists the tables to join, and **Leave the team** takes it out. A table's
+   name for screen readers says who its team is.
+10. To keep a table where it is, open one of its agents (its window) and choose
    **Pin desk in Town** from the window's **⋯** menu, on a phone too. The
    table wears a pin, stays put
    when tabs are reordered or the room grows, and its agents stay at it rather
@@ -285,8 +299,11 @@ on your phone and desktop.
    the host supports, optionally name the tab, and press **Create**; **+** beside a host's name creates a workspace. Select a workspace or
    tab to give it a colour of your own; status keeps its own colours. A tab's
    colour is its terminal colour, the same one Spaces and Town show: it starts
-   as a stable default (or its workspace's colour, if you gave the workspace
-   one), and **Default colour** returns to it.
+   as a stable default (the colour of the agent that spawned it, or its
+   workspace's colour, if you gave the workspace one), and **Default colour**
+   returns to it. A faint string joins tabs whose agents know each other.
+   Drag a tab onto another tab to group them, or select a tab, press
+   **Group…** and tap the other; a grouped tab's bar offers **Ungroup**.
 2. Scroll or pinch to zoom, drag empty board to pan, or use the controls at the
    bottom right. Zoomed out, each workspace shows a square per pane (hollow for
    shells); tap a workspace there to zoom in on it.

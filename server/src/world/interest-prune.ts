@@ -1,6 +1,6 @@
 import { interestKeyPrefix } from "../../../shared/interest";
 import { serverLogger } from "../utils/logger";
-import { type BoardStore, goneInterestOps } from "./board-store";
+import type { BoardDocument, BoardOp, BoardStore } from "./board-store";
 
 /** Reconcile missed closes whenever a host becomes ready, including startup. */
 export async function reconcileReadyInterest(
@@ -84,4 +84,23 @@ export async function pruneGoneInterest(
       return;
     }
   }
+}
+
+/**
+ * Interest records for one host whose terminals are gone. `terminals` must be
+ * every terminal of a fresh, complete listing from the host's current
+ * runtime; a failed or stale host keeps its records, so pass nothing then.
+ */
+export function goneInterestOps(
+  document: BoardDocument,
+  connectionId: string,
+  terminals: ReadonlySet<string>,
+): BoardOp[] {
+  const prefix = interestKeyPrefix(connectionId);
+  return Object.keys(document.layout.interest)
+    .filter(
+      (key) =>
+        key.startsWith(prefix) && !terminals.has(key.slice(prefix.length)),
+    )
+    .map((key) => ({ op: "interest.set", key, interest: null }));
 }

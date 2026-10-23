@@ -9,7 +9,12 @@ import {
   gitChanges,
   type Affected,
 } from "./affected";
-import { acquireCheckSlot, type CheckClass, heldEnv } from "./check-lock";
+import {
+  acquireAllCheckSlots,
+  acquireCheckSlot,
+  type CheckClass,
+  heldEnv,
+} from "./check-lock";
 import { guardDiskSpace } from "./disk-guard";
 import { worldBrowserSuites, worldTimedSuites } from "./world-browser-suites";
 
@@ -38,7 +43,8 @@ import { worldBrowserSuites, worldTimedSuites } from "./world-browser-suites";
 
 type Lane = {
   name: string;
-  queue: CheckClass;
+  /** "all": the lane needs the whole machine (timed suites). */
+  queue: CheckClass | "all";
   commands: string[][];
   env?: Record<string, string>;
 };
@@ -132,7 +138,7 @@ function plan(selection: Affected) {
   if (chrome.length || timedSuites.length)
     quiet.push({
       name: "quiet",
-      queue: "browser",
+      queue: "all",
       commands: [
         ...(chrome.length
           ? [["bun", "scripts/run-tests.ts", ...chrome, "--parallel=2"]]
@@ -169,10 +175,11 @@ type Result = { name: string; code: number; seconds: number; log: string };
 
 async function runLane(lane: Lane): Promise<Result> {
   const log = join(logs, `${lane.name}.log`);
-  const release = await acquireCheckSlot(lane.queue, {
-    lane: lane.name,
-    worktree: basename(root),
-  });
+  const options = { lane: lane.name, worktree: basename(root) };
+  const release =
+    lane.queue === "all"
+      ? await acquireAllCheckSlots(options)
+      : await acquireCheckSlot(lane.queue, options);
   try {
     return await runLaneCommands(lane, log);
   } finally {
@@ -190,7 +197,11 @@ async function runLaneCommands(lane: Lane, log: string): Promise<Result> {
       cwd: root,
       stdout: "pipe",
       stderr: "pipe",
-      env: { ...process.env, ...lane.env, ...heldEnv(lane.queue) },
+      env: {
+        ...process.env,
+        ...lane.env,
+        ...heldEnv(lane.queue === "all" ? "browser" : lane.queue),
+      },
     });
     const pump = async (stream: ReadableStream<Uint8Array>) => {
       for await (const chunk of stream) out.write(chunk);

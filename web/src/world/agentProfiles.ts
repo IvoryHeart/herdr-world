@@ -209,7 +209,14 @@ export async function openHarnessLogin(target: LaunchTarget, kind: string) {
 
 export async function launchAgent(
   target: LaunchTarget,
-  choice: { profileId?: string; kind?: string; label: string; text: string },
+  choice: {
+    profileId?: string;
+    kind?: string;
+    label: string;
+    text: string;
+    /** The agent that started this one; the service stamps the spawn. */
+    parent?: { paneId: string; terminalId?: string };
+  },
 ) {
   return (await (
     await bridge()
@@ -223,6 +230,14 @@ export async function launchAgent(
         kind: choice.kind ?? "",
         label: choice.label,
         text: choice.text,
+        ...(choice.parent
+          ? {
+              parent_pane_id: choice.parent.paneId,
+              ...(choice.parent.terminalId
+                ? { parent_terminal_id: choice.parent.terminalId }
+                : {}),
+            }
+          : {}),
       },
       150_000,
     )) as LaunchOutcome;

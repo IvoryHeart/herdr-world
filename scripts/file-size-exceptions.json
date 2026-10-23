@@ -15,7 +15,6 @@
     "site/styles.css": 2354,
     "web/src/App.tsx": 5164,
     "web/src/api.ts": 1474,
-    "web/src/components/AgentChat.tsx": 1032,
     "web/src/components/AssistantPanel.css": 1410,
     "web/src/components/AssistantPanel.tsx": 2800,
     "web/src/components/AssistantTasks.tsx": 1204,

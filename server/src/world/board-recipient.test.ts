@@ -61,6 +61,7 @@ describe("Recording a string's agent", () => {
       desk_pins: {},
       interest: {},
     },
+    relations: { spawns: [], groups: [] },
     notes: [],
     strings: [{ id: "s1", from: { note: "n1" }, to: { anchor: to } }],
   });

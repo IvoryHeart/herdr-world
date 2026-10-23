@@ -44,6 +44,7 @@ import { readGuiSettings, updateGuiSettings } from "./config/gui-settings";
 import { cliCommands, runCli, topLevelHelp } from "./cli";
 import { CONTINUE_TO_SERVER, defaultCliContext } from "./cli/command";
 import { runTaskSummaryCommand } from "./herdr/task-summary";
+import { stampLaunchParent } from "./herdr/spawn-stamp";
 import { runAgentCheckoutCommand } from "./herdr/agent-checkout";
 import { createWebPushService } from "./notifications/web-push";
 import { enrichIntegrationVersions } from "./herdr/integration-versions";
@@ -147,6 +148,8 @@ import {
 import { linkedNoteText, sendNote } from "./world/board-send";
 import { checkAnchor } from "./world/board-anchor";
 import { herdrEventName } from "./utils/herdr-events";
+import { recordSpawnClaims } from "./world/relations";
+import { moveWorkspaceIds } from "./world/move-workspace-ids";
 import { agentKinds, launchAgent } from "./agent/launch";
 import { profileLaunch } from "./agent/profile-launch";
 import { ProfileStore } from "./agent/profile-store";
@@ -541,25 +544,6 @@ function publishProfilesChanged(revision: number) {
     control: { type: "world_profiles_changed", revision },
   });
   for (const ws of clients) safeSend(ws, line, "world-profiles");
-}
-
-/** The host's workspace IDs after a move, with both rooms of the move. */
-async function moveWorkspaceIds(
-  call: (method: string, params: Record<string, unknown>) => Promise<unknown>,
-  moved: { workspace_id: string; source_workspace_id?: string },
-) {
-  const ids = new Set([moved.workspace_id]);
-  if (moved.source_workspace_id) ids.add(moved.source_workspace_id);
-  try {
-    const listed = (await call("workspace.list", {})) as {
-      workspaces?: { workspace_id?: unknown }[];
-    };
-    for (const entry of listed?.workspaces ?? [])
-      if (typeof entry.workspace_id === "string") ids.add(entry.workspace_id);
-  } catch {
-    // The two rooms of the move are what a colliding tab key usually needs.
-  }
-  return ids;
 }
 
 /**
@@ -1204,9 +1188,11 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
         req.accept_world_snapshot_chunk_admission === true
       )
         transfer = snapshotAdmission.open(ws, id);
+      const snapshot = await snapshots.snapshot(params);
+      recordSpawnClaims(board(), snapshot, publishBoardChanged, logger);
       await sendWorldSnapshotReply(
         id,
-        await snapshots.snapshot(params),
+        snapshot,
         req.accept_world_snapshot_chunks === true,
         (payload) => safeSend(ws, payload, "world-snapshot"),
         () => clients.has(ws),
@@ -1669,6 +1655,14 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
           });
         }
       }
+      // A Board note's agent spawned this one: stamp it so World groups them.
+      if (result.pane_id && requestIsCurrent())
+        await stampLaunchParent(
+          (rpc, rpcParams) => herdr.call(rpc, rpcParams, 10_000),
+          p,
+          result.pane_id,
+          logger,
+        );
       sendReply({ id, result }, method);
     } catch (error) {
       sendError(`${method}-error`, error);
@@ -1810,6 +1804,7 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
                     ? {
                         before: colorsBefore,
                         workspaceIds: await moveWorkspaceIds(call, result),
+                        inherited: p.inherited_color === true,
                       }
                     : undefined,
                 )
