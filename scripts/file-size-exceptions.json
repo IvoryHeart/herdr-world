@@ -36,7 +36,7 @@
     "web/src/world/board/board.css": 1419,
     "web/src/world/herdrOfficeProjection.ts": 1354,
     "web/src/world/town/town.css": 1519,
-    "web/src/world/town/townRenderer.ts": 1783,
+    "web/src/world/town/townRenderer.ts": 1739,
     "web/src/world/useWorldInspectorController.ts": 1144,
     "web/src/world/worldObject.ts": 1239
   },
