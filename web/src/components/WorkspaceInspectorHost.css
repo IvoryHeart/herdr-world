@@ -352,6 +352,74 @@
   }
 }
 
+/* The top selector follows the window's own width, docked, floating or on a
+   phone: labelled from 640px; below that every view is an icon (named by its
+   tooltip and aria-label); below 360px only the active view shows, with the
+   others under ⋯ (#265's breakpoints). */
+.workspace-inspector-tabs-more {
+  display: none;
+}
+
+@container workspace-inspector (max-width: 639px) {
+  .workspace-inspector-tabs button {
+    flex: 0 0 auto;
+    padding: 0 8px;
+  }
+
+  .workspace-inspector-tabs .workspace-inspector-tab-label {
+    display: none;
+  }
+}
+
+@container workspace-inspector (max-width: 359px) {
+  .workspace-inspector-tabs {
+    grid-column: 1;
+    width: auto;
+    min-width: 0;
+  }
+
+  .workspace-inspector-tabs button:not(.is-active) {
+    display: none;
+  }
+
+  .workspace-inspector-head > .workspace-inspector-tabs-more {
+    display: inline-flex;
+    grid-column: 2;
+    grid-row: 2;
+    align-items: center;
+    justify-content: center;
+    min-width: 32px;
+    min-height: 28px;
+    padding: 0;
+    border: 1px solid var(--viewer-border);
+    border-radius: 8px;
+    background: var(--viewer-content-bg);
+    color: var(--text-strong);
+  }
+}
+
+.workspace-inspector-tabs-menu {
+  display: flex;
+  flex-direction: column;
+  min-width: 140px;
+  padding: 4px;
+}
+
+.workspace-inspector-tabs-menu button {
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+
+.workspace-inspector-tabs-menu button:hover,
+.workspace-inspector-tabs-menu button:focus-visible {
+  background: var(--accent-soft);
+  color: var(--text-strong);
+}
+
 .workspace-inspector.is-compact .workspace-inspector-resource {
   display: flex;
   padding: 0;
