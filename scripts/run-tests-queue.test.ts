@@ -82,7 +82,8 @@ test.each([
       let text = "";
       for await (const chunk of child.stdout) {
         text += new TextDecoder().decode(chunk);
-        if (!sawWait && text.includes("[queue] browser tests waiting")) {
+        // Selections that may include a timed suite wait for the whole machine.
+        if (!sawWait && /\[queue\] (browser|timed) tests waiting/.test(text)) {
           sawWait = true;
           expect(existsSync(marker)).toBe(false);
           release();
