@@ -183,7 +183,9 @@ changes what you see and does not disconnect hosts or retarget open terminals.
    automatically, with a solid connector to its parent and the parent's
    colour. To take a table you grouped out of its group, drag it onto its own
    room's bare floor, away from the free spot (**Leave the team**); a spawn
-   link stays.
+   link stays. Without a drag, focus a table and press **M**: **Group with…**
+   lists the tables to join, and **Leave the team** takes it out. A table's
+   name for screen readers says who its team is.
 
 A table with more panes than drawn seats shows the count and offers a chooser
 for every pane. When a table closes, the tables after it close up so the room

@@ -25,8 +25,9 @@ import {
   runtimeRelationInputs,
   withInheritedColors,
 } from "./relations";
-import type { RelationsDocument } from "../../../shared/relations";
+import { terminalKey, type RelationsDocument } from "../../../shared/relations";
 import { worldRuntimeStore } from "./runtimeStore";
+import type { WorldObject } from "./worldObject";
 
 /** Terminal colours as World's service keeps them (see terminalColor.ts). */
 
@@ -34,50 +35,91 @@ const NONE: TerminalColors = Object.freeze({});
 
 type Connections = ReturnType<typeof worldRuntimeStore.get>["connections"];
 
-/** Whether any pane carries a spawn stamp (shared/relations.ts tokens). */
-function anySpawnToken(connections: Connections) {
+/**
+ * Whether anything can inherit: a pane carries a spawn stamp
+ * (shared/relations.ts tokens), or a saved claim names a terminal that is
+ * still listed. The service drops claims whose terminals closed; this also
+ * covers a claim saved before that ran.
+ */
+export function mayInherit(
+  relations: RelationsDocument,
+  connections: Connections,
+) {
+  const listed = relations.spawns.length ? new Set<string>() : null;
   for (const connection of connections)
     for (const pane of connection.snapshot?.panes ?? []) {
       const tokens = (pane as { tokens?: Record<string, unknown> }).tokens;
       if (tokens?.spawned_by || tokens?.spawned_by_terminal) return true;
+      listed?.add(
+        terminalKey({
+          connection_id: connection.connectionId,
+          terminal_id: pane.terminal_id,
+        }),
+      );
     }
-  return false;
+  return relations.spawns.some(
+    (claim) =>
+      listed!.has(terminalKey(claim.child)) ||
+      listed!.has(terminalKey(claim.parent)),
+  );
 }
 
 /**
- * Saved colours plus inherited ones, derived once per change for every
- * view that colours terminals. Spaces refreshes large snapshots often, so
- * with no spawn claim saved and no stamp on any pane nothing is derived.
+ * Saved colours plus inherited ones, derived once per change of each set of
+ * connections (the runtime store's, or the World object a view shows), for
+ * every view that colours terminals. Spaces refreshes large snapshots often,
+ * so with nothing that can inherit nothing is derived.
  */
 const inherited = (() => {
-  const derive = relationsDeriver();
-  let last: {
-    colors: TerminalColors;
-    relations: RelationsDocument;
-    connections: Connections;
-    result: TerminalColors;
-  } | null = null;
+  const derived = new WeakMap<
+    Connections,
+    {
+      derive: ReturnType<typeof relationsDeriver>;
+      colors?: TerminalColors;
+      relations?: RelationsDocument;
+      result?: TerminalColors;
+    }
+  >();
   return (
     colors: TerminalColors,
     relations: RelationsDocument,
     connections: Connections,
   ): TerminalColors => {
-    if (
-      last &&
-      last.colors === colors &&
-      last.relations === relations &&
-      last.connections === connections
-    )
-      return last.result;
-    let result = colors;
-    if (relations.spawns.length || anySpawnToken(connections)) {
-      const derived = derive(relations, runtimeRelationInputs(connections));
-      result = withInheritedColors(colors, derived.relations, derived.places);
+    let last = derived.get(connections);
+    if (!last) {
+      last = { derive: relationsDeriver() };
+      derived.set(connections, last);
     }
-    last = { colors, relations, connections, result };
+    if (last.colors === colors && last.relations === relations)
+      return last.result!;
+    let result = colors;
+    if (mayInherit(relations, connections)) {
+      const found = last.derive(relations, runtimeRelationInputs(connections));
+      result = withInheritedColors(colors, found.relations, found.places);
+    }
+    Object.assign(last, { colors, relations, result });
     return result;
   };
 })();
+
+/** Where inherited colours find terminals: the runtime store, or a view's World. */
+export type ColorSource = {
+  get(): { connections: Connections };
+  subscribe(listener: () => void): () => void;
+};
+
+/**
+ * A World object's connections as the colour source, so a view colours the
+ * same terminals it draws relations between (useRelations).
+ */
+export function useWorldColorSource(
+  world: Pick<WorldObject, "hosts">,
+): ColorSource {
+  return useMemo(() => {
+    const state = { connections: world.hosts.map((host) => host.connection) };
+    return { get: () => state, subscribe: () => () => {} };
+  }, [world.hosts]);
+}
 
 /** The previous colours while no colour changed, so their identity is stable. */
 export function keepColors(
@@ -99,10 +141,7 @@ export function keepColors(
  */
 export function useTerminalColors(
   store: BoardDocumentStore = sharedBoardStore(),
-  runtime: Pick<
-    typeof worldRuntimeStore,
-    "get" | "subscribe"
-  > = worldRuntimeStore,
+  runtime: ColorSource = worldRuntimeStore,
 ): TerminalColors {
   useEffect(() => {
     store.start();

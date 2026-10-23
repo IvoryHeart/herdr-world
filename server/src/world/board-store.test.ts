@@ -782,6 +782,38 @@ describe("Relations in the Board store", () => {
     ]);
   });
 
+  test("the service prunes closed terminals; a client cannot", () => {
+    const store = new BoardStore(path);
+    store.patch([
+      { op: "spawn.record", claims: [spawn("b", "a"), spawn("d", "c")] },
+      { op: "group.join", id: "g1", members: [term("b")], target: [term("a")] },
+    ]);
+    expect(() =>
+      clientBoardOps([{ op: "relations.prune", children: [], members: [] }]),
+    ).toThrow("unknown operation");
+    store.patch([
+      { op: "relations.prune", children: [term("b")], members: [term("a")] },
+    ]);
+    expect(new BoardStore(path).get().relations).toEqual({
+      spawns: [spawn("d", "c")],
+      groups: [],
+    });
+  });
+
+  test("a group across connections is refused", () => {
+    const store = new BoardStore(path);
+    expect(() =>
+      store.patch([
+        {
+          op: "group.join",
+          id: "g1",
+          members: [{ connection_id: "lab", terminal_id: "b" }],
+          target: [term("a")],
+        },
+      ]),
+    ).toThrow("cannot span connections");
+  });
+
   test("malformed relations are refused and change nothing", () => {
     const store = new BoardStore(path);
     expect(() =>

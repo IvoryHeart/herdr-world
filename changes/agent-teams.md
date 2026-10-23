@@ -6,5 +6,7 @@
   Town, a string in Board, and its parent's colour unless it has its own. Rest
   a dragged Town table on another table until it snaps, or drop a Board tab on
   another tab (or use **Group…**), to group them; Town also seats the tab
-  beside its teammate in Herdr. World keeps the groups and the last spawn
-  claims it saw; after a Herdr restart they are shown stale, never dropped.
+  beside its teammate in Herdr; **M** on a focused Town table offers
+  **Group with…** and **Leave the team** too. World keeps the groups and the
+  last spawn claims it saw, shown stale while their host is offline, and drops
+  them once their agents have closed.

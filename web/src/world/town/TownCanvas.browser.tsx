@@ -435,10 +435,27 @@ function hoverEntry(entry: Element) {
  * another in its room groups them (a mouse on wide screens, a held touch on
  * phones), seats its tab after the other's in Herdr and walls them in.
  */
-async function groupTwoDesks(host: HTMLElement, canvasHost: HTMLElement) {
+async function groupTwoDesks(
+  host: HTMLElement,
+  canvasHost: HTMLElement,
+  room: string,
+) {
   await waitFor(
     () => host.querySelector('.town-team-link[data-kind="spawned"]') !== null,
     "a spawned agent's desk has no connector to its parent's",
+  );
+  // The spawned desk ("task 2") wears its parent's ("task 3") colour.
+  const deskColor = (name: string) =>
+    host
+      .querySelector<HTMLElement>(
+        `.world-semantic-target[data-kind="desk"][aria-label^="Desk ${name}, ${room},"]`,
+      )
+      ?.getAttribute("data-color");
+  await waitFor(
+    () =>
+      Boolean(deskColor("task 3")) &&
+      deskColor("task 2") === deskColor("task 3"),
+    `the spawned desk does not inherit its parent's colour (${deskColor("task 2")} vs ${deskColor("task 3")})`,
   );
   const onScreen = (target: HTMLElement) => {
     const box = target.getBoundingClientRect();
@@ -535,6 +552,38 @@ async function groupTwoDesks(host: HTMLElement, canvasHost: HTMLElement) {
     `tab.move seats the grouped tab (${JSON.stringify(seat)})`,
   );
   await waitFor(() => walled() > walls, "the grouped desks have no team wall");
+  // Walls are drawn only; the desk's name says who its team is.
+  const fromKey = from.dataset.targetKey;
+  await waitFor(
+    () =>
+      host
+        .querySelector<HTMLElement>(
+          `.world-semantic-target[data-target-key="${CSS.escape(fromKey ?? "")}"]`,
+        )
+        ?.getAttribute("aria-label")
+        ?.includes(", in a team with ") === true,
+    "a grouped desk's label does not name its team",
+  );
+  // Without a drag: M on the desk offers to group it or take it out.
+  host
+    .querySelector<HTMLElement>(
+      `.world-semantic-target[data-target-key="${CSS.escape(fromKey ?? "")}"]`,
+    )
+    ?.dispatchEvent(new KeyboardEvent("keydown", { key: "m", bubbles: true }));
+  const choices = () =>
+    [...host.querySelectorAll(".town-chooser-list button > span")].map(
+      (entry) => entry.textContent,
+    );
+  await waitFor(
+    () =>
+      choices().includes("Group with…") && choices().includes("Leave the team"),
+    `a grouped desk's move menu has no team actions (${choices().join(", ")})`,
+  );
+  host.querySelector<HTMLElement>(".town-chooser .town-peek-close")?.click();
+  await waitFor(
+    () => host.querySelector(".town-chooser") === null,
+    "the desk's move menu did not close",
+  );
 }
 
 function worldFor(connections: WorldRuntimeConnection[]) {
@@ -1310,7 +1359,11 @@ async function run() {
     touch("pointerup", 22, box.left + 4, box.top + 4);
     touch("pointerup", 21, box.left + box.width / 2, box.top + box.height / 2);
     check(moves.length === 1, "a cancelled drag must not move anything");
-    await groupTwoDesks(host, canvasHost);
+    await groupTwoDesks(
+      host,
+      canvasHost,
+      String(base.connections[0]?.snapshot?.workspaces[0]?.label),
+    );
     // The exported trace holds the gesture (input, transitions, effects) and
     // the frames it asked for, with their reasons, once they are drawn.
     const drawn = window.__HERDR_TOWN_RENDERER__?.frames ?? 0;

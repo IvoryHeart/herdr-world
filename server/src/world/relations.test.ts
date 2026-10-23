@@ -74,3 +74,40 @@ test("a claim already saved is not written again", () => {
   ).claims;
   expect(spawnRecordOps(document, result(connection()), 10)).toEqual([]);
 });
+
+test("a complete snapshot drops claims and group members whose terminals closed", () => {
+  const document = emptyBoardDocument();
+  const gone = (terminal_id: string) => ({
+    connection_id: "studio",
+    terminal_id,
+  });
+  document.relations.spawns = [
+    {
+      child: gone("term_old_child"),
+      parent: gone("term_old_parent"),
+      source: "herdr:spawned_by",
+      generation: 1,
+      observed_at: 1,
+    },
+  ];
+  document.relations.groups = [
+    {
+      id: "g1",
+      members: [gone("term_parent"), gone("term_old")],
+      created_at: 1,
+    },
+  ];
+  const complete = connection();
+  complete.snapshot!.coverage = { panes: 2 } as never;
+  const ops = spawnRecordOps(document, result(complete), 9);
+  expect(ops[0]).toEqual({
+    op: "relations.prune",
+    children: [gone("term_old_child")],
+    members: [gone("term_old")],
+  });
+  expect(ops[1]?.op).toBe("spawn.record");
+  // A bounded snapshot may leave panes out, so it prunes nothing.
+  expect(
+    spawnRecordOps(document, result(connection()), 9).map((op) => op.op),
+  ).toEqual(["spawn.record"]);
+});

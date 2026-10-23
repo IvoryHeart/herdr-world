@@ -40,7 +40,7 @@ import { readGuiSettings, updateGuiSettings } from "./config/gui-settings";
 import { cliCommands, runCli, topLevelHelp } from "./cli";
 import { CONTINUE_TO_SERVER, defaultCliContext } from "./cli/command";
 import { runTaskSummaryCommand } from "./herdr/task-summary";
-import { runSpawnStampCommand, stampSpawn } from "./herdr/spawn-stamp";
+import { stampSpawn } from "./herdr/spawn-stamp";
 import { runAgentCheckoutCommand } from "./herdr/agent-checkout";
 import { createWebPushService } from "./notifications/web-push";
 import { enrichIntegrationVersions } from "./herdr/integration-versions";
@@ -179,11 +179,6 @@ const agentCheckoutCommandResult = await runAgentCheckoutCommand(
 );
 if (agentCheckoutCommandResult !== null)
   process.exit(agentCheckoutCommandResult);
-const spawnStampCommandResult = await runSpawnStampCommand(
-  process.argv.slice(2),
-  APP_VERSION,
-);
-if (spawnStampCommandResult !== null) process.exit(spawnStampCommandResult);
 if (taskSummaryCommandResult !== null) {
   process.exit(taskSummaryCommandResult);
 }

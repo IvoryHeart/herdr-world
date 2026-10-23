@@ -71,13 +71,16 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     shows the new order when Herdr reports it; agents stay with their table.
   - **Teams.** Tables whose agents know each other are drawn inside one wall
     with a connector: a spawned agent is joined to the agent that started it,
-    and a manual group with dotted lines; stale links are faded, never dropped.
+    and a manual group with dotted lines; stale links are faded while a host
+    is offline, and dropped once its agents have closed.
     Drag a table onto another table and hold it there a moment: it snaps to
     that table (**Group with …**), and dropping groups them. Town moves it to
     that room if needed and seats its tab beside the other's in Herdr. A quick
     drop keeps meaning a move or a reorder, so the gestures stay separate.
     Drop a table you grouped on its own room's bare floor (not the free spot)
     to leave its group; a spawn link stays, since Herdr's stamp records it.
+    **M** on a focused table offers the same as **Group with…** and **Leave
+    the team**, and the table's accessible name lists its teammates.
   - Cached failed-host buildings stay stale and non-actionable. Search and Hosts
     use the shared aggregate. Reception and lounge positions only show status;
     only an explicit move changes Herdr's layout, always within one host.

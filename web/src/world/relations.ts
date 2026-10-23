@@ -30,6 +30,17 @@ import type { WorldObject } from "./worldObject";
 
 export const NO_RELATIONS: RelationsDocument = { spawns: [], groups: [] };
 
+/** A live snapshot of the connection's current runtime, as the service reads it. */
+function currentConnection(connection: WorldRuntimeConnection) {
+  return (
+    connection.state === "ready" &&
+    !connection.stale &&
+    connection.actionable &&
+    connection.snapshot !== null &&
+    connection.snapshotGeneration === connection.generation
+  );
+}
+
 /** Each connection's snapshot as the shared rules read it. */
 export function relationObservations(
   connections: readonly WorldRuntimeConnection[],
@@ -37,12 +48,7 @@ export function relationObservations(
   return connections.map((connection) => ({
     connection_id: connection.connectionId,
     generation: connection.generation,
-    current:
-      connection.state === "ready" &&
-      !connection.stale &&
-      connection.actionable &&
-      connection.snapshot !== null &&
-      connection.snapshotGeneration === connection.generation,
+    current: currentConnection(connection),
     panes: (connection.snapshot?.panes ?? []).map((pane) => ({
       pane_id: pane.pane_id,
       terminal_id: pane.terminal_id,
@@ -152,7 +158,7 @@ export function worldRelationInputs(
     observations.push({
       connection_id: host.connectionId,
       generation: host.generation,
-      current: !host.stale && host.actionable,
+      current: currentConnection(host.connection),
       panes: leaves.map((leaf) => ({
         pane_id: leaf.nativeId,
         terminal_id: leaf.terminalId,

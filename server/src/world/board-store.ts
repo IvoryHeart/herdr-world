@@ -148,6 +148,12 @@ export type BoardOp =
       claims: SpawnClaim[];
     }
   | {
+      /** Service only: drop claims and group members whose terminals closed. */
+      op: "relations.prune";
+      children: TerminalRef[];
+      members: TerminalRef[];
+    }
+  | {
       /** Service only: record which agent a pane end is for. */
       op: "anchor.recipient";
       string_id: string;
@@ -173,7 +179,11 @@ export function clientBoardOps(ops: unknown): {
   const observed = new Map<string, ObservedAgent>();
   const clean = ops.map((op) => {
     if (!isObject(op)) fail("op must be an object");
-    if (op.op === "anchor.recipient" || op.op === "spawn.record")
+    if (
+      op.op === "anchor.recipient" ||
+      op.op === "spawn.record" ||
+      op.op === "relations.prune"
+    )
       fail("unknown operation");
     if (op.op !== "string.put" || !isObject(op.string)) return op as BoardOp;
     const string = op.string;
@@ -650,6 +660,22 @@ function applyOp(next: BoardDocument, op: BoardOp, current: BoardDocument) {
       // The oldest claims give way when the bound is reached.
       next.relations.spawns = [...kept, ...claims].slice(
         -RELATION_LIMITS.spawns,
+      );
+      return;
+    }
+    case "relations.prune": {
+      // A restarted Herdr closes every saved terminal at once.
+      const refs = (value: unknown, what: string) => {
+        if (!Array.isArray(value)) fail(`${what} must be a list`);
+        return value.map(terminalRef);
+      };
+      const children = new Set(refs(op.children, "children").map(terminalKey));
+      next.relations.spawns = next.relations.spawns.filter(
+        (claim) => !children.has(terminalKey(claim.child)),
+      );
+      next.relations.groups = leaveGroups(
+        next.relations.groups,
+        refs(op.members, "members"),
       );
       return;
     }
