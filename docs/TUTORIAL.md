@@ -129,7 +129,7 @@ changes what you see and does not disconnect hosts or retarget open terminals.
    whole picture, press **Summary** on the Town board (on a phone, tap the
    counts chip under the search bar): the **Town summary** window lists who
    needs you, unreviewed finishes and when each was last active, each host's
-   rooms with their counts, and spend.
+   rooms with their counts, and spend. Use **Back** to close it.
 4. Tap an agent or its table to open its window on **Chat**: World's Inspector,
    with **Chat**, **Terminal**, **Changes** and **Files** in its top selector.
    In Town it docks on the right; drag its title to undock it. Chat shows the
