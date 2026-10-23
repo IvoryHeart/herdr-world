@@ -1326,6 +1326,33 @@ The rail SHALL list a bounded number of entries and count the rest.
 - **WHEN** the user hides the desktop rail and reloads Town
 - **THEN** the rail stays hidden, shows the waiting count, and can be restored with one action
 
+### Requirement: Town summary
+
+Town SHALL derive its board sign, its phone counts chip and its summary window
+from one summary read model built from the attention rail's entries, so they
+show the same agents and the same needs-you and finished counts as the rail and
+reception. The board sign SHALL show agents working, needing the user and
+finished, and spend when a metrics provider reports it. Its Summary action, and
+on phones its counts chip, SHALL open a Town summary window in the shared
+window frame that lists, in this order: agents that need the user with how long
+each has waited and one action; unreviewed finishes with their age when Herdr
+reports activity times; every host with its rooms and their counts (needing
+the user, working, finished, quiet, unknown), where activating a room moves the
+Town camera to it; and spend per model with its source and age. Without a
+metrics provider the summary SHALL say there is no cost data and SHALL NOT show
+zero spend.
+
+#### Scenario: One count everywhere
+
+- **WHEN** two agents are blocked and one has an unreviewed finish
+- **THEN** the board sign, the phone chip, the rail and the summary all show two
+  needing the user and one finished
+
+#### Scenario: Go to a room from the summary
+
+- **WHEN** the user opens the Town summary on a phone and activates a room
+- **THEN** the summary closes and the Town camera shows that room
+
 ### Requirement: Town agent peek
 
 Hovering an agent, a reception entry or a rail entry with a pointer SHALL open a

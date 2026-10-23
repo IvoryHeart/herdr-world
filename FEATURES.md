@@ -14,9 +14,12 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   pane a seat. Plain terminals show prompts. Additional panes beyond the drawn
   seats remain available through the table's count and chooser. Each table
   carries its tab's name on a nameplate at its front edge.
-  - The Town board counts agents working, needing you and done, with spend
-    when a metrics provider is configured. Wide screens show it at the top
-    left; phones show a compact chip under the search bar that opens it.
+  - The Town board counts agents working, needing you and finished (the same
+    counts as reception and the call rail), with spend when a metrics provider
+    is configured. Its **Summary** button, or on a phone the compact chip under
+    the search bar, opens the **Town summary** window: who needs you, recent
+    finishes with their age, every host and room with its counts (tap a room
+    to go there), and spend per model ("No cost data" without a provider).
   - Blocked agents queue at reception oldest first. Finished agents wait there
     until you open their terminal or mark that completion reviewed, then join
     idle agents in the lounge. Movement only represents state.

@@ -159,3 +159,32 @@ test("ages read as people say them", () => {
   expect(townSummaryAge(0, 3 * 3_600_000)).toBe("3 h ago");
   expect(townSummaryAge(0, 50 * 3_600_000)).toBe("2 d ago");
 });
+
+test("the summary panel reads in attention order and never shows zero spend", async () => {
+  const { renderToStaticMarkup } = await import("react-dom/server");
+  const { createElement } = await import("react");
+  const { TownSummaryPanel } = await import("./TownSummaryPanel");
+  const projection = office({ alpha: ["blocked", "done"], beta: ["idle"] });
+  const summary = townSummary(projection, callsOf(projection), NO_METRICS);
+  const html = renderToStaticMarkup(
+    createElement(TownSummaryPanel, {
+      summary,
+      now: 500 + 12 * 60_000,
+      onOpenAgent: () => {},
+      onShowRoom: () => {},
+    }),
+  );
+  const order = [
+    "Needs you",
+    "Finished, not yet reviewed",
+    "Hosts and rooms",
+    "Spend",
+  ];
+  const at = order.map((heading) => html.indexOf(heading));
+  expect(at.every((index) => index >= 0)).toBe(true);
+  expect([...at].sort((a, b) => a - b)).toEqual(at);
+  expect(html).toContain("waiting 12 m");
+  expect(html).toContain("Show room alpha in Town");
+  expect(html).toContain("No cost data");
+  expect(html).not.toContain("$0.00");
+});

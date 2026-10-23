@@ -186,6 +186,8 @@ export function TownCanvas({
   selectedRoomKey,
   observability,
   summaryCounts,
+  onOpenSummary,
+  roomFocus = null,
   calm = false,
   terminalColors = NO_COLORS,
   deskPins = NO_PINS,
@@ -198,6 +200,10 @@ export function TownCanvas({
    * the same needs-you and finished counts as the call rail and reception.
    */
   summaryCounts?: TownSummary["counts"];
+  /** Open the Town summary window from the board sign or the phone chip. */
+  onOpenSummary?: () => void;
+  /** A room to move the camera to (a new `seq` asks again), as from the summary. */
+  roomFocus?: { roomKey: string; seq: number } | null;
   /** Town's event trace (development builds only; see world/devtools). */
   trace?: ViewTrace;
   calm?: boolean;
@@ -1337,6 +1343,13 @@ export function TownCanvas({
     const renderer = rendererRef.current;
     if (renderer) zoomToRoom(renderer, latest.current.layout, roomKey);
   };
+  // The summary asks for a room; each request's seq moves the camera once.
+  useEffect(() => {
+    if (!roomFocus) return;
+    const renderer = rendererRef.current;
+    if (renderer)
+      zoomToRoom(renderer, latest.current.layout, roomFocus.roomKey);
+  }, [roomFocus]);
 
   return (
     <div className="town-shell" ref={shellRef}>
@@ -1385,6 +1398,7 @@ export function TownCanvas({
         model={model}
         observability={observability}
         summaryCounts={summaryCounts}
+        onOpenSummary={onOpenSummary}
       />
       <div className="town-zoom" role="group" aria-label="Camera">
         <button type="button" aria-label="Zoom in" onClick={() => stepZoom(1)}>
@@ -2234,10 +2248,12 @@ function TownBoard({
   model,
   observability,
   summaryCounts,
+  onOpenSummary,
 }: {
   model: TownModel;
   observability: OfficeObservability;
   summaryCounts?: TownSummary["counts"];
+  onOpenSummary?: () => void;
 }) {
   const counts = { working: 0, blocked: 0, done: 0, idle: 0, unknown: 0 };
   for (const agent of model.agents.values()) counts[agent.semanticStatus] += 1;
@@ -2257,11 +2273,21 @@ function TownBoard({
       <button
         type="button"
         className="town-board-chip"
-        aria-expanded={open}
-        aria-controls="town-board"
-        aria-label={`Town board: ${summary}`}
-        title={open ? "Hide the Town board" : "Show the Town board"}
-        onClick={() => setOpen((value) => !value)}
+        // With a summary to open, the chip opens it; otherwise the board.
+        {...(onOpenSummary
+          ? { "aria-haspopup": "dialog" as const }
+          : { "aria-expanded": open, "aria-controls": "town-board" })}
+        aria-label={`${onOpenSummary ? "Town summary" : "Town board"}: ${summary}`}
+        title={
+          onOpenSummary
+            ? "Open the Town summary"
+            : open
+              ? "Hide the Town board"
+              : "Show the Town board"
+        }
+        onClick={() =>
+          onOpenSummary ? onOpenSummary() : setOpen((value) => !value)
+        }
       >
         <span data-status="working">{counts.working}</span>
         <span data-status="blocked">!{counts.blocked}</span>
@@ -2277,7 +2303,18 @@ function TownBoard({
           if (event.key === "Escape") setOpen(false);
         }}
       >
-        <div className="town-board-title">TOWN BOARD</div>
+        <div className="town-board-title">
+          TOWN BOARD
+          {onOpenSummary ? (
+            <button
+              type="button"
+              className="town-board-open"
+              onClick={onOpenSummary}
+            >
+              Summary
+            </button>
+          ) : null}
+        </div>
         <dl>
           <div>
             <dt>Working</dt>

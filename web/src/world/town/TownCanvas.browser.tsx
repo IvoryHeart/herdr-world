@@ -613,30 +613,27 @@ async function run() {
         : host.querySelectorAll(".town-room").length === totalRooms,
     "the town's rooms were never drawn",
   );
-  // Phones show the Town board as a compact chip that opens the full board;
-  // wider screens show the board itself.
+  // Phones show the Town board as a compact chip that opens the Town summary
+  // window; wider screens show the board, whose Summary button opens it.
   {
     const chip = host.querySelector<HTMLButtonElement>(".town-board-chip")!;
     const board = host.querySelector<HTMLElement>(".town-board")!;
     const shown = (element: HTMLElement) =>
       getComputedStyle(element).display !== "none";
-    if (window.innerWidth <= 640) {
+    if (window.innerWidth <= 640)
       check(
-        shown(chip) && !shown(board),
-        "a phone shows the Town board chip, not the board",
+        shown(chip) &&
+          !shown(board) &&
+          chip.getAttribute("aria-haspopup") === "dialog" &&
+          chip.getAttribute("aria-label")?.startsWith("Town summary:") === true,
+        "a phone shows a chip that opens the Town summary, not the board",
       );
-      chip.click();
-      await waitFor(() => shown(board), "the chip did not open the Town board");
+    else
       check(
-        chip.getAttribute("aria-expanded") === "true",
-        "the open chip is not marked expanded",
-      );
-      chip.click();
-      await waitFor(() => !shown(board), "the chip did not close the board");
-    } else
-      check(
-        !shown(chip) && shown(board),
-        "a wide screen shows the Town board, not its chip",
+        !shown(chip) &&
+          shown(board) &&
+          board.querySelector(".town-board-open") !== null,
+        "a wide screen shows the Town board with its Summary button",
       );
   }
   const roomCards = host.querySelectorAll(".town-room-card");
