@@ -10,6 +10,9 @@ import {
   DEFAULT_NOTICE_AUTO_DISMISS_MS,
   emptyServerSessionState,
   healthMatchesUpdateVersion,
+  type HerdrStatusUpgrade,
+  herdrUpgradeMenuEntry,
+  herdrUpgradeOffered,
   herdrTaskNotificationsActive,
   isTaskNotificationTarget,
   mergeConnectionCatalog,
@@ -693,6 +696,7 @@ function partitionState(): State {
     automaticUpdateChecksEnabled: true,
     updateInfo: null,
     updateInstalling: false,
+    herdrUpgrading: false,
     pendingRestartVersion: null,
     dismissedUpdateVersion: null,
   };
@@ -2539,6 +2543,222 @@ describe("update restart verification", () => {
       false,
     );
     expect(healthMatchesUpdateVersion({ ok: true }, "0.3.0")).toBe(false);
+  });
+});
+
+describe("Herdr upgrade", () => {
+  const status = (
+    upgrade: HerdrStatusUpgrade | undefined,
+    version = "0.9.5",
+  ) => ({
+    state: "running",
+    version,
+    verified_version: "0.9.5",
+    upgrade,
+  });
+
+  test("is offered when Herdr, its server or this release's integrations are behind", () => {
+    for (const upgrade of <HerdrStatusUpgrade[]>[
+      { state: "outdated", version: "0.9.3", pending: [] },
+      {
+        state: "current",
+        version: "0.9.5",
+        server_outdated: true,
+        pending: [],
+      },
+      {
+        state: "current",
+        version: "0.9.5",
+        pending: ["ivoryheart.herdr-world"],
+      },
+      { state: "newer", version: "0.10.0", pending: ["claude"] },
+    ])
+      expect(herdrUpgradeOffered(status(upgrade))).toBe(true);
+    for (const upgrade of <(HerdrStatusUpgrade | undefined)[]>[
+      { state: "current", version: "0.9.5", pending: [] },
+      { state: "newer", version: "0.10.0", pending: [] },
+      { state: "package-managed", command: "brew upgrade herdr", pending: [] },
+      { state: "missing", pending: [] },
+      undefined,
+    ])
+      expect(herdrUpgradeOffered(status(upgrade))).toBe(false);
+    expect(herdrUpgradeOffered(null)).toBe(false);
+  });
+
+  test("names the step by what is behind", () => {
+    expect(
+      herdrUpgradeMenuEntry(
+        status({ state: "outdated", version: "0.9.3", pending: [] }),
+      ),
+    ).toEqual({
+      label: "Upgrade Herdr to 0.9.5",
+      description:
+        "Herdr 0.9.3 is installed or running; this release verified 0.9.5",
+    });
+    expect(
+      herdrUpgradeMenuEntry(
+        status({
+          state: "current",
+          version: "0.9.5",
+          pending: ["codex", "ivoryheart.herdr-world"],
+        }),
+      ),
+    ).toEqual({
+      label: "Update Herdr integrations",
+      description:
+        "For this release: codex harness integration, Herdr World plugin",
+    });
+  });
+
+  /** Fakes the upgrade API; the job reports `done` on the second poll. */
+  function fakeUpgradeApi(done: Record<string, unknown>) {
+    const requests: string[] = [];
+    let polls = 0;
+    const fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const method = init?.method ?? "GET";
+      requests.push(`${method} ${input}`);
+      if (method === "POST") {
+        expect(
+          new Headers(init?.headers).get("x-herdr-world-herdr-upgrade"),
+        ).toBe("1");
+        return Response.json({ ok: true, status: "running" }, { status: 202 });
+      }
+      polls += 1;
+      return Response.json(polls < 2 ? { status: "running" } : done);
+    }) as unknown as typeof globalThis.fetch;
+    return { requests, fetch };
+  }
+
+  async function withApi(
+    done: Record<string, unknown>,
+    action: () => Promise<void>,
+  ) {
+    const previousState = store.get();
+    const previousFetch = globalThis.fetch;
+    const api = fakeUpgradeApi(done);
+    globalThis.fetch = api.fetch;
+    __storeTesting.setHerdrUpgradePollMs(0);
+    try {
+      __storeTesting.replaceState({ ...partitionState(), notice: null });
+      await action();
+      return api.requests;
+    } finally {
+      __storeTesting.setHerdrUpgradePollMs(1000);
+      globalThis.fetch = previousFetch;
+      queueMicrotask(() => __storeTesting.replaceState(previousState));
+    }
+  }
+
+  test("after a World update it reconciles even when Herdr itself is current", async () => {
+    let notice: unknown;
+    const requests = await withApi(
+      {
+        status: "done",
+        report: { server: { outcome: "current" } },
+        lines: ["Herdr World plugin: updated (v0.3.0)"],
+        changed: true,
+        failed: [],
+      },
+      async () => {
+        await store.upgradeHerdr({ automatic: true });
+        notice = store.get().notice;
+      },
+    );
+    // No status pre-check: the plugin and integrations follow the release.
+    expect(requests).toEqual([
+      "POST /api/herdr/upgrade",
+      "GET /api/herdr/upgrade",
+      "GET /api/herdr/upgrade",
+    ]);
+    expect(notice).toMatchObject({
+      kind: "success",
+      message: "Herdr is up to date",
+      detail: "Herdr World plugin: updated (v0.3.0)",
+      detailMode: "output",
+    });
+  });
+
+  test("after a World update it stays quiet when nothing changed", async () => {
+    let notice: unknown = "unset";
+    await withApi(
+      {
+        status: "done",
+        report: { server: { outcome: "current" } },
+        lines: [],
+        changed: false,
+        failed: [],
+      },
+      async () => {
+        await store.upgradeHerdr({ automatic: true });
+        notice = store.get().notice;
+      },
+    );
+    expect(notice).toBeNull();
+  });
+
+  test("a restart or a failed step is never reported as success", async () => {
+    let restart: unknown;
+    await withApi(
+      {
+        status: "done",
+        report: { server: { outcome: "restart-required" } },
+        lines: [
+          "Upgraded Herdr 0.9.3 -> 0.9.5.",
+          "Restart the server when convenient.",
+        ],
+        changed: true,
+        failed: [],
+      },
+      async () => {
+        await store.upgradeHerdr();
+        restart = store.get().notice;
+      },
+    );
+    expect(restart).toMatchObject({
+      kind: "info",
+      message: "Herdr upgraded; restart needed",
+      detail:
+        "Upgraded Herdr 0.9.3 -> 0.9.5.\nRestart the server when convenient.",
+    });
+    let partial: unknown;
+    await withApi(
+      {
+        status: "done",
+        report: { server: { outcome: "handed-off" } },
+        lines: [
+          "codex harness integration: failed",
+          "Not completed: codex harness integration.",
+        ],
+        changed: true,
+        failed: ["codex harness integration"],
+      },
+      async () => {
+        await store.upgradeHerdr({ automatic: true });
+        partial = store.get().notice;
+      },
+    );
+    expect(partial).toMatchObject({
+      kind: "error",
+      message: "Herdr upgrade incomplete",
+      detail:
+        "codex harness integration: failed\nNot completed: codex harness integration.",
+    });
+  });
+
+  test("reports a failed upgrade", async () => {
+    let notice: unknown;
+    await withApi(
+      { status: "failed", error: "checksum does not match" },
+      async () => {
+        await store.upgradeHerdr();
+        notice = store.get().notice;
+      },
+    );
+    expect(notice).toMatchObject({
+      kind: "error",
+      message: "Herdr upgrade failed",
+      detail: "checksum does not match",
+    });
   });
 });
 
