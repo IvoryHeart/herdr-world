@@ -71,7 +71,8 @@ export async function fetchWorldSources(
 export async function runPullRequestVerb(
   item: WorkItem,
   verb: PullRequestVerb,
-  options: { comment?: string } = {},
+  /** `headSha`: the head the viewer confirmed (merge); defaults to the item's. */
+  options: { comment?: string; headSha?: string } = {},
   fetchImpl: FetchLike = worldSourcesStore.fetchImpl(),
 ): Promise<PullRequestAction> {
   const response = await fetchImpl(`${SOURCES_PATH}/github/pull-request`, {
@@ -80,7 +81,7 @@ export async function runPullRequestVerb(
     body: JSON.stringify({
       key: item.key,
       verb,
-      ...(verb === "merge" ? { headSha: item.headSha } : {}),
+      ...(verb === "merge" ? { headSha: options.headSha ?? item.headSha } : {}),
       ...(verb === "close" && options.comment?.trim()
         ? { comment: options.comment.trim() }
         : {}),

@@ -96,6 +96,8 @@ const detailedPr = (number: number, fields: Record<string, unknown> = {}) => ({
   },
   ...fields,
 });
+/** #43's head; a scenario moves it to show a push while a sheet is open. */
+let head43 = prHead("3");
 /** Verb requests the cards sent, and GitHub's (synthetic) answer. */
 const verbPosts: Record<string, unknown>[] = [];
 const sourcesBody = () => ({
@@ -146,7 +148,7 @@ const sourcesBody = () => ({
       repo: "example-org/web-app",
       checks: "fail",
     },
-    detailedPr(43),
+    detailedPr(43, { headSha: head43 }),
     detailedPr(44, { lane: "green", review: "review_required" }),
     ...mergedWeek,
     {
@@ -900,6 +902,23 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
         !ready.querySelector(".pr-card-sheet") && verbPosts.length === 1,
         "cancel runs nothing",
       );
+      // A push while the merge sheet is open withdraws it.
+      button(ready, "Merge…").click();
+      await settle(50);
+      head43 = prHead("9");
+      await worldSourcesStore.refresh(true);
+      await waitFor(
+        () =>
+          ready.querySelector('[role="alert"]')?.textContent ===
+          "Head changed: review again.",
+        "a new head withdraws the open merge sheet",
+      );
+      check(
+        !ready.querySelector(".pr-card-sheet") && verbPosts.length === 1,
+        "nothing merges on a head the user did not see",
+      );
+      head43 = prHead("3");
+      await worldSourcesStore.refresh(true);
       window.dispatchEvent(
         new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
       );

@@ -230,10 +230,11 @@ export function reviewerResults(
     const reviewer = reviewerOf(post.body);
     if (!reviewer) continue;
     const line = resultLine(post.body, number);
+    // Only GitHub's review metadata or a SHA the text names binds a result
+    // to a head; when a commit was made says nothing of when it was pushed.
     const commit =
       (typeof post.commit === "string" && post.commit) ||
       namedCommit(post.body, commits) ||
-      commits.filter((entry) => entry.at && entry.at <= post.at).at(-1)?.oid ||
       null;
     const index = commit
       ? commits.findIndex((entry) => entry.oid === commit)
@@ -242,8 +243,10 @@ export function reviewerResults(
       reviewer,
       url: httpsUrl(post.url) ?? "",
       at: post.at,
+      // The whole line decides; only what is shown is shortened. Without a
+      // RESULT line nothing of the post leaves the service.
       outcome: line ? resultOutcome(line) : "unknown",
-      line: line ?? bounded(post.body.split("\n")[0]!),
+      line: line ? bounded(line) : "",
       commit,
       commitsSince:
         commit === head ? 0 : index >= 0 ? commits.length - 1 - index : null,
@@ -269,37 +272,63 @@ export function reviewerOf(body: string) {
 
 export function resultLine(body: string, number: number) {
   const match = new RegExp(`RESULT #${number}:\\s*([^\\n]*)`, "u").exec(body);
-  return match ? bounded(match[1]!) : null;
+  return match ? match[1]!.replace(/[*_`]/gu, "").trim() : null;
 }
 
 const bounded = (text: string) =>
   [...text.replace(/[*_`]/gu, "").trim()].slice(0, MAX_LINE).join("");
 
+const NUMBER = "(\\d+|one|two|three|four|five|six|seven|eight|nine|ten)";
+const WORDS: Record<string, number> = {
+  one: 1,
+  two: 2,
+  three: 3,
+  four: 4,
+  five: 5,
+  six: 6,
+  seven: 7,
+  eight: 8,
+  nine: 9,
+  ten: 10,
+};
+
 /**
  * Reviewers write results in their own words. Anything still open wins:
- * `1 remaining`, `1 original P2 remains`, `1 new P2`, `2/3 resolved`,
- * `5 findings`. Otherwise `3/3 resolved`, `confirmed`, `no new findings` or
- * `0 findings` confirm. Anything else is unknown.
+ * `1 remaining`, `1 original P2 remains`, `1 P2 open`, `1 new P2`,
+ * `2/3 resolved`, `3 findings`, `not confirmed`. Otherwise `3/3 resolved`,
+ * `confirmed`, `no new findings` or `0 findings` confirm. Anything else is
+ * unknown: World never reads Ready into a phrase it doesn't recognise.
  */
 export function resultOutcome(line: string): PullRequestReviewer["outcome"] {
-  const counts = (pattern: RegExp) =>
-    [...line.matchAll(pattern)].map((match) => Number(match[1]));
+  const counts = (pattern: string) =>
+    [...line.matchAll(new RegExp(pattern, "giu"))].map((match) => {
+      const word = match[1]!.toLowerCase();
+      return WORDS[word] ?? Number(word);
+    });
+  // A count that is the second half of `2/3` is not a count of its own.
+  const lone = `(?<![/\\d])${NUMBER}`;
   const resolved = /(\d+)\s*\/\s*(\d+)\b[^,;]*?\bresolved/iu.exec(line);
   const open =
-    counts(/(\d+)\s+(?:[\w-]+\s+){0,3}?remain(?:s|ing)?\b/giu).some(Boolean) ||
-    counts(/(\d+)\s+new\b/giu).some(Boolean) ||
+    counts(
+      `${lone}\\s+(?:[\\w-]+\\s+){0,3}?(?:remain(?:s|ing)?|open|unresolved|unfixed|outstanding(?!\\s+(?:findings?\\s+)?(?:resolved|fixed|confirmed)))\\b`,
+    ).some(Boolean) ||
+    counts(`${lone}\\s+new\\b`).some(Boolean) ||
+    counts(`(?<![/\\d])(\\d+)\\s+findings?\\b`).some(Boolean) ||
+    /\b(?:not|never)\s+(?:yet\s+)?(?:confirmed|resolved|fixed)\b|\bunconfirmed\b/iu.test(
+      line,
+    ) ||
     (resolved !== null && Number(resolved[1]) < Number(resolved[2]));
   if (open) return "open";
-  if (
-    resolved ||
+  return resolved ||
     /\b(?:confirmed|no (?:new )?findings|0 (?:new )?findings)\b/iu.test(line)
-  )
-    return "confirmed";
-  return counts(/(\d+)\s+findings?\b/giu).some(Boolean) ? "open" : "unknown";
+    ? "confirmed"
+    : "unknown";
 }
 
 function namedCommit(body: string, commits: { oid: string }[]) {
-  const named = /\bat\s+`?([0-9a-f]{7,40})\b/iu.exec(body)?.[1]?.toLowerCase();
+  const named = /\b(?:at|of)\s+`?([0-9a-f]{7,40})\b/iu
+    .exec(body)?.[1]
+    ?.toLowerCase();
   return named
     ? (commits.find((entry) => entry.oid.startsWith(named))?.oid ?? null)
     : null;

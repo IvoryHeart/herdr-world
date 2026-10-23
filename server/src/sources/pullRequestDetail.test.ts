@@ -123,9 +123,12 @@ const detailNode = (fields: Record<string, unknown> = {}) => ({
           createdAt: "2026-01-01T12:01:00Z",
         },
       ),
-      post("rev2 — Fix confirmation.\n\nRESULT #7: 2/2 resolved, 0 new.", {
-        createdAt: "2026-01-01T12:20:00Z",
-      }),
+      post(
+        "rev2 — Fix confirmation at ccccccc.\n\nRESULT #7: 2/2 resolved, 0 new.",
+        {
+          createdAt: "2026-01-01T12:20:00Z",
+        },
+      ),
       post(
         "**rev4**: confirmation at aaaaaaa.\n\nRESULT #7: no new findings.",
         {
@@ -177,8 +180,7 @@ describe("pull request detail", () => {
         entry.commitsSince,
       ]),
     ).toEqual([
-      // rev2's latest result wins over its first review; the comment names
-      // no SHA, so its head is the newest commit made before it.
+      // rev2's latest result wins over its first review; it names its head.
       ["rev2", "confirmed", HEAD, 0],
       // rev4 names the commit it confirmed: two commits ago.
       ["rev4", "confirmed", OLDEST, 2],
@@ -226,6 +228,12 @@ describe("pull request detail", () => {
       ["2/3 resolved, 1 remaining, 1 new.", "open"],
       ["2 fixes confirmed; 1 original P2 remains, plus 1 new P2.", "open"],
       ["review posted, 3 findings (2 P2, 1 P3)", "open"],
+      ["2/2 resolved, 1 P2 open", "open"],
+      ["2/2 resolved, 3 findings (P2)", "open"],
+      ["not confirmed, 0 new findings", "open"],
+      ["one P2 remains", "open"],
+      ["All four findings confirmed; 0 new.", "confirmed"],
+      ["both remaining P2s confirmed fixed; no new findings.", "confirmed"],
       ["looks fine to me", "unknown"],
     ];
     for (const [line, outcome] of cases)
@@ -239,7 +247,7 @@ describe("pull request detail", () => {
         reviews: { nodes: [] },
         comments: {
           nodes: [
-            post("rev3 — All four findings fixed, nice work.", {
+            post("rev3 — synthetic-private-canary, all fixed.", {
               createdAt: "2026-01-01T12:30:00Z",
             }),
           ],
@@ -247,12 +255,66 @@ describe("pull request detail", () => {
       }),
     );
     expect(detail.reviewers).toMatchObject([
+      { reviewer: "rev3", outcome: "unknown", line: "" },
+    ]);
+    // Nothing of a post without a RESULT line leaves the service.
+    expect(JSON.stringify(detail)).not.toContain("canary");
+  });
+
+  test("a commit's date is no proof of the head a result was given on", () => {
+    // OLDER was made at 11:00 but pushed after a SHA-less confirmation at
+    // 11:30 that reviewed OLDEST; the confirmation must not count for it.
+    const detail = parseDetail(
+      item(7, { headSha: OLDER }),
+      detailNode({
+        headRefOid: OLDER,
+        commits: {
+          nodes: [
+            { commit: { oid: OLDEST, committedDate: "2026-01-01T10:00:00Z" } },
+            { commit: { oid: OLDER, committedDate: "2026-01-01T11:00:00Z" } },
+          ],
+        },
+        reviews: { nodes: [] },
+        comments: {
+          nodes: [
+            post(
+              "rev2 — Fix confirmation.\n\nRESULT #7: 2/2 resolved, 0 new.",
+              {
+                createdAt: "2026-01-01T11:30:00Z",
+              },
+            ),
+          ],
+        },
+      }),
+    );
+    expect(detail.reviewers).toMatchObject([
       {
-        reviewer: "rev3",
-        outcome: "unknown",
-        line: "rev3 — All four findings fixed, nice work.",
+        reviewer: "rev2",
+        outcome: "confirmed",
+        commit: null,
+        commitsSince: null,
       },
     ]);
+  });
+
+  test("the whole RESULT line decides; only the text shown is shortened", () => {
+    const line = `2/2 resolved; ${"the fix holds under every case tried. ".repeat(8)}1 new P2 in the retry path.`;
+    expect(line.length).toBeGreaterThan(250);
+    const detail = parseDetail(
+      item(7),
+      detailNode({
+        reviews: { nodes: [] },
+        comments: {
+          nodes: [
+            post(`rev2 — Fix confirmation at ccccccc.\n\nRESULT #7: ${line}`, {
+              createdAt: "2026-01-01T12:30:00Z",
+            }),
+          ],
+        },
+      }),
+    );
+    expect(detail.reviewers[0]!.outcome).toBe("open");
+    expect([...detail.reviewers[0]!.line].length).toBeLessThanOrEqual(200);
   });
 
   test("reads changed, unread, running or old pull requests first, a bounded few", () => {

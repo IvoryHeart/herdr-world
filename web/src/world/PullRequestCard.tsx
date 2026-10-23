@@ -44,6 +44,7 @@ const DONE: Record<PullRequestVerb, string> = {
   ready: "Marked ready",
 };
 const MAX_DOTS = 12;
+const HEAD_CHANGED = "Head changed: review again.";
 
 export function PullRequestCard({
   item,
@@ -63,7 +64,13 @@ export function PullRequestCard({
   onAskAuthor?(item: WorkItem): void;
 }) {
   const [open, setOpen] = useState(false);
-  const [sheet, setSheet] = useState<PullRequestVerb | null>(null);
+  // A sheet holds the head it was opened on: the confirm is for that head.
+  const [sheet, setSheetState] = useState<{
+    verb: PullRequestVerb;
+    head: string | undefined;
+  } | null>(null);
+  const setSheet = (verb: PullRequestVerb | null) =>
+    setSheetState(verb ? { verb, head: item.headSha } : null);
   const [state, setState] = useState<
     | { kind: "idle" }
     | { kind: "running"; verb: PullRequestVerb }
@@ -81,12 +88,26 @@ export function PullRequestCard({
     if (state.kind === "done" && seen !== state.seen)
       setState({ kind: "idle" });
   }, [seen, state]);
+  // A push while the sheet is open withdraws it: review the new head first.
+  useEffect(() => {
+    if (sheet && sheet.head !== item.headSha) {
+      setSheetState(null);
+      setState({ kind: "failed", detail: HEAD_CHANGED });
+    }
+  }, [sheet, item.headSha]);
 
-  const run = async (verb: PullRequestVerb, comment?: string) => {
+  const run = async (
+    verb: PullRequestVerb,
+    head: string | undefined,
+    comment?: string,
+  ) => {
     setSheet(null);
     setState({ kind: "running", verb });
     try {
-      const action = await runPullRequestVerb(item, verb, { comment });
+      const action = await runPullRequestVerb(item, verb, {
+        comment,
+        headSha: head,
+      });
       setState(
         action.outcome === "done"
           ? { kind: "done", verb, seen }
@@ -179,10 +200,10 @@ export function PullRequestCard({
       {sheet ? (
         <ConfirmSheet
           item={item}
-          verb={sheet}
-          failing={sheet === "merge" ? failing : []}
+          verb={sheet.verb}
+          failing={sheet.verb === "merge" ? failing : []}
           onCancel={() => setSheet(null)}
-          onConfirm={(comment) => void run(sheet, comment)}
+          onConfirm={(comment) => void run(sheet.verb, sheet.head, comment)}
         />
       ) : (
         <div className="pr-card-actions">
@@ -210,7 +231,8 @@ export function PullRequestCard({
               <ul>
                 {item.pr.reviewers.map((entry) => (
                   <li key={entry.reviewer} data-outcome={entry.outcome}>
-                    <b>{entry.reviewer}</b> {entry.line}
+                    <b>{entry.reviewer}</b>{" "}
+                    {entry.line || "No RESULT line in its latest post"}
                     <small>
                       {entry.outcome === "confirmed"
                         ? `${confirmedAt(entry)} · `
