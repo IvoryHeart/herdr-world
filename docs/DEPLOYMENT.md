@@ -310,6 +310,33 @@ herdr-world --socket-path /path/to/herdr.sock \
 herdr-world --ssh-host workbox
 ```
 
+## Agent profiles and the launcher
+
+**New agent** starts a harness in a new Herdr tab through the connection that
+owns the chosen room (`tab.create`, then `agent.start` with the profile's
+arguments, then a readiness wait and the first prompt). Agent kinds come from
+the host's Herdr (`server.agent_manifests`); an older Herdr offers Claude and
+Codex. Profiles are stored atomically, with owner-only permissions, in
+`~/.config/herdr-world/agent-profiles.json` on Unix or
+`%APPDATA%\herdr-world\agent-profiles.json` on Windows; override the path
+with `HERDR_WORLD_AGENT_PROFILES_PATH`. Profiles refuse text that looks like a
+credential and never hold one.
+
+To show whether a harness is installed and logged in, the service runs each
+harness's own status command on the room's host (locally, or over the
+connection's OpenSSH destination): `claude auth status` and
+`codex login status`. It keeps only whether the harness is logged in and the
+login method; the commands' other output, which can name the account, is
+discarded. It also lists `SKILL.md` folders by name. A service whose `PATH`
+lacks the harness still finds it in the usual install folders (such as
+`~/.local/bin`). **Log in** opens a new tab and shows the harness's fixed login
+command (`claude auth login`, `codex login --device-auth`), wrapped in `sh -c`
+so it finds the executable the same way, with **Copy** and **Open its tab**.
+You run it there and finish the login yourself. World types nothing into the
+tab: Herdr can't tell a prompt from a startup script waiting for a key. Windows
+hosts are not probed: their harnesses show no status, and every agent kind
+their Herdr supports stays available. Log in is not offered there.
+
 ## Optional cost metrics
 
 The Town board can show token use and reported cost from a Prometheus-compatible
@@ -345,6 +372,9 @@ Jira or SSH lookup finishes in the background.
   [GitHub CLI](https://cli.github.com/) for that user and run `gh auth login`
   (for a user service, the same account the service runs as). Until then the
   source says **Sign in with gh auth login**. World stores no GitHub token.
+  Merged pull requests cover the last 7 days by default (1 to 90 in
+  **Settings → Sources**, saved as `custom.world_sources.github.mergedDays`);
+  World reads them 100 per request, up to GitHub search's 1,000 results.
 - **Jira Cloud** needs your site (`example.atlassian.net`), account email and an
   [API token](https://id.atlassian.com/manage-profile/security/api-tokens),
   entered in **Settings → Sources**. The site and email are saved in
@@ -361,7 +391,10 @@ else its pane's directory, else its workspace's worktree. It runs `git` locally
 for local profiles and over the profile's SSH destination for SSH profiles;
 Windows hosts are not read. At most 32 checkouts are read per refresh and each
 is cached for two minutes. A pull request an agent reports with `--pr` links
-directly.
+directly. Without `git` on that host, or for a directory that is not a
+repository, pull requests and tickets still show; only that agent's desk link
+is missing, and World reports no error for it. If GitHub or Jira is down,
+that source shows an error and keeps its last items.
 
 ## Herdr plugin
 

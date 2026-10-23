@@ -213,6 +213,41 @@ and open its terminal or Inspector without losing its workspace context.
 
 ![Town at phone width](./images/herdr-world-mobile-town.png)
 
+### Start a new agent from a profile
+
+<a id="new-agent"></a>
+
+A profile is a ready-made agent: a name, a harness and model, a role, skills,
+a starting brief and a look in Town. World starts it in a new tab for you.
+
+1. Open **Menu → Agent profiles** (or **Actions → Agent profiles**). The
+   starters are Reviewer (Codex), Builder, Designer and FirstMate (Claude
+   Code). Pick one, or press **New profile** or **Duplicate**.
+2. On **Who**, set the name, home room, role and colour. On **Brain**, choose a
+   harness the host supports, a model (empty keeps the harness's default) and
+   a permission mode. On **Skills & tools**, tap the skills (found in the
+   room's `.agents/skills` and `.claude/skills` and your harness folders) and,
+   for Claude Code, the tools it may use. On **Brief**, write the first prompt;
+   `{{task}}` is filled with what you type when you launch. On **Look**, dress
+   the character and watch it walk, turn and sit in the preview. **What a
+   launch runs** shows the exact Herdr command. Press **Save**.
+3. Open **New agent**: **Actions → New agent**, **New agent** on a
+   room's plaque (on a phone, tap the room first), or the robot beside **+** in
+   Spaces' tab bar. Choose the room, optionally type a task, and tap a profile,
+   or tap a kind under **Quick start** for a plain agent.
+4. If a harness is logged out on that host, the launcher says so: **Log in**
+   opens a small tab and shows the harness's own login command
+   (`claude auth login`, `codex login --device-auth`). **Copy** it, **Open its
+   tab**, run it and finish the login there, then **Check again**.
+5. World creates the tab, starts the agent, waits until it is ready and sends
+   the brief, then opens its terminal. The tab takes the profile's colour and
+   the agent wears the profile's look in Town. If the agent stops on a question
+   first (for example Claude asking whether to trust a new folder), the
+   launcher says so and **Open its tab** lets you answer.
+
+**You are done when:** an agent you started from a profile is answering in its
+own tab, dressed as you chose in Town.
+
 ### Use Board: notes and strings for your agents
 
 <a id="board"></a>
@@ -230,8 +265,8 @@ on your phone and desktop.
    An agent's card shows a ⚑ chip with its quest progress, such as 2/5; hover
    the chip for the quest and its current step.
    The round **+** on a workspace's right edge (shown on hover or selection)
-   opens **New tab**: choose a Terminal, Claude or Codex, optionally name the
-   tab, and press **Create**; **+** beside a host's name creates a workspace. Select a workspace or
+   opens **New tab**: choose a Terminal, one of your profiles or an agent kind
+   the host supports, optionally name the tab, and press **Create**; **+** beside a host's name creates a workspace. Select a workspace or
    tab to give it a colour of your own; status keeps its own colours. A tab's
    colour is its terminal colour, the same one Spaces and Town show: it starts
    as a stable default (or its workspace's colour, if you gave the workspace
@@ -262,10 +297,8 @@ on your phone and desktop.
    even in the same terminal, nothing is sent: World names the new agent and
    offers **Send to** it instead. Nothing is sent without your action.
    **Start an agent…** opens the same dialog: choose the workspace
-   and the agent, optionally name the tab, and press **Start and send**; the
-   note is sent once the agent is ready. (Starting a chosen agent kind
-   currently opens a shell; see
-   [issue 219](https://github.com/IvoryHeart/herdr-world/issues/219).)
+   and the agent or profile, optionally name the tab, and press **Start and
+   send**; the note is sent once the agent is ready.
 8. Drag a tab onto another workspace of the same host to move it there (on a
    phone, hold the tab still for a moment first; a quick swipe pans). Board
    asks first, with **Don't ask again**, and always asks before moving a
@@ -275,7 +308,10 @@ on your phone and desktop.
    GitHub pull requests in columns from **In review** through **Fixing**,
    **Green** and **Ready to merge** to **Merged**, and on the **Tickets** tab
    your Jira tickets and assigned issues by status. A card names the agents
-   working on it; tap one to close Work and jump to its card. Escape or a
+   working on it; tap one to close Work and jump to its card. **Merged**
+   groups the week's pull requests you opened by the day they merged, with
+   today open; tap a day to open
+   it, and change how many days it covers in **Settings → Sources**. Escape or a
    press outside also closes Work. **Green** means checks pass while a
    required review is pending; **Ready to merge** means approved, or passing
    in a repository that requires no review. The same pull

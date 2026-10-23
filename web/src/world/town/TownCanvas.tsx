@@ -25,7 +25,7 @@ import { DEVTOOLS, NO_TRACE, type ViewTrace } from "../devtools/flag";
 import { traceGesture } from "../devtools/trace";
 import { EllipsisVertical } from "lucide-react";
 import { useMobileControls } from "../../components/MobileControls";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { Bot, Pencil, Plus, Trash2 } from "lucide-react";
 import type {
   HerdrOfficeProjection,
   OfficeAgent,
@@ -93,6 +93,8 @@ export type TownRoomActions = {
   canCreateSeat(roomKey: string): boolean;
   createSeatReason(roomKey: string): string | null;
   onCreateSeat(roomKey: string): void;
+  /** Open the launcher for this room: a new agent from a profile or a kind. */
+  onNewAgent(roomKey: string): void;
   showCreateRoom(roomKey: string | null): boolean;
   canCreateRoom(roomKey: string | null): boolean;
   createRoomReason(roomKey: string | null): string | null;
@@ -1772,6 +1774,20 @@ const TownWorldLayer = memo(function TownWorldLayer({
                         !{c.blocked}
                       </span>
                     ) : null}
+                    <button
+                      className="world-room-overlay-action town-plaque-action town-plaque-agent"
+                      type="button"
+                      aria-label={`New agent in ${label}`}
+                      title={
+                        roomActions.createSeatReason(room.key) ??
+                        `Start a new agent in ${label}`
+                      }
+                      disabled={!roomActions.canCreateSeat(room.key)}
+                      onClick={() => roomActions.onNewAgent(room.key)}
+                    >
+                      <Bot size={12} aria-hidden="true" />
+                      <span>New agent</span>
+                    </button>
                     <button
                       className="world-room-overlay-action world-room-overlay-action-rename town-plaque-action"
                       type="button"

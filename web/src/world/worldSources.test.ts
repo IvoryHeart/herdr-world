@@ -160,6 +160,58 @@ describe("World sources in the browser", () => {
     ).toEqual(["draft", "conflicts", "checks failing"]);
   });
 
+  test("history columns group a busy week by the day each one finished", () => {
+    const world = fixtureWorld([]);
+    const now = new Date(2026, 2, 10, 15).getTime();
+    const at = (day: number, hour: number) =>
+      new Date(2026, 2, day, hour).getTime();
+    const merged = Array.from({ length: 150 }, (_, index) =>
+      pr(100 + index, {
+        lane: "merged",
+        status: "merged",
+        // A comment after merging moves updatedAt, not the day it merged.
+        updatedAt: now,
+        finishedAt: at(10 - (index % 5), 9),
+      }),
+    );
+    const [column] = workLensColumns(
+      snapshot(merged, []),
+      world,
+      "pull_requests",
+      now,
+    ).filter((entry) => entry.lane === "merged");
+    expect(column!.cards).toHaveLength(150);
+    expect(column!.days!.map((day) => [day.key, day.cards.length])).toEqual([
+      ["2026-03-10", 30],
+      ["2026-03-09", 30],
+      ["2026-03-08", 30],
+      ["2026-03-07", 30],
+      ["2026-03-06", 30],
+    ]);
+    expect(column!.days!.slice(0, 2).map((day) => day.label)).toEqual([
+      "Today",
+      "Yesterday",
+    ]);
+    // A Done ticket groups by when it was resolved, not its last comment.
+    const done = workLensColumns(
+      snapshot(
+        [{ ...ticket, lane: "done", updatedAt: now, finishedAt: at(8, 9) }],
+        [],
+      ),
+      world,
+      "tickets",
+      now,
+    ).find((entry) => entry.lane === "done")!;
+    expect(done.days!.map((day) => day.key)).toEqual(["2026-03-08"]);
+    const open = workLensColumns(
+      snapshot(merged, []),
+      world,
+      "pull_requests",
+      now,
+    );
+    expect(open[0]!.days).toBeUndefined();
+  });
+
   test("a desk shows its agent's open pull request before a ticket", () => {
     const projection = {
       rooms: [

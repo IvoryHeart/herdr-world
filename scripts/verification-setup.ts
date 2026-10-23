@@ -7,15 +7,30 @@ import {
   rm,
   writeFile,
 } from "node:fs/promises";
+import { homedir } from "node:os";
 import { resolve } from "node:path";
 import checker from "../tools/quint/checker.json";
 import { runVerificationProcess } from "./verification-process";
 
 export const verificationRoot = resolve(import.meta.dir, "..");
-export const checkerHome = resolve(
-  verificationRoot,
-  ".agents/verification/checker",
-);
+/**
+ * The verified checker (about 190 MB unpacked) is shared by every worktree
+ * and clone of this user instead of being downloaded into each one. Its
+ * contents are verified against the committed digests before use, so a
+ * shared copy is as trustworthy as a private one.
+ * HERDR_WORLD_VERIFICATION_CACHE moves it.
+ */
+export function verificationCacheDirectory(
+  env: Record<string, string | undefined> = process.env,
+  home = homedir(),
+) {
+  if (env.HERDR_WORLD_VERIFICATION_CACHE?.trim())
+    return resolve(env.HERDR_WORLD_VERIFICATION_CACHE.trim());
+  const cache = env.XDG_CACHE_HOME?.trim() || resolve(home, ".cache");
+  return resolve(cache, "herdr-world", "verification");
+}
+
+export const checkerHome = resolve(verificationCacheDirectory(), "checker");
 export const checkerDirectory = resolve(
   checkerHome,
   `apalache-dist-${checker.version}`,
@@ -108,8 +123,22 @@ export async function setupVerification() {
     await mkdir(resolve(checkerHome, `apalache-dist-${checker.version}`), {
       recursive: true,
     });
-    await rm(checkerDirectory, { recursive: true, force: true });
-    await rename(staged, checkerDirectory);
+    // Another worktree may be repairing the shared copy at the same time:
+    // move a stale copy aside instead of deleting it under a reader, and
+    // keep whichever verified copy is published first.
+    await rename(checkerDirectory, resolve(temporary, "replaced")).catch(
+      () => {},
+    );
+    try {
+      await rename(staged, checkerDirectory);
+    } catch (error) {
+      if (
+        (error as NodeJS.ErrnoException).code !== "ENOTEMPTY" &&
+        (error as NodeJS.ErrnoException).code !== "EEXIST"
+      )
+        throw error;
+      await assertVerificationInstalled();
+    }
     console.log(
       `Verified checker ${checker.version}; jar SHA-256 ${sha256(jar)}`,
     );

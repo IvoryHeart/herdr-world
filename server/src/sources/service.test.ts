@@ -325,6 +325,107 @@ describe("World sources service", () => {
     expect(saved.at(-1)).toEqual({ github: { enabled: false } });
   });
 
+  test("the merged window is saved, reported and used; a bad one is refused", async () => {
+    const queries: string[] = [];
+    const run: RunProcess = async (argv) => {
+      if (argv[0] !== "gh") return { code: 0, stdout: "", stderr: "" };
+      if (argv[1] !== "auth") queries.push(argv.at(-1)!);
+      return argv[1] === "auth"
+        ? { code: 0, stdout: "", stderr: "" }
+        : { code: 0, stdout: JSON.stringify(graphql), stderr: "" };
+    };
+    const { service, handle, saved } = setup({ run });
+    const path = `${WORLD_SOURCES_PATH}/github`;
+    expect((await service.snapshot()).sources[0]!.config).toEqual({
+      kind: "github",
+      mergedDays: 7,
+    });
+    const response = await handle(put(path, { mergedDays: 30 }), path);
+    const body = await response!.json();
+    expect(body.sources[0].config).toEqual({ kind: "github", mergedDays: 30 });
+    expect(saved.at(-1)).toEqual({ github: { mergedDays: 30 } });
+    // 1,000 (setup's clock) minus 30 days.
+    expect(queries.at(-1)).toContain(
+      `merged:>=${new Date(1_000 - 30 * 86_400_000).toISOString().replace(/\.\d{3}Z$/u, "Z")}`,
+    );
+    for (const bad of [
+      { mergedDays: 0 },
+      { mergedDays: "7" },
+      { other: 1 },
+      {},
+    ]) {
+      const refused = await handle(put(path, bad), path);
+      expect(refused!.status).toBe(400);
+    }
+    expect(saved).toHaveLength(1);
+  });
+
+  test("a new merged window keeps the current items if its read fails", async () => {
+    let fail = false;
+    const run: RunProcess = async (argv) => {
+      if (argv[0] !== "gh") return { code: 0, stdout: "", stderr: "" };
+      if (argv[1] === "auth") return { code: 0, stdout: "", stderr: "" };
+      return fail
+        ? { code: 1, stdout: "", stderr: "" }
+        : { code: 0, stdout: JSON.stringify(graphql), stderr: "" };
+    };
+    const { service } = setup({ run });
+    expect((await service.snapshot()).items.map((item) => item.ref)).toEqual([
+      "example-org/widgets#5",
+    ]);
+    fail = true;
+    // Also a combined patch that leaves GitHub on.
+    for (const patch of [
+      { mergedDays: 30 },
+      { enabled: true, mergedDays: 14 },
+    ]) {
+      const after = await service.configureGitHub(patch);
+      expect(after.items.map((item) => item.ref)).toEqual([
+        "example-org/widgets#5",
+      ]);
+      expect(after.sources[0]).toMatchObject({ state: "error", itemCount: 1 });
+    }
+    // Switching a source off and on still starts from nothing.
+    await service.configureGitHub({ enabled: false });
+    expect((await service.configureGitHub({ enabled: true })).items).toEqual(
+      [],
+    );
+  });
+
+  test("without git, or outside a repository, pull requests show and only desk links are absent", async () => {
+    for (const git of ["missing", "not a repository"] as const) {
+      let gitCalls = 0;
+      const run: RunProcess = async (argv) => {
+        if (argv[0] === "gh")
+          return argv[1] === "auth"
+            ? { code: 0, stdout: "", stderr: "" }
+            : { code: 0, stdout: JSON.stringify(graphql), stderr: "" };
+        gitCalls += 1;
+        if (git === "missing")
+          throw Object.assign(new Error("spawn git"), { code: "ENOENT" });
+        return {
+          code: 128,
+          stdout: "",
+          stderr: "fatal: not a git repository",
+        };
+      };
+      const { service, advance } = setup({ run });
+      const snapshot = await service.snapshot();
+      expect(snapshot.items.map((item) => item.ref)).toEqual([
+        "example-org/widgets#5",
+      ]);
+      expect(snapshot.sources[0]).toMatchObject({ state: "connected" });
+      expect(snapshot.links).toEqual([]);
+      expect(JSON.stringify(snapshot)).not.toContain("fatal");
+      // The failed lookup is cached, not retried on every request.
+      const calls = gitCalls;
+      expect(calls).toBeGreaterThan(0);
+      advance(20_000);
+      await service.snapshot();
+      expect(gitCalls).toBe(calls);
+    }
+  });
+
   test("settings round-trip through settings.json's custom block", () => {
     const base: GuiSettings = {
       version: 1,
@@ -333,7 +434,7 @@ describe("World sources service", () => {
       custom: { other: 1 },
     };
     const next = withSourceSettings(base, {
-      github: { enabled: false },
+      github: { enabled: false, mergedDays: 30 },
       jira: {
         enabled: true,
         site: "https://example.atlassian.net",
@@ -343,7 +444,7 @@ describe("World sources service", () => {
     });
     expect(next.custom.other).toBe(1);
     expect(storedSourceSettings(next)).toEqual({
-      github: { enabled: false },
+      github: { enabled: false, mergedDays: 30 },
       jira: {
         enabled: true,
         site: "https://example.atlassian.net",
@@ -354,6 +455,14 @@ describe("World sources service", () => {
     expect(
       storedSourceSettings({ custom: { [WORLD_SOURCES_SETTINGS_KEY]: "bad" } }),
     ).toEqual({});
+    // A restarted service keeps the saved window; a bad one falls back.
+    expect(
+      setup({ settings: storedSourceSettings(next) }).service.mergedDays(),
+    ).toBe(30);
+    const tampered = withSourceSettings(base, { github: { mergedDays: 500 } });
+    expect(
+      setup({ settings: storedSourceSettings(tampered) }).service.mergedDays(),
+    ).toBe(7);
   });
 });
 

@@ -24,19 +24,20 @@ retained in [`LICENSES/HERDR-DROVR-MIT.txt`](LICENSES/HERDR-DROVR-MIT.txt).
 
 ## Claw-Empire character assets
 
-The pixel character sprites embedded, downscaled, in the website film under
-`site/film` originate from
+Earlier releases and website versions carried pixel character sprites that
+originate from
 [`GreenSheep01201/claw-empire`](https://github.com/GreenSheep01201/claw-empire)
 at commit `66a24ea7df2435ef897c48c147deb7ec572c01c2`, licensed under Apache-2.0,
 Copyright 2026 GreenSheep01201 (seowongil@gmail.com). The licence is retained in
 [`LICENSES/CLAW-EMPIRE-APACHE-2.0.txt`](LICENSES/CLAW-EMPIRE-APACHE-2.0.txt). The
-application no longer ships them: they were drawn only by the retired Office view.
+application and the website no longer ship them: they were drawn by the retired
+Office view and, until October 2026, by the website film, which now draws the app's
+own Town art. See [docs/world-assets.md](docs/world-assets.md).
 
 ## Website film fonts
 
 The website film under `site/film/fonts` bundles Big Shoulders Display, JetBrains Mono
-and Silkscreen under the SIL Open Font License 1.1. The film also embeds downscaled
-copies of the Claw-Empire character sprites listed above. The font licence is
+and Silkscreen under the SIL Open Font License 1.1. The font licence is
 retained in [`LICENSES/FILM-FONTS-OFL.txt`](LICENSES/FILM-FONTS-OFL.txt).
 
 ## Nerd Fonts
