@@ -1299,11 +1299,17 @@ async function run() {
       await waitFor(() => ghost() !== null, "holding a desk did not lift it");
       // Nudge at the edge, then step back out of it so the town is still
       // when we look and drop.
-      const edge = [window.innerWidth / 2, window.innerHeight - 20] as const;
-      const still = [window.innerWidth / 2, window.innerHeight - 110] as const;
-      for (let step = 0; step < 80 && !otherRoom(); step += 1) {
+      // The town's own bottom edge (a tray may cover the window's), and
+      // up to about 30 s of scrolling: the 100-desk room is tall on a phone
+      // and a slow runner draws few frames.
+      const stage = canvasHost.getBoundingClientRect();
+      const x = stage.left + stage.width / 2;
+      const edge = [x, stage.bottom - 20] as const;
+      const still = [x, stage.bottom - 110] as const;
+      const until = performance.now() + 30_000;
+      while (!otherRoom() && performance.now() < until) {
         press("pointermove", edge);
-        await new Promise((resolve) => setTimeout(resolve, 120));
+        await new Promise((resolve) => setTimeout(resolve, 250));
         press("pointermove", still);
         await settle();
       }
