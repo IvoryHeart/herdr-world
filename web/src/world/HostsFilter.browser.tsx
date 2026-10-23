@@ -37,6 +37,7 @@ import type { Pane, Tab, Workspace } from "../types";
 import { writeHostsFilter } from "./hostsFilter";
 import { worldRuntimeStore } from "./runtimeStore";
 import WorldFoundationApp from "./WorldFoundationApp";
+import WorldInspectorConversationView from "./WorldInspectorConversation";
 import { worldObjectId } from "./worldObject";
 import "../styles/tokens.css";
 import "../styles/base.css";
@@ -71,10 +72,11 @@ const operation =
   new URLSearchParams(location.search).get("operation") ?? "filters";
 const requestedView =
   new URLSearchParams(location.search).get("view") ?? "board";
-const coldMaster = operation.startsWith("cold-master");
+const coldMaster = operation === "cold-master";
 const coldHost =
   operation === "cold-host" ||
   coldMaster ||
+  operation === "cold-master-connect" ||
   operation === "navigator" ||
   operation === "spaces-navigator" ||
   operation === "bare-navigator" ||
@@ -738,23 +740,87 @@ async function operationalScenario(unmount: () => void) {
     );
     return;
   }
-  if (coldMaster) {
-    // On load, Town docks its master's window without focusing it. That
-    // host's session has not loaded yet; the window must fill in by itself,
-    // never stay an empty frame until the agent is clicked.
-    if (operation === "cold-master-connect") {
+  if (operation === "cold-master-connect") {
+    const target = document.createElement("div");
+    document.body.append(target);
+    const root = createRoot(target);
+    let binds = 0;
+    flushSync(() => {
+      __storeTesting.replaceState({ ...store.get(), status: "disconnected" });
+      root.render(
+        <WorldInspectorConversationView
+          conversation={{
+            nodeId: worldObjectId("beta", "terminal", "shared"),
+            connectionId: "beta",
+            runtimeGeneration: 7,
+            resourceIdentity: "shared",
+            workspaceId: "shared",
+            tabId: "shared",
+            paneId: "shared",
+            label: "Synthetic master",
+            hostLabel: "Synthetic beta",
+            spaceLabel: "Synthetic Studio",
+            context: {
+              kind: "agent",
+              label: "Synthetic master",
+              agent: "codex",
+              stateLabel: "Idle",
+              locationLabel: "Synthetic Studio · Synthetic beta",
+            },
+            availableViews: ["history", "terminal"],
+            view: "history",
+            dock: "right",
+            expanded: false,
+            size: 420,
+          }}
+          target={target}
+          floating
+          terminalActive={false}
+          onChange={() => {}}
+          onClose={() => {}}
+          onResourceFocus={() => {}}
+          onTerminalPortalChange={() => {}}
+          onBind={() => {
+            binds++;
+            void store.loadConnectionSession("beta");
+          }}
+        />,
+      );
+    });
+    try {
       await waitFor(
-        () => !!document.querySelector(".world-inspector-loading"),
-        "The docked master's window did not mount before connecting",
+        () => !!target.querySelector(".world-inspector-loading"),
+        "The restored master's window did not mount before connecting",
       );
       check(
-        store.get().sessionsByConnectionId.beta?.workspaces.length === 0,
-        "The disconnected host unexpectedly loaded its session",
+        binds === 0,
+        "The disconnected window requested its host too early",
       );
       flushSync(() =>
         __storeTesting.replaceState({ ...store.get(), status: "connected" }),
       );
+      await waitFor(
+        () => !!target.querySelector(".workspace-inspector-head"),
+        "The docked master's window stayed empty after connecting",
+      );
+      check(
+        binds === 1,
+        "Connecting must bind the restored window exactly once",
+      );
+      check(
+        store.get().activeConnectionId === "alpha",
+        "Binding the restored window changed the Spaces owner",
+      );
+    } finally {
+      flushSync(() => root.unmount());
+      target.remove();
     }
+    return;
+  }
+  if (coldMaster) {
+    // On load, Town docks its master's window without focusing it. That
+    // host's session has not loaded yet; the window must fill in by itself,
+    // never stay an empty frame until the agent is clicked.
     await waitFor(
       () =>
         !![
@@ -2520,7 +2586,7 @@ async function run() {
   bridge.call = client.call;
   __storeTesting.replaceState({
     ...store.get(),
-    status: operation === "cold-master-connect" ? "disconnected" : "connected",
+    status: "connected",
     navigationMode: coldHost ? "browser-local" : "shared",
     catalogueReady: true,
     activeConnectionId: "alpha",
