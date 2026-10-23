@@ -745,6 +745,9 @@ describe("World view preference", () => {
       locationLabel: "Shared · Host A",
       agent: "codex",
     });
+    expect(
+      worldInspectorContext({ ...agent, agentName: "scout" } as typeof agent),
+    ).toMatchObject({ label: "scout", agent: "codex" });
     expect(worldInspectorContext(world.hosts[0])).toBeNull();
   });
 

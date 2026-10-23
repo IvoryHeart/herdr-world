@@ -85,10 +85,13 @@ export type ConversationDelivery = {
   id: string;
   text: string;
   sent_at: string;
+  transcript_at?: string;
   state: "pending" | "matched" | "misdelivered" | "uncertain" | "unverified";
   expected: string;
   fingerprint: string;
   matched_id?: string;
+  /** How the transcript turn was matched: its words, or its order. */
+  matched_by?: "words" | "order";
   delivered_to?: string;
   evidence?: "herdr" | "transcript";
   detail?: string;

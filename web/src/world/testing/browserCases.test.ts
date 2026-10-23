@@ -9,14 +9,14 @@ import {
 } from "./browserCases";
 
 test("World suite splitting preserves every original viewport/operation/view case exactly once", () => {
-  expect(hostFilterCases).toHaveLength(121);
+  expect(hostFilterCases).toHaveLength(123);
   expect(
     new Set(hostFilterCases.map((item) => JSON.stringify(item))).size,
-  ).toBe(121);
+  ).toBe(123);
   const assigned = hostFilterGroups.flatMap((group) =>
     hostFilterCases.filter((item) => hostFilterGroup(item) === group),
   );
-  expect(assigned).toHaveLength(121);
+  expect(assigned).toHaveLength(123);
   expect(new Set(assigned)).toEqual(new Set(hostFilterCases));
   for (const group of hostFilterGroups)
     expect(assigned.some((item) => hostFilterGroup(item) === group)).toBe(true);

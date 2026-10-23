@@ -1,4 +1,5 @@
 import {
+  Fragment,
   memo,
   useCallback,
   useEffect,
@@ -13,6 +14,7 @@ import {
 import {
   ArrowDown,
   Check,
+  CheckCheck,
   ChevronRight,
   CircleSlash,
   Copy,
@@ -40,6 +42,7 @@ import {
 } from "./agentHistoryView";
 import { formatBytes } from "./agentSession";
 import { MarkdownPreview } from "./markdown";
+import { unwrapPastedContent } from "./pastedContent";
 import {
   StepDetailEvidence,
   StepRowEvidence,
@@ -50,6 +53,8 @@ import "./AgentHistoryChat.css";
 // Treat the list as pinned while the reader is within this distance of the
 // newest message, so polling refreshes keep following live output.
 const FOLLOW_THRESHOLD_PX = 48;
+// Scrolling this close to the top loads the next older page.
+const OLDER_THRESHOLD_PX = 240;
 
 const EMPTY_LOADING: ReadonlySet<string> = new Set();
 const noop = () => {};
@@ -58,18 +63,23 @@ const ChatBubble = memo(function ChatBubble({
   entry,
   sequence,
   highlighted,
-  matched = false,
+  matched = null,
   onOpen,
 }: {
   entry: HistoryEntry;
   sequence: number;
   highlighted: boolean;
   /** Has the same words as a message Chat sent: matched, not proven. */
-  matched?: boolean;
+  matched?: "words" | "order" | null;
   onOpen: (entry: HistoryEntry) => void;
 }) {
-  const preview = entry.text.slice(0, HISTORY_PREVIEW_CHARS);
-  const truncated = preview.length < entry.text.length;
+  // A user's paste shows as the words they pasted, marked as a paste.
+  const shown =
+    entry.role === "user"
+      ? unwrapPastedContent(entry.text)
+      : { text: entry.text, pasted: false };
+  const preview = shown.text.slice(0, HISTORY_PREVIEW_CHARS);
+  const truncated = preview.length < shown.text.length;
   const label = historyEntryLabel(entry);
   const tone = entry.kind === "error" ? "is-error" : `is-${entry.role}`;
   return (
@@ -102,15 +112,28 @@ const ChatBubble = memo(function ChatBubble({
         <time dateTime={entry.sent_at} title={entry.sent_at}>
           {formatUiDateTime(entry.sent_at)}
         </time>
+        {shown.pasted ? (
+          <span className="agent-history-chat-pasted">Pasted</span>
+        ) : null}
         {matched ? (
-          <span title="Chat sent the same words just before this appeared; it cannot prove this is that message.">
-            Sent from Chat; matched by its words
+          <span
+            className="agent-history-chat-read"
+            title={
+              matched === "words"
+                ? "Chat sent the same words just before this appeared; it cannot prove this is that message."
+                : "Inferred: the first message here after Chat sent one, in a form its harness rewrites (a paste or image placeholder, or added words)."
+            }
+          >
+            <CheckCheck size={13} aria-hidden="true" />
+            {matched === "words"
+              ? "Sent from Chat; matched by its words"
+              : "Sent from Chat; matched by order"}
           </span>
         ) : null}
         <button
           type="button"
           className="agent-history-copy"
-          onClick={() => void copyTextWithFeedback(entry.text)}
+          onClick={() => void copyTextWithFeedback(shown.text)}
           aria-label={`Copy ${label.toLowerCase()} message`}
           title="Copy"
         >
@@ -475,7 +498,20 @@ export function AgentHistoryChat({
   matchedIds,
   stepEvidence,
   after,
+  hasOlder = false,
+  olderLoading = false,
+  onLoadOlder,
+  onAtLatest,
+  placed,
 }: {
+  /** Shown among the messages at their time, such as an unseen send. */
+  placed?: readonly { key: string; at: string; node: ReactNode }[];
+  /** Entries older than the shown ones exist; onLoadOlder fetches a page. */
+  hasOlder?: boolean;
+  olderLoading?: boolean;
+  onLoadOlder?: () => void;
+  /** The reader is back at the newest message. */
+  onAtLatest?: () => void;
   /**
    * Chat's step model by tool-call ID: each row shows its label, state, test
    * badge and time, and opened, its diff, test strip or output. Unchanged
@@ -483,7 +519,7 @@ export function AgentHistoryChat({
    */
   stepEvidence?: ReadonlyMap<string, ConversationStep>;
   /** Messages a send from Chat matched by their words. */
-  matchedIds?: ReadonlySet<string>;
+  matchedIds?: ReadonlyMap<string, "words" | "order">;
   /** Shown after the newest message (Chat's sends not yet seen). */
   after?: ReactNode;
   items: HistoryChatItem[];
@@ -542,10 +578,56 @@ export function AgentHistoryChat({
     followRef.current = true;
   }, [followKey]);
 
+  // Older entries arrive above the reader: keep the same distance from the
+  // bottom, so the message being read stays put.
+  const firstKey = items[0]
+    ? items[0].type === "message"
+      ? items[0].entry.id
+      : items[0].id
+    : null;
+  const firstKeyRef = useRef(firstKey);
+  const heightRef = useRef(0);
   useLayoutEffect(() => {
     const list = listRef.current;
-    if (list && followRef.current) list.scrollTop = list.scrollHeight;
-  }, [items, listRef]);
+    if (!list) return;
+    if (followRef.current) list.scrollTop = list.scrollHeight;
+    else if (firstKeyRef.current !== firstKey && heightRef.current > 0)
+      list.scrollTop += list.scrollHeight - heightRef.current;
+    firstKeyRef.current = firstKey;
+    heightRef.current = list.scrollHeight;
+  }, [items, listRef, firstKey]);
+  // Placed nodes go before the first item stamped after them; each once.
+  const placedQueue = [...(placed ?? [])]
+    .filter((entry) => Number.isFinite(Date.parse(entry.at)))
+    .sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
+  const placedBefore = (item: HistoryChatItem) => {
+    const at = Date.parse(
+      item.type === "message" ? item.entry.sent_at : item.entries[0]!.sent_at,
+    );
+    let count = 0;
+    while (
+      count < placedQueue.length &&
+      Date.parse(placedQueue[count]!.at) < at
+    )
+      count += 1;
+    return placedQueue
+      .splice(0, count)
+      .map((entry) => <Fragment key={entry.key}>{entry.node}</Fragment>);
+  };
+  const placedRest = () =>
+    placedQueue
+      .splice(0)
+      .map((entry) => <Fragment key={entry.key}>{entry.node}</Fragment>);
+  const loadOlderIfNear = (list: HTMLDivElement) => {
+    if (
+      hasOlder &&
+      !olderLoading &&
+      onLoadOlder &&
+      list.scrollHeight > list.clientHeight &&
+      list.scrollTop < OLDER_THRESHOLD_PX
+    )
+      onLoadOlder();
+  };
 
   // Re-pin after layout changes the list did not cause itself: the inspector
   // revealing a hidden view, a resized pane, or lazy markdown (diagrams,
@@ -576,6 +658,9 @@ export function AgentHistoryChat({
           list.scrollHeight - list.scrollTop - list.clientHeight <
           FOLLOW_THRESHOLD_PX;
         setAway(!followRef.current);
+        heightRef.current = list.scrollHeight;
+        if (!followRef.current) loadOlderIfNear(list);
+        else onAtLatest?.();
       }}
     >
       {away ? (
@@ -593,7 +678,23 @@ export function AgentHistoryChat({
         </button>
       ) : null}
       <div ref={contentRef} className="agent-history-chat-content">
-        {items.map((item) =>
+        {hasOlder && onLoadOlder ? (
+          <button
+            type="button"
+            className="agent-history-chat-older"
+            disabled={olderLoading}
+            onClick={() => {
+              followRef.current = false;
+              onLoadOlder();
+            }}
+          >
+            {olderLoading
+              ? "Loading earlier messages…"
+              : "Load earlier messages"}
+          </button>
+        ) : null}
+        {items.map((item) => [
+          ...placedBefore(item),
           // A marker such as a compaction reads as a divider, not a message.
           item.type === "message" && item.entry.notice ? (
             <div
@@ -609,7 +710,7 @@ export function AgentHistoryChat({
               entry={item.entry}
               sequence={item.sequence}
               highlighted={highlightedSequence === item.sequence}
-              matched={matchedIds?.has(item.entry.id) ?? false}
+              matched={matchedIds?.get(item.entry.id) ?? null}
               onOpen={onOpen}
             />
           ) : (
@@ -622,7 +723,8 @@ export function AgentHistoryChat({
               onOpen={onOpen}
             />
           ),
-        )}
+        ])}
+        {placedRest()}
         {after}
       </div>
     </div>

@@ -56,8 +56,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     shows a blue pennant (green when done, amber when blocked) beside it in
     a room or at a desk, with a progress bar when the quest has steps; the
     pennant leaves with the agent. Hover or tap the pennant for **Quest**, its title and progress.
-  - **Open terminal** in the card's header opens the live pane; **Inspector**
-    opens files and changes. **Next** opens the next waiting agent's window,
+  - **Open terminal** in the card's header opens the live pane; **Open chat**
+    opens the agent's window, whose Files and Changes views hold the rest.
+    **Next** opens the next waiting agent's window,
     then finished agents' if none wait.
     The needs-you list becomes a bottom tray on phones and hides when no agent
     is blocked. Review marks acknowledge a specific completion in this browser,
@@ -538,7 +539,9 @@ commit a search selection. Press K in the recent switcher to convert it to searc
   composer closed joins the draft when that composer opens again.
 - Drag a file or directory path from the File Explorer into a terminal to
   insert its quoted host path. Terminal font size is adjustable independently
-  of interface scale in **Menu → Appearance**.
+  of interface scale in **Menu → Appearance**. **Chat text** there sets Chat's
+  text size: it follows the terminal font size until changed, and its value
+  button links it back.
 - Show Herdr session popup panes over the active workspace when a plugin opens
   a modal interaction.
 - Relay terminal OSC 52 clipboard writes. Herdr 0.9.0 follows the foreground

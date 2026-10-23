@@ -709,6 +709,220 @@ describe("the delivery ledger", () => {
     expect(ledger.list("p").at(-1)).toMatchObject({ text: "Later" });
   });
 
+  test("a sent attachment matches the harness's record of it", () => {
+    const upload = "/tmp/herdr-world-uploads-test/upload-ab12/img-1-x.png";
+    const cases = [
+      // Claude Code records an image path as a placeholder.
+      [`Look at this ${upload} `, "[Image #16]Look at this"],
+      [`Look at ${upload} and fix it`, "Look at [Image #2] and fix it"],
+      // A quoted path, kept as typed by a harness that does not convert it.
+      [`Read '${upload}' please`, `Read '${upload}' please`],
+      // An attachment alone.
+      [`${upload} `, "[Image #3]"],
+      // Multi-line input, rewrapped by the harness.
+      ["First line\nsecond line\n\nthird", "First line\r\nsecond line third"],
+      // Long input Claude Code records as a paste placeholder, with words.
+      [
+        `Please review\n${"x".repeat(10)}`,
+        `Please review [Pasted text #1 +1 lines] ${"x".repeat(10)}`,
+      ],
+    ];
+    for (const [sent, recorded] of cases) {
+      const ledger = createDeliveryLedger();
+      ledger.record("p", { ...send, text: sent! });
+      ledger.evaluate(
+        "p",
+        "A",
+        [
+          {
+            fingerprint: "A",
+            label: "session A",
+            messages: [said(recorded!, send.endedAt + 50)],
+          },
+        ],
+        send.endedAt + 1000,
+      );
+      expect([sent, ledger.list("p")[0]?.state]).toEqual([sent, "matched"]);
+    }
+    // Different words: no match by words; see the order tests below.
+    const ledger = createDeliveryLedger();
+    ledger.record("p", { ...send, text: `Look at this ${upload}` });
+    ledger.evaluate(
+      "p",
+      "A",
+      [
+        {
+          fingerprint: "A",
+          label: "session A",
+          messages: [said("[Image #1]Look at that", send.endedAt + 50)],
+        },
+      ],
+      send.endedAt + 1000,
+    );
+    expect(ledger.list("p")[0]).toMatchObject({
+      state: "matched",
+      matched_by: "order",
+    });
+  });
+
+  test("a multi-line send to an idle agent matches its turn even when the harness rewrites it", () => {
+    const ledger = createDeliveryLedger();
+    ledger.record("p", { ...send, text: "Line one\nline two\nline three" });
+    ledger.evaluate(
+      "p",
+      "A",
+      [
+        {
+          fingerprint: "A",
+          label: "session A",
+          messages: [
+            said("Earlier, before the send", send.startedAt - 5000),
+            said("[Pasted text #1 +2 lines]", send.endedAt + 50),
+          ],
+        },
+      ],
+      send.endedAt + 1000,
+    );
+    expect(ledger.list("p")[0]).toMatchObject({
+      state: "matched",
+      matched_by: "order",
+      matched_id: `[Pasted text #1 +2 lines]:${send.endedAt + 50}`,
+    });
+  });
+
+  test("a send queued while the agent works waits, then matches when the turn is written", () => {
+    const ledger = createDeliveryLedger();
+    ledger.record("p", { ...send, text: "Also check the docs" });
+    // Mid-turn: the agent keeps replying, but the queued message is not in
+    // the transcript yet. Replies are not user turns, so it stays pending.
+    const reply = {
+      id: "r1",
+      role: "assistant" as const,
+      kind: "message" as const,
+      text: "Still working on the first task",
+      sent_at: new Date(send.endedAt + 2000).toISOString(),
+    };
+    ledger.evaluate(
+      "p",
+      "A",
+      [{ fingerprint: "A", label: "session A", messages: [reply] }],
+      send.endedAt + 3000,
+    );
+    expect(ledger.list("p")[0]?.state).toBe("pending");
+    // The agent takes it up: the turn is written then, after the replies.
+    ledger.evaluate(
+      "p",
+      "A",
+      [
+        {
+          fingerprint: "A",
+          label: "session A",
+          messages: [reply, said("Also check the docs", send.endedAt + 60_000)],
+        },
+      ],
+      send.endedAt + 61_000,
+    );
+    expect(ledger.list("p")[0]).toMatchObject({
+      state: "matched",
+      matched_by: "words",
+    });
+  });
+
+  test("a multi-line send matches Claude Code's pasted_content record of it by its words", () => {
+    const ledger = createDeliveryLedger();
+    const sent = "Please check:\n- the build\n- the docs";
+    ledger.record("p", { ...send, text: sent });
+    const recorded = `<pasted_content id="4821">\n${sent}\n</pasted_content id="4821">`;
+    ledger.evaluate(
+      "p",
+      "A",
+      [
+        {
+          fingerprint: "A",
+          label: "session A",
+          messages: [said(recorded, send.endedAt + 50)],
+        },
+      ],
+      send.endedAt + 1000,
+    );
+    expect(ledger.list("p")[0]).toMatchObject({
+      state: "matched",
+      matched_by: "words",
+    });
+  });
+
+  test("a send carries its time on the transcript host's clock", () => {
+    for (const offsetMs of [-60_000, 60_000]) {
+      const ledger = createDeliveryLedger();
+      ledger.record("p", { ...send, clock: { offsetMs, uncertaintyMs: 0 } });
+      expect(ledger.list("p")[0]).toMatchObject({
+        sent_at: new Date(send.startedAt).toISOString(),
+        transcript_at: new Date(send.startedAt + offsetMs).toISOString(),
+      });
+    }
+  });
+
+  test("an unrelated later prompt never settles a send by order", () => {
+    const ledger = createDeliveryLedger();
+    ledger.record("p", { ...send, text: "Run all tests" });
+    const view = (messages: ReturnType<typeof said>[]) => [
+      { fingerprint: "A", label: "session A", messages },
+    ];
+    // Another client types something else in the same session.
+    ledger.evaluate(
+      "p",
+      "A",
+      view([said("Summarize the README instead", send.endedAt + 2000)]),
+      send.endedAt + 3000,
+    );
+    expect(ledger.list("p")[0]?.state).toBe("pending");
+    // A harness that trims or wraps the words still matches, by order.
+    ledger.evaluate(
+      "p",
+      "A",
+      view([
+        said("Summarize the README instead", send.endedAt + 2000),
+        said("Please: Run all tests now", send.endedAt + 4000),
+      ]),
+      send.endedAt + 5000,
+    );
+    expect(ledger.list("p")[0]).toMatchObject({
+      state: "matched",
+      matched_by: "order",
+      matched_id: `Please: Run all tests now:${send.endedAt + 4000}`,
+    });
+  });
+
+  test("two sends take their turns by words first, then in order", () => {
+    const ledger = createDeliveryLedger();
+    ledger.record("p", { ...send, text: "first\nmulti" });
+    ledger.record("p", {
+      ...send,
+      text: "second",
+      startedAt: send.startedAt + 10,
+      endedAt: send.endedAt + 10,
+    });
+    ledger.evaluate(
+      "p",
+      "A",
+      [
+        {
+          fingerprint: "A",
+          label: "session A",
+          messages: [
+            said("[Pasted text #1 +1 lines]", send.endedAt + 50),
+            said("second", send.endedAt + 60),
+          ],
+        },
+      ],
+      send.endedAt + 1000,
+    );
+    expect(ledger.list("p").map((item) => item.matched_by)).toEqual([
+      "order",
+      "words",
+    ]);
+  });
+
   test("the check ends after its window", () => {
     const ledger = createDeliveryLedger();
     ledger.record("p", send);

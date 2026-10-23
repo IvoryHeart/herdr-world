@@ -11,6 +11,7 @@ import {
   writeMobileControlsPlacement,
   type MobileControlsPlacement,
 } from "./mobileControlsPlacement";
+import { TERMINAL_FONT_SCALE_KEY, useTextScales } from "./textScales";
 import {
   isRangerTaskNotificationTarget,
   type RangerTaskNotificationTarget,
@@ -280,7 +281,6 @@ const DEFAULT_SIDEBAR = 284;
 const THEME_KEY = "theme";
 const ACCENT_COLOR_KEY = "accentColor";
 const UI_SCALE_KEY = "uiScale";
-const TERMINAL_FONT_SCALE_KEY = "terminalFontScale";
 const TERMINAL_FONT_FAMILY_KEY = "terminalFontFamily";
 const LazyTerminalView = lazyWithReload("terminal-view", () =>
   import("./components/TerminalView").then((module) => ({
@@ -3713,12 +3713,7 @@ export default function App({
     );
     worldLocalStorage.setItem(UI_SCALE_KEY, String(uiScale));
   }, [accentColor, resolvedTheme, theme, uiScale]);
-  useEffect(() => {
-    worldLocalStorage.setItem(
-      TERMINAL_FONT_SCALE_KEY,
-      String(terminalFontScale),
-    );
-  }, [terminalFontScale]);
+  useTextScales(terminalFontScale);
   // A view switch moves to that view's own Zen choice, or its default.
   const applyZenModeRef = useRef(applyZenMode);
   applyZenModeRef.current = applyZenMode;
