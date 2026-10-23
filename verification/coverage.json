@@ -1128,7 +1128,10 @@
         "server/src/http/browser-admission.test.ts",
         "server/src/config/auth-token.test.ts",
         "server/src/config/server-config.test.ts",
-        "server/src/http/login-page-pin.test.ts"
+        "server/src/http/login-page-pin.test.ts",
+        "server/src/http/world-cli-endpoint.test.ts",
+        "server/src/world/caller-identity.test.ts",
+        "server/src/world/world-cli.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/186",
       "technique": "alternative",
@@ -1136,7 +1139,7 @@
       "status": "alternative-evidence",
       "remaining": "No new abstract authentication model replaces protocol/security tests; trusted-single-user and supported deployment assumptions remain unchanged.",
       "requiredChecks": ["bun run check", "bun run verification:gate"],
-      "evidenceDecision": "Real HTTP tests exercise authentication, PIN/rate budgets, cookies and browser admission; real request/response semantics are the security boundary. v0.8.5: Configured passwords accept 8\u20131024 Unicode characters with a recommendation warning below 15. Direct boundary tests cover ASCII/Unicode and CLI/environment ingestion; session, Origin and throttling evidence remains mandatory.",
+      "evidenceDecision": "Real HTTP tests exercise authentication, PIN/rate budgets, cookies and browser admission; real request/response semantics are the security boundary. v0.8.5: Configured passwords accept 8\u20131024 Unicode characters with a recommendation warning below 15. Direct boundary tests cover ASCII/Unicode and CLI/environment ingestion; session, Origin and throttling evidence remains mandatory. Agent CLI (FM-WORLDCLI): the `/api/world/cli` bearer path is tested directly for loopback-only, no-Origin admission, a derived CLI token that the login credential cannot replace, wrong and missing tokens, and a throttle that never blocks the owner's login. Pane attribution is a pure check of the caller's process ancestry against Herdr's pane process info, tested with spoofed panes, a second connection on the same port from another loopback address, ambiguous rows, shared sockets, IPv6, unknown processes and remote hosts. End to end in a throwaway Herdr session, an in-pane call was verified and the same pane ID from another process was not; the port-collision case is covered only by the synthetic /proc tests. No ordering or recovery protocol is added, so a model would restate these checks.",
       "partialEvidence": {
         "models": [],
         "contracts": ["verification/consumer-evidence.md"],

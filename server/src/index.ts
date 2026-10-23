@@ -45,6 +45,12 @@ import { cliCommands, runCli, topLevelHelp } from "./cli";
 import { CONTINUE_TO_SERVER, defaultCliContext } from "./cli/command";
 import { runTaskSummaryCommand } from "./herdr/task-summary";
 import { stampLaunchParent } from "./herdr/spawn-stamp";
+import {
+  WORLD_CLI_IDLE_TIMEOUT_SECONDS,
+  WORLD_CLI_PATH,
+} from "./http/world-cli-endpoint";
+import { createWorldCliService } from "./world/world-cli-service";
+import { parseRpcMeta } from "./http/rpc-meta";
 import { runAgentCheckoutCommand } from "./herdr/agent-checkout";
 import { createWebPushService } from "./notifications/web-push";
 import { enrichIntegrationVersions } from "./herdr/integration-versions";
@@ -126,7 +132,7 @@ import {
   serverLogger,
 } from "./utils/logger";
 import { runProcessWithCodeTimeout, shQuote } from "./utils/process-utils";
-import { rpcLogLevel } from "./utils/rpc-logging";
+import { rpcLogLevel, shouldLogRpc } from "./utils/rpc-logging";
 import { DOWNLOAD_TIMEOUT_MS } from "./workspace/file-constants";
 import { WorldSnapshotService } from "./world/snapshot";
 import { WorldWatchlistRegistry } from "./world/watchlist";
@@ -288,6 +294,7 @@ const {
   handlePinLogin,
   handleLogout,
   loginPage,
+  bearerAuth,
 } = createAuthHandlers({
   authRequired: config.authRequired,
   password: config.password,
@@ -325,41 +332,6 @@ const conversationWatchers = new WeakMap<
 
 const rpcOutcomes = new Map<string, { status: "error"; detail?: string }>();
 
-const IMPORTANT_RPC_METHODS = new Set([
-  "bridge.pause_others",
-  "agent_conversation.get",
-  "agent_conversation.latest",
-  "agent_conversation.steps",
-  "agent_conversation.send",
-  "agent_conversation.dismiss",
-  "agent_conversation.answer",
-  "agent_conversation.watch",
-  "agent_conversation.unwatch",
-  "agent_history.get",
-  "agent_history.entry",
-  "agent_session.get",
-  "agent_turn.get",
-  "agent_checkout.get",
-  "agent_session.link_preview",
-  "agent_session.link",
-  "file.read",
-  "git.diff_file",
-  "git.commit_file",
-  "git.commit_preview",
-  "git.file_action",
-  "git.pull",
-  "git.repo_action",
-  "settings.update_repo",
-  "settings.workspace_auto_sync.get",
-  "settings.workspace_auto_sync.list",
-  "settings.workspace_auto_sync.update",
-  "settings.workspace_auto_sync.update_key",
-  "settings.worktree_hooks.get",
-  "worktree.create",
-  "worktree.open",
-  "worktree.remove",
-]);
-const SLOW_RPC_LOG_MS = 750;
 const legacyRoutingLogger = createLegacyRoutingLogger({
   log: (message) =>
     logger.warn("deprecated request routing", { detail: message }),
@@ -382,34 +354,6 @@ function logDetail(value: string): string {
     .slice(0, 300);
 }
 
-function parseRpcMeta(raw: string): {
-  id: string | null;
-  method: string | null;
-  connectionId: unknown;
-  connectionGeneration: unknown;
-} {
-  try {
-    const msg = JSON.parse(raw);
-    return {
-      id: typeof msg?.id === "string" ? msg.id : null,
-      method: typeof msg?.method === "string" ? msg.method : null,
-      connectionId: Object.hasOwn(msg ?? {}, "connection_id")
-        ? msg.connection_id
-        : undefined,
-      connectionGeneration: Object.hasOwn(msg ?? {}, "connection_generation")
-        ? msg.connection_generation
-        : undefined,
-    };
-  } catch {
-    return {
-      id: null,
-      method: null,
-      connectionId: undefined,
-      connectionGeneration: undefined,
-    };
-  }
-}
-
 function rpcOutcomeKey(ws: ServerWebSocket<unknown>, id: string) {
   return `${clientLabel(ws)}\0${id}`;
 }
@@ -429,19 +373,6 @@ function takeRpcOutcome(ws: ServerWebSocket<unknown>, id: string | null) {
   const outcome = rpcOutcomes.get(key) ?? null;
   rpcOutcomes.delete(key);
   return outcome;
-}
-
-function shouldLogRpc(
-  method: string | null,
-  elapsedMs: number,
-  failed: boolean,
-) {
-  if (!method) return failed;
-  if (failed) return true;
-  if (method === "bridge.ping" || method === "bridge.status") return false;
-  if (method === "terminal.input" || method === "terminal.scroll") return false;
-  if (method === "terminal.resize" && elapsedMs < SLOW_RPC_LOG_MS) return false;
-  return IMPORTANT_RPC_METHODS.has(method) || elapsedMs >= SLOW_RPC_LOG_MS;
 }
 
 function logRpc(
@@ -581,6 +512,17 @@ function publishBoardChanged(revision: number) {
   });
   for (const ws of clients) safeSend(ws, line, "world-board");
 }
+
+/** The agent CLI (world-cli-service.ts). */
+const worldCli = createWorldCliService({
+  board: { get: () => board().get(), patch: (ops) => board().patch(ops) },
+  connections: () => connectionManager,
+  snapshots: () => worldSnapshots,
+  publishBoard: publishBoardChanged,
+  broadcast: (line) => {
+    for (const ws of clients) safeSend(ws, line, "world-ledger");
+  },
+});
 
 function publishWatchlistChanged(revision: number) {
   const line = JSON.stringify({
@@ -1202,6 +1144,14 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
       sendError("world-snapshot-error", error);
     } finally {
       transfer?.close();
+    }
+    return;
+  }
+  if (method === "world.asks.get" || method === "world.ask.answer") {
+    try {
+      sendReply({ id, result: worldCli.rpc(method, params) }, method);
+    } catch (error) {
+      sendError(`${method}-error`, error);
     }
     return;
   }
@@ -2449,6 +2399,18 @@ function main() {
               }
             }
             return response;
+          }
+
+          if (url.pathname === WORLD_CLI_PATH) {
+            // `ask --wait` holds a call for up to 20 s; Bun's default idle
+            // timeout (10 s) would cut it.
+            server.timeout(req, WORLD_CLI_IDLE_TIMEOUT_SECONDS);
+            return worldCli.http(
+              req,
+              server.requestIP(req),
+              server.port ?? config.port,
+              bearerAuth,
+            );
           }
 
           // Loopback listeners retain World's trusted local access policy.

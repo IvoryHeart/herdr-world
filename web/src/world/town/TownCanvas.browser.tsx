@@ -459,7 +459,25 @@ const worldBridge = bridge as unknown as {
   onControl(listener: (control: { type: string }) => void): () => void;
 };
 const bridgeCall = worldBridge.call.bind(bridge);
+/** One open question from an agent (`herdr-world ask`), as the service keeps it. */
+const ledger = {
+  version: 1,
+  revision: 1,
+  changes: [],
+  results: [],
+  asks: [
+    {
+      id: "q-synthetic-1",
+      at: Date.now() - 90_000,
+      actor: { label: "claude in w1:p2", verified: true },
+      question: "Ship the reception fix now, or wait for review?",
+      options: ["Ship", "Wait"],
+      owner_only: true,
+    },
+  ],
+};
 worldBridge.call = async (method, params) => {
+  if (method === "world.asks.get") return structuredClone(ledger);
   if (method === "world.board.get") return structuredClone(boardDocument);
   if (method === "world.board.patch") {
     for (const op of (params?.ops ?? []) as {
@@ -918,6 +936,18 @@ async function run() {
     }, 2500);
     return;
   }
+
+  // An agent's question leads the Needs you list, with its options.
+  await waitFor(
+    () => host.querySelector(".town-ask") !== null,
+    "an agent's question is missing from the Needs you list",
+  );
+  check(
+    [...host.querySelectorAll(".town-ask-options button")].some(
+      (button) => button.textContent === "Ship",
+    ),
+    "the question's options are not offered",
+  );
 
   const diagnostics = window.__HERDR_TOWN_RENDERER__!;
   check(

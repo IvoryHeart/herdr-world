@@ -401,6 +401,39 @@ strung to one pane. Town draws teams as walls and connectors; Board strings
 related cards and groups a tab dropped on another tab, or chosen with
 **Group…** and a tap; **Ungroup** undoes it.
 
+### Agent CLI (`herdr-world --skill`)
+
+Agents change World objects themselves from their pane, through the running
+World service. `herdr-world --skill` prints the guide; commands answer in JSON
+when piped, with stable exit codes:
+
+- `colour set|reset`, `board card pin|unpin|move|group|ungroup|colour`: Board
+  cards and tab or workspace colours. Recorded with the agent and time;
+  `history` lists changes and `undo <change>` takes one back.
+- `town desk move … --herdr`: reorder a desk in its room with Herdr's tab
+  order, as a drag in Town does. It needs `--herdr` because it changes Herdr,
+  and World cannot undo it.
+- `ask "…" [--options a,b] [--owner-only] [--wait]`: a question for you. It
+  appears first in Town's **Needs you** list, where you pick an option or
+  type an answer; `--wait` blocks until then. Another verified agent (never
+  the one that asked) may answer a question that is not owner-only.
+- `result --task ID "…" [--pr N] [--status done|blocked|failed]` and
+  `result ls`: task results kept by World, instead of terminal scraping.
+- `spawned-by <parent-pane>`: the spawn stamp, made by the child itself. It
+  is display-only Herdr pane metadata, so it needs no `--herdr`; the parent
+  it names is the child's claim.
+- `whoami`, `ls`, `history [--actor]`.
+
+World checks who is calling: the CLI sends its `HERDR_PANE_ID`, and the
+service accepts it only when the calling process runs in that pane of a local
+Herdr (the pane's shell or foreground process is among its ancestors).
+The CLI reaches only a World service on the same machine, with a token
+derived from the service's signing secret that cannot log a browser in.
+Otherwise the change is labelled unverified, or "terminal with no pane" when
+no pane is named, since any process can leave it out; `me` and `spawned-by`
+need a verified pane. The CLI never
+merges, deletes panes, tabs or workspaces, or reaches outside World.
+
 ### Agent checkout context
 
 An active agent can report its exact checkout once with `herdr-world

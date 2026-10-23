@@ -247,6 +247,39 @@ ID that may since name another pane. Inside an agent pane `HERDR_SOCKET_PATH` se
 that pane's own Herdr ahead of `--session`; pass `--socket-path` to target
 another. Experiment only in a throwaway `herdr --session`.
 
+From inside the child pane, `herdr-world spawned-by w1:p1` makes the same
+stamp through the running World service, which first checks that the caller
+runs in that pane.
+
+## Agent CLI
+
+`herdr-world --skill` is the agent guide (`server/src/cli/world-skill.ts`).
+The verbs (`server/src/cli/world.ts`) POST to `/api/world/cli` on the running
+service (`server/src/http/world-cli-endpoint.ts`): loopback only, no browser
+Origin, and a bearer token derived from the session signing secret
+(`worldCliToken`), so it rotates with the login credential and cannot log a
+browser in. Wrong tokens get the login throttle, counted apart from logins so
+they never lock the owner out. One call holds at most 20 s for `ask --wait`.
+World's pages fetch only the open questions (`world.asks.get`), and only when
+a ledger notice says a question changed. Behind a reverse proxy on
+loopback every peer looks local, so "loopback only" is a transport rule, not
+proof of locality: the token itself stays in the service's private data
+directory, and attribution still needs the caller's process on this machine.
+When a call names a pane, the service asks Herdr for that pane's shell and
+foreground processes (`pane.process_info`), looks for the caller's TCP
+connection (address and port, failing closed on any ambiguity) among them and
+their descendants through `/proc`, and accepts its `HERDR_PANE_ID` only when it
+is found there on a local Herdr (`server/src/world/caller-identity.ts`). A call
+naming no pane is not looked up and is labelled "terminal with no pane"; a
+claim that is not a Herdr pane ID is refused. Unverified callers share one
+allowance of open questions. Changes, questions and results live
+in `world-ledger.json` beside the Board file (`HERDR_WORLD_LEDGER_PATH`
+overrides it). To try it against a development service, run the CLI with the
+same `HOME` (or set `HERDR_WORLD_URL` to its loopback URL and
+`HERDR_WORLD_TOKEN` to its CLI token), and point the service at a
+throwaway `herdr --session` with explicit `--socket-path` and
+`--client-socket-path`.
+
 ## Harness agent checkouts
 
 An active agent harness can report its own checkout without starting the World web
