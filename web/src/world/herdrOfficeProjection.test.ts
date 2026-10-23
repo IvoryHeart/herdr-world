@@ -62,10 +62,35 @@ describe("Pixel Office projection", () => {
         name: "firstmate",
       },
     ];
-    const office = projectWorldOffice(buildWorldObject([source]), 1);
+    const world = buildWorldObject([source]);
+    // Window titles name who you talk to before what runs it.
+    expect(world.spaces[0]!.children[0]!.label).toBe("firstmate · claude");
+    const office = projectWorldOffice(world, 1);
     const agent = office.roster[0]!.agent;
-    expect(agent.displayLabel).toBe("claude");
+    // Town calls an agent by its Herdr name, not its harness.
+    expect(agent.displayLabel).toBe("firstmate");
     expect(agent.agentName).toBe("firstmate");
+    // Its harness still picks its artwork, whatever its name.
+    expect(agent.harness).toBe("claude");
+  });
+
+  test("a reception chip names the waiting agent by its Herdr name", () => {
+    const source = connection(
+      "alpha",
+      [tab("shared", 1)],
+      [pane("shared", "blocked", "claude", 0)],
+    );
+    source.snapshot!.agents = [
+      {
+        pane_id: "pane-shared-0",
+        terminal_id: "terminal-shared-0",
+        agent: "claude",
+        name: "rev1",
+      },
+    ];
+    const office = projectWorldOffice(buildWorldObject([source]), 1);
+    const waiting = office.receptions.flatMap((entry) => entry.waitingAgents);
+    expect(waiting.map((agent) => agent.displayLabel)).toEqual(["rev1"]);
   });
 
   test("desks follow Herdr's tab list order, not tab numbers", () => {

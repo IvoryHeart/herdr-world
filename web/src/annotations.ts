@@ -1,4 +1,5 @@
 import { connectionStorageKey } from "./connectionStorage";
+import { paneAgentTitle } from "./agentName";
 import type { GitDiffKind, Pane } from "./types";
 import { resourceOwnerKey, type ResourceScope } from "./workspaceResource";
 
@@ -813,5 +814,5 @@ export function removeDeliveredReviewAnnotations(
 }
 
 export function terminalAnnotationTitle(pane: Pane): string {
-  return `${pane.agent?.trim() || "Terminal"} · ${pane.pane_id.slice(0, 8)}`;
+  return `${paneAgentTitle(pane) || "Terminal"} · ${pane.pane_id.slice(0, 8)}`;
 }
