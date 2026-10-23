@@ -15,6 +15,7 @@ import {
   useWindowWorkArea,
 } from "./windows/useWindowManager";
 import { visibleWindowIds } from "./windows/windowManager";
+import { useWorldPanels } from "./windows/WorldPanel";
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { worldLocalStorage } from "../browserStorage";
 import { type WindowArrangementControl } from "../components/WindowArrangementMenu";
@@ -95,6 +96,8 @@ export function useWorldInspectorWindows({
   onInspectorConversationsChangeRef,
   onInspectorTerminalPortalRef,
 }: Input) {
+  // Non-Inspector windows, such as Town's summary, share the manager.
+  const { panels } = useWorldPanels();
   const [windowLayer, setWindowLayer] = useState<HTMLDivElement | null>(null);
   const windowStage = useWindowWorkArea(windowLayer, active);
   const { mobile: compactArrangement } = useLayoutPreferences();
@@ -122,14 +125,35 @@ export function useWorldInspectorWindows({
       })),
     [inspectorConversations, windowStage, view, officeInspectorPresentation],
   );
+  const managedInputs = useMemo(
+    () =>
+      panels.length
+        ? [
+            ...windowInputs,
+            ...panels.map(({ id, label, initialSnap }) => ({
+              id,
+              label,
+              initialSnap,
+            })),
+          ]
+        : windowInputs,
+    [windowInputs, panels],
+  );
   const { state: managedWindows, dispatch: windowCommand } = useWindowManager(
-    windowInputs,
+    managedInputs,
     windowStage,
   );
   const activeInspectorId = managedWindows.activeId;
+  // A panel window in front means no Inspector is active.
   useLayoutEffect(
-    () => onActiveInspectorChange(activeInspectorId),
-    [activeInspectorId, onActiveInspectorChange],
+    () =>
+      onActiveInspectorChange(
+        activeInspectorId &&
+          panels.some((panel) => panel.id === activeInspectorId)
+          ? null
+          : activeInspectorId,
+      ),
+    [activeInspectorId, onActiveInspectorChange, panels],
   );
   const contextRailInspector = inspectorConversations.find(
     (conversation) =>
@@ -297,6 +321,8 @@ export function useWorldInspectorWindows({
         onInspectorConversationsChangeRef.current([]);
         onDockedInspectorIdChange(null);
         setSelection(null);
+        // Panels close through their owners, like their own Back.
+        for (const panel of panels) panel.onClose();
         return;
       }
       if (command === "restore") windowCommand({ type: "restore-layout" });
@@ -313,6 +339,7 @@ export function useWorldInspectorWindows({
       windowCommand,
       world,
       availableWindowTabs,
+      panels,
     ],
   );
   const visualArrangementControl = useMemo<WindowArrangementControl>(() => {
@@ -330,7 +357,7 @@ export function useWorldInspectorWindows({
           : terminalWindowArrangementReason(
               preset,
               { left: 0, top: 0, ...windowStage },
-              windowInputs
+              managedInputs
                 .filter((input) => !managedWindows.windows[input.id]?.minimized)
                 .map((input) => ({
                   ...input,
@@ -343,7 +370,7 @@ export function useWorldInspectorWindows({
     }
     if (!managedWindows.baseline)
       disabledReasons.restore = "No arranged positions to restore.";
-    if (!windowInputs.length)
+    if (!managedInputs.length)
       disabledReasons["close-all"] = "No windows are open.";
     if (!availableWindowTabs.size)
       disabledReasons["open-all"] =
@@ -362,7 +389,8 @@ export function useWorldInspectorWindows({
           : (managedWindows.layout?.preset ?? null),
       disabledReasons,
       onSelect: selectVisualArrangement,
-      windows: windowInputs.map((input) => ({
+      // Panels are listed too, so a minimized one can be restored.
+      windows: managedInputs.map((input) => ({
         id: input.id,
         tab: (() => {
           const conversation = inspectorConversations.find(
@@ -395,7 +423,7 @@ export function useWorldInspectorWindows({
   }, [
     compactArrangement,
     windowStage,
-    windowInputs,
+    managedInputs,
     managedWindows,
     activeInspectorId,
     intentRequestRef,

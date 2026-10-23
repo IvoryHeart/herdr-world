@@ -1,0 +1,256 @@
+/* The pull request card, in any view. Views can set the --pr-* tokens; the
+   defaults come from World's theme. */
+.pr-card {
+  --pr-ink: var(--text, #e7ebe3);
+  --pr-soft: var(--muted, #a2aba1);
+  --pr-line: var(--border, #45504a);
+  --pr-accent: var(--accent, #92b3ff);
+  --pr-ground: var(--shell-panel, #252d29);
+  --pr-pass: var(--success-text, #6dd29a);
+  --pr-fail: var(--danger-text, #ff8a80);
+  --pr-pending: var(--warning-text, #ffc25a);
+  padding: 10px 11px;
+  border-radius: 9px;
+  background: var(--pr-ground);
+  color: var(--pr-ink);
+  font-size: 13px;
+  line-height: 1.35;
+}
+.pr-card[data-ready] {
+  border-left: 3px solid var(--pr-pass);
+}
+.pr-card-head p,
+.pr-card p {
+  margin: 0;
+}
+.pr-card-ref {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--pr-accent);
+  font-size: 12px;
+  font-weight: 650;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+.pr-card-title {
+  margin-top: 4px !important;
+  overflow-wrap: anywhere;
+}
+.pr-card-compact .pr-card-title {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pr-card-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  margin-top: 6px !important;
+  color: var(--pr-soft);
+  font-size: 11px;
+}
+.pr-card [data-state="pass"],
+.pr-card [data-outcome="confirmed"] > b,
+.pr-card-summary [data-outcome="confirmed"] {
+  color: var(--pr-pass);
+}
+.pr-card [data-state="fail"],
+.pr-card-summary [data-outcome="open"] {
+  color: var(--pr-fail);
+}
+.pr-card-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.pr-card-dots i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--pr-pass);
+}
+.pr-card-dots i[data-state="fail"] {
+  background: var(--pr-fail);
+}
+.pr-card-dots i[data-state="pending"] {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--pr-pending);
+}
+.pr-card-dots i[data-state="skipped"] {
+  background: var(--pr-line);
+}
+.pr-card-attention {
+  margin-top: 6px !important;
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--pr-pass);
+}
+.pr-card-attention[data-reason="stalled"],
+.pr-card-failed {
+  color: var(--pr-fail);
+}
+.pr-card-failed,
+.pr-card-done {
+  margin-top: 6px !important;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.pr-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+.pr-card button,
+.pr-card .pr-card-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 28px;
+  padding: 3px 10px;
+  border: 1px solid var(--pr-line);
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  text-decoration: none;
+  cursor: pointer;
+}
+.pr-card button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.pr-card .pr-card-primary {
+  border-color: var(--pr-accent);
+  color: var(--pr-accent);
+  font-weight: 650;
+}
+.pr-card .pr-card-danger {
+  border-color: var(--pr-fail);
+  color: var(--pr-fail);
+  font-weight: 650;
+}
+.pr-card-actions button[aria-expanded] svg {
+  transition: transform 120ms ease;
+}
+.pr-card-actions button[aria-expanded="true"] svg {
+  transform: rotate(90deg);
+}
+.pr-card-command {
+  display: grid;
+  gap: 6px;
+  width: 100%;
+  font-size: 12px;
+}
+.pr-card-command p {
+  color: var(--pr-soft);
+}
+.pr-card code {
+  font-family: var(--mono-font, ui-monospace, monospace);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.pr-card-command code {
+  padding: 4px 6px;
+  border: 1px solid var(--pr-line);
+  border-radius: 6px;
+  user-select: all;
+  -webkit-user-select: all;
+}
+.pr-card-command span {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.pr-card-sheet {
+  margin-top: 8px;
+  padding: 8px;
+  border: 1px solid var(--pr-accent);
+  border-radius: 8px;
+  font-size: 12px;
+}
+.pr-card-sheet[data-verb="close"] {
+  border-color: var(--pr-fail);
+}
+.pr-card-sheet ul {
+  margin: 6px 0 0;
+  padding-left: 0;
+  list-style: none;
+  color: var(--pr-fail);
+}
+.pr-card-sheet label {
+  display: grid;
+  gap: 4px;
+  margin-top: 6px;
+  color: var(--pr-soft);
+}
+.pr-card-sheet textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--pr-line);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--pr-ink);
+  font: inherit;
+  user-select: text;
+  -webkit-user-select: text;
+}
+.pr-card-detail {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--pr-line);
+  font-size: 12px;
+}
+.pr-card-detail h4 {
+  margin: 0 0 4px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--pr-soft);
+}
+.pr-card-detail ul {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.pr-card-detail li {
+  overflow-wrap: anywhere;
+}
+.pr-card-detail small {
+  display: block;
+  color: var(--pr-soft);
+  font-size: 11px;
+}
+.pr-card-detail li[data-state="fail"] a,
+.pr-card-detail li[data-state="pending"] a,
+.pr-card-detail a {
+  color: inherit;
+}
+.pr-card-detail summary {
+  color: var(--pr-soft);
+  cursor: pointer;
+}
+.pr-card-note,
+.pr-card-facts {
+  color: var(--pr-soft);
+  font-size: 11px;
+}
+.pr-card-agents {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.pr-card-agents span {
+  padding: 3px 8px;
+  border: 1px solid var(--pr-line);
+  border-radius: 999px;
+  font-size: 11px;
+}

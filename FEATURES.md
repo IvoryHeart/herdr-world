@@ -342,6 +342,25 @@ each source's state, switch it off or configure it.
   on its nameplate (`#123 ✓`, `#123 ✗`, `#123 ●` or `ABC-12`), and Board's Work
   lens names it on the card. A link holds only for the agent session and
   Herdr runtime it was made in.
+- **Your open pull requests** get a card in Work with CI on the head (a dot
+  per check), each rev agent's latest result ("per rev4's comment", read from
+  its `RESULT #N: …` line; GitHub can't take your own approval, so reviews are
+  comments) and your merge rules: not a draft, every finding confirmed, CI
+  green on the head, mergeable, and screenshots for a change to the web app
+  or site. Each rule shows ✓, ✗ or ? (World can't tell; a confirmation of an
+  older head is ?). **Details** lists the failing checks with links, the
+  reviewers, the head commit and how far it is behind its base. A card says
+  **Ready to merge** when every rule holds, and **Stalled** when CI failed on
+  the head and its agent is idle.
+- **Merge…**, **Close…** and **Mark ready…** (for a draft) open a sheet that
+  says exactly what happens; nothing runs until you confirm. Merge makes a
+  merge commit, keeps the branch and refuses if anyone pushed since you
+  looked; failing rules make it **Merge despite N failing rules**. GitHub's
+  answer, or its reason for refusing, shows on the card. World never bypasses
+  branch protection: while GitHub requires a review, the card offers **Open
+  on GitHub** and **Copy merge command** instead of Merge. The same card
+  opens from the pull request's badge on its agent's Town desk (a sheet on a
+  phone).
 - A source that is not signed in or configured says how to connect it (Work
   shows a quiet **Set up** button for one you never set up); the views work
   without it. The service refreshes at most once a minute while a visible

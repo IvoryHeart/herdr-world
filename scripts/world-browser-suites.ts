@@ -30,7 +30,12 @@ export const worldBrowserShards = [
     "BoardView",
     "useSpacesTabWindowArrangement.browser",
   ], // 60
-  ["HostsFilter.creation", "HostsFilter.arrangement", "windows/WindowFrame"], // 58
+  [
+    "HostsFilter.creation",
+    "HostsFilter.arrangement",
+    "windows/WindowFrame",
+    "windows/WorldPanel",
+  ], // 60
   ["HostsFilter.navigation", "town/TownCanvas", "HostsFilter.pending"], // 59
 ].map((shard) => shard.map((name) => `web/src/world/${name}.test.ts`));
 
