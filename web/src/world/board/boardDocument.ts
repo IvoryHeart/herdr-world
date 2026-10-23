@@ -67,6 +67,9 @@ export type BoardString = {
   to: BoardEnd;
   detached?: boolean;
 };
+/** A desk's cell in its Town room (server/src/world/board-store.ts). */
+export type DeskCell = { col: number; row: number };
+export type DeskPin = { cell: DeskCell | null };
 export type BoardDocument = {
   version: 1;
   revision: number;
@@ -77,6 +80,8 @@ export type BoardDocument = {
     folded: string[];
     /** Card key to the colour the user chose; absent before card colours. */
     colors?: Record<string, CardColor>;
+    /** Town desks pinned by tab card key; absent before desk pins. */
+    desk_pins?: Record<string, DeskPin>;
   };
   notes: BoardNote[];
   strings: BoardString[];
@@ -110,6 +115,9 @@ export type BoardOp =
       replace?: boolean;
     }
   | { op: "card.color"; key: string; color: CardColor | null }
+  | { op: "desk.pin"; key: string; cell: DeskCell | null }
+  | { op: "desk.unpin"; key: string }
+  | { op: "desk.place"; key: string; cell: DeskCell }
   | {
       op: "anchor.witness";
       string_id: string;

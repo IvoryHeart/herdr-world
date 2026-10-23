@@ -206,6 +206,15 @@ type RoomMemory = {
   column?: number;
 };
 
+/**
+ * Pinned desks' cells by desk key. A null cell (a desk just pinned) keeps the
+ * cell the desk has in this scene until Town saves it.
+ */
+export type TownPinnedCells = ReadonlyMap<
+  string,
+  { col: number; row: number } | null
+>;
+
 /** Placement memory carried between layouts of one live scene. */
 export type TownPlacementMemory = Map<string, RoomMemory>;
 
@@ -226,20 +235,53 @@ export function townTierFor(
  * i-th tab takes the i-th cell in reading order, so a reorder in Herdr, Spaces
  * or Town moves desks, and a closed desk leaves no gap. The room only grows
  * while a scene is live, so its walls never jump when a desk closes.
+ *
+ * A pinned desk keeps its cell whatever the tab order or room size, and the
+ * room grows to hold it; the other desks take the free cells in tab order.
  */
 function placeRoomDesks(
   deskKeys: readonly string[],
   previous: RoomMemory | undefined,
   tiers: readonly (readonly [number, number])[],
+  pins: TownPinnedCells | undefined,
 ): { memory: RoomMemory; overflow: string[] } {
-  const tier = townTierFor(deskKeys.length, previous?.tier ?? 0, tiers);
+  const fixed = new Map<string, { col: number; row: number }>();
+  if (pins?.size)
+    for (const key of deskKeys) {
+      if (!pins.has(key)) continue;
+      const cell = pins.get(key) ?? previous?.cells.get(key);
+      if (cell) fixed.set(key, cell);
+    }
+  let tier = townTierFor(deskKeys.length, previous?.tier ?? 0, tiers);
+  const outside = (tier: number) =>
+    [...fixed.values()].some(
+      ({ col, row }) => col >= tiers[tier]![0] || row >= tiers[tier]![1],
+    );
+  while (tier < tiers.length - 1 && outside(tier)) tier += 1;
   const [cols, rows] = tiers[tier]!;
   const capacity = Math.min(cols * rows - 1, TOWN_MAX_RENDERED_DESKS);
   const cells = new Map<string, { col: number; row: number }>();
-  deskKeys.slice(0, capacity).forEach((key, index) => {
+  const taken = new Set<number>();
+  for (const [key, { col, row }] of fixed) {
+    const index = row * cols + col;
+    if (col >= cols || row >= rows || taken.has(index)) continue;
+    if (cells.size >= capacity) break;
+    cells.set(key, { col, row });
+    taken.add(index);
+  }
+  const overflow: string[] = [];
+  let index = 0;
+  for (const key of deskKeys) {
+    if (cells.has(key)) continue;
+    if (cells.size >= capacity) {
+      overflow.push(key);
+      continue;
+    }
+    while (taken.has(index)) index += 1;
     cells.set(key, { col: index % cols, row: Math.floor(index / cols) });
-  });
-  return { memory: { tier, cells }, overflow: deskKeys.slice(capacity) };
+    taken.add(index);
+  }
+  return { memory: { tier, cells }, overflow };
 }
 
 function mulberry32(seed: number) {
@@ -266,6 +308,7 @@ function draftBuilding(
   memory: TownPlacementMemory,
   nextMemory: TownPlacementMemory,
   shape: TownShape,
+  pins: TownPinnedCells | undefined,
 ): DraftBuilding {
   const tiers = townRoomTiers(shape.deskColumns);
   const placed = rooms.map((room) => {
@@ -273,6 +316,7 @@ function draftBuilding(
       room.deskKeys,
       memory.get(room.key),
       tiers,
+      pins,
     );
     nextMemory.set(room.key, roomMemory);
     const [cols, rows] = tiers[roomMemory.tier]!;
@@ -349,6 +393,7 @@ export function layoutTown(
   input: TownInput,
   shapeOrFormFactor: TownShape | TownFormFactor,
   memory: TownPlacementMemory = new Map(),
+  pins?: TownPinnedCells,
 ): { layout: TownLayout; memory: TownPlacementMemory } {
   const shape = shapeOf(shapeOrFormFactor);
   const formFactor = shape.formFactor;
@@ -365,6 +410,7 @@ export function layoutTown(
       memory,
       nextMemory,
       shape,
+      pins,
     ),
   );
   const seatsOf = new Map<string, number>();
@@ -766,4 +812,26 @@ export function townReflowShift(
         y: (moved.y - nearest.y) * TOWN_TILE,
       }
     : { x: 0, y: 0 };
+}
+
+/**
+ * The cell a desk being pinned keeps: where the user sees it. While a reflow
+ * is held (TownCanvas) that is the visible layout, not the pending one; a
+ * desk the visible layout lacks takes its pending cell.
+ */
+export function townPinCell(
+  visible: TownLayout,
+  pending: TownLayout,
+  deskKey: string,
+): { col: number; row: number } | null {
+  for (const layout of [visible, pending]) {
+    const at = layout.deskCells.get(deskKey);
+    const cell = at
+      ? layout.buildings
+          .flatMap((building) => building.rooms)
+          .find((room) => room.key === at.roomKey)?.cells[at.cellIndex]
+      : undefined;
+    if (cell) return { col: cell.col, row: cell.row };
+  }
+  return null;
 }

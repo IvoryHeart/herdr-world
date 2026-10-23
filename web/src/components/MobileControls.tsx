@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
-import { ChevronDown, EllipsisVertical, SquareStack } from "lucide-react";
+import { ChevronDown, EllipsisVertical, Pin, SquareStack } from "lucide-react";
 import { useStoreSelector } from "../store";
 import type { Pane, Tab } from "../types";
 import { agentStateKind, type AgentStateKind } from "./agentSession";
@@ -27,6 +27,14 @@ export type MobileControls = {
   toggleWorkspaces: () => void;
   /** Optional terminal colours, chosen from a swatch beside the title. */
   tabColors?: TabColorControl;
+  /** Optional pin toggle beside the swatch (World's desk or card pin). */
+  tabPin?: TabPinControl;
+};
+
+export type TabPinControl = {
+  label: { pin: string; unpin: string; title: string };
+  pinnedOf(owner: TabColorOwner, tab: Tab): boolean;
+  onPin(owner: TabColorOwner, tab: Tab, pinned: boolean): void;
 };
 
 type MobileTerminalIdentity = {
@@ -91,6 +99,7 @@ export function usePublishMobileControls(controls: MobileControls | null) {
       ].join("|")
     : "";
   const tabColors = controls?.tabColors;
+  const tabPin = controls?.tabPin;
   useLayoutEffect(() => {
     const live = latest.current;
     controlsStore.set(
@@ -103,7 +112,7 @@ export function usePublishMobileControls(controls: MobileControls | null) {
           }
         : null,
     );
-  }, [key, tabColors]);
+  }, [key, tabColors, tabPin]);
   useLayoutEffect(() => () => controlsStore.set(null), []);
 }
 
@@ -230,6 +239,13 @@ export function MobileTerminalAppBar() {
           }}
         />
       ) : null}
+      {terminal?.tab && controls.tabPin ? (
+        <MobileTerminalPin
+          pin={controls.tabPin}
+          owner={terminal.owner}
+          tab={terminal.tab}
+        />
+      ) : null}
       {terminal ? (
         <button
           type="button"
@@ -290,5 +306,29 @@ export function MobileTerminalAppBar() {
         <EllipsisVertical size={21} aria-hidden="true" />
       </button>
     </div>
+  );
+}
+
+function MobileTerminalPin({
+  pin,
+  owner,
+  tab,
+}: {
+  pin: TabPinControl;
+  owner: TabColorOwner;
+  tab: Tab;
+}) {
+  const pinned = pin.pinnedOf(owner, tab);
+  return (
+    <button
+      type="button"
+      className="mobile-terminal-pin"
+      aria-label={pinned ? pin.label.unpin : pin.label.pin}
+      aria-pressed={pinned}
+      title={pin.label.title}
+      onClick={() => pin.onPin(owner, tab, !pinned)}
+    >
+      <Pin size={18} aria-hidden="true" />
+    </button>
   );
 }
