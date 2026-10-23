@@ -1,4 +1,12 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
+import { ColorSwatches } from "./ColorSwatch";
+import { WorkspaceColorContext } from "./workspaceColor";
 import type { Workspace } from "../types";
 import { useOperationalStore, useStoreSelector } from "../store";
 import type { PullRequestSummary } from "../../../shared/pullRequest";
@@ -81,6 +89,7 @@ export function ContextMenu({
   onClose: () => void;
 }) {
   const store = useOperationalStore();
+  const workspaceColors = useContext(WorkspaceColorContext);
   const workspaces = useStoreSelector((state) => state.workspaces);
   const activeConnectionId = useStoreSelector(
     (state) => state.activeConnectionId,
@@ -459,6 +468,19 @@ export function ContextMenu({
             ))}
           </div>
         ))}
+        {workspaceColors ? (
+          <div className="context-menu-colors">
+            <ColorSwatches
+              palette={workspaceColors.palette}
+              current={workspaceColors.colorOf(w.workspace_id)}
+              label="Workspace colour"
+              onColor={(id) => {
+                onClose();
+                workspaceColors.onColor(w.workspace_id, id);
+              }}
+            />
+          </div>
+        ) : null}
       </div>
       {dialogs}
       {openWorktreeDialog}

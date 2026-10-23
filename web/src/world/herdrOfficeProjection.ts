@@ -45,6 +45,7 @@ export type OfficeQualifiedTarget = {
 
 export type OfficeHost = {
   key: string;
+  connectionId: string;
   displayLabel: string;
   accessibleLabel?: string;
   displayOrder: number;
@@ -450,6 +451,7 @@ export function projectWorldOffice(
   const hosts = world.hosts.map(
     (host, displayOrder): OfficeHost => ({
       key: host.id,
+      connectionId: host.connectionId,
       displayLabel: host.label,
       accessibleLabel: host.label,
       displayOrder,
@@ -912,6 +914,7 @@ export async function prepareWorldOffice(
       host.id,
       {
         key: host.id,
+        connectionId: host.connectionId,
         displayLabel: host.label,
         accessibleLabel: host.label,
         displayOrder,
