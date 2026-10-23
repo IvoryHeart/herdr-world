@@ -11,12 +11,10 @@ import {
   writeMobileControlsPlacement,
   type MobileControlsPlacement,
 } from "./mobileControlsPlacement";
-import { subscribeLocalStorage } from "./browserStorage";
 import {
   isRangerTaskNotificationTarget,
   type RangerTaskNotificationTarget,
 } from "./taskNotifications";
-import { flushSync } from "react-dom";
 import { useCreationSources } from "./creationRequests";
 import { useReviewAnnotationDraft } from "./useReviewAnnotationDraft";
 import { bridge } from "./api";
@@ -33,7 +31,7 @@ import {
   type NewReviewAnnotation,
   type ReviewAnnotation,
 } from "./annotations";
-import { worldLocalStorage } from "./browserStorage";
+import { subscribeLocalStorage, worldLocalStorage } from "./browserStorage";
 import { useLayoutPreferences } from "./layoutPreferences";
 import {
   shortcutMatches,
@@ -75,7 +73,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { createPortal } from "react-dom";
+import { createPortal, flushSync } from "react-dom";
 import type { ITheme } from "@xterm/xterm";
 import { APP_VERSION } from "./version";
 import { WorkspaceInspectorPortal } from "./components/WorkspaceInspectorPortal";
@@ -250,6 +248,7 @@ const WorkspaceInspectorHost = lazyWithReload("workspace-inspector", () =>
   })),
 );
 
+import { paneAgentTitle } from "./agentName";
 import "./components/AssistantPanel.css";
 import "./components/markdown.css";
 const AssistantPanel = lazyWithReload("assistant", () =>
@@ -1489,7 +1488,8 @@ export default function App({
       tabId,
       paneId: pane.pane_id,
       terminalId: pane.terminal_id,
-      label: pane.display_agent ?? pane.agent ?? "Terminal",
+      label:
+        paneAgentTitle(pane, pane.display_agent ?? pane.agent) || "Terminal",
       hostLabel: s.activeConnectionId,
       spaceLabel: workspace.label ?? `Workspace ${workspace.number}`,
       portal: null,

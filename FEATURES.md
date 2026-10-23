@@ -13,13 +13,16 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   Each host is a building, each workspace a room, each tab a team table and each
   pane a seat. Plain terminals show prompts. Additional panes beyond the drawn
   seats remain available through the table's count and chooser. Each table
-  carries its tab's name on a nameplate at its front edge.
+  carries its tab's name on a nameplate at its front edge. Agents go by the
+  name Herdr gives them (`firstmate`), else their harness (`claude`); window
+  and Inspector titles put the name first (`firstmate · claude`).
   - The Town board counts agents working, needing you and finished (the same
     counts as reception and the call rail), with spend when a metrics provider
     is configured. Its **Summary** button, or on a phone the compact chip under
-    the search bar, opens the **Town summary** window: who needs you, recent
-    finishes with their age, every host and room with its counts (tap a room
-    to go there), and spend per model ("No cost data" without a provider).
+    the search bar, opens the **Town summary** window: who needs you,
+    unreviewed finishes and when each was last active, every host and room
+    with its counts (tap a room to go there), and spend per model ("No cost
+    data" without a provider).
   - Blocked agents queue at reception oldest first. Finished agents wait there
     until you open their terminal or mark that completion reviewed, then join
     idle agents in the lounge. Movement only represents state.
@@ -516,6 +519,9 @@ See [resource ownership](docs/ARCHITECTURE.md#workspace-resource-ownership).
   with each choice's description) or plan approval, Chat shows it as an ask
   card and answers with the option you pick (click or its number key), after
   checking the question has not changed.
+  Each tool call's row in Chat carries its evidence: a plain label, its state
+  and time, a pass or fail badge for a test run, and when opened, the edit's
+  diff, the test strip with its first failure, or the end of its output.
   It refreshes when the service sees the transcript, title or status change,
   without browser polling, and keeps the last good view if a read fails. When
   it cannot read the conversation it shows the reason with the matching action:

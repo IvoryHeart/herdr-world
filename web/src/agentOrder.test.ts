@@ -330,3 +330,26 @@ describe("session activity ordering", () => {
     }
   });
 });
+
+describe("Herdr agent names", () => {
+  test("a pane takes its agent's Herdr name, whatever its state", () => {
+    const named = {
+      ...activityPane,
+      name: "reviewer",
+      agent_status: "working",
+    };
+    expect(
+      withAgentActivity([activityPane], { agents: [named] })[0]?.agent_name,
+    ).toBe("reviewer");
+  });
+
+  test("a name from another terminal or harness is not taken", () => {
+    for (const other of [
+      { ...activityPane, name: "reviewer", terminal_id: "t2" },
+      { ...activityPane, name: "reviewer", agent: "claude" },
+    ])
+      expect(
+        withAgentActivity([activityPane], { agents: [other] })[0],
+      ).not.toHaveProperty("agent_name");
+  });
+});

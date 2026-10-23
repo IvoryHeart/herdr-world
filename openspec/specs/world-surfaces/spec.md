@@ -1335,8 +1335,8 @@ reception. The board sign SHALL show agents working, needing the user and
 finished, and spend when a metrics provider reports it. Its Summary action, and
 on phones its counts chip, SHALL open a Town summary window in the shared
 window frame that lists, in this order: agents that need the user with how long
-each has waited and one action; unreviewed finishes with their age when Herdr
-reports activity times; every host with its rooms and their counts (needing
+each has waited and one action; unreviewed finishes with when each was last
+active when Herdr reports activity times, never presented as the finish time; every host with its rooms and their counts (needing
 the user, working, finished, quiet, unknown), where activating a room moves the
 Town camera to it; and spend per model with its source and age. Without a
 metrics provider the summary SHALL say there is no cost data and SHALL NOT show
