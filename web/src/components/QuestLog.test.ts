@@ -29,7 +29,12 @@ const quest: Quest = {
 
 test("progress text, mark and current step", () => {
   expect(questProgressText(quest)).toBe("1/3");
-  expect(questMark(quest)).toEqual({ done: 1, total: 3, status: "active" });
+  expect(questMark(quest)).toMatchObject({
+    progress: "1/3",
+    done: 1,
+    total: 3,
+    status: "active",
+  });
   expect(questCurrentStep(quest)?.text).toBe("Add retry");
   const loop: Quest = {
     ...quest,

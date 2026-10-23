@@ -57,7 +57,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     the chat (the default) or the terminal; either way the tap does not mark
     finished work reviewed. **Open terminal** in the peek does, as before.
   - A seated agent with a quest (its own todo list, plan, Codex goal or loop)
-    shows a flag and progress bar at its seat in a room or at a desk.
+    shows a blue pennant (green when done, amber when blocked) beside it in
+    a room or at a desk, with a progress bar when the quest has steps; the
+    pennant leaves with the agent. Hover or tap the pennant for **Quest**, its title and progress.
   - **Open terminal** in the card's header opens the live pane; **Inspector**
     opens files and changes. **Next** opens the next waiting agent's window,
     then finished agents' if none wait.
