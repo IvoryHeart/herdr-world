@@ -14,7 +14,9 @@ export function placedSends(
 ) {
   return pending.map((delivery) => ({
     key: delivery.id,
-    at: delivery.sent_at,
+    // On the transcript host's clock, so an SSH host's offset cannot put it
+    // below replies written after it.
+    at: delivery.transcript_at ?? delivery.sent_at,
     node: (
       <article
         className="agent-history-chat-message is-user is-pending"

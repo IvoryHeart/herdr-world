@@ -851,6 +851,17 @@ describe("the delivery ledger", () => {
     });
   });
 
+  test("a send carries its time on the transcript host's clock", () => {
+    for (const offsetMs of [-60_000, 60_000]) {
+      const ledger = createDeliveryLedger();
+      ledger.record("p", { ...send, clock: { offsetMs, uncertaintyMs: 0 } });
+      expect(ledger.list("p")[0]).toMatchObject({
+        sent_at: new Date(send.startedAt).toISOString(),
+        transcript_at: new Date(send.startedAt + offsetMs).toISOString(),
+      });
+    }
+  });
+
   test("an unrelated later prompt never settles a send by order", () => {
     const ledger = createDeliveryLedger();
     ledger.record("p", { ...send, text: "Run all tests" });

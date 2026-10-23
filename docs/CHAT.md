@@ -194,6 +194,10 @@ Each send leaves a receipt for the pane, bound to the session it was sent to:
 | `uncertain` | The same words appeared at about the time of the send, or both in its own session and first in the session the pane moved to | A notice saying Chat cannot tell, with **Dismiss** |
 | `unverified` | Chat can no longer check | A notice saying why, with **Dismiss** |
 
+Each receipt carries `sent_at` (this service's clock, for display) and
+`transcript_at` (the same moment on the transcript host's clock, using the
+measured SSH offset), by which Chat places a pending send among the turns.
+
 Transcript times are sorted into three bands around the send: before it,
 about the time of it (the clock's uncertainty plus one second, for
 transcripts that round), and clearly after it.

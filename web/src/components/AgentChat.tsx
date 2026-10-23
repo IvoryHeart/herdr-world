@@ -133,6 +133,8 @@ export type ConversationDelivery = {
   id: string;
   text: string;
   sent_at: string;
+  /** The send time on the transcript host's clock, for placement. */
+  transcript_at?: string;
   state: "pending" | "matched" | "misdelivered" | "uncertain" | "unverified";
   expected: string;
   fingerprint: string;

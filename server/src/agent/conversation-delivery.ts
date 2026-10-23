@@ -29,6 +29,11 @@ export type ConversationDelivery = {
   id: string;
   text: string;
   sent_at: string;
+  /**
+   * The send time on the transcript host's clock (this service's time plus
+   * the measured offset), for placing it among the transcript's turns.
+   */
+  transcript_at: string;
   state: "pending" | "matched" | "misdelivered" | "uncertain" | "unverified";
   /** The session Chat showed when the message was sent. */
   expected: string;
@@ -213,6 +218,7 @@ export function createDeliveryLedger() {
         id: randomUUID(),
         text: send.text,
         sent_at: new Date(send.startedAt).toISOString(),
+        transcript_at: new Date(send.startedAt + offsetMs).toISOString(),
         state: send.switchedTo ? "misdelivered" : "pending",
         expected: send.expected,
         fingerprint: send.fingerprint,
@@ -422,6 +428,7 @@ function publicDelivery(receipt: Receipt): ConversationDelivery {
     id: receipt.id,
     text: receipt.text,
     sent_at: receipt.sent_at,
+    transcript_at: receipt.transcript_at,
     state: receipt.state,
     expected: receipt.expected,
     fingerprint: receipt.fingerprint,
