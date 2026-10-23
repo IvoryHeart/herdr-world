@@ -84,7 +84,11 @@ World harnesses separate bounded Chrome startup from fixture execution using
 [the browser deadline helper](../web/src/browserChrome.ts) and its
 [regression tests](../web/src/browserChrome.test.ts). The fixture clock starts at
 the main HTML request, before loading assets or initializing the application;
-responsiveness and operation limits remain unchanged.
+responsiveness and operation limits remain unchanged. On CI the test runner
+first pays a fresh runner's one-time Chrome launch cost (font cache, cold disk)
+through [the Chrome warm-up](../scripts/chrome-warmup.ts) and its
+[regression tests](../scripts/chrome-warmup.test.ts), so no test's startup
+budget absorbs it.
 
 ## RPC paths
 
