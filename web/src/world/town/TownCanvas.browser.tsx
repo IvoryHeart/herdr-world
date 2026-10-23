@@ -2018,14 +2018,56 @@ async function run() {
       [...host.querySelectorAll<HTMLButtonElement>(".town-room-card")].find(
         (card) => card.textContent?.includes("orbit"),
       );
-    for (let step = 0; step < 6 && !orbitCard(); step += 1) {
-      host.querySelector<HTMLButtonElement>('[aria-label="Zoom out"]')!.click();
-      await new Promise((resolve) => setTimeout(resolve, 900));
+    const frameDelay = Number(params.get("flightFrameDelay") ?? 0);
+    const actualRAF = window.requestAnimationFrame.bind(window);
+    if (frameDelay > 0) {
+      await waitFor(
+        () => !diagnostics.flying,
+        "initial camera flight did not finish",
+      );
+      for (let into = 0; into < 3 && diagnostics.level !== "desk"; into += 1) {
+        const before = diagnostics.frames;
+        host
+          .querySelector<HTMLButtonElement>('[aria-label="Zoom in"]')!
+          .click();
+        await waitFor(
+          () => diagnostics.frames > before && !diagnostics.flying,
+          "desk-entry camera flight did not finish",
+        );
+      }
+      check(
+        diagnostics.level === "desk",
+        "slow-frame check did not enter desk level",
+      );
+      window.requestAnimationFrame = (callback) =>
+        actualRAF(() => {
+          setTimeout(() => callback(performance.now()), frameDelay);
+        });
+    }
+    const zoomSteps: { frames: number; zoom: number; flying: boolean }[] = [];
+    try {
+      for (let step = 0; step < 6 && !orbitCard(); step += 1) {
+        const beforeFrames = diagnostics.frames;
+        host
+          .querySelector<HTMLButtonElement>('[aria-label="Zoom out"]')!
+          .click();
+        await waitFor(
+          () => diagnostics.frames > beforeFrames && !diagnostics.flying,
+          "zoom-out camera flight did not finish",
+        );
+        zoomSteps.push({
+          frames: diagnostics.frames - beforeFrames,
+          zoom: diagnostics.zoom,
+          flying: diagnostics.flying,
+        });
+      }
+    } finally {
+      if (frameDelay > 0) window.requestAnimationFrame = actualRAF;
     }
     const roomCard = orbitCard();
     check(
       roomCard !== undefined,
-      `the 100-desk room has no card (level ${diagnostics.level}, zoom ${diagnostics.zoom.toFixed(2)}, ${host.querySelectorAll(".town-room-card").length} cards)`,
+      `the 100-desk room has no card (level ${diagnostics.level}, zoom ${diagnostics.zoom.toFixed(2)}, ${host.querySelectorAll(".town-room-card").length} cards; steps ${JSON.stringify(zoomSteps)})`,
     );
     roomCard?.click();
     const first = () =>
