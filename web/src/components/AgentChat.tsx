@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  CheckCheck,
   Copy,
   ListTree,
   Paperclip,
@@ -29,6 +28,7 @@ import { AgentMessageDialog } from "./AgentMessageDialog";
 import type { HistoryEntry } from "./agentHistory";
 import { groupHistoryChatItems } from "./agentHistoryView";
 import { useAgentHistoryWindow } from "./useAgentHistoryWindow";
+import { matchedTurns, placedSends } from "./chat/pendingSends";
 import { AttachmentChips } from "./AttachmentChips";
 import { CodexSessionLink } from "./CodexSessionLink";
 import { QuestLog } from "./QuestLog";
@@ -636,44 +636,9 @@ export function AgentChat({
       delivery.state === "pending" &&
       delivery.fingerprint === conversation?.session_fingerprint,
   );
-  // Herdr took the message, but a busy harness writes it into the transcript
-  // only when the agent takes it up: delivered, not yet read. It sits at its
-  // send time, never below replies written since, until that turn appears.
-  const waitingFor = conversation?.agent ?? pane.agent ?? "the agent";
-  const pendingBubble = (delivery: ConversationDelivery) => (
-    <article
-      key={delivery.id}
-      className="agent-history-chat-message is-user is-pending"
-      data-delivery="pending"
-    >
-      <div className="agent-history-chat-bubble">
-        <p>{delivery.text}</p>
-      </div>
-      <div className="agent-history-chat-meta">
-        <CheckCheck size={13} className="agent-chat-ticks" aria-hidden="true" />
-        Delivered · waiting for {waitingFor}{" "}
-        <button
-          type="button"
-          className="agent-chat-pending-dismiss"
-          onClick={() => dismiss(delivery.id)}
-        >
-          Stop checking
-        </button>
-      </div>
-    </article>
-  );
-  const matchedIds = new Map(
-    deliveries
-      .filter(
-        (delivery) =>
-          delivery.state === "matched" &&
-          delivery.fingerprint === conversation?.session_fingerprint,
-      )
-      .flatMap((delivery) =>
-        delivery.matched_id
-          ? [[delivery.matched_id, delivery.matched_by ?? "words"] as const]
-          : [],
-      ),
+  const matchedIds = matchedTurns(
+    deliveries,
+    conversation?.session_fingerprint,
   );
   // Sent to a session the pane has since left: still checked there.
   const elsewhere = deliveries.filter(
@@ -897,11 +862,11 @@ export function AgentChat({
             followKey={pane.pane_id}
             toolLoading={history.toolEntryLoading}
             onLoadTool={history.loadToolEntry}
-            placed={pending.map((delivery) => ({
-              key: delivery.id,
-              at: delivery.sent_at,
-              node: pendingBubble(delivery),
-            }))}
+            placed={placedSends(
+              pending,
+              conversation?.agent ?? pane.agent ?? "the agent",
+              dismiss,
+            )}
             hasOlder={history.hasOlder}
             olderLoading={history.olderLoading}
             onLoadOlder={history.loadOlder}

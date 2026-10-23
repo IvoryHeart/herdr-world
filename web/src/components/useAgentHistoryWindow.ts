@@ -29,7 +29,7 @@ import {
  * once and carries on from its cursor.
  *
  * Scrolling back past the window loads older entries a page at a time
- * (agent_history.older). They are kept before the window; entries the window
+ * (agent_history.get with `before`). They are kept before the window; entries the window
  * drops off its head while older ones are shown join them, so the reader's
  * place never vanishes.
  */
@@ -318,7 +318,7 @@ export function useAgentHistoryWindow({
     let committed = false;
     setOlderLoading(true);
     client
-      .call("agent_history.older", {
+      .call("agent_history.get", {
         pane_id: pane.pane_id,
         workspace_id: pane.workspace_id,
         tab_id: pane.tab_id,

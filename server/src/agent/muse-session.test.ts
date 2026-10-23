@@ -465,6 +465,14 @@ describe("Muse Code session inspection", () => {
       await expect(
         handlers.readOlder({ ...params, before: "gone" }),
       ).rejects.toThrow("no longer available");
+      // agent_history.get serves the same page when given `before`.
+      expect(
+        await handlers.readHistoryRequest({
+          ...params,
+          before: snapshot.entries.at(-1)!.id,
+          limit: 1,
+        }),
+      ).toEqual(older);
       expect(await (await handlers.downloadFile(params)).text()).toBe(
         summary.text!,
       );

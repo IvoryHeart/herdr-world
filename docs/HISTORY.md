@@ -37,8 +37,8 @@ provider representation changes; synthetic timestamps remain stable within a
 cached file generation. Clients accept replies only against the request cursor
 and current pane/connection lease.
 
-`agent_history.older` takes the pane's identity, `before` (an entry ID) and an
-optional `limit` (1–200 conversation entries, default 200). It returns the
+`agent_history.get` with `before` (an entry ID) and an optional `limit` (1–200
+conversation entries, default 200) reads older entries instead. It returns the
 page just before that entry, cut like the window and redacted like it:
 `{ epoch, entries, has_more }`. Clients keep a page only while `epoch` matches
 their cursor's. An entry that is gone is an error; refresh and try again.

@@ -174,7 +174,7 @@ async function run() {
   let historyAnswer: ((params: Record<string, unknown>) => unknown) | null =
     null;
   let answerAcknowledged = false;
-  /** Answers agent_history.older while set. */
+  /** Answers agent_history.get for an older page (`before`) while set. */
   let olderAnswer: ((params: Record<string, unknown>) => unknown) | null = null;
   bridge.connection = () => ({
     connectionId: "test",
@@ -195,7 +195,7 @@ async function run() {
           prompt_fingerprint: params.prompt_fingerprint,
         };
       if (method === "pane.send_input") return {};
-      if (method === "agent_history.older" && olderAnswer)
+      if (method === "agent_history.get" && params.before && olderAnswer)
         return olderAnswer(params);
       if (method === "agent_conversation.latest")
         return { ...reply, messages: undefined };
@@ -246,6 +246,10 @@ async function run() {
         onClose={() => {}}
       />,
     );
+  const olderReads = () =>
+    calls.filter(
+      (call) => call.method === "agent_history.get" && call.params.before,
+    ).length;
   const count = (method: string) =>
     calls.filter((call) => call.method === method).length;
   const reads = () => count("agent_conversation.latest");
@@ -1547,7 +1551,7 @@ async function run() {
         !!container.querySelector(".agent-history-chat-older"),
         "A full window must offer earlier messages",
       );
-      const before = count("agent_history.older");
+      const before = olderReads();
       list.scrollTop = 0;
       list.dispatchEvent(new Event("scroll"));
       await settle();
@@ -1558,14 +1562,14 @@ async function run() {
         ),
       ].find((element) => element.textContent?.includes("Turn 40 "));
       check(
-        count("agent_history.older") === before + 1 &&
+        olderReads() === before + 1 &&
           (list.textContent ?? "").includes("Turn 20 ") &&
           !!anchor &&
           anchor.getBoundingClientRect().top >=
             list.getBoundingClientRect().top - 1 &&
           anchor.getBoundingClientRect().top <
             list.getBoundingClientRect().top + list.clientHeight / 2,
-        `Scrolling to the top must load the previous page and keep the reader's place (${count("agent_history.older") - before} pages)`,
+        `Scrolling to the top must load the previous page and keep the reader's place (${olderReads() - before} pages)`,
       );
       // The last page ends the offer.
       list.scrollTop = 0;

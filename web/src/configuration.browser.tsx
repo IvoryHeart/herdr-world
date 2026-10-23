@@ -2,6 +2,7 @@ import "./styles/tokens.css";
 import "./styles/base.css";
 import { useState } from "react";
 import { createRoot } from "react-dom/client";
+import { getChatTextScale } from "./textScales";
 import { flushSync } from "react-dom";
 import { bridge, type HerdrEventMsg } from "./api";
 import { ConfigMenu } from "./components/ConfigMenu";
@@ -264,14 +265,11 @@ bridge.connection = (id) => {
     },
   };
 };
-let chatScaleShown: number | null = null;
 function Harness() {
   const [theme, setTheme] = useState<"light" | "dark" | "system">("dark");
   const [scale, setScale] = useState(
     Number(new URLSearchParams(location.search).get("scale") ?? 100),
   );
-  const [chatScale, setChatScale] = useState<number | null>(null);
-  chatScaleShown = chatScale;
   document.documentElement.dataset.theme = theme;
   document.documentElement.style.zoom = String(scale / 100);
   document.documentElement.style.setProperty("--ui-scale", String(scale / 100));
@@ -293,8 +291,6 @@ function Harness() {
       onTerminalFontNameChange={() => {}}
       terminalFontScale={100}
       onTerminalFontScaleChange={() => {}}
-      chatTextScale={chatScale}
-      onChatTextScaleChange={setChatScale}
       zenMode={false}
       mobileTerminalShortcuts={[[], []]}
       mobileTerminalSideShortcuts={[]}
@@ -676,7 +672,7 @@ async function run() {
   // Chat text follows the terminal size until set on its own; its value
   // button links it back.
   check(
-    chatScaleShown === null &&
+    getChatTextScale() === null &&
       !!document.querySelector(
         '[aria-label="Chat text size follows the terminal, currently 100%"]',
       ),
@@ -684,11 +680,14 @@ async function run() {
   );
   click("Increase Chat text size");
   await settle();
-  check(chatScaleShown === 105, `Chat text did not unlink (${chatScaleShown})`);
+  check(
+    getChatTextScale() === 105,
+    `Chat text did not unlink (${getChatTextScale()})`,
+  );
   click("Link Chat text size to the terminal, currently 105%");
   await settle();
   check(
-    chatScaleShown === null,
+    getChatTextScale() === null,
     "Chat text did not link to the terminal again",
   );
   for (let i = 0; i < (innerWidth <= 320 ? 10 : 5); i++)

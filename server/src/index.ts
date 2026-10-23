@@ -328,7 +328,6 @@ const IMPORTANT_RPC_METHODS = new Set([
   "agent_conversation.unwatch",
   "agent_history.get",
   "agent_history.entry",
-  "agent_history.older",
   "agent_session.get",
   "agent_turn.get",
   "agent_checkout.get",
@@ -1496,10 +1495,9 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
     sourceWorkspaceForWorktreeCreate,
   } = connection.worktreeHooks;
   const {
-    readHistory: readAgentMessageHistory,
+    readHistoryRequest: readAgentMessageHistory,
     readSummary: readAgentSessionSummary,
     readEntry: readAgentHistoryEntry,
-    readOlder: readAgentHistoryOlder,
     readTurn: readAgentTurn,
   } = connection.agentSessions;
 
@@ -1979,15 +1977,6 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
       sendReply({ id, result }, "agent-history-get");
     } catch (e) {
       sendError("agent-history-get-error", e);
-    }
-    return;
-  }
-  if (method === "agent_history.older") {
-    try {
-      const result = await readAgentHistoryOlder(params ?? {});
-      sendReply({ id, result }, "agent-history-older");
-    } catch (e) {
-      sendError("agent-history-older-error", e);
     }
     return;
   }

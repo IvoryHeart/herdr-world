@@ -297,7 +297,7 @@ transcript is never reread or redrawn whole. The window is kept per pane for
 the page, so a Chat that remounts, docks or reopens shows its conversation at
 once. Scrolling near the top of a full window, or **Load earlier messages**,
 reads the 100 conversation entries before the oldest one shown
-(`agent_history.older`) and keeps the message being read in place; entries
+(`agent_history.get` with `before`) and keeps the message being read in place; entries
 the window drops while older ones are shown stay on screen. Transcripts on an
 SSH host are rechecked on Herdr events only.
 

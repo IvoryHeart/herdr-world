@@ -30,6 +30,7 @@ import {
   UI_SCALE_MIN,
   UI_SCALE_STEP,
 } from "../appearance";
+import { setChatTextScale, useChatTextScale } from "../textScales";
 import { lazyWithReload } from "../lazyWithReload";
 import {
   mobileTerminalShortcutCount,
@@ -90,9 +91,6 @@ export type ConfigurationProps = {
   onAccentColorChange: (accentColor: AccentColor) => void;
   onUiScaleChange: (scale: number) => void;
   onTerminalFontScaleChange: (scale: number) => void;
-  /** Chat's text scale; null follows the terminal font scale. */
-  chatTextScale?: number | null;
-  onChatTextScaleChange?: (scale: number | null) => void;
   onTerminalFontNameChange: (name: string) => void;
   onMobileTerminalShortcutsChange: (rows: MobileTerminalShortcutRows) => void;
   onMobileTerminalSideShortcutsChange: (
@@ -408,13 +406,7 @@ export function ConfigurationDialog({
                   </button>
                 </div>
               </div>
-              {props.onChatTextScaleChange ? (
-                <ChatTextRow
-                  scale={props.chatTextScale ?? null}
-                  terminalFontScale={props.terminalFontScale}
-                  onChange={props.onChatTextScaleChange}
-                />
-              ) : null}
+              <ChatTextRow terminalFontScale={props.terminalFontScale} />
               <button
                 type="button"
                 className="config-menu-item"
@@ -706,15 +698,9 @@ export function ConfigurationDialog({
  * Chat's text size: linked to the terminal font scale until changed here;
  * the value button links it again.
  */
-function ChatTextRow({
-  scale,
-  terminalFontScale,
-  onChange,
-}: {
-  scale: number | null;
-  terminalFontScale: number;
-  onChange: (scale: number | null) => void;
-}) {
+function ChatTextRow({ terminalFontScale }: { terminalFontScale: number }) {
+  const scale = useChatTextScale();
+  const onChange = setChatTextScale;
   const shown = scale ?? terminalFontScale;
   return (
     <div className="config-preference-row">

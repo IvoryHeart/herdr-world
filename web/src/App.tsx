@@ -12,6 +12,7 @@ import {
   type MobileControlsPlacement,
 } from "./mobileControlsPlacement";
 import { subscribeLocalStorage } from "./browserStorage";
+import { TERMINAL_FONT_SCALE_KEY, useTextScales } from "./textScales";
 import {
   isRangerTaskNotificationTarget,
   type RangerTaskNotificationTarget,
@@ -82,8 +83,6 @@ import { WorkspaceInspectorPortal } from "./components/WorkspaceInspectorPortal"
 import {
   type AccentColor,
   normalizeAccentColor,
-  chatTextSize,
-  normalizeChatTextScale,
   normalizeTerminalFontFamily,
   normalizeTerminalFontScale,
   terminalFontFamilyStack,
@@ -281,8 +280,6 @@ const DEFAULT_SIDEBAR = 284;
 const THEME_KEY = "theme";
 const ACCENT_COLOR_KEY = "accentColor";
 const UI_SCALE_KEY = "uiScale";
-const TERMINAL_FONT_SCALE_KEY = "terminalFontScale";
-const CHAT_TEXT_SCALE_KEY = "chatTextScale";
 const TERMINAL_FONT_FAMILY_KEY = "terminalFontFamily";
 const ZEN_MODE_KEY = "zenMode";
 const LazyTerminalView = lazyWithReload("terminal-view", () =>
@@ -439,10 +436,6 @@ function loadAccentColor(): AccentColor {
 
 function loadUiScale(): number {
   return normalizeUiScale(worldLocalStorage.getItem(UI_SCALE_KEY));
-}
-
-function loadChatTextScale(): number | null {
-  return normalizeChatTextScale(worldLocalStorage.getItem(CHAT_TEXT_SCALE_KEY));
 }
 
 function loadTerminalFontScale(): number {
@@ -1112,9 +1105,6 @@ export default function App({
   useVisualViewportCssVars(uiScale);
   const [terminalFontScale, setTerminalFontScale] = useState<number>(() =>
     loadTerminalFontScale(),
-  );
-  const [chatTextScale, setChatTextScale] = useState<number | null>(() =>
-    loadChatTextScale(),
   );
   const [terminalFontName, setTerminalFontName] = useState<string>(() =>
     loadTerminalFontFamily(),
@@ -3730,22 +3720,7 @@ export default function App({
     );
     worldLocalStorage.setItem(UI_SCALE_KEY, String(uiScale));
   }, [accentColor, resolvedTheme, theme, uiScale]);
-  useEffect(() => {
-    worldLocalStorage.setItem(
-      TERMINAL_FONT_SCALE_KEY,
-      String(terminalFontScale),
-    );
-  }, [terminalFontScale]);
-  useEffect(() => {
-    worldLocalStorage.setItem(
-      CHAT_TEXT_SCALE_KEY,
-      chatTextScale === null ? "linked" : String(chatTextScale),
-    );
-    document.documentElement.style.setProperty(
-      "--chat-font-size",
-      chatTextSize(chatTextScale, terminalFontScale),
-    );
-  }, [chatTextScale, terminalFontScale]);
+  useTextScales(terminalFontScale);
   // A view switch moves to that view's own Zen choice, or its default.
   const applyZenModeRef = useRef(applyZenMode);
   applyZenModeRef.current = applyZenMode;
@@ -3789,8 +3764,6 @@ export default function App({
           key === UI_SCALE_KEY
         )
           setTerminalFontScale(loadTerminalFontScale());
-        if (key === null || key === CHAT_TEXT_SCALE_KEY)
-          setChatTextScale(loadChatTextScale());
         if (key === null || key === TERMINAL_FONT_FAMILY_KEY)
           setTerminalFontName(loadTerminalFontFamily());
         if (key === null || key === zenKeyRef.current)
@@ -4327,8 +4300,6 @@ export default function App({
               onUiScaleChange={setUiScale}
               terminalFontScale={terminalFontScale}
               onTerminalFontScaleChange={setTerminalFontScale}
-              chatTextScale={chatTextScale}
-              onChatTextScaleChange={setChatTextScale}
               terminalFontName={terminalFontName}
               onTerminalFontNameChange={(name) =>
                 setTerminalFontName(normalizeTerminalFontFamily(name))
