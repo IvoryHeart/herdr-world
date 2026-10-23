@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import {
   layoutTown,
-  TOWN_MAX_RENDERED_DESKS,
+  TOWN_DEFAULT_RENDERED_DESKS,
   TOWN_ROOM_TIERS,
   townDeskSlots,
   townPinCell,
@@ -61,7 +61,7 @@ test("each capacity step contains the previous one", () => {
 });
 
 test("rooms always keep a free desk spot up to the rendered bound", () => {
-  for (let count = 0; count <= TOWN_MAX_RENDERED_DESKS; count += 1) {
+  for (let count = 0; count <= TOWN_DEFAULT_RENDERED_DESKS; count += 1) {
     const [cols, rows] = TOWN_ROOM_TIERS[townTierFor(count)]!;
     expect(cols * rows).toBeGreaterThan(count);
   }
@@ -186,7 +186,7 @@ test("desk slots follow Herdr's tab order, so a reorder moves desks", () => {
 
 test("at every capacity step, slot i is the i-th desk in reading order", () => {
   let result = layoutTown(town({ a: [1] }), "wide");
-  for (let count = 2; count <= TOWN_MAX_RENDERED_DESKS; count += 1) {
+  for (let count = 2; count <= TOWN_DEFAULT_RENDERED_DESKS; count += 1) {
     result = layoutTown(town({ a: [count] }), "wide", result.memory);
     const room = result.layout.buildings[0]!.rooms[0]!;
     desks("a/room-0", count).forEach((key, index) => {
@@ -213,22 +213,71 @@ test("a live room does not shrink, and a rebuild re-derives from native order", 
   );
 });
 
-test("desks beyond the rendered bound stay reachable as overflow", () => {
+test("an explicit Fold shrinks an expanded room while ordinary tab closures preserve its size", () => {
+  for (const shape of Object.values(TOWN_SHAPES)) {
+    const expanded = town({ a: [130] });
+    Object.assign(expanded.rooms[0]!, { deskFold: "expanded" });
+    const first = layoutTown(expanded, shape);
+    const folded = town({ a: [24] });
+    Object.assign(folded.rooms[0]!, { deskFold: "folded" });
+    const next = layoutTown(folded, shape, first.memory);
+    expect(next.layout.buildings[0]!.rooms[0]!.h).toBeLessThan(
+      first.layout.buildings[0]!.rooms[0]!.h,
+    );
+    expect(next.layout.deskCells.size).toBe(24);
+    const closed = layoutTown(town({ a: [2] }), shape, first.memory);
+    expect(closed.layout.buildings[0]!.rooms[0]!.h).toBe(
+      first.layout.buildings[0]!.rooms[0]!.h,
+    );
+  }
+});
+
+test("Fold preserves a protected pin's cell beyond the expanded target", () => {
+  for (const shape of Object.values(TOWN_SHAPES)) {
+    const expanded = town({ a: [260] });
+    expanded.rooms[0]!.deskFold = "expanded";
+    const first = layoutTown(expanded, shape);
+    const pinnedKey = expanded.rooms[0]!.deskKeys[259]!;
+    const cell = cellOf(first.layout, pinnedKey)!;
+    const folded = town({ a: [24] });
+    folded.rooms[0]!.deskFold = "folded";
+    folded.rooms[0]!.deskKeys = [
+      ...folded.rooms[0]!.deskKeys.slice(0, 23),
+      pinnedKey,
+    ];
+    const next = layoutTown(
+      folded,
+      shape,
+      first.memory,
+      new Map([[pinnedKey, { col: cell.col, row: cell.row }]]),
+    );
+    const kept = cellOf(next.layout, pinnedKey)!;
+    expect([kept.col, kept.row]).toEqual([cell.col, cell.row]);
+    expect(next.layout.deskCells.size).toBe(24);
+    expect(
+      next.layout.buildings[0]!.rooms[0]!.cells.some(
+        (candidate) => candidate.deskKey === null,
+      ),
+    ).toBe(true);
+  }
+});
+
+test("every admitted desk beyond the normal target keeps a visible cell", () => {
   const { layout } = layoutTown(
-    town({ a: [TOWN_MAX_RENDERED_DESKS + 4] }),
+    town({ a: [TOWN_DEFAULT_RENDERED_DESKS + 4] }),
     "wide",
   );
   const room = layout.buildings[0]!.rooms[0]!;
   expect(room.cells.filter((c) => c.deskKey).length).toBe(
-    TOWN_MAX_RENDERED_DESKS,
+    TOWN_DEFAULT_RENDERED_DESKS + 4,
   );
   expect(room.cells.some((c) => !c.deskKey)).toBe(true);
-  expect(room.overflowDeskKeys.length).toBe(4);
+  expect(room.overflowDeskKeys).toEqual([]);
 });
 
 test("rooms extend to show every desk of real rooms, wide and narrow", () => {
   for (const formFactor of ["wide", "narrow"] as const)
-    for (const count of [24, 50, 100, TOWN_MAX_RENDERED_DESKS]) {
+    for (const count of [24, 50, 100, TOWN_DEFAULT_RENDERED_DESKS, 130, 260]) {
       const { layout } = layoutTown(town({ a: [count, 6, 3] }), formFactor);
       const building = layout.buildings[0]!;
       const room = building.rooms[0]!;
@@ -264,7 +313,7 @@ test("a room grows square to eight desks wide, then extends downward", () => {
   expect(TOWN_ROOM_TIERS[townTierFor(24)]).toEqual([5, 5]);
   expect(TOWN_ROOM_TIERS[townTierFor(50)]).toEqual([8, 7]);
   expect(TOWN_ROOM_TIERS[townTierFor(100)]).toEqual([8, 13]);
-  expect(TOWN_ROOM_TIERS[townTierFor(TOWN_MAX_RENDERED_DESKS)]).toEqual([
+  expect(TOWN_ROOM_TIERS[townTierFor(TOWN_DEFAULT_RENDERED_DESKS)]).toEqual([
     8, 16,
   ]);
 });
@@ -407,7 +456,7 @@ test("the container's size picks the shape, not one breakpoint", () => {
     const tiers = townRoomTiers(shape.deskColumns);
     const [cols, rows] = tiers[tiers.length - 1]!;
     expect(cols).toBe(shape.deskColumns);
-    expect(cols * rows).toBeGreaterThan(TOWN_MAX_RENDERED_DESKS);
+    expect(cols * rows).toBeGreaterThan(TOWN_DEFAULT_RENDERED_DESKS);
   }
 });
 

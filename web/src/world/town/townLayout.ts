@@ -10,11 +10,10 @@
 export const TOWN_TILE = 16;
 
 /**
- * One cell is always kept free, so this many desks render per room. The Town
- * projection admits the same number (TOWN_PRESENTATION_BOUNDS), keeping the
- * selected, newest and busiest desks when a room has more.
+ * The usual expanded presentation target. Admission can exceed it for protected
+ * desks; layout extends downward for every admitted desk and one free cell.
  */
-export const TOWN_MAX_RENDERED_DESKS = 8 * 16 - 1;
+export const TOWN_DEFAULT_RENDERED_DESKS = 8 * 16 - 1;
 
 /**
  * Capacity steps as [columns, rows] for rooms at most `maxCols` desks wide;
@@ -24,12 +23,13 @@ export const TOWN_MAX_RENDERED_DESKS = 8 * 16 - 1;
  */
 export function townRoomTiers(
   maxCols: number,
+  desks = TOWN_DEFAULT_RENDERED_DESKS,
+  minimumTier = 0,
 ): readonly (readonly [number, number])[] {
-  const cached = tierCache.get(maxCols);
-  if (cached) return cached;
-  const tiers: (readonly [number, number])[] = [[2, 1]];
-  let [cols, rows] = [2, 1];
-  while (cols * rows < TOWN_MAX_RENDERED_DESKS + 1) {
+  const tiers = tierCache.get(maxCols) ?? [[2, 1] as const];
+  let [cols, rows] = tiers[tiers.length - 1]!;
+  const need = Math.max(TOWN_DEFAULT_RENDERED_DESKS + 1, desks + 1);
+  while (cols * rows < need || tiers.length <= minimumTier) {
     if (rows < cols || cols >= maxCols) rows += 1;
     else cols += 1;
     tiers.push([cols, rows]);
@@ -37,7 +37,7 @@ export function townRoomTiers(
   tierCache.set(maxCols, tiers);
   return tiers;
 }
-const tierCache = new Map<number, readonly (readonly [number, number])[]>();
+const tierCache = new Map<number, (readonly [number, number])[]>();
 
 /** The wide shape's steps: eight desks wide, then downward. */
 export const TOWN_ROOM_TIERS = townRoomTiers(8);
@@ -183,6 +183,8 @@ export type TownLayout = {
 };
 
 export type TownInputRoom = {
+  /** Explicit Fold may shrink a room; ordinary tab closures keep its tier. */
+  deskFold?: "folded" | "expanded";
   key: string;
   hostKey: string;
   order: number;
@@ -200,6 +202,7 @@ export type TownInput = {
 };
 
 type RoomMemory = {
+  deskFold?: "folded" | "expanded";
   tier: number;
   cells: Map<string, { col: number; row: number }>;
   /** The building column the room keeps while the scene is live. */
@@ -221,9 +224,9 @@ export type TownPlacementMemory = Map<string, RoomMemory>;
 export function townTierFor(
   desks: number,
   minimumTier = 0,
-  tiers = TOWN_ROOM_TIERS,
+  tiers = townRoomTiers(8, desks, minimumTier),
 ) {
-  const need = Math.min(desks + 1, TOWN_MAX_RENDERED_DESKS + 1);
+  const need = desks + 1;
   let tier = Math.min(Math.max(0, minimumTier), tiers.length - 1);
   while (tier < tiers.length - 1 && tiers[tier]![0] * tiers[tier]![1] < need)
     tier += 1;
@@ -242,16 +245,21 @@ export function townTierFor(
 function placeRoomDesks(
   deskKeys: readonly string[],
   previous: RoomMemory | undefined,
-  tiers: readonly (readonly [number, number])[],
+  maxCols: number,
   pins: TownPinnedCells | undefined,
-): { memory: RoomMemory; overflow: string[] } {
+): { memory: RoomMemory; overflow: string[]; cols: number; rows: number } {
   const fixed = new Map<string, { col: number; row: number }>();
   if (pins?.size)
     for (const key of deskKeys) {
       if (!pins.has(key)) continue;
       const cell = pins.get(key) ?? previous?.cells.get(key);
-      if (cell) fixed.set(key, cell);
+      if (cell && cell.col < maxCols) fixed.set(key, cell);
     }
+  const needed = Math.max(
+    deskKeys.length,
+    ...[...fixed.values()].map(({ row }) => (row + 1) * maxCols - 1),
+  );
+  const tiers = townRoomTiers(maxCols, needed, previous?.tier ?? 0);
   let tier = townTierFor(deskKeys.length, previous?.tier ?? 0, tiers);
   const outside = (tier: number) =>
     [...fixed.values()].some(
@@ -259,7 +267,7 @@ function placeRoomDesks(
     );
   while (tier < tiers.length - 1 && outside(tier)) tier += 1;
   const [cols, rows] = tiers[tier]!;
-  const capacity = Math.min(cols * rows - 1, TOWN_MAX_RENDERED_DESKS);
+  const capacity = cols * rows - 1;
   const cells = new Map<string, { col: number; row: number }>();
   const taken = new Set<number>();
   for (const [key, { col, row }] of fixed) {
@@ -281,7 +289,7 @@ function placeRoomDesks(
     cells.set(key, { col: index % cols, row: Math.floor(index / cols) });
     taken.add(index);
   }
-  return { memory: { tier, cells }, overflow };
+  return { memory: { tier, cells }, overflow, cols, rows };
 }
 
 function mulberry32(seed: number) {
@@ -310,16 +318,23 @@ function draftBuilding(
   shape: TownShape,
   pins: TownPinnedCells | undefined,
 ): DraftBuilding {
-  const tiers = townRoomTiers(shape.deskColumns);
   const placed = rooms.map((room) => {
-    const { memory: roomMemory, overflow } = placeRoomDesks(
+    const previous = memory.get(room.key);
+    const folded =
+      previous?.deskFold === "expanded" && room.deskFold === "folded";
+    const {
+      memory: roomMemory,
+      overflow,
+      cols,
+      rows,
+    } = placeRoomDesks(
       room.deskKeys,
-      memory.get(room.key),
-      tiers,
+      folded ? { ...previous, tier: 0 } : previous,
+      shape.deskColumns,
       pins,
     );
+    roomMemory.deskFold = room.deskFold;
     nextMemory.set(room.key, roomMemory);
-    const [cols, rows] = tiers[roomMemory.tier]!;
     return {
       key: room.key,
       hostKey,

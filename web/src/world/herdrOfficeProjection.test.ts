@@ -10,6 +10,8 @@ import {
 import type { WorldRuntimeConnection } from "./runtimeStore";
 import { buildWorldObject } from "./worldObject";
 import { officePresentationKey } from "./officeSelection";
+import { townModelFromProjection } from "./town/townModel";
+import { layoutTown, TOWN_SHAPES } from "./town/townLayout";
 import { tabCardKey } from "../../../shared/terminalColor";
 
 describe("Pixel Office projection", () => {
@@ -205,6 +207,21 @@ describe("Pixel Office projection", () => {
       );
       expect(room.desks).toHaveLength(130);
       expect(room.omittedDeskCount).toBe(30);
+      for (const shape of Object.values(TOWN_SHAPES)) {
+        const { layout } = layoutTown(
+          townModelFromProjection(shown).input,
+          shape,
+        );
+        expect(
+          [...protectedDesks].filter((key) => !layout.deskCells.has(key)),
+        ).toEqual([]);
+        expect(
+          layout.buildings[0]!.rooms[0]!.cells.some(
+            (cell) => cell.deskKey === null,
+          ),
+        ).toBe(true);
+      }
+
       const cached = project(
         world,
         3,
