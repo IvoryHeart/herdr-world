@@ -201,6 +201,25 @@ describe("answering a blocked agent's prompt", () => {
       acknowledged: false,
       unconfirmed_reason: "still_showing",
     });
+    // Nor does a partial screen with a new Herdr state.
+    const moved = fakeHerdr();
+    moved.state.screen = [
+      "─".repeat(60),
+      "Should the banner be red?",
+      "",
+      "❯ 1. Yes",
+      "  2. No",
+      "",
+      "Enter to select · ↑/↓ to navigate · Esc to cancel",
+    ].join("\n");
+    moved.state.onSend = () => {
+      moved.state.seq += 1;
+      moved.state.screen = "─".repeat(60) + "\n☐ Colour";
+    };
+    expect(await answer(moved.source, "1")).toMatchObject({
+      acknowledged: false,
+      unconfirmed_reason: "still_showing",
+    });
   });
 
   // Without evidence that this agent left this prompt, a sent key is never

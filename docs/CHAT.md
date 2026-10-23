@@ -78,10 +78,10 @@ view that you open on purpose.
   gap needs an input Herdr applies only while the prompt is unchanged.
 - Chat replaces the card with what it sent. "You answered 2 · …" needs
   evidence that this agent left this prompt: the same session, and then a
-  status that shows progress (`working`, `idle` or `done`), a different
-  recognised question on a readable screen (a form's next tab keeps Herdr's
-  state; a partial or unrecognised screen does not count), or a
-  new state with a changed screen. Otherwise the receipt reads "Sent 2 · …"
+  status that shows progress (`working`, `idle` or `done`), or a recognised
+  menu on a readable screen that is a different question (a form's next tab
+  keeps Herdr's state) or comes with a new Herdr state. A partial or
+  unrecognised screen never counts. Otherwise the receipt reads "Sent 2 · …"
   with the reason (`unconfirmed_reason`): the question still shows
   (`still_showing`), the pane has another session (`session_changed`, and the
   key may have reached it), Herdr reports a status such as `unknown`
