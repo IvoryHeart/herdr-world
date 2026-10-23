@@ -1,4 +1,6 @@
 import { createElement } from "react";
+import { isSlashCommand } from "../../../../../shared/conversationInput";
+import { CommandReceipt } from "./command";
 import type { WorkItem, WorkLink } from "../../../../../shared/worldSources";
 import type { HistoryEntry } from "../../agentHistory";
 import {
@@ -35,11 +37,22 @@ type MessageToken = {
   owner: ChatBlockOwner;
   onAskAuthor: ChatBlockInput["onAskAuthor"];
 };
-type BlockToken = MessageToken | { kind: "step"; step: ConversationStep };
+type BlockToken =
+  | MessageToken
+  | { kind: "step"; step: ConversationStep }
+  | { kind: "command"; entry: HistoryEntry };
 
 /** One module-level renderer; each bubble/step compares only its own token. */
 export const decorateChat: HistoryDecorator = (target, value) => {
   const token = value as BlockToken | undefined;
+  if (target.type === "message" && token?.kind === "command")
+    return {
+      message: createElement(CommandReceipt, {
+        text: token.entry.text,
+        at: token.entry.sent_at,
+        observed: true,
+      }),
+    };
   if (target.type === "step" && token?.kind === "step") {
     const { step } = token;
     return {
@@ -124,6 +137,15 @@ export function chatBlockTokens(
             ? old
             : { kind: "step", step },
         );
+      continue;
+    }
+    if (entry.role === "user" && isSlashCommand(entry.text)) {
+      next.set(
+        key,
+        old?.kind === "command" && old.entry === entry
+          ? old
+          : { kind: "command", entry },
+      );
       continue;
     }
     // A user quoting a PR is not an agent announcing its work.

@@ -414,6 +414,7 @@ async function run() {
           text: "Run the tests",
           sent_at: sentAt,
           state: "pending",
+          queued: true,
           expected: "claude session shown",
           fingerprint: "a".repeat(64),
         },
@@ -445,8 +446,8 @@ async function run() {
     check(
       pendingBubbles.length === 1 &&
         pendingBubble?.textContent?.includes("Run the tests") === true &&
-        pendingBubble.textContent.includes("Delivered · waiting for claude"),
-      "A pending send must show only in its own conversation, as delivered and waiting",
+        pendingBubble.textContent.includes("Queued · sent to claude"),
+      "A pending send must show only in its own conversation, as queued without claiming delivery",
     );
     const matched = container.querySelector('[data-delivery="matched"]');
     check(
@@ -555,6 +556,53 @@ async function run() {
       "A refused send must say why",
     );
     check(textarea.value === "Another", "A refused draft must stay");
+
+    // Commands use native admission and remain unchecked until transcript evidence.
+    sendResult = { status: "sent" };
+    type("/custom.plugin anything");
+    await settle();
+    container
+      .querySelector<HTMLButtonElement>('button[aria-label="Send"]')!
+      .click();
+    await settle();
+    check(
+      !calls.some((call) => call.method === "terminal.write"),
+      "Chat commands must use agent.prompt rather than terminal input",
+    );
+    check(
+      calls.some(
+        (call) =>
+          call.method === "agent_conversation.send" &&
+          call.params.text === "/custom.plugin anything",
+      ),
+      "Custom slash commands must use the conversation send adapter",
+    );
+    reply = {
+      ...reply,
+      deliveries: [
+        {
+          id: "command-1",
+          text: "/custom.plugin anything",
+          sent_at: sentAt,
+          fingerprint: "a".repeat(64),
+          expected: "claude session shown",
+          state: "pending",
+          kind: "command",
+        },
+      ],
+    };
+    push();
+    await settle();
+    check(
+      container
+        .querySelector('.agent-chat-command-receipt[data-delivery="unchecked"]')
+        ?.textContent?.includes("sent, not checked") === true,
+      "A command receipt must not claim its effect was checked",
+    );
+    reply = { ...reply, deliveries: [] };
+    push();
+    type("Another");
+    await settle();
 
     // Attachments upload with a chip each; Send waits for them.
     const originalRequest = window.XMLHttpRequest;
@@ -2029,7 +2077,7 @@ async function run() {
 
     // A send not yet in the transcript (a busy harness writes a queued
     // message only when the agent takes it up) sits at its send time, never
-    // below replies written since, as delivered and waiting. A multi-line
+    // below replies written since, as queued without claiming delivery. A multi-line
     // turn Claude Code wrapped as a paste shows the words, marked pasted.
     {
       const ago = (ms: number) => new Date(Date.now() - ms).toISOString();
@@ -2101,8 +2149,8 @@ async function run() {
         (
           container.querySelector('[data-delivery="pending"]')?.textContent ??
           ""
-        ).includes("Delivered · waiting for claude"),
-        "An unseen send must read as delivered and waiting",
+        ).includes("Queued · sent to claude"),
+        "An unseen send must read as queued without claiming delivery",
       );
       check(
         !(container.textContent ?? "").includes("pasted_content") &&

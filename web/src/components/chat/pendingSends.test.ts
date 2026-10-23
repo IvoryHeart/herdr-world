@@ -1,6 +1,23 @@
 import { expect, test } from "bun:test";
 import { placedSends } from "./pendingSends";
 import type { ConversationDelivery } from "../AgentChat";
+import { renderToStaticMarkup } from "react-dom/server";
+
+test("native queued receipts and unchecked commands never claim delivery", () => {
+  const html = (extra: Partial<ConversationDelivery>) =>
+    renderToStaticMarkup(
+      placedSends([delivery(extra)], "Mira-claude", () => {})[0]!.node,
+    );
+  expect(html({ queued: true })).toContain("Queued · sent to Mira-claude");
+  expect(html({ queued: true })).not.toContain("Delivered");
+  expect(html({ state: "unverified", queued: true })).toContain(
+    "Sent, not seen in the transcript",
+  );
+  const command = html({ text: "/compact", kind: "command" });
+  expect(command).toContain("agent-chat-command-receipt");
+  expect(command).toContain("sent, not checked");
+  expect(command).not.toContain("agent-history-chat-bubble");
+});
 
 const delivery = (
   extra: Partial<ConversationDelivery>,

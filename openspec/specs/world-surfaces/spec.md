@@ -1409,6 +1409,26 @@ Opening the terminal from a peek SHALL follow the Inspector presentation prefere
   yes/no prompt
 - **THEN** the peek offers Reply and the terminal without answer buttons
 
+### Requirement: Shared Chat composer and honest send receipts
+
+Chat SHALL reuse TerminalComposer, its harness command palette, editing and uploads,
+with a separate draft qualified by connection, runtime, terminal, pane and session.
+Chat SHALL hide Direct mode, Insert draft and the terminal key bar. Enter SHALL send;
+Shift+Enter SHALL insert a new line. Submissions SHALL use the bound conversation's
+agent prompt rather than terminal insertion. Every slash command SHALL be allowed.
+
+Native working-state admission SHALL show a queued bubble with recipient and send
+time until transcript evidence arrives. World SHALL NOT add a second send queue.
+Blocked sends SHALL preserve the draft and show the refusal. Commands without a
+literal own-transcript receipt SHALL say **sent, not checked**; neither a session
+switch nor a rewritten user turn SHALL claim their effect was checked or misdelivered.
+
+#### Scenario: A command intentionally switches sessions
+
+- **WHEN** a bound Chat sends a slash command and the harness switches sessions
+- **THEN** its slim receipt remains **sent, not checked** without pausing normal sends
+  as a misdelivery; no command effect is inferred
+
 ### Requirement: Town peeks show recent chatter and take replies
 
 An agent's peek SHALL show the agent's latest message from the conversation

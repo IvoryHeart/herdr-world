@@ -1,0 +1,113 @@
+.terminal-composer[data-surface="chat"] {
+  position: relative;
+  display: grid;
+  grid-template-columns: var(--chat-composer-button-size, 40px) minmax(0, 1fr) var(
+      --chat-composer-button-size,
+      40px
+    ) auto;
+  align-items: end;
+  gap: 4px 6px;
+  width: 100%;
+  max-width: 820px;
+  min-width: 0;
+  margin: 0 auto;
+  padding: 0;
+  background: transparent;
+  border: 0;
+}
+.terminal-composer[data-surface="chat"] [hidden] {
+  display: none !important;
+}
+.terminal-composer[data-surface="chat"] .terminal-composer-toolbar,
+.terminal-composer[data-surface="chat"] .terminal-composer-submit-actions {
+  display: contents;
+}
+.terminal-composer[data-surface="chat"] > .attachment-chips {
+  grid-column: 1 / -1;
+  grid-row: 1;
+}
+.terminal-composer[data-surface="chat"] .terminal-composer-attach {
+  grid-column: 1;
+  grid-row: 2;
+}
+.terminal-composer[data-surface="chat"] > .terminal-mobile-input-bar {
+  grid-column: 2;
+  grid-row: 2;
+  min-width: 0;
+  padding: 0;
+}
+.terminal-composer[data-surface="chat"] .terminal-composer-commands-toggle {
+  grid-column: 3;
+  grid-row: 2;
+}
+.terminal-composer[data-surface="chat"] .terminal-composer-submit.is-primary {
+  grid-column: 4;
+  grid-row: 2;
+}
+.terminal-composer[data-surface="chat"] .terminal-composer-input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: var(--chat-composer-button-size, 40px);
+  max-height: calc(6 * 1.4em + 16px);
+  padding: 8px 10px;
+  overflow-y: auto;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--chat-font-size, 14px);
+  line-height: 1.4;
+  background: var(--chat-composer-input-bg, var(--input-bg));
+  border: var(--chat-composer-edge-width, 1px) solid
+    var(--chat-composer-edge, var(--border));
+  border-radius: var(--chat-composer-radius, 10px);
+  resize: none;
+}
+.terminal-composer[data-surface="chat"] .terminal-composer-toolbar button {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--chat-composer-button-size, 40px);
+  height: var(--chat-composer-button-size, 40px);
+  margin: 0;
+  padding: 0 10px;
+  color: var(--text);
+  font: inherit;
+  background: var(--chat-composer-button-bg, var(--panel));
+  border: var(--chat-composer-edge-width, 1px) solid
+    var(--chat-composer-edge, var(--border));
+  border-radius: var(--chat-composer-radius, 10px);
+  box-shadow: var(--chat-composer-button-shadow, none);
+}
+.terminal-composer[data-surface="chat"] .terminal-composer-submit.is-primary {
+  background: var(--chat-composer-button-bg, var(--accent-soft));
+}
+.terminal-composer[data-surface="chat"] .terminal-composer-hint {
+  grid-column: 1 / -1;
+  grid-row: 3;
+  width: auto;
+  min-width: 0;
+  margin: 0;
+  white-space: normal;
+}
+.terminal-composer[data-surface="chat"] .terminal-composer-hint:empty {
+  display: none;
+}
+.terminal-composer[data-surface="chat"] .terminal-composer-commands {
+  position: absolute;
+  z-index: 2;
+  inset: auto 0 calc(100% + 6px);
+  width: auto;
+  max-height: min(260px, 45dvh);
+  overflow: auto;
+  color: var(--text);
+  background: var(--panel);
+}
+@media (pointer: coarse) {
+  .terminal-composer[data-surface="chat"] {
+    --chat-composer-button-size: 44px;
+  }
+  .terminal-composer[data-surface="chat"] .terminal-composer-input {
+    font-size: max(16px, var(--chat-font-size, 14px));
+  }
+}

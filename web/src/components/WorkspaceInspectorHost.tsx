@@ -64,6 +64,7 @@ import {
   type WorkspaceInspectorContext,
 } from "../workspaceResource";
 import { WorkspaceInspectorAgentIdentity } from "./WorkspaceInspectorAgentIdentity";
+import { agentName } from "./agentDisplayName";
 import { AgentChat } from "./AgentChat";
 import { AgentCheckoutPanel } from "./AgentCheckoutPanel";
 import { paneHasAgentHistory } from "./agentSession";
@@ -1287,6 +1288,9 @@ export function WorkspaceInspectorHost({
                 ])}
                 pane={historyPane}
                 workSessionFingerprint={historySessionFingerprint}
+                recipientLabel={
+                  agentContext ? agentName(agentContext) : undefined
+                }
                 active={visible && state.open && state.view === "history"}
                 wide={!compact}
                 onOpenTerminal={

@@ -1,3 +1,4 @@
+import { renderToStaticMarkup } from "react-dom/server";
 import { expect, test } from "bun:test";
 import type { WorkItem } from "../../../../../shared/worldSources";
 import type { HistoryEntry } from "../../agentHistory";
@@ -177,4 +178,31 @@ test("unchanged message and paired tool-step tokens keep identity and eviction p
   expect(changed.get("entry:message")).toBe(first.get("entry:message"));
   expect(changed.get("step:run-1")).not.toBe(first.get("step:run-1"));
   expect(chatBlockTokens(changed, { ...request, entries: [] }).size).toBe(0);
+});
+
+test("only user slash commands become slim transcript receipts, with stable tokens", () => {
+  const request = input("/custom.plugin anything");
+  request.entries = [{ ...entry("/custom.plugin anything"), role: "user" }];
+  const tokens = chatBlockTokens(new Map(), request);
+  const decoration = decorateChat(
+    { type: "message", entry: request.entries[0]! },
+    tokens.get("entry:message"),
+  );
+  expect(renderToStaticMarkup(decoration?.message)).toContain(
+    "seen in the transcript",
+  );
+  expect(renderToStaticMarkup(decoration?.message)).not.toContain(
+    "sent, not checked",
+  );
+  expect(chatBlockTokens(tokens, request).get("entry:message")).toBe(
+    tokens.get("entry:message"),
+  );
+  for (const message of [
+    entry("/compact"),
+    { ...entry("/uploads/report.txt"), role: "user" as const },
+  ]) {
+    expect(
+      chatBlockTokens(new Map(), { ...request, entries: [message] }).size,
+    ).toBe(0);
+  }
 });

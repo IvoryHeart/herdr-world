@@ -1,0 +1,31 @@
+.agent-chat-command-receipt {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  min-width: 0;
+  padding: 5px 8px;
+  color: var(--muted);
+  font-size: 11px;
+  border-block: 1px solid var(--border-soft);
+}
+.agent-chat-command-receipt code {
+  flex: 1 1 12em;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  color: var(--text);
+  font-family: var(--font-mono, monospace);
+}
+.agent-chat-command-receipt button {
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+.agent-history-chat-message.is-command {
+  align-self: stretch;
+  max-width: 100%;
+}

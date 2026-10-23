@@ -22,6 +22,89 @@ import {
 import { createSessionProjectionCache } from "./session-projection-cache";
 import { createAgentSessionResolverContext } from "./session-resolver";
 import type { HerdrCall } from "./session-types";
+import { isSlashCommand } from "../../../shared/conversationInput";
+
+test("slash commands include custom names while pasted paths stay ordinary messages", () => {
+  for (const text of [
+    "/",
+    "/compact",
+    " /custom.plugin anything",
+    "/review:fast",
+    "/🦀",
+  ])
+    expect(isSlashCommand(text)).toBe(true);
+  for (const text of [
+    "/var/log/app.log is missing",
+    "Read /compact",
+    "!ls",
+    "# note",
+  ])
+    expect(isSlashCommand(text)).toBe(false);
+});
+
+test("unchecked commands match literal transcript words only and never treat a deliberate session switch as misdelivery", () => {
+  const ledger = createDeliveryLedger();
+  const time = Date.UTC(2026, 0, 1);
+  ledger.record("pane", {
+    text: "/compact",
+    fingerprint: "old",
+    expected: "Claude",
+    kind: "command",
+    queued: true,
+    baseline: [],
+    clock: { offsetMs: 0, uncertaintyMs: 0 },
+    startedAt: time,
+    endedAt: time + 1,
+    switchedTo: "new",
+  });
+  const message = (id: string, text: string) => ({
+    id,
+    text,
+    role: "user" as const,
+    kind: "message" as const,
+    sent_at: new Date(time + 2000).toISOString(),
+  });
+  ledger.evaluate(
+    "pane",
+    "new",
+    [
+      {
+        fingerprint: "old",
+        label: "Claude",
+        messages: [message("rewritten", "[Pasted text #1]")],
+      },
+      {
+        fingerprint: "new",
+        label: "New Claude",
+        messages: [message("another", "/compact")],
+      },
+    ],
+    time + 3000,
+  );
+  expect(ledger.list("pane")[0]).toMatchObject({
+    state: "pending",
+    kind: "command",
+    queued: true,
+  });
+  ledger.evaluate(
+    "pane",
+    "new",
+    [
+      {
+        fingerprint: "old",
+        label: "Claude",
+        messages: [message("literal", "/compact")],
+      },
+    ],
+    time + 4000,
+  );
+  expect(ledger.list("pane")[0]).toMatchObject({
+    state: "matched",
+    matched_id: "literal",
+    matched_by: "words",
+  });
+  expect(ledger.list("pane")[0]!.delivered_to).toBeUndefined();
+});
 
 // Herdr 0.9.3's agent.prompt takes only {target, text} and ignores any
 // precondition field, so a session switch between Chat's last check and the
@@ -361,26 +444,51 @@ describe("a session switch between Chat's check and Herdr's prompt", () => {
     ]);
   });
 
-  test("commands Chat cannot check are refused before Herdr sees them", async () => {
+  test("all slash commands use native admission and retain unchecked receipts across intentional session switches", async () => {
     const shown = await transcript("shown-k");
+    const switched = await transcript("command-switch-k");
     const { state, call } = fakeHerdr(claude(shown));
     const source = chat(call);
+    state.onPrompt = () => {
+      state.replyWith = claude(switched);
+    };
     for (const text of [
       "/compact",
       "  /clear",
       "/review:fast now",
-      "!ls",
-      "# remember this",
+      "/custom.plugin anything",
     ])
       expect(await sendTo(source, text)).toMatchObject({
+        status: "sent",
+        delivery: { kind: "command", state: "pending" },
+      });
+    expect(state.prompts).toHaveLength(4);
+    expect(
+      (await source.read({ pane_id: "w1:p1" })).deliveries?.every(
+        (delivery) => delivery.state !== "misdelivered",
+      ),
+    ).toBe(true);
+    const refused = fakeHerdr(claude(shown));
+    const ordinary = chat(refused.call);
+    for (const text of ["!ls", "# remember this"])
+      expect(await sendTo(ordinary, text)).toMatchObject({
         status: "refused",
         reason: "command",
       });
-    expect(state.prompts).toEqual([]);
+    expect(refused.state.prompts).toEqual([]);
     // A pasted path is a message, not a command word.
     expect(
-      await sendTo(source, "/var/log/app.log shows an error; why?"),
+      await sendTo(ordinary, "/var/log/app.log shows an error; why?"),
     ).toMatchObject({ status: "sent" });
+  });
+
+  test("a message admitted while working records native queue provenance", async () => {
+    const shown = await transcript("working-queue");
+    const { call } = fakeHerdr({ ...claude(shown), agent_status: "working" });
+    expect(await sendTo(chat(call), "Next, review the changes")).toMatchObject({
+      status: "sent",
+      delivery: { queued: true, state: "pending" },
+    });
   });
 
   test("a full pane refuses the next send instead of dropping a notice", async () => {

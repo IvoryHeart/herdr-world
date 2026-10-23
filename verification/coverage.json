@@ -325,6 +325,7 @@
         "web/src/terminalComposerCommands.test.ts",
         "web/src/mobileTerminalShortcuts.test.ts",
         "web/src/components/TerminalComposer.dom.test.ts",
+        "web/src/components/TerminalComposer.chat.test.ts",
         "web/src/components/TerminalComposer.uploads.test.ts",
         "web/src/components/TerminalView.inputMode.test.ts"
       ],
@@ -334,7 +335,7 @@
       "status": "alternative-evidence",
       "remaining": "No abstract shell semantics or automatic command execution is claimed; terminal dispatch authority is covered separately.",
       "requiredChecks": ["bun run check", "bun run verification:gate"],
-      "evidenceDecision": "Pure command resolution/catalogue tests and qualified composer draft tests directly cover aliases, key normalization and owner identity.",
+      "evidenceDecision": "Pure command resolution/catalogue and qualified draft tests cover aliases, key normalization and owner identity. The shared Chat composer DOM consumer covers native editing/completion, IME-safe Enter send, isolated drafts and transactional refusal restoration; source race tests cover native queued admission and unchecked slash-command receipts.",
       "partialEvidence": {
         "models": [],
         "contracts": ["verification/consumer-evidence.md"],
@@ -343,6 +344,7 @@
           "web/src/terminalComposerCommands.test.ts",
           "web/src/mobileTerminalShortcuts.test.ts",
           "web/src/components/TerminalComposer.dom.test.ts",
+          "web/src/components/TerminalComposer.chat.test.ts",
           "web/src/components/TerminalComposer.uploads.test.ts",
           "web/src/components/TerminalView.inputMode.test.ts"
         ],

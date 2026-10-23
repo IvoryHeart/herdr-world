@@ -7,6 +7,7 @@ export type HistoryDecorationTarget =
   | { type: "step"; step: ToolStep };
 
 export type HistoryDecoration = {
+  message?: ReactNode;
   label?: string;
   state?: "error" | "interrupted";
   row?: ReactNode;

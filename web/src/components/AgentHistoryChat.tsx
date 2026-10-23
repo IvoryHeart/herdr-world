@@ -87,6 +87,25 @@ const ChatBubble = memo(function ChatBubble({
   const label = historyEntryLabel(entry);
   const tone = entry.kind === "error" ? "is-error" : `is-${entry.role}`;
   const decoration = decorate?.({ type: "message", entry }, decorationToken);
+  if (decoration?.message)
+    return (
+      <article
+        className={`agent-history-chat-message is-command ${highlighted ? "is-minimap-target" : ""}`}
+        data-sequence={sequence}
+        data-delivery={matched ? "matched" : undefined}
+      >
+        {decoration.message}
+        {truncated ? (
+          <button
+            type="button"
+            className="agent-history-chat-more"
+            onClick={() => onOpen(entry)}
+          >
+            View full message
+          </button>
+        ) : null}
+      </article>
+    );
   return (
     <article
       className={`agent-history-chat-message ${tone} ${highlighted ? "is-minimap-target" : ""}`}

@@ -8,6 +8,7 @@ import {
   CornerDownLeft,
   Keyboard,
   Paperclip,
+  Plus,
   SquareTerminal,
   TextCursorInput,
   X,
@@ -61,6 +62,8 @@ import {
 import type { UploadProgress } from "../terminalImageUpload";
 import { AttachmentChips } from "./AttachmentChips";
 import "./TerminalComposer.css";
+import "./TerminalComposer.chat.css";
+import { TerminalComposerPalette } from "./TerminalComposerPalette";
 import type { TerminalInputMode } from "../terminalInputMode";
 export type { TerminalInputMode } from "../terminalInputMode";
 
@@ -118,6 +121,10 @@ export function TerminalComposer({
   onUploadFile,
   onPreparePathInsertion,
   onError,
+  surface = "terminal",
+  recipient,
+  disabledReason,
+  notice,
 }: {
   draftKey: string;
   paneId?: string;
@@ -141,6 +148,10 @@ export function TerminalComposer({
   onUploadFile: ComposerUpload;
   onPreparePathInsertion?: () => (text: string) => Promise<void>;
   onError: (message: string) => void;
+  surface?: "terminal" | "chat";
+  recipient?: string;
+  disabledReason?: string;
+  notice?: string;
 }) {
   useShortcutPreferences();
   const [text, setText] = useState(() => readTerminalComposerDraft(draftKey));
@@ -476,6 +487,7 @@ export function TerminalComposer({
     const submittedDraftKey = draftKey;
     if (
       !accessoriesOpen ||
+      disabledReason ||
       !draft ||
       terminalComposerUploadCount(submittedDraftKey) > 0 ||
       attachmentUploading(submittedDraftKey) ||
@@ -766,10 +778,10 @@ export function TerminalComposer({
   useEffect(() => {
     if (busy || composing) cancelSubmitTouch();
   }, [busy, composing]);
-  const submitDisabled = !text || busy || composing;
-  const hasShortcuts = shortcutRows.some((row) =>
-    row.some((shortcut) => shortcut !== null),
-  );
+  const submitDisabled = !text || busy || composing || !!disabledReason;
+  const hasShortcuts =
+    surface !== "chat" &&
+    shortcutRows.some((row) => row.some((shortcut) => shortcut !== null));
   const shortcutColumns = Math.max(1, ...shortcutRows.map((row) => row.length));
   useEffect(() => {
     onShortcutsVisibleChange?.(shortcutsOpen && !pickerOpen);
@@ -784,6 +796,7 @@ export function TerminalComposer({
       <div
         ref={composerRef}
         className="terminal-composer"
+        data-surface={surface}
         data-expanded={
           (expanded &&
             (editorFocused || toolPointerPending) &&
@@ -796,7 +809,7 @@ export function TerminalComposer({
         data-open={open || undefined}
         data-reserved={reserved || undefined}
         role="group"
-        aria-label="Terminal input"
+        aria-label={surface === "chat" ? "Chat input" : "Terminal input"}
         tabIndex={-1}
         onFocus={(event) => {
           // Composer dock/background focus stays neutral. Only its native
@@ -837,7 +850,7 @@ export function TerminalComposer({
               input.click();
             }}
           >
-            <Paperclip size={15} />
+            {surface === "chat" ? <Plus size={15} /> : <Paperclip size={15} />}
           </button>
           {hasShortcuts ? (
             <button
@@ -906,24 +919,38 @@ export function TerminalComposer({
               focusPickerWithoutKeyboard();
             }}
           >
-            <SquareTerminal size={17} aria-hidden="true" />
+            {surface === "chat" ? (
+              <span aria-hidden="true">/</span>
+            ) : (
+              <SquareTerminal size={17} aria-hidden="true" />
+            )}
           </button>
           <div
             className="terminal-composer-submit-actions"
             hidden={mode !== "composer"}
           >
-            <span className="terminal-composer-hint" role="status">
-              {uploading
-                ? "Uploading file…"
-                : submissionPending
-                  ? "Sending…"
-                  : ""}
+            <span
+              className={
+                surface === "chat"
+                  ? "terminal-composer-hint agent-chat-notice"
+                  : "terminal-composer-hint"
+              }
+              role={notice ? "alert" : "status"}
+            >
+              {notice ||
+                disabledReason ||
+                (uploading
+                  ? "Uploading file…"
+                  : submissionPending
+                    ? "Sending…"
+                    : "")}
             </span>
             <button
               type="button"
               className="terminal-composer-submit"
               title="Insert into the terminal without executing"
               aria-label="Insert draft into the terminal"
+              hidden={surface === "chat"}
               disabled={submitDisabled}
               onMouseDown={keepTextareaFocus}
               onPointerDown={submitPointerDown}
@@ -940,11 +967,17 @@ export function TerminalComposer({
             <button
               type="button"
               className="terminal-composer-submit is-primary"
-              title={shortcutTitle(
-                "Insert into the terminal and send Enter",
-                "composer.send",
-              )}
-              aria-label="Send draft to the terminal"
+              title={
+                surface === "chat"
+                  ? "Send message (Enter)"
+                  : shortcutTitle(
+                      "Insert into the terminal and send Enter",
+                      "composer.send",
+                    )
+              }
+              aria-label={
+                surface === "chat" ? "Send" : "Send draft to the terminal"
+              }
               disabled={submitDisabled}
               onMouseDown={keepTextareaFocus}
               onPointerDown={submitPointerDown}
@@ -962,6 +995,7 @@ export function TerminalComposer({
           <button
             type="button"
             className="terminal-composer-close"
+            hidden={surface === "chat"}
             title="Close terminal input"
             aria-label="Close terminal input"
             onMouseDown={keepTextareaFocus}
@@ -1025,110 +1059,26 @@ export function TerminalComposer({
           </div>
         ) : null}
         {presentedPickerOpen ? (
-          <section
-            ref={commandPickerRef}
-            className="terminal-composer-commands"
-            role="group"
-            tabIndex={-1}
-            aria-label="Agent commands"
-            aria-activedescendant={
-              !replacement && selectedCommand
-                ? `${pickerId}-${activeCommand}`
-                : undefined
-            }
-            onKeyDown={commandKeyDown}
-          >
-            <div className="terminal-composer-command-heading">
-              <span>Commands</span>
-              <button
-                type="button"
-                aria-label="Dismiss commands"
-                onMouseDown={keepTextareaFocus}
-                onClick={closeCommandPicker}
-              >
-                <X size={14} />
-              </button>
-            </div>
-            {replacement ? (
-              <div
-                className="terminal-composer-command-confirm"
-                role="group"
-                aria-label="Confirm draft replacement"
-              >
-                <p role="status">
-                  Replace the entire draft with {replacement.command.name}?
-                  Nothing will be sent.
-                </p>
-                <button
-                  type="button"
-                  ref={replacementCancelRef}
-                  tabIndex={0}
-                  onMouseDown={keepTextareaFocus}
-                  onClick={() => {
-                    setReplacement(null);
-                    focusPickerWithoutKeyboard();
-                  }}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  className="is-primary"
-                  disabled={busy || composing}
-                  tabIndex={0}
-                  onMouseDown={keepTextareaFocus}
-                  onClick={() => selectCommand(replacement.command, true)}
-                >
-                  Replace draft
-                </button>
-              </div>
-            ) : (
-              <>
-                <div
-                  id={pickerId}
-                  ref={commandListRef}
-                  role="listbox"
-                  aria-label="Agent commands"
-                  className="terminal-composer-command-list"
-                >
-                  {matches.map((command, index) => (
-                    <button
-                      type="button"
-                      role="option"
-                      id={`${pickerId}-${index}`}
-                      key={command.name}
-                      tabIndex={-1}
-                      aria-selected={index === activeCommand}
-                      disabled={busy || composing}
-                      onMouseDown={keepTextareaFocus}
-                      onClick={() => selectCommand(command)}
-                    >
-                      <span className="terminal-composer-command-usage">
-                        <strong>{command.name}</strong>
-                        {command.arguments ? (
-                          <>
-                            {" "}
-                            <small>{command.arguments}</small>
-                          </>
-                        ) : null}
-                      </span>
-                      <span className="terminal-composer-command-description">
-                        {command.description}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-                {matches.length === 0 ? (
-                  <span
-                    className="terminal-composer-command-note"
-                    role="status"
-                  >
-                    No matching commands. You can still type and send your own.
-                  </span>
-                ) : null}
-              </>
-            )}
-          </section>
+          <TerminalComposerPalette
+            {...{
+              commandPickerRef,
+              selectedCommand,
+              pickerId,
+              activeCommand,
+              commandKeyDown,
+              keepTextareaFocus,
+              closeCommandPicker,
+              replacement,
+              replacementCancelRef,
+              setReplacement,
+              focusPickerWithoutKeyboard,
+              busy,
+              composing,
+              selectCommand,
+              commandListRef,
+              matches,
+            }}
+          />
         ) : null}
         <div className="terminal-mobile-input-bar">
           <textarea
@@ -1137,7 +1087,9 @@ export function TerminalComposer({
             value={text}
             rows={1}
             placeholder={
-              agent?.trim() ? `Message ${agent.trim()}…` : "Message…"
+              recipient || agent?.trim()
+                ? `Message ${recipient ?? agent?.trim()}…`
+                : "Message…"
             }
             onFocus={() => {
               setEditorFocused(true);
@@ -1151,7 +1103,7 @@ export function TerminalComposer({
             }}
             onClick={() => activateMessage(true)}
             autoComplete="off"
-            aria-label="Terminal input draft"
+            aria-label={surface === "chat" ? "Message" : "Terminal input draft"}
             role="combobox"
             aria-expanded={presentedPickerOpen && !replacement}
             aria-controls={
@@ -1253,12 +1205,23 @@ export function TerminalComposer({
                 void submit(true);
                 return;
               }
+              if (
+                surface === "chat" &&
+                e.key === "Enter" &&
+                !e.shiftKey &&
+                !e.altKey
+              ) {
+                e.preventDefault();
+                void submit(true);
+                return;
+              }
               commandKeyDown(e);
             }}
           />
           <button
             type="button"
             className="terminal-mobile-direct"
+            hidden={surface === "chat"}
             aria-label="Type directly into the terminal"
             title="Type directly into the terminal"
             aria-pressed={directInputActive ?? (open && mode === "direct")}

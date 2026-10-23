@@ -40,6 +40,12 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     **Ask the author to fix** sends `↳ #N` to the author in this conversation.
     Chat's Now status uses a small circle with a status tooltip and screen-reader
     text: blue working ring, yellow needs-you mark, green done tick, grey idle dot.
+  - Chat reuses Terminal's full **Compose** editor, attachments and harness
+    command palette, with a separate conversation draft. Enter sends;
+    Shift+Enter adds a line. Every slash command is allowed and stays **sent,
+    not checked** until transcript evidence. Native working-state admission
+    shows queued message bubbles with the recipient and time; blocked sends
+    preserve the draft and the refusal reason.
   - The top selector follows the window's own width, docked, floating or on a
     phone: labelled from 640px, icons (with their names as tooltips) below
     that, and below 360px only the active view, with the others under ⋯.

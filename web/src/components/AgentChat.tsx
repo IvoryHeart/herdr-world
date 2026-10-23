@@ -1,25 +1,14 @@
 import "./AgentChat.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  Copy,
-  ListTree,
-  Paperclip,
-  RefreshCw,
-  Send,
-  SquareTerminal,
-} from "lucide-react";
+import { Copy, ListTree, RefreshCw, SquareTerminal } from "lucide-react";
 import { watchConversation } from "../conversationWatch";
+import { attachmentUploading } from "../attachmentUploads";
 import {
-  startAttachmentUploads,
-  useAttachmentDelivery,
-  useAttachmentUploads,
-} from "../attachmentUploads";
-import { terminalUploadedPathsText } from "../terminalFileDrop";
-import { shortcutMatches, shortcutTitle } from "../shortcutPreferences";
-import {
-  uploadTerminalFile,
-  uploadTerminalImage,
-} from "../terminalImageUpload";
+  beginTerminalComposerSubmission,
+  finishTerminalComposerSubmission,
+  terminalComposerUploadCount,
+} from "../terminalComposer";
+import { ChatComposer, chatComposerDraftKey } from "./chat/ChatComposer";
 import { copyTextWithFeedback } from "../copyText";
 import type { Pane } from "../types";
 import { useConnectionClient } from "../useConnectionClient";
@@ -30,7 +19,6 @@ import type { HistoryEntry } from "./agentHistory";
 import { groupHistoryChatItems } from "./agentHistoryView";
 import { useAgentHistoryWindow } from "./useAgentHistoryWindow";
 import { matchedTurns, placedSends } from "./chat/pendingSends";
-import { AttachmentChips } from "./AttachmentChips";
 import { CodexSessionLink } from "./CodexSessionLink";
 import { QuestLog } from "./QuestLog";
 import { useStepEvidence } from "./chat/useStepEvidence";
@@ -75,6 +63,7 @@ export function AgentChat({
   onOpenTerminal,
   onClose,
   workSessionFingerprint,
+  recipientLabel,
 }: {
   pane: Pane;
   active: boolean;
@@ -82,43 +71,18 @@ export function AgentChat({
   onOpenTerminal?: () => void;
   onClose: () => void;
   workSessionFingerprint?: string;
+  recipientLabel?: string;
 }) {
   const connectionClient = useConnectionClient();
   const [conversation, setConversation] = useState<Conversation | null>(null);
   // Set when the newest read failed; the last good conversation stays shown.
   const [stale, setStale] = useState("");
   const [loading, setLoading] = useState(false);
-  const [draft, setDraft] = useState("");
-  const [sending, setSending] = useState(false);
   const [notice, setNotice] = useState("");
   const [details, setDetails] = useState(false);
   const seqRef = useRef(0);
   const listRef = useRef<HTMLDivElement>(null);
   const shownRef = useRef<Conversation | null>(null);
-  const filePicker = useRef<HTMLInputElement>(null);
-  const uploadScope = `agent-chat\u0000${connectionClient.connectionId}\u0000${connectionClient.serverRuntimeGeneration}\u0000${pane.pane_id}`;
-  const uploading = useAttachmentUploads(uploadScope).some(
-    (upload) => upload.status === "uploading",
-  );
-  // Files upload through the pane's connection, as the terminal composer's
-  // do. Each finished path joins the message of whichever Chat is open for
-  // this pane, even if the one that started the upload has closed since.
-  const attach = (files: File[]) => {
-    if (!files.length) return;
-    void startAttachmentUploads(uploadScope, files, async (file, onProgress) =>
-      terminalUploadedPathsText([
-        await (file.type.startsWith("image/")
-          ? uploadTerminalImage
-          : uploadTerminalFile)(connectionClient, file, onProgress),
-      ]),
-    );
-  };
-  useAttachmentDelivery(uploadScope, (text) =>
-    setDraft((current) =>
-      current && !/\s$/.test(current) ? `${current} ${text}` : current + text,
-    ),
-  );
-
   // Chat's status, session and receipts come from the conversation summary
   // (agent_conversation.latest, without messages); the messages themselves
   // are History's window below, so a long, busy transcript is never re-read
@@ -202,54 +166,44 @@ export function AgentChat({
   }, [active, connectionClient, details, load, pane.pane_id, refreshHistory]);
 
   const send = useCallback(
-    async (message?: string) => {
-      const text = (message ?? draft).trim();
+    async (value: string) => {
+      const text = value.trim();
+      if (!text) throw new Error("Write a message first.");
+      if (!connectionClient.isCurrent() || !conversation?.session_fingerprint)
+        throw new Error(
+          "The conversation changed. Nothing was sent; check it before sending again.",
+        );
       if (
-        !text ||
-        sending ||
-        uploading ||
-        !conversation?.session_fingerprint ||
         conversation.deliveries?.some(
           (delivery) => delivery.state === "misdelivered",
         )
       )
-        return;
-      setSending(true);
+        throw new Error(
+          "Read and dismiss the session-switch notice before sending.",
+        );
       setNotice("");
-      try {
-        const result = (await connectionClient.call("agent_conversation.send", {
-          pane_id: pane.pane_id,
-          text,
-          session_fingerprint: conversation.session_fingerprint,
-          // What Chat showed: a send checks for the message after these.
-          baseline: history.messages
-            .filter((message) => message.role === "user")
-            .map((message) => message.id),
-        })) as SendResult;
-        if (result.status === "sent") {
-          if (message === undefined) setDraft("");
-          load();
-          refreshHistory();
-        } else {
-          setNotice(result.message);
-          if (result.reason === "changed") load();
-        }
-      } catch (reason) {
-        setNotice(reason instanceof Error ? reason.message : String(reason));
-      } finally {
-        setSending(false);
+      const result = (await connectionClient.call("agent_conversation.send", {
+        pane_id: pane.pane_id,
+        text,
+        session_fingerprint: conversation.session_fingerprint,
+        baseline: history.messages
+          .filter((message) => message.role === "user")
+          .map((message) => message.id),
+      })) as SendResult;
+      if (result.status !== "sent") {
+        if (result.reason === "changed") load();
+        throw new Error(result.message);
       }
+      load();
+      refreshHistory();
     },
     [
       connectionClient,
       conversation,
-      draft,
       history.messages,
       load,
       pane.pane_id,
       refreshHistory,
-      sending,
-      uploading,
     ],
   );
 
@@ -265,12 +219,29 @@ export function AgentChat({
     [connectionClient, load, pane.pane_id],
   );
 
-  const sendRef = useRef(send);
-  sendRef.current = send;
+  const draftKey = chatComposerDraftKey(
+    connectionClient,
+    pane,
+    conversation?.session_fingerprint,
+  );
+  const sendRef = useRef({ send, draftKey });
+  sendRef.current = { send, draftKey };
   const askAuthor = useCallback((item: WorkItem) => {
-    void sendRef.current(
-      `↳ #${item.number} Please fix the findings on this pull request.`,
-    );
+    const current = sendRef.current;
+    if (
+      terminalComposerUploadCount(current.draftKey) ||
+      attachmentUploading(current.draftKey)
+    ) {
+      setNotice("Wait for the uploads before sending.");
+      return;
+    }
+    if (!beginTerminalComposerSubmission(current.draftKey)) return;
+    void current
+      .send(`↳ #${item.number} Please fix the findings on this pull request.`)
+      .catch((reason: unknown) =>
+        setNotice(reason instanceof Error ? reason.message : String(reason)),
+      )
+      .finally(() => finishTerminalComposerSubmission(current.draftKey));
   }, []);
   const decorationTokens = useChatBlocks({
     entries: history.messages,
@@ -452,22 +423,31 @@ export function AgentChat({
   const deliveries = conversation?.deliveries ?? [];
   const pending = deliveries.filter(
     (delivery) =>
-      delivery.state === "pending" &&
+      delivery.kind !== "command" &&
+      (delivery.state === "pending" || delivery.state === "unverified") &&
       delivery.fingerprint === conversation?.session_fingerprint,
+  );
+  const commands = deliveries.filter(
+    (delivery) => delivery.kind === "command" && delivery.state !== "matched",
   );
   const matched = matchedTurns(deliveries, conversation?.session_fingerprint);
   // Sent to a session the pane has since left: still checked there.
   const elsewhere = deliveries.filter(
     (delivery) =>
+      delivery.kind !== "command" &&
       delivery.state === "pending" &&
       delivery.fingerprint !== conversation?.session_fingerprint,
   );
   const misdelivered = deliveries.filter(
-    (delivery) => delivery.state === "misdelivered",
+    (delivery) =>
+      delivery.kind !== "command" && delivery.state === "misdelivered",
   );
   const unverified = deliveries.filter(
     (delivery) =>
-      delivery.state === "unverified" || delivery.state === "uncertain",
+      delivery.kind !== "command" &&
+      (delivery.state === "uncertain" ||
+        (delivery.state === "unverified" &&
+          delivery.fingerprint !== conversation?.session_fingerprint)),
   );
   const canSend =
     conversation?.status === "ok" && !!conversation.session_fingerprint;
@@ -674,8 +654,11 @@ export function AgentChat({
             toolLoading={history.toolEntryLoading}
             onLoadTool={history.loadToolEntry}
             placed={placedSends(
-              pending,
-              conversation?.agent ?? pane.agent ?? "the agent",
+              [...pending, ...commands],
+              recipientLabel ??
+                conversation?.agent ??
+                pane.agent ??
+                "the agent",
               dismiss,
             )}
             hasOlder={history.hasOlder}
@@ -721,84 +704,22 @@ export function AgentChat({
         </div>
       ) : null}
       {canSend ? (
-        <form
-          className="agent-chat-composer"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void send();
-          }}
-        >
-          {notice ? (
-            <p className="agent-chat-notice" role="alert">
-              {notice}
-            </p>
-          ) : null}
-          <AttachmentChips scope={uploadScope} />
-          <div className="agent-chat-composer-row">
-            <button
-              type="button"
-              className="agent-chat-attach"
-              aria-label="Attach files"
-              title="Attach files"
-              onClick={() => filePicker.current?.click()}
-            >
-              <Paperclip size={14} />
-            </button>
-            <input
-              ref={filePicker}
-              type="file"
-              multiple
-              hidden
-              onChange={(event) => {
-                const files = Array.from(event.target.files ?? []);
-                // Reset so picking the same file again still fires change.
-                event.target.value = "";
-                attach(files);
-              }}
-            />
-            <textarea
-              value={draft}
-              rows={2}
-              placeholder={`Message ${conversation?.agent ?? "agent"}`}
-              aria-label="Message"
-              onChange={(event) => setDraft(event.target.value)}
-              onPaste={(event) => {
-                const files = Array.from(event.clipboardData.files);
-                if (!files.length) return;
-                event.preventDefault();
-                attach(files);
-              }}
-              // As in World's terminal composer: Enter starts a new line, and
-              // the composer's send shortcut (Ctrl/Cmd+Enter) sends.
-              onKeyDown={(event) => {
-                if (
-                  event.nativeEvent.isComposing ||
-                  event.keyCode === 229 ||
-                  !shortcutMatches(event.nativeEvent, "composer.send")
-                )
-                  return;
-                event.preventDefault();
-                void send();
-              }}
-            />
-            <button
-              type="submit"
-              disabled={
-                sending || uploading || !draft.trim() || misdelivered.length > 0
-              }
-              aria-label="Send"
-              title={
-                misdelivered.length > 0
-                  ? "Dismiss the notice about the other session first"
-                  : uploading
-                    ? "Waiting for uploads"
-                    : shortcutTitle("Send", "composer.send")
-              }
-            >
-              <Send size={14} />
-            </button>
-          </div>
-        </form>
+        <ChatComposer
+          client={connectionClient}
+          pane={pane}
+          fingerprint={conversation?.session_fingerprint ?? ""}
+          recipient={
+            recipientLabel ?? conversation?.agent ?? pane.agent ?? "agent"
+          }
+          notice={notice}
+          disabledReason={
+            misdelivered.length
+              ? "Read and dismiss the session-switch notice before sending."
+              : undefined
+          }
+          onSubmit={send}
+          onError={setNotice}
+        />
       ) : null}
     </div>
   );

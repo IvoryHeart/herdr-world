@@ -17,11 +17,13 @@ view that you open on purpose.
   When there is evidence it went to another session, a red notice
   names both sessions and pauses Send until you dismiss it; when Chat can no
   longer check, it says so (see [Delivery](#delivery)).
-- Does not send commands: a slash command word such as `/compact` or
-  `/review:fast`, or for Claude Code text that starts with `!` or `#`, is
-  refused with a pointer to the Terminal, because a command can switch the
-  session and is not recorded as something you said. A message that starts
-  with a path, such as `/var/log/app.log fails`, is sent.
+- Sends all slash commands, including custom and plugin commands, through the
+  same session-qualified `agent prompt` as messages. A slim command row says
+  **sent, not checked** until the literal command appears in its own transcript;
+  this confirms text was seen, never that the command had its intended effect.
+  Commands may intentionally switch sessions. Claude Code's `!` and `#`
+  terminal input modes still require the Terminal. A message starting with a
+  path, such as `/var/log/app.log fails`, is ordinary message text.
 - Refreshes when the service says the conversation changed (see
   [Refresh](#refresh)). The browser has no timer. **Refresh** rereads on demand.
 - Adds the shared pull request card below an agent message that announces a
@@ -110,14 +112,22 @@ view that you open on purpose.
 - When the conversation is unavailable, Chat shows the reason and the action it
   names: the integration command to copy, the Codex session link, **Refresh**
   and **Open Terminal**. It offers no composer then.
-- In the composer, Enter starts a new line. **Send**, or the terminal
-  composer's send shortcut (`Ctrl+Enter`, `Cmd+Enter` on a Mac, as set in
-  shortcuts), sends.
-- The paperclip (or a paste) attaches files. Each uploads to the pane's host
-  with a progress chip, and its path joins the message; **Send** waits for
-  uploads. A path that finishes after Chat closed joins the message when Chat
-  opens again for that pane. Paths go after any text already typed; a message
-  that starts with an uploaded path is not a slash command.
+- Chat uses the same full **Compose** component as the Terminal: **+** attaches
+  files and **/ Commands** opens that harness's command palette. Its placeholder
+  names the same agent as the window bar. Enter sends, Shift+Enter starts a new
+  line; **Send** and the configured terminal send shortcut (`Ctrl+Enter`,
+  `Cmd+Enter` on a Mac) also send. Direct mode, Insert draft and the terminal
+  key bar stay out of Chat.
+- Each bound conversation has its own draft, separate from Terminal drafts.
+  **+ Add file** or paste uploads to that pane's host with progress chips;
+  completed paths enter at the saved caret, and **Send** waits for uploads.
+  A completion after Chat closes updates only that conversation's draft.
+  Failed sends restore the submitted text before any newer draft.
+- While Herdr reports the agent working, an accepted send shows
+  **Queued · sent to <agent>**, with its send time. Herdr owns admission and
+  scheduling; World keeps no second queue. Without a transcript receipt it
+  remains **Sent, not seen in the transcript** when checking ends. Blocked
+  sends remain refused with their reason and keep the draft.
 - **Details** opens the earlier History view: Timeline, tool output, transcript
   preview and export.
 
@@ -232,11 +242,16 @@ Each send leaves a receipt for the pane, bound to the session it was sent to:
 
 | State | Meaning | Shown |
 | --- | --- | --- |
-| `pending` | Herdr took it, but it is not yet in the session's transcript (a busy harness writes a queued message only when the agent takes it up) | In that session's conversation at its send time, never below replies written since, as "Delivered · waiting for <agent>" with grey ticks. After the pane moves on, as a line "Still checking <session>". Both have **Stop checking** |
+| `pending` | Herdr took it, but it is not yet in the session's transcript (a busy harness writes a queued message only when the agent takes it up) | In that session's conversation at its send time, never below replies written since, as "Queued · sent to <agent>" for working-state admission, otherwise "Sent, not seen in the transcript", with its send time. After the pane moves on, as a line "Still checking <session>". Both have **Stop checking** |
 | `matched` | The same words appeared in its own session clearly after the send; or, when none did, the first user turn written there after the send that its harness could have rewritten it into (a paste or image placeholder, or words around the typed ones) | That transcript message is marked with blue ticks, "Sent from Chat; matched by its words", or "Sent from Chat; matched by order". Both show order, not cause |
 | `misdelivered` | Evidence of a switch after the send | A red notice naming both sessions; Send is paused until it is dismissed |
 | `uncertain` | The same words appeared at about the time of the send, or both in its own session and first in the session the pane moved to | A notice saying Chat cannot tell, with **Dismiss** |
-| `unverified` | Chat can no longer check | A notice saying why, with **Dismiss** |
+| `unverified` | Chat can no longer check | Its own session keeps a "Sent, not seen in the transcript" bubble; another session shows the reason. Both have **Dismiss** |
+
+Command receipts carry `kind: "command"`; native working-state admission adds
+`queued: true`. Commands use only literal own-transcript matching, never the
+rewritten-message fallback or another session as misdelivery evidence. Without
+that receipt they remain **sent, not checked**, even after a session switch.
 
 Each receipt carries `sent_at` (this service's clock, for display) and
 `transcript_at` (the same moment on the transcript host's clock, using the
