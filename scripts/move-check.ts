@@ -27,13 +27,41 @@ export function normalize(line: string): string | undefined {
   return text.replace(/^export (default )?/, "");
 }
 
+/**
+ * 1-based line numbers of a file's import and export-list statements,
+ * including every member line of a multi-line `import { … } from`. A -U0 diff
+ * can change one member without showing the statement around it, so plumbing
+ * is decided from the file itself.
+ */
+export function statementLines(text: string): Set<number> {
+  const lines = text.split("\n");
+  const found = new Set<number>();
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]!.trim();
+    if (!/^(import\b|export (type )?\{|export \* from)/.test(line)) continue;
+    found.add(i + 1);
+    // A list left open on this line runs to its closing brace.
+    if (line.includes("{") && !line.includes("}"))
+      while (++i < lines.length) {
+        found.add(i + 1);
+        if (lines[i]!.includes("}")) break;
+      }
+  }
+  return found;
+}
+
+/** Whether a removed or added line of `file` is import/export plumbing. */
+export type Plumbing = (file: string, sign: "-" | "+", line: number) => boolean;
+
 export type Line = { text: string; at: number };
 export type Hunk = { file: string; sign: "-" | "+"; lines: Line[] };
 
 /** Removed and added hunks of a unified diff, plumbing skipped, with line numbers. */
-export function diffHunks(diff: string): Hunk[] {
+export function diffHunks(diff: string, plumbing?: Plumbing): Hunk[] {
   const hunks: Hunk[] = [];
   let file = "";
+  let oldFile = "";
+  let newFile = "";
   let current: Hunk | undefined;
   let inBlock = false;
   let oldLine = 0;
@@ -51,17 +79,20 @@ export function diffHunks(diff: string): Hunk[] {
       continue;
     }
     if (raw.startsWith("+++ ")) {
-      file = raw.slice(4).replace(/^b\//, "");
+      newFile = raw.slice(4).replace(/^b\//, "");
+      file = newFile === "/dev/null" ? oldFile : newFile;
       continue;
     }
     if (raw.startsWith("--- ")) {
-      if (raw !== "--- /dev/null") file = raw.slice(4).replace(/^a\//, "");
+      oldFile = raw.slice(4).replace(/^a\//, "");
+      if (raw !== "--- /dev/null") file = oldFile;
       continue;
     }
     const sign = raw[0];
     if (sign !== "-" && sign !== "+") continue;
     const at = sign === "-" ? oldLine++ : newLine++;
     if (current && current.sign !== sign) close();
+    if (plumbing?.(sign === "-" ? oldFile : newFile, sign, at)) continue;
     const text = raw.slice(1).trim();
     // Members of a multi-line import/export list, within this hunk only.
     if (inBlock) {
@@ -209,7 +240,28 @@ if (import.meta.main) {
       ":(exclude)*.md",
       ":(exclude)scripts/file-size-exceptions.json",
     ]);
-    const { lost, extra, runs } = matchMoves(diffHunks(diff));
+    // Import/export statements per file version, read from the files; the
+    // diff's removed side is the merge base of base and HEAD.
+    const from = git(["merge-base", base, "HEAD"]).trim();
+    const ranges = new Map<string, Set<number>>();
+    const plumbing: Plumbing = (file, sign, line) => {
+      if (file === "/dev/null") return false;
+      const key = `${sign}${file}`;
+      if (!ranges.has(key)) {
+        const result = Bun.spawnSync(
+          ["git", "show", `${sign === "-" ? from : "HEAD"}:${file}`],
+          { stdout: "pipe", stderr: "pipe" },
+        );
+        ranges.set(
+          key,
+          result.exitCode === 0
+            ? statementLines(result.stdout.toString())
+            : new Set(),
+        );
+      }
+      return ranges.get(key)!.has(line);
+    };
+    const { lost, extra, runs } = matchMoves(diffHunks(diff, plumbing));
     const show = (
       title: string,
       list: Array<{ file: string; line: string }>,

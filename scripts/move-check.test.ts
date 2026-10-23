@@ -1,5 +1,11 @@
 import { expect, test } from "bun:test";
-import { diffHunks, matchMoves, normalize } from "./move-check";
+import {
+  diffHunks,
+  matchMoves,
+  normalize,
+  type Plumbing,
+  statementLines,
+} from "./move-check";
 
 const diff = (...lines: string[]) => lines.join("\n");
 const file = (from: string, to: string, ...body: string[]) => [
@@ -223,4 +229,65 @@ test("blocks moved to another file out of their order are reported", () => {
   expect(report.runs).toHaveLength(1);
   expect(report.lost).toHaveLength(3);
   expect(report.extra).toHaveLength(3);
+});
+
+test("import statements and every member of a multi-line list are found in a file", () => {
+  const source = [
+    'import { a } from "./a";',
+    "import {",
+    "  type NotificationTarget,",
+    "  helper,",
+    '} from "./store";',
+    'export { b } from "./b";',
+    'export * from "./c";',
+    "const value = 1;",
+    "export function keep() {}",
+  ].join("\n");
+  expect([...statementLines(source)]).toEqual([1, 2, 3, 4, 5, 6, 7]);
+});
+
+test("a changed member of an unchanged multi-line import is plumbing, from the files", () => {
+  // -U0 shows only the member lines; the "import {" stays as unseen context.
+  const before = [
+    "import {",
+    "  type NotificationTarget,",
+    '} from "./store";',
+    "run();",
+  ].join("\n");
+  const after = [
+    "import {",
+    "  emptyServerSessionState,",
+    '} from "./store";',
+    "run();",
+  ].join("\n");
+  const versions = { "-": statementLines(before), "+": statementLines(after) };
+  const plumbing: Plumbing = (_file, sign, line) => versions[sign].has(line);
+  const hunks = diffHunks(
+    diff(
+      ...file(
+        "web/src/store.ts",
+        "web/src/store.ts",
+        "@@ -2,1 +2,1 @@",
+        "-  type NotificationTarget,",
+        "+  emptyServerSessionState,",
+      ),
+    ),
+    plumbing,
+  );
+  expect(matchMoves(hunks)).toEqual({ lost: [], extra: [], runs: [] });
+  // Without the files, the same hunk is reported.
+  const blind = matchMoves(
+    diffHunks(
+      diff(
+        ...file(
+          "web/src/store.ts",
+          "web/src/store.ts",
+          "@@ -2,1 +2,1 @@",
+          "-  type NotificationTarget,",
+          "+  emptyServerSessionState,",
+        ),
+      ),
+    ),
+  );
+  expect(blind.lost).toHaveLength(1);
 });
