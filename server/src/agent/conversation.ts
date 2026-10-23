@@ -99,12 +99,14 @@ export type ConversationTarget = { pane_id: string };
 
 /**
  * What kept an answer from being acknowledged: Herdr no longer reports the
- * agent, the pane has another session, the screen could not be read, or the
- * same question still shows.
+ * agent, the pane has another session, Herdr's status is not one that shows
+ * progress (such as "unknown"), the screen could not be read, or the same
+ * question still shows.
  */
 export type AnswerUnconfirmedReason =
   | "agent_missing"
   | "session_changed"
+  | "unknown_status"
   | "unreadable"
   | "still_showing";
 

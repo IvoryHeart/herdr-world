@@ -48,10 +48,11 @@ view that you open on purpose.
   unchanged.
 - Chat replaces the card with what it sent. "You answered 2 · …" needs
   evidence that this agent left this prompt: the same session, and either a
-  status other than blocked, or a new state with a different question on a
+  status that shows progress (`working`, `idle` or `done`), or a new state with a different question on a
   readable screen. Otherwise the receipt reads "Sent 2 · …" with the reason
   (`unconfirmed_reason`): the question still shows (`still_showing`), the pane
   has another session (`session_changed`, and the key may have reached it),
+  Herdr reports a status such as `unknown` (`unknown_status`),
   Herdr no longer reports the agent (`agent_missing`), or the screen could not
   be read (`unreadable`). Chat answers only when you pick an option.
 - Keeps the last good conversation when a read fails, for example while the

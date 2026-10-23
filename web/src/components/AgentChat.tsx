@@ -97,6 +97,7 @@ type AnswerResult =
 type UnconfirmedReason =
   | "agent_missing"
   | "session_changed"
+  | "unknown_status"
   | "unreadable"
   | "still_showing";
 
@@ -105,6 +106,8 @@ const UNCONFIRMED: Record<UnconfirmedReason, string> = {
     "the question is still showing; check the Terminal if it does not move on.",
   session_changed:
     "the pane has another session now, so the key may have reached it. Check the Terminal.",
+  unknown_status:
+    "Herdr does not say what the agent is doing now, so Chat cannot confirm the answer. Check the Terminal.",
   agent_missing:
     "Herdr no longer reports the agent, so Chat cannot confirm the answer. Check the Terminal.",
   unreadable:

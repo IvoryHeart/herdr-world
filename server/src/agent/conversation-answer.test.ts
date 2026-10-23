@@ -172,6 +172,14 @@ describe("answering a blocked agent's prompt", () => {
       },
     ],
     [
+      "Herdr's status is not one that shows progress",
+      "unknown_status",
+      (state: ReturnType<typeof fakeHerdr>["state"]) => {
+        state.status = "unknown";
+        state.seq += 1;
+      },
+    ],
+    [
       "the screen cannot be read",
       "unreadable",
       (state: ReturnType<typeof fakeHerdr>["state"]) => {

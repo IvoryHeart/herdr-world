@@ -91,6 +91,9 @@ export function paneBinding(
   };
 }
 
+/** Herdr statuses that show an agent moved on from a prompt. */
+const MOVED_ON = new Set(["working", "idle", "done"]);
+
 /** A plain name for the session a pane's `agent.get` reply describes. */
 export function sessionLabel(
   agent: string,
@@ -550,10 +553,11 @@ export function createHerdrConversationSource(args: {
           : { pane_id, text: option.key, keys: [] },
       );
       // An answer is acknowledged only on evidence that this agent moved on
-      // from this prompt: the same session, then a status other than blocked,
-      // or a new state and a different question on a readable screen. No
-      // agent, another session, an unreadable screen or the same question
-      // leaves it unconfirmed, with the reason.
+      // from this prompt: the same session, then a status that shows progress
+      // (working, idle or done), or a new state and a different question on
+      // a readable screen. No agent, another session, an unrecognised status,
+      // an unreadable screen or the same question leaves it unconfirmed, with
+      // the reason.
       const unconfirmed = await agentInfo(pane_id)
         .then(async (info): Promise<AnswerUnconfirmedReason | null> => {
           const status = stringValue(info?.agent_status);
@@ -563,7 +567,8 @@ export function createHerdrConversationSource(args: {
             JSON.stringify(before?.agent_session ?? null)
           )
             return "session_changed";
-          if (status !== "blocked") return null;
+          if (MOVED_ON.has(status)) return null;
+          if (status !== "blocked") return "unknown_status";
           // Read under the checked state, so only what the screen shows
           // counts as a different question.
           const shown = await readPrompt(pane_id, before);
