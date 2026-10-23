@@ -1005,6 +1005,38 @@ async function run() {
       historyAnswer = null;
     }
 
+    // History's read fails while the summary reads: Chat says so instead of
+    // loading forever, and Refresh retries History as well.
+    {
+      reply = conversation([message("r1", "assistant", "Recovered answer")]);
+      historyAnswer = () => {
+        throw new Error("History read failed.");
+      };
+      root.render(<div />);
+      await settle();
+      render("idle", true, 99);
+      await settle();
+      await settle();
+      const text = () =>
+        container.querySelector(".agent-chat")?.textContent ?? "";
+      check(
+        text().includes("History read failed.") &&
+          !text().includes("Loading conversation"),
+        `A failed History read was not shown: ${text().slice(0, 200)}`,
+      );
+      historyAnswer = null;
+      container
+        .querySelector<HTMLButtonElement>('[aria-label="Refresh conversation"]')
+        ?.click();
+      await settle();
+      await settle();
+      check(
+        text().includes("Recovered answer") &&
+          !text().includes("History read failed."),
+        "Refresh did not retry History's read",
+      );
+    }
+
     const unwatched = count("agent_conversation.unwatch");
     render("done", false);
     await settle();

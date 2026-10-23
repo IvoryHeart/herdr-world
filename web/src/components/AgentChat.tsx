@@ -342,7 +342,10 @@ export function AgentChat({
         <span className="agent-chat-toolbar-spacer" />
         <button
           type="button"
-          onClick={load}
+          onClick={() => {
+            load();
+            refreshHistory();
+          }}
           disabled={loading}
           aria-label="Refresh conversation"
           title="Refresh"
@@ -433,6 +436,15 @@ export function AgentChat({
           Could not refresh, so this is the last conversation read. {stale}
         </p>
       ) : null}
+      {/* History's read failed: keep its last good window, if any, and say
+          so; Refresh retries it. */}
+      {!stale && !unavailable && history.error ? (
+        <p className="agent-chat-stale" role="status">
+          {history.history
+            ? `Could not refresh the messages, so these are the last read. ${history.error}`
+            : `Could not read the messages. ${history.error}`}
+        </p>
+      ) : null}
       {unavailable ? (
         <div className="agent-chat-unavailable" role="status">
           <strong>Conversation unavailable</strong>
@@ -477,9 +489,11 @@ export function AgentChat({
         <div className="agent-chat-list">
           {history.messages.length === 0 ? (
             <p className="agent-chat-empty">
-              {history.loading || !history.history
-                ? "Loading conversation…"
-                : "No messages yet."}
+              {history.history
+                ? "No messages yet."
+                : history.error
+                  ? "Messages could not be read. Use Refresh to try again."
+                  : "Loading conversation…"}
             </p>
           ) : null}
           <AgentHistoryChat

@@ -162,23 +162,32 @@ export function AgentHistoryDrawer({
     [toolEntryTexts],
   );
   const error = [historyError, sessionError].filter(Boolean).join("\n");
-  // The session summary refreshes with the history.
+  // The session summary refreshes with the history. Only the newest read
+  // for the current pane and connection publishes: a late answer from an
+  // earlier poll, pane or connection is dropped, success or failure.
+  const sessionSeqRef = useRef(0);
   const loadSession = useCallback(() => {
     if (!pane.agent || !connectionClient.isCurrent()) return;
-    const paneId = pane.pane_id;
+    const seq = ++sessionSeqRef.current;
+    const current = () =>
+      connectionClient.isCurrent() && sessionSeqRef.current === seq;
     connectionClient
       .call("agent_session.get", { pane_id: pane.pane_id, agent: pane.agent })
       .then((value) => {
-        if (!connectionClient.isCurrent() || paneId !== pane.pane_id) return;
+        if (!current()) return;
         setSession(value as AgentSessionSummary);
         setSessionError("");
       })
       .catch((reason: unknown) => {
-        if (!connectionClient.isCurrent()) return;
+        if (!current()) return;
         setSessionError(
           reason instanceof Error ? reason.message : String(reason),
         );
       });
+  }, [connectionClient, pane.agent, pane.pane_id]);
+  // A new pane, agent or connection drops reads still in flight.
+  useEffect(() => {
+    sessionSeqRef.current += 1;
   }, [connectionClient, pane.agent, pane.pane_id]);
   const refreshAll = useCallback(() => {
     loadHistory();
