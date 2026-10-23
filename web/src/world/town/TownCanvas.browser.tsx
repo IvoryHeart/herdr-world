@@ -382,7 +382,25 @@ const worldBridge = bridge as unknown as {
   onControl(listener: (control: { type: string }) => void): () => void;
 };
 const bridgeCall = worldBridge.call.bind(bridge);
+/** One open question from an agent (`herdr-world ask`), as the service keeps it. */
+const ledger = {
+  version: 1,
+  revision: 1,
+  changes: [],
+  results: [],
+  asks: [
+    {
+      id: "q-synthetic-1",
+      at: Date.now() - 90_000,
+      actor: { label: "claude in w1:p2", verified: true },
+      question: "Ship the reception fix now, or wait for review?",
+      options: ["Ship", "Wait"],
+      owner_only: true,
+    },
+  ],
+};
 worldBridge.call = async (method, params) => {
+  if (method === "world.ledger.get") return structuredClone(ledger);
   if (method === "world.board.get") return structuredClone(boardDocument);
   if (method === "world.board.patch") {
     for (const op of (params?.ops ?? []) as {
@@ -616,6 +634,41 @@ async function run() {
   );
 
   if (mode === "preview") {
+    // `&zoom=room`: into the first room, where an agent spawned another.
+    if (params.get("zoom") === "room") {
+      const label = base.connections[0]?.snapshot?.workspaces[0]?.label;
+      const card = [
+        ...host.querySelectorAll<HTMLElement>(".town-room-card"),
+      ].find((entry) =>
+        entry.getAttribute("aria-label")?.startsWith(`${String(label)}:`),
+      );
+      const canvas = host.querySelector<HTMLElement>(".town-canvas-host");
+      // Double-tap the room's floor twice: each one zooms in 2x there.
+      for (let zoom = 0; card && canvas && zoom < 2; zoom += 1) {
+        const box = card.getBoundingClientRect();
+        const point = {
+          clientX: box.left + box.width / 2,
+          clientY: box.bottom + 30,
+        };
+        for (const type of [
+          "pointerdown",
+          "pointerup",
+          "pointerdown",
+          "pointerup",
+        ])
+          canvas.dispatchEvent(
+            new PointerEvent(type, {
+              bubbles: true,
+              pointerId: 41,
+              pointerType: "mouse",
+              button: 0,
+              buttons: type === "pointerdown" ? 1 : 0,
+              ...point,
+            }),
+          );
+        await new Promise((resolve) => setTimeout(resolve, 900));
+      }
+    }
     // Keep the town alive: flip a few statuses every couple of seconds.
     const r = random(99);
     window.setInterval(() => {
@@ -644,6 +697,18 @@ async function run() {
     }, 2500);
     return;
   }
+
+  // An agent's question leads the Needs you list, with its options.
+  await waitFor(
+    () => host.querySelector(".town-ask") !== null,
+    "an agent's question is missing from the Needs you list",
+  );
+  check(
+    [...host.querySelectorAll(".town-ask-options button")].some(
+      (button) => button.textContent === "Ship",
+    ),
+    "the question's options are not offered",
+  );
 
   const diagnostics = window.__HERDR_TOWN_RENDERER__!;
   check(

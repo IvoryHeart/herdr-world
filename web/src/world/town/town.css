@@ -65,6 +65,11 @@
   overflow: visible;
   pointer-events: none;
 }
+/* Zoomed out, room cards cover the desks the walls would surround. */
+.town-world[data-level="town"] .town-teams,
+.town-world[data-level="overview"] .town-teams {
+  display: none;
+}
 .town-team-wall {
   fill: none;
   stroke-width: calc(2px * max(1, var(--iz)));
@@ -1126,15 +1131,20 @@
 
 /* Questions agents asked (`herdr-world ask`), above the waiting agents. */
 .town-asks {
+  /* Never squeezed by the agent list below it; scrolls past its cap. */
+  flex: 0 0 auto;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 6px;
-  padding: 4px 6px 8px;
+  padding: 2px 0 6px;
   max-height: 45vh;
   overflow-y: auto;
 }
 
 .town-ask {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
   gap: 4px;
   padding: 6px 8px;
   border-left: 3px solid var(--town-wait);
@@ -1204,7 +1214,15 @@
     width: auto;
     max-height: none;
     flex-direction: row;
+    flex-wrap: wrap;
     align-items: center;
+  }
+
+  /* Questions take a full row above the head and the strip. */
+  .town-asks {
+    order: -1;
+    flex: 1 0 100%;
+    max-height: 40vh;
   }
 
   .town-rail-head {
