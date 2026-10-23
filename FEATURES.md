@@ -73,7 +73,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     phone, the pin in the window header). A
     pinned table wears a pin and keeps its place: tab reorders, a room growing
     or Town's own placement leave it, and it cannot be dragged until you unpin
-    it (other tables fill the free places in tab order). Its agents stay at it:
+    it (other tables fill the free places in tab order). In a room with more
+    tabs than Town shows, pinned tables are always among those shown. Its agents stay at it:
     they never go to the lounge, leave only to wait at reception (blocked, or
     finished and not yet seen) and walk straight back once you have seen them.
     The pin is a World view setting, saved on the World service beside
@@ -106,7 +107,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   carries strung notes along. Zoomed out, workspaces show a square per pane.
   - **Pin** in a selected card's bar keeps the card where it is: it shows a
     pin, and placement, Tidy and settling leave it until **Unpin** (a drag
-    still moves it). Pins are saved with the board on the World service.
+    still moves it). On a phone, where the card's terminal covers Board, the
+    pin in the terminal's header pins its card. Pins are saved with the board
+    on the World service.
   - Tabs list each pane as a row; plain-shell tabs look like terminals; only a
     working agent's tab (or the selected one) pulses (a ⋯ setting).
   - **+** on a workspace opens New tab (Terminal, Claude or Codex, an optional

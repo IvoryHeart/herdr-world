@@ -99,6 +99,7 @@ import type { WorldCanvasAnchor } from "./worldConnectorGeometry";
 import { WorldSearchResults } from "./WorldSearchResults";
 import { WorldViewToolbar } from "./WorldViewToolbar";
 import { defaultTerminalColor, TERMINAL_COLOR_HEX } from "./terminalColor";
+import { publishBoardCardPins } from "./board/boardCardPins";
 import "./board/board.css";
 
 /**
@@ -496,6 +497,15 @@ export default function BoardView({
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
   /** Cards pinned in place (layout.pinned), for their badge and the bar. */
   const [pinnedKeys, setPinnedKeys] = useState<ReadonlySet<string>>(new Set());
+  const togglePinRef = useRef<(key: string) => void>(() => {});
+  // A phone's full-screen terminal pins its card from its header.
+  useEffect(() => {
+    publishBoardCardPins({
+      pinned: pinnedKeys,
+      toggle: (key) => togglePinRef.current(key),
+    });
+  }, [pinnedKeys]);
+  useEffect(() => () => publishBoardCardPins(null), []);
   const [query, setQuery] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
   /** The pane chooser: to pick a pane, or to finish a string to one. */
@@ -2868,6 +2878,7 @@ export default function BoardView({
     }
     setPinnedKeys(new Set(layout.current.pinned.keys()));
   };
+  togglePinRef.current = togglePin;
 
   const toolbar = (
     <WorldViewToolbar

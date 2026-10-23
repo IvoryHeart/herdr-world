@@ -1,4 +1,6 @@
-import { useEffect, useRef, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useRef, useSyncExternalStore } from "react";
+import type { TabPinControl } from "../components/MobileControls";
+import { useBoardCardPins, type BoardCardPins } from "./board/boardCardPins";
 import {
   sharedBoardStore,
   type BoardDocumentStore,
@@ -60,6 +62,53 @@ export function setDeskPinned(
   return store.patch([
     pinned ? { op: "desk.pin", key, cell: null } : { op: "desk.unpin", key },
   ]);
+}
+
+/**
+ * The phone terminal's pin (MobileControls.tsx): the tab's card while Board
+ * shows, whose card bar the terminal covers there; otherwise its Town desk.
+ */
+export function useWorldTabPin(): TabPinControl {
+  const deskPins = useDeskPins();
+  const board = useBoardCardPins();
+  return useMemo(() => worldTabPin(deskPins, board), [deskPins, board]);
+}
+
+export function worldTabPin(
+  deskPins: DeskPins,
+  board: BoardCardPins,
+  pinDesk: typeof setDeskPinned = setDeskPinned,
+): TabPinControl {
+  const targetOf = (
+    ...[owner, tab]: Parameters<TabPinControl["pinnedOf"]>
+  ): TerminalColorTarget => ({
+    connectionId: owner.connectionId,
+    workspaceId: tab.workspace_id,
+    tabId: tab.tab_id,
+    workspaceIds: new Set(owner.workspaceIds),
+  });
+  const keyOf = (...args: Parameters<TabPinControl["pinnedOf"]>) =>
+    terminalColorKey(targetOf(...args));
+  const toggleCard = board.toggle;
+  if (toggleCard)
+    return {
+      label: {
+        pin: "Pin card on Board",
+        unpin: "Unpin card on Board",
+        title: "A pinned card keeps its place on Board until you drag it",
+      },
+      pinnedOf: (owner, tab) => board.pinned.has(keyOf(owner, tab)),
+      onPin: (owner, tab) => toggleCard(keyOf(owner, tab)),
+    };
+  return {
+    label: {
+      pin: "Pin desk in Town",
+      unpin: "Unpin desk in Town",
+      title: "A pinned desk keeps its place in Town, and its agents stay at it",
+    },
+    pinnedOf: (owner, tab) => Boolean(deskPins[keyOf(owner, tab)]),
+    onPin: (owner, tab, pinned) => void pinDesk(targetOf(owner, tab), pinned),
+  };
 }
 
 /** Record the cell Town gave a pinned desk that had none yet. */

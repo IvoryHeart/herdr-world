@@ -9,6 +9,7 @@ import {
 import type { WorldRuntimeConnection } from "./runtimeStore";
 import { buildWorldObject } from "./worldObject";
 import { officePresentationKey } from "./officeSelection";
+import { tabCardKey } from "../../../shared/terminalColor";
 
 describe("Pixel Office projection", () => {
   test("prepared presentation lookup matches complete roster resolution and canonical-key priority", async () => {
@@ -124,6 +125,57 @@ describe("Pixel Office projection", () => {
         projectWorldOffice(world, 3, null),
       );
     }
+  });
+  test("a pinned desk past the room's bound is admitted with its agents", async () => {
+    const tabs = Array.from(
+      { length: OFFICE_PRESENTATION_BOUNDS.desksPerRoom + 3 },
+      (_, index) => tab(`tab-${index}`, index + 1),
+    );
+    const world = buildWorldObject([
+      connection(
+        "alpha",
+        tabs,
+        tabs.flatMap((entry, index) => [
+          pane(entry.tab_id, "working", `Synthetic ${index}`, 0),
+          pane(entry.tab_id, "working", `Synthetic ${index}b`, 1),
+        ]),
+      ),
+    ]);
+    await prepareWorldOffice(world);
+    const last = tabs[tabs.length - 1]!.tab_id;
+    const tabsOf = (room: { desks: { tabRef: { nativeId: string } }[] }) =>
+      room.desks.map((desk) => desk.tabRef.nativeId);
+    expect(tabsOf(projectWorldOffice(world, 1).rooms[0]!)).not.toContain(last);
+    const pinned = new Set([tabCardKey("alpha", last, new Set(["workspace"]))]);
+    const room = projectWorldOffice(
+      world,
+      1,
+      null,
+      OFFICE_PRESENTATION_BOUNDS,
+      pinned,
+    ).rooms[0]!;
+    expect(tabsOf(room)).toHaveLength(OFFICE_PRESENTATION_BOUNDS.desksPerRoom);
+    expect(tabsOf(room)[room.desks.length - 1]).toBe(last);
+    const desk = room.desks[room.desks.length - 1]!;
+    expect(
+      room.roomAgents.filter((agent) => agent.deskKey === desk.key),
+    ).toHaveLength(2);
+    // The cached projector admits it again when the pins change.
+    const project = createOfficeProjector();
+    project(world, 1, null);
+    expect(project(world, 2, null, pinned)).toEqual(
+      projectWorldOffice(world, 2, null, OFFICE_PRESENTATION_BOUNDS, pinned),
+    );
+    const selected = world.leaves[0]!.id;
+    expect(project(world, 3, selected, pinned)).toEqual(
+      projectWorldOffice(
+        world,
+        3,
+        selected,
+        OFFICE_PRESENTATION_BOUNDS,
+        pinned,
+      ),
+    );
   });
   test("selecting an admitted terminal preserves desk, device and standing-agent positions", () => {
     const tabs = Array.from({ length: 3 }, (_, index) =>

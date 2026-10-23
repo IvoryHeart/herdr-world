@@ -238,7 +238,7 @@ on your phone and desktop.
    and notes left on a card move to free space. Select a card and press
    **Pin** in its bar to keep it where it is: a pinned card shows a pin, and
    placement, tidying and settling leave it until you **Unpin** it (you can
-   still drag it).
+   still drag it). On a phone, tap the pin in the card's terminal header.
 4. Tap a workspace, tab or pane row to open its Inspector with Terminal, Files,
    Changes and Chat; a line joins each Inspector window to its card. Double-click a tab to open its terminal.
 5. Double-click (or double-tap) empty board to pin a note and type; double-click

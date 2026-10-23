@@ -6,6 +6,7 @@ import type {
   WorldSpaceObject,
 } from "./worldObject";
 import { boundedOptionalText, yieldWorldTask } from "./worldObject";
+import { tabCardKey } from "../../../shared/terminalColor";
 
 export const OFFICE_PRESENTATION_BOUNDS = Object.freeze({
   rooms: 128,
@@ -258,6 +259,7 @@ export function createOfficeProjector(
   let previousWorld: WorldObject | null = null;
   let previous: HerdrOfficeProjection | null = null;
   let previousSelected: string | null = null;
+  let previousPinned: ReadonlySet<string> = NO_PINNED_TABS;
   const intern = <T extends { key: string }>(next: T[], prior: T[]) => {
     const byKey = new Map(prior.map((item) => [item.key, item]));
     const result = next.map((item) => {
@@ -273,16 +275,25 @@ export function createOfficeProjector(
     world: WorldObject,
     generatedAt: number,
     selectedId: string | null,
+    pinnedTabs: ReadonlySet<string> = NO_PINNED_TABS,
   ): HerdrOfficeProjection => {
     let next: HerdrOfficeProjection | null = null;
     const inputs = previous && projectionInputs.get(previous);
+    // Pinned desks are admitted first, so a pin change admits desks again.
+    const samePins = pinnedTabs === previousPinned;
     if (
       previous &&
       previousWorld === world &&
-      selectedId === previousSelected
+      selectedId === previousSelected &&
+      samePins
     ) {
       next = { ...previous, generatedAt };
-    } else if (previous && previousWorld === world && inputs?.prepared) {
+    } else if (
+      previous &&
+      previousWorld === world &&
+      samePins &&
+      inputs?.prepared
+    ) {
       const selection = selectedId ? world.nodeById.get(selectedId) : undefined;
       const selectedSpaceId =
         selection?.kind === "space" ? selection.id : selection?.parentId;
@@ -383,7 +394,14 @@ export function createOfficeProjector(
       }
     }
     if (next && inputs) projectionInputs.set(next, inputs);
-    else next = projectWorldOffice(world, generatedAt, selectedId, bounds);
+    else
+      next = projectWorldOffice(
+        world,
+        generatedAt,
+        selectedId,
+        bounds,
+        pinnedTabs,
+      );
     if (previous && next.rooms !== previous.rooms) {
       // Compare content once at projection admission, never once per canvas frame.
       next.rooms = intern(next.rooms, previous.rooms);
@@ -393,16 +411,25 @@ export function createOfficeProjector(
     }
     previousWorld = world;
     previousSelected = selectedId;
+    previousPinned = pinnedTabs;
     previous = next;
     return next;
   };
 }
 
+const NO_PINNED_TABS: ReadonlySet<string> = new Set();
+
+/**
+ * `pinnedTabs` holds the tab card keys of Town's pinned desks (useDeskPins.ts):
+ * past a room's desk bound they are admitted right after the selected desk,
+ * so a pinned desk never drops out of its room.
+ */
 export function projectWorldOffice(
   world: WorldObject,
   generatedAt: number,
   selectedId: string | null = null,
   bounds: OfficePresentationBounds = OFFICE_PRESENTATION_BOUNDS,
+  pinnedTabs: ReadonlySet<string> = NO_PINNED_TABS,
 ): HerdrOfficeProjection {
   const selection = selectedId ? world.nodeById.get(selectedId) : undefined;
   const selectedSpaceId =
@@ -457,13 +484,32 @@ export function projectWorldOffice(
     selectedId && prepared
       ? prepared.roster[prepared.agentIndex.get(selectedId) ?? -1]?.agent
       : undefined;
+  const workspaceIds = new Map<string, Set<string>>();
+  if (pinnedTabs.size)
+    for (const { room } of presentedRooms) {
+      const { connectionId, nativeId } = room.workspaceRef;
+      if (!workspaceIds.has(connectionId))
+        workspaceIds.set(connectionId, new Set());
+      workspaceIds.get(connectionId)!.add(nativeId);
+    }
+  const pinned = (desk: OfficeDesk) =>
+    pinnedTabs.size > 0 &&
+    pinnedTabs.has(
+      tabCardKey(
+        desk.tabRef.connectionId,
+        desk.tabRef.nativeId,
+        workspaceIds.get(desk.tabRef.connectionId) ?? NO_PINNED_TABS,
+      ),
+    );
   const rooms = presentedRooms.map((entry) => {
+    const selectedDesk = (desk: OfficeDesk) =>
+      entry.source.id === selectedSpaceId &&
+      desk.tabRef.nativeId === selectedLeaf?.tabId;
     const desks = boundedWithPriority(
       entry.desks,
       bounds.desksPerRoom,
-      (desk) =>
-        entry.source.id === selectedSpaceId &&
-        desk.tabRef.nativeId === selectedLeaf?.tabId,
+      (desk) => selectedDesk(desk) || pinned(desk),
+      selectedDesk,
     ).map((desk) => {
       const devices = boundedWithPriority(
         projectPaneDevices(entry.source.children, desk),
@@ -482,6 +528,8 @@ export function projectWorldOffice(
       ),
     );
     const deskOrder = new Map(desks.map((desk, index) => [desk.key, index]));
+    // A pinned desk keeps its agents too.
+    const pinnedDesks = new Set(desks.filter(pinned).map((desk) => desk.key));
     const roomAgents = entry.agents
       .filter(({ destination }) => destination === "room")
       .map((agent) => ({
@@ -497,6 +545,9 @@ export function projectWorldOffice(
       roomAgents: boundedWithPriority(
         roomAgents,
         bounds.roomAgentsPerRoom,
+        (agent) =>
+          agent.key === selectedId ||
+          (agent.deskKey !== null && pinnedDesks.has(agent.deskKey)),
         (agent) => agent.key === selectedId,
       ),
       omittedDeskCount: Math.max(0, entry.source.coverage.tabs - desks.length),
@@ -1158,15 +1209,18 @@ function boundedSorted<T>(
   return kept;
 }
 
+/** `first` ranks some priority values ahead of the rest of them. */
 function boundedWithPriority<T>(
   values: readonly T[],
   limit: number,
   priority: (value: T) => boolean,
+  first: (value: T) => boolean = () => false,
 ) {
   if (values.length <= limit) return [...values];
   const admitted = new Set(
     [
-      ...values.filter(priority),
+      ...values.filter(first),
+      ...values.filter((value) => !first(value) && priority(value)),
       ...values.filter((value) => !priority(value)),
     ].slice(0, limit),
   );

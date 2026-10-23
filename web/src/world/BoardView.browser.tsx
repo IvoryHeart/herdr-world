@@ -15,6 +15,7 @@ import {
   type FixtureSpace,
 } from "./board/boardFixture";
 import { defaultTerminalColor } from "./terminalColor";
+import { currentBoardCardPins } from "./board/boardCardPins";
 import "./world.css";
 
 /*
@@ -1596,6 +1597,27 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
           "Unpin removes the pin",
         );
         check(!card(tabKey)!.querySelector(".board-pin"), "unpinned, no badge");
+        // A phone's full-screen terminal pins the card from its header,
+        // through what Board publishes for it.
+        check(
+          !currentBoardCardPins().pinned.has(tabKey),
+          "Board publishes the card unpinned",
+        );
+        currentBoardCardPins().toggle!(tabKey);
+        await waitFor(
+          () =>
+            Boolean(saved.layout.pinned[tabKey]) &&
+            currentBoardCardPins().pinned.has(tabKey) &&
+            Boolean(card(tabKey)!.querySelector(".board-pin")),
+          "the window header pins the card",
+        );
+        currentBoardCardPins().toggle!(tabKey);
+        await waitFor(
+          () =>
+            !saved.layout.pinned[tabKey] &&
+            !currentBoardCardPins().pinned.has(tabKey),
+          "the window header unpins it",
+        );
         mount(2, world, null);
         await settle(50);
       }

@@ -240,6 +240,7 @@ import {
   type WorldTerminalPresentation,
 } from "./world/worldTerminalPresentation";
 import { useWorldTabColors } from "./world/useTerminalColors";
+import { useWorldTabPin } from "./world/useDeskPins";
 
 const WorkspaceInspectorHost = lazyWithReload("workspace-inspector", () =>
   import("./components/WorkspaceInspectorHost").then((module) => ({
@@ -2007,6 +2008,7 @@ export default function App({
     ],
   );
   const worldTabColors = useWorldTabColors();
+  const worldTabPin = useWorldTabPin();
   const toggleAnnotations = useCallback(() => {
     if (annotationsOpen && (!mobile || mobileView === "annotations")) {
       setAnnotationsOpen(false);
@@ -4291,6 +4293,7 @@ export default function App({
           setMobileMoreOpen((open) => !open);
         },
         tabColors: worldTabColors,
+        tabPin: hasWorkspaceSurface ? worldTabPin : undefined,
         workspacesOpen: mobileView === "workspaces",
         toggleWorkspaces: () => {
           setMobileMoreOpen(false);

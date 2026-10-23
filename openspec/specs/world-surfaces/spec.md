@@ -1246,13 +1246,22 @@ be picked up for a drag, nor be a reorder target, until unpinned. An agent at
 a pinned desk SHALL NOT go to the lounge: it SHALL leave its seat only for
 reception, when blocked or done and not yet checked, and SHALL return to its
 seat once checked or answered. A pin SHALL follow its tab to another workspace
-and SHALL be dropped when its tab closes.
+and SHALL be dropped when its tab closes. When a room has more desks than Town
+presents, pinned desks and their agents SHALL be presented ahead of every
+other desk but the selected one.
 
 #### Scenario: A pinned agent finishes and is seen
 
 - **WHEN** an agent at a pinned desk finishes and the user checks it
 - **THEN** it waits at reception until checked and then walks back to its seat,
   never to the lounge
+
+#### Scenario: A pinned desk in a crowded room
+
+- **WHEN** a room's tabs exceed Town's desk bound and one of its later tabs is
+  pinned
+- **THEN** that desk and its agents stay presented, and an unpinned desk is
+  omitted instead
 
 #### Scenario: A room reflows around a pinned desk
 
@@ -1743,8 +1752,8 @@ SHALL NOT follow its workspace.
 
 #### Scenario: Pin a card
 
-- **WHEN** the user pins a selected card from its bar and then tidies its
-  workspace
+- **WHEN** the user pins a selected card from its bar (on a phone, from its
+  terminal's header) and then tidies its workspace
 - **THEN** the card shows a pin badge and keeps its position while the other
   cards are rearranged, and unpinning it lets it belong where it is beside its
   workspace again
