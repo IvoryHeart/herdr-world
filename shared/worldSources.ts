@@ -1,3 +1,5 @@
+import type { PullRequestAction, PullRequestDetail } from "./pullRequests";
+
 /**
  * Built-in sources: systems of record that World reads alongside Herdr, such
  * as GitHub pull requests and Jira tickets. The service owns each source's
@@ -102,6 +104,12 @@ export type WorkItem = {
   checks?: WorkChecks;
   review?: WorkReview;
   mergeable?: "mergeable" | "conflicting" | "unknown";
+  /** The branch it merges into (open pull requests). */
+  base?: string;
+  /** The head commit GitHub reported (open pull requests). */
+  headSha?: string;
+  /** Your open pull requests: checks, reviewer results and files, read in detail. */
+  pr?: PullRequestDetail;
 };
 
 /** A work item linked to the agent pane whose checkout or report names it. */
@@ -124,6 +132,8 @@ export type WorldSourcesSnapshot = {
   sources: WorldSourceStatus[];
   items: WorkItem[];
   links: WorkLink[];
+  /** Pull request verbs run from World since the service started, newest first. */
+  actions: PullRequestAction[];
 };
 
 const CHECK_GLYPH: Record<WorkChecks, string> = {

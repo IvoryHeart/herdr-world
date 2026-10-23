@@ -50,90 +50,157 @@ const mergedWeek = Array.from({ length: 150 }, (_, index) => ({
   repo: "example-org/web-app",
   checks: "pass",
 }));
-worldSourcesStore.useFetch(async () =>
-  Response.json({
-    observedAt: 1,
-    sources: [
+// Your own open pull requests, read in detail: one ready to merge, one that
+// GitHub still holds for a review.
+const prHead = (digit: string) => digit.repeat(40);
+const detailedPr = (number: number, fields: Record<string, unknown> = {}) => ({
+  key: `github:pr:example-org/web-app#${number}`,
+  source: "github",
+  kind: "pull_request",
+  ref: `example-org/web-app#${number}`,
+  title: `Synthetic card change ${number}`,
+  url: `https://github.com/example-org/web-app/pull/${number}`,
+  lane: "ready",
+  status: "open",
+  roles: ["author"],
+  updatedAt: 2,
+  number,
+  repo: "example-org/web-app",
+  base: "main",
+  headSha: prHead(String(number % 10)),
+  draft: false,
+  checks: "pass",
+  review: "approved",
+  mergeable: "mergeable",
+  pr: {
+    baseRef: "main",
+    behindBy: 2,
+    checks: [
+      { name: "Unit tests", state: "pass", required: true },
+      { name: "Browser suite", state: "pass", required: false },
+    ],
+    checksTruncated: false,
+    reviewers: [
       {
-        id: "github",
-        label: "GitHub",
-        enabled: true,
-        state: "connected",
-        detail: "GitHub is connected: 1 item.",
-        checkedAt: 1,
-        lastSuccessAt: 1,
-        itemCount: 1,
-        config: { kind: "github", mergedDays: 7 },
-      },
-      {
-        id: "jira",
-        label: "Jira",
-        enabled: true,
-        state: "not_connected",
-        detail: "Add your Jira site, email and API token in Sources settings.",
-        checkedAt: 1,
-        lastSuccessAt: null,
-        itemCount: 0,
-        config: {
-          kind: "jira",
-          site: null,
-          email: null,
-          jql: "",
-          tokenSet: false,
-        },
+        reviewer: "rev2",
+        url: `https://github.com/example-org/web-app/pull/${number}#issuecomment-1`,
+        at: 1,
+        outcome: "confirmed",
+        line: "2/2 resolved, 0 new.",
+        commit: prHead(String(number % 10)),
+        commitsSince: 0,
       },
     ],
-    items: [
-      {
-        key: "github:pr:example-org/web-app#42",
-        source: "github",
-        kind: "pull_request",
-        ref: "example-org/web-app#42",
-        title: "Fix the login form",
-        url: "https://github.com/example-org/web-app/pull/42",
-        lane: "fixing",
-        status: "open",
-        roles: ["author"],
-        updatedAt: 1,
-        number: 42,
-        repo: "example-org/web-app",
-        checks: "fail",
+    uiChange: true,
+    images: 5,
+  },
+  ...fields,
+});
+/** Verb requests the cards sent, and GitHub's (synthetic) answer. */
+const verbPosts: Record<string, unknown>[] = [];
+const sourcesBody = () => ({
+  observedAt: 1,
+  sources: [
+    {
+      id: "github",
+      label: "GitHub",
+      enabled: true,
+      state: "connected",
+      detail: "GitHub is connected: 1 item.",
+      checkedAt: 1,
+      lastSuccessAt: 1,
+      itemCount: 1,
+      config: { kind: "github", mergedDays: 7 },
+    },
+    {
+      id: "jira",
+      label: "Jira",
+      enabled: true,
+      state: "not_connected",
+      detail: "Add your Jira site, email and API token in Sources settings.",
+      checkedAt: 1,
+      lastSuccessAt: null,
+      itemCount: 0,
+      config: {
+        kind: "jira",
+        site: null,
+        email: null,
+        jql: "",
+        tokenSet: false,
       },
-      ...mergedWeek,
-      {
-        key: "jira:WEB-7",
-        source: "jira",
-        kind: "ticket",
-        ref: "WEB-7",
-        title: "Login form rejects valid emails",
-        url: "https://example.atlassian.net/browse/WEB-7",
-        lane: "doing",
-        status: "In Progress",
-        roles: ["assignee"],
-        updatedAt: 1,
+    },
+  ],
+  items: [
+    {
+      key: "github:pr:example-org/web-app#42",
+      source: "github",
+      kind: "pull_request",
+      ref: "example-org/web-app#42",
+      title: "Fix the login form",
+      url: "https://github.com/example-org/web-app/pull/42",
+      lane: "fixing",
+      status: "open",
+      roles: ["author"],
+      updatedAt: 1,
+      number: 42,
+      repo: "example-org/web-app",
+      checks: "fail",
+    },
+    detailedPr(43),
+    detailedPr(44, { lane: "green", review: "review_required" }),
+    ...mergedWeek,
+    {
+      key: "jira:WEB-7",
+      source: "jira",
+      kind: "ticket",
+      ref: "WEB-7",
+      title: "Login form rejects valid emails",
+      url: "https://example.atlassian.net/browse/WEB-7",
+      lane: "doing",
+      status: "In Progress",
+      roles: ["assignee"],
+      updatedAt: 1,
+    },
+  ],
+  links: [
+    {
+      connectionId: "studio",
+      generation: 1,
+      paneId: "w1:p1",
+      sessionFingerprint: null,
+      itemKey: "github:pr:example-org/web-app#42",
+      via: "branch",
+    },
+    // Made for the same pane ID in an earlier runtime: not this agent.
+    {
+      connectionId: "studio",
+      generation: 0,
+      paneId: "w1:p1",
+      sessionFingerprint: null,
+      itemKey: "jira:WEB-7",
+      via: "branch",
+    },
+  ],
+});
+worldSourcesStore.useFetch(async (input, init) => {
+  if (String(input).endsWith("/github/pull-request")) {
+    const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+    verbPosts.push(body);
+    return Response.json({
+      action: {
+        verb: body.verb,
+        itemKey: body.key,
+        ref: "example-org/web-app#43",
+        at: 3,
+        outcome: "failed",
+        detail: "Pull request is not mergeable: synthetic conflict",
+        sender: { basis: "reported", via: "browser" },
       },
-    ],
-    links: [
-      {
-        connectionId: "studio",
-        generation: 1,
-        paneId: "w1:p1",
-        sessionFingerprint: null,
-        itemKey: "github:pr:example-org/web-app#42",
-        via: "branch",
-      },
-      // Made for the same pane ID in an earlier runtime: not this agent.
-      {
-        connectionId: "studio",
-        generation: 0,
-        paneId: "w1:p1",
-        sessionFingerprint: null,
-        itemKey: "jira:WEB-7",
-        via: "branch",
-      },
-    ],
-  }),
-);
+      snapshot: sourcesBody(),
+    });
+  }
+  return Response.json(sourcesBody());
+});
 const params = new URL(location.href).searchParams;
 const mode = params.get("mode") ?? "test";
 const theme = params.get("theme");
@@ -727,6 +794,108 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
       );
       await settle(100);
       check(!host.querySelector(".work-lens"), "Escape closes the lens");
+    },
+  ],
+  [
+    "a pull request card shows readiness and acts only after its sheet confirms",
+    async () => {
+      host
+        .querySelector<HTMLButtonElement>(
+          'button[aria-label="Work: pull requests and tickets"]',
+        )!
+        .click();
+      const card = (number: number) =>
+        host.querySelector<HTMLElement>(
+          `.work-lens article[aria-label="Pull request example-org/web-app#${number}"]`,
+        );
+      await waitFor(() => Boolean(card(43)), "the Work lens shows the card");
+      const ready = card(43)!;
+      check(
+        Boolean(ready.closest('[data-lane="ready"]')) &&
+          ready
+            .querySelector(".pr-card-summary")
+            ?.textContent?.includes("rev2 confirmed") === true &&
+          ready.textContent?.includes("Ready ✓") === true &&
+          ready.querySelector('[role="img"]')?.getAttribute("aria-label") ===
+            "CI: 2 passed",
+        `a ready pull request shows CI, its reviewer and Ready (${ready.textContent})`,
+      );
+      // GitHub still requires a review: no Merge, the plain command instead.
+      const held = card(44)!;
+      check(
+        held.querySelector(".pr-card-command code")?.textContent ===
+          "gh pr merge 44 --repo example-org/web-app --merge" &&
+          held.textContent?.includes(
+            "GitHub requires a review; merge on GitHub.",
+          ) === true &&
+          ![...held.querySelectorAll("button")].some((button) =>
+            button.textContent?.startsWith("Merge"),
+          ) &&
+          held
+            .querySelector<HTMLAnchorElement>(".pr-card-command a")
+            ?.href.endsWith("/pull/44") === true,
+        "a pull request held for review offers Open on GitHub and the command",
+      );
+      const button = (root: HTMLElement, text: string) =>
+        [...root.querySelectorAll<HTMLButtonElement>("button")].find(
+          (entry) => entry.textContent === text,
+        )!;
+      button(ready, "Merge…").click();
+      await settle(50);
+      check(
+        ready.querySelector(".pr-card-sheet p")?.textContent ===
+          "Merge #43 into main with a merge commit. Head 3333333 must still be the head. The branch is kept." &&
+          verbPosts.length === 0,
+        "the sheet says exactly what happens, and nothing runs yet",
+      );
+      button(ready, "Merge").click();
+      await waitFor(
+        () => Boolean(ready.querySelector('[role="alert"]')),
+        "GitHub's answer shows on the card",
+      );
+      check(
+        JSON.stringify(verbPosts) ===
+          JSON.stringify([
+            {
+              key: "github:pr:example-org/web-app#43",
+              verb: "merge",
+              headSha: prHead("3"),
+            },
+          ]) &&
+          ready.querySelector('[role="alert"]')?.textContent ===
+            "Pull request is not mergeable: synthetic conflict",
+        `merge sends the head seen; a refusal is GitHub's words (${JSON.stringify(verbPosts)})`,
+      );
+      button(ready, "Details").click();
+      await settle(50);
+      check(
+        ready.querySelectorAll('[aria-label="Readiness"] li[data-state="pass"]')
+          .length === 5 &&
+          ready.textContent?.includes(
+            "GitHub doesn't let you approve your own PR.",
+          ) === true &&
+          ready.textContent?.includes("per rev2's comment") === true &&
+          ready.textContent?.includes("2 behind main") === true,
+        "details show each rule, the reviewer's provenance and the head",
+      );
+      button(ready, "Close…").click();
+      await settle(50);
+      check(
+        ready.querySelector(".pr-card-sheet p")?.textContent ===
+          "Close #43 without merging. The branch is kept." &&
+          Boolean(ready.querySelector(".pr-card-sheet textarea")),
+        "closing asks first, with an optional comment",
+      );
+      button(ready, "Cancel").click();
+      await settle(50);
+      check(
+        !ready.querySelector(".pr-card-sheet") && verbPosts.length === 1,
+        "cancel runs nothing",
+      );
+      window.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+      );
+      await settle(100);
     },
   ],
   [

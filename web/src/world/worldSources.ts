@@ -1,4 +1,11 @@
 import { useSyncExternalStore } from "react";
+import type {
+  PullRequestAction,
+  PullRequestCheck,
+  PullRequestDetail,
+  PullRequestReviewer,
+  PullRequestVerb,
+} from "../../../shared/pullRequests";
 import {
   PULL_REQUEST_LANES,
   TICKET_LANES,
@@ -28,6 +35,7 @@ const FOLLOW_UP_MS = 3_000;
 /** Open work, a full merged window (GitHub's 1,000-result search) and tickets. */
 const MAX_ITEMS = 2_000;
 const MAX_LINKS = 2_000;
+const MAX_ACTIONS = 50;
 const LANES = new Set<string>([...PULL_REQUEST_LANES, ...TICKET_LANES]);
 
 export const EMPTY_WORLD_SOURCES: WorldSourcesSnapshot = {
@@ -36,6 +44,7 @@ export const EMPTY_WORLD_SOURCES: WorldSourcesSnapshot = {
   sources: [],
   items: [],
   links: [],
+  actions: [],
 };
 
 export async function fetchWorldSources(
@@ -52,6 +61,38 @@ export async function fetchWorldSources(
   );
   if (!response.ok) throw new Error(await responseError(response));
   return parseWorldSources(await response.json());
+}
+
+/**
+ * Run a verb the viewer confirmed on one of their pull requests. Resolves
+ * with GitHub's outcome (a failure carries GitHub's reason); throws only when
+ * World would not start it.
+ */
+export async function runPullRequestVerb(
+  item: WorkItem,
+  verb: PullRequestVerb,
+  options: { comment?: string } = {},
+  fetchImpl: FetchLike = worldSourcesStore.fetchImpl(),
+): Promise<PullRequestAction> {
+  const response = await fetchImpl(`${SOURCES_PATH}/github/pull-request`, {
+    method: "POST",
+    headers: { "content-type": "application/json", accept: "application/json" },
+    body: JSON.stringify({
+      key: item.key,
+      verb,
+      ...(verb === "merge" ? { headSha: item.headSha } : {}),
+      ...(verb === "close" && options.comment?.trim()
+        ? { comment: options.comment.trim() }
+        : {}),
+    }),
+    signal: AbortSignal.timeout(90_000),
+  });
+  if (!response.ok) throw new Error(await responseError(response));
+  const body = record(await response.json());
+  worldSourcesStore.publishSettled(parseWorldSources(body.snapshot));
+  const action = parseAction(body.action);
+  if (!action) throw new Error("World did not report the outcome");
+  return action;
 }
 
 export async function updateWorldSource(
@@ -112,7 +153,96 @@ export function parseWorldSources(value: unknown): WorldSourcesSnapshot {
     sources,
     items,
     links,
+    actions: (Array.isArray(data.actions) ? data.actions : [])
+      .slice(0, MAX_ACTIONS)
+      .map(parseAction)
+      .filter((entry): entry is PullRequestAction => entry !== null),
   };
+}
+
+function parseAction(value: unknown): PullRequestAction | null {
+  const entry = record(value);
+  if (
+    !["merge", "close", "ready"].includes(entry.verb as string) ||
+    !text(entry.itemKey) ||
+    (entry.outcome !== "done" && entry.outcome !== "failed")
+  )
+    return null;
+  return {
+    verb: entry.verb as PullRequestVerb,
+    itemKey: entry.itemKey as string,
+    ref: text(entry.ref) ?? (entry.itemKey as string),
+    at: number(entry.at),
+    outcome: entry.outcome,
+    ...(text(entry.detail) ? { detail: text(entry.detail)! } : {}),
+    sender: { basis: "reported", via: "browser" },
+  };
+}
+
+const CHECK_STATES = new Set(["pass", "fail", "pending", "skipped"]);
+const OUTCOMES = new Set(["confirmed", "open", "unknown"]);
+
+function parseDetail(value: unknown): PullRequestDetail | null {
+  const detail = record(value);
+  if (!text(detail.baseRef)) return null;
+  const count = (entry: unknown) =>
+    Number.isSafeInteger(entry) && (entry as number) >= 0
+      ? (entry as number)
+      : null;
+  return {
+    baseRef: text(detail.baseRef)!,
+    behindBy: count(detail.behindBy),
+    checks: (Array.isArray(detail.checks) ? detail.checks : [])
+      .slice(0, 200)
+      .map(record)
+      .flatMap((check): PullRequestCheck[] =>
+        text(check.name) && CHECK_STATES.has(check.state as string)
+          ? [
+              {
+                name: text(check.name)!,
+                state: check.state as PullRequestCheck["state"],
+                required: check.required === true,
+                ...(httpsText(check.url) ? { url: httpsText(check.url)! } : {}),
+                ...(number(check.completedAt)
+                  ? { completedAt: number(check.completedAt) }
+                  : {}),
+              },
+            ]
+          : [],
+      ),
+    checksTruncated: detail.checksTruncated === true,
+    reviewers: (Array.isArray(detail.reviewers) ? detail.reviewers : [])
+      .slice(0, 20)
+      .map(record)
+      .flatMap((entry): PullRequestReviewer[] =>
+        text(entry.reviewer) && OUTCOMES.has(entry.outcome as string)
+          ? [
+              {
+                reviewer: text(entry.reviewer)!,
+                url: httpsText(entry.url) ?? "",
+                at: number(entry.at),
+                outcome: entry.outcome as PullRequestReviewer["outcome"],
+                line: text(entry.line) ?? "",
+                commit: sha(entry.commit),
+                commitsSince: count(entry.commitsSince),
+              },
+            ]
+          : [],
+      ),
+    uiChange: typeof detail.uiChange === "boolean" ? detail.uiChange : null,
+    images: count(detail.images) ?? 0,
+  };
+}
+
+function sha(value: unknown) {
+  return typeof value === "string" && /^[0-9a-f]{40}$/u.test(value)
+    ? value
+    : null;
+}
+
+function httpsText(value: unknown) {
+  const url = text(value);
+  return url && /^https:\/\//u.test(url) ? url : null;
 }
 
 function parseStatus(value: unknown): WorldSourceStatus | null {
@@ -168,6 +298,7 @@ function parseItem(value: unknown): WorkItem | null {
     !LANES.has(item.lane as string)
   )
     return null;
+  const detail = parseDetail(item.pr);
   const optionalText = (name: string) =>
     text(item[name]) ? { [name]: text(item[name]) } : {};
   return {
@@ -190,6 +321,9 @@ function parseItem(value: unknown): WorkItem | null {
     ...optionalText("repo"),
     ...optionalText("branch"),
     ...optionalText("headRepo"),
+    ...optionalText("base"),
+    ...(sha(item.headSha) ? { headSha: sha(item.headSha)! } : {}),
+    ...(detail ? { pr: detail } : {}),
     ...(number(item.finishedAt) ? { finishedAt: number(item.finishedAt) } : {}),
     ...(typeof item.draft === "boolean" ? { draft: item.draft } : {}),
     ...(["pass", "fail", "pending", "none"].includes(item.checks as string)
@@ -301,6 +435,10 @@ class WorldSourcesStore {
   /** Tests: use a fake service. */
   useFetch(fetchImpl: FetchLike) {
     this.#fetch = fetchImpl;
+  }
+
+  fetchImpl(): FetchLike {
+    return this.#fetch;
   }
 
   #publish(sequence: number, snapshot: WorldSourcesSnapshot) {
