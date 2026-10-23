@@ -38,6 +38,7 @@ import { TownCanvas } from "./town/TownCanvas";
 import { townDeskColorTarget } from "./town/townModel";
 import { resolveTerminal, type TerminalColor } from "./terminalColor";
 import { setTerminalColor, useTerminalColors } from "./useTerminalColors";
+import { useDeskPins } from "./useDeskPins";
 import {
   sendTownReply,
   townChoices,
@@ -161,6 +162,13 @@ export default function TownView({
     [],
   );
   const layoutPreferences = useLayoutPreferences();
+  const deskPins = useDeskPins();
+  // Only which tabs are pinned matters to admission, not their cells.
+  const pinnedTabKeys = Object.keys(deskPins).sort().join("\n");
+  const pinnedTabs = useMemo(
+    () => new Set(pinnedTabKeys ? pinnedTabKeys.split("\n") : []),
+    [pinnedTabKeys],
+  );
   // Rooms past TOWN_PRESENTATION_BOUNDS.foldedDesksPerRoom show their busiest
   // desks until the user expands them into a longer room.
   const [expandedRooms, setExpandedRooms] = useState<ReadonlySet<string>>(
@@ -177,8 +185,8 @@ export default function TownView({
   );
   const observedOffice = useMemo(
     (): HerdrOfficeProjection =>
-      projectOffice(world, Date.now(), selectedId, expandedRooms),
-    [world, selectedId, projectOffice, expandedRooms],
+      projectOffice(world, Date.now(), selectedId, pinnedTabs, expandedRooms),
+    [world, selectedId, projectOffice, pinnedTabs, expandedRooms],
   );
   const townFinished = useTownFinished(observedOffice);
   // Terminal frames and unrelated store updates must not reconcile the scene.
@@ -1377,6 +1385,7 @@ export default function TownView({
             trace={trace}
             projection={office}
             terminalColors={terminalColors}
+            deskPins={deskPins}
             selectedKey={townSelectedKey}
             completionSeenKeys={completionSeenKeys}
             summonedKeys={summonedKeys}

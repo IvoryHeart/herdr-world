@@ -7,6 +7,7 @@ import {
   BROWSER_STARTUP_TIMEOUT_MS,
   waitForBrowserFixture,
 } from "../browserChrome";
+import { chromeRenderingFlags } from "./testing/chromeRendering";
 
 const chrome =
   Bun.env.CHROME_BIN ||
@@ -80,8 +81,7 @@ test.skipIf(!chrome).each([
           `--window-size=${width},900`,
           ...(motion ? ["--force-prefers-reduced-motion"] : []),
           "--enable-webgl",
-          "--use-angle=swiftshader",
-          "--enable-unsafe-swiftshader",
+          ...(await chromeRenderingFlags(chrome!)),
           "--disable-background-networking",
           "--no-first-run",
           "--no-default-browser-check",

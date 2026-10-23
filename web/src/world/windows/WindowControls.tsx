@@ -1,18 +1,19 @@
-import { Fragment, useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
-import { measuredFixedPositionScale } from "../../fixedPositionScale";
 import {
   ChevronLeft,
   Maximize2,
   Minimize2,
   MoreHorizontal,
+  Pin,
   X,
 } from "lucide-react";
+import { Fragment, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
-  ColorSwatchButton,
   type ColorChoice,
+  ColorSwatchButton,
   type ColorValue,
 } from "../../components/ColorSwatch";
+import { measuredFixedPositionScale } from "../../fixedPositionScale";
 import { useLayer } from "../../layerStack";
 import type { SnapTarget } from "./windowManager";
 import "./windows.css";
@@ -31,6 +32,8 @@ export type ManagedWindowControls = {
     current: ColorValue;
     onColor(id: string | null): void;
   } | null;
+  /** An agent window's Town desk pin (useDeskPins.ts), toggled in its menu. */
+  pin?: { pinned: boolean; onPin(pinned: boolean): void } | null;
   /** Close is shown as Back at the start of the bar, as Town's window does. */
   back?: { label: string };
   /** A narrow window: maximize joins ⋯ so the bar still fits. */
@@ -89,6 +92,8 @@ type MenuItem = {
   label: string;
   detail?: string;
   checked?: boolean;
+  /** A setting turned on and off (the desk pin), not a choice among views. */
+  toggle?: boolean;
   section?: string;
   run(): void;
 };
@@ -150,6 +155,19 @@ export function WindowControls({
           })),
           { label: "Float window", run: controls.onFloat },
         ]),
+    ...(controls.pin
+      ? [
+          {
+            key: "pin",
+            label: controls.pin.pinned
+              ? "Unpin desk in Town"
+              : "Pin desk in Town",
+            checked: controls.pin.pinned,
+            toggle: true,
+            run: () => controls.pin?.onPin(!controls.pin.pinned),
+          },
+        ]
+      : []),
   ];
   const host = useRef<HTMLDivElement>(null);
   const menu = useRef<HTMLDivElement>(null);
@@ -163,8 +181,9 @@ export function WindowControls({
     // The checked item (the current view) first, else the first item.
     const items = menu.current;
     (
-      items?.querySelector<HTMLButtonElement>('[aria-checked="true"]') ??
-      items?.querySelector<HTMLButtonElement>('[role^="menuitem"]')
+      items?.querySelector<HTMLButtonElement>(
+        '[role="menuitemradio"][aria-checked="true"]',
+      ) ?? items?.querySelector<HTMLButtonElement>('[role^="menuitem"]')
     )?.focus();
   }, [open]);
   const scale = open ? measuredFixedPositionScale() : 1;
@@ -279,9 +298,24 @@ export function WindowControls({
                 ) : null}
                 <button
                   type="button"
-                  className={item.key ? "is-wide" : undefined}
+                  className={
+                    item.toggle
+                      ? "is-wide world-window-pin"
+                      : item.key
+                        ? "is-wide"
+                        : undefined
+                  }
+                  title={
+                    item.toggle
+                      ? "A pinned desk keeps its place in Town, and its agents stay at it"
+                      : undefined
+                  }
                   role={
-                    item.checked === undefined ? "menuitem" : "menuitemradio"
+                    item.checked === undefined
+                      ? "menuitem"
+                      : item.toggle
+                        ? "menuitemcheckbox"
+                        : "menuitemradio"
                   }
                   aria-checked={item.checked}
                   onClick={() => {
@@ -289,6 +323,7 @@ export function WindowControls({
                     setOpen(false);
                   }}
                 >
+                  {item.toggle ? <Pin size={14} aria-hidden="true" /> : null}
                   <span>{item.label}</span>
                   {item.detail ? <small>{item.detail}</small> : null}
                 </button>

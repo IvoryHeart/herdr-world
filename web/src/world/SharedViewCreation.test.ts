@@ -7,6 +7,7 @@ import {
   waitForBrowserFixture,
 } from "../browserChrome";
 import { InputDriver } from "./browserAcceptanceFixture";
+import { chromeRenderingFlags } from "./testing/chromeRendering";
 
 const chrome =
   Bun.env.CHROME_BIN || Bun.which("google-chrome") || Bun.which("chromium");
@@ -107,8 +108,7 @@ test.skipIf(!chrome).each([1440, 390])(
           "--remote-debugging-port=0",
           "--window-size=1440,1000",
           "--enable-webgl",
-          "--use-angle=swiftshader",
-          "--enable-unsafe-swiftshader",
+          ...(await chromeRenderingFlags(chrome!)),
           "--disable-dev-shm-usage",
           "--disable-background-networking",
           "--no-first-run",
