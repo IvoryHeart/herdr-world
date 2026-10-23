@@ -233,6 +233,14 @@ failed jobs first when the failure is a known flake; otherwise merge the revert,
 revert the merge that broke it, or land a fix. Later red commits are added to the open issue, not to new ones, and the next
 green main run at or after the red commit closes the issue and its revert PR.
 
+Source files may not regrow. `bun run check:size` (part of `check` and the
+static lane) allows at most 1000 lines per non-test source file; larger files are
+listed in `scripts/file-size-exceptions.json` and may not grow past their recorded
+size. The list only shrinks: no new or raised entries. When a split shrinks a file,
+lower or remove its entry in the same PR. A split PR should be a pure move:
+`bun run check:move` lists every removed line that does not reappear and every
+added line that was not removed (imports and exports aside); attach its output.
+
 Unlabeled PRs get `documentation` (docs-only), `dependencies` (dependency updates),
 `bug` (fix titles), or `enhancement` (other code). Release preparation gets
 `skip-changelog`. Override with a `.github/release.yml` category before merging.
