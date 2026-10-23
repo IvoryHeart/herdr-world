@@ -452,6 +452,19 @@ describe("Muse Code session inspection", () => {
       expect(
         await handlers.readEntry({ ...params, entry_id: tool.id }),
       ).toMatchObject({ text: "# README" });
+      // Scrolling back pages before an entry, redacted like the window and
+      // tied to its epoch.
+      const older = await handlers.readOlder({
+        ...params,
+        before: snapshot.entries.at(-1)!.id,
+        limit: 1,
+      });
+      expect(older.epoch).toBe(snapshot.cursor.epoch);
+      expect(older.has_more).toBe(false);
+      expect(older.entries).toEqual(snapshot.entries.slice(0, 3));
+      await expect(
+        handlers.readOlder({ ...params, before: "gone" }),
+      ).rejects.toThrow("no longer available");
       expect(await (await handlers.downloadFile(params)).text()).toBe(
         summary.text!,
       );

@@ -43,6 +43,20 @@ export function historyEntriesFromTrajectory(
   file: SessionFile,
   trajectory: AtifTrajectory,
 ): HistoryEntry[] {
+  return historyWindowEntries(
+    allHistoryEntriesFromTrajectory(file, trajectory),
+    HISTORY_WINDOW_LIMIT,
+  );
+}
+
+/**
+ * Every entry of the transcript, oldest first. IDs count occurrences from the
+ * start, so they match the window's IDs for the same entries.
+ */
+export function allHistoryEntriesFromTrajectory(
+  file: SessionFile,
+  trajectory: AtifTrajectory,
+): HistoryEntry[] {
   const entries: HistoryEntry[] = [];
   const occurrences = new Map<string, number>();
   const names = new Map<string, string>();
@@ -112,7 +126,23 @@ export function historyEntriesFromTrajectory(
       });
     }
   }
-  return historyWindowEntries(entries, HISTORY_WINDOW_LIMIT);
+  return entries;
+}
+
+/**
+ * The page of entries just before `beforeId`: up to `limit` conversation
+ * entries with the tool entries between them, cut the way the window is cut.
+ * Null when `beforeId` is not in the transcript.
+ */
+export function historyEntriesBefore(
+  entries: readonly HistoryEntry[],
+  beforeId: string,
+  limit: number,
+): { entries: HistoryEntry[]; has_more: boolean } | null {
+  const end = entries.findIndex((entry) => entry.id === beforeId);
+  if (end < 0) return null;
+  const page = historyWindowEntries(entries.slice(0, end), limit);
+  return { entries: page, has_more: end - page.length > 0 };
 }
 
 // Short content hash of a tool payload, shared by redacted entries and
@@ -121,7 +151,7 @@ export function historyTextHash(text: string) {
   return createHash("sha256").update(text).digest("hex").slice(0, 16);
 }
 
-function redactHistoryEntry(entry: HistoryEntry): HistoryEntry {
+export function redactHistoryEntry(entry: HistoryEntry): HistoryEntry {
   if (entry.role !== "tool" || entry.text.length === 0) return entry;
   return {
     ...entry,

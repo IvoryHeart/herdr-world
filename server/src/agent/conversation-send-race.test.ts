@@ -709,6 +709,52 @@ describe("the delivery ledger", () => {
     expect(ledger.list("p").at(-1)).toMatchObject({ text: "Later" });
   });
 
+  test("a sent attachment matches the harness's record of it", () => {
+    const upload = "/tmp/herdr-world-uploads-1000/upload-ab12/img-1-x.png";
+    const cases = [
+      // Claude Code records an image path as a placeholder.
+      [`Look at this ${upload} `, "[Image #16]Look at this"],
+      [`Look at ${upload} and fix it`, "Look at [Image #2] and fix it"],
+      // A quoted path, kept as typed by a harness that does not convert it.
+      [`Read '${upload}' please`, `Read '${upload}' please`],
+      // An attachment alone.
+      [`${upload} `, "[Image #3]"],
+    ];
+    for (const [sent, recorded] of cases) {
+      const ledger = createDeliveryLedger();
+      ledger.record("p", { ...send, text: sent! });
+      ledger.evaluate(
+        "p",
+        "A",
+        [
+          {
+            fingerprint: "A",
+            label: "session A",
+            messages: [said(recorded!, send.endedAt + 50)],
+          },
+        ],
+        send.endedAt + 1000,
+      );
+      expect([sent, ledger.list("p")[0]?.state]).toEqual([sent, "matched"]);
+    }
+    // Different words around the same attachment do not match.
+    const ledger = createDeliveryLedger();
+    ledger.record("p", { ...send, text: `Look at this ${upload}` });
+    ledger.evaluate(
+      "p",
+      "A",
+      [
+        {
+          fingerprint: "A",
+          label: "session A",
+          messages: [said("[Image #1]Look at that", send.endedAt + 50)],
+        },
+      ],
+      send.endedAt + 1000,
+    );
+    expect(ledger.list("p")[0]?.state).toBe("pending");
+  });
+
   test("the check ends after its window", () => {
     const ledger = createDeliveryLedger();
     ledger.record("p", send);

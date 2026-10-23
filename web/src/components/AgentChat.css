@@ -1,5 +1,8 @@
 .agent-chat {
   min-height: 0;
+  /* A flex item sizes to its widest content unless told otherwise; a long
+     title, path or command must not widen Chat past its window. */
+  min-width: 0;
   flex: 1 1 auto;
   display: flex;
   flex-direction: column;

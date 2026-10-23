@@ -1,4 +1,5 @@
 import {
+  Fragment,
   memo,
   useCallback,
   useEffect,
@@ -37,6 +38,8 @@ import "./AgentHistoryChat.css";
 // Treat the list as pinned while the reader is within this distance of the
 // newest message, so polling refreshes keep following live output.
 const FOLLOW_THRESHOLD_PX = 48;
+// Scrolling this close to the top loads the next older page.
+const OLDER_THRESHOLD_PX = 240;
 
 const EMPTY_LOADING: ReadonlySet<string> = new Set();
 const noop = () => {};
@@ -415,7 +418,17 @@ export function AgentHistoryChat({
   onOpen,
   matchedIds,
   after,
+  hasOlder = false,
+  olderLoading = false,
+  onLoadOlder,
+  placed,
 }: {
+  /** Shown among the messages at their time, such as an unseen send. */
+  placed?: readonly { key: string; at: string; node: ReactNode }[];
+  /** Entries older than the shown ones exist; onLoadOlder fetches a page. */
+  hasOlder?: boolean;
+  olderLoading?: boolean;
+  onLoadOlder?: () => void;
   /** Messages a send from Chat matched by their words. */
   matchedIds?: ReadonlySet<string>;
   /** Shown after the newest message (Chat's sends not yet seen). */
@@ -476,10 +489,56 @@ export function AgentHistoryChat({
     followRef.current = true;
   }, [followKey]);
 
+  // Older entries arrive above the reader: keep the same distance from the
+  // bottom, so the message being read stays put.
+  const firstKey = items[0]
+    ? items[0].type === "message"
+      ? items[0].entry.id
+      : items[0].id
+    : null;
+  const firstKeyRef = useRef(firstKey);
+  const heightRef = useRef(0);
   useLayoutEffect(() => {
     const list = listRef.current;
-    if (list && followRef.current) list.scrollTop = list.scrollHeight;
-  }, [items, listRef]);
+    if (!list) return;
+    if (followRef.current) list.scrollTop = list.scrollHeight;
+    else if (firstKeyRef.current !== firstKey && heightRef.current > 0)
+      list.scrollTop += list.scrollHeight - heightRef.current;
+    firstKeyRef.current = firstKey;
+    heightRef.current = list.scrollHeight;
+  }, [items, listRef, firstKey]);
+  // Placed nodes go before the first item stamped after them; each once.
+  const placedQueue = [...(placed ?? [])]
+    .filter((entry) => Number.isFinite(Date.parse(entry.at)))
+    .sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
+  const placedBefore = (item: HistoryChatItem) => {
+    const at = Date.parse(
+      item.type === "message" ? item.entry.sent_at : item.entries[0]!.sent_at,
+    );
+    let count = 0;
+    while (
+      count < placedQueue.length &&
+      Date.parse(placedQueue[count]!.at) < at
+    )
+      count += 1;
+    return placedQueue
+      .splice(0, count)
+      .map((entry) => <Fragment key={entry.key}>{entry.node}</Fragment>);
+  };
+  const placedRest = () =>
+    placedQueue
+      .splice(0)
+      .map((entry) => <Fragment key={entry.key}>{entry.node}</Fragment>);
+  const loadOlderIfNear = (list: HTMLDivElement) => {
+    if (
+      hasOlder &&
+      !olderLoading &&
+      onLoadOlder &&
+      list.scrollHeight > list.clientHeight &&
+      list.scrollTop < OLDER_THRESHOLD_PX
+    )
+      onLoadOlder();
+  };
 
   // Re-pin after layout changes the list did not cause itself: the inspector
   // revealing a hidden view, a resized pane, or lazy markdown (diagrams,
@@ -510,6 +569,8 @@ export function AgentHistoryChat({
           list.scrollHeight - list.scrollTop - list.clientHeight <
           FOLLOW_THRESHOLD_PX;
         setAway(!followRef.current);
+        heightRef.current = list.scrollHeight;
+        if (!followRef.current) loadOlderIfNear(list);
       }}
     >
       {away ? (
@@ -527,7 +588,23 @@ export function AgentHistoryChat({
         </button>
       ) : null}
       <div ref={contentRef} className="agent-history-chat-content">
-        {items.map((item) =>
+        {hasOlder && onLoadOlder ? (
+          <button
+            type="button"
+            className="agent-history-chat-older"
+            disabled={olderLoading}
+            onClick={() => {
+              followRef.current = false;
+              onLoadOlder();
+            }}
+          >
+            {olderLoading
+              ? "Loading earlier messages…"
+              : "Load earlier messages"}
+          </button>
+        ) : null}
+        {items.map((item) => [
+          ...placedBefore(item),
           // A marker such as a compaction reads as a divider, not a message.
           item.type === "message" && item.entry.notice ? (
             <div
@@ -555,7 +632,8 @@ export function AgentHistoryChat({
               onOpen={onOpen}
             />
           ),
-        )}
+        ])}
+        {placedRest()}
         {after}
       </div>
     </div>

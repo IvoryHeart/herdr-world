@@ -23,6 +23,7 @@ import {
 import {
   HISTORY_WINDOW_LIMIT,
   historyTextHash,
+  redactHistoryEntry,
   redactHistoryUpdate,
 } from "./session-history";
 import { taskSummarySessionFingerprint } from "../herdr/task-summary";
@@ -114,6 +115,38 @@ export function createAgentSessionHandlers(args: {
         ...redactHistoryUpdate(update),
       };
     },
+    // Entries older than the window, a page at a time, for scrolling back.
+    readOlder: async (params: Record<string, unknown>) => {
+      const resolved = await resolveAgentSession(
+        params,
+        args.herdrCall,
+        args.files,
+        resolverContext,
+      );
+      if (!resolved.file) {
+        cache.invalidate(resolved);
+        throw new Error(resolved.detail || "Agent session is unavailable");
+      }
+      const before = typeof params.before === "string" ? params.before : "";
+      const limit =
+        typeof params.limit === "number" && Number.isFinite(params.limit)
+          ? Math.min(
+              HISTORY_WINDOW_LIMIT,
+              Math.max(1, Math.floor(params.limit)),
+            )
+          : HISTORY_WINDOW_LIMIT;
+      const { epoch, page } = await cache.older(resolved, before, limit);
+      if (!page) {
+        throw new Error(
+          "That history entry is no longer available; refresh the history and try again",
+        );
+      }
+      return {
+        epoch,
+        entries: page.entries.map(redactHistoryEntry),
+        has_more: page.has_more,
+      };
+    },
     readEntry: async (params: Record<string, unknown>) => {
       const resolved = await resolveAgentSession(
         params,
@@ -125,12 +158,9 @@ export function createAgentSessionHandlers(args: {
         cache.invalidate(resolved);
         throw new Error(resolved.detail || "Agent session is unavailable");
       }
-      const projection = await cache.get(resolved);
       const entryId =
         typeof params.entry_id === "string" ? params.entry_id : "";
-      const entry = projection.entries.find(
-        (candidate) => candidate.id === entryId,
-      );
+      const entry = await cache.entry(resolved, entryId);
       if (!entry) {
         throw new Error(
           "That history entry is no longer available; refresh the history and try again",

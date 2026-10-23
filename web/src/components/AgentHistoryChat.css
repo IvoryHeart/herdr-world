@@ -2,6 +2,24 @@
   min-height: 0;
   flex: 1 1 auto;
   overflow: auto;
+  /* The list keeps the reader's place itself when older entries arrive. */
+  overflow-anchor: none;
+}
+
+.agent-history-chat-older {
+  align-self: center;
+  padding: 4px 12px;
+  color: var(--muted);
+  font-size: 12px;
+  background: transparent;
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.agent-history-chat-older:disabled {
+  cursor: progress;
+  opacity: 0.7;
 }
 
 .agent-history-chat-content {
@@ -15,7 +33,9 @@
 
 .agent-history-chat-message {
   min-width: 0;
-  max-width: min(88%, 680px);
+  /* About 75 characters of the bubbles' 12px text a line, however wide the
+     window: longer lines are hard to follow. */
+  max-width: min(88%, 460px);
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -38,6 +58,18 @@
   background: var(--input-bg);
   border: 1px solid var(--border-soft);
   border-radius: 12px 12px 12px 4px;
+}
+
+/* A wide table scrolls inside its bubble instead of squeezing every cell to
+   one letter a line. */
+.agent-history-chat-bubble table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.agent-history-chat-bubble :is(th, td) {
+  overflow-wrap: normal;
 }
 
 .agent-history-chat-message.is-user .agent-history-chat-bubble {

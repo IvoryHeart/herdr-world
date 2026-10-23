@@ -254,6 +254,8 @@ function AskCard({
 const STOPS_WITH_ESCAPE = new Set(["claude", "codex", "pi"]);
 /** Two presses of Esc this close together stop the agent. */
 const DOUBLE_ESCAPE_MS = 700;
+/** How long a send may wait behind newer turns before it shows in place. */
+const PENDING_IN_PLACE_MS = 60_000;
 
 function elapsed(ms: number) {
   const seconds = Math.max(0, Math.floor(ms / 1000));
@@ -632,6 +634,36 @@ export function AgentChat({
       delivery.state === "pending" &&
       delivery.fingerprint === conversation?.session_fingerprint,
   );
+  // A send the transcript has moved past (newer turns, and a minute gone) is
+  // shown where it was sent, not below everything said since.
+  const newest = history.messages[history.messages.length - 1]?.sent_at;
+  const overtaken = (delivery: ConversationDelivery) =>
+    !!newest &&
+    Date.parse(newest) > Date.parse(delivery.sent_at) &&
+    Date.now() - Date.parse(delivery.sent_at) > PENDING_IN_PLACE_MS;
+  const pendingBubble = (delivery: ConversationDelivery, late: boolean) => (
+    <article
+      key={delivery.id}
+      className="agent-history-chat-message is-user is-pending"
+      data-delivery={late ? "unknown" : "pending"}
+    >
+      <div className="agent-history-chat-bubble">
+        <p>{delivery.text}</p>
+      </div>
+      <div className="agent-history-chat-meta">
+        {late
+          ? "Sent · delivery unknown"
+          : "Sent; not yet seen in this conversation"}{" "}
+        <button
+          type="button"
+          className="agent-chat-pending-dismiss"
+          onClick={() => dismiss(delivery.id)}
+        >
+          Stop checking
+        </button>
+      </div>
+    </article>
+  );
   const matchedIds = new Set(
     deliveries
       .filter(
@@ -865,6 +897,14 @@ export function AgentChat({
             followKey={pane.pane_id}
             toolLoading={history.toolEntryLoading}
             onLoadTool={history.loadToolEntry}
+            placed={pending.filter(overtaken).map((delivery) => ({
+              key: delivery.id,
+              at: delivery.sent_at,
+              node: pendingBubble(delivery, true),
+            }))}
+            hasOlder={history.hasOlder}
+            olderLoading={history.olderLoading}
+            onLoadOlder={history.loadOlder}
             onOpen={setExpanded}
             matchedIds={matchedIds}
             after={[
@@ -888,27 +928,9 @@ export function AgentChat({
                   ) : null}
                 </div>
               ) : null,
-              ...pending.map((delivery) => (
-                <article
-                  key={delivery.id}
-                  className="agent-history-chat-message is-user is-pending"
-                  data-delivery="pending"
-                >
-                  <div className="agent-history-chat-bubble">
-                    <p>{delivery.text}</p>
-                  </div>
-                  <div className="agent-history-chat-meta">
-                    Sent; not yet seen in this conversation{" "}
-                    <button
-                      type="button"
-                      className="agent-chat-pending-dismiss"
-                      onClick={() => dismiss(delivery.id)}
-                    >
-                      Stop checking
-                    </button>
-                  </div>
-                </article>
-              )),
+              ...pending
+                .filter((delivery) => !overtaken(delivery))
+                .map((delivery) => pendingBubble(delivery, false)),
               answered ? (
                 <p key="answered" className="agent-chat-answered" role="status">
                   {answered.acknowledged ? "You answered" : "Sent"}{" "}

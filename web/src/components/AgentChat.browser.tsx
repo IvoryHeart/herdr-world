@@ -174,6 +174,8 @@ async function run() {
   let historyAnswer: ((params: Record<string, unknown>) => unknown) | null =
     null;
   let answerAcknowledged = false;
+  /** Answers agent_history.older while set. */
+  let olderAnswer: ((params: Record<string, unknown>) => unknown) | null = null;
   bridge.connection = () => ({
     connectionId: "test",
     generation: 1,
@@ -193,6 +195,8 @@ async function run() {
           prompt_fingerprint: params.prompt_fingerprint,
         };
       if (method === "pane.send_input") return {};
+      if (method === "agent_history.older" && olderAnswer)
+        return olderAnswer(params);
       if (method === "agent_conversation.latest")
         return { ...reply, messages: undefined };
       // A transcript caught mid-write fails History's read too.
@@ -1278,7 +1282,7 @@ async function run() {
         root.render(
           <div
             className="workspace-inspector-body"
-            style={{ width, height, display: "flex" }}
+            style={{ width, height, display: "flex", flex: "none" }}
           >
             <div className="workspace-inspector-resource inspector-history-resource">
               <AgentChat
@@ -1316,6 +1320,360 @@ async function run() {
         );
       }
       historyAnswer = null;
+    }
+
+    // On a phone, wide content (an unbroken path, a long command, a code
+    // block, a table) wraps or scrolls inside its bubble: nothing in Chat,
+    // the composer included, reaches past the window's right edge.
+    {
+      const wide = [
+        `Saved to /srv/example/${"deeply-nested-folder/".repeat(12)}report.md`,
+        "```\n" +
+          `bun run check -- ${"--flag-with-a-long-name ".repeat(12)}` +
+          "\n```",
+        `| ${Array.from({ length: 12 }, (_, i) => `column ${i}`).join(" | ")} |\n|${" --- |".repeat(12)}\n| ${Array.from({ length: 12 }, () => "value").join(" | ")} |`,
+        `https://example.com/${"segment-".repeat(30)}end`,
+      ];
+      const longPath = `/srv/example/${"deeply-nested-folder/".repeat(8)}shot.png`;
+      reply = {
+        ...conversation(
+          [
+            ...wide.map((text, index) =>
+              message(`wide-${index}`, "assistant", text),
+            ),
+            message("wide-user", "user", `Please read ${"a/".repeat(60)}b.ts`),
+          ],
+          "working",
+        ),
+        terminal_title: `✳ Resume ${"the-long-running-task-name-".repeat(4)}`,
+        running_tool: {
+          id: "toolu_wide",
+          name: "Bash",
+          summary: `bun test ${"server/src/agent/very-long-path-".repeat(6)}`,
+          started_at: new Date(Date.now() - 3_000).toISOString(),
+        },
+        deliveries: [
+          {
+            id: "d-wide",
+            text: `Look at this ${longPath}`,
+            sent_at: "2026-10-22T09:00:05Z",
+            state: "pending",
+            expected: "claude session shown",
+            fingerprint: "b".repeat(64),
+          },
+        ],
+        quest: {
+          quest_version: 1,
+          source: "todo",
+          tool: "TodoWrite",
+          title: `Resume ${"the-long-running-task-name-".repeat(4)}`,
+          status: "active",
+          steps: [
+            {
+              id: "s1",
+              text: `Rebuild ${"a-very-long-step-description-".repeat(5)}`,
+              status: "active",
+              step_ids: [],
+            },
+          ],
+          progress: { done: 0, total: 1 },
+          started_at: "2026-10-22T09:00:00Z",
+          updated_at: "2026-10-22T09:00:00Z",
+          set_by: null,
+          helpers: 0,
+        },
+      };
+      document.documentElement.dataset.layout = "mobile";
+      root.render(
+        <div
+          className="workspace-inspector-body"
+          style={{ width: 390, height: 660, display: "flex", flex: "none" }}
+        >
+          <div className="workspace-inspector-resource inspector-history-resource">
+            <AgentChat
+              pane={{ ...pane("working"), pane_id: "wide" }}
+              active
+              onOpenTerminal={() => {}}
+              onClose={() => {}}
+            />
+          </div>
+        </div>,
+      );
+      await settle();
+      await settle();
+      const body = container
+        .querySelector(".workspace-inspector-body")!
+        .getBoundingClientRect();
+      const list = container.querySelector<HTMLElement>(".agent-history-chat")!;
+      // Markdown renders lazily; the code block and table are what widen.
+      for (
+        let tries = 0;
+        tries < 50 && !container.querySelector(".agent-history-chat pre");
+        tries += 1
+      )
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      await settle();
+      check(
+        !!container.querySelector(".agent-history-chat pre"),
+        `The phone check needs its code block rendered: ${container.querySelector(".agent-history-chat-bubble")?.innerHTML.slice(0, 300)}`,
+      );
+      // Every element, not a chosen few: whatever widens the window counts.
+      const wider = [
+        ...container.querySelectorAll<HTMLElement>(".agent-chat *"),
+      ]
+        .filter(
+          (element) =>
+            element.getBoundingClientRect().width > 0 &&
+            element.getBoundingClientRect().right > body.right + 1 &&
+            !element.closest("pre, table"),
+        )
+        .slice(0, 6)
+        .map(
+          (element) =>
+            `${element.tagName.toLowerCase()}.${element.className} ${Math.round(element.getBoundingClientRect().right)}`,
+        );
+      const resource = container.querySelector<HTMLElement>(
+        ".workspace-inspector-resource",
+      )!;
+      check(
+        wider.length === 0 && resource.scrollWidth <= resource.clientWidth + 1,
+        `At 390 px these reach past the window: ${wider.join(", ")}; resource ${resource.scrollWidth}/${resource.clientWidth}`,
+      );
+      const cell = container.querySelector<HTMLElement>(
+        ".agent-history-chat-bubble th",
+      );
+      check(
+        !!cell && cell.getBoundingClientRect().width >= 40,
+        `A wide table must scroll, not squeeze its cells (${cell?.getBoundingClientRect().width} px)`,
+      );
+      const outside = [
+        ...container.querySelectorAll<HTMLElement>(
+          ".agent-chat, .agent-history-chat-message, .agent-history-chat-bubble, .agent-chat-composer, .agent-chat-composer textarea",
+        ),
+      ].filter(
+        (element) => element.getBoundingClientRect().right > body.right + 1,
+      );
+      check(
+        outside.length === 0 && list.scrollWidth <= list.clientWidth + 1,
+        `At 390 px wide content leaves the window: ${outside.map((element) => `${element.className} ${Math.round(element.getBoundingClientRect().right)}`).join(", ")}; list ${list.scrollWidth}/${list.clientWidth}`,
+      );
+      delete document.documentElement.dataset.layout;
+    }
+
+    // Scrolling back past History's window loads older messages a page at a
+    // time, keeping the message being read in place.
+    {
+      const entry = (index: number) => ({
+        id: `turn-${index}`,
+        role: index % 2 ? "assistant" : "user",
+        kind: "message",
+        text: `Turn ${index} ${"with enough words to wrap a line. ".repeat(3)}`,
+        sent_at: "2026-10-22T09:00:00Z",
+      });
+      const all = Array.from({ length: 60 }, (_, index) => entry(index));
+      historyAnswer = () => ({
+        history_version: 2,
+        window_limit: 20,
+        mode: "snapshot",
+        cursor: { epoch: "paged", revision: 1 },
+        agent: "claude",
+        pane_id: "p",
+        workspace_id: "Example",
+        tab_id: "tab",
+        updated_at: "2026-10-22T09:00:00Z",
+        path: "",
+        entries: all.slice(40),
+      });
+      olderAnswer = (params) => {
+        const end = all.findIndex((item) => item.id === params.before);
+        const start = Math.max(0, end - 20);
+        return {
+          epoch: "paged",
+          entries: all.slice(start, end),
+          has_more: start > 0,
+        };
+      };
+      root.render(<div />);
+      await settle();
+      root.render(
+        <div
+          className="workspace-inspector-body"
+          style={{ width: 390, height: 660, display: "flex", flex: "none" }}
+        >
+          <div className="workspace-inspector-resource inspector-history-resource">
+            <AgentChat
+              pane={{ ...pane("idle"), pane_id: "paged" }}
+              active
+              onOpenTerminal={() => {}}
+              onClose={() => {}}
+            />
+          </div>
+        </div>,
+      );
+      await settle();
+      await settle();
+      const list = container.querySelector<HTMLElement>(".agent-history-chat")!;
+      check(
+        !!container.querySelector(".agent-history-chat-older"),
+        "A full window must offer earlier messages",
+      );
+      const before = count("agent_history.older");
+      list.scrollTop = 0;
+      list.dispatchEvent(new Event("scroll"));
+      await settle();
+      await settle();
+      const anchor = [
+        ...container.querySelectorAll<HTMLElement>(
+          ".agent-history-chat-message",
+        ),
+      ].find((element) => element.textContent?.includes("Turn 40 "));
+      check(
+        count("agent_history.older") === before + 1 &&
+          (list.textContent ?? "").includes("Turn 20 ") &&
+          !!anchor &&
+          anchor.getBoundingClientRect().top >=
+            list.getBoundingClientRect().top - 1 &&
+          anchor.getBoundingClientRect().top <
+            list.getBoundingClientRect().top + list.clientHeight / 2,
+        `Scrolling to the top must load the previous page and keep the reader's place (${count("agent_history.older") - before} pages)`,
+      );
+      // The last page ends the offer.
+      list.scrollTop = 0;
+      list.dispatchEvent(new Event("scroll"));
+      await settle();
+      await settle();
+      check(
+        (list.textContent ?? "").includes("Turn 0 ") &&
+          !container.querySelector(".agent-history-chat-older"),
+        "Earlier messages must load back to the first turn, then stop offering more",
+      );
+      historyAnswer = null;
+      olderAnswer = null;
+    }
+
+    // Bubbles keep a readable line length in a wide window (design docks
+    // Chat at 520 px and lets it widen to 900 px or more).
+    {
+      reply = conversation([
+        message(
+          "measure",
+          "assistant",
+          "Measure the line length of a long answer with ordinary English words in it. ".repeat(
+            6,
+          ),
+        ),
+      ]);
+      for (const width of [520, 900]) {
+        root.render(
+          <div
+            className="workspace-inspector-body"
+            style={{ width, height: 600, display: "flex", flex: "none" }}
+          >
+            <div className="workspace-inspector-resource inspector-history-resource">
+              <AgentChat
+                pane={{ ...pane("idle"), pane_id: `measure-${width}` }}
+                active
+                onOpenTerminal={() => {}}
+                onClose={() => {}}
+              />
+            </div>
+          </div>,
+        );
+        for (
+          let tries = 0;
+          tries < 30 &&
+          !container.querySelector(".agent-history-chat-markdown p");
+          tries += 1
+        )
+          await new Promise((resolve) => setTimeout(resolve, 100));
+        await settle();
+        const text = container.querySelector<HTMLElement>(
+          ".agent-history-chat-markdown p",
+        )!;
+        const range = document.createRange();
+        range.selectNodeContents(text);
+        const lines = new Set(
+          [...range.getClientRects()].map((rect) => Math.round(rect.top)),
+        ).size;
+        const perLine = Math.round(text.textContent!.length / lines);
+        check(
+          perLine >= 55 && perLine <= 80,
+          `At ${width} px a bubble line holds about ${perLine} characters`,
+        );
+      }
+    }
+
+    // A send the transcript has moved past shows where it was sent, saying
+    // its delivery is unknown; one just sent stays at the bottom.
+    {
+      const ago = (ms: number) => new Date(Date.now() - ms).toISOString();
+      reply = {
+        ...conversation([
+          {
+            ...message("late-1", "user", "Earlier question"),
+            sent_at: ago(300_000),
+          },
+          {
+            ...message("late-2", "assistant", "Reply after the send"),
+            sent_at: ago(60_000),
+          },
+        ]),
+        deliveries: [
+          {
+            id: "d-late",
+            text: "Look at this [attachment]",
+            sent_at: ago(180_000),
+            state: "pending",
+            expected: "claude session shown",
+            fingerprint: "a".repeat(64),
+          },
+          {
+            id: "d-now",
+            text: "Just sent",
+            sent_at: ago(1_000),
+            state: "pending",
+            expected: "claude session shown",
+            fingerprint: "a".repeat(64),
+          },
+        ],
+      };
+      root.render(
+        <AgentChat
+          pane={{ ...pane("idle"), pane_id: "late" }}
+          active
+          onOpenTerminal={() => {}}
+          onClose={() => {}}
+        />,
+      );
+      await settle();
+      await settle();
+      const order = [
+        ...container.querySelectorAll<HTMLElement>(
+          ".agent-history-chat-message",
+        ),
+      ].map(
+        (element) =>
+          element.dataset.delivery ??
+          element.querySelector("p")?.textContent ??
+          "",
+      );
+      check(
+        JSON.stringify(order) ===
+          JSON.stringify([
+            "Earlier question",
+            "unknown",
+            "Reply after the send",
+            "pending",
+          ]),
+        `An overtaken send must sit at its time and a fresh one at the bottom: ${JSON.stringify(order)}`,
+      );
+      check(
+        (
+          container.querySelector('[data-delivery="unknown"]')?.textContent ??
+          ""
+        ).includes("Sent · delivery unknown"),
+        "An overtaken send must say its delivery is unknown",
+      );
     }
 
     // History's read fails while the summary reads: Chat says so instead of

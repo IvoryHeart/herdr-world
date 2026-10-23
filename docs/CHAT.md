@@ -185,7 +185,7 @@ Each send leaves a receipt for the pane, bound to the session it was sent to:
 
 | State | Meaning | Shown |
 | --- | --- | --- |
-| `pending` | Not yet seen in the session it was sent to | In that session's conversation as "Sent; not yet seen"; after the pane moves on, as a line "Still checking <session>". Both have **Stop checking** |
+| `pending` | Not yet seen in the session it was sent to | In that session's conversation as "Sent; not yet seen" below the newest message. Once newer turns arrive and a minute has passed, it moves to where it was sent and reads "Sent · delivery unknown". After the pane moves on, as a line "Still checking <session>". All have **Stop checking** |
 | `matched` | The same words appeared in its own session clearly after the send | That transcript message is marked "Sent from Chat; matched by its words" |
 | `misdelivered` | Evidence of a switch after the send | A red notice naming both sessions; Send is paused until it is dismissed |
 | `uncertain` | The same words appeared at about the time of the send, or both in its own session and first in the session the pane moved to | A notice saying Chat cannot tell, with **Dismiss** |
@@ -195,8 +195,14 @@ Transcript times are sorted into three bands around the send: before it,
 about the time of it (the clock's uncertainty plus one second, for
 transcripts that round), and clearly after it.
 
+Texts are compared trimmed and without attachments: an uploaded file's path
+as Chat sends it, and the `[Image #N]` placeholder Claude Code records for an
+image path, are removed with the spaces around them. A message that is only
+an attachment can match in its own session but is never evidence of a
+switch to another one.
+
 - A receipt becomes `matched` when its own session's transcript has a user
-  message with the same text (trimmed) that Chat did not show before the send
+  message with the same text that Chat did not show before the send
   and that is stamped clearly after it. That proves order, not cause: another
   client or person could have typed the same words, so Chat never calls it
   delivered and keeps checking the other sessions the pane showed until the
@@ -282,7 +288,11 @@ pushes runs at most one more read of each. Chat renders History's bubbles and
 collapsed tool cards, which load their text only when opened, so a long, busy
 transcript is never reread or redrawn whole. The window is kept per pane for
 the page, so a Chat that remounts, docks or reopens shows its conversation at
-once. Transcripts on an SSH host are rechecked on Herdr events only.
+once. Scrolling near the top of a full window, or **Load earlier messages**,
+reads the 100 conversation entries before the oldest one shown
+(`agent_history.older`) and keeps the message being read in place; entries
+the window drops while older ones are shown stay on screen. Transcripts on an
+SSH host are rechecked on Herdr events only.
 
 Once a truncated Codex title ID has matched one transcript, rechecks on this
 machine stat that transcript instead of searching again. That is safe only

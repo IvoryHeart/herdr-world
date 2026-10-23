@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type { ConnectionClient } from "../api";
 import type { Pane } from "../types";
 import {
@@ -20,9 +27,16 @@ import {
  * The merged window is kept per pane for this page (a few panes at most), so
  * a window that remounts, docks, undocks or reopens shows its conversation at
  * once and carries on from its cursor.
+ *
+ * Scrolling back past the window loads older entries a page at a time
+ * (agent_history.older). They are kept before the window; entries the window
+ * drops off its head while older ones are shown join them, so the reader's
+ * place never vanishes.
  */
 const CACHE_LIMIT = 12;
-const cache = new Map<string, AgentHistory>();
+const OLDER_PAGE = 100;
+type Older = { epoch: string; entries: HistoryEntry[]; hasMore: boolean };
+const cache = new Map<string, { history: AgentHistory; older: Older | null }>();
 
 const cacheKey = (client: ConnectionClient, pane: Pane) =>
   JSON.stringify([
@@ -34,10 +48,14 @@ const cacheKey = (client: ConnectionClient, pane: Pane) =>
     pane.agent,
   ]);
 
-function remember(key: string, history: AgentHistory | null) {
+function remember(
+  key: string,
+  history: AgentHistory | null,
+  older: Older | null,
+) {
   cache.delete(key);
   if (!history) return;
-  cache.set(key, history);
+  cache.set(key, { history, older });
   while (cache.size > CACHE_LIMIT) cache.delete(cache.keys().next().value!);
 }
 
@@ -56,8 +74,16 @@ export function useAgentHistoryWindow({
 }) {
   const key = pane.agent ? cacheKey(client, pane) : null;
   const [history, setHistory] = useState<AgentHistory | null>(() =>
-    key ? (cache.get(key) ?? null) : null,
+    key ? (cache.get(key)?.history ?? null) : null,
   );
+  const [older, setOlder] = useState<Older | null>(() =>
+    key ? (cache.get(key)?.older ?? null) : null,
+  );
+  const [olderLoading, setOlderLoading] = useState(false);
+  const olderRef = useRef<Older | null>(older);
+  // Conversation entries the server's window holds; a full window may have
+  // older entries behind it.
+  const windowLimitRef = useRef<number | null>(null);
   const [toolEntryTexts, setToolEntryTexts] = useState<
     ReadonlyMap<string, ToolTextOverlay>
   >(() => new Map());
@@ -100,6 +126,9 @@ export function useAgentHistoryWindow({
       })
       .then((response) => {
         if (!client.isCurrent() || loadSeqRef.current !== seq) return;
+        const limit = (response as AgentHistoryResponse | null)?.window_limit;
+        if (typeof limit === "number") windowLimitRef.current = limit;
+        const previous = historyRef.current;
         const merged = mergeAgentHistory(
           historyRef.current,
           response as AgentHistoryResponse,
@@ -120,7 +149,26 @@ export function useAgentHistoryWindow({
           return;
         }
         historyRef.current = merged;
-        remember(key, merged);
+        // Older pages belong to one epoch; entries the window evicts from its
+        // head join them so the scrolled-back reader keeps their place.
+        let kept = olderRef.current;
+        if (kept && (!merged || merged.cursor.epoch !== kept.epoch))
+          kept = null;
+        else if (kept && merged && previous) {
+          const ids = new Set(merged.messages.map((message) => message.id));
+          const evicted: HistoryEntry[] = [];
+          for (const entry of previous.messages) {
+            if (ids.has(entry.id)) break;
+            evicted.push(entry);
+          }
+          if (evicted.length)
+            kept = { ...kept, entries: [...kept.entries, ...evicted] };
+        }
+        if (kept !== olderRef.current) {
+          olderRef.current = kept;
+          setOlder(kept);
+        }
+        remember(key, merged, kept);
         setHistory(merged);
         if (!merged) return;
         // Drop fetched texts for entries that left the window or whose content
@@ -128,7 +176,10 @@ export function useAgentHistoryWindow({
         setToolEntryTexts((current) => {
           if (current.size === 0) return current;
           const kept = new Map<string, ToolTextOverlay>();
-          for (const message of merged.messages) {
+          for (const message of [
+            ...(olderRef.current?.entries ?? []),
+            ...merged.messages,
+          ]) {
             const overlay = current.get(message.id);
             if (overlay !== undefined && toolOverlayMatches(overlay, message))
               kept.set(message.id, overlay);
@@ -137,7 +188,11 @@ export function useAgentHistoryWindow({
         });
         // Failure marks for entries that left the window are dead weight; an
         // entry reappearing later may retry once.
-        const windowed = new Set(merged.messages.map((message) => message.id));
+        const windowed = new Set(
+          [...(olderRef.current?.entries ?? []), ...merged.messages].map(
+            (message) => message.id,
+          ),
+        );
         for (const id of toolEntryFailedRef.current)
           if (!windowed.has(id)) toolEntryFailedRef.current.delete(id);
         setError("");
@@ -170,8 +225,12 @@ export function useAgentHistoryWindow({
     inFlightRef.current = null;
     againRef.current = false;
     const kept = key ? (cache.get(key) ?? null) : null;
-    historyRef.current = kept;
-    setHistory(kept);
+    historyRef.current = kept?.history ?? null;
+    setHistory(kept?.history ?? null);
+    olderRef.current = kept?.older ?? null;
+    setOlder(kept?.older ?? null);
+    setOlderLoading(false);
+    windowLimitRef.current = null;
     setToolEntryTexts(new Map());
     setToolEntryLoading(new Set());
     toolEntryFailedRef.current.clear();
@@ -242,7 +301,104 @@ export function useAgentHistoryWindow({
     [client, pane.agent, pane.pane_id, pane.tab_id, pane.workspace_id],
   );
 
-  const messages = useMemo(() => history?.messages ?? [], [history?.messages]);
+  // One older page at a time, before the oldest entry shown.
+  const olderSeqRef = useRef(0);
+  const olderInFlightRef = useRef(false);
+  const loadOlder = useCallback(() => {
+    const current = historyRef.current;
+    if (!pane.agent || !key || !current || !client.isCurrent()) return;
+    if (olderInFlightRef.current) return;
+    const kept = olderRef.current;
+    const anchor = kept?.entries[0] ?? current.messages[0];
+    if (!anchor || (kept && !kept.hasMore)) return;
+    const epoch = current.cursor.epoch;
+    const seq = olderSeqRef.current + 1;
+    olderSeqRef.current = seq;
+    olderInFlightRef.current = true;
+    let committed = false;
+    setOlderLoading(true);
+    client
+      .call("agent_history.older", {
+        pane_id: pane.pane_id,
+        workspace_id: pane.workspace_id,
+        tab_id: pane.tab_id,
+        agent: pane.agent,
+        before: anchor.id,
+        limit: OLDER_PAGE,
+      })
+      .then((result) => {
+        if (!client.isCurrent() || olderSeqRef.current !== seq) return;
+        const reply = result as {
+          epoch?: unknown;
+          entries?: unknown;
+          has_more?: unknown;
+        };
+        const now = historyRef.current;
+        if (
+          !now ||
+          reply.epoch !== epoch ||
+          now.cursor.epoch !== epoch ||
+          !Array.isArray(reply.entries)
+        )
+          return;
+        const shown = new Set(
+          [...(olderRef.current?.entries ?? []), ...now.messages].map(
+            (entry) => entry.id,
+          ),
+        );
+        const page = (reply.entries as HistoryEntry[]).filter(
+          (entry) => !shown.has(entry.id),
+        );
+        const next: Older = {
+          epoch,
+          entries: [...page, ...(olderRef.current?.entries ?? [])],
+          hasMore: reply.has_more === true && page.length > 0,
+        };
+        olderRef.current = next;
+        // The guard holds until this page has rendered (see below): a scroll
+        // in between still reads the old top and would fetch the next page.
+        committed = true;
+        setOlder(next);
+        remember(key, now, next);
+      })
+      .catch((reason: unknown) => {
+        if (!client.isCurrent() || olderSeqRef.current !== seq) return;
+        setError(reason instanceof Error ? reason.message : String(reason));
+      })
+      .finally(() => {
+        if (olderSeqRef.current !== seq) return;
+        if (!committed) olderInFlightRef.current = false;
+        setOlderLoading(false);
+      });
+  }, [client, key, pane.agent, pane.pane_id, pane.tab_id, pane.workspace_id]);
+  useLayoutEffect(() => {
+    olderInFlightRef.current = false;
+  }, [older]);
+  useEffect(() => {
+    // A new pane or lease drops a page still in flight.
+    olderSeqRef.current += 1;
+    olderInFlightRef.current = false;
+  }, [key]);
+
+  const windowMessages = history?.messages;
+  const olderEntries = older?.entries;
+  const messages = useMemo(
+    () =>
+      olderEntries?.length
+        ? [...olderEntries, ...(windowMessages ?? [])]
+        : (windowMessages ?? []),
+    [olderEntries, windowMessages],
+  );
+  const conversationCount = useMemo(
+    () =>
+      (windowMessages ?? []).filter((message) => message.role !== "tool")
+        .length,
+    [windowMessages],
+  );
+  const hasOlder = older
+    ? older.hasMore
+    : windowLimitRef.current !== null &&
+      conversationCount >= windowLimitRef.current;
   // Substitute fetched tool payloads only while they still match the entry.
   const hydrated = useMemo(
     () =>
@@ -263,6 +419,9 @@ export function useAgentHistoryWindow({
     loading,
     error,
     refresh,
+    hasOlder,
+    olderLoading,
+    loadOlder,
     toolEntryTexts,
     toolEntryLoading,
     toolEntryFailedRef,

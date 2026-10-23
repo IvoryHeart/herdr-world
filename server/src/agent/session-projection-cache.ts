@@ -4,6 +4,8 @@ import type { AgentSessionResolved, SessionFile } from "./session-types";
 import { conversationMessagesFromTrajectory } from "./session-messages";
 import { projectAgentTrajectory } from "./session-trajectory";
 import {
+  allHistoryEntriesFromTrajectory,
+  historyEntriesBefore,
   historyEntriesFromTrajectory,
   historyUpdate,
   type HistoryEntry,
@@ -58,6 +60,10 @@ export async function readSessionProjection(
 }
 
 type Projection = Awaited<ReturnType<typeof readSessionProjection>>;
+
+// The whole transcript's entries, built only when someone scrolls back past
+// the window, and dropped with the projection.
+const allEntries = new WeakMap<Projection, HistoryEntry[]>();
 type Cached = {
   projection: Projection;
   signature: string;
@@ -251,6 +257,17 @@ export function createSessionProjectionCache(
       if (pending.get(key) === task) pending.delete(key);
     }
   }
+  function everyEntry(cached: Cached) {
+    let entries = allEntries.get(cached.projection);
+    if (!entries) {
+      entries = allHistoryEntriesFromTrajectory(
+        { ...cached.projection.file, mtimeMs: cached.fallbackTime },
+        cached.projection.trajectory,
+      );
+      allEntries.set(cached.projection, entries);
+    }
+    return entries;
+  }
   return {
     invalidate,
     async get(resolved: AgentSessionResolved) {
@@ -266,6 +283,25 @@ export function createSessionProjectionCache(
       if (known && stat && known.signature === signature({ ...file, ...stat }))
         return known.quest;
       return (await load(resolved)).projection.quest;
+    },
+    /** The page before an entry, for scrolling back past the window. */
+    async older(
+      resolved: AgentSessionResolved,
+      beforeId: string,
+      limit: number,
+    ) {
+      const cached = await load(resolved);
+      return {
+        epoch: cached.epoch,
+        page: historyEntriesBefore(everyEntry(cached), beforeId, limit),
+      };
+    },
+    /** One entry, in the window or older. */
+    async entry(resolved: AgentSessionResolved, entryId: string) {
+      const cached = await load(resolved);
+      const find = (entries: readonly HistoryEntry[]) =>
+        entries.find((entry) => entry.id === entryId);
+      return find(cached.projection.entries) ?? find(everyEntry(cached));
     },
     async history(resolved: AgentSessionResolved, cursor: unknown) {
       const cached = await load(resolved);

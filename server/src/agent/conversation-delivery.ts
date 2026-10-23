@@ -95,9 +95,15 @@ const TIMESTAMP_ROUNDING_MS = 1000;
 export const RECEIPTS_PER_PANE = 20;
 const SEEN_PER_RECEIPT = 4;
 
-// Harnesses may trim what was typed; inner whitespace is kept, so prompts
-// that differ only in spacing stay distinct.
-const typedText = (text: string) => text.trim();
+// An attachment as Chat sends it (an uploaded file's path, bare or quoted)
+// or as a harness records it (Claude Code turns an image path into
+// "[Image #N]"), with the spaces around it.
+const ATTACHMENT =
+  /\s*(?:\[Image #\d+\]|(['"]?)[^\s'"]*herdr-world-uploads-[^\s'"]*\1)\s*/g;
+
+// Harnesses may trim what was typed and rewrite attachments; other inner
+// whitespace is kept, so prompts that differ only in spacing stay distinct.
+export const typedText = (text: string) => text.replace(ATTACHMENT, " ").trim();
 
 const userMessages = (messages: readonly ConversationMessage[]) =>
   messages.filter(
@@ -245,7 +251,7 @@ export function createDeliveryLedger() {
               Date.parse(message.sent_at) >= receipt.near,
           );
         const same = (message: ConversationMessage) =>
-          message.text.trim() === receipt.typed;
+          typedText(message.text) === receipt.typed;
         let unclear: { view: DeliveryView; id: string } | null = null;
         // Its own session: a copy written clearly after the send matches it.
         let match: { view: DeliveryView; id: string } | null = null;
@@ -267,7 +273,12 @@ export function createDeliveryLedger() {
         // words typed there later, or already there, are not.
         let evidence: { view: DeliveryView; id: string } | null = null;
         for (const view of views) {
-          if (view.fingerprint === receipt.fingerprint || !view.messages)
+          // An attachment alone has no words to tell sessions apart.
+          if (
+            view.fingerprint === receipt.fingerprint ||
+            !view.messages ||
+            !receipt.typed
+          )
             continue;
           const first = candidates(view)[0];
           if (!first || !same(first)) continue;
