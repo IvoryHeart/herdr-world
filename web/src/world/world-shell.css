@@ -217,3 +217,14 @@
   white-space: nowrap;
   border: 0;
 }
+
+/* A host's colour sits beside its header (it is not a part of the toggle). */
+.world-navigator-host-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.world-navigator-host-row .world-navigator-host {
+  flex: 1;
+  min-width: 0;
+}
