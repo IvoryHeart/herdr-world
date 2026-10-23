@@ -129,7 +129,7 @@ import {
   clientBoardOps,
   moveFollowOps,
   reconcileOps,
-  tabClosedColorOps,
+  tabClosedOps,
   BoardConflictError,
   BoardStore,
   type BoardOp,
@@ -563,16 +563,17 @@ async function moveWorkspaceIds(
   return ids;
 }
 
-async function dropClosedTabColor(
+async function dropClosedTabSettings(
   connectionId: string,
   tabId: string,
   call: (method: string, params: Record<string, unknown>) => Promise<unknown>,
   isCurrent: () => boolean,
 ) {
   try {
-    const colors = board().get().layout.colors;
-    const plain = Boolean(colors[`${connectionId}:${tabId}`]);
-    if (!plain && !colors[`${connectionId}:tab:${tabId}`]) return;
+    const { colors, desk_pins: pins } = board().get().layout;
+    const saved = (key: string) => Boolean(colors[key] || pins[key]);
+    const plain = saved(`${connectionId}:${tabId}`);
+    if (!plain && !saved(`${connectionId}:tab:${tabId}`)) return;
     const absent =
       plain &&
       (
@@ -583,10 +584,10 @@ async function dropClosedTabColor(
         })
       ).state === "absent";
     if (!isCurrent()) return;
-    const ops = tabClosedColorOps(board().get(), connectionId, tabId, absent);
+    const ops = tabClosedOps(board().get(), connectionId, tabId, absent);
     if (ops.length) publishBoardChanged(board().patch(ops).revision);
   } catch (error) {
-    logger.warn("Board could not drop a closed tab's colour", {
+    logger.warn("Board could not drop a closed tab's colour or pin", {
       detail: String(error),
     });
   }
@@ -869,7 +870,7 @@ function runtimeFactoryForProfile(
               ? (event as { data?: { tab_id?: unknown } }).data?.tab_id
               : undefined;
           if (typeof closedTab === "string" && closedTab)
-            void dropClosedTabColor(
+            void dropClosedTabSettings(
               eventIdentity.id,
               closedTab,
               (rpc, rpcParams) => runtime.herdr.call(rpc, rpcParams, 10_000),

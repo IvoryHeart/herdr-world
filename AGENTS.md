@@ -113,7 +113,11 @@ hook runs `bun run check:changed` for code changes: static checks, the affected
 unit tests and nearest World browser suites, and the unfiltered verification
 gate when its inputs change. CI runs the full gate; `bun run check:delivery` runs
 it locally in parallel lanes. A Markdown-only follow-up uses `bun run check:docs`
-only when a passed code gate already covers its code.
+only when a passed code gate already covers its code, and a push that only merges
+`origin/main` (no edits beyond changelog fragments) runs `bun run check:static`.
+Heavy checks from every worktree share one machine-wide queue (one browser lane and
+one verification at a time); a queued gate prints whom it waits for, so wait rather
+than bypass the hook.
 CI runs documentation checks for Markdown-only PR diffs and full checks for code
 changes. Browser tests require Chrome/Chromium or `CHROME_BIN`:
 

@@ -30,9 +30,11 @@ permissions:
     actions: read
 
 concurrency:
-    # Each main commit keeps its own run, so a quick second merge cannot
-    # cancel or skip the first one's check.
-    group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || (github.event_name == 'push' && github.sha) || github.ref }}
+    # Main pushes share one group: the running check finishes, and a batch of
+    # merges queued behind it is tested once, at its newest commit (GitHub
+    # keeps only the latest pending run). Main gate names every merge since the
+    # last green commit when that run fails.
+    group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || (github.event_name == 'push' && 'main-push') || github.ref }}
     cancel-in-progress: ${{ github.event_name == 'pull_request' && github.event.action != 'edited' }}
 
 jobs:

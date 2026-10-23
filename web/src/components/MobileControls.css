@@ -92,7 +92,8 @@
     touch-action: manipulation;
   }
 
-  .mobile-terminal-appbar .mobile-terminal-swatch {
+  .mobile-terminal-appbar .mobile-terminal-swatch,
+  .mobile-terminal-appbar .mobile-terminal-pin {
     width: 36px;
     flex: none;
   }
@@ -109,6 +110,10 @@
   .mobile-terminal-appbar button[aria-pressed="true"],
   .mobile-terminal-appbar button[aria-expanded="true"] {
     background: var(--accent-soft);
+  }
+
+  .mobile-terminal-appbar .mobile-terminal-pin[aria-pressed="true"] {
+    color: var(--accent);
   }
 
   .mobile-tabs-count {
