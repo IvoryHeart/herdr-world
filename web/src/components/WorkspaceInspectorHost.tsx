@@ -63,7 +63,7 @@ import {
   type WorkspaceInspectorState,
   type WorkspaceInspectorContext,
 } from "../workspaceResource";
-import { AgentIcon } from "./AgentIcon";
+import { WorkspaceInspectorAgentIdentity } from "./WorkspaceInspectorAgentIdentity";
 import { AgentChat } from "./AgentChat";
 import { AgentCheckoutPanel } from "./AgentCheckoutPanel";
 import { paneHasAgentHistory } from "./agentSession";
@@ -82,7 +82,6 @@ import { FilePreviewTabs } from "./FilePreviewTabs";
 import { workspaceInspectorLayout } from "./workspaceInspectorLayout";
 import { PullRequestCard } from "./PullRequestCard";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
-import { ColorSwatchButton } from "./ColorSwatch";
 import { changedCount, checkoutLabel } from "./inspectorCheckout";
 import { AgentInterestButton } from "./AgentInterestButton";
 import { InspectorSplitResizer } from "./InspectorSplitResizer";
@@ -153,6 +152,7 @@ export function WorkspaceInspectorHost({
   onExpandedChange,
   windowControls,
   terminalColor,
+  agentSettings,
   onWindowMaximize,
   windowMaximized = false,
   onClose,
@@ -199,8 +199,10 @@ export function WorkspaceInspectorHost({
   onDockChange: (dock: InspectorDock) => void;
   onExpandedChange: (expanded: boolean) => void;
   windowControls?: ManagedWindowControls;
-  /** The terminal's colour, shown and chosen beside its name. */
+  /** The terminal's colour: the icon's background, chosen from its settings. */
   terminalColor?: ManagedWindowControls["color"];
+  /** More of the agent's settings, below the colour in the icon's popover. */
+  agentSettings?: ReactNode;
   onWindowMaximize?: () => void;
   windowMaximized?: boolean;
   onClose: () => void;
@@ -613,62 +615,21 @@ export function WorkspaceInspectorHost({
             label="Inspector window"
           />
         ) : null}
-        {terminalColor ? (
-          <ColorSwatchButton
-            className="workspace-inspector-swatch"
-            label="Terminal colour"
-            palette={terminalColor.palette}
-            current={terminalColor.current}
-            onColor={terminalColor.onColor}
-          />
-        ) : null}
         {agentContext ? (
-          <div
-            className="workspace-inspector-identity workspace-inspector-agent-identity"
-            data-kind={agentContext.kind}
-          >
-            <span
-              className="workspace-inspector-agent-avatar"
-              aria-hidden="true"
-            >
-              {agentContext.portrait ? (
-                <img
-                  className="workspace-inspector-portrait"
-                  src={agentContext.portrait}
-                  alt=""
-                />
-              ) : agentContext.kind === "agent" ? (
-                <AgentIcon
-                  agent={agentContext.agent ?? agentContext.label}
-                  compact
-                />
-              ) : agentContext.kind === "terminal" ? (
-                <SquareTerminal size={16} />
-              ) : (
-                <FolderTree size={16} />
-              )}
-            </span>
-            <span className="workspace-inspector-checkout">
-              {agentContext.label}
-            </span>
-            {locationLine(
-              <>
-                <span
-                  className="workspace-inspector-state"
-                  data-tone={agentContext.statusTone}
-                >
-                  {agentContext.stateLabel}
-                </span>
-                <span className="workspace-inspector-where">
-                  {` · ${agentContext.locationLabel}`}
-                  {agentContext.taskSummary
-                    ? ` · ${agentContext.taskSummary}`
-                    : ""}
-                </span>
-              </>,
+          <WorkspaceInspectorAgentIdentity
+            context={agentContext}
+            terminalColor={terminalColor}
+            agentSettings={agentSettings}
+            location={locationLine(
+              <span className="workspace-inspector-where">
+                {agentContext.locationLabel}
+                {agentContext.taskSummary
+                  ? ` · ${agentContext.taskSummary}`
+                  : ""}
+              </span>,
               `${agentContext.kind}, ${agentContext.stateLabel}, ${agentContext.locationLabel}`,
             )}
-          </div>
+          />
         ) : (
           <div className="workspace-inspector-identity">
             <span className="workspace-inspector-repo">
@@ -1393,6 +1354,10 @@ function inspectorAgentContext(
     stateLabel: pane.state_labels?.[status]?.trim() || status,
     locationLabel: workspace?.label || "Workspace",
     agent: pane.agent,
+    // Spaces shows the same state badge as World: Herdr's statuses are the tones.
+    statusTone: status,
+    // The agent's Herdr name (agent.list), not its display label.
+    ...(pane.agent_name?.trim() ? { agentName: pane.agent_name.trim() } : {}),
     ...(pane.task_summary?.trim()
       ? { taskSummary: pane.task_summary.trim() }
       : {}),
