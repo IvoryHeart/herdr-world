@@ -436,13 +436,19 @@ async function run() {
         '.town-view-shell .world-semantic-target[data-kind="agent"]',
       )!
       .click();
+    // A tap opens the agent's one window on Chat; its Terminal view is one
+    // tap away in the window's top selector.
+    const terminalTab = () =>
+      document.querySelector<HTMLButtonElement>(
+        '.workspace-inspector [role="tab"][aria-label="Terminal"]',
+      );
     await until(
-      () => document.querySelector(".town-peek-head .town-peek-terminal"),
-      "Town agent card",
+      () =>
+        document.querySelector('.workspace-inspector[data-view="history"]') &&
+        terminalTab(),
+      "Town agent window on Chat",
     );
-    document
-      .querySelector<HTMLButtonElement>(".town-peek-head .town-peek-terminal")!
-      .click();
+    terminalTab()!.click();
     await until(
       () =>
         document.querySelector(
