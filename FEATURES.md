@@ -510,6 +510,9 @@ See [resource ownership](docs/ARCHITECTURE.md#workspace-resource-ownership).
   with each choice's description) or plan approval, Chat shows it as an ask
   card and answers with the option you pick (click or its number key), after
   checking the question has not changed.
+  Each tool call's row in Chat carries its evidence: a plain label, its state
+  and time, a pass or fail badge for a test run, and when opened, the edit's
+  diff, the test strip with its first failure, or the end of its output.
   It refreshes when the service sees the transcript, title or status change,
   without browser polling, and keeps the last good view if a read fails. When
   it cannot read the conversation it shows the reason with the matching action:
