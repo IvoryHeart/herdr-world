@@ -1,6 +1,7 @@
 import type { ConversationDelivery } from "./conversation-delivery";
 import type { PendingPrompt } from "./pending-prompt";
 import type { ConversationIdentity } from "./conversation-watch";
+import type { AgentQuest, Quest } from "./quest";
 import type { HistoryEntry } from "./session-history";
 
 // The conversation read model is the one contract Chat and other consumers
@@ -65,6 +66,8 @@ export type Conversation = {
   updated_at: string | null;
   messages: ConversationMessage[];
   latest: ConversationMessage | null;
+  /** What the agent is working through, from its own todos, plan or goal. */
+  quest: Quest | null;
   /**
    * Messages Chat sent from this pane that are not yet settled: pending ones
    * belong to the conversation whose fingerprint they carry; misdelivered and
@@ -163,6 +166,7 @@ export type ConversationSendResult =
     };
 
 export type ConversationTarget = { pane_id: string };
+export type { AgentQuest };
 
 /**
  * What kept an answer from being acknowledged: Herdr no longer reports the
@@ -208,6 +212,11 @@ export interface ConversationSource {
   identity(target: ConversationTarget): Promise<ConversationIdentity>;
   /** Latest for the named panes, or for every agent the source sees. */
   latestAll(paneIds?: readonly string[]): Promise<ConversationLatest[]>;
+  /**
+   * Quests for the named panes, or every agent the source sees, without
+   * settling deliveries or projecting messages.
+   */
+  quests(paneIds?: readonly string[]): Promise<AgentQuest[]>;
   send(
     target: ConversationTarget & {
       text: string;

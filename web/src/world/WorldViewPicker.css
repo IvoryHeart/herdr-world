@@ -1,0 +1,150 @@
+/* Desktop: the views hang from the top edge beside Exit Zen. */
+.zen-dock {
+  position: fixed;
+  top: 0;
+  left: 50%;
+  z-index: 121;
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  transform: translateX(-50%);
+}
+
+.zen-dock .zen-island {
+  position: static;
+  transform: none;
+}
+
+.world-view-picker {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px 4px 4px;
+  border: 1px solid var(--border);
+  border-top: 0;
+  border-radius: 0 0 10px 10px;
+  background: color-mix(in srgb, var(--panel) 80%, transparent);
+  box-shadow: var(--shadow-lg);
+  opacity: 0.85;
+  transition: opacity 0.15s ease;
+}
+
+.world-view-picker:hover,
+.world-view-picker:focus-within {
+  opacity: 1;
+}
+
+.world-view-picker button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  padding: 0 7px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.world-view-picker button span {
+  display: none;
+}
+
+.world-view-picker button[aria-pressed="true"] {
+  background: var(--accent-soft);
+  color: var(--text-strong);
+}
+
+.world-view-picker button[aria-pressed="true"] span {
+  display: inline;
+}
+
+.world-view-picker button:hover {
+  color: var(--text);
+}
+
+/* Phone: one corner button where the bottom navigation was. */
+.world-view-picker-phone {
+  position: fixed;
+  left: calc(12px + env(safe-area-inset-left, 0px));
+  bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  z-index: 120;
+}
+
+.world-view-picker-fab {
+  width: 52px;
+  height: 52px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--panel) 92%, transparent);
+  color: var(--text-strong);
+  box-shadow: var(--shadow-lg);
+  touch-action: manipulation;
+}
+
+.world-view-picker-fab[aria-expanded="true"] {
+  background: var(--accent-soft);
+}
+
+.world-view-picker-menu {
+  position: absolute;
+  left: 0;
+  bottom: 60px;
+  width: 210px;
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--panel);
+  box-shadow: var(--shadow-lg);
+}
+
+.world-view-picker-menu button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text);
+  font-size: 15px;
+  text-align: left;
+}
+
+.world-view-picker-menu button[aria-checked="true"] {
+  background: var(--accent-soft);
+  color: var(--text-strong);
+  font-weight: 600;
+}
+
+.world-view-picker-menu hr {
+  width: 100%;
+  margin: 4px 0;
+  border: 0;
+  border-top: 1px solid var(--border);
+}
+
+/* Typing owns the bottom edge, as it does for the bottom navigation. */
+.keyboard-open .world-view-picker-phone {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .world-view-picker {
+    transition: none;
+  }
+}
+
+/* Town's phone strip makes room for the picker in the corner. */
+@media (max-width: 640px) {
+  .world-foundation-shell[data-zen] .town-view-shell .town-rail {
+    left: 76px;
+  }
+}
