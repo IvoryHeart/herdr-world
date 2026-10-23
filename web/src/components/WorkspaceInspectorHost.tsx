@@ -1,6 +1,5 @@
 import { useEffectCallback } from "../useEffectCallback";
 import { preferencesStorageKey } from "../workspaceResource";
-import { subscribeLocalStorage } from "../browserStorage";
 import { useLayoutPreferences } from "../layoutPreferences";
 import { connectionClientScopeKey } from "../useConnectionClient";
 import {
@@ -39,7 +38,7 @@ import {
   type ReactNode,
 } from "react";
 import type { ConnectionClient } from "../api";
-import { worldLocalStorage } from "../browserStorage";
+import { subscribeLocalStorage, worldLocalStorage } from "../browserStorage";
 import {
   type NewReviewAnnotation,
   type ReviewAnnotation,
@@ -87,6 +86,7 @@ import { ColorSwatchButton } from "./ColorSwatch";
 import { changedCount, checkoutLabel } from "./inspectorCheckout";
 import { AgentInterestButton } from "./AgentInterestButton";
 import { InspectorSplitResizer } from "./InspectorSplitResizer";
+import { paneAgentTitle } from "../agentName";
 import "./WorkspaceInspectorHost.css";
 
 const DiffContentView = lazyWithReload("diff-content-view", () =>
@@ -1389,7 +1389,7 @@ function inspectorAgentContext(
   const status = pane.agent_status || "unknown";
   return {
     kind: "agent",
-    label: pane.display_agent?.trim() || pane.agent,
+    label: paneAgentTitle(pane, pane.display_agent?.trim() || pane.agent),
     stateLabel: pane.state_labels?.[status]?.trim() || status,
     locationLabel: workspace?.label || "Workspace",
     agent: pane.agent,

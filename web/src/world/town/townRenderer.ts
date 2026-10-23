@@ -229,7 +229,7 @@ function glowTexture() {
 
 const kindOf = (agent: OfficeAgent) => {
   const label =
-    `${agent.displayLabel} ${agent.taskSummary ?? ""}`.toLowerCase();
+    `${agent.harness ?? agent.displayLabel} ${agent.taskSummary ?? ""}`.toLowerCase();
   return label.includes("codex")
     ? "codex"
     : label.includes("gemini")

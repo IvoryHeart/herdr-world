@@ -1,4 +1,8 @@
 import { runPluginCommand } from "./config/plugin-command";
+import {
+  conversationRpc,
+  CONVERSATION_RPC_METHODS,
+} from "./agent/conversation-rpc";
 import { createMoveQueue, moveDesk, movePane } from "./world/desk-move";
 
 /** Town moves run one at a time per connection (see world/desk-move). */
@@ -322,6 +326,7 @@ const IMPORTANT_RPC_METHODS = new Set([
   "bridge.pause_others",
   "agent_conversation.get",
   "agent_conversation.latest",
+  "agent_conversation.steps",
   "agent_conversation.send",
   "agent_conversation.dismiss",
   "agent_conversation.answer",
@@ -1864,79 +1869,14 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
     }
     return;
   }
-  if (
-    method === "agent_conversation.get" ||
-    method === "agent_conversation.latest" ||
-    method === "agent_conversation.send" ||
-    method === "agent_conversation.answer" ||
-    method === "agent_conversation.dismiss"
-  ) {
+  if (CONVERSATION_RPC_METHODS.has(method)) {
     try {
-      const source = connection.agentSessions.conversation;
-      const p = params ?? {};
-      const paneId = typeof p.pane_id === "string" ? p.pane_id : "";
-      if (method !== "agent_conversation.latest" && !paneId)
-        throw new Error(`${method} requires pane_id`);
-      const result =
-        method === "agent_conversation.get"
-          ? await source.read({ pane_id: paneId })
-          : method === "agent_conversation.answer"
-            ? await source.answer({
-                pane_id: paneId,
-                key: typeof p.key === "string" ? p.key : "",
-                prompt_fingerprint:
-                  typeof p.prompt_fingerprint === "string"
-                    ? p.prompt_fingerprint
-                    : "",
-              })
-            : method === "agent_conversation.dismiss"
-              ? {
-                  dismissed: source.dismiss({
-                    pane_id: paneId,
-                    delivery_id:
-                      typeof p.delivery_id === "string" ? p.delivery_id : "",
-                  }),
-                }
-              : method === "agent_conversation.send"
-                ? await source.send({
-                    pane_id: paneId,
-                    text: typeof p.text === "string" ? p.text : "",
-                    session_fingerprint:
-                      typeof p.session_fingerprint === "string"
-                        ? p.session_fingerprint
-                        : "",
-                    ...(Array.isArray(p.baseline)
-                      ? {
-                          baseline: p.baseline.filter(
-                            (id): id is string => typeof id === "string",
-                          ),
-                        }
-                      : {}),
-                  })
-                : paneId
-                  ? await source.latest({ pane_id: paneId })
-                  : {
-                      conversations: await source.latestAll(
-                        Array.isArray(p.pane_ids)
-                          ? p.pane_ids.filter(
-                              (id): id is string => typeof id === "string",
-                            )
-                          : undefined,
-                      ),
-                    };
+      const result = await conversationRpc(
+        method,
+        params ?? {},
+        connection.agentSessions.conversation,
+      );
       sendReply({ id, result }, method);
-    } catch (e) {
-      sendError(`${method}-error`, e);
-    }
-    return;
-  }
-  if (method === "agent_quest.list") {
-    try {
-      const ids = Array.isArray(params?.pane_ids)
-        ? params.pane_ids.filter((id): id is string => typeof id === "string")
-        : undefined;
-      const quests = await connection.agentSessions.conversation.quests(ids);
-      sendReply({ id, result: { quests } }, method);
     } catch (e) {
       sendError(`${method}-error`, e);
     }
