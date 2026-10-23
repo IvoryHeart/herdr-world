@@ -78,8 +78,10 @@ export async function settleVerdict(options: {
 }): Promise<ReturnType<typeof judge>> {
   let against = { sha: options.baseSha, size: options.base };
   let verdict = judge(against.size, options.delta);
-  for (let round = 0; round < (options.rounds ?? 5); round++) {
+  for (let round = 0; ; round++) {
     await options.post(verdict.state, verdict.description);
+    // Out of rounds: the verdict just posted is the newest one computed.
+    if (round + 1 >= (options.rounds ?? 5)) break;
     const tip = await options.readTip();
     if (tip === against.sha) break;
     const size = await options.readMainSize(tip);

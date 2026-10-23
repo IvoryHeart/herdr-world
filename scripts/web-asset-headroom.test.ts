@@ -116,3 +116,24 @@ test("a new tip without a recorded size is left to main's own run", async () => 
   expect(verdict.state).toBe("success");
   expect(posts).toEqual(["success"]);
 });
+
+test("when main keeps moving, the newest verdict computed is the one posted last", async () => {
+  let tick = 0;
+  const posts: string[] = [];
+  const verdict = await settleVerdict({
+    baseSha: "main-0",
+    base: { files: 140, bytes: 13 * MiB },
+    delta: { files: 0, bytes: 0 },
+    readTip: async () => `main-${++tick}`,
+    readMainSize: async (sha) => ({
+      files: 140,
+      bytes: (13 + Number(sha.slice(5)) * 0.1) * MiB,
+    }),
+    post: async (_state, description) => {
+      posts.push(description);
+    },
+    rounds: 3,
+  });
+  expect(posts).toHaveLength(3);
+  expect(posts.at(-1)).toBe(verdict.description);
+});
