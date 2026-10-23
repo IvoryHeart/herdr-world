@@ -92,6 +92,7 @@ import {
   type TownDeskBadge,
 } from "./townBadges";
 import "./town.css";
+import "./townBoard.css";
 
 export type TownRoomActions = {
   showCreateSeat(roomKey: string): boolean;
