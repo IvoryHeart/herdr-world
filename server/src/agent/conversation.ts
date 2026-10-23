@@ -1,4 +1,5 @@
 import type { ConversationDelivery } from "./conversation-delivery";
+import type { PendingPrompt } from "./pending-prompt";
 import type { ConversationIdentity } from "./conversation-watch";
 import type { AgentQuest, Quest } from "./quest";
 import type { HistoryEntry } from "./session-history";
@@ -73,6 +74,11 @@ export type Conversation = {
    * unverified ones are notices for the pane until dismissed.
    */
   deliveries: ConversationDelivery[];
+  /**
+   * The question the agent is waiting on, read from its screen while Herdr
+   * reports it blocked; null otherwise.
+   */
+  pending_prompt: PendingPrompt | null;
 } & (
   | { status: "ok"; unavailable: null }
   | {
@@ -162,6 +168,42 @@ export type ConversationSendResult =
 export type ConversationTarget = { pane_id: string };
 export type { AgentQuest };
 
+/**
+ * What kept an answer from being acknowledged: Herdr no longer reports the
+ * agent, the pane has another session, Herdr's status is not one that shows
+ * progress (such as "unknown"), the screen could not be read, or the same
+ * question still shows.
+ */
+export type AnswerUnconfirmedReason =
+  | "agent_missing"
+  | "session_changed"
+  | "unknown_status"
+  | "unreadable"
+  | "still_showing";
+
+export type ConversationAnswerResult =
+  | {
+      /** The key was pressed in the pane. */
+      status: "sent";
+      key: string;
+      number: string;
+      label: string;
+      /**
+       * Herdr showed this agent move on from this prompt after the key: the
+       * same session, and a status other than blocked or a new question.
+       */
+      acknowledged: boolean;
+      /** Why the answer is not acknowledged; null when it is. */
+      unconfirmed_reason: AnswerUnconfirmedReason | null;
+      prompt_fingerprint: string;
+    }
+  | {
+      status: "refused";
+      reason: "not_blocked" | "changed" | "unknown_option";
+      message: string;
+      pending_prompt: PendingPrompt | null;
+    };
+
 export interface ConversationSource {
   readonly id: string;
   read(target: ConversationTarget): Promise<Conversation>;
@@ -185,6 +227,13 @@ export interface ConversationSource {
   ): Promise<ConversationSendResult>;
   /** Forget a delivery notice the user has seen. */
   dismiss(target: ConversationTarget & { delivery_id: string }): boolean;
+  /**
+   * Answer the agent's pending prompt by pressing one option's key, only if
+   * the agent is still blocked on that same prompt.
+   */
+  answer(
+    target: ConversationTarget & { key: string; prompt_fingerprint: string },
+  ): Promise<ConversationAnswerResult>;
 }
 
 function plural(name: string, calls: number) {

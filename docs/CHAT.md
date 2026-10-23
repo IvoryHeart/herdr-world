@@ -38,6 +38,39 @@ view that you open on purpose.
   Now bar, or Esc pressed twice while Chat has focus, presses Esc in the
   agent's pane to interrupt the turn. One Esc only asks for a second; Chat
   never stops an agent by itself.
+- Answers the agent's own question. When Herdr reports the agent blocked, Chat
+  reads the bottom of its screen and recognises only the menus of supported
+  harnesses: Claude Code's whole permission box (a question ending in "?",
+  numbered options, the ❯ cursor on one; a digit selects) and Codex's approval
+  menu (options ending in their key hints such as "(y)" or "(esc)", the ›
+  cursor on one; the hint key selects). It shows an ask card with the complete
+  request (the whole command, or the file and its edit), the question and each
+  option. Anything else gets no options and **Answer in the Terminal**: plain
+  numbered output, a y/n line, a box cut off by the capture, or a request the
+  harness shows shortened.
+- Picking an option, or pressing its number while that card has focus, calls
+  `agent_conversation.answer`. The service checks Herdr's state, rereads the
+  screen, and checks Herdr's state again (status, session, title, state
+  sequence); the prompt's fingerprint covers the shown prompt, the session and
+  the state sequence, and any difference refuses with nothing sent. Then it
+  presses that option's key.
+- **The gap World cannot close.** Herdr has no conditional input
+  ([herdrdev/herdr#4764](https://github.com/herdrdev/herdr/issues/4764)), so
+  the key cannot be made conditional on the prompt. If the prompt or session
+  changes in the instant between the last check and the key, the key reaches
+  the new prompt. The card says so under its options. The owner accepted this
+  risk until Herdr can close it; it is tracked as a known issue in
+  [#284](https://github.com/IvoryHeart/herdr-world/issues/284). Closing the
+  gap needs an input Herdr applies only while the prompt is unchanged.
+- Chat replaces the card with what it sent. "You answered 2 · …" needs
+  evidence that this agent left this prompt: the same session, and either a
+  status that shows progress (`working`, `idle` or `done`), or a new state with a different question on a
+  readable screen. Otherwise the receipt reads "Sent 2 · …" with the reason
+  (`unconfirmed_reason`): the question still shows (`still_showing`), the pane
+  has another session (`session_changed`, and the key may have reached it),
+  Herdr reports a status such as `unknown` (`unknown_status`),
+  Herdr no longer reports the agent (`agent_missing`), or the screen could not
+  be read (`unreadable`). Chat answers only when you pick an option.
 - Keeps the last good conversation when a read fails, for example while the
   transcript is being written, and says that it could not refresh.
 - When the conversation is unavailable, Chat shows the reason and the action it
@@ -66,11 +99,13 @@ projection cache as History ([History synchronization](HISTORY.md)).
 | `agent_conversation.latest` | `pane_id`, or `pane_ids`, or nothing for every agent | A conversation without `messages`, or `{ conversations }` |
 | `agent_conversation.send` | `pane_id`, `text`, `session_fingerprint`, optional `baseline` (IDs of the user messages Chat showed) | `{ status: "sent", delivery }` or `{ status: "refused", reason, message }` |
 | `agent_conversation.dismiss` | `pane_id`, `delivery_id` | `{ dismissed }`; forgets a delivery notice |
+| `agent_conversation.answer` | `pane_id`, `key`, `prompt_fingerprint` | `{ status: "sent", number, label, acknowledged, unconfirmed_reason, prompt_fingerprint }` or `{ status: "refused", reason, message, pending_prompt }` |
 | `agent_conversation.watch` / `.unwatch` | `pane_id` | `{ ok: true }`; see [Refresh](#refresh) |
 | `agent_quest.list` | `pane_ids`, or nothing for every agent | `{ quests }`: per pane, `agent`, `session_binding`, `session_fingerprint` and `quest`; see [Quests](#quests) |
 
 A conversation carries `agent`, `agent_status`, `terminal_title`, `running_tool`
-(the open tool call: its ID, name, summary and start), `session_binding`,
+(the open tool call: its ID, name, summary and start), `pending_prompt` (the
+question a blocked agent is waiting on, or null), `session_binding`,
 `session_fingerprint`, `updated_at`, ordered `messages`, `latest` (the last
 assistant message), `quest` (see [Quests](#quests)) and a `status` of `ok` or
 `unavailable`. Each message has a
