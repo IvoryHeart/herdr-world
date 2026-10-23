@@ -78,6 +78,7 @@ test("admission uses the shared calls, completion overlay and qualified asks, th
     "desk-blocked",
     "desk-done",
     "desk-fresh",
+    "desk-stale",
   ]);
   // A reviewed finish and a removed question release their desk; no status-based rediscovery.
   expect([...townAttentionDesks([], [], semantic.roster)]).toEqual([]);

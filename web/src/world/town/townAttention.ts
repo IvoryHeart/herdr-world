@@ -18,7 +18,7 @@ export function townAttentionDesks(
     asking.get(key)!.add(actor.terminal_id ?? "");
   }
   for (const { agent } of roster) {
-    if (!agent.deskKey || agent.stale) continue;
+    if (!agent.deskKey) continue;
     const terminals = asking.get(
       JSON.stringify([
         agent.currentPaneRef.connectionId,
