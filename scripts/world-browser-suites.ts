@@ -142,8 +142,30 @@ export function includesBrowserSuites(
   args: readonly string[],
   root = process.cwd(),
 ): boolean {
+  return selectsSuites(
+    args,
+    [...webBrowserSuites, ...worldBrowserSuites],
+    root,
+  );
+}
+
+/**
+ * Whether the selection includes a timed (latency) suite, which needs the
+ * whole machine rather than the browser slot alone. Same conservative rules.
+ */
+export function includesTimedSuites(
+  args: readonly string[],
+  root = process.cwd(),
+): boolean {
+  return selectsSuites(args, worldTimedSuites, root);
+}
+
+function selectsSuites(
+  args: readonly string[],
+  suites: readonly string[],
+  root: string,
+): boolean {
   if (args.length === 0) return true;
-  const suites = [...webBrowserSuites, ...worldBrowserSuites];
   return args.some((arg) => {
     if (arg.startsWith("-")) return true;
     const absolute = resolve(root, arg);

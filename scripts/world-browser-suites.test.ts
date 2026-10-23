@@ -197,3 +197,14 @@ test("a run that includes a Chrome-driven suite is recognised for the browser sl
   ).toBe(true);
   expect(includesBrowserSuites(["./scripts/check-lock.test.ts"])).toBe(false);
 });
+
+test("a selection with a timed suite needs the whole machine; other browser suites do not", async () => {
+  const { includesTimedSuites, worldTimedSuites } = await import(
+    "./world-browser-suites"
+  );
+  const root = new URL("..", import.meta.url).pathname;
+  expect(includesTimedSuites([worldTimedSuites[0]!], root)).toBe(true);
+  expect(includesTimedSuites([], root)).toBe(true);
+  expect(includesTimedSuites(["web/src/uiScale.test.ts"], root)).toBe(false);
+  expect(includesTimedSuites(["scripts/check-lock.test.ts"], root)).toBe(false);
+});

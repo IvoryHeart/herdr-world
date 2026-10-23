@@ -1,5 +1,5 @@
 import { availableParallelism } from "node:os";
-import { acquireCheckSlot, heldEnv } from "./check-lock";
+import { acquireAllCheckSlots, acquireCheckSlot, heldEnv } from "./check-lock";
 import { warmChrome } from "./chrome-warmup";
 import {
   assertWebBrowserInventory,
@@ -7,6 +7,7 @@ import {
   browserWorkflowIgnorePattern,
   webBrowserSuites,
   includesBrowserSuites,
+  includesTimedSuites,
   worldBrowserIgnorePattern,
 } from "./world-browser-suites";
 import { cleanupRunTemp, createRunTemp, sweepStaleRunTemps } from "./test-temp";
@@ -58,11 +59,16 @@ console.info(
 // any process still using it, however the run ends (see test-temp.ts).
 sweepStaleRunTemps();
 // A run that includes Chrome-driven suites takes the machine-wide browser
-// slot, like the gate's browser lane (a whole run includes the web suites).
+// slot, like the gate's browser lane (a whole run includes the web suites);
+// one that includes a timed (latency) suite takes the whole machine, like the
+// gate's quiet lane.
 const usesBrowser = !excludeWorld && includesBrowserSuites(args);
-const releaseSlot = usesBrowser
-  ? await acquireCheckSlot("browser", { lane: "browser tests" })
-  : () => {};
+const usesTimed = usesBrowser && includesTimedSuites(args);
+const releaseSlot = usesTimed
+  ? await acquireAllCheckSlots({ lane: "timed tests" })
+  : usesBrowser
+    ? await acquireCheckSlot("browser", { lane: "browser tests" })
+    : () => {};
 const directory = createRunTemp();
 // Once per CI job: nested runners inherit the flag.
 const chrome =
