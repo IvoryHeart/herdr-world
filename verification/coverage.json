@@ -911,6 +911,7 @@
         "server/src/agent/conversation-watch.test.ts",
         "server/src/agent/conversation-send-race.test.ts",
         "server/src/agent/conversation-steps.test.ts",
+        "server/src/agent/conversation-now.test.ts",
         "server/src/agent/codex-session-link.test.ts",
         "server/src/connections/session-link-routing.test.ts",
         "server/src/agent/codex-session.test.ts",
@@ -1362,7 +1363,10 @@
         "scripts/plugin-native.test.ts",
         "server/src/config/plugin-command.test.ts",
         "scripts/installer-upgrade.test.ts",
-        "server/src/herdr/release.test.ts"
+        "server/src/herdr/release.test.ts",
+        "server/src/herdr/upgrade.test.ts",
+        "server/src/herdr/cli.test.ts",
+        "server/src/herdr/supervision.test.ts"
       ],
       "acceptedDelivery": "https://github.com/IvoryHeart/herdr-world/pull/186",
       "technique": "alternative",
@@ -1370,7 +1374,7 @@
       "status": "alternative-evidence",
       "remaining": "OS service managers and downloaded artifacts require supported-platform CI/live evidence; environment-gated checks must report prerequisites/skips.",
       "requiredChecks": ["bun run check", "bun run verification:gate"],
-      "evidenceDecision": "Real setup/update/service tests exercise verified assets, replacement failures, request budgets, saved default diagnostic precedence, package/plugin and preview ownership guards, and moved generated service paths without forcing custom definitions. Native plugin compatibility and system installers add checksum, metadata, native-support and failed-promotion checks; a compiled fixture with an isolated home and empty PATH verifies all frozen action verbs and canonical service ownership. Windows installer and macOS launchd execution remain platform CI evidence. Proposed installer-upgrade CI builds real native candidate archives and exercises latest-stable plugin installation, authenticated runtime/session migration and failed-checksum retention in isolated state. This direct platform evidence is more useful than a model of OS packaging; OS service/channel upgrades and older release combinations remain excluded (docs/release.md).",
+      "evidenceDecision": "Real setup/update/service tests exercise verified assets, replacement failures, request budgets, saved default diagnostic precedence, package/plugin and preview ownership guards, and moved generated service paths without forcing custom definitions. Native plugin compatibility and system installers add checksum, metadata, native-support and failed-promotion checks; a compiled fixture with an isolated home and empty PATH verifies all frozen action verbs and canonical service ownership. Windows installer and macOS launchd execution remain platform CI evidence. Proposed installer-upgrade CI builds real native candidate archives and exercises latest-stable plugin installation, authenticated runtime/session migration and failed-checksum retention in isolated state. Herdr installs and upgrades use fake Herdr binaries, installers and servers: checksum and version checks precede replacement, a failed check restores the previous binary, newer and package-managed installs stay untouched, version-manager shims are never replaced, a newer or unidentified running server is never handed to the verified release, and live handoff is requested only for a Linux server proven to run outside any supervisor (a daemonized server in a scope; fake procfs cases include an operator-owned systemd unit and a wrapper parent; macOS is never proven), a v0.2.6 versioned legacy Windows Herdr is found off PATH and migrated, and install.ps1 release directories on PATH are recognized as official; otherwise the old server keeps running and a restart is reported. The installer-upgrade matrix runs the real candidate `herdr upgrade` against a compiled fake Herdr on each native platform to prove harness-integration installation and plugin tag pinning. This direct platform evidence is more useful than a model of OS packaging; OS service/channel upgrades and older release combinations remain excluded (docs/release.md).",
       "partialEvidence": {
         "models": [],
         "contracts": ["verification/consumer-evidence.md"],
@@ -1385,7 +1389,10 @@
           "scripts/plugin-native.test.ts",
           "server/src/config/plugin-command.test.ts",
           "scripts/installer-upgrade.test.ts",
-          "server/src/herdr/release.test.ts"
+          "server/src/herdr/release.test.ts",
+          "server/src/herdr/upgrade.test.ts",
+          "server/src/herdr/cli.test.ts",
+          "server/src/herdr/supervision.test.ts"
         ],
         "checks": ["bun run check"],
         "review": "Accepted within documented bounds by review 5516249164; existing consumer/platform checks and excluded claims remain mandatory."

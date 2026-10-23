@@ -138,6 +138,7 @@ async function run() {
     call: async (method: string, params: Record<string, unknown> = {}) => {
       calls.push({ method, params });
       if (method === "agent_conversation.send") return sendResult;
+      if (method === "pane.send_input") return {};
       if (method === "agent_conversation.get") return reply;
       if (
         method === "agent_conversation.watch" ||
@@ -778,6 +779,24 @@ async function run() {
       ) !== null,
       "A running step must spin",
     );
+    // The open call already has its step card, so no second running row.
+    reply = {
+      ...reply,
+      running_tool: {
+        id: "b2",
+        name: "Bash",
+        summary: "bun test src",
+        started_at: new Date().toISOString(),
+      },
+    };
+    render("working");
+    push();
+    await settle();
+    check(
+      !container.querySelector(".agent-chat-running") &&
+        container.querySelector('[data-step-id="b2"].is-running') !== null,
+      "An open call shown as a step card must not also show a running row",
+    );
     check(
       edit.textContent?.includes("3 more lines; see Changes") === true,
       "A cut diff must say how much is left out and where to see it",
@@ -808,6 +827,131 @@ async function run() {
         edit.querySelector(".agent-chat-step-diff") !== null,
       "A running step that finishes must fold; one the reader opened stays open",
     );
+    // The Now bar: Herdr's status, the task from the terminal title and the
+    // time since the status changed; the step running now has its own timer.
+    reply = {
+      ...conversation([message("u8", "user", "Run the tests")], "working"),
+      terminal_title: "✳ Running tests",
+      running_tool: {
+        id: "toolu_8",
+        name: "Bash",
+        summary: "bun test server/src/link",
+        started_at: new Date(Date.now() - 3_000).toISOString(),
+      },
+    };
+    render("idle", true, 60);
+    push();
+    await settle();
+    render("working", true, 61);
+    // The display clock ticks once a second from when it started, so a fixed
+    // wait can read it before its first full second; wait for that instead.
+    for (
+      let waited = 0;
+      waited < 5_000 &&
+      !/^[1-9]\d*s$/.test(
+        container.querySelector(".agent-chat-now .agent-chat-now-time")
+          ?.textContent ?? "",
+      );
+      waited += 100
+    )
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    const now = container.querySelector(".agent-chat-now");
+    check(
+      now?.querySelector(".agent-chat-status")?.textContent === "Working" &&
+        now.querySelector(".agent-chat-now-title")?.textContent ===
+          "Running tests" &&
+        /^[1-9]\d*s$/.test(
+          now.querySelector(".agent-chat-now-time")?.textContent ?? "",
+        ),
+      `The Now bar must show the status, task and time (${now?.textContent})`,
+    );
+    const runningRow = container.querySelector(".agent-chat-running");
+    check(
+      runningRow?.textContent?.includes("Bash") === true &&
+        runningRow.textContent.includes("bun test server/src/link") &&
+        /[3-9]s$/.test(runningRow.textContent) &&
+        runningRow.getAttribute("data-call-id") === "toolu_8",
+      `The running step must name its tool, command and time (${runningRow?.textContent})`,
+    );
+    // Stop presses Esc in the pane; so does Esc twice, never once.
+    const escapes = () =>
+      calls.filter(
+        (call) =>
+          call.method === "pane.send_input" &&
+          JSON.stringify(call.params.keys) === '["escape"]',
+      ).length;
+    container.querySelector<HTMLButtonElement>(".agent-chat-stop")!.click();
+    await settle();
+    check(escapes() === 1, "Stop must press Esc in the agent's pane");
+    const list = container.querySelector<HTMLElement>(".agent-chat-list")!;
+    list.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+    );
+    await settle();
+    check(
+      escapes() === 1 &&
+        (
+          container.querySelector(".agent-chat-now-note")?.textContent ?? ""
+        ).includes("Press Esc again"),
+      "One Esc must only ask for a second",
+    );
+    list.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+    );
+    await settle();
+    check(escapes() === 2, "Esc twice must press Esc in the agent's pane");
+    // Only the status and task are announced; the clocks tick silently.
+    check(
+      !container.querySelector(".agent-chat-now")?.hasAttribute("aria-live") &&
+        container
+          .querySelector(".agent-chat-now-live")
+          ?.getAttribute("aria-live") === "polite" &&
+        [...container.querySelectorAll(".agent-chat-now-time")].every(
+          (time) =>
+            time.getAttribute("aria-hidden") === "true" &&
+            !time.closest("[aria-live], [role='status']"),
+        ),
+      "The Now bar's clocks must not be inside a live region",
+    );
+    // An Esc another handler used does not arm Stop, and the note to press
+    // again lasts only as long as a second Esc would stop.
+    await new Promise((resolve) => setTimeout(resolve, 800));
+    list.addEventListener("keydown", (event) => event.preventDefault(), {
+      once: true,
+    });
+    list.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "Escape",
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+    list.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+    );
+    await settle();
+    check(escapes() === 2, "An Esc already handled must not count");
+    await new Promise((resolve) => setTimeout(resolve, 800));
+    check(
+      !(
+        container.querySelector(".agent-chat-now-note")?.textContent ?? ""
+      ).includes("Press Esc again"),
+      "The note to press Esc again must clear when its window ends",
+    );
+    // A call still open while the agent waits for approval, or after it
+    // stopped, is not running.
+    for (const [status, sequence] of [
+      ["blocked", 62],
+      ["idle", 63],
+    ] as const) {
+      render(status, true, sequence);
+      await settle();
+      check(
+        !container.querySelector(".agent-chat-running") &&
+          !container.querySelector(".agent-chat-now .agent-chat-now-time"),
+        `An open call must not show as running while ${status}`,
+      );
+    }
     // A long conversation scrolls in the window, phone and desktop widths
     // alike: it opens at the newest message, keeps the reader's place when a
     // message lands while they read back, and Jump to latest returns.
