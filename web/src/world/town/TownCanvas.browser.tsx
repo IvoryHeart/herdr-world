@@ -2396,6 +2396,15 @@ async function run() {
         foldedPlaque() !== null,
       "fold did not restore the room's current attention desks",
     );
+    await waitFor(
+      () =>
+        host.querySelectorAll('.world-semantic-target[data-kind="desk"]')
+          .length === diagnostics.desks &&
+        host.querySelector(
+          '.world-semantic-targets-overlay[aria-busy="false"]',
+        ) !== null,
+      "folded desk targets did not finish progressive admission",
+    );
     const orbitDesks = [
       ...host.querySelectorAll<HTMLElement>(
         '.world-semantic-target[data-kind="desk"]',
@@ -2405,7 +2414,7 @@ async function run() {
     ).length;
     check(
       foldedPlaque()!.textContent?.trim() === `+${100 - orbitDesks}`,
-      "fold plaque counts a visible attention desk as hidden",
+      `fold plaque ${foldedPlaque()!.textContent?.trim()} disagrees with ${orbitDesks} visible desks of 100`,
     );
 
     // The town takes its shape from its container: phones and portrait
