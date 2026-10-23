@@ -1423,6 +1423,11 @@ Blocked sends SHALL preserve the draft and show the refusal. Commands without a
 literal own-transcript receipt SHALL say **sent, not checked**; neither a session
 switch nor a rewritten user turn SHALL claim their effect was checked or misdelivered.
 
+The current quest SHALL appear at the start of its section inside the scrolling
+conversation, collapsed to a title/progress row. Its keyboard-reachable expand
+button SHALL expose aria-expanded and reveal objectives inline. The row SHALL
+repeat no agent identity or status and SHALL NOT be sticky.
+
 #### Scenario: A command intentionally switches sessions
 
 - **WHEN** a bound Chat sends a slash command and the harness switches sessions

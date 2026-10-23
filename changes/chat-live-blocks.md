@@ -9,3 +9,5 @@
   palette. Enter sends and Shift+Enter adds a line, with drafts kept per
   conversation. Slash commands have honest unchecked receipts, and native
   working-state sends show queued bubbles until their transcript receipt.
+- The current quest takes one slim title/progress row inside the conversation;
+  expand it for objectives without adding a fixed toolbar.

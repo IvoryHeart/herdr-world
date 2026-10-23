@@ -510,7 +510,6 @@ export function AgentChat({
           <ListTree size={13} /> Details
         </button>
       </div>
-      <QuestLog quest={conversation?.quest} />
       {misdelivered.map((delivery) => (
         <div key={delivery.id} className="agent-chat-misdelivered" role="alert">
           {delivery.evidence === "herdr" ? (
@@ -653,14 +652,31 @@ export function AgentChat({
             followKey={pane.pane_id}
             toolLoading={history.toolEntryLoading}
             onLoadTool={history.loadToolEntry}
-            placed={placedSends(
-              [...pending, ...commands],
-              recipientLabel ??
-                conversation?.agent ??
-                pane.agent ??
-                "the agent",
-              dismiss,
-            )}
+            placed={[
+              ...(conversation?.quest
+                ? [
+                    {
+                      key: `quest:${conversation.session_fingerprint}:${conversation.quest.started_at}`,
+                      at: conversation.quest.started_at,
+                      node: (
+                        <QuestLog
+                          key={`${conversation.session_fingerprint}:${conversation.quest.started_at}`}
+                          quest={conversation.quest}
+                          compact
+                        />
+                      ),
+                    },
+                  ]
+                : []),
+              ...placedSends(
+                [...pending, ...commands],
+                recipientLabel ??
+                  conversation?.agent ??
+                  pane.agent ??
+                  "the agent",
+                dismiss,
+              ),
+            ]}
             hasOlder={history.hasOlder}
             olderLoading={history.olderLoading}
             onLoadOlder={history.loadOlder}

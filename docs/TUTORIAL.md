@@ -149,8 +149,9 @@ changes what you see and does not disconnect hosts or retarget open terminals.
    Zoom into a room: an agent with a quest (its own todo list, plan, Codex goal
    or `/loop`) shows a swallowtail pennant beside its seat, with a progress
    bar when the quest has steps; tap the pennant to see **Quest** and its
-   title. Open its chat to read the quest log above the conversation: each
-   objective as pending, active, done or blocked.
+   title. Open its chat to see a slim quest title and progress row in the conversation.
+   Expand it to read each objective as pending, active, done or blocked; the
+   row scrolls with the messages.
    Chat's Now circle has the status word on hover: blue for working, yellow
    for needs you, green for done and grey for idle.
 5. Read the question before using an answer button: it sends the offered key to

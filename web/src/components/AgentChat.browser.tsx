@@ -1760,6 +1760,29 @@ async function run() {
         !!container.querySelector(".agent-history-chat pre"),
         `The phone check needs its code block rendered: ${container.querySelector(".agent-history-chat-bubble")?.innerHTML.slice(0, 300)}`,
       );
+      const context = list.querySelector<HTMLElement>(".quest-log.is-compact");
+      const contextToggle =
+        context?.querySelector<HTMLButtonElement>(".quest-log-head");
+      check(
+        !!context &&
+          contextToggle?.getAttribute("aria-expanded") === "false" &&
+          !context.querySelector(".quest-log-steps"),
+        "Quest context must start collapsed inside the scrolling conversation",
+      );
+      check(
+        getComputedStyle(context!).position !== "sticky",
+        "Quest context must not form another sticky bar",
+      );
+      contextToggle!.focus();
+      contextToggle!.click();
+      await settle();
+      check(
+        contextToggle!.getAttribute("aria-expanded") === "true" &&
+          !!context!.querySelector(".quest-log-steps .is-active"),
+        "Quest objectives must expand inline from a keyboard-reachable button",
+      );
+      contextToggle!.click();
+      await settle();
       // Every element, not a chosen few: whatever widens the window counts.
       const wider = [
         ...container.querySelectorAll<HTMLElement>(".agent-chat *"),

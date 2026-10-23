@@ -38,6 +38,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   - An agent's known PR announcement or current work claim can show a compact
     pull request card in Chat. **Details** has CI, reviews and owner actions;
     **Ask the author to fix** sends `↳ #N` to the author in this conversation.
+    The current quest appears as a collapsed title/progress row in the scrolling
+    conversation; expand it for objectives.
     Chat's Now status uses a small circle with a status tooltip and screen-reader
     text: blue working ring, yellow needs-you mark, green done tick, grey idle dot.
   - Chat reuses Terminal's full **Compose** editor, attachments and harness

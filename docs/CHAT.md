@@ -384,8 +384,10 @@ A quest is what an agent is working through, read from its own transcript by
 fixed rules, without a model (`server/src/agent/quest.ts`). It is computed with
 the projection, over the whole transcript rather than Chat's 200-entry window,
 and each connection keeps up to 256 quests, so a quest whose transcript has not
-changed is answered without reading it again. Chat shows the quest log above
-the conversation; Town stands a pennant beside the agent's seat, which names
+changed is answered without reading it again. Chat places the current quest at
+the start of its section inside the scrolling conversation. It starts as one slim **title · progress** row; expand its button
+to read the objectives, without repeating the agent identity or status.
+Town stands a pennant beside the agent's seat, which names
 the quest on hover or tap; Board puts a chip on the agent's card.
 
 A quest has a `title`, a `source` (`todo`, `plan`, `goal` or `loop`), the
