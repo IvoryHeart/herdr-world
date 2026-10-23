@@ -1,8 +1,6 @@
-import { moveWorkspaceIds } from "../world/move-workspace-ids";
 import { checkAnchor } from "../world/board-anchor";
 import { linkedNoteText, sendNote } from "../world/board-send";
-import { moveFollowOps, reconcileOps } from "../world/board-store";
-import { createMoveQueue, moveDesk, movePane } from "../world/desk-move";
+import { executeTownMove } from "../world/town-move";
 import type { ConnectionRpcContext } from "./context";
 
 /** Board and Town actions on one connection (board.*, town.*). */
@@ -124,69 +122,40 @@ async function dispatchBoardTownRpc(
   if (method === "town.move_desk" || method === "town.move_pane") {
     const call = (rpc: string, rpcParams: Record<string, unknown>) =>
       herdr.call(rpc, rpcParams, 15_000);
-    // One move at a time per connection: each re-reads the topology (and the
-    // last-desk check) only once the previous move has finished.
-    let queue = townMoveQueues.get(route.connectionId);
-    if (!queue) {
-      queue = createMoveQueue();
-      townMoveQueues.set(route.connectionId, queue);
-    }
     try {
       const p = params ?? {};
-      // The colours as the move starts: a close of the old tab seen during
-      // the move must not lose the colour it carries over.
-      let colorsBefore = board().get().layout.colors;
-      const result = await queue(() => {
-        colorsBefore = board().get().layout.colors;
-        return method === "town.move_desk"
-          ? moveDesk(call, {
+      const result = await executeTownMove(
+        {
+          connectionId: route.connectionId,
+          generation: route.generation,
+          call,
+          isCurrent: requestIsCurrent,
+          queues: townMoveQueues,
+          board: {
+            get: () => board().get(),
+            patch: (ops) => board().patch(ops),
+          },
+          publishBoard: publishBoardChanged,
+          onFollowError: (error) =>
+            logger.warn("Board strings did not follow a move", {
+              detail: String(error),
+            }),
+        },
+        method === "town.move_desk"
+          ? {
+              kind: "desk",
               tab_id: String(p.tab_id ?? ""),
               workspace_id: String(p.workspace_id ?? ""),
               allow_close_room: p.allow_close_room === true,
-              isCurrent: requestIsCurrent,
-            })
-          : movePane(call, {
+              inherited_color: p.inherited_color === true,
+            }
+          : {
+              kind: "pane",
               pane_id: String(p.pane_id ?? ""),
               tab_id: String(p.tab_id ?? ""),
               allow_close_room: p.allow_close_room === true,
-              isCurrent: requestIsCurrent,
-            });
-      });
-      // Board's strings follow the move whichever view or client made it.
-      if (
-        (result.status === "moved" || result.status === "failed") &&
-        route.scope === "connection"
-      ) {
-        try {
-          // A failed move may have left (or put back) panes under new IDs:
-          // reconcile from what it positively observed.
-          const ops =
-            result.status === "moved"
-              ? moveFollowOps(
-                  board().get(),
-                  route.connectionId,
-                  method === "town.move_desk" ? String(p.tab_id ?? "") : null,
-                  result,
-                  method === "town.move_desk"
-                    ? {
-                        before: colorsBefore,
-                        workspaceIds: await moveWorkspaceIds(call, result),
-                        inherited: p.inherited_color === true,
-                      }
-                    : undefined,
-                )
-              : reconcileOps(
-                  board().get(),
-                  route.connectionId,
-                  result.topology ?? [],
-                );
-          if (ops.length) publishBoardChanged(board().patch(ops).revision);
-        } catch (error) {
-          logger.warn("Board strings did not follow a move", {
-            detail: String(error),
-          });
-        }
-      }
+            },
+      );
       sendReply({ id, result }, method);
     } catch (error) {
       sendError(`${method}-error`, error);

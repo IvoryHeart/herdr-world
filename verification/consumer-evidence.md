@@ -75,6 +75,20 @@ protocol is introduced. Board/Town browser checks remain necessary for real
 layout and gesture outcomes. This does not prove human-only role editing,
 permanent audit retention, or future Groups CLI/roster behavior.
 
+### Shared Town move execution (Q43)
+
+The existing Town desk/agent move contract supplies the properties: one queue
+per captured connection, retired-generation refusal, topology/colour capture at
+queue admission, unchanged rollback/uncertain-step behavior, and Board following
+only from confirmed or positively observed topology. `town-move.test.ts` uses
+the actual RPC adapter and native move functions to check the injected shared
+queue, a retired queued generation, known partial-failure reconciliation,
+unknown topology without retry/anchor guessing, and the original ordering of
+Board following outside the move queue. Existing `desk-move.test.ts` retains
+the full native move/rollback fixtures. The fixture was moved unchanged to a
+shared test helper. These controlled promise schedules and actual transformations
+are direct bounded adapter evidence, not a general temporal progress proof.
+
 ## Review and remaining obligations
 
 Evidence statuses describe concrete decisions; independent acceptance is recorded separately. Review 5516249164 accepts every Q01–Q43 bounded mapping and alternative. Mandatory consumers and excluded claims remain binding. Final implementation/gate/resource acceptance is recorded in [review 5517420140](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5517420140); owner-approved PR #188 merged as `481ca1e8`. Mandatory consumers and excluded claims remain binding. Review must inspect the intended requirement, model/reducer domain, adapter fidelity, actual consumer tests and excluded claims. Q21 has its separate bounded exhaustive contract. Q26–Q28 retain their separately accepted Ranger storage/permission assumptions.

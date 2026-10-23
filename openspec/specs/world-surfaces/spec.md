@@ -1484,6 +1484,15 @@ panes back into the original tab using their current IDs and report the outcome.
 It SHALL NOT retry an uncertain step, and if rollback fails it SHALL report the
 actual resulting topology.
 
+Service move adapters SHALL share one service-owned queue per connection and
+use the captured connection/generation without a default fallback. A queued
+retired generation SHALL be refused. Topology and source colours SHALL be read
+at queue admission. Board following SHALL retain its ordering after move
+serialization: confirmed replacement IDs may be followed, and failed moves
+SHALL reconcile only positively observed terminal witnesses. Unknown locations
+SHALL NOT be guessed. A Board-follow failure SHALL NOT replace the real move
+outcome with a success or discard partial/unknown topology.
+
 Town SHALL let the user reorder a desk within its room the same ways: dropping
 it on another desk of its room puts it in that desk's slot, as a tab dragged
 onto another in Spaces, and dropping it on the room's free spot puts it last of

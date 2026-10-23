@@ -251,6 +251,24 @@ From inside the child pane, `herdr-world spawned-by w1:p1` makes the same
 stamp through the running World service, which first checks that the caller
 runs in that pane.
 
+## Town move execution
+
+`server/src/world/town-move.ts` owns desk/pane move orchestration independently
+of the RPC transport. Its caller injects the captured connection ID/generation,
+current-runtime check, Herdr call, Board access/publication and the service's
+shared `townMoveQueues` map. It never looks up a default connection. A queued
+retired generation is refused before reading another runtime; the existing
+`moveDesk`/`movePane` functions reread topology after queue admission and keep
+their layout, last-room, rollback and uncertain-step rules. Source colours are
+captured at queue entry.
+
+Board following stays after the serialized move, outside the move queue, as in
+the original RPC implementation. Successful moves follow confirmed replacement
+IDs; failed moves reconcile only observed terminal witnesses. Unknown locations
+are not guessed or retried. Board-follow errors are reported separately while
+the real move outcome is preserved. RPC keeps transport replies and synchronous
+unmatched-method decline. This extraction adds no user controls or camera policy.
+
 ## Stored Groups
 
 World stores Teams, Pods and generic kinds in the existing Board document's
