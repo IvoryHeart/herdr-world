@@ -88,6 +88,30 @@ Ideas only were taken from these Herdr plugins; no code was copied.
   of the desk's DOM nameplate, so it is crisp, clickable and never overlaps
   neighbouring desks' chips.
 
+- **Pull request detail and readiness.** The user's open pull requests are
+  read in detail (checks on the head with whether each is required, changed
+  files, the last 30 reviews and 50 comments) in batches of ten, at most 20
+  per refresh, again only when the list shows a change, while checks run or
+  after ten minutes. Comment text stays in the service: the browser gets each
+  rev agent's latest `RESULT #N:` line, its outcome and the commit it was
+  given on (a review's own commit, else a SHA the text names, else the newest
+  commit before it, inferred), and an image count. Only posts from the
+  repository's owner, members and collaborators count. Readiness (not a
+  draft, findings confirmed on the head, CI green, mergeable, screenshots for
+  `web/src` or `site` changes) is computed in `shared/pullRequests.ts`; Ready
+  to merge and Stalled (CI red on the head and its agents idle, held for two minutes)
+  are needs-you reasons for Reception and the Town summary.
+- **Pull request verbs.** Merge, close and mark ready are a browser route
+  only (not the CLI, agent skill or MCP), run as the service user's `gh` with
+  argv and a timeout, one at a time per pull request, on a pull request World
+  listed as the user's own and open. Merge reads the pull request again,
+  refuses if the head moved or a review is required, and runs `gh pr merge
+  --merge --match-head-commit`; World never passes `--admin` (owner decision).
+  GitHub's refusal is shown in its words. Each run is recorded as an event
+  with its sender (the browser session), in memory. Agents share the service
+  user's `gh` sign-in, so "only the owner acts" is a crew rule, documented,
+  not enforced.
+
 ## Follow-ups
 
 - Start an agent from an issue, PR or ticket (github-start, jira-board).

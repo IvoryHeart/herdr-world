@@ -355,7 +355,14 @@ on your phone and desktop.
    press outside also closes Work. **Green** means checks pass while a
    required review is pending; **Ready to merge** means approved, or passing
    in a repository that requires no review. The same pull
-   request appears as a badge on the agent's desk in Town, such as `#42 ✓`.
+   request appears as a badge on the agent's desk in Town, such as `#42 ✓`;
+   for one of your open pull requests, tap the badge to open the same card.
+   Your own open pull requests get a fuller card: CI dots, each rev agent's
+   result and **Ready ✓** when your merge rules hold. **Details** shows each
+   rule, the failing checks and the reviewers' comments. **Merge…**,
+   **Close…** and **Mark ready…** ask first and say exactly what happens;
+   while GitHub still requires a review, use **Open on GitHub** or **Copy
+   merge command** and merge it yourself.
    If Work shows **Set up Jira** or says no source is connected, open
    **Settings → Sources**: sign
    in to GitHub with `gh auth login` as the user that runs World, or add your
@@ -379,6 +386,18 @@ The Town and Board screenshots use real shell panes in disposable projects.
 The phone Board close-up focuses one workspace, its tabs and a strung note.
 Their empty agent counts are intentional; the notes are sample planning text,
 not reports of completed agent work.
+
+### Let agents arrange World
+
+Agents can use World too. Tell an agent to run `herdr-world --skill`: it learns
+to colour and pin its card, group with the agent that started it, report a
+task result, or ask you a question (`herdr-world ask "Ship it?" --options
+yes,no --wait`). A question shows first in Town's **Needs you** list with the
+agent's name; pick an option or type an answer, and the waiting agent carries
+on. `herdr-world history` shows who changed what, and `herdr-world undo` takes
+back a World-side change. A change marked **unverified** came from a process
+World could not place in the pane it named, or from a terminal that named no
+pane.
 
 ### Use Desk: answer, review and follow work
 
