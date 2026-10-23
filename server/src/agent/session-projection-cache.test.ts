@@ -429,16 +429,18 @@ describe("session projection cache and history revisions", () => {
       expect(first.projection.trajectory.steps[0].message).toHaveLength(
         100_000,
       );
+      // Too large to retain, it is read again, but keeps its paging identity:
+      // an unchanged file answers with no changes under the same cursor.
       const next = await cache.history(f.resolved, first.update.cursor);
-      expect(next.update.mode).toBe("snapshot");
-      expect(next.update.cursor.epoch).not.toBe(first.update.cursor.epoch);
+      expect(next.update.mode).toBe("delta");
+      expect(next.update.cursor).toEqual(first.update.cursor);
       expect(f.reads).toBe(2);
     } finally {
       spy.mockRestore();
     }
   });
 
-  test("entry and retained payload budgets evict with a fresh epoch", async () => {
+  test("evicted and unretained projections keep their paging identity", async () => {
     const f = fixture();
     f.set([message("hello")]);
     const cache = createSessionProjectionCache(f.files, {
@@ -448,7 +450,8 @@ describe("session projection cache and history revisions", () => {
     const first = await cache.history(f.resolved, null);
     await cache.get({ ...f.resolved, agent: "claude" });
     const next = await cache.history(f.resolved, first.update.cursor);
-    expect(next.update.mode).toBe("snapshot");
+    expect(next.update.mode).toBe("delta");
+    expect(next.update.cursor).toEqual(first.update.cursor);
     expect(f.reads).toBe(3);
     const tiny = createSessionProjectionCache(f.files, {
       entries: 10,
@@ -456,9 +459,17 @@ describe("session projection cache and history revisions", () => {
     });
     const oversized = await tiny.history(f.resolved, null);
     expect(
-      (await tiny.history(f.resolved, oversized.update.cursor)).update.mode,
-    ).toBe("snapshot");
-    expect(f.reads).toBe(5);
+      (await tiny.history(f.resolved, oversized.update.cursor)).update.cursor,
+    ).toEqual(oversized.update.cursor);
+    // An older page of the same unretained file shares the window's epoch.
+    const older = await tiny.older(f.resolved, "gone", 10);
+    expect(older.epoch).toBe(oversized.update.cursor.epoch);
+    expect(f.reads).toBe(6);
+    // A replaced file still starts a new epoch.
+    f.set([message("other")], { identity: "2" });
+    expect((await tiny.history(f.resolved, null)).update.cursor.epoch).not.toBe(
+      oversized.update.cursor.epoch,
+    );
   });
 
   test("quests outlive evicted projections until the transcript changes", async () => {
