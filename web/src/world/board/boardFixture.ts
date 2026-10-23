@@ -120,7 +120,16 @@ export function fixtureHost(
     kind: "host",
     parentId: null,
     label: connectionId,
-    connection: {} as WorldHostObject["connection"],
+    // A ready, current runtime unless the host is stale (relations read it).
+    connection: {
+      connectionId,
+      state: stale ? "reconnecting" : "ready",
+      generation: 1,
+      snapshotGeneration: 1,
+      stale,
+      actionable: !stale,
+      snapshot: {},
+    } as unknown as WorldHostObject["connection"],
     spaces: builtSpaces,
     coverage: coverage(
       builtSpaces.flatMap((space) => space.children),

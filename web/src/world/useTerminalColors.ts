@@ -36,7 +36,7 @@ const NONE: TerminalColors = Object.freeze({});
 
 type Connections = ReturnType<typeof worldRuntimeStore.get>["connections"];
 
-/** Whether a child can inherit: a stamp, or a claim between listed terminals. */
+/** Whether a child can inherit: a saved claim between listed terminals. */
 export function mayInherit(
   relations: RelationsDocument,
   connections: Connections,
@@ -44,14 +44,7 @@ export function mayInherit(
   return anyRelation({ spawns: relations.spawns, groups: [] }, (see) => {
     for (const connection of connections)
       for (const pane of connection.snapshot?.panes ?? [])
-        if (
-          see(
-            connection.connectionId,
-            pane.terminal_id,
-            (pane as { tokens?: unknown }).tokens,
-          )
-        )
-          return;
+        if (see(connection.connectionId, pane.terminal_id)) return;
   });
 }
 

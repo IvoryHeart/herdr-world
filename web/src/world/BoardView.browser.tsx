@@ -15,7 +15,12 @@ import {
   type FixtureSpace,
 } from "./board/boardFixture";
 import { defaultTerminalColor } from "./terminalColor";
-import { joinGroup, leaveGroups } from "../../../shared/relations";
+import { worldRelationInputs } from "./relations";
+import {
+  joinGroup,
+  leaveGroups,
+  observedSpawnClaims,
+} from "../../../shared/relations";
 import "./world.css";
 
 /*
@@ -434,6 +439,17 @@ const variant = (
       })),
     })),
   );
+/** Save the claims the service would for the world's spawn stamps. */
+const recordSpawns = (shown: ReturnType<typeof variant>) => {
+  saved = {
+    ...saved,
+    relations: {
+      groups: saved.relations?.groups ?? [],
+      spawns: observedSpawnClaims(worldRelationInputs(shown).observations, 1),
+    },
+  };
+  return shown;
+};
 const strungPane = () => {
   const end = saved.strings[0]!.to;
   return "anchor" in end ? end.anchor : null;
@@ -1589,7 +1605,7 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
         spawned.leaves.find(
           (leaf) => leaf.connectionId === "studio" && leaf.tabId === tabId,
         )!;
-      mount(2, spawned, null);
+      mount(2, recordSpawns(spawned), null);
       await rest();
       await bringIntoView(() => card("studio:w1:t2")!);
       await waitFor(
@@ -2574,15 +2590,17 @@ if (mode === "preview")
   void fresh().then(async () => {
     mount(
       2,
-      variant((leaf) =>
-        leaf.connectionId === "studio" && leaf.nativeId === "w1:p2"
-          ? {
-              ...leaf,
-              pane: {
-                tokens: { spawned_by: "w1:p1" },
-              } as unknown as typeof leaf.pane,
-            }
-          : leaf,
+      recordSpawns(
+        variant((leaf) =>
+          leaf.connectionId === "studio" && leaf.nativeId === "w1:p2"
+            ? {
+                ...leaf,
+                pane: {
+                  tokens: { spawned_by: "w1:p1" },
+                } as unknown as typeof leaf.pane,
+              }
+            : leaf,
+        ),
       ),
       null,
     );

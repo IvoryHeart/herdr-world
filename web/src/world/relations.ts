@@ -232,19 +232,19 @@ export function relationsDeriver() {
 }
 
 /**
- * Whether there is anything to derive: a pane carries a spawn stamp, or a
- * saved claim or group has two terminals still listed. A view draws a
- * relation, and a child inherits a colour, only between listed terminals, so
- * claims and groups whose agents closed cost nothing while large snapshots
- * refresh.
+ * Whether there is anything to derive: a saved claim or group with two
+ * terminals still listed. A view draws a relation, and a child inherits a
+ * colour, only between listed terminals. The service saves a claim for every
+ * spawn stamp it sees (server/src/world/relations.ts), so the browser never
+ * scans panes for stamps: with nothing saved, a large snapshot refresh costs
+ * nothing here.
  */
 export function anyRelation(
   relations: RelationsDocument,
-  /** Calls `see` for each terminal until it returns true. */
-  each: (
-    see: (connectionId: string, terminalId: string, tokens: unknown) => boolean,
-  ) => void,
+  /** Calls `see` for each listed terminal until it returns true. */
+  each: (see: (connectionId: string, terminalId: string) => boolean) => void,
 ): boolean {
+  if (!relations.spawns.length && !relations.groups.length) return false;
   // Only the saved terminals are looked up, by terminal ID, so a large
   // snapshot costs no key per pane.
   const wanted = new Map<string, Set<string>>();
@@ -259,19 +259,13 @@ export function anyRelation(
   }
   for (const group of relations.groups) group.members.forEach(want);
   const listed = new Set<string>();
-  let stamped = false;
-  each((connectionId, terminalId, tokens) => {
-    const stamp = tokens as Record<string, unknown> | undefined;
-    if (stamp?.spawned_by || stamp?.spawned_by_terminal)
-      return (stamped = true);
+  each((connectionId, terminalId) => {
     if (wanted.get(terminalId)?.has(connectionId))
       listed.add(
         terminalKey({ connection_id: connectionId, terminal_id: terminalId }),
       );
     return false;
   });
-  if (stamped) return true;
-  if (!listed.size) return false;
   const has = (ref: TerminalRef) => listed.has(terminalKey(ref));
   return (
     relations.spawns.some((claim) => has(claim.child) && has(claim.parent)) ||
@@ -298,14 +292,7 @@ export function useRelations(
         for (const host of hosts)
           for (const space of host.spaces)
             for (const leaf of space.children)
-              if (
-                see(
-                  host.connectionId,
-                  leaf.terminalId,
-                  (leaf.pane as { tokens?: unknown } | undefined)?.tokens,
-                )
-              )
-                return;
+              if (see(host.connectionId, leaf.terminalId)) return;
       }),
     [relations, hosts],
   );

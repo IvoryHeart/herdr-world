@@ -17,30 +17,18 @@ const claim = {
   observed_at: 1,
 };
 
-test("colours are derived only while something can inherit", () => {
+test("colours are derived only while a saved claim joins listed terminals", () => {
   const none = { spawns: [], groups: [] };
-  const shell = connection([{ pane_id: "w1:p1", terminal_id: "term_shell" }]);
-  expect(mayInherit(none, [shell])).toBe(false);
-  // A stamped pane, even before the service saves its claim.
+  const child = { pane_id: "w1:p2", terminal_id: "term_child" };
+  const parent = { pane_id: "w1:p1", terminal_id: "term_parent" };
+  // A stamp alone waits for the service to save its claim.
   expect(
     mayInherit(none, [
-      connection([
-        {
-          pane_id: "w1:p2",
-          terminal_id: "term_x",
-          tokens: { spawned_by: "w1:p1" },
-        },
-      ]),
+      connection([parent, { ...child, tokens: { spawned_by: "w1:p1" } }]),
     ]),
-  ).toBe(true);
-  // A saved claim counts only while both of its terminals are listed.
+  ).toBe(false);
   const saved = { spawns: [claim], groups: [] };
-  expect(mayInherit(saved, [shell])).toBe(false);
-  const child = { pane_id: "w1:p2", terminal_id: "term_child" };
+  expect(mayInherit(saved, [connection([])])).toBe(false);
   expect(mayInherit(saved, [connection([child])])).toBe(false);
-  expect(
-    mayInherit(saved, [
-      connection([child, { pane_id: "w1:p1", terminal_id: "term_parent" }]),
-    ]),
-  ).toBe(true);
+  expect(mayInherit(saved, [connection([child, parent])])).toBe(true);
 });
