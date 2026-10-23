@@ -1,3 +1,5 @@
+import { teamMembers, type GroupSender } from "../../../shared/groups";
+import { isGroupOp } from "./board-groups";
 import { randomUUID } from "node:crypto";
 import { stampSpawn } from "../herdr/spawn-stamp";
 import {
@@ -288,7 +290,9 @@ function point(params: Record<string, unknown>, name = "point"): BoardPoint {
 
 function groupOf(groups: readonly RelationGroup[], ref: TerminalRef) {
   return groups.find((group) =>
-    group.members.some((member) => terminalKey(member) === terminalKey(ref)),
+    teamMembers(group).some(
+      (member) => terminalKey(member) === terminalKey(ref),
+    ),
   );
 }
 
@@ -307,7 +311,9 @@ export function probeValue(document: BoardDocument, probe: LedgerProbe) {
         : undefined;
       return JSON.stringify(
         group
-          ? group.members.map((member) => terminalKey(member)).sort()
+          ? teamMembers(group)
+              .map((member) => terminalKey(member))
+              .sort()
           : null,
       );
     }
@@ -416,7 +422,7 @@ function planBoard(
     case "board card ungroup": {
       const ref = terminalOf(target, topology);
       const previous = groupOf(document.relations.groups, ref);
-      const regroup = { ref, members: previous?.members ?? null };
+      const regroup = { ref, members: previous ? teamMembers(previous) : null };
       const probe: LedgerProbe = { aspect: "group", key, ref };
       if (command === "board card ungroup") {
         if (!previous) refused(`${key} is in no group`);
@@ -495,8 +501,15 @@ export function createWorldCli(deps: WorldCliDeps) {
     return change;
   };
 
-  const patchBoard = (ops: BoardOp[]) => {
-    const document = deps.board.patch(ops);
+  const patchBoard = (ops: BoardOp[], actor: CliActor) => {
+    const sender: GroupSender = {
+      label: actor.label,
+      basis: actor.verified ? "inferred" : "reported",
+      via: "cli",
+    };
+    const document = deps.board.patch(
+      ops.map((op) => (isGroupOp(op) ? { ...op, sender } : op)),
+    );
     deps.publishBoard(document.revision);
     return document;
   };
@@ -506,16 +519,17 @@ export function createWorldCli(deps: WorldCliDeps) {
    * so a change that cannot be recorded is taken back.
    */
   const changeBoard = (
+    actor: CliActor,
     ops: BoardOp[],
     revert: BoardOp[],
     write: (document: BoardDocument) => LedgerChange,
   ) => {
-    const document = patchBoard(ops);
+    const document = patchBoard(ops, actor);
     try {
       return write(document);
     } catch (error) {
       try {
-        patchBoard(revert);
+        patchBoard(revert, actor);
       } catch {
         // The original error says more.
       }
@@ -578,7 +592,7 @@ export function createWorldCli(deps: WorldCliDeps) {
       const revert = plan.regroup
         ? regroupOps(deps.board.get(), plan.regroup)
         : plan.undo;
-      return changeBoard(plan.ops, revert, (document) =>
+      return changeBoard(actor, plan.ops, revert, (document) =>
         record(actor, command, plan.summary, plan.undo, {
           expect: {
             probe: plan.probe,
@@ -652,7 +666,7 @@ export function createWorldCli(deps: WorldCliDeps) {
         const ops = change!.regroup
           ? regroupOps(current, change!.regroup)
           : change!.undo!;
-        return changeBoard(ops, change!.redo ?? [], () => {
+        return changeBoard(actor, ops, change!.redo ?? [], () => {
           const undone: LedgerChange = {
             id: deps.ledger.nextId("c"),
             at: now(),

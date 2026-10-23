@@ -3787,13 +3787,10 @@ export const store = {
     );
   },
 
-  focusWorkspaceSource(target: WorkspaceSourceTarget) {
-    return store.focusQualifiedTarget({
-      ...target,
-      paneId: target.paneId ?? null,
-    });
-  },
-
+  focusWorkspaceSource: (target: WorkspaceSourceTarget) =>
+    store.focusQualifiedTarget({ ...target, paneId: target.paneId ?? null }),
+  loadConnectionSession: (connectionId: string) =>
+    refreshNow(captureConnectionLease(connectionId), true),
   async focusQualifiedTarget(target: QualifiedFocusTarget): Promise<boolean> {
     if (!qualifiedRuntimeTargetIsCurrent(target)) return false;
     const lease = captureConnectionLease(target.connectionId);

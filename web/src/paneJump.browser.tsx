@@ -1,7 +1,7 @@
 import { createRoot } from "react-dom/client";
 import { flushSync } from "react-dom";
 import App from "./App";
-import { bridge, type ConnectionClient } from "./api";
+import { bridge, type ConnectionClient, type TerminalPush } from "./api";
 import { __storeTesting, store } from "./store";
 import { selectShortcutPreset } from "./shortcutPreferences";
 import "./styles/tokens.css";
@@ -112,6 +112,7 @@ async function run() {
   document.body.append(outside);
   const focused: string[] = [];
   let requestedPaneId = "";
+  const terminalListeners = new Set<(frame: TerminalPush) => void>();
   const client: ConnectionClient = {
     connectionId: "pane-jump-test",
     generation: 1,
@@ -119,6 +120,22 @@ async function run() {
     isCurrent: () => true,
     acceptsServerGeneration: (generation) => generation === 1,
     call: async (method, params = {}) => {
+      if (method === "terminal.attach") {
+        // A successful attach includes a first frame. Otherwise the real
+        // no-frame watchdog retries and resets input during the focus checks.
+        const frame: TerminalPush = {
+          connection_id: client.connectionId,
+          connection_generation: 1,
+          terminal_id: String(params.terminal_id),
+          width: Number(params.cols),
+          height: Number(params.rows),
+          full: true,
+          mouse_reporting: false,
+          bytes: btoa("ready"),
+        };
+        for (const listener of terminalListeners) listener(frame);
+        return {};
+      }
       if (method === "pane.get") {
         requestedPaneId = String(params.pane_id);
         return {
@@ -141,7 +158,12 @@ async function run() {
   };
   store.init = () => {};
   bridge.connection = () => client;
-  bridge.onTerminal = () => () => {};
+  bridge.onTerminal = (listener) => {
+    terminalListeners.add(listener);
+    return () => {
+      terminalListeners.delete(listener);
+    };
+  };
   bridge.onTerminalClosed = () => () => {};
   __storeTesting.replaceState({
     ...store.get(),
@@ -432,14 +454,19 @@ async function run() {
       await key("Escape", "Escape");
       await until(() => !document.querySelector(".command-popover"));
     }
+    check(
+      !document.querySelector(".terminal-shell .terminal-loading"),
+      "Pane switcher fixture terminals did not receive their initial frames",
+    );
     // Discovery remains available in visual views while Spaces operations are disabled.
     if (document.querySelector('[aria-label="Show shortcut cheat sheet"]')) {
       selectShortcutPreset("linux");
       flushSync(() => root.render(<App operationalShortcutsEnabled={false} />));
       await key("K", "KeyK", 11);
       await key("K", "KeyK", 11, "keyUp");
+      // Wait for the passive focus/key effects before sending Escape.
       await until(() =>
-        document.querySelector('[aria-label="Shortcut cheat sheet"]'),
+        document.querySelector(".shortcut-cheatsheet input:focus"),
       );
       check(
         !search(),

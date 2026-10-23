@@ -247,7 +247,7 @@ terminal IDs when it restarts (pane IDs are reused), so a claim or group from
 before a restart can never match again: once a current snapshot that lists
 every pane of the connection shows its terminals closed, the service drops it
 (an offline host keeps it, shown stale). Stamp the restored agents again to
-relate them. Groups never span connections; the service refuses one that
+relate them. Magnetic Teams never span connections; the service refuses one that
 would. The service saves a claim for every stamp in a snapshot before sending
 it, so the browser derives relations from saved claims and groups alone and
 never scans panes for stamps. A stamp
@@ -259,6 +259,72 @@ another. Experiment only in a throwaway `herdr --session`.
 From inside the child pane, `herdr-world spawned-by w1:p1` makes the same
 stamp through the running World service, which first checks that the caller
 runs in that pane.
+
+## Stored Groups
+
+World stores Teams, Pods and generic kinds in the existing Board document's
+`relations.groups`; Room and Desk are Herdr projections and are refused in this
+store. A stored Group has `id`, `kind`, optional `name`, `members`, optional
+`attrs`, and `created_at`. Each member has `ref`, `roles`, `joined_at` and an
+optional `name_at_join`. `shared/groups.ts` owns validation and observation-only
+address resolution; `server/src/world/board-groups.ts` applies the operations.
+
+Old magnetic groups migrate to kind `team`, with terminal refs wrapped as
+members, empty roles, and their creation time used as the join time. Reading
+preserves the file and revision; the next ordinary write saves the new shape.
+Teams remain confined to one connection. Closing a terminal prunes only Team
+membership, only after a complete current snapshot; an unnamed Team with fewer
+than two members disappears. Named Teams can remain empty. Spawn claims remain
+separate. Only Teams feed magnetic layout, grouping menus and the existing CLI's
+group/ungroup undo; Pod membership never pulls desks or cards together.
+
+Pods are named and use canonical `agent://<immutable-connection-id>/<agent-name>` addresses,
+with each component percent-encoded. They may span connections and survive pane
+replacement. Missing or stale observations resolve as away; multiple current
+matches resolve as ambiguous, with no guessed occupant. Neither can supply an
+action target. Custom kinds have no exclusivity or implicit pruning.
+
+The existing Board patch path accepts `group.create`, `group.join`,
+`group.leave`, `group.set_roles`, `group.set_attrs`, `group.delete` and
+`group.promote`. New join/leave operations use `id` and `refs`; join can add
+`roles`. Legacy terminal `members`/`target` joins and `members` leaves retain
+Team semantics. `group.set_roles` replaces roles for existing members;
+`group.set_attrs` changes `name` and merges `attrs` (null clears either).
+Kinds cannot be changed through that operation. Promotion is explicitly
+Team-to-Pod: `mapping: [{from: <terminal-ref>, to: <agent-address>, roles: [...]}]`
+must map every existing member exactly once to a distinct address. The group
+keeps its ID and creation time. Room/Desk creation or promotion is refused.
+
+Lead and builder are pooled exclusive roles: an address can hold either or both
+in one Pod total, while reviewer can span Pods. A conflicting edit fails
+atomically. Join, role edits and promotion can use `replace: true` only after an
+explicit transfer confirmation; this removes lead/builder roles from the other
+Pod, preserving reviewer and other roles. All operations in a Board patch,
+including these transfers and their attribution, save together or not at all.
+Existing revision-conditional writes remain available through `patchIf`.
+
+Lead/reviewer edits are reserved to the owner or FirstMate by **crew rule**.
+World's trusted single-user service does not authenticate that distinction or
+prevent self-promotion. A sender name is attribution, not authorization. An
+optional sender claim is `{label, basis: "reported" | "inferred", via?}`; missing
+attribution remains `{basis: "unknown"}`. Existing CLI group/ungroup and undo
+forward the caller label as inferred when process-verified, otherwise reported;
+this does not authenticate a human/FirstMate distinction. `via` records a channel, not a claim
+basis. PR merge/close/ready actions stay browser-only and are not added to the
+World CLI, its skill, MCP or message ledger.
+
+`relations.group_changes` retains the most recent **128 events**, including
+records for deleted groups. Each carries `group_id`, Board `revision`, time,
+operation, sender and complete member role diffs. A diff can contain 64 entries
+when 32 old refs are replaced by 32 new refs; it is never clipped. No-op edits
+add no events. Retention may remove older events from a revision: this is recent
+attribution, not a complete audit or message ledger. Data remains subject to the
+Board byte cap, 500 groups, 32 members per group, 32 Pods per participating
+connection and bounded roles/attributes. Pods default to `open_pr_limit: 2`;
+`open_pr_limit` and ordered `queue` are intent, never enforced work limits.
+
+This is the model/store foundation. The Groups CLI, roster, frames and one-time
+import are delivered separately; existing user controls are unchanged.
 
 ## Agent CLI
 

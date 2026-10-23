@@ -114,8 +114,8 @@ changes what you see and does not disconnect hosts or retarget open terminals.
 1. Open **Town** from the view switcher, or return to the World root URL.
    Every view opens in Zen, full-bleed: use the view picker at the top edge (on
    a phone, the corner button) to switch views, or **Exit Zen** to show the
-   bars. Each
-   host is a building, each workspace a room, each tab a table and each pane a
+   bars. The choice is shared, so leaving Zen in one view leaves it in all.
+   Each host is a building, each workspace a room, each tab a table and each pane a
    seat. Plain terminal panes show a prompt rather than an agent character.
 2. Use **+** and **−** to move between town, building, room and desk detail;
    **ALL** shows the whole town. Drag the background to pan, or use arrow keys
@@ -131,7 +131,8 @@ changes what you see and does not disconnect hosts or retarget open terminals.
    Escape to close the board.
 4. Tap an agent or its table to open its window on **Chat**: World's Inspector,
    with **Chat**, **Terminal**, **Changes** and **Files** in its top selector.
-   In Town it docks on the right; drag its title to undock it. Chat shows the
+   In Town it docks on the right at a readable width; drag its left edge to
+   resize it (Town remembers the width), or drag its title to undock it. Chat shows the
    conversation's latest 200 entries, scrolls back inside the window, and
    offers **Jump to latest**; the composer stays at the bottom. The **NEEDS YOU** list provides another route to waiting
    agents and becomes a bottom tray on phones; it hides when no agent is
@@ -154,7 +155,8 @@ changes what you see and does not disconnect hosts or retarget open terminals.
    that live pane. When no supported choices appear, use **Open chat** to reply
    in the agent's window, or **Open terminal** in the card's header (or the
    window's **Terminal** view). The window's **Chat** composer sends with
-   Herdr's agent prompt.
+   Herdr's agent prompt. As in the terminal composer, Enter starts a new line;
+   **Send** or `Ctrl+Enter` (`Cmd+Enter` on a Mac) sends.
    A Codex conversation inferred from its shared daemon is read-only: Chat
    offers no composer or answer buttons. In Codex's Terminal, run `/title` and
    add **Thread ID**, or use **Details → Link Codex session** to preview and
@@ -163,16 +165,17 @@ changes what you see and does not disconnect hosts or retarget open terminals.
    file shows a chip while it uploads, then done or failed; retry a failed one
    (or pick it again) or remove it. **Send** waits for uploads. Uploads go to
    the selected pane's host; review the message and attached paths before
-   sending. Choose **Inspector** for files and changes, or **Open terminal**
-   for direct work.
+   sending. The window's **Files** and **Changes** views hold its files and
+   changes; **Open terminal** is for direct work.
    The swatch beside a room's name colours that workspace (its carpet here,
    its card in Board and a dot in the Spaces sidebar), and the swatch on a
    building's reception board colours the host (its roof, Board zone and
    Spaces header). A workspace's colour shows on its tables that have no colour
    of their own; a host's does not.
    The colour swatch beside the agent's name changes the colour of its table;
-   it is the tab's colour everywhere in World. The same swatch sits beside the
-   name in a terminal's header, the terminal window's menu has **Colour**, and
+   it is the tab's colour everywhere in World. In an agent's window the icon
+   sits on that colour: click it to open the agent's settings and choose
+   another. The terminal window's menu has **Colour**, and
    in Spaces the tab's menu (right-click or long-press) offers the same palette
    and **Default colour**.
    In the agent's window, the button beside its name sets its interest:

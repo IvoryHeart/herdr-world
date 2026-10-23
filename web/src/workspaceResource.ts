@@ -17,6 +17,8 @@ export interface WorkspaceInspectorContext {
   stateLabel: string;
   locationLabel: string;
   agent?: string;
+  /** The agent's own Herdr name, when it has one (otter in otter-claude). */
+  agentName?: string;
   taskSummary?: string;
   /** The status as a tone (working, blocked, done, idle, unknown) for its pill. */
   statusTone?: string;

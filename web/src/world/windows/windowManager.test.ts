@@ -163,3 +163,67 @@ describe("coordinated windows", () => {
     expect(canvas.height).toBeGreaterThan(small.height);
   });
 });
+
+describe("edge docks", () => {
+  const docked = (dock: { width: number; upToHalf?: boolean }, size = stage) =>
+    reconcileWindows(
+      createWindowManager(),
+      [{ id: "a", label: "a", initialSnap: "right", initialSnapDock: dock }],
+      size,
+    );
+
+  test("a right dock opens at its own width, at most half when asked", () => {
+    expect(
+      windowGeometry(docked({ width: 520, upToHalf: true }), "a", stage),
+    ).toEqual({ left: 680, top: 0, width: 520, height: 800 });
+    const narrow = { width: 800, height: 600 };
+    expect(
+      windowGeometry(
+        docked({ width: 520, upToHalf: true }, narrow),
+        "a",
+        narrow,
+      )?.width,
+    ).toBe(396);
+    expect(
+      windowGeometry(docked({ width: 700 }, narrow), "a", narrow)?.width,
+    ).toBe(700);
+  });
+
+  test("resizing the inner edge keeps the dock; moving it away floats it", () => {
+    let state = docked({ width: 520, upToHalf: true });
+    state = reduceWindowManager(
+      state,
+      {
+        type: "place",
+        id: "a",
+        rect: { left: 600, top: 0, width: 600, height: 800 },
+      },
+      stage,
+    );
+    expect(state.windows.a?.placement).toEqual({
+      kind: "snap",
+      target: "right",
+      dock: { width: 600 },
+    });
+    expect(windowGeometry(state, "a", stage)?.left).toBe(600);
+    state = reduceWindowManager(
+      state,
+      {
+        type: "place",
+        id: "a",
+        rect: { left: 300, top: 40, width: 600, height: 600 },
+      },
+      stage,
+    );
+    expect(state.windows.a?.placement.kind).toBe("floating");
+  });
+
+  test("the Right half snap still takes half", () => {
+    const state = reduceWindowManager(
+      docked({ width: 520, upToHalf: true }),
+      { type: "snap", id: "a", target: "right" },
+      stage,
+    );
+    expect(windowGeometry(state, "a", stage)?.width).toBe(596);
+  });
+});

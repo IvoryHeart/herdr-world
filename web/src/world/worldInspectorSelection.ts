@@ -110,12 +110,15 @@ export function worldInspectorContext(
     : hostStateLabel(node.hostState);
   return {
     kind: node.kind,
-    label: node.label,
+    // An agent's Herdr name (`herdr agent rename`) before its harness label,
+    // as Board and Desk name it.
+    label: (leaf?.kind === "agent" && leaf.agentName) || node.label,
     stateLabel: statusLabel,
     locationLabel: leaf
       ? `${leaf.spaceLabel} · ${node.hostLabel}`
       : node.hostLabel,
     ...(leaf?.kind === "agent" ? { agent: leaf.pane.agent } : {}),
+    ...(leaf?.agentName ? { agentName: leaf.agentName } : {}),
     ...(leaf ? { statusTone: leaf.status } : {}),
     ...(leaf?.taskSummary ? { taskSummary: leaf.taskSummary } : {}),
   };

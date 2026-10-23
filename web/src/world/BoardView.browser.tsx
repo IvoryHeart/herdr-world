@@ -2162,7 +2162,9 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
           movedTabs.length === 0,
           "grouping two tabs moves no tab between workspaces",
         );
-        const members = groups()[0]!.members.map((ref) => ref.terminal_id);
+        const members = groups()[0]!.members.map(({ ref }) =>
+          typeof ref === "string" ? undefined : ref.terminal_id,
+        );
         check(
           members.length === 2 &&
             members[0] === leafOf("w1:t4").terminalId &&

@@ -39,6 +39,11 @@ const claim = (child: string, parent: string, generation = 3): SpawnClaim => ({
   generation,
   observed_at: 1_000,
 });
+const joined = (id: string, at: number) => ({
+  ref: ref(id),
+  roles: [],
+  joined_at: at,
+});
 const none = { spawns: [], groups: [] };
 
 describe("spawn evidence", () => {
@@ -196,11 +201,21 @@ describe("manual groups", () => {
   test("joining starts a group led by the target, then extends it", () => {
     let groups = joinGroup([], [ref("b")], [ref("a")], "g1", 7);
     expect(groups).toEqual([
-      { id: "g1", members: [ref("a"), ref("b")], created_at: 7 },
+      {
+        id: "g1",
+        kind: "team",
+        members: [joined("a", 7), joined("b", 7)],
+        created_at: 7,
+      },
     ]);
     groups = joinGroup(groups, [ref("c")], [ref("b")], "g2", 8);
     expect(groups).toEqual([
-      { id: "g1", members: [ref("a"), ref("b"), ref("c")], created_at: 7 },
+      {
+        id: "g1",
+        kind: "team",
+        members: [joined("a", 7), joined("b", 7), joined("c", 8)],
+        created_at: 7,
+      },
     ]);
   });
 
@@ -209,7 +224,12 @@ describe("manual groups", () => {
     groups = joinGroup(groups, [ref("d")], [ref("c")], "g2", 2);
     groups = joinGroup(groups, [ref("b")], [ref("c")], "g3", 3);
     expect(groups).toEqual([
-      { id: "g2", members: [ref("c"), ref("d"), ref("b")], created_at: 2 },
+      {
+        id: "g2",
+        kind: "team",
+        members: [joined("c", 2), joined("d", 2), joined("b", 3)],
+        created_at: 2,
+      },
     ]);
     expect(leaveGroups(groups, [ref("c"), ref("d")])).toEqual([]);
   });
@@ -294,7 +314,14 @@ describe("review fixes", () => {
   test("duplicates collapse, and a new group cannot reuse an ID", () => {
     expect(
       joinGroup([], [ref("b"), ref("b")], [ref("a"), ref("a")], "g1", 1),
-    ).toEqual([{ id: "g1", members: [ref("a"), ref("b")], created_at: 1 }]);
+    ).toEqual([
+      {
+        id: "g1",
+        kind: "team",
+        members: [joined("a", 1), joined("b", 1)],
+        created_at: 1,
+      },
+    ]);
     const groups = joinGroup([], [ref("b")], [ref("a")], "g1", 1);
     expect(() => joinGroup(groups, [ref("d")], [ref("c")], "g1", 2)).toThrow(
       "already exists",
