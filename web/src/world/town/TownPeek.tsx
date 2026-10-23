@@ -1,17 +1,6 @@
-import {
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type ReactNode,
-} from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { SquareTerminal } from "lucide-react";
 import type { OfficeAgent } from "../herdrOfficeProjection";
-import { AttachmentChips } from "../../components/AttachmentChips";
-import {
-  useAttachmentDelivery,
-  useAttachmentUploads,
-} from "../../attachmentUploads";
 import { MarkdownPreview } from "../../components/markdown";
 import { formatUiDateTime } from "../../uiLocale";
 import type { TownChoice, TownConversation } from "./townChat";
@@ -37,18 +26,13 @@ export function townStatusText(agent: OfficeAgent) {
     : (agent.stateLabels[agent.semanticStatus] ?? STATUS[agent.semanticStatus]);
 }
 
-const typingTarget = (target: EventTarget | null) =>
-  target instanceof HTMLElement &&
-  (target.isContentEditable ||
-    ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName) ||
-    target.closest(".xterm, [role='dialog']:not(.town-peek)") !== null);
-
 /**
- * A hover card for one agent: its latest message from Chat's conversation
- * read model (never terminal text), the question it is asking, one-tap
- * answers and a reply line. On the phone the reply line opens World's
- * composer, so typing, keys and uploads use one window. Open terminal in the
- * header opens the agent's terminal.
+ * A hover card for one agent, a preview only: its latest message from Chat's
+ * conversation read model (never terminal text), the question it is asking
+ * and one-tap answers that send the offered key. Replies, follow-ups and
+ * attachments happen in the agent's one window: Open chat (or tapping the
+ * agent) opens it on Chat, and Open terminal in the header opens its
+ * terminal.
  */
 export function TownPeek({
   agent,
@@ -58,18 +42,13 @@ export function TownPeek({
   choices,
   canReply,
   anchor,
-  pinned,
-  onReply,
+  onAnswer,
   onChat,
   onTerminal,
   onInspector,
   onNext,
   onClose,
   onHold,
-  composer,
-  inlineReply,
-  onAttach,
-  uploadScope,
   onReviewed,
   deskColor = null,
 }: {
@@ -85,26 +64,16 @@ export function TownPeek({
   question: readonly string[];
   /** Check a finished agent's work, which sends it for a break. */
   onReviewed(): void;
-  /** Upload files for this pane, one chip each under `uploadScope`. */
-  onAttach(files: File[], image: boolean): void;
-  /**
-   * Where this pane's attachments are kept. Paths finished there join the
-   * inline reply line, including ones started by an earlier peek.
-   */
-  uploadScope: string | null;
-  /** Type the reply in the card itself rather than opening the composer. */
-  inlineReply: boolean;
-  /** World's composer for this pane; present while chatting. */
-  composer?: ReactNode;
   onInspector(): void;
   agent: OfficeAgent;
   where: string;
   choices: readonly TownChoice[];
   canReply: boolean;
-  /** Client point the card sits beside; null shows it as a bottom sheet. */
-  anchor: { x: number; y: number } | null;
-  pinned: boolean;
-  onReply(text: string, submit: boolean): Promise<boolean>;
+  /** Client point the card sits beside. */
+  anchor: { x: number; y: number };
+  /** Send one offered answer's key to the agent's pane. */
+  onAnswer(key: string): void;
+  /** Open the agent's one window on Chat. */
   onChat(): void;
   onTerminal(): void;
   onNext: (() => void) | null;
@@ -113,32 +82,6 @@ export function TownPeek({
 }) {
   const card = useRef<HTMLDivElement>(null);
   const screen = useRef<HTMLDivElement>(null);
-  const chatting = Boolean(composer);
-  const input = useRef<HTMLInputElement>(null);
-  const [draft, setDraft] = useState("");
-  const [sending, setSending] = useState(false);
-  const uploading = useAttachmentUploads(uploadScope).some(
-    (upload) => upload.status === "uploading",
-  );
-  const filePicker = useRef<HTMLInputElement>(null);
-  const attach = (files: File[], image: boolean) => {
-    if (files.length) onAttach(files, image);
-  };
-  // A different agent starts with an empty reply; mounting keeps any path
-  // already taken in for this one.
-  const draftAgent = useRef(agent.key);
-  useEffect(() => {
-    if (draftAgent.current === agent.key) return;
-    draftAgent.current = agent.key;
-    setDraft("");
-  }, [agent.key]);
-  // On the phone, paths go to World's composer draft instead.
-  useAttachmentDelivery(inlineReply ? uploadScope : null, (text) => {
-    setDraft((current) =>
-      current && !current.endsWith(" ") ? `${current} ${text}` : current + text,
-    );
-    input.current?.focus();
-  });
   // Follow the newest message unless the reader has scrolled up in it.
   const follow = useRef(true);
   const latest = conversation?.latest ?? null;
@@ -150,16 +93,13 @@ export function TownPeek({
   useLayoutEffect(() => {
     if (follow.current && screen.current)
       screen.current.scrollTop = screen.current.scrollHeight;
-  }, [text, chatting]);
+  }, [text]);
   const [placed, setPlaced] = useState<{ left: number; top: number } | null>(
     null,
   );
 
   useEffect(() => {
-    if (!anchor || !card.current) {
-      setPlaced(null);
-      return;
-    }
+    if (!card.current) return;
     const box = card.current.getBoundingClientRect();
     const parent = card.current.offsetParent?.getBoundingClientRect();
     const originX = parent?.left ?? 0;
@@ -175,64 +115,20 @@ export function TownPeek({
     );
     setPlaced({ left: left - originX, top: top - originY });
     // The card is re-placed when its anchor point or content size changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [anchor?.x, anchor?.y, agent.key, text, choices.length]);
-
-  useEffect(() => {
-    if (!pinned) return;
-    const keydown = (event: KeyboardEvent) => {
-      if (typingTarget(event.target)) return;
-      if (event.key === "Escape") {
-        onClose();
-        return;
-      }
-      // Answers and typing belong to the card: a key pressed while focus is
-      // on another control (zoom, the rail) never writes to the agent.
-      if (
-        event.metaKey ||
-        event.ctrlKey ||
-        event.altKey ||
-        !(event.target instanceof Node) ||
-        !card.current?.contains(event.target)
-      )
-        return;
-      const choice = choices.find(
-        (candidate, index) =>
-          event.key === String(index + 1) || event.key === candidate.key,
-      );
-      if (choice && canReply) {
-        event.preventDefault();
-        void onReply(choice.key, false);
-        return;
-      }
-      // Any other typing goes straight into the reply line.
-      if (event.key.length === 1 && input.current) input.current.focus();
-    };
-    window.addEventListener("keydown", keydown);
-    return () => window.removeEventListener("keydown", keydown);
-  }, [pinned, choices, canReply, onClose, onReply]);
-  // A pinned card takes focus, so its answer keys work at once, unless the
-  // user is already typing somewhere.
-  useEffect(() => {
-    if (!pinned || !card.current) return;
-    if (!typingTarget(document.activeElement))
-      card.current.focus({ preventScroll: true });
-  }, [pinned, agent.key]);
+  }, [anchor.x, anchor.y, agent.key, text, choices.length]);
 
   return (
     <div
       ref={card}
-      className={`town-peek${anchor ? "" : " town-peek-sheet"}${chatting ? " town-peek-chat" : ""}${agent.semanticStatus === "blocked" ? " town-peek-blocked" : ""}`}
+      className={`town-peek${agent.semanticStatus === "blocked" ? " town-peek-blocked" : ""}`}
       role="dialog"
       tabIndex={-1}
       data-agent-key={agent.key}
       aria-label={`${agent.displayLabel} peek`}
       style={
-        anchor
-          ? placed
-            ? { left: placed.left, top: placed.top }
-            : { visibility: "hidden" }
-          : undefined
+        placed
+          ? { left: placed.left, top: placed.top }
+          : { visibility: "hidden" }
       }
       onPointerEnter={() => onHold(true)}
       onPointerLeave={() => onHold(false)}
@@ -331,7 +227,7 @@ export function TownPeek({
               key={choice.key}
               type="button"
               title={choice.label}
-              onClick={() => void onReply(choice.key, false)}
+              onClick={() => onAnswer(choice.key)}
             >
               <span>{choice.label}</span>
               <kbd>{index + 1}</kbd>
@@ -339,98 +235,20 @@ export function TownPeek({
           ))}
         </div>
       ) : null}
-      {agent.semanticStatus === "done" ? (
-        <div className="town-answers" role="group" aria-label="Finished work">
+      <div className="town-answers" role="group" aria-label="Chat">
+        {agent.semanticStatus === "done" ? (
           <button type="button" onClick={onReviewed}>
             <span>Mark reviewed</span>
           </button>
-          {canReply ? (
-            <button
-              type="button"
-              onClick={() => (inlineReply ? input.current?.focus() : onChat())}
-            >
-              <span>Follow up</span>
-            </button>
-          ) : null}
-        </div>
-      ) : null}
-      {!chatting ? <AttachmentChips scope={uploadScope} /> : null}
-      {!chatting && canReply ? (
-        <form
-          className="town-reply"
-          onSubmit={(event) => {
-            event.preventDefault();
-            const text = draft.trim();
-            if (!inlineReply) {
-              onChat();
-              return;
-            }
-            if (!text || sending || uploading) return;
-            setSending(true);
-            void onReply(text, true).then((sent) => {
-              setSending(false);
-              if (sent) setDraft("");
-            });
-          }}
-        >
-          <button
-            type="button"
-            className="town-attach"
-            aria-label="Attach files"
-            title="Attach files"
-            onClick={() => filePicker.current?.click()}
-          >
-            📎
+        ) : null}
+        {canReply ? (
+          <button type="button" onClick={onChat}>
+            <span>
+              {agent.semanticStatus === "done" ? "Follow up" : "Open chat"}
+            </span>
           </button>
-          <input
-            ref={filePicker}
-            type="file"
-            multiple
-            hidden
-            onChange={(event) => {
-              const files = Array.from(event.target.files ?? []);
-              // Reset so picking the same file again still fires change.
-              event.target.value = "";
-              attach(files, false);
-            }}
-          />
-          {inlineReply ? (
-            <input
-              ref={input}
-              value={draft}
-              aria-label={`Reply to ${agent.displayLabel}`}
-              placeholder={
-                uploading ? "Uploading…" : `Reply to ${agent.displayLabel}…`
-              }
-              autoComplete="off"
-              onChange={(event) => setDraft(event.target.value)}
-              onPaste={(event) => {
-                const images = Array.from(event.clipboardData.files).filter(
-                  (file) => file.type.startsWith("image/"),
-                );
-                if (!images.length) return;
-                event.preventDefault();
-                attach(images, true);
-              }}
-            />
-          ) : (
-            <button
-              type="button"
-              className="town-message-box"
-              aria-label={`Message ${agent.displayLabel}`}
-              onClick={onChat}
-            >
-              Reply to {agent.displayLabel}…
-            </button>
-          )}
-          <button
-            type="submit"
-            disabled={inlineReply && (!draft.trim() || sending || uploading)}
-          >
-            Send
-          </button>
-        </form>
-      ) : null}
+        ) : null}
+      </div>
       <div className="town-peek-foot">
         <button
           type="button"
@@ -445,7 +263,6 @@ export function TownPeek({
           </button>
         ) : null}
       </div>
-      {composer}
     </div>
   );
 }

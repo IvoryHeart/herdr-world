@@ -1419,10 +1419,6 @@
   color: var(--town-muted);
 }
 
-.town-peek .attachment-chips {
-  margin-top: 8px;
-}
-
 .town-answers {
   display: flex;
   gap: 6px;
@@ -1557,107 +1553,6 @@
 
 .town-reception-entry.town-reception-done small {
   color: #7be08f;
-}
-
-/* Chat: the peek grows World's composer; the screen scrolls, the composer stays. */
-.town-peek-chat {
-  display: flex;
-  flex-direction: column;
-  width: min(460px, calc(100% - 24px));
-  max-height: calc(100% - 24px);
-}
-
-.town-peek-chat .town-peek-screen {
-  flex: 0 1 auto;
-  min-height: 48px;
-  max-height: min(180px, 26dvh);
-}
-
-.town-peek-chat .town-peek-head,
-.town-peek-chat .town-answers,
-.town-peek-chat .town-peek-foot,
-.town-composer {
-  flex: none;
-}
-
-.town-composer {
-  margin: 8px -10px -10px;
-  border-top: 1px solid rgba(255, 255, 255, 0.07);
-}
-
-@media (max-width: 640px) {
-  .town-peek-sheet.town-peek-chat {
-    z-index: 11;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    width: auto;
-    max-height: 100%;
-    border-radius: 12px 12px 0 0;
-  }
-
-  .town-peek-chat .town-peek-foot button {
-    min-height: 30px;
-  }
-}
-
-@media (min-width: 641px) {
-  .town-peek-sheet.town-peek-chat {
-    bottom: 12px;
-    top: auto;
-  }
-}
-
-@media (max-width: 640px) {
-  /* While chatting on a phone the composer owns the space: no footer (the
-     composer's close returns to the full peek). */
-  .town-peek-chat .town-peek-foot {
-    display: none;
-  }
-}
-
-/* The reply line: an input with Send, as in a chat. On the phone the box opens
-   World's composer. */
-.town-reply {
-  display: flex;
-  gap: 6px;
-  margin-top: 8px;
-}
-
-.town-reply input,
-.town-peek .town-message-box {
-  flex: 1;
-  min-width: 0;
-  min-height: 38px;
-  padding: 0 12px;
-  text-align: left;
-  color: var(--town-text);
-  background: var(--town-term);
-  border: 2px solid var(--town-edge);
-  border-radius: 9px;
-  box-shadow: none;
-  font:
-    400 14px "Rubik",
-    system-ui,
-    sans-serif;
-}
-
-.town-peek .town-message-box {
-  color: var(--town-muted);
-  cursor: text;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.town-reply input::placeholder {
-  color: var(--town-muted);
-}
-
-.town-reply button[type="submit"] {
-  flex: none;
-  padding: 0 14px;
-  font-weight: 600;
 }
 
 .town-question {
