@@ -328,7 +328,9 @@ each source's state, switch it off or configure it.
   looked; failing rules make it **Merge despite N failing rules**. GitHub's
   answer, or its reason for refusing, shows on the card. World never bypasses
   branch protection: while GitHub requires a review, the card offers **Open
-  on GitHub** and **Copy merge command** instead of Merge.
+  on GitHub** and **Copy merge command** instead of Merge. The same card
+  opens from the pull request's badge on its agent's Town desk (a sheet on a
+  phone).
 - A source that is not signed in or configured says how to connect it (Work
   shows a quiet **Set up** button for one you never set up); the views work
   without it. The service refreshes at most once a minute while a visible

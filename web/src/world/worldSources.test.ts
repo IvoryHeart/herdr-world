@@ -267,6 +267,7 @@ describe("World sources in the browser", () => {
           text: "#12 ✗",
           tone: "fail",
           url: "https://github.com/example-org/widgets/pull/12",
+          itemKey: "github:pr:example-org/widgets#12",
         },
       ],
     ]);

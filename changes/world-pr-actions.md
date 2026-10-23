@@ -7,5 +7,6 @@
   the card, each behind a sheet that says exactly what happens; GitHub's
   answer shows on the card. World never bypasses branch protection: while a
   review is required it offers Open on GitHub and the merge command instead.
+- Tap a pull request's badge on a Town desk to open the same card.
 - Cards say **Ready to merge** when every rule holds, and **Stalled** when CI
   failed on the head and its agent is idle.

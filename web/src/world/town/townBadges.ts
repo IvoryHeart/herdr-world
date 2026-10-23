@@ -14,7 +14,13 @@ import { paneKey, workItemsByPane } from "../worldSources";
 
 export type TownBadgeTone = "pass" | "fail" | "pending" | "plain";
 
-export type TownDeskBadge = { text: string; tone: TownBadgeTone; url: string };
+export type TownDeskBadge = {
+  text: string;
+  tone: TownBadgeTone;
+  url: string;
+  /** The item it shows, so a pull request badge can open its card. */
+  itemKey: string;
+};
 
 export function townDeskBadges(
   projection: HerdrOfficeProjection,
@@ -53,6 +59,7 @@ export function townDeskBadges(
           text: workBadgeText(item),
           tone: toneOf(item),
           url: item.url,
+          itemKey: item.key,
         });
     }
   return badges;
@@ -83,7 +90,8 @@ export function sameTownBadges(
       !other ||
       other.text !== badge.text ||
       other.tone !== badge.tone ||
-      other.url !== badge.url
+      other.url !== badge.url ||
+      other.itemKey !== badge.itemKey
     )
       return false;
   }
