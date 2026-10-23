@@ -391,7 +391,10 @@ on your phone and desktop.
    for one of your open pull requests, tap the badge to open the same card.
    Your own open pull requests get a fuller card: CI dots, each rev agent's
    result and **Ready ✓** when your merge rules hold. **Details** shows each
-   rule, the failing checks and the reviewers' comments. **Merge…**,
+   rule, the failing checks and the reviewers' formal reviews or comments.
+   **Unknown reviewer** means the RESULT post has no clear reviewer claim;
+   use **View RESULT source** to inspect it. It does not confirm readiness.
+   **Merge…**,
    **Close…** and **Mark ready…** ask first and say exactly what happens;
    while GitHub still requires a review, use **Open on GitHub** or **Copy
    merge command** and merge it yourself.

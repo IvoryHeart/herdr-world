@@ -98,6 +98,33 @@ the site build for tutorial changes.
 New foundation modules need an owner and focused evidence in the guide. Leave
 machine- and user-specific data untracked and use synthetic examples in tests.
 
+### Post review results
+
+Put an explicit sender claim and reviewed commit before the RESULT line in
+each formal GitHub review or confirmation comment:
+
+```text
+Reviewer: rev2
+Reviewed commit: cccccccccccccccccccccccccccccccccccccccc
+RESULT #7: 2/2 resolved, 0 new
+```
+
+Use the actual PR number and exact reviewed SHA. The name is a sender claim,
+not a verified identity; the shared GitHub account cannot distinguish crew
+reviewers. Legacy headers such as `rev2 — Review of <SHA>` and
+`rev1 refreshed confirmation at <SHA>` remain readable. Conflicting reviewer
+claims, quoted replies and fenced examples cannot establish a reviewer.
+
+World uses formal review commit metadata or an explicitly named full SHA or
+unique prefix; conflicting claims and ambiguous prefixes stay unknown. It
+never derives the reviewed head from timestamps. RESULT-only evidence remains
+separately linked as unknown attribution; a later named review does not claim
+an earlier anonymous post. Correct the original post to attribute it. Positive
+open-finding counts take precedence over clear or unknown wording, and an
+unrecognised remainder cannot make a resolved fraction confirm readiness.
+PR actions remain in the browser's confirmation flow, outside the World CLI,
+skills and MCP.
+
 ## Run an optional visible team
 
 For HWF operating guidance, use the repo-local

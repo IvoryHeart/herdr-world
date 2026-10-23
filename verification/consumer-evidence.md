@@ -70,3 +70,25 @@ permanent audit retention, or future Groups CLI/roster behavior.
 Evidence statuses describe concrete decisions; independent acceptance is recorded separately. Review 5516249164 accepts every Q01–Q43 bounded mapping and alternative. Mandatory consumers and excluded claims remain binding. Final implementation/gate/resource acceptance is recorded in [review 5517420140](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5517420140); owner-approved PR #188 merged as `481ca1e8`. Mandatory consumers and excluded claims remain binding. Review must inspect the intended requirement, model/reducer domain, adapter fidelity, actual consumer tests and excluded claims. Q21 has its separate bounded exhaustive contract. Q26–Q28 retain their separately accepted Ranger storage/permission assumptions.
 
 No temporal progress proof has been added. Successful reachability witnesses show that a tested path occurs; they do not establish eventual completion for all schedules. Scheduler/deadline regressions are bounded implementation evidence with their stated transport/storage assumptions. Additional fairness assumptions need an explicit requirement and review before introducing temporal properties.
+
+### Reviewer RESULT evidence (Q43, #369)
+
+A crew reviewer name is an explicit sender claim, never a verified principal
+from a shared GitHub login. Unknown RESULT posts remain separately source-keyed
+and linked; an older or later named clear cannot erase that evidence. Reviewed
+heads require formal commit metadata or a unique explicit SHA. Ambiguous or
+conflicting claims and stale heads cannot establish current-head readiness.
+Open findings take precedence over unknown evidence, and unknown attribution
+cannot establish clear.
+
+Direct fixtures in `server/src/sources/pullRequestReviews.test.ts` and
+`pullRequestDetail.test.ts` exercise canonical and current legacy posts,
+quoted/author replies, shared-login refusal, distinct unknown sources, explicit
+correction, latest named results, SHA ambiguity/conflicts and typed open counts.
+`shared/pullRequests.test.ts` covers readiness precedence; browser decoder and
+static review rendering tests cover retention and useful unknown source links.
+These are bounded pure parsing/projection rules, so a state model would repeat
+the implementation boundary. Existing PR action tests retain browser-only,
+confirmed exact-head admission. Real GitHub pagination/completeness and live
+browser interaction remain excluded from this local fixture evidence; the
+closing batch gate, site build and consumer/CI checks remain required.

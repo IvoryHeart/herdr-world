@@ -365,13 +365,17 @@ each source's state, switch it off or configure it.
   lens names it on the card. A link holds only for the agent session and
   Herdr runtime it was made in.
 - **Your open pull requests** get a card in Work with CI on the head (a dot
-  per check), each rev agent's latest result ("per rev4's comment", read from
-  its `RESULT #N: …` line; GitHub can't take your own approval, so reviews are
-  comments) and your merge rules: not a draft, every finding confirmed, CI
+  per check), each explicitly attributed rev agent's latest `RESULT #N: …`
+  from a formal review or comment, and your merge rules: not a draft, every finding confirmed, CI
   green on the head, mergeable, and screenshots for a change to the web app
   or site. Each rule shows ✓, ✗ or ? (World can't tell; a confirmation of an
   older head is ?). **Details** lists the failing checks with links, the
-  reviewers, the head commit and how far it is behind its base. A card says
+  reviewers, the head commit and how far it is behind its base. RESULT posts
+  without a clear reviewer claim stay visible as **Unknown reviewer**, with
+  **View RESULT source** links, and cannot confirm readiness. Names are sender
+  claims, not verified identities; a shared GitHub login does not identify a
+  crew reviewer. Reviewed heads come only from review commit metadata or an
+  explicit, unambiguous SHA, never a timestamp. A card says
   **Ready to merge** when every rule holds, and **Stalled** when CI failed on
   the head and its agent is idle.
 - **Merge…**, **Close…** and **Mark ready…** (for a draft) open a sheet that

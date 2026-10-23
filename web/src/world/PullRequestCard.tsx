@@ -12,6 +12,7 @@ import {
   verbConsequence,
   type PullRequestAttention,
   type PullRequestCheck,
+  type PullRequestReviewer,
   type PullRequestVerb,
   type ReadinessRule,
 } from "../../../shared/pullRequests";
@@ -158,8 +159,11 @@ export function PullRequestCard({
       <p className="pr-card-summary">
         <CheckDots item={item} />
         {item.pr?.reviewers.map((entry) => (
-          <span key={entry.reviewer} data-outcome={entry.outcome}>
-            {entry.reviewer}{" "}
+          <span
+            key={entry.sourceId || entry.url || entry.reviewer}
+            data-outcome={entry.outcome}
+          >
+            {entry.reviewer ?? "Unknown reviewer"}{" "}
             {entry.outcome === "confirmed"
               ? entry.commitsSince === 0
                 ? "confirmed"
@@ -225,38 +229,7 @@ export function PullRequestCard({
             checks={item.pr?.checks}
             truncated={item.pr?.checksTruncated}
           />
-          <section aria-label="Reviews">
-            <h4>Reviews</h4>
-            {item.pr?.reviewers.length ? (
-              <ul>
-                {item.pr.reviewers.map((entry) => (
-                  <li key={entry.reviewer} data-outcome={entry.outcome}>
-                    <b>{entry.reviewer}</b>{" "}
-                    {entry.line || "No RESULT line in its latest post"}
-                    <small>
-                      {entry.outcome === "confirmed"
-                        ? `${confirmedAt(entry)} · `
-                        : ""}
-                      {entry.url ? (
-                        <a
-                          href={entry.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                        >
-                          per {entry.reviewer}'s comment
-                        </a>
-                      ) : (
-                        `per ${entry.reviewer}'s comment`
-                      )}
-                    </small>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p>{item.pr ? "No reviewer result yet." : "Not read yet."}</p>
-            )}
-            <p className="pr-card-note">{REVIEWS_COME_FROM_COMMENTS}</p>
-          </section>
+          <PullRequestReviews reviewers={item.pr?.reviewers} />
           <p className="pr-card-facts">
             {item.headSha ? (
               <>
@@ -504,5 +477,49 @@ function ConfirmSheet({
         </button>
       </div>
     </div>
+  );
+}
+
+/** Parsed evidence only; unattributed posts remain individually linked. */
+export function PullRequestReviews({
+  reviewers,
+}: {
+  reviewers?: PullRequestReviewer[];
+}) {
+  return (
+    <section aria-label="Reviews">
+      <h4>Reviews</h4>
+      {reviewers?.length ? (
+        <ul>
+          {reviewers.map((entry) => (
+            <li
+              key={entry.sourceId || entry.url || entry.reviewer}
+              data-outcome={entry.outcome}
+            >
+              <b>{entry.reviewer ?? "Unknown reviewer"}</b>{" "}
+              {entry.line || "No RESULT line in its latest post"}
+              {!entry.reviewer ? <span> · Attribution unknown</span> : null}
+              <small>
+                {entry.outcome === "confirmed" && entry.reviewer
+                  ? `${confirmedAt(entry)} · `
+                  : ""}
+                {entry.url ? (
+                  <a href={entry.url} target="_blank" rel="noopener noreferrer">
+                    {entry.reviewer
+                      ? `per ${entry.reviewer}'s review or comment`
+                      : "View RESULT source"}
+                  </a>
+                ) : (
+                  "Source link unavailable"
+                )}
+              </small>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p>{reviewers ? "No reviewer result yet." : "Not read yet."}</p>
+      )}
+      <p className="pr-card-note">{REVIEWS_COME_FROM_COMMENTS}</p>
+    </section>
   );
 }

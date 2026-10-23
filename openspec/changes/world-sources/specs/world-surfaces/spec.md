@@ -23,6 +23,12 @@ World SHALL merge, close or mark a pull request ready only after the user
 confirms a sheet that states the outcome, SHALL pin a merge to the head the
 user saw, and SHALL NOT bypass branch protection.
 
+Reviewer attribution SHALL be an explicit sender claim in the review or comment,
+not an identity inferred from a shared GitHub login. Unattributed RESULT evidence
+SHALL remain visible with its source link and SHALL NOT confirm readiness.
+Reviewed heads SHALL come only from review commit metadata or an unambiguous
+explicit SHA, never timestamps; conflicting claims SHALL remain unknown.
+
 #### Scenario: Prerequisite missing
 - **WHEN** `gh` is not signed in, or Jira has no site, email or token
 - **THEN** that source shows not connected with how to connect it, and other

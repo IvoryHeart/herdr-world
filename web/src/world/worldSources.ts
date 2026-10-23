@@ -213,16 +213,23 @@ function parseDetail(value: unknown): PullRequestDetail | null {
       ),
     checksTruncated: detail.checksTruncated === true,
     reviewers: (Array.isArray(detail.reviewers) ? detail.reviewers : [])
-      .slice(0, 20)
+      .slice(0, 80)
       .map(record)
       .flatMap((entry): PullRequestReviewer[] =>
-        text(entry.reviewer) && OUTCOMES.has(entry.outcome as string)
+        (entry.reviewer === null || text(entry.reviewer)) &&
+        OUTCOMES.has(entry.outcome as string)
           ? [
               {
-                reviewer: text(entry.reviewer)!,
+                reviewer: text(entry.reviewer),
+                ...(text(entry.sourceId)
+                  ? { sourceId: text(entry.sourceId)! }
+                  : {}),
                 url: httpsText(entry.url) ?? "",
                 at: number(entry.at),
-                outcome: entry.outcome as PullRequestReviewer["outcome"],
+                outcome:
+                  entry.reviewer === null
+                    ? "unknown"
+                    : (entry.outcome as PullRequestReviewer["outcome"]),
                 line: text(entry.line) ?? "",
                 commit: sha(entry.commit),
                 commitsSince: count(entry.commitsSince),
