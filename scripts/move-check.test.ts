@@ -291,3 +291,14 @@ test("a changed member of an unchanged multi-line import is plumbing, from the f
   );
   expect(blind.lost).toHaveLength(1);
 });
+
+test("a dynamic import and its callback are code, not plumbing", () => {
+  const source = [
+    'void import("./worker").then(({ start }) => {',
+    "  start(options);",
+    "});",
+    "const url = import.meta.url;",
+    'import type { Options } from "./options";',
+  ].join("\n");
+  expect([...statementLines(source)]).toEqual([5]);
+});

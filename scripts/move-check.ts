@@ -38,7 +38,13 @@ export function statementLines(text: string): Set<number> {
   const found = new Set<number>();
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]!.trim();
-    if (!/^(import\b|export (type )?\{|export \* from)/.test(line)) continue;
+    // Static import declarations only: not import(...) calls or import.meta.
+    if (
+      !/^(import\s+(type\s+)?[\w*{"']|export (type )?\{|export \* from)/.test(
+        line,
+      )
+    )
+      continue;
     found.add(i + 1);
     // A list left open on this line runs to its closing brace.
     if (line.includes("{") && !line.includes("}"))
