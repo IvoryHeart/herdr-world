@@ -10,6 +10,8 @@ const publicRoot = fileURLToPath(new URL("../server/public/", import.meta.url));
 // sprites) left 129 files and 13.0 MiB, so the budgets keep a little headroom.
 const maxFileCount = 150;
 const maxTotalBytes = 13.25 * 1024 * 1024;
+/** Whole-bundle budgets, also projected onto current main for open PRs. */
+export const BUNDLE_BUDGET = { files: maxFileCount, bytes: maxTotalBytes };
 const maxInitialJsBytes = 660 * 1024;
 const maxInitialJsGzipBytes = 202 * 1024;
 const maxInitialCssBytes = 196 * 1024;
@@ -87,7 +89,7 @@ export function assertLazyGrammarAssets(manifest) {
   }
 }
 
-async function collectAssetStats(root) {
+export async function collectAssetStats(root = publicRoot) {
   const directories = [root];
   let fileCount = 0;
   let totalBytes = 0;

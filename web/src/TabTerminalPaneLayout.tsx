@@ -1,4 +1,5 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { paneAgentTitle } from "./agentName";
 import { Suspense, useRef } from "react";
 import type { ITheme } from "@xterm/xterm";
 import { useLayoutPreferences } from "./layoutPreferences";
@@ -47,7 +48,7 @@ function rectPercent(value: number, start: number, size: number) {
 
 function paneTitle(paneId: string, panes: readonly Pane[]) {
   const pane = panes.find((p) => p.pane_id === paneId);
-  if (pane?.agent) return pane.agent;
+  if (pane?.agent) return paneAgentTitle(pane);
   const cwd = pane?.foreground_cwd ?? pane?.cwd;
   const name = cwd?.split(/[\\/]/).filter(Boolean).pop();
   return name || paneId;

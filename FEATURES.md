@@ -13,7 +13,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   Each host is a building, each workspace a room, each tab a team table and each
   pane a seat. Plain terminals show prompts. Additional panes beyond the drawn
   seats remain available through the table's count and chooser. Each table
-  carries its tab's name on a nameplate at its front edge.
+  carries its tab's name on a nameplate at its front edge. Agents go by the
+  name Herdr gives them (`firstmate`), else their harness (`claude`); window
+  and Inspector titles put the name first (`firstmate · claude`).
   - Blocked agents queue at reception oldest first. Finished agents wait there
     until you open their terminal or mark that completion reviewed, then join
     idle agents in the lounge. Movement only represents state.
@@ -79,6 +81,19 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     with more than 127 tabs keeps its three newest and busiest tables and
     hides idle ones first. Town asks Herdr to move the tab and
     shows the new order when Herdr reports it; agents stay with their table.
+  - **Teams.** Tables whose agents know each other are drawn inside one wall
+    with a connector: a spawned agent is joined to the agent that started it,
+    and a manual group with dotted lines; stale links are faded while a host
+    is offline, and dropped once its agents have closed.
+    Drag a table onto another table and hold it there a moment: it snaps to
+    that table (**Group with …**), and dropping groups them. Town moves it to
+    that room if needed and seats its tab beside the other's in Herdr. A quick
+    drop keeps meaning a move or a reorder, so the gestures stay separate.
+    Drop a table you grouped on its own room's bare floor (not the free spot)
+    to leave its group; a spawn link stays, since Herdr's stamp records it.
+    **M** on a focused table offers the same as **Group with…** and **Leave
+    the team**, and the table's accessible name lists its teammates. A
+    pinned table joins a team only in its own room, and keeps its place.
   - **Pin a desk** from its agent window's **⋯** menu (**Pin desk in Town**),
     on a phone too. A
     pinned table wears a pin and keeps its place: tab reorders, a room growing
@@ -146,6 +161,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   - A desk moved to another room keeps the colour it showed, even a default or
     its old room's, saved as its own colour: it no longer follows its room's
     colour, and **Default colour** resets it to its new tab's default.
+  - A spawned agent's tab without a colour of its own takes the colour of the
+    tab that spawned it (before its workspace's colour), and keeps following it
+    when moved. A chosen colour always wins.
 
 - **Board** (`/board`) shows hosts as zones, workspaces as cards and tabs as
   cards around their workspace, beside your notes. Cards are elastic while you
@@ -338,6 +356,20 @@ Herdr pane. The Inspector shows it only while the current
 agent session matches the report. Herdr owns expiry; the command does not infer work,
 assign tasks, or provide a Clear operation.
 
+### Teams and spawn stamps
+
+World groups terminals that know each other. Each relation lists its evidence,
+one entry per source, with the source's system of record and whether it holds
+now: a **spawn** (Herdr pane metadata while it lives, then World's saved copy)
+or a **manual group** (saved by World). Evidence for a terminal that is gone or
+on a stale host is shown as stale, not dropped. Herdr records no creator for a
+tab or pane, so a spawner stamps the child:
+`herdr-world stamp CHILD_PANE PARENT_PANE` (`bun run agent:stamp --` in a
+checkout). Board's **Start an agent** stamps the new agent when its note is
+strung to one pane. Town draws teams as walls and connectors; Board strings
+related cards and groups a tab dropped on another tab, or chosen with
+**Group…** and a tap; **Ungroup** undoes it.
+
 ### Agent checkout context
 
 An active agent can report its exact checkout once with `herdr-world
@@ -510,6 +542,9 @@ See [resource ownership](docs/ARCHITECTURE.md#workspace-resource-ownership).
   with each choice's description) or plan approval, Chat shows it as an ask
   card and answers with the option you pick (click or its number key), after
   checking the question has not changed.
+  Each tool call's row in Chat carries its evidence: a plain label, its state
+  and time, a pass or fail badge for a test run, and when opened, the edit's
+  diff, the test strip with its first failure, or the end of its output.
   It refreshes when the service sees the transcript, title or status change,
   without browser polling, and keeps the last good view if a read fails. When
   it cannot read the conversation it shows the reason with the matching action:
@@ -526,6 +561,10 @@ See [resource ownership](docs/ARCHITECTURE.md#workspace-resource-ownership).
   and confirm its association with the foreground Codex pane. This replaces the
   existing link for all viewers. Codex lookup searches active and archived records
   on the selected local/Unix SSH runtime; Windows SSH history remains unavailable.
+  For shared-daemon Codex panes without a session report or thread title, one
+  matching pane and one loaded thread can provide a recent, read-only guess.
+  Ambiguity shows no conversation. Add **Thread ID** with `/title`, link the
+  session explicitly, or use the Terminal to reply or answer permissions.
 - Open Details with independent User/Agent/Tool filters (User/Agent enabled,
   Tool hidden initially), a message minimap, and on-demand tool details. The recent window
   counts 200 conversation entries, not associated tools; exports remain complete.

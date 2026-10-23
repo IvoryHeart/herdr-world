@@ -166,9 +166,24 @@ passed code gate on an ancestor, and a push that only merges `origin/main` runs
 same Git hook configuration.
 
 Agents in parallel worktrees share one machine-wide check queue: one browser lane
-and one behavioral verification at a time, two light lanes. A queued gate prints
+and one behavioral verification at a time, two light lanes, and the timed
+(latency) lane alone on the whole machine. Run browser suites through
+`bun run test <path>` or `bun run test:browser`, which queue, rather than a bare
+`bun test` on a browser file, which does not. A queued gate prints
 `[queue] <lane> waiting for <worktree> <lane> (pid, since)`. Do not bypass the
 hook because a gate is queued; the wait is shorter than the contention it avoids.
+
+Direct test runs recognise canonical file and directory paths, including `./`,
+absolute paths and symlinks. A pending whole-machine lane reserves admission before
+waiting for running work, so later ordinary arrivals cannot continually overtake
+it. This reserves admission before heavy slots drain: light work also waits,
+even with free light slots, and can wait minutes behind a running heavy lane.
+Direct runs containing timed suites take every slot, including the default
+full test run and `test:world --shard=latency`. Unknown selections conservatively
+take the quiet lane; known browser-only selections take the browser slot.
+Known value-taking flags such as `-t` and `--timeout` do not widen an explicit
+file selection; a flags-only invocation still selects Bun's full test run.
+Process exit releases both admission and slots through the kernel.
 
 On a machine with a usable GPU, set `HERDR_WORLD_TEST_GPU=1` (for example in the
 shell that runs `git push`) so World browser suites render WebGL on the GPU instead

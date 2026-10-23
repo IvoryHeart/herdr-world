@@ -8,6 +8,16 @@ import {
   resolveTerminalColor,
   tabCardKey,
 } from "../../../shared/terminalColor";
+import {
+  joinGroup,
+  leaveGroups,
+  RELATION_LIMITS,
+  terminalKey,
+  type RelationGroup,
+  type RelationsDocument,
+  type SpawnClaim,
+  type TerminalRef,
+} from "../../../shared/relations";
 
 /**
  * Board's saved state: layout, notes and strings. One document for the World
@@ -82,6 +92,8 @@ export type BoardDocument = {
   layout: BoardLayoutDocument;
   notes: BoardNote[];
   strings: BoardString[];
+  /** Which terminals know each other (shared/relations.ts). */
+  relations: RelationsDocument;
 };
 
 export type BoardOp =
@@ -136,6 +148,25 @@ export type BoardOp =
       witness: string[];
     }
   | {
+      /** Group `members` with `target`'s group, or start one (`id`). */
+      op: "group.join";
+      id: string;
+      members: TerminalRef[];
+      target: TerminalRef[];
+    }
+  | { op: "group.leave"; members: TerminalRef[] }
+  | {
+      /** Service only: the spawn claims it saw on Herdr panes. */
+      op: "spawn.record";
+      claims: SpawnClaim[];
+    }
+  | {
+      /** Service only: drop claims and group members whose terminals closed. */
+      op: "relations.prune";
+      children: TerminalRef[];
+      members: TerminalRef[];
+    }
+  | {
       /** Service only: record which agent a pane end is for. */
       op: "anchor.recipient";
       string_id: string;
@@ -161,7 +192,12 @@ export function clientBoardOps(ops: unknown): {
   const observed = new Map<string, ObservedAgent>();
   const clean = ops.map((op) => {
     if (!isObject(op)) fail("op must be an object");
-    if (op.op === "anchor.recipient") fail("unknown operation");
+    if (
+      op.op === "anchor.recipient" ||
+      op.op === "spawn.record" ||
+      op.op === "relations.prune"
+    )
+      fail("unknown operation");
     if (op.op !== "string.put" || !isObject(op.string)) return op as BoardOp;
     const string = op.string;
     const strip = (end: unknown, side: "from" | "to") => {
@@ -242,6 +278,7 @@ export function emptyBoardDocument(): BoardDocument {
     },
     notes: [],
     strings: [],
+    relations: { spawns: [], groups: [] },
   };
 }
 
@@ -368,6 +405,56 @@ function string(value: unknown): BoardString {
   };
 }
 
+function terminalRef(value: unknown): TerminalRef {
+  if (!isObject(value)) fail("terminal must be an object");
+  return {
+    connection_id: text(
+      value.connection_id,
+      "terminal connection",
+      BOARD_LIMITS.key,
+    ),
+    terminal_id: text(value.terminal_id, "terminal ID", BOARD_LIMITS.key),
+  };
+}
+function terminalRefs(value: unknown, what: string): TerminalRef[] {
+  if (!Array.isArray(value) || value.length > RELATION_LIMITS.members)
+    fail(`${what} must be a list of at most ${RELATION_LIMITS.members}`);
+  return value.map(terminalRef);
+}
+function count(value: unknown, what: string) {
+  if (!Number.isSafeInteger(value) || (value as number) < 0) fail(what);
+  return value as number;
+}
+function spawnClaim(value: unknown): SpawnClaim {
+  if (!isObject(value)) fail("spawn claim must be an object");
+  return {
+    child: terminalRef(value.child),
+    parent: terminalRef(value.parent),
+    source: text(value.source, "spawn source", BOARD_LIMITS.key),
+    generation: count(value.generation, "spawn generation"),
+    observed_at: count(value.observed_at, "spawn time"),
+  };
+}
+function group(value: unknown): RelationGroup {
+  if (!isObject(value)) fail("group must be an object");
+  return {
+    id: text(value.id, "group id", BOARD_LIMITS.key),
+    members: terminalRefs(value.members, "group members"),
+    created_at: count(value.created_at, "group time"),
+  };
+}
+function relations(value: unknown): RelationsDocument {
+  // Boards saved before relations have none.
+  if (value === undefined) return { spawns: [], groups: [] };
+  if (!isObject(value)) fail("relations must be an object");
+  if (!Array.isArray(value.spawns) || !Array.isArray(value.groups))
+    fail("relations");
+  return {
+    spawns: value.spawns.map(spawnClaim),
+    groups: value.groups.map(group),
+  };
+}
+
 /** Parse a stored document strictly; anything unexpected is rejected. */
 export function parseBoardDocument(value: unknown): BoardDocument {
   if (!isObject(value) || value.version !== 1) fail("unsupported version");
@@ -399,6 +486,7 @@ export function parseBoardDocument(value: unknown): BoardDocument {
       return note(entry, rev);
     }),
     strings: strings.map(string),
+    relations: relations(value.relations),
   };
   checkBounds(document);
   return document;
@@ -427,6 +515,22 @@ function checkBounds(document: BoardDocument) {
     for (const side of [entry.from, entry.to])
       if ("note" in side && !noteIds.has(side.note))
         fail("a string refers to a missing note");
+  const { spawns, groups } = document.relations;
+  if (spawns.length > RELATION_LIMITS.spawns)
+    fail(`at most ${RELATION_LIMITS.spawns} spawn claims`);
+  if (groups.length > RELATION_LIMITS.groups)
+    fail(`at most ${RELATION_LIMITS.groups} groups`);
+  const children = new Set(spawns.map((claim) => terminalKey(claim.child)));
+  if (children.size !== spawns.length) fail("one spawn claim per child");
+  const grouped = new Set<string>();
+  for (const entry of groups) {
+    if (entry.members.length < 2) fail("a group has at least two members");
+    for (const member of entry.members) {
+      const key = terminalKey(member);
+      if (grouped.has(key)) fail("a terminal is in one group at a time");
+      grouped.add(key);
+    }
+  }
 }
 
 /* ---------- Store ---------- */
@@ -568,6 +672,58 @@ function applyOp(next: BoardDocument, op: BoardOp, current: BoardDocument) {
       else fail("card colour");
       return;
     }
+    case "group.join": {
+      const members = terminalRefs(op.members, "members");
+      const target = terminalRefs(op.target, "target");
+      const id = text(op.id, "group id", BOARD_LIMITS.key);
+      try {
+        next.relations.groups = joinGroup(
+          next.relations.groups,
+          members,
+          target,
+          id,
+          Date.now(),
+        );
+      } catch (error) {
+        fail((error as Error).message);
+      }
+      return;
+    }
+    case "group.leave":
+      next.relations.groups = leaveGroups(
+        next.relations.groups,
+        terminalRefs(op.members, "members"),
+      );
+      return;
+    case "spawn.record": {
+      if (!Array.isArray(op.claims)) fail("claims must be a list");
+      const claims = op.claims.map(spawnClaim);
+      const replaced = new Set(claims.map((claim) => terminalKey(claim.child)));
+      const kept = next.relations.spawns.filter(
+        (claim) => !replaced.has(terminalKey(claim.child)),
+      );
+      // The oldest claims give way when the bound is reached.
+      next.relations.spawns = [...kept, ...claims].slice(
+        -RELATION_LIMITS.spawns,
+      );
+      return;
+    }
+    case "relations.prune": {
+      // A restarted Herdr closes every saved terminal at once.
+      const refs = (value: unknown, what: string) => {
+        if (!Array.isArray(value)) fail(`${what} must be a list`);
+        return value.map(terminalRef);
+      };
+      const children = new Set(refs(op.children, "children").map(terminalKey));
+      next.relations.spawns = next.relations.spawns.filter(
+        (claim) => !children.has(terminalKey(claim.child)),
+      );
+      next.relations.groups = leaveGroups(
+        next.relations.groups,
+        refs(op.members, "members"),
+      );
+      return;
+    }
     case "desk.pin": {
       const key = text(op.key, "desk key", BOARD_LIMITS.key);
       next.layout.desk_pins[key] = {
@@ -707,6 +863,12 @@ function colorFollowOps(
   const { before, workspaceIds } = colors;
   const { source_workspace_id: from, workspace_id: to } = moved;
   if (!from || !to) return [];
+  // A spawned tab's inherited colour follows its terminals, not its tab ID.
+  if (
+    colors.inherited &&
+    !before[tabCardKey(connectionId, movedTab, workspaceIds)]
+  )
+    return [];
   const previousKey = tabCardKey(connectionId, movedTab, workspaceIds);
   const nextKey = tabCardKey(connectionId, moved.tab_id, workspaceIds);
   if (previousKey === nextKey) return [];
@@ -730,6 +892,8 @@ function colorFollowOps(
 export type MoveColors = {
   before: Readonly<Record<string, CardColor>>;
   workspaceIds: ReadonlySet<string>;
+  /** The browser showed the tab with its parent's colour (relations). */
+  inherited?: boolean;
 };
 
 /**

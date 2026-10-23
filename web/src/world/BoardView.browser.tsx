@@ -15,6 +15,12 @@ import {
   type FixtureSpace,
 } from "./board/boardFixture";
 import { defaultTerminalColor } from "./terminalColor";
+import { worldRelationInputs } from "./relations";
+import {
+  joinGroup,
+  leaveGroups,
+  observedSpawnClaims,
+} from "../../../shared/relations";
 import { currentBoardCardPins } from "./board/boardCardPins";
 import { worldSourcesStore } from "./worldSources";
 import "./world.css";
@@ -202,6 +208,7 @@ const emptyDocument = (): BoardDocument => ({
   layout: { anchors: {}, offsets: {}, pinned: {}, folded: [] },
   notes: [],
   strings: [],
+  relations: { spawns: [], groups: [] },
 });
 let saved: BoardDocument = emptyDocument();
 // `?colors=demo` (for screenshots) starts with chosen workspace and host colours.
@@ -257,6 +264,13 @@ function apply(ops: BoardOp[]) {
       if (op.color) colors[op.key] = op.color;
       else delete colors[op.key];
       next.layout.colors = colors;
+    } else if (op.op === "group.join" || op.op === "group.leave") {
+      const relations = next.relations ?? { spawns: [], groups: [] };
+      relations.groups =
+        op.op === "group.join"
+          ? joinGroup(relations.groups, op.members, op.target, op.id, 1)
+          : leaveGroups(relations.groups, op.members);
+      next.relations = relations;
     } else if (op.op === "layout.set") {
       if (op.replace)
         next.layout = { ...next.layout, anchors: {}, offsets: {}, pinned: {} };
@@ -538,6 +552,17 @@ const variant = (
       })),
     })),
   );
+/** Save the claims the service would for the world's spawn stamps. */
+const recordSpawns = (shown: ReturnType<typeof variant>) => {
+  saved = {
+    ...saved,
+    relations: {
+      groups: saved.relations?.groups ?? [],
+      spawns: observedSpawnClaims(worldRelationInputs(shown).observations, 1),
+    },
+  };
+  return shown;
+};
 const strungPane = () => {
   const end = saved.strings[0]!.to;
   return "anchor" in end ? end.anchor : null;
@@ -1879,6 +1904,129 @@ const scenarios: [name: string, run: () => Promise<void>][] = [
     },
   ],
   [
+    "teams: spawned cards are strung and tabs group magnetically",
+    async () => {
+      // review (w1:p2) was spawned by login fix (w1:p1).
+      const spawned = variant((leaf) =>
+        leaf.connectionId === "studio" && leaf.nativeId === "w1:p2"
+          ? {
+              ...leaf,
+              pane: {
+                tokens: { spawned_by: "w1:p1" },
+              } as unknown as typeof leaf.pane,
+            }
+          : leaf,
+      );
+      const leafOf = (tabId: string) =>
+        spawned.leaves.find(
+          (leaf) => leaf.connectionId === "studio" && leaf.tabId === tabId,
+        )!;
+      mount(2, recordSpawns(spawned), null);
+      await rest();
+      await bringIntoView(() => card("studio:w1:t2")!);
+      await waitFor(
+        () =>
+          host.querySelector('path.board-relation[data-kind="spawned"]') !==
+          null,
+        "a spawned tab is not strung to its parent",
+      );
+      const parentKey = "studio:w1:t1",
+        childKey = "studio:w1:t2";
+      check(
+        defaultTerminalColor(parentKey) !== defaultTerminalColor(childKey) &&
+          getComputedStyle(card(childKey)!).backgroundColor ===
+            getComputedStyle(card(parentKey)!).backgroundColor,
+        "a spawned tab shows its parent's colour, not its own default",
+      );
+      const groups = () => saved.relations?.groups ?? [];
+      const moving = "studio:w2:t1",
+        mate = "studio:w1:t4";
+      if (innerWidth > 720) {
+        // Drag one tab onto another: the other glows, and the drop groups.
+        await bringIntoView(() => card(mate)!);
+        let to = centre(card(mate)!);
+        const carry = async () => {
+          const from = centre(card(moving)!.querySelector(".board-label")!);
+          to = centre(card(mate)!);
+          pointer(card(moving)!, "pointerdown", from.x, from.y, 17);
+          for (let i = 1; i <= 10; i++) {
+            pointer(
+              card(moving)!,
+              "pointermove",
+              from.x + ((to.x - from.x) * i) / 10,
+              from.y + ((to.y - from.y) * i) / 10,
+              17,
+            );
+            await settle(16);
+          }
+        };
+        await carry();
+        check(
+          card(mate)!.classList.contains("board-glue"),
+          "the tab a tab is over glows",
+        );
+        pointer(card(moving)!, "pointerup", to.x, to.y, 17);
+        await waitFor(
+          () => groups().length === 1,
+          "dropping a tab on a tab did not group them",
+        );
+        check(
+          movedTabs.length === 0,
+          "grouping two tabs moves no tab between workspaces",
+        );
+        const members = groups()[0]!.members.map((ref) => ref.terminal_id);
+        check(
+          members.length === 2 &&
+            members[0] === leafOf("w1:t4").terminalId &&
+            members[1] === leafOf("w2:t1").terminalId,
+          `the group holds one terminal per tab, led by the tab dropped on (${members.join(", ")})`,
+        );
+        await waitFor(
+          () =>
+            host.querySelector('path.board-relation[data-kind="manual"]') !==
+            null,
+          "grouped tabs are not strung together",
+        );
+        // Ungroup from the tab's bar.
+        mount(2, spawned, leafOf("w2:t1").id);
+        await waitFor(
+          () =>
+            [...host.querySelectorAll("button")].some(
+              (b) => b.textContent === "Ungroup",
+            ),
+          "a grouped tab offers Ungroup",
+        );
+        [...host.querySelectorAll<HTMLButtonElement>("button")]
+          .find((b) => b.textContent === "Ungroup")!
+          .click();
+        await waitFor(() => groups().length === 0, "Ungroup did not ungroup");
+      }
+      // Select and group, at any width: Group… on one tab, then tap another.
+      mount(2, spawned, leafOf("w2:t1").id);
+      await waitFor(
+        () =>
+          [...host.querySelectorAll("button")].some(
+            (b) => b.textContent === "Group…",
+          ),
+        "a tab offers Group…",
+      );
+      [...host.querySelectorAll<HTMLButtonElement>("button")]
+        .find((b) => b.textContent === "Group…")!
+        .click();
+      await settle(50);
+      await bringIntoView(() => card(mate)!);
+      const tapAt = centre(card(mate)!.querySelector(".board-label")!);
+      pointer(card(mate)!, "pointerdown", tapAt.x, tapAt.y, 18);
+      pointer(card(mate)!, "pointerup", tapAt.x, tapAt.y, 18);
+      await waitFor(
+        () => groups().length === 1,
+        "Group… then a tap did not group the tabs",
+      );
+      mount(2, world, null);
+      await settle(50);
+    },
+  ],
+  [
     "drags a tab onto another workspace",
     async () => {
       // Drag a tab onto another workspace: it glues, and asks before moving.
@@ -2752,6 +2900,33 @@ async function run() {
   }
   current = "";
 }
+
+// `?mode=preview`: the synthetic board with one spawn, for screenshots.
+if (mode === "preview")
+  void fresh().then(async () => {
+    mount(
+      2,
+      recordSpawns(
+        variant((leaf) =>
+          leaf.connectionId === "studio" && leaf.nativeId === "w1:p2"
+            ? {
+                ...leaf,
+                pane: {
+                  tokens: { spawned_by: "w1:p1" },
+                } as unknown as typeof leaf.pane,
+              }
+            : leaf,
+        ),
+      ),
+      null,
+    );
+    // Fixture time is manual: run it so the board settles, then fit it.
+    for (let frame = 0; frame < 120; frame += 1) await clock.advance(16);
+    document
+      .querySelector<HTMLButtonElement>('[aria-label="Fit everything"]')
+      ?.click();
+    for (let frame = 0; frame < 120; frame += 1) await clock.advance(16);
+  });
 
 if (mode === "test")
   run()

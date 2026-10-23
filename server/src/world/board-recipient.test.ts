@@ -60,6 +60,7 @@ describe("Recording a string's agent", () => {
       colors: {},
       desk_pins: {},
     },
+    relations: { spawns: [], groups: [] },
     notes: [],
     strings: [{ id: "s1", from: { note: "n1" }, to: { anchor: to } }],
   });
