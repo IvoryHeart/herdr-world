@@ -237,9 +237,28 @@ export function useRelations(
   const { document } = useBoardDocument(store);
   const derive = useRef(relationsDeriver()).current;
   const hosts = world.hosts;
-  const inputs = useMemo(() => worldRelationInputs({ hosts }), [hosts]);
-  return derive(document?.relations ?? NO_RELATIONS, inputs);
+  const relations = document?.relations ?? NO_RELATIONS;
+  // Nothing saved and no stamp on any pane: nothing to derive.
+  const anything =
+    relations.spawns.length > 0 ||
+    relations.groups.length > 0 ||
+    hosts.some((host) =>
+      host.spaces.some((space) =>
+        space.children.some((leaf) => {
+          const tokens = (leaf.pane as { tokens?: Record<string, unknown> })
+            ?.tokens;
+          return Boolean(tokens?.spawned_by || tokens?.spawned_by_terminal);
+        }),
+      ),
+    );
+  const inputs = useMemo(
+    () => (anything ? worldRelationInputs({ hosts }) : null),
+    [anything, hosts],
+  );
+  return inputs ? derive(relations, inputs) : NO_DERIVED;
 }
+
+const NO_DERIVED: Derived = { relations: [], places: new Map() };
 
 /** Group the terminals of `members` with those of `target`. */
 export function groupTerminals(
