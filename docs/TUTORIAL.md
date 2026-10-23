@@ -142,8 +142,8 @@ changes what you see and does not disconnect hosts or retarget open terminals.
    question when one can be identified, and refreshes when the conversation
    changes. Opening
    an agent brings it back to its desk from reception or the lounge until its
-   status changes. To open terminals instead, set **Menu → Town opens** to
-   **Terminal**; that tap also brings the agent back and, like the chat, does
+   status changes. To open terminals instead, set **Menu → Agents open** to
+   **Terminal** (Board and Desk follow it too); that tap also brings the agent back and, like the chat, does
    not mark its work reviewed.
    Zoom into a room: an agent with a quest (its own todo list, plan, Codex goal
    or `/loop`) shows a swallowtail pennant beside its seat, with a progress
@@ -343,7 +343,9 @@ on your phone and desktop.
    placement, tidying and settling leave it until you **Unpin** it (you can
    still drag it). On a phone, tap the pin in the card's terminal header.
 4. Tap a workspace, tab or pane row to open its Inspector with Terminal, Files,
-   Changes and Chat; a line joins each Inspector window to its card. Double-click a tab to open its terminal.
+   Changes and Chat; a line joins each Inspector window to its card. Tapping or
+   double-clicking an agent's tab opens its Chat, as in Town; a plain shell, or an
+   agent without Chat, opens its terminal.
 5. Double-click (or double-tap) empty board to pin a note and type; double-click
    a note to edit it. Tap a note for its bar: colour, **Edit**, **String to…**, **Delete** (or press Delete).
 6. Drag a card's red dot onto a pane row, a tab or a workspace to string a note

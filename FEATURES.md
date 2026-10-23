@@ -49,8 +49,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   - Tapping an agent or its table brings the agent back: from reception or the
     lounge it walks to its desk and stays there until its status changes. A
     table stands for an agent that needs you (waiting, then finished) before
-    the one seated there. **Menu → Town opens** chooses whether that tap opens
-    the chat (the default) or the terminal; either way the tap does not mark
+    the one seated there. **Menu → Agents open** chooses whether that tap opens
+    the chat (the default) or the terminal, in Town, Board and Desk alike; either way the tap does not mark
     finished work reviewed. **Open terminal** in the peek does, as before.
   - A seated agent with a quest (its own todo list, plan, Codex goal or loop)
     shows a blue pennant (green when done, amber when blocked) beside it in
@@ -188,6 +188,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   pans the board, as in Town) and settle within a second; workspaces fold into a count and open
   into free space; Tidy (with Undo) rearranges a workspace or the board and
   carries strung notes along. Zoomed out, workspaces show a square per pane.
+  - Tapping or double-clicking a tab or pane row opens an agent on Chat (as in
+    Town, by **Agents open**), and a plain shell, or an agent without Chat, on
+    its terminal.
   - **Pin** in a selected card's bar keeps the card where it is: it shows a
     pin, and placement, Tidy and settling leave it until **Unpin** (a drag
     still moves it). On a phone, where the card's terminal covers Board, the
@@ -245,14 +248,15 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   - **Agents** lists every agent in the host filter, those you recently opened from the
     Desk first, then each workspace by recent activity. **Reviewed** lists the
     stops you marked, newest first, with **Reopen**; marking offers **Undo**.
-  - On wide screens, opening a card snaps that agent's Inspector to the right (terminal,
-    files, changes, history) beside the Desk as a reading pane and folds the lanes
-    into one queue. `J`/`K` preview the next agent there, `Enter` moves into its
-    terminal and `Esc` closes the pane. Phones open the Inspector full screen.
+  - On wide screens, opening a card snaps that agent's Inspector to the right (on
+    Chat, or the terminal when the agent has no Chat or **Agents open** is set to
+    Terminal) beside the Desk as a reading pane and folds the lanes
+    into one queue. `J`/`K` preview the next agent there, `Enter` opens it using
+    **Agents open** and `Esc` closes the pane. Phones open the Inspector full screen.
   - One search (`/`) filters every mode by agent name, thread title, harness,
     workspace, tab, folder, request and report. Agents are named by the thread
     title their harness writes to the terminal when they have no Herdr name.
-  - `J`/`K` move between cards; `Enter` opens the agent's terminal Inspector to
+  - `J`/`K` move between cards; `Enter` opens the agent's Inspector using **Agents open** to
     answer, review, or watch. Hosts outside the filter appear as summary chips.
 - **Spaces** is the focused operational workspace: terminals, files, changes,
   annotations, worktrees, and Agent History for one selected connection.

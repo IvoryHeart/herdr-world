@@ -136,7 +136,9 @@ const panes: Pane[] = [
     workspace_id: workspaceBase.workspace_id,
     tab_id: tabs[1]!.tab_id,
     focused: false,
-    agent: "reviewer",
+    // A harness Chat reads, so the Reviewer opens on Chat; the Builder's
+    // harness is one Chat cannot read, so it opens its terminal.
+    agent: "claude",
     display_agent: "Reviewer",
     agent_status: "idle",
     revision: 1,
@@ -168,8 +170,8 @@ let agents: Record<string, unknown>[] = [
   {
     pane_id: "reviewer-pane",
     terminal_id: "reviewer-terminal",
-    agent: "reviewer",
-    agent_session: { agent: "reviewer", kind: "id", value: "review-a" },
+    agent: "claude",
+    agent_session: { agent: "claude", kind: "id", value: "review-a" },
   },
 ];
 const terminalListeners = new Set<(push: TerminalPush) => void>();
@@ -536,11 +538,14 @@ function agentTarget(label: string) {
   );
 }
 
-/** Opens an agent's Inspector from Town: a click only selects it. */
+/** The view an agent opens on: Chat when Chat reads its harness. */
+const opensOn = (label: string) =>
+  label === "Reviewer" ? "history" : "terminal";
+
 /**
  * Open an agent's terminal from Town as a user does: activating the agent
- * opens its window on Chat, and the window's Terminal view shows the
- * terminal.
+ * opens its window on Chat when Chat reads its harness (else on its
+ * terminal), and the window's Terminal view shows the terminal.
  */
 async function openAgent(label: string) {
   const target = agentTarget(label)!;
@@ -549,13 +554,13 @@ async function openAgent(label: string) {
     target.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
   });
   const window = `[role="dialog"][aria-label="${label} Inspector"]`;
-  // The window opens on Chat first, even when it was already open.
+  // The window opens on its first view, even when it was already open.
   await until(
     () =>
       document.querySelector(
-        `${window} .workspace-inspector[data-view="history"]`,
+        `${window} .workspace-inspector[data-view="${opensOn(label)}"]`,
       ),
-    `${label} window on Chat`,
+    `${label} window on ${opensOn(label) === "history" ? "Chat" : "its terminal"}`,
   );
   flushSync(() =>
     document
@@ -1211,7 +1216,7 @@ async function run() {
   );
   const floatingPreferenceNavigatorRow = () =>
     [...document.querySelectorAll<HTMLElement>(".sidebar .agent-row")].find(
-      (row) => row.getAttribute("aria-label")?.startsWith("reviewer pane"),
+      (row) => row.getAttribute("aria-label")?.startsWith("claude pane"),
     );
   flushSync(() => floatingPreferenceNavigatorRow()?.click());
   await until(
@@ -2330,7 +2335,7 @@ async function run() {
   );
   const reviewerNavigatorRow = [
     ...document.querySelectorAll<HTMLElement>(".sidebar .agent-row"),
-  ].find((row) => row.getAttribute("aria-label")?.startsWith("reviewer pane"));
+  ].find((row) => row.getAttribute("aria-label")?.startsWith("claude pane"));
   check(
     Boolean(reviewerNavigatorRow),
     "shared navigator omitted the Reviewer agent",
@@ -3081,6 +3086,13 @@ async function run() {
       ),
     "Builder Board Inspector replacement",
   );
+  // Chat cannot read the Builder's harness, so Board opens its terminal.
+  check(
+    document
+      .querySelector(".world-managed-window.is-active .workspace-inspector")
+      ?.getAttribute("data-view") === "terminal",
+    "Board opens an agent whose harness Chat cannot read on its terminal",
+  );
   document
     .querySelector<HTMLButtonElement>(
       '[aria-label="Reviewer Inspector"] [aria-label="Close Inspector window"]',
@@ -3201,6 +3213,29 @@ async function run() {
         )
         ?.textContent?.includes("Reviewer"),
     "Reviewer docked Inspector before Spaces handoff",
+  );
+  // Chat reads the Reviewer's harness, so Board opens it on Chat.
+  await until(
+    () =>
+      document
+        .querySelector(".world-managed-window.is-active .workspace-inspector")
+        ?.getAttribute("data-view") === "history",
+    "Board opens an agent Chat reads on Chat",
+  );
+  // The compact checks below read its terminal, as a user switching views.
+  flushSync(() =>
+    document
+      .querySelector<HTMLButtonElement>(
+        '.world-managed-window.is-active [role="tab"][aria-label="Terminal"]',
+      )!
+      .click(),
+  );
+  await until(
+    () =>
+      document
+        .querySelector(".world-managed-window.is-active .workspace-inspector")
+        ?.getAttribute("data-view") === "terminal",
+    "Reviewer's Terminal view before Spaces handoff",
   );
   await settle();
   const persistentControlPlane = document.querySelector(".world-control-plane");
@@ -3781,10 +3816,10 @@ async function run() {
     {
       pane_id: "reviewer-pane",
       terminal_id: "reviewer-terminal",
-      agent: "reviewer",
+      agent: "claude",
       display_agent: "Reviewer Next",
       task_summary: "Reviewing the replacement session",
-      agent_session: { agent: "reviewer", kind: "id", value: "review-b" },
+      agent_session: { agent: "claude", kind: "id", value: "review-b" },
     },
   ];
   worldRevision += 1;
@@ -4841,6 +4876,113 @@ async function run() {
   )?.set?.call(officeViewSelect, "town");
   officeViewSelect?.dispatchEvent(new Event("change", { bubbles: true }));
   await settle();
+
+  // Reuse a shell's tab window for a readable agent while its focus request
+  // is pending. The target's views determine what opens, not the shell's.
+  Object.getOwnPropertyDescriptor(
+    HTMLSelectElement.prototype,
+    "value",
+  )?.set?.call(officeViewSelect, "board");
+  officeViewSelect?.dispatchEvent(new Event("change", { bubbles: true }));
+  await until(() => document.querySelector(".board"), "Board for tab reuse");
+  await arrangeWindows("Close all terminal windows");
+  const reuseTab: Tab = {
+    ...tabs[0]!,
+    tab_id: "open-rule-tab",
+    number: 90,
+    label: "Open Rule Shell",
+    focused: false,
+    pane_count: 1,
+  };
+  const reuseShell: Pane = {
+    ...panes[0]!,
+    pane_id: "open-rule-shell",
+    terminal_id: "open-rule-shell-terminal",
+    tab_id: reuseTab.tab_id,
+    focused: false,
+    agent: undefined,
+    agent_session: undefined,
+    agent_name: undefined,
+    display_agent: undefined,
+    agent_status: "unknown",
+  };
+  tabs.push(reuseTab);
+  panes.push(reuseShell);
+  worldRevision += 1;
+  await worldRuntimeStore.refresh();
+  await until(() => boardTarget(reuseTab.label), "new shell tab on Board");
+  boardTarget(reuseTab.label)!.dispatchEvent(
+    new MouseEvent("dblclick", { bubbles: true }),
+  );
+  await until(
+    () =>
+      document.querySelector(
+        '.world-managed-window.is-active .workspace-inspector[data-view="terminal"] [data-pane-id="open-rule-shell"]',
+      ),
+    "shell tab opened in its floating terminal window",
+  );
+  const reuseWindow = document.querySelector<HTMLElement>(
+    ".world-managed-window.is-active",
+  )!;
+  check(
+    !reuseWindow.querySelector('[role="tab"][aria-label="Chat"]'),
+    "shell window unexpectedly offers Chat before the agent appears",
+  );
+  const reuseAgent: Pane = {
+    ...reuseShell,
+    pane_id: "open-rule-agent",
+    terminal_id: "open-rule-agent-terminal",
+    agent: "claude",
+    agent_name: "Open Rule Agent",
+    display_agent: "Open Rule Agent",
+    agent_status: "idle",
+    agent_session: { value: "open-rule-session" },
+  };
+  panes.push(reuseAgent);
+  reuseTab.pane_count = 2;
+  agents.push({
+    ...reuseAgent,
+    agent_session: { agent: "claude", kind: "id", value: "open-rule-session" },
+  });
+  worldRevision += 1;
+  await worldRuntimeStore.refresh();
+  await until(
+    () => boardTarget("Open Rule Agent"),
+    "readable sibling on Board",
+  );
+  const pendingAgentFocus = Promise.withResolvers<void>();
+  delayedPaneGet = {
+    paneId: reuseAgent.pane_id,
+    promise: pendingAgentFocus.promise,
+  };
+  const priorAgentGets = calls.filter(
+    ({ method, params }) =>
+      method === "pane.get" && params.pane_id === reuseAgent.pane_id,
+  ).length;
+  boardTarget("Open Rule Agent")!.dispatchEvent(
+    new MouseEvent("dblclick", { bubbles: true }),
+  );
+  await until(
+    () =>
+      calls.filter(
+        ({ method, params }) =>
+          method === "pane.get" && params.pane_id === reuseAgent.pane_id,
+      ).length > priorAgentGets,
+    "reused window waits for the readable agent focus reply",
+  );
+  pendingAgentFocus.resolve();
+  delayedPaneGet = null;
+  await until(
+    () =>
+      reuseWindow.querySelector('.workspace-inspector[data-view="history"]'),
+    "shell window reused on the readable agent's requested Chat view",
+  );
+  check(
+    reuseWindow.isConnected &&
+      document.querySelectorAll(".world-managed-window .workspace-inspector")
+        .length === 1,
+    "opening the readable sibling replaced or duplicated its tab window",
+  );
 
   runtimeGeneration += 1;
   worldRevision += 1;

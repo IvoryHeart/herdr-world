@@ -1335,10 +1335,12 @@ when it is waiting), answer options only when the pane's latest lines present a
 numbered menu or a yes/no prompt, and actions to reply, open the Inspector, open
 the terminal from the peek's header and go to the next waiting agent. Tapping an
 agent, or the table of an agent away at reception or in the lounge, SHALL open
-what the Town opens preference names: the agent's one window, World's
-Inspector, on its Chat view (the default), or its terminal; tapping a room SHALL
-only zoom to it. Activating an agent or its table, the needs-you list, N and
-Next SHALL open the same window on Chat; no separate peek chat window SHALL
+what the Agents open preference names: the agent's one window, World's
+Inspector, on its Chat view (the default) when Chat reads the agent's harness,
+otherwise its terminal; tapping a room SHALL only zoom to it. Activating an
+agent or its table, the needs-you list, N and Next SHALL open the agent the same
+way, and so SHALL opening an agent's card or pane row in Board and an agent in
+Desk; a plain shell SHALL open its terminal. No separate peek chat window SHALL
 exist, and the peek card SHALL only preview an agent on hover. In Town the
 Inspector SHALL dock right by default and keep the dock each window was left
 with. Its top selector SHALL list Chat, Terminal, Changes and Files (Commits
@@ -1382,14 +1384,21 @@ Opening the terminal from a peek SHALL follow the Inspector presentation prefere
 
 #### Scenario: Tap the table of an agent waiting at reception
 
-- **WHEN** Town opens Chat and the user taps the table of an agent that is
+- **WHEN** Agents open names Chat and the user taps the table of an agent that is
   waiting at reception
 - **THEN** that agent's window opens on Chat, the agent walks back to its desk,
   and no terminal or peek card opens
 
+#### Scenario: Board opens an agent on Chat
+
+- **WHEN** Agents open names Chat and the user opens an agent's tab in Board
+  whose harness Chat reads, then a plain shell's tab and an agent whose harness
+  Chat cannot read
+- **THEN** the first window opens on Chat and the other two on their terminals
+
 #### Scenario: Town opens Terminal
 
-- **WHEN** the user sets Town opens to Terminal and taps the table of a
+- **WHEN** the user sets Agents open to Terminal and taps the table of a
   finished agent waiting at reception
 - **THEN** that agent's terminal opens, no peek opens, the agent walks back to
   its desk, and its completion is not marked reviewed

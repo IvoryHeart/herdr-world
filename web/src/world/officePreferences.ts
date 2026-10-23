@@ -5,7 +5,7 @@
  */
 export type OfficeInspectorPresentation = "docked" | "floating";
 
-/** What tapping an agent or its desk in Town opens. */
+/** What opening an agent shows in Town, Board and Desk (the Agents open setting). */
 export type TownOpens = "chat" | "terminal";
 
 export type OfficePreferences = {

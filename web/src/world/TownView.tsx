@@ -96,6 +96,8 @@ import {
   WORLD_OFFICE_PREFERENCES_CHANGED_EVENT,
   type OfficePreferences,
 } from "./officePreferences";
+import { worldNodeOpenView } from "./worldInspectorSelection";
+import { useTownMaster } from "./town/useTownMaster";
 import type { WorldObject } from "./worldObject";
 import { WorldViewToolbar, worldSearchMatches } from "./WorldViewToolbar";
 import {
@@ -113,9 +115,6 @@ import { preferredOfficeConnectorAnchor } from "./worldConnectorGeometry";
 import { officeCreationInputsEqual } from "./officeCreationInputs";
 
 /** A keyed index of a list, built the first time it is read. */
-/** Town masters whose chat has been docked in this page visit. */
-const dockedTownMasters = new Set<string>();
-
 function lazyIndex<T>(items: readonly T[], keyOf: (item: T) => string) {
   let index: Map<string, T> | null = null;
   const read = () =>
@@ -964,14 +963,14 @@ export default function TownView({
       setChooser(key);
       return;
     }
-    // An agent opens its window on Chat; a pane without an agent opens its
-    // terminal.
+    // An agent opens as every view opens it (openAgent); a pane without an
+    // agent opens its terminal.
     const mobile = isMobileLayout();
     const agentKey = agentByKey.has(key)
       ? key
       : (deviceByKey.get(key)?.device.agentKey ?? deskAgentKey(key));
     if (agentKey && agentByKey.has(agentKey)) {
-      openChat(agentKey);
+      openAgent(agentKey);
       return;
     }
     // Otherwise open the pane's terminal, with its composer on the phone layout.
@@ -1060,11 +1059,26 @@ export default function TownView({
   const nextCall = (currentKey: string | null) =>
     nextTownCall(calls, currentKey);
   /**
-   * Open an agent's chat: its one window, World's Inspector, on the Chat
-   * view, docked right by default. The agent walks back to its desk. Every
-   * way into an agent from Town comes through here; a hover card is only a
-   * preview. `focus` false opens it without focusing the agent's pane.
+   * Open an agent as every view does (worldNodeOpenView): its chat when Chat
+   * can read it and the Agents open setting chooses Chat, else its terminal.
+   * Either way the agent comes back to its desk and nothing is reviewed.
    */
+  const openAgent = (agentKey: string) => {
+    const agent = agentByKey.get(agentKey)?.agent;
+    if (!agent) return;
+    const node = world.nodeById.get(agent.nodeId);
+    const opens = node
+      ? worldNodeOpenView(node, preferences.townOpens)
+      : preferences.townOpens === "chat"
+        ? "history"
+        : "terminal";
+    if (opens === "history") return openChat(agentKey);
+    window.clearTimeout(peekTimer.current);
+    setPeek(null);
+    summon(agentKey);
+    openOfficeTerminal(agentKey, false);
+  };
+  /** Open Chat explicitly; focus false keeps focus outside the agent's pane. */
   const openChat = (agentKey: string, focus = true) => {
     const agent = agentByKey.get(agentKey)?.agent;
     if (!agent) return;
@@ -1077,32 +1091,12 @@ export default function TownView({
       onOpenInspectorView(agent.nodeId, "history", focus);
     else void onSelect(agent.nodeId);
   };
-  // The Town master's (FirstMate's) chat is docked from the start on wide
-  // screens, once per visit: closed, it stays closed until opened again.
-  const masterName = preferences.townMaster.trim().toLowerCase();
-  // Herdr's agent name (herdr agent rename) first, then the shown label.
-  const masterAgent = masterName
-    ? (
-        office.roster.find(
-          ({ agent }) => agent.agentName?.toLowerCase() === masterName,
-        ) ??
-        office.roster.find(
-          ({ agent }) => agent.displayLabel.toLowerCase() === masterName,
-        )
-      )?.agent
-    : undefined;
-  useEffect(() => {
-    if (
-      !masterAgent ||
-      layoutPreferences.mobile ||
-      dockedTownMasters.has(masterAgent.key)
-    )
-      return;
-    dockedTownMasters.add(masterAgent.key);
-    openChat(masterAgent.key, false);
-    // openChat reads the current roster; the master opens once per key.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [masterAgent?.key, layoutPreferences.mobile]);
+  useTownMaster(
+    office.roster,
+    preferences.townMaster,
+    layoutPreferences.mobile,
+    (key) => openChat(key, false),
+  );
   const lastPointer = useRef<{ x: number; y: number } | null>(null);
   /**
    * The agent a table stands for: one that needs you (waiting, then
@@ -1130,8 +1124,8 @@ export default function TownView({
   };
   /**
    * Tapping an agent, or its desk even while the agent is away at reception
-   * or in the lounge, opens what the Town opens setting chooses: the agent's
-   * chat (the peek) or its terminal. A desk without an agent opens its pane.
+   * or in the lounge, opens the agent (openAgent). A desk without an agent
+   * opens its pane.
    */
   const tapTown = (key: string) => {
     const desk = agentByKey.has(key)
@@ -1139,13 +1133,7 @@ export default function TownView({
       : office.deskRoster.find(({ desk }) => desk.key === key)?.desk;
     const agentKey = agentByKey.has(key) ? key : desk && deskAgentKey(desk.key);
     if (agentKey) {
-      // Either way the agent comes back to its desk and nothing is reviewed.
-      if (preferences.townOpens === "terminal") {
-        window.clearTimeout(peekTimer.current);
-        setPeek(null);
-        summon(agentKey);
-        openOfficeTerminal(agentKey, false);
-      } else openChat(agentKey);
+      openAgent(agentKey);
       return;
     }
     if (deviceByKey.has(key) || desk) {
@@ -1172,7 +1160,7 @@ export default function TownView({
         const next = nextCall(null);
         if (!next) return;
         event.preventDefault();
-        openChat(next.agent.key);
+        openAgent(next.agent.key);
       }
     };
     window.addEventListener("keydown", keydown);
@@ -1261,7 +1249,7 @@ export default function TownView({
                 })
               : hoverAgent(null)
           }
-          onOpen={(key) => openChat(key)}
+          onOpen={(key) => openAgent(key)}
         />
         {moveFlow ? (
           <TownChooser
@@ -1297,7 +1285,7 @@ export default function TownView({
                 detail: agent ? townStatusText(agent) : "terminal",
                 onChoose: () => {
                   setChooser(null);
-                  if (agent) openChat(agent.key);
+                  if (agent) openAgent(agent.key);
                   else openReply(device.key);
                 },
               };
@@ -1337,7 +1325,7 @@ export default function TownView({
             }}
             onNext={
               nextCall(peekAgent.key)
-                ? () => openChat(nextCall(peekAgent.key)!.agent.key)
+                ? () => openAgent(nextCall(peekAgent.key)!.agent.key)
                 : null
             }
             onClose={() => {

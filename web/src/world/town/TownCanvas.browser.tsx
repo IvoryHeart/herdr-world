@@ -115,7 +115,9 @@ const HOSTS = [
     ],
   },
 ];
-const AGENTS = ["claude", "codex", "gemini"];
+// Harnesses Chat reads, so every agent here opens on Chat; one Chat cannot
+// read opens its terminal (WorldTerminalHandoff covers that).
+const AGENTS = ["claude", "codex", "pi"];
 const NAMES = [
   "Mira",
   "Juno",

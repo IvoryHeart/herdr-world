@@ -4,6 +4,10 @@ import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { bridge, type ConnectionClient } from "../api";
 import { worldLocalStorage } from "../browserStorage";
+import {
+  DEFAULT_OFFICE_PREFERENCES,
+  writeOfficePreferences,
+} from "./officePreferences";
 import { WorktreeLifecycleDialog } from "../components/WorktreeLifecycleDialog";
 import { ContextMenu } from "../components/ContextMenu";
 import { WorktreeOpenDialog } from "../components/WorktreeOpenDialog";
@@ -2054,6 +2058,12 @@ async function run() {
   localStorage.clear();
   // The legacy operational preference must not become an overview filter.
   worldLocalStorage.setItem("worldSelectedConnection", "beta");
+  // These cases check which host owns a terminal, so opening an agent opens
+  // its terminal, as Agents open set to Terminal does.
+  writeOfficePreferences(worldLocalStorage, {
+    ...DEFAULT_OFFICE_PREFERENCES,
+    townOpens: "terminal",
+  });
   history.replaceState(null, "", "/board");
   initializeLayoutPreferences();
   if (

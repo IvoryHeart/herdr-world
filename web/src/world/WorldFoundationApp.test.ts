@@ -34,6 +34,7 @@ import {
 } from "./WorldFoundationApp";
 import { resolveTerminalWindowArrangement } from "./terminalWindowArrangement";
 import { buildWorldObject } from "./worldObject";
+import { worldNodeOpenView } from "./worldInspectorSelection";
 import { worldPathNeedsCanonical } from "./worldViewRouting";
 import {
   reconcileWorldInspectorConversation,
@@ -703,6 +704,40 @@ describe("World view preference", () => {
     expect(worldIntentInitialView(agent, null)).toBe("terminal");
     expect(worldIntentInitialView(agent, "changes")).toBe("changes");
     expect(worldIntentInitialView(terminal, "history")).toBe("terminal");
+    // Opening a node anywhere: an agent Chat can read opens on Chat unless
+    // Agents open says Terminal; a shell, or a harness Chat cannot read,
+    // opens its terminal; a workspace opens its files.
+    expect(worldNodeOpenView(agent, "chat")).toBe("history");
+    expect(worldNodeOpenView(agent, "terminal")).toBe("terminal");
+    for (const harness of [
+      "claude-code",
+      "Claude",
+      "pi-agent",
+      "pi-coding-agent",
+      " Pi-Coding-Agent ",
+      "antigravity",
+      "antigravity-cli",
+      "antigravity cli",
+      "muse-code",
+      "muse code",
+      "kimi-code",
+      "kimi code",
+      "grok-build",
+      "grok build",
+    ]) {
+      const alias = { ...agent, pane: { ...agent.pane, agent: harness } };
+      expect(worldNodeOpenView(alias, "chat")).toBe("history");
+      expect(worldNodeOpenView(alias, "terminal")).toBe("terminal");
+    }
+    expect(worldNodeOpenView(terminal, "chat")).toBe("terminal");
+    expect(
+      worldNodeOpenView(
+        { ...agent, pane: { ...agent.pane, agent: "gemini" } },
+        "chat",
+      ),
+    ).toBe("terminal");
+    expect(worldNodeOpenView(world.spaces[0], "chat")).toBe("files");
+    expect(worldNodeOpenView(world.hosts[0], "chat")).toBeNull();
     expect(worldInspectorContext(agent)).toMatchObject({
       kind: "agent",
       label: "codex",

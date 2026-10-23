@@ -425,7 +425,7 @@ function mount(key: number, shown = world, selectedId: string | null = null) {
           lastAnchors = anchors;
         }}
         onSelect={(id) => selected.push(id)}
-        onOpenTerminal={(id) => opened.push(id)}
+        onOpen={(id) => opened.push(id)}
         store={store}
         sendNote={async (target, note, confirm) => {
           // As the service does: a replacement is sent to only once confirmed.
