@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  CheckCheck,
   Copy,
   ListTree,
   Paperclip,
@@ -136,6 +137,8 @@ export type ConversationDelivery = {
   expected: string;
   fingerprint: string;
   matched_id?: string;
+  /** How the transcript turn was matched: its words, or its order. */
+  matched_by?: "words" | "order";
   delivered_to?: string;
   evidence?: "herdr" | "transcript";
   detail?: string;
@@ -255,8 +258,6 @@ function AskCard({
 const STOPS_WITH_ESCAPE = new Set(["claude", "codex", "pi"]);
 /** Two presses of Esc this close together stop the agent. */
 const DOUBLE_ESCAPE_MS = 700;
-/** How long a send may wait behind newer turns before it shows in place. */
-const PENDING_IN_PLACE_MS = 60_000;
 
 function elapsed(ms: number) {
   const seconds = Math.max(0, Math.floor(ms / 1000));
@@ -635,26 +636,22 @@ export function AgentChat({
       delivery.state === "pending" &&
       delivery.fingerprint === conversation?.session_fingerprint,
   );
-  // A send the transcript has moved past (newer turns, and a minute gone) is
-  // shown where it was sent, not below everything said since.
-  const newest = history.messages[history.messages.length - 1]?.sent_at;
-  const overtaken = (delivery: ConversationDelivery) =>
-    !!newest &&
-    Date.parse(newest) > Date.parse(delivery.sent_at) &&
-    Date.now() - Date.parse(delivery.sent_at) > PENDING_IN_PLACE_MS;
-  const pendingBubble = (delivery: ConversationDelivery, late: boolean) => (
+  // Herdr took the message, but a busy harness writes it into the transcript
+  // only when the agent takes it up: delivered, not yet read. It sits at its
+  // send time, never below replies written since, until that turn appears.
+  const waitingFor = conversation?.agent ?? pane.agent ?? "the agent";
+  const pendingBubble = (delivery: ConversationDelivery) => (
     <article
       key={delivery.id}
       className="agent-history-chat-message is-user is-pending"
-      data-delivery={late ? "unknown" : "pending"}
+      data-delivery="pending"
     >
       <div className="agent-history-chat-bubble">
         <p>{delivery.text}</p>
       </div>
       <div className="agent-history-chat-meta">
-        {late
-          ? "Sent · delivery unknown"
-          : "Sent; not yet seen in this conversation"}{" "}
+        <CheckCheck size={13} className="agent-chat-ticks" aria-hidden="true" />
+        Delivered · waiting for {waitingFor}{" "}
         <button
           type="button"
           className="agent-chat-pending-dismiss"
@@ -665,7 +662,7 @@ export function AgentChat({
       </div>
     </article>
   );
-  const matchedIds = new Set(
+  const matchedIds = new Map(
     deliveries
       .filter(
         (delivery) =>
@@ -673,7 +670,9 @@ export function AgentChat({
           delivery.fingerprint === conversation?.session_fingerprint,
       )
       .flatMap((delivery) =>
-        delivery.matched_id ? [delivery.matched_id] : [],
+        delivery.matched_id
+          ? [[delivery.matched_id, delivery.matched_by ?? "words"] as const]
+          : [],
       ),
   );
   // Sent to a session the pane has since left: still checked there.
@@ -898,10 +897,10 @@ export function AgentChat({
             followKey={pane.pane_id}
             toolLoading={history.toolEntryLoading}
             onLoadTool={history.loadToolEntry}
-            placed={pending.filter(overtaken).map((delivery) => ({
+            placed={pending.map((delivery) => ({
               key: delivery.id,
               at: delivery.sent_at,
-              node: pendingBubble(delivery, true),
+              node: pendingBubble(delivery),
             }))}
             hasOlder={history.hasOlder}
             olderLoading={history.olderLoading}
@@ -929,9 +928,6 @@ export function AgentChat({
                   ) : null}
                 </div>
               ) : null,
-              ...pending
-                .filter((delivery) => !overtaken(delivery))
-                .map((delivery) => pendingBubble(delivery, false)),
               answered ? (
                 <p key="answered" className="agent-chat-answered" role="status">
                   {answered.acknowledged ? "You answered" : "Sent"}{" "}

@@ -188,8 +188,8 @@ Each send leaves a receipt for the pane, bound to the session it was sent to:
 
 | State | Meaning | Shown |
 | --- | --- | --- |
-| `pending` | Not yet seen in the session it was sent to | In that session's conversation as "Sent; not yet seen" below the newest message. Once newer turns arrive and a minute has passed, it moves to where it was sent and reads "Sent · delivery unknown". After the pane moves on, as a line "Still checking <session>". All have **Stop checking** |
-| `matched` | The same words appeared in its own session clearly after the send | That transcript message is marked "Sent from Chat; matched by its words" |
+| `pending` | Herdr took it, but it is not yet in the session's transcript (a busy harness writes a queued message only when the agent takes it up) | In that session's conversation at its send time, never below replies written since, as "Delivered · waiting for <agent>" with grey ticks. After the pane moves on, as a line "Still checking <session>". Both have **Stop checking** |
+| `matched` | The same words appeared in its own session clearly after the send; or, when none did, the first user turn written there after the send | That transcript message is marked with blue ticks, "Sent from Chat; matched by its words", or "Sent from Chat" when matched by order |
 | `misdelivered` | Evidence of a switch after the send | A red notice naming both sessions; Send is paused until it is dismissed |
 | `uncertain` | The same words appeared at about the time of the send, or both in its own session and first in the session the pane moved to | A notice saying Chat cannot tell, with **Dismiss** |
 | `unverified` | Chat can no longer check | A notice saying why, with **Dismiss** |
@@ -198,11 +198,15 @@ Transcript times are sorted into three bands around the send: before it,
 about the time of it (the clock's uncertainty plus one second, for
 transcripts that round), and clearly after it.
 
-Texts are compared trimmed and without attachments: an uploaded file's path
-as Chat sends it, and the `[Image #N]` placeholder Claude Code records for an
-image path, are removed with the spaces around them. A message that is only
+Texts are compared with whitespace collapsed and without attachments: an
+uploaded file's path as Chat sends it, and the `[Image #N]` and
+`[Pasted text #N …]` placeholders Claude Code records, are removed. A message that is only
 an attachment can match in its own session but is never evidence of a
-switch to another one.
+switch to another one. Claude Code wraps multi-line and pasted input in
+`pasted_content` tags; Chat compares and shows the words inside, marking the
+turn **Pasted**. A send that no turn matches by its words, after every send
+has had that chance, takes the first unclaimed user turn in its own session
+written clearly after it, oldest send first.
 
 - A receipt becomes `matched` when its own session's transcript has a user
   message with the same text that Chat did not show before the send

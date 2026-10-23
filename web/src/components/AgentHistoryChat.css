@@ -60,6 +60,24 @@
   border-radius: 12px 12px 12px 4px;
 }
 
+/* Read: blue ticks, as in the delivery vocabulary. */
+.agent-history-chat-read {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.agent-history-chat-read svg {
+  color: var(--accent);
+}
+
+.agent-history-chat-pasted {
+  padding: 0 5px;
+  font-size: 10px;
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+}
+
 /* A wide table scrolls inside its bubble instead of squeezing every cell to
    one letter a line. */
 .agent-history-chat-bubble table {

@@ -11,7 +11,15 @@ import {
   type ReactNode,
   type RefObject,
 } from "react";
-import { ArrowDown, Check, ChevronRight, Copy, Wrench, X } from "lucide-react";
+import {
+  ArrowDown,
+  Check,
+  CheckCheck,
+  ChevronRight,
+  Copy,
+  Wrench,
+  X,
+} from "lucide-react";
 import { copyTextWithFeedback } from "../copyText";
 import { formatUiDateTime } from "../uiLocale";
 import { HISTORY_PREVIEW_CHARS } from "./AgentHistoryCard";
@@ -33,6 +41,7 @@ import {
 } from "./agentHistoryView";
 import { formatBytes } from "./agentSession";
 import { MarkdownPreview } from "./markdown";
+import { unwrapPastedContent } from "./pastedContent";
 import "./AgentHistoryChat.css";
 
 // Treat the list as pinned while the reader is within this distance of the
@@ -48,18 +57,23 @@ const ChatBubble = memo(function ChatBubble({
   entry,
   sequence,
   highlighted,
-  matched = false,
+  matched = null,
   onOpen,
 }: {
   entry: HistoryEntry;
   sequence: number;
   highlighted: boolean;
   /** Has the same words as a message Chat sent: matched, not proven. */
-  matched?: boolean;
+  matched?: "words" | "order" | null;
   onOpen: (entry: HistoryEntry) => void;
 }) {
-  const preview = entry.text.slice(0, HISTORY_PREVIEW_CHARS);
-  const truncated = preview.length < entry.text.length;
+  // A user's paste shows as the words they pasted, marked as a paste.
+  const shown =
+    entry.role === "user"
+      ? unwrapPastedContent(entry.text)
+      : { text: entry.text, pasted: false };
+  const preview = shown.text.slice(0, HISTORY_PREVIEW_CHARS);
+  const truncated = preview.length < shown.text.length;
   const label = historyEntryLabel(entry);
   const tone = entry.kind === "error" ? "is-error" : `is-${entry.role}`;
   return (
@@ -92,15 +106,28 @@ const ChatBubble = memo(function ChatBubble({
         <time dateTime={entry.sent_at} title={entry.sent_at}>
           {formatUiDateTime(entry.sent_at)}
         </time>
+        {shown.pasted ? (
+          <span className="agent-history-chat-pasted">Pasted</span>
+        ) : null}
         {matched ? (
-          <span title="Chat sent the same words just before this appeared; it cannot prove this is that message.">
-            Sent from Chat; matched by its words
+          <span
+            className="agent-history-chat-read"
+            title={
+              matched === "words"
+                ? "Chat sent the same words just before this appeared; it cannot prove this is that message."
+                : "The first message in this conversation after Chat sent one; the harness rewrote its words."
+            }
+          >
+            <CheckCheck size={13} aria-hidden="true" />
+            {matched === "words"
+              ? "Sent from Chat; matched by its words"
+              : "Sent from Chat"}
           </span>
         ) : null}
         <button
           type="button"
           className="agent-history-copy"
-          onClick={() => void copyTextWithFeedback(entry.text)}
+          onClick={() => void copyTextWithFeedback(shown.text)}
           aria-label={`Copy ${label.toLowerCase()} message`}
           title="Copy"
         >
@@ -430,7 +457,7 @@ export function AgentHistoryChat({
   olderLoading?: boolean;
   onLoadOlder?: () => void;
   /** Messages a send from Chat matched by their words. */
-  matchedIds?: ReadonlySet<string>;
+  matchedIds?: ReadonlyMap<string, "words" | "order">;
   /** Shown after the newest message (Chat's sends not yet seen). */
   after?: ReactNode;
   items: HistoryChatItem[];
@@ -620,7 +647,7 @@ export function AgentHistoryChat({
               entry={item.entry}
               sequence={item.sequence}
               highlighted={highlightedSequence === item.sequence}
-              matched={matchedIds?.has(item.entry.id) ?? false}
+              matched={matchedIds?.get(item.entry.id) ?? null}
               onOpen={onOpen}
             />
           ) : (

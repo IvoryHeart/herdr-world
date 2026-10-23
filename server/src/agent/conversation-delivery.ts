@@ -34,8 +34,14 @@ export type ConversationDelivery = {
   expected: string;
   /** That session's fingerprint; a pending message shows only there. */
   fingerprint: string;
-  /** matched: the transcript message with the same words. */
+  /** matched: the transcript message taken for this send. */
   matched_id?: string;
+  /**
+   * matched: how. `words`: the same words. `order`: no turn had them, and
+   * this was the first user turn in its session written after the send
+   * (harnesses rewrite multi-line input, pastes and attachments).
+   */
+  matched_by?: "words" | "order";
   /** misdelivered: the session the evidence names. */
   delivered_to?: string;
   /** misdelivered: Herdr's prompt reply, or another session's transcript. */
@@ -96,14 +102,23 @@ export const RECEIPTS_PER_PANE = 20;
 const SEEN_PER_RECEIPT = 4;
 
 // An attachment as Chat sends it (an uploaded file's path, bare or quoted)
-// or as a harness records it (Claude Code turns an image path into
-// "[Image #N]"), with the spaces around it.
+// or as a harness records it: Claude Code turns an image path into
+// "[Image #N]" and long or multi-line input into "[Pasted text #N ...]".
 const ATTACHMENT =
-  /\s*(?:\[Image #\d+\]|(['"]?)[^\s'"]*herdr-world-uploads-[^\s'"]*\1)\s*/g;
+  /\[(?:Image|Pasted text) #\d+[^\]]*\]|(['"]?)[^\s'"]*herdr-world-uploads-[^\s'"]*\1/g;
 
-// Harnesses may trim what was typed and rewrite attachments; other inner
-// whitespace is kept, so prompts that differ only in spacing stay distinct.
-export const typedText = (text: string) => text.replace(ATTACHMENT, " ").trim();
+// Harnesses trim, rewrap and rewrite what was typed, so words are compared
+// without attachments and with whitespace collapsed.
+// Claude Code wraps pasted and multi-line input in a pasted_content tag
+// pair carrying one id; the words inside are what was typed.
+const PASTED_WRAPPER = /<\/?pasted_content(?: id="[^"]*")?>/g;
+
+export const typedText = (text: string) =>
+  text
+    .replace(PASTED_WRAPPER, " ")
+    .replace(ATTACHMENT, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 
 const userMessages = (messages: readonly ConversationMessage[]) =>
   messages.filter(
@@ -311,6 +326,7 @@ export function createDeliveryLedger() {
           claim(match);
           receipt.state = "matched";
           receipt.matched_id = match.id;
+          receipt.matched_by = "words";
           continue;
         }
         if (receipt.state !== "pending") continue;
@@ -320,6 +336,35 @@ export function createDeliveryLedger() {
           receipt.detail = `The same words appeared in ${unclear.view.label || receipt.expected} at about the time you sent them, so Chat cannot tell whether that was this message.`;
           continue;
         }
+      }
+      // A send no turn matched by its words takes the first user turn in its
+      // own session written clearly after it, oldest send first. Harnesses
+      // rewrite multi-line input, pastes and attachments, and a busy one
+      // writes a queued message only when the agent takes it up; until a
+      // turn appears, the send stays pending ("waiting").
+      for (const receipt of list) {
+        if (receipt.state !== "pending" || !open(receipt, now)) continue;
+        const own = views.find(
+          (view) => view.fingerprint === receipt.fingerprint,
+        );
+        const next = userMessages(own?.messages ?? []).find(
+          (message) =>
+            !claimed.has(claimKey(paneId, receipt.fingerprint, message.id)) &&
+            !receipt.baseline.has(message.id) &&
+            Date.parse(message.sent_at) >= receipt.after &&
+            Date.parse(message.sent_at) <= receipt.until,
+        );
+        if (!next) continue;
+        claimed.add(claimKey(paneId, receipt.fingerprint, next.id));
+        receipt.state = "matched";
+        receipt.matched_id = next.id;
+        receipt.matched_by = "order";
+      }
+      for (const receipt of list) {
+        if (receipt.state !== "pending" || !open(receipt, now)) continue;
+        const own = views.find(
+          (view) => view.fingerprint === receipt.fingerprint,
+        );
         if (now - receipt.sentAtMs > DELIVERY_CHECK_MS) expireOne(receipt);
         else if (current !== receipt.fingerprint && own?.messages === null) {
           receipt.state = "unverified";
@@ -363,6 +408,7 @@ function publicDelivery(receipt: Receipt): ConversationDelivery {
     expected: receipt.expected,
     fingerprint: receipt.fingerprint,
     ...(receipt.matched_id ? { matched_id: receipt.matched_id } : {}),
+    ...(receipt.matched_by ? { matched_by: receipt.matched_by } : {}),
     ...(receipt.delivered_to ? { delivered_to: receipt.delivered_to } : {}),
     ...(receipt.evidence ? { evidence: receipt.evidence } : {}),
     ...(receipt.detail ? { detail: receipt.detail } : {}),

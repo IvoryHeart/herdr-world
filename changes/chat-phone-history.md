@@ -15,9 +15,12 @@
   scroll instead of squeezing every cell to one letter a line.
 - A message sent from Chat with an attachment is no longer left as "Sent; not
   yet seen" when Claude Code records the image as `[Image #N]`.
-- A sent message the conversation has moved past no longer sits below newer
-  replies: after a minute it shows where it was sent, as "Sent · delivery
-  unknown".
+- A message sent from Chat over several lines no longer stays "Sent; not yet
+  seen" or shows twice with its `pasted_content` tags: Chat reads Claude
+  Code's paste wrapper, shows the words marked **Pasted**, and otherwise takes
+  the first turn written after the send.
+- A sent message waiting for a busy agent sits at its send time as
+  "Delivered · waiting for <agent>", never below replies written since.
 - A loop the agent scheduled once (`ScheduleWakeup`) no longer shows as in
   progress after its wake-up has run and no further one was scheduled.
 - An agent's window header shows the name given with `herdr agent rename`

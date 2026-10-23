@@ -413,16 +413,14 @@ async function run() {
     check(
       pendingBubbles.length === 1 &&
         pendingBubble?.textContent?.includes("Run the tests") === true &&
-        pendingBubble.textContent.includes("not yet seen") &&
-        !/delivered/i.test(container.textContent ?? ""),
-      "A pending send must show only in its own conversation, and say it is not yet seen, never delivered",
+        pendingBubble.textContent.includes("Delivered · waiting for claude"),
+      "A pending send must show only in its own conversation, as delivered and waiting",
     );
     const matched = container.querySelector('[data-delivery="matched"]');
     check(
       matched?.textContent?.includes("Thanks") === true &&
-        matched.textContent.includes("matched by its words") &&
-        !/delivered/i.test(container.textContent ?? ""),
-      "A message matched by its words must say so, never that it was delivered",
+        matched.textContent.includes("matched by its words"),
+      "A message matched by its words must say so",
     );
     const elsewhere = container.querySelector('[data-delivery="elsewhere"]');
     check(
@@ -1635,14 +1633,20 @@ async function run() {
       }
     }
 
-    // A send the transcript has moved past shows where it was sent, saying
-    // its delivery is unknown; one just sent stays at the bottom.
+    // A send not yet in the transcript (a busy harness writes a queued
+    // message only when the agent takes it up) sits at its send time, never
+    // below replies written since, as delivered and waiting. A multi-line
+    // turn Claude Code wrapped as a paste shows the words, marked pasted.
     {
       const ago = (ms: number) => new Date(Date.now() - ms).toISOString();
       reply = {
         ...conversation([
           {
-            ...message("late-1", "user", "Earlier question"),
+            ...message(
+              "late-1",
+              "user",
+              '<pasted_content id="4821">\nEarlier question\nover two lines\n</pasted_content id="4821">',
+            ),
             sent_at: ago(300_000),
           },
           {
@@ -1653,7 +1657,7 @@ async function run() {
         deliveries: [
           {
             id: "d-late",
-            text: "Look at this [attachment]",
+            text: "Also check the docs",
             sent_at: ago(180_000),
             state: "pending",
             expected: "claude session shown",
@@ -1692,19 +1696,24 @@ async function run() {
       check(
         JSON.stringify(order) ===
           JSON.stringify([
-            "Earlier question",
-            "unknown",
+            "Earlier question\nover two lines",
+            "pending",
             "Reply after the send",
             "pending",
           ]),
-        `An overtaken send must sit at its time and a fresh one at the bottom: ${JSON.stringify(order)}`,
+        `Unseen sends must sit at their send time: ${JSON.stringify(order)}`,
       );
       check(
         (
-          container.querySelector('[data-delivery="unknown"]')?.textContent ??
+          container.querySelector('[data-delivery="pending"]')?.textContent ??
           ""
-        ).includes("Sent · delivery unknown"),
-        "An overtaken send must say its delivery is unknown",
+        ).includes("Delivered · waiting for claude"),
+        "An unseen send must read as delivered and waiting",
+      );
+      check(
+        !(container.textContent ?? "").includes("pasted_content") &&
+          !!container.querySelector(".agent-history-chat-pasted"),
+        "A pasted turn must show its words, marked as pasted, not its wrapper",
       );
     }
 

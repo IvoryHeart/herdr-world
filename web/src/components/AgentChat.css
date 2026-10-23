@@ -542,6 +542,13 @@
 }
 
 /* A send not yet seen in the transcript, in History's list. */
+/* Delivered, not yet read: grey ticks. */
+.agent-chat-ticks {
+  color: var(--muted);
+  vertical-align: -2px;
+  margin-right: 3px;
+}
+
 .agent-history-chat-message.is-pending .agent-history-chat-bubble {
   opacity: 0.7;
   border-style: dashed;
