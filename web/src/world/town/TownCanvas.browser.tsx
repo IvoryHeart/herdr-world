@@ -2357,12 +2357,18 @@ async function run() {
       "the town reflowed while the user held it",
     );
     press("pointerup");
-    perRoom.set(grown, 24);
+    const grownDeskCount = () =>
+      [
+        ...host.querySelectorAll<HTMLElement>(
+          '.world-semantic-target[data-kind="desk"]',
+        ),
+      ].filter((target) =>
+        JSON.parse(target.dataset.targetKey!)[2].startsWith(`${grown}-tab-`),
+      ).length;
     await waitFor(
+      () => diagnostics.layout!.geometry !== before && grownDeskCount() === 24,
       () =>
-        diagnostics.layout!.geometry !== before &&
-        diagnostics.desks === drawn(null),
-      "the grown room never reflowed after the user let go",
+        `the grown room never reflowed after the user let go (geometry changed: ${diagnostics.layout!.geometry !== before}, grown desks: ${grownDeskCount()})`,
     );
     check(
       diagnostics.lastError === null,
