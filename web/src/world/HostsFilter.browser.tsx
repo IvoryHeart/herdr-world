@@ -396,6 +396,13 @@ function leaf(id: string) {
       worldObjectId(id, "terminal", "shared"),
   );
 }
+function inspectorForHost(element: Element | null, id: string) {
+  const value =
+    element?.closest<HTMLElement>("[data-window-id]")?.dataset.windowId;
+  if (!value) return false;
+  const identity = JSON.parse(value) as unknown[];
+  return identity[0] === id && identity[1] === 7;
+}
 async function float(id: string) {
   const target = leaf(id);
   if (!target) throw new Error(`Missing admitted ${id} target`);
@@ -408,7 +415,7 @@ async function float(id: string) {
     () =>
       !![
         ...document.querySelectorAll<HTMLElement>(".world-floating-terminal"),
-      ].find((window) => window.textContent?.includes(`Synthetic ${id}`)),
+      ].find((window) => inspectorForHost(window, id)),
     `The ${id} Inspector did not open`,
   );
   await frame();
@@ -704,7 +711,7 @@ async function operationalScenario(unmount: () => void) {
         ),
       ].some(
         (inspector) =>
-          inspector.textContent?.includes("Synthetic beta") &&
+          inspectorForHost(inspector, "beta") &&
           !!inspector.getBoundingClientRect().width,
       );
     await waitFor(
@@ -1327,7 +1334,7 @@ async function operationalScenario(unmount: () => void) {
       () =>
         [
           ...document.querySelectorAll<HTMLElement>(".world-floating-terminal"),
-        ].some((element) => element.textContent?.includes("Synthetic alpha")),
+        ].some((element) => inspectorForHost(element, "alpha")),
       "Returning from Spaces lost the retained alpha Inspector",
     );
     return;
@@ -1350,7 +1357,7 @@ async function operationalScenario(unmount: () => void) {
     check(
       [
         ...document.querySelectorAll<HTMLElement>(".workspace-inspector-head"),
-      ].some((header) => header.textContent?.includes("Synthetic alpha")),
+      ].some((header) => inspectorForHost(header, "alpha")),
       "Filtering retired the selected Inspector rather than its visual menu capture",
     );
     check(
@@ -1903,7 +1910,7 @@ async function operationalScenario(unmount: () => void) {
           ),
         ].some(
           (element) =>
-            element.textContent?.includes("Synthetic beta") &&
+            inspectorForHost(element, "beta") &&
             element.textContent?.includes("Outside Hosts filter"),
         ),
       "A qualified out-of-filter notification did not open its own labelled Inspector",
@@ -1952,14 +1959,12 @@ async function operationalScenario(unmount: () => void) {
       "Open all did not cover every filtered qualified tab exactly once",
     );
     check(
-      windows.some((window) => window.textContent?.includes("Synthetic beta")),
+      windows.some((window) => inspectorForHost(window, "beta")),
       "Open all omitted the admitted sibling host",
     );
     check(
       operation === "open-all" ||
-        !windows.some((window) =>
-          window.textContent?.includes("Synthetic alpha"),
-        ),
+        !windows.some((window) => inspectorForHost(window, "alpha")),
       "Filtered Open all used the ambient host",
     );
     check(
@@ -1983,7 +1988,7 @@ async function operationalScenario(unmount: () => void) {
             ...document.querySelectorAll<HTMLElement>(
               ".world-floating-terminal",
             ),
-          ].some((element) => element.textContent?.includes("Synthetic alpha")),
+          ].some((element) => inspectorForHost(element, "alpha")),
         "Compact Open all did not preserve independently selectable alpha",
       );
       check(
@@ -1999,7 +2004,7 @@ async function operationalScenario(unmount: () => void) {
     const currentBetaWindow = () =>
       [
         ...document.querySelectorAll<HTMLElement>(".world-floating-terminal"),
-      ].find((element) => element.textContent?.includes("Synthetic beta"))!;
+      ].find((element) => inspectorForHost(element, "beta"))!;
     currentBetaWindow().focus();
     await frame();
     const keys = defaultShortcutBindings(detectShortcutPlatform())[
@@ -2498,6 +2503,28 @@ async function run() {
         };
       if (method === "git.pull" && operation === "context-menu-pull-failure")
         return gitPull.promise;
+      if (method === "agent_worktree.get")
+        return {
+          subject: params.subject,
+          revision: `synthetic-${id}-${generation}`,
+          observedAt: "2026-01-01T00:00:00Z",
+          state: "resolved",
+          selectedCandidateId: "synthetic-root",
+          candidates: [
+            {
+              candidateId: "synthetic-root",
+              canonicalRoot: "/synthetic",
+              gitCommonDir: "/synthetic/.git",
+              branch: "main",
+              source: "foreground_cwd",
+              evidence: {
+                sourceRef: "Synthetic pane foreground_cwd",
+                observedAt: "2026-01-01T00:00:00Z",
+                basis: "reported",
+              },
+            },
+          ],
+        };
       if (method === "file.list") {
         calls.push(`resource:${id}`);
         if (id === "alpha") {
@@ -2796,7 +2823,7 @@ async function run() {
             ...document.querySelectorAll<HTMLElement>(
               ".world-floating-terminal",
             ),
-          ].some((element) => element.textContent?.includes(`Synthetic ${id}`)),
+          ].some((element) => inspectorForHost(element, id)),
         `Independent ${id} Inspector did not open`,
       );
     }
@@ -2813,15 +2840,16 @@ async function run() {
         .dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
       await waitFor(
         () =>
-          document
-            .querySelector(".world-floating-terminal")
-            ?.textContent?.includes("Synthetic alpha") ?? false,
+          inspectorForHost(
+            document.querySelector(".world-floating-terminal"),
+            "alpha",
+          ),
         "Compact switch back to the retained alpha Inspector",
       );
     }
     const alphaInspector = [
       ...document.querySelectorAll<HTMLElement>(".world-floating-terminal"),
-    ].find((element) => element.textContent?.includes("Synthetic alpha"))!;
+    ].find((element) => inspectorForHost(element, "alpha"))!;
     await waitFor(
       () =>
         !![
