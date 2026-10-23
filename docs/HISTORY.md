@@ -71,11 +71,17 @@ terminals outside Herdr can share the daemon and its Codex home, so an unseen
 client can still make a guess name the wrong conversation. Use **Thread ID** in
 `/title` or an explicit session link when identity matters.
 
-Each quest snapshot shares one bounded whole-runtime daemon listing and checks
-the pane set again after that listing. Successful evidence lasts only for that
+Each quest snapshot shares one proxy with bounded per-directory listings and
+checks the pane set again after those listings. Thread and page budgets apply
+separately to each directory, so unrelated saved history cannot exhaust them.
+The proxy's shared deadline retains completed directory listings; unfinished
+directories remain unavailable. A malformed transport invalidates the batch.
+Successful evidence lasts only for that
 snapshot; concurrent identical reads may share a request. Unavailable discovery
-backs off for 60 seconds within that connection and runtime generation, showing
-no guess during the backoff. A new generation starts with empty discovery state.
+backs off for 60 seconds per directory within that connection and runtime
+generation, showing no guess during the backoff. Quest polling and single-pane
+Chat/History reads have separate backoff state, so a failed snapshot cannot
+suppress an interactive lookup. A new generation starts with empty discovery state.
 
 This evidence is a **guess**, never proof of client identity. History records
 `session.source: codex-daemon`; Chat records its confidence as

@@ -53,15 +53,37 @@ export function codexDaemonProxyArgv(sshHost?: string) {
     : ["codex", "app-server", "proxy"];
 }
 
+type ProxyOptions = { sshHost?: string; argv?: string[]; timeoutMs?: number };
+
+export async function listCodexDaemonThreads(
+  cwd: string,
+  options: ProxyOptions = {},
+) {
+  return (await listOnProxy([cwd], options))?.get(cwd) ?? null;
+}
+
+/** One proxy, independent complete evidence for each requested directory. */
+export async function listCodexDaemonThreadBatch(
+  cwds: readonly string[],
+  options: ProxyOptions = {},
+) {
+  const unique = [...new Set(cwds)];
+  if (unique.length === 0) return new Map<string, CodexDaemonThread[] | null>();
+  return (
+    (await listOnProxy(unique, options)) ??
+    new Map(unique.map((cwd) => [cwd, null]))
+  );
+}
+
 /**
  * Connect to an existing daemon only. `proxy` does not start one. Never resume,
  * subscribe to, or send input to threads. A partial listing proves no uniqueness.
  * The same transport runs on the selected SSH host; there is no local fallback.
  */
-export async function listCodexDaemonThreads(
-  cwd: string | undefined,
-  options: { sshHost?: string; argv?: string[]; timeoutMs?: number } = {},
-): Promise<CodexDaemonThread[] | null> {
+async function listOnProxy(
+  cwds: readonly string[],
+  options: ProxyOptions = {},
+): Promise<Map<string, CodexDaemonThread[] | null> | null> {
   let child;
   try {
     child = Bun.spawn(options.argv ?? codexDaemonProxyArgv(options.sshHost), {
@@ -77,6 +99,7 @@ export async function listCodexDaemonThreads(
     { resolve(value: unknown): void; reject(error: Error): void }
   >();
   let stopped = false;
+  let timedOut = false;
   const fail = () => {
     if (stopped) return;
     stopped = true;
@@ -85,7 +108,12 @@ export async function listCodexDaemonThreads(
     pending.clear();
     child.kill("SIGKILL");
   };
-  const timer = setTimeout(fail, options.timeoutMs ?? TIMEOUT_MS);
+  const timer = setTimeout(() => {
+    if (!stopped) {
+      timedOut = true;
+      fail();
+    }
+  }, options.timeoutMs ?? TIMEOUT_MS);
   const reader = (async () => {
     const decoder = new TextDecoder();
     let buffer = "";
@@ -134,13 +162,7 @@ export async function listCodexDaemonThreads(
       }
     });
   };
-  try {
-    await request("initialize", {
-      clientInfo: { name: "herdr_world_history", version: "1" },
-      capabilities: { experimentalApi: false },
-    });
-    child.stdin.write('{"method":"initialized"}\n');
-    await child.stdin.flush();
+  const readCwd = async (cwd: string): Promise<CodexDaemonThread[] | null> => {
     const threads: CodexDaemonThread[] = [];
     const seen = new Set<string>();
     const cursors = new Set<string>();
@@ -183,7 +205,7 @@ export async function listCodexDaemonThreads(
           return null;
         seen.add(item.id.toLowerCase());
         if (seen.size > MAX_THREADS) return null;
-        if (cwd !== undefined && item.cwd !== cwd) return null;
+        if (item.cwd !== cwd) return null;
         const interactive = interactiveSource(item.source);
         if (interactive === null) return null;
         if (
@@ -225,6 +247,35 @@ export async function listCodexDaemonThreads(
       if (cursor !== null) cursors.add(cursor);
     } while (cursor !== null);
     return threads;
+  };
+  try {
+    await request("initialize", {
+      clientInfo: { name: "herdr_world_history", version: "1" },
+      capabilities: { experimentalApi: false },
+    });
+    child.stdin.write('{"method":"initialized"}\n');
+    await child.stdin.flush();
+    const results = new Map<string, CodexDaemonThread[] | null>();
+    for (const cwd of cwds) {
+      try {
+        results.set(cwd, await readCwd(cwd));
+      } catch {
+        results.set(cwd, null);
+      }
+    }
+    if (stopped && !timedOut) return null;
+    const claimed = new Map<string, string>();
+    for (const [cwd, threads] of results) {
+      for (const thread of threads ?? []) {
+        const other = claimed.get(thread.id);
+        if (other && other !== cwd) {
+          results.set(other, null);
+          results.set(cwd, null);
+        }
+        claimed.set(thread.id, cwd);
+      }
+    }
+    return results;
   } catch {
     return null;
   } finally {

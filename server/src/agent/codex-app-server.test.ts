@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   codexDaemonProxyArgv,
   listCodexDaemonThreads,
+  listCodexDaemonThreadBatch,
 } from "./codex-app-server";
 
 const ID = "019f0000-1111-7222-8333-444455556666";
@@ -33,13 +34,15 @@ for await (const chunk of Bun.stdin.stream()) {
     buffer = buffer.slice(newline + 1);
     if (message.method === 'initialized') continue;
     if (mode === 'hang') continue;
+    if (mode === 'hangSecondDirectory' && message.params?.cwd === '/work/other') continue;
+    if (mode === 'malformedSecondDirectory' && message.params?.cwd === '/work/other') { process.stdout.write('not json\\n'); continue; }
     if (mode === 'malformed') { process.stdout.write('not json\\n'); continue; }
     if (mode === 'oversized') { process.stdout.write('x'.repeat(1024 * 1024 + 1)); continue; }
     if (mode === 'exit') process.exit(1);
     let result;
     if (message.method === 'initialize') result = {};
     else if (message.method === 'thread/list' &&
-      (message.params.cwd === undefined || message.params.cwd === '/work/demo') &&
+      ['/work/demo', '/work/other'].includes(message.params.cwd) &&
       message.params.useStateDbOnly === true &&
       message.params.archived === false &&
       JSON.stringify(message.params.sourceKinds) === '["cli","vscode"]') {
@@ -125,27 +128,89 @@ describe("Codex daemon observation", () => {
     );
   });
 
-  test("one whole-runtime listing retains different directories and unloaded competitors", async () => {
-    const result = await listCodexDaemonThreads(undefined, {
-      argv: peer([
-        {
-          data: [
-            thread,
-            {
-              ...thread,
-              id: ID.replace(/6$/, "7"),
-              cwd: "/work/other",
-              status: { type: "notLoaded" },
-            },
-          ],
-          nextCursor: null,
-        },
-      ]),
-    });
-    expect(result?.map(({ cwd, status }) => ({ cwd, status }))).toEqual([
-      { cwd: "/work/demo", status: "active" },
-      { cwd: "/work/other", status: "notLoaded" },
-    ]);
+  test("one proxy shares independent directory listings and retains unloaded competitors", async () => {
+    const result = await listCodexDaemonThreadBatch(
+      ["/work/demo", "/work/other"],
+      {
+        argv: peer([
+          { data: [thread], nextCursor: null },
+          {
+            data: [
+              {
+                ...thread,
+                id: ID.replace(/6$/, "7"),
+                cwd: "/work/other",
+                status: { type: "notLoaded" },
+              },
+            ],
+            nextCursor: null,
+          },
+        ]),
+      },
+    );
+    expect(result.get("/work/demo")?.[0]?.status).toBe("active");
+    expect(result.get("/work/other")?.[0]?.status).toBe("notLoaded");
+  });
+
+  test("a crowded directory does not exhaust another directory's thread budget", async () => {
+    const crowded = Array.from({ length: 500 }, (_, i) => ({
+      ...thread,
+      id: `019f0000-1111-7222-8333-${i.toString(16).padStart(12, "0")}`,
+    }));
+    const result = await listCodexDaemonThreadBatch(
+      ["/work/demo", "/work/other"],
+      {
+        argv: peer([
+          { data: crowded, nextCursor: "more" },
+          { data: [{ ...thread, cwd: "/work/other" }], nextCursor: null },
+        ]),
+      },
+    );
+    expect(result.get("/work/demo")).toBeNull();
+    expect(result.get("/work/other")?.[0]?.id).toBe(ID);
+  });
+
+  test("a thread changing directories during a batch cannot identify two panes", async () => {
+    const result = await listCodexDaemonThreadBatch(
+      ["/work/demo", "/work/other"],
+      {
+        argv: peer([
+          { data: [thread], nextCursor: null },
+          { data: [{ ...thread, cwd: "/work/other" }], nextCursor: null },
+        ]),
+      },
+    );
+    expect(result.get("/work/demo")).toBeNull();
+    expect(result.get("/work/other")).toBeNull();
+  });
+
+  test("the shared deadline retains completed directories and rejects an unfinished directory", async () => {
+    const result = await listCodexDaemonThreadBatch(
+      ["/work/demo", "/work/other"],
+      {
+        argv: peer(
+          [{ data: [thread], nextCursor: null }],
+          "hangSecondDirectory",
+        ),
+        timeoutMs: 1000,
+      },
+    );
+    expect(result.get("/work/demo")?.[0]?.id).toBe(ID);
+    expect(result.get("/work/other")).toBeNull();
+  });
+
+  test("a malformed transport still invalidates every directory", async () => {
+    const result = await listCodexDaemonThreadBatch(
+      ["/work/demo", "/work/other"],
+      {
+        argv: peer(
+          [{ data: [thread], nextCursor: null }],
+          "malformedSecondDirectory",
+        ),
+      },
+    );
+    expect(result.get("/work/demo")).toBeNull();
+    expect(result.get("/work/other")).toBeNull();
   });
 
   test.each([

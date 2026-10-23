@@ -69,7 +69,7 @@ export async function prepareCodexInferenceBatch(args: {
     !args.files.listCodexThreads
   )
     return batch;
-  const eligible = before.some(
+  const eligible = before.filter(
     (pane) =>
       pane.agent_session == null &&
       !/[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{5,12}/i.test(
@@ -78,14 +78,41 @@ export async function prepareCodexInferenceBatch(args: {
       before.filter((other) => codexPaneCwd(other) === codexPaneCwd(pane))
         .length === 1,
   );
-  if (!eligible) return batch;
+  const cwds = [...new Set(eligible.map(codexPaneCwd))];
+  if (!cwds.length) return batch;
   try {
-    batch.threads = await args.discovery.read(
-      undefined,
-      JSON.stringify(before.map(witness).sort()),
-      () => args.files.listCodexThreads!(),
+    let query: Promise<Map<string, CodexDaemonThread[] | null>> | undefined;
+    const requested = new Set<string>();
+    const snapshot = JSON.stringify(before.map(witness).sort());
+    const results = await Promise.all(
+      cwds.map((cwd) =>
+        args.discovery.read(
+          cwd,
+          snapshot,
+          async () => {
+            requested.add(cwd);
+            // Collect cache misses before opening this snapshot's one proxy.
+            await Promise.resolve();
+            const directories = [...requested];
+            query ??= args.files.listCodexThreadBatch
+              ? args.files.listCodexThreadBatch(directories)
+              : Promise.all(
+                  directories.map(
+                    async (directory) =>
+                      [
+                        directory,
+                        await args.files.listCodexThreads!(directory),
+                      ] as const,
+                  ),
+                ).then((rows) => new Map(rows));
+            return (await query).get(cwd) ?? null;
+          },
+          "snapshot",
+        ),
+      ),
     );
-    if (batch.threads === null) return batch;
+    if (results.every((threads) => threads === null)) return batch;
+    batch.threads = results.flatMap((threads) => threads ?? []);
     batch.clock = args.files.clockOffset
       ? await args.files.clockOffset()
       : null;
@@ -134,6 +161,12 @@ export async function inferCodexDaemonThread(args: {
         : null;
     const now = Date.now() + (clock?.offsetMs ?? 0);
     const uncertainty = clock?.uncertaintyMs ?? 0;
+    if (
+      !Number.isFinite(now) ||
+      !Number.isFinite(uncertainty) ||
+      uncertainty < 0
+    )
+      return null;
     // Keep every loaded contender, and recent or malformed unloaded evidence.
     // Only a valid, old unloaded thread can be excluded from the count.
     const contenders = threads.filter(
@@ -143,7 +176,7 @@ export async function inferCodexDaemonThread(args: {
           thread.createdAt <= 0 ||
           thread.updatedAt < thread.createdAt ||
           thread.updatedAt > now + FUTURE_SKEW_MS - uncertainty ||
-          now - thread.updatedAt + uncertainty <= RECENT_MS),
+          now - thread.updatedAt - uncertainty <= RECENT_MS),
     );
     if (contenders.length !== 1 || contenders[0]!.status === "notLoaded")
       return null;

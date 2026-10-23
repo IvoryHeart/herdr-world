@@ -13,12 +13,31 @@ test("unavailability backs off for 60 seconds; successful reads are never retain
     return calls === 1 ? null : [];
   };
   expect(await cache.read("/work/a", "pane", fetch)).toBeNull();
-  expect(await cache.read("/work/b", "changed", fetch)).toBeNull();
+  expect(await cache.read("/work/a", "changed", fetch)).toBeNull();
   expect(calls).toBe(1);
   now = 60_000;
   expect(await cache.read("/work/a", "pane", fetch)).toEqual([]);
   await cache.read("/work/a", "pane", fetch);
   expect(calls).toBe(3);
+});
+
+test("snapshot failure never suppresses a single-pane read or another directory", async () => {
+  const cache = createCodexDiscoveryCache({
+    connectionId: "one",
+    generation: 1,
+  });
+  expect(
+    await cache.read("/work/a", "pane", async () => null, "snapshot"),
+  ).toBeNull();
+  expect(await cache.read("/work/a", "pane", async () => [], "single")).toEqual(
+    [],
+  );
+  expect(
+    await cache.read("/work/b", "pane", async () => [], "snapshot"),
+  ).toEqual([]);
+  expect(
+    await cache.read("/work/a", "changed", async () => [], "snapshot"),
+  ).toBeNull();
 });
 
 test("only identical in-flight evidence shares a read; generations and connections stay isolated", async () => {

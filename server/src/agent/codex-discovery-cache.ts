@@ -7,41 +7,52 @@ export function createCodexDiscoveryCache(
   scope?: CodexDiscoveryScope,
   now = Date.now,
 ) {
-  const pending = new Map<string, Promise<CodexDaemonThread[] | null>>();
-  let unavailableUntil = 0;
+  const pending = new Map<
+    string,
+    { witness: string; promise: Promise<CodexDaemonThread[] | null> }
+  >();
+  const unavailableUntil = new Map<string, number>();
   let epoch = 0;
   return {
     clear() {
       epoch++;
       pending.clear();
-      unavailableUntil = 0;
+      unavailableUntil.clear();
     },
     read(
-      cwd: string | undefined,
+      cwd: string,
       witness: string,
       fetch: () => Promise<CodexDaemonThread[] | null>,
+      kind: "single" | "snapshot" = "single",
     ) {
-      if (now() < unavailableUntil) return Promise.resolve(null);
-      const key = JSON.stringify([
+      for (const [key, until] of unavailableUntil)
+        if (until <= now()) unavailableUntil.delete(key);
+      const failureKey = JSON.stringify([
         scope?.connectionId,
         scope?.generation,
         cwd,
-        witness,
+        kind,
       ]);
+      if (now() < (unavailableUntil.get(failureKey) ?? 0))
+        return Promise.resolve(null);
+      // Retain the shared witness by reference, rather than copy the entire
+      // pane snapshot into every directory's map key.
+      const key = failureKey;
       const existing = pending.get(key);
-      if (existing) return existing;
+      if (existing?.witness === witness) return existing.promise;
       const expected = epoch;
       const result: Promise<CodexDaemonThread[] | null> = Promise.resolve()
         .then(fetch)
         .catch(() => null)
         .then((threads) => {
           if (epoch === expected) {
-            if (pending.get(key) === result) pending.delete(key);
-            if (threads === null) unavailableUntil = now() + 60_000;
+            if (pending.get(key)?.promise === result) pending.delete(key);
+            if (threads === null)
+              unavailableUntil.set(failureKey, now() + 60_000);
           }
           return threads;
         });
-      pending.set(key, result);
+      pending.set(key, { witness, promise: result });
       return result;
     },
   };

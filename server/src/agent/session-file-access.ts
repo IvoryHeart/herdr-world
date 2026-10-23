@@ -5,6 +5,7 @@ import { sshCommandArgv } from "../bridge/ssh-command";
 import type { SessionFile } from "./session-types";
 import {
   listCodexDaemonThreads,
+  listCodexDaemonThreadBatch,
   type CodexDaemonThread,
 } from "./codex-app-server";
 
@@ -28,8 +29,11 @@ export type AgentSessionFileAccess = {
   readDownloadBody(path: string): Promise<BodyInit>;
   findPiSessionById(id: string): Promise<SessionFile | null>;
   findCodexSessionById(id: string): Promise<SessionFile | null>;
-  /** Complete interactive-thread evidence; omit cwd for one whole-runtime snapshot. */
-  listCodexThreads?(cwd?: string): Promise<CodexDaemonThread[] | null>;
+  /** Complete interactive-thread evidence for one directory. */
+  listCodexThreads?(cwd: string): Promise<CodexDaemonThread[] | null>;
+  listCodexThreadBatch?(
+    cwds: readonly string[],
+  ): Promise<Map<string, CodexDaemonThread[] | null>>;
   /** The one transcript whose ID starts with `prefix`, if exactly one does. */
   findCodexSessionByPrefix(
     prefix: string,
@@ -139,6 +143,7 @@ export const localAgentSessionFiles: AgentSessionFileAccess = {
   findCodexSessionById: findLocalCodexSession,
   findCodexSessionByPrefix: findLocalCodexSessionByPrefix,
   listCodexThreads: listCodexDaemonThreads,
+  listCodexThreadBatch: listCodexDaemonThreadBatch,
 };
 
 function parseRemoteFileMetadata(stdout: string): SessionFile | null {
@@ -215,6 +220,8 @@ printf '%s\\t%s\\t%s\\t%s\\t%s\\n' "$size" "$mtime" "$path64" "$identity" "$chan
   return {
     remote: true,
     listCodexThreads: (cwd) => listCodexDaemonThreads(cwd, { sshHost: host }),
+    listCodexThreadBatch: (cwds) =>
+      listCodexDaemonThreadBatch(cwds, { sshHost: host }),
     statFile,
     async clockOffset() {
       const before = Date.now();

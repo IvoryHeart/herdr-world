@@ -89,6 +89,16 @@ function fixture(remote = false) {
       state.onThreads();
       return state.threads;
     },
+    async listCodexThreadBatch(cwds) {
+      state.daemonCalls++;
+      state.onThreads();
+      return new Map(
+        cwds.map((cwd) => [
+          cwd,
+          state.threads?.filter((thread) => thread.cwd === cwd) ?? null,
+        ]),
+      );
+    },
     ...(remote
       ? {
           async clockOffset() {
@@ -147,6 +157,23 @@ describe("Codex shared-daemon inference", () => {
     });
     expect((await resolve()).session?.value).toBe(ID);
     state.threads![1]!.createdAt = Date.now();
+    expect((await resolve()).session).toBeNull();
+  });
+
+  test("remote clock uncertainty keeps a possibly recent unloaded competitor", async () => {
+    const { state, files, resolve } = fixture(true);
+    files.clockOffset = async () => ({ offsetMs: 0, uncertaintyMs: 1000 });
+    state.threads!.push({
+      ...state.threads![0]!,
+      id: OTHER,
+      status: "notLoaded",
+      createdAt: Date.now() - 20 * 60_000,
+      updatedAt: Date.now() - 10 * 60_000 - 500,
+    });
+    expect((await resolve()).session).toBeNull();
+    state.threads![1]!.updatedAt = Date.now() - 10 * 60_000 - 1500;
+    expect((await resolve()).session?.value).toBe(ID);
+    files.clockOffset = async () => ({ offsetMs: 0, uncertaintyMs: NaN });
     expect((await resolve()).session).toBeNull();
   });
 
@@ -218,6 +245,39 @@ describe("Codex shared-daemon inference", () => {
       value: ID,
     });
     expect(state.daemonCalls).toBe(1);
+  });
+
+  test("a failed quest batch cannot back off a single-pane Chat or History lookup", async () => {
+    const { files, resolve, source } = fixture();
+    files.listCodexThreadBatch = async (cwds) =>
+      new Map(cwds.map((cwd) => [cwd, null]));
+    const chat = source();
+    try {
+      expect((await chat.quests())[0]?.session_binding).toBeNull();
+      expect((await resolve()).session?.value).toBe(ID);
+    } finally {
+      chat.dispose();
+    }
+  });
+
+  test("a backed-off directory is omitted when another directory refreshes", async () => {
+    const { state, files, source } = fixture();
+    state.panes.push({ ...state.pane, pane_id: "w1:p2", cwd: "/work/other" });
+    const requests: string[][] = [];
+    files.listCodexThreadBatch = async (cwds) => {
+      requests.push([...cwds]);
+      return new Map(
+        cwds.map((cwd) => [cwd, cwd === "/work/demo" ? state.threads : null]),
+      );
+    };
+    const chat = source();
+    try {
+      await chat.quests();
+      await chat.quests();
+      expect(requests).toEqual([["/work/demo", "/work/other"], ["/work/demo"]]);
+    } finally {
+      chat.dispose();
+    }
   });
   test.each([false, true])(
     "unique pane and loaded thread work on their selected runtime (remote=%s)",
