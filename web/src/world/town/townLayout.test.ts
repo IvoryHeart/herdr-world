@@ -4,6 +4,7 @@ import {
   TOWN_MAX_RENDERED_DESKS,
   TOWN_ROOM_TIERS,
   townDeskSlots,
+  townPinCell,
   townSeat,
   townRoomTiers,
   TOWN_SHAPES,
@@ -498,4 +499,28 @@ test("reception, queue and lounge stay on walkable floor in every shape", () => 
         ).toBe(false);
     }
   }
+});
+
+test("a desk pinned during a held reflow keeps the cell the user sees", () => {
+  const keys = desks("a/room-0", 3);
+  // The visible (held) layout has tab-2 in tab order; the pending one has
+  // moved it to column 1, row 1.
+  const visible = layoutTown(town({ a: [3] }), "wide").layout;
+  const pending = layoutTown(
+    town({ a: [3] }),
+    "wide",
+    new Map(),
+    new Map([[keys[2]!, { col: 1, row: 1 }]]),
+  ).layout;
+  const seen = cellOf(visible, keys[2]!)!;
+  expect(cellOf(pending, keys[2]!)).toMatchObject({ col: 1, row: 1 });
+  expect(seen.col === 1 && seen.row === 1).toBe(false);
+  expect(townPinCell(visible, pending, keys[2]!)).toEqual({
+    col: seen.col,
+    row: seen.row,
+  });
+  // A desk the visible layout lacks takes its pending cell.
+  const before = layoutTown(town({ a: [2] }), "wide").layout;
+  expect(townPinCell(before, pending, keys[2]!)).toEqual({ col: 1, row: 1 });
+  expect(townPinCell(before, before, keys[2]!)).toBeNull();
 });

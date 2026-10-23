@@ -55,6 +55,7 @@ import {
   townSeat,
   townShapeFor,
   townShapeKey,
+  townPinCell,
   type TownLayout,
   type TownPlacementMemory,
   type TownShape,
@@ -301,20 +302,14 @@ export function TownCanvas({
   useEffect(() => {
     for (const [deskKey, pin] of model.deskPins) {
       if (pin.cell || placing.current.has(pin.key)) continue;
-      const at = placed.deskCells.get(deskKey);
-      const room = at
-        ? placed.buildings
-            .flatMap((building) => building.rooms)
-            .find((entry) => entry.key === at.roomKey)
-        : undefined;
-      const cell = room?.cells[at!.cellIndex];
+      const cell = townPinCell(layout, placed, deskKey);
       if (!cell) continue;
       placing.current.add(pin.key);
       void placeDeskPin(pin.key, { col: cell.col, row: cell.row }).finally(() =>
         placing.current.delete(pin.key),
       );
     }
-  }, [placed, model.deskPins]);
+  }, [layout, placed, model.deskPins]);
   const blockedSince = useRef(new Map<string, number>());
   const [hover, setHover] = useState<string | null>(null);
   const latest = useRef({

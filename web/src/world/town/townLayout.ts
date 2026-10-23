@@ -813,3 +813,25 @@ export function townReflowShift(
       }
     : { x: 0, y: 0 };
 }
+
+/**
+ * The cell a desk being pinned keeps: where the user sees it. While a reflow
+ * is held (TownCanvas) that is the visible layout, not the pending one; a
+ * desk the visible layout lacks takes its pending cell.
+ */
+export function townPinCell(
+  visible: TownLayout,
+  pending: TownLayout,
+  deskKey: string,
+): { col: number; row: number } | null {
+  for (const layout of [visible, pending]) {
+    const at = layout.deskCells.get(deskKey);
+    const cell = at
+      ? layout.buildings
+          .flatMap((building) => building.rooms)
+          .find((room) => room.key === at.roomKey)?.cells[at.cellIndex]
+      : undefined;
+    if (cell) return { col: cell.col, row: cell.row };
+  }
+  return null;
+}
