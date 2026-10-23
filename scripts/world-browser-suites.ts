@@ -132,3 +132,23 @@ export async function assertWebBrowserInventory(root = process.cwd()) {
     );
   }
 }
+
+/**
+ * Whether a test run over `paths` (files or directories; none means every
+ * test) includes a Chrome-driven suite, and so needs the machine-wide browser
+ * slot.
+ */
+export function includesBrowserSuites(paths: readonly string[]): boolean {
+  const suites = [...webBrowserSuites, ...worldBrowserSuites];
+  return (
+    paths.length === 0 ||
+    paths.some((path) =>
+      suites.some(
+        (suite) =>
+          suite === path ||
+          suite.endsWith(`/${path}`) ||
+          suite.startsWith(`${path.replace(/\/$/, "")}/`),
+      ),
+    )
+  );
+}

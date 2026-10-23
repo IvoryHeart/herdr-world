@@ -77,13 +77,17 @@ quieter. Lane logs are kept in `.agents/delivery/lanes/`.
 Heavy local checks share one machine-wide queue (`scripts/check-lock.ts`) across
 all worktrees and clones: one browser lane (World browser suites, Chrome-driven
 tests, timed suites) and one behavioral verification at a time, and at most two
-light lanes (static checks, unit tests). `bun run check:changed`,
-`check:delivery`, `test:browser` and `scripts/run-world-tests.ts` all queue, and a
-waiting lane prints `waiting for <worktree> <lane> (pid, since)`. Slots are
+light lanes (static checks, unit tests). The quiet lane's timed (latency) suites
+need the whole machine: they take every slot, waiting for running heavy lanes, and
+nothing heavy starts beside them. `bun run check:changed`, `check:delivery`,
+`test:browser`, `scripts/run-world-tests.ts` and any `bun run test` that includes a
+Chrome-driven suite all queue, and a waiting lane prints `waiting for <worktree>
+<lane> (pid, since)`. Slots are
 `flock(2)` locks under `$XDG_RUNTIME_DIR/herdr-world-checks` (or the temporary
 directory), released by the kernel when their holder exits however it exits, so a
-crashed gate never leaves a stale lock. A process holds one slot at a time, and its
-children run inside it, so gates cannot deadlock. CI does not queue.
+crashed gate never leaves a stale lock. A lane holds one slot, or all of them taken
+in one fixed order, and its children run inside it, so gates cannot deadlock. CI
+does not queue.
 
 Test Chrome renders WebGL with SwiftShader, the software renderer that CI's pixel
 and visual comparisons are calibrated against. Locally, `HERDR_WORLD_TEST_GPU=1`

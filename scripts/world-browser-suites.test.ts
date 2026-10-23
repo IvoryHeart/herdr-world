@@ -171,3 +171,14 @@ test("an unassigned web browser suite fails inventory validation", async () => {
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test("a run that includes a Chrome-driven suite is recognised for the browser slot", async () => {
+  const { includesBrowserSuites } = await import("./world-browser-suites");
+  expect(includesBrowserSuites([])).toBe(true);
+  expect(includesBrowserSuites(["web/src/uiScale.test.ts"])).toBe(true);
+  expect(includesBrowserSuites(["uiScale.test.ts"])).toBe(true);
+  expect(includesBrowserSuites(["web/src/world"])).toBe(true);
+  expect(includesBrowserSuites(["web/src/world/"])).toBe(true);
+  expect(includesBrowserSuites(["scripts/check-lock.test.ts"])).toBe(false);
+  expect(includesBrowserSuites(["server/src/http"])).toBe(false);
+});

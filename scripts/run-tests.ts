@@ -1,10 +1,12 @@
 import { availableParallelism } from "node:os";
+import { acquireCheckSlot, heldEnv } from "./check-lock";
 import { warmChrome } from "./chrome-warmup";
 import {
   assertWebBrowserInventory,
   assertWorldBrowserInventory,
   browserWorkflowIgnorePattern,
   webBrowserSuites,
+  includesBrowserSuites,
   worldBrowserIgnorePattern,
 } from "./world-browser-suites";
 import { cleanupRunTemp, createRunTemp, sweepStaleRunTemps } from "./test-temp";
@@ -55,6 +57,14 @@ console.info(
 // The run's TMPDIR holds test and Chrome scratch files; it is removed, with
 // any process still using it, however the run ends (see test-temp.ts).
 sweepStaleRunTemps();
+// A run that includes Chrome-driven suites takes the machine-wide browser
+// slot, like the gate's browser lane (a whole run includes the web suites).
+const usesBrowser =
+  !excludeWorld &&
+  includesBrowserSuites(args.filter((arg) => !arg.startsWith("-")));
+const releaseSlot = usesBrowser
+  ? await acquireCheckSlot("browser", { lane: "browser tests" })
+  : () => {};
 const directory = createRunTemp();
 // Once per CI job: nested runners inherit the flag.
 const chrome =
@@ -77,6 +87,7 @@ try {
         TMP: directory,
         TEMP: directory,
         ...(warm ? { HERDR_CHROME_WARM: "1" } : {}),
+        ...(usesBrowser ? heldEnv("browser") : {}),
       },
     });
     const interrupt = () => child.kill("SIGINT");
@@ -96,4 +107,5 @@ try {
   }
 } finally {
   cleanupRunTemp(directory);
+  releaseSlot();
 }

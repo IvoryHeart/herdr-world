@@ -8,7 +8,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { acquireCheckSlot, HELD_ENV } from "./check-lock";
+import { acquireAllCheckSlots, acquireCheckSlot, HELD_ENV } from "./check-lock";
 
 const roots: string[] = [];
 afterEach(() => {
@@ -28,11 +28,13 @@ function holderScript(root: string) {
   writeFileSync(
     script,
     `import { appendFileSync } from "node:fs";
-import { acquireCheckSlot } from ${JSON.stringify(join(import.meta.dir, "check-lock.ts"))};
+import { acquireAllCheckSlots, acquireCheckSlot } from ${JSON.stringify(join(import.meta.dir, "check-lock.ts"))};
 const [dir, name, label, holdMs, record] = process.argv.slice(2);
-const release = await acquireCheckSlot(name as "browser", {
-  lane: label, worktree: "worktree-" + label, dir, pollMs: 25, env: {},
-});
+const options = { lane: label, worktree: "worktree-" + label, dir, pollMs: 25, env: {} };
+const release =
+  name === "all"
+    ? await acquireAllCheckSlots(options)
+    : await acquireCheckSlot(name as "browser", options);
 appendFileSync(record, JSON.stringify({ label, at: Date.now(), event: "start" }) + "\\n");
 await Bun.sleep(Number(holdMs));
 appendFileSync(record, JSON.stringify({ label, at: Date.now(), event: "end" }) + "\\n");
@@ -156,4 +158,50 @@ test("children of a holder and CI runs never wait", async () => {
   } finally {
     release();
   }
+});
+
+test("a timed lane waits for every running heavy lane, and nothing starts beside it", async () => {
+  const root = scratch();
+  const hold = holderScript(root);
+  // A unit lane is running when the timed lane asks for the whole machine.
+  const unit = hold("light", "unit", 500);
+  await Bun.sleep(200);
+  const timed = hold("all", "timed", 500);
+  await Bun.sleep(500);
+  // A verification run arriving while the timed lane runs must wait.
+  const verification = hold("verification", "verification", 50);
+  await Promise.all([unit.exited, timed.exited, verification.exited]);
+  const [first, second, third] = intervals(root);
+  expect(second!.start).toBeGreaterThanOrEqual(first!.end);
+  expect(third!.start).toBeGreaterThanOrEqual(second!.end);
+});
+
+test("two whole-machine lanes take turns without deadlock", async () => {
+  const root = scratch();
+  const hold = holderScript(root);
+  const runs = [
+    hold("all", "a", 200),
+    hold("all", "b", 200),
+    hold("light", "c", 200),
+  ];
+  const done = Promise.all(runs.map((run) => run.exited));
+  const outcome = await Promise.race([
+    done.then(() => "done"),
+    Bun.sleep(5000).then(() => "stuck"),
+  ]);
+  expect(outcome).toBe("done");
+  const spans = intervals(root);
+  for (let i = 1; i < spans.length; i++)
+    if (spans[i - 1]!.end > spans[i]!.start)
+      // Only light lanes may overlap each other, never a whole-machine lane.
+      throw new Error(`overlap: ${JSON.stringify(spans)}`);
+});
+
+test("children of a whole-machine holder do not queue again", async () => {
+  const release = await acquireAllCheckSlots({
+    lane: "child",
+    env: { [HELD_ENV]: "browser" },
+    dir: join(scratch(), "locks"),
+  });
+  release();
 });

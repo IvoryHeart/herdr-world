@@ -166,7 +166,10 @@ passed code gate on an ancestor, and a push that only merges `origin/main` runs
 same Git hook configuration.
 
 Agents in parallel worktrees share one machine-wide check queue: one browser lane
-and one behavioral verification at a time, two light lanes. A queued gate prints
+and one behavioral verification at a time, two light lanes, and the timed
+(latency) lane alone on the whole machine. Run browser suites through
+`bun run test <path>` or `bun run test:browser`, which queue, rather than a bare
+`bun test` on a browser file, which does not. A queued gate prints
 `[queue] <lane> waiting for <worktree> <lane> (pid, since)`. Do not bypass the
 hook because a gate is queued; the wait is shorter than the contention it avoids.
 

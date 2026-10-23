@@ -18,13 +18,18 @@ import { basename, join } from "node:path";
  *   verification  1   behavioral verification
  *   light         2   static checks and unit tests
  *
+ * Timed (latency) suites need the whole machine, so they take every slot of
+ * every class (acquireAllCheckSlots), in one fixed order: they wait for the
+ * running heavy lanes to finish, and nothing heavy starts beside them.
+ *
  * The kernel releases a lock when its holder exits, however it exits, so a
  * dead process never leaves a stale lock behind; the holder note beside each
  * slot only says who is waiting on whom. Locks are not inherited by child
  * processes (files open close-on-exec), so an orphaned Chrome cannot keep a
- * slot. A process holds at most one slot at a time and children of a holder
- * skip their own acquisition (HERDR_WORLD_CHECK_LOCK), so two gates cannot
- * deadlock waiting for each other. CI runs on its own runner and skips the
+ * slot. A lane holds one slot, or all of them in the fixed order, and never
+ * waits while holding a slot another waiter needs out of order; children of
+ * a holder skip their own acquisition (HERDR_WORLD_CHECK_LOCK). So two gates
+ * cannot deadlock waiting for each other. CI runs on its own runner and skips the
  * queue.
  */
 
@@ -115,6 +120,21 @@ export async function acquireCheckSlot(
   name: CheckClass,
   options: AcquireOptions,
 ): Promise<Release> {
+  return acquire([name], options);
+}
+
+/** Wait for every slot of every class, for a lane that needs the whole machine. */
+export async function acquireAllCheckSlots(
+  options: AcquireOptions,
+): Promise<Release> {
+  return acquire(Object.keys(CHECK_SLOTS) as CheckClass[], options, true);
+}
+
+async function acquire(
+  names: CheckClass[],
+  options: AcquireOptions,
+  all = false,
+): Promise<Release> {
   const env = options.env ?? process.env;
   const log = options.log ?? ((message: string) => console.info(message));
   if (env.CI === "true" || env[HELD_ENV]) return () => {};
@@ -125,41 +145,73 @@ export async function acquireCheckSlot(
   }
   const dir = options.dir ?? defaultLockDir();
   mkdirSync(dir, { recursive: true, mode: 0o700 });
-  const slots = options.slots ?? CHECK_SLOTS[name];
   const holder: Holder = {
     pid: process.pid,
     worktree: options.worktree ?? basename(process.cwd()),
     lane: options.lane,
     since: "",
   };
-  let lastReport = "";
-  for (;;) {
-    for (let slot = 0; slot < slots; slot += 1) {
-      const path = join(dir, `${name}.${slot}`);
-      const fd = openSync(`${path}.lock`, "a");
-      if (lock(fd, LOCK_EX | LOCK_NB) === 0) {
-        holder.since = new Date().toISOString();
-        writeFileSync(`${path}.json`, `${JSON.stringify(holder)}\n`);
-        let released = false;
-        return () => {
-          if (released) return;
-          released = true;
-          closeSync(fd); // closing the only descriptor drops the lock
-        };
-      }
+  const take = (path: string): Release | undefined => {
+    const fd = openSync(`${path}.lock`, "a");
+    if (lock(fd, LOCK_EX | LOCK_NB) !== 0) {
       closeSync(fd);
+      return undefined;
     }
+    holder.since = new Date().toISOString();
+    writeFileSync(`${path}.json`, `${JSON.stringify(holder)}\n`);
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      closeSync(fd); // closing the only descriptor drops the lock
+    };
+  };
+  let lastReport = "";
+  const wait = async (paths: string[]) => {
     const report = `[queue] ${options.lane} waiting for ${describe(
-      Array.from({ length: slots }, (_, slot) =>
-        readHolder(join(dir, `${name}.${slot}.json`)),
-      ),
+      paths.map((path) => readHolder(`${path}.json`)),
     )}`;
     if (report !== lastReport) {
       log(report);
       lastReport = report;
     }
     await Bun.sleep(options.pollMs ?? 1000);
+  };
+  const slotPaths = (name: CheckClass) =>
+    Array.from(
+      {
+        length:
+          name === names[0] && !all && options.slots
+            ? options.slots
+            : CHECK_SLOTS[name],
+      },
+      (_, slot) => join(dir, `${name}.${slot}`),
+    );
+  if (!all) {
+    const paths = slotPaths(names[0]!);
+    for (;;) {
+      for (const path of paths) {
+        const release = take(path);
+        if (release) return release;
+      }
+      await wait(paths);
+    }
   }
+  // Every slot, one at a time in the fixed order, so whole-machine lanes
+  // never deadlock with each other.
+  const held: Release[] = [];
+  for (const name of names)
+    for (const path of slotPaths(name)) {
+      let release = take(path);
+      while (!release) {
+        await wait([path]);
+        release = take(path);
+      }
+      held.push(release);
+    }
+  return () => {
+    for (const release of held.reverse()) release();
+  };
 }
 
 /** Environment for children that run inside the caller's slot. */
