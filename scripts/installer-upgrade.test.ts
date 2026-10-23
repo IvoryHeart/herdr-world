@@ -14,6 +14,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   candidateVersion,
+  releaseMirror,
   runtimeEnvironment,
   removeInstallerFixture,
   upgradeCookieStatus,
@@ -190,3 +191,66 @@ test.skipIf(process.platform === "win32")(
   },
   5_000,
 );
+
+test("the baseline release is fetched once per cache and then served locally", async () => {
+  const cache = mkdtempSync(join(tmpdir(), "installer baseline assets "));
+  const fetched: string[] = [];
+  const upstream = "https://releases.example.com/v1.2.3";
+  const download = async (url: string) => {
+    fetched.push(url);
+    return url.endsWith("/absent.tar.xz")
+      ? new Response("gone", { status: 404 })
+      : new Response(`bytes of ${url}`);
+  };
+  const first = releaseMirror(cache, upstream, download);
+  try {
+    const name = "herdr-world-v1.2.3-linux-x64.tar.xz";
+    const get = (mirror: ReturnType<typeof releaseMirror>, path: string) =>
+      fetch(`${mirror.url.origin}/${path}`);
+    expect(await (await get(first, name)).text()).toBe(
+      `bytes of ${upstream}/${name}`,
+    );
+    expect(await (await get(first, name)).text()).toBe(
+      `bytes of ${upstream}/${name}`,
+    );
+    expect((await get(first, "absent.tar.xz")).status).toBe(404);
+    expect((await get(first, "..%2Fsecret")).status).toBe(404);
+    expect(fetched).toEqual([
+      `${upstream}/${name}`,
+      `${upstream}/absent.tar.xz`,
+    ]);
+
+    // A later run restoring the same cache downloads nothing.
+    const second = releaseMirror(cache, upstream, download);
+    try {
+      expect((await get(second, name)).status).toBe(200);
+    } finally {
+      second.stop(true);
+    }
+    expect(fetched).toHaveLength(2);
+    expect(existsSync(join(cache, "absent.tar.xz"))).toBe(false);
+  } finally {
+    first.stop(true);
+    rmSync(cache, { recursive: true, force: true });
+  }
+});
+
+test("CI caches the baseline assets per release tag and platform", async () => {
+  const workflow = Bun.YAML.parse(
+    await Bun.file(
+      new URL("../.github/workflows/installer-upgrade.yml", import.meta.url),
+    ).text(),
+  ) as any;
+  const upgrade = workflow.jobs.upgrade;
+  expect(upgrade.env.INSTALLER_BASELINE_ASSETS).toBe(
+    "${{ github.workspace }}/.agents/installer-baseline-assets",
+  );
+  expect(
+    upgrade.steps.find(
+      (step: any) => step.name === "Cache the baseline release assets",
+    )?.with,
+  ).toEqual({
+    path: ".agents/installer-baseline-assets",
+    key: "installer-baseline-${{ needs.baseline.outputs.tag }}-${{ matrix.platform }}",
+  });
+});
