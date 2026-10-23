@@ -10,8 +10,9 @@ import {
   terminalComposerCloseWarning,
   terminalComposerDraftPaneIds,
 } from "../terminalComposer";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { ContextMenu, type ContextMenuState } from "./ContextMenu";
+import { WorkspaceColorContext } from "./workspaceColor";
 import { ThemedSelect } from "./ThemedSelect";
 import { CreateWorkspaceDialog } from "./CreateWorkspaceDialog";
 import { buildWorkspaceHierarchy, worktreeCreationSource } from "../worktree";
@@ -1021,6 +1022,8 @@ function WorkspaceRow({
   onContextMenu: (w: Workspace, x: number, y: number) => void;
   workspaceDrag?: WorkspaceDragProps;
 }) {
+  const workspaceColors = useContext(WorkspaceColorContext);
+  const workspaceColor = workspaceColors?.colorOf(w.workspace_id);
   const store = useOperationalStore();
   const children = childrenByParent.get(w.workspace_id) ?? [];
   const review = workspacePullRequest(reviews[w.workspace_id]);
@@ -1234,6 +1237,18 @@ function WorkspaceRow({
         ) : (
           <span className="twisty" aria-hidden="true" />
         )}
+        {workspaceColor?.custom ? (
+          <span
+            className="ws-color"
+            style={{
+              background: workspaceColors?.palette.find(
+                (entry) => entry.id === workspaceColor.id,
+              )?.hex,
+            }}
+            title={`Colour ${workspaceColor.id}`}
+            aria-hidden="true"
+          />
+        ) : null}
         <strong className="ws-label" title={workspaceDisplayName(w)}>
           {workspaceDisplayName(w)}
         </strong>

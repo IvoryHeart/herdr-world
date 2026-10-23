@@ -2,10 +2,14 @@ import { describe, expect, test } from "bun:test";
 import { boardTabKey } from "./board/boardModel";
 import {
   defaultTerminalColor,
+  hostColorKey,
+  placeColor,
   resolveTerminal,
+  workspaceColorKey,
   TERMINAL_COLORS,
   terminalColor,
   terminalColorKey,
+  type TerminalColor,
 } from "./terminalColor";
 import { keepColors } from "./useTerminalColors";
 
@@ -76,5 +80,42 @@ describe("terminal colour", () => {
     const changed = { "studio:w1:t1": "pink" } as const;
     expect(keepColors(last, changed)).toBe(changed);
     expect(keepColors(last, {})).toEqual({});
+  });
+});
+
+describe("place colours", () => {
+  test("a workspace's is saved under its card key, a host's under its own", () => {
+    expect(workspaceColorKey("studio", "w1")).toBe("studio:w1");
+    expect(hostColorKey("studio")).toBe("@host:studio");
+    // A host key can never be a card key, which starts with "<connection>:".
+    expect(hostColorKey("studio").startsWith("studio:")).toBe(false);
+  });
+
+  test("a place shows only a chosen palette colour; none means its default", () => {
+    const colors = { "studio:w1": "teal", "@host:studio": "mauve" } as const;
+    expect(placeColor(colors as never, "studio:w1")).toBe("teal");
+    expect(placeColor(colors as never, "@host:studio")).toBeNull();
+    expect(placeColor({}, "studio:w2")).toBeNull();
+  });
+
+  test("tabs inherit a workspace's colour but never the host's", () => {
+    const other = { ...tab("w2:t1"), workspaceId: "w2" };
+    const fallback = defaultTerminalColor(terminalColorKey(other));
+    // A host colour unlike the tab's default, so inheriting it would show.
+    const hostColor = TERMINAL_COLORS.find(
+      (c) => c !== fallback && c !== "teal",
+    )!;
+    const colors: Record<string, TerminalColor> = {
+      "studio:w1": "teal",
+      "@host:studio": hostColor,
+    };
+    expect(terminalColor(colors, tab("w1:t1"))).toBe("teal");
+    expect(terminalColor(colors, other)).toBe(
+      defaultTerminalColor(terminalColorKey(other)),
+    );
+    // A tab's own colour is never overwritten by either.
+    expect(
+      terminalColor({ ...colors, "studio:w1:t1": "red" }, tab("w1:t1")),
+    ).toBe("red");
   });
 });

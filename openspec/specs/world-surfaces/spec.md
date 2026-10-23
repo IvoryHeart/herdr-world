@@ -1708,6 +1708,27 @@ and in the terminal window's menu, as well as in the Spaces tab menu, the Town
 peek and Board. Every picker SHALL be the same palette with **Default colour**,
 opened as a transient layer.
 
+Workspaces and hosts SHALL have colours of their own from the same palette,
+saved by the World service with terminal colours: a workspace's under its Board
+card key, a host's under a key no card can have. A workspace's colour SHALL be
+offered and shown on its Board card, on its Town room (carpet and room card,
+with the picker beside the room's name) and in the Spaces sidebar (a dot before
+its name, the palette in its menu). A host's colour SHALL be offered and shown
+on its Town building (roof, with the picker on its reception board), its Board
+zone and its Spaces sidebar header. Without one, a workspace SHALL show its
+default (Town's carpet, no Board tint) and a host its theme. A tab without a
+colour of its own SHALL take its workspace's chosen colour, then its own
+default; a host's colour SHALL NOT be inherited, so tabs keep their varied
+defaults. No inherited colour SHALL overwrite a chosen one, and each place's
+own colour MAY be reset.
+
+#### Scenario: Colour a workspace and a host
+
+- **WHEN** the user picks teal for a workspace and pink for its host
+- **THEN** the workspace's Town carpet, Board card and Spaces dot show teal, its
+  tabs without a colour of their own show teal, the host's Town roof, Board zone
+  and Spaces header show pink, and no tab shows pink because of the host
+
 #### Scenario: Colour a tab in Spaces
 
 - **WHEN** the user picks pink from a tab's menu in Spaces
