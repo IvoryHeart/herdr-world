@@ -1,0 +1,156 @@
+/* Quest log and chip. Inside Town the window takes Town's palette. */
+
+.quest-log,
+.quest-chip {
+  --quest-active: var(--town-work, var(--accent));
+  --quest-done: var(--town-done, #3f9d55);
+  --quest-blocked: var(--town-wait, var(--warning-text));
+  --quest-paused: var(--town-muted, var(--muted));
+  --quest-flag: var(--town-accent, #d9a520);
+}
+
+.quest-log {
+  flex: 0 0 auto;
+  margin: 8px 10px 0;
+  padding: 6px 10px 8px;
+  border: 1px solid var(--border-soft);
+  border-left: 3px solid var(--quest-flag);
+  border-radius: 8px;
+  background: var(--town-panel, var(--bg));
+  color: var(--town-text, var(--text));
+  font-size: 13px;
+}
+
+.quest-log-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.quest-log-flag {
+  color: var(--quest-flag);
+}
+
+.quest-log-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.quest-log-count {
+  flex: none;
+  color: var(--town-muted, var(--muted));
+  font-variant-numeric: tabular-nums;
+}
+
+.quest-log-bar {
+  height: 6px;
+  margin-top: 6px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--border-soft);
+}
+
+.quest-log-bar > span {
+  display: block;
+  height: 100%;
+  background: var(--quest-active);
+  transition: width 0.3s ease;
+}
+
+.quest-log.is-done .quest-log-bar > span {
+  background: var(--quest-done);
+}
+
+.quest-log.is-blocked .quest-log-bar > span {
+  background: var(--quest-blocked);
+}
+
+.quest-log.is-paused .quest-log-bar > span {
+  background: var(--quest-paused);
+}
+
+.quest-log-steps {
+  max-height: 168px;
+  margin: 6px 0 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.quest-log-steps li {
+  display: flex;
+  gap: 6px;
+  padding: 1px 0;
+  line-height: 1.35;
+}
+
+.quest-log-mark {
+  flex: none;
+  width: 1em;
+  text-align: center;
+}
+
+.quest-log-steps .is-done {
+  color: var(--town-muted, var(--muted));
+}
+
+.quest-log-steps .is-done .quest-log-mark {
+  color: var(--quest-done);
+}
+
+.quest-log-steps .is-active {
+  font-weight: 600;
+}
+
+.quest-log-steps .is-active .quest-log-mark {
+  color: var(--quest-active);
+}
+
+.quest-log-steps .is-blocked .quest-log-mark {
+  color: var(--quest-blocked);
+}
+
+.quest-log-meta {
+  margin: 6px 0 0;
+  color: var(--town-muted, var(--muted));
+  font-size: 11px;
+}
+
+.quest-chip {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 3px;
+  padding: 0 5px;
+  border: 1px solid currentcolor;
+  border-radius: 999px;
+  color: var(--quest-active);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  line-height: 16px;
+  white-space: nowrap;
+}
+
+.quest-chip.is-done {
+  color: var(--quest-done);
+}
+
+.quest-chip.is-blocked {
+  color: var(--quest-blocked);
+}
+
+.quest-chip.is-paused {
+  color: var(--quest-paused);
+}

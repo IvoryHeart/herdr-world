@@ -45,6 +45,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     the one seated there. **Menu → Town opens** chooses whether that tap opens
     the chat (the default) or the terminal; either way the tap does not mark
     finished work reviewed. **Open terminal** in the peek does, as before.
+  - A seated agent with a quest (its own todo list, plan, Codex goal or loop)
+    shows a flag and progress bar at its seat in a room or at a desk.
   - **Open terminal** in the card's header opens the live pane; **Inspector**
     opens files and changes. **Next** opens the next waiting agent's window,
     then finished agents' if none wait.
@@ -101,6 +103,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   carries strung notes along. Zoomed out, workspaces show a square per pane.
   - Tabs list each pane as a row; plain-shell tabs look like terminals; only a
     working agent's tab (or the selected one) pulses (a ⋯ setting).
+  - An agent with a quest shows a ⚑ chip with its progress (such as 2/5, or
+    Loop ×3); hover it for the quest and the current step.
   - **+** on a workspace opens New tab (Terminal, Claude or Codex, an optional
     name, then Create; a note's Start an agent uses the same dialog); **+** on a host creates a workspace. Workspace cards count their
     agents by status; tabs show their terminal colour and workspaces take a
@@ -438,6 +442,11 @@ See [resource ownership](docs/ARCHITECTURE.md#workspace-resource-ownership).
   it cannot read the conversation it shows the reason with the matching action:
   copy the integration command, link a Codex session, **Refresh** or **Open
   Terminal**. **Details** opens the History view below. See [Chat](docs/CHAT.md).
+- Above the conversation, Chat shows the agent's quest in a foldable log: its
+  title, a progress bar and each objective as pending, active, done or blocked,
+  read without a model from the harness's own todos (Claude Code `TodoWrite` and
+  tasks, Codex `update_plan`, Kimi `SetTodoList`), approved plan, Codex goal or
+  `/loop`. See [Quests](docs/CHAT.md#quests).
 - In Details, switch between **Chat** and **Timeline**. Chat pairs tool calls
   with results and shares Ranger's conversation minimap; Timeline keeps individual
   records available. Use **Link Codex session** to preview a full conversation UUID
