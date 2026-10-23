@@ -549,11 +549,11 @@ function InspectorResources({
 
   return createPortal(
     // Town's window is always the dark panel, so its code viewers are too.
-    townSkin ? (
-      <ThemeScope.Provider value="dark">{content}</ThemeScope.Provider>
-    ) : (
-      content
-    ),
+    // The provider stays in the tree in every view, so switching views does
+    // not remount the Inspector.
+    <ThemeScope.Provider value={townSkin ? "dark" : null}>
+      {content}
+    </ThemeScope.Provider>,
     portalOwner,
     worldInspectorWindowId(conversation),
   );

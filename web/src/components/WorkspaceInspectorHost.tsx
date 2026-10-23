@@ -281,9 +281,9 @@ export function WorkspaceInspectorHost({
   const diffViewerRef = useRef<DiffViewerPanelHandle | null>(null);
   const splitId = useId();
   const [hostWidth, setHostWidth] = useState(0);
-  // The widest window width at which the bar was found crowded; below it a
-  // managed window's views join ⋯.
-  const [crowdedBelow, setCrowdedBelow] = useState(360);
+  // The window width the bar needs with its views inline and a readable
+  // name; below it a managed window's views join ⋯.
+  const [barNeeds, setBarNeeds] = useState(360);
   const headRef = useRef<HTMLElement | null>(null);
   const { mobile } = useLayoutPreferences();
   const [fileDiffState, setFileDiffState] = useState<{
@@ -490,24 +490,55 @@ export function WorkspaceInspectorHost({
 
   const viewsInMenu = Boolean(
     windowControls &&
-      (windowControls.compact || (hostWidth > 0 && hostWidth < crowdedBelow)),
+      (windowControls.compact || (hostWidth > 0 && hostWidth < barNeeds)),
   );
-  // A bar whose controls overflow, or whose name is squeezed below a
-  // readable width, moves its views into ⋯ at this width and narrower. The
-  // Town skin's larger targets crowd well before 360px.
+  // While the views are inline, measure what the bar needs: everything but
+  // the name, plus 120px so the name stays readable. The Town skin's larger
+  // targets need more than 360px. It is a property of the bar's content, so
+  // a passing overflow (a zoom, a font still loading) does not stick.
   useLayoutEffect(() => {
     const head = headRef.current;
     if (!windowControls || viewsInMenu || !head || hostWidth <= 0) return;
     const identity = head.querySelector<HTMLElement>(
       ".workspace-inspector-agent-identity, .workspace-inspector-identity",
     );
-    if (
-      head.scrollWidth > head.clientWidth + 1 ||
-      (identity && identity.clientWidth < 120)
-    ) {
-      setCrowdedBelow(hostWidth + 1);
-    }
-  }, [windowControls, viewsInMenu, hostWidth, state.view]);
+    if (!identity) return;
+    // The bar needs its other controls, the gaps and padding, and 120px for
+    // the name. View labels show only at 640px and wider, so they are left
+    // out; otherwise a window that narrows keeps a wide need.
+    const style = getComputedStyle(head);
+    const shown = [...head.children].filter(
+      (child): child is HTMLElement =>
+        child instanceof HTMLElement && child.offsetWidth > 0,
+    );
+    const labels = [
+      ...head.querySelectorAll<HTMLElement>(".workspace-inspector-tab-label"),
+    ].reduce(
+      (width, label) =>
+        width +
+        label.offsetWidth +
+        (label.offsetWidth
+          ? parseFloat(getComputedStyle(label.parentElement!).columnGap) || 0
+          : 0),
+      0,
+    );
+    const needs = Math.max(
+      360,
+      Math.ceil(
+        shown.reduce(
+          (width, child) =>
+            child === identity ? width : width + child.offsetWidth,
+          0,
+        ) -
+          labels +
+          120 +
+          (parseFloat(style.columnGap) || 0) * (shown.length - 1) +
+          parseFloat(style.paddingLeft) +
+          parseFloat(style.paddingRight),
+      ),
+    );
+    if (Math.abs(needs - barNeeds) > 1) setBarNeeds(needs);
+  }, [windowControls, viewsInMenu, hostWidth, barNeeds, state.view]);
 
   // The line under the name says where this is; it opens the repository's
   // branch and PR status, so the bar needs no separate button or card.
