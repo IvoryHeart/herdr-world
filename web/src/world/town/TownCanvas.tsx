@@ -106,6 +106,7 @@ import {
   type TownDeskBadge,
 } from "./townBadges";
 import "./town.css";
+import "./townTeams.css";
 
 /** A place's colour in the shared picker (ColorSwatch.tsx). */
 export type PlaceColorChoice = {
