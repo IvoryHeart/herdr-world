@@ -402,6 +402,25 @@ reconciliation apply unchanged. CLI results retain the real move outcome and
 confirmed locations: Done, Partly done, Not done, or Unknown. Failure returns a
 nonzero exit plus the structured result; Unknown is never automatically retried.
 
+### Groups panel
+
+`groups/GroupsWindow.tsx` mounts in WorldControlPlane inside the existing
+WorldPanels provider. Actions opens it with the `herdr-world:groups-open` event;
+spatial signs can supply the stable view key. It reuses the window manager and
+panel chrome. `useGroups` subscribes to existing runtime/source observations and
+owns only its reference-counted Board subscription; it never stops the shell's
+runtime owner. The detail reuses browser-only PullRequestCard controls.
+
+`shared/groupOps.ts` supplies the existing Group operation types to both browser
+and service. Forms and confirmations pass the reviewed Board revision through
+BoardDocumentStore and the optional `world.board.patch` revision parameter to
+BoardStore.patchIf. A stale revision returns current state/conflict without retry.
+Legacy callers omitting a revision keep their existing operation-specific rules.
+Browser edits without an explicit sender claim retain unknown attribution; the
+crew rule is explanatory, not a principal check. Ambiguous member inspection
+revalidates connection, generation, terminal, pane and session before opening,
+and never persists a tie-break or changes effective membership.
+
 ## Agent CLI
 
 `herdr-world --skill` is the agent guide (`server/src/cli/world-skill.ts`).

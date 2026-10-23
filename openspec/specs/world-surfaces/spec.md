@@ -1843,6 +1843,26 @@ NOT mutate source records or grant downstream action authority.
 - **WHEN** a pane's old-generation or old-session work link remains cached
 - **THEN** the replacement occupant's Group does not count that link
 
+### Requirement: Groups roster and detail
+
+World SHALL offer Actions → Groups in its existing panel window, with kind
+filters All/Pod/Team/Room/Desk and a phone roster/detail Back flow. Rows SHALL
+show kind/name, rolled-up status, lead/member/reviewer indicators, source-qualified
+open PR counts and the first Now item. Detail SHALL reuse linked PR cards and
+show member roles, the full ordered Now list and bounded recent attribution.
+World-owned Group edits SHALL support explicit membership/role changes,
+name/Now/limit edits, confirmed deletion and complete explicit Team promotion.
+Exclusive-role transfers SHALL ask first. A form or confirmation SHALL bind to
+the Board revision reviewed and SHALL refuse a stale write without automatic retry.
+Projected membership SHALL remain owned by Herdr. An ambiguous member's Inspect
+control SHALL revalidate the qualified current match without persisting a resolved
+address or contributing that match to membership roll-ups.
+
+#### Scenario: Another client changes the roster during a role confirmation
+
+- **WHEN** the user confirms a Group edit against an older Board revision
+- **THEN** World returns the current document/conflict and changes no membership
+
 ### Requirement: Group CLI
 
 The World CLI SHALL expose Group create/add/remove/lead/reviewers/now/list/show/

@@ -414,6 +414,22 @@ related cards and groups a tab dropped on another tab, or chosen with
 **Group…** and a tap; **Ungroup** undoes it. Existing saved magnetic groups
 migrate automatically to kind Team; these controls continue to act on Teams.
 
+### Groups
+
+**Actions → Groups** opens the existing movable panel window (full screen on
+phones). Filter All/Pod/Team/Room/Desk, then open a row for member roles, live
+status, linked open PR cards, the ordered Now list and recent sender attribution.
+The roster shows shared reviewers with rings and warns above the Pod's open-PR
+limit without blocking edits. Unavailable work is unknown; failed refreshes are
+labelled cached. Away and ambiguous addresses never contribute live work/status.
+
+Create Teams/Pods, add/remove members, edit roles, name/Now/limit, delete with
+confirmation or explicitly promote a Team with a complete current address mapping.
+Exclusive-role transfers ask first. An edit or confirmation based on an older
+Board revision is refused and refreshes the roster. Ambiguous member actions
+inspect a qualified match without treating it as resolved. Room/Desk membership
+belongs to Herdr and uses Town's move gestures or guarded CLI moves.
+
 ### Agent CLI (`herdr-world --skill`)
 
 Agents change World objects themselves from their pane, through the running

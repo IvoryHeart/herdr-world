@@ -1,0 +1,253 @@
+import { useState } from "react";
+import { flushSync } from "react-dom";
+import { createRoot } from "react-dom/client";
+import { bridge } from "../../api";
+import {
+  WorldPanelsContext,
+  useWorldPanelRegistry,
+  WorldPanelWindow,
+} from "../windows/WorldPanel";
+import { WindowFrame } from "../windows/WindowFrame";
+import { WindowSurface } from "../windows/WindowSurface";
+import { useWindowManager } from "../windows/useWindowManager";
+import { buildWorldObject, type WorldObject } from "../worldObject";
+import { parseWorldSnapshotResult, worldRuntimeStore } from "../runtimeStore";
+import { GroupsWindow } from "./GroupsWindow";
+import { openGroups } from "./groupActions";
+import "../../styles/tokens.css";
+import "../../styles/base.css";
+import "../../components/WorkspaceAgentRows.css";
+import "../world.css";
+
+Object.assign(bridge, {
+  call: async (method: string, params?: unknown) => {
+    const value = await (
+      await fetch("/rpc", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ method, params }),
+      })
+    ).json();
+    if (value?.error) throw new Error(value.error);
+    return value;
+  },
+  connection: () => ({ isCurrent: () => true }),
+  onControl: () => () => {},
+  onStatus: () => () => {},
+});
+// Cover the plain-HTTP LAN path where randomUUID is unavailable.
+Object.defineProperty(Crypto.prototype, "randomUUID", {
+  value: undefined,
+  configurable: true,
+});
+
+function Fixture({ world }: { world: WorldObject }) {
+  const registry = useWorldPanelRegistry();
+  const stage = { width: innerWidth, height: innerHeight };
+  const { state, dispatch } = useWindowManager(
+    registry.panels.map(({ id, label }) => ({ id, label })),
+    stage,
+  );
+  const [inspected, setInspected] = useState("");
+  const compact = innerWidth < 700;
+  return (
+    <WorldPanelsContext.Provider value={registry}>
+      <p data-inspected={inspected}>Example crew</p>
+      <GroupsWindow world={world} onOpenTerminal={setInspected} />
+      <WindowSurface
+        state={state}
+        dispatch={dispatch}
+        stage={stage}
+        compact={compact}
+        onLayer={() => {}}
+      >
+        {({ entry, geometry, stage, workArea, zIndex, active }) => {
+          const panel = registry.panels.find((panel) => panel.id === entry.id);
+          return panel ? (
+            <WindowFrame
+              key={entry.id}
+              id={entry.id}
+              label={`${panel.label} window`}
+              geometry={geometry}
+              stage={stage}
+              workArea={workArea}
+              zIndex={zIndex}
+              active={active}
+              compact={compact}
+              onRaise={() => dispatch({ type: "raise", id: entry.id })}
+              onPlace={(rect) =>
+                dispatch({ type: "place", id: entry.id, rect })
+              }
+              onSnap={(target) =>
+                dispatch({ type: "snap", id: entry.id, target })
+              }
+              onMaximize={() => dispatch({ type: "maximize", id: entry.id })}
+            >
+              <WorldPanelWindow
+                label={panel.label}
+                onBody={registry.panelBodyRef(entry.id)}
+                controls={{
+                  compact,
+                  maximized: entry.maximized,
+                  onMinimize: () =>
+                    dispatch({ type: "minimize", id: entry.id }),
+                  onMaximize: () =>
+                    dispatch({ type: "maximize", id: entry.id }),
+                  onClose: panel.onClose,
+                  onSnap: (target) =>
+                    dispatch({ type: "snap", id: entry.id, target }),
+                  onFloat: () => dispatch({ type: "float", id: entry.id }),
+                  back: { label: "Back to Town" },
+                }}
+              />
+            </WindowFrame>
+          ) : null;
+        }}
+      </WindowSurface>
+    </WorldPanelsContext.Provider>
+  );
+}
+const failures: string[] = [];
+const check = (condition: unknown, message: string) => {
+  if (!condition) failures.push(message);
+};
+const waitFor = (condition: () => unknown) =>
+  new Promise<void>((resolve, reject) => {
+    if (condition()) {
+      resolve();
+      return;
+    }
+    const observer = new MutationObserver(() => {
+      if (condition()) {
+        observer.disconnect();
+        clearTimeout(timer);
+        resolve();
+      }
+    });
+    const timer = setTimeout(() => {
+      observer.disconnect();
+      reject(new Error("Groups UI did not reach expected state"));
+    }, 10_000);
+    observer.observe(document, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      characterData: true,
+    });
+  });
+const buttons = () => [
+  ...document.querySelectorAll<HTMLButtonElement>("button"),
+];
+const click = (text: string) => {
+  const button = buttons().find(
+    (button) => button.textContent?.trim() === text,
+  );
+  if (!button) throw new Error(`missing button ${text}`);
+  button.click();
+};
+async function run() {
+  const payload = await (await fetch("/snapshot")).json();
+  const observed = parseWorldSnapshotResult(payload)!;
+  const world = buildWorldObject(observed.connections);
+  worldRuntimeStore.start();
+  await worldRuntimeStore.refresh();
+  const root = createRoot(document.getElementById("root")!);
+  flushSync(() => root.render(<Fixture world={world} />));
+  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+  openGroups();
+  await waitFor(
+    () => document.querySelectorAll(".group-roster-row").length > 3,
+  );
+  check(
+    Boolean(document.querySelector(".world-managed-window .groups-window")),
+    "Groups must portal into the existing managed panel",
+  );
+  check(
+    document.documentElement.scrollWidth <= innerWidth,
+    "Groups roster must fit the viewport",
+  );
+  if (new URL(location.href).searchParams.has("preview")) {
+    if (new URL(location.href).searchParams.has("detail")) {
+      buttons()
+        .find(
+          (button) =>
+            button.classList.contains("group-roster-row") &&
+            button.textContent?.includes("Pod · Chat"),
+        )!
+        .click();
+      await waitFor(() => document.querySelector(".group-detail"));
+    }
+    document.body.dataset.ready = "true";
+    return;
+  }
+  click("Pod");
+  await waitFor(
+    () => document.querySelectorAll(".group-roster-row").length === 2,
+  );
+  buttons()
+    .find(
+      (button) =>
+        button.classList.contains("group-roster-row") &&
+        button.textContent?.includes("Pod · Chat"),
+    )!
+    .click();
+  await waitFor(() => document.querySelector(".group-detail"));
+  check(
+    document
+      .querySelector(".group-detail")
+      ?.textContent?.includes("Away · last seen unavailable"),
+    "away membership must not invent a last seen time",
+  );
+  check(
+    document
+      .querySelector(".group-detail")
+      ?.textContent?.includes("membership remains ambiguous"),
+    "duplicate names remain ambiguous",
+  );
+  await waitFor(() => document.querySelector(".group-pr-pill.is-warning"));
+  check(
+    document.querySelectorAll(".group-detail .pr-card").length === 3,
+    "Groups reuse linked PR cards",
+  );
+  click("Add…");
+  const select =
+    document.querySelector<HTMLSelectElement>(".group-edit select")!;
+  const setter = Object.getOwnPropertyDescriptor(
+    HTMLSelectElement.prototype,
+    "value",
+  )!.set!;
+  setter.call(select, "connection-a\0terminal-1");
+  flushSync(() => select.dispatchEvent(new Event("change", { bubbles: true })));
+  document.querySelector<HTMLFormElement>(".group-edit")!.requestSubmit();
+  await waitFor(() =>
+    buttons().some((button) => button.textContent === "Confirm"),
+  );
+  await fetch("/advance", { method: "POST" });
+  click("Confirm");
+  await waitFor(() =>
+    document.querySelector("[role=alert]")?.textContent?.includes("changed"),
+  );
+  check(
+    !document
+      .querySelector(".group-detail .group-member-name")
+      ?.textContent?.includes("bPresent"),
+    "stale confirmation must not transfer a new role",
+  );
+  click("Back to Groups");
+  await waitFor(() => document.querySelector(".group-roster"));
+  check(
+    document
+      .querySelector(".group-roster")
+      ?.textContent?.includes("Town updated"),
+    "revision conflict refreshes the roster",
+  );
+  root.unmount();
+  worldRuntimeStore.stop();
+  await fetch("/result", { method: "POST", body: JSON.stringify(failures) });
+}
+run().catch(async (error) => {
+  await fetch("/result", {
+    method: "POST",
+    body: JSON.stringify([...failures, String(error)]),
+  });
+});

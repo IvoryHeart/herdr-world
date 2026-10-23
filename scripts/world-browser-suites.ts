@@ -21,7 +21,7 @@ export const worldTimedSuites = [
 // bounds the slowest shard, so more machines would not finish sooner. Per-file
 // timings in CI artifacts guide later rebalancing.
 export const worldBrowserShards = [
-  ["SharedViewCreation", "WorldViewErrorBoundary"], // 72
+  ["SharedViewCreation", "WorldViewErrorBoundary", "groups/GroupsWindow"], // 72
   ["HostsFilter.resources", "HostsFilter.inspector-timeout"], // 60
   ["HostsFilter", "HostsFilter.cold", "HostsFilter.timeouts"], // 60
   [

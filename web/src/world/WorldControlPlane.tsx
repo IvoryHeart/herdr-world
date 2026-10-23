@@ -13,6 +13,7 @@ import {
   WORLD_AGENT_PROFILES_EVENT,
 } from "./agentProfiles";
 import { DeskView } from "./DeskView";
+import { GroupsWindow } from "./groups/GroupsWindow";
 import {
   floatingTerminalGeometryId,
   writeFloatingTerminalDock,
@@ -273,6 +274,10 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
       <AgentDialogs
         world={aggregateWorld}
         onOpenTerminal={(nodeId) => void openTerminalById(nodeId)}
+      />
+      <GroupsWindow
+        world={aggregateWorld}
+        onOpenTerminal={(id) => void openTerminalById(id)}
       />
       <CreateWorkspaceDialog
         open={workspaceCreationOpen}

@@ -1,13 +1,11 @@
+import type { GroupOp } from "../../../../shared/groupOps";
 import { useSyncExternalStore } from "react";
 import {
   bridge,
   type BridgeControlMsg,
   type ConnectionStatus,
 } from "../../api";
-import type {
-  RelationsDocument,
-  TerminalRef,
-} from "../../../../shared/relations";
+import type { RelationsDocument } from "../../../../shared/relations";
 import type { StoredInterest } from "../../../../shared/interest";
 
 /**
@@ -135,13 +133,7 @@ export type BoardOp =
       end: "from" | "to";
       witness: string[];
     }
-  | {
-      op: "group.join";
-      id: string;
-      members: TerminalRef[];
-      target: TerminalRef[];
-    }
-  | { op: "group.leave"; members: TerminalRef[] };
+  | GroupOp;
 
 export type BoardDocumentState = {
   document: BoardDocument | null;
@@ -223,11 +215,12 @@ export class BoardDocumentStore {
    * Apply operations in order, one patch at a time. A conflict replaces the
    * local document with the service's and returns its message.
    */
-  patch(ops: BoardOp[]): Promise<string | null> {
+  patch(ops: BoardOp[], revision?: number): Promise<string | null> {
     const run = this.queue.then(async () => {
       try {
         const result = (await this.client.call("world.board.patch", {
           ops,
+          ...(revision === undefined ? {} : { revision }),
         })) as {
           document?: unknown;
           conflict?: string;

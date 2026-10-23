@@ -6,3 +6,6 @@
   moves show the complete effect first and report observed outcomes.
 - Import a Pod crew table once with explicit confirmation and address mappings;
   render World's current roster as Markdown without file synchronization.
+- Open Actions → Groups for a panel roster and detail with kind filters,
+  member/role management, linked PR cards, Now and recent attribution; stale
+  confirmations refresh the roster without changing membership.

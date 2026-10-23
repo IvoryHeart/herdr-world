@@ -333,7 +333,10 @@ function apply(ops: BoardOp[]) {
       if (op.color) colors[op.key] = op.color;
       else delete colors[op.key];
       next.layout.colors = colors;
-    } else if (op.op === "group.join" || op.op === "group.leave") {
+    } else if (
+      (op.op === "group.join" && "target" in op) ||
+      (op.op === "group.leave" && "members" in op)
+    ) {
       const relations = next.relations ?? { spawns: [], groups: [] };
       relations.groups =
         op.op === "group.join"

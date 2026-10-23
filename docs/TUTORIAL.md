@@ -445,6 +445,28 @@ supply `--mapping` as a JSON object from that exact table name to its qualified
 then on, edit World through the CLI and render the table with `herdr-world group
 list --kind pod --markdown`; there is no two-way file synchronization.
 
+### Organize Groups
+
+Open **Actions → Groups**. Use the kind chips to find a Pod, Team, Room or Desk;
+tap a row for its members, status, open PR cards and Now list. On a phone, Back
+returns to the roster or closes the panel. On desktop the panel uses the same
+move, snap, maximize and window menu as your other World windows.
+
+Choose **New…** for a Pod or Team. In a Pod, **Add…** accepts a current agent or
+an explicit qualified address, including an away agent. **Roles…** changes roles;
+lead/reviewer edits follow the owner/FirstMate crew rule. Moving an exclusive
+lead/builder role asks first and keeps any other roles. An ambiguous address
+remains ambiguous: **Inspect** opens one current match; it does not pick its
+identity for membership. Rename duplicates in Herdr or explicitly replace the
+member with a distinct address.
+
+**Edit pod…** changes its name, Now list and warning limit. **Promote to Pod…**
+shows every terminal-to-address mapping before preserving a Team's identity as a
+Pod. **Delete…** asks first and leaves agents running. If someone edits the Board
+while a form or confirmation is open, review the refreshed Group before trying
+again. Recent changes retain sender claims and their basis, or unknown attribution
+when no claim was supplied.
+
 ### Use Desk: answer, review and follow work
 
 <a id="desk"></a>

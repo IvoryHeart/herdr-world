@@ -117,6 +117,24 @@ prove every external Herdr interleaving, or extend the bounded history into an
 audit. The revision-only publisher extraction has no contract impact: it preserves the exact type/revision payload, explicit send context, synchronous error behavior and live client iteration. Full required registry/consumer verification remains a batch-close check.
 
 
+### Groups roster and revision-bound edits (Q43)
+
+Group action tests cover explicit pooled-role transfer plans, unknown browser
+sender attribution, projected-owner refusal, complete promotion admission and
+unavailable PR counts. The real BoardDocumentStore/RPC/BoardStore adapter test
+proves stale reviewed revisions cannot delete or change a newer Group and return
+the current document. The panel's registered browser suite uses real panel/window
+components and the actual service Group store/handler: kind filters, away and
+ambiguous states, linked PR warnings and a competing edit during confirmation at
+wide/phone sizes. Browser execution and five-view screenshots are batch-close
+requirements; quick item checks do not claim those outcomes before execution.
+
+The shared GroupOp move is type-only and has no contract impact. The optional
+Board revision guard preserves legacy omitted-revision behavior and synchronous
+unmatched namespace decline. Direct finite adapter cases fit this existing atomic
+revision mechanism; actual panel, gesture and device behavior require the browser
+consumer evidence separately.
+
 ## Review and remaining obligations
 
 Evidence statuses describe concrete decisions; independent acceptance is recorded separately. Review 5516249164 accepts every Q01–Q43 bounded mapping and alternative. Mandatory consumers and excluded claims remain binding. Final implementation/gate/resource acceptance is recorded in [review 5517420140](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5517420140); owner-approved PR #188 merged as `481ca1e8`. Mandatory consumers and excluded claims remain binding. Review must inspect the intended requirement, model/reducer domain, adapter fidelity, actual consumer tests and excluded claims. Q21 has its separate bounded exhaustive contract. Q26–Q28 retain their separately accepted Ranger storage/permission assumptions.
