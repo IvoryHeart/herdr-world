@@ -8,6 +8,21 @@ import {
   resolveTerminalColor,
   tabCardKey,
 } from "../../../shared/terminalColor";
+import {
+  joinGroup,
+  leaveGroups,
+  RELATION_LIMITS,
+  terminalKey,
+  type RelationGroup,
+  type RelationsDocument,
+  type SpawnClaim,
+  type TerminalRef,
+} from "../../../shared/relations";
+import {
+  isInterestKey,
+  STORED_INTERESTS,
+  type StoredInterest,
+} from "../../../shared/interest";
 
 /**
  * Board's saved state: layout, notes and strings. One document for the World
@@ -72,6 +87,8 @@ export type BoardLayoutDocument = {
    * its cell (null until Town first places it), and its agents stay at it.
    */
   desk_pins: Record<string, DeskPin>;
+  /** Terminal key (shared/interest.ts) to the viewer's muted or focused. */
+  interest: Record<string, StoredInterest>;
 };
 /** A desk's cell in its Town room: column and row, from the top left. */
 export type DeskCell = { col: number; row: number };
@@ -82,6 +99,8 @@ export type BoardDocument = {
   layout: BoardLayoutDocument;
   notes: BoardNote[];
   strings: BoardString[];
+  /** Which terminals know each other (shared/relations.ts). */
+  relations: RelationsDocument;
 };
 
 export type BoardOp =
@@ -129,11 +148,32 @@ export type BoardOp =
   | { op: "desk.unpin"; key: string }
   /** Record where Town put a pinned desk; only a desk still pinned, unplaced. */
   | { op: "desk.place"; key: string; cell: DeskCell }
+  /** Mute or focus an agent's terminal, or return it to watching with null. */
+  | { op: "interest.set"; key: string; interest: StoredInterest | null }
   | {
       op: "anchor.witness";
       string_id: string;
       end: "from" | "to";
       witness: string[];
+    }
+  | {
+      /** Group `members` with `target`'s group, or start one (`id`). */
+      op: "group.join";
+      id: string;
+      members: TerminalRef[];
+      target: TerminalRef[];
+    }
+  | { op: "group.leave"; members: TerminalRef[] }
+  | {
+      /** Service only: the spawn claims it saw on Herdr panes. */
+      op: "spawn.record";
+      claims: SpawnClaim[];
+    }
+  | {
+      /** Service only: drop claims and group members whose terminals closed. */
+      op: "relations.prune";
+      children: TerminalRef[];
+      members: TerminalRef[];
     }
   | {
       /** Service only: record which agent a pane end is for. */
@@ -161,7 +201,12 @@ export function clientBoardOps(ops: unknown): {
   const observed = new Map<string, ObservedAgent>();
   const clean = ops.map((op) => {
     if (!isObject(op)) fail("op must be an object");
-    if (op.op === "anchor.recipient") fail("unknown operation");
+    if (
+      op.op === "anchor.recipient" ||
+      op.op === "spawn.record" ||
+      op.op === "relations.prune"
+    )
+      fail("unknown operation");
     if (op.op !== "string.put" || !isObject(op.string)) return op as BoardOp;
     const string = op.string;
     const strip = (end: unknown, side: "from" | "to") => {
@@ -239,9 +284,11 @@ export function emptyBoardDocument(): BoardDocument {
       folded: [],
       colors: {},
       desk_pins: {},
+      interest: {},
     },
     notes: [],
     strings: [],
+    relations: { spawns: [], groups: [] },
   };
 }
 
@@ -320,6 +367,17 @@ function deskPins(value: unknown): Record<string, DeskPin> {
   }
   return out;
 }
+function interests(value: unknown): Record<string, StoredInterest> {
+  if (value === undefined) return {};
+  if (!isObject(value)) fail("interest must be an object");
+  const out: Record<string, StoredInterest> = {};
+  for (const [key, entry] of Object.entries(value)) {
+    text(key, "interest key", BOARD_LIMITS.key);
+    if (!STORED_INTERESTS.includes(entry as StoredInterest)) fail("interest");
+    out[key] = entry as StoredInterest;
+  }
+  return out;
+}
 function anchor(value: unknown): BoardAnchor {
   if (!isObject(value)) fail("anchor must be an object");
   if (!KINDS.includes(value.kind as BoardAnchorKind)) fail("anchor kind");
@@ -368,6 +426,56 @@ function string(value: unknown): BoardString {
   };
 }
 
+function terminalRef(value: unknown): TerminalRef {
+  if (!isObject(value)) fail("terminal must be an object");
+  return {
+    connection_id: text(
+      value.connection_id,
+      "terminal connection",
+      BOARD_LIMITS.key,
+    ),
+    terminal_id: text(value.terminal_id, "terminal ID", BOARD_LIMITS.key),
+  };
+}
+function terminalRefs(value: unknown, what: string): TerminalRef[] {
+  if (!Array.isArray(value) || value.length > RELATION_LIMITS.members)
+    fail(`${what} must be a list of at most ${RELATION_LIMITS.members}`);
+  return value.map(terminalRef);
+}
+function count(value: unknown, what: string) {
+  if (!Number.isSafeInteger(value) || (value as number) < 0) fail(what);
+  return value as number;
+}
+function spawnClaim(value: unknown): SpawnClaim {
+  if (!isObject(value)) fail("spawn claim must be an object");
+  return {
+    child: terminalRef(value.child),
+    parent: terminalRef(value.parent),
+    source: text(value.source, "spawn source", BOARD_LIMITS.key),
+    generation: count(value.generation, "spawn generation"),
+    observed_at: count(value.observed_at, "spawn time"),
+  };
+}
+function group(value: unknown): RelationGroup {
+  if (!isObject(value)) fail("group must be an object");
+  return {
+    id: text(value.id, "group id", BOARD_LIMITS.key),
+    members: terminalRefs(value.members, "group members"),
+    created_at: count(value.created_at, "group time"),
+  };
+}
+function relations(value: unknown): RelationsDocument {
+  // Boards saved before relations have none.
+  if (value === undefined) return { spawns: [], groups: [] };
+  if (!isObject(value)) fail("relations must be an object");
+  if (!Array.isArray(value.spawns) || !Array.isArray(value.groups))
+    fail("relations");
+  return {
+    spawns: value.spawns.map(spawnClaim),
+    groups: value.groups.map(group),
+  };
+}
+
 /** Parse a stored document strictly; anything unexpected is rejected. */
 export function parseBoardDocument(value: unknown): BoardDocument {
   if (!isObject(value) || value.version !== 1) fail("unsupported version");
@@ -390,6 +498,8 @@ export function parseBoardDocument(value: unknown): BoardDocument {
       colors: colors(layout.colors),
       // Boards saved before desk pins have none.
       desk_pins: deskPins(layout.desk_pins),
+      // Boards saved before interest have none: every agent is watched.
+      interest: interests(layout.interest),
     },
     notes: notes.map((entry) => {
       const rev =
@@ -399,6 +509,7 @@ export function parseBoardDocument(value: unknown): BoardDocument {
       return note(entry, rev);
     }),
     strings: strings.map(string),
+    relations: relations(value.relations),
   };
   checkBounds(document);
   return document;
@@ -416,7 +527,8 @@ function checkBounds(document: BoardDocument) {
     Object.keys(layout.pinned).length +
     layout.folded.length +
     Object.keys(layout.colors).length +
-    Object.keys(layout.desk_pins).length;
+    Object.keys(layout.desk_pins).length +
+    Object.keys(layout.interest).length;
   if (entries > BOARD_LIMITS.layoutEntries)
     fail(`at most ${BOARD_LIMITS.layoutEntries} layout entries`);
   const noteIds = new Set(document.notes.map((entry) => entry.id));
@@ -427,6 +539,22 @@ function checkBounds(document: BoardDocument) {
     for (const side of [entry.from, entry.to])
       if ("note" in side && !noteIds.has(side.note))
         fail("a string refers to a missing note");
+  const { spawns, groups } = document.relations;
+  if (spawns.length > RELATION_LIMITS.spawns)
+    fail(`at most ${RELATION_LIMITS.spawns} spawn claims`);
+  if (groups.length > RELATION_LIMITS.groups)
+    fail(`at most ${RELATION_LIMITS.groups} groups`);
+  const children = new Set(spawns.map((claim) => terminalKey(claim.child)));
+  if (children.size !== spawns.length) fail("one spawn claim per child");
+  const grouped = new Set<string>();
+  for (const entry of groups) {
+    if (entry.members.length < 2) fail("a group has at least two members");
+    for (const member of entry.members) {
+      const key = terminalKey(member);
+      if (grouped.has(key)) fail("a terminal is in one group at a time");
+      grouped.add(key);
+    }
+  }
 }
 
 /* ---------- Store ---------- */
@@ -484,6 +612,13 @@ export class BoardStore {
     replaceDataFile(this.path, payload);
     this.document = next;
     return this.get();
+  }
+  /**
+   * Apply the operations only if the board is still at `revision`; null when
+   * a newer edit landed meanwhile, so the caller can read again.
+   */
+  patchIf(revision: number, ops: readonly BoardOp[]): BoardDocument | null {
+    return this.document.revision === revision ? this.patch(ops) : null;
   }
 }
 
@@ -568,6 +703,58 @@ function applyOp(next: BoardDocument, op: BoardOp, current: BoardDocument) {
       else fail("card colour");
       return;
     }
+    case "group.join": {
+      const members = terminalRefs(op.members, "members");
+      const target = terminalRefs(op.target, "target");
+      const id = text(op.id, "group id", BOARD_LIMITS.key);
+      try {
+        next.relations.groups = joinGroup(
+          next.relations.groups,
+          members,
+          target,
+          id,
+          Date.now(),
+        );
+      } catch (error) {
+        fail((error as Error).message);
+      }
+      return;
+    }
+    case "group.leave":
+      next.relations.groups = leaveGroups(
+        next.relations.groups,
+        terminalRefs(op.members, "members"),
+      );
+      return;
+    case "spawn.record": {
+      if (!Array.isArray(op.claims)) fail("claims must be a list");
+      const claims = op.claims.map(spawnClaim);
+      const replaced = new Set(claims.map((claim) => terminalKey(claim.child)));
+      const kept = next.relations.spawns.filter(
+        (claim) => !replaced.has(terminalKey(claim.child)),
+      );
+      // The oldest claims give way when the bound is reached.
+      next.relations.spawns = [...kept, ...claims].slice(
+        -RELATION_LIMITS.spawns,
+      );
+      return;
+    }
+    case "relations.prune": {
+      // A restarted Herdr closes every saved terminal at once.
+      const refs = (value: unknown, what: string) => {
+        if (!Array.isArray(value)) fail(`${what} must be a list`);
+        return value.map(terminalRef);
+      };
+      const children = new Set(refs(op.children, "children").map(terminalKey));
+      next.relations.spawns = next.relations.spawns.filter(
+        (claim) => !children.has(terminalKey(claim.child)),
+      );
+      next.relations.groups = leaveGroups(
+        next.relations.groups,
+        refs(op.members, "members"),
+      );
+      return;
+    }
     case "desk.pin": {
       const key = text(op.key, "desk key", BOARD_LIMITS.key);
       next.layout.desk_pins[key] = {
@@ -584,6 +771,15 @@ function applyOp(next: BoardDocument, op: BoardOp, current: BoardDocument) {
         next.layout.desk_pins[text(op.key, "desk key", BOARD_LIMITS.key)];
       const cell = deskCell(op.cell);
       if (pin && !pin.cell) pin.cell = cell;
+      return;
+    }
+    case "interest.set": {
+      const key = text(op.key, "interest key", BOARD_LIMITS.key);
+      if (!isInterestKey(key)) fail("interest key");
+      if (op.interest === null) delete next.layout.interest[key];
+      else if (STORED_INTERESTS.includes(op.interest))
+        next.layout.interest[key] = op.interest;
+      else fail("interest");
       return;
     }
     case "anchor.witness": {
@@ -707,6 +903,12 @@ function colorFollowOps(
   const { before, workspaceIds } = colors;
   const { source_workspace_id: from, workspace_id: to } = moved;
   if (!from || !to) return [];
+  // A spawned tab's inherited colour follows its terminals, not its tab ID.
+  if (
+    colors.inherited &&
+    !before[tabCardKey(connectionId, movedTab, workspaceIds)]
+  )
+    return [];
   const previousKey = tabCardKey(connectionId, movedTab, workspaceIds);
   const nextKey = tabCardKey(connectionId, moved.tab_id, workspaceIds);
   if (previousKey === nextKey) return [];
@@ -730,6 +932,8 @@ function colorFollowOps(
 export type MoveColors = {
   before: Readonly<Record<string, CardColor>>;
   workspaceIds: ReadonlySet<string>;
+  /** The browser showed the tab with its parent's colour (relations). */
+  inherited?: boolean;
 };
 
 /**
@@ -756,55 +960,5 @@ export function tabClosedOps(
   ]);
 }
 
-/**
- * After a move that failed (and maybe rolled back), panes can sit under new
- * IDs. Using only what the outcome positively observed (terminal to pane and
- * tab), a pane anchor whose witnessed terminal was seen takes that pane's ID,
- * and a tab anchor whose witnessed terminals were all seen in one tab takes
- * that tab.
- * Anchors with no observed terminal are left as they are (unresolved).
- */
-export function reconcileOps(
-  document: BoardDocument,
-  connectionId: string,
-  topology: readonly { terminal_id: string; pane_id: string; tab_id: string }[],
-): BoardOp[] {
-  const byTerminal = new Map(
-    topology.map((entry) => [entry.terminal_id, entry]),
-  );
-  const rewrite = (end: BoardEnd): BoardEnd => {
-    if (!("anchor" in end) || end.anchor.connection_id !== connectionId)
-      return end;
-    const { anchor } = end;
-    const seen = anchor.witness.flatMap((terminal) => {
-      const entry = byTerminal.get(terminal);
-      return entry ? [entry] : [];
-    });
-    if (!seen.length) return end;
-    if (anchor.kind === "pane") {
-      const pane = seen[0]!.pane_id;
-      return pane === anchor.native_id
-        ? end
-        : { anchor: { ...anchor, native_id: pane } };
-    }
-    if (anchor.kind === "tab") {
-      // Only when every witnessed terminal was seen, all in one tab: a
-      // partial observation may have missed panes still in the old tab.
-      if (seen.length !== anchor.witness.length) return end;
-      const tabs = new Set(seen.map((entry) => entry.tab_id));
-      const [tab] = [...tabs];
-      return tabs.size === 1 && tab !== anchor.native_id
-        ? { anchor: { ...anchor, native_id: tab! } }
-        : end;
-    }
-    return end;
-  };
-  const ops: BoardOp[] = [];
-  for (const string of document.strings) {
-    const from = rewrite(string.from),
-      to = rewrite(string.to);
-    if (from !== string.from || to !== string.to)
-      ops.push({ op: "string.put", string: { ...string, from, to } });
-  }
-  return ops;
-}
+// Moved out so this module stays within the size ratchet; importers keep it.
+export { reconcileOps } from "./board-reconcile";

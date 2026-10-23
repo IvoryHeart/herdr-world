@@ -1,5 +1,11 @@
 import { expect, test } from "bun:test";
-import { diffHunks, matchMoves, normalize } from "./move-check";
+import {
+  diffHunks,
+  matchMoves,
+  normalize,
+  type Plumbing,
+  statementLines,
+} from "./move-check";
 
 const diff = (...lines: string[]) => lines.join("\n");
 const file = (from: string, to: string, ...body: string[]) => [
@@ -223,4 +229,140 @@ test("blocks moved to another file out of their order are reported", () => {
   expect(report.runs).toHaveLength(1);
   expect(report.lost).toHaveLength(3);
   expect(report.extra).toHaveLength(3);
+});
+
+test("import statements and every member of a multi-line list are found in a file", () => {
+  const source = [
+    'import { a } from "./a";',
+    "import {",
+    "  type NotificationTarget,",
+    "  helper,",
+    '} from "./store";',
+    'export { b } from "./b";',
+    'export * from "./c";',
+    "const value = 1;",
+    "export function keep() {}",
+  ].join("\n");
+  expect([...statementLines(source)]).toEqual([1, 2, 3, 4, 5, 6, 7]);
+});
+
+test("a changed member of an unchanged multi-line import is plumbing, from the files", () => {
+  // -U0 shows only the member lines; the "import {" stays as unseen context.
+  const before = [
+    "import {",
+    "  type NotificationTarget,",
+    '} from "./store";',
+    "run();",
+  ].join("\n");
+  const after = [
+    "import {",
+    "  emptyServerSessionState,",
+    '} from "./store";',
+    "run();",
+  ].join("\n");
+  const versions = { "-": statementLines(before), "+": statementLines(after) };
+  const plumbing: Plumbing = (_file, sign, line) => versions[sign].has(line);
+  const hunks = diffHunks(
+    diff(
+      ...file(
+        "web/src/store.ts",
+        "web/src/store.ts",
+        "@@ -2,1 +2,1 @@",
+        "-  type NotificationTarget,",
+        "+  emptyServerSessionState,",
+      ),
+    ),
+    plumbing,
+  );
+  expect(matchMoves(hunks)).toEqual({ lost: [], extra: [], runs: [] });
+  // Without the files, the same hunk is reported.
+  const blind = matchMoves(
+    diffHunks(
+      diff(
+        ...file(
+          "web/src/store.ts",
+          "web/src/store.ts",
+          "@@ -2,1 +2,1 @@",
+          "-  type NotificationTarget,",
+          "+  emptyServerSessionState,",
+        ),
+      ),
+    ),
+  );
+  expect(blind.lost).toHaveLength(1);
+});
+
+test("a dynamic import and its callback are code, not plumbing", () => {
+  const source = [
+    'void import("./worker").then(({ start }) => {',
+    "  start(options);",
+    "});",
+    "const url = import.meta.url;",
+    'import type { Options } from "./options";',
+  ].join("\n");
+  expect([...statementLines(source)]).toEqual([5]);
+});
+
+test("comments and module strings do not extend or end a declaration", () => {
+  const source = [
+    'import setup from "./setup"; // {',
+    'setup.configure("safe");',
+    'import other from "./{";',
+    "other();",
+    "import { // }",
+    "  helper,",
+    '} from "./helpers";',
+    "helper();",
+  ].join("\n");
+  expect([...statementLines(source)]).toEqual([1, 3, 5, 6, 7]);
+});
+
+test("a line shared by plumbing and executable code remains code", () => {
+  expect(statementLines('import setup from "./setup"; setup();').size).toBe(0);
+  expect(statementLines("export { setup }; setup();").size).toBe(0);
+});
+
+test("side-effect imports remain executable inventory lines", () => {
+  expect(statementLines('import "./register";').size).toBe(0);
+  expect(normalize('import"./register";')).toBe('import"./register";');
+});
+
+test("invalid and non-JavaScript files cannot hide lines as plumbing", () => {
+  expect(statementLines("import { broken;\nrun();").size).toBe(0);
+  expect(statementLines('import { text } from "./x";', "notes.txt").size).toBe(
+    0,
+  );
+});
+
+test("TSX imports are parsed without swallowing a component", () => {
+  expect([
+    ...statementLines(
+      'import { view } from "./view";\nconst app = <view />;',
+      "view.tsx",
+    ),
+  ]).toEqual([1]);
+});
+
+test("full-file classification keeps bare dynamic imports and import.meta", () => {
+  const source = [
+    'import("./worker").then(({ start }) => {',
+    "  start(options);",
+    "});",
+    "import.meta.resolve('./worker');",
+  ];
+  expect(statementLines(source.join("\n")).size).toBe(0);
+  const hunks = diffHunks(
+    diff(
+      ...file(
+        "/dev/null",
+        "worker.ts",
+        "@@ -0,0 +1,4 @@",
+        ...source.map((line) => `+${line}`),
+      ),
+    ),
+    () => false,
+  );
+  expect(hunks.flatMap((hunk) => hunk.lines).map((line) => line.text)).toEqual(
+    source.map((line) => line.trim()),
+  );
 });

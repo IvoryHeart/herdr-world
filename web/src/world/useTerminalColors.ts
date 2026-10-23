@@ -20,10 +20,91 @@ import {
   type TerminalColors,
   type TerminalColorTarget,
 } from "./terminalColor";
+import {
+  anyRelation,
+  NO_RELATIONS,
+  relationsDeriver,
+  runtimeRelationInputs,
+  withInheritedColors,
+} from "./relations";
+import type { RelationsDocument } from "../../../shared/relations";
+import { worldRuntimeStore } from "./runtimeStore";
+import type { WorldObject } from "./worldObject";
 
 /** Terminal colours as World's service keeps them (see terminalColor.ts). */
 
 const NONE: TerminalColors = Object.freeze({});
+
+type Connections = ReturnType<typeof worldRuntimeStore.get>["connections"];
+
+/** Whether a child can inherit: a saved claim between listed terminals. */
+export function mayInherit(
+  relations: RelationsDocument,
+  connections: Connections,
+) {
+  return anyRelation({ spawns: relations.spawns, groups: [] }, (see) => {
+    for (const connection of connections)
+      for (const pane of connection.snapshot?.panes ?? [])
+        if (see(connection.connectionId, pane.terminal_id)) return;
+  });
+}
+
+/**
+ * Saved colours plus inherited ones, derived once per change of each set of
+ * connections (the runtime store's, or the World object a view shows), for
+ * every view that colours terminals. Spaces refreshes large snapshots often,
+ * so with nothing that can inherit nothing is derived.
+ */
+const inherited = (() => {
+  const derived = new WeakMap<
+    Connections,
+    {
+      derive: ReturnType<typeof relationsDeriver>;
+      colors?: TerminalColors;
+      relations?: RelationsDocument;
+      result?: TerminalColors;
+    }
+  >();
+  return (
+    colors: TerminalColors,
+    relations: RelationsDocument,
+    connections: Connections,
+  ): TerminalColors => {
+    let last = derived.get(connections);
+    if (!last) {
+      last = { derive: relationsDeriver() };
+      derived.set(connections, last);
+    }
+    if (last.colors === colors && last.relations === relations)
+      return last.result!;
+    let result = colors;
+    if (mayInherit(relations, connections)) {
+      const found = last.derive(relations, runtimeRelationInputs(connections));
+      result = withInheritedColors(colors, found.relations, found.places);
+    }
+    Object.assign(last, { colors, relations, result });
+    return result;
+  };
+})();
+
+/** Where inherited colours find terminals: the runtime store, or a view's World. */
+export type ColorSource = {
+  get(): { connections: Connections };
+  subscribe(listener: () => void): () => void;
+};
+
+/**
+ * A World object's connections as the colour source, so a view colours the
+ * same terminals it draws relations between (useRelations).
+ */
+export function useWorldColorSource(
+  world: Pick<WorldObject, "hosts">,
+): ColorSource {
+  return useMemo(() => {
+    const state = { connections: world.hosts.map((host) => host.connection) };
+    return { get: () => state, subscribe: () => () => {} };
+  }, [world.hosts]);
+}
 
 /** The previous colours while no colour changed, so their identity is stable. */
 export function keepColors(
@@ -38,26 +119,44 @@ export function keepColors(
 }
 
 /**
- * The saved colours, kept current from the World service. The object changes
+ * The saved colours, kept current from the World service, with the colours
+ * spawned tabs inherit from their parents (relations.ts). The object changes
  * only when a colour does, so Board's other edits (notes, positions) never
  * re-render or rebuild the views that colour terminals.
  */
 export function useTerminalColors(
   store: BoardDocumentStore = sharedBoardStore(),
+  runtime: ColorSource = worldRuntimeStore,
 ): TerminalColors {
   useEffect(() => {
     store.start();
     return () => store.stop();
   }, [store]);
   const last = useRef<TerminalColors>(NONE);
+  const subscribe = useCallback(
+    (listener: () => void) => {
+      const offStore = store.subscribe(listener);
+      const offRuntime = runtime.subscribe(listener);
+      return () => {
+        offStore();
+        offRuntime();
+      };
+    },
+    [store, runtime],
+  );
   const snapshot = () => {
+    const document = store.get().document;
     last.current = keepColors(
       last.current,
-      store.get().document?.layout.colors ?? NONE,
+      inherited(
+        document?.layout.colors ?? NONE,
+        document?.relations ?? NO_RELATIONS,
+        runtime.get().connections,
+      ),
     );
     return last.current;
   };
-  return useSyncExternalStore(store.subscribe, snapshot, snapshot);
+  return useSyncExternalStore(subscribe, snapshot, snapshot);
 }
 
 /** Choose a tab's colour, or reset it to the default with `null`. */

@@ -83,6 +83,8 @@ import { workspaceInspectorLayout } from "./workspaceInspectorLayout";
 import { PullRequestCard } from "./PullRequestCard";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { ColorSwatchButton } from "./ColorSwatch";
+import { changedCount, checkoutLabel } from "./inspectorCheckout";
+import { AgentInterestButton } from "./AgentInterestButton";
 import { InspectorSplitResizer } from "./InspectorSplitResizer";
 import { paneAgentTitle } from "../agentName";
 import "./WorkspaceInspectorHost.css";
@@ -97,23 +99,6 @@ const GitCommitHistory = lazyWithReload("git-commit-history", () =>
     default: module.GitCommitHistory,
   })),
 );
-
-function changedCount(workspace?: Workspace) {
-  const status = workspace?.worktree?.git_status;
-  return status
-    ? status.staged + status.unstaged + status.untracked + status.conflicted
-    : 0;
-}
-
-function checkoutLabel(workspace?: Workspace) {
-  if (!workspace) return "Unavailable checkout";
-  return (
-    workspace.worktree?.git_status?.branch ||
-    workspace.worktree?.repo_name ||
-    workspace.label ||
-    workspace.workspace_id
-  );
-}
 
 const INSPECTOR_RESOURCE_HORIZONTAL_PADDING = 16;
 
@@ -712,6 +697,12 @@ export function WorkspaceInspectorHost({
               : null}
           </div>
         )}
+        {agentContext ? (
+          <AgentInterestButton
+            connectionId={connectionClient.connectionId}
+            pane={historyPane}
+          />
+        ) : null}
         {/* One selector in the window's top bar, Chat first: Chat,
             Terminal, Changes, Files (and Commits). */}
         <div className="workspace-inspector-tabs" role="tablist">
