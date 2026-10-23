@@ -126,6 +126,7 @@ describe("answering a blocked agent's prompt", () => {
       number: "2",
       label: "Yes, and don't ask again",
       acknowledged: false,
+      unconfirmed_reason: "still_showing",
     });
     expect(state.sent).toEqual([{ pane_id: "w1:p1", text: "2", keys: [] }]);
     const moving = fakeHerdr();
@@ -136,8 +137,68 @@ describe("answering a blocked agent's prompt", () => {
     expect(await answer(moving.source, "1")).toMatchObject({
       status: "sent",
       acknowledged: true,
+      unconfirmed_reason: null,
     });
   });
+
+  test("a next question after the key is the agent moving on", async () => {
+    const { state, source } = fakeHerdr();
+    state.onSend = () => {
+      state.seq += 2;
+      state.screen = PROMPT.replace("agent/demo", "agent/next");
+    };
+    expect(await answer(source, "1")).toMatchObject({
+      acknowledged: true,
+      unconfirmed_reason: null,
+    });
+  });
+
+  // Without evidence that this agent left this prompt, a sent key is never
+  // reported as answered.
+  test.each([
+    [
+      "Herdr no longer reports the agent",
+      "agent_missing",
+      (state: ReturnType<typeof fakeHerdr>["state"]) => {
+        state.status = "";
+      },
+    ],
+    [
+      "the pane has another session",
+      "session_changed",
+      (state: ReturnType<typeof fakeHerdr>["state"]) => {
+        state.session = `${transcript}.replacement`;
+        state.status = "working";
+      },
+    ],
+    [
+      "the screen cannot be read",
+      "unreadable",
+      (state: ReturnType<typeof fakeHerdr>["state"]) => {
+        state.screen = "";
+        state.seq += 1;
+      },
+    ],
+    [
+      "only Herdr's state changed",
+      "still_showing",
+      (state: ReturnType<typeof fakeHerdr>["state"]) => {
+        state.seq += 1;
+      },
+    ],
+  ] as const)(
+    "%s: the answer stays unconfirmed",
+    async (_name, reason, after) => {
+      const { state, source } = fakeHerdr();
+      state.onSend = () => after(state);
+      expect(await answer(source, "1")).toMatchObject({
+        status: "sent",
+        acknowledged: false,
+        unconfirmed_reason: reason,
+      });
+      expect(state.sent).toHaveLength(1);
+    },
+  );
 
   test("a question that changed since Chat showed it is not answered", async () => {
     const { state, source } = fakeHerdr();

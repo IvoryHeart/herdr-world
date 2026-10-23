@@ -88,9 +88,28 @@ type AnswerResult =
       number: string;
       label: string;
       acknowledged: boolean;
+      unconfirmed_reason: UnconfirmedReason | null;
       prompt_fingerprint: string;
     }
   | { status: "refused"; reason: string; message: string };
+
+// Mirrors AnswerUnconfirmedReason in server/src/agent/conversation.ts.
+type UnconfirmedReason =
+  | "agent_missing"
+  | "session_changed"
+  | "unreadable"
+  | "still_showing";
+
+const UNCONFIRMED: Record<UnconfirmedReason, string> = {
+  still_showing:
+    "the question is still showing; check the Terminal if it does not move on.",
+  session_changed:
+    "the pane has another session now, so the key may have reached it. Check the Terminal.",
+  agent_missing:
+    "Herdr no longer reports the agent, so Chat cannot confirm the answer. Check the Terminal.",
+  unreadable:
+    "Chat could not read the screen to confirm the answer. Check the Terminal.",
+};
 
 export type ConversationDelivery = {
   id: string;
@@ -191,8 +210,10 @@ function AskCard({
             ))}
           </div>
           <p className="agent-chat-ask-fine">
-            Options read from {agent}'s own prompt. Chat presses the one you
-            pick; with this card focused, its number picks it too.
+            Options read from {agent}'s own prompt. Chat checks the question
+            again just before it presses the one you pick, but Herdr cannot hold
+            it still: if it changes in that instant, the key reaches the new
+            one. With this card focused, its number picks it too.
           </p>
         </>
       ) : (
@@ -456,6 +477,7 @@ export function AgentChat({
     number: string;
     label: string;
     acknowledged: boolean;
+    unconfirmed_reason: UnconfirmedReason | null;
   } | null>(null);
   const [askNotice, setAskNotice] = useState("");
   const answer = useCallback(
@@ -479,6 +501,7 @@ export function AgentChat({
             number: result.number,
             label: result.label,
             acknowledged: result.acknowledged,
+            unconfirmed_reason: result.unconfirmed_reason,
           });
         else setAskNotice(result.message);
       } catch (reason) {
@@ -766,7 +789,7 @@ export function AgentChat({
                 </b>
                 {answered.acknowledged
                   ? null
-                  : " · the question is still showing; check the Terminal if it does not move on."}
+                  : ` · ${UNCONFIRMED[answered.unconfirmed_reason ?? "still_showing"]}`}
                 <span className="agent-chat-answered-question">
                   {answered.question.join(" ")}
                 </span>

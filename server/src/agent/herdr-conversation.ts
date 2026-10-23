@@ -5,6 +5,7 @@ import { taskSummarySessionFingerprint } from "../herdr/task-summary";
 import {
   conversationMessages,
   latestAssistantMessage,
+  type AnswerUnconfirmedReason,
   type Conversation,
   type ConversationBinding,
   type ConversationLatest,
@@ -495,10 +496,11 @@ export function createHerdrConversationSource(args: {
   return {
     id: "herdr",
     answer: async ({ pane_id, key, prompt_fingerprint }) => {
-      // Herdr has no conditional input, so the prompt is checked as close to
-      // the key as World can: Herdr's state, the screen, then Herdr's state
-      // again, and any difference refuses. The pane can still change between
-      // the last check and the key; see docs/CHAT.md.
+      // Herdr has no conditional input (herdr#4764), so the key cannot be
+      // made conditional on the prompt. World checks as close to the key as
+      // it can: Herdr's state, the screen, then Herdr's state again, and any
+      // difference refuses. A change between the last check and the key is
+      // not caught; Chat says so on the card and docs/CHAT.md explains it.
       const before = await agentInfo(pane_id);
       const refuse = (
         reason: "not_blocked" | "changed" | "unknown_option",
@@ -547,22 +549,38 @@ export function createHerdrConversationSource(args: {
           ? { pane_id, text: "", keys: ["escape"] }
           : { pane_id, text: option.key, keys: [] },
       );
-      // Whether the prompt went away: a sent key is not an acknowledged
-      // answer until the agent moves on from it.
-      const settled = await agentInfo(pane_id)
-        .then(async (info) =>
-          stringValue(info?.agent_status) !== "blocked"
-            ? true
-            : (await readPrompt(pane_id, info))?.fingerprint !==
-              prompt.fingerprint,
-        )
-        .catch(() => false);
+      // An answer is acknowledged only on evidence that this agent moved on
+      // from this prompt: the same session, then a status other than blocked,
+      // or a new state and a different question on a readable screen. No
+      // agent, another session, an unreadable screen or the same question
+      // leaves it unconfirmed, with the reason.
+      const unconfirmed = await agentInfo(pane_id)
+        .then(async (info): Promise<AnswerUnconfirmedReason | null> => {
+          const status = stringValue(info?.agent_status);
+          if (!info || !status) return "agent_missing";
+          if (
+            JSON.stringify(info.agent_session ?? null) !==
+            JSON.stringify(before?.agent_session ?? null)
+          )
+            return "session_changed";
+          if (status !== "blocked") return null;
+          // Read under the checked state, so only what the screen shows
+          // counts as a different question.
+          const shown = await readPrompt(pane_id, before);
+          if (!shown) return "unreadable";
+          return shown.fingerprint !== prompt.fingerprint &&
+            info.state_change_seq !== before?.state_change_seq
+            ? null
+            : "still_showing";
+        })
+        .catch(() => "unreadable" as const);
       return {
         status: "sent" as const,
         key: option.key,
         number: option.number,
         label: option.label,
-        acknowledged: settled,
+        acknowledged: unconfirmed === null,
+        unconfirmed_reason: unconfirmed,
         prompt_fingerprint: prompt.fingerprint,
       };
     },

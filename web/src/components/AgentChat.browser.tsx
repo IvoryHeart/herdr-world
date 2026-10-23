@@ -144,6 +144,7 @@ async function run() {
           number: "2",
           label: "Yes, always",
           acknowledged: answerAcknowledged,
+          unconfirmed_reason: answerAcknowledged ? null : "session_changed",
           prompt_fingerprint: params.prompt_fingerprint,
         };
       if (method === "agent_conversation.get") return reply;
@@ -744,6 +745,12 @@ async function run() {
       ).startsWith("Sent 2 · Yes, always") &&
         !container.querySelector(".agent-chat-ask"),
       "A sent answer must replace the card with what was sent",
+    );
+    check(
+      (
+        container.querySelector(".agent-chat-answered")?.textContent ?? ""
+      ).includes("another session now, so the key may have reached it"),
+      "An unconfirmed answer must say why Chat cannot confirm it",
     );
     // The receipt survives the transcript moving on.
     reply = {

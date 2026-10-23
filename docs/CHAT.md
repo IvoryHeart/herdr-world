@@ -39,11 +39,21 @@ view that you open on purpose.
   screen, and checks Herdr's state again (status, session, title, state
   sequence); the prompt's fingerprint covers the shown prompt, the session and
   the state sequence, and any difference refuses with nothing sent. Then it
-  presses that option's key. Herdr has no conditional input, so a change in
-  the moment between the last check and the key is still possible. Chat
-  replaces the card with what it sent: "Sent 2 · …" while the question still
-  shows, "You answered 2 · …" once the agent moved on. Chat answers only when
-  you pick an option.
+  presses that option's key.
+- **The gap World cannot close.** Herdr has no conditional input
+  (herdr#4764), so the key cannot be made conditional on the prompt. If the
+  prompt or session changes in the instant between the last check and the
+  key, the key reaches the new prompt. The card says so under its options.
+  Closing the gap needs an input Herdr applies only while the prompt is
+  unchanged.
+- Chat replaces the card with what it sent. "You answered 2 · …" needs
+  evidence that this agent left this prompt: the same session, and either a
+  status other than blocked, or a new state with a different question on a
+  readable screen. Otherwise the receipt reads "Sent 2 · …" with the reason
+  (`unconfirmed_reason`): the question still shows (`still_showing`), the pane
+  has another session (`session_changed`, and the key may have reached it),
+  Herdr no longer reports the agent (`agent_missing`), or the screen could not
+  be read (`unreadable`). Chat answers only when you pick an option.
 - Keeps the last good conversation when a read fails, for example while the
   transcript is being written, and says that it could not refresh.
 - When the conversation is unavailable, Chat shows the reason and the action it
@@ -72,7 +82,7 @@ projection cache as History ([History synchronization](HISTORY.md)).
 | `agent_conversation.latest` | `pane_id`, or `pane_ids`, or nothing for every agent | A conversation without `messages`, or `{ conversations }` |
 | `agent_conversation.send` | `pane_id`, `text`, `session_fingerprint`, optional `baseline` (IDs of the user messages Chat showed) | `{ status: "sent", delivery }` or `{ status: "refused", reason, message }` |
 | `agent_conversation.dismiss` | `pane_id`, `delivery_id` | `{ dismissed }`; forgets a delivery notice |
-| `agent_conversation.answer` | `pane_id`, `key`, `prompt_fingerprint` | `{ status: "sent", number, label, acknowledged, prompt_fingerprint }` or `{ status: "refused", reason, message, pending_prompt }` |
+| `agent_conversation.answer` | `pane_id`, `key`, `prompt_fingerprint` | `{ status: "sent", number, label, acknowledged, unconfirmed_reason, prompt_fingerprint }` or `{ status: "refused", reason, message, pending_prompt }` |
 | `agent_conversation.watch` / `.unwatch` | `pane_id` | `{ ok: true }`; see [Refresh](#refresh) |
 
 A conversation carries `agent`, `agent_status`, `pending_prompt` (the question a

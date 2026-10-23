@@ -97,6 +97,17 @@ export type ConversationSendResult =
 
 export type ConversationTarget = { pane_id: string };
 
+/**
+ * What kept an answer from being acknowledged: Herdr no longer reports the
+ * agent, the pane has another session, the screen could not be read, or the
+ * same question still shows.
+ */
+export type AnswerUnconfirmedReason =
+  | "agent_missing"
+  | "session_changed"
+  | "unreadable"
+  | "still_showing";
+
 export type ConversationAnswerResult =
   | {
       /** The key was pressed in the pane. */
@@ -104,8 +115,13 @@ export type ConversationAnswerResult =
       key: string;
       number: string;
       label: string;
-      /** The agent moved on from the prompt after the key. */
+      /**
+       * Herdr showed this agent move on from this prompt after the key: the
+       * same session, and a status other than blocked or a new question.
+       */
       acknowledged: boolean;
+      /** Why the answer is not acknowledged; null when it is. */
+      unconfirmed_reason: AnswerUnconfirmedReason | null;
       prompt_fingerprint: string;
     }
   | {
