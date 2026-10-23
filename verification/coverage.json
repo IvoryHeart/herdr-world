@@ -1681,6 +1681,7 @@
         "web/src/chimes/chimeHost.test.ts",
         "web/src/world/groups/groupActions.test.ts",
         "web/src/world/groups/GroupsWindow.test.ts",
+        "web/src/world/groups/GroupsSummary.test.tsx",
         "server/src/rpc/group-revision.test.ts",
         "shared/groupObservations.test.ts",
         "server/src/world/board-groups.test.ts",

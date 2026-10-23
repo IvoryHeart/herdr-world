@@ -162,6 +162,7 @@ function GroupsBody({
     <WorldPanel
       name="groups"
       label={group ? groupTitle(group) : "Groups"}
+      focusKey={request}
       onClose={onClose}
     >
       <div className="groups-window">

@@ -465,6 +465,11 @@ tap a row for its members, status, open PR cards and Now list. On a phone, Back
 returns to the roster or closes the panel. On desktop the panel uses the same
 move, snap, maximize and window menu as your other World windows.
 
+Town's **Summary** also lists **Pods**, after Hosts and rooms and before Spend.
+Each row shows current status, the first Now item and the PR count or its
+cached/unknown state. Tap it to open that Pod in Groups, including when the
+Groups window is already open or minimized. Reception keeps its shared counts.
+
 Choose **New…** for a Pod or Team. In a Pod, **Add…** accepts a current agent or
 an explicit qualified address, including an away agent. **Roles…** changes roles;
 lead/reviewer edits follow the owner/FirstMate crew rule. Moving an exclusive

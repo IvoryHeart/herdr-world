@@ -152,6 +152,18 @@ for batch-close browser execution. No terminal choice is copied from membership.
 These finite precedence and existing atomic-storage adapters warrant direct
 exhaustive evidence rather than a separate model of the same small table.
 
+### Pods in Town Summary (Q43)
+
+Direct rendering checks use the shared Group projection and the actual Summary
+panel to cover Pod-only rows, first Now item, current PR warnings, cached/unknown
+work, loading/error/empty distinction, placement between Hosts and Spend, and
+unchanged reception markup. The production hook mounts the optional section only
+while Summary is open. The registered Groups browser fixture exercises its real
+Groups-open event and shared panel focus path; browser execution and five-view
+screenshots remain batch-close acceptance. This adds a projection consumer, not
+a new membership, ordering or recovery protocol, so direct consumer evidence is
+appropriate alongside the existing Summary and panel tests.
+
 ## Review and remaining obligations
 
 Evidence statuses describe concrete decisions; independent acceptance is recorded separately. Review 5516249164 accepts every Q01–Q43 bounded mapping and alternative. Mandatory consumers and excluded claims remain binding. Final implementation/gate/resource acceptance is recorded in [review 5517420140](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5517420140); owner-approved PR #188 merged as `481ca1e8`. Mandatory consumers and excluded claims remain binding. Review must inspect the intended requirement, model/reducer domain, adapter fidelity, actual consumer tests and excluded claims. Q21 has its separate bounded exhaustive contract. Q26–Q28 retain their separately accepted Ranger storage/permission assumptions.

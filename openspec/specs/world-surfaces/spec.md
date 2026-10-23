@@ -1914,6 +1914,18 @@ Projected membership SHALL remain owned by Herdr. An ambiguous member's Inspect
 control SHALL revalidate the qualified current match without persisting a resolved
 address or contributing that match to membership roll-ups.
 
+The open Town Summary SHALL show Pods after Hosts/rooms and before Spend,
+using the same current Groups read model for status, first Now item and
+source-qualified open PR warnings. Activating a row SHALL open that Pod's
+Groups detail, restoring and raising an already-open Groups window. This
+section SHALL NOT change reception's shared calls/Asks items or counts.
+
+#### Scenario: Open a Pod from Town Summary
+
+- **WHEN** the user activates a Pod row in the open Town Summary
+- **THEN** its Groups detail opens or is restored and raised
+- **AND** cached or unavailable work remains labelled and reception counts do not change
+
 #### Scenario: Another client changes the roster during a role confirmation
 
 - **WHEN** the user confirms a Group edit against an older Board revision

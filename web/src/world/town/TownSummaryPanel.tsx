@@ -7,6 +7,7 @@ import {
 } from "../officeObservability";
 import { WorldPanel } from "../windows/WorldPanel";
 import type { WorldObject } from "../worldObject";
+import { GroupsSummary } from "../groups/GroupsSummary";
 import {
   TownAsk,
   townRailInset,
@@ -25,7 +26,7 @@ import "./townSummaryPanel.css";
 
 /**
  * The Town summary's body, in attention order: who needs you, recent
- * finishes, hosts and their rooms, and spend. It renders the shared read
+ * finishes, hosts and their rooms, Pods, and spend. It renders the shared read
  * model (townSummary.ts); the window around it is the shared panel frame.
  */
 export function TownSummaryPanel({
@@ -34,6 +35,7 @@ export function TownSummaryPanel({
   onOpenAgent,
   onShowRoom,
   onAnswer,
+  groups,
 }: {
   summary: TownSummaryModel;
   now: number;
@@ -42,6 +44,7 @@ export function TownSummaryPanel({
   /** Move the Town camera to a room. */
   onShowRoom(roomKey: string): void;
   onAnswer(id: string, text: string): Promise<string | null>;
+  groups?: ReactNode;
 }) {
   return (
     <div className="town-summary">
@@ -128,6 +131,7 @@ export function TownSummaryPanel({
           ))}
         </div>
       </section>
+      {groups}
       <section aria-labelledby="town-summary-spend">
         <h3 id="town-summary-spend">Spend</h3>
         {summary.spend.available ? (
@@ -294,6 +298,7 @@ export function useTownSummary({
       >
         <TownSummaryPanel
           summary={summary}
+          groups={<GroupsSummary />}
           now={now}
           onOpenAgent={openAgent}
           onAnswer={answerAsk}

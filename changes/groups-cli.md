@@ -12,3 +12,5 @@
 - Set Team/Pod Focus or Mute without copying member preferences; agent bells
   distinguish inherited Default from explicit Watch and explain the winning claim.
   Focus follows current resolved members, with unchanged reception counts.
+- Read Pod status, Now and source-qualified PR warnings in Town Summary;
+  tap a row to open or restore its Groups detail without changing reception counts.

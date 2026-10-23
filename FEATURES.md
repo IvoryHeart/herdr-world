@@ -440,6 +440,10 @@ The roster shows shared reviewers with rings and warns above the Pod's open-PR
 limit without blocking edits. Unavailable work is unknown; failed refreshes are
 labelled cached. Away and ambiguous addresses never contribute live work/status.
 
+Town's open **Summary** shows a **Pods** section after Hosts and rooms, with
+the same status, first Now item and source-qualified PR warning. Tap a Pod to
+open or raise its Groups detail. Pod roll-ups do not add to reception counts.
+
 Create Teams/Pods, add/remove members, edit roles, name/Now/limit, delete with
 confirmation or explicitly promote a Team with a complete current address mapping.
 Exclusive-role transfers ask first. An edit or confirmation based on an older

@@ -6,6 +6,7 @@ import { AgentInterestButton } from "../../components/AgentInterestButton";
 import {
   WorldPanelsContext,
   useWorldPanelRegistry,
+  useWorldPanelFocus,
   WorldPanelWindow,
 } from "../windows/WorldPanel";
 import { WindowFrame } from "../windows/WindowFrame";
@@ -14,7 +15,8 @@ import { useWindowManager } from "../windows/useWindowManager";
 import { buildWorldObject, type WorldObject } from "../worldObject";
 import { parseWorldSnapshotResult, worldRuntimeStore } from "../runtimeStore";
 import { GroupsWindow } from "./GroupsWindow";
-import { openGroups } from "./groupActions";
+import { GroupsSummary } from "./GroupsSummary";
+import { TownSummaryPanel } from "../town/TownSummaryPanel";
 import "../../styles/tokens.css";
 import "../../styles/base.css";
 import "../../components/WorkspaceAgentRows.css";
@@ -50,10 +52,38 @@ function Fixture({ world }: { world: WorldObject }) {
     stage,
   );
   const [inspected, setInspected] = useState("");
+  const [summaryOpen, setSummaryOpen] = useState(false);
+  useWorldPanelFocus(registry, state, dispatch);
   const compact = innerWidth < 700;
   return (
     <WorldPanelsContext.Provider value={registry}>
       <p data-inspected={inspected}>Example crew</p>
+      <button type="button" onClick={() => setSummaryOpen(!summaryOpen)}>
+        {summaryOpen ? "Close Summary" : "Summary"}
+      </button>
+      <button
+        type="button"
+        onClick={() => dispatch({ type: "minimize", id: "panel:groups" })}
+      >
+        Minimize Groups
+      </button>
+      {summaryOpen && (
+        <TownSummaryPanel
+          summary={{
+            counts: { needsYou: 0, working: 0, finished: 0 },
+            needsYou: [],
+            asks: [],
+            finished: [],
+            hosts: [],
+            spend: { available: false },
+          }}
+          now={1}
+          onOpenAgent={() => {}}
+          onShowRoom={() => {}}
+          onAnswer={async () => null}
+          groups={<GroupsSummary />}
+        />
+      )}
       <AgentInterestButton
         connectionId="connection-a"
         pane={world.leaves[0]?.pane}
@@ -159,7 +189,20 @@ async function run() {
   const root = createRoot(document.getElementById("root")!);
   flushSync(() => root.render(<Fixture world={world} />));
   await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-  openGroups();
+  click("Summary");
+  await waitFor(() => document.querySelector(".groups-summary-pod"));
+  document.querySelector<HTMLButtonElement>(".groups-summary-pod")!.click();
+  await waitFor(() => document.querySelector(".group-detail"));
+  check(
+    Boolean(
+      document
+        .querySelector(".group-detail")
+        ?.textContent?.includes("Pod · Chat"),
+    ),
+    "Summary must open the current Pod through the shared Groups event",
+  );
+  click("Close Summary");
+  click("Back to Groups");
   await waitFor(
     () => document.querySelectorAll(".group-roster-row").length > 3,
   );
@@ -170,6 +213,29 @@ async function run() {
   check(
     document.documentElement.scrollWidth <= innerWidth,
     "Groups roster must fit the viewport",
+  );
+  click("Minimize Groups");
+  await waitFor(
+    () => !document.querySelector(".world-managed-window .groups-window"),
+  );
+  click("Summary");
+  await waitFor(() => document.querySelector(".groups-summary-pod"));
+  document.querySelector<HTMLButtonElement>(".groups-summary-pod")!.click();
+  await waitFor(() =>
+    document.querySelector(".world-managed-window .group-detail"),
+  );
+  check(
+    Boolean(
+      document
+        .querySelector(".group-detail")
+        ?.textContent?.includes("Pod · Chat"),
+    ),
+    "Summary must restore the minimized Groups detail",
+  );
+  click("Close Summary");
+  click("Back to Groups");
+  await waitFor(
+    () => document.querySelectorAll(".group-roster-row").length > 3,
   );
   if (new URL(location.href).searchParams.has("preview")) {
     if (new URL(location.href).searchParams.has("detail")) {
