@@ -1,3 +1,4 @@
+import type { PullRequestAction } from "../../../shared/pullRequests";
 import type {
   WorkItem,
   WorkLink,
@@ -28,6 +29,8 @@ import {
   type TopologyConnection,
 } from "./links";
 import type { SourceSecrets } from "./secrets";
+import { runPullRequestVerb, type PullRequestVerbRequest } from "./actions";
+import type { CachedDetail } from "./pullRequestDetail";
 
 /**
  * World's built-in sources. Each is on by default and can be switched off;
@@ -92,6 +95,19 @@ export type SourcesServiceOptions = {
 /** Settings the user can correct; the message names the field. */
 export class SourceSettingsError extends Error {}
 
+/** A pull request verb World won't start; the message says why. */
+export class PullRequestVerbError extends Error {
+  constructor(
+    message: string,
+    readonly status: 404 | 409,
+  ) {
+    super(message);
+  }
+}
+
+/** Verbs kept for "since you were away"; the oldest go first. */
+const MAX_ACTIONS = 50;
+
 const DEFAULT_REFRESH_MS = 60_000;
 const DEFAULT_LINK_MS = 15_000;
 /** Even a forced refresh waits this long after the last one. */
@@ -120,6 +136,10 @@ export class SourcesService {
   /** Bumped by a settings change; older refresh cycles then write nothing. */
   #epoch = 0;
   #cycling: Promise<void> | null = null;
+  #details = new Map<string, CachedDetail>();
+  #actions: PullRequestAction[] = [];
+  /** Pull requests with a verb running. */
+  #acting = new Set<string>();
 
   constructor(options: SourcesServiceOptions) {
     this.#options = options;
@@ -217,7 +237,51 @@ export class SourcesService {
       sources: this.statuses(),
       items,
       links: this.#links.filter((link) => keys.has(link.itemKey)),
+      actions: [...this.#actions],
     };
+  }
+
+  /**
+   * Run a verb the viewer confirmed on one of their open pull requests, then
+   * refresh so the card shows what GitHub now says. Each run is recorded
+   * with who asked: the viewer, as their browser session reported it.
+   */
+  async pullRequestVerb(key: string, request: PullRequestVerbRequest) {
+    const item = this.enabled("github")
+      ? this.#sources.github.items.find((entry) => entry.key === key)
+      : undefined;
+    if (!item || item.kind !== "pull_request")
+      throw new PullRequestVerbError(
+        "World doesn't know that pull request",
+        404,
+      );
+    if (this.#acting.has(key))
+      throw new PullRequestVerbError(
+        `An action on #${item.number} is still running`,
+        409,
+      );
+    this.#acting.add(key);
+    let outcome;
+    try {
+      outcome = await runPullRequestVerb(this.#options.run, item, request);
+    } finally {
+      this.#acting.delete(key);
+    }
+    const action: PullRequestAction = {
+      verb: request.verb,
+      itemKey: key,
+      ref: item.ref,
+      at: this.#now(),
+      outcome: outcome.ok ? "done" : "failed",
+      ...(outcome.ok ? {} : { detail: outcome.detail }),
+      sender: { basis: "reported", via: "browser" },
+    };
+    this.#actions = [action, ...this.#actions].slice(0, MAX_ACTIONS);
+    if (outcome.ok) {
+      this.#details.delete(key);
+      this.#sources.github.checkedAt = 0;
+    }
+    return { action, snapshot: await this.snapshot(true) };
   }
 
   #items() {
@@ -321,6 +385,7 @@ export class SourcesService {
     source.checkedAt = 0;
     this.#linkedAt = 0;
     if (keepItems) return;
+    if (id === "github") this.#details.clear();
     source.items = [];
     source.state = "not_connected";
     source.detail = "Checking…";
@@ -364,7 +429,13 @@ export class SourcesService {
 
   #fetch(id: WorldSourceId, now: number): Promise<SourceRefresh> {
     if (id === "github")
-      return refreshGitHub(this.#options.run, now, this.mergedDays());
+      return refreshGitHub(
+        this.#options.run,
+        now,
+        this.mergedDays(),
+        Date.now,
+        this.#details,
+      );
     return refreshJira(
       this.jiraConfig(),
       this.#jiraToken(),

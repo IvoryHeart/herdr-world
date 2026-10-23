@@ -53,6 +53,7 @@ const snapshot = (
   sources: [],
   items,
   links,
+  actions: [],
 });
 
 const link = (
@@ -148,7 +149,7 @@ describe("World sources in the browser", () => {
     ]);
     expect(columns[0]!.cards.map((card) => card.item.number)).toEqual([3, 1]);
     expect(columns[1]!.cards[0]!.agents).toEqual([
-      { id: leaf.id, label: "login" },
+      { id: leaf.id, label: "login", idle: false },
     ]);
     expect(columns[0]!.cards.flatMap((card) => card.agents)).toEqual([]);
     const tickets = workLensColumns(data, world, "tickets");
@@ -266,6 +267,7 @@ describe("World sources in the browser", () => {
           text: "#12 ✗",
           tone: "fail",
           url: "https://github.com/example-org/widgets/pull/12",
+          itemKey: "github:pr:example-org/widgets#12",
         },
       ],
     ]);
