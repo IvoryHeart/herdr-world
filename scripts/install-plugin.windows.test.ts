@@ -48,10 +48,14 @@ test.skipIf(process.platform !== "win32")(
       writeFileSync(
         fixture,
         [
-          // \`hold\` keeps this executable's image locked, as an antivirus scan
-          // or a slow process exit can right after the installer runs it.
-          `if (process.argv[2] === "hold") { await Bun.sleep(Number(process.env.STAGING_LOCK_MS)); process.exit(0); }`,
-          `if (process.argv[2] === "--version" && process.env.STAGING_LOCK_MS) Bun.spawn([process.execPath, "hold"], { stdio: ["ignore", "ignore", "ignore"] }).unref();`,
+          // A detached PowerShell holds this executable open without delete
+          // sharing, as an antivirus scan can right after the installer runs
+          // it; the binary returns only once the hold is in place.
+          `if (process.argv[2] === "--version" && process.env.STAGING_LOCK_MS) {`,
+          `  const ready = process.execPath + ".held";`,
+          `  Bun.spawn([process.env.SystemRoot + "\\\\System32\\\\WindowsPowerShell\\\\v1.0\\\\powershell.exe", "-NoProfile", "-NonInteractive", "-Command", "$f=[IO.File]::Open($env:HOLD_PATH,'Open','Read','Read'); New-Item -ItemType File -Path $env:HOLD_READY | Out-Null; Start-Sleep -Milliseconds $env:STAGING_LOCK_MS; $f.Dispose()"], { env: { ...process.env, HOLD_PATH: process.execPath, HOLD_READY: ready }, stdio: ["ignore", "ignore", "ignore"], detached: true }).unref();`,
+          `  for (let i = 0; i < 300 && !(await Bun.file(ready).exists()); i++) await Bun.sleep(50);`,
+          `}`,
           `if (process.argv[2] === "--version" && process.env.WRONG_VERSION) console.log("herdr-world 0.0.0");`,
           `else if (process.argv[2] === "version" || process.argv[2] === "--version" || (process.argv[2] === "plugin" && process.argv[3] === "version" && !process.env.PLUGIN_REJECT_NATIVE)) console.log("herdr-world 9.8.7"); else process.exit(2);`,
         ].join("\n"),
