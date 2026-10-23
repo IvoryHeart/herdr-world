@@ -12,7 +12,13 @@ import { bridge, type BridgeControlMsg, type ConnectionStatus } from "../api";
 export type WorldAsk = {
   id: string;
   at: number;
-  actor: { label: string; verified: boolean };
+  actor: {
+    label: string;
+    verified: boolean;
+    connection_id?: string;
+    pane_id?: string;
+    terminal_id?: string;
+  };
   question: string;
   options: string[];
   owner_only: boolean;

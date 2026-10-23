@@ -41,6 +41,11 @@ test.skipIf(!chrome).each([
   [1080, 1920, "extended", 0],
   // Regress fixed-delay zoom-out retries on a slow software renderer.
   [1080, 1920, "extended", 300],
+  // Every one of 130 protected desks keeps its browser target past both bounds.
+  [390, 844, "protected", 0],
+  // Request a room beyond admission while renderer initialization is held.
+  [390, 844, "navigation", 0],
+  [1440, 900, "navigation", 0],
 ])(
   "the Office town renders, queues blocked agents and zooms into rooms at %ipx by %ipx (%s, %ims zoom frames)",
   async (width, height, scale, flightFrameDelay) => {
@@ -106,7 +111,7 @@ test.skipIf(!chrome).each([
         }),
         "Office town browser check",
         // Extended towns at large windows paint far more pixels in software.
-        scale === "extended" ? 80_000 : 40_000,
+        scale === "extended" || scale === "protected" ? 80_000 : 40_000,
       );
       expect(failures).toEqual([]);
     } finally {

@@ -7,6 +7,7 @@
  */
 
 import { useEffect, useRef, useState } from "react";
+import { withOfficeReadModel } from "../officeReadModel";
 import type {
   HerdrOfficeProjection,
   OfficeAgent,
@@ -128,7 +129,7 @@ export function withTownFinished(
   // Only containers holding a changed agent are copied.
   const list = (agents: OfficeAgent[]) =>
     agents.some(changes) ? agents.map(present) : agents;
-  return {
+  const result = {
     ...office,
     rooms: office.rooms.map((room) => {
       const roomAgents = list(room.roomAgents);
@@ -145,4 +146,5 @@ export function withTownFinished(
       changes(entry.agent) ? { ...entry, agent: present(entry.agent) } : entry,
     ),
   };
+  return withOfficeReadModel(office, result, swapped);
 }

@@ -6,7 +6,15 @@ import type { Pane, Tab, Workspace } from "../../types";
 import type { WorldRuntimeConnection } from "../runtimeStore";
 import { buildWorldObject, type WorldObject } from "../worldObject";
 import TownView from "../TownView";
+import { projectWorldOffice } from "../herdrOfficeProjection";
+import type { WorldAsk } from "../worldAsks";
+import { townCalls, unseenTownCompletions } from "./TownRail";
+import { townAttentionDesks } from "./townAttention";
 import type { BoardDocument, BoardOp } from "../board/boardDocument";
+import {
+  WorldPanelsContext,
+  type WorldPanelEntry,
+} from "../windows/WorldPanel";
 import { TOWN_SHAPES, townShapeFor } from "./townLayout";
 import "../../components/TerminalView.css";
 import "../../components/MobileControls.css";
@@ -17,7 +25,10 @@ import {
   type BridgeControlMsg,
   type ConnectionClient,
 } from "../../api";
-import { readCompletionSeen } from "../completionSeenState";
+import {
+  officeCompletionIdentity,
+  readCompletionSeen,
+} from "../completionSeenState";
 import { worldSourcesStore } from "../worldSources";
 import "../world.css";
 import {
@@ -156,9 +167,13 @@ function topology(seed: number): Topology {
   const agentPanes: Pane[] = [];
   const connections = HOSTS.map((host): WorldRuntimeConnection => {
     const roomNames =
-      scale === "max"
-        ? host.rooms
-        : host.rooms.slice(0, 5 + Math.floor(r() * 4));
+      scale === "navigation"
+        ? host === HOSTS[0]
+          ? Array.from({ length: 128 }, (_, index) => `focus-room-${index}`)
+          : [`${host.id}-destination`]
+        : scale === "max"
+          ? host.rooms
+          : host.rooms.slice(0, 5 + Math.floor(r() * 4));
     const workspaces: Workspace[] = [];
     const tabs: Tab[] = [];
     const panes: Pane[] = [];
@@ -167,14 +182,17 @@ function topology(seed: number): Topology {
       // Extended rooms: agents spawning agents fill the first rooms far past
       // the owner's 2026-10-17 estimate of 11-15 desks.
       const extended =
-        scale === "extended" && host === HOSTS[0]
-          ? [100, 50, 24][roomIndex]
+        (scale === "extended" || scale === "protected") && host === HOSTS[0]
+          ? [scale === "protected" ? 160 : 100, 50, 24][roomIndex]
           : 0;
-      const deskCount = extended
-        ? extended
-        : scale === "max"
-          ? 11 + Math.floor(r() * 5)
-          : 3 + Math.floor(r() * r() * 13);
+      const deskCount =
+        scale === "navigation"
+          ? 1
+          : extended
+            ? extended
+            : scale === "max"
+              ? 11 + Math.floor(r() * 5)
+              : 3 + Math.floor(r() * r() * 13);
       let paneTotal = 0;
       for (let d = 0; d < deskCount; d += 1) {
         const tabId = `${workspaceId}-tab-${d}`;
@@ -466,6 +484,7 @@ const worldBridge = bridge as unknown as {
 };
 const bridgeCall = worldBridge.call.bind(bridge);
 /** One open question from an agent (`herdr-world ask`), as the service keeps it. */
+const askAnswers: { id: string; answer: string }[] = [];
 const ledger = {
   version: 1,
   revision: 1,
@@ -479,11 +498,18 @@ const ledger = {
       question: "Ship the reception fix now, or wait for review?",
       options: ["Ship", "Wait"],
       owner_only: true,
-    },
+    } as WorldAsk,
   ],
 };
 worldBridge.call = async (method, params) => {
   if (method === "world.asks.get") return structuredClone(ledger);
+  if (method === "world.ask.answer") {
+    const id = String(params?.id);
+    askAnswers.push({ id, answer: String(params?.answer) });
+    ledger.asks = ledger.asks.filter((ask) => ask.id !== id);
+    ledger.revision += 1;
+    return structuredClone({ revision: ledger.revision, asks: ledger.asks });
+  }
   if (method === "world.board.get") return structuredClone(boardDocument);
   if (method === "world.board.patch") {
     for (const op of (params?.ops ?? []) as {
@@ -755,6 +781,24 @@ async function run() {
       ?.tabs ?? [];
   const blocked = base.agentPanes.filter((_, index) => index % 23 === 4);
   for (const pane of blocked) pane.agent_status = "blocked";
+  if (scale === "protected")
+    for (const pane of base.agentPanes) {
+      const index = Number(pane.tab_id?.replace("local-orbit-tab-", ""));
+      if (pane.workspace_id === "local-orbit" && index < 130)
+        pane.agent_status = "blocked";
+    }
+
+  const asker = base.agentPanes.find(
+    (pane) =>
+      pane.agent_status === "idle" && pane.workspace_id === "local-orbit",
+  );
+  if (asker)
+    Object.assign(ledger.asks[0]!.actor, {
+      connection_id: "local",
+      pane_id: asker.pane_id,
+      terminal_id: asker.terminal_id,
+    });
+
   statusOf = (paneId) =>
     base.agentPanes.find((pane) => pane.pane_id === paneId)?.agent_status ?? "";
   let setWorld: (world: WorldObject) => void = () => {};
@@ -765,7 +809,13 @@ async function run() {
   const unfocusedOpens: string[] = [];
   function Harness() {
     const [world, set] = useState(() => worldFor(base.connections));
-    const [selectedId, setSelectedId] = useState<string | null>(null);
+    const [selectedId, setSelectedId] = useState<string | null>(() =>
+      scale === "navigation"
+        ? worldFor(base.connections).leaves.find(
+            (leaf) => leaf.connectionId === "local",
+          )!.id
+        : null,
+    );
     useEffect(() => {
       setWorld = set;
     }, []);
@@ -838,12 +888,180 @@ async function run() {
       })),
     }),
   );
+  // A stand-in for WorldControlPlane's panel windows: Town's summary window
+  // renders its body into this element while open.
+  const panelBody = document.createElement("div");
+  panelBody.className = "fixture-panel-body";
+  // A plain frame so screenshots show the window; the real frame is design's.
+  Object.assign(panelBody.style, {
+    position: "fixed",
+    zIndex: "50",
+    overflow: "auto",
+    background: "#16181d",
+    color: "#e8e6e1",
+    fontFamily: "system-ui, sans-serif",
+    border: "1px solid #333",
+    borderRadius: "10px",
+    ...(window.innerWidth <= 640
+      ? { inset: "0", borderRadius: "0" }
+      : { top: "56px", right: "16px", width: "380px", maxHeight: "80vh" }),
+  });
+  document.body.append(panelBody);
+  const panelEntries: WorldPanelEntry[] = [];
+  const panels = {
+    panels: panelEntries,
+    panelBodyRef: () => () => {},
+    register: (entry: WorldPanelEntry) => {
+      panelEntries.push(entry);
+      return () => {
+        const at = panelEntries.indexOf(entry);
+        if (at >= 0) panelEntries.splice(at, 1);
+      };
+    },
+    bodies: { "panel:town-summary": panelBody },
+  };
+  let releaseRenderer: (() => void) | null = null;
+  if (scale === "navigation") {
+    const { Application } = await import("pixi.js");
+    const original = Application.prototype.init;
+    const held = Promise.withResolvers<void>();
+    Application.prototype.init = async function (
+      ...args: Parameters<typeof original>
+    ) {
+      await held.promise;
+      return original.apply(this, args);
+    };
+    releaseRenderer = () => {
+      Application.prototype.init = original;
+      held.resolve();
+    };
+  }
   const root = createRoot(host);
   root.render(
     <StrictMode>
-      <Harness />
+      <WorldPanelsContext.Provider value={panels}>
+        <Harness />
+      </WorldPanelsContext.Provider>
     </StrictMode>,
   );
+  if (scale === "navigation") {
+    const summaryButton = () =>
+      window.innerWidth <= 640
+        ? host.querySelector<HTMLButtonElement>(".town-board-chip")
+        : host.querySelector<HTMLButtonElement>(".town-board-open");
+    await waitFor(
+      () => summaryButton() !== null,
+      "Summary launcher is missing before renderer setup",
+    );
+    summaryButton()!.click();
+    await waitFor(
+      () => panelBody.querySelectorAll(".town-summary-room").length === 130,
+      "Summary omitted rooms past presentation admission",
+    );
+    const destination =
+      base.connections[base.connections.length - 1]!.snapshot!.workspaces[0]!;
+    const roomButton = () =>
+      panelBody.querySelector<HTMLButtonElement>(
+        `button[aria-label="Show room ${destination.label} in Town"]`,
+      );
+    const desk = (nativeId: string) =>
+      [
+        ...host.querySelectorAll<HTMLElement>(
+          '.world-semantic-target[data-kind="desk"]',
+        ),
+      ].find((target) => JSON.parse(target.dataset.targetKey!)[2] === nativeId);
+    const targetId = `${destination.workspace_id}-tab-0`;
+    const selectedDeskId = `${base.connections[0]!.snapshot!.workspaces[0]!.workspace_id}-tab-0`;
+    check(
+      window.__HERDR_TOWN_RENDERER__?.ready !== true,
+      "the delayed-setup probe already has a renderer",
+    );
+    roomButton()!.click();
+    if (window.innerWidth <= 640)
+      await waitFor(
+        () => panelBody.querySelector(".town-summary") === null,
+        "phone navigation did not close Summary before setup",
+      );
+    releaseRenderer!();
+    await waitFor(
+      () => window.__HERDR_TOWN_RENDERER__?.ready === true,
+      "delayed renderer never initialized",
+    );
+    const diagnostics = window.__HERDR_TOWN_RENDERER__!;
+    const focused = () => {
+      const rect = desk(targetId)?.getBoundingClientRect();
+      return Boolean(
+        !diagnostics.flying &&
+          diagnostics.zoom > 1.2 &&
+          rect &&
+          rect.left >= 0 &&
+          rect.right <= window.innerWidth &&
+          rect.top >= 0 &&
+          rect.bottom <= window.innerHeight,
+      );
+    };
+    await waitFor(
+      focused,
+      "the room request was lost before renderer/layout readiness",
+    );
+    check(
+      desk(selectedDeskId) !== undefined,
+      "preferred room admission displaced the selected desk",
+    );
+    host
+      .querySelector<HTMLButtonElement>('[aria-label="Show the whole town"]')!
+      .click();
+    await waitFor(
+      () => !diagnostics.flying && diagnostics.zoom < 1,
+      "navigation repeat setup did not return to overview",
+    );
+    if (window.innerWidth <= 640) summaryButton()!.click();
+    await waitFor(
+      () => roomButton() !== null,
+      "Summary did not reopen for the repeated room request",
+    );
+    roomButton()!.click();
+    await waitFor(
+      focused,
+      "a repeated room request did not move the camera again",
+    );
+    setWorld(worldFor(base.connections.slice(0, -1)));
+    await waitFor(
+      () => desk(targetId) === undefined,
+      "removed room remained admitted",
+    );
+    await settle();
+    const restored = {
+      ...base.connections[base.connections.length - 1]!,
+      generation: 4,
+      snapshotGeneration: 4,
+    };
+    const beforeFrames = diagnostics.frames;
+    setWorld(worldFor([...base.connections.slice(0, -1), restored]));
+    await waitFor(
+      () => diagnostics.frames > beforeFrames,
+      "restored topology never rendered",
+    );
+    check(
+      !diagnostics.flying,
+      "removed room navigation replayed on a new generation",
+    );
+    check(
+      desk(selectedDeskId) !== undefined,
+      "room removal displaced the selected desk",
+    );
+    check(
+      diagnostics.lastError === null,
+      `room navigation renderer error: ${diagnostics.lastError}`,
+    );
+    root.unmount();
+    await settle();
+    check(
+      diagnostics.activeApplications === 0,
+      "room navigation unmount leaked a renderer",
+    );
+    return;
+  }
   await waitFor(
     () => window.__HERDR_TOWN_RENDERER__?.ready === true,
     "town renderer did not become ready",
@@ -855,6 +1073,81 @@ async function run() {
       ) !== null,
     "town targets did not finish progressive admission",
   );
+
+  if (scale === "protected" && mode === "test") {
+    const rendered = window.__HERDR_TOWN_RENDERER__!;
+    const orbitCard = () =>
+      [...host.querySelectorAll<HTMLButtonElement>(".town-room-card")].find(
+        (card) => card.textContent?.includes("orbit"),
+      );
+    await waitFor(
+      () => orbitCard() !== undefined,
+      "protected room has no overview card",
+    );
+    const beforeFrames = rendered.frames;
+    orbitCard()!.click();
+    await waitFor(
+      () => rendered.frames > beforeFrames && !rendered.flying,
+      "protected room focus never settled",
+    );
+    await waitFor(
+      () =>
+        host.querySelectorAll('.world-semantic-target[data-kind="desk"]')
+          .length === rendered.desks &&
+        host.querySelector(
+          '.world-semantic-targets-overlay[aria-busy="false"]',
+        ) !== null,
+      "protected targets never finished admission after focus",
+    );
+    const visible = new Set(
+      [
+        ...host.querySelectorAll<HTMLElement>(
+          '.world-semantic-target[data-kind="desk"]',
+        ),
+      ].map((target) => JSON.parse(target.dataset.targetKey!)[2] as string),
+    );
+    check(
+      Array.from(
+        { length: 130 },
+        (_, index) => `local-orbit-tab-${index}`,
+      ).every((key) => visible.has(key)),
+      "protected desks beyond 127 lost their browser targets",
+    );
+    const orbit = [...visible].filter((key) =>
+      key.startsWith("local-orbit-tab-"),
+    ).length;
+    const expand = host.querySelector<HTMLButtonElement>(
+      'button[aria-label^="Expand room orbit"]',
+    );
+    check(
+      expand?.textContent?.trim() === `+${160 - orbit}`,
+      `protected room plaque ${expand?.textContent?.trim()} disagrees with ${orbit} visible desks of 160`,
+    );
+    check(
+      expand?.getAttribute("aria-label") ===
+        "Expand room orbit toward 127 desks" &&
+        expand.title.includes("127 desks") &&
+        !expand.title.includes("all 160"),
+      "expansion accessibility text overpromises all 160 desks",
+    );
+    check(
+      rendered.lastError === null,
+      `protected-room renderer error: ${rendered.lastError}`,
+    );
+    check(
+      rendered.activeApplications === 1 &&
+        document.querySelectorAll("canvas[data-office-canvas]").length === 1,
+      "protected-room StrictMode duplicated the renderer",
+    );
+    root.unmount();
+    await settle();
+    check(
+      rendered.activeApplications === 0 &&
+        document.querySelectorAll("canvas[data-office-canvas]").length === 0,
+      "protected-room unmount left a renderer",
+    );
+    return;
+  }
 
   if (mode === "preview") {
     // `&zoom=room`: into the first room, where an agent spawned another.
@@ -985,49 +1278,100 @@ async function run() {
         : host.querySelectorAll(".town-room").length === totalRooms,
     "the town's rooms were never drawn",
   );
-  // Phones show the Town board as a compact chip that opens the full board;
-  // wider screens show the board itself.
+  // Phones show the Town board as a compact chip, wider screens the board and
+  // its Summary button; either opens the Town summary window, whose
+  // needs-you count is the sign's, the chip's and the rail's.
   {
     const chip = host.querySelector<HTMLButtonElement>(".town-board-chip")!;
     const board = host.querySelector<HTMLElement>(".town-board")!;
     const shown = (element: HTMLElement) =>
       getComputedStyle(element).display !== "none";
-    if (window.innerWidth <= 640) {
-      check(
-        shown(chip) && !shown(board),
-        "a phone shows the Town board chip, not the board",
-      );
-      chip.click();
-      await waitFor(() => shown(board), "the chip did not open the Town board");
-      check(
-        chip.getAttribute("aria-expanded") === "true",
-        "the open chip is not marked expanded",
-      );
-      chip.click();
-      await waitFor(() => !shown(board), "the chip did not close the board");
-      chip.focus({ preventScroll: true });
-      chip.click();
-      await waitFor(
-        () => shown(board),
-        "the focused chip did not reopen the board",
-      );
-      chip.dispatchEvent(
-        new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
-      );
-      await waitFor(
-        () => !shown(board),
-        "Escape on the focused chip did not close the board",
-      );
-      check(
-        chip.getAttribute("aria-expanded") === "false" &&
-          document.activeElement === chip,
-        "Escape should collapse the board and keep focus on its chip",
-      );
-    } else
-      check(
-        !shown(chip) && shown(board),
-        "a wide screen shows the Town board, not its chip",
-      );
+    const phone = window.innerWidth <= 640;
+    check(
+      phone ? shown(chip) && !shown(board) : !shown(chip) && shown(board),
+      phone
+        ? "a phone shows the Town board chip, not the board"
+        : "a wide screen shows the Town board, not its chip",
+    );
+    const signNeeds = Number(
+      board.querySelectorAll("dd")[1]?.textContent ?? "NaN",
+    );
+    const chipNeeds = Number(
+      chip.querySelector('[data-status="blocked"]')?.textContent?.slice(1),
+    );
+    (phone
+      ? chip
+      : board.querySelector<HTMLButtonElement>(".town-board-open")!
+    ).click();
+    await waitFor(
+      () =>
+        panelEntries.some((entry) => entry.id === "panel:town-summary") &&
+        panelBody.querySelector(".town-summary") !== null,
+      "the Town summary window did not open",
+    );
+    const windowNeeds = Number(
+      panelBody.querySelector("#town-summary-needs span")?.textContent,
+    );
+    const railNeeds = Number(
+      host.querySelector(".town-rail-head b")?.textContent ?? "0",
+    );
+    check(
+      windowNeeds === signNeeds &&
+        windowNeeds === chipNeeds &&
+        windowNeeds === railNeeds,
+      `needs-you counts differ: summary ${windowNeeds}, sign ${signNeeds}, chip ${chipNeeds}, rail ${railNeeds}`,
+    );
+    check(
+      ledger.asks.length > 0 &&
+        panelBody.querySelectorAll(".town-ask").length === ledger.asks.length,
+      "the summary must show the rail's open questions",
+    );
+    const summaryAsk = panelBody.querySelector<HTMLElement>(".town-ask")!;
+    const railAsk = host.querySelector<HTMLElement>(".town-ask")!;
+    check(
+      getComputedStyle(summaryAsk).backgroundColor ===
+        getComputedStyle(railAsk).backgroundColor &&
+        getComputedStyle(summaryAsk).borderLeftColor ===
+          getComputedStyle(railAsk).borderLeftColor &&
+        getComputedStyle(summaryAsk).backgroundColor !== "rgba(0, 0, 0, 0)",
+      "the Summary portal lost the shared question card colors",
+    );
+    const sections = [...panelBody.querySelectorAll("h3")].map((heading) =>
+      heading.textContent?.replace(/\s*\d+$/, ""),
+    );
+    check(
+      sections.join("|") ===
+        "Needs you|Finished, not reviewed|Hosts and rooms|Spend",
+      `summary sections out of order: ${sections.join(", ")}`,
+    );
+    check(
+      panelBody.textContent?.includes("No cost data") === true,
+      "a summary without metrics says there is no cost data",
+    );
+    const questionId = ledger.asks[0]!.id;
+    panelBody
+      .querySelector<HTMLButtonElement>(".town-ask-options button")!
+      .click();
+    await waitFor(() => {
+      const counts = [
+        panelBody.querySelector("#town-summary-needs span")?.textContent,
+        board.querySelectorAll("dd")[1]?.textContent,
+        chip.querySelector('[data-status="blocked"]')?.textContent?.slice(1),
+        host.querySelector(".town-rail-head b")?.textContent ?? "0",
+      ];
+      return counts.every((value) => Number(value) === windowNeeds - 1);
+    }, "answering an ask did not update every needs-you count together");
+    check(
+      askAnswers.some(
+        (answer) => answer.id === questionId && answer.answer === "Ship",
+      ),
+      "the summary answer did not use the question's existing owner action",
+    );
+    panelEntries.find((entry) => entry.id === "panel:town-summary")!.onClose();
+    await waitFor(
+      () => panelBody.querySelector(".town-summary") === null,
+      "closing the Town summary window left its body",
+    );
   }
   const roomCards = host.querySelectorAll(".town-room-card");
   const drawnRooms = host.querySelectorAll(".town-room").length;
@@ -1046,20 +1390,99 @@ async function run() {
   );
   const waitingEntries = host.querySelectorAll(".town-reception-entry").length;
   check(waitingEntries > 0, "blocked agents did not appear at reception");
+  // A room past 24 desks shows its busiest until expanded into a longer room.
+  const perRoom = new Map<string, number>();
+  for (const entry of base.connections.flatMap((c) => c.snapshot?.tabs ?? []))
+    perRoom.set(entry.workspace_id, (perRoom.get(entry.workspace_id) ?? 0) + 1);
+  const expectedOffice = projectWorldOffice(
+    worldFor(base.connections),
+    Date.now(),
+  );
+  const seen = readCompletionSeen(worldLocalStorage);
+  const expectedCalls = townCalls(
+    expectedOffice.roster,
+    new Map(),
+    unseenTownCompletions(
+      expectedOffice.roster,
+      new Set(
+        expectedOffice.roster
+          .filter(({ agent }) => seen.has(officeCompletionIdentity(agent)))
+          .map(({ agent }) => agent.key),
+      ),
+    ),
+    (key) => expectedOffice.roster.find(({ agent }) => agent.key === key),
+  );
+  const protectedDesks = townAttentionDesks(
+    expectedCalls,
+    ledger.asks,
+    expectedOffice.roster,
+  );
+  const protectedCounts = new Map<string, number>();
+  for (const { desk } of expectedOffice.deskRoster)
+    if (protectedDesks.has(desk.key)) {
+      const id = expectedOffice.rooms.find(({ key }) => key === desk.roomKey)!
+        .workspaceRef.nativeId;
+      protectedCounts.set(id, (protectedCounts.get(id) ?? 0) + 1);
+    }
+  const drawn = (expanded: string | null) =>
+    [...perRoom].reduce(
+      (sum, [id, count]) =>
+        sum +
+        Math.max(
+          id === expanded ? count : Math.min(count, 24),
+          protectedCounts.get(id) ?? 0,
+        ),
+      0,
+    );
+  const visibleDeskKeys = new Set(
+    [
+      ...host.querySelectorAll<HTMLElement>(
+        '.world-semantic-target[data-kind="desk"]',
+      ),
+    ].map((target) => target.dataset.targetKey),
+  );
+  check(
+    [...protectedDesks].every((key) => visibleDeskKeys.has(key)),
+    "fold hid a desk from the shared call/ask attention source",
+  );
+  check(
+    diagnostics.desks === drawn(null),
+    `a folded town drew ${diagnostics.desks} of ${drawn(null)} desks`,
+  );
+  if (scale === "extended") {
+    const expand = () =>
+      host.querySelector<HTMLButtonElement>(
+        'button[aria-label^="Expand room orbit"]',
+      );
+    check(expand() !== null, "the 100-desk room offers no Expand");
+    expand()?.click();
+    // Wait for the drawn targets: the reflow waits for the press to settle.
+    await waitFor(
+      () =>
+        diagnostics.desks === drawn("local-orbit") &&
+        host.querySelectorAll('.world-semantic-target[data-kind="desk"]')
+          .length === drawn("local-orbit"),
+      `expanding the 100-desk room drew ${diagnostics.desks} of ${drawn("local-orbit")} desks`,
+    );
+    check(
+      host.querySelector('button[aria-label^="Fold room orbit"]') !== null,
+      "an expanded room offers Fold",
+    );
+  }
   const deskTargets = host.querySelectorAll(
     '.world-semantic-target[data-kind="desk"]',
   ).length;
-  const totalTabs = base.connections.reduce(
-    (sum, c) => sum + (c.snapshot?.tabs.length ?? 0),
-    0,
-  );
+  const totalTabs = drawn(scale === "extended" ? "local-orbit" : null);
   check(
     deskTargets === totalTabs,
     `expected ${totalTabs} desk targets, found ${deskTargets}`,
   );
+  // Counted now: expanding a room can move other rooms out of the drawn area.
+  const roomsNow = host.querySelectorAll(".town-room").length;
+  const renames = host.querySelectorAll('[aria-label^="Rename room"]').length;
   check(
-    host.querySelectorAll('[aria-label^="Rename room"]').length === drawnRooms,
-    "every room needs a rename action",
+    renames === roomsNow,
+    `every room needs a rename action (${renames} of ${roomsNow})`,
   );
   // Room actions hidden at the overview must not take a tap.
   const hiddenActions = [
@@ -1999,12 +2422,11 @@ async function run() {
   );
 
   if (scale === "extended") {
-    // Rooms extend: every tab has a desk, the newest included, and zooming
-    // into the 100-desk room opens at its first desks.
-    const tabs = base.connections.flatMap((c) => c.snapshot?.tabs ?? []);
+    // Rooms fold past 24 desks until expanded; an expanded room extends to
+    // every tab, the newest included, and zooming in opens at its first desks.
     check(
-      diagnostics.desks === tabs.length,
-      `an extended town drew ${diagnostics.desks} of ${tabs.length} desks`,
+      diagnostics.desks === drawn("local-orbit"),
+      `an expanded room drew ${diagnostics.desks} of ${drawn("local-orbit")} desks`,
     );
     // Earlier checks leave the camera at a desk; step out until the 100-desk
     // room's card shows (on a phone, Zoom out returns to the first building).
@@ -2097,6 +2519,44 @@ async function run() {
       diagnostics.lastError === null,
       `renderer error at scale: ${diagnostics.lastError}`,
     );
+    // Seen marks and questions can change during the checks above: fold must
+    // use the current attention set, not the initial protected-desk count.
+    const expandedDesks = diagnostics.desks;
+    const expandedGeometry = diagnostics.layout!.geometry;
+    host
+      .querySelector<HTMLButtonElement>('button[aria-label^="Fold room orbit"]')
+      ?.click();
+    const foldedPlaque = () =>
+      host.querySelector<HTMLButtonElement>(
+        'button[aria-label^="Expand room orbit"]',
+      );
+    await waitFor(
+      () =>
+        diagnostics.desks < expandedDesks &&
+        diagnostics.layout!.geometry !== expandedGeometry &&
+        foldedPlaque() !== null,
+      "fold did not restore the room's current attention desks",
+    );
+    await waitFor(
+      () =>
+        host.querySelectorAll('.world-semantic-target[data-kind="desk"]')
+          .length === diagnostics.desks &&
+        host.querySelector(
+          '.world-semantic-targets-overlay[aria-busy="false"]',
+        ) !== null,
+      "folded desk targets did not finish progressive admission",
+    );
+    const orbitDesks = [
+      ...host.querySelectorAll<HTMLElement>(
+        '.world-semantic-target[data-kind="desk"]',
+      ),
+    ].filter((target) =>
+      JSON.parse(target.dataset.targetKey!)[2].startsWith("local-orbit-tab-"),
+    ).length;
+    check(
+      foldedPlaque()!.textContent?.trim() === `+${100 - orbitDesks}`,
+      `fold plaque ${foldedPlaque()!.textContent?.trim()} disagrees with ${orbitDesks} visible desks of 100`,
+    );
 
     // The town takes its shape from its container: phones and portrait
     // screens stack buildings and rooms grow downward; wide screens use
@@ -2142,8 +2602,10 @@ async function run() {
       );
     press("pointerdown");
     const snapshot = base.connections[0]!.snapshot!;
-    const grown = "local-meadow";
-    for (let index = 24; index < 64; index += 1) {
+    // A room under the 24-desk fold grows to it (a folded room would not).
+    const grown = "local-lantern";
+    const had = perRoom.get(grown) ?? 0;
+    for (let index = had; index < 24; index += 1) {
       const tabId = `${grown}-tab-${index}`;
       snapshot.tabs.push({
         tab_id: tabId,
@@ -2183,12 +2645,18 @@ async function run() {
       "the town reflowed while the user held it",
     );
     press("pointerup");
-    const tabs2 = base.connections.flatMap((c) => c.snapshot?.tabs ?? []);
+    const grownDeskCount = () =>
+      [
+        ...host.querySelectorAll<HTMLElement>(
+          '.world-semantic-target[data-kind="desk"]',
+        ),
+      ].filter((target) =>
+        JSON.parse(target.dataset.targetKey!)[2].startsWith(`${grown}-tab-`),
+      ).length;
     await waitFor(
+      () => diagnostics.layout!.geometry !== before && grownDeskCount() === 24,
       () =>
-        diagnostics.layout!.geometry !== before &&
-        diagnostics.desks === tabs2.length,
-      "the grown room never reflowed after the user let go",
+        `the grown room never reflowed after the user let go (geometry changed: ${diagnostics.layout!.geometry !== before}, grown desks: ${grownDeskCount()})`,
     );
     check(
       diagnostics.lastError === null,

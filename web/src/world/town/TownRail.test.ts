@@ -1,7 +1,12 @@
 import { expect, test } from "bun:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { nextTownCall, TownRail, type TownCall } from "./TownRail";
+import {
+  townRailInset,
+  nextTownCall,
+  TownRail,
+  type TownCall,
+} from "./TownRail";
 
 const call = (key: string, kind: TownCall["kind"]) =>
   ({ agent: { key }, kind }) as unknown as TownCall;
@@ -33,6 +38,7 @@ test("Next moves to a finished agent only when no other agent waits", () => {
 test("questions from agents open the rail, with their options", () => {
   const html = renderToStaticMarkup(
     createElement(TownRail, {
+      needsYouCount: 1,
       asks: [
         {
           id: "q-1",
@@ -54,7 +60,17 @@ test("questions from agents open the rail, with their options", () => {
   );
   expect(html).toContain("NEEDS YOU <b>1</b>");
   expect(html).toContain("Ship the fix now?");
-  expect(html).toContain("claude in w1:p2 · 1m");
+  expect(html).toContain("claude in w1:p2");
+  expect(html).toContain("asks: Ship the fix now?");
+  expect(html).toContain("1m</small>");
   expect(html).toContain(">yes</button>");
   expect(html).not.toContain("Nobody is waiting on you.");
+});
+
+test("camera reserves the rail for open questions and respects tray/collapse boundaries", () => {
+  expect(townRailInset(960, false, 1)).toBe(252);
+  expect(townRailInset(960, false, 0)).toBe(0);
+  expect(townRailInset(960, true, 1)).toBe(0);
+  expect(townRailInset(640, false, 1)).toBe(0);
+  expect(townRailInset(641, false, 1)).toBe(252);
 });

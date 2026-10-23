@@ -1,9 +1,16 @@
 import { useId, useState } from "react";
 import { worldLocalStorage } from "../../browserStorage";
-import type { OfficeAgent } from "../herdrOfficeProjection";
+import type { OfficeAgent, OfficeRosterEntry } from "../herdrOfficeProjection";
 import type { WorldAsk } from "../worldAsks";
 import { townPortrait } from "./townSprites";
 import "./townAsks.css";
+
+/** The same room/host wording in Town's peek and Summary. */
+export function townLocation(
+  entry: Pick<OfficeRosterEntry, "roomLabel" | "hostLabel"> | undefined,
+) {
+  return entry ? `${entry.roomLabel} · ${entry.hostLabel}` : "";
+}
 
 export type TownCall = {
   agent: OfficeAgent;
@@ -49,7 +56,7 @@ export function townAgo(since: number, now: number) {
 }
 
 /** One open question from an agent (`herdr-world ask`), answered here. */
-function TownAsk({
+export function TownAsk({
   ask,
   now,
   onAnswer,
@@ -78,11 +85,11 @@ function TownAsk({
         void send(draft);
       }}
     >
-      <small>
-        {ask.actor.label}
-        {ask.actor.verified ? "" : " (unverified)"} · {townAgo(ask.at, now)}
-      </small>
-      <p id={questionId}>{ask.question}</p>
+      <small>{townAgo(ask.at, now)}</small>
+      <p id={questionId}>
+        <b>{ask.actor.label}</b>
+        {ask.actor.verified ? "" : " (unverified)"} asks: {ask.question}
+      </p>
       {ask.options.length ? (
         <div className="town-ask-options">
           {ask.options.map((option, index) => (
@@ -122,6 +129,7 @@ function TownAsk({
  */
 export function TownRail({
   calls: allCalls,
+  needsYouCount,
   activeKey,
   now,
   onPeek,
@@ -131,6 +139,7 @@ export function TownRail({
   asks = [],
   onAnswer = async () => null,
 }: {
+  needsYouCount: number;
   asks?: readonly WorldAsk[];
   onAnswer?(id: string, text: string): Promise<string | null>;
   collapsed: boolean;
@@ -144,8 +153,7 @@ export function TownRail({
   const [closedHosts, setClosedHosts] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
-  const waiting =
-    allCalls.filter((call) => call.kind === "blocked").length + asks.length;
+  const waiting = needsYouCount;
   const calls = allCalls.slice(0, RAIL_LIMIT);
   const hidden = allCalls.length - calls.length;
   // Nothing waiting: the rail steps out of the way entirely.
@@ -204,7 +212,7 @@ export function TownRail({
   return (
     <aside
       className={`town-rail${collapsed ? " town-rail-collapsed" : ""}`}
-      aria-label="Agents that need you"
+      aria-label="Items that need you"
     >
       <div className="town-rail-head">
         <span>
@@ -285,4 +293,85 @@ export function TownRail({
       )}
     </aside>
   );
+}
+
+/**
+ * The call rail's entries, in attention order: blocked agents oldest first,
+ * then unseen finishes. `since` remembers when each agent started waiting and
+ * forgets agents that no longer wait.
+ */
+export function townCalls(
+  roster: readonly OfficeRosterEntry[],
+  since: Map<string, number>,
+  unseenCompletions: readonly OfficeAgent[],
+  entryOf: (agentKey: string) => OfficeRosterEntry | undefined,
+): TownCall[] {
+  const live = new Set<string>();
+  const blocked: TownCall[] = [];
+  for (const entry of roster) {
+    const { agent } = entry;
+    if (agent.semanticStatus !== "blocked" || agent.stale) continue;
+    live.add(agent.key);
+    if (!since.has(agent.key)) since.set(agent.key, Date.now());
+    blocked.push({
+      agent,
+      kind: "blocked",
+      since: since.get(agent.key)!,
+      hostKey: entry.hostKey,
+      hostLabel: entry.hostLabel,
+      roomKey: entry.roomKey,
+      roomLabel: entry.roomLabel,
+    });
+  }
+  for (const key of [...since.keys()]) if (!live.has(key)) since.delete(key);
+  blocked.sort(
+    (a, b) => a.since - b.since || a.agent.key.localeCompare(b.agent.key),
+  );
+  const finished = unseenCompletions.flatMap((agent): TownCall[] => {
+    const entry = entryOf(agent.key);
+    return entry
+      ? [
+          {
+            agent,
+            kind: "done",
+            since: Date.now(),
+            hostKey: entry.hostKey,
+            hostLabel: entry.hostLabel,
+            roomKey: entry.roomKey,
+            roomLabel: entry.roomLabel,
+          },
+        ]
+      : [];
+  });
+  return [...blocked, ...finished];
+}
+
+/** The shared unreviewed finishes, using Town's current finished/seen overlay. */
+export function unseenTownCompletions(
+  roster: readonly OfficeRosterEntry[],
+  seen: ReadonlySet<string>,
+): OfficeAgent[] {
+  return roster
+    .filter(
+      ({ agent }) =>
+        agent.semanticStatus === "done" &&
+        agent.deskKey !== null &&
+        !seen.has(agent.key),
+    )
+    .map(({ agent }) => agent)
+    .sort(
+      (left, right) =>
+        Number(right.canOpenInSpaces) - Number(left.canOpenInSpaces) ||
+        left.displayLabel.localeCompare(right.displayLabel) ||
+        left.key.localeCompare(right.key),
+    );
+}
+
+/** Reserve the wide rail's actual width, including when only questions are open. */
+export function townRailInset(
+  width: number,
+  collapsed: boolean,
+  needsYouCount: number,
+) {
+  return width > 640 && !collapsed && needsYouCount > 0 ? 252 : 0;
 }
