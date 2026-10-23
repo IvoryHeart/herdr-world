@@ -58,13 +58,19 @@ test("while a main-red issue is open, later red commits only comment on it", () 
 });
 
 test("a green run at or after the red commit closes the issue and its revert", () => {
+  const red = "fedcba9876543210fedcba9876543210fedcba98";
   expect(
     planMainGate({
       ...base,
       conclusion: "success",
-      openIssue: { number: 7, atOrAfterRed: true },
+      openIssue: { number: 7, redSha: red, atOrAfterRed: true },
     }),
-  ).toMatchObject({ kind: "resolve", issue: 7 });
+  ).toMatchObject({
+    kind: "resolve",
+    issue: 7,
+    // The red commit's revert, not one named after the green commit.
+    revertBranch: "revert/main-fedcba98",
+  });
   // A late green run of an older commit leaves a newer break open.
   expect(
     planMainGate({
