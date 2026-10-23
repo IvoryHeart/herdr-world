@@ -13,9 +13,9 @@ import {
   townRoomColorKey,
 } from "./townModel";
 
-/** One synthetic host with two workspaces of one tab each. */
-function projection() {
-  const workspaces: Workspace[] = ["w1", "w2"].map((id, index) => ({
+/** One synthetic host with the given workspaces of one tab each. */
+function projection(ids = ["w1", "w2"]) {
+  const workspaces: Workspace[] = ids.map((id, index) => ({
     workspace_id: id,
     number: index + 1,
     label: id,
@@ -77,6 +77,14 @@ test("rooms and buildings show their workspace's and host's chosen colours", () 
   expect(colors.hosts.get(office.hosts[0]!.key)).toBe("pink");
   // Nothing chosen: the shared empty value, so nothing repaints.
   expect(townPlaceColors(office, {})).toBe(NO_PLACE_COLORS);
+});
+
+test("a building with no rooms shown still shows its host's colour", () => {
+  const office = projection([]);
+  expect(office.rooms).toHaveLength(0);
+  expect(office.hosts).toHaveLength(1);
+  const colors = townPlaceColors(office, { "@host:studio": "pink" });
+  expect(colors.hosts.get(office.hosts[0]!.key)).toBe("pink");
 });
 
 test("the same colours keep the same object", () => {

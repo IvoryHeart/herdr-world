@@ -50,14 +50,6 @@ export const NO_PLACE_COLORS: TownPlaceColors = {
 export const townRoomColorKey = (room: OfficeRoom) =>
   workspaceColorKey(room.workspaceRef.connectionId, room.workspaceRef.nativeId);
 
-/** Each host's connection, from its presented rooms. */
-export function townHostConnections(projection: HerdrOfficeProjection) {
-  const connections = new Map<string, string>();
-  for (const room of projection.rooms)
-    connections.set(room.hostKey, room.workspaceRef.connectionId);
-  return connections;
-}
-
 /** The chosen colours of the projection's rooms and buildings. */
 export function townPlaceColors(
   projection: HerdrOfficeProjection,
@@ -69,9 +61,10 @@ export function townPlaceColors(
     if (color) rooms.set(room.key, color);
   }
   const hosts = new Map<string, TerminalColor>();
-  for (const [hostKey, connectionId] of townHostConnections(projection)) {
-    const color = placeColor(colors, hostColorKey(connectionId));
-    if (color) hosts.set(hostKey, color);
+  // Every building, even one with no rooms shown, has its host's colour.
+  for (const host of projection.hosts) {
+    const color = placeColor(colors, hostColorKey(host.connectionId));
+    if (color) hosts.set(host.key, color);
   }
   return rooms.size || hosts.size ? { rooms, hosts } : NO_PLACE_COLORS;
 }

@@ -32,11 +32,7 @@ import {
 } from "../store";
 import { WORLD_OBSERVABILITY_UPDATED_EVENT } from "../workspaceResource";
 import { TownCanvas } from "./town/TownCanvas";
-import {
-  townDeskColorTarget,
-  townHostConnections,
-  townRoomColorKey,
-} from "./town/townModel";
+import { townDeskColorTarget, townRoomColorKey } from "./town/townModel";
 import { resolveTerminal, type TerminalColor } from "./terminalColor";
 import {
   setTerminalColor,
@@ -642,15 +638,14 @@ export default function TownView({
       const room = office.rooms.find((entry) => entry.key === key);
       return room ? placeChoices(townRoomColorKey(room)) : null;
     }
-    const connectionId = townHostConnections(office).get(key);
-    if (!connectionId) return null;
     const host = office.hosts.find((entry) => entry.key === key);
+    if (!host) return null;
     const theme =
       TOWN_HOST_THEMES[
-        (host?.deterministicSkin.themeIndex ?? 0) % TOWN_HOST_THEMES.length
+        host.deterministicSkin.themeIndex % TOWN_HOST_THEMES.length
       ]!;
     return {
-      ...placeChoices(hostColorKey(connectionId)),
+      ...placeChoices(hostColorKey(host.connectionId)),
       defaultHex: theme.roof,
     };
   };
