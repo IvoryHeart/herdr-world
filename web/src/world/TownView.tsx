@@ -34,9 +34,7 @@ import {
   useStoreSelector,
 } from "../store";
 import { WORLD_OBSERVABILITY_UPDATED_EVENT } from "../workspaceResource";
-import { TownSummaryPanel } from "./town/TownSummaryPanel";
-import { WorldPanel } from "./windows/WorldPanel";
-import { townSummary } from "./town/townSummary";
+import { useTownSummary } from "./town/TownSummaryPanel";
 import { TownCanvas } from "./town/TownCanvas";
 import { townDeskColorTarget, townRoomColorKey } from "./town/townModel";
 import { resolveTerminal, type TerminalColor } from "./terminalColor";
@@ -616,17 +614,16 @@ export default function TownView({
       ),
     [office.roster, unseenCompletions, agentByKey],
   );
-  // The Town summary (pm's phase 1): one read model for the board sign, the
-  // phone chip and the summary window, built from the call rail's calls.
-  const summary = useMemo(
-    () => townSummary(office, calls, observability),
-    [office, calls, observability],
-  );
-  const [summaryOpen, setSummaryOpen] = useState(false);
-  const [summaryRoom, setSummaryRoom] = useState<{
-    roomKey: string;
-    seq: number;
-  } | null>(null);
+  // The Town summary: board sign, phone chip and window (pm's phase 1).
+  const townSummary = useTownSummary({
+    world,
+    office,
+    calls,
+    observability,
+    now,
+    narrow: width <= 640,
+    openAgent: (key) => openChat(key),
+  });
   const whereOfAgent = (agentKey: string) => {
     const entry = agentByKey.get(agentKey);
     return entry ? `${entry.roomLabel} · ${entry.hostLabel}` : "";
@@ -1244,27 +1241,7 @@ export default function TownView({
     <>
       {toolbarPortal ? createPortal(toolbar, toolbarPortal) : toolbar}
       <WorldSearchResults world={world} query={query} onSelect={onSelect} />
-      {summaryOpen ? (
-        <WorldPanel
-          name="town-summary"
-          label="Town summary"
-          onClose={() => setSummaryOpen(false)}
-        >
-          <TownSummaryPanel
-            summary={summary}
-            now={now}
-            onOpenAgent={(key) => openChat(key)}
-            onShowRoom={(roomKey) => {
-              // On a phone the summary covers Town: close it to show the room.
-              if (width <= 640) setSummaryOpen(false);
-              setSummaryRoom((last) => ({
-                roomKey,
-                seq: (last?.seq ?? 0) + 1,
-              }));
-            }}
-          />
-        </WorldPanel>
-      ) : null}
+      {townSummary.window}
       <div
         className={`world-office-shell world-stage-shell town-view-shell`}
         onPointerDownCapture={(event) => {
@@ -1433,9 +1410,9 @@ export default function TownView({
             }}
             selectedRoomKey={selectedRoomKey}
             observability={observability}
-            summaryCounts={summary.counts}
-            onOpenSummary={() => setSummaryOpen(true)}
-            roomFocus={summaryRoom}
+            summaryCounts={townSummary.summary.counts}
+            onOpenSummary={townSummary.open}
+            roomFocus={townSummary.roomFocus}
             calm={preferences.townCalm}
             chrome={{
               left:

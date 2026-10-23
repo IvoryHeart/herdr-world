@@ -85,6 +85,8 @@ export function townSummary(
   office: HerdrOfficeProjection,
   calls: readonly TownCall[],
   observability: OfficeObservability,
+  /** Herdr's last session activity of an agent (epoch ms), when known. */
+  activityOf: (agent: OfficeAgent) => number | undefined = () => undefined,
 ): TownSummary {
   const item = (call: TownCall, since: number | null): TownSummaryItem => ({
     agent: call.agent,
@@ -98,7 +100,7 @@ export function townSummary(
     .map((call) => item(call, call.since));
   const finished = calls
     .filter((call) => call.kind === "done")
-    .map((call) => item(call, call.agent.lastActivityAt ?? null))
+    .map((call) => item(call, activityOf(call.agent) ?? null))
     .sort((left, right) => (right.since ?? 0) - (left.since ?? 0));
   // Room and host counts come from the whole roster, not the drawn desks.
   const roomCounts = new Map<string, TownSummaryCounts>();

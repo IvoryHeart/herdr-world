@@ -1,8 +1,15 @@
+import { useMemo, useState, type ReactNode } from "react";
+import type { HerdrOfficeProjection } from "../herdrOfficeProjection";
 import {
   formatOfficeCost,
   formatOfficeModelName,
+  type OfficeObservability,
 } from "../officeObservability";
+import { WorldPanel } from "../windows/WorldPanel";
+import type { WorldObject } from "../worldObject";
+import type { TownCall } from "./TownRail";
 import {
+  townSummary,
   townSummaryAge,
   type TownSummary as TownSummaryModel,
   type TownSummaryCounts,
@@ -183,4 +190,70 @@ function Counts({ counts }: { counts: TownSummaryCounts }) {
         : "empty"}
     </span>
   );
+}
+
+/**
+ * Town's summary: the shared read model for the board sign and phone chip,
+ * and its window while open. A room chosen in the window becomes `roomFocus`
+ * for the canvas; on a phone the window closes first, since it covers Town.
+ */
+export function useTownSummary({
+  world,
+  office,
+  calls,
+  observability,
+  now,
+  narrow,
+  openAgent,
+}: {
+  world: WorldObject;
+  office: HerdrOfficeProjection;
+  calls: readonly TownCall[];
+  observability: OfficeObservability;
+  now: number;
+  narrow: boolean;
+  openAgent(agentKey: string): void;
+}): {
+  summary: TownSummaryModel;
+  open(): void;
+  roomFocus: { roomKey: string; seq: number } | null;
+  window: ReactNode;
+} {
+  const summary = useMemo(
+    () =>
+      townSummary(office, calls, observability, (agent) => {
+        const leaf = world.nodeById.get(agent.nodeId);
+        return leaf && "lastActivityAt" in leaf
+          ? leaf.lastActivityAt
+          : undefined;
+      }),
+    [world, office, calls, observability],
+  );
+  const [isOpen, setOpen] = useState(false);
+  const [roomFocus, setRoomFocus] = useState<{
+    roomKey: string;
+    seq: number;
+  } | null>(null);
+  return {
+    summary,
+    open: () => setOpen(true),
+    roomFocus,
+    window: isOpen ? (
+      <WorldPanel
+        name="town-summary"
+        label="Town summary"
+        onClose={() => setOpen(false)}
+      >
+        <TownSummaryPanel
+          summary={summary}
+          now={now}
+          onOpenAgent={openAgent}
+          onShowRoom={(roomKey) => {
+            if (narrow) setOpen(false);
+            setRoomFocus((last) => ({ roomKey, seq: (last?.seq ?? 0) + 1 }));
+          }}
+        />
+      </WorldPanel>
+    ) : null,
+  };
 }

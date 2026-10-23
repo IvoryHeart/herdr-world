@@ -4,6 +4,7 @@ import {
   projectWorldOffice,
   TOWN_PRESENTATION_BOUNDS,
 } from "../herdrOfficeProjection";
+import type { OfficeAgent } from "../herdrOfficeProjection";
 import type { OfficeObservability } from "../officeObservability";
 import type { WorldRuntimeConnection } from "../runtimeStore";
 import { buildWorldObject } from "../worldObject";
@@ -60,12 +61,19 @@ function office(statuses: Record<string, string[]>) {
     actionable: true,
     snapshot: { workspaces, tabs, panes, agents: [] },
   };
-  return projectWorldOffice(
-    buildWorldObject([connection], "studio"),
+  const world = buildWorldObject([connection], "studio");
+  const projection = projectWorldOffice(
+    world,
     1,
     null,
     TOWN_PRESENTATION_BOUNDS,
   );
+  /** Herdr's activity time, read from the World leaf as Town does. */
+  const activityOf = (agent: OfficeAgent) => {
+    const leaf = world.nodeById.get(agent.nodeId);
+    return leaf && "lastActivityAt" in leaf ? leaf.lastActivityAt : undefined;
+  };
+  return Object.assign(projection, { activityOf });
 }
 
 const NO_METRICS: OfficeObservability = {
@@ -106,7 +114,12 @@ test("the summary counts what the call rail shows, room by room", () => {
     alpha: ["blocked", "working", "done"],
     beta: ["working", "idle"],
   });
-  const summary = townSummary(projection, callsOf(projection), NO_METRICS);
+  const summary = townSummary(
+    projection,
+    callsOf(projection),
+    NO_METRICS,
+    projection.activityOf,
+  );
   // One shared needs-you count: the rail's blocked calls, which reception
   // also shows, and which the sign, the chip and the window all read.
   expect(summary.counts).toEqual({ needsYou: 1, working: 2, finished: 1 });
@@ -171,7 +184,12 @@ test("the summary panel reads in attention order and never shows zero spend", as
   const { createElement } = await import("react");
   const { TownSummaryPanel } = await import("./TownSummaryPanel");
   const projection = office({ alpha: ["blocked", "done"], beta: ["idle"] });
-  const summary = townSummary(projection, callsOf(projection), NO_METRICS);
+  const summary = townSummary(
+    projection,
+    callsOf(projection),
+    NO_METRICS,
+    projection.activityOf,
+  );
   const html = renderToStaticMarkup(
     createElement(TownSummaryPanel, {
       summary,

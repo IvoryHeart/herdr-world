@@ -74,8 +74,6 @@ export type OfficeAgent = {
   displayLabel: string;
   /** The name Herdr gives the agent (agent.list), when it has one. */
   agentName?: string;
-  /** When Herdr last saw this agent's session change (epoch ms), if known. */
-  lastActivityAt?: number;
   taskSummary?: string;
   semanticStatus: WorldAgentStatus;
   stateLabels: Partial<Record<WorldAgentStatus, string>>;
@@ -1162,7 +1160,6 @@ function projectAgent(
     ...(leaf.agentName ? { agentName: leaf.agentName } : {}),
     ...(summary ? { taskSummary: summary } : {}),
     semanticStatus: leaf.status,
-    ...(leaf.lastActivityAt ? { lastActivityAt: leaf.lastActivityAt } : {}),
     stateLabels: leaf.stateLabels,
     focused: leaf.focused,
     destination,

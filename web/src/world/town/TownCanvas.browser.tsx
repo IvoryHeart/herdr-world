@@ -548,6 +548,8 @@ async function run() {
   document.body.append(panelBody);
   const panelEntries: WorldPanelEntry[] = [];
   const panels = {
+    panels: panelEntries,
+    panelBodyRef: () => () => {},
     register: (entry: WorldPanelEntry) => {
       panelEntries.push(entry);
       return () => {
