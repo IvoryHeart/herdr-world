@@ -1193,6 +1193,162 @@
   left: 0;
   top: 0;
 }
+/* The Work lens: pull requests and tickets as columns over the board. */
+.work-lens {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  padding: calc(env(safe-area-inset-top, 0px) + 56px)
+    max(12px, env(safe-area-inset-right, 0px))
+    calc(env(safe-area-inset-bottom, 0px) + 12px)
+    max(12px, env(safe-area-inset-left, 0px));
+  background: color-mix(in srgb, var(--board-ground) 96%, transparent);
+  color: var(--board-ink);
+  touch-action: auto;
+}
+.work-lens-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.work-lens-tabs {
+  display: flex;
+  gap: 2px;
+  margin-right: auto;
+  padding: 3px;
+  border: 1px solid var(--board-line);
+  border-radius: 10px;
+}
+.work-lens-tabs button,
+.work-lens-icon {
+  min-height: 34px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.work-lens-icon {
+  width: 36px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+}
+.work-lens-tabs [aria-selected="true"] {
+  background: var(--board-card);
+  font-weight: 650;
+}
+.work-lens-note {
+  margin: 10px 2px 0;
+  color: var(--board-soft);
+  font-size: 13px;
+}
+.work-lens-hint {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0 0;
+}
+.work-lens-setup {
+  border: 1px dashed var(--board-line);
+  border-radius: 999px;
+  padding: 2px 10px;
+  background: transparent;
+  color: var(--board-soft);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.work-lens-columns {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: 10px;
+  margin-top: 12px;
+  overflow-x: auto;
+  overscroll-behavior: contain;
+}
+.work-lens-column {
+  flex: 0 0 min(260px, 78vw);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border: 1px solid var(--board-line);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--board-card) 45%, transparent);
+}
+.work-lens-column h3 {
+  margin: 0;
+  padding: 10px 12px 6px;
+  font-size: 13px;
+}
+.work-lens-column h3 span {
+  color: var(--board-soft);
+  font-weight: 400;
+}
+.work-lens-column ul {
+  flex: 1;
+  margin: 0;
+  padding: 4px 8px 8px;
+  list-style: none;
+  overflow-y: auto;
+}
+.work-card {
+  margin-top: 8px;
+  padding: 10px 11px;
+  border-radius: 9px;
+  background: var(--board-card);
+  box-shadow: var(--board-shadow);
+}
+.work-lens-column[data-lane="fixing"] .work-card {
+  border-left: 3px solid var(--s-blocked);
+}
+.work-lens-column[data-lane="ready"] .work-card,
+.work-lens-column[data-lane="green"] .work-card {
+  border-left: 3px solid var(--s-done);
+}
+.work-card-ref {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--board-accent);
+  font-size: 12px;
+  font-weight: 650;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+.work-card-title {
+  margin: 4px 0 0;
+  font-size: 13px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.work-card-facts {
+  margin: 6px 0 0;
+  color: var(--board-soft);
+  font-size: 11px;
+}
+.work-card-agents {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 8px;
+}
+.work-card-agents button {
+  padding: 3px 8px;
+  border: 1px solid var(--board-line);
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
 
 /* A host's colour, which tints its zone. */
 .board-zone-label .board-zone-color {

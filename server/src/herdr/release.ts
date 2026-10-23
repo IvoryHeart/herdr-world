@@ -1,15 +1,24 @@
 import { createHash } from "node:crypto";
-import { chmodSync, existsSync, mkdirSync, renameSync, rmSync } from "node:fs";
-import { homedir } from "node:os";
-import { join } from "node:path";
+import {
+  chmodSync,
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  renameSync,
+  rmSync,
+} from "node:fs";
+import { homedir, tmpdir } from "node:os";
+import { basename, dirname, join } from "node:path";
 
 /**
  * Herdr World only installs this exact Herdr build. The SHA-256 values were
  * recorded from https://herdr.dev/latest.json when this version was verified,
  * so a replaced or tampered release asset fails verification instead of
- * installing. Bump the version and checksums together after verifying a new
- * Herdr release against Herdr World's supported protocol range
- * (server/src/bridge/protocol-compat.ts).
+ * installing. Bump the version, the package checksums and the Windows
+ * installer checksum together after verifying a new Herdr release against
+ * Herdr World's supported protocol range (server/src/bridge/protocol-compat.ts).
  */
 export const VERIFIED_HERDR_VERSION = "0.9.5";
 export const VERIFIED_HERDR_PROTOCOL = 22;
@@ -34,22 +43,28 @@ export const VERIFIED_HERDR_SHA256: Record<HerdrReleaseTarget, string> = {
     "d2c6c9c971c43a0bfdde8c692a9a1a7a45c3e4807cd01ae45662b4734fac1cbf",
 };
 
+/**
+ * Herdr's official Windows installer (distribution/install.ps1 at the verified
+ * tag). It owns the Windows layout, so Herdr World runs it in local-package
+ * mode with the package it already verified instead of reimplementing it.
+ */
+export const VERIFIED_HERDR_WINDOWS_INSTALLER_SHA256 =
+  "369e0d2b5a5f976e11b512f3c4b610a2eba6119732b292a2f587ca8f80fe0baf";
+
 export function resolveHerdrReleaseTarget(
   platform: string,
   arch: string,
 ): HerdrReleaseTarget | null {
+  // Herdr ships one x86_64 Windows build; its installer runs it under
+  // emulation on ARM64.
+  if (platform === "win32") {
+    return arch === "x64" || arch === "arm64" ? "windows-x86_64" : null;
+  }
   const os =
-    platform === "linux"
-      ? "linux"
-      : platform === "darwin"
-        ? "macos"
-        : platform === "win32"
-          ? "windows"
-          : null;
+    platform === "linux" ? "linux" : platform === "darwin" ? "macos" : null;
   const cpu = arch === "x64" ? "x86_64" : arch === "arm64" ? "aarch64" : null;
   if (!os || !cpu) return null;
-  const candidate = `${os}-${cpu}` as HerdrReleaseTarget;
-  return candidate in VERIFIED_HERDR_SHA256 ? candidate : null;
+  return `${os}-${cpu}` as HerdrReleaseTarget;
 }
 
 export function herdrReleaseAssetName(target: HerdrReleaseTarget): string {
@@ -65,46 +80,140 @@ export function herdrReleaseUrl(
   return `https://github.com/herdrdev/herdr/releases/download/v${version}/${herdrReleaseAssetName(target)}`;
 }
 
-export function herdrInstallRoot(
-  homeDir: string,
-  appDataDir?: string,
-  platform: string = process.platform,
-): string {
-  if (platform === "win32") {
-    // Herdr's official Windows layout is a junctioned release store under
-    // %USERPROFILE%\.herdr plus a visible bin shim; Herdr World does not
-    // reimplement it and keeps its own managed directory instead.
-    return join(
-      appDataDir ?? join(homeDir, "AppData", "Roaming"),
-      "herdr-world",
-      "herdr",
-    );
-  }
-  // The official Unix installer location (install.sh): a single binary that
-  // `herdr update` can replace in place afterwards.
-  return join(homeDir, ".local", "bin");
-}
-
-export function herdrManagedBinaryPath(
-  homeDir: string,
-  appDataDir?: string,
-  platform: string = process.platform,
+export function herdrWindowsInstallerUrl(
   version: string = VERIFIED_HERDR_VERSION,
 ): string {
-  const base = herdrInstallRoot(homeDir, appDataDir, platform);
-  if (platform !== "win32") return join(base, "herdr");
-  return join(base, version, "herdr.exe");
+  return `https://raw.githubusercontent.com/herdrdev/herdr/v${version}/distribution/install.ps1`;
 }
 
-export interface InstallHerdrDeps {
+export interface HerdrLocationEnv {
   platform?: string;
-  arch?: string;
   homeDir?: string;
+  /** %LOCALAPPDATA% on Windows. */
+  localAppDataDir?: string;
+  /** %APPDATA% on Windows; only locates installs made by older World releases. */
   appDataDir?: string;
+  /** HERDR_INSTALL_DIR, honored by both official installers. */
+  installDir?: string;
+  /** HERDR_HOME: where install.ps1 keeps its Windows release store. */
+  herdrHome?: string;
+}
+
+function locationEnv(env: HerdrLocationEnv) {
+  const platform = env.platform ?? process.platform;
+  const homeDir = env.homeDir ?? homedir();
+  return {
+    platform,
+    homeDir,
+    localAppDataDir:
+      env.localAppDataDir ??
+      process.env.LOCALAPPDATA ??
+      join(homeDir, "AppData", "Local"),
+    appDataDir:
+      env.appDataDir ??
+      process.env.APPDATA ??
+      join(homeDir, "AppData", "Roaming"),
+    installDir:
+      env.installDir ?? (process.env.HERDR_INSTALL_DIR?.trim() || undefined),
+    herdrHome: env.herdrHome ?? (process.env.HERDR_HOME?.trim() || undefined),
+  };
+}
+
+/**
+ * Where Herdr's own installers put the herdr command, so a Herdr that Herdr
+ * World installs is found by `herdr`, `herdr update` and Herdr World alike:
+ * ~/.local/bin/herdr on Unix (install.sh) and the junctioned
+ * %LOCALAPPDATA%\Programs\Herdr\bin\herdr.exe on Windows (install.ps1).
+ */
+export function herdrDefaultBinaryPath(env: HerdrLocationEnv = {}): string {
+  const { platform, homeDir, localAppDataDir, installDir } = locationEnv(env);
+  if (platform === "win32") {
+    return join(
+      installDir ?? join(localAppDataDir, "Programs", "Herdr", "bin"),
+      "herdr.exe",
+    );
+  }
+  return join(installDir ?? join(homeDir, ".local", "bin"), "herdr");
+}
+
+/** Negative when a < b. Pre-releases sort before their release. */
+export function compareHerdrVersions(a: string, b: string): number {
+  const parse = (value: string) => {
+    const [core, pre] = value.split("-", 2);
+    return { parts: core.split(".").map(Number), pre };
+  };
+  const left = parse(a);
+  const right = parse(b);
+  for (let index = 0; index < 3; index += 1) {
+    const difference = (left.parts[index] ?? 0) - (right.parts[index] ?? 0);
+    if (difference) return difference;
+  }
+  if (left.pre === right.pre) return 0;
+  if (!left.pre) return 1;
+  if (!right.pre) return -1;
+  return left.pre < right.pre ? -1 : 1;
+}
+
+/**
+ * Herdr World 0.2.6 and earlier installed Windows Herdr into its own
+ * versioned directories, %APPDATA%\herdr-world\herdr\<version>\herdr.exe,
+ * outside PATH. Returns the installed copies, newest first.
+ */
+export function legacyWindowsHerdrBinaries(
+  env: HerdrLocationEnv = {},
+): string[] {
+  const { appDataDir } = locationEnv(env);
+  const root = join(appDataDir, "herdr-world", "herdr");
+  let versions: string[];
+  try {
+    versions = readdirSync(root).filter((name) =>
+      /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(name),
+    );
+  } catch {
+    return [];
+  }
+  return versions
+    .sort((left, right) => compareHerdrVersions(right, left))
+    .map((version) => join(root, version, "herdr.exe"))
+    .filter((path) => existsSync(path));
+}
+
+/**
+ * Whether a Windows herdr.exe belongs to the layout Herdr's install.ps1
+ * manages: its visible bin junction, the `current` junction, or a release
+ * directory under %USERPROFILE%\.herdr\packages\standalone (HERDR_HOME
+ * moves it). The installer puts the active release directory on PATH, so
+ * PATH lookups often return the release directory itself.
+ */
+export function isOfficialWindowsHerdr(
+  binaryPath: string,
+  env: HerdrLocationEnv = {},
+): boolean {
+  const { homeDir, herdrHome } = locationEnv(env);
+  const standalone = join(
+    herdrHome ?? join(homeDir, ".herdr"),
+    "packages",
+    "standalone",
+  );
+  const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
+  return (
+    basename(binaryPath).toLowerCase() === "herdr.exe" &&
+    (same(binaryPath, herdrDefaultBinaryPath({ ...env, platform: "win32" })) ||
+      same(binaryPath, join(standalone, "current", "herdr.exe")) ||
+      same(dirname(dirname(binaryPath)), join(standalone, "releases")))
+  );
+}
+
+export interface InstallHerdrDeps extends HerdrLocationEnv {
+  arch?: string;
   download?: (url: string, destinationPath: string) => Promise<void>;
+  /** Runs a command to completion and returns its exit code. */
   runCommand?: (argv: string[]) => number;
-  /** Test-only override; production installs always use the verified table. */
+  /** Returns the trimmed `--version` output of a binary, or null if it fails. */
+  readVersion?: (binaryPath: string) => string | null;
+  /** Test-only overrides; production installs always use the verified table. */
   expectedSha256?: string;
+  expectedInstallerSha256?: string;
 }
 
 async function defaultDownload(
@@ -121,17 +230,36 @@ async function defaultDownload(
   await Bun.write(destinationPath, response);
 }
 
-function powershellSingleQuotedString(value: string): string {
-  return `'${value.replaceAll("'", "''")}'`;
+export function readHerdrVersion(binaryPath: string): string | null {
+  try {
+    const result = Bun.spawnSync([binaryPath, "--version"], {
+      stdin: "ignore",
+      stdout: "pipe",
+      stderr: "ignore",
+      timeout: 10_000,
+    });
+    if (result.exitCode !== 0) return null;
+    return result.stdout.toString().trim();
+  } catch {
+    return null;
+  }
 }
 
-/**
- * Download the verified Herdr release into Herdr World's managed directory and
- * return the binary path. Idempotent: an existing managed binary is kept.
- */
-export async function installVerifiedHerdr(
-  deps: InstallHerdrDeps = {},
-): Promise<{ binaryPath: string; version: string; installed: boolean }> {
+/** `herdr 0.9.5` -> `0.9.5`; anything else -> null. */
+export function parseHerdrVersion(output: string | null): string | null {
+  const match = /^herdr (\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)$/.exec(
+    output?.trim() ?? "",
+  );
+  return match?.[1] ?? null;
+}
+
+async function sha256(path: string): Promise<string> {
+  return createHash("sha256")
+    .update(new Uint8Array(await Bun.file(path).arrayBuffer()))
+    .digest("hex");
+}
+
+function verifiedTarget(deps: InstallHerdrDeps): HerdrReleaseTarget {
   const platform = deps.platform ?? process.platform;
   const arch = deps.arch ?? process.arch;
   const target = resolveHerdrReleaseTarget(platform, arch);
@@ -140,63 +268,161 @@ export async function installVerifiedHerdr(
       `no verified Herdr ${VERIFIED_HERDR_VERSION} release for ${platform}-${arch}`,
     );
   }
-  const homeDir = deps.homeDir ?? homedir();
-  const appDataDir = deps.appDataDir ?? process.env.APPDATA;
-  const binaryPath = herdrManagedBinaryPath(homeDir, appDataDir, platform);
-  if (existsSync(binaryPath)) {
-    return { binaryPath, version: VERIFIED_HERDR_VERSION, installed: false };
-  }
+  return target;
+}
 
-  const download = deps.download ?? defaultDownload;
-  const installRoot = herdrInstallRoot(homeDir, appDataDir, platform);
-  const installDir =
-    platform === "win32"
-      ? join(installRoot, VERIFIED_HERDR_VERSION)
-      : installRoot;
-  mkdirSync(installRoot, { recursive: true });
-  // Stage inside the install root so final renames stay on one filesystem.
-  const staging = join(installRoot, `.staging-${process.pid}`);
-  mkdirSync(staging, { recursive: true });
+async function downloadVerifiedPackage(
+  target: HerdrReleaseTarget,
+  destinationPath: string,
+  deps: InstallHerdrDeps,
+): Promise<void> {
+  await (deps.download ?? defaultDownload)(
+    herdrReleaseUrl(target),
+    destinationPath,
+  );
+  const expected = deps.expectedSha256 ?? VERIFIED_HERDR_SHA256[target];
+  if ((await sha256(destinationPath)) !== expected) {
+    throw new Error(
+      "downloaded Herdr checksum does not match the verified release",
+    );
+  }
+}
+
+function assertVerifiedVersion(binaryPath: string, deps: InstallHerdrDeps) {
+  const output = (deps.readVersion ?? readHerdrVersion)(binaryPath);
+  if (parseHerdrVersion(output) !== VERIFIED_HERDR_VERSION) {
+    throw new Error(
+      `Herdr at ${binaryPath} reports ${JSON.stringify(output ?? "no version")}, expected herdr ${VERIFIED_HERDR_VERSION}`,
+    );
+  }
+}
+
+/**
+ * Install or upgrade Windows Herdr with Herdr's official installer, given the
+ * package and installer this Herdr World release verified. The installer
+ * keeps earlier releases beside the new one and switches its `current`
+ * junction only after the new release passes its own checks.
+ */
+async function runVerifiedWindowsInstaller(
+  deps: InstallHerdrDeps,
+): Promise<string> {
+  const target = verifiedTarget(deps);
+  const staging = mkdtempSync(join(tmpdir(), "herdr-world-herdr-"));
   try {
-    const assetName = herdrReleaseAssetName(target);
-    const archivePath = join(staging, assetName);
-    await download(herdrReleaseUrl(target), archivePath);
-    const actual = createHash("sha256")
-      .update(new Uint8Array(await Bun.file(archivePath).arrayBuffer()))
-      .digest("hex");
-    const expectedSha256 = deps.expectedSha256 ?? VERIFIED_HERDR_SHA256[target];
-    if (actual !== expectedSha256) {
+    const packagePath = join(staging, herdrReleaseAssetName(target));
+    await downloadVerifiedPackage(target, packagePath, deps);
+    const installerPath = join(staging, "install.ps1");
+    await (deps.download ?? defaultDownload)(
+      herdrWindowsInstallerUrl(),
+      installerPath,
+    );
+    const expectedInstaller =
+      deps.expectedInstallerSha256 ?? VERIFIED_HERDR_WINDOWS_INSTALLER_SHA256;
+    if ((await sha256(installerPath)) !== expectedInstaller) {
       throw new Error(
-        "downloaded Herdr checksum does not match the verified release",
+        "downloaded Herdr installer checksum does not match the verified release",
       );
     }
-
-    if (platform === "win32") {
-      const runCommand =
-        deps.runCommand ??
-        ((argv: string[]) => Bun.spawnSync(argv).exitCode ?? 1);
-      const extractDir = join(staging, "extracted");
-      const code = runCommand([
-        "powershell.exe",
-        "-NoProfile",
-        "-NonInteractive",
-        "-Command",
-        `Expand-Archive -LiteralPath ${powershellSingleQuotedString(archivePath)} -DestinationPath ${powershellSingleQuotedString(extractDir)} -Force`,
-      ]);
-      if (code !== 0) {
-        throw new Error("could not extract the downloaded Herdr archive");
-      }
-      if (!existsSync(join(extractDir, "herdr.exe"))) {
-        throw new Error("downloaded Herdr archive does not contain herdr.exe");
-      }
-      // Publish the complete layout (herdr.exe, conpty/ and notices) at once.
-      renameSync(extractDir, installDir);
-    } else {
-      chmodSync(archivePath, 0o755);
-      renameSync(archivePath, binaryPath);
+    const runCommand =
+      deps.runCommand ??
+      ((argv: string[]) => Bun.spawnSync(argv).exitCode ?? 1);
+    const argv = [
+      "powershell.exe",
+      "-NoProfile",
+      "-NonInteractive",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-File",
+      installerPath,
+      "-LocalPackagePath",
+      packagePath,
+      "-LocalPackageFormat",
+      "zip",
+      "-LocalPackageIdentity",
+      VERIFIED_HERDR_VERSION,
+      "-LocalPackageSha256",
+      deps.expectedSha256 ?? VERIFIED_HERDR_SHA256[target],
+    ];
+    const { installDir } = locationEnv(deps);
+    if (installDir) argv.push("-InstallDir", installDir);
+    if (runCommand(argv) !== 0) {
+      throw new Error("Herdr's Windows installer failed");
     }
-    return { binaryPath, version: VERIFIED_HERDR_VERSION, installed: true };
+    const binaryPath = herdrDefaultBinaryPath(deps);
+    assertVerifiedVersion(binaryPath, deps);
+    return binaryPath;
   } finally {
     rmSync(staging, { recursive: true, force: true });
   }
+}
+
+/**
+ * Install the verified Herdr release into Herdr's default location and return
+ * the binary path. Idempotent: an existing binary there is kept.
+ */
+export async function installVerifiedHerdr(
+  deps: InstallHerdrDeps = {},
+): Promise<{ binaryPath: string; version: string; installed: boolean }> {
+  const target = verifiedTarget(deps);
+  const binaryPath = herdrDefaultBinaryPath(deps);
+  if (existsSync(binaryPath)) {
+    return { binaryPath, version: VERIFIED_HERDR_VERSION, installed: false };
+  }
+  if (target.startsWith("windows")) {
+    await runVerifiedWindowsInstaller(deps);
+    return { binaryPath, version: VERIFIED_HERDR_VERSION, installed: true };
+  }
+
+  const installDir = dirname(binaryPath);
+  mkdirSync(installDir, { recursive: true });
+  // Stage beside the target so the final rename stays on one filesystem.
+  const staged = join(installDir, `.herdr.new-${process.pid}`);
+  try {
+    await downloadVerifiedPackage(target, staged, deps);
+    chmodSync(staged, 0o755);
+    assertVerifiedVersion(staged, deps);
+    renameSync(staged, binaryPath);
+    return { binaryPath, version: VERIFIED_HERDR_VERSION, installed: true };
+  } finally {
+    rmSync(staged, { force: true });
+  }
+}
+
+/**
+ * Replace an installed Herdr with the verified release. On Unix the old binary
+ * is kept as `<binary>.previous` and restored if the new one fails its version
+ * check; on Windows Herdr's installer keeps the earlier release directories.
+ */
+export async function replaceWithVerifiedHerdr(
+  binaryPath: string,
+  deps: InstallHerdrDeps = {},
+): Promise<{ binaryPath: string; backupPath?: string }> {
+  const target = verifiedTarget(deps);
+  if (target.startsWith("windows")) {
+    return { binaryPath: await runVerifiedWindowsInstaller(deps) };
+  }
+  const directory = dirname(binaryPath);
+  const name = basename(binaryPath);
+  const staged = join(directory, `.${name}.new-${process.pid}`);
+  const backupPath = `${binaryPath}.previous`;
+  try {
+    await downloadVerifiedPackage(target, staged, deps);
+    chmodSync(staged, 0o755);
+    assertVerifiedVersion(staged, deps);
+    copyFileSync(binaryPath, backupPath);
+    chmodSync(backupPath, 0o755);
+    renameSync(staged, binaryPath);
+  } finally {
+    rmSync(staged, { force: true });
+  }
+  try {
+    assertVerifiedVersion(binaryPath, deps);
+  } catch (error) {
+    renameSync(backupPath, binaryPath);
+    throw new Error(
+      `${(error as Error).message}; restored the previous Herdr binary`,
+      { cause: error },
+    );
+  }
+  return { binaryPath, backupPath };
 }

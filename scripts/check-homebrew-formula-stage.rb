@@ -19,6 +19,18 @@ class StageBin
   end
 end
 
+# The staged archive is the World package; the Intel Mac Herdr resource is
+# checked by its pinned URL and digest in generate-homebrew-formula.test.ts.
+module OS
+  def self.mac? = false
+end
+
+module Hardware
+  module CPU
+    def self.intel? = false
+  end
+end
+
 class Formula
   def self.test(&_block); end
   def self.method_missing(_name, *_args, &_block); end

@@ -126,6 +126,15 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     strings whose target closed wait in Needs a home. Selecting a card opens
     the shared Inspector. Development builds add an event trace for bug reports
     ([development tools](docs/development.md#development-tools)).
+  - **Work** (the pull request button in Board's controls) lays your pull
+    requests out as columns: In review, Fixing (changes requested, checks
+    failing or conflicts), Green (checks pass, a required review is pending),
+    Ready to merge (approved, or passing where no review is required) and
+    Merged; the Tickets tab
+    groups Jira tickets and assigned GitHub issues by status. Each card links
+    to the pull request or ticket and names the agents working on it; tap an
+    agent to jump to its card. Escape, Back or a press outside closes it. See
+    [Sources](#sources-github-and-jira).
   See the [Board exercise](./docs/TUTORIAL.md#board).
 
 - **Desk** organizes the filtered hosts' agents by what
@@ -206,6 +215,34 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   or assign tasks to an agent.
 - World runs as one application and one browser origin. No remote World/Roamgate
   service or browser bridge URL is required for an SSH host.
+
+### Sources: GitHub and Jira
+
+World reads your pull requests and tickets itself; there is nothing else to
+install, and every source is on by default. Open **Settings → Sources** to see
+each source's state, switch it off or configure it.
+
+- **GitHub** uses the GitHub CLI signed in as the user that runs World (`gh
+  auth login`): open pull requests you opened, were asked to review or are
+  assigned, the last week's merged ones and issues assigned to you, each with
+  review state, checks and mergeability. World stores no GitHub credentials.
+- **Jira Cloud** needs a site, your account email and an API token. The token
+  stays in World's private storage on the service and is never shown again;
+  changing the site or email removes it, so enter the token again with them.
+  The filter (JQL) defaults to tickets assigned to you or that you watch.
+- An agent is linked to the pull request whose branch its checkout is on (the
+  branch's own repository, or fork, is a GitHub remote of that checkout), to a
+  pull request it reported with
+  `herdr-world agent-checkout --pr`, and to a ticket whose key its branch names
+  (for example `abc-12-fix-login` and `ABC-12`). Its Town desk shows the badge
+  on its nameplate (`#123 ✓`, `#123 ✗`, `#123 ●` or `ABC-12`), and Board's Work
+  lens names it on the card. A link holds only for the agent session and
+  Herdr runtime it was made in.
+- A source that is not signed in or configured says how to connect it (Work
+  shows a quiet **Set up** button for one you never set up); the views work
+  without it. The service refreshes at most once a minute while a visible
+  browser tab shows sources, answers at once with what it has while a refresh
+  runs, and the browser never contacts GitHub or Jira.
 
 ### Retired views and runtime boundaries
 
@@ -389,6 +426,9 @@ See [resource ownership](docs/ARCHITECTURE.md#workspace-resource-ownership).
   says so, or that it cannot tell when the same words appeared at about the
   same time. Slash commands, and Claude Code's `!` and `#`, go through the
   Terminal.
+  A Now bar shows the agent's status, its current task from the terminal title
+  and how long it has been at it, with Stop (or Esc twice) for Claude Code,
+  Codex and Pi; the step running now shows with its command and timer.
   It refreshes when the service sees the transcript, title or status change,
   without browser polling, and keeps the last good view if a read fails. When
   it cannot read the conversation it shows the reason with the matching action:
@@ -665,6 +705,13 @@ load asynchronously; editing the name takes precedence over a late suggestion.
 - Manage a user service from the CLI; check releases and run checksum-verified
   one-click standalone updates under a supported supervisor. Probe `/health` or
   `/healthz`. See [services](docs/DEPLOYMENT.md#user-service).
+- Keep Herdr on the version this World release verified: installs and updates
+  bring Herdr, the Codex/Claude/Pi harness integrations and the Herdr World plugin up to
+  date, and **Menu → Runtime → Upgrade Herdr** (or **Update Herdr integrations**)
+  appears when something is behind. A running server keeps its panes through a
+  live handoff when World can prove nothing supervises it (Linux); otherwise World says a restart is
+  needed. See
+  [Herdr installation and upgrades](docs/DEPLOYMENT.md#herdr-installation-and-upgrades).
 
 **All listeners require login**, including loopback. World generates a persistent
 token unless an 8–1024-character password is configured; 15+ characters are
