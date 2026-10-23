@@ -1653,6 +1653,7 @@
         "server/src/herdr/spawn-stamp.test.ts",
         "web/src/world/relations.test.ts",
         "web/src/world/useTerminalColors.test.ts",
+        "web/src/world/town/townTeamActions.test.ts",
         "web/src/world/town/townDrag.test.ts",
         "web/src/world/town/TownCanvas.test.ts"
       ],

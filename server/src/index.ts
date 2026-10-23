@@ -1681,7 +1681,12 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
       }
       // A Board note's agent spawned this one: stamp it so World groups them.
       if (result.pane_id && requestIsCurrent())
-        await stampLaunchParent(call, p, result.pane_id, logger);
+        await stampLaunchParent(
+          (rpc, rpcParams) => herdr.call(rpc, rpcParams, 10_000),
+          p,
+          result.pane_id,
+          logger,
+        );
       sendReply({ id, result }, method);
     } catch (error) {
       sendError(`${method}-error`, error);

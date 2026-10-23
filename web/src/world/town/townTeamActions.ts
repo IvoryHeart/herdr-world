@@ -39,6 +39,12 @@ export type TownTeamDeps = {
   /** Close the desk's menu, or open its "Group with…" step. */
   closeMenu(): void;
   openGroupMenu(deskKey: string): void;
+  /** Board's and Herdr's writes; tests replace them. */
+  io?: {
+    groupTerminals: typeof groupTerminals;
+    ungroupTerminals: typeof ungroupTerminals;
+    requestDeskReorder: typeof requestDeskReorder;
+  };
 };
 
 export type TownMenuEntry = {
@@ -55,6 +61,11 @@ export type TownMenuEntry = {
  */
 export function townTeamActions(deps: TownTeamDeps) {
   const { toast } = deps;
+  const io = deps.io ?? {
+    groupTerminals,
+    ungroupTerminals,
+    requestDeskReorder,
+  };
   /** Pinned in Town (useDeskPins.ts, keyed like the desk's colour). */
   const deskPinned = (desk: OfficeDesk) => {
     const target = townDeskColorTarget(deps.office, desk);
@@ -92,7 +103,7 @@ export function townTeamActions(deps: TownTeamDeps) {
       roomKey: target.roomKey,
       tabRef: { ...desk.tabRef, nativeId: tabId },
     };
-    const outcome = await requestDeskReorder(moved, target).catch(
+    const outcome = await io.requestDeskReorder(moved, target).catch(
       (cause): TownMoveOutcome => ({
         status: "refused",
         reason: "tab_move",
@@ -142,7 +153,7 @@ export function townTeamActions(deps: TownTeamDeps) {
       );
       return "returned";
     }
-    const problem = await groupTerminals(members, with_);
+    const problem = await io.groupTerminals(members, with_);
     if (problem) {
       toast("error", `${desk.displayLabel} was not grouped: ${problem}`);
       return "returned";
@@ -163,7 +174,7 @@ export function townTeamActions(deps: TownTeamDeps) {
   const runUngroupDesk = async (deskKey: string): Promise<TownMoveResult> => {
     const desk = deps.deskForKey(deskKey);
     if (!desk) return "returned";
-    const problem = await ungroupTerminals(deskTerminals(desk));
+    const problem = await io.ungroupTerminals(deskTerminals(desk));
     toast(
       problem ? "error" : "ok",
       problem
