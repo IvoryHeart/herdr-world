@@ -28,6 +28,7 @@ import {
   resourceScopeForWorkspace,
   WORLD_OBSERVABILITY_SETTINGS_EVENT,
   WORLD_OBSERVABILITY_UPDATED_EVENT,
+  WORLD_SOURCES_SETTINGS_EVENT,
   WORKSPACE_INSPECTOR_CLOSE_EVENT,
   writeInspectorPreferences,
 } from "../workspaceResource";
@@ -81,6 +82,12 @@ export const OfficeObservabilityDialog = lazyWithReload(
     })),
 );
 
+export const SourcesDialog = lazyWithReload("world-sources", () =>
+  import("./SourcesDialog").then((module) => ({
+    default: module.SourcesDialog,
+  })),
+);
+
 export default function WorldFoundationApp() {
   const [view, setViewState] = useState<WorldView>(initialView);
   const { mobile } = useLayoutPreferences();
@@ -114,6 +121,7 @@ export default function WorldFoundationApp() {
     Record<string, HTMLDivElement | null>
   >({});
   const [officeMetricsOpen, setOfficeMetricsOpen] = useState(false);
+  const [sourcesOpen, setSourcesOpen] = useState(false);
   const workspaceSurfaceSelectionRef = useRef<
     ((selection: WorkspaceSurfaceSelection) => Promise<boolean>) | null
   >(null);
@@ -222,6 +230,12 @@ export default function WorldFoundationApp() {
   useEffect(() => {
     worldRuntimeStore.start();
     return () => worldRuntimeStore.stop();
+  }, []);
+
+  useEffect(() => {
+    const open = () => setSourcesOpen(true);
+    window.addEventListener(WORLD_SOURCES_SETTINGS_EVENT, open);
+    return () => window.removeEventListener(WORLD_SOURCES_SETTINGS_EVENT, open);
   }, []);
 
   useEffect(() => {
@@ -590,6 +604,14 @@ export default function WorldFoundationApp() {
       {mobile && view !== "spaces" && !canReturnToView && !zenActive ? (
         <WorldMobileNav view={view} onSelect={setView} />
       ) : null}
+      {sourcesOpen
+        ? createPortal(
+            <Suspense fallback={null}>
+              <SourcesDialog onClose={() => setSourcesOpen(false)} />
+            </Suspense>,
+            document.body,
+          )
+        : null}
       {officeMetricsOpen
         ? createPortal(
             <Suspense fallback={null}>

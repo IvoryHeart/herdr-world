@@ -48,9 +48,13 @@ older World or Roamgate installation.
 ### Open your first workspace: about 5 minutes
 
 1. If Herdr is already installed, start it with a trusted project open. See
-   [herdr.dev](https://herdr.dev) for setup. If it is not installed, complete the
-   **standalone World installation in step 2 first**, then run
-   `herdr-world herdr setup` to install and start Herdr before step 3.
+   [herdr.dev](https://herdr.dev) for setup. If it is not installed, do step 2
+   first: the standalone installer and Homebrew install the Herdr version this
+   World release verified (with npm or a Windows archive, run
+   `herdr-world herdr upgrade --install`). Then run `herdr-world herdr setup` to
+   start Herdr before step 3. Later World updates upgrade Herdr and the Herdr
+   integrations for the Codex, Claude and Pi harnesses on the machine too; see
+   [Herdr installation and upgrades](./DEPLOYMENT.md#herdr-installation-and-upgrades).
 2. [Install Herdr World](./DEPLOYMENT.md#install-a-release). Standalone needs no Bun;
    Windows supports npm (`npm install --global @ivoryheart/herdr-world`,
    Node.js 22.14.0 or newer) or the matching x64/ARM64 archive and
@@ -254,6 +258,20 @@ on your phone and desktop.
    phone, hold the tab still for a moment first; a quick swipe pans). Board
    asks first, with **Don't ask again**, and always asks before moving a
    workspace's last tab, which closes that workspace. Strings follow the move.
+
+9. Press the pull request button in Board's controls to open **Work**: your
+   GitHub pull requests in columns from **In review** through **Fixing**,
+   **Green** and **Ready to merge** to **Merged**, and on the **Tickets** tab
+   your Jira tickets and assigned issues by status. A card names the agents
+   working on it; tap one to close Work and jump to its card. Escape or a
+   press outside also closes Work. **Green** means checks pass while a
+   required review is pending; **Ready to merge** means approved, or passing
+   in a repository that requires no review. The same pull
+   request appears as a badge on the agent's desk in Town, such as `#42 ✓`.
+   If Work shows **Set up Jira** or says no source is connected, open
+   **Settings → Sources**: sign
+   in to GitHub with `gh auth login` as the user that runs World, or add your
+   Jira site, account email and an API token there.
 
 After Herdr restarts, Board cannot prove that a workspace or agent is the one a
 string was made with, so it draws those strings dashed and asks once per host:
