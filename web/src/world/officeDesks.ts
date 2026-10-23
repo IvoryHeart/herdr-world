@@ -62,3 +62,21 @@ const DESK_STATUS_RANK: Record<WorldAgentStatus, number> = {
   done: 3,
   idle: 4,
 };
+
+/** `first` ranks some priority values ahead of the rest of them. */
+export function boundedWithPriority<T>(
+  values: readonly T[],
+  limit: number,
+  priority: (value: T) => boolean,
+  first: (value: T) => boolean = () => false,
+) {
+  if (values.length <= limit) return [...values];
+  const admitted = new Set(
+    [
+      ...values.filter(first),
+      ...values.filter((value) => !first(value) && priority(value)),
+      ...values.filter((value) => !priority(value)),
+    ].slice(0, limit),
+  );
+  return values.filter((value) => admitted.has(value));
+}

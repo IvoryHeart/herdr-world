@@ -81,10 +81,11 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     last of the tables shown (**M** lists the same places). Rooms extend as
     tabs open: wide screens show three columns of rooms up to eight tables
     wide, portrait and half-width screens two columns up to six, and phones
-    one column up to four, growing downward. A folded room normally shows 24
-    tables, keeping the ones that need you, are working or are newest; selected
-    and pinned tables stay visible beyond that count. Its plaque's
-    **+N** expands it into a longer room of up to 127 tables, and **Fold**
+    one column up to four, growing downward. A folded room normally shows up to
+    24 tables. Selected and pinned tables, blocked agents, unreviewed finishes
+    and verified agents with open questions stay visible beyond that count.
+    Its plaque's **+N** counts only hidden tables and expands the room to a
+    normal limit of 127; the same tables stay visible beyond that limit. **Fold**
     puts it back. A growing room moves only the rooms below it, and never
     while you hold the town. Town asks Herdr to move the tab and
     shows the new order when Herdr reports it; agents stay with their table.

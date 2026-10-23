@@ -33,6 +33,7 @@ import {
   useStoreSelector,
 } from "../store";
 import { WORLD_OBSERVABILITY_UPDATED_EVENT } from "../workspaceResource";
+import { townAttentionDesks } from "./town/townAttention";
 import { useTownOffice } from "./town/useTownOffice";
 import { TownCanvas } from "./town/TownCanvas";
 import type { TownQuestMark } from "./town/townQuestPennant";
@@ -66,9 +67,9 @@ import { TownChooser } from "./town/TownChooser";
 import { TownPeek, townStatusText } from "./town/TownPeek";
 import {
   nextTownCall,
+  townCalls,
   readTownRailCollapsed,
   TownRail,
-  type TownCall,
 } from "./town/TownRail";
 import { sharedAsksStore, useWorldAsks } from "./worldAsks";
 import { useNow } from "./handoffs";
@@ -170,6 +171,7 @@ export default function TownView({
     office: observedOffice,
     deskPins,
     toggleRoomFold,
+    present,
   } = useTownOffice(world, selectedId);
   const townFinished = useTownFinished(observedOffice);
   // Terminal frames and unrelated store updates must not reconcile the scene.
@@ -599,47 +601,26 @@ export default function TownView({
           : new Map(current).set(key, status),
       );
   };
-  const calls = useMemo((): TownCall[] => {
-    const since = blockedSince.current;
-    const live = new Set<string>();
-    const blocked: TownCall[] = [];
-    for (const entry of office.roster) {
-      const { agent } = entry;
-      if (agent.semanticStatus !== "blocked" || agent.stale) continue;
-      live.add(agent.key);
-      if (!since.has(agent.key)) since.set(agent.key, Date.now());
-      blocked.push({
-        agent,
-        kind: "blocked",
-        since: since.get(agent.key)!,
-        hostKey: entry.hostKey,
-        hostLabel: entry.hostLabel,
-        roomKey: entry.roomKey,
-        roomLabel: entry.roomLabel,
-      });
-    }
-    for (const key of [...since.keys()]) if (!live.has(key)) since.delete(key);
-    blocked.sort(
-      (a, b) => a.since - b.since || a.agent.key.localeCompare(b.agent.key),
-    );
-    const finished = unseenCompletions.flatMap((agent): TownCall[] => {
-      const entry = agentByKey.get(agent.key);
-      return entry
-        ? [
-            {
-              agent,
-              kind: "done",
-              since: Date.now(),
-              hostKey: entry.hostKey,
-              hostLabel: entry.hostLabel,
-              roomKey: entry.roomKey,
-              roomLabel: entry.roomLabel,
-            },
-          ]
-        : [];
-    });
-    return [...blocked, ...finished];
-  }, [office.roster, unseenCompletions, agentByKey]);
+  const calls = useMemo(
+    () =>
+      townCalls(office.roster, blockedSince.current, unseenCompletions, (key) =>
+        agentByKey.get(key),
+      ),
+    [office.roster, unseenCompletions, agentByKey],
+  );
+  const attentionDesks = useMemo(
+    () => townAttentionDesks(calls, asks, office.roster),
+    [calls, asks, office.roster],
+  );
+  const presentedOffice = useMemo(
+    () =>
+      withTownFinished(
+        present(attentionDesks),
+        townFinished.finished,
+        completionSeenKeys,
+      ),
+    [present, attentionDesks, townFinished.finished, completionSeenKeys],
+  );
   const whereOfAgent = (agentKey: string) => {
     const entry = agentByKey.get(agentKey);
     return entry ? `${entry.roomLabel} · ${entry.hostLabel}` : "";
@@ -1346,7 +1327,7 @@ export default function TownView({
         <div className="town-stage">
           <TownCanvas
             trace={trace}
-            projection={office}
+            projection={presentedOffice}
             relations={relations}
             terminalColors={terminalColors}
             deskPins={deskPins}

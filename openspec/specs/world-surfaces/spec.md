@@ -1112,11 +1112,15 @@ grows square until it reaches its shape's width (four desks on a phone, six on
 portrait and mid-width screens, eight on wide screens) and then extends
 downward, and its building grows around it. A folded room SHALL use a default
 bound of 24 desks, and an expanded room a default bound of 127; Fold SHALL
-restore the 24-desk bound. Selected and pinned desks SHALL remain visible even
-past these bounds, subject to the pinned-desk requirement. A room with more
-tabs than it draws SHALL keep selected and pinned desks and the three newest
-tabs, then desks whose agents need the user, are
-working or are unknown, then finished ones, hiding idle and empty desks first,
+restore the 24-desk bound. Selected and pinned desks, every desk represented
+by the shared Town call list (blocked agents and unreviewed finishes), and the
+desk of a verified, qualified asking agent with an open question SHALL remain
+visible past either bound. Admission SHALL consume desk keys from that shared
+attention source after its finished/seen overlay, without independently inferring
+attention from projection status or matching question actors by label. A room
+with more tabs than it draws SHALL keep these protected desks, then the three
+newest tabs, then working or unknown agents, then finished ones, hiding idle and
+empty desks first. No protected desk SHALL contribute to the hidden count. Town
 SHALL count every hidden desk on the room, and SHALL offer Expand on its plaque
 while it is folded. Zooming into a room taller or wider than the usable view, from its
 card or with Zoom in, SHALL open at its first desks. While a

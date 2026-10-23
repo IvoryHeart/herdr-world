@@ -17,6 +17,11 @@ export function useTownOffice(world: WorldObject, selectedId: string | null) {
     () => createOfficeProjector(TOWN_PRESENTATION_BOUNDS),
     [],
   );
+  // Separate caches avoid alternating semantic and protected presentation inputs.
+  const projectPresentation = useMemo(
+    () => createOfficeProjector(TOWN_PRESENTATION_BOUNDS),
+    [],
+  );
   const deskPins = useDeskPins();
   // Only which tabs are pinned matters to admission, not their cells.
   const pinnedTabKeys = Object.keys(deskPins).sort().join("\n");
@@ -41,5 +46,17 @@ export function useTownOffice(world: WorldObject, selectedId: string | null) {
       projectOffice(world, Date.now(), selectedId, pinnedTabs, expandedRooms),
     [world, selectedId, projectOffice, pinnedTabs, expandedRooms],
   );
-  return { office: observedOffice, deskPins, toggleRoomFold };
+  const present = useCallback(
+    (protectedDesks: ReadonlySet<string>) =>
+      projectPresentation(
+        world,
+        Date.now(),
+        selectedId,
+        pinnedTabs,
+        expandedRooms,
+        protectedDesks,
+      ),
+    [world, selectedId, pinnedTabs, expandedRooms, projectPresentation],
+  );
+  return { office: observedOffice, deskPins, toggleRoomFold, present };
 }
