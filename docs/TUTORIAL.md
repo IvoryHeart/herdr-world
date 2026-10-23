@@ -157,6 +157,11 @@ changes what you see and does not disconnect hosts or retarget open terminals.
    the selected pane's host; review the message and attached paths before
    sending. The window's **Files** and **Changes** views hold its files and
    changes; **Open terminal** is for direct work.
+   The swatch beside a room's name colours that workspace (its carpet here,
+   its card in Board and a dot in the Spaces sidebar), and the swatch on a
+   building's reception board colours the host (its roof, Board zone and
+   Spaces header). A workspace's colour shows on its tables that have no colour
+   of their own; a host's does not.
    The colour swatch beside the agent's name changes the colour of its table;
    it is the tab's colour everywhere in World. The same swatch sits beside the
    name in a terminal's header, the terminal window's menu has **Colour**, and
