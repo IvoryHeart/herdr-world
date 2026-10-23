@@ -4145,9 +4145,10 @@ async function run() {
         ?.includes("Builder Sibling") === true &&
       document
         .querySelector(
-          '[aria-label="Reviewer Next Inspector"] .workspace-inspector-agent-identity',
+          '[aria-label="Reviewer Next Inspector"] .workspace-inspector-checkout',
         )
-        ?.textContent?.includes("Reviewer Next") === true &&
+        ?.getAttribute("title")
+        ?.includes("Reviewer Next") === true &&
       Math.abs(afterSiblingBounds.left - splitBuilderBounds.left) <= 2 &&
       Math.abs(afterSiblingBounds.top - splitBuilderBounds.top) <= 2,
     "sibling focus moved or docked its floating Inspector",
