@@ -26,6 +26,16 @@ import { useWorldInspectorController } from "./useWorldInspectorController";
 import { useWorldVisualActions } from "./useWorldVisualActions";
 import { useTerminalColorChoices } from "./useTerminalColors";
 import type { WorldInspectorConversation } from "./worldTerminalPresentation";
+import type {
+  WorldAgentStatus,
+  WorldLeafObject,
+  WorldObjectNode,
+} from "./worldObject";
+
+/** Switch to lists the agents waiting on you, then finished ones, then the rest. */
+function switchToRank(status: WorldAgentStatus) {
+  return status === "blocked" ? 0 : status === "done" ? 1 : 2;
+}
 
 const TownView = lazyWithReload("world-town", () => import("./TownView"));
 const BoardView = lazyWithReload("world-board", () => import("./BoardView"));
@@ -324,7 +334,7 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
                   // Town draws its one window in the Town prototype's look;
                   // Board and Desk keep the calm shell look.
                   className={`world-floating-terminal ${
-                    view === "town" ? "is-town-skin" : ""
+                    view === "town" ? "is-town-skin theme-scope-dark" : ""
                   }`}
                   onTerminalActivate={(paneId) => {
                     const snapshot = connectionSnapshot(
@@ -512,21 +522,24 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
               back: view === "town" ? { label: "Back to Town" } : undefined,
               // A phone switches between agents and terminals from ⋯, as
               // its terminal does: agents open on Chat, terminals on Terminal.
+              // The list is the hosts the filter shows, live ones only, those
+              // that need you first; the menu scrolls rather than cutting.
               switchTo: compactArrangement
                 ? presentedWorld.nodes
                     .filter(
-                      (node) =>
+                      (node: WorldObjectNode): node is WorldLeafObject =>
                         (node.kind === "agent" || node.kind === "terminal") &&
+                        node.actionable &&
+                        !node.stale &&
                         node.id !== conversation.nodeId,
                     )
-                    .slice(0, 24)
+                    .sort(
+                      (a, b) => switchToRank(a.status) - switchToRank(b.status),
+                    )
                     .map((node) => ({
                       id: node.id,
                       label: node.label,
-                      detail:
-                        node.kind === "agent" || node.kind === "terminal"
-                          ? `${node.stateLabels[node.status] ?? node.status} · ${node.spaceLabel}`
-                          : undefined,
+                      detail: `${node.stateLabels[node.status] ?? node.status} · ${node.spaceLabel}`,
                       onSelect: () =>
                         void applySelection(
                           node.id,

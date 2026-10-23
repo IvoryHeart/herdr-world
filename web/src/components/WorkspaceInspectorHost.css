@@ -392,6 +392,14 @@
   }
 }
 
+/* A managed window whose bar is crowded keeps only the active view's chip;
+   every view is in the window's ⋯. */
+.workspace-inspector-head[data-views-in-menu]
+  .workspace-inspector-tabs
+  button:not(.is-active) {
+  display: none;
+}
+
 .workspace-inspector-tabs-menu {
   display: flex;
   flex-direction: column;

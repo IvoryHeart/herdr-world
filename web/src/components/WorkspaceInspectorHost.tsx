@@ -281,6 +281,10 @@ export function WorkspaceInspectorHost({
   const diffViewerRef = useRef<DiffViewerPanelHandle | null>(null);
   const splitId = useId();
   const [hostWidth, setHostWidth] = useState(0);
+  // The widest window width at which the bar was found crowded; below it a
+  // managed window's views join ⋯.
+  const [crowdedBelow, setCrowdedBelow] = useState(360);
+  const headRef = useRef<HTMLElement | null>(null);
   const { mobile } = useLayoutPreferences();
   const [fileDiffState, setFileDiffState] = useState<{
     resourceKey: string;
@@ -484,6 +488,27 @@ export function WorkspaceInspectorHost({
     return () => observer.disconnect();
   }, []);
 
+  const viewsInMenu = Boolean(
+    windowControls &&
+      (windowControls.compact || (hostWidth > 0 && hostWidth < crowdedBelow)),
+  );
+  // A bar whose controls overflow, or whose name is squeezed below a
+  // readable width, moves its views into ⋯ at this width and narrower. The
+  // Town skin's larger targets crowd well before 360px.
+  useLayoutEffect(() => {
+    const head = headRef.current;
+    if (!windowControls || viewsInMenu || !head || hostWidth <= 0) return;
+    const identity = head.querySelector<HTMLElement>(
+      ".workspace-inspector-agent-identity, .workspace-inspector-identity",
+    );
+    if (
+      head.scrollWidth > head.clientWidth + 1 ||
+      (identity && identity.clientWidth < 120)
+    ) {
+      setCrowdedBelow(hostWidth + 1);
+    }
+  }, [windowControls, viewsInMenu, hostWidth, state.view]);
+
   // The line under the name says where this is; it opens the repository's
   // branch and PR status, so the bar needs no separate button or card.
   const locationLine = (content: ReactNode, description: string) =>
@@ -535,6 +560,10 @@ export function WorkspaceInspectorHost({
       data-view={state.view}
     >
       <header
+        ref={headRef}
+        data-views-in-menu={
+          viewsInMenu && !windowControls?.compact ? "" : undefined
+        }
         // A managed window keeps its bar on a phone, Terminal included: it
         // holds the view selector. The shell's own Inspector uses the
         // phone's terminal bar instead.
@@ -795,9 +824,9 @@ export function WorkspaceInspectorHost({
             // A phone shows the window like its terminal: the views move
             // into ⋯ beside the agents it can switch to.
             controls={
-              // Below 360px the views join ⋯ too, so a narrow window
-              // keeps one menu rather than two.
-              windowControls.compact || (hostWidth > 0 && hostWidth < 360)
+              // A crowded or narrow window's views join ⋯ too, so it keeps
+              // one menu rather than two.
+              viewsInMenu
                 ? {
                     ...windowControls,
                     narrow: !windowControls.compact,

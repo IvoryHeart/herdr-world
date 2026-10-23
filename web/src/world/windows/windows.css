@@ -368,27 +368,6 @@
   height: 32px;
   padding: 0;
 }
-.world-window-next {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  min-height: 28px;
-  padding: 0 8px;
-  white-space: nowrap;
-}
-.world-window-next-count {
-  font-variant-numeric: tabular-nums;
-}
-.world-window-next.is-urgent {
-  background: #e3aa3a;
-  color: #1f1606;
-}
-@container workspace-inspector (max-width: 639px) {
-  .world-window-next-label {
-    display: none;
-  }
-}
-
 /* Town draws the agent's window as the Town prototype's chat panel: a dark
    translucent panel with a 2px edge, chunky targets and a pixel name. The
    look comes from the shell's own tokens, so every view inside follows. */
@@ -441,7 +420,6 @@
 .is-town-skin
   :is(
     .world-window-back,
-    .world-window-next,
     .world-window-controls > button,
     .workspace-inspector-tabs-more
   ) {
@@ -459,14 +437,6 @@
 .is-town-skin .world-window-back {
   width: 40px;
   height: 40px;
-}
-.is-town-skin .world-window-next {
-  padding: 0 12px;
-  font-size: 14px;
-}
-.is-town-skin .world-window-next.is-urgent {
-  background: #e3aa3a;
-  color: #1f1606;
 }
 .is-town-skin .world-window-controls {
   gap: 6px;

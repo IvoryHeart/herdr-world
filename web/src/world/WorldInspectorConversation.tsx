@@ -21,6 +21,7 @@ import { type ActiveDiffSelection } from "../components/DiffViewerPanel";
 import { requestFilePreview } from "../components/fileExplorerResources";
 import type { ActiveFilePreviewSelection } from "../components/FilePreviewContent";
 import { WorkspaceInspectorHost } from "../components/WorkspaceInspectorHost";
+import { ThemeScope } from "../themeScope";
 import {
   OperationalContext,
   connectionSnapshot,
@@ -547,7 +548,12 @@ function InspectorResources({
   );
 
   return createPortal(
-    content,
+    // Town's window is always the dark panel, so its code viewers are too.
+    townSkin ? (
+      <ThemeScope.Provider value="dark">{content}</ThemeScope.Provider>
+    ) : (
+      content
+    ),
     portalOwner,
     worldInspectorWindowId(conversation),
   );

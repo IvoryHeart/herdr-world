@@ -2096,7 +2096,37 @@ async function run() {
       ),
     `the Inspector's bar was not one row: ${JSON.stringify(headRows)}`,
   );
+  // A crowded bar moves its views into ⋯ rather than squeezing the name or
+  // pushing a control past the window's edge.
+  const checkBarFits = (label: string) => {
+    const frame = document.querySelector<HTMLElement>(
+      `[aria-label="${label} Inspector"]`,
+    )!;
+    const head = frame.querySelector<HTMLElement>(".workspace-inspector-head")!;
+    const bounds = frame.getBoundingClientRect();
+    const name = head
+      .querySelector<HTMLElement>(
+        ".workspace-inspector-agent-identity, .workspace-inspector-identity",
+      )!
+      .getBoundingClientRect().width;
+    const outside = [...head.querySelectorAll<HTMLElement>("button")]
+      .filter((button) => {
+        const rect = button.getBoundingClientRect();
+        return (
+          rect.width > 0 &&
+          (rect.left < bounds.left - 1 || rect.right > bounds.right + 1)
+        );
+      })
+      .map((button) => button.getAttribute("aria-label"));
+    check(
+      outside.length === 0 &&
+        (name >= 120 || head.hasAttribute("data-views-in-menu")),
+      `the ${label} bar overflowed: ${JSON.stringify({ outside, name, width: bounds.width })}`,
+    );
+  };
+  checkBarFits("Builder");
   await selectSnap("Builder", "Left half");
+  checkBarFits("Builder");
   const focusedDock = document.querySelector<HTMLElement>(
     '[aria-label="Builder Inspector"]',
   )!;

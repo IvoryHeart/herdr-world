@@ -3,7 +3,6 @@ import { createPortal } from "react-dom";
 import { measuredFixedPositionScale } from "../../fixedPositionScale";
 import {
   ChevronLeft,
-  ChevronRight,
   Maximize2,
   Minimize2,
   MoreHorizontal,
@@ -17,15 +16,6 @@ import {
 import { useLayer } from "../../layerStack";
 import type { SnapTarget } from "./windowManager";
 import "./windows.css";
-
-/** Where a phone shows a window: the whole screen, a sheet or a card. */
-export type PhoneWindowPlacement =
-  | { kind: "full" }
-  | { kind: "sheet"; edge: "top" | "bottom"; fraction: number }
-  | {
-      kind: "float";
-      rect: { left: number; top: number; width: number; height: number };
-    };
 
 export type ManagedWindowControls = {
   maximized: boolean;
@@ -41,13 +31,8 @@ export type ManagedWindowControls = {
     current: ColorValue;
     onColor(id: string | null): void;
   } | null;
-  /** The phone placement, when the frame can move the window on a phone. */
-  phonePlacement?: PhoneWindowPlacement;
-  onPhonePlacement?(placement: PhoneWindowPlacement): void;
   /** Close is shown as Back at the start of the bar, as Town's window does. */
   back?: { label: string };
-  /** The next agent that needs you, as the bar's primary action. */
-  next?: { count: number; urgent: boolean; onNext(): void } | null;
   /** A narrow window: maximize joins ⋯ so the bar still fits. */
   narrow?: boolean;
   /** On a phone, the window's views live in ⋯ instead of the bar. */
@@ -108,64 +93,9 @@ type MenuItem = {
   run(): void;
 };
 
-function phonePlacementItems(controls: ManagedWindowControls): MenuItem[] {
-  const place = controls.onPhonePlacement;
-  if (!place) return [];
-  const current = controls.phonePlacement ?? { kind: "full" };
-  const edge = current.kind === "sheet" ? current.edge : "bottom";
-  const fraction = current.kind === "sheet" ? current.fraction : 0.5;
-  const sheetAt = (at: number) =>
-    current.kind === "sheet" && Math.abs(current.fraction - at) < 0.01;
-  return [
-    {
-      label: "Full screen",
-      checked: current.kind === "full",
-      run: () => place({ kind: "full" }),
-    },
-    {
-      label: "Top",
-      checked: current.kind === "sheet" && current.edge === "top",
-      run: () => place({ kind: "sheet", edge: "top", fraction }),
-    },
-    {
-      label: "Bottom",
-      checked: current.kind === "sheet" && current.edge === "bottom",
-      run: () => place({ kind: "sheet", edge: "bottom", fraction }),
-    },
-    {
-      label: "One third",
-      checked: sheetAt(1 / 3),
-      run: () => place({ kind: "sheet", edge, fraction: 1 / 3 }),
-    },
-    {
-      label: "Half",
-      checked: sheetAt(1 / 2),
-      run: () => place({ kind: "sheet", edge, fraction: 1 / 2 }),
-    },
-    {
-      label: "Floating",
-      checked: current.kind === "float",
-      run: () =>
-        place(
-          current.kind === "float"
-            ? current
-            : {
-                kind: "float",
-                rect: {
-                  left: 12,
-                  top: Math.round(window.innerHeight * 0.25),
-                  width: window.innerWidth - 24,
-                  height: Math.round(window.innerHeight * 0.5),
-                },
-              },
-        ),
-    },
-  ];
-}
-
 /**
  * The window bar keeps maximise and close as buttons. The rarer actions
- * (minimise, snap, float, a phone's position and the colour) share ⋯.
+ * (minimise, snap, float and the colour) share ⋯.
  */
 export function WindowControls({
   controls,
@@ -212,7 +142,7 @@ export function WindowControls({
       run: controls.onMinimize,
     },
     ...(controls.compact
-      ? phonePlacementItems(controls)
+      ? []
       : [
           ...choices.map(({ target, label }) => ({
             label,
@@ -230,11 +160,12 @@ export function WindowControls({
   });
   useEffect(() => {
     if (!open) return;
-    menu.current
-      ?.querySelector<HTMLButtonElement>(
-        '[aria-checked="true"], [role^="menuitem"]',
-      )
-      ?.focus();
+    // The checked item (the current view) first, else the first item.
+    const items = menu.current;
+    (
+      items?.querySelector<HTMLButtonElement>('[aria-checked="true"]') ??
+      items?.querySelector<HTMLButtonElement>('[role^="menuitem"]')
+    )?.focus();
   }, [open]);
   const scale = open ? measuredFixedPositionScale() : 1;
   const anchor = trigger.current?.getBoundingClientRect();
@@ -283,23 +214,6 @@ export function WindowControls({
         }
       }}
     >
-      {controls.next ? (
-        <button
-          type="button"
-          className={`world-window-next ${controls.next.urgent ? "is-urgent" : ""}`}
-          aria-label={`Next agent that needs you (${controls.next.count})`}
-          title="Next agent that needs you"
-          onClick={controls.next.onNext}
-        >
-          <span className="world-window-next-label">Next</span>
-          {controls.next.count > 0 ? (
-            <span className="world-window-next-count">
-              {controls.next.count}
-            </span>
-          ) : null}
-          <ChevronRight size={15} aria-hidden="true" />
-        </button>
-      ) : null}
       <button
         ref={trigger}
         type="button"
@@ -343,7 +257,13 @@ export function WindowControls({
               ...position,
               maxHeight: `calc(100dvh - ${(position.top ?? 8) + 8}px)`,
             }}
-            className="world-window-snap-menu"
+            // The menu is portaled out of the window, so it carries the
+            // window's dark scope (Town) with it.
+            className={`world-window-snap-menu ${
+              host.current?.closest(".theme-scope-dark")
+                ? "theme-scope-dark"
+                : ""
+            }`}
             role="menu"
             aria-label="Window actions"
           >

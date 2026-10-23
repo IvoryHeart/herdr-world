@@ -58,6 +58,7 @@ import {
   normalizeFilesystemPath,
 } from "../filesystemPaths";
 import { CreateWorkspaceDialog } from "./CreateWorkspaceDialog";
+import { useViewTheme, type AppTheme } from "../themeScope";
 import "./FilePreviewContent.css";
 
 export type ActiveFilePreviewSelection = {
@@ -74,8 +75,6 @@ export type FilePreviewSelectionMeta = {
   userInitiated?: boolean;
   deletedEntry?: Pick<FileExplorerEntry, "path" | "type">;
 };
-
-type AppTheme = "dark" | "light";
 
 const PDF_INLINE_PREVIEW_MAX_BYTES = 25 * 1024 * 1024;
 
@@ -164,27 +163,6 @@ function isPdfPath(path: string) {
   return path.toLowerCase().endsWith(".pdf");
 }
 
-function currentDocumentTheme(): AppTheme {
-  return document.documentElement.dataset.theme === "light" ? "light" : "dark";
-}
-
-function useDocumentTheme() {
-  const [theme, setTheme] = useState<AppTheme>(() => currentDocumentTheme());
-
-  useEffect(() => {
-    const observer = new MutationObserver(() =>
-      setTheme(currentDocumentTheme()),
-    );
-    observer.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ["data-theme"],
-    });
-    return () => observer.disconnect();
-  }, []);
-
-  return theme;
-}
-
 export function FilePreviewContent({
   entry,
   preview,
@@ -258,7 +236,7 @@ export function FilePreviewContent({
   };
   const [markdownSelection, setMarkdownSelection] =
     useState<MarkdownSelectionTarget | null>(null);
-  const theme = useDocumentTheme();
+  const theme = useViewTheme();
   const previewText = preview?.text ?? null;
   const lineBeyondPreview =
     line !== undefined &&
