@@ -228,15 +228,18 @@ async function run() {
   const root = createRoot(host);
   flushSync(() => root.render(<App />));
   try {
-    await until(() => document.querySelector(".xterm-helper-textarea"));
-    let terminal = document.querySelector<HTMLTextAreaElement>(
-      ".xterm-helper-textarea",
-    )!;
+    // The selected pane's terminal, not merely the first one: after a jump
+    // the newly active pane focuses its own terminal a frame and a timer
+    // later, which can land after the next step on a loaded machine.
+    const activeTerminal = () =>
+      document.querySelector<HTMLTextAreaElement>(
+        `.terminal-shell[data-pane-id="${CSS.escape(store.get().selectedPaneId ?? "")}"] .xterm-helper-textarea`,
+      );
+    await until(activeTerminal);
+    let terminal = activeTerminal()!;
     const focusTerminal = async () => {
-      await until(() => document.querySelector(".xterm-helper-textarea"));
-      terminal = document.querySelector<HTMLTextAreaElement>(
-        ".xterm-helper-textarea",
-      )!;
+      await until(activeTerminal);
+      terminal = activeTerminal()!;
       terminal.focus();
     };
     const search = () =>
@@ -251,10 +254,6 @@ async function run() {
             recentPaneIds: ["w1:p1", "w1:p2"],
           }),
         );
-        await until(() => document.querySelector(".xterm-helper-textarea"));
-        terminal = document.querySelector<HTMLTextAreaElement>(
-          ".xterm-helper-textarea",
-        )!;
         await focusTerminal();
         const openingModifiers = platform === "mac" ? 2 : 3;
         const heldModifiers = openingModifiers | (reverse ? 8 : 0);
