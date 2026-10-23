@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import type { HerdrOfficeProjection } from "../herdrOfficeProjection";
 import {
   formatOfficeCost,
@@ -7,7 +7,8 @@ import {
 } from "../officeObservability";
 import { WorldPanel } from "../windows/WorldPanel";
 import type { WorldObject } from "../worldObject";
-import type { TownCall } from "./TownRail";
+import { TownAsk, type TownCall } from "./TownRail";
+import { sharedAsksStore, useWorldAsks } from "../worldAsks";
 import {
   townSummary,
   townSummaryAge,
@@ -27,6 +28,7 @@ export function TownSummaryPanel({
   now,
   onOpenAgent,
   onShowRoom,
+  onAnswer,
 }: {
   summary: TownSummaryModel;
   now: number;
@@ -34,6 +36,7 @@ export function TownSummaryPanel({
   onOpenAgent(agentKey: string): void;
   /** Move the Town camera to a room. */
   onShowRoom(roomKey: string): void;
+  onAnswer(id: string, text: string): Promise<string | null>;
 }) {
   return (
     <div className="town-summary">
@@ -41,6 +44,13 @@ export function TownSummaryPanel({
         <h3 id="town-summary-needs">
           Needs you <span>{summary.counts.needsYou}</span>
         </h3>
+        {summary.asks.length > 0 ? (
+          <div className="town-asks">
+            {summary.asks.map((ask) => (
+              <TownAsk key={ask.id} ask={ask} now={now} onAnswer={onAnswer} />
+            ))}
+          </div>
+        ) : null}
         {summary.needsYou.length ? (
           <ul>
             {summary.needsYou.map((item) => (
@@ -57,7 +67,7 @@ export function TownSummaryPanel({
               />
             ))}
           </ul>
-        ) : (
+        ) : summary.asks.length ? null : (
           <p className="town-summary-empty">Nobody is waiting for you.</p>
         )}
       </section>
@@ -157,7 +167,12 @@ function SummaryItem({
   return (
     <li className="town-summary-item">
       <div>
-        <strong>{item.agent.displayLabel}</strong>
+        <strong>
+          {item.agent.displayLabel}
+          {item.agent.semanticStatus === "blocked"
+            ? " · blocked: needs input"
+            : ""}
+        </strong>
         <small>
           {item.roomLabel} · {item.hostLabel} · {detail}
         </small>
@@ -207,7 +222,6 @@ export function useTownSummary({
   calls,
   observability,
   now,
-  narrow,
   openAgent,
 }: {
   world: WorldObject;
@@ -215,23 +229,39 @@ export function useTownSummary({
   calls: readonly TownCall[];
   observability: OfficeObservability;
   now: number;
-  narrow: boolean;
   openAgent(agentKey: string): void;
 }): {
   summary: TownSummaryModel;
+  viewportWidth: number;
+  answerAsk(id: string, text: string): Promise<string | null>;
   open(): void;
   roomFocus: { roomKey: string; seq: number } | null;
   window: ReactNode;
 } {
+  const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth);
+  useEffect(() => {
+    const resize = () => setViewportWidth(window.innerWidth);
+    window.addEventListener("resize", resize);
+    return () => window.removeEventListener("resize", resize);
+  }, []);
+  const asksStore = sharedAsksStore();
+  const asks = useWorldAsks(asksStore);
+  const answerAsk = (id: string, text: string) => asksStore.answer(id, text);
   const summary = useMemo(
     () =>
-      townSummary(office, calls, observability, (agent) => {
-        const leaf = world.nodeById.get(agent.nodeId);
-        return leaf && "lastActivityAt" in leaf
-          ? leaf.lastActivityAt
-          : undefined;
-      }),
-    [world, office, calls, observability],
+      townSummary(
+        office,
+        calls,
+        observability,
+        (agent) => {
+          const leaf = world.nodeById.get(agent.nodeId);
+          return leaf && "lastActivityAt" in leaf
+            ? leaf.lastActivityAt
+            : undefined;
+        },
+        asks,
+      ),
+    [world, office, calls, observability, asks],
   );
   const [isOpen, setOpen] = useState(false);
   const [roomFocus, setRoomFocus] = useState<{
@@ -240,6 +270,8 @@ export function useTownSummary({
   } | null>(null);
   return {
     summary,
+    viewportWidth,
+    answerAsk,
     open: () => setOpen(true),
     roomFocus,
     window: isOpen ? (
@@ -252,8 +284,9 @@ export function useTownSummary({
           summary={summary}
           now={now}
           onOpenAgent={openAgent}
+          onAnswer={answerAsk}
           onShowRoom={(roomKey) => {
-            if (narrow) setOpen(false);
+            if (viewportWidth <= 640) setOpen(false);
             setRoomFocus((last) => ({ roomKey, seq: (last?.seq ?? 0) + 1 }));
           }}
         />

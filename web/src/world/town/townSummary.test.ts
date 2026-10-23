@@ -9,6 +9,7 @@ import type { OfficeObservability } from "../officeObservability";
 import type { WorldRuntimeConnection } from "../runtimeStore";
 import { buildWorldObject } from "../worldObject";
 import type { TownCall } from "./TownRail";
+import type { WorldAsk } from "../worldAsks";
 import { townSummary, townSummaryAge } from "./townSummary";
 
 /** One synthetic host: two rooms, one agent per tab, with given statuses. */
@@ -140,6 +141,46 @@ test("the summary counts what the call rail shows, room by room", () => {
   expect(host!.counts.working).toBe(2);
 });
 
+test("open asks and blocked agents are separate needs-you items", () => {
+  const projection = office({ alpha: ["blocked", "working"] });
+  const calls = callsOf(projection);
+  const asks: WorldAsk[] = [
+    {
+      id: "question-one",
+      at: 500,
+      actor: { label: calls[0]!.agent.displayLabel, verified: true },
+      question: "Ship the synthetic change?",
+      options: ["Ship", "Wait"],
+      owner_only: true,
+    },
+    {
+      id: "question-two",
+      at: 600,
+      actor: { label: "Synthetic reviewer", verified: false },
+      question: "Review the example?",
+      options: [],
+      owner_only: true,
+    },
+  ];
+  const summary = townSummary(
+    projection,
+    calls,
+    NO_METRICS,
+    projection.activityOf,
+    asks,
+  );
+  // One blocked agent that also asks a question contributes two items.
+  expect(summary.counts.needsYou).toBe(3);
+  expect(summary.asks).toBe(asks);
+  expect(summary.needsYou.length + summary.asks.length).toBe(3);
+  // Host/room counts still describe agents; questions have no room claim.
+  expect(summary.hosts[0]!.counts.needsYou).toBe(1);
+  expect(
+    townSummary(projection, calls, NO_METRICS, projection.activityOf, []).counts
+      .needsYou,
+  ).toBe(1);
+});
+
 test("spend says there is no cost data rather than zero", () => {
   const projection = office({ alpha: ["working"] });
   expect(townSummary(projection, [], NO_METRICS).spend).toEqual({
@@ -184,11 +225,22 @@ test("the summary panel reads in attention order and never shows zero spend", as
   const { createElement } = await import("react");
   const { TownSummaryPanel } = await import("./TownSummaryPanel");
   const projection = office({ alpha: ["blocked", "done"], beta: ["idle"] });
+  const asks: WorldAsk[] = [
+    {
+      id: "question-one",
+      at: 500,
+      actor: { label: "Synthetic worker", verified: true },
+      question: "Ship the synthetic change?",
+      options: ["Ship", "Wait"],
+      owner_only: true,
+    },
+  ];
   const summary = townSummary(
     projection,
     callsOf(projection),
     NO_METRICS,
     projection.activityOf,
+    asks,
   );
   const html = renderToStaticMarkup(
     createElement(TownSummaryPanel, {
@@ -196,6 +248,7 @@ test("the summary panel reads in attention order and never shows zero spend", as
       now: 500 + 12 * 60_000,
       onOpenAgent: () => {},
       onShowRoom: () => {},
+      onAnswer: async () => null,
     }),
   );
   const order = [
@@ -208,6 +261,10 @@ test("the summary panel reads in attention order and never shows zero spend", as
   expect(at.every((index) => index >= 0)).toBe(true);
   expect([...at].sort((a, b) => a - b)).toEqual(at);
   expect(html).toContain("waiting 12 m");
+  expect(html).toContain("Synthetic worker");
+  expect(html).toContain("asks: Ship the synthetic change?");
+  expect(html).toContain("blocked: needs input");
+  expect(html).toContain('aria-label="Your answer to Synthetic worker"');
   // A finish's time is its last activity, never claimed as the finish.
   expect(html).toContain("last active");
   expect(html).not.toContain("finished 1");

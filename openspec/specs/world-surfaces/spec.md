@@ -1335,12 +1335,17 @@ The rail SHALL list a bounded number of entries and count the rest.
 
 Town SHALL derive its board sign, its phone counts chip and its summary window
 from one summary read model built from the attention rail's entries, so they
-show the same agents and the same needs-you and finished counts as the rail and
-reception. The board sign SHALL show agents working, needing the user and
-finished, and spend when a metrics provider reports it. Its Summary action, and
+show the same attention items and needs-you count as the reception tray and
+rail. Needs-you SHALL count blocked agents plus open questions as separate
+items, including when one blocked agent also raised a question. Reception as
+a place continues to seat agents. Host and room counts describe agents;
+questions SHALL NOT acquire a guessed host or room. The board sign SHALL show
+agents working and finished, items needing the user, and spend when a metrics
+provider reports it. Its Summary action, and
 on phones its counts chip, SHALL open a Town summary window in the shared
-window frame that lists, in this order: agents that need the user with how long
-each has waited and one action; unreviewed finishes with when each was last
+window frame that lists, in this order: open questions using the rail's Ask
+cards and answer action, then blocked agents with their reason, waiting age
+and one action; unreviewed finishes with when each was last
 active when Herdr reports activity times, never presented as the finish time; every host with its rooms and their counts (needing
 the user, working, finished, quiet, unknown), where activating a room moves the
 Town camera to it; and spend per model with its source and age. Without a
@@ -1349,9 +1354,12 @@ zero spend.
 
 #### Scenario: One count everywhere
 
-- **WHEN** two agents are blocked and one has an unreviewed finish
-- **THEN** the board sign, the phone chip, the rail and the summary all show two
-  needing the user and one finished
+- **WHEN** two agents are blocked, one of them also has an open question,
+  and one agent has an unreviewed finish
+- **THEN** the board sign, phone chip, reception tray, rail and summary all
+  show three items needing the user, with one finished agent in the summary
+- **AND** answering that question updates every needs-you count to two while
+  both blocked agents remain waiting
 
 #### Scenario: Go to a room from the summary
 

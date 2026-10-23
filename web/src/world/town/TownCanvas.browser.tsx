@@ -469,7 +469,33 @@ const worldBridge = bridge as unknown as {
   onControl(listener: (control: { type: string }) => void): () => void;
 };
 const bridgeCall = worldBridge.call.bind(bridge);
+/** One open question from an agent (`herdr-world ask`), as the service keeps it. */
+const askAnswers: { id: string; answer: string }[] = [];
+const ledger = {
+  version: 1,
+  revision: 1,
+  changes: [],
+  results: [],
+  asks: [
+    {
+      id: "q-synthetic-1",
+      at: Date.now() - 90_000,
+      actor: { label: "claude in w1:p2", verified: true },
+      question: "Ship the reception fix now, or wait for review?",
+      options: ["Ship", "Wait"],
+      owner_only: true,
+    },
+  ],
+};
 worldBridge.call = async (method, params) => {
+  if (method === "world.asks.get") return structuredClone(ledger);
+  if (method === "world.ask.answer") {
+    const id = String(params?.id);
+    askAnswers.push({ id, answer: String(params?.answer) });
+    ledger.asks = ledger.asks.filter((ask) => ask.id !== id);
+    ledger.revision += 1;
+    return structuredClone({ revision: ledger.revision, asks: ledger.asks });
+  }
   if (method === "world.board.get") return structuredClone(boardDocument);
   if (method === "world.board.patch") {
     for (const op of (params?.ops ?? []) as {
@@ -963,6 +989,18 @@ async function run() {
     return;
   }
 
+  // An agent's question leads the Needs you list, with its options.
+  await waitFor(
+    () => host.querySelector(".town-ask") !== null,
+    "an agent's question is missing from the Needs you list",
+  );
+  check(
+    [...host.querySelectorAll(".town-ask-options button")].some(
+      (button) => button.textContent === "Ship",
+    ),
+    "the question's options are not offered",
+  );
+
   const diagnostics = window.__HERDR_TOWN_RENDERER__!;
   check(
     diagnostics.level === "overview",
@@ -1027,9 +1065,19 @@ async function run() {
     const windowNeeds = Number(
       panelBody.querySelector("#town-summary-needs span")?.textContent,
     );
+    const railNeeds = Number(
+      host.querySelector(".town-rail-head b")?.textContent ?? "0",
+    );
     check(
-      windowNeeds === signNeeds && windowNeeds === chipNeeds,
-      `the summary needs-you count ${windowNeeds} differs from the sign ${signNeeds} or chip ${chipNeeds}`,
+      windowNeeds === signNeeds &&
+        windowNeeds === chipNeeds &&
+        windowNeeds === railNeeds,
+      `needs-you counts differ: summary ${windowNeeds}, sign ${signNeeds}, chip ${chipNeeds}, rail ${railNeeds}`,
+    );
+    check(
+      ledger.asks.length > 0 &&
+        panelBody.querySelectorAll(".town-ask").length === ledger.asks.length,
+      "the summary must show the rail's open questions",
     );
     const sections = [...panelBody.querySelectorAll("h3")].map((heading) =>
       heading.textContent?.replace(/\s*\d+$/, ""),
@@ -1042,6 +1090,25 @@ async function run() {
     check(
       panelBody.textContent?.includes("No cost data") === true,
       "a summary without metrics says there is no cost data",
+    );
+    const questionId = ledger.asks[0]!.id;
+    panelBody
+      .querySelector<HTMLButtonElement>(".town-ask-options button")!
+      .click();
+    await waitFor(() => {
+      const counts = [
+        panelBody.querySelector("#town-summary-needs span")?.textContent,
+        board.querySelectorAll("dd")[1]?.textContent,
+        chip.querySelector('[data-status="blocked"]')?.textContent?.slice(1),
+        host.querySelector(".town-rail-head b")?.textContent ?? "0",
+      ];
+      return counts.every((value) => Number(value) === windowNeeds - 1);
+    }, "answering an ask did not update every needs-you count together");
+    check(
+      askAnswers.some(
+        (answer) => answer.id === questionId && answer.answer === "Ship",
+      ),
+      "the summary answer did not use the question's existing owner action",
     );
     panelEntries.find((entry) => entry.id === "panel:town-summary")!.onClose();
     await waitFor(

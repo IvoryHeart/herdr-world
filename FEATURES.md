@@ -16,10 +16,13 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   carries its tab's name on a nameplate at its front edge. Agents go by the
   name Herdr gives them (`firstmate`), else their harness (`claude`); window
   and Inspector titles put the name first (`firstmate · claude`).
-  - The Town board counts agents working, needing you and finished (the same
-    counts as reception and the call rail), with spend when a metrics provider
+  - The Town board counts agents working and finished, plus **items** needing
+    you: blocked agents and open questions, matching the reception tray and
+    call rail. A blocked agent with an open question contributes two items.
+    It shows spend when a metrics provider
     is configured. Its **Summary** button, or on a phone the compact chip under
-    the search bar, opens the **Town summary** window: who needs you,
+    the search bar, opens the **Town summary** window: blocked agents and
+    questions you can answer in place,
     unreviewed finishes and when each was last active, every host and room
     with its counts (tap a room to go there), and spend per model ("No cost
     data" without a provider).
@@ -410,6 +413,39 @@ checkout). Board's **Start an agent** stamps the new agent when its note is
 strung to one pane. Town draws teams as walls and connectors; Board strings
 related cards and groups a tab dropped on another tab, or chosen with
 **Group…** and a tap; **Ungroup** undoes it.
+
+### Agent CLI (`herdr-world --skill`)
+
+Agents change World objects themselves from their pane, through the running
+World service. `herdr-world --skill` prints the guide; commands answer in JSON
+when piped, with stable exit codes:
+
+- `colour set|reset`, `board card pin|unpin|move|group|ungroup|colour`: Board
+  cards and tab or workspace colours. Recorded with the agent and time;
+  `history` lists changes and `undo <change>` takes one back.
+- `town desk move … --herdr`: reorder a desk in its room with Herdr's tab
+  order, as a drag in Town does. It needs `--herdr` because it changes Herdr,
+  and World cannot undo it.
+- `ask "…" [--options a,b] [--owner-only] [--wait]`: a question for you. It
+  appears first in Town's **Needs you** list, where you pick an option or
+  type an answer; `--wait` blocks until then. Another verified agent (never
+  the one that asked) may answer a question that is not owner-only.
+- `result --task ID "…" [--pr N] [--status done|blocked|failed]` and
+  `result ls`: task results kept by World, instead of terminal scraping.
+- `spawned-by <parent-pane>`: the spawn stamp, made by the child itself. It
+  is display-only Herdr pane metadata, so it needs no `--herdr`; the parent
+  it names is the child's claim.
+- `whoami`, `ls`, `history [--actor]`.
+
+World checks who is calling: the CLI sends its `HERDR_PANE_ID`, and the
+service accepts it only when the calling process runs in that pane of a local
+Herdr (the pane's shell or foreground process is among its ancestors).
+The CLI reaches only a World service on the same machine, with a token
+derived from the service's signing secret that cannot log a browser in.
+Otherwise the change is labelled unverified, or "terminal with no pane" when
+no pane is named, since any process can leave it out; `me` and `spawned-by`
+need a verified pane. The CLI never
+merges, deletes panes, tabs or workspaces, or reaches outside World.
 
 ### Agent checkout context
 

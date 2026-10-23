@@ -1,7 +1,9 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import { worldLocalStorage } from "../../browserStorage";
 import type { OfficeAgent, OfficeRosterEntry } from "../herdrOfficeProjection";
+import type { WorldAsk } from "../worldAsks";
 import { townPortrait } from "./townSprites";
+import "./townAsks.css";
 
 export type TownCall = {
   agent: OfficeAgent;
@@ -46,19 +48,93 @@ export function townAgo(since: number, now: number) {
   return minutes < 60 ? `${minutes}m` : `${Math.floor(minutes / 60)}h`;
 }
 
+/** One open question from an agent (`herdr-world ask`), answered here. */
+export function TownAsk({
+  ask,
+  now,
+  onAnswer,
+}: {
+  ask: WorldAsk;
+  now: number;
+  onAnswer(id: string, text: string): Promise<string | null>;
+}) {
+  const questionId = useId();
+  const [draft, setDraft] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const send = async (text: string) => {
+    if (!text.trim() || busy) return;
+    setBusy(true);
+    const problem = await onAnswer(ask.id, text.trim());
+    setBusy(false);
+    setError(problem);
+  };
+  return (
+    <form
+      className="town-ask"
+      aria-label={`Question from ${ask.actor.label}`}
+      onSubmit={(event) => {
+        event.preventDefault();
+        void send(draft);
+      }}
+    >
+      <small>{townAgo(ask.at, now)}</small>
+      <p id={questionId}>
+        <b>{ask.actor.label}</b>
+        {ask.actor.verified ? "" : " (unverified)"} asks: {ask.question}
+      </p>
+      {ask.options.length ? (
+        <div className="town-ask-options">
+          {ask.options.map((option, index) => (
+            <button
+              key={`${index}:${option}`}
+              type="button"
+              aria-describedby={questionId}
+              disabled={busy}
+              onClick={() => void send(option)}
+            >
+              {option}
+            </button>
+          ))}
+        </div>
+      ) : null}
+      <div className="town-ask-reply">
+        <input
+          value={draft}
+          aria-label={`Your answer to ${ask.actor.label}`}
+          aria-describedby={questionId}
+          placeholder={ask.options.length ? "Or type an answer" : "Your answer"}
+          onChange={(event) => setDraft(event.target.value)}
+        />
+        <button type="submit" disabled={busy || !draft.trim()}>
+          Answer
+        </button>
+      </div>
+      {error ? <small role="alert">{error}</small> : null}
+    </form>
+  );
+}
+
 /**
  * Agents that need you (oldest first) and finished agents. Desktop groups them
  * by host and room in a collapsible rail; phones show a horizontal tray.
+ * Questions agents asked come first.
  */
 export function TownRail({
   calls: allCalls,
+  needsYouCount,
   activeKey,
   now,
   onPeek,
   onOpen,
   collapsed,
   onCollapsedChange,
+  asks = [],
+  onAnswer = async () => null,
 }: {
+  needsYouCount: number;
+  asks?: readonly WorldAsk[];
+  onAnswer?(id: string, text: string): Promise<string | null>;
   collapsed: boolean;
   onCollapsedChange(collapsed: boolean): void;
   calls: readonly TownCall[];
@@ -70,7 +146,7 @@ export function TownRail({
   const [closedHosts, setClosedHosts] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
-  const waiting = allCalls.filter((call) => call.kind === "blocked").length;
+  const waiting = needsYouCount;
   const calls = allCalls.slice(0, RAIL_LIMIT);
   const hidden = allCalls.length - calls.length;
   // Nothing waiting: the rail steps out of the way entirely.
@@ -129,7 +205,7 @@ export function TownRail({
   return (
     <aside
       className={`town-rail${collapsed ? " town-rail-collapsed" : ""}`}
-      aria-label="Agents that need you"
+      aria-label="Items that need you"
     >
       <div className="town-rail-head">
         <span>
@@ -145,6 +221,18 @@ export function TownRail({
           {collapsed ? "›" : "‹"}
         </button>
       </div>
+      {asks.length && !collapsed ? (
+        <div
+          className="town-asks"
+          role="region"
+          aria-label="Questions for you"
+          aria-live="polite"
+        >
+          {asks.map((ask) => (
+            <TownAsk key={ask.id} ask={ask} now={now} onAnswer={onAnswer} />
+          ))}
+        </div>
+      ) : null}
       {calls.length ? (
         <>
           {/* Phones: one flat, oldest-first strip. */}
@@ -193,7 +281,7 @@ export function TownRail({
           </div>
           {hidden ? <p className="town-rail-empty">+{hidden} more</p> : null}
         </>
-      ) : (
+      ) : asks.length ? null : (
         <p className="town-rail-empty">Nobody is waiting on you.</p>
       )}
     </aside>

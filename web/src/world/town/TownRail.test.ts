@@ -1,5 +1,7 @@
 import { expect, test } from "bun:test";
-import { nextTownCall, type TownCall } from "./TownRail";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { nextTownCall, TownRail, type TownCall } from "./TownRail";
 
 const call = (key: string, kind: TownCall["kind"]) =>
   ({ agent: { key }, kind }) as unknown as TownCall;
@@ -26,4 +28,36 @@ test("Next moves to a finished agent only when no other agent waits", () => {
   expect(nextTownCall(calls, "a")?.agent.key).toBe("d");
   expect(nextTownCall(calls, "d")?.agent.key).toBe("a");
   expect(nextTownCall([call("a", "blocked")], "a")).toBeNull();
+});
+
+test("questions from agents open the rail, with their options", () => {
+  const html = renderToStaticMarkup(
+    createElement(TownRail, {
+      needsYouCount: 1,
+      asks: [
+        {
+          id: "q-1",
+          at: 0,
+          actor: { label: "claude in w1:p2", verified: true },
+          question: "Ship the fix now?",
+          options: ["yes", "no"],
+          owner_only: true,
+        },
+      ],
+      calls: [],
+      activeKey: null,
+      now: 60_000,
+      onPeek: () => {},
+      onOpen: () => {},
+      collapsed: false,
+      onCollapsedChange: () => {},
+    }),
+  );
+  expect(html).toContain("NEEDS YOU <b>1</b>");
+  expect(html).toContain("Ship the fix now?");
+  expect(html).toContain("claude in w1:p2");
+  expect(html).toContain("asks: Ship the fix now?");
+  expect(html).toContain("1m</small>");
+  expect(html).toContain(">yes</button>");
+  expect(html).not.toContain("Nobody is waiting on you.");
 });

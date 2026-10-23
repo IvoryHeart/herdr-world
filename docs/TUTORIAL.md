@@ -128,8 +128,10 @@ changes what you see and does not disconnect hosts or retarget open terminals.
    status; they do not move the underlying pane or change its host. For the
    whole picture, press **Summary** on the Town board (on a phone, tap the
    counts chip under the search bar): the **Town summary** window lists who
-   needs you, unreviewed finishes and when each was last active, each host's
-   rooms with their counts, and spend. Use **Back** to close it.
+   needs you (blocked agents and open questions), unreviewed finishes and when each was last active, each host's
+   rooms with their counts, and spend. Answer a question from its offered
+   options or type a reply. A blocked agent that also asked a question counts
+   as two items needing you. Use **Back** to close the summary.
 4. Tap an agent or its table to open its window on **Chat**: World's Inspector,
    with **Chat**, **Terminal**, **Changes** and **Files** in its top selector.
    In Town it docks on the right; drag its title to undock it. Chat shows the
@@ -389,6 +391,18 @@ The Town and Board screenshots use real shell panes in disposable projects.
 The phone Board close-up focuses one workspace, its tabs and a strung note.
 Their empty agent counts are intentional; the notes are sample planning text,
 not reports of completed agent work.
+
+### Let agents arrange World
+
+Agents can use World too. Tell an agent to run `herdr-world --skill`: it learns
+to colour and pin its card, group with the agent that started it, report a
+task result, or ask you a question (`herdr-world ask "Ship it?" --options
+yes,no --wait`). A question shows first in Town's **Needs you** list with the
+agent's name; pick an option or type an answer, and the waiting agent carries
+on. `herdr-world history` shows who changed what, and `herdr-world undo` takes
+back a World-side change. A change marked **unverified** came from a process
+World could not place in the pane it named, or from a terminal that named no
+pane.
 
 ### Use Desk: answer, review and follow work
 

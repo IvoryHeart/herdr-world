@@ -5,16 +5,20 @@ import type {
 import type { OfficeObservability } from "../officeObservability";
 import type { WorldAgentStatus } from "../worldObject";
 import type { TownCall } from "./TownRail";
+import type { WorldAsk } from "../worldAsks";
 
 /**
  * The Town summary: one read model behind the Town board sign, the phone
  * chip and the summary window (pm's Town summary scope, phase 1). It never
  * keeps its own attention list: "needs you" and recent finishes are the call
- * rail's calls, so every surface shows the same items and counts.
+ * rail's calls, so every surface shows the same items and counts. Open
+ * questions remain the shared ledger questions; the global needs-you count
+ * includes them as separate items.
  */
 export type TownSummary = {
   counts: { needsYou: number; working: number; finished: number };
   needsYou: readonly TownSummaryItem[];
+  asks: readonly WorldAsk[];
   /**
    * Unreviewed finishes, most recently active first. Their time is Herdr's
    * last session activity, not the finish itself: show it as "last active".
@@ -87,6 +91,7 @@ export function townSummary(
   observability: OfficeObservability,
   /** Herdr's last session activity of an agent (epoch ms), when known. */
   activityOf: (agent: OfficeAgent) => number | undefined = () => undefined,
+  asks: readonly WorldAsk[] = [],
 ): TownSummary {
   const item = (call: TownCall, since: number | null): TownSummaryItem => ({
     agent: call.agent,
@@ -135,11 +140,12 @@ export function townSummary(
     observability.health !== "unavailable" && observability.sourceCount > 0;
   return {
     counts: {
-      needsYou: needsYou.length,
+      needsYou: needsYou.length + asks.length,
       working,
       finished: finished.length,
     },
     needsYou,
+    asks,
     finished,
     hosts,
     spend: available

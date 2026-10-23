@@ -550,12 +550,6 @@ export default function TownView({
   /* ---------- Town attention, peek, replies and toasts ---------- */
   const now = useNow(5_000);
   const [railCollapsed, setRailCollapsed] = useState(readTownRailCollapsed);
-  const [width, setWidth] = useState(() => window.innerWidth);
-  useEffect(() => {
-    const resize = () => setWidth(window.innerWidth);
-    window.addEventListener("resize", resize);
-    return () => window.removeEventListener("resize", resize);
-  }, []);
   const blockedSince = useRef(new Map<string, number>());
   // Built on first use: a dense town's roster is large, and these lookups are
   // only needed by taps, hovers and an open peek.
@@ -611,7 +605,6 @@ export default function TownView({
     calls,
     observability,
     now,
-    narrow: width <= 640,
     openAgent: (key) => openChat(key),
   });
   const whereOfAgent = (agentKey: string) => {
@@ -1205,6 +1198,9 @@ export default function TownView({
           />
         ) : null}
         <TownRail
+          needsYouCount={townSummary.summary.counts.needsYou}
+          asks={townSummary.summary.asks}
+          onAnswer={townSummary.answerAsk}
           collapsed={railCollapsed}
           onCollapsedChange={setRailCollapsed}
           calls={calls}
@@ -1365,7 +1361,7 @@ export default function TownView({
             calm={preferences.townCalm}
             chrome={{
               left:
-                width >= 640 &&
+                townSummary.viewportWidth >= 640 &&
                 !railCollapsed &&
                 calls.some((call) => call.kind === "blocked")
                   ? 252

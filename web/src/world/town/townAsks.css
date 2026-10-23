@@ -1,0 +1,80 @@
+/* Questions agents asked (`herdr-world ask`), above the waiting agents. */
+.town-asks {
+  /* Never squeezed by the agent list below it; scrolls past its cap. */
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
+  padding: 2px 0 6px;
+  max-height: 45vh;
+  overflow-y: auto;
+}
+
+.town-ask {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+  gap: 4px;
+  padding: 6px 8px;
+  border-left: 3px solid var(--town-wait);
+  border-radius: 6px;
+  background: var(--town-btn);
+}
+
+.town-ask small {
+  font-size: 11px;
+  color: var(--town-muted);
+}
+
+.town-ask p {
+  margin: 0;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.town-ask-options,
+.town-ask-reply {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.town-ask-reply input {
+  flex: 1 1 8em;
+  min-width: 0;
+  font: inherit;
+  font-size: 13px;
+  color: var(--town-text);
+  background: var(--town-term);
+  border: 1px solid var(--town-edge);
+  border-radius: 4px;
+  padding: 3px 6px;
+}
+
+.town-ask button {
+  font: inherit;
+  font-size: 12px;
+  color: var(--town-text);
+  background: var(--town-panel);
+  border: 1px solid var(--town-edge);
+  border-radius: 4px;
+  padding: 3px 8px;
+  cursor: pointer;
+}
+
+.town-ask button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+@media (max-width: 640px) {
+  .town-view-shell .town-rail {
+    flex-wrap: wrap;
+  }
+  /* Questions take a full row above the rail's head and strip. */
+  .town-asks {
+    order: -1;
+    flex: 1 0 100%;
+    max-height: 40vh;
+  }
+}

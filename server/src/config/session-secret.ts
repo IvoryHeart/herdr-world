@@ -132,7 +132,25 @@ function writeSessionSecret(path: string, state: SessionSecretState): void {
   replaceDataFile(path, `${JSON.stringify(state)}\n`);
 }
 
-/** Persist independent signing material, rotating it when login credentials change. */
+/**
+ * The agent CLI's bearer token (`/api/world/cli`): derived from the session
+ * signing secret, so it rotates with the login credential, and accepted only
+ * by that endpoint, so it cannot log a browser in.
+ */
+export function worldCliToken(secret: string): string {
+  return createHmac("sha256", Buffer.from(secret, "hex"))
+    .update("herdr-world:agent-cli:v1")
+    .digest("hex");
+}
+
+/** The CLI token of the service whose secret is at `path`, if it has one. */
+export function readWorldCliToken(path = sessionSecretPath()): string | null {
+  const state = readSessionSecret(path);
+  return state && SECRET_PATTERN.test(state.secret)
+    ? worldCliToken(state.secret)
+    : null;
+}
+
 export function sessionSecretPath(
   settingsPath = worldEnv("SETTINGS_PATH"),
   root = dataRoot(),
@@ -167,6 +185,7 @@ export function revokeSessionSecret(path = sessionSecretPath()): boolean {
   }
 }
 
+/** Persist independent signing material, rotating it when login credentials change. */
 export function loadOrCreateSessionSecret(
   credentials: readonly string[],
   path?: string,
