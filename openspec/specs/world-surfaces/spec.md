@@ -1682,14 +1682,58 @@ from a live host's label MAY open World's New workspace dialog.
 - **WHEN** a host's topology is cached after a failure
 - **THEN** its zone and cards are shown as stale and offer no actions
 
+### Requirement: Agent relations
+
+World SHALL relate two terminals of one connection when either a spawn or a
+manual group says so, and SHALL show each relation with its evidence: its
+source, whether it holds now and its system of record. A spawn is the child
+pane's Herdr metadata token `spawned_by` (the parent pane) or
+`spawned_by_terminal` (the parent terminal, which wins), which any tool may
+write; Herdr is its record while the token lives, and World's saved claim,
+recorded by the service only from a live snapshot of the connection's current
+runtime, is the record after the token is cleared. A manual group is joined or
+left by the user in Town or Board, or by the World service's clients, and World
+is its record. A relation SHALL NOT cross connections, and the service SHALL
+refuse a group that would. Evidence whose terminals are not in a current
+snapshot SHALL be shown as stale, and the service SHALL drop a saved claim or
+group member once a current snapshot that lists every pane of its connection
+shows its terminals closed. Herdr SHALL remain the record for layout: a group
+moves a tab only through Herdr's own tab moves.
+
+#### Scenario: An agent spawns another
+
+- **WHEN** a pane carries `spawned_by` naming another pane on its connection
+- **THEN** Town walls the two desks in and connects them, Board strings their cards, and the child takes its parent's colour
+
+#### Scenario: Group desks by hand
+
+- **WHEN** the user joins one desk to another's team in Town or Board
+- **THEN** World saves the group and shows both as one team in every view
+
+#### Scenario: A relation's host is offline
+
+- **WHEN** the connection holding a related terminal is cached after a failure
+- **THEN** the relation is kept and shown as stale
+
+#### Scenario: A group across connections
+
+- **WHEN** a client asks to group terminals of two connections
+- **THEN** the service refuses and saves nothing
+
+#### Scenario: Herdr restarts
+
+- **WHEN** a complete current snapshot no longer lists a saved claim's terminals
+- **THEN** the service drops the claim, and a new stamp makes a new one
+
 ### Requirement: Terminal colour
 
 Every Herdr tab SHALL have one terminal colour from a fixed palette, shown as
 its tab in Spaces, its card in Board and, when Town draws a table for it, that
 table; a tab beyond a room's drawn tables keeps its colour in Spaces and Board.
-Without a choice of its own a tab SHALL take its workspace's Board colour, if
-any, or else a default derived only from its connection and Herdr tab ID, so it
-is the same on every device and after reloads. A colour chosen in any view
+Without a choice of its own a tab SHALL take the colour of the tab whose agent
+spawned it (a spawn relation, never a manual group), then its workspace's Board
+colour, if any, or else a default derived only from its connection and Herdr
+tab ID, so it is the same on every device and after reloads. A colour chosen in any view
 SHALL be saved by the World service, keyed by connection and Herdr tab ID (as
 Board keys a tab card, qualified when the tab ID is also a workspace ID),
 SHALL appear in every view and on every device, and MAY be reset; reset is
@@ -1697,7 +1741,8 @@ offered only for a tab's own colour, not one inherited from its workspace. The
 key carries no terminal witness, so after a Herdr restart a colour follows
 whichever tab holds that ID. A tab World moves to another workspace SHALL keep
 the colour it showed, whether chosen, inherited or default, saved as its own
-colour. When World observes
+colour, except a colour inherited from its spawning tab, which follows its
+terminals and is not saved. When World observes
 Herdr close a tab on the connection's current runtime, it SHALL drop that tab's
 saved colour. Terminal colour SHALL never stand for or hide a status. World
 SHALL NOT write a colour to Herdr.
@@ -1749,6 +1794,34 @@ own colour MAY be reset.
 - **WHEN** the user moves a desk whose tab shows its default colour to another room
 - **THEN** the tab, under its new Herdr tab ID, shows the same colour in every view
 
+
+### Requirement: Agent interest
+
+Each agent SHALL have the viewer's interest: watching (the default), muted or
+focused, chosen from a button beside the agent's name in its Inspector header in
+every view. Interest SHALL belong to the agent's terminal on its host, without
+the runtime generation, so it follows the terminal through moves and an agent
+restarted in that terminal keeps it, and each agent in a multi-pane tab has its
+own. The World service SHALL save it with Board's layout, the same on every
+device, and SHALL NOT write it to Herdr. When a complete pane listing from a
+host's current runtime no longer shows a terminal, World SHALL drop that
+terminal's interest; it SHALL NOT drop interest on a failed, stale or partial
+listing. Interest SHALL only gate chimes: a muted agent SHALL NOT chime, and
+while a focused agent's terminal is shown on a ready host only focused agents
+and the Town master's needs-you SHALL chime; a focus World cannot reach SHALL
+NOT silence other agents, and SHALL apply again when its host is back. A
+watched agent's control SHALL say when it is quiet because another agent is
+focused. Interest SHALL NOT keep any item out of reception.
+
+#### Scenario: Mute an agent
+
+- **WHEN** the user opens the interest button beside an agent's name and chooses Muted
+- **THEN** the button shows Muted on every device, the choices close, and the agent's needs still enter reception without a chime
+
+#### Scenario: A closed agent's interest goes
+
+- **WHEN** the host's current runtime lists every pane and the muted agent's terminal is not among them
+- **THEN** World drops that terminal's interest, and keeps it when the listing fails or comes from a replaced runtime
 ### Requirement: Transient layers close top first
 
 Menus, popovers, pickers and lists opened over a terminal or view SHALL form one
@@ -2777,6 +2850,45 @@ changed witnesses or runtime authority before reporting the link, then verify
 Herdr retained it. Remote lookup SHALL NOT fall back to local transcripts.
 The external runtime does not offer an atomic process-and-link operation; this
 contract does not exclude a process change during the final report RPC.
+
+Codex title IDs SHALL take precedence over hook reports. A report contradicted
+by another pane claiming or naming its thread SHALL NOT bind a conversation.
+Without a title or report, World MAY infer a read-only conversation from the
+selected runtime's existing app-server only when exactly one Codex pane and one
+loaded interactive thread share an exact directory, recent activity and matching
+status, with no recently updated unloaded interactive competitor. Inference SHALL require complete bounded discovery and unchanged pane
+evidence, SHALL be recomputed per snapshot, and SHALL NOT persist a session link.
+Chat SHALL label this evidence `guessed`, with no session fingerprint, Send or
+answer keys. Missing, stale, conflicting or ambiguous evidence SHALL yield no
+inferred conversation; remote discovery SHALL NOT fall back to a local daemon.
+Uniqueness covers visible panes in the selected connection, not every client
+sharing that daemon or Codex home. An unseen client MAY make a guess incorrect;
+this evidence SHALL remain read-only. Quest snapshots SHALL share discovery and
+take a final pane snapshot after the daemon read. Successful metadata SHALL NOT
+survive the snapshot; unavailable discovery MAY suppress guesses for 60 seconds.
+Discovery state SHALL belong to one connection ID and runtime generation and
+SHALL be discarded on generation replacement. Exact/reported binding and Send
+SHALL NOT depend on this cached metadata.
+
+#### Scenario: Shared daemon with one eligible pane and thread
+
+- **WHEN** an unlinked Codex pane uniquely matches one loaded thread on its own runtime by directory and recent matching activity
+- **THEN** Chat and History read that thread as a guess, without granting message or answer authority
+
+#### Scenario: A second pane or thread makes inference ambiguous
+
+- **WHEN** another Codex pane or loaded thread shares the directory, or the evidence changes during discovery
+- **THEN** the next snapshot withholds the inferred conversation, including any previously inferred match
+
+#### Scenario: The pane's own recently active thread has been unloaded
+
+- **WHEN** one visible idle pane shares its directory with a recent unloaded interactive thread and another client's loaded idle thread
+- **THEN** both threads count as competitors and World shows no inferred conversation
+
+#### Scenario: A daemon client is outside the selected connection
+
+- **WHEN** an unseen client shares the daemon and visible metadata leaves one eligible thread
+- **THEN** any inferred conversation remains an explicitly fallible guess with no message or answer authority
 
 #### Scenario: A pane changes after preview
 

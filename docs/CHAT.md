@@ -68,6 +68,14 @@ view that you open on purpose.
   sequence); the prompt's fingerprint covers the shown prompt, the session and
   the state sequence, and any difference refuses with nothing sent. Then it
   presses that option's key.
+- Codex conversations inferred from the shared daemon are read-only guesses.
+  World cannot see every client sharing that daemon: another Herdr session or
+  an outside terminal can make the guess wrong. Recent unloaded threads count
+  as competitors; `/title` with **Thread ID** or an explicit link gives stronger
+  identity evidence.
+  Chat shows no answer card for them, and the service rejects answer requests
+  without an exact title or uncontradicted reported binding. Use the Terminal
+  to answer, or identify the thread with `/title` or an explicit session link.
 - **The gap World cannot close.** Herdr has no conditional input
   ([herdrdev/herdr#4764](https://github.com/herdrdev/herdr/issues/4764)), so
   the key cannot be made conditional on the prompt. If the prompt or session
@@ -106,8 +114,9 @@ view that you open on purpose.
 Each connection owns one conversation source. Herdr is the first source; another
 runtime, such as ACP, can implement the same interface
 (`server/src/agent/conversation.ts`) without changing Chat or other consumers.
-The Herdr source uses the agent and session Herdr reports for the pane, or the
-Codex thread named in the pane's title, through the same session resolver and
+The Herdr source uses the agent and session Herdr reports for the pane, the
+Codex thread named in the pane's title, or an unambiguous read-only daemon
+inference, through the same session resolver and
 projection cache as History ([History synchronization](HISTORY.md)).
 
 | RPC | Parameters | Reply |
@@ -175,6 +184,12 @@ message.
 | `reported` | The harness's Herdr integration reported the session | Yes |
 | `title` | The Codex pane title names the thread (Thread ID in `/title`) | Only once the title gives a complete thread ID: a full UUID, or a truncated one that matched exactly one saved transcript |
 | `guessed` | World found the newest Grok Build, Antigravity or Muse session in the pane's folder | No; two agents in one folder would see the same guess |
+| `guessed` (Codex) | One pane and one loaded daemon thread share an exact folder, recent activity and matching status; [full inference rules](HISTORY.md#chat-and-codex-session-binding) | No composer or answer keys; inference grants no input authority |
+
+Codex title IDs take precedence over reports and guesses. A reported session
+claimed by another pane (including its thread title) is discarded. Daemon
+inference is recomputed for every snapshot and disappears on ambiguity or
+changed evidence; it is never saved as a session link.
 
 `session_fingerprint` identifies a reported session or a complete Codex thread
 ID, and is null otherwise. Codex shows 29 characters of the thread ID in its

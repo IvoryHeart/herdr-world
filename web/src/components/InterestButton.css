@@ -1,0 +1,77 @@
+/* An agent's interest (InterestButton.tsx). */
+.interest-button {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.interest-button:hover,
+.interest-button[data-state="open"] {
+  background: var(--panel-2);
+}
+
+.interest-button[data-interest="focused"] {
+  color: var(--accent);
+}
+
+/* Above World's windows and their menus. */
+.popover-content.interest-popover {
+  z-index: 6100;
+  width: 232px;
+  padding: 4px;
+}
+
+.interest-choices {
+  display: grid;
+  gap: 2px;
+}
+
+.interest-choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.interest-choice > svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+.interest-choice span {
+  display: grid;
+}
+
+.interest-choice small {
+  color: var(--muted);
+}
+
+.interest-choice:hover {
+  background: var(--panel-2);
+}
+
+.interest-choice[aria-pressed="true"] {
+  background: var(--panel-2);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+/* Watching, but quiet while another agent is focused. */
+.interest-button[data-quiet] {
+  opacity: 0.55;
+}
