@@ -2,6 +2,8 @@ import { expect, test } from "bun:test";
 import { joinGroup, relationsOf } from "../../../shared/relations";
 import { resolveTerminalColor } from "../../../shared/terminalColor";
 import {
+  anyRelation,
+  terminalsAreGrouped,
   relationObservations,
   relationsDeriver,
   runtimeRelationInputs,
@@ -125,4 +127,57 @@ test("the derived relations keep their identity until something relevant changes
   const moved = connection();
   moved.snapshot!.panes[1]!.tab_id = "w1:t9";
   expect(derive(doc, runtimeRelationInputs([moved]))).not.toBe(first);
+});
+
+test("Pod-only state neither scans terminal topology nor enables the magnetic Ungroup action", () => {
+  const groups = [
+    {
+      id: "pod",
+      kind: "pod",
+      name: "Reviewers",
+      created_at: 1,
+      members: [
+        { ref: "agent://studio/reviewer", roles: ["reviewer"], joined_at: 1 },
+      ],
+    },
+  ];
+  let scans = 0;
+  expect(
+    anyRelation({ spawns: [], groups }, () => {
+      scans++;
+    }),
+  ).toBe(false);
+  expect(
+    anyRelation(
+      {
+        spawns: [],
+        groups: [
+          ...groups,
+          {
+            id: "single",
+            kind: "team",
+            name: "Single",
+            created_at: 1,
+            members: [
+              {
+                ref: { connection_id: "studio", terminal_id: "lone" },
+                roles: [],
+                joined_at: 1,
+              },
+            ],
+          },
+        ],
+      },
+      () => {
+        scans++;
+      },
+    ),
+  ).toBe(false);
+  expect(scans).toBe(0);
+  expect(
+    terminalsAreGrouped(
+      [{ connection_id: "studio", terminal_id: "seat" }],
+      groups,
+    ),
+  ).toBe(false);
 });

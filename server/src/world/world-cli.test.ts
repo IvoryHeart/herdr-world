@@ -274,12 +274,24 @@ describe("Board and colour changes", () => {
   test("group and ungroup by terminal, and undo a group", async () => {
     const { board, ledger, run } = setup();
     await run("board card group", { target: "me", with: "tab:w1:t2" });
-    expect(board.get().relations.groups[0]?.members).toEqual([
+    expect(
+      board.get().relations.groups[0]?.members.map((member) => member.ref),
+    ).toEqual([
       { connection_id: "studio", terminal_id: "term_b" },
       { connection_id: "studio", terminal_id: "term_a" },
     ]);
+    expect(board.get().relations.group_changes!.at(-1)!.sender).toEqual({
+      label: "claude in w1:p1",
+      basis: "inferred",
+      via: "cli",
+    });
     await run("undo", { id: ledger.get().changes[0]!.id });
     expect(board.get().relations.groups).toEqual([]);
+    expect(board.get().relations.group_changes!.at(-1)!.sender).toEqual({
+      label: "claude in w1:p1",
+      basis: "inferred",
+      via: "cli",
+    });
     await run("board card group", { target: "me", with: "pane:w1:p2" });
     await run("board card ungroup", { target: "me" });
     expect(board.get().relations.groups).toEqual([]);
@@ -442,7 +454,9 @@ describe("review fixes", () => {
     expect(
       board
         .get()
-        .relations.groups[0]?.members.map((m) => m.terminal_id)
+        .relations.groups[0]?.members.map((m) =>
+          typeof m.ref === "string" ? undefined : m.ref.terminal_id,
+        )
         .sort(),
     ).toEqual(["term_a", "term_b"]);
   });

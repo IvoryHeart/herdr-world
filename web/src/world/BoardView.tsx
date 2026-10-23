@@ -131,6 +131,7 @@ import {
 import { inheritedColorKey } from "../../../shared/terminalColor";
 import {
   groupTerminals,
+  terminalsAreGrouped,
   ungroupTerminals,
   useRelations,
   withInheritedColors,
@@ -2977,12 +2978,8 @@ export default function BoardView({
     return team !== null && team === teamOf(b);
   };
   /** The tab is in a manual group the user can leave. */
-  const groupedTab = (key: string) => {
-    const refs = new Set(tabTerminals(key).map(terminalKey));
-    return (saved?.relations?.groups ?? []).some((group) =>
-      group.members.some((member) => refs.has(terminalKey(member))),
-    );
-  };
+  const groupedTab = (key: string) =>
+    terminalsAreGrouped(tabTerminals(key), saved?.relations?.groups ?? []);
   const groupCards = async (fromKey: string, toKey: string) => {
     const members = tabTerminals(fromKey).slice(0, 1);
     const target = tabTerminals(toKey).slice(0, 1);

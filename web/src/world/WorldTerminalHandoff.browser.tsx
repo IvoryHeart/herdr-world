@@ -3827,10 +3827,12 @@ async function run() {
   await until(
     () =>
       document
+        // The bar shortens a long name in the middle; its title keeps it whole.
         .querySelector(
-          ".world-managed-window.is-active .workspace-inspector-agent-identity",
+          ".world-managed-window.is-active .workspace-inspector-checkout",
         )
-        ?.textContent?.includes("Reviewer Next") &&
+        ?.getAttribute("title")
+        ?.includes("Reviewer Next") &&
       document
         .querySelector(".world-managed-window.is-active .workspace-inspector")
         ?.getAttribute("data-view") === "terminal",
@@ -4178,9 +4180,10 @@ async function run() {
         ?.includes("Builder Sibling") === true &&
       document
         .querySelector(
-          '[aria-label="Reviewer Next Inspector"] .workspace-inspector-agent-identity',
+          '[aria-label="Reviewer Next Inspector"] .workspace-inspector-checkout',
         )
-        ?.textContent?.includes("Reviewer Next") === true &&
+        ?.getAttribute("title")
+        ?.includes("Reviewer Next") === true &&
       Math.abs(afterSiblingBounds.left - splitBuilderBounds.left) <= 2 &&
       Math.abs(afterSiblingBounds.top - splitBuilderBounds.top) <= 2,
     "sibling focus moved or docked its floating Inspector",

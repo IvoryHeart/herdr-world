@@ -508,9 +508,9 @@ worldBridge.call = async (method, params) => {
       });
       const groups = relations.groups;
       relations.groups =
-        op.op === "group.join"
+        op.op === "group.join" && "target" in op
           ? joinGroup(groups, op.members, op.target, op.id, Date.now())
-          : op.op === "group.leave"
+          : op.op === "group.leave" && "members" in op
             ? leaveGroups(groups, op.members)
             : groups;
     }

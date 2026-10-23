@@ -1,6 +1,7 @@
 import {
   floatingTerminalGeometryId,
   readFloatingTerminalDock,
+  readFloatingTerminalDockWidth,
   readFloatingTerminalGeometry,
   type FloatingTerminalDock,
 } from "./floatingTerminalPreferences";
@@ -14,7 +15,7 @@ import {
   useWindowManager,
   useWindowWorkArea,
 } from "./windows/useWindowManager";
-import { visibleWindowIds } from "./windows/windowManager";
+import { type SnapDock, visibleWindowIds } from "./windows/windowManager";
 import { useWorldPanels } from "./windows/WorldPanel";
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { worldLocalStorage } from "../browserStorage";
@@ -110,6 +111,17 @@ export function useWorldInspectorWindows({
           view,
           officeInspectorPresentation,
           readFloatingTerminalDock(
+            worldLocalStorage,
+            floatingTerminalGeometryId(conversation),
+          ),
+        ),
+        initialSnapDock: inspectorInitialDock(
+          view,
+          readFloatingTerminalDock(
+            worldLocalStorage,
+            floatingTerminalGeometryId(conversation),
+          ),
+          readFloatingTerminalDockWidth(
             worldLocalStorage,
             floatingTerminalGeometryId(conversation),
           ),
@@ -491,6 +503,25 @@ export type WorldInspectorWindows = ReturnType<typeof useWorldInspectorWindows>;
  * the "Inspector opening" preference floats it, and either way a window keeps
  * the dock it was last left with (docked somewhere, or floating).
  */
+/** Town's docked window opens at a readable width rather than half the stage. */
+export const TOWN_DOCK_WIDTH = 520;
+
+/**
+ * How wide Town's docked window opens: the width it was last resized to, or
+ * {@link TOWN_DOCK_WIDTH} (at most half the stage) until the user docks it
+ * themselves. "Right half" from the window menu stays half.
+ */
+export function inspectorInitialDock(
+  view: string,
+  saved: FloatingTerminalDock | null,
+  savedWidth: number | null,
+): SnapDock | undefined {
+  if (view !== "town") return undefined;
+  if (savedWidth && (saved === "left" || saved === "right"))
+    return { width: savedWidth };
+  return saved ? undefined : { width: TOWN_DOCK_WIDTH, upToHalf: true };
+}
+
 export function inspectorInitialSnap(
   view: string,
   presentation: "docked" | "floating",
