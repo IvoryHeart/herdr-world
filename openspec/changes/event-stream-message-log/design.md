@@ -26,16 +26,90 @@ receipt. A working-tree observation is not branch or PR ownership.
 
 ## Decisions
 
+### Systems of record, served by provider plugins
+
+**Domain** is PM's proposed wording for the owner's systems-of-record grouping;
+it avoids overloading a thing's kind or a Group's Room/Desk/Team/Pod kind. The
+owner still reviews this wording. A **provider** is a plugin implementing a
+domain contract; a **provider instance** is its configured account, site, host
+or repository scope. One provider can implement several domain contracts.
+
+| Domain | Example providers and facts |
+| --- | --- |
+| Code | Git: checkout, branch, commit and worktree; GitHub: PRs, reviews and checks |
+| Work | GitHub Issues and Jira: issues, tickets and work status |
+| Runtime | Herdr and harnesses: connections, panes/terminals, occupants, sessions and transcript/delivery evidence |
+| Observability | OTel, logs and metrics providers: traces, usage and measurements |
+| Docs | Repository documents and wiki providers: documents, specs and revisions |
+| Agents & skills | World profiles, skill registries and harness plugins: profile/staffing definitions, skill content and eval claims |
+
+These are domain mappings, not a claim that every adapter already exists.
+GitHub can implement both Code and Work; Jira implements Work. Herdr and
+harnesses contribute Runtime facts at different resolutions. An instance is
+authoritative only for the datasets and facts it owns, not its entire domain.
+For example, a Git checkout and a GitHub PR have different authorities even
+when they refer to the same commit. A telemetry inference does not override
+either. Overlapping providers preserve distinct provenance; neither becomes
+the preferred system of record merely by loading last. Adoption or migration
+of authority is explicit and preserves earlier claims.
+
+Each domain has one versioned provider contract with the same common surface:
+
+- **Capabilities:** supported reads/snapshots/subscriptions, freshness and
+  declared version/platform support. Unsupported, unknown and temporarily
+  unavailable are distinguishable; none is a silent successful no-op.
+- **Claims:** provider/instance/incarnation, source identity/revision, subject,
+  author/channel, basis, timestamps and evidence reference. Domain-specific
+  facts flow through the event capture envelope below.
+- **Verbs:** typed inputs/outcomes, target/revision conditions, risk,
+  confirmation and supported exposure. Existing PR actions stay browser-only;
+  explicitly supported CLI runtime/message actions remain possible. Outcome
+  claims and provider capabilities never grant policy bypasses.
+- **Auth/scopes:** declared required scopes, configured account/resource scope
+  and credential readiness. Credentials stay in service-owned storage or the
+  upstream tool's login; never in World payloads, logs or plugin manifests.
+  This does not isolate other processes sharing the service user's OS account.
+- **Health:** readiness/degradation and last observation with a reason. Health
+  is not proof that every verb is authorized or every claim is current.
+
+Common fields avoid one bespoke integration shape per product; domain-specific
+contracts avoid a universal untyped plugin API. Views depend on domain
+capabilities and claims rather than naming individual vendors. Runtime message
+delivery adapters implement suitable Runtime verbs without moving ledger
+ownership into the harness. Worktree observation joins qualified Runtime cwd
+evidence with Code checkout evidence; it does not collapse their authorities.
+
+World itself supplies the records it owns, including messages, groups, viewer
+Interest and profiles. The agents/skills/seats model retains one profile with
+persona and named staffing variants, an immutable World-owned seat, and a
+separate observed occupant. Herdr's pane is not that seat. Harness readiness
+is a Runtime health observation; a skill registry supplies content/provenance,
+and an eval runner supplies eval claims.
+
+Marketplaces are later discovery/distribution sources for plugins and skills,
+not grants of runtime authority. Discovery, installation, activation and
+permission approval remain distinct. A marketplace skill still needs matching
+eval evidence for critical seats: skill and suite digests, harness/version,
+model, runner revision and relevant configuration/permissions. Noncritical
+experimental status is explicit. A provider does not redefine a profile or
+silently attach a skill to a seat.
+
+Refactor existing built-in integrations only in their touched batches. External
+plugin packaging, a possible process boundary/MCP transport and which new
+provider to prioritize remain owner decisions before that implementation;
+the domain contract does not select an execution protocol. See the
+[short provider contract](specs/provider-systems/spec.md).
+
 ### One capture path and two uses of the ledger
 
 ```mermaid
 flowchart LR
-    S["Sources: Herdr · harnesses · Git · World stores"] --> C["Capture: qualify · normalize · deduplicate"]
+    S["Systems of record via domain provider plugins"] --> C["Capture: qualify · normalize · deduplicate"]
     C --> L["Ledger: events + message intents + delivery evidence"]
     L --> R["Read models: attention · threads · activity · worktree"]
     R --> V["Town · Board · Chat · Inspector · FirstMate"]
     M["Message send: owner UI / agent CLI"] --> L
-    L --> D["Delivery adapters: conditions + target connection"]
+    L --> D["Runtime delivery verbs: conditions + target connection"]
     D --> H["Target harness on its host"]
     H --> C
 ```

@@ -5,13 +5,18 @@
 - [x] 1.2 Record the three bounded relay spike attempts in design.md, including
   Codex idle/draft/user-standing evidence, blocked Claude and sender probes,
   and the unproven receipt-ID mapping; verify no private identifiers remain.
-- [ ] 1.3 Validate the change with OpenSpec strict validation and repository
+- [x] 1.3 Fold systems-of-record/domain provider contracts into proposal, design
+  and delta requirements; verify consistency with profile/staffing/seat/eval
+  boundaries and keep marketplaces a later discovery/distribution concern.
+- [ ] 1.4 Validate the change with OpenSpec strict validation and repository
   checks; obtain independent architecture review before owner acceptance.
-- [ ] 1.4 Obtain owner approval of the design and implementation sequence;
+- [ ] 1.5 Obtain owner approval of the design and implementation sequence;
   preserve unresolved adapter prerequisites in the approved task list.
 
 Later sections are proposed implementation batches, not authorization to start
-them. Pod leads own their work lists and integrate related items as commits on
+them. Active pod work is tracked by GitHub issues and batch milestones; these
+checkboxes describe proposal dependencies, not a competing todo system.
+Pod leads integrate related issue-backed items as commits on
 one batch branch. Use typecheck and focused tests per item, one complete gate
 at batch close, and one commit-by-commit review from the pod's pair. No per-item
 pushes or full gates. Reconcile existing accepted work instead of rebuilding it.
@@ -33,6 +38,11 @@ pushes or full gates. Reconcile existing accepted work instead of rebuilding it.
 
 ## 3. Capture and replay batch — Platform
 
+- [ ] 3.0 Confirm domain wording, the initial provider set and packaging scope
+  with the owner; define the common contract plus domain-specific claims/verbs,
+  and verify multi-domain instances, scoped authority, capability absence and
+  credential/verb exposure using synthetic contract fixtures. External plugin
+  execution and marketplace connections require their own accepted scope.
 - [ ] 3.1 Define bounded retention/payload settings and the initial source set
   using synthetic workload measurements; record the approved limits and their
   gap/reset behavior before implementing persistence.

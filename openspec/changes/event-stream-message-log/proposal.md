@@ -8,6 +8,9 @@ launch directory.
 
 ## What Changes
 
+- Organize systems of record by domain, served by provider plugins implementing
+  one contract per domain: capabilities, provenance claims, verbs and auth/scopes.
+  One provider and its configured instances can serve several domains.
 - Propose capture of qualified source events into a bounded durable log with
   resumable cursors and rebuildable read models.
 - Propose a message log/outbox with explicit threads, attributed senders,
@@ -28,6 +31,8 @@ approved implementation is delivered and its deltas are synchronized.
 
 ### New Capabilities
 
+- `provider-systems`: scoped systems of record, domain contracts, provider
+  instances and the boundary to later plugin/skill marketplaces.
 - `event-stream-message-log`: qualified capture/replay, durable message intents,
   conditional delivery, shared read models and evidenced worktree bindings.
 

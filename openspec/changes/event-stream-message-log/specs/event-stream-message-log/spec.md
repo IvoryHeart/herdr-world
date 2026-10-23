@@ -110,8 +110,7 @@ on their owning runtime rather than the World host.
 
 #### Scenario: Viewer chooses another known worktree
 - **WHEN** the viewer selects an offered worktree-list candidate
-- **THEN** Files and Changes share that target while the observed agent-working-
-  tree claim remains unchanged
+- **THEN** Files and Changes share that target while the observed agent working-tree claim remains unchanged
 
 #### Scenario: Session turns over during root resolution
 - **WHEN** the bound session or generation changes before an operation
