@@ -46,7 +46,9 @@ export function townDragFor(
   const deskKey =
     hit.kind === "desk" ? hit.key : hit.kind === "pane" ? hit.deskKey : null;
   const desk = deskKey ? model.desks.get(deskKey) : undefined;
-  if (!desk || !desk.canOpenInSpaces) return null;
+  // A pinned desk stays where it is until it is unpinned.
+  if (!desk || !desk.canOpenInSpaces || model.deskPins.has(desk.key))
+    return null;
   return {
     kind: "desk",
     key: desk.key,
@@ -92,6 +94,11 @@ export function townDropTarget(
               ? model.agentSeats.get(hit.key)?.deskKey
               : undefined;
       const onto = ontoKey ? model.desks.get(ontoKey) : undefined;
+      if (onto && onto.key !== drag.key && model.deskPins.has(onto.key))
+        return {
+          key: null,
+          label: `${onto.displayLabel} is pinned: unpin it to take its place`,
+        };
       if (onto && onto.key !== drag.key)
         return {
           key: onto.key,

@@ -21,7 +21,9 @@ base=
 # The scoped gate reads this worktree, so a push of anything but its HEAD
 # (another branch, several refs) runs the full gate. A Markdown-only
 # follow-up can use the docs gate if this worktree already passed a code gate
-# on an ancestor.
+# on an ancestor. A push that only merges origin/main into the pushed branch
+# (scripts/merge-push.ts defines this conservatively) runs static checks only:
+# both sides were tested and CI runs the full gate on the merge.
 if read -r local_ref local_sha remote_ref remote_sha; then
   if read -r extra_line || [ "$local_sha" != "$head_sha" ]; then
     gate=full
@@ -32,7 +34,13 @@ if read -r local_ref local_sha remote_ref remote_sha; then
         git merge-base --is-ancestor "$remote_sha" "$head_sha" 2>/dev/null; then
         base=$remote_sha
       fi
-      if [ "$local_sha" = "$head_sha" ] && [ -f "$report_file" ]; then
+      if [ "$local_sha" = "$head_sha" ] &&
+        git rev-parse --quiet --verify "$head_sha^2" >/dev/null &&
+        merge_note=$(bun scripts/merge-push.ts "$remote_sha" 2>&1); then
+        gate=static
+        printf 'pre-push: %s; running static checks only\n' "$merge_note" >&2
+      fi
+      if [ "$gate" = changed ] && [ "$local_sha" = "$head_sha" ] && [ -f "$report_file" ]; then
         full_sha=$(awk -F '\t' '$3 == "0" && ($5 == "" || $5 == "full" || $5 == "changed") { sha=$2 } END { print sha }' "$report_file")
         if [ -n "$full_sha" ] &&
           git merge-base --is-ancestor "$remote_sha" "$head_sha" 2>/dev/null &&
@@ -51,6 +59,8 @@ if [ "${HERDR_WORLD_PREPUSH:-}" = full ]; then
 fi
 if [ "$gate" = docs ]; then
   check_command=check:docs
+elif [ "$gate" = static ]; then
+  check_command=check:static
 elif [ "$gate" = full ]; then
   check_command=check:delivery
 else

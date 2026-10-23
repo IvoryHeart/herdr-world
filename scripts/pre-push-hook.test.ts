@@ -177,3 +177,70 @@ test("pre-push compares with the pushed branch, and uses the docs gate only afte
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test("a push that only merges main runs static checks; a code resolution runs the gate", () => {
+  const root = mkdtempSync(join(tmpdir(), "pre-push-merge-"));
+  const hook = fileURLToPath(new URL("../.githooks/pre-push", import.meta.url));
+  const mergePush = fileURLToPath(new URL("./merge-push.ts", import.meta.url));
+  const argsPath = join(root, "bun-args");
+  const git = (...args: string[]) =>
+    execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
+  const commit = (path: string, text: string, message: string) => {
+    writeFileSync(join(root, path), text);
+    git("add", "-A");
+    git("commit", "-qm", message);
+    return git("rev-parse", "HEAD");
+  };
+  try {
+    git("init", "-q", "-b", "main");
+    git("config", "user.email", "example@example.invalid");
+    git("config", "user.name", "Example");
+    commit("a.ts", "export const a = 1;\n", "base");
+    git("switch", "-q", "-c", "feature");
+    const pushed = commit("b.ts", "export const b = 1;\n", "feature");
+    git("switch", "-q", "main");
+    commit("c.ts", "export const c = 1;\n", "main moved");
+    git("update-ref", "refs/remotes/origin/main", "main");
+    git("switch", "-q", "feature");
+    git("merge", "--no-edit", "-q", "origin/main");
+    // The fake bun runs the real merge detection and records the check.
+    writeFileSync(
+      join(root, "bun"),
+      `#!/bin/sh\nif [ "$1" = scripts/merge-push.ts ]; then exec "$REAL_BUN" "$MERGE_PUSH" "$2"; fi\nprintf "%s\\n" "$*" > "$HOOK_ARGS_FILE"\n`,
+      { mode: 0o755 },
+    );
+    const run = () =>
+      spawnSync("sh", [hook], {
+        cwd: root,
+        input: `refs/heads/feature ${git("rev-parse", "HEAD")} refs/heads/feature ${pushed}\n`,
+        encoding: "utf8",
+        env: {
+          ...process.env,
+          PATH: `${root}:${process.env.PATH ?? ""}`,
+          HOOK_ARGS_FILE: argsPath,
+          REAL_BUN: process.execPath,
+          MERGE_PUSH: mergePush,
+        },
+      });
+    const merged = run();
+    expect(merged.status).toBe(0);
+    expect(merged.stderr).toMatch(
+      /pre-push: merge-push: only merges [0-9a-f]{8} from origin\/main; running static checks only/,
+    );
+    expect(readFileSync(argsPath, "utf8")).toBe("run check:static\n");
+    expect(
+      readFileSync(join(root, ".agents/delivery/pre-push.tsv"), "utf8"),
+    ).toMatch(/\t0\t\d+\tstatic\n$/);
+
+    // Editing code inside the merge commit loses the shortcut.
+    writeFileSync(join(root, "a.ts"), "export const a = 2;\n");
+    git("add", "-A");
+    git("commit", "-q", "--amend", "--no-edit");
+    expect(run().status).toBe(0);
+    expect(readFileSync(argsPath, "utf8")).toBe(
+      `run check:changed --base=${pushed}\n`,
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
