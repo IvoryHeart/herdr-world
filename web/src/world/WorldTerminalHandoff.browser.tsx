@@ -3792,10 +3792,12 @@ async function run() {
   await until(
     () =>
       document
+        // The bar shortens a long name in the middle; its title keeps it whole.
         .querySelector(
-          ".world-managed-window.is-active .workspace-inspector-agent-identity",
+          ".world-managed-window.is-active .workspace-inspector-checkout",
         )
-        ?.textContent?.includes("Reviewer Next") &&
+        ?.getAttribute("title")
+        ?.includes("Reviewer Next") &&
       document
         .querySelector(".world-managed-window.is-active .workspace-inspector")
         ?.getAttribute("data-view") === "terminal",

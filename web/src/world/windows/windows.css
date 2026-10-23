@@ -489,29 +489,6 @@
   object-fit: contain;
   image-rendering: pixelated;
 }
-.is-town-skin .workspace-inspector-state {
-  display: inline-flex;
-  align-items: center;
-  padding: 1px 8px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 999px;
-  background: #222b39;
-  color: var(--text);
-  font-size: 11px;
-  font-weight: 600;
-}
-.is-town-skin .workspace-inspector-state[data-tone="working"] {
-  color: #6fc3ff;
-}
-.is-town-skin .workspace-inspector-state[data-tone="blocked"] {
-  color: #ffb547;
-}
-.is-town-skin .workspace-inspector-state[data-tone="done"] {
-  color: #7be08f;
-}
-.is-town-skin .workspace-inspector-state[data-tone="idle"] {
-  color: #d9c39b;
-}
 /* Chat in Town reads like the Town peek: message cards on the terminal
    dark, a reply row with a 2px edge, and chunky buttons. The header already
    shows the status pill, so Chat's own copy of it stays out. */
@@ -574,9 +551,6 @@
   }
   .is-town-skin .workspace-inspector-agent-identity {
     column-gap: 6px;
-  }
-  .is-town-skin .workspace-inspector-where {
-    display: none;
   }
 }
 :where(html[data-layout="mobile"]) .world-managed-window.is-town-skin,

@@ -8,6 +8,7 @@ import {
   type ManagedWindowControls,
 } from "../world/windows/WindowControls";
 import {
+  Check,
   ChevronDown,
   FileDiff,
   FolderTree,
@@ -85,6 +86,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { ColorSwatches } from "./ColorSwatch";
 import { changedCount, checkoutLabel } from "./inspectorCheckout";
 import { AgentInterestButton } from "./AgentInterestButton";
+import { middleEllipsis } from "./middleEllipsis";
 import { InspectorSplitResizer } from "./InspectorSplitResizer";
 import { paneAgentTitle } from "../agentName";
 import "./WorkspaceInspectorHost.css";
@@ -530,6 +532,30 @@ export function WorkspaceInspectorHost({
 
   // The line under the name says where this is; it opens the repository's
   // branch and PR status, so the bar needs no separate button or card.
+  // An agent is named "<name>-<harness>", e.g. otter-claude.
+  const agentName =
+    agentContext?.kind === "agent" &&
+    agentContext.agent &&
+    agentContext.label.toLowerCase() !== agentContext.agent.toLowerCase() &&
+    !agentContext.label
+      .toLowerCase()
+      .endsWith(`-${agentContext.agent.toLowerCase()}`)
+      ? `${agentContext.label}-${agentContext.agent}`
+      : (agentContext?.label ?? "");
+  // The state is a badge on the icon; the word stays in its label and title.
+  const stateBadge = agentContext?.statusTone ? (
+    <span
+      className="workspace-inspector-agent-badge"
+      data-tone={agentContext.statusTone}
+      aria-hidden="true"
+    >
+      {agentContext.statusTone === "done" ? (
+        <Check size={9} strokeWidth={3.5} />
+      ) : agentContext.statusTone === "blocked" ? (
+        "!"
+      ) : null}
+    </span>
+  ) : null;
   const avatarIcon = agentContext?.portrait ? (
     <img
       className="workspace-inspector-portrait"
@@ -644,10 +670,11 @@ export function WorkspaceInspectorHost({
                     type="button"
                     className="workspace-inspector-agent-avatar is-settings"
                     style={avatarColour(terminalColor)}
-                    aria-label={`Agent settings for ${agentContext.label}`}
-                    title="Colour and agent settings"
+                    aria-label={`Agent settings for ${agentName}, ${agentContext.stateLabel}`}
+                    title={`${agentContext.stateLabel} · colour and agent settings`}
                   >
                     {avatarIcon}
+                    {stateBadge}
                   </button>
                 </PopoverTrigger>
                 <PopoverContent
@@ -655,7 +682,7 @@ export function WorkspaceInspectorHost({
                   align="start"
                   aria-label={`Agent settings for ${agentContext.label}`}
                 >
-                  <strong>{agentContext.label}</strong>
+                  <strong>{agentName}</strong>
                   <span className="workspace-inspector-agent-settings-label">
                     Colour
                   </span>
@@ -671,24 +698,22 @@ export function WorkspaceInspectorHost({
             ) : (
               <span
                 className="workspace-inspector-agent-avatar"
-                aria-hidden="true"
+                title={agentContext.stateLabel}
               >
                 {avatarIcon}
+                {stateBadge}
               </span>
             )}
-            <span className="workspace-inspector-checkout">
-              {agentContext.label}
+            <span
+              className="workspace-inspector-checkout"
+              title={`${agentName} · ${agentContext.stateLabel}`}
+            >
+              {middleEllipsis(agentName, 14)}
             </span>
             {locationLine(
               <>
-                <span
-                  className="workspace-inspector-state"
-                  data-tone={agentContext.statusTone}
-                >
-                  {agentContext.stateLabel}
-                </span>
                 <span className="workspace-inspector-where">
-                  {` · ${agentContext.locationLabel}`}
+                  {agentContext.locationLabel}
                   {agentContext.taskSummary
                     ? ` · ${agentContext.taskSummary}`
                     : ""}

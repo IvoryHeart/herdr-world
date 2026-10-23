@@ -274,11 +274,14 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   choices that cannot fit explain why.
 - Inspectors and arranged Spaces windows share snap, minimize, maximize/restore,
   close and all eight resize handles. Each window has one bar: its name, a
-  location line, the view selector and **⋯**, maximize and close. **⋯** holds
+  location line, the view selector and **⋯**, maximize and close. An agent is
+  named `<name>-<harness>` (for example `otter-claude`), shortened in the middle
+  past 14 characters, and its state is a badge on its icon: a tick when done, a
+  spinner while working, **!** when it needs you and a grey dot when idle. **⋯** holds
   minimize, the snap choices and float. Tapping the location line under the name
   shows the branch, worktree and PR status, replacing the card above Changes. In
-  Town the window takes the Town look (portrait, pixel name, status pill, chunky
-  buttons, **‹ Back**). On a phone the window fills the screen like the
+  Town the window takes the Town look (portrait, pixel name, chunky buttons,
+  **‹ Back**). On a phone the window fills the screen like the
   terminal: its bar shows the name and status, and **⋯** switches the view
   (Chat, Terminal, Changes, Files) or switches to another agent or terminal. Opening or focusing a window preserves other
   placements; snapping into an occupied region overlaps without rearranging it.
