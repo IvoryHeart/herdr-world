@@ -1,3 +1,4 @@
+import { agentWorktreeHttpEndpoint } from "./agentWorktreeClient";
 import { type ConnectionClient, UncertainRequestError } from "./api";
 
 /** Decode a resource only while its captured runtime lease remains admitted. */
@@ -15,7 +16,9 @@ export async function connectionHttpResource<T>(
   assertCurrent();
   const path = connectionHttpPath(
     client.connectionId,
-    endpoint,
+    /^\/?file[/-]/u.test(endpoint)
+      ? agentWorktreeHttpEndpoint(client, endpoint)
+      : endpoint,
     client.serverRuntimeGeneration,
   );
   const method = (init?.method ?? "GET").toUpperCase();

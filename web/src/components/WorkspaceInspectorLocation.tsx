@@ -1,0 +1,78 @@
+import { AGENT_WORKTREE_SOURCE_LABELS } from "../../../shared/agentWorktree";
+import type { ReactNode } from "react";
+import { ChevronDown } from "lucide-react";
+import type { ConnectionClient } from "../api";
+import type { Workspace } from "../types";
+import type { AgentWorktreeView } from "../useAgentWorktree";
+import { AgentWorktreeLine, AgentWorktreePicker } from "./AgentWorktreePicker";
+import { PullRequestCard } from "./PullRequestCard";
+import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
+
+export function WorkspaceInspectorLocation({
+  enabled,
+  workspace,
+  client,
+  content,
+  description,
+  worktree,
+  open,
+  onOpenChange,
+}: {
+  enabled: boolean;
+  workspace?: Workspace;
+  client: ConnectionClient;
+  content: ReactNode;
+  description: string;
+  worktree?: AgentWorktreeView;
+  open: boolean;
+  onOpenChange(open: boolean): void;
+}) {
+  const worktreeDescription = worktree?.selected
+    ? `Viewing ${worktree.selected.canonicalRoot}, ${worktree.selected.branch ?? "detached HEAD"}. ${AGENT_WORKTREE_SOURCE_LABELS[worktree.selected.source]}${worktree.observation?.state === "stale" ? ", stale" : ""}`
+    : worktree?.observation?.state === "ambiguous"
+      ? `${worktree.observation.candidates.length} worktrees; choose`
+      : "Choose a worktree";
+  const label = worktree ? <AgentWorktreeLine view={worktree} /> : content;
+  if (!enabled || !workspace)
+    return (
+      <span className="workspace-inspector-path" title={description}>
+        {label}
+      </span>
+    );
+  return (
+    <Popover open={open} onOpenChange={onOpenChange}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="workspace-inspector-path workspace-inspector-location"
+          aria-label={
+            worktree
+              ? `${worktreeDescription}. Repository status and source`
+              : `${description}. Repository status and source`
+          }
+          title="Repository status and source"
+        >
+          <span className="workspace-inspector-location-text">{label}</span>
+          <ChevronDown size={12} aria-hidden="true" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        className="workspace-inspector-repository-popover"
+        align="start"
+      >
+        {worktree ? <AgentWorktreePicker view={worktree} /> : null}
+        {!worktree || worktree.target ? (
+          <PullRequestCard
+            client={client}
+            workspaceId={workspace.workspace_id}
+            branch={
+              worktree
+                ? (worktree.selected?.branch ?? undefined)
+                : workspace.worktree?.git_status?.branch
+            }
+          />
+        ) : null}
+      </PopoverContent>
+    </Popover>
+  );
+}

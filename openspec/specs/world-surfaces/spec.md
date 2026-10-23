@@ -226,30 +226,52 @@ not embed or launch a separately branded Roamgate application.
 - **THEN** only that runtime reconnects and newly opened resources require current target admission,
   without retiring other hosts or replaying the stale action
 
-### Requirement: Agent checkout source-control context
+### Requirement: Agent worktree source-control context
 
-For an actionable agent Inspector, World SHALL read Agent checkout context only from
-a complete versioned report whose session fingerprint matches the exact active pane
-session on the Inspector's connection and generation. It SHALL use a bounded
-read-only Git query on that reported checkout, show its branch and changed files,
-and keep Workspace changes as an explicit separate choice. World SHALL NOT infer
-the checkout from workspace or terminal CWD, another session, or another host. A
-reported HTTPS PR link SHALL be labelled Reported PR. Agent checkout SHALL expose no
-Git mutations. Reports omit TTL and Clear; they become unavailable on session
-replacement, pane closure, or Herdr restart.
+An agent Inspector's Files and Changes SHALL share one selected worktree,
+independently of its workspace launch directory. World SHALL rank evidenced
+candidates from live Herdr pane foreground_cwd, then that exact occupant's own
+session/transcript/Codex rollout cwd or session-bound checkout report, then its
+branch matched within an explicitly known repository's Git worktree list.
+Roots SHALL be canonicalized on the target runtime, including SSH. Detached HEAD
+SHALL remain a valid root with null branch. An outside-Git or unreadable cwd SHALL
+remain attributed unconfirmed evidence, without guessed sibling repositories.
 
-#### Scenario: Agent checkout differs from workspace changes
+The observation SHALL carry connection, generation, pane/terminal and session,
+revision/time, source/reference/basis and resolved, ambiguous, unavailable or
+stale state. A client SHALL submit a candidate identity plus qualified subject
+and revision; the service SHALL resolve and revalidate it for RPC and HTTP file
+reads, previews, downloads and actions. Old occupants, moved/replaced roots or
+retired generations SHALL NOT fall back to another root or host.
 
-- **WHEN** two agents in one workspace report different current-session worktrees
-- **THEN** each Inspector shows its own reported branch and changed files, while
-  Workspace changes remains separately labelled and selectable
+The existing location line SHALL show the selected tree/branch and source mark.
+Its popover SHALL offer Worktree radio choices and Refresh, with phone tap
+rows at least 44px. Equal-rank ambiguity SHALL require an explicit choice.
+Stale evidence SHALL remain visible but SHALL NOT admit resources. The empty
+Files/Changes state SHALL open the same chooser. Other entries from that scoped
+worktree list MAY be offered as worktree_list viewer choices; they SHALL NOT
+become automatic bindings or claims of agent/branch ownership. Selection SHALL
+apply to Files and Changes together and remain separate from observed claims.
 
-#### Scenario: Checkout report is absent or replaced
+Existing explicit checkout reports SHALL retain versioned session guards and
+Reported PR attribution; viewing another root SHALL NOT rewrite those reports.
+Observers SHALL refresh from events or explicit demand rather than polling.
+Unchanged source bindings MAY reuse a bounded observation; selected roots and
+inferred branch ambiguity SHALL still be revalidated at operation boundaries.
 
-- **WHEN** metadata is absent, malformed, lost after restart, or its session or
-  generation changes while a request is pending
-- **THEN** Agent checkout shows an unavailable reason and a Workspace changes
-  choice, and no old checkout, PR, or changed files enter that Inspector
+#### Scenario: Agent changes directory or uses another linked checkout
+
+- **WHEN** an agent launched in the main checkout has stronger live/session
+  evidence for a linked worktree, or the user deliberately chooses a listed tree
+- **THEN** Files, Changes and HTTP previews use that same qualified selected root,
+  and the location popover explains the source without asserting ownership
+
+#### Scenario: Worktree evidence conflicts or expires
+
+- **WHEN** equal-rank candidates conflict, a source/root changes while a request
+  is pending, or the occupant/generation is replaced
+- **THEN** no stale or guessed default admits access; the chooser retains
+  attributable evidence and resource access waits for a current selection
 
 ### Requirement: Terminal file links use the originating Inspector
 

@@ -1,3 +1,9 @@
+### Fixed
+
+- Agent Files and Changes now share an evidenced worktree target rather than
+  silently using the launch checkout. The location popover shows sources and
+  alternate worktrees; stale or ambiguous evidence requires a current choice.
+
 ### Added
 
 - Chat shows compact pull request cards beneath an agent's known PR announcement

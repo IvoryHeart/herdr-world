@@ -465,15 +465,29 @@ no pane is named, since any process can leave it out; `me` and `spawned-by`
 need a verified pane. The CLI never
 merges, deletes panes, tabs or workspaces, or reaches outside World.
 
-### Agent checkout context
+### Agent worktree in Files and Changes
 
-An active agent can report its exact checkout once with `herdr-world
-agent-checkout /absolute/checkout --pane w1:p1`. The Inspector reads branch and
-bounded changed-file status from that checkout on the same qualified connection,
-and labels any optional HTTPS link as **Reported PR**. Reports belong to the
-exact active session without a timer; session replacement or a Herdr restart makes
-the Agent checkout unavailable. **Workspace changes** remains an explicit, separate
-choice. Agent checkout has no Git mutation controls or Clear command.
+An agent's **Files** and **Changes** share one worktree, independently of its
+launch directory. The service considers the live Herdr pane `foreground_cwd`,
+then the same agent session's native transcript/Codex rollout cwd or explicit
+checkout report, then its branch matched in a scoped `git worktree list`.
+The location line names the selected tree and branch; its source mark explains
+**Live pane**, **Session cwd**, **Agent report** or **Branch match**.
+
+Open that location popover for **Worktree** candidates and **Refresh**. Pick a
+radio choice to apply it to Files and Changes together. Repository-listed
+alternatives are viewing choices, never branch ownership claims. Equal-rank
+matches need a choice; stale or replaced-session evidence stops resource access
+until refreshed. Files never silently falls back to the workspace checkout.
+Detached HEAD is supported. An outside-Git or inaccessible cwd is shown as
+unconfirmed evidence, without scanning neighboring repositories.
+
+An agent may still report its checkout with `herdr-world agent-checkout
+/absolute/checkout --pane w1:p1`, optionally `--pr HTTPS_URL`. The report belongs
+to that exact session, expires with replacement/restart, and its link is labelled
+**Reported PR**. It is evidence rather than a claim of ownership; viewing another
+candidate does not rewrite it. Existing file and Git actions use the selected
+root and revalidate its qualified binding before acting.
 
 ## Workspace, Tab, and Pane Navigation
 
@@ -623,15 +637,16 @@ See [resource ownership](docs/ARCHITECTURE.md#workspace-resource-ownership).
   terminal, and hides context the harness injects as user turns. It sends with
   Herdr's agent prompt only to a session Herdr ties to the pane (a reported
   session or a Codex title thread), not to one World guessed from the folder.
-  The paperclip attaches files, which upload to the pane's host and add their
+  **+ Add file** attaches files, which upload to the pane's host and add their
   paths to the message.
   A sent message shows as not yet seen until its session's transcript has
   the same words, and then as matched by its words, never as delivered.
   When there is evidence it went to another session, a red notice names both
   sessions and pauses Send until dismissed; when Chat can no longer check, it
   says so, or that it cannot tell when the same words appeared at about the
-  same time. Slash commands, and Claude Code's `!` and `#`, go through the
-  Terminal.
+  same time. All slash commands use Chat's shared Compose editor and have
+  **sent, not checked** receipts until their text appears in the transcript.
+  Claude Code's `!` and `#` modes still use the Terminal.
   A Now bar shows the agent's status, its current task from the terminal title
   and how long it has been at it, with Stop (or Esc twice) for Claude Code,
   Codex and Pi; the step running now shows with its command and timer.
@@ -647,8 +662,9 @@ See [resource ownership](docs/ARCHITECTURE.md#workspace-resource-ownership).
   it cannot read the conversation it shows the reason with the matching action:
   copy the integration command, link a Codex session, **Refresh** or **Open
   Terminal**. **Details** opens the History view below. See [Chat](docs/CHAT.md).
-- Above the conversation, Chat shows the agent's quest in a foldable log: its
-  title, a progress bar and each objective as pending, active, done or blocked,
+- Inside the scrolling conversation, Chat shows the current quest as one
+  collapsed title/progress row. Expand it for the progress bar and objectives
+  as pending, active, done or blocked,
   read without a model from the harness's own todos (Claude Code `TodoWrite` and
   tasks, Codex `update_plan`, Kimi `SetTodoList`), approved plan, Codex goal or
   `/loop`. See [Quests](docs/CHAT.md#quests).

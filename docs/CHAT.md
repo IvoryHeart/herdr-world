@@ -136,6 +136,21 @@ view that you open on purpose.
 - **Details** opens the earlier History view: Timeline, tool output, transcript
   preview and export.
 
+## Files and Changes worktree
+
+The agent window's Files and Changes use the same selected worktree. Open its
+location line for **Worktree** candidates, source labels and **Refresh**.
+Evidence is ordered live pane cwd, then that session's native transcript/Codex
+rollout cwd or checkout report, then its branch in the known repository's
+worktree list. A higher-ranked live directory keeps precedence; lower sources
+and other listed trees remain explicit viewing choices, useful for `git -C`.
+
+Ambiguous choices and stale evidence never silently use the launch checkout.
+The service rechecks the subject, revision and root for both RPC and HTTP
+resources; a new session cannot inherit the old selection. This changes the
+Inspector's resource target, without changing Chat's bound session, draft or
+prompt adapter. A viewed tree is never an ownership claim.
+
 ## Read model
 
 Each connection owns one conversation source. Herdr is the first source; another
@@ -155,6 +170,7 @@ projection cache as History ([History synchronization](HISTORY.md)).
 | `agent_conversation.answer` | `pane_id`, `key`, `prompt_fingerprint` | `{ status: "sent", number, label, acknowledged, unconfirmed_reason, prompt_fingerprint }` or `{ status: "refused", reason, message, pending_prompt }` |
 | `agent_conversation.steps` | `pane_id`, `call_ids` (at most 500) | `{ steps }`: the step model for those tool calls, by the harness's call ID; calls it cannot find are left out |
 | `agent_conversation.watch` / `.unwatch` | `pane_id` | `{ ok: true }`; see [Refresh](#refresh) |
+| `agent_worktree.get` | qualified `subject` (connection, generation, pane/terminal, session), optional `refresh` | Worktree observation with revision/time, candidates and attributed evidence; selected candidate plus subject/revision is submitted with resource requests |
 | `agent_quest.list` | `pane_ids`, or nothing for every agent | `{ quests }`: per pane, `agent`, `session_binding`, `session_fingerprint` and `quest`; see [Quests](#quests) |
 
 A conversation carries `agent`, `agent_status`, `terminal_title`, `running_tool`

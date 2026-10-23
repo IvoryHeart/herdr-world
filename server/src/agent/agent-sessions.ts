@@ -216,6 +216,26 @@ export function createAgentSessionHandlers(args: {
         turn,
       };
     },
+    readWorktreeMetadata: async (paneId: string, expected: string) => {
+      if ((await paneSessionFingerprint(args.herdrCall, paneId)) !== expected)
+        return null;
+      const resolved = await resolveAgentSession(
+        { pane_id: paneId },
+        args.herdrCall,
+        args.files,
+        resolverContext,
+      );
+      if (
+        !resolved.file ||
+        !resolved.session ||
+        taskSummarySessionFingerprint(resolved.session) !== expected
+      )
+        return null;
+      const projection = await cache.get(resolved);
+      if ((await paneSessionFingerprint(args.herdrCall, paneId)) !== expected)
+        return null;
+      return projection.worktree;
+    },
     readSummary: (params: Record<string, unknown>) =>
       readAgentSessionSummary(
         params,

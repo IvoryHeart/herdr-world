@@ -153,6 +153,7 @@ const rememberedTabPanes = new Map<string, string>();
 let worldRevision = 1;
 let runtimeGeneration = 7;
 let rejectNextWorldSnapshot = false;
+let ambiguousAgentWorktrees = false;
 let staleNextWorldSnapshot = false;
 let omitNextWorldTopology = false;
 let siblingObservationGate: Promise<void> | null = null;
@@ -439,10 +440,51 @@ const client: ConnectionClient = {
       if (delayed) await delayed.promise;
       return { layout: delayed?.layout ?? layout() };
     }
+    if (method === "agent_worktree.get") {
+      const subject = params.subject as { paneId: string };
+      const at = "2026-01-01T00:00:00Z";
+      return {
+        subject,
+        revision: ambiguousAgentWorktrees ? "ambiguous" : "resolved",
+        observedAt: at,
+        state: ambiguousAgentWorktrees ? "ambiguous" : "resolved",
+        selectedCandidateId: ambiguousAgentWorktrees
+          ? null
+          : `${subject.paneId}-agent`,
+        candidates: ["agent", "main"].map((kind) => ({
+          candidateId: `${subject.paneId}-${kind}`,
+          canonicalRoot:
+            kind === "agent"
+              ? `/repo/.agents/worktrees/${subject.paneId}`
+              : "/repo",
+          gitCommonDir: "/repo/.git",
+          branch: kind === "agent" ? "agent/review" : "main",
+          source: ambiguousAgentWorktrees
+            ? "branch_match"
+            : kind === "agent"
+              ? "foreground_cwd"
+              : "worktree_list",
+          evidence: {
+            sourceRef: "Synthetic worktree observation",
+            observedAt: at,
+            basis:
+              ambiguousAgentWorktrees || kind === "main"
+                ? "inferred"
+                : "reported",
+          },
+        })),
+      };
+    }
     if (method === "file.list") {
       return {
         workspace_id: workspaceBase.workspace_id,
-        root: "/repo",
+        root: (
+          params.agent_worktree as
+            | { candidateId?: string; subject?: { paneId?: string } }
+            | undefined
+        )?.candidateId?.endsWith("-agent")
+          ? `/repo/.agents/worktrees/${(params.agent_worktree as { subject: { paneId: string } }).subject.paneId}`
+          : "/repo",
         checkout_path: "/repo",
         path: "",
         entries: [],
@@ -3508,22 +3550,89 @@ async function run() {
     ".inspector-changes-resource:not(.is-hidden)",
   );
   await until(
+    () => Boolean(compactChangesResource?.querySelector(".diff-viewer-side")),
+    "compact agent worktree Changes",
+  );
+  // The same location popover supplies explicit choices when evidence is ambiguous.
+  ambiguousAgentWorktrees = true;
+  persistentReviewerInspector!
+    .querySelector<HTMLButtonElement>(".workspace-inspector-location")!
+    .click();
+  await until(
+    () => Boolean(document.querySelector(".agent-worktree-picker")),
+    "agent worktree location popover",
+  );
+  [
+    ...document.querySelectorAll<HTMLButtonElement>(
+      ".agent-worktree-picker button",
+    ),
+  ]
+    .find((button) => button.textContent === "Refresh")!
+    .click();
+  await until(
     () =>
-      Boolean(compactChangesResource?.querySelector("button:not([disabled])")),
-    "compact Agent checkout unavailable state",
+      Boolean(
+        compactChangesResource?.querySelector(
+          ".workspace-inspector-unavailable",
+        ),
+      ),
+    "ambiguous worktree empty state",
   );
-  const workspaceChangesChoice = [
-    ...compactChangesResource!.querySelectorAll<HTMLButtonElement>("button"),
-  ].find((button) => button.textContent === "Workspace changes");
   check(
-    Boolean(workspaceChangesChoice),
-    "Agent checkout unavailable state did not offer Workspace changes",
+    !compactChangesResource?.querySelector(".diff-viewer-side"),
+    "Ambiguous worktree evidence must not mount workspace Changes as fallback",
   );
-  workspaceChangesChoice?.click();
+  persistentReviewerInspector!
+    .querySelector<HTMLButtonElement>(".workspace-inspector-location")!
+    .click();
+  [...compactChangesResource!.querySelectorAll<HTMLButtonElement>("button")]
+    .find((button) => button.textContent === "Choose a worktree")!
+    .click();
+  await until(
+    () => Boolean(document.querySelector(".agent-worktree-picker")),
+    "Choose a worktree reopens the same location popover",
+  );
+  const worktreeChoices = document.querySelectorAll<HTMLInputElement>(
+    '.agent-worktree-picker input[type="radio"]',
+  );
+  check(
+    worktreeChoices.length === 2 &&
+      [...worktreeChoices].every((radio) => !radio.checked),
+    "Ambiguous worktrees must offer two unselected native radio choices",
+  );
+  const worktreeRequestsStart = calls.length;
+  (worktreeChoices[0] as HTMLInputElement).click();
   await until(
     () => Boolean(compactChangesResource?.querySelector(".diff-viewer-side")),
-    "compact Workspace changes choice",
+    "explicit agent worktree choice",
   );
+  await until(
+    () =>
+      ["file.list", "git.diff_summary"].every((method) =>
+        calls
+          .slice(worktreeRequestsStart)
+          .some(
+            (call) =>
+              call.method === method &&
+              (
+                call.params.agent_worktree as
+                  | { candidateId?: string }
+                  | undefined
+              )?.candidateId === "reviewer-pane-agent",
+          ),
+      ),
+    "same chosen root for Files and Changes",
+  );
+  check(
+    persistentReviewerInspector!
+      .querySelector(".workspace-inspector-location")
+      ?.textContent?.includes("reviewer-pane") === true,
+    "Location line must identify the selected worktree, not the launch checkout",
+  );
+  persistentReviewerInspector!
+    .querySelector<HTMLButtonElement>(".workspace-inspector-location")!
+    .click();
+  ambiguousAgentWorktrees = false;
   check(
     (compactChangesResource?.getBoundingClientRect().height ?? 0) > 0 &&
       (compactChangesResource
