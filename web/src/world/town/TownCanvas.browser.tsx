@@ -224,7 +224,25 @@ function topology(seed: number): Topology {
       snapshotGeneration: 3,
       stale: false,
       actionable: true,
-      snapshot: { workspaces, tabs, panes, agents: [] },
+      snapshot: {
+        workspaces,
+        tabs,
+        panes,
+        // Screenshots only (?names=demo): Herdr names for every agent.
+        agents:
+          typeof location !== "undefined" &&
+          new URLSearchParams(location.search).get("names") === "demo"
+            ? panes
+                .filter((pane) => pane.agent)
+                .map((pane) => ({
+                  pane_id: pane.pane_id,
+                  terminal_id: pane.terminal_id,
+                  agent: pane.agent,
+                  agent_status: pane.agent_status,
+                  name: pane.task_summary?.split(" ")[0]?.toLowerCase(),
+                }))
+            : [],
+      },
     };
   });
   return { connections, agentPanes };
