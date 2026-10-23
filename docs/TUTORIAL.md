@@ -206,10 +206,11 @@ changes what you see and does not disconnect hosts or retarget open terminals.
    the room's free spot to put it last of the tables shown. A room grows as
    tabs open, up to eight tables wide on a wide screen, six on a portrait or
    half-width screen and four on a phone, then row by row. A folded room normally
-   shows 24 tables, keeping the ones that need you, are working or are newest;
-   selected and pinned tables stay visible beyond that count. Press
-   **+N** on its plaque to expand it into a longer room of up to 127 tables,
-   and **Fold** to put it back. Rooms sit in columns that suit your screen
+   shows up to 24 tables. Selected and pinned tables, blocked agents, unreviewed
+   finishes and verified agents with open questions stay visible beyond that
+   count. Press **+N** on its plaque to expand it to a normal limit of 127 tables;
+   the same tables stay visible beyond that limit. **+N** counts only hidden tables.
+   Press **Fold** to put it back. Rooms sit in columns that suit your screen
    (one on a phone), and a growing room pushes down only the rooms below it,
    once you let go of the town. Town moves the tab in Herdr, so Spaces
    shows the new order too, and moving a tab in Spaces moves its table. The

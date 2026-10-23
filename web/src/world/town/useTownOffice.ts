@@ -4,6 +4,10 @@ import {
   type HerdrOfficeProjection,
   TOWN_PRESENTATION_BOUNDS,
 } from "../herdrOfficeProjection";
+import { townAttentionDesks } from "./townAttention";
+import type { TownCall } from "./TownRail";
+import type { WorldAsk } from "../worldAsks";
+import { withTownFinished } from "./townFinished";
 import { useDeskPins } from "../useDeskPins";
 import type { WorldObject } from "../worldObject";
 
@@ -14,6 +18,11 @@ import type { WorldObject } from "../worldObject";
  */
 export function useTownOffice(world: WorldObject, selectedId: string | null) {
   const projectOffice = useMemo(
+    () => createOfficeProjector(TOWN_PRESENTATION_BOUNDS),
+    [],
+  );
+  // Separate caches avoid alternating semantic and protected presentation inputs.
+  const projectPresentation = useMemo(
     () => createOfficeProjector(TOWN_PRESENTATION_BOUNDS),
     [],
   );
@@ -41,5 +50,36 @@ export function useTownOffice(world: WorldObject, selectedId: string | null) {
       projectOffice(world, Date.now(), selectedId, pinnedTabs, expandedRooms),
     [world, selectedId, projectOffice, pinnedTabs, expandedRooms],
   );
-  return { office: observedOffice, deskPins, toggleRoomFold };
+  const present = useCallback(
+    (protectedDesks: ReadonlySet<string>) =>
+      projectPresentation(
+        world,
+        Date.now(),
+        selectedId,
+        pinnedTabs,
+        expandedRooms,
+        protectedDesks,
+      ),
+    [world, selectedId, pinnedTabs, expandedRooms, projectPresentation],
+  );
+  return { office: observedOffice, deskPins, toggleRoomFold, present };
+}
+
+/** Admit attention from the full semantic roster, then apply its same finish overlay. */
+export function useTownPresentation(
+  present: (desks: ReadonlySet<string>) => HerdrOfficeProjection,
+  office: HerdrOfficeProjection,
+  calls: readonly TownCall[],
+  asks: readonly WorldAsk[],
+  finished: ReadonlySet<string>,
+  seen: ReadonlySet<string>,
+) {
+  const desks = useMemo(
+    () => townAttentionDesks(calls, asks, office.roster),
+    [calls, asks, office.roster],
+  );
+  return useMemo(
+    () => withTownFinished(present(desks), finished, seen),
+    [present, desks, finished, seen],
+  );
 }

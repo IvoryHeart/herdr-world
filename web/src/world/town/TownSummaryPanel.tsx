@@ -7,7 +7,7 @@ import {
 } from "../officeObservability";
 import { WorldPanel } from "../windows/WorldPanel";
 import type { WorldObject } from "../worldObject";
-import { TownAsk, type TownCall } from "./TownRail";
+import { TownAsk, townRailInset, type TownCall } from "./TownRail";
 import { sharedAsksStore, useWorldAsks } from "../worldAsks";
 import {
   townSummary,
@@ -217,6 +217,7 @@ function Counts({ counts }: { counts: TownSummaryCounts }) {
  * for the canvas; on a phone the window closes first, since it covers Town.
  */
 export function useTownSummary({
+  railCollapsed,
   world,
   office,
   calls,
@@ -224,6 +225,7 @@ export function useTownSummary({
   now,
   openAgent,
 }: {
+  railCollapsed: boolean;
   world: WorldObject;
   office: HerdrOfficeProjection;
   calls: readonly TownCall[];
@@ -232,7 +234,7 @@ export function useTownSummary({
   openAgent(agentKey: string): void;
 }): {
   summary: TownSummaryModel;
-  viewportWidth: number;
+  railInset: number;
   answerAsk(id: string, text: string): Promise<string | null>;
   open(): void;
   roomFocus: { roomKey: string; seq: number } | null;
@@ -270,7 +272,11 @@ export function useTownSummary({
   } | null>(null);
   return {
     summary,
-    viewportWidth,
+    railInset: townRailInset(
+      viewportWidth,
+      railCollapsed,
+      summary.counts.needsYou,
+    ),
     answerAsk,
     open: () => setOpen(true),
     roomFocus,

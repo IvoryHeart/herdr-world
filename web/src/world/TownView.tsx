@@ -34,7 +34,7 @@ import {
 } from "../store";
 import { WORLD_OBSERVABILITY_UPDATED_EVENT } from "../workspaceResource";
 import { useTownSummary } from "./town/TownSummaryPanel";
-import { useTownOffice } from "./town/useTownOffice";
+import { useTownOffice, useTownPresentation } from "./town/useTownOffice";
 import { TownCanvas } from "./town/TownCanvas";
 import type { TownQuestMark } from "./town/townQuestPennant";
 import { townDeskColorTarget, townRoomColorKey } from "./town/townModel";
@@ -67,8 +67,9 @@ import { TownChooser } from "./town/TownChooser";
 import { TownPeek, townStatusText } from "./town/TownPeek";
 import {
   nextTownCall,
-  readTownRailCollapsed,
   townCalls,
+  unseenTownCompletions,
+  readTownRailCollapsed,
   TownRail,
 } from "./town/TownRail";
 import { useNow } from "./handoffs";
@@ -170,6 +171,7 @@ export default function TownView({
     office: observedOffice,
     deskPins,
     toggleRoomFold,
+    present,
   } = useTownOffice(world, selectedId);
   const townFinished = useTownFinished(observedOffice);
   // Terminal frames and unrelated store updates must not reconcile the scene.
@@ -290,22 +292,8 @@ export default function TownView({
   );
   const selectedKey = officePresentationKey(office, selectedId);
   const unseenCompletions = useMemo(
-    () =>
-      office.roster
-        .filter(
-          ({ agent }) =>
-            agent.semanticStatus === "done" &&
-            agent.deskKey !== null &&
-            !completionSeenKeys.has(agent.key),
-        )
-        .map(({ agent }) => agent)
-        .sort(
-          (left, right) =>
-            Number(right.canOpenInSpaces) - Number(left.canOpenInSpaces) ||
-            left.displayLabel.localeCompare(right.displayLabel) ||
-            left.key.localeCompare(right.key),
-        ),
-    [completionSeenKeys, office],
+    () => unseenTownCompletions(office.roster, completionSeenKeys),
+    [completionSeenKeys, office.roster],
   );
   const selectedRoomKey = officeRoomKeyForSelection(world, selectedId);
   const conversationTargets = floatingTerminals.flatMap((terminal) => {
@@ -600,6 +588,7 @@ export default function TownView({
   );
   // The Town summary: board sign, phone chip and window (pm's phase 1).
   const townSummary = useTownSummary({
+    railCollapsed,
     world,
     office,
     calls,
@@ -607,6 +596,14 @@ export default function TownView({
     now,
     openAgent: (key) => openChat(key),
   });
+  const presentedOffice = useTownPresentation(
+    present,
+    office,
+    calls,
+    townSummary.summary.asks,
+    townFinished.finished,
+    completionSeenKeys,
+  );
   const whereOfAgent = (agentKey: string) => {
     const entry = agentByKey.get(agentKey);
     return entry ? `${entry.roomLabel} · ${entry.hostLabel}` : "";
@@ -1129,7 +1126,6 @@ export default function TownView({
     window.addEventListener("keydown", keydown);
     return () => window.removeEventListener("keydown", keydown);
   });
-  const whereOf = whereOfAgent;
   /** The peeked agent's desk colour: its terminal's, shared across World. */
   const peekDeskColor = (agentKey: string) => {
     const deskKey = office.paneRoster.find(
@@ -1147,7 +1143,6 @@ export default function TownView({
         void setTerminalColor(target, color),
     };
   };
-  const townSelectedKey = peek?.key ?? selectedKey;
 
   if (!world.hosts.length) {
     return (
@@ -1315,11 +1310,11 @@ export default function TownView({
         <div className="town-stage">
           <TownCanvas
             trace={trace}
-            projection={office}
+            projection={presentedOffice}
             relations={relations}
             terminalColors={terminalColors}
             deskPins={deskPins}
-            selectedKey={townSelectedKey}
+            selectedKey={peek?.key ?? selectedKey}
             completionSeenKeys={completionSeenKeys}
             summonedKeys={summonedKeys}
             quests={questMarks}
@@ -1360,12 +1355,7 @@ export default function TownView({
             roomFocus={townSummary.roomFocus}
             calm={preferences.townCalm}
             chrome={{
-              left:
-                townSummary.viewportWidth >= 640 &&
-                !railCollapsed &&
-                calls.some((call) => call.kind === "blocked")
-                  ? 252
-                  : 0,
+              left: townSummary.railInset,
               right: 0,
             }}
             roomActions={{

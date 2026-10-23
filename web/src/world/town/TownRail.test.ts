@@ -1,7 +1,12 @@
 import { expect, test } from "bun:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { nextTownCall, TownRail, type TownCall } from "./TownRail";
+import {
+  townRailInset,
+  nextTownCall,
+  TownRail,
+  type TownCall,
+} from "./TownRail";
 
 const call = (key: string, kind: TownCall["kind"]) =>
   ({ agent: { key }, kind }) as unknown as TownCall;
@@ -60,4 +65,12 @@ test("questions from agents open the rail, with their options", () => {
   expect(html).toContain("1m</small>");
   expect(html).toContain(">yes</button>");
   expect(html).not.toContain("Nobody is waiting on you.");
+});
+
+test("camera reserves the rail for open questions and respects tray/collapse boundaries", () => {
+  expect(townRailInset(960, false, 1)).toBe(252);
+  expect(townRailInset(960, false, 0)).toBe(0);
+  expect(townRailInset(960, true, 1)).toBe(0);
+  expect(townRailInset(640, false, 1)).toBe(0);
+  expect(townRailInset(641, false, 1)).toBe(252);
 });

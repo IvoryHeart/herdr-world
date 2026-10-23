@@ -338,3 +338,33 @@ export function townCalls(
   });
   return [...blocked, ...finished];
 }
+
+/** The shared unreviewed finishes, using Town's current finished/seen overlay. */
+export function unseenTownCompletions(
+  roster: readonly OfficeRosterEntry[],
+  seen: ReadonlySet<string>,
+): OfficeAgent[] {
+  return roster
+    .filter(
+      ({ agent }) =>
+        agent.semanticStatus === "done" &&
+        agent.deskKey !== null &&
+        !seen.has(agent.key),
+    )
+    .map(({ agent }) => agent)
+    .sort(
+      (left, right) =>
+        Number(right.canOpenInSpaces) - Number(left.canOpenInSpaces) ||
+        left.displayLabel.localeCompare(right.displayLabel) ||
+        left.key.localeCompare(right.key),
+    );
+}
+
+/** Reserve the wide rail's actual width, including when only questions are open. */
+export function townRailInset(
+  width: number,
+  collapsed: boolean,
+  needsYouCount: number,
+) {
+  return width > 640 && !collapsed && needsYouCount > 0 ? 252 : 0;
+}

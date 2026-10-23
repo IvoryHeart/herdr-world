@@ -6,6 +6,10 @@ import type { Pane, Tab, Workspace } from "../../types";
 import type { WorldRuntimeConnection } from "../runtimeStore";
 import { buildWorldObject, type WorldObject } from "../worldObject";
 import TownView from "../TownView";
+import { projectWorldOffice } from "../herdrOfficeProjection";
+import type { WorldAsk } from "../worldAsks";
+import { townCalls, unseenTownCompletions } from "./TownRail";
+import { townAttentionDesks } from "./townAttention";
 import type { BoardDocument, BoardOp } from "../board/boardDocument";
 import {
   WorldPanelsContext,
@@ -21,7 +25,10 @@ import {
   type BridgeControlMsg,
   type ConnectionClient,
 } from "../../api";
-import { readCompletionSeen } from "../completionSeenState";
+import {
+  officeCompletionIdentity,
+  readCompletionSeen,
+} from "../completionSeenState";
 import { worldSourcesStore } from "../worldSources";
 import "../world.css";
 import {
@@ -484,7 +491,7 @@ const ledger = {
       question: "Ship the reception fix now, or wait for review?",
       options: ["Ship", "Wait"],
       owner_only: true,
-    },
+    } as WorldAsk,
   ],
 };
 worldBridge.call = async (method, params) => {
@@ -767,6 +774,17 @@ async function run() {
       ?.tabs ?? [];
   const blocked = base.agentPanes.filter((_, index) => index % 23 === 4);
   for (const pane of blocked) pane.agent_status = "blocked";
+  const asker = base.agentPanes.find(
+    (pane) =>
+      pane.agent_status === "idle" && pane.workspace_id === "local-orbit",
+  );
+  if (asker)
+    Object.assign(ledger.asks[0]!.actor, {
+      connection_id: "local",
+      pane_id: asker.pane_id,
+      terminal_id: asker.terminal_id,
+    });
+
   statusOf = (paneId) =>
     base.agentPanes.find((pane) => pane.pane_id === paneId)?.agent_status ?? "";
   let setWorld: (world: WorldObject) => void = () => {};
@@ -1137,12 +1155,57 @@ async function run() {
   const perRoom = new Map<string, number>();
   for (const entry of base.connections.flatMap((c) => c.snapshot?.tabs ?? []))
     perRoom.set(entry.workspace_id, (perRoom.get(entry.workspace_id) ?? 0) + 1);
+  const expectedOffice = projectWorldOffice(
+    worldFor(base.connections),
+    Date.now(),
+  );
+  const seen = readCompletionSeen(worldLocalStorage);
+  const expectedCalls = townCalls(
+    expectedOffice.roster,
+    new Map(),
+    unseenTownCompletions(
+      expectedOffice.roster,
+      new Set(
+        expectedOffice.roster
+          .filter(({ agent }) => seen.has(officeCompletionIdentity(agent)))
+          .map(({ agent }) => agent.key),
+      ),
+    ),
+    (key) => expectedOffice.roster.find(({ agent }) => agent.key === key),
+  );
+  const protectedDesks = townAttentionDesks(
+    expectedCalls,
+    ledger.asks,
+    expectedOffice.roster,
+  );
+  const protectedCounts = new Map<string, number>();
+  for (const { desk } of expectedOffice.deskRoster)
+    if (protectedDesks.has(desk.key)) {
+      const id = expectedOffice.rooms.find(({ key }) => key === desk.roomKey)!
+        .workspaceRef.nativeId;
+      protectedCounts.set(id, (protectedCounts.get(id) ?? 0) + 1);
+    }
   const drawn = (expanded: string | null) =>
     [...perRoom].reduce(
       (sum, [id, count]) =>
-        sum + (id === expanded ? count : Math.min(count, 24)),
+        sum +
+        Math.max(
+          id === expanded ? count : Math.min(count, 24),
+          protectedCounts.get(id) ?? 0,
+        ),
       0,
     );
+  const visibleDeskKeys = new Set(
+    [
+      ...host.querySelectorAll<HTMLElement>(
+        '.world-semantic-target[data-kind="desk"]',
+      ),
+    ].map((target) => target.dataset.targetKey),
+  );
+  check(
+    [...protectedDesks].every((key) => visibleDeskKeys.has(key)),
+    "fold hid a desk from the shared call/ask attention source",
+  );
   check(
     diagnostics.desks === drawn(null),
     `a folded town drew ${diagnostics.desks} of ${drawn(null)} desks`,
@@ -2181,7 +2244,7 @@ async function run() {
       diagnostics.lastError === null,
       `renderer error at scale: ${diagnostics.lastError}`,
     );
-    // Fold puts the room back to its busiest 24 desks.
+    // Fold restores the target of 24 while retaining every attention desk.
     host
       .querySelector<HTMLButtonElement>('button[aria-label^="Fold room orbit"]')
       ?.click();

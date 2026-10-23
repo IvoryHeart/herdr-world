@@ -5,7 +5,7 @@ import type {
   WorldObject,
   WorldSpaceObject,
 } from "./worldObject";
-import { boundedDesks } from "./officeDesks";
+import { boundedDesks, boundedWithPriority } from "./officeDesks";
 import { stableNumber } from "./stableNumber";
 import { boundedOptionalText, yieldWorldTask } from "./worldObject";
 import { tabCardKey } from "../../../shared/terminalColor";
@@ -282,6 +282,7 @@ export function createOfficeProjector(
   let previousSelected: string | null = null;
   let previousExpanded: ReadonlySet<string> = NO_EXPANDED_ROOMS;
   let previousPinned: ReadonlySet<string> = NO_PINNED_TABS;
+  let previousProtected: ReadonlySet<string> = NO_PINNED_TABS;
   const intern = <T extends { key: string }>(next: T[], prior: T[]) => {
     const byKey = new Map(prior.map((item) => [item.key, item]));
     const result = next.map((item) => {
@@ -299,25 +300,29 @@ export function createOfficeProjector(
     selectedId: string | null,
     pinnedTabs: ReadonlySet<string> = NO_PINNED_TABS,
     expandedRooms: ReadonlySet<string> = NO_EXPANDED_ROOMS,
+    protectedDesks: ReadonlySet<string> = NO_PINNED_TABS,
   ): HerdrOfficeProjection => {
     let next: HerdrOfficeProjection | null = null;
     const inputs = previous && projectionInputs.get(previous);
     // Pinned desks are admitted first, and expanding or folding a room changes
-    // its bound, so either change admits desks again.
-    const samePins =
-      pinnedTabs === previousPinned && expandedRooms === previousExpanded;
+    // its bound; changes to attention desks also require fresh admission.
+    const sameAdmission =
+      pinnedTabs === previousPinned &&
+      expandedRooms === previousExpanded &&
+      protectedDesks.size === previousProtected.size &&
+      [...protectedDesks].every((key) => previousProtected.has(key));
     if (
       previous &&
       inputs &&
       previousWorld === world &&
       selectedId === previousSelected &&
-      samePins
+      sameAdmission
     ) {
       next = { ...previous, generatedAt };
     } else if (
       previous &&
       previousWorld === world &&
-      samePins &&
+      sameAdmission &&
       inputs?.prepared
     ) {
       const selection = selectedId ? world.nodeById.get(selectedId) : undefined;
@@ -428,6 +433,7 @@ export function createOfficeProjector(
         bounds,
         pinnedTabs,
         expandedRooms,
+        protectedDesks,
       );
     if (previous && next.rooms !== previous.rooms) {
       // Compare content once at projection admission, never once per canvas frame.
@@ -440,6 +446,7 @@ export function createOfficeProjector(
     previousSelected = selectedId;
     previousExpanded = expandedRooms;
     previousPinned = pinnedTabs;
+    previousProtected = new Set(protectedDesks);
     previous = next;
     return next;
   };
@@ -460,6 +467,8 @@ export function projectWorldOffice(
   pinnedTabs: ReadonlySet<string> = NO_PINNED_TABS,
   /** Rooms the user expanded past `foldedDesksPerRoom` (room keys). */
   expandedRooms: ReadonlySet<string> = NO_EXPANDED_ROOMS,
+  /** Qualified desk keys supplied by Town's complete attention read model. */
+  protectedDesks: ReadonlySet<string> = NO_PINNED_TABS,
 ): HerdrOfficeProjection {
   const selection = selectedId ? world.nodeById.get(selectedId) : undefined;
   const selectedSpaceId =
@@ -542,7 +551,7 @@ export function projectWorldOffice(
       (desk) =>
         entry.source.id === selectedSpaceId &&
         desk.tabRef.nativeId === selectedLeaf?.tabId,
-      pinned,
+      (desk) => pinned(desk) || protectedDesks.has(desk.key),
     ).map((desk) => {
       const devices = boundedWithPriority(
         projectPaneDevices(entry.source.children, desk),
@@ -1253,24 +1262,6 @@ function boundedSorted<T>(
     if (kept.length > limit) kept.pop();
   }
   return kept;
-}
-
-/** `first` ranks some priority values ahead of the rest of them. */
-function boundedWithPriority<T>(
-  values: readonly T[],
-  limit: number,
-  priority: (value: T) => boolean,
-  first: (value: T) => boolean = () => false,
-) {
-  if (values.length <= limit) return [...values];
-  const admitted = new Set(
-    [
-      ...values.filter(first),
-      ...values.filter((value) => !first(value) && priority(value)),
-      ...values.filter((value) => !priority(value)),
-    ].slice(0, limit),
-  );
-  return values.filter((value) => admitted.has(value));
 }
 
 const NO_EXPANDED_ROOMS: ReadonlySet<string> = new Set();

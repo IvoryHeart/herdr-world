@@ -172,6 +172,59 @@ describe("Pixel Office projection", () => {
       );
     }
   });
+  test("attention desks survive both fold bounds and protection removal invalidates the cache", async () => {
+    const tabs = Array.from({ length: 160 }, (_, index) =>
+      tab(`attention-${index}`, index + 1),
+    );
+    const world = buildWorldObject([
+      connection(
+        "alpha",
+        tabs,
+        tabs.map((entry) => pane(entry.tab_id, "idle", "Synthetic")),
+      ),
+    ]);
+    await prepareWorldOffice(world);
+    const baseline = projectWorldOffice(
+      world,
+      1,
+      null,
+      TOWN_PRESENTATION_BOUNDS,
+    );
+    const protectedDesks = new Set(
+      baseline.deskRoster.slice(0, 130).map(({ desk }) => desk.key),
+    );
+    const expanded = new Set([baseline.rooms[0]!.key]);
+    const pins = new Set<string>();
+    const project = createOfficeProjector(TOWN_PRESENTATION_BOUNDS);
+    for (const rooms of [new Set<string>(), expanded]) {
+      const shown = project(world, 2, null, pins, rooms, protectedDesks);
+      const room = shown.rooms[0]!;
+      const visible = new Set(room.desks.map(({ key }) => key));
+      expect([...protectedDesks].filter((key) => !visible.has(key))).toEqual(
+        [],
+      );
+      expect(room.desks).toHaveLength(130);
+      expect(room.omittedDeskCount).toBe(30);
+      const cached = project(
+        world,
+        3,
+        null,
+        pins,
+        rooms,
+        new Set(protectedDesks),
+      );
+      expect(cached.rooms).toBe(shown.rooms);
+      expect(cached.presentationBounds).toBe(shown.presentationBounds);
+    }
+    project(world, 3, null, pins, expanded, protectedDesks);
+    protectedDesks.clear();
+    const released = project(world, 4, null, pins, expanded, protectedDesks);
+    expect(released.rooms[0]!.desks).toHaveLength(127);
+    expect(released.rooms[0]!.omittedDeskCount).toBe(33);
+    const removed = project(world, 4, null, pins, new Set(), protectedDesks);
+    expect(removed.rooms[0]!.desks).toHaveLength(24);
+    expect(removed.rooms[0]!.omittedDeskCount).toBe(136);
+  });
   test("a pinned desk past the room's bound is admitted with its agents", async () => {
     const tabs = Array.from(
       { length: OFFICE_PRESENTATION_BOUNDS.desksPerRoom + 3 },
