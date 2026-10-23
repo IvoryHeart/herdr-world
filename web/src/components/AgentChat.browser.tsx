@@ -1035,6 +1035,50 @@ async function run() {
           !text().includes("History read failed."),
         "Refresh did not retry History's read",
       );
+
+      // Loaded, then a failed read, then a retry that succeeds with nothing
+      // new (the same cursor): the warning goes and the messages stay.
+      const refresh = () =>
+        container
+          .querySelector<HTMLButtonElement>(
+            '[aria-label="Refresh conversation"]',
+          )
+          ?.click();
+      historyAnswer = () => {
+        throw new Error("History read failed again.");
+      };
+      refresh();
+      await settle();
+      await settle();
+      check(
+        text().includes("History read failed again.") &&
+          text().includes("Recovered answer"),
+        "A failed History refresh must warn and keep the last window",
+      );
+      let unchanged = 0;
+      historyAnswer = (params) => {
+        unchanged += 1;
+        const cursor = params.cursor as { epoch: string; revision: number };
+        return {
+          ...historyOf([]),
+          mode: "delta",
+          cursor,
+          base_revision: cursor.revision,
+          upserts: [],
+          removed: [],
+          entries: undefined,
+        };
+      };
+      refresh();
+      await settle();
+      await settle();
+      check(
+        unchanged > 0 &&
+          !text().includes("History read failed again.") &&
+          text().includes("Recovered answer"),
+        "A successful History retry with nothing new left the warning up",
+      );
+      historyAnswer = null;
     }
 
     const unwatched = count("agent_conversation.unwatch");

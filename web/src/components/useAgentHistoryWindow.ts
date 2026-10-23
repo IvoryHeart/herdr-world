@@ -105,7 +105,20 @@ export function useAgentHistoryWindow({
           response as AgentHistoryResponse,
           requested,
         );
-        if (merged === historyRef.current) return;
+        if (merged === historyRef.current) {
+          // A valid answer with nothing new (same cursor) still ends an
+          // earlier failure; an invalid or out-of-date one does not.
+          const reply = response as AgentHistoryResponse;
+          const kept = historyRef.current?.cursor;
+          if (
+            reply?.history_version === 2 &&
+            kept &&
+            reply.cursor?.epoch === kept.epoch &&
+            reply.cursor?.revision === kept.revision
+          )
+            setError("");
+          return;
+        }
         historyRef.current = merged;
         remember(key, merged);
         setHistory(merged);
