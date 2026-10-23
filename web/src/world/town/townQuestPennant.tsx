@@ -2,7 +2,7 @@
  * Town's quest pennant: an agent's quest beside its seat, from the room
  * level, with a label on hover, focus or a tap.
  */
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { TownRendererHandle } from "./townRenderer";
 import "./townQuest.css";
 
@@ -51,11 +51,23 @@ export function TownQuestPennant({
   renderer: { readonly current: TownRendererHandle | null };
 }) {
   const [open, setOpen] = useState(false);
+  const button = useRef<HTMLButtonElement | null>(null);
+  // Safari does not focus a tapped button, so blur alone never closes the
+  // label: a press anywhere else does.
+  useEffect(() => {
+    if (!open) return;
+    const close = (event: PointerEvent) => {
+      if (!button.current?.contains(event.target as Node)) setOpen(false);
+    };
+    document.addEventListener("pointerdown", close, true);
+    return () => document.removeEventListener("pointerdown", close, true);
+  }, [open]);
   const label = `Quest: ${quest.title}, ${quest.progress}`;
   return (
     <button
       type="button"
       ref={(pennant) => {
+        button.current = pennant;
         if (pennant) markAway(pennant, renderer.current);
       }}
       className={`town-quest${top ? " town-quest-top" : ""}`}

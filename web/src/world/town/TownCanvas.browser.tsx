@@ -1151,7 +1151,14 @@ async function run() {
       selected.length === 0,
     `a pennant tap shows the quest and selects nothing (${pennantLabel.textContent})`,
   );
-  pennant.click();
+  // A press elsewhere closes it, even where a tap gives the button no focus.
+  document.body.dispatchEvent(
+    new PointerEvent("pointerdown", { bubbles: true }),
+  );
+  await waitFor(
+    () => getComputedStyle(pennantLabel).display === "none",
+    "a press elsewhere did not close a pennant's label",
+  );
   await waitFor(
     () => host.querySelector(".town-desk-badge") !== null,
     "desks of agents with a pull request show its badge",
