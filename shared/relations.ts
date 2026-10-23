@@ -1,3 +1,10 @@
+import {
+  GROUP_LIMITS,
+  teamMembers,
+  type Group,
+  type GroupChange,
+} from "./groups";
+
 /**
  * Which terminals know each other, and why. A relation is between two
  * terminals on their connections; each source that says so is one piece of
@@ -40,22 +47,19 @@ export type SpawnClaim = {
   observed_at: number;
 };
 
-/** Desks or cards the user grouped; the first member is the one joined. */
-export type RelationGroup = {
-  id: string;
-  members: TerminalRef[];
-  created_at: number;
-};
+/** World groups share one model; only kind team participates in terminal relations. */
+export type RelationGroup = Group;
 
 export type RelationsDocument = {
   spawns: SpawnClaim[];
   groups: RelationGroup[];
+  /** Bounded recent attribution, including deleted groups; not a complete audit. */
+  group_changes?: GroupChange[];
 };
 
 export const RELATION_LIMITS = Object.freeze({
   spawns: 1_000,
-  groups: 500,
-  members: 32,
+  ...GROUP_LIMITS,
 });
 
 /** One connection as a snapshot shows it. */
@@ -237,13 +241,13 @@ export function relationsOf(
     });
   }
   for (const group of document.groups) {
+    const members = teamMembers(group);
     // A star around its first live member, so a closed lead does not leave
     // the rest unrelated.
     const hub =
-      group.members.find((member) => live.has(terminalKey(member))) ??
-      group.members[0];
+      members.find((member) => live.has(terminalKey(member))) ?? members[0];
     if (!hub) continue;
-    for (const member of group.members)
+    for (const member of members)
       if (member !== hub)
         add(hub, member, {
           kind: "manual",
@@ -311,13 +315,24 @@ export function leaveGroups(
   members: readonly TerminalRef[],
 ): RelationGroup[] {
   return groups
-    .map((group) => ({
-      ...group,
-      members: group.members.filter(
-        (member) => !members.some((leaving) => sameRef(leaving, member)),
-      ),
-    }))
-    .filter((group) => group.members.length > 1);
+    .map((group) =>
+      group.kind !== "team"
+        ? group
+        : {
+            ...group,
+            members: group.members.filter(
+              (member) =>
+                typeof member.ref === "string" ||
+                !members.some((leaving) =>
+                  sameRef(leaving, member.ref as TerminalRef),
+                ),
+            ),
+          },
+    )
+    .filter(
+      (group) =>
+        group.kind !== "team" || group.name || group.members.length > 1,
+    );
 }
 
 /**
@@ -346,7 +361,7 @@ export function joinGroup(
   )
     throw new Error("a group cannot span connections");
   const host = groups.find((group) =>
-    group.members.some((member) =>
+    teamMembers(group).some((member) =>
       target.some((entry) => sameRef(entry, member)),
     ),
   );
@@ -354,26 +369,22 @@ export function joinGroup(
     groups.filter((group) => group !== host),
     joining,
   );
-  const base = host
-    ? host.members.filter(
-        (member) => !joining.some((entry) => sameRef(entry, member)),
-      )
-    : [...target];
+  const refs = [...(host ? teamMembers(host) : target), ...joining].filter(
+    (member, index, all) =>
+      all.findIndex((entry) => sameRef(entry, member)) === index,
+  );
   if (!host && groups.some((group) => group.id === id))
     throw new Error(`group ${id} already exists`);
-  const group: RelationGroup = host
-    ? { ...host, members: [...base, ...joining] }
-    : {
-        id,
-        members: [
-          ...base.filter(
-            (member, index) =>
-              base.findIndex((entry) => sameRef(entry, member)) === index,
-          ),
-          ...joining,
-        ],
-        created_at: now,
-      };
+  const group: RelationGroup = {
+    ...(host ?? { id, kind: "team", created_at: now }),
+    members: refs.map(
+      (ref) =>
+        host?.members.find(
+          (member) =>
+            typeof member.ref !== "string" && sameRef(member.ref, ref),
+        ) ?? { ref, roles: [], joined_at: now },
+    ),
+  };
   if (group.members.length > RELATION_LIMITS.members)
     throw new Error(
       `a group holds at most ${RELATION_LIMITS.members} terminals`,
@@ -405,6 +416,8 @@ export function closedRelations(
     children: document.spawns
       .filter((claim) => closed(claim.child) && closed(claim.parent))
       .map((claim) => claim.child),
-    members: document.groups.flatMap((group) => group.members.filter(closed)),
+    members: document.groups.flatMap((group) =>
+      teamMembers(group).filter(closed),
+    ),
   };
 }

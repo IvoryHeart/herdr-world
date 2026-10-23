@@ -44,6 +44,27 @@ This reconciles the remaining baseline entries without treating a component mode
 | Q42 Preferences/filters/shortcuts | Pure bounded key parsing and browser storage tests exercise namespaces, canonicalization, quotas and newest explicit preference. | Storage quota/browser implementation behavior remains direct evidence; preferences do not authorize downstream operations. |
 | Q43 Rendering/layout/search/metrics/site | Actual production-context/browser/layout and generated site-content tests exercise rendering, search projection and published content. ConcurrentContexts checks phase-specific terminal lifetime and stable Board card observer registrations during status-only refreshes at desktop and phone widths; direct ref tests cover replacement, removal and abandoned renders. | Pixel/layout/performance/device outcomes require real rendering and supported browser/site checks; no model of every device or accessibility event schedule. |
 
+### Stored Groups (Q43)
+
+Properties come from the Stored Groups requirement: pooled lead/builder roles
+belong to one Pod per address, reviewer may span Pods, terminal Teams alone
+magnetize/prune, unresolved addresses never guess an occupant, and group edits
+plus bounded attribution persist atomically. `shared/groups.test.ts` exhausts
+36 two-Pod role combinations and exercises canonical address scope, restart,
+away/ambiguous resolution and custom-kind isolation. `board-groups.test.ts`
+covers read-only legacy migration, all three conflicting-role paths and
+confirmed transfer, rollback/stale revisions, member/role/participating-Pod
+caps, 64-entry promotion diffs, no-op suppression and 128-event deletion
+attribution. Existing relation/store/CLI tests retain terminal grouping,
+pruning and undo; the browser adapter also proves Pod-only data does not scan
+terminal topology or enable magnetic Ungroup.
+
+Direct exhaustive and service evidence fits these pure finite validation rules
+and the existing atomic Board write. No new scheduling or authenticated caller
+protocol is introduced. Board/Town browser checks remain necessary for real
+layout and gesture outcomes. This does not prove human-only role editing,
+permanent audit retention, or future Groups CLI/roster behavior.
+
 ## Review and remaining obligations
 
 Evidence statuses describe concrete decisions; independent acceptance is recorded separately. Review 5516249164 accepts every Q01–Q43 bounded mapping and alternative. Mandatory consumers and excluded claims remain binding. Final implementation/gate/resource acceptance is recorded in [review 5517420140](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5517420140); owner-approved PR #188 merged as `481ca1e8`. Mandatory consumers and excluded claims remain binding. Review must inspect the intended requirement, model/reducer domain, adapter fidelity, actual consumer tests and excluded claims. Q21 has its separate bounded exhaustive contract. Q26–Q28 retain their separately accepted Ranger storage/permission assumptions.

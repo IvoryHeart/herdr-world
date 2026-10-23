@@ -294,7 +294,13 @@ not reappear in another file, any added line that was not removed, code moved
 within its own file and blocks that change order; it prints every moved run with
 its source and destination lines. Attach its output. Reviewers still read the
 runs and the import/export lines it ignores; it is not a proof of no behaviour
-change. Static JavaScript/TypeScript imports with bindings and export lists use parsed statement
+change. Histogram diff alignment keeps retained core bodies out of the inventory.
+At least three consecutive matching lines establish each cross-file mapping.
+Shorter fragments may join it only at a unique remaining location that preserves
+the source and destination order around all accepted runs. Each added line is
+consumed once; short fragments are printed explicitly as anchored fragments.
+Unanchored short swaps, ambiguous matches and same-file moves remain failures.
+Static JavaScript/TypeScript imports with bindings and export lists use parsed statement
 bounds, including multi-line lists. Dynamic imports and executable code sharing
 an import/export line remain in the inventory, as do side-effect-only imports.
 Unparseable files keep all lines. The CLI prints ignored import/export changes

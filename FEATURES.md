@@ -30,7 +30,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     window, with **Jump to latest** when you have scrolled back and the
     composer always at the bottom. Reopening or redocking the window keeps the
     conversation. In Town it
-    docks on the right by default (**Menu → Inspector opening**), can be
+    docks on the right by default (**Menu → Inspector opening**), 520px wide
+    (at most half the screen) so Town stays in view and lines stay readable.
+    Drag its inner edge to resize it; Town remembers the width. It can be
     undocked, and keeps the dock it was left with. On a phone, the Chat view
     shows only its own composer, without the terminal key bar.
   - The top selector follows the window's own width, docked, floating or on a
@@ -150,8 +152,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
 - **Terminal colours.** Every tab has one colour, shown as the tab in Spaces,
   the card in Board and its table in Town (tabs beyond a room's drawn tables
   show it in Spaces and Board). A tab starts with a stable default colour, or
-  its workspace's Board colour; choose another from the swatch beside the
-  terminal's name in its header (desktop window or phone app bar), the
+  its workspace's Board colour; choose another from the agent's icon in its
+  window's header (the icon sits on the colour and opens the agent's settings),
+  the swatch in the phone terminal's app bar, the
   terminal window's menu (**Colour**), the tab's menu in Spaces, the swatch in
   an agent's peek in Town, or the selected card in Board, and reset a tab's own
   colour with **Default colour** the same way. Herdr has no tab colour, so the World service
@@ -277,11 +280,14 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   choices that cannot fit explain why.
 - Inspectors and arranged Spaces windows share snap, minimize, maximize/restore,
   close and all eight resize handles. Each window has one bar: its name, a
-  location line, the view selector and **⋯**, maximize and close. **⋯** holds
+  location line, the view selector and **⋯**, maximize and close. An agent is
+  named `<name>-<harness>` (for example `otter-claude`), shortened in the middle
+  past 14 characters, and its state is a badge on its icon: a tick when done, a
+  spinner while working, **!** when it needs you and a grey dot when idle. **⋯** holds
   minimize, the snap choices and float. Tapping the location line under the name
   shows the branch, worktree and PR status, replacing the card above Changes. In
-  Town the window takes the Town look (portrait, pixel name, status pill, chunky
-  buttons, **‹ Back**). On a phone the window fills the screen like the
+  Town the window takes the Town look (portrait, pixel name, chunky buttons,
+  **‹ Back**). On a phone the window fills the screen like the
   terminal: its bar shows the name and status, and **⋯** switches the view
   (Chat, Terminal, Changes, Files) or switches to another agent or terminal. Opening or focusing a window preserves other
   placements; snapping into an occupied region overlaps without rearranging it.
@@ -398,14 +404,15 @@ assign tasks, or provide a Clear operation.
 World groups terminals that know each other. Each relation lists its evidence,
 one entry per source, with the source's system of record and whether it holds
 now: a **spawn** (Herdr pane metadata while it lives, then World's saved copy)
-or a **manual group** (saved by World). Evidence for a terminal that is gone or
+or a **manual Team** (saved by World). Evidence for a terminal that is gone or
 on a stale host is shown as stale, not dropped. Herdr records no creator for a
 tab or pane, so a spawner stamps the child:
 `herdr-world stamp CHILD_PANE PARENT_PANE` (`bun run agent:stamp --` in a
 checkout). Board's **Start an agent** stamps the new agent when its note is
 strung to one pane. Town draws teams as walls and connectors; Board strings
 related cards and groups a tab dropped on another tab, or chosen with
-**Group…** and a tap; **Ungroup** undoes it.
+**Group…** and a tap; **Ungroup** undoes it. Existing saved magnetic groups
+migrate automatically to kind Team; these controls continue to act on Teams.
 
 ### Agent CLI (`herdr-world --skill`)
 

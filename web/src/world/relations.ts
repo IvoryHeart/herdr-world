@@ -1,3 +1,4 @@
+import { teamMembers } from "../../../shared/groups";
 import { useEffect, useMemo, useRef } from "react";
 import {
   relationsOf,
@@ -257,7 +258,11 @@ export function anyRelation(
     want(claim.child);
     want(claim.parent);
   }
-  for (const group of relations.groups) group.members.forEach(want);
+  for (const group of relations.groups) {
+    const members = teamMembers(group);
+    if (members.length > 1) members.forEach(want);
+  }
+  if (!wanted.size) return false;
   const listed = new Set<string>();
   each((connectionId, terminalId) => {
     if (wanted.get(terminalId)?.has(connectionId))
@@ -269,7 +274,7 @@ export function anyRelation(
   const has = (ref: TerminalRef) => listed.has(terminalKey(ref));
   return (
     relations.spawns.some((claim) => has(claim.child) && has(claim.parent)) ||
-    relations.groups.some((group) => group.members.filter(has).length > 1)
+    relations.groups.some((group) => teamMembers(group).filter(has).length > 1)
   );
 }
 
@@ -327,4 +332,15 @@ export function ungroupTerminals(
   store: BoardDocumentStore = sharedBoardStore(),
 ) {
   return store.patch([{ op: "group.leave", members: [...members] }]);
+}
+
+/** Group menu state is Team membership; Pod roles never magnetize a card. */
+export function terminalsAreGrouped(
+  refs: readonly TerminalRef[],
+  groups: RelationsDocument["groups"],
+): boolean {
+  const wanted = new Set(refs.map(terminalKey));
+  return groups.some((group) =>
+    teamMembers(group).some((ref) => wanted.has(terminalKey(ref))),
+  );
 }
