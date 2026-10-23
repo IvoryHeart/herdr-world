@@ -1,4 +1,5 @@
 import { openProfileEditor, useAgentProfiles } from "./agentProfiles";
+import { profileLinkFor } from "./profileLink";
 
 /**
  * The agent-settings popover's way to its profile: Edit profile when the
@@ -12,21 +13,14 @@ export function AgentProfileLink({
   terminalId?: string;
 }) {
   const { document } = useAgentProfiles();
-  const assignment = terminalId
-    ? document?.assignments.find(
-        (a) => a.connection_id === connectionId && a.terminal_id === terminalId,
-      )
-    : undefined;
-  const profile = assignment
-    ? document?.profiles.find((p) => p.id === assignment.profile_id)
-    : undefined;
+  const link = profileLinkFor(document, connectionId, terminalId);
   return (
     <button
       type="button"
       className="workspace-inspector-agent-settings-link"
-      onClick={() => openProfileEditor(profile?.id)}
+      onClick={() => openProfileEditor(link.profileId)}
     >
-      {profile ? `Edit profile · ${profile.name}` : "Profiles…"}
+      {link.label}
     </button>
   );
 }
