@@ -196,7 +196,9 @@ changes what you see and does not disconnect hosts or retarget open terminals.
    The colour swatch beside the agent's name changes the colour of its table;
    it is the tab's colour everywhere in World. In an agent's window the icon
    sits on that colour: click it to open the agent's settings and choose
-   another. The terminal window's menu has **Colour**, and
+   another. The same settings link to the agent's profile: **Edit profile ·
+   <name>** when it was launched from one, otherwise **Profiles…**. The
+   terminal window's menu has **Colour**, and
    in Spaces the tab's menu (right-click or long-press) offers the same palette
    and **Default colour**.
    In the agent's window, the button beside its name sets its interest:
@@ -283,7 +285,8 @@ and open its terminal or Inspector without losing its workspace context.
 A profile is a ready-made agent: a name, a harness and model, a role, skills,
 a starting brief and a look in Town. World starts it in a new tab for you.
 
-1. Open **Menu → Agent profiles** (or **Actions → Agent profiles**). The
+1. Open **Menu → Agent profiles** (or **Actions → Agent profiles**, or click an
+   agent window's icon and choose **Edit profile** / **Profiles…**). The
    starters are Reviewer (Codex), Builder, Designer and FirstMate (Claude
    Code). Pick one, or press **New profile** or **Duplicate**.
 2. On **Who**, set the name, home room, role and colour. On **Brain**, choose a

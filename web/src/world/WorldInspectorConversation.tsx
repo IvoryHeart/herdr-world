@@ -23,6 +23,7 @@ import { requestFilePreview } from "../components/fileExplorerResources";
 import type { ActiveFilePreviewSelection } from "../components/FilePreviewContent";
 import { WorkspaceInspectorHost } from "../components/WorkspaceInspectorHost";
 import { ThemeScope } from "../themeScope";
+import { AgentProfileLink } from "./AgentProfileLink";
 import {
   OperationalContext,
   connectionSnapshot,
@@ -557,6 +558,14 @@ function InspectorResources({
               onExpandedChange={changeExpanded}
               windowControls={windowControls}
               terminalColor={terminalColor}
+              agentSettings={
+                conversation.context.kind === "agent" ? (
+                  <AgentProfileLink
+                    connectionId={conversation.connectionId}
+                    terminalId={conversation.terminalId}
+                  />
+                ) : undefined
+              }
               onWindowMaximize={onWindowMaximize}
               windowMaximized={windowMaximized}
               onDockOut={floating ? undefined : onDockOut}

@@ -43,8 +43,10 @@ Office view (`herdrOfficeProjection.ts`, `officeRoomActions.ts`,
 
 ### Town rendering performance
 
-Town's Summary reads complete per-room status totals already prepared by World;
-it memoises those immutable room contributions and groups room links by host.
+Town's Summary reads per-room status totals counted with the canonical observed
+agent roster during cooperative World preparation; aggregate coverage can include
+agents outside that roster and remains separate. Summary memoises those immutable
+room contributions and groups room links by host.
 Finish/seen overlays change only the affected room totals. Ask, metrics and clock
 updates reuse that topology. Asking identities resolve through the snapshot's
 generation-qualified pane and agent indexes, without scanning the roster. The
