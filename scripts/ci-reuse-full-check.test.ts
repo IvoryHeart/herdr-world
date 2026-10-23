@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   canReuseFullCheck,
+  checkoutCommitFromLog,
   isDocsOnlyChange,
   isDocumentationPath,
   selectValidationMode,
@@ -15,10 +16,13 @@ const head = "b".repeat(40);
 const pr = { number: 126, base: { sha: base }, head: { sha: head } };
 const run = (id: number, baseSha = base) => ({
   id,
+  run_attempt: 1,
   head_sha: head,
   pull_requests: [{ ...pr, base: { sha: baseSha } }],
 });
 const job = (full: string, result = "success", reused = false) => ({
+  id: 7,
+  run_attempt: 1,
   name: "Delivery checks",
   conclusion: result,
   steps: [
@@ -31,7 +35,9 @@ const job = (full: string, result = "success", reused = false) => ({
 });
 const verify = (
   runs: ReturnType<typeof run>[],
-  jobs: Record<number, ReturnType<typeof job>[]>,
+  jobs: Record<number, Array<ReturnType<typeof job> & { run_id?: number }>>,
+  parents = [base, head],
+  commitSha = "d".repeat(40),
 ) =>
   canReuseFullCheck(
     runs,
@@ -41,8 +47,55 @@ const verify = (
     head,
     "Delivery checks",
     "Run full repository check",
-    async (id) => jobs[id] ?? [],
+    async (id) =>
+      (jobs[id] ?? []).map((job) => ({ ...job, run_id: job.run_id ?? id })),
+    async () => ({ checkoutSha: "d".repeat(40), commitSha, parents }),
   );
+
+test("mutable PR associations cannot substitute a different tested base", async () => {
+  const runs = [run(3)];
+  const jobs = { 3: [job("success")] };
+  expect(await verify(runs, jobs, ["c".repeat(40), head])).toBe(false);
+  expect(await verify(runs, jobs, [base, "c".repeat(40)])).toBe(false);
+  expect(await verify(runs, jobs, [head, base])).toBe(false);
+  expect(await verify(runs, jobs, [base, head, base])).toBe(false);
+  expect(await verify(runs, jobs, [])).toBe(false);
+  expect(await verify(runs, jobs, [base, head], "e".repeat(40))).toBe(false);
+  expect(
+    await verify(runs, { 3: [{ ...job("success"), run_attempt: 2 }] }),
+  ).toBe(false);
+  expect(await verify(runs, { 3: [{ ...job("success"), run_id: 99 }] })).toBe(
+    false,
+  );
+  expect(await verify(runs, jobs, [base, head])).toBe(true);
+});
+
+test("checkout proof requires the full unambiguous immutable commit", () => {
+  const proof = (sha: string) =>
+    `##[group]Run actions/checkout@synthetic\n2026-01-01T00:00:00.000Z [command]/usr/bin/git log -1 --format=%H\n2026-01-01T00:00:00.001Z ${sha}\n`;
+  expect(checkoutCommitFromLog(proof(head))).toBe(head);
+  expect(
+    checkoutCommitFromLog(`HEAD is now at ${head.slice(0, 8)}`),
+  ).toBeUndefined();
+  expect(checkoutCommitFromLog(head)).toBeUndefined();
+  expect(checkoutCommitFromLog(proof(head) + proof(base))).toBeUndefined();
+  expect(checkoutCommitFromLog(proof("not-a-commit"))).toBeUndefined();
+  expect(
+    checkoutCommitFromLog(
+      proof(head).replace(
+        "Run actions/checkout@synthetic",
+        "Run arbitrary script",
+      ),
+    ),
+  ).toBeUndefined();
+  expect(
+    checkoutCommitFromLog(
+      proof(head) +
+        "##[group]Run later script\n[command]/usr/bin/git log -1 --format=%H\n" +
+        base,
+    ),
+  ).toBe(head);
+});
 
 test("metadata events reuse proof while code events always validate", async () => {
   for (const action of ["edited", "labeled"]) {

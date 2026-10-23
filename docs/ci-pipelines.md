@@ -44,8 +44,14 @@ commands to verify coverage, ordering and failure propagation without rebuilding
 Code events (`opened`, `synchronize`, `reopened`) receive fresh validation.
 Description edits and labels queue behind a running check instead of cancelling
 it. They may reuse only a successful full Delivery checks job for the same PR,
-base commit and head commit. A newer failed full result prevents reuse of an
-older success; API errors and missing proof fall back to full validation.
+base commit and head commit. GitHub's historical PR association can change, so
+it is not proof of the tested base. Reuse binds the selected full Delivery job
+to its run and attempt, reads the full checkout SHA only from that job's checkout
+action log, and resolves the immutable merge commit. Its returned SHA must match
+the checkout SHA and its two ordered parents must match the requested base/head.
+Default leaf checkouts retain the original event's `GITHUB_SHA`. A newer failed
+full result prevents reuse of an older success; missing, ambiguous or expired
+logs and API errors fall back to full validation.
 The release-preview label can therefore request archives without repeating a
 successful full check. Other label changes still create workflow runs, but can
 take this same short path.
