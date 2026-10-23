@@ -52,6 +52,7 @@ import {
   TOWN_TILE as T,
   townDeskSlots,
   townDeskTable,
+  townGeometryKey,
   townSeat,
   type TownCell,
   type TownLayout,
@@ -102,6 +103,12 @@ export type TownRendererDiagnostics = {
     height: number;
     buildings: number;
     rooms: number;
+    /** The container shape: stacked buildings, room and desk columns. */
+    formFactor: string;
+    roomColumns: number;
+    deskColumns: number;
+    /** Room and building placement (townGeometryKey), to see reflows. */
+    geometry: string;
   };
   /** Drag outcomes as drawn: lifts, landings (each with its dust), returns. */
   drags: { lifts: number; landings: number; returns: number; dust: number };
@@ -485,6 +492,10 @@ export async function createTownRenderer(
       height: layout.height,
       buildings: layout.buildings.length,
       rooms: layout.buildings.reduce((sum, b) => sum + b.rooms.length, 0),
+      formFactor: layout.shape.formFactor,
+      roomColumns: layout.shape.roomColumns,
+      deskColumns: layout.shape.deskColumns,
+      geometry: townGeometryKey(layout),
     };
     for (const view of actorViews.values()) {
       view.sprite.destroy();
