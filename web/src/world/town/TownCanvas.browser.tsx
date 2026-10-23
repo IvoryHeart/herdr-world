@@ -8,7 +8,7 @@ import { buildWorldObject, type WorldObject } from "../worldObject";
 import TownView from "../TownView";
 import { projectWorldOffice } from "../herdrOfficeProjection";
 import type { WorldAsk } from "../worldAsks";
-import { townCalls } from "./TownRail";
+import { townCalls, unseenTownCompletions } from "./TownRail";
 import { townAttentionDesks } from "./townAttention";
 import type { BoardDocument, BoardOp } from "../board/boardDocument";
 import { TOWN_SHAPES, townShapeFor } from "./townLayout";
@@ -1076,13 +1076,14 @@ async function run() {
   const expectedCalls = townCalls(
     expectedOffice.roster,
     new Map(),
-    expectedOffice.roster
-      .filter(
-        ({ agent }) =>
-          agent.semanticStatus === "done" &&
-          !seen.has(officeCompletionIdentity(agent)),
-      )
-      .map(({ agent }) => agent),
+    unseenTownCompletions(
+      expectedOffice.roster,
+      new Set(
+        expectedOffice.roster
+          .filter(({ agent }) => seen.has(officeCompletionIdentity(agent)))
+          .map(({ agent }) => agent.key),
+      ),
+    ),
     (key) => expectedOffice.roster.find(({ agent }) => agent.key === key),
   );
   const protectedDesks = townAttentionDesks(

@@ -3,10 +3,11 @@ import type { WorldAgentStatus } from "./worldObject";
 
 /**
  * A room's desks within its bound, in tab order. When a room has more, the
- * selected desk, then pinned desks, then the newest tabs (Herdr appends new tabs) always stay, then
+ * selected desk and protected desks (pins and Town attention) stay; the newest
+ * tabs (Herdr appends new tabs) follow, then
  * desks whose agents need the user, are working or are unknown, then finished
  * ones; idle and empty desks are hidden first, and among equals newer tabs
- * stay. With more busy desks than the bound, the oldest of them are hidden
+ * stay. Without protection, excess busy desks are hidden
  * too; every hidden desk is counted on its room (`omittedDeskCount`).
  */
 export function boundedDesks(
@@ -52,7 +53,7 @@ export function boundedDesks(
   return desks.filter((desk) => admitted.has(desk));
 }
 
-/** Past the bound, this many newest tabs always keep a desk. */
+/** After protected desks, prefer this many newest tabs. */
 const NEWEST_DESKS_KEPT = 3;
 
 const DESK_STATUS_RANK: Record<WorldAgentStatus, number> = {

@@ -6,7 +6,7 @@ import type {
 } from "../herdrOfficeProjection";
 import type { WorldAsk } from "../worldAsks";
 import { townAttentionDesks } from "./townAttention";
-import { townCalls } from "./TownRail";
+import { townCalls, unseenTownCompletions } from "./TownRail";
 import { withTownFinished } from "./townFinished";
 
 function entry(
@@ -18,6 +18,8 @@ function entry(
   return {
     agent: {
       key,
+      displayLabel: key,
+      canOpenInSpaces: true,
       deskKey: `desk-${key}`,
       semanticStatus: status,
       stale,
@@ -61,11 +63,7 @@ test("admission uses the shared calls, completion overlay and qualified asks, th
   const checked = new Set(["reviewed"]);
   const finished = new Set(["fresh"]);
   const semantic = withTownFinished(office, finished, checked);
-  const unseen = semantic.roster
-    .filter(
-      ({ agent }) => agent.semanticStatus === "done" && !checked.has(agent.key),
-    )
-    .map(({ agent }) => agent);
+  const unseen = unseenTownCompletions(semantic.roster, checked);
   const calls = townCalls(semantic.roster, new Map(), unseen, (key) =>
     semantic.roster.find(({ agent }) => agent.key === key),
   );

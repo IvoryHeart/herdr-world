@@ -33,8 +33,7 @@ import {
   useStoreSelector,
 } from "../store";
 import { WORLD_OBSERVABILITY_UPDATED_EVENT } from "../workspaceResource";
-import { townAttentionDesks } from "./town/townAttention";
-import { useTownOffice } from "./town/useTownOffice";
+import { useTownOffice, useTownPresentation } from "./town/useTownOffice";
 import { TownCanvas } from "./town/TownCanvas";
 import type { TownQuestMark } from "./town/townQuestPennant";
 import { townDeskColorTarget, townRoomColorKey } from "./town/townModel";
@@ -68,6 +67,7 @@ import { TownPeek, townStatusText } from "./town/TownPeek";
 import {
   nextTownCall,
   townCalls,
+  unseenTownCompletions,
   readTownRailCollapsed,
   TownRail,
 } from "./town/TownRail";
@@ -292,22 +292,8 @@ export default function TownView({
   );
   const selectedKey = officePresentationKey(office, selectedId);
   const unseenCompletions = useMemo(
-    () =>
-      office.roster
-        .filter(
-          ({ agent }) =>
-            agent.semanticStatus === "done" &&
-            agent.deskKey !== null &&
-            !completionSeenKeys.has(agent.key),
-        )
-        .map(({ agent }) => agent)
-        .sort(
-          (left, right) =>
-            Number(right.canOpenInSpaces) - Number(left.canOpenInSpaces) ||
-            left.displayLabel.localeCompare(right.displayLabel) ||
-            left.key.localeCompare(right.key),
-        ),
-    [completionSeenKeys, office],
+    () => unseenTownCompletions(office.roster, completionSeenKeys),
+    [completionSeenKeys, office.roster],
   );
   const selectedRoomKey = officeRoomKeyForSelection(world, selectedId);
   const conversationTargets = floatingTerminals.flatMap((terminal) => {
@@ -608,18 +594,13 @@ export default function TownView({
       ),
     [office.roster, unseenCompletions, agentByKey],
   );
-  const attentionDesks = useMemo(
-    () => townAttentionDesks(calls, asks, office.roster),
-    [calls, asks, office.roster],
-  );
-  const presentedOffice = useMemo(
-    () =>
-      withTownFinished(
-        present(attentionDesks),
-        townFinished.finished,
-        completionSeenKeys,
-      ),
-    [present, attentionDesks, townFinished.finished, completionSeenKeys],
+  const presentedOffice = useTownPresentation(
+    present,
+    office,
+    calls,
+    asks,
+    townFinished.finished,
+    completionSeenKeys,
   );
   const whereOfAgent = (agentKey: string) => {
     const entry = agentByKey.get(agentKey);

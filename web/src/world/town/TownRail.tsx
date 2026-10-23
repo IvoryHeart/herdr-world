@@ -337,3 +337,24 @@ export function townCalls(
   });
   return [...blocked, ...finished];
 }
+
+/** The shared unreviewed finishes, using Town's current finished/seen overlay. */
+export function unseenTownCompletions(
+  roster: readonly OfficeRosterEntry[],
+  seen: ReadonlySet<string>,
+): OfficeAgent[] {
+  return roster
+    .filter(
+      ({ agent }) =>
+        agent.semanticStatus === "done" &&
+        agent.deskKey !== null &&
+        !seen.has(agent.key),
+    )
+    .map(({ agent }) => agent)
+    .sort(
+      (left, right) =>
+        Number(right.canOpenInSpaces) - Number(left.canOpenInSpaces) ||
+        left.displayLabel.localeCompare(right.displayLabel) ||
+        left.key.localeCompare(right.key),
+    );
+}
