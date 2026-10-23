@@ -1,4 +1,4 @@
-import { LogIn, Play, RefreshCw, Settings2 } from "lucide-react";
+import { Copy, LogIn, Play, RefreshCw, Settings2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   agentNameFor,
@@ -152,16 +152,16 @@ export function AgentLauncherDialog({
     setOutcome(null);
     setError(null);
     try {
+      // World types nothing into the tab; the user runs the command there.
       const opened = await openHarnessLogin(target, kind);
-      if (opened.status === "typed") {
-        onOpen({
-          connectionId: target.connectionId,
-          terminalId: opened.terminal_id,
-        });
-        onClose();
-        return;
-      }
-      setOutcome(retainedOutcome(target, opened));
+      setOutcome(
+        retainedOutcome(target, {
+          status: "opened",
+          message: `A login tab for ${harnessLabel(kind)} is open in ${target.workspaceLabel}. Run this there, finish the login, then Check again:`,
+          terminal_id: opened.terminal_id,
+          command: opened.command,
+        }),
+      );
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     }
@@ -224,7 +224,7 @@ export function AgentLauncherDialog({
                 <button
                   type="button"
                   className="agent-launcher-login"
-                  title={`Opens a tab with ${harnessLabel(kind)}'s login command ready; press Enter there`}
+                  title={`Opens a tab and shows ${harnessLabel(kind)}'s login command to run there`}
                   onClick={() => void logIn(kind)}
                 >
                   <LogIn size={13} aria-hidden="true" /> Log in
@@ -310,6 +310,24 @@ export function AgentLauncherDialog({
           {outcome ? (
             <p className={outcome.failed ? "agent-launcher-error" : undefined}>
               {outcome.message}
+              {outcome.command ? (
+                <>
+                  <code className="agent-launcher-command">
+                    {outcome.command}
+                  </code>
+                  <button
+                    type="button"
+                    className="agent-launcher-login"
+                    onClick={() =>
+                      void navigator.clipboard
+                        ?.writeText(outcome.command!)
+                        .catch(() => {})
+                    }
+                  >
+                    <Copy size={13} aria-hidden="true" /> Copy
+                  </button>
+                </>
+              ) : null}
               {outcome.terminal ? (
                 <button
                   type="button"

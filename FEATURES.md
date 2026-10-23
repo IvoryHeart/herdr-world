@@ -85,8 +85,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   - The launcher shows whether each harness is installed and logged in on the
     host, asked with the harness's own status command (`claude auth status`,
     `codex login status`; Pi reports only whether it is installed). **Log in**
-    opens a small tab with the harness's own login command ready on its line;
-    you press Enter and finish it there. World never sees or stores
+    opens a small tab and shows the harness's own login command to copy and
+    run there. World never types into it, and never sees or stores
     credentials.
   - **Agent profiles** (Menu → Agent profiles, Actions → Agent profiles, or
     Edit profiles in the launcher and Board) set a name, home room, role,

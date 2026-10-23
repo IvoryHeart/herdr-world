@@ -161,7 +161,7 @@ export async function harnessReadiness(options: {
 }
 
 /**
- * The line typed into the login tab: `sh -c` resolves the executable from the
+ * The line the user runs in the login tab: `sh -c` resolves the executable from the
  * same table as readiness (so a default-location install works when the
  * shell's PATH lacks it) and runs its fixed login command. Nothing comes from
  * the browser but the kind.
@@ -177,30 +177,19 @@ export function loginCommand(kind: string) {
   return `sh -c ${q(script)}`;
 }
 
-export type LoginOutcome = {
-  /**
-   * typed: the login command waits on the tab's command line for the user's
-   * Enter. Herdr reports no prompt state, so World never presses Enter itself.
-   */
-  status: "typed" | "uncertain" | "failed";
-  message?: string;
+export type LoginTab = {
   tab_id: string;
   pane_id: string;
   terminal_id: string;
+  /** The line for the user to run there (see loginCommand). */
+  command: string;
 };
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  Boolean(value) && typeof value === "object" && !Array.isArray(value);
-
 /**
- * Open a small Herdr tab in the workspace and put the harness's own login
- * command on its command line, without Enter: the user reads it and presses
- * Enter. Herdr does not say whether a shell is at its prompt or a startup
- * script is waiting in `read`, and the same screen fits both, so World never
- * runs the command itself. It still waits for the shell to hold the
- * foreground with a settled screen, so typing doesn't land in a starting
- * shell's output, and checks the host and tab again right before typing.
- * Otherwise nothing is typed and the outcome says so.
+ * Open a small Herdr tab in the workspace for the harness's login, and return
+ * its fixed login command for the user to enter there. World types nothing
+ * into the tab: Herdr reports no prompt state, and a startup script reading
+ * a key (`read -n 1`) would take typed text as its answer.
  */
 export async function openHarnessLogin(
   call: HerdrCall,
@@ -209,19 +198,13 @@ export async function openHarnessLogin(
     kind: string;
     windows: boolean;
     isCurrent: () => boolean;
-    now?: () => number;
-    sleep?: (ms: number) => Promise<void>;
-    timeoutMs?: number;
   },
-): Promise<LoginOutcome> {
+): Promise<LoginTab> {
   const command = loginCommand(request.kind);
   if (!command) throw new Error("World has no login command for this harness.");
   if (request.windows)
     throw new Error("World cannot run a harness login on a Windows host.");
   if (!request.isCurrent()) throw new Error("The host reconnected. Try again.");
-  const now = request.now ?? Date.now;
-  const sleep =
-    request.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
   const created = (await call("tab.create", {
     workspace_id: request.workspace_id,
     label: `${request.kind} login`,
@@ -233,68 +216,10 @@ export async function openHarnessLogin(
   const terminalId = created?.root_pane?.terminal_id;
   if (!paneId || !terminalId)
     throw new Error("Herdr did not confirm the login tab.");
-  const tab = {
+  return {
     tab_id: String(created.tab?.tab_id ?? ""),
     pane_id: paneId,
     terminal_id: terminalId,
-  };
-  /** Why the tab can no longer take the command, or null while it can. */
-  const lost = async (): Promise<LoginOutcome | null> => {
-    if (!request.isCurrent())
-      return {
-        status: "failed",
-        message: "The host reconnected; nothing was typed in the login tab.",
-        ...tab,
-      };
-    const live = await call("pane.get", { pane_id: paneId }).catch(() => null);
-    if (
-      !isRecord(live) ||
-      !isRecord(live.pane) ||
-      live.pane.terminal_id !== terminalId ||
-      !request.isCurrent()
-    )
-      return {
-        status: "failed",
-        message: "The login tab changed; nothing was typed.",
-        ...tab,
-      };
-    return null;
-  };
-  const deadline = now() + (request.timeoutMs ?? 15_000);
-  let settled: string | null = null;
-  while (now() < deadline) {
-    const gone = await lost();
-    if (gone) return gone;
-    const info = await call("pane.process_info", { pane_id: paneId }).catch(
-      () => null,
-    );
-    const process =
-      isRecord(info) && isRecord(info.process_info) ? info.process_info : null;
-    const shellInFront =
-      process !== null &&
-      typeof process.shell_pid === "number" &&
-      process.shell_pid > 0 &&
-      process.foreground_process_group_id === process.shell_pid;
-    const read = shellInFront
-      ? ((await call("pane.read", { pane_id: paneId, source: "visible" }).catch(
-          () => null,
-        )) as { read?: { text?: string }; text?: string } | null)
-      : null;
-    const screen = (read?.read?.text ?? read?.text ?? "").trim();
-    if (screen && screen === settled) {
-      // The reads above were awaited: check the host and tab again.
-      const changed = await lost();
-      if (changed) return changed;
-      await call("pane.send_text", { pane_id: paneId, text: command });
-      return { status: "typed", ...tab };
-    }
-    settled = screen || null;
-    await sleep(250);
-  }
-  return {
-    status: "uncertain",
-    message:
-      "The login tab's shell did not settle; nothing was typed. Open the tab and run the harness's login there.",
-    ...tab,
+    command,
   };
 }

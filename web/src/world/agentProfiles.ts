@@ -129,16 +129,24 @@ export type RetainedOutcome = {
   message: string;
   failed: boolean;
   terminal: { connectionId: string; terminalId: string } | null;
+  /** A login's command, for the user to copy and run in that terminal. */
+  command?: string;
 };
 export const retainedOutcome = (
   target: LaunchTarget,
-  result: { status: string; message?: string; terminal_id?: string },
+  result: {
+    status: string;
+    message?: string;
+    terminal_id?: string;
+    command?: string;
+  },
 ): RetainedOutcome => ({
   message: result.message ?? "",
   failed: result.status === "failed",
   terminal: result.terminal_id
     ? { connectionId: target.connectionId, terminalId: result.terminal_id }
     : null,
+  ...(result.command ? { command: result.command } : {}),
 });
 
 export type HarnessReadiness = {
@@ -191,12 +199,11 @@ export async function openHarnessLogin(target: LaunchTarget, kind: string) {
       { workspace_id: target.workspaceId, kind },
       30_000,
     )) as {
-    /** typed: the login command waits on the tab's line for the user's Enter. */
-    status: "typed" | "uncertain" | "failed";
-    message?: string;
     tab_id: string;
     pane_id: string;
     terminal_id: string;
+    /** The line for the user to run in that tab; World types nothing. */
+    command: string;
   };
 }
 

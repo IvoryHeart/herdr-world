@@ -14,8 +14,9 @@
   Codex options and developer instructions), the tab takes its colour and the
   agent wears its look in Town.
 - The launcher shows whether each harness is installed and logged in, using the
-  harness's own status command, and **Log in** opens its own login command in a
-  small tab. World never sees or stores credentials.
+  harness's own status command, and **Log in** opens a small tab and shows the
+  harness's own login command to run there. World never sees or stores
+  credentials.
 
 ### Fixed
 

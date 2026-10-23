@@ -237,13 +237,11 @@ connection's OpenSSH destination): `claude auth status` and
 login method; the commands' other output, which can name the account, is
 discarded. It also lists `SKILL.md` folders by name. A service whose `PATH`
 lacks the harness still finds it in the usual install folders (such as
-`~/.local/bin`). **Log in** opens a new tab and, once that tab's shell has
-settled, puts the harness's fixed login command (`claude auth login`,
-`codex login --device-auth`, run through `sh -c` with the executable found the
-same way) on its command line. World never presses Enter: Herdr can't tell a
-prompt from a startup script waiting for an answer, so you check the line, press
-Enter and finish the login yourself. If the shell never settles, nothing is
-typed and the launcher offers to open the tab. Windows
+`~/.local/bin`). **Log in** opens a new tab and shows the harness's fixed login
+command (`claude auth login`, `codex login --device-auth`), wrapped in `sh -c`
+so it finds the executable the same way, with **Copy** and **Open its tab**.
+You run it there and finish the login yourself. World types nothing into the
+tab: Herdr can't tell a prompt from a startup script waiting for a key. Windows
 hosts are not probed: their harnesses show no status, and every agent kind
 their Herdr supports stays available. Log in is not offered there.
 

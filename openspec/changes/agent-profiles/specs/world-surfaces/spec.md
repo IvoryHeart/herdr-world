@@ -161,15 +161,12 @@ which method. It SHALL run the harness's own status command on the room's host
 fields; it SHALL NOT read credentials or forward the command's output. Harness
 commands SHALL be data per harness, not logic. The launcher and the profile
 editor SHALL show a missing or logged-out harness, and SHALL offer Log in, which
-opens a new tab in the room running the harness's own fixed login command for
-the user to complete; World SHALL then re-check on request. The login command
-SHALL use the executable readiness found, by the same lookup on that host. It
-SHALL be placed on the new terminal's command line only once that terminal's
-shell holds the foreground with a settled screen, and only if the host's
-runtime and the tab's terminal are unchanged immediately before. World SHALL
-NOT submit it: Herdr reports no prompt state, so the user presses Enter.
-Otherwise nothing SHALL be typed, and World SHALL say so and offer to open the
-tab. Windows hosts
+opens a new tab in the room and shows the harness's own fixed login command,
+with Copy and Open its tab, for the user to run there and complete; World SHALL
+then re-check on request. The login command SHALL find the executable by the
+same lookup readiness uses on that host. World SHALL NOT type into the login
+tab: Herdr reports no prompt state, and a startup script reading a key would
+take typed text as its answer. Windows hosts
 SHALL NOT be probed; they SHALL report no readiness, which blocks no kind their
 Herdr supports.
 
@@ -183,15 +180,10 @@ Herdr supports.
 - **WHEN** a harness's status output includes the account's email address
 - **THEN** World reports only whether it is logged in and the method, never the address
 
-#### Scenario: The login tab's shell is not ready
-
-- **WHEN** the user chooses Log in and the new tab's shell never settles at its prompt within the bound
-- **THEN** World types nothing, says so and offers to open the tab
-
 #### Scenario: A startup question in the login tab
 
-- **WHEN** the new tab's startup script waits for an answer when World places the login command
-- **THEN** the command is not submitted; the user sees it on the line and decides
+- **WHEN** the user chooses Log in and the new tab's startup script waits for a single key
+- **THEN** World has typed nothing there; the user sees the question, answers it and then runs the login command shown in New agent
 
 #### Scenario: A Windows host
 
