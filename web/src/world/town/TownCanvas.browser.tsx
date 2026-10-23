@@ -595,25 +595,29 @@ async function groupTwoDesks(
       deskColor("task 2") === deskColor("task 3"),
     `the spawned desk does not inherit its parent's colour (${deskColor("task 2")} vs ${deskColor("task 3")})`,
   );
-  // Visible, with its centre (where the pointer rests) clear of the edge
-  // zone and the rail on wide screens, where a carried desk pans the town
-  // and would slide away from the desk it rests on.
+  // Keep the pointer clear of the canvas viewport's auto-pan edges, including
+  // its reserved gutters. Window coordinates miss the canvas's top offset and
+  // can pan the town underneath a same-room drag.
+  const viewport = canvasHost.getBoundingClientRect();
   const clear = 64;
-  const left = phone ? clear : 252 + clear;
+  const left = viewport.left + (phone ? 12 : 252) + clear;
+  const right = viewport.right - (phone ? 12 : 72) - clear;
+  const top = viewport.top + (phone ? 12 : 16) + clear;
+  const bottom = viewport.bottom - (phone ? 12 : 16) - clear;
   const onScreen = (target: HTMLElement) => {
     const box = target.getBoundingClientRect();
     const x = box.left + box.width / 2;
     const y = box.top + box.height / 2;
     return (
       box.width > 0 &&
-      box.left > 8 &&
-      box.top > 8 &&
-      box.right < window.innerWidth - 8 &&
-      box.bottom < window.innerHeight - 8 &&
+      box.left > viewport.left + 8 &&
+      box.top > viewport.top + 8 &&
+      box.right < viewport.right - 8 &&
+      box.bottom < viewport.bottom - 8 &&
       x > left &&
-      x < window.innerWidth - clear &&
-      y > clear &&
-      y < window.innerHeight - clear
+      x < right &&
+      y > top &&
+      y < bottom
     );
   };
   const desks = [
@@ -633,9 +637,15 @@ async function groupTwoDesks(
         (other) => other !== target && roomOf(other) === roomOf(target),
       ),
   );
+  // Exercise the rightmost teammate that still clears the auto-pan zone.
   const to =
     from &&
-    desks.find((target) => target !== from && roomOf(target) === roomOf(from));
+    desks
+      .filter((target) => target !== from && roomOf(target) === roomOf(from))
+      .sort(
+        (a, b) =>
+          b.getBoundingClientRect().right - a.getBoundingClientRect().right,
+      )[0];
   check(Boolean(from && to), "no two desks of one room on screen to group");
   if (!from || !to) return;
   const walled = () =>
@@ -661,6 +671,7 @@ async function groupTwoDesks(
   const b = to.getBoundingClientRect();
   const start = { x: a.left + a.width / 2, y: a.top + a.height / 2 };
   const end = { x: b.left + b.width / 2, y: b.top + b.height / 2 };
+  const picked = [from.dataset.targetKey, to.dataset.targetKey];
   point("pointerdown", start.x, start.y);
   if (phone)
     await waitFor(
@@ -699,6 +710,13 @@ async function groupTwoDesks(
       join.target.length === 1 &&
       tabOf(join.members[0]!) !== tabOf(join.target[0]!),
     `group.join sent one terminal per desk (${JSON.stringify(join)})`,
+  );
+  const deskKey = (ref: TerminalRef) =>
+    JSON.stringify([ref.connection_id, "tab", tabOf(ref)]);
+  const grouped = [deskKey(join.members[0]!), deskKey(join.target[0]!)];
+  check(
+    grouped.every((key, index) => key === picked[index]),
+    `group.join changed the picked desks (${JSON.stringify({ picked, grouped, start, end })})`,
   );
   await waitFor(
     () => moves.some((move) => move.method === "tab.move"),
