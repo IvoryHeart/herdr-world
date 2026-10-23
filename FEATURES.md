@@ -79,8 +79,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     with more than 127 tabs keeps its three newest and busiest tables and
     hides idle ones first. Town asks Herdr to move the tab and
     shows the new order when Herdr reports it; agents stay with their table.
-  - **Pin a desk** from its agent window's menu (**Pin desk in Town**; on a
-    phone, the pin in the window header). A
+  - **Pin a desk** from its agent window's **⋯** menu (**Pin desk in Town**),
+    on a phone too. A
     pinned table wears a pin and keeps its place: tab reorders, a room growing
     or Town's own placement leave it, and it cannot be dragged until you unpin
     it (other tables fill the free places in tab order). In a room with more
