@@ -66,8 +66,11 @@ The [local worker launcher](../scripts/upstream-local.ts) uses cached Codex
 subscription sign-in and serializes scheduled runs on the user's machine.
 
 [Development verification](development.md#verification) describes local and CI
-runner settings. [PR CI](../.github/workflows/ci.yml) and
-[Release](../.github/workflows/release.yml) call the same
+runner settings. [CI](../.github/workflows/ci.yml) runs on pull requests and on
+every push to main; [Main gate](../.github/workflows/main-gate.yml) turns a red
+main run into one `main-red` issue and a prepared revert PR through
+[its script](../scripts/main-gate.ts) and [regressions](../scripts/main-gate.test.ts).
+CI and [Release](../.github/workflows/release.yml) call the same
 [World browser workflow](../.github/workflows/world-browser.yml).
 [Prepare Release](../.github/workflows/prepare-release.yml) validates generated
 files in its own checkout. Start with [CI workflow tests](../scripts/ci-workflow.test.ts)
