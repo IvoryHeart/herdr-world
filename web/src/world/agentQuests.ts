@@ -4,7 +4,7 @@
  * connection and runtime generation, one call per connection.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { bridge, type ConnectionClient } from "../api";
 import type { AgentQuest, Quest } from "../../../server/src/agent/quest";
 import { deskClient } from "./handoffs";
@@ -71,17 +71,22 @@ export function useAgentQuests(
   const [quests, setQuests] = useState(EMPTY);
   const shown = useRef(quests);
   shown.current = quests;
-  const agents = leaves.filter((leaf) => leaf.kind === "agent");
-  const signature = JSON.stringify(
-    agents.map((leaf) => [
-      leaf.id,
-      leaf.connectionId,
-      leaf.generation,
-      leaf.pane.pane_id,
-      leaf.status,
-    ]),
-  );
-  const working = agents.some((leaf) => leaf.status === "working");
+  // A large World has thousands of leaves: derive these once per leaves
+  // list, not on every render of the view.
+  const { agents, signature, working } = useMemo(() => {
+    const agents: WorldLeafObject[] = [];
+    const parts: string[] = [];
+    let working = false;
+    for (const leaf of leaves) {
+      if (leaf.kind !== "agent") continue;
+      agents.push(leaf);
+      parts.push(
+        `${leaf.id}\0${leaf.connectionId}\0${leaf.generation}\0${leaf.pane.pane_id}\0${leaf.status}`,
+      );
+      if (leaf.status === "working") working = true;
+    }
+    return { agents, signature: parts.join("\n"), working };
+  }, [leaves]);
   const latest = useRef(agents);
   latest.current = agents;
   useEffect(() => {
@@ -99,13 +104,19 @@ export function useAgentQuests(
           string,
           { client: ConnectionClient; group: WorldLeafObject[] }
         >();
+        // Resolved once per group: every leaf in it shares the client.
+        const refused = new Set<string>();
         for (const leaf of latest.current) {
-          const client = leafClient(leaf);
-          if (!client) continue;
-          const key = JSON.stringify([leaf.connectionId, leaf.generation]);
+          const key = `${leaf.connectionId}\0${leaf.generation}`;
           const entry = groups.get(key);
-          if (entry) entry.group.push(leaf);
-          else groups.set(key, { client, group: [leaf] });
+          if (entry) {
+            entry.group.push(leaf);
+            continue;
+          }
+          if (refused.has(key)) continue;
+          const client = leafClient(leaf);
+          if (client) groups.set(key, { client, group: [leaf] });
+          else refused.add(key);
         }
         const next = new Map<string, Quest>();
         await Promise.all(
