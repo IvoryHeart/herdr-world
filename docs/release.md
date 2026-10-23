@@ -19,6 +19,9 @@ and a synthetic next-patch release-candidate version unique to the CI run. It us
 a loopback artifact server to exercise the same candidate installers before public
 release assets exist. The baseline uses its published tag's real plugin build
 command and downloaded release executable; older baselines may require Bun at setup.
+CI caches the baseline's published assets per tag and platform and serves them to
+that installer from a loopback mirror, so each tag is downloaded once per platform
+rather than on every run; otherwise CI dominated the releases' download counts.
 
 The matrix verifies fresh plugin installation, latest-stable plugin upgrade, frozen
 cached action argv, executable versions, HTTP health, login, embedded browser assets,
