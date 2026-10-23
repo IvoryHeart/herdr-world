@@ -20,7 +20,7 @@ import { parse } from "@babel/parser";
 export const MIN_RUN = 3;
 
 const PLUMBING =
-  /^(import(?:\s+(?:type\s+)?[\w*{"']|["'])|export \{|export \* from|export type \{|\} from ["']|["'][^"']+["'];?$|\};?$)/;
+  /^(import\s+(?:type\s+)?[\w*{]|export \{|export \* from|export type \{|\} from ["']|["'][^"']+["'];?$|\};?$)/;
 
 /** A diff line's comparable text, or undefined when it is plumbing. */
 export function normalize(line: string): string | undefined {
@@ -52,7 +52,7 @@ export function statementLines(text: string, file = "source.ts"): Set<number> {
     for (const node of [...program.body, ...program.directives]) {
       if (!node.loc) continue;
       const plumbing =
-        node.type === "ImportDeclaration" ||
+        (node.type === "ImportDeclaration" && node.specifiers.length > 0) ||
         node.type === "TSImportEqualsDeclaration" ||
         node.type === "ExportAllDeclaration" ||
         (node.type === "ExportNamedDeclaration" && !node.declaration);
@@ -267,7 +267,11 @@ if (import.meta.main) {
     // Import/export statements per file version, read from the files; the
     // diff's removed side is the merge base of base and HEAD.
     const from = git(["merge-base", base, "HEAD"]).trim();
-    const ranges = new Map<string, Set<number>>();
+    const ranges = new Map<
+      string,
+      { statements: Set<number>; lines: string[] }
+    >();
+    const ignored = new Map<string, string[]>();
     const plumbing: Plumbing = (file, sign, line) => {
       if (file === "/dev/null") return false;
       const key = `${sign}${file}`;
@@ -276,14 +280,18 @@ if (import.meta.main) {
           ["git", "show", `${sign === "-" ? from : "HEAD"}:${file}`],
           { stdout: "pipe", stderr: "pipe" },
         );
-        ranges.set(
-          key,
-          result.exitCode === 0
-            ? statementLines(result.stdout.toString(), file)
-            : new Set(),
-        );
+        const text = result.exitCode === 0 ? result.stdout.toString() : "";
+        ranges.set(key, {
+          statements: statementLines(text, file),
+          lines: text.split("\n"),
+        });
       }
-      return ranges.get(key)!.has(line);
+      const version = ranges.get(key)!;
+      if (!version.statements.has(line)) return false;
+      const lines = ignored.get(file) ?? [];
+      lines.push(`${sign}${line}: ${version.lines[line - 1]!.trim()}`);
+      ignored.set(file, lines);
+      return true;
     };
     const { lost, extra, runs } = matchMoves(diffHunks(diff, plumbing));
     const show = (
@@ -304,6 +312,13 @@ if (import.meta.main) {
       console.info(
         `  ${run.from}:${run.fromLine} -> ${run.to}:${run.toLine} (${run.lines} lines) ${run.first.slice(0, 80)}`,
       );
+    for (const [file, lines] of ignored) {
+      console.info(
+        `Ignored import/export plumbing in ${file} (${lines.length}):`,
+      );
+      for (const line of lines.slice(0, 40)) console.info(`  ${line}`);
+      if (lines.length > 40) console.info(`  … and ${lines.length - 40} more`);
+    }
     show("Removed and not moved", lost);
     show("Added without a moved original", extra);
     if (lost.length || extra.length) process.exit(1);

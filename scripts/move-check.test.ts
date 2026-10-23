@@ -322,6 +322,11 @@ test("a line shared by plumbing and executable code remains code", () => {
   expect(statementLines("export { setup }; setup();").size).toBe(0);
 });
 
+test("side-effect imports remain executable inventory lines", () => {
+  expect(statementLines('import "./register";').size).toBe(0);
+  expect(normalize('import"./register";')).toBe('import"./register";');
+});
+
 test("invalid and non-JavaScript files cannot hide lines as plumbing", () => {
   expect(statementLines("import { broken;\nrun();").size).toBe(0);
   expect(statementLines('import { text } from "./x";', "notes.txt").size).toBe(

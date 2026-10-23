@@ -29,6 +29,7 @@ const fixtures = [
     'import("./worker").then(({ start }) => {\n  start("safe");\n});\n',
   ],
   ["bare dynamic import argument", 'import("./safe");\n'],
+  ["side-effect import", 'import "./safe";\n'],
 ] as const;
 
 for (const [name, before] of fixtures) {
@@ -76,3 +77,50 @@ for (const [name, before] of fixtures) {
     }
   });
 }
+
+test("CLI prints changed import and re-export wiring for review", () => {
+  const root = mkdtempSync(join(tmpdir(), "move-check-wiring-"));
+  try {
+    const hooks = join(root, "hooks");
+    mkdirSync(hooks);
+    const git = (...args: string[]) => {
+      const result = Bun.spawnSync(
+        [
+          "git",
+          "-c",
+          `core.hooksPath=${hooks}`,
+          "-c",
+          "user.name=Fixture",
+          "-c",
+          "user.email=fixture@example.invalid",
+          ...args,
+        ],
+        { cwd: root, stdout: "pipe", stderr: "pipe" },
+      );
+      expect(result.exitCode).toBe(0);
+      return result.stdout.toString().trim();
+    };
+    git("init", "--quiet");
+    const before =
+      'import { before } from "./before";\nexport { before as publicName };\n';
+    writeFileSync(join(root, "entry.ts"), before);
+    git("add", "entry.ts");
+    git("commit", "--quiet", "-m", "Fixture before");
+    const base = git("rev-parse", "HEAD");
+    writeFileSync(join(root, "entry.ts"), before.replaceAll("before", "after"));
+    git("commit", "--quiet", "-am", "Fixture after");
+    const result = Bun.spawnSync(
+      [process.execPath, join(import.meta.dir, "move-check.ts"), base],
+      { cwd: root, stdout: "pipe", stderr: "pipe" },
+    );
+    expect(result.exitCode).toBe(0);
+    const output = result.stdout.toString();
+    expect(output).toContain("Ignored import/export plumbing in entry.ts (4)");
+    expect(output).toContain('-1: import { before } from "./before";');
+    expect(output).toContain('+1: import { after } from "./after";');
+    expect(output).toContain("-2: export { before as publicName };");
+    expect(output).toContain("+2: export { after as publicName };");
+  } finally {
+    rmSync(root, { recursive: true });
+  }
+});
