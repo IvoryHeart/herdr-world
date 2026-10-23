@@ -3,6 +3,7 @@ import {
   ChevronUp,
   Trash2,
   EllipsisVertical,
+  GitPullRequest,
   Maximize2,
   Minus,
   Pin,
@@ -100,6 +101,7 @@ import { WorldSearchResults } from "./WorldSearchResults";
 import { WorldViewToolbar } from "./WorldViewToolbar";
 import { defaultTerminalColor, TERMINAL_COLOR_HEX } from "./terminalColor";
 import { publishBoardCardPins } from "./board/boardCardPins";
+import { WorkLens } from "./board/WorkLens";
 import "./board/board.css";
 
 /**
@@ -508,6 +510,8 @@ export default function BoardView({
   useEffect(() => () => publishBoardCardPins(null), []);
   const [query, setQuery] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
+  const [workOpen, setWorkOpen] = useState(false);
+  const workButtonRef = useRef<HTMLButtonElement | null>(null);
   /** The pane chooser: to pick a pane, or to finish a string to one. */
   const [chooser, setChooser] = useState<{
     tabKey: string;
@@ -1607,7 +1611,7 @@ export default function BoardView({
   /* ---------- Pointer input ---------- */
   /** What a pointer landed on; null for controls and text being edited. */
   function classify(target: HTMLElement): GestureTarget | null {
-    if (target.closest("[contenteditable='true']")) return null;
+    if (target.closest("[contenteditable='true'], .work-lens")) return null;
     if (
       target.closest("button, input, a, label") &&
       !target.closest(".board-card")
@@ -1987,6 +1991,8 @@ export default function BoardView({
   }
 
   const onWheel = useCallback((event: WheelEvent) => {
+    // The Work lens scrolls its own columns.
+    if ((event.target as Element | null)?.closest?.(".work-lens")) return;
     event.preventDefault();
     camGoal.current = null;
     panVelocity.current = null;
@@ -2961,7 +2967,7 @@ export default function BoardView({
           if (
             card ||
             target.closest(
-              ".board-controls, .board-zone-label, .board-notebar, .board-chooser, .board-cut, .board-toast, .board-trace, .board-banner, .board-tray",
+              ".board-controls, .board-zone-label, .board-notebar, .board-chooser, .board-cut, .board-toast, .board-trace, .board-banner, .board-tray, .work-lens",
             )
           )
             return;
@@ -3677,6 +3683,15 @@ export default function BoardView({
               {detached.length}
             </button>
           ) : null}
+          <button
+            ref={workButtonRef}
+            type="button"
+            aria-label="Work: pull requests and tickets"
+            aria-pressed={workOpen}
+            onClick={() => setWorkOpen(!workOpen)}
+          >
+            <GitPullRequest size={15} aria-hidden="true" />
+          </button>
           <div className="board-menu-wrap">
             <button
               type="button"
@@ -3711,6 +3726,21 @@ export default function BoardView({
             ) : null}
           </div>
         </div>
+        {workOpen ? (
+          <WorkLens
+            world={world}
+            anchor={() => workButtonRef.current}
+            onClose={() => setWorkOpen(false)}
+            onSelectAgent={(id) => {
+              setWorkOpen(false);
+              const tab = model.tabs.find((entry) =>
+                entry.panes.some((pane) => pane.leaf.id === id),
+              );
+              if (tab) focusWorkspace(tab.workspaceKey);
+              onSelect(id);
+            }}
+          />
+        ) : null}
         {DEVTOOLS && tracing ? (
           <TraceOverlay
             view="board"

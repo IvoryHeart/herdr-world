@@ -227,6 +227,7 @@ import {
   type WorkspaceInspectorContext,
   type WorkspaceInspectorState,
   WORLD_OBSERVABILITY_SETTINGS_EVENT,
+  WORLD_SOURCES_SETTINGS_EVENT,
   writeInspectorPreferences,
   writeResourceFileSelection,
 } from "./workspaceResource";
@@ -4270,6 +4271,9 @@ export default function App({
                 window.dispatchEvent(
                   new Event(WORLD_OBSERVABILITY_SETTINGS_EVENT),
                 )
+              }
+              onOpenSources={() =>
+                window.dispatchEvent(new Event(WORLD_SOURCES_SETTINGS_EVENT))
               }
             />
           </OperationalContext.Provider>

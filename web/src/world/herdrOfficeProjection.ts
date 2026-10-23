@@ -91,6 +91,7 @@ export type OfficePaneDevice = {
   stale: boolean;
   canOpenInSpaces: boolean;
   agentKey?: string;
+  agentSessionFingerprint?: string;
 };
 
 export type OfficePaneRosterEntry = {
@@ -1116,6 +1117,9 @@ function projectPaneDevices(
       stale: leaf.stale,
       canOpenInSpaces: leaf.capabilities.openSpaces,
       ...(leaf.kind === "agent" ? { agentKey: leaf.id } : {}),
+      ...(leaf.agentSessionFingerprint
+        ? { agentSessionFingerprint: leaf.agentSessionFingerprint }
+        : {}),
     }));
   preparedPaneDevices.set(desk, devices);
   return devices;
