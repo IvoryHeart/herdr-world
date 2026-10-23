@@ -21,7 +21,7 @@ import {
   worldMotionPreference,
   type WorldFrames,
 } from "../worldFrameScheduler";
-import { worldRendererCountersEnabled } from "../devtools/renderer";
+import { diagnostics } from "./townDiagnostics";
 import { DEVTOOLS } from "../devtools/flag";
 
 /** Why Town drew a frame and what it asked for next (development trace). */
@@ -83,82 +83,7 @@ import {
   type TownLook,
 } from "./townSprites";
 
-export type TownRendererDiagnostics = {
-  mounts: number;
-  destroys: number;
-  activeApplications: number;
-  activeTickers: number;
-  frames: number;
-  sceneRenders: number;
-  ready: boolean;
-  reducedMotion: boolean;
-  interactionPaused: boolean;
-  lastError: string | null;
-  level: TownLevel | null;
-  zoom: number;
-  actors: number;
-  walking: number;
-  /** Agents opened by the user whose goal is their own desk. */
-  summoned: string[];
-  desks: number;
-  /** Animated node counts, kept compatible with existing browser evidence. */
-  animation: {
-    characters: number;
-    monitors: number;
-    statuses: number;
-    quests: number;
-  };
-  layout: null | {
-    width: number;
-    height: number;
-    buildings: number;
-    rooms: number;
-    /** The container shape: stacked buildings, room and desk columns. */
-    formFactor: string;
-    roomColumns: number;
-    deskColumns: number;
-    /** Room and building placement (townGeometryKey), to see reflows. */
-    geometry: string;
-  };
-  /** Drag outcomes as drawn: lifts, landings (each with its dust), returns. */
-  drags: { lifts: number; landings: number; returns: number; dust: number };
-};
-
-declare global {
-  interface Window {
-    __HERDR_WORLD_FORCE_RENDERER_FAILURE__?: boolean;
-    __HERDR_TOWN_RENDERER__?: TownRendererDiagnostics;
-  }
-}
-
-function diagnostics(): TownRendererDiagnostics {
-  const enabled = worldRendererCountersEnabled();
-  if (enabled && window.__HERDR_TOWN_RENDERER__)
-    return window.__HERDR_TOWN_RENDERER__;
-  const value: TownRendererDiagnostics = {
-    mounts: 0,
-    destroys: 0,
-    activeApplications: 0,
-    activeTickers: 0,
-    frames: 0,
-    sceneRenders: 0,
-    ready: false,
-    reducedMotion: false,
-    interactionPaused: false,
-    lastError: null,
-    level: null,
-    zoom: 1,
-    actors: 0,
-    walking: 0,
-    summoned: [],
-    desks: 0,
-    animation: { characters: 0, monitors: 0, statuses: 0, quests: 0 },
-    layout: null,
-    drags: { lifts: 0, landings: 0, returns: 0, dust: 0 },
-  };
-  if (enabled) window.__HERDR_TOWN_RENDERER__ = value;
-  return value;
-}
+export type { TownRendererDiagnostics } from "./townDiagnostics";
 
 export type TownSceneState = {
   selectedKey: string | null;
@@ -186,7 +111,13 @@ export type TownRendererHandle = {
   /** Lift a desk or agent under the pointer for a drag. */
   beginDrag(kind: "desk" | "agent", key: string, x: number, y: number): void;
   /** Follow the pointer (world point) and show where it would land. */
-  moveDrag(x: number, y: number, targetKey: string | null): void;
+  /** `snap`: the target is a desk the carried desk groups with. */
+  moveDrag(
+    x: number,
+    y: number,
+    targetKey: string | null,
+    snap?: boolean,
+  ): void;
   /** Spring back to its spot, or wait at the target while Herdr moves it. */
   endDrag(mode: "cancel" | "park"): void;
   /** Land on the target with a puff, spring home, or fade when uncertain. */
@@ -1568,7 +1499,12 @@ export async function createTownRenderer(
     );
     moveDrag(x, y, null);
   };
-  const moveDrag = (x: number, y: number, targetKey: string | null) => {
+  const moveDrag = (
+    x: number,
+    y: number,
+    targetKey: string | null,
+    snap = false,
+  ) => {
     if (!drag || !layout || drag.phase.name !== "drag") return;
     drag.x = x;
     drag.y = y - (drag.kind === "desk" ? 24 : 14);
@@ -1576,8 +1512,8 @@ export async function createTownRenderer(
     drag.slot?.destroy();
     drag.slot = null;
     if (targetKey && drag.kind === "desk") {
-      // Another desk's slot when reordering in the room, or else the next
-      // free spot of the target room: where the desk will land.
+      // Another desk's slot when reordering in the room or grouping with
+      // that desk, or else the next free spot of the target room.
       const room = layout.buildings
         .flatMap((b) => b.rooms)
         .find((candidate) => candidate.key === targetKey);
@@ -1591,6 +1527,9 @@ export async function createTownRenderer(
           w: 70,
           h: 57,
         };
+      }
+      // Grouping keeps both desks: no ghost table takes the other's place.
+      if (cell && !snap) {
         const seats = model?.desks.get(drag.key)?.paneDevices.length ?? 4;
         const slot = new Sprite(
           textureOf(

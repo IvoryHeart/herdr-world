@@ -263,6 +263,7 @@ describe("the saved link a Send relies on", () => {
       colors: {},
       desk_pins: {},
     },
+    relations: { spawns: [], groups: [] },
     notes: [
       {
         id: "n1",

@@ -14,14 +14,16 @@ export type TownDrag = {
 };
 
 /**
- * Where a drag lands. A desk dropped in its own room is reordered: onto
- * another desk it takes that desk's slot (`key` is that desk), onto the free
- * spot it goes last (`key` is the room).
+ * Where a drag lands. A desk dropped on another room moves there. In its own
+ * room it is reordered: onto another desk it takes that desk's slot (`key` is
+ * that desk), onto the free spot it goes last (`key` is the room). Rested on
+ * any desk it joins that desk's team (moving rooms first when needed), and a
+ * grouped desk dropped on its own room's floor leaves its team.
  */
 export type TownDropTarget = {
   key: string | null;
   label: string;
-  reorder?: boolean;
+  action?: "move" | "reorder" | "group" | "ungroup";
 };
 
 /** What a held press picks up: a desk or a seated agent, zoomed in. */
@@ -58,13 +60,58 @@ export function townDragFor(
   };
 }
 
-/** Where a drag would land under the pointer, or why it can't. */
+/** How long a dragged desk rests on another desk before it snaps to it. */
+export const TOWN_MAGNET_MS = 450;
+
+/** The desk under a dragged desk, if it is one it could group with. */
+export function townMagnetDesk(
+  drag: TownDrag,
+  hit: TownHit | null,
+  model: TownModel,
+): string | null {
+  if (drag.kind !== "desk") return null;
+  const key =
+    hit?.kind === "desk"
+      ? hit.key
+      : hit?.kind === "pane"
+        ? hit.deskKey
+        : hit?.kind === "agent"
+          ? model.agentSeats.get(hit.key)?.deskKey
+          : undefined;
+  return key && key !== drag.key && model.desks.has(key) ? key : null;
+}
+
+/**
+ * Where a drag would land under the pointer, or why it can't. A desk dropped
+ * at once on another desk reorders (same room) or moves (another room); held
+ * still on it for TOWN_MAGNET_MS (`magnet`), it snaps to that desk and groups
+ * with it, so moving, reordering and grouping stay separate gestures.
+ */
 export function townDropTarget(
   drag: TownDrag,
   hit: TownHit | null,
   model: TownModel,
+  /** Each related desk's team (townTeams.ts). */
+  deskTeams: ReadonlyMap<string, string> = new Map(),
+  /** The desk the dragged desk has rested on long enough to snap to. */
+  magnet: string | null = null,
+  /** Desks in a manual group: only these can leave one. */
+  groupedDesks: ReadonlySet<string> = new Set(),
 ): TownDropTarget {
   if (drag.kind === "desk") {
+    const mate = magnet ? model.desks.get(magnet) : undefined;
+    if (mate && magnet === townMagnetDesk(drag, hit, model)) {
+      if (mate.hostKey !== drag.hostKey)
+        return { key: null, label: "Desks group only within one host" };
+      const team = deskTeams.get(mate.key);
+      if (team && team === deskTeams.get(drag.key))
+        return { key: null, label: `${drag.label}: already in this team` };
+      return {
+        key: mate.key,
+        label: `Group with ${mate.displayLabel}`,
+        action: "group",
+      };
+    }
     const roomKey =
       hit?.kind === "room"
         ? hit.key
@@ -103,7 +150,7 @@ export function townDropTarget(
         return {
           key: onto.key,
           label: `Put ${name} in ${onto.displayLabel}’s place`,
-          reorder: true,
+          action: "reorder",
         };
       // The free spot is the room's last drawn slot. In a room with more
       // tabs than it draws, that is the last drawn desk's place, so the desk
@@ -114,19 +161,25 @@ export function townDropTarget(
           ? {
               key: lastDrawn,
               label: `Put ${name} last of the desks shown in ${room.displayLabel}`,
-              reorder: true,
+              action: "reorder",
             }
           : {
               key: room.key,
               label: `Put ${name} last in ${room.displayLabel}`,
-              reorder: true,
+              action: "reorder",
             };
+      if (hit?.kind === "room" && groupedDesks.has(drag.key))
+        return { key: room.key, label: "Leave the team", action: "ungroup" };
       return {
         key: null,
         label: `${drag.label}: drop on a desk to reorder`,
       };
     }
-    return { key: room.key, label: `${drag.label} to ${room.displayLabel}` };
+    return {
+      key: room.key,
+      label: `${drag.label} to ${room.displayLabel}`,
+      action: "move",
+    };
   }
   const deskKey =
     hit?.kind === "desk"

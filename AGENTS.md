@@ -116,7 +116,8 @@ it locally in parallel lanes. A Markdown-only follow-up uses `bun run check:docs
 only when a passed code gate already covers its code, and a push that only merges
 `origin/main` (no edits beyond changelog fragments) runs `bun run check:static`.
 Heavy checks from every worktree share one machine-wide queue (one browser lane and
-one verification at a time); a queued gate prints whom it waits for, so wait rather
+one verification at a time; the timed latency lane alone); run browser suites via
+`bun run test <path>` so they queue too. A queued gate prints whom it waits for, so wait rather
 than bypass the hook.
 CI runs documentation checks for Markdown-only PR diffs and full checks for code
 changes. Browser tests require Chrome/Chromium or `CHROME_BIN`:
