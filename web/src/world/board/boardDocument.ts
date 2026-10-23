@@ -4,6 +4,7 @@ import {
   type BridgeControlMsg,
   type ConnectionStatus,
 } from "../../api";
+import type { StoredInterest } from "../../../../shared/interest";
 
 /**
  * The browser's view of Board's saved state in the World service
@@ -77,6 +78,8 @@ export type BoardDocument = {
     folded: string[];
     /** Card key to the colour the user chose; absent before card colours. */
     colors?: Record<string, CardColor>;
+    /** Terminal key to muted or focused; absent from older services. */
+    interest?: Record<string, StoredInterest>;
   };
   notes: BoardNote[];
   strings: BoardString[];
@@ -110,6 +113,7 @@ export type BoardOp =
       replace?: boolean;
     }
   | { op: "card.color"; key: string; color: CardColor | null }
+  | { op: "interest.set"; key: string; interest: StoredInterest | null }
   | {
       op: "anchor.witness";
       string_id: string;

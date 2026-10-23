@@ -52,7 +52,14 @@ describe("Recording a string's agent", () => {
   const doc = (to: BoardAnchor): BoardDocument => ({
     version: 1,
     revision: 1,
-    layout: { anchors: {}, offsets: {}, pinned: {}, folded: [], colors: {} },
+    layout: {
+      anchors: {},
+      offsets: {},
+      pinned: {},
+      folded: [],
+      colors: {},
+      interest: {},
+    },
     notes: [],
     strings: [{ id: "s1", from: { note: "n1" }, to: { anchor: to } }],
   });

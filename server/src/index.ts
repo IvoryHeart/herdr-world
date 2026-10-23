@@ -134,6 +134,7 @@ import {
   BoardStore,
   type BoardOp,
 } from "./world/board-store";
+import { closesTerminals, pruneGoneInterest } from "./world/interest-prune";
 import {
   readPaneRecipient,
   recipientOps,
@@ -854,6 +855,13 @@ function runtimeFactoryForProfile(
               (rpc, rpcParams) => runtime.herdr.call(rpc, rpcParams, 10_000),
               context.isCurrent,
             );
+          if (closesTerminals(herdrEventName(event)))
+            void pruneGoneInterest(board(), eventIdentity.id, {
+              call: (rpc, rpcParams) =>
+                runtime.herdr.call(rpc, rpcParams, 10_000),
+              isCurrent: context.isCurrent,
+              changed: publishBoardChanged,
+            });
           logger.debug("Herdr event", {
             connection: eventIdentity.id,
             detail: summarizeHerdrEvent(event),

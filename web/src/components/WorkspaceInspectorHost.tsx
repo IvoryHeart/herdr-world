@@ -1,20 +1,11 @@
-import { useEffectCallback } from "../useEffectCallback";
-import { preferencesStorageKey } from "../workspaceResource";
-import { subscribeLocalStorage } from "../browserStorage";
-import { useLayoutPreferences } from "../layoutPreferences";
-import { connectionClientScopeKey } from "../useConnectionClient";
-import {
-  WindowControls,
-  type ManagedWindowControls,
-} from "../world/windows/WindowControls";
 import {
   FileDiff,
   FolderTree,
   GitFork,
   GitGraph,
   GitPullRequest,
-  MessagesSquare,
   Maximize2,
+  MessagesSquare,
   Minimize2,
   MoreHorizontal,
   PanelBottom,
@@ -26,6 +17,8 @@ import {
   X,
 } from "lucide-react";
 import {
+  type CSSProperties,
+  type KeyboardEvent as ReactKeyboardEvent,
   Suspense,
   useCallback,
   useEffect,
@@ -33,39 +26,46 @@ import {
   useLayoutEffect,
   useRef,
   useState,
-  type CSSProperties,
-  type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
-import type { ConnectionClient } from "../api";
-import { worldLocalStorage } from "../browserStorage";
 import {
   type NewReviewAnnotation,
   type ReviewAnnotation,
 } from "../annotations";
+import type { ConnectionClient } from "../api";
+import { subscribeLocalStorage, worldLocalStorage } from "../browserStorage";
+import { useLayoutPreferences } from "../layoutPreferences";
 import { lazyWithReload } from "../lazyWithReload";
 import { shortcutTitle, useShortcutPreferences } from "../shortcutPreferences";
 import type { GitDiffEntry, Pane, Workspace } from "../types";
+import { connectionClientScopeKey } from "../useConnectionClient";
+import { useEffectCallback } from "../useEffectCallback";
 import {
-  DEFAULT_INSPECTOR_NAVIGATION_RATIO,
-  inspectorNavigationRatioAtPosition,
-  normalizeInspectorViews,
-  readInspectorPreferences,
-  resourceOwnerKey,
-  resourceStateKey,
-  writeInspectorNavigationRatio,
-  readResourceFileTabs,
-  writeResourceFileTabs,
   closeResourceFileTab,
+  DEFAULT_INSPECTOR_NAVIGATION_RATIO,
   type InspectorDock,
   type InspectorSplitView,
   type InspectorView,
-  type WorkspaceInspectorState,
+  inspectorNavigationRatioAtPosition,
+  normalizeInspectorViews,
+  preferencesStorageKey,
+  readInspectorPreferences,
+  readResourceFileTabs,
+  resourceOwnerKey,
+  resourceStateKey,
   type WorkspaceInspectorContext,
+  type WorkspaceInspectorState,
+  writeInspectorNavigationRatio,
+  writeResourceFileTabs,
 } from "../workspaceResource";
-import { AgentIcon } from "./AgentIcon";
+import {
+  type ManagedWindowControls,
+  WindowControls,
+} from "../world/windows/WindowControls";
 import { AgentChat } from "./AgentChat";
 import { AgentCheckoutPanel } from "./AgentCheckoutPanel";
+import { AgentIcon } from "./AgentIcon";
 import { paneHasAgentHistory } from "./agentSession";
+import { ColorSwatchButton } from "./ColorSwatch";
 import {
   type ActiveDiffSelection,
   DiffViewerPanel,
@@ -78,11 +78,12 @@ import {
   FilePreviewContent,
 } from "./FilePreviewContent";
 import { FilePreviewTabs } from "./FilePreviewTabs";
-import { workspaceInspectorLayout } from "./workspaceInspectorLayout";
+import { InspectorSplitResizer } from "./InspectorSplitResizer";
+import { InterestButton, type InterestChoice } from "./InterestButton";
+import { changedCount, checkoutLabel } from "./inspectorCheckout";
 import { PullRequestCard } from "./PullRequestCard";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
-import { ColorSwatchButton } from "./ColorSwatch";
-import { InspectorSplitResizer } from "./InspectorSplitResizer";
+import { workspaceInspectorLayout } from "./workspaceInspectorLayout";
 import "./WorkspaceInspectorHost.css";
 
 const DiffContentView = lazyWithReload("diff-content-view", () =>
@@ -95,23 +96,6 @@ const GitCommitHistory = lazyWithReload("git-commit-history", () =>
     default: module.GitCommitHistory,
   })),
 );
-
-function changedCount(workspace?: Workspace) {
-  const status = workspace?.worktree?.git_status;
-  return status
-    ? status.staged + status.unstaged + status.untracked + status.conflicted
-    : 0;
-}
-
-function checkoutLabel(workspace?: Workspace) {
-  if (!workspace) return "Unavailable checkout";
-  return (
-    workspace.worktree?.git_status?.branch ||
-    workspace.worktree?.repo_name ||
-    workspace.label ||
-    workspace.workspace_id
-  );
-}
 
 const INSPECTOR_RESOURCE_HORIZONTAL_PADDING = 16;
 
@@ -166,6 +150,7 @@ export function WorkspaceInspectorHost({
   onExpandedChange,
   windowControls,
   terminalColor,
+  agentInterest,
   onWindowMaximize,
   windowMaximized = false,
   onClose,
@@ -214,6 +199,8 @@ export function WorkspaceInspectorHost({
   windowControls?: ManagedWindowControls;
   /** The terminal's colour, shown and chosen beside its name. */
   terminalColor?: ManagedWindowControls["color"];
+  /** The agent's interest, which gates its chimes. */
+  agentInterest?: InterestChoice | null;
   onWindowMaximize?: () => void;
   windowMaximized?: boolean;
   onClose: () => void;
@@ -524,6 +511,9 @@ export function WorkspaceInspectorHost({
             current={terminalColor.current}
             onColor={terminalColor.onColor}
           />
+        ) : null}
+        {agentContext && agentInterest ? (
+          <InterestButton {...agentInterest} />
         ) : null}
         {agentContext ? (
           <div className="workspace-inspector-identity workspace-inspector-agent-identity">

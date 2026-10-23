@@ -341,7 +341,14 @@ describe("desk moves", () => {
     const doc: BoardDocument = {
       version: 1,
       revision: 1,
-      layout: { anchors: {}, offsets: {}, pinned: {}, folded: [], colors: {} },
+      layout: {
+        anchors: {},
+        offsets: {},
+        pinned: {},
+        folded: [],
+        colors: {},
+        interest: {},
+      },
       notes: [{ id: "n1", text: "Note", color: "yellow", x: 0, y: 0, rev: 1 }],
       strings: [
         {

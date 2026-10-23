@@ -1,4 +1,3 @@
-import type { ManagedWindowControls } from "./windows/WindowControls";
 import {
   Suspense,
   useCallback,
@@ -9,21 +8,22 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
+import type { Interest } from "../../../shared/interest";
 import {
   createReviewAnnotation,
-  reanchorDiffReviewAnnotations,
-  reanchorFileReviewAnnotations,
   type NewReviewAnnotation,
   type ReviewAnnotation,
+  reanchorDiffReviewAnnotations,
+  reanchorFileReviewAnnotations,
 } from "../annotations";
 import { worldLocalStorage } from "../browserStorage";
 import { type ActiveDiffSelection } from "../components/DiffViewerPanel";
-import { requestFilePreview } from "../components/fileExplorerResources";
 import type { ActiveFilePreviewSelection } from "../components/FilePreviewContent";
+import { requestFilePreview } from "../components/fileExplorerResources";
 import { WorkspaceInspectorHost } from "../components/WorkspaceInspectorHost";
 import {
-  OperationalContext,
   connectionSnapshot,
+  OperationalContext,
   shallowEqual,
   store,
   useStoreSelector,
@@ -35,26 +35,28 @@ import {
 } from "../useConnectionClient";
 import { useReviewAnnotationDraft } from "../useReviewAnnotationDraft";
 import {
+  type InspectorDock,
+  type InspectorView,
   readResourceFileSelection,
   resourceScopeForWorkspace,
   resourceStateKey,
-  writeInspectorPreferences,
-  writeResourceFileSelection,
-  type InspectorDock,
-  type InspectorView,
-  type WorkspaceInspectorState,
   WORKSPACE_ANNOTATION_REQUEST_EVENT,
   type WorkspaceAnnotationRequest,
+  type WorkspaceInspectorState,
+  writeInspectorPreferences,
+  writeResourceFileSelection,
 } from "../workspaceResource";
 import {
-  worldInspectorWindowId,
-  type WorldInspectorConversation,
-} from "./worldTerminalPresentation";
-import {
   INSPECTOR_TERMINAL_FILE_EVENT,
-  inspectorTerminalFileAdmitted,
   type InspectorTerminalFileRequest,
+  inspectorTerminalFileAdmitted,
 } from "./inspectorTerminalHandoff";
+import { setAgentInterest, useAgentInterest } from "./useAgentInterest";
+import type { ManagedWindowControls } from "./windows/WindowControls";
+import {
+  type WorldInspectorConversation,
+  worldInspectorWindowId,
+} from "./worldTerminalPresentation";
 
 const emptyDiff = (): ActiveDiffSelection => ({
   entry: null,
@@ -166,6 +168,15 @@ function InspectorResources({
           candidate.tab_id === conversation.tabId,
       )
     : undefined;
+  const interest = useAgentInterest();
+  const terminalId = historyPane?.agent ? historyPane.terminal_id : undefined;
+  const agentInterest = terminalId
+    ? {
+        current: interest.interestOf(conversation.connectionId, terminalId),
+        onInterest: (next: Interest) =>
+          void setAgentInterest(conversation.connectionId, terminalId, next),
+      }
+    : null;
   const scope = useMemo(
     () =>
       workspace
@@ -501,6 +512,7 @@ function InspectorResources({
             onExpandedChange={changeExpanded}
             windowControls={windowControls}
             terminalColor={terminalColor}
+            agentInterest={agentInterest}
             onWindowMaximize={onWindowMaximize}
             windowMaximized={windowMaximized}
             onDockOut={floating ? undefined : onDockOut}

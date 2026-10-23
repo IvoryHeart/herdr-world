@@ -94,6 +94,13 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   - A desk moved to another room keeps the colour it showed, even a default or
     its old room's, saved as its own colour: it no longer follows its room's
     colour, and **Default colour** resets it to its new tab's default.
+- **Agent interest.** The button beside an agent's name in its Inspector
+  header sets **Watching** (the default), **Muted** or **Focused** for that
+  agent, saved by the World service for its terminal on every device. Chimes
+  read it: a muted agent never chimes, and while any agent is focused only
+  focused agents and the Town master's needs-you chime. Interest never hides
+  anything from reception. It follows the terminal through moves, and goes
+  when its host shows the terminal has closed.
 
 - **Board** (`/board`) shows hosts as zones, workspaces as cards and tabs as
   cards around their workspace, beside your notes. Cards are elastic while you

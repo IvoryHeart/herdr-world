@@ -1,13 +1,18 @@
 import { existsSync, readFileSync, renameSync } from "node:fs";
 import { join } from "node:path";
-import { dataRoot, replaceDataFile } from "../config/data-paths";
-import { worldEnv } from "../config/environment";
-import { RECIPIENT_MAX, type ObservedAgent } from "./board-recipient";
+import {
+  interestKeyPrefix,
+  STORED_INTERESTS,
+  type StoredInterest,
+} from "../../../shared/interest";
 import {
   cardKey,
   resolveTerminalColor,
   tabCardKey,
 } from "../../../shared/terminalColor";
+import { dataRoot, replaceDataFile } from "../config/data-paths";
+import { worldEnv } from "../config/environment";
+import { type ObservedAgent, RECIPIENT_MAX } from "./board-recipient";
 
 /**
  * Board's saved state: layout, notes and strings. One document for the World
@@ -67,6 +72,8 @@ export type BoardLayoutDocument = {
   folded: string[];
   /** Card key to the colour the user chose for it. */
   colors: Record<string, CardColor>;
+  /** Terminal key (shared/interest.ts) to the viewer's muted or focused. */
+  interest: Record<string, StoredInterest>;
 };
 export type BoardDocument = {
   version: 1;
@@ -116,6 +123,8 @@ export type BoardOp =
       replace?: boolean;
     }
   | { op: "card.color"; key: string; color: CardColor | null }
+  /** Mute or focus an agent's terminal, or return it to watching with null. */
+  | { op: "interest.set"; key: string; interest: StoredInterest | null }
   | {
       op: "anchor.witness";
       string_id: string;
@@ -219,7 +228,14 @@ export function emptyBoardDocument(): BoardDocument {
   return {
     version: 1,
     revision: 0,
-    layout: { anchors: {}, offsets: {}, pinned: {}, folded: [], colors: {} },
+    layout: {
+      anchors: {},
+      offsets: {},
+      pinned: {},
+      folded: [],
+      colors: {},
+      interest: {},
+    },
     notes: [],
     strings: [],
   };
@@ -275,6 +291,17 @@ function colors(value: unknown): Record<string, CardColor> {
     text(key, "colors key", BOARD_LIMITS.key);
     if (!CARD_COLORS.includes(entry as CardColor)) fail("card colour");
     out[key] = entry as CardColor;
+  }
+  return out;
+}
+function interests(value: unknown): Record<string, StoredInterest> {
+  if (value === undefined) return {};
+  if (!isObject(value)) fail("interest must be an object");
+  const out: Record<string, StoredInterest> = {};
+  for (const [key, entry] of Object.entries(value)) {
+    text(key, "interest key", BOARD_LIMITS.key);
+    if (!STORED_INTERESTS.includes(entry as StoredInterest)) fail("interest");
+    out[key] = entry as StoredInterest;
   }
   return out;
 }
@@ -346,6 +373,8 @@ export function parseBoardDocument(value: unknown): BoardDocument {
       folded: keys(layout.folded, "folded"),
       // Boards saved before card colours have none.
       colors: colors(layout.colors),
+      // Boards saved before interest have none: every agent is watched.
+      interest: interests(layout.interest),
     },
     notes: notes.map((entry) => {
       const rev =
@@ -371,7 +400,8 @@ function checkBounds(document: BoardDocument) {
     Object.keys(layout.offsets).length +
     Object.keys(layout.pinned).length +
     layout.folded.length +
-    Object.keys(layout.colors).length;
+    Object.keys(layout.colors).length +
+    Object.keys(layout.interest).length;
   if (entries > BOARD_LIMITS.layoutEntries)
     fail(`at most ${BOARD_LIMITS.layoutEntries} layout entries`);
   const noteIds = new Set(document.notes.map((entry) => entry.id));
@@ -523,6 +553,14 @@ function applyOp(next: BoardDocument, op: BoardOp, current: BoardDocument) {
       else fail("card colour");
       return;
     }
+    case "interest.set": {
+      const key = text(op.key, "interest key", BOARD_LIMITS.key);
+      if (op.interest === null) delete next.layout.interest[key];
+      else if (STORED_INTERESTS.includes(op.interest))
+        next.layout.interest[key] = op.interest;
+      else fail("interest");
+      return;
+    }
     case "anchor.witness": {
       const target = next.strings.find((entry) => entry.id === op.string_id);
       const side = target?.[op.end === "to" ? "to" : "from"];
@@ -662,6 +700,25 @@ export function tabClosedColorOps(
   return keys
     .filter((key) => document.layout.colors[key])
     .map((key) => ({ op: "card.color", key, color: null }));
+}
+
+/**
+ * Interest records for one host whose terminals are gone. `terminals` must be
+ * every terminal of a fresh, complete listing from the host's current
+ * runtime; a failed or stale host keeps its records, so pass nothing then.
+ */
+export function goneInterestOps(
+  document: BoardDocument,
+  connectionId: string,
+  terminals: ReadonlySet<string>,
+): BoardOp[] {
+  const prefix = interestKeyPrefix(connectionId);
+  return Object.keys(document.layout.interest)
+    .filter(
+      (key) =>
+        key.startsWith(prefix) && !terminals.has(key.slice(prefix.length)),
+    )
+    .map((key) => ({ op: "interest.set", key, interest: null }));
 }
 
 /**
