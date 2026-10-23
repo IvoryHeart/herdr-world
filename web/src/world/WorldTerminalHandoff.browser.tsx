@@ -1165,6 +1165,63 @@ async function run() {
       window.__HERDR_TOWN_RENDERER__?.ready === true && agentTarget("Builder"),
     "Town after shared-frame navigation",
   );
+  // A minimized panel window (Town summary) comes back from the window list
+  // and is raised by the window manager (#346).
+  const summaryWindow = () =>
+    document.querySelector<HTMLElement>('[aria-label="Town summary window"]');
+  document
+    .querySelector<HTMLElement>('[aria-label^="Town summary: "]')!
+    .click();
+  await until(() => summaryWindow(), "Town summary opens as a panel window");
+  summaryWindow()!
+    .querySelector<HTMLButtonElement>(
+      '[aria-label="More actions for Town summary window"]',
+    )!
+    .click();
+  await until(
+    () => document.querySelector(".world-window-snap-menu"),
+    "Town summary window menu",
+  );
+  [
+    ...document.querySelectorAll<HTMLButtonElement>(
+      '.world-window-snap-menu [role^="menuitem"]',
+    ),
+  ]
+    .find((button) => button.textContent?.trim() === "Minimize")!
+    .click();
+  await until(
+    () =>
+      !summaryWindow() || summaryWindow()!.getBoundingClientRect().width === 0,
+    "Town summary minimized",
+  );
+  document
+    .querySelector<HTMLButtonElement>('button[aria-label^="Open windows ("]')!
+    .click();
+  await until(
+    () => document.querySelector('[role="menu"][aria-label="Open windows"]'),
+    "window list opens",
+  );
+  [
+    ...document.querySelectorAll<HTMLButtonElement>(
+      '[role="menu"][aria-label="Open windows"] [role="menuitem"]',
+    ),
+  ]
+    .find((button) => button.textContent?.includes("Town summary"))!
+    .click();
+  await until(() => {
+    const restored = summaryWindow();
+    return (
+      restored &&
+      restored.getBoundingClientRect().width > 0 &&
+      restored.classList.contains("is-active")
+    );
+  }, "the window list restores and raises the minimized Town summary");
+  summaryWindow()!
+    .querySelector<HTMLButtonElement>(
+      '[aria-label="Close Town summary window"]',
+    )!
+    .click();
+  await until(() => !summaryWindow(), "Town summary closes again");
   check(
     document.querySelector(".world-office-toolbar") === null,
     "Town settings still consumed a scene toolbar",

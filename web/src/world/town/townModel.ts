@@ -238,6 +238,7 @@ export function townModelFromProjection(
         displayOrder,
       })),
       rooms: projection.rooms.map((room) => ({
+        deskFold: room.deskFold,
         key: room.key,
         hostKey: room.hostKey,
         order: room.order,

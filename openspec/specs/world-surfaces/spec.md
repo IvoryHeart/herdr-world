@@ -1110,12 +1110,22 @@ moves desks. A room's capacity SHALL step through a
 bounded set of grid sizes that always leaves at least one free desk spot: a room
 grows square until it reaches its shape's width (four desks on a phone, six on
 portrait and mid-width screens, eight on wide screens) and then extends
-downward, up to 127 drawn desks, and its building grows around it, so a room of
-real size shows every desk. Only a room with more tabs than that SHALL leave
-desks undrawn: it SHALL keep the selected desk and the three newest tabs, then
-desks whose agents need the user, are working or are unknown, then finished
-ones, hiding idle and empty desks first, and SHALL count every hidden desk on
-the room. Zooming into a room taller or wider than the usable view, from its
+downward, and its building grows around it. A folded room SHALL use a default
+bound of 24 desks, and an expanded room a default bound of 127; Fold SHALL
+restore the 24-desk bound and allow the room to shrink, while retaining pinned
+cells and its building column. Ordinary tab closures SHALL keep the live size
+step. An expanded room SHALL retain its Fold control after closures, including
+at or below 24 desks, until the user folds it. Selected and pinned desks, every desk represented
+by the shared Town call list (blocked agents and unreviewed finishes), and the
+desk of a verified, qualified asking agent with an open question SHALL remain
+visible past either bound. Admission SHALL consume desk keys from that shared
+attention source after its finished/seen overlay, without independently inferring
+attention from projection status or matching question actors by label. A room
+with more tabs than it draws SHALL keep these protected desks, then the three
+newest tabs, then working or unknown agents, then finished ones, hiding idle and
+empty desks first. No protected desk SHALL contribute to the hidden count. Town
+SHALL count every hidden desk on the room, and SHALL offer Expand on its plaque
+while it is folded. Zooming into a room taller or wider than the usable view, from its
 card or with Zoom in, SHALL open at its first desks. While a
 scene is live, a topology change SHALL NOT reorder rooms or move a desk to
 another room: a tab Herdr adds last SHALL take the first free spot of its room
@@ -1159,8 +1169,12 @@ stays where it was.
 #### Scenario: Agents fill a room past its old size
 
 - **WHEN** a room has 24, 50 or 100 tabs
-- **THEN** the room extends and draws a desk for every tab, the newest included,
-  on a phone, a half-width window, a wide screen and a portrait monitor
+- **THEN** a 24-tab room draws a desk for every tab, and a larger room draws its
+  24 busiest and newest desks with Expand on its plaque
+- **AND WHEN** the user expands the 100-tab room
+- **THEN** it extends and draws a desk for every tab, the newest included, on a
+  phone, a half-width window, a wide screen and a portrait monitor, and Fold
+  returns it to 24
 
 #### Scenario: A room grows while the user watches
 
@@ -1281,7 +1295,8 @@ seat once checked or answered. A pin SHALL follow its tab to another workspace
 and SHALL be dropped when its tab closes. When a room has more desks than Town
 presents, its pinned desks and the selected desk, with their agents, SHALL
 still be presented, even past the bound, and other desks SHALL be omitted
-instead; only pins beyond the 127 desks a room can draw MAY go undrawn.
+instead. Layout SHALL extend for every admitted pinned or selected desk,
+even beyond the normal 127-desk expanded target.
 
 #### Scenario: A pinned agent finishes and is seen
 
@@ -1325,6 +1340,47 @@ The rail SHALL list a bounded number of entries and count the rest.
 
 - **WHEN** the user hides the desktop rail and reloads Town
 - **THEN** the rail stays hidden, shows the waiting count, and can be restored with one action
+
+### Requirement: Town summary
+
+Town SHALL derive its board sign, its phone counts chip and its summary window
+from one summary read model built from the attention rail's entries, so they
+show the same attention items and needs-you count as the reception tray and
+rail. Needs-you SHALL count blocked agents plus open questions as separate
+items, including when one blocked agent also raised a question. Reception as
+a place continues to seat agents. Host and room counts describe agents;
+questions SHALL NOT acquire a guessed host or room. The board sign SHALL show
+agents working and finished, items needing the user, and spend when a metrics
+provider reports it. Its Summary action, and
+on phones its counts chip, SHALL open a Town summary window in the shared
+window frame. Launching an already-open Summary SHALL restore and raise it
+through the shared window manager. It lists, in this order: open questions using the rail's Ask
+cards and answer action, then blocked agents with their reason, waiting age
+and one action; unreviewed finishes with when each was last
+active when Herdr reports activity times, never presented as the finish time; every host with its rooms and their counts (needing
+the user, working, finished, quiet, unknown), where activating a room moves the
+Town camera to it, admitting the qualified requested room while preserving the
+selected room. A room request SHALL wait for renderer setup and its admitted
+layout, be consumed once, and retrigger for a later click on the same room.
+The list SHALL use the complete room roster, including rooms outside the current
+presentation bound. Blocked entries SHALL show the supplied state label, with
+"needs input" only as a fallback. Spend lists each model with its source and age. Without a
+metrics provider the summary SHALL say there is no cost data and SHALL NOT show
+zero spend.
+
+#### Scenario: One count everywhere
+
+- **WHEN** two agents are blocked, one of them also has an open question,
+  and one agent has an unreviewed finish
+- **THEN** the board sign, phone chip, reception tray, rail and summary all
+  show three items needing the user, with one finished agent in the summary
+- **AND** answering that question updates every needs-you count to two while
+  both blocked agents remain waiting
+
+#### Scenario: Go to a room from the summary
+
+- **WHEN** the user opens the Town summary on a phone and activates a room
+- **THEN** the summary closes and the Town camera shows that room
 
 ### Requirement: Town agent peek
 

@@ -43,6 +43,17 @@ Office view (`herdrOfficeProjection.ts`, `officeRoomActions.ts`,
 
 ### Town rendering performance
 
+Town's Summary reads per-room status totals counted with the canonical observed
+agent roster during cooperative World preparation; aggregate coverage can include
+agents outside that roster and remains separate. Summary memoises those immutable
+room contributions and groups room links by host.
+Finish/seen overlays change only the affected room totals. Ask, metrics and clock
+updates reuse that topology. Asking identities resolve through the snapshot's
+generation-qualified pane and agent indexes, without scanning the roster. The
+canvas reuses semantic admission when its attention desks are already visible;
+otherwise its separate presentation cache admits the protected desks. These
+paths retain the fixed production input-latency budgets in the browser tests.
+
 The renderer draws through the shared World frame scheduler: state frames for
 camera, roof and walking changes, motion frames for ambient animation, which
 pause while the user types in a terminal and for reduced motion or calm mode.

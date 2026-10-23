@@ -31,3 +31,13 @@ owner counts and all DOM event schedules are outside this finite domain.
 
 Run `bun run test web/src/world/windows/windowOrdering.test.ts` and the existing
 window/browser suites through `bun run check`.  Accepted within the documented bounds by [independent review 5516249164](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5516249164). Mandatory consumer tests and excluded claims remain unchanged. Final implementation/gate/resource acceptance is recorded in [review 5517420140](https://github.com/IvoryHeart/herdr-world/pull/188#pullrequestreview-5517420140); owner-approved PR #188 merged as `481ca1e8`. Mandatory consumers and excluded claims remain binding.
+
+The shared panel launcher delivers a focus intent to this same reducer; it does
+not change window order itself. `WorldPanel.test.ts` exercises the actual React
+registry and manager: a launcher restores a minimized panel and raises a covered
+one, waits for registration, retains only the newest request, consumes delivery
+once, and discards a request when its registration disappears. An obsolete
+registration cleanup cannot remove a newer registration. These are maintained
+consumer cases for Q21's live-focus and hide/restore properties. The reducer's
+bounded exhaustive evidence remains unchanged; these browser cases do not claim
+to cover every possible asynchronous DOM schedule.

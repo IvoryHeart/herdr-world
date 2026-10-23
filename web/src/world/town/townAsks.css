@@ -1,3 +1,19 @@
+/* Shared Town colors also reach Summary through its window portal. */
+.town-view-shell,
+.town-summary {
+  --town-panel: rgba(17, 21, 29, 0.94);
+  --town-edge: #090c11;
+  --town-text: #f1efe6;
+  --town-muted: #a9b2a4;
+  --town-accent: #ffd166;
+  --town-work: #6fc3ff;
+  --town-wait: #ffb547;
+  --town-done: #7be08f;
+  --town-idle: #d9c39b;
+  --town-btn: #273141;
+  --town-term: #0d1117;
+}
+
 /* Questions agents asked (`herdr-world ask`), above the waiting agents. */
 .town-asks {
   /* Never squeezed by the agent list below it; scrolls past its cap. */
