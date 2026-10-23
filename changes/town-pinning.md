@@ -1,6 +1,7 @@
 ### Added
 
-- Pin a desk in Town (agent window menu → **Pin desk in Town**) or a card on
+- Pin a desk in Town (agent window menu → **Pin desk in Town**, or the pin in
+  the window header on a phone) or a card on
   Board (**Pin** in its bar). A pinned desk or card shows a pin and keeps its
   place through reorders, room growth, Tidy and settling. Agents at a pinned
   desk never go to the lounge: they visit reception only when they need you or

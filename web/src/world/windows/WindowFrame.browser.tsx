@@ -19,14 +19,16 @@ let harness: ReturnType<typeof useWindowManager> & {
   setSize(size: Size): void;
   setCompact(value: boolean): void;
   setInputs(value: typeof initialInputs): void;
+  pins: Record<string, boolean>;
 };
 let terminalActivations = 0;
 function Fixture() {
   const [size, setSize] = useState({ width: 1000, height: 600 });
   const [compact, setCompact] = useState(false);
   const [inputs, setInputs] = useState(initialInputs);
+  const [pins, setPins] = useState<Record<string, boolean>>({});
   const manager = useWindowManager(inputs, size);
-  harness = { ...manager, size, setSize, setCompact, setInputs };
+  harness = { ...manager, size, setSize, setCompact, setInputs, pins };
   const { state, dispatch } = manager;
   return (
     <>
@@ -92,6 +94,11 @@ function Fixture() {
                     onSnap: (target) =>
                       dispatch({ type: "snap", id: entry.id, target }),
                     onFloat: () => dispatch({ type: "float", id: entry.id }),
+                    pin: {
+                      pinned: pins[entry.id] ?? false,
+                      onPin: (pinned) =>
+                        setPins((value) => ({ ...value, [entry.id]: pinned })),
+                    },
                   }}
                 />
               </header>
@@ -269,12 +276,45 @@ async function run() {
     Boolean(document.querySelector(".world-window-divider")),
     "viewport resize lost shared divider",
   );
+  // The desk pin is a menu item on desktop and a header toggle when compact.
+  flushSync(() =>
+    document.querySelector<HTMLButtonElement>('[aria-label="Snap A"]')!.click(),
+  );
+  const pinItem = document.querySelector<HTMLButtonElement>(
+    '.world-window-snap-menu [role="menuitemcheckbox"]',
+  );
+  check(
+    pinItem?.textContent === "Pin desk in Town" &&
+      pinItem.getAttribute("aria-checked") === "false",
+    "window menu lacks the desk pin item",
+  );
+  flushSync(() => pinItem!.click());
+  check(
+    harness.pins.A === true &&
+      !document.querySelector(".world-window-snap-menu") &&
+      !document.querySelector(".world-window-pin-toggle"),
+    "menu pin item did not pin the desk and close the menu",
+  );
   const desktop = JSON.stringify(harness.state.windows);
   flushSync(() => harness.setCompact(true));
   check(
     document.querySelectorAll(".world-managed-window").length === 1 &&
       !document.querySelector("[data-window-resize]"),
     "compact mode exposed desktop frames or handles",
+  );
+  const pinToggle = document.querySelector<HTMLButtonElement>(
+    ".world-window-pin-toggle",
+  );
+  const pressed = pinToggle?.getAttribute("aria-pressed");
+  const pinsBefore = JSON.stringify(harness.pins);
+  flushSync(() => pinToggle?.click());
+  check(
+    Boolean(pinToggle) &&
+      JSON.stringify(harness.pins) !== pinsBefore &&
+      document
+        .querySelector(".world-window-pin-toggle")
+        ?.getAttribute("aria-pressed") === String(pressed !== "true"),
+    "compact window desk pin toggle did not toggle the pin",
   );
   flushSync(() => harness.setCompact(false));
   check(

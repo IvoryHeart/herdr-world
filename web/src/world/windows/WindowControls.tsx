@@ -122,6 +122,21 @@ export function WindowControls({
           <Columns2 size={15} />
         </button>
       )}
+      {controls.compact && controls.pin && (
+        // A compact window has no menu, so its desk pin is a toggle here.
+        <button
+          type="button"
+          className="world-window-pin-toggle"
+          aria-label={
+            controls.pin.pinned ? "Unpin desk in Town" : "Pin desk in Town"
+          }
+          aria-pressed={controls.pin.pinned}
+          title="A pinned desk keeps its place in Town, and its agents stay at it"
+          onClick={() => controls.pin?.onPin(!controls.pin.pinned)}
+        >
+          <Pin size={15} />
+        </button>
+      )}
       <button
         type="button"
         aria-label={`Minimize ${label}`}

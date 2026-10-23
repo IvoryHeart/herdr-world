@@ -361,3 +361,6 @@
     min-height: 36px;
   }
 }
+.world-window-pin-toggle[aria-pressed="true"] {
+  color: var(--accent);
+}
