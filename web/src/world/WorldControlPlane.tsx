@@ -5,7 +5,13 @@ import {
 } from "./floatingTerminalPreferences";
 import { WindowSurface } from "./windows/WindowSurface";
 import { WindowFrame } from "./windows/WindowFrame";
-import { Suspense } from "react";
+import { Suspense, useEffect, useState } from "react";
+import {
+  WORLD_AGENT_LAUNCH_EVENT,
+  WORLD_AGENT_PROFILES_EVENT,
+  type LaunchTarget,
+} from "./agentProfiles";
+import type { WorldObject } from "./worldObject";
 import { worldLocalStorage } from "../browserStorage";
 import { ConfirmDialog } from "../components/ModalDialogs";
 import { CreateWorkspaceDialog } from "../components/CreateWorkspaceDialog";
@@ -39,6 +45,86 @@ function switchToRank(status: WorldAgentStatus) {
 
 const TownView = lazyWithReload("world-town", () => import("./TownView"));
 const BoardView = lazyWithReload("world-board", () => import("./BoardView"));
+
+const AgentLauncherDialog = lazyWithReload("world-agent-launcher", () =>
+  import("./AgentLauncherDialog").then((module) => ({
+    default: module.AgentLauncherDialog,
+  })),
+);
+const ProfileEditor = lazyWithReload("world-profile-editor", () =>
+  import("./ProfileEditor").then((module) => ({
+    default: module.ProfileEditor,
+  })),
+);
+
+/**
+ * The launcher and the profile editor, opened from any view by their events
+ * (agentProfiles.ts). They see every host's rooms.
+ */
+function AgentDialogs({
+  world,
+  onOpenTerminal,
+}: {
+  world: WorldObject;
+  onOpenTerminal(nodeId: string): void;
+}) {
+  const [launch, setLaunch] = useState<
+    (Partial<LaunchTarget> & { profileId?: string }) | null
+  >(null);
+  const [editing, setEditing] = useState<{ profileId?: string } | null>(null);
+  // A launched agent or login terminal opens once World's snapshot shows it.
+  const [pendingOpen, setPendingOpen] = useState<{
+    connectionId: string;
+    terminalId: string;
+  } | null>(null);
+  useEffect(() => {
+    if (!pendingOpen) return;
+    const leaf = world.leaves.find(
+      (candidate) =>
+        candidate.connectionId === pendingOpen.connectionId &&
+        candidate.terminalId === pendingOpen.terminalId,
+    );
+    if (!leaf) return;
+    setPendingOpen(null);
+    onOpenTerminal(leaf.id);
+  }, [world, pendingOpen, onOpenTerminal]);
+  useEffect(() => {
+    const onLaunch = (event: Event) =>
+      setLaunch({ ...(event as CustomEvent<LaunchTarget>).detail });
+    const onProfiles = (event: Event) =>
+      setEditing({ profileId: (event as CustomEvent<string>).detail });
+    window.addEventListener(WORLD_AGENT_LAUNCH_EVENT, onLaunch);
+    window.addEventListener(WORLD_AGENT_PROFILES_EVENT, onProfiles);
+    return () => {
+      window.removeEventListener(WORLD_AGENT_LAUNCH_EVENT, onLaunch);
+      window.removeEventListener(WORLD_AGENT_PROFILES_EVENT, onProfiles);
+    };
+  }, []);
+  return (
+    <Suspense fallback={null}>
+      {editing ? (
+        <ProfileEditor
+          world={world}
+          initialId={editing.profileId}
+          onLaunch={(profileId) =>
+            setLaunch((current) => ({ ...current, profileId }))
+          }
+          onClose={() => setEditing(null)}
+        />
+      ) : null}
+      {launch ? (
+        <AgentLauncherDialog
+          key={launch.profileId ?? ""}
+          world={world}
+          initial={launch}
+          onOpen={setPendingOpen}
+          onEditProfiles={() => setEditing({})}
+          onClose={() => setLaunch(null)}
+        />
+      ) : null}
+    </Suspense>
+  );
+}
 
 const WorldIntentConnector = lazyWithReload(
   "world-intent-connector",
@@ -145,6 +231,10 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
       id="world"
       data-active={active ? "true" : "false"}
     >
+      <AgentDialogs
+        world={aggregateWorld}
+        onOpenTerminal={(nodeId) => void openTerminalById(nodeId)}
+      />
       <CreateWorkspaceDialog
         open={workspaceCreationOpen}
         initialDestination={workspaceCreationDestination}

@@ -7,7 +7,8 @@ import {
 } from "../store";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { MessageSquareText, PanelRight, Pin } from "lucide-react";
+import { Bot, MessageSquareText, PanelRight, Pin } from "lucide-react";
+import { requestAgentLaunch } from "../world/agentProfiles";
 import type { Tab } from "../types";
 import {
   orderTabsForDisplay,
@@ -492,6 +493,24 @@ export function TabBar({
             title={createReason ?? shortcutTitle("New tab", "tab.create")}
           >
             +
+          </button>
+          <button
+            type="button"
+            className="tabbar-add tabbar-add-agent"
+            aria-label="New agent"
+            disabled={!!createReason || s.serverRuntimeGeneration === null}
+            title={createReason ?? "New agent from a profile or a kind"}
+            onClick={() => {
+              if (s.serverRuntimeGeneration === null) return;
+              requestAgentLaunch({
+                connectionId: s.activeConnectionId,
+                generation: s.serverRuntimeGeneration,
+                workspaceId: focusedWs.workspace_id,
+                workspaceLabel: focusedWs.label,
+              });
+            }}
+          >
+            <Bot size={15} aria-hidden="true" />
           </button>
           <div className="tabbar-utilities">
             {showInspector ? (
