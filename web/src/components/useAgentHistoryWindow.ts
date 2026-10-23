@@ -304,6 +304,7 @@ export function useAgentHistoryWindow({
   // One older page at a time, before the oldest entry shown.
   const olderSeqRef = useRef(0);
   const olderInFlightRef = useRef(false);
+  const olderCommittingSeqRef = useRef<number | null>(null);
   const loadOlder = useCallback(() => {
     const current = historyRef.current;
     if (!pane.agent || !key || !current || !client.isCurrent()) return;
@@ -366,6 +367,7 @@ export function useAgentHistoryWindow({
         // The guard holds until this page has rendered (see below): a scroll
         // in between still reads the old top and would fetch the next page.
         committed = true;
+        olderCommittingSeqRef.current = seq;
         setOlder(next);
         remember(key, now, next);
       })
@@ -380,6 +382,8 @@ export function useAgentHistoryWindow({
       });
   }, [client, key, pane.agent, pane.pane_id, pane.tab_id, pane.workspace_id]);
   useLayoutEffect(() => {
+    if (olderCommittingSeqRef.current !== olderSeqRef.current) return;
+    olderCommittingSeqRef.current = null;
     olderInFlightRef.current = false;
   }, [older]);
   // Back at the newest message, the older pages go: they would otherwise
@@ -395,6 +399,7 @@ export function useAgentHistoryWindow({
     // A new pane or lease drops a page still in flight.
     olderSeqRef.current += 1;
     olderInFlightRef.current = false;
+    olderCommittingSeqRef.current = null;
   }, [key]);
 
   const windowMessages = history?.messages;

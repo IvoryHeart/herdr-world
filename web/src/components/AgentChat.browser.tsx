@@ -2,6 +2,8 @@ import { createRoot } from "react-dom/client";
 import { bridge, type BridgeControlMsg } from "../api";
 import type { Pane } from "../types";
 import { AgentChat, type Conversation } from "./AgentChat";
+import { useAgentHistoryWindow } from "./useAgentHistoryWindow";
+import { useConnectionClient } from "../useConnectionClient";
 import type { ConversationStep } from "./chat/blocks/steps";
 import "../styles/tokens.css";
 import "../styles/base.css";
@@ -17,6 +19,18 @@ async function settle() {
 }
 
 type Messages = NonNullable<Conversation["messages"]>;
+
+function HistoryWindowProbe({
+  pane,
+  observe,
+}: {
+  pane: Pane;
+  observe(value: ReturnType<typeof useAgentHistoryWindow>): void;
+}) {
+  const client = useConnectionClient();
+  observe(useAgentHistoryWindow({ pane, client, active: true }));
+  return null;
+}
 
 /** History's window of the same messages, as agent_history.get sends it. */
 let historyRevision = 0;
@@ -1803,7 +1817,7 @@ async function run() {
 
     // A live refresh while the first older page is in flight: the turns the
     // window drops meanwhile stay between the page and the window.
-    {
+    for (const mode of ["chat", "hook"] as const) {
       const entry = (index: number) => ({
         id: `race-${index}`,
         role: index % 2 ? "assistant" : "user",
@@ -1814,13 +1828,19 @@ async function run() {
       const all = Array.from({ length: 70 }, (_, index) => entry(index));
       let start = 40;
       let revision = 1;
+      const paneId = `race-${mode}`;
+      const probe: {
+        current: ReturnType<typeof useAgentHistoryWindow> | null;
+      } = {
+        current: null,
+      };
       historyAnswer = () => ({
         history_version: 2,
         window_limit: 20,
         mode: "snapshot",
         cursor: { epoch: "race", revision },
         agent: "claude",
-        pane_id: "race",
+        pane_id: paneId,
         workspace_id: "Example",
         tab_id: "tab",
         updated_at: "2026-10-22T09:00:00Z",
@@ -1845,42 +1865,80 @@ async function run() {
           style={{ width: 390, height: 660, display: "flex", flex: "none" }}
         >
           <div className="workspace-inspector-resource inspector-history-resource">
-            <AgentChat
-              pane={{ ...pane("idle"), pane_id: "race" }}
-              active
-              onOpenTerminal={() => {}}
-              onClose={() => {}}
-            />
+            {mode === "chat" ? (
+              <AgentChat
+                pane={{ ...pane("idle"), pane_id: paneId }}
+                active
+                onOpenTerminal={() => {}}
+                onClose={() => {}}
+              />
+            ) : (
+              <HistoryWindowProbe
+                pane={{ ...pane("idle"), pane_id: paneId }}
+                observe={(value) => {
+                  probe.current = value;
+                }}
+              />
+            )}
           </div>
         </div>,
       );
       await settle();
       await settle();
-      const list = container.querySelector<HTMLElement>(".agent-history-chat")!;
-      list.scrollTop = 0;
-      list.dispatchEvent(new Event("scroll"));
+      const requestOlder = () => {
+        if (mode === "hook") probe.current?.loadOlder();
+        else {
+          const list = container.querySelector<HTMLElement>(
+            ".agent-history-chat",
+          )!;
+          list.scrollTop = 0;
+          list.dispatchEvent(new Event("scroll"));
+        }
+      };
+      const requestsBefore = olderReads();
+      requestOlder();
       await settle();
+      requestOlder();
+      await settle();
+      check(
+        olderReads() === requestsBefore + 1,
+        `${mode}: repeated requests must keep one older-page RPC while its reply is pending`,
+      );
       // The window moves on by ten turns before the page arrives.
       start = 50;
       revision = 2;
-      push("race");
+      if (mode === "chat") push(paneId);
+      else probe.current?.refresh();
       await settle();
       await settle();
+      requestOlder();
+      await settle();
+      check(
+        olderReads() === requestsBefore + 1,
+        `${mode}: window eviction must not restart a pending older-page RPC`,
+      );
       page.resolve();
       await settle();
       await settle();
-      const shown = [
-        ...container.querySelectorAll<HTMLElement>(
-          ".agent-history-chat-message p, .agent-history-chat-markdown",
-        ),
-      ]
-        .map((element) => /Race (\d+) /.exec(element.textContent ?? "")?.[1])
-        .filter((value): value is string => !!value)
-        .map(Number);
+      const shown =
+        mode === "hook"
+          ? (probe.current?.messages ?? []).map((entry) =>
+              Number(/Race (\d+) /.exec(entry.text ?? "")?.[1]),
+            )
+          : [
+              ...container.querySelectorAll<HTMLElement>(
+                ".agent-history-chat-message p, .agent-history-chat-markdown",
+              ),
+            ]
+              .map(
+                (element) => /Race (\d+) /.exec(element.textContent ?? "")?.[1],
+              )
+              .filter((value): value is string => !!value)
+              .map(Number);
       const expected = Array.from({ length: 50 }, (_, index) => index + 20);
       check(
         JSON.stringify([...new Set(shown)]) === JSON.stringify(expected),
-        `A refresh during the first older page must not leave a gap: ${JSON.stringify(shown)}`,
+        `${mode}: a refresh during the first older page must not leave a gap: ${JSON.stringify(shown)}`,
       );
       historyAnswer = null;
       olderAnswer = null;

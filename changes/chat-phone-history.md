@@ -16,6 +16,8 @@
 
 ### Fixed
 
+- Repeated scrolling while an earlier Chat page is loading keeps one request
+  in flight, including when new messages move the recent-history window.
 - A docked Chat window restored on page load, for an agent on a host the page
   had not opened yet, no longer stays blank until the agent is clicked, even
   when the connection comes up after the window mounts.
