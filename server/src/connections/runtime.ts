@@ -432,9 +432,14 @@ export function createLegacyConnectionRuntime(args: {
           type: "herdr-world.task_notification",
           kind: event.kind,
           agent: event.agent,
+          sender: event.sender ?? { known: false },
           title:
             event.title ??
-            (event.kind === "blocked" ? "Agent needs input" : "Task completed"),
+            (event.kind === "blocked"
+              ? "Agent needs input"
+              : event.kind === "message"
+                ? "Message for you"
+                : "Task completed"),
           body:
             event.body ??
             ([event.workspaceLabel?.trim(), event.tabLabel?.trim()]

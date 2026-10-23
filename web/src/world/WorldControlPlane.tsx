@@ -1,5 +1,6 @@
 import { Suspense, useEffect, useState } from "react";
 import { worldLocalStorage } from "../browserStorage";
+import { useChimeHost, WORLD_SOUNDS_EVENT } from "../chimes/chimeHost";
 import { CreateWorkspaceDialog } from "../components/CreateWorkspaceDialog";
 import { ConfirmDialog } from "../components/ModalDialogs";
 import { lazyWithReload } from "../lazyWithReload";
@@ -7,6 +8,7 @@ import { connectionSnapshot, store } from "../store";
 import { WORKSPACE_INSPECTOR_CLOSE_EVENT } from "../workspaceResource";
 import {
   type LaunchTarget,
+  useAgentProfiles,
   WORLD_AGENT_LAUNCH_EVENT,
   WORLD_AGENT_PROFILES_EVENT,
 } from "./agentProfiles";
@@ -25,6 +27,7 @@ import WorldInspectorConversationView from "./WorldInspectorConversation";
 import WorldIntentProfile from "./WorldIntentProfile";
 import { WorldConnectionRequired } from "./WorldStatus";
 import { WindowFrame } from "./windows/WindowFrame";
+import { WorldPanelWindow, useWorldPanels } from "./windows/WorldPanel";
 import { WindowSurface } from "./windows/WindowSurface";
 import { type WorldControlPlaneProps } from "./worldControlPlaneContract";
 import {
@@ -53,6 +56,11 @@ const AgentLauncherDialog = lazyWithReload("world-agent-launcher", () =>
     default: module.AgentLauncherDialog,
   })),
 );
+const SoundsDialog = lazyWithReload("world-sounds", () =>
+  import("./SoundsDialog").then((module) => ({
+    default: module.SoundsDialog,
+  })),
+);
 const ProfileEditor = lazyWithReload("world-profile-editor", () =>
   import("./ProfileEditor").then((module) => ({
     default: module.ProfileEditor,
@@ -74,6 +82,11 @@ function AgentDialogs({
     (Partial<LaunchTarget> & { profileId?: string }) | null
   >(null);
   const [editing, setEditing] = useState<{ profileId?: string } | null>(null);
+  const [sounds, setSounds] = useState(false);
+  // Chimes need the profiles document (Town master, profile chimes) and
+  // unlocked audio whichever view is open.
+  useAgentProfiles();
+  useChimeHost();
   // A launched agent or login terminal opens once World's snapshot shows it.
   const [pendingOpen, setPendingOpen] = useState<{
     connectionId: string;
@@ -95,15 +108,21 @@ function AgentDialogs({
       setLaunch({ ...(event as CustomEvent<LaunchTarget>).detail });
     const onProfiles = (event: Event) =>
       setEditing({ profileId: (event as CustomEvent<string>).detail });
+    const onSounds = () => setSounds(true);
     window.addEventListener(WORLD_AGENT_LAUNCH_EVENT, onLaunch);
     window.addEventListener(WORLD_AGENT_PROFILES_EVENT, onProfiles);
+    window.addEventListener(WORLD_SOUNDS_EVENT, onSounds);
     return () => {
       window.removeEventListener(WORLD_AGENT_LAUNCH_EVENT, onLaunch);
       window.removeEventListener(WORLD_AGENT_PROFILES_EVENT, onProfiles);
+      window.removeEventListener(WORLD_SOUNDS_EVENT, onSounds);
     };
   }, []);
   return (
     <Suspense fallback={null}>
+      {sounds ? (
+        <SoundsDialog world={world} onClose={() => setSounds(false)} />
+      ) : null}
       {editing ? (
         <ProfileEditor
           world={world}
@@ -139,6 +158,8 @@ const WorldViewErrorBoundary = lazyWithReload("world-view-boundary", () =>
   })),
 );
 export function WorldControlPlane(props: WorldControlPlaneProps) {
+  // Panel windows (not Inspectors) that a view opens with <WorldPanel>.
+  const { panels, panelBodyRef } = useWorldPanels();
   const controller = useWorldInspectorController(props);
   const {
     view,
@@ -416,6 +437,73 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
               zIndex,
               active: windowActive,
             }) => {
+              const panel = panels.find(
+                (candidate) => candidate.id === entry.id,
+              );
+              if (panel)
+                return (
+                  <WindowFrame
+                    key={entry.id}
+                    id={entry.id}
+                    label={`${panel.label} window`}
+                    geometry={geometry}
+                    restoreGeometry={
+                      entry.maximized ||
+                      entry.placement.kind !== "floating" ||
+                      managedWindows.focusMode
+                        ? entry.floating
+                        : undefined
+                    }
+                    stage={stage}
+                    workArea={workArea}
+                    zIndex={zIndex}
+                    active={windowActive}
+                    compact={compactArrangement}
+                    // In Town a panel takes the Town window look, as the
+                    // Inspector does.
+                    className={`world-panel-frame ${
+                      view === "town" ? "is-town-skin theme-scope-dark" : ""
+                    }`}
+                    onRaise={() =>
+                      windowCommand({ type: "raise", id: entry.id })
+                    }
+                    onPlace={(rect) =>
+                      windowCommand({ type: "place", id: entry.id, rect })
+                    }
+                    onSnap={(target) =>
+                      windowCommand({ type: "snap", id: entry.id, target })
+                    }
+                    onMaximize={() =>
+                      windowCommand({ type: "maximize", id: entry.id })
+                    }
+                  >
+                    <WorldPanelWindow
+                      label={panel.label}
+                      onBody={panelBodyRef(entry.id)}
+                      controls={{
+                        compact: compactArrangement,
+                        maximized: entry.maximized || managedWindows.focusMode,
+                        onMinimize: () =>
+                          windowCommand({ type: "minimize", id: entry.id }),
+                        onMaximize: () =>
+                          windowCommand({ type: "maximize", id: entry.id }),
+                        onClose: panel.onClose,
+                        onSnap: (target) =>
+                          windowCommand({
+                            type: "snap",
+                            id: entry.id,
+                            target,
+                          }),
+                        onFloat: () =>
+                          windowCommand({ type: "float", id: entry.id }),
+                        // A panel is a detail of its view: Back closes it.
+                        back: {
+                          label: `Back to ${view[0]!.toUpperCase()}${view.slice(1)}`,
+                        },
+                      }}
+                    />
+                  </WindowFrame>
+                );
               const conversation = inspectorConversations.find(
                 (candidate) => worldInspectorWindowId(candidate) === entry.id,
               );

@@ -619,3 +619,40 @@
 .world-window-pin-toggle[aria-pressed="true"] {
   color: var(--accent);
 }
+
+/* A panel window (Town's summary and the like): one bar, then its body. */
+.world-panel-window {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  border-radius: inherit;
+  background: var(--viewer-panel-bg, var(--panel));
+  color: var(--text);
+}
+.world-panel-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 0;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--viewer-border, var(--border));
+}
+.world-panel-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.is-town-skin .world-panel-title {
+  font:
+    700 17px / 1.1 "Pixelify Sans",
+    ui-monospace,
+    monospace;
+}
+.world-panel-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}

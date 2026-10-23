@@ -320,7 +320,10 @@ Codex. Profiles are stored atomically, with owner-only permissions, in
 `~/.config/herdr-world/agent-profiles.json` on Unix or
 `%APPDATA%\herdr-world\agent-profiles.json` on Windows; override the path
 with `HERDR_WORLD_AGENT_PROFILES_PATH`. Profiles refuse text that looks like a
-credential and never hold one.
+credential and never hold one. The same file keeps your chime settings and who
+the Town master is; a device's own chime switch and volume stay in that
+browser. Herdr reports `herdr notification show` without a pane, so World
+can't say which agent sent it.
 
 To show whether a harness is installed and logged in, the service runs each
 harness's own status command on the room's host (locally, or over the
@@ -375,6 +378,18 @@ Jira or SSH lookup finishes in the background.
   Merged pull requests cover the last 7 days by default (1 to 90 in
   **Settings → Sources**, saved as `custom.world_sources.github.mergedDays`);
   World reads them 100 per request, up to GitHub search's 1,000 results.
+- **Your open pull requests** are read in more detail: checks on the head,
+  changed files, and the last 30 reviews and 50 comments, which stay in the
+  service (the browser gets only reviewer results and an image count). World
+  reads at most 20 a refresh, 10 per request, and reads one again only when
+  GitHub reports it changed, while its checks run, or after 10 minutes.
+- **Merge, close and mark ready** run `gh pr merge --merge
+  --match-head-commit <head>`, `gh pr close [--comment]` and `gh pr ready`
+  as the service user, after a confirm in the browser. Merge reads the pull
+  request again first and refuses if the head moved or a review is still
+  required; World never passes `--admin`. The gh sign-in needs permission to
+  merge in that repository. World records each verb run, its outcome and
+  that the browser asked, in memory until the service restarts.
 - **Jira Cloud** needs your site (`example.atlassian.net`), account email and an
   [API token](https://id.atlassian.com/manage-profile/security/api-tokens),
   entered in **Settings → Sources**. The site and email are saved in

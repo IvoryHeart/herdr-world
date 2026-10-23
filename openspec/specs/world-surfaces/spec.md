@@ -1794,6 +1794,34 @@ own colour MAY be reset.
 - **WHEN** the user moves a desk whose tab shows its default colour to another room
 - **THEN** the tab, under its new Herdr tab ID, shows the same colour in every view
 
+
+### Requirement: Agent interest
+
+Each agent SHALL have the viewer's interest: watching (the default), muted or
+focused, chosen from a button beside the agent's name in its Inspector header in
+every view. Interest SHALL belong to the agent's terminal on its host, without
+the runtime generation, so it follows the terminal through moves and an agent
+restarted in that terminal keeps it, and each agent in a multi-pane tab has its
+own. The World service SHALL save it with Board's layout, the same on every
+device, and SHALL NOT write it to Herdr. When a complete pane listing from a
+host's current runtime no longer shows a terminal, World SHALL drop that
+terminal's interest; it SHALL NOT drop interest on a failed, stale or partial
+listing. Interest SHALL only gate chimes: a muted agent SHALL NOT chime, and
+while a focused agent's terminal is shown on a ready host only focused agents
+and the Town master's needs-you SHALL chime; a focus World cannot reach SHALL
+NOT silence other agents, and SHALL apply again when its host is back. A
+watched agent's control SHALL say when it is quiet because another agent is
+focused. Interest SHALL NOT keep any item out of reception.
+
+#### Scenario: Mute an agent
+
+- **WHEN** the user opens the interest button beside an agent's name and chooses Muted
+- **THEN** the button shows Muted on every device, the choices close, and the agent's needs still enter reception without a chime
+
+#### Scenario: A closed agent's interest goes
+
+- **WHEN** the host's current runtime lists every pane and the muted agent's terminal is not among them
+- **THEN** World drops that terminal's interest, and keeps it when the listing fails or comes from a replaced runtime
 ### Requirement: Transient layers close top first
 
 Menus, popovers, pickers and lists opened over a terminal or view SHALL form one

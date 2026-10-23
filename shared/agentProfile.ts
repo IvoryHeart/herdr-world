@@ -11,6 +11,7 @@
  * receives the role ahead of the brief in its first prompt.
  */
 
+import { isTimbre, type Timbre } from "./chimes";
 import { TERMINAL_COLOR_NAMES, type TerminalColorName } from "./terminalColor";
 
 export const HAIR_STYLES = ["short", "long", "bun", "cap", "shaved"] as const;
@@ -58,6 +59,13 @@ export type AgentProfile = {
   home_room: string;
   color: TerminalColorName | null;
   look: AgentLook;
+  /** Its own chime; null uses its class's (see shared/chimes). */
+  chime: Timbre | null;
+  /**
+   * Offer an agent launched from it the Town master role. Only the owner's
+   * tap assigns the role.
+   */
+  town_master: boolean;
 };
 
 export const PROFILE_LIMITS = {
@@ -185,6 +193,8 @@ export const STARTER_PROFILES: AgentProfile[] = [
     send_brief: true,
     home_room: "",
     color: "purple",
+    chime: null,
+    town_master: false,
     look: {
       skin: "#e3ad80",
       hair: "#ece4da",
@@ -210,6 +220,8 @@ export const STARTER_PROFILES: AgentProfile[] = [
     send_brief: true,
     home_room: "",
     color: "blue",
+    chime: null,
+    town_master: false,
     look: {
       skin: "#c68a5c",
       hair: "#2b2026",
@@ -235,6 +247,8 @@ export const STARTER_PROFILES: AgentProfile[] = [
     send_brief: false,
     home_room: "",
     color: "pink",
+    chime: null,
+    town_master: false,
     look: {
       skin: "#f2c9a0",
       hair: "#d070b0",
@@ -260,6 +274,8 @@ export const STARTER_PROFILES: AgentProfile[] = [
     send_brief: false,
     home_room: "",
     color: "yellow",
+    chime: null,
+    town_master: true,
     look: {
       skin: "#8d5a3b",
       hair: "#5a3825",
@@ -360,6 +376,13 @@ export function parseProfile(value: unknown): AgentProfile {
         ? null
         : choice(value.color, TERMINAL_COLOR_NAMES, "colour"),
     look: parseLook(value.look),
+    chime:
+      value.chime == null
+        ? null
+        : isTimbre(value.chime)
+          ? value.chime
+          : fail("chime is not one of World's sounds"),
+    town_master: value.town_master === true,
   };
   if (value.starter === true) profile.starter = true;
   return profile;

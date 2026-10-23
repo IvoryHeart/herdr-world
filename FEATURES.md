@@ -50,7 +50,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     the chat (the default) or the terminal; either way the tap does not mark
     finished work reviewed. **Open terminal** in the peek does, as before.
   - A seated agent with a quest (its own todo list, plan, Codex goal or loop)
-    shows a flag and progress bar at its seat in a room or at a desk.
+    shows a blue pennant (green when done, amber when blocked) beside it in
+    a room or at a desk, with a progress bar when the quest has steps; the
+    pennant leaves with the agent. Hover or tap the pennant for **Quest**, its title and progress.
   - **Open terminal** in the card's header opens the live pane; **Inspector**
     opens files and changes. **Next** opens the next waiting agent's window,
     then finished agents' if none wait.
@@ -164,6 +166,18 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   - A spawned agent's tab without a colour of its own takes the colour of the
     tab that spawned it (before its workspace's colour), and keeps following it
     when moved. A chosen colour always wins.
+- **Agent interest.** The button beside an agent's name in its Inspector
+  header in Town, Board and Spaces sets **Watching** (the default), **Muted**
+  or **Focused** for that agent, saved by the World service for its terminal on
+  every device. Chimes
+  read it: a muted agent never chimes, and while a focused agent is reachable
+  only focused agents and the Town master's needs-you chime (Watching then
+  says it is quiet). A focus on an offline host silences no one until the host
+  is back. Interest never hides
+  anything from reception. It follows the terminal through moves, and goes
+  when its host shows the terminal has closed, including after reconnecting.
+  A failed save shows an error and keeps the previous choice; reopen the
+  button to retry.
 
 - **Board** (`/board`) shows hosts as zones, workspaces as cards and tabs as
   cards around their workspace, beside your notes. Cards are elastic while you
@@ -328,6 +342,25 @@ each source's state, switch it off or configure it.
   on its nameplate (`#123 ✓`, `#123 ✗`, `#123 ●` or `ABC-12`), and Board's Work
   lens names it on the card. A link holds only for the agent session and
   Herdr runtime it was made in.
+- **Your open pull requests** get a card in Work with CI on the head (a dot
+  per check), each rev agent's latest result ("per rev4's comment", read from
+  its `RESULT #N: …` line; GitHub can't take your own approval, so reviews are
+  comments) and your merge rules: not a draft, every finding confirmed, CI
+  green on the head, mergeable, and screenshots for a change to the web app
+  or site. Each rule shows ✓, ✗ or ? (World can't tell; a confirmation of an
+  older head is ?). **Details** lists the failing checks with links, the
+  reviewers, the head commit and how far it is behind its base. A card says
+  **Ready to merge** when every rule holds, and **Stalled** when CI failed on
+  the head and its agent is idle.
+- **Merge…**, **Close…** and **Mark ready…** (for a draft) open a sheet that
+  says exactly what happens; nothing runs until you confirm. Merge makes a
+  merge commit, keeps the branch and refuses if anyone pushed since you
+  looked; failing rules make it **Merge despite N failing rules**. GitHub's
+  answer, or its reason for refusing, shows on the card. World never bypasses
+  branch protection: while GitHub requires a review, the card offers **Open
+  on GitHub** and **Copy merge command** instead of Merge. The same card
+  opens from the pull request's badge on its agent's Town desk (a sheet on a
+  phone).
 - A source that is not signed in or configured says how to connect it (Work
   shows a quiet **Set up** button for one you never set up); the views work
   without it. The service refreshes at most once a minute while a visible
@@ -369,6 +402,39 @@ checkout). Board's **Start an agent** stamps the new agent when its note is
 strung to one pane. Town draws teams as walls and connectors; Board strings
 related cards and groups a tab dropped on another tab, or chosen with
 **Group…** and a tap; **Ungroup** undoes it.
+
+### Agent CLI (`herdr-world --skill`)
+
+Agents change World objects themselves from their pane, through the running
+World service. `herdr-world --skill` prints the guide; commands answer in JSON
+when piped, with stable exit codes:
+
+- `colour set|reset`, `board card pin|unpin|move|group|ungroup|colour`: Board
+  cards and tab or workspace colours. Recorded with the agent and time;
+  `history` lists changes and `undo <change>` takes one back.
+- `town desk move … --herdr`: reorder a desk in its room with Herdr's tab
+  order, as a drag in Town does. It needs `--herdr` because it changes Herdr,
+  and World cannot undo it.
+- `ask "…" [--options a,b] [--owner-only] [--wait]`: a question for you. It
+  appears first in Town's **Needs you** list, where you pick an option or
+  type an answer; `--wait` blocks until then. Another verified agent (never
+  the one that asked) may answer a question that is not owner-only.
+- `result --task ID "…" [--pr N] [--status done|blocked|failed]` and
+  `result ls`: task results kept by World, instead of terminal scraping.
+- `spawned-by <parent-pane>`: the spawn stamp, made by the child itself. It
+  is display-only Herdr pane metadata, so it needs no `--herdr`; the parent
+  it names is the child's claim.
+- `whoami`, `ls`, `history [--actor]`.
+
+World checks who is calling: the CLI sends its `HERDR_PANE_ID`, and the
+service accepts it only when the calling process runs in that pane of a local
+Herdr (the pane's shell or foreground process is among its ancestors).
+The CLI reaches only a World service on the same machine, with a token
+derived from the service's signing secret that cannot log a browser in.
+Otherwise the change is labelled unverified, or "terminal with no pane" when
+no pane is named, since any process can leave it out; `me` and `spawned-by`
+need a verified pane. The CLI never
+merges, deletes panes, tabs or workspaces, or reaches outside World.
 
 ### Agent checkout context
 
@@ -818,6 +884,24 @@ load asynchronously; editing the name takes precedence over a late suggestion.
   inspection has the metadata limits described above.
 - Enable local browser alerts and background Web Push in **Menu → Behavior &
   automation → Task notifications**. See [push setup and troubleshooting](docs/DEPLOYMENT.md#web-push-notifications).
+- **Chimes.** While a World page is open, World plays its own chime for a
+  change that needs you: a sound for who (the Town master, the crew, or the
+  agent's profile) and a pattern for why (needs you: two rising notes;
+  for you: a soft double knock; finished: one falling note). A toast always
+  says who and why, or "sender unknown" when Herdr didn't say. Changes within
+  3 seconds share one chime and one "N changes" toast. **Menu → Sounds** sets
+  this device's chimes and volume (per device), the Town master's and crew's
+  sounds and which patterns play (all your browsers), and who the Town master
+  is: only you assign it, and its needs-you chime still plays while you focus
+  on other agents. A profile's **Look & sound** gives its agents their own
+  chime. An agent sends you a "for you" with `herdr notification show <title>`
+  and no `--sound`. While World chimes, its notifications are silent; Herdr's
+  own client may still play its sound (`[ui.sound] enabled = false` turns it
+  off).
+  Muting this device also silences push while World is open, including just
+  after enabling notifications. Changes to device settings apply across open
+  tabs, and queued burst sounds obey your current sound settings.
+  Missing sender metadata stays unknown and uses the crew sound.
 - Multiple browsers receive pushed events. Pause/resume yours, see client counts,
   or pause others. Herdr semantic task alerts use the relevant pane when Herdr
   supplies one; pane-less alerts open World without guessing a target. Older

@@ -360,12 +360,18 @@ let latestText =
                   ? null
                   : {
                       quest_version: 1,
-                      source: "todo",
-                      tool: "TodoWrite",
+                      // A loop has no steps: its pennant has no bar.
+                      ...(index % 4
+                        ? { source: "todo", tool: "TodoWrite" }
+                        : {
+                            source: "loop",
+                            tool: "ScheduleWakeup",
+                            iterations: 3,
+                          }),
                       title: "Synthetic quest",
                       status: "active",
                       steps: [],
-                      progress: { done: index % 3, total: 3 },
+                      progress: { done: index % 3, total: index % 4 ? 3 : 0 },
                       started_at: "2026-01-01T00:00:00Z",
                       updated_at: "2026-01-01T00:00:01Z",
                       set_by: null,
@@ -459,7 +465,25 @@ const worldBridge = bridge as unknown as {
   onControl(listener: (control: { type: string }) => void): () => void;
 };
 const bridgeCall = worldBridge.call.bind(bridge);
+/** One open question from an agent (`herdr-world ask`), as the service keeps it. */
+const ledger = {
+  version: 1,
+  revision: 1,
+  changes: [],
+  results: [],
+  asks: [
+    {
+      id: "q-synthetic-1",
+      at: Date.now() - 90_000,
+      actor: { label: "claude in w1:p2", verified: true },
+      question: "Ship the reception fix now, or wait for review?",
+      options: ["Ship", "Wait"],
+      owner_only: true,
+    },
+  ],
+};
 worldBridge.call = async (method, params) => {
+  if (method === "world.asks.get") return structuredClone(ledger);
   if (method === "world.board.get") return structuredClone(boardDocument);
   if (method === "world.board.patch") {
     for (const op of (params?.ops ?? []) as {
@@ -764,7 +788,8 @@ async function run() {
       />
     );
   }
-  // Every agent works on one synthetic pull request, so desks show badges.
+  // Every agent works on one synthetic pull request of yours, read in detail,
+  // so desks show badges that open its card.
   const agents = worldFor(base.connections).leaves.filter(
     (leaf) => leaf.kind === "agent",
   );
@@ -785,7 +810,22 @@ async function run() {
           roles: ["author"],
           updatedAt: 1,
           number: 7,
+          repo: "example-org/atlas",
+          base: "main",
+          headSha: "7".repeat(40),
+          draft: false,
           checks: "pass",
+          review: "review_required",
+          mergeable: "mergeable",
+          pr: {
+            baseRef: "main",
+            behindBy: 0,
+            checks: [{ name: "Unit tests", state: "pass", required: true }],
+            checksTruncated: false,
+            reviewers: [],
+            uiChange: false,
+            images: 0,
+          },
         },
       ],
       links: agents.map((leaf) => ({
@@ -903,14 +943,28 @@ async function run() {
     return;
   }
 
+  // An agent's question leads the Needs you list, with its options.
+  await waitFor(
+    () => host.querySelector(".town-ask") !== null,
+    "an agent's question is missing from the Needs you list",
+  );
+  check(
+    [...host.querySelectorAll(".town-ask-options button")].some(
+      (button) => button.textContent === "Ship",
+    ),
+    "the question's options are not offered",
+  );
+
   const diagnostics = window.__HERDR_TOWN_RENDERER__!;
   check(
     diagnostics.level === "overview",
     `default level is ${diagnostics.level}, expected overview`,
   );
   check(
-    diagnostics.animation.quests === 0,
-    "quest markers must not float over the overview's room cards",
+    [...host.querySelectorAll(".town-quest")].every(
+      (pennant) => getComputedStyle(pennant).display === "none",
+    ),
+    "quest pennants must not float over the overview's room cards",
   );
   check(
     (diagnostics.layout?.buildings ?? 0) === 3,
@@ -1430,22 +1484,81 @@ async function run() {
     "zoomed room stayed at overview",
   );
   check(selected.length === 0, "a room tap must not open an Inspector");
-  // Seated agents with a quest show its progress over their desks.
+  // Seated agents with a quest show a pennant at their seats; a tap names
+  // it as a quest, so it never reads as a pinned desk.
+  const shownPennant = () =>
+    [...host.querySelectorAll<HTMLButtonElement>(".town-quest")].find(
+      (pennant) => getComputedStyle(pennant).display !== "none",
+    );
   await waitFor(
-    () => window.__HERDR_TOWN_RENDERER__!.animation.quests > 0,
-    "no quest marker over any desk in the zoomed room",
+    () => shownPennant() !== undefined,
+    "no quest pennant at any seat in the zoomed room",
+  );
+  const pennant = shownPennant()!;
+  check(
+    pennant.getAttribute("aria-label")?.startsWith("Quest: Synthetic quest") ===
+      true,
+    `a pennant names its quest (${pennant.getAttribute("aria-label")})`,
+  );
+  const pennantLabel = pennant.querySelector<HTMLElement>(".town-quest-label")!;
+  check(
+    getComputedStyle(pennantLabel).display === "none",
+    "a pennant's label waits for hover or a tap",
+  );
+  pennant.click();
+  await waitFor(
+    () => getComputedStyle(pennantLabel).display !== "none",
+    "tapping a pennant did not show its label",
+  );
+  check(
+    /^Quest\s+Synthetic quest/.test(pennantLabel.textContent ?? "") &&
+      selected.length === 0,
+    `a pennant tap shows the quest and selects nothing (${pennantLabel.textContent})`,
+  );
+  // A press elsewhere closes it, even where a tap gives the button no focus.
+  document.body.dispatchEvent(
+    new PointerEvent("pointerdown", { bubbles: true }),
+  );
+  await waitFor(
+    () => getComputedStyle(pennantLabel).display === "none",
+    "a press elsewhere did not close a pennant's label",
   );
   await waitFor(
     () => host.querySelector(".town-desk-badge") !== null,
     "desks of agents with a pull request show its badge",
   );
-  const badge = host.querySelector<HTMLAnchorElement>(".town-desk-badge")!;
+  const badge = host.querySelector<HTMLButtonElement>(".town-desk-badge")!;
   check(
     badge.textContent === "#7 ✓" &&
       badge.dataset.tone === "pass" &&
-      badge.target === "_blank" &&
-      badge.rel.includes("noopener"),
-    `a desk badge links its pull request (${badge.textContent})`,
+      badge.tagName === "BUTTON",
+    `a desk badge of your pull request is a button (${badge.textContent})`,
+  );
+  badge.click();
+  await waitFor(
+    () => document.querySelector(".town-badge-popover .pr-card") !== null,
+    "the badge opens the pull request card",
+  );
+  const popover = document.querySelector<HTMLElement>(".town-badge-popover")!;
+  check(
+    popover.querySelector(".pr-card-command code")?.textContent ===
+      "gh pr merge 7 --repo example-org/atlas --merge" &&
+      popover
+        .querySelector<HTMLAnchorElement>(".pr-card-command a")
+        ?.href.endsWith("/pull/7") === true &&
+      selected.length === 0,
+    "the card offers Open on GitHub and the merge command, not an Inspector",
+  );
+  check(
+    popover.contains(document.activeElement),
+    "focus moves into the card, so a keyboard reaches its actions",
+  );
+  window.dispatchEvent(
+    new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+  );
+  await waitFor(
+    () => document.querySelector(".town-badge-popover") === null,
+    "Escape closes the pull request card",
   );
 
   // From the keyboard, M on a desk lists the host's other rooms; choosing one
