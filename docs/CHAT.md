@@ -26,13 +26,25 @@ view that you open on purpose.
   [Refresh](#refresh)). The browser has no timer. **Refresh** rereads on demand.
 - Answers the agent's own question. When Herdr reports the agent blocked, Chat
   reads the bottom of its screen and recognises only the menus of supported
-  harnesses: Claude Code's whole permission box (a question ending in "?",
-  numbered options, the ❯ cursor on one; a digit selects) and Codex's approval
-  menu (options ending in their key hints such as "(y)" or "(esc)", the ›
-  cursor on one; the hint key selects). It shows an ask card with the complete
-  request (the whole command, or the file and its edit), the question and each
+  harnesses:
+  - Claude Code's whole permission box: a question ending in "?", numbered
+    options, the ❯ cursor on one. A digit selects.
+  - Claude Code's questions and plan approval: a numbered menu below a rule
+    and above its footer of controls ("Enter to select · … · Esc to cancel",
+    or the plan's "ctrl+g to edit"), with the question ending in "?" and the ❯
+    cursor on one option. A digit selects. Each choice shows the description
+    under it. Options that open a text box ("Type something.", "Chat about
+    this", "Tell Claude what to change") are not offered. A form with several
+    questions is answered one tab at a time, then its "Ready to submit your
+    answers?" review.
+  - Codex's approval menu: options ending in their key hints such as "(y)" or
+    "(esc)", the › cursor on one. The hint key selects.
+
+  It shows an ask card with the complete request (the whole command, the file
+  and its edit, or a form's header and answers so far), the question and each
   option. Anything else gets no options and **Answer in the Terminal**: plain
-  numbered output, a y/n line, a box cut off by the capture, or a request the
+  numbered output, a y/n line, an unnumbered menu (such as Claude Code's
+  folder trust), a box or form cut off by the capture, or a request the
   harness shows shortened.
 - Picking an option, or pressing its number while that card has focus, calls
   `agent_conversation.answer`. The service checks Herdr's state, rereads the
@@ -49,14 +61,16 @@ view that you open on purpose.
   [#284](https://github.com/IvoryHeart/herdr-world/issues/284). Closing the
   gap needs an input Herdr applies only while the prompt is unchanged.
 - Chat replaces the card with what it sent. "You answered 2 · …" needs
-  evidence that this agent left this prompt: the same session, and either a
-  status that shows progress (`working`, `idle` or `done`), or a new state with a different question on a
-  readable screen. Otherwise the receipt reads "Sent 2 · …" with the reason
-  (`unconfirmed_reason`): the question still shows (`still_showing`), the pane
-  has another session (`session_changed`, and the key may have reached it),
-  Herdr reports a status such as `unknown` (`unknown_status`),
-  Herdr no longer reports the agent (`agent_missing`), or the screen could not
-  be read (`unreadable`). Chat answers only when you pick an option.
+  evidence that this agent left this prompt: the same session, and then a
+  status that shows progress (`working`, `idle` or `done`), a different
+  question on a readable screen (a form's next tab keeps Herdr's state), or a
+  new state with a changed screen. Otherwise the receipt reads "Sent 2 · …"
+  with the reason (`unconfirmed_reason`): the question still shows
+  (`still_showing`), the pane has another session (`session_changed`, and the
+  key may have reached it), Herdr reports a status such as `unknown`
+  (`unknown_status`), Herdr no longer reports the agent (`agent_missing`), or
+  the screen could not be read (`unreadable`). Chat answers only when you
+  pick an option.
 - Keeps the last good conversation when a read fails, for example while the
   transcript is being written, and says that it could not refresh.
 - When the conversation is unavailable, Chat shows the reason and the action it

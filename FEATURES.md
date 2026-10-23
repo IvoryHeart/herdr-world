@@ -382,9 +382,10 @@ See [resource ownership](docs/ARCHITECTURE.md#workspace-resource-ownership).
   says so, or that it cannot tell when the same words appeared at about the
   same time. Slash commands, and Claude Code's `!` and `#`, go through the
   Terminal.
-  When the agent waits on a permission or choice prompt, Chat shows it as an
-  ask card and answers with the option you pick (click or its number key),
-  after checking the question has not changed.
+  When the agent waits on a permission prompt, a question (one or several,
+  with each choice's description) or plan approval, Chat shows it as an ask
+  card and answers with the option you pick (click or its number key), after
+  checking the question has not changed.
   It refreshes when the service sees the transcript, title or status change,
   without browser polling, and keeps the last good view if a read fails. When
   it cannot read the conversation it shows the reason with the matching action:

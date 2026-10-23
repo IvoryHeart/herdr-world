@@ -784,6 +784,36 @@ async function run() {
         ).includes("Answer in the Terminal"),
       "An unreadable prompt must offer the Terminal and no answers",
     );
+    // A question form's choices carry the description shown under each.
+    reply = {
+      ...reply,
+      pending_prompt: {
+        question: ["Which colour should the demo banner be?"],
+        request: ["☐ Banner colour"],
+        options: [
+          {
+            number: "1",
+            label: "Red",
+            key: "1",
+            description: "Set the demo banner to red.",
+          },
+          { number: "2", label: "Green", key: "2" },
+        ],
+        fingerprint: "f2q",
+      },
+    };
+    push();
+    await settle();
+    const choices = [
+      ...container.querySelectorAll(".agent-chat-ask-options button"),
+    ];
+    check(
+      choices.length === 2 &&
+        choices[0]!.querySelector("small")?.textContent ===
+          "Set the demo banner to red." &&
+        !choices[1]!.querySelector("small"),
+      "A question's choices must show their descriptions",
+    );
     // Two Chats with questions: a key on one card never answers the other.
     reply = {
       ...reply,

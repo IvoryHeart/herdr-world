@@ -153,6 +153,34 @@ describe("answering a blocked agent's prompt", () => {
     });
   });
 
+  test("a question form's next question is the agent moving on", async () => {
+    const rule = "─".repeat(60);
+    const form = (question: string) =>
+      [
+        rule,
+        "←  ☐ Colour  ☐ Sticky  ✔ Submit  →",
+        "",
+        question,
+        "",
+        "❯ 1. Yes",
+        "  2. No",
+        "",
+        "Enter to select · Tab/Arrow keys to navigate · Esc to cancel",
+      ].join("\n");
+    const { state, source } = fakeHerdr();
+    state.screen = form("Should the banner be red?");
+    // Claude moves to the next tab with no new Herdr state.
+    state.onSend = () => {
+      state.screen = form("Should the banner be sticky?");
+    };
+    expect(await answer(source, "1")).toMatchObject({
+      status: "sent",
+      label: "Yes",
+      acknowledged: true,
+    });
+    expect(state.sent).toEqual([{ pane_id: "w1:p1", text: "1", keys: [] }]);
+  });
+
   // Without evidence that this agent left this prompt, a sent key is never
   // reported as answered.
   test.each([
