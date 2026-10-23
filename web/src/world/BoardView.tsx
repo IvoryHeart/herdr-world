@@ -104,11 +104,17 @@ import {
   tidy,
 } from "./board/boardPlacement";
 import { createFrameLoop, type FrameLoop } from "./board/boardScheduler";
+import { BoardZoneColor } from "./board/BoardZoneColor";
 import { WorkLens } from "./board/WorkLens";
 import { DEVTOOLS, NO_TRACE } from "./devtools/flag";
 import { TraceOverlay } from "./devtools/TraceOverlay";
 import { openTrace, rememberTrace, traceGesture } from "./devtools/trace";
-import { defaultTerminalColor, TERMINAL_COLOR_HEX } from "./terminalColor";
+import {
+  defaultTerminalColor,
+  hostColorKey,
+  placeColor,
+  TERMINAL_COLOR_HEX,
+} from "./terminalColor";
 import { WorldSearchResults } from "./WorldSearchResults";
 import { WorldViewToolbar } from "./WorldViewToolbar";
 import type { WorldCanvasAnchor } from "./worldConnectorGeometry";
@@ -2891,6 +2897,14 @@ export default function BoardView({
   }, [noteSelected, colorKey]);
   const setCardColor = (key: string, color: CardColor | null) =>
     void report(boardStore.patch([{ op: "card.color", key, color }]));
+  // Stable, so zones whose colour is unchanged skip rendering their pickers.
+  const setCardColorRef = useRef(setCardColor);
+  setCardColorRef.current = setCardColor;
+  const setZoneColor = useCallback(
+    (key: string, color: CardColor | null) =>
+      setCardColorRef.current(key, color),
+    [],
+  );
   /**
    * Pin a card where it is, or unpin it. A pinned card never moves on its
    * own: placement, tidying and settling leave it; only a drag moves it.
@@ -3009,37 +3023,55 @@ export default function BoardView({
           </div>
         ) : null}
         <div ref={worldRef} className="board-world">
-          {model.hosts.map((host) => (
-            <div
-              key={host.key}
-              className={`board-zone${host.stale ? " board-stale" : ""}`}
-              ref={(el) => {
-                if (el) zoneEls.current.set(host.key, el);
-                else zoneEls.current.delete(host.key);
-              }}
-            >
+          {model.hosts.map((host) => {
+            // A host's chosen colour tints its zone (it is not inherited).
+            const hostKey = hostColorKey(host.connectionId);
+            const hostColor = placeColor(cardColors, hostKey);
+            return (
               <div
-                className="board-zone-label"
-                data-host={host.key}
-                data-world-node-anchor={host.id}
-                title="Drag to move the whole host"
+                key={host.key}
+                className={`board-zone${host.stale ? " board-stale" : ""}`}
+                style={
+                  hostColor
+                    ? ({
+                        "--board-zone": TERMINAL_COLOR_HEX[hostColor],
+                      } as CSSProperties)
+                    : undefined
+                }
+                ref={(el) => {
+                  if (el) zoneEls.current.set(host.key, el);
+                  else zoneEls.current.delete(host.key);
+                }}
               >
-                {host.label}
-                {host.stale ? (
-                  <small>offline</small>
-                ) : (
-                  <button
-                    type="button"
-                    className="board-zone-add"
-                    aria-label={`New workspace on ${host.label}`}
-                    onClick={() => setNewWorkspaceOn(host)}
-                  >
-                    +
-                  </button>
-                )}
+                <div
+                  className="board-zone-label"
+                  data-host={host.key}
+                  data-world-node-anchor={host.id}
+                  title="Drag to move the whole host"
+                >
+                  <BoardZoneColor
+                    colorKey={hostKey}
+                    hostLabel={host.label}
+                    color={hostColor}
+                    onColor={setZoneColor}
+                  />
+                  {host.label}
+                  {host.stale ? (
+                    <small>offline</small>
+                  ) : (
+                    <button
+                      type="button"
+                      className="board-zone-add"
+                      aria-label={`New workspace on ${host.label}`}
+                      onClick={() => setNewWorkspaceOn(host)}
+                    >
+                      +
+                    </button>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
           <svg ref={svgRef} className="board-wires" aria-hidden="true" />
           {/* Cards in their own container, new when a large board is built,
               so React appends them as one subtree instead of placing each

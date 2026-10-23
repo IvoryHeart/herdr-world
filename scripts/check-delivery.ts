@@ -83,6 +83,7 @@ function mergeBase() {
 const STATIC = [
   "notices:check",
   "changelog:check",
+  "check:size",
   "format:check",
   "lint",
   "typecheck",

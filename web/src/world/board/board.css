@@ -1417,3 +1417,10 @@
   font-size: 11px;
   cursor: pointer;
 }
+
+/* A host's colour, which tints its zone. */
+.board-zone-label .board-zone-color {
+  pointer-events: auto;
+  width: 22px;
+  height: 22px;
+}

@@ -73,6 +73,10 @@ import "./worldFonts.css";
 import { WorldMobileNav, worldViewLabel } from "./WorldMobileNav";
 import { WorldViewPicker } from "./WorldViewPicker";
 import { WorldControlPlane } from "./WorldControlPlane";
+import {
+  WorldPanelsContext,
+  useWorldPanelRegistry,
+} from "./windows/WorldPanel";
 import { EMPTY_VISUAL_ACTION_EXTENSION } from "./worldControlPlaneContract";
 
 export const OfficeObservabilityDialog = lazyWithReload(
@@ -285,6 +289,8 @@ export default function WorldFoundationApp() {
     }
   };
 
+  // Panel windows (Town's summary and the like) beside the Inspectors.
+  const panelRegistry = useWorldPanelRegistry();
   const canReturnToView =
     mobile &&
     view !== "spaces" &&
@@ -516,34 +522,36 @@ export default function WorldFoundationApp() {
             </div>
           }
           workspaceSurface={
-            <WorldControlPlane
-              view={visualView}
-              active={view !== "spaces"}
-              creationIntentRevision={creationIntentRevision}
-              inspectorConversations={inspectorConversations}
-              dockedInspectorId={dockedInspectorId}
-              onDockedInspectorIdChange={setDockedInspectorId}
-              onInspectorConversationsChange={setInspectorConversations}
-              onInspectorTerminalPortal={(windowId, portal) =>
-                setInspectorTerminalPortals((current) =>
-                  current[windowId] === portal
-                    ? current
-                    : { ...current, [windowId]: portal },
-                )
-              }
-              onWorkspaceSurfaceSelectionReady={
-                registerWorkspaceSurfaceSelection
-              }
-              onInspectorPaneFocusReady={(handler) => {
-                inspectorPaneFocusRef.current = handler;
-              }}
-              onActiveInspectorChange={setActiveInspectorWindowId}
-              onVisualArrangementControlReady={setVisualArrangementControl}
-              onVisualActionExtensionReady={setVisualActionExtension}
-              viewToolbarPortal={viewToolbarPortal}
-              onGoToSpaces={() => setView("spaces")}
-              onPresentedWorldChange={setPresentedStatusWorld}
-            />
+            <WorldPanelsContext.Provider value={panelRegistry}>
+              <WorldControlPlane
+                view={visualView}
+                active={view !== "spaces"}
+                creationIntentRevision={creationIntentRevision}
+                inspectorConversations={inspectorConversations}
+                dockedInspectorId={dockedInspectorId}
+                onDockedInspectorIdChange={setDockedInspectorId}
+                onInspectorConversationsChange={setInspectorConversations}
+                onInspectorTerminalPortal={(windowId, portal) =>
+                  setInspectorTerminalPortals((current) =>
+                    current[windowId] === portal
+                      ? current
+                      : { ...current, [windowId]: portal },
+                  )
+                }
+                onWorkspaceSurfaceSelectionReady={
+                  registerWorkspaceSurfaceSelection
+                }
+                onInspectorPaneFocusReady={(handler) => {
+                  inspectorPaneFocusRef.current = handler;
+                }}
+                onActiveInspectorChange={setActiveInspectorWindowId}
+                onVisualArrangementControlReady={setVisualArrangementControl}
+                onVisualActionExtensionReady={setVisualActionExtension}
+                viewToolbarPortal={viewToolbarPortal}
+                onGoToSpaces={() => setView("spaces")}
+                onPresentedWorldChange={setPresentedStatusWorld}
+              />
+            </WorldPanelsContext.Provider>
           }
           workspaceSurfaceVisible={view !== "spaces"}
           workspaceSurfaceContext={
