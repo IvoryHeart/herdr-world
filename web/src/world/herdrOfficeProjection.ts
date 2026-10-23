@@ -1153,7 +1153,6 @@ function projectAgent(
     observedGeneration: leaf.generation,
     roomKey,
     hostKey,
-    // An agent goes by its Herdr name ("reviewer"), else its harness.
     displayLabel: leaf.agentName ?? leaf.agentLabel ?? leaf.label,
     ...(leaf.agentName ? { agentName: leaf.agentName } : {}),
     ...(summary ? { taskSummary: summary } : {}),
