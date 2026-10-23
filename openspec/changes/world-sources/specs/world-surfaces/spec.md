@@ -17,6 +17,12 @@ a Work lens of pull requests by lane and tickets by status whose cards name
 their linked agents, and Town SHALL show a linked item's badge on the agent's
 desk.
 
+For the user's own open pull requests World SHALL compute readiness from what
+GitHub reports, never store it, and show each rule as met, failed or unknown.
+World SHALL merge, close or mark a pull request ready only after the user
+confirms a sheet that states the outcome, SHALL pin a merge to the head the
+user saw, and SHALL NOT bypass branch protection.
+
 #### Scenario: Prerequisite missing
 - **WHEN** `gh` is not signed in, or Jira has no site, email or token
 - **THEN** that source shows not connected with how to connect it, and other
@@ -45,6 +51,23 @@ desk.
   in the merged window (seven days unless changed in Sources settings)
 - **THEN** the Work lens shows every one, grouped by the day it merged with
   only the newest day open, up to GitHub's 1,000-result search limit
+
+#### Scenario: Merge confirmed on the head the user saw
+- **WHEN** the user confirms Merge on a pull request GitHub would merge as it
+  is, and nobody pushed since the card was read
+- **THEN** World merges it with a merge commit and keeps the branch; if the
+  head moved, World refuses with "Head changed: review again"
+
+#### Scenario: Required review outstanding
+- **WHEN** GitHub still requires a review on the user's own pull request
+- **THEN** the card offers Open on GitHub and the plain merge command instead
+  of Merge, and World runs no merge
+
+#### Scenario: A reviewer confirmed an older head
+- **WHEN** a rev agent's latest result confirms its findings on a commit
+  before the current head
+- **THEN** the findings rule is unknown and says which commit it confirmed
+  and how many commits came since
 
 #### Scenario: Jira site or account changed
 - **WHEN** the user changes the Jira site or email without entering a token

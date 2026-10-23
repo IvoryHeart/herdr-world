@@ -331,6 +331,12 @@ on your phone and desktop.
    required review is pending; **Ready to merge** means approved, or passing
    in a repository that requires no review. The same pull
    request appears as a badge on the agent's desk in Town, such as `#42 ✓`.
+   Your own open pull requests get a fuller card: CI dots, each rev agent's
+   result and **Ready ✓** when your merge rules hold. **Details** shows each
+   rule, the failing checks and the reviewers' comments. **Merge…**,
+   **Close…** and **Mark ready…** ask first and say exactly what happens;
+   while GitHub still requires a review, use **Open on GitHub** or **Copy
+   merge command** and merge it yourself.
    If Work shows **Set up Jira** or says no source is connected, open
    **Settings → Sources**: sign
    in to GitHub with `gh auth login` as the user that runs World, or add your
