@@ -30,8 +30,10 @@ view that you open on purpose.
   in the transcript with no result yet) shows at the end of the conversation
   with its command or file and its own timer. Harnesses write transcripts per
   message or tool call, not per token, so this is what moves during a long
-  step; it is never terminal output. A display clock ticks only while
-  something runs.
+  step; it is never terminal output. The step and the clocks show only while
+  Herdr reports the agent working: a call waiting for your approval, or one
+  an interrupt or crash left without a result, is not shown as running.
+  Screen readers hear the status and task change, not the clocks.
 - Stops the agent when you ask. For Claude Code, Codex and Pi, **Stop** in the
   Now bar, or Esc pressed twice while Chat has focus, presses Esc in the
   agent's pane to interrupt the turn. One Esc only asks for a second; Chat

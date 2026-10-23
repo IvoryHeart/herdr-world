@@ -750,6 +750,58 @@ async function run() {
     );
     await settle();
     check(escapes() === 2, "Esc twice must press Esc in the agent's pane");
+    // Only the status and task are announced; the clocks tick silently.
+    check(
+      !container.querySelector(".agent-chat-now")?.hasAttribute("aria-live") &&
+        container
+          .querySelector(".agent-chat-now-live")
+          ?.getAttribute("aria-live") === "polite" &&
+        [...container.querySelectorAll(".agent-chat-now-time")].every(
+          (time) =>
+            time.getAttribute("aria-hidden") === "true" &&
+            !time.closest("[aria-live], [role='status']"),
+        ),
+      "The Now bar's clocks must not be inside a live region",
+    );
+    // An Esc another handler used does not arm Stop, and the note to press
+    // again lasts only as long as a second Esc would stop.
+    await new Promise((resolve) => setTimeout(resolve, 800));
+    list.addEventListener("keydown", (event) => event.preventDefault(), {
+      once: true,
+    });
+    list.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "Escape",
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+    list.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+    );
+    await settle();
+    check(escapes() === 2, "An Esc already handled must not count");
+    await new Promise((resolve) => setTimeout(resolve, 800));
+    check(
+      !(
+        container.querySelector(".agent-chat-now-note")?.textContent ?? ""
+      ).includes("Press Esc again"),
+      "The note to press Esc again must clear when its window ends",
+    );
+    // A call still open while the agent waits for approval, or after it
+    // stopped, is not running.
+    for (const [status, sequence] of [
+      ["blocked", 62],
+      ["idle", 63],
+    ] as const) {
+      render(status, true, sequence);
+      await settle();
+      check(
+        !container.querySelector(".agent-chat-running") &&
+          !container.querySelector(".agent-chat-now .agent-chat-now-time"),
+        `An open call must not show as running while ${status}`,
+      );
+    }
     // A long conversation scrolls in the window, phone and desktop widths
     // alike: it opens at the newest message, keeps the reader's place when a
     // message lands while they read back, and Jump to latest returns.

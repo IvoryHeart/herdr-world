@@ -370,8 +370,11 @@ export function AgentChat({
     seenStatus.current = liveStatus;
     setStatusSince(Date.now());
   }, [liveStatus]);
-  const running = conversation?.running_tool ?? null;
-  const ticking = liveStatus === "working" || running !== null;
+  // An open call is running only while Herdr says the agent works: a call
+  // waiting for approval, or one cut off by an interrupt or crash, is not.
+  const running =
+    liveStatus === "working" ? (conversation?.running_tool ?? null) : null;
+  const ticking = liveStatus === "working";
   const [clock, setClock] = useState(() => Date.now());
   useEffect(() => {
     if (!ticking) return;
@@ -398,25 +401,37 @@ export function AgentChat({
   const firstEscape = useRef(0);
   useEffect(() => {
     if (!canStop) return;
+    let expire = 0;
     const keydown = (event: KeyboardEvent) => {
       if (
         event.key !== "Escape" ||
+        event.defaultPrevented ||
         event.isComposing ||
         !(event.target instanceof HTMLElement) ||
         !event.target.closest(".agent-chat")
       )
         return;
       const now = Date.now();
+      window.clearTimeout(expire);
       if (now - firstEscape.current < DOUBLE_ESCAPE_MS) {
         firstEscape.current = 0;
         void stop();
       } else {
         firstEscape.current = now;
-        setStopNote(`Press Esc again to stop ${agentName || "the agent"}.`);
+        const note = `Press Esc again to stop ${agentName || "the agent"}.`;
+        setStopNote(note);
+        // The note holds only while a second Esc would stop.
+        expire = window.setTimeout(
+          () => setStopNote((current) => (current === note ? "" : current)),
+          DOUBLE_ESCAPE_MS,
+        );
       }
     };
     window.addEventListener("keydown", keydown);
-    return () => window.removeEventListener("keydown", keydown);
+    return () => {
+      window.clearTimeout(expire);
+      window.removeEventListener("keydown", keydown);
+    };
   }, [agentName, canStop, stop]);
   // A new turn clears the last stop note.
   useEffect(() => {
@@ -478,18 +493,21 @@ export function AgentChat({
     conversation?.status === "ok" && !!conversation.session_fingerprint;
   return (
     <div className="agent-chat">
-      <div className="agent-chat-toolbar agent-chat-now" aria-live="polite">
-        <span className={`agent-chat-status is-${liveStatus.toLowerCase()}`}>
-          {liveStatus === "working" ? (
-            <span className="agent-chat-spinner" aria-hidden="true" />
-          ) : null}
-          {STATUS_WORDS[liveStatus] ?? status}
-        </span>
-        <span
-          className="agent-chat-now-title"
-          title={conversation?.terminal_title ?? ""}
-        >
-          {titleTask(conversation?.terminal_title)}
+      <div className="agent-chat-toolbar agent-chat-now">
+        {/* Only the status and task are announced; the clocks are not. */}
+        <span className="agent-chat-now-live" aria-live="polite">
+          <span className={`agent-chat-status is-${liveStatus.toLowerCase()}`}>
+            {liveStatus === "working" ? (
+              <span className="agent-chat-spinner" aria-hidden="true" />
+            ) : null}
+            {STATUS_WORDS[liveStatus] ?? status}
+          </span>
+          <span
+            className="agent-chat-now-title"
+            title={conversation?.terminal_title ?? ""}
+          >
+            {titleTask(conversation?.terminal_title)}
+          </span>
         </span>
         {stopNote ? (
           <span className="agent-chat-now-note" role="status">
@@ -497,7 +515,7 @@ export function AgentChat({
           </span>
         ) : null}
         {statusSince !== null && ticking ? (
-          <span className="agent-chat-now-time">
+          <span className="agent-chat-now-time" aria-hidden="true">
             {elapsed(clock - statusSince)}
           </span>
         ) : null}
@@ -686,19 +704,16 @@ export function AgentChat({
               />
             ))}
             {running ? (
-              <div
-                className="agent-chat-running"
-                role="status"
-                data-call-id={running.id}
-              >
+              <div className="agent-chat-running" data-call-id={running.id}>
                 <span className="agent-chat-spinner" aria-hidden="true" />
-                <span className="agent-chat-running-label">
+                {/* Announced when the step starts, not as its clock ticks. */}
+                <span className="agent-chat-running-label" role="status">
                   <b>{running.name}</b>
                   {running.summary ? <code>{running.summary}</code> : null}
                 </span>
                 {Number.isFinite(Date.parse(running.started_at)) &&
                 clock >= Date.parse(running.started_at) ? (
-                  <span className="agent-chat-now-time">
+                  <span className="agent-chat-now-time" aria-hidden="true">
                     {elapsed(clock - Date.parse(running.started_at))}
                   </span>
                 ) : null}
