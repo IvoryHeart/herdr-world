@@ -224,7 +224,7 @@ fixed rules, without a model (`server/src/agent/quest.ts`). It is computed with
 the projection, over the whole transcript rather than Chat's 200-entry window,
 and each connection keeps up to 256 quests, so a quest whose transcript has not
 changed is answered without reading it again. Chat shows the quest log above
-the conversation; Town marks progress over a seated agent; Board puts a chip on
+the conversation; Town marks progress at a seated agent; Board puts a chip on
 the agent's card.
 
 A quest has a `title`, a `source` (`todo`, `plan`, `goal` or `loop`), the
@@ -261,6 +261,13 @@ World only guessed from the folder is not shown on desks or cards. When a
 quest cannot be read for a moment (the transcript changed while it was read),
 `agent_quest.list` marks it `read_failed` and Town and Board keep the last one.
 A hidden page reads again when it is shown.
+
+Town and Board read quests when the World changes, at most once every 5
+seconds, and every 15 seconds while an agent is working. One read asks about
+the first 200 agents, one call per connection and runtime generation; the
+service answers it from one `agent.list`, not an `agent.get` for each pane, so
+a busy World does not queue Herdr calls ahead of terminal input. In a World
+with more agents, later ones show no quest yet.
 
 Known gaps: Claude Code builds that keep the plan in a file (the
 `plan_mode_exit` attachment names `~/.claude/plans/…`) are not read, because

@@ -1,4 +1,5 @@
 import { questMark, useAgentQuests } from "./agentQuests";
+import type { TownQuestMark } from "./town/townSprites";
 import {
   useCreationProgress,
   creationPendingReason,
@@ -573,15 +574,12 @@ export default function TownView({
   const summonedKeys = useMemo(() => new Set(summoned.keys()), [summoned]);
   // Each agent's quest, marked over its desk by agent key.
   const agentQuests = useAgentQuests(world.leaves);
+  // A Town agent's key is its leaf ID, so the marks come straight from the
+  // quests (a dense town's roster is large).
   const questMarks = useMemo(
-    () =>
-      new Map(
-        office.roster.flatMap(({ agent }) => {
-          const quest = agentQuests.get(agent.nodeId);
-          return quest ? [[agent.key, questMark(quest)] as const] : [];
-        }),
-      ),
-    [agentQuests, office.roster],
+    (): ReadonlyMap<string, TownQuestMark> =>
+      new Map([...agentQuests].map(([key, quest]) => [key, questMark(quest)])),
+    [agentQuests],
   );
   const summon = (key: string) => {
     const status = agentByKey.get(key)?.agent.semanticStatus;

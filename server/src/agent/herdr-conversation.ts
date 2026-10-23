@@ -262,8 +262,13 @@ export function createHerdrConversationSource(args: {
     unavailable: { reason, detail, ...extra },
   });
 
-  const resolve = async (paneId: string, reuseCodexTitle = false) => {
-    const info = await agentInfo(paneId);
+  const resolve = async (
+    paneId: string,
+    reuseCodexTitle = false,
+    // An agent record already listed (`agent.list`), or null for none.
+    listed?: { info: Record<string, unknown> | null },
+  ) => {
+    const info = listed ? listed.info : await agentInfo(paneId);
     const agent = normalizeAgentName(stringValue(info?.agent));
     const base: Omit<Conversation, "status" | "unavailable"> = {
       conversation_version: 1,
@@ -561,28 +566,52 @@ export function createHerdrConversationSource(args: {
           ),
         )
       ).map(withoutMessages),
-    quests: (paneIds) =>
-      eachPane(paneIds, async (pane_id): Promise<AgentQuest> => {
-        const empty = {
-          pane_id,
-          agent: null,
-          session_binding: null,
-          quest: null,
-        };
-        try {
-          const step = await resolve(pane_id, true);
-          if (!("resolved" in step)) return { ...empty, agent: step.agent };
-          const { base, resolved } = step;
-          return {
-            pane_id,
-            agent: base.agent,
-            session_binding: base.session_binding,
-            quest: resolved.file ? await args.cache.quest(resolved) : null,
-          };
-        } catch {
-          return { ...empty, read_failed: true };
+    // One agent.list for every pane, not an agent.get each: a busy World
+    // asks for hundreds of panes, and per-pane calls would queue ahead of
+    // terminal input on the same Herdr connection.
+    quests: async (paneIds) => {
+      const listed = new Map<string, Record<string, unknown>>();
+      let listFailed = false;
+      try {
+        const result = await args.herdrCall("agent.list", {});
+        const agents =
+          isRecord(result) && Array.isArray(result.agents) ? result.agents : [];
+        for (const agent of agents.filter(isRecord)) {
+          const id = stringValue(agent.pane_id);
+          if (id) listed.set(id, agent);
         }
-      }),
+      } catch (error) {
+        if (!paneIds) throw error;
+        listFailed = true;
+      }
+      return eachPane(
+        paneIds ?? [...listed.keys()],
+        async (pane_id): Promise<AgentQuest> => {
+          const empty = {
+            pane_id,
+            agent: null,
+            session_binding: null,
+            quest: null,
+          };
+          if (listFailed) return { ...empty, read_failed: true };
+          try {
+            const step = await resolve(pane_id, true, {
+              info: listed.get(pane_id) ?? null,
+            });
+            if (!("resolved" in step)) return { ...empty, agent: step.agent };
+            const { base, resolved } = step;
+            return {
+              pane_id,
+              agent: base.agent,
+              session_binding: base.session_binding,
+              quest: resolved.file ? await args.cache.quest(resolved) : null,
+            };
+          } catch {
+            return { ...empty, read_failed: true };
+          }
+        },
+      );
+    },
     send: async ({ pane_id, text, session_fingerprint, baseline }) => {
       if (!text.trim())
         return {

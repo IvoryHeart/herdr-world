@@ -4,7 +4,7 @@
  * connection and runtime generation, one call per connection.
  */
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { bridge, type ConnectionClient } from "../api";
 import type { AgentQuest, Quest } from "../../../server/src/agent/quest";
 import { deskClient } from "./handoffs";
@@ -14,6 +14,13 @@ export type { Quest };
 
 /** How often quests are reread while an agent is working. */
 export const QUEST_REFRESH_MS = 15_000;
+/**
+ * The least time between reads. Statuses can flip many times a second in a
+ * busy World; each flip asks for a read, and they share one.
+ */
+export const QUEST_MIN_GAP_MS = 5_000;
+/** The most agents one read asks about. */
+export const QUEST_PANE_LIMIT = 200;
 
 const EMPTY: ReadonlyMap<string, Quest> = new Map();
 
@@ -58,11 +65,13 @@ const leafClient = (leaf: WorldLeafObject): ConnectionClient | null =>
   );
 
 /**
- * Quests by leaf ID for the given agents. They are read again when an agent
- * appears, leaves or changes status, and every QUEST_REFRESH_MS while one is
- * working (checklists change mid-turn). A session found only by guessing
- * from the pane's folder may be another agent's, so it shows no quest. A
- * connection that cannot answer keeps its last quests.
+ * Quests by leaf ID for the given agents. They are read again when the
+ * leaves change (at most once per QUEST_MIN_GAP_MS), and every
+ * QUEST_REFRESH_MS while one is working (checklists change mid-turn). A
+ * read asks for the first QUEST_PANE_LIMIT agents only: a dense World has
+ * millions of panes, and render does no work per leaf. A session found only
+ * by guessing from the pane's folder may be another agent's, so it shows no
+ * quest. A connection that cannot answer keeps its last quests.
  */
 export function useAgentQuests(
   leaves: readonly WorldLeafObject[],
@@ -71,24 +80,9 @@ export function useAgentQuests(
   const [quests, setQuests] = useState(EMPTY);
   const shown = useRef(quests);
   shown.current = quests;
-  // A large World has thousands of leaves: derive these once per leaves
-  // list, not on every render of the view.
-  const { agents, signature, working } = useMemo(() => {
-    const agents: WorldLeafObject[] = [];
-    const parts: string[] = [];
-    let working = false;
-    for (const leaf of leaves) {
-      if (leaf.kind !== "agent") continue;
-      agents.push(leaf);
-      parts.push(
-        `${leaf.id}\0${leaf.connectionId}\0${leaf.generation}\0${leaf.pane.pane_id}\0${leaf.status}`,
-      );
-      if (leaf.status === "working") working = true;
-    }
-    return { agents, signature: parts.join("\n"), working };
-  }, [leaves]);
-  const latest = useRef(agents);
-  latest.current = agents;
+  const latest = useRef(leaves);
+  latest.current = leaves;
+  const lastRead = useRef(0);
   useEffect(() => {
     if (!active) return;
     let cancelled = false;
@@ -98,6 +92,8 @@ export function useAgentQuests(
     const read = async () => {
       if (reading) return;
       reading = true;
+      lastRead.current = Date.now();
+      let working = false;
       if (document.visibilityState !== "hidden") {
         // One call per connection and runtime generation.
         const groups = new Map<
@@ -106,7 +102,11 @@ export function useAgentQuests(
         >();
         // Resolved once per group: every leaf in it shares the client.
         const refused = new Set<string>();
+        let asked = 0;
         for (const leaf of latest.current) {
+          if (leaf.kind !== "agent") continue;
+          if (asked++ >= QUEST_PANE_LIMIT) break;
+          if (leaf.status === "working") working = true;
           const key = `${leaf.connectionId}\0${leaf.generation}`;
           const entry = groups.get(key);
           if (entry) {
@@ -170,12 +170,14 @@ export function useAgentQuests(
       void read();
     };
     document.addEventListener("visibilitychange", shownAgain);
-    void read();
+    const wait = lastRead.current + QUEST_MIN_GAP_MS - Date.now();
+    if (wait > 0) timer = window.setTimeout(read, wait);
+    else void read();
     return () => {
       cancelled = true;
       document.removeEventListener("visibilitychange", shownAgain);
       if (timer !== undefined) window.clearTimeout(timer);
     };
-  }, [signature, active, working]);
+  }, [leaves, active]);
   return active ? quests : EMPTY;
 }

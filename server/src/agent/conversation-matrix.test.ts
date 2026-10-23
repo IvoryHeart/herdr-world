@@ -847,6 +847,41 @@ describe("quests", () => {
     ]);
   });
 
+  test("a bulk read lists agents once instead of asking for each pane", async () => {
+    const dir = await mkdtemp(join(root, "quest-"));
+    const path = join(dir, "session.jsonl");
+    await writeFile(path, `${todo("in_progress")}\n`);
+    const inner = herdr(
+      pane("claude", {
+        source: "herdr:claude",
+        agent: "claude",
+        kind: "path",
+        value: path,
+      }),
+    );
+    const calls: string[] = [];
+    let listFails = false;
+    const chat = source(async (method, params) => {
+      calls.push(method);
+      if (method === "agent.list" && listFails) throw new Error("offline");
+      return inner(method, params);
+    });
+    const quests = await chat.quests(["w1:p1", "w1:p2", "w1:p3"]);
+    expect(calls).toEqual(["agent.list"]);
+    expect(quests.map((entry) => [entry.pane_id, entry.quest?.source])).toEqual(
+      [
+        ["w1:p1", "todo"],
+        ["w1:p2", undefined],
+        ["w1:p3", undefined],
+      ],
+    );
+    // Without the list, every asked pane keeps its last quest.
+    listFails = true;
+    expect(
+      (await chat.quests(["w1:p1", "w1:p2"])).map((entry) => entry.read_failed),
+    ).toEqual([true, true]);
+  });
+
   test("a quest that cannot be read is marked, not reported as none", async () => {
     const files = {
       ...localAgentSessionFiles,
