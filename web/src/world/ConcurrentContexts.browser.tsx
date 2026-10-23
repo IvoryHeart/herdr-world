@@ -163,6 +163,7 @@ async function finishStress() {
     () =>
       stressReceipts.filter((receipt) => receipt.phase === stressPhase)
         .length === count,
+    `${stressPhase} input receipts`,
   );
   performance.mark(`stress:${stressPhase}:end`);
   stressPhase = null;
@@ -322,7 +323,10 @@ function client(host: string, generation: number | null): ConnectionClient {
   };
 }
 
-function waitForDom(predicate: () => boolean): Promise<void> {
+function waitForDom(
+  predicate: () => boolean,
+  label = "component",
+): Promise<void> {
   if (predicate()) return Promise.resolve();
   return new Promise((resolve, reject) => {
     const observer = new MutationObserver(() => {
@@ -334,7 +338,11 @@ function waitForDom(predicate: () => boolean): Promise<void> {
     });
     const timer = setTimeout(() => {
       observer.disconnect();
-      reject(new Error("Synthetic component admission timed out"));
+      reject(
+        new Error(
+          `Synthetic ${label} admission timed out (phase ${stressPhase ?? "none"})`,
+        ),
+      );
     }, 10_000);
     observer.observe(document.body, {
       subtree: true,
@@ -641,10 +649,8 @@ async function run() {
   );
   await yieldWorldTask();
   await waitForDom(
-    () =>
-      scene
-        .querySelector('[data-dense-revision="2"] .board-counts')
-        ?.textContent?.includes("working") ?? false,
+    () => !!scene.querySelector('[data-dense-revision="2"] .board-s-working'),
+    "refreshed Board status",
   );
   await finishStress();
   check(
