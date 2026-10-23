@@ -231,7 +231,9 @@ code{font:500 12px var(--f-mono);color:#cfd6c9;background:#0d1117;padding:1px 5p
 /* phone: the window covers the screen; the selector stays in the header */
 .win.cover{inset:0;border-radius:0;border:0;background:var(--solid)!important}
 .win.cover .wbar{gap:4px;padding:6px}
-.win.cover .views{padding:2px;gap:2px}
+.win.cover .views{display:none}
+.wmenu .sec{font:700 11px var(--f-body);color:var(--muted);letter-spacing:.06em;padding:6px 10px 2px}
+.wmenu .mi[aria-checked="true"]{background:#222b39}
 .win.cover .chip{min-height:40px;padding:0 8px}
 .win.cover .ident{min-width:64px}
 .win.cover .thumbviews{display:flex;justify-content:space-between;padding:6px 8px 0;border-top:1px solid var(--line);flex:none}
@@ -301,7 +303,7 @@ code{font:500 12px var(--f-mono);color:#cfd6c9;background:#0d1117;padding:1px 5p
         <h3>Town window (v4 skin)</h3>
         <ul class="plain">
           <li><b>‹ Back</b> · avatar (its ring is the terminal colour) · <b>name</b> + status pill, with a <b>location line</b> underneath (room · desk · branch). Tap the location line for branch, worktree, path and PR.</li>
-          <li><b>One top selector</b> with Chat, Terminal, Changes and Files sits in the same bar on every screen size. The chips are icons until the window is 640px wide; Changes shows its count.</li>
+          <li><b>One top selector</b> with Chat, Terminal, Changes and Files sits in the bar on desktop. It is labelled from a 640px-wide window, icons from 360px, and below that only the active view shows, with the rest in ⋯. On a phone the window looks like the terminal: the name and status in the bar, and ⋯ lists the views, the other agents and terminals to switch to, and the window's actions.</li>
           <li><b>Next ›</b> is the primary action on desktop and turns gold when someone else needs you. On a phone it moves into ⋯, because the need-you pill already covers it.</li>
           <li><b>⋯</b> holds the rare actions: snap, float or dock, maximise, minimise, colour and pop-out. Double-click the bar to maximise; drag it to the edges to snap.</li>
           <li>Pane chips get a second row only when the desk has 2 or more panes. At the bottom there is only Chat's composer (attach, reply box, send), and only in Chat. Terminal, Changes and Files have no bottom bar.</li>
@@ -333,7 +335,7 @@ code{font:500 12px var(--f-mono);color:#cfd6c9;background:#0d1117;padding:1px 5p
     <div class="tablewrap"><table>
       <thead><tr><th>Viewport</th><th>Town dock</th><th>Window bar</th><th>Tray and camera</th><th>Board / Spaces</th></tr></thead>
       <tbody>
-        <tr><td>Phone 390 × 844</td><td>Window covers the screen. Back returns to the map. FirstMate is the other tab.</td><td>‹, avatar, name, the 4-icon selector (40px targets) and ⋯. Next goes into ⋯.</td><td>Bottom strip, with the view picker at bottom left and one 44px camera button. In Zen there is no bottom nav.</td><td>Unchanged: phone Board and Spaces already use one header.</td></tr>
+        <tr><td>Phone 390 × 844</td><td>The window fills the screen like the terminal. Back returns to the map.</td><td>‹, portrait, name, status pill and ⋯. ⋯ holds View (Chat, Terminal, Changes, Files), Switch to (other agents and terminals) and Window. Next is reached through the need-you pill.</td><td>Bottom strip, with the view picker at bottom left and one 44px camera button. In Zen there is no bottom nav.</td><td>Unchanged: phone Board and Spaces already use one header.</td></tr>
         <tr><td>Mac laptop 1440 × 900</td><td>Right dock, <code>min(520px, 40vw)</code>. FirstMate and the agent share it as avatar tabs in the bar.</td><td>Town skin. Icon chips.</td><td>Left rail. Camera beside the dock.</td><td>Calm 44px app bar. Spaces uses a 40px merged bar.</td></tr>
         <tr><td>Half-width Linux 1270 × 1300</td><td>Right dock, 508px, with avatar tabs.</td><td>As laptop.</td><td>Left rail. Hosts shrinks to an icon.</td><td>Sidebar follows the user's preference. Inspector windows open at 60% width.</td></tr>
         <tr><td>Wide Linux 2560 × 1300</td><td>Right dock of 520px, with avatar tabs. Undock a tab to float it beside the dock.</td><td>Icon chips; labels appear at 640px or wider.</td><td>Left rail. Camera beside the dock.</td><td>As laptop.</td></tr>
@@ -358,7 +360,7 @@ code{font:500 12px var(--f-mono);color:#cfd6c9;background:#0d1117;padding:1px 5p
         <tr><td>1 controls</td><td>Dock / float / dock side / expand / pop-out</td><td>Inspector placement modes</td><td><span class="freq f4">rare</span></td><td>⋯ menu</td></tr>
         <tr><td>1 controls</td><td>Colour swatch (#261)</td><td>Pick the terminal colour</td><td><span class="freq f4">rare</span></td><td>Avatar ring or swatch; picker under ⋯ → Colour</td></tr>
         <tr><td>1 controls</td><td>Repository status (PR icon)</td><td>PR card popover</td><td><span class="freq f3">sometimes</span></td><td>Location popover. The icon goes, because it duplicates bar 3.</td></tr>
-        <tr><td>2 views</td><td>Terminal · Files · Changes (+count) · Commits · Chat</td><td>Switch the view</td><td><span class="freq f1">constant</span></td><td>One top selector in the bar, phone included</td></tr>
+        <tr><td>2 views</td><td>Terminal · Files · Changes (+count) · Commits · Chat</td><td>Switch the view</td><td><span class="freq f1">constant</span></td><td>One top selector in the bar on desktop; ⋯ on phones, where the window looks like the terminal</td></tr>
         <tr><td>3 branch</td><td>Branch-link icon row</td><td>Opens PR status</td><td><span class="freq f4">rare</span></td><td>Removed; the location popover covers it</td></tr>
         <tr><td>3 PR card</td><td>“PR/MR status” card (Changes, Commits)</td><td>Provider PR state, refresh</td><td><span class="freq f3">sometimes</span></td><td>Pill in the Changes toolbar plus the popover</td></tr>
         <tr><td>Town</td><td>Camera + − ALL (+ ⋮ on phone)</td><td>Zoom and fit</td><td><span class="freq f2">often</span></td><td>Desktop cluster; one 44px fit button on phone (was 56 × 190)</td></tr>
@@ -531,7 +533,9 @@ function calmWin(id, style) {
   </section>`;
 }
 function menu(id, skin) {
-  const views = st.vp === 'phone' && skin === 'town' ? `<button type="button" class="mi" role="menuitem">Next agent that needs you<kbd>1</kbd></button><hr>` : '';
+  // A phone shows the window like its terminal: views and other agents live in ⋯.
+  const w = WIN[id];
+  const views = st.vp === 'phone' && skin === 'town' ? `<div class="sec">VIEW</div>${VIEW_DEFS.map(([k,l])=>`<button type="button" class="mi" role="menuitemradio" aria-checked="${w.view===k}" data-win="${id}" data-v="${k}">${l}<kbd>${k==='changes'?'2':''}</kbd></button>`).join('')}<div class="sec">SWITCH TO</div><button type="button" class="mi" role="menuitem">codex<kbd>needs you · orbit-api</kbd></button><button type="button" class="mi" role="menuitem">FirstMate<kbd>Town master</kbd></button><button type="button" class="mi" role="menuitem">tests<kbd>shell · lantern-notes</kbd></button><div class="sec">WINDOW</div>` : '';
   const items = [['Maximise','double-click'],['Minimise',''],['Snap left','drag ←'],['Snap right','drag →'],['Snap top / bottom',''],[skin==='town'?'Undock (float)':'Dock to the right',''],['Open terminal window','']];
   const mviews = VIEW_DEFS.map(([k,l,ic])=>`<button type="button" class="mi mview" role="menuitem" data-win="${id}" data-v="${k}">${l}<kbd>${k==='changes'?'2':''}</kbd></button>`).join('');
   return `<div class="wmenu" role="menu">${mviews}${views}${items.map(([l,k])=>`<button type="button" class="mi" role="menuitem">${l}<kbd>${k}</kbd></button>`).join('')}<hr><div class="sw" aria-label="Colour">${['#6fc3ff','#7be08f','#ffb547','#ff7a6b','#c79bff','#d9c39b'].map(c=>`<i style="background:${c}"></i>`).join('')}</div><hr><button type="button" class="mi" role="menuitem">Close<kbd>Esc</kbd></button></div>`;
