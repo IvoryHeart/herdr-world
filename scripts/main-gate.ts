@@ -33,31 +33,35 @@ const NEUTRAL = [
   /^\(pass\) /,
   /^\(fail\) /,
   /exited with code \d+/,
-  /^##\[error\]Process completed with exit code \d+/,
+  /^Process completed with exit code \d+/,
+  /^$/,
   /^\d+ tests? failed:$/,
   /^\d+ fail$/,
   /^\d+ \|/, // source excerpt in a stack trace
 ];
 const ERRORISH = /error|exceed|fail|assert|panic|refus|denied|mismatch/i;
 
-/** The output of the step that failed: from its `##[group]Run` to the job's first exit error. */
-export function failedStepOutput(log: string): string[] {
-  const lines = log
-    .split("\n")
-    .map((line) => line.replace(/^\d{4}-\d\d-\d\dT[\d:.]+Z ?/, "").trim());
-  const end = lines.findIndex((line) =>
-    /^##\[error\]Process completed with exit code/.test(line),
-  );
-  if (end < 0) return lines;
-  let start = end;
-  while (start > 0 && !lines[start - 1]!.startsWith("##[group]Run ")) start--;
-  return lines.slice(start, end + 1);
+/**
+ * The output of every failed step: each `##[group]Run` section holding an
+ * `##[error]` line (a script's exit, or an action's own error), with that
+ * annotation prefix removed so its message is judged like any other line.
+ */
+export function failedStepOutputs(log: string): string[][] {
+  const steps: string[][] = [[]];
+  for (const raw of log.split("\n")) {
+    const line = raw.replace(/^\d{4}-\d\d-\d\dT[\d:.]+Z ?/, "").trim();
+    if (line.startsWith("##[group]Run ")) steps.push([]);
+    steps.at(-1)!.push(line);
+  }
+  return steps
+    .filter((step) => step.some((line) => line.startsWith("##[error]")))
+    .map((step) => step.map((line) => line.replace(/^##\[error\]/, "")));
 }
 
 /**
  * True when every failed job (aggregates aside) failed only through a known
- * infrastructure flake: its failed step shows that flake, at most one failing
- * test, and no other error of any kind.
+ * infrastructure flake: each of its failed steps shows that flake, at most one
+ * failing test, and no other error of any kind.
  */
 export function onlyInfraFlakes(
   failed: Array<{ name: string; log: string }>,
@@ -66,19 +70,28 @@ export function onlyInfraFlakes(
   return (
     jobs.length > 0 &&
     jobs.every((job) => {
-      const step = failedStepOutput(job.log);
-      const tests = new Set(step.filter((line) => line.startsWith("(fail) ")));
-      const flake = step.some((line) =>
-        INFRA_FLAKES.some((pattern) => pattern.test(line)),
+      // Every failed step, including always() steps after the first, must be
+      // the flake alone.
+      const steps = failedStepOutputs(job.log);
+      return (
+        steps.length > 0 &&
+        steps.every((step) => {
+          const tests = new Set(
+            step.filter((line) => line.startsWith("(fail) ")),
+          );
+          const flake = step.some((line) =>
+            INFRA_FLAKES.some((pattern) => pattern.test(line)),
+          );
+          const other = step.some(
+            (line) =>
+              !line.startsWith("##[group]") &&
+              ERRORISH.test(line) &&
+              !INFRA_FLAKES.some((pattern) => pattern.test(line)) &&
+              !NEUTRAL.some((pattern) => pattern.test(line)),
+          );
+          return flake && tests.size <= 1 && !other;
+        })
       );
-      const other = step.some(
-        (line) =>
-          !line.startsWith("##[group]") &&
-          ERRORISH.test(line) &&
-          !INFRA_FLAKES.some((pattern) => pattern.test(line)) &&
-          !NEUTRAL.some((pattern) => pattern.test(line)),
-      );
-      return flake && tests.size <= 1 && !other;
     })
   );
 }

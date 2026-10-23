@@ -230,6 +230,24 @@ test("only known infrastructure flakes are rerun before alerting", () => {
       },
     ]),
   ).toBe(false);
+  // A later always() step that also failed (an evidence upload) is not the flake.
+  expect(
+    onlyInfraFlakes([
+      {
+        name: "Behavioral verification",
+        log: [
+          "##[group]Run bun run verification:resources --system",
+          "AssertionError: Invalid control group (ActiveState=inactive)",
+          "##[error]Process completed with exit code 1.",
+          "##[group]Run actions/upload-artifact",
+          "Error: No files were found with the provided path",
+          "##[error]Process completed with exit code 1.",
+        ]
+          .map(stamp)
+          .join("\n"),
+      },
+    ]),
+  ).toBe(false);
   // The Windows staging lock is a product bug (#254), not a runner flake.
   expect(
     onlyInfraFlakes([
@@ -239,6 +257,12 @@ test("only known infrastructure flakes are rerun before alerting", () => {
           "Remove-Item : Cannot remove item C:\\Temp\\server\\.plugin-install-x\\herdr-world.exe: The process cannot access the file",
         ),
       },
+    ]),
+  ).toBe(false);
+  // A failed job whose log shows no failed step proves nothing.
+  expect(
+    onlyInfraFlakes([
+      { name: startup.name, log: "browser startup timed out after 35000ms" },
     ]),
   ).toBe(false);
   // Only the aggregate failed: nothing to attribute to a flake.
