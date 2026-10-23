@@ -33,6 +33,9 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
     docks on the right by default (**Menu → Inspector opening**), can be
     undocked, and keeps the dock it was left with. On a phone, the Chat view
     shows only its own composer, without the terminal key bar.
+  - An agent's known PR announcement or current work claim can show a compact
+    pull request card in Chat. **Details** has CI, reviews and owner actions;
+    **Ask the author to fix** sends `↳ #N` to the author in this conversation.
   - The top selector follows the window's own width, docked, floating or on a
     phone: labelled from 640px, icons (with their names as tooltips) below
     that, and below 360px only the active view, with the others under ⋯.

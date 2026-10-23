@@ -1318,7 +1318,6 @@ export function WorkspaceInspectorHost({
               state.view === "history" ? "" : "is-hidden"
             }`}
           >
-            {/* The persisted "history" view now shows Chat. */}
             {historyAvailable && historyPane ? (
               <AgentChat
                 key={JSON.stringify([
@@ -1326,6 +1325,7 @@ export function WorkspaceInspectorHost({
                   historySessionFingerprint ?? null,
                 ])}
                 pane={historyPane}
+                workSessionFingerprint={historySessionFingerprint}
                 active={visible && state.open && state.view === "history"}
                 wide={!compact}
                 onOpenTerminal={

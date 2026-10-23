@@ -24,6 +24,12 @@ view that you open on purpose.
   with a path, such as `/var/log/app.log fails`, is sent.
 - Refreshes when the service says the conversation changed (see
   [Refresh](#refresh)). The browser has no timer. **Refresh** rereads on demand.
+- Adds the shared pull request card below an agent message that announces a
+  known PR with **READY** or **opened**, or names a PR on its current work
+  claim. An ambiguous bare number gets no card. **Details** shows current CI,
+  reviews and the owner's actions. When this conversation owns the claim,
+  **Ask the author to fix** sends a `↳ #N` message through Chat; it keeps any
+  unsent draft. A retired host, runtime or agent session cannot supply a claim.
 - Shows what is happening now. The Now bar at the top has Herdr's status, the
   task the harness names in its terminal title (such as "Running tests"), and
   the time since Chat saw the status change. The step running now (a tool call

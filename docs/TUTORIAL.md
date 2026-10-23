@@ -166,6 +166,10 @@ changes what you see and does not disconnect hosts or retarget open terminals.
    the selected pane's host; review the message and attached paths before
    sending. The window's **Files** and **Changes** views hold its files and
    changes; **Open terminal** is for direct work.
+   A known PR named in an agent's **READY** or **opened** announcement, or its
+   current work claim, gets a PR card in Chat. Open **Details** for CI and
+   reviews. **Ask the author to fix** sends a `↳ #N` message when this
+   conversation owns the PR's claim; your unsent draft is kept.
    The swatch beside a room's name colours that workspace (its carpet here,
    its card in Board and a dot in the Spaces sidebar), and the swatch on a
    building's reception board colours the host (its roof, Board zone and

@@ -5,6 +5,7 @@ import { AgentChat, type Conversation } from "./AgentChat";
 import { useAgentHistoryWindow } from "./useAgentHistoryWindow";
 import { useConnectionClient } from "../useConnectionClient";
 import type { ConversationStep } from "./chat/blocks/steps";
+import { EMPTY_WORLD_SOURCES, worldSourcesStore } from "../world/worldSources";
 import "../styles/tokens.css";
 import "../styles/base.css";
 import "../styles/vendor.css";
@@ -1399,6 +1400,25 @@ async function run() {
     // and each change brings only what changed, so nothing re-reads or
     // re-renders the whole conversation. No task may block for 200 ms.
     {
+      worldSourcesStore.publishSettled({
+        ...EMPTY_WORLD_SOURCES,
+        items: [
+          {
+            key: "github:pr:example/project#42",
+            source: "github",
+            kind: "pull_request",
+            ref: "example/project#42",
+            title: "Fix Chat",
+            number: 42,
+            repo: "example/project",
+            url: "https://github.com/example/project/pull/42",
+            lane: "review",
+            status: "OPEN",
+            roles: ["author"],
+            updatedAt: 1,
+          },
+        ],
+      });
       const longTasks: number[] = [];
       const observer = new PerformanceObserver((list) => {
         for (const entry of list.getEntries()) longTasks.push(entry.duration);
@@ -1413,7 +1433,10 @@ async function run() {
           id: `busy-${index}`,
           role: index % 2 ? "assistant" : "user",
           kind: "message",
-          text: `Busy message ${index}: **the queue** keeps its order.`,
+          text:
+            index === 1
+              ? "READY #42"
+              : `Busy message ${index}: **the queue** keeps its order.`,
           sent_at: "2026-10-22T09:00:00Z",
         });
         for (let tool = 0; tool < 15; tool += 1)
@@ -1492,6 +1515,12 @@ async function run() {
       push();
       await settle();
       await settle();
+      check(
+        !!container.querySelector(
+          '.pr-card[aria-label="Pull request example/project#42"]',
+        ),
+        "The busy fixture did not exercise the PR block registry",
+      );
       longTasks.length = 0;
       for (let step = 0; step < 20; step += 1) {
         const id = `busy-new-${step}`;

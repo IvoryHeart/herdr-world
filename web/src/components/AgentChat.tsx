@@ -33,6 +33,9 @@ import { AttachmentChips } from "./AttachmentChips";
 import { CodexSessionLink } from "./CodexSessionLink";
 import { QuestLog } from "./QuestLog";
 import { useStepEvidence } from "./chat/useStepEvidence";
+import { useChatBlocks } from "./chat/useChatBlocks";
+import { ChatAfterBlocks, decorateChat } from "./chat/blocks/registry";
+import type { WorkItem } from "../../../shared/worldSources";
 import {
   DOUBLE_ESCAPE_MS,
   elapsed,
@@ -41,7 +44,6 @@ import {
   titleTask,
 } from "./chat/blocks/now";
 import "./AgentChat.css";
-import { AskCard, UNCONFIRMED } from "./chat/blocks/ask";
 import type {
   AnswerResult,
   Conversation,
@@ -72,12 +74,14 @@ export function AgentChat({
   wide = false,
   onOpenTerminal,
   onClose,
+  workSessionFingerprint,
 }: {
   pane: Pane;
   active: boolean;
   wide?: boolean;
   onOpenTerminal?: () => void;
   onClose: () => void;
+  workSessionFingerprint?: string;
 }) {
   const connectionClient = useConnectionClient();
   const [conversation, setConversation] = useState<Conversation | null>(null);
@@ -197,54 +201,57 @@ export function AgentChat({
     return stop;
   }, [active, connectionClient, details, load, pane.pane_id, refreshHistory]);
 
-  const send = useCallback(async () => {
-    const text = draft.trim();
-    if (
-      !text ||
-      sending ||
-      uploading ||
-      !conversation?.session_fingerprint ||
-      conversation.deliveries?.some(
-        (delivery) => delivery.state === "misdelivered",
+  const send = useCallback(
+    async (message?: string) => {
+      const text = (message ?? draft).trim();
+      if (
+        !text ||
+        sending ||
+        uploading ||
+        !conversation?.session_fingerprint ||
+        conversation.deliveries?.some(
+          (delivery) => delivery.state === "misdelivered",
+        )
       )
-    )
-      return;
-    setSending(true);
-    setNotice("");
-    try {
-      const result = (await connectionClient.call("agent_conversation.send", {
-        pane_id: pane.pane_id,
-        text,
-        session_fingerprint: conversation.session_fingerprint,
-        // What Chat showed: a send checks for the message after these.
-        baseline: history.messages
-          .filter((message) => message.role === "user")
-          .map((message) => message.id),
-      })) as SendResult;
-      if (result.status === "sent") {
-        setDraft("");
-        load();
-        refreshHistory();
-      } else {
-        setNotice(result.message);
-        if (result.reason === "changed") load();
+        return;
+      setSending(true);
+      setNotice("");
+      try {
+        const result = (await connectionClient.call("agent_conversation.send", {
+          pane_id: pane.pane_id,
+          text,
+          session_fingerprint: conversation.session_fingerprint,
+          // What Chat showed: a send checks for the message after these.
+          baseline: history.messages
+            .filter((message) => message.role === "user")
+            .map((message) => message.id),
+        })) as SendResult;
+        if (result.status === "sent") {
+          if (message === undefined) setDraft("");
+          load();
+          refreshHistory();
+        } else {
+          setNotice(result.message);
+          if (result.reason === "changed") load();
+        }
+      } catch (reason) {
+        setNotice(reason instanceof Error ? reason.message : String(reason));
+      } finally {
+        setSending(false);
       }
-    } catch (reason) {
-      setNotice(reason instanceof Error ? reason.message : String(reason));
-    } finally {
-      setSending(false);
-    }
-  }, [
-    connectionClient,
-    conversation,
-    draft,
-    history.messages,
-    load,
-    pane.pane_id,
-    refreshHistory,
-    sending,
-    uploading,
-  ]);
+    },
+    [
+      connectionClient,
+      conversation,
+      draft,
+      history.messages,
+      load,
+      pane.pane_id,
+      refreshHistory,
+      sending,
+      uploading,
+    ],
+  );
 
   const dismiss = useCallback(
     (deliveryId: string) => {
@@ -257,6 +264,29 @@ export function AgentChat({
     },
     [connectionClient, load, pane.pane_id],
   );
+
+  const sendRef = useRef(send);
+  sendRef.current = send;
+  const askAuthor = useCallback((item: WorkItem) => {
+    void sendRef.current(
+      `↳ #${item.number} Please fix the findings on this pull request.`,
+    );
+  }, []);
+  const decorationTokens = useChatBlocks({
+    entries: history.messages,
+    steps: stepEvidence,
+    owner: {
+      connectionId: connectionClient.connectionId,
+      generation: connectionClient.serverRuntimeGeneration,
+      paneId: pane.pane_id,
+      sessionFingerprint: workSessionFingerprint,
+      label: pane.agent_name ?? pane.agent ?? "the agent",
+    },
+    onAskAuthor:
+      conversation?.status === "ok" && conversation.session_fingerprint
+        ? askAuthor
+        : undefined,
+  });
 
   // The agent's question: answered by pressing one option's key in its pane,
   // only when the user picks it. The service checks the agent still shows
@@ -660,54 +690,21 @@ export function AgentChat({
             onAtLatest={history.dropOlder}
             onOpen={setExpanded}
             matchedIds={matched}
-            stepEvidence={stepEvidence}
-            after={[
-              running ? (
-                <div
-                  key="running"
-                  className="agent-chat-running"
-                  data-call-id={running.id}
-                >
-                  <span className="agent-chat-spinner" aria-hidden="true" />
-                  {/* Announced when the step starts, not as its clock ticks. */}
-                  <span className="agent-chat-running-label" role="status">
-                    <b>{running.name}</b>
-                    {running.summary ? <code>{running.summary}</code> : null}
-                  </span>
-                  {Number.isFinite(Date.parse(running.started_at)) &&
-                  clock >= Date.parse(running.started_at) ? (
-                    <span className="agent-chat-now-time" aria-hidden="true">
-                      {elapsed(clock - Date.parse(running.started_at))}
-                    </span>
-                  ) : null}
-                </div>
-              ) : null,
-              answered ? (
-                <p key="answered" className="agent-chat-answered" role="status">
-                  {answered.acknowledged ? "You answered" : "Sent"}{" "}
-                  <b>
-                    {answered.number} · {answered.label}
-                  </b>
-                  {answered.acknowledged
-                    ? null
-                    : ` · ${UNCONFIRMED[answered.unconfirmed_reason ?? "still_showing"]}`}
-                  <span className="agent-chat-answered-question">
-                    {answered.question.join(" ")}
-                  </span>
-                </p>
-              ) : null,
-              showAsk && prompt ? (
-                <AskCard
-                  key="ask"
-                  agent={conversation?.agent ?? "The agent"}
-                  prompt={prompt}
-                  answering={answering}
-                  notice={askNotice}
-                  onAnswer={(key) => void answer(key)}
-                  onOpenTerminal={onOpenTerminal}
-                />
-              ) : null,
-            ]}
+            decorate={decorateChat}
+            decorationTokens={decorationTokens}
+            after={
+              <ChatAfterBlocks
+                running={running}
+                clock={clock}
+                answered={answered}
+                prompt={showAsk ? prompt : null}
+                agent={conversation?.agent ?? "The agent"}
+                answering={answering}
+                notice={askNotice}
+                onAnswer={(key) => void answer(key)}
+                onOpenTerminal={onOpenTerminal}
+              />
+            }
           />
           <AgentMessageDialog
             message={expanded}

@@ -44,10 +44,10 @@ import { formatBytes } from "./agentSession";
 import { MarkdownPreview } from "./markdown";
 import { unwrapPastedContent } from "./pastedContent";
 import {
-  StepDetailEvidence,
-  StepRowEvidence,
-  type ConversationStep,
-} from "./chat/blocks/steps";
+  historyDecorationKey,
+  type HistoryDecorator,
+  type HistoryDecoration,
+} from "./historyDecoration";
 import "./AgentHistoryChat.css";
 
 // Treat the list as pinned while the reader is within this distance of the
@@ -64,6 +64,8 @@ const ChatBubble = memo(function ChatBubble({
   sequence,
   highlighted,
   matched = null,
+  decorate,
+  decorationToken,
   onOpen,
 }: {
   entry: HistoryEntry;
@@ -71,6 +73,8 @@ const ChatBubble = memo(function ChatBubble({
   highlighted: boolean;
   /** Has the same words as a message Chat sent: matched, not proven. */
   matched?: "words" | "order" | null;
+  decorate?: HistoryDecorator;
+  decorationToken?: unknown;
   onOpen: (entry: HistoryEntry) => void;
 }) {
   // A user's paste shows as the words they pasted, marked as a paste.
@@ -82,6 +86,7 @@ const ChatBubble = memo(function ChatBubble({
   const truncated = preview.length < shown.text.length;
   const label = historyEntryLabel(entry);
   const tone = entry.kind === "error" ? "is-error" : `is-${entry.role}`;
+  const decoration = decorate?.({ type: "message", entry }, decorationToken);
   return (
     <article
       className={`agent-history-chat-message ${tone} ${highlighted ? "is-minimap-target" : ""}`}
@@ -140,6 +145,7 @@ const ChatBubble = memo(function ChatBubble({
           <Copy size={12} />
         </button>
       </div>
+      {decoration?.after}
     </article>
   );
 });
@@ -276,103 +282,127 @@ function ToolStepDetail({
   );
 }
 
-function ToolStepRow({
-  step,
-  evidence,
-  expanded,
-  loader,
-  onToggle,
-  onOpen,
-}: {
-  step: ToolStep;
-  /** What Chat's step model knows about this call, when it is given. */
-  evidence?: ConversationStep;
-  expanded: boolean;
-  loader: ToolContentLoader;
-  onToggle: () => void;
-  onOpen: (entry: HistoryEntry) => void;
-}) {
-  const { call, result } = step;
-  const status = toolStepStatus(step, evidence);
-  const headline =
-    call && !isToolContentPending(call)
-      ? toolArgumentHeadline(call.text)
-      : call && loader.loading.has(call.id)
-        ? "Loading…"
-        : "";
-  const sentAt = (call ?? result)?.sent_at;
-  return (
-    <li
-      className={`agent-history-chat-step is-${status} ${expanded ? "is-expanded" : ""}`}
-    >
-      <button
-        type="button"
-        className="agent-history-chat-step-row"
-        aria-expanded={expanded}
-        title={sentAt ? formatUiDateTime(sentAt) : undefined}
-        onClick={onToggle}
+const ToolStepRow = memo(
+  function ToolStepRow({
+    step,
+    decorate,
+    decorationToken,
+    expanded,
+    loader,
+    onToggle,
+    onOpen,
+  }: {
+    step: ToolStep;
+    /** What Chat's step model knows about this call, when it is given. */
+    decorate?: HistoryDecorator;
+    decorationToken?: unknown;
+    expanded: boolean;
+    loader: ToolContentLoader;
+    onToggle: (id: string) => void;
+    onOpen: (entry: HistoryEntry) => void;
+  }) {
+    const { call, result } = step;
+    const decoration = decorate?.({ type: "step", step }, decorationToken);
+    const status = toolStepStatus(step, decoration);
+    const headline =
+      call && !isToolContentPending(call)
+        ? toolArgumentHeadline(call.text)
+        : call && loader.loading.has(call.id)
+          ? "Loading…"
+          : "";
+    const sentAt = (call ?? result)?.sent_at;
+    return (
+      <li
+        className={`agent-history-chat-step is-${status} ${expanded ? "is-expanded" : ""}`}
       >
-        {status === "done" ? (
-          <Check size={12} aria-label="Succeeded" />
-        ) : status === "error" ? (
-          <X size={12} aria-label="Failed" />
-        ) : status === "interrupted" ? (
-          <CircleSlash size={12} aria-label="Interrupted" />
-        ) : (
-          <Wrench size={12} aria-label="No output yet" />
-        )}
-        <span className="agent-history-chat-step-name">
-          {evidence?.label ?? step.name}
-        </span>
-        <span className="agent-history-chat-step-headline">{headline}</span>
-        {status === "interrupted" ? (
-          <span className="agent-history-chat-step-note">Interrupted</span>
+        <button
+          type="button"
+          className="agent-history-chat-step-row"
+          aria-expanded={expanded}
+          title={sentAt ? formatUiDateTime(sentAt) : undefined}
+          onClick={() => onToggle(step.id)}
+        >
+          {status === "done" ? (
+            <Check size={12} aria-label="Succeeded" />
+          ) : status === "error" ? (
+            <X size={12} aria-label="Failed" />
+          ) : status === "interrupted" ? (
+            <CircleSlash size={12} aria-label="Interrupted" />
+          ) : (
+            <Wrench size={12} aria-label="No output yet" />
+          )}
+          <span className="agent-history-chat-step-name">
+            {decoration?.label ?? step.name}
+          </span>
+          <span className="agent-history-chat-step-headline">{headline}</span>
+          {status === "interrupted" ? (
+            <span className="agent-history-chat-step-note">Interrupted</span>
+          ) : null}
+          {decoration?.row}
+        </button>
+        {expanded ? (
+          <>
+            {decoration?.detail}
+            <ToolStepDetail step={step} loader={loader} onOpen={onOpen} />
+          </>
         ) : null}
-        {evidence ? <StepRowEvidence step={evidence} /> : null}
-      </button>
-      {expanded ? (
-        <>
-          {evidence ? <StepDetailEvidence step={evidence} /> : null}
-          <ToolStepDetail step={step} loader={loader} onOpen={onOpen} />
-        </>
-      ) : null}
-    </li>
-  );
-}
+      </li>
+    );
+  },
+  (a, b) =>
+    a.step.call === b.step.call &&
+    a.step.result === b.step.result &&
+    a.step.id === b.step.id &&
+    a.step.name === b.step.name &&
+    a.expanded === b.expanded &&
+    a.loader === b.loader &&
+    a.decorate === b.decorate &&
+    a.decorationToken === b.decorationToken &&
+    a.onToggle === b.onToggle &&
+    a.onOpen === b.onOpen,
+);
 
 /**
  * A row's status. The step model adds what the entries alone do not say: a
  * call whose tests failed, and, while no result has arrived, a call cut off
  * without one.
  */
-function toolStepStatus(step: ToolStep, evidence?: ConversationStep) {
+function toolStepStatus(step: ToolStep, decoration?: HistoryDecoration) {
   if (step.result)
-    return step.result.is_error || evidence?.state === "failed"
+    return step.result.is_error || decoration?.state === "error"
       ? "error"
       : "done";
-  return evidence?.state === "interrupted" ? "interrupted" : "pending";
+  return decoration?.state === "interrupted" ? "interrupted" : "pending";
 }
 
 /** The step model's entry for a call, by the harness's call ID. */
-function evidenceFor(
-  evidence: ReadonlyMap<string, ConversationStep> | undefined,
+function decorationFor(
+  decorate: HistoryDecorator | undefined,
+  tokens: ReadonlyMap<string, unknown> | undefined,
   step: ToolStep,
 ) {
-  const callId = step.call?.source_call_id ?? step.result?.source_call_id;
-  return callId ? evidence?.get(callId) : undefined;
+  const entry = step.call ?? step.result;
+  return entry
+    ? decorate?.(
+        { type: "step", step },
+        tokens?.get(historyDecorationKey(entry)),
+      )
+    : undefined;
 }
 
 // Collapsed by default; the block keeps its open state across polling
 // refreshes because its key follows the first entry's id.
 function ToolBlock({
   entries,
-  stepEvidence,
+  decorate,
+  decorationTokens,
   loader,
   onToggle,
   onOpen,
 }: {
   entries: HistoryEntry[];
-  stepEvidence?: ReadonlyMap<string, ConversationStep>;
+  decorate?: HistoryDecorator;
+  decorationTokens?: ReadonlyMap<string, unknown>;
   loader: ToolContentLoader;
   // Called before the reader opens or closes part of the block.
   onToggle: () => void;
@@ -380,6 +410,13 @@ function ToolBlock({
 }) {
   const [open, setOpen] = useState(false);
   const [expandedStep, setExpandedStep] = useState<string | null>(null);
+  const toggleStep = useCallback(
+    (id: string) => {
+      onToggle();
+      setExpandedStep((current) => (current === id ? null : id));
+    },
+    [onToggle],
+  );
   const listId = useId();
   const steps = useMemo(() => pairToolSteps(entries), [entries]);
   // Each payload version is queued and fetched directly at most once per
@@ -421,10 +458,13 @@ function ToolBlock({
   }, [expandedStep, load, steps]);
   const summary = summarizeToolSteps(steps);
   // The header counts the errors the rows show, with the step model's.
-  const errors = stepEvidence
+  const errors = decorate
     ? steps.filter(
         (step) =>
-          toolStepStatus(step, evidenceFor(stepEvidence, step)) === "error",
+          toolStepStatus(
+            step,
+            decorationFor(decorate, decorationTokens, step),
+          ) === "error",
       ).length
     : summary.errors;
   const callsLabel = `${summary.calls} tool ${summary.calls === 1 ? "call" : "calls"}`;
@@ -466,15 +506,13 @@ function ToolBlock({
             <ToolStepRow
               key={step.id}
               step={step}
-              evidence={evidenceFor(stepEvidence, step)}
+              decorate={decorate}
+              decorationToken={decorationTokens?.get(
+                historyDecorationKey((step.call ?? step.result)!),
+              )}
               expanded={expandedStep === step.id}
               loader={loader}
-              onToggle={() => {
-                onToggle();
-                setExpandedStep((current) =>
-                  current === step.id ? null : step.id,
-                );
-              }}
+              onToggle={toggleStep}
               onOpen={onOpen}
             />
           ))}
@@ -496,7 +534,8 @@ export function AgentHistoryChat({
   onLoadTool = noop,
   onOpen,
   matchedIds,
-  stepEvidence,
+  decorate,
+  decorationTokens,
   after,
   hasOlder = false,
   olderLoading = false,
@@ -513,11 +552,11 @@ export function AgentHistoryChat({
   /** The reader is back at the newest message. */
   onAtLatest?: () => void;
   /**
-   * Chat's step model by tool-call ID: each row shows its label, state, test
-   * badge and time, and opened, its diff, test strip or output. Unchanged
-   * steps keep their object across reads. The History drawer passes none.
+   * One stable renderer and identity-compared per-entry/per-step tokens.
+   * The History drawer passes neither and remains undecorated.
    */
-  stepEvidence?: ReadonlyMap<string, ConversationStep>;
+  decorate?: HistoryDecorator;
+  decorationTokens?: ReadonlyMap<string, unknown>;
   /** Messages a send from Chat matched by their words. */
   matchedIds?: ReadonlyMap<string, "words" | "order">;
   /** Shown after the newest message (Chat's sends not yet seen). */
@@ -711,13 +750,18 @@ export function AgentHistoryChat({
               sequence={item.sequence}
               highlighted={highlightedSequence === item.sequence}
               matched={matchedIds?.get(item.entry.id) ?? null}
+              decorate={decorate}
+              decorationToken={decorationTokens?.get(
+                historyDecorationKey(item.entry),
+              )}
               onOpen={onOpen}
             />
           ) : (
             <ToolBlock
               key={item.id}
               entries={item.entries}
-              stepEvidence={stepEvidence}
+              decorate={decorate}
+              decorationTokens={decorationTokens}
               loader={loader}
               onToggle={pauseFollow}
               onOpen={onOpen}
