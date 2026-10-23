@@ -27,6 +27,7 @@ import WorldInspectorConversationView from "./WorldInspectorConversation";
 import WorldIntentProfile from "./WorldIntentProfile";
 import { WorldConnectionRequired } from "./WorldStatus";
 import { WindowFrame } from "./windows/WindowFrame";
+import { WorldPanelWindow, useWorldPanels } from "./windows/WorldPanel";
 import { WindowSurface } from "./windows/WindowSurface";
 import { type WorldControlPlaneProps } from "./worldControlPlaneContract";
 import {
@@ -157,6 +158,8 @@ const WorldViewErrorBoundary = lazyWithReload("world-view-boundary", () =>
   })),
 );
 export function WorldControlPlane(props: WorldControlPlaneProps) {
+  // Panel windows (not Inspectors) that a view opens with <WorldPanel>.
+  const { panels, panelBodyRef } = useWorldPanels();
   const controller = useWorldInspectorController(props);
   const {
     view,
@@ -434,6 +437,73 @@ export function WorldControlPlane(props: WorldControlPlaneProps) {
               zIndex,
               active: windowActive,
             }) => {
+              const panel = panels.find(
+                (candidate) => candidate.id === entry.id,
+              );
+              if (panel)
+                return (
+                  <WindowFrame
+                    key={entry.id}
+                    id={entry.id}
+                    label={`${panel.label} window`}
+                    geometry={geometry}
+                    restoreGeometry={
+                      entry.maximized ||
+                      entry.placement.kind !== "floating" ||
+                      managedWindows.focusMode
+                        ? entry.floating
+                        : undefined
+                    }
+                    stage={stage}
+                    workArea={workArea}
+                    zIndex={zIndex}
+                    active={windowActive}
+                    compact={compactArrangement}
+                    // In Town a panel takes the Town window look, as the
+                    // Inspector does.
+                    className={`world-panel-frame ${
+                      view === "town" ? "is-town-skin theme-scope-dark" : ""
+                    }`}
+                    onRaise={() =>
+                      windowCommand({ type: "raise", id: entry.id })
+                    }
+                    onPlace={(rect) =>
+                      windowCommand({ type: "place", id: entry.id, rect })
+                    }
+                    onSnap={(target) =>
+                      windowCommand({ type: "snap", id: entry.id, target })
+                    }
+                    onMaximize={() =>
+                      windowCommand({ type: "maximize", id: entry.id })
+                    }
+                  >
+                    <WorldPanelWindow
+                      label={panel.label}
+                      onBody={panelBodyRef(entry.id)}
+                      controls={{
+                        compact: compactArrangement,
+                        maximized: entry.maximized || managedWindows.focusMode,
+                        onMinimize: () =>
+                          windowCommand({ type: "minimize", id: entry.id }),
+                        onMaximize: () =>
+                          windowCommand({ type: "maximize", id: entry.id }),
+                        onClose: panel.onClose,
+                        onSnap: (target) =>
+                          windowCommand({
+                            type: "snap",
+                            id: entry.id,
+                            target,
+                          }),
+                        onFloat: () =>
+                          windowCommand({ type: "float", id: entry.id }),
+                        // A panel is a detail of its view: Back closes it.
+                        back: {
+                          label: `Back to ${view[0]!.toUpperCase()}${view.slice(1)}`,
+                        },
+                      }}
+                    />
+                  </WindowFrame>
+                );
               const conversation = inspectorConversations.find(
                 (candidate) => worldInspectorWindowId(candidate) === entry.id,
               );

@@ -105,6 +105,7 @@ import {
   townDeskBadges,
   type TownDeskBadge,
 } from "./townBadges";
+import { DeskWorkBadge } from "./DeskWorkBadge";
 import "./town.css";
 import "./townTeams.css";
 
@@ -1671,27 +1672,6 @@ const TownTeamsLayer = memo(function TownTeamsLayer({
     </svg>
   );
 });
-function TownDeskBadgeLink({
-  badge,
-  deskLabel,
-}: {
-  badge: TownDeskBadge | undefined;
-  deskLabel: string;
-}) {
-  return badge ? (
-    <a
-      className="town-desk-badge"
-      data-tone={badge.tone}
-      href={badge.url}
-      target="_blank"
-      rel="noopener noreferrer"
-      aria-label={`${badge.text} at ${deskLabel}`}
-    >
-      {badge.text}
-    </a>
-  ) : null;
-}
-
 const TownWorldLayer = memo(function TownWorldLayer({
   model,
   layout,
@@ -1935,7 +1915,7 @@ const TownWorldLayer = memo(function TownWorldLayer({
                               >
                                 {desk.displayLabel}
                               </span>
-                              <TownDeskBadgeLink
+                              <DeskWorkBadge
                                 badge={deskBadges.get(desk.key)}
                                 deskLabel={desk.displayLabel}
                               />

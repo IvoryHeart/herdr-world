@@ -1,0 +1,27 @@
+/* Pull request cards in the Work lens take Board's chalk palette. */
+.work-card-pr {
+  margin-top: 8px;
+}
+.work-card-pr .pr-card {
+  --pr-ink: var(--board-ink);
+  --pr-soft: var(--board-soft);
+  --pr-line: var(--board-line);
+  --pr-accent: var(--board-accent);
+  --pr-ground: var(--board-card);
+  --pr-pass: var(--s-done);
+  --pr-fail: #ff8a80;
+  --pr-pending: var(--s-blocked);
+  box-shadow: var(--board-shadow);
+  user-select: text;
+  -webkit-user-select: text;
+}
+.work-lens-column[data-lane="fixing"] .work-card-pr .pr-card {
+  border-left: 3px solid var(--s-blocked);
+}
+.work-lens-column[data-lane="ready"] .work-card-pr .pr-card,
+.work-lens-column[data-lane="green"] .work-card-pr .pr-card {
+  border-left: 3px solid var(--s-done);
+}
+:root[data-theme="light"] .work-card-pr .pr-card {
+  --pr-fail: #c62828;
+}

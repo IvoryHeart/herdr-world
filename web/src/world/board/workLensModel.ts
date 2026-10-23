@@ -15,7 +15,12 @@ import { linkMatchesPane, paneKey } from "../worldSources";
 
 export type WorkLensGroup = "pull_requests" | "tickets";
 
-export type WorkLensAgent = { id: string; label: string };
+export type WorkLensAgent = {
+  id: string;
+  label: string;
+  /** Idle or finished now: waiting for someone, not working. */
+  idle: boolean;
+};
 
 export type WorkLensCard = { item: WorkItem; agents: WorkLensAgent[] };
 
@@ -98,6 +103,7 @@ export function workLensColumns(
       list.push({
         id: leaf.id,
         label: leaf.agentName ?? leaf.agentLabel ?? leaf.tabLabel ?? leaf.label,
+        idle: leaf.status === "idle" || leaf.status === "done",
       });
     agentsByItem.set(link.itemKey, list);
   }
