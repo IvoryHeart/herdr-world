@@ -48,6 +48,8 @@ export type ManagedWindowControls = {
   back?: { label: string };
   /** The next agent that needs you, as the bar's primary action. */
   next?: { count: number; urgent: boolean; onNext(): void } | null;
+  /** A narrow window: maximize joins ⋯ so the bar still fits. */
+  narrow?: boolean;
   /** On a phone, the window's views live in ⋯ instead of the bar. */
   views?: readonly {
     id: string;
@@ -67,15 +69,19 @@ export type ManagedWindowControls = {
 /** Close presented as Back, for the leading edge of a window bar. */
 export function WindowBackButton({
   controls,
+  label = "window",
 }: {
   controls: ManagedWindowControls;
+  label?: string;
 }) {
   if (!controls.back) return null;
+  // It closes the window, so it keeps the window's Close name; the tooltip
+  // says where Back leads.
   return (
     <button
       type="button"
       className="world-window-back"
-      aria-label={controls.back.label}
+      aria-label={`Close ${label}`}
       title={controls.back.label}
       onClick={controls.onClose}
     >
@@ -184,10 +190,23 @@ export function WindowControls({
       section: index === 0 ? "Switch to" : undefined,
       run: target.onSelect,
     })),
+    ...(controls.narrow
+      ? [
+          {
+            label: controls.maximized ? "Restore" : "Maximize",
+            section:
+              controls.views?.length || controls.switchTo?.length
+                ? "Window"
+                : undefined,
+            run: controls.onMaximize,
+          },
+        ]
+      : []),
     {
       label: "Minimize",
-      section:
-        controls.views?.length || controls.switchTo?.length
+      section: controls.narrow
+        ? undefined
+        : controls.views?.length || controls.switchTo?.length
           ? "Window"
           : undefined,
       run: controls.onMinimize,
@@ -292,7 +311,7 @@ export function WindowControls({
       >
         <MoreHorizontal size={16} />
       </button>
-      {!controls.compact && (
+      {!controls.compact && !controls.narrow && (
         <button
           type="button"
           aria-label={`${controls.maximized ? "Restore" : "Maximize"} ${label}`}

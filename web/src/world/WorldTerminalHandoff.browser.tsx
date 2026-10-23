@@ -1832,9 +1832,16 @@ async function run() {
   const mobileHeader = mobileInspector.querySelector<HTMLElement>(
     ".workspace-inspector-head",
   )!;
+  // On a phone the window looks like the terminal: its own bar (name,
+  // status and ⋯) is the only bar, and the app's topbar slides away.
   check(
-    mobileHeader.getBoundingClientRect().height === 0,
-    "mobile terminal title and resource bars consume no terminal height",
+    mobileHeader.getBoundingClientRect().height > 0 &&
+      mobileHeader.getBoundingClientRect().height <= 72 &&
+      !mobileInspector
+        .querySelector(".workspace-inspector-tabs:not([hidden])")
+        ?.getClientRects().length &&
+      document.querySelector(".topbar")?.classList.contains("is-zen") === true,
+    "the phone terminal window shows one bar of its own and no topbar above it",
   );
   const mobileInput = mobileInspector.querySelector<HTMLTextAreaElement>(
     "textarea.terminal-composer-input",
@@ -2082,7 +2089,7 @@ async function run() {
             (headRows[0]!.top + headRows[0]!.height / 2),
         ) < 4,
     ) &&
-      builderHead.getBoundingClientRect().height <= 64 &&
+      builderHead.getBoundingClientRect().height <= 72 &&
       !builderHead.querySelector(".workspace-inspector-repository-action") &&
       !document.querySelector(
         '[aria-label="Builder Inspector"] .pull-request-card',

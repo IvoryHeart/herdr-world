@@ -39,6 +39,21 @@
 .world-window-layer::-webkit-scrollbar-track {
   background: var(--shell-panel);
 }
+/* A managed window keeps one ⋯: below 360px its views join the window's
+   menu, so the Inspector's own More views button stays out. */
+.world-managed-window .workspace-inspector-tabs-more {
+  display: none !important;
+}
+@container workspace-inspector (max-width: 359px) {
+  .world-managed-window .workspace-inspector-head {
+    gap: 4px;
+  }
+  .world-managed-window
+    .workspace-inspector-head
+    > .workspace-inspector-identity {
+    min-width: 40px;
+  }
+}
 /* Managed windows use the Inspector's one bar with tighter padding. */
 .world-managed-window .workspace-inspector-head {
   gap: 6px;

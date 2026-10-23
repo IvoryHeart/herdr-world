@@ -405,10 +405,12 @@
   --town-button: #273141;
   --town-button-on: #3a4459;
   --town-edge: #090c11;
-  border: 2px solid var(--town-edge);
+  /* The 2px edge is a ring, so the window's content still fills it. */
+  border: 0;
   border-radius: 12px;
   background: rgba(17, 21, 29, 0.92);
   box-shadow:
+    0 0 0 2px var(--town-edge),
     inset 0 0 0 1px rgba(255, 255, 255, 0.07),
     0 10px 30px rgba(0, 0, 0, 0.35);
   backdrop-filter: blur(8px);
@@ -416,8 +418,8 @@
   font-family: "Rubik", system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 .world-managed-window.is-town-skin.is-active {
-  border-color: var(--town-edge);
   box-shadow:
+    0 0 0 2px var(--town-edge),
     inset 0 0 0 1px rgba(255, 209, 102, 0.35),
     0 10px 30px rgba(0, 0, 0, 0.35);
 }

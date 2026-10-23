@@ -562,7 +562,12 @@ export function WorkspaceInspectorHost({
               : undefined
         }
       >
-        {windowControls ? <WindowBackButton controls={windowControls} /> : null}
+        {windowControls ? (
+          <WindowBackButton
+            controls={windowControls}
+            label="Inspector window"
+          />
+        ) : null}
         {terminalColor ? (
           <ColorSwatchButton
             className="workspace-inspector-swatch"
@@ -790,9 +795,12 @@ export function WorkspaceInspectorHost({
             // A phone shows the window like its terminal: the views move
             // into ⋯ beside the agents it can switch to.
             controls={
-              windowControls.compact
+              // Below 360px the views join ⋯ too, so a narrow window
+              // keeps one menu rather than two.
+              windowControls.compact || (hostWidth > 0 && hostWidth < 360)
                 ? {
                     ...windowControls,
+                    narrow: !windowControls.compact,
                     views: INSPECTOR_TAB_ORDER.filter(
                       (view) =>
                         availableViews.includes(view) &&
