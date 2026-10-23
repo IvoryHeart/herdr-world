@@ -2351,6 +2351,12 @@ function TownBoard({
     observability.health !== "unavailable" && observability.sourceCount > 0;
   // Phones show a compact chip; it opens the full board in place.
   const [open, setOpen] = useState(false);
+  const closeOnEscape = (event: React.KeyboardEvent) => {
+    if (open && event.key === "Escape") {
+      event.stopPropagation();
+      setOpen(false);
+    }
+  };
   const summary = `${counts.working} working, ${counts.blocked} need you, ${counts.done} done`;
   return (
     <>
@@ -2362,6 +2368,7 @@ function TownBoard({
         aria-label={`Town board: ${summary}`}
         title={open ? "Hide the Town board" : "Show the Town board"}
         onClick={() => setOpen((value) => !value)}
+        onKeyDown={closeOnEscape}
       >
         <span data-status="working">{counts.working}</span>
         <span data-status="blocked">!{counts.blocked}</span>
@@ -2373,9 +2380,7 @@ function TownBoard({
         data-open={open}
         role="group"
         aria-label="Town board"
-        onKeyDown={(event) => {
-          if (event.key === "Escape") setOpen(false);
-        }}
+        onKeyDown={closeOnEscape}
       >
         <div className="town-board-title">TOWN BOARD</div>
         <dl>

@@ -951,6 +951,24 @@ async function run() {
       );
       chip.click();
       await waitFor(() => !shown(board), "the chip did not close the board");
+      chip.focus({ preventScroll: true });
+      chip.click();
+      await waitFor(
+        () => shown(board),
+        "the focused chip did not reopen the board",
+      );
+      chip.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+      );
+      await waitFor(
+        () => !shown(board),
+        "Escape on the focused chip did not close the board",
+      );
+      check(
+        chip.getAttribute("aria-expanded") === "false" &&
+          document.activeElement === chip,
+        "Escape should collapse the board and keep focus on its chip",
+      );
     } else
       check(
         !shown(chip) && shown(board),
