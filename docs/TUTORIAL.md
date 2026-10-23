@@ -126,6 +126,9 @@ changes what you see and does not disconnect hosts or retarget open terminals.
    agents also wait there until you open their terminal or mark that completion
    reviewed, then join idle agents in the lounge. These locations visualize
    status; they do not move the underlying pane or change its host.
+   On a phone, tap the counts chip under search to open the Town board with
+   working, needs-you and finished counts and spend. Tap it again or press
+   Escape to close the board.
 4. Tap an agent or its table to open its window on **Chat**: World's Inspector,
    with **Chat**, **Terminal**, **Changes** and **Files** in its top selector.
    In Town it docks on the right at a readable width; drag its left edge to
@@ -144,9 +147,10 @@ changes what you see and does not disconnect hosts or retarget open terminals.
    **Terminal**; that tap also brings the agent back and, like the chat, does
    not mark its work reviewed.
    Zoom into a room: an agent with a quest (its own todo list, plan, Codex goal
-   or `/loop`) shows a flag and progress bar at its seat. Open its chat to
-   read the quest log above the conversation: each objective as pending,
-   active, done or blocked.
+   or `/loop`) shows a swallowtail pennant beside its seat, with a progress
+   bar when the quest has steps; tap the pennant to see **Quest** and its
+   title. Open its chat to read the quest log above the conversation: each
+   objective as pending, active, done or blocked.
 5. Read the question before using an answer button: it sends the offered key to
    that live pane. When no supported choices appear, use **Open chat** to reply
    in the agent's window, or **Open terminal** in the card's header (or the
@@ -261,8 +265,9 @@ a starting brief and a look in Town. World starts it in a new tab for you.
    a permission mode. On **Skills & tools**, tap the skills (found in the
    room's `.agents/skills` and `.claude/skills` and your harness folders) and,
    for Claude Code, the tools it may use. On **Brief**, write the first prompt;
-   `{{task}}` is filled with what you type when you launch. On **Look**, dress
-   the character and watch it walk, turn and sit in the preview. **What a
+   `{{task}}` is filled with what you type when you launch. On **Look & sound**,
+   dress the character and watch it walk, turn and sit in the preview, and
+   pick its **Chime** (or keep the class default). **What a
    launch runs** shows the exact Herdr command. Press **Save**.
 3. Open **New agent**: **Actions → New agent**, **New agent** on a
    room's plaque (on a phone, tap the room first), or the robot beside **+** in
@@ -280,6 +285,24 @@ a starting brief and a look in Town. World starts it in a new tab for you.
 
 **You are done when:** an agent you started from a profile is answering in its
 own tab, dressed as you chose in Town.
+
+### Hear who needs you
+
+<a id="chimes"></a>
+
+1. Open **Menu → Sounds**. Under **This device**, leave **Play chimes on this
+   device** on and tap **Needs you**, **For you** and **Finished** to hear the
+   three patterns. Turn it off on devices that shouldn't chime; push stays
+   silent too while World is open, including when notifications are first
+   enabled. Open tabs share this device setting, and queued burst sounds
+   follow your latest sound choices.
+2. Under **Town master**, choose your coordinating agent (for example
+   FirstMate) and tap **Make Town master**. Its chime is a sound of its own.
+3. Tap anywhere in World once (browsers start sound only after a tap). When an
+   agent finishes or needs you, World chimes and a toast says who and why.
+
+**You are done when:** an agent finishing in another tab makes a chime and a
+toast naming it.
 
 ### Use Board: notes and strings for your agents
 
@@ -385,6 +408,18 @@ The Town and Board screenshots use real shell panes in disposable projects.
 The phone Board close-up focuses one workspace, its tabs and a strung note.
 Their empty agent counts are intentional; the notes are sample planning text,
 not reports of completed agent work.
+
+### Let agents arrange World
+
+Agents can use World too. Tell an agent to run `herdr-world --skill`: it learns
+to colour and pin its card, group with the agent that started it, report a
+task result, or ask you a question (`herdr-world ask "Ship it?" --options
+yes,no --wait`). A question shows first in Town's **Needs you** list with the
+agent's name; pick an option or type an answer, and the waiting agent carries
+on. `herdr-world history` shows who changed what, and `herdr-world undo` takes
+back a World-side change. A change marked **unverified** came from a process
+World could not place in the pane it named, or from a terminal that named no
+pane.
 
 ### Use Desk: answer, review and follow work
 

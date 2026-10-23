@@ -1,9 +1,15 @@
+import type { BridgeRpcContext, ConnectionRpcContext } from "./rpc/context";
+import { handleAgentRpc } from "./rpc/agent";
+import { handleBoardTownRpc } from "./rpc/board-town";
+import { handleBridgeRpc } from "./rpc/bridge";
+import { handleConnectionsRpc } from "./rpc/connections";
+import { handleFilesRpc } from "./rpc/files";
+import { handleGitRpc } from "./rpc/git";
+import { handleLauncherRpc } from "./rpc/launcher";
+import { handleWorldRpc } from "./rpc/world";
+
 import { runPluginCommand } from "./config/plugin-command";
-import {
-  conversationRpc,
-  CONVERSATION_RPC_METHODS,
-} from "./agent/conversation-rpc";
-import { createMoveQueue, moveDesk, movePane } from "./world/desk-move";
+import { createMoveQueue } from "./world/desk-move";
 
 /** Town moves run one at a time per connection (see world/desk-move). */
 const townMoveQueues = new Map<string, ReturnType<typeof createMoveQueue>>();
@@ -11,7 +17,6 @@ import { unixOnlyMessage } from "./connections/unix-only";
 import { inspectWorkspacePath } from "./workspace/path";
 import { createWorkspaceWorktree } from "./worktree/create";
 import { canRevealFiles } from "./workspace/file-manager";
-import { sendWorldSnapshotReply } from "./bridge/world-snapshot-reply";
 import { WorldSnapshotAdmission } from "./bridge/world-snapshot-admission";
 import { loadOrCreateSessionSecret } from "./config/session-secret";
 import {
@@ -44,7 +49,12 @@ import { readGuiSettings, updateGuiSettings } from "./config/gui-settings";
 import { cliCommands, runCli, topLevelHelp } from "./cli";
 import { CONTINUE_TO_SERVER, defaultCliContext } from "./cli/command";
 import { runTaskSummaryCommand } from "./herdr/task-summary";
-import { stampLaunchParent } from "./herdr/spawn-stamp";
+import {
+  WORLD_CLI_IDLE_TIMEOUT_SECONDS,
+  WORLD_CLI_PATH,
+} from "./http/world-cli-endpoint";
+import { createWorldCliService } from "./world/world-cli-service";
+import { parseRpcMeta } from "./http/rpc-meta";
 import { runAgentCheckoutCommand } from "./herdr/agent-checkout";
 import { createWebPushService } from "./notifications/web-push";
 import { enrichIntegrationVersions } from "./herdr/integration-versions";
@@ -92,7 +102,6 @@ import {
 } from "./connections/protocol";
 import {
   type ConnectionRpcRequest,
-  dispatchAgentSessionLink,
   isConnectionRpcEnvelope,
   resolveRpcRoute,
 } from "./connections/rpc-routing";
@@ -126,18 +135,11 @@ import {
   serverLogger,
 } from "./utils/logger";
 import { runProcessWithCodeTimeout, shQuote } from "./utils/process-utils";
-import { rpcLogLevel } from "./utils/rpc-logging";
+import { rpcLogLevel, shouldLogRpc } from "./utils/rpc-logging";
 import { DOWNLOAD_TIMEOUT_MS } from "./workspace/file-constants";
 import { WorldSnapshotService } from "./world/snapshot";
 import { WorldWatchlistRegistry } from "./world/watchlist";
-import {
-  clientBoardOps,
-  moveFollowOps,
-  reconcileOps,
-  BoardConflictError,
-  BoardStore,
-  type BoardOp,
-} from "./world/board-store";
+import { BoardStore, type BoardOp } from "./world/board-store";
 import { afterHerdrClose } from "./world/board-closing";
 import { reconcileReadyInterest } from "./world/interest-prune";
 import {
@@ -145,17 +147,8 @@ import {
   recipientOps,
   type ObservedAgent,
 } from "./world/board-recipient";
-import { linkedNoteText, sendNote } from "./world/board-send";
-import { checkAnchor } from "./world/board-anchor";
 import { herdrEventName } from "./utils/herdr-events";
-import { recordSpawnClaims } from "./world/relations";
-import { moveWorkspaceIds } from "./world/move-workspace-ids";
-import { agentKinds, launchAgent } from "./agent/launch";
-import { profileLaunch } from "./agent/profile-launch";
 import { ProfileStore } from "./agent/profile-store";
-import { discoverSkills } from "./agent/skills";
-import { harnessReadiness, openHarnessLogin } from "./agent/harness-readiness";
-import { tabCardKey } from "../../shared/terminalColor";
 import {
   createOfficeObservabilityHttpHandler,
   resolveOfficeObservabilityBootstrap,
@@ -170,10 +163,6 @@ import {
 import { SourcesService } from "./sources/service";
 import { CheckoutResolver } from "./sources/links";
 import { readSourceSecrets, writeSourceSecrets } from "./sources/secrets";
-import {
-  removeWorktreeWithRecovery,
-  WORKTREE_REMOVE_TIMEOUT_MS,
-} from "./worktree/remove";
 
 const snapshotAdmission = new WorldSnapshotAdmission();
 const APP_VERSION = currentBuildVersion(
@@ -288,6 +277,7 @@ const {
   handlePinLogin,
   handleLogout,
   loginPage,
+  bearerAuth,
 } = createAuthHandlers({
   authRequired: config.authRequired,
   password: config.password,
@@ -325,41 +315,6 @@ const conversationWatchers = new WeakMap<
 
 const rpcOutcomes = new Map<string, { status: "error"; detail?: string }>();
 
-const IMPORTANT_RPC_METHODS = new Set([
-  "bridge.pause_others",
-  "agent_conversation.get",
-  "agent_conversation.latest",
-  "agent_conversation.steps",
-  "agent_conversation.send",
-  "agent_conversation.dismiss",
-  "agent_conversation.answer",
-  "agent_conversation.watch",
-  "agent_conversation.unwatch",
-  "agent_history.get",
-  "agent_history.entry",
-  "agent_session.get",
-  "agent_turn.get",
-  "agent_checkout.get",
-  "agent_session.link_preview",
-  "agent_session.link",
-  "file.read",
-  "git.diff_file",
-  "git.commit_file",
-  "git.commit_preview",
-  "git.file_action",
-  "git.pull",
-  "git.repo_action",
-  "settings.update_repo",
-  "settings.workspace_auto_sync.get",
-  "settings.workspace_auto_sync.list",
-  "settings.workspace_auto_sync.update",
-  "settings.workspace_auto_sync.update_key",
-  "settings.worktree_hooks.get",
-  "worktree.create",
-  "worktree.open",
-  "worktree.remove",
-]);
-const SLOW_RPC_LOG_MS = 750;
 const legacyRoutingLogger = createLegacyRoutingLogger({
   log: (message) =>
     logger.warn("deprecated request routing", { detail: message }),
@@ -382,34 +337,6 @@ function logDetail(value: string): string {
     .slice(0, 300);
 }
 
-function parseRpcMeta(raw: string): {
-  id: string | null;
-  method: string | null;
-  connectionId: unknown;
-  connectionGeneration: unknown;
-} {
-  try {
-    const msg = JSON.parse(raw);
-    return {
-      id: typeof msg?.id === "string" ? msg.id : null,
-      method: typeof msg?.method === "string" ? msg.method : null,
-      connectionId: Object.hasOwn(msg ?? {}, "connection_id")
-        ? msg.connection_id
-        : undefined,
-      connectionGeneration: Object.hasOwn(msg ?? {}, "connection_generation")
-        ? msg.connection_generation
-        : undefined,
-    };
-  } catch {
-    return {
-      id: null,
-      method: null,
-      connectionId: undefined,
-      connectionGeneration: undefined,
-    };
-  }
-}
-
 function rpcOutcomeKey(ws: ServerWebSocket<unknown>, id: string) {
   return `${clientLabel(ws)}\0${id}`;
 }
@@ -429,19 +356,6 @@ function takeRpcOutcome(ws: ServerWebSocket<unknown>, id: string | null) {
   const outcome = rpcOutcomes.get(key) ?? null;
   rpcOutcomes.delete(key);
   return outcome;
-}
-
-function shouldLogRpc(
-  method: string | null,
-  elapsedMs: number,
-  failed: boolean,
-) {
-  if (!method) return failed;
-  if (failed) return true;
-  if (method === "bridge.ping" || method === "bridge.status") return false;
-  if (method === "terminal.input" || method === "terminal.scroll") return false;
-  if (method === "terminal.resize" && elapsedMs < SLOW_RPC_LOG_MS) return false;
-  return IMPORTANT_RPC_METHODS.has(method) || elapsedMs >= SLOW_RPC_LOG_MS;
 }
 
 function logRpc(
@@ -581,6 +495,17 @@ function publishBoardChanged(revision: number) {
   });
   for (const ws of clients) safeSend(ws, line, "world-board");
 }
+
+/** The agent CLI (world-cli-service.ts). */
+const worldCli = createWorldCliService({
+  board: { get: () => board().get(), patch: (ops) => board().patch(ops) },
+  connections: () => connectionManager,
+  snapshots: () => worldSnapshots,
+  publishBoard: publishBoardChanged,
+  broadcast: (line) => {
+    for (const ws of clients) safeSend(ws, line, "world-ledger");
+  },
+});
 
 function publishWatchlistChanged(revision: number) {
   const line = JSON.stringify({
@@ -982,6 +907,33 @@ function safeSend(
   });
 }
 
+/** What the rpc/ namespace handlers share with the service. */
+const rpcServices = {
+  bindBoardRecipients,
+  board,
+  clients,
+  connectionManager,
+  connectionProfiles,
+  conversationWatchers,
+  getAssistantService,
+  logger,
+  markRpcError,
+  profiles,
+  publishBoardChanged,
+  publishProfilesChanged,
+  publishWatchlistChanged,
+  publishWorldInvalidation,
+  safeSend,
+  snapshotAdmission,
+  townMoveQueues,
+  worldWatchlist,
+  worldCli,
+  get worldSnapshots() {
+    return worldSnapshots;
+  },
+};
+export type RpcServices = typeof rpcServices;
+
 async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
   let parsed: unknown;
   try {
@@ -1113,292 +1065,28 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
     markRpcError(ws, id, message);
     sendReply({ id, error: { message } }, context);
   };
-  if (method === "bridge.ping") {
-    sendReply({ id, result: { ok: true } }, "bridge-ping");
-    return;
-  }
-  if (method === "bridge.status") {
-    sendReply(
-      {
-        id,
-        result: {
-          clients: clients.size,
-          terminals:
-            connectionManager
-              .defaultReadyRuntime()
-              ?.terminalBridge.statusTerminals() ?? [],
-          default_connection_id: connectionManager.defaultId(),
-          connections: connectionProfiles.list(),
-        },
-      },
-      "bridge-status",
-    );
-    return;
-  }
-  if (method.startsWith("bridge.assistant.")) {
-    try {
-      // Browser admissions must carry the selected catalogue scope. Internal
-      // scheduled turns may use the service's own verified fixed scope.
-      if (
-        [
-          "bridge.assistant.send",
-          "bridge.assistant.task.create",
-          "bridge.assistant.task.update",
-        ].includes(method) &&
-        !Array.isArray(params?.scope)
-      )
-        throw new Error("Invalid workspace scope");
-      const result =
-        method === "bridge.assistant.context"
-          ? await (await getAssistantService()).workspaceCatalog()
-          : method === "bridge.assistant.mentions"
-            ? await (await getAssistantService()).mentionCatalog(params ?? {})
-            : method === "bridge.assistant.task.get"
-              ? await (await getAssistantService()).taskDetail(params ?? {})
-              : await (await getAssistantService()).handle(
-                  method,
-                  params ?? {},
-                );
-      sendReply({ id, result }, "assistant-rpc");
-    } catch (error) {
-      sendError("assistant-rpc-error", error);
-    }
-    return;
-  }
-  if (method === "connections.list") {
-    sendReply(
-      {
-        id,
-        result: {
-          default_connection_id: connectionManager.defaultId(),
-          connections: connectionProfiles.list(),
-        },
-      },
-      "connections-list",
-    );
-    return;
-  }
-  if (method === "world.snapshot") {
-    let transfer: ReturnType<WorldSnapshotAdmission["open"]> | undefined;
-    try {
-      const snapshots = worldSnapshots;
-      if (!snapshots) throw new Error("World snapshot service is unavailable");
-      if (
-        req.accept_world_snapshot_chunks === true &&
-        req.accept_world_snapshot_chunk_admission === true
-      )
-        transfer = snapshotAdmission.open(ws, id);
-      const snapshot = await snapshots.snapshot(params);
-      recordSpawnClaims(board(), snapshot, publishBoardChanged, logger);
-      await sendWorldSnapshotReply(
-        id,
-        snapshot,
-        req.accept_world_snapshot_chunks === true,
-        (payload) => safeSend(ws, payload, "world-snapshot"),
-        () => clients.has(ws),
-        transfer?.wait,
-      );
-    } catch (error) {
-      sendError("world-snapshot-error", error);
-    } finally {
-      transfer?.close();
-    }
-    return;
-  }
-  if (method === "world.board.get") {
-    try {
-      sendReply({ id, result: board().get() }, "world-board-get");
-    } catch (error) {
-      sendError("world-board-get-error", error);
-    }
-    return;
-  }
-  if (method === "world.board.patch") {
-    try {
-      const { ops, observed } = clientBoardOps(
-        (params as { ops?: unknown } | undefined)?.ops,
-      );
-      const result = board().patch(ops);
-      publishBoardChanged(result.revision);
-      sendReply({ id, result: { document: result } }, "world-board-patch");
-      void bindBoardRecipients(ops, observed).catch((error) =>
-        logger.warn("Board could not record a string's agent", {
-          detail: String(error),
-        }),
-      );
-    } catch (error) {
-      if (error instanceof BoardConflictError)
-        sendReply(
-          { id, result: { conflict: error.message, document: error.document } },
-          "world-board-patch",
-        );
-      else sendError("world-board-patch-error", error);
-    }
-    return;
-  }
-  if (method === "world.profiles.get") {
-    try {
-      sendReply({ id, result: profiles().get() }, "world-profiles-get");
-    } catch (error) {
-      sendError("world-profiles-get-error", error);
-    }
-    return;
-  }
-  if (method === "world.profiles.save" || method === "world.profiles.delete") {
-    try {
-      const p = (params ?? {}) as Record<string, unknown>;
-      const result =
-        method === "world.profiles.save"
-          ? profiles().save(p.profile)
-          : profiles().delete(String(p.id ?? ""));
-      publishProfilesChanged(result.revision);
-      sendReply({ id, result }, "world-profiles-write");
-    } catch (error) {
-      sendError("world-profiles-write-error", error);
-    }
-    return;
-  }
-  if (method === "world.watchlist.list") {
-    sendReply({ id, result: worldWatchlist.list() }, "world-watchlist-list");
-    return;
-  }
-  if (method === "world.watchlist.pin" || method === "world.watchlist.unpin") {
-    try {
-      const identity = params as Record<string, unknown> | undefined;
-      const connectionId = identity?.connection_id;
-      const generation = identity?.connection_generation;
-      const terminalId = identity?.terminal_id;
-      if (
-        typeof connectionId !== "string" ||
-        !connectionId ||
-        !Number.isSafeInteger(generation) ||
-        (generation as number) < 0 ||
-        typeof terminalId !== "string" ||
-        !terminalId
-      ) {
-        throw new Error("invalid World watch identity");
-      }
-      if (method === "world.watchlist.unpin") {
-        const result = worldWatchlist.unpin({
-          connection_id: connectionId,
-          connection_generation: generation as number,
-          terminal_id: terminalId,
-        });
-        if (result.changed) {
-          publishWorldInvalidation(connectionId, generation as number);
-          publishWatchlistChanged(result.revision);
-        }
-        sendReply(
-          { id, result: { ...worldWatchlist.list(), changed: result.changed } },
-          "world-watchlist-unpin",
-        );
-        return;
-      }
-      const lease = connectionManager.readyRuntimeLease(connectionId);
-      if (!lease || lease.generation !== generation || !lease.isCurrent()) {
-        throw new Error("World watch target is unavailable");
-      }
-      const paneResult = await lease.runtime.herdr.call("pane.list", {}, 5_000);
-      const panes = (paneResult as { panes?: unknown })?.panes;
-      const matches = Array.isArray(panes)
-        ? panes.filter(
-            (pane) =>
-              pane &&
-              typeof pane === "object" &&
-              (pane as Record<string, unknown>).terminal_id === terminalId,
-          )
-        : [];
-      if (!lease.isCurrent() || matches.length !== 1) {
-        throw new Error("World watch target is unavailable");
-      }
-      const result = worldWatchlist.pin({
-        connection_id: connectionId,
-        connection_generation: generation as number,
-        terminal_id: terminalId,
-        label: typeof identity?.label === "string" ? identity.label : "Watch",
-      });
-      if (result.changed) {
-        publishWorldInvalidation(connectionId, generation as number);
-        publishWatchlistChanged(result.revision);
-      }
-      sendReply(
-        { id, result: { ...worldWatchlist.list(), changed: result.changed } },
-        "world-watchlist-pin",
-      );
-    } catch (error) {
-      sendError("world-watchlist-error", error);
-    }
-    return;
-  }
-  if (method.startsWith("world.")) {
-    sendError(
-      "unknown-world-method",
-      new Error(`unknown bridge-global method: ${method}`),
-    );
-    return;
-  }
-  if (method.startsWith("connections.")) {
-    try {
-      let result: unknown;
-      if (method === "connections.create") {
-        result = await connectionProfiles.create(params?.profile ?? params);
-      } else if (method === "connections.update") {
-        result = await connectionProfiles.update(
-          params?.id,
-          params?.profile ?? params,
-        );
-      } else if (method === "connections.remove") {
-        result = await connectionProfiles.remove(params?.id);
-      } else if (method === "connections.set_default") {
-        result = await connectionProfiles.setDefault(params?.id);
-      } else if (method === "connections.connect") {
-        result = await connectionProfiles.connect(params?.id);
-      } else if (method === "connections.disconnect") {
-        result = await connectionProfiles.disconnect(params?.id);
-      } else if (method === "connections.test") {
-        result = await connectionProfiles.test(params?.profile ?? params);
-      } else {
-        throw new Error(`unknown bridge-global method: ${method}`);
-      }
-      sendReply({ id, result }, "connections-mutation");
-    } catch (error) {
-      const message = sanitizeConnectionError(error);
-      markRpcError(ws, id, message);
-      sendReply({ id, error: { message } }, "connections-mutation-error");
-    }
-    return;
-  }
-  if (method === "bridge.pause_others") {
-    const targets = Array.from(clients).filter((client) => client !== ws);
-    let pausedClients = 0;
-    for (const client of targets) {
-      const ok = safeSend(
-        client,
-        JSON.stringify({
-          control: {
-            type: "pause_connection",
-            reason:
-              "Another Herdr World client paused this connection. Resume when you want this browser to sync again.",
-          },
-        }),
-        "pause-other-client",
-      );
-      if (ok) pausedClients += 1;
-    }
-    sendReply(
-      {
-        id,
-        result: {
-          ok: true,
-          paused_clients: pausedClients,
-          clients: clients.size,
-        },
-      },
-      "bridge-pause-others",
-    );
-    return;
-  }
 
+  const rpc: BridgeRpcContext = {
+    ws,
+    req,
+    id,
+    method,
+    params,
+    route,
+    connectionId,
+    requestIsCurrent,
+    sendReply,
+    sendError,
+    services: rpcServices,
+  };
+  for (const handle of [
+    handleBridgeRpc,
+    handleConnectionsRpc,
+    handleWorldRpc,
+  ]) {
+    const result = handle(rpc);
+    if (result !== false && (await result) !== false) return;
+  }
   if (route.scope === "bridge") {
     sendError(
       "unknown-bridge-method",
@@ -1419,49 +1107,10 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
     );
     return;
   }
-  const {
-    sshHost,
-    herdr,
-    worktreeParents,
-    handleSettingsRpc,
-    worktreeRemovalCoordinator,
-    worktreeRemovalRuntime,
-    terminalBridge,
-  } = connection;
-  const {
-    listWorkspaceFiles,
-    resolveWorkspaceFiles,
-    readWorkspaceFile,
-    searchWorkspaceFiles,
-    revealWorkspaceFile,
-    createWorkspaceDirectory,
-    moveWorkspaceFile,
-    readGitDiffSummary,
-    readWorkspacePullRequest,
-    readGitDiffFile,
-    readGitCommits,
-    readGitCommit,
-    readGitCommitFile,
-    readGitCommitPreview,
-    runGitPull,
-    runWorkspaceGitFileAction,
-    runWorkspaceGitRepoAction,
-  } = connection.files;
-  const { enrichWorkspacesWithGitStatus, invalidateGitStatus } =
-    connection.status;
-  const {
-    runWorktreeHook,
-    worktreeRemoveHookContext,
-    runWorktreeRemovedHook,
-    runWorktreeOpenedHook,
-    sourceWorkspaceForWorktreeCreate,
-  } = connection.worktreeHooks;
-  const {
-    readHistory: readAgentMessageHistory,
-    readSummary: readAgentSessionSummary,
-    readEntry: readAgentHistoryEntry,
-    readTurn: readAgentTurn,
-  } = connection.agentSessions;
+  const { sshHost, herdr, worktreeParents, handleSettingsRpc, terminalBridge } =
+    connection;
+
+  const { enrichWorkspacesWithGitStatus } = connection.status;
 
   if (
     method === "workspace.path" ||
@@ -1520,561 +1169,21 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
     return;
   }
 
-  // Town desk and agent moves: several confirmed pane moves on this exact
-  // connection and runtime generation, with rollback (see world/desk-move).
-  // The launcher: kinds and skills on this host, and a new agent in a new
-  // tab, from a profile or a quick pick of a kind (agent/launch.ts).
-  // Installed and logged in, per supported harness, from each harness's own
-  // status command (agent/harness-readiness.ts). Onboarding uses it too.
-  if (method === "launcher.readiness") {
-    try {
-      const kinds = await agentKinds((rpc, rpcParams) =>
-        herdr.call(rpc, rpcParams, 10_000),
-      );
-      const readiness = await harnessReadiness({
-        kinds,
-        host: sshHost(),
-        windows: sshHost()
-          ? connection.remotePlatform === "windows"
-          : process.platform === "win32",
-        run: runProcessWithCodeTimeout,
-        shQuote,
-      });
-      sendReply({ id, result: { readiness } }, method);
-    } catch (error) {
-      sendError(`${method}-error`, error);
-    }
-    return;
-  }
-  if (method === "launcher.login") {
-    try {
-      const p = (params ?? {}) as Record<string, unknown>;
-      const result = await openHarnessLogin(
-        (rpc, rpcParams) => herdr.call(rpc, rpcParams, 10_000),
-        {
-          workspace_id: String(p.workspace_id ?? ""),
-          kind: String(p.kind ?? ""),
-          windows: sshHost()
-            ? connection.remotePlatform === "windows"
-            : process.platform === "win32",
-          isCurrent: requestIsCurrent,
-        },
-      );
-      sendReply({ id, result }, method);
-    } catch (error) {
-      sendError(`${method}-error`, error);
-    } finally {
-      if (route.scope === "connection" && route.isCurrent())
-        publishWorldInvalidation(route.connectionId, route.generation);
-    }
-    return;
-  }
-  if (method === "launcher.catalog") {
-    try {
-      const p = (params ?? {}) as Record<string, unknown>;
-      const call = (rpc: string, rpcParams: Record<string, unknown>) =>
-        herdr.call(rpc, rpcParams, 10_000);
-      const workspaceId = String(p.workspace_id ?? "");
-      let cwd = "";
-      if (workspaceId) {
-        const listed = (await call("pane.list", {}).catch(() => null)) as {
-          panes?: Record<string, unknown>[];
-        } | null;
-        const pane = listed?.panes?.find((x) => x.workspace_id === workspaceId);
-        cwd = String(pane?.foreground_cwd || pane?.cwd || "");
-      }
-      const host = {
-        host: sshHost(),
-        windows: sshHost()
-          ? connection.remotePlatform === "windows"
-          : process.platform === "win32",
-        run: runProcessWithCodeTimeout,
-        shQuote,
-      };
-      const kinds = await agentKinds(call);
-      const [skills, readiness] = await Promise.all([
-        discoverSkills({ cwd, ...host }).catch(() => []),
-        harnessReadiness({ kinds, ...host }).catch(() => []),
-      ]);
-      sendReply({ id, result: { kinds, skills, readiness } }, method);
-    } catch (error) {
-      sendError(`${method}-error`, error);
-    }
-    return;
-  }
-  if (method === "launcher.start") {
-    try {
-      const p = (params ?? {}) as Record<string, unknown>;
-      const profileId = typeof p.profile_id === "string" ? p.profile_id : "";
-      const profile = profileId ? profiles().profile(profileId) : null;
-      if (profileId && !profile)
-        throw new Error("That profile no longer exists.");
-      const call = (rpc: string, rpcParams: Record<string, unknown>) =>
-        herdr.call(rpc, rpcParams, 70_000);
-      const result = await launchAgent(call, {
-        workspace_id: String(p.workspace_id ?? ""),
-        ...profileLaunch(profile ?? null, {
-          kind: String(p.kind ?? ""),
-          label: String(p.label ?? "")
-            .trim()
-            .slice(0, 64),
-          text: String(p.text ?? "").slice(0, 16_000),
-        }),
-        isCurrent: requestIsCurrent,
-      });
-      if (profile && result.terminal_id && route.scope === "connection") {
-        try {
-          publishProfilesChanged(
-            profiles().assign({
-              connection_id: route.connectionId,
-              terminal_id: result.terminal_id,
-              profile_id: profile.id,
-            }).revision,
-          );
-          if (profile.color && result.tab_id) {
-            const workspaceIds = await moveWorkspaceIds(call, {
-              workspace_id: String(p.workspace_id ?? ""),
-            });
-            publishBoardChanged(
-              board().patch([
-                {
-                  op: "card.color",
-                  key: tabCardKey(
-                    route.connectionId,
-                    result.tab_id,
-                    workspaceIds,
-                  ),
-                  color: profile.color,
-                },
-              ]).revision,
-            );
-          }
-        } catch (error) {
-          logger.warn("A launched agent kept no profile record", {
-            detail: String(error),
-          });
-        }
-      }
-      // A Board note's agent spawned this one: stamp it so World groups them.
-      if (result.pane_id && requestIsCurrent())
-        await stampLaunchParent(
-          (rpc, rpcParams) => herdr.call(rpc, rpcParams, 10_000),
-          p,
-          result.pane_id,
-          logger,
-        );
-      sendReply({ id, result }, method);
-    } catch (error) {
-      sendError(`${method}-error`, error);
-    } finally {
-      if (route.scope === "connection" && route.isCurrent())
-        publishWorldInvalidation(route.connectionId, route.generation);
-    }
-    return;
-  }
-  if (method === "board.check_anchor") {
-    try {
-      const p = (params ?? {}) as Record<string, unknown>;
-      const result = await checkAnchor(
-        (rpc, rpcParams) => herdr.call(rpc, rpcParams, 10_000),
-        {
-          kind: p.kind as "workspace" | "tab" | "pane",
-          native_id: String(p.native_id ?? ""),
-          isCurrent: requestIsCurrent,
-        },
-      );
-      sendReply({ id, result }, method);
-    } catch (error) {
-      sendError(`${method}-error`, error);
-    }
-    return;
-  }
-  if (method === "board.send_note") {
-    try {
-      const p = (params ?? {}) as Record<string, unknown>;
-      // Send what the saved board says, not the caller's copy: the string
-      // and note must still be the ones the user saw.
-      const linked =
-        route.scope === "connection"
-          ? linkedNoteText(board().get(), {
-              connection_id: route.connectionId,
-              pane_id: String(p.pane_id ?? ""),
-              terminal_id: String(p.terminal_id ?? ""),
-              note_id: String(p.note_id ?? ""),
-              string_id: String(p.string_id ?? ""),
-              note_rev: Number(p.note_rev),
-            })
-          : ({
-              status: "refused",
-              reason: "changed",
-              message: "No host was named; nothing was sent.",
-            } as const);
-      const result =
-        "text" in linked
-          ? await sendNote(
-              (rpc, rpcParams) => herdr.call(rpc, rpcParams, 15_000),
-              {
-                pane_id: String(p.pane_id ?? ""),
-                terminal_id: String(p.terminal_id ?? ""),
-                text: linked.text,
-                recipient: linked.recipient,
-                confirm_recipient:
-                  typeof p.confirm_recipient === "string"
-                    ? p.confirm_recipient
-                    : undefined,
-                isCurrent: requestIsCurrent,
-              },
-            )
-          : linked;
-      // A confirmed replacement (or a newer token for the same agent)
-      // becomes the string's recipient.
-      if ("text" in linked && result.status === "sent" && result.recipient)
-        try {
-          publishBoardChanged(
-            board().patch([
-              {
-                op: "anchor.recipient",
-                string_id: String(p.string_id ?? ""),
-                end: linked.end,
-                connection_id: route.connectionId,
-                pane_id: String(p.pane_id ?? ""),
-                terminal_id: String(p.terminal_id ?? ""),
-                recipient: result.recipient,
-              },
-            ]).revision,
-          );
-        } catch (error) {
-          logger.warn("Board could not record a string's agent", {
-            detail: String(error),
-          });
-        }
-      sendReply({ id, result }, method);
-    } catch (error) {
-      sendError(`${method}-error`, error);
-    }
-    return;
-  }
-  if (method === "town.move_desk" || method === "town.move_pane") {
-    const call = (rpc: string, rpcParams: Record<string, unknown>) =>
-      herdr.call(rpc, rpcParams, 15_000);
-    // One move at a time per connection: each re-reads the topology (and the
-    // last-desk check) only once the previous move has finished.
-    let queue = townMoveQueues.get(route.connectionId);
-    if (!queue) {
-      queue = createMoveQueue();
-      townMoveQueues.set(route.connectionId, queue);
-    }
-    try {
-      const p = params ?? {};
-      // The colours as the move starts: a close of the old tab seen during
-      // the move must not lose the colour it carries over.
-      let colorsBefore = board().get().layout.colors;
-      const result = await queue(() => {
-        colorsBefore = board().get().layout.colors;
-        return method === "town.move_desk"
-          ? moveDesk(call, {
-              tab_id: String(p.tab_id ?? ""),
-              workspace_id: String(p.workspace_id ?? ""),
-              allow_close_room: p.allow_close_room === true,
-              isCurrent: requestIsCurrent,
-            })
-          : movePane(call, {
-              pane_id: String(p.pane_id ?? ""),
-              tab_id: String(p.tab_id ?? ""),
-              allow_close_room: p.allow_close_room === true,
-              isCurrent: requestIsCurrent,
-            });
-      });
-      // Board's strings follow the move whichever view or client made it.
-      if (
-        (result.status === "moved" || result.status === "failed") &&
-        route.scope === "connection"
-      ) {
-        try {
-          // A failed move may have left (or put back) panes under new IDs:
-          // reconcile from what it positively observed.
-          const ops =
-            result.status === "moved"
-              ? moveFollowOps(
-                  board().get(),
-                  route.connectionId,
-                  method === "town.move_desk" ? String(p.tab_id ?? "") : null,
-                  result,
-                  method === "town.move_desk"
-                    ? {
-                        before: colorsBefore,
-                        workspaceIds: await moveWorkspaceIds(call, result),
-                        inherited: p.inherited_color === true,
-                      }
-                    : undefined,
-                )
-              : reconcileOps(
-                  board().get(),
-                  route.connectionId,
-                  result.topology ?? [],
-                );
-          if (ops.length) publishBoardChanged(board().patch(ops).revision);
-        } catch (error) {
-          logger.warn("Board strings did not follow a move", {
-            detail: String(error),
-          });
-        }
-      }
-      sendReply({ id, result }, method);
-    } catch (error) {
-      sendError(`${method}-error`, error);
-    }
-    return;
-  }
-
-  if (method === "agent.list") {
-    try {
-      const result =
-        connection.remotePlatform === "windows"
-          ? await herdr.call("agent.list", params ?? {})
-          : await connection.agentSessions.listWithActivity(params ?? {});
-      sendReply({ id, result }, "agent-list");
-    } catch (e) {
-      sendError("agent-list-error", e);
-    }
-    return;
-  }
-  if (
-    method === "agent_conversation.watch" ||
-    method === "agent_conversation.unwatch"
-  ) {
-    try {
-      const paneId = typeof params?.pane_id === "string" ? params.pane_id : "";
-      if (!paneId) throw new Error(`${method} requires pane_id`);
-      const watcher = connection.agentSessions.conversationWatch;
-      if (method === "agent_conversation.watch") {
-        watcher.watch(ws, paneId);
-        let watchers = conversationWatchers.get(ws);
-        if (!watchers) {
-          watchers = new Set();
-          conversationWatchers.set(ws, watchers);
-        }
-        watchers.add(watcher);
-      } else {
-        watcher.unwatch(ws, paneId);
-      }
-      sendReply({ id, result: { ok: true } }, method);
-    } catch (e) {
-      sendError(`${method}-error`, e);
-    }
-    return;
-  }
-  if (CONVERSATION_RPC_METHODS.has(method)) {
-    try {
-      const result = await conversationRpc(
-        method,
-        params ?? {},
-        connection.agentSessions.conversation,
-      );
-      sendReply({ id, result }, method);
-    } catch (e) {
-      sendError(`${method}-error`, e);
-    }
-    return;
-  }
-  if (method === "agent_history.get") {
-    try {
-      const result = await readAgentMessageHistory(params ?? {});
-      sendReply({ id, result }, "agent-history-get");
-    } catch (e) {
-      sendError("agent-history-get-error", e);
-    }
-    return;
-  }
-  if (method === "agent_history.entry") {
-    try {
-      const result = await readAgentHistoryEntry(params ?? {});
-      sendReply({ id, result }, "agent-history-entry");
-    } catch (e) {
-      sendError("agent-history-entry-error", e);
-    }
-    return;
-  }
-  if (method === "agent_session.get") {
-    try {
-      const result = await readAgentSessionSummary(params ?? {});
-      sendReply({ id, result }, "agent-session-get");
-    } catch (e) {
-      sendError("agent-session-get-error", e);
-    }
-    return;
-  }
-  if (method === "agent_turn.get") {
-    try {
-      const result = await readAgentTurn(params ?? {});
-      sendReply({ id, result }, "agent-turn-get");
-    } catch (e) {
-      sendError("agent-turn-get-error", e);
-    }
-    return;
-  }
-  if (method === "agent_checkout.get") {
-    try {
-      const result = await connection.agentCheckout(params ?? {});
-      sendReply({ id, result }, "agent-checkout-get");
-    } catch (e) {
-      sendError("agent-checkout-get-error", e);
-    }
-    return;
-  }
-  if (
-    method === "agent_session.link_preview" ||
-    method === "agent_session.link"
-  ) {
-    try {
-      const result = await dispatchAgentSessionLink(
-        route,
-        method,
-        params ?? {},
-      );
-      sendReply({ id, result }, method);
-    } catch (e) {
-      sendError("agent-session-link-error", e);
-    }
-    return;
-  }
-  if (method === "file.list") {
-    try {
-      const result = await listWorkspaceFiles(params ?? {});
-      sendReply({ id, result }, "file-list");
-    } catch (e) {
-      sendError("file-list-error", e);
-    }
-    return;
-  }
-  if (method === "file.resolve") {
-    try {
-      const result = await resolveWorkspaceFiles(params ?? {});
-      sendReply({ id, result }, "file-resolve");
-    } catch (e) {
-      sendError("file-resolve-error", e);
-    }
-    return;
-  }
-  if (method === "file.mkdir" || method === "file.move") {
-    try {
-      const result = await (method === "file.mkdir"
-        ? createWorkspaceDirectory
-        : moveWorkspaceFile)(params ?? {});
-      sendReply({ id, result }, method);
-    } catch (e) {
-      sendError(`${method}-error`, e);
-    }
-    return;
-  }
-  if (method === "file.read") {
-    try {
-      const result = await readWorkspaceFile(params ?? {});
-      sendReply({ id, result }, "file-read");
-    } catch (e) {
-      sendError("file-read-error", e);
-    }
-    return;
-  }
-  if (method === "file.search") {
-    try {
-      const result = await searchWorkspaceFiles(params ?? {});
-      sendReply({ id, result }, "file-search");
-    } catch (e) {
-      sendError("file-search-error", e);
-    }
-    return;
-  }
-  if (method === "file.reveal") {
-    try {
-      const result = await revealWorkspaceFile(params ?? {}, ws.remoteAddress);
-      sendReply({ id, result }, "file-reveal");
-    } catch (e) {
-      sendError("file-reveal-error", e);
-    }
-    return;
-  }
-  if (method === "git.diff_summary") {
-    try {
-      const result = await readGitDiffSummary(params ?? {});
-      sendReply({ id, result }, "git-diff-summary");
-    } catch (e) {
-      sendError("git-diff-summary-error", e);
-    }
-    return;
-  }
-  if (method === "git.pull_request") {
-    try {
-      const result = await readWorkspacePullRequest(params ?? {});
-      sendReply({ id, result }, "git-pull-request");
-    } catch {
-      // Root resolution errors may include remote URLs or CLI diagnostics.
-      sendError(
-        "git-pull-request-error",
-        new Error("Cannot resolve this workspace's Git checkout."),
-      );
-    }
-    return;
-  }
-  if (method === "git.diff_file") {
-    try {
-      const result = await readGitDiffFile(params ?? {});
-      sendReply({ id, result }, "git-diff-file");
-    } catch (e) {
-      sendError("git-diff-file-error", e);
-    }
-    return;
-  }
-  if (
-    method === "git.commits" ||
-    method === "git.commit" ||
-    method === "git.commit_file" ||
-    method === "git.commit_preview"
-  ) {
-    try {
-      const result =
-        method === "git.commits"
-          ? await readGitCommits(params ?? {})
-          : method === "git.commit"
-            ? await readGitCommit(params ?? {})
-            : method === "git.commit_file"
-              ? await readGitCommitFile(params ?? {})
-              : await readGitCommitPreview(params ?? {});
-      sendReply({ id, result }, method);
-    } catch (e) {
-      sendError(`${method}-error`, e);
-    }
-    return;
-  }
-  if (method === "git.pull") {
-    try {
-      const result = await runGitPull(params ?? {});
-      invalidateGitStatus(result.root);
-      sendReply({ id, result }, "git-pull");
-    } catch (e) {
-      sendError("git-pull-error", e);
-    }
-    return;
-  }
-  if (method === "git.file_action") {
-    try {
-      const result = await runWorkspaceGitFileAction(params ?? {});
-      invalidateGitStatus(result.root);
-      sendReply({ id, result }, "git-file-action");
-    } catch (e) {
-      sendError("git-file-action-error", e);
-    }
-    return;
-  }
-  if (method === "git.repo_action") {
-    try {
-      const result = await runWorkspaceGitRepoAction(params ?? {});
-      invalidateGitStatus(result.root);
-      sendReply({ id, result }, "git-repo-action");
-    } catch (e) {
-      sendError("git-repo-action-error", e);
-    }
-    return;
+  const connectionRpc: ConnectionRpcContext = {
+    ...rpc,
+    route,
+    params,
+    connection,
+  };
+  for (const handle of [
+    handleLauncherRpc,
+    handleBoardTownRpc,
+    handleAgentRpc,
+    handleFilesRpc,
+    handleGitRpc,
+  ]) {
+    const result = handle(connectionRpc);
+    if (result !== false && (await result) !== false) return;
   }
   if (method.startsWith("terminal.")) {
     return terminalBridge.handleTerminalRpc(
@@ -2087,139 +1196,6 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
   }
   if (method.startsWith("settings.")) {
     return handleSettingsRpc(ws, id, method, params ?? {}, requestIsCurrent);
-  }
-  if (method === "worktree.create") {
-    try {
-      const result = await createWorkspaceWorktree(
-        connection,
-        params ?? {},
-        requestIsCurrent,
-        (error) => {
-          if (!requestIsCurrent()) return;
-          logger.warn("unable to persist worktree parent", {
-            connection: connectionId,
-            error: sanitizeConnectionError(error),
-          });
-        },
-      );
-      sendReply(
-        {
-          id,
-          result,
-        },
-        "worktree-create",
-      );
-    } catch (e) {
-      sendError("worktree-create-error", e);
-    }
-    return;
-  }
-  if (method === "worktree.open") {
-    try {
-      const workspaceId = String(params?.workspace_id ?? "");
-      const sourceWorkspace = await sourceWorkspaceForWorktreeCreate(
-        params ?? {},
-      );
-      const result = await herdr.call(method, params ?? {});
-      await worktreeParents
-        .rememberWorktreeParent(result, workspaceId, requestIsCurrent)
-        .catch((error) => {
-          if (!requestIsCurrent()) return;
-          logger.warn("unable to persist opened worktree parent", {
-            connection: connectionId,
-            error: sanitizeConnectionError(error),
-          });
-        });
-      const openedHook = await runWorktreeOpenedHook(result, sourceWorkspace);
-      sendReply(
-        {
-          id,
-          result: { ...result, opened_hook: openedHook },
-        },
-        "worktree-open",
-      );
-    } catch (e) {
-      sendError("worktree-open-error", e);
-    }
-    return;
-  }
-  if (method === "worktree.remove") {
-    try {
-      const workspaceId = String(params?.workspace_id ?? "");
-      const result = await worktreeRemovalCoordinator.run(
-        workspaceId,
-        async () => {
-          const removeHookContext = await worktreeRemoveHookContext(
-            params ?? {},
-          );
-          const checkoutState = removeHookContext
-            ? await worktreeRemovalRuntime
-                .inspectCheckout(removeHookContext.checkoutPath)
-                .catch(() => "unknown" as const)
-            : "unknown";
-          const beforeRemoveHook =
-            removeHookContext && checkoutState !== "missing"
-              ? await runWorktreeHook({
-                  hook: "teardown",
-                  checkoutPath: removeHookContext.checkoutPath,
-                  sourceCheckoutPath: removeHookContext.sourceCheckoutPath,
-                  repoSettingsKey: removeHookContext.repoSettingsKey,
-                })
-              : ({
-                  event: "worktree.before_remove",
-                  status: "skipped",
-                } as const);
-          if (beforeRemoveHook.status === "failed") {
-            markRpcError(
-              ws,
-              id,
-              beforeRemoveHook.error || "before-remove hook failed",
-            );
-            return {
-              ok: false,
-              skipped_remove: true,
-              before_remove_hook: beforeRemoveHook,
-            };
-          }
-
-          const removal = await removeWorktreeWithRecovery({
-            call: (name, callParams) =>
-              herdr.call(name, callParams, WORKTREE_REMOVE_TIMEOUT_MS),
-            params: params ?? {},
-            checkoutPath: removeHookContext?.checkoutPath,
-            runtime: worktreeRemovalRuntime,
-          });
-          if (removal.cleanup?.preserved_path) {
-            logger.warn("preserved stale worktree files", {
-              connection: connectionId,
-              path: removal.cleanup.preserved_path,
-            });
-          }
-          if (removeHookContext?.checkoutPath) {
-            await worktreeParents
-              .forgetWorktree(removeHookContext.checkoutPath, requestIsCurrent)
-              .catch((error) => {
-                if (!requestIsCurrent()) return;
-                logger.warn("unable to remove worktree parent", {
-                  connection: connectionId,
-                  error: sanitizeConnectionError(error),
-                });
-              });
-          }
-          const removedHook = await runWorktreeRemovedHook(removeHookContext);
-          return {
-            ...removal.result,
-            ...(removal.cleanup ? { cleanup: removal.cleanup } : {}),
-            before_remove_hook: beforeRemoveHook,
-            removed_hook: removedHook,
-          };
-        },
-      );
-      sendReply({ id, result }, "worktree-remove");
-    } catch (e) {
-      sendError("worktree-remove-error", e);
-    }
-    return;
   }
   try {
     const rawResult = await herdr.call(method, params ?? {});
@@ -2449,6 +1425,18 @@ function main() {
               }
             }
             return response;
+          }
+
+          if (url.pathname === WORLD_CLI_PATH) {
+            // `ask --wait` holds a call for up to 20 s; Bun's default idle
+            // timeout (10 s) would cut it.
+            server.timeout(req, WORLD_CLI_IDLE_TIMEOUT_SECONDS);
+            return worldCli.http(
+              req,
+              server.requestIP(req),
+              server.port ?? config.port,
+              bearerAuth,
+            );
           }
 
           // Loopback listeners retain World's trusted local access policy.
