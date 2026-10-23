@@ -65,6 +65,11 @@
   overflow: visible;
   pointer-events: none;
 }
+/* Zoomed out, room cards cover the desks the walls would surround. */
+.town-world[data-level="town"] .town-teams,
+.town-world[data-level="overview"] .town-teams {
+  display: none;
+}
 .town-team-wall {
   fill: none;
   stroke-width: calc(2px * max(1, var(--iz)));
