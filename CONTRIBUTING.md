@@ -196,6 +196,12 @@ A PR with nothing user-facing (tests, CI, contributor tooling) instead puts
 `Changelog: none — <specific reason>` in its description. PR links in entries are
 optional; do not push again solely to add one after the PR opens.
 
+After a merge, CI runs the full check again on the new main commit. If it fails,
+the Main gate workflow opens one `main-red` issue that names the merge commit and
+its PR, and prepares a revert PR, which it never merges. Rerun the failed jobs
+first when the failure is a known flake; otherwise merge the revert or land a
+fix. Later red commits are added to the open issue, not to new ones.
+
 Unlabeled PRs get `documentation` (docs-only), `dependencies` (dependency updates),
 `bug` (fix titles), or `enhancement` (other code). Release preparation gets
 `skip-changelog`. Override with a `.github/release.yml` category before merging.

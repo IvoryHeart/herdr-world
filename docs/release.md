@@ -152,7 +152,10 @@ with the bump. Users receive the new Herdr with the World release that declares 
    archives and update metadata. Run the repository checks on the prepared branch;
    the tracked pre-push hook runs the full gate when pushing it.
 3. After independent review and merge, identify the exact release PR merge commit
-   on `main`. With the current repository settings, create and push the annotated
+   on `main` and wait for its push CI: tag only a main commit whose **CI** run for
+   the `push` event concluded `success`, never while that run is pending or red
+   (see the Main gate in [CONTRIBUTING](../CONTRIBUTING.md#pull-requests)). With
+   the current repository settings, create and push the annotated
    `vX.Y.Z[-rc.N]` tag on that commit using a maintainer account authorized by the
    release tag ruleset. Verify the tag does not exist and the commit has the expected
    plugin version before pushing. For example:
@@ -161,6 +164,8 @@ with the bump. Users receive the new Herdr with the World release that declares 
    git fetch origin main
    release_sha="$(gh pr view PR_NUMBER --json mergeCommit --jq .mergeCommit.oid)"
    git merge-base --is-ancestor "$release_sha" origin/main
+   gh run list --workflow CI --event push --commit "$release_sha" \
+     --json conclusion --jq '.[0].conclusion' # must print success
    git show "$release_sha:herdr-plugin.toml" | rg '^version = "X.Y.Z-rc.N"$'
    git ls-remote --tags origin "refs/tags/vX.Y.Z-rc.N" # must print nothing
    git tag -a vX.Y.Z-rc.N -m "Herdr World X.Y.Z-rc.N" "$release_sha"
