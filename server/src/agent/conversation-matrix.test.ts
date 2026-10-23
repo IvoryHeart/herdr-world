@@ -504,15 +504,12 @@ describe("conversation read model across harnesses", () => {
         expect(conversation.agent).toBe(fixture.agent);
         expect(conversation.agent_status).toBe("done");
         expect(conversation.session_fingerprint).toMatch(/^[a-f0-9]{64}$/);
-        // Chat reads one step per tool call; each fixture makes one call.
         const shape = conversation.messages.map((message) =>
-          message.kind === "step"
-            ? "tool:1"
-            : message.kind === "activity"
-              ? `tool:${message.tools?.length}`
-              : message.kind === "notice"
-                ? `notice:${message.text}`
-                : `${message.role}:${message.text}`,
+          message.kind === "activity"
+            ? `tool:${message.tools?.length}`
+            : message.kind === "notice"
+              ? `notice:${message.text}`
+              : `${message.role}:${message.text}`,
         );
         expect(shape).toEqual([
           ...(fixture.lead ?? []),

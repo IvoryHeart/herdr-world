@@ -10,7 +10,15 @@ import {
   type ReactNode,
   type RefObject,
 } from "react";
-import { ArrowDown, Check, ChevronRight, Copy, Wrench, X } from "lucide-react";
+import {
+  ArrowDown,
+  Check,
+  ChevronRight,
+  CircleSlash,
+  Copy,
+  Wrench,
+  X,
+} from "lucide-react";
 import { copyTextWithFeedback } from "../copyText";
 import { formatUiDateTime } from "../uiLocale";
 import { HISTORY_PREVIEW_CHARS } from "./AgentHistoryCard";
@@ -262,18 +270,7 @@ function ToolStepRow({
   onOpen: (entry: HistoryEntry) => void;
 }) {
   const { call, result } = step;
-  // The step model knows a call whose tests failed, or one cut off without
-  // a result, which the entries alone do not say.
-  const status =
-    evidence?.state === "failed"
-      ? "error"
-      : evidence?.state === "interrupted"
-        ? "interrupted"
-        : !result
-          ? "pending"
-          : result.is_error
-            ? "error"
-            : "done";
+  const status = toolStepStatus(step, evidence);
   const headline =
     call && !isToolContentPending(call)
       ? toolArgumentHeadline(call.text)
@@ -296,18 +293,18 @@ function ToolStepRow({
           <Check size={12} aria-label="Succeeded" />
         ) : status === "error" ? (
           <X size={12} aria-label="Failed" />
+        ) : status === "interrupted" ? (
+          <CircleSlash size={12} aria-label="Interrupted" />
         ) : (
-          <Wrench
-            size={12}
-            aria-label={
-              status === "interrupted" ? "Interrupted" : "No output yet"
-            }
-          />
+          <Wrench size={12} aria-label="No output yet" />
         )}
         <span className="agent-history-chat-step-name">
           {evidence?.label ?? step.name}
         </span>
         <span className="agent-history-chat-step-headline">{headline}</span>
+        {status === "interrupted" ? (
+          <span className="agent-history-chat-step-note">Interrupted</span>
+        ) : null}
         {evidence ? <StepRowEvidence step={evidence} /> : null}
       </button>
       {expanded ? (
@@ -318,6 +315,19 @@ function ToolStepRow({
       ) : null}
     </li>
   );
+}
+
+/**
+ * A row's status. The step model adds what the entries alone do not say: a
+ * call whose tests failed, and, while no result has arrived, a call cut off
+ * without one.
+ */
+function toolStepStatus(step: ToolStep, evidence?: ConversationStep) {
+  if (step.result)
+    return step.result.is_error || evidence?.state === "failed"
+      ? "error"
+      : "done";
+  return evidence?.state === "interrupted" ? "interrupted" : "pending";
 }
 
 /** The step model's entry for a call, by the harness's call ID. */
@@ -387,6 +397,13 @@ function ToolBlock({
     }
   }, [expandedStep, load, steps]);
   const summary = summarizeToolSteps(steps);
+  // The header counts the errors the rows show, with the step model's.
+  const errors = stepEvidence
+    ? steps.filter(
+        (step) =>
+          toolStepStatus(step, evidenceFor(stepEvidence, step)) === "error",
+      ).length
+    : summary.errors;
   const callsLabel = `${summary.calls} tool ${summary.calls === 1 ? "call" : "calls"}`;
   const toolsLabel = summary.tools
     .map(({ name, count }) => (count > 1 ? `${name} ×${count}` : name))
@@ -413,9 +430,9 @@ function ToolBlock({
         <span className="agent-history-chat-tools-label">
           <strong>{callsLabel}</strong>
           <span className="agent-history-chat-tools-names">{toolsLabel}</span>
-          {summary.errors > 0 ? (
+          {errors > 0 ? (
             <span className="agent-history-chat-tools-errors">
-              {summary.errors} {summary.errors === 1 ? "error" : "errors"}
+              {errors} {errors === 1 ? "error" : "errors"}
             </span>
           ) : null}
         </span>

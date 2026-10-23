@@ -163,8 +163,11 @@ export function stepDiff(
  * for bun, vitest, jest, pytest and cargo. Null when none matches.
  */
 export function parseTestStrip(output: string): TestStrip | null {
-  const firstFailure = (pattern: RegExp) =>
-    pattern.exec(output)?.[1]?.trim() ?? null;
+  // A test's name is the harness's output too, so it is redacted like it.
+  const firstFailure = (pattern: RegExp) => {
+    const name = pattern.exec(output)?.[1]?.trim();
+    return name ? redactSecrets(name) : null;
+  };
   // bun: " 12 pass" / " 1 fail" on their own lines.
   const bunPass = /^\s*(\d+) pass\s*$/m.exec(output);
   const bunFail = /^\s*(\d+) fail\s*$/m.exec(output);
@@ -240,6 +243,18 @@ export function stepsFromEntries(
   for (const entry of entries)
     if (entry.kind === "tool_result" && entry.source_call_id)
       results.set(entry.source_call_id, entry);
+  // Whether anything came after each call: a message, or a call that started
+  // later. One pass from the end, so a long transcript stays linear.
+  const later: boolean[] = new Array(entries.length).fill(false);
+  let messageAfter = false;
+  let latestCallAfter = "";
+  for (let index = entries.length - 1; index >= 0; index -= 1) {
+    const entry = entries[index]!;
+    later[index] = messageAfter || latestCallAfter > entry.sent_at;
+    if (entry.kind === "message") messageAfter = true;
+    else if (entry.kind === "tool_call" && entry.sent_at > latestCallAfter)
+      latestCallAfter = entry.sent_at;
+  }
   const steps: ConversationStep[] = [];
   entries.forEach((entry, index) => {
     if (entry.kind !== "tool_call") return;
@@ -249,13 +264,6 @@ export function stepsFromEntries(
     const result = entry.source_call_id
       ? results.get(entry.source_call_id)
       : undefined;
-    const later = entries
-      .slice(index + 1)
-      .some(
-        (other) =>
-          other.kind === "message" ||
-          (other.kind === "tool_call" && other.sent_at > entry.sent_at),
-      );
     const output = result?.text ?? "";
     const test =
       result && /\btest\b|pytest|vitest|jest|cargo/i.test(summary ?? "")
@@ -273,7 +281,7 @@ export function stepsFromEntries(
         ? result.is_error || (test?.failed ?? 0) > 0
           ? "failed"
           : "ok"
-        : later
+        : later[index]
           ? "interrupted"
           : "running",
       started_at: entry.sent_at,

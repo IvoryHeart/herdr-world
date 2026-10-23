@@ -133,6 +133,28 @@ describe("steps from a transcript", () => {
     }
   });
 
+  test("a failing test's name is redacted too", () => {
+    const [step] = stepsFromEntries([
+      call("f1", "Bash", { command: "bun test" }),
+      result(
+        "f1",
+        "(fail) connects with API_KEY=abcdef1234567890 [1.2ms]\n 3 pass\n 1 fail",
+      ),
+    ]);
+    expect(step!.test!.failed).toBe(1);
+    expect(step!.test!.first_failure).not.toContain("abcdef1234567890");
+    expect(JSON.stringify(step)).not.toContain("abcdef1234567890");
+  });
+
+  test("a call cut off then answered later reads as finished", () => {
+    const steps = stepsFromEntries([
+      call("a1", "Bash", { command: "sleep 5" }),
+      call("a2", "Bash", { command: "echo next" }),
+      result("a1", "done"),
+    ]);
+    expect(steps[0]!.state).toBe("ok");
+  });
+
   test("a call without an ID still gets a stable step ID", () => {
     const entry = { ...call("x", "Grep", { pattern: "nextDelay" }) };
     delete entry.source_call_id;

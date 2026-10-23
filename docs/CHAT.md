@@ -131,27 +131,29 @@ assistant message), `quest` (see [Quests](#quests)) and a `status` of `ok` or
 
 - `message`: user or assistant text.
 - `error`: an error the harness recorded.
-- `step`: one tool call, which Chat shows as a card. Its `step` carries the
-  harness's tool-call ID (`id`, the same ID other views such as Quests link to),
-  the tool, a label ("Read reconnect.ts", "Run tests"), the command or file it
-  names, its state (`running` with no result yet, `ok`, `failed`, or
-  `interrupted` when the agent moved on without a result), start and end
-  times, the end of its output (12 lines at most), the lines an edit removed
-  and added (40 at most between them, with `omitted` counting the rest), and
-  for a test run its pass and fail counts (bun, vitest, jest, pytest and cargo
-  summaries). The label, summary, output and diff all have credential-shaped
-  values redacted. Chat's list is History's: each of History's tool rows
-  takes its step by the call ID and shows the step's label, its time and a
-  test run's pass or fail badge. A run whose tests failed reads as failed,
-  and a call cut off without a result as interrupted. Opening the row shows
-  the test strip with its first failure, the edit's diff (a cut diff says how
-  many lines are left out and points to Changes) or the end of its output,
-  above the call's own arguments and output. The History drawer shows the
-  plain rows.
 - `activity`: one line for each run of tool calls between messages, such as
   "Used Read, Bash ×2", for consumers that want a summary instead of steps.
 - `notice`: an event in the conversation, such as "Conversation compacted" or a
   Claude Code background task update.
+
+**Steps.** `agent_conversation.steps` gives the step model for the tool calls
+Chat names by the harness's call ID (the same ID other views such as Quests
+link to). Each step has the tool, a label ("Read reconnect.ts", "Run
+tests"), the command or file it names, its state (`running` with no result
+yet, `ok`, `failed`, or `interrupted` when the agent moved on without a
+result), start and end times, the end of its output (12 lines at most), the
+lines an edit removed and added (40 at most between them, with `omitted`
+counting the rest), and for a test run its pass and fail counts and first
+failing test (bun, vitest, jest, pytest and cargo summaries). The label,
+summary, output, failing test and diff all have credential-shaped values
+redacted. Chat's list is History's: Chat asks only for the calls in
+History's window, again for any not yet finished, and keeps only those. Each
+tool row shows its step's label, time and a test run's pass or fail badge; a
+run whose tests failed reads as failed, and a call cut off without a result
+as interrupted until its result arrives. Opening the row shows the test
+strip with its first failure or the edit's diff (a cut diff says how many
+lines are left out and points to Changes), above the call's own arguments
+and output. The History drawer shows the plain rows.
 
 User messages are what the person wrote. The readers drop text the harness
 injects as user turns: Codex repository instructions (`# AGENTS.md

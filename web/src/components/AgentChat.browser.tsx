@@ -175,6 +175,9 @@ async function run() {
   let historyAnswer: ((params: Record<string, unknown>) => unknown) | null =
     null;
   let answerAcknowledged = false;
+  /** The step model the fixture's agent_conversation.steps answers from. */
+  let fixtureSteps: ConversationStep[] = [];
+  const stepsAsked: string[][] = [];
   bridge.connection = () => ({
     connectionId: "test",
     generation: 1,
@@ -195,11 +198,12 @@ async function run() {
         };
       if (method === "pane.send_input") return {};
       if (method === "agent_conversation.steps") {
+        stepsAsked.push(params.call_ids as string[]);
         const ids = new Set(params.call_ids as string[]);
         return {
-          steps: (reply.messages ?? [])
-            .map((entry) => entry.step)
-            .filter((step) => step?.call_id && ids.has(step.call_id)),
+          steps: fixtureSteps.filter(
+            (step) => step.call_id && ids.has(step.call_id),
+          ),
         };
       }
       if (method === "agent_conversation.latest")
@@ -774,26 +778,19 @@ async function run() {
         tool: string,
         label: string,
         extra: Partial<ConversationStep> = {},
-      ): NonNullable<Conversation["messages"]>[number] => ({
+      ): ConversationStep => ({
         id,
-        role: "tool",
-        kind: "step",
-        text: label,
-        sent_at: at,
-        step: {
-          id,
-          call_id: id,
-          tool,
-          label,
-          input_summary: null,
-          state: "ok",
-          started_at: at,
-          ended_at: "2026-10-22T09:00:01Z",
-          result_tail: null,
-          diff: null,
-          test: null,
-          ...extra,
-        },
+        call_id: id,
+        tool,
+        label,
+        input_summary: null,
+        state: "ok",
+        started_at: at,
+        ended_at: "2026-10-22T09:00:01Z",
+        result_tail: null,
+        diff: null,
+        test: null,
+        ...extra,
       });
       const entry = (
         id: string,
@@ -808,61 +805,81 @@ async function run() {
         text: kind === "tool_call" ? "{}" : "done",
         sent_at: at,
       });
-      reply = conversation(
-        [
-          message("u6", "user", "Add backoff"),
-          step("e1", "Edit", "Edit reconnect.ts", {
-            diff: {
-              file: "src/reconnect.ts",
-              removed: ["  return 1000;"],
-              added: ["  return backoff(attempt);"],
-              truncated: true,
-              omitted: 3,
-            },
-          }),
-          step("b1", "Bash", "Run reconnect tests", {
-            state: "failed",
-            input_summary: "bun test src",
-            test: {
-              runner: "bun",
-              passed: 12,
-              failed: 1,
-              first_failure: "backs off to the cap",
-            },
-            result_tail: "(fail) backs off to the cap",
-          }),
-        ],
-        "idle",
-      );
-      historyAnswer = () => ({
-        ...historyOf([]),
-        entries: [
-          {
-            id: "u6",
-            role: "user",
-            kind: "message",
-            text: "Add backoff",
-            sent_at: at,
+      reply = conversation([message("u6", "user", "Add backoff")], "idle");
+      fixtureSteps = [
+        step("e1", "Edit", "Edit reconnect.ts", {
+          diff: {
+            file: "src/reconnect.ts",
+            removed: ["  return 1000;"],
+            added: ["  return backoff(attempt);"],
+            truncated: true,
+            omitted: 3,
           },
-          entry("e1", "tool_call", "Edit"),
-          entry("e1", "tool_result", "Edit"),
-          entry("b1", "tool_call", "Bash"),
-          entry("b1", "tool_result", "Bash"),
-        ],
-      });
+        }),
+        step("b1", "Bash", "Run reconnect tests", {
+          state: "failed",
+          input_summary: "bun test src",
+          test: {
+            runner: "bun",
+            passed: 12,
+            failed: 1,
+            first_failure: "backs off to the cap",
+          },
+          result_tail: "(fail) backs off to the cap",
+        }),
+        step("i1", "Bash", "Watch the logs", {
+          state: "interrupted",
+          ended_at: null,
+        }),
+        // Evidence from an older read: the result has since arrived.
+        step("s1", "Bash", "Print the version", {
+          state: "interrupted",
+          ended_at: null,
+        }),
+      ];
+      let window = [
+        {
+          id: "u6",
+          role: "user",
+          kind: "message",
+          text: "Add backoff",
+          sent_at: at,
+        },
+        entry("e1", "tool_call", "Edit"),
+        entry("e1", "tool_result", "Edit"),
+        entry("b1", "tool_call", "Bash"),
+        entry("b1", "tool_result", "Bash"),
+        entry("i1", "tool_call", "Bash"),
+        entry("s1", "tool_call", "Bash"),
+        entry("s1", "tool_result", "Bash"),
+      ];
+      historyAnswer = () => ({ ...historyOf([]), entries: window });
       render("idle", true, 45);
       push();
       await settle();
       await settle();
+      check(
+        container.querySelector(".agent-history-chat-tools-errors")
+          ?.textContent === "1 error",
+        "The block's error count must include a run whose tests failed",
+      );
       container
         .querySelector<HTMLButtonElement>(".agent-history-chat-tools-toggle")
         ?.click();
       await settle();
+      const cut = container.querySelectorAll(".agent-history-chat-step")[2];
+      const arrived = container.querySelectorAll(".agent-history-chat-step")[3];
+      check(
+        cut?.classList.contains("is-interrupted") === true &&
+          cut.textContent?.includes("Interrupted") === true &&
+          arrived?.classList.contains("is-done") === true,
+        "A call cut off must read as interrupted, and one whose result arrived must not",
+      );
       const rows = [
         ...container.querySelectorAll<HTMLElement>(".agent-history-chat-step"),
       ];
       check(
-        rows.length === 2 &&
+        rows.length === 4 &&
           rows[0]!.querySelector(".agent-history-chat-step-name")
             ?.textContent === "Edit reconnect.ts" &&
           rows[0]!.textContent?.includes("1.0s") === true &&
@@ -892,7 +909,41 @@ async function run() {
           rows[1]!.textContent?.includes("backs off to the cap") === true,
         "Opening a failed run's row must show its red strip and failing test",
       );
+      // A call shown as interrupted is asked for again when History changes,
+      // so a late result settles it.
+      fixtureSteps = fixtureSteps.map((item) =>
+        item.call_id === "i1"
+          ? { ...item, state: "ok", ended_at: "2026-10-22T09:00:03Z" }
+          : item,
+      );
+      window = [...window, entry("i1", "tool_result", "Bash")];
+      push();
+      await settle();
+      await settle();
+      const settled = container.querySelectorAll(".agent-history-chat-step")[2];
+      check(
+        settled?.classList.contains("is-done") === true &&
+          settled.textContent?.includes("3.0s") === true,
+        `A late result must settle an interrupted call (${settled?.textContent})`,
+      );
+      // Calls that leave History's window leave Chat's evidence too: one that
+      // comes back is asked for again.
+      const saved = window;
+      window = window.filter((item) => !item.id.endsWith("-e1"));
+      push();
+      await settle();
+      await settle();
+      const before = stepsAsked.length;
+      window = saved;
+      push();
+      await settle();
+      await settle();
+      check(
+        stepsAsked.slice(before).some((ids) => ids.includes("e1")),
+        "Evidence must be kept only for the calls in History's window",
+      );
       historyAnswer = null;
+      fixtureSteps = [];
     }
     // A blocked agent's question becomes an ask card with its whole
     // request. A number answers only while that card has focus; Chat then
@@ -1361,41 +1412,31 @@ async function run() {
           order: [...order],
         };
       };
-      // Every call also has its step evidence, as Chat's read gives it.
-      const busySteps: NonNullable<Conversation["messages"]> = [];
+      // Every call also has its step evidence, as Chat's steps read gives it.
+      fixtureSteps = [];
       for (let index = 0; index < 150; index += 1)
         for (let call = 0; call < 8; call += 1) {
           const id = `busy-${index}-call-${call}`;
-          busySteps.push({
+          fixtureSteps.push({
             id,
-            role: "tool",
-            kind: "step",
-            text: "Run tests",
-            sent_at: "2026-10-22T09:00:00Z",
-            step: {
-              id,
-              call_id: id,
-              tool: "Bash",
-              label: "Run tests",
-              input_summary: "bun test",
-              state: call % 3 ? "ok" : "failed",
-              started_at: "2026-10-22T09:00:00Z",
-              ended_at: "2026-10-22T09:00:02Z",
-              result_tail: "12 pass",
-              diff: null,
-              test: {
-                runner: "bun",
-                passed: 12,
-                failed: call % 3 ? 0 : 1,
-                first_failure: null,
-              },
+            call_id: id,
+            tool: "Bash",
+            label: "Run tests",
+            input_summary: "bun test",
+            state: call % 3 ? "ok" : "failed",
+            started_at: "2026-10-22T09:00:00Z",
+            ended_at: "2026-10-22T09:00:02Z",
+            result_tail: "12 pass",
+            diff: null,
+            test: {
+              runner: "bun",
+              passed: 12,
+              failed: call % 3 ? 0 : 1,
+              first_failure: null,
             },
           });
         }
-      reply = conversation([
-        message("busy-0", "user", "Busy message 0"),
-        ...busySteps,
-      ]);
+      reply = conversation([message("busy-0", "user", "Busy message 0")]);
       push();
       await settle();
       await settle();

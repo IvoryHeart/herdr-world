@@ -38,13 +38,11 @@ import "./AgentChat.css";
 export type ConversationMessage = {
   id: string;
   role: "user" | "assistant" | "tool";
-  kind: "message" | "error" | "activity" | "notice" | "step";
+  kind: "message" | "error" | "activity" | "notice";
   text: string;
   sent_at: string;
   tools?: { name: string; calls: number }[];
   failed?: number;
-  /** For a `step`: one tool call with its evidence. */
-  step?: ConversationStep;
 };
 
 export type Conversation = {
@@ -395,8 +393,10 @@ export function AgentChat({
   );
   // The step model's evidence for History's rows, by tool-call ID. Chat
   // asks only for the calls in History's window that it does not have yet,
-  // or that were still running; a step that did not change keeps its object,
-  // so its row need not redraw.
+  // or that had not finished (running, or interrupted, which a late result
+  // can still settle). It keeps only the window's calls, so it is bounded as
+  // History is, and a step that did not change keeps its object, so its row
+  // need not redraw.
   const [stepEvidence, setStepEvidence] = useState<
     ReadonlyMap<string, ConversationStep>
   >(() => new Map());
@@ -416,10 +416,19 @@ export function AgentChat({
     return [...ids];
   }, [history.messages]);
   useEffect(() => {
+    const inWindow = new Set(callIds);
+    if ([...stepEvidence.keys()].some((id) => !inWindow.has(id))) {
+      setStepEvidence(
+        new Map([...stepEvidence].filter(([id]) => inWindow.has(id))),
+      );
+      return;
+    }
     if (!active || details) return;
     const wanted = callIds.filter((id) => {
       const known = stepEvidence.get(id);
-      return !known || known.state === "running";
+      return (
+        !known || known.state === "running" || known.state === "interrupted"
+      );
     });
     if (!wanted.length) return;
     let current = true;
@@ -434,7 +443,7 @@ export function AgentChat({
         setStepEvidence((previous) => {
           let next: Map<string, ConversationStep> | null = null;
           for (const step of steps) {
-            if (!step.call_id) continue;
+            if (!step.call_id || !inWindow.has(step.call_id)) continue;
             const known = previous.get(step.call_id);
             if (known && JSON.stringify(known) === JSON.stringify(step))
               continue;
