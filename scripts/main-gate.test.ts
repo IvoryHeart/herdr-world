@@ -1,5 +1,10 @@
 import { expect, test } from "bun:test";
-import { planMainGate, redShaMarker, redShaOf } from "./main-gate";
+import {
+  onlyInfraFlakes,
+  planMainGate,
+  redShaMarker,
+  redShaOf,
+} from "./main-gate";
 
 const sha = "0123456789abcdef0123456789abcdef01234567";
 const runUrl = "https://github.com/example/repo/actions/runs/1";
@@ -121,4 +126,41 @@ test("a red tip of an untested batch names every merge and prepares no revert", 
   expect(plan.issueBody).toContain("No revert was prepared");
   expect(plan.createRevert).toBe(false);
   expect(redShaOf(plan.issueBody)).toBe(sha);
+});
+
+test("only known infrastructure flakes are rerun before alerting", () => {
+  const startup = {
+    name: "World browser tests / World browser tests (3/6)",
+    log: "error: Hosts filter browser acceptance browser startup timed out after 35000ms\n(fail) the shell preserves targets [35199ms]\n(fail) the shell preserves targets [35199ms]",
+  };
+  const delivery = { name: "Delivery checks", log: "Delivery checks failed" };
+  expect(onlyInfraFlakes([startup, delivery])).toBe(true);
+  expect(
+    onlyInfraFlakes([
+      {
+        name: "Behavioral verification",
+        log: "AssertionError: Invalid control group (ActiveState=inactive)",
+      },
+    ]),
+  ).toBe(true);
+  // A real failure next to a flake, or two failing tests, is not a flake.
+  expect(
+    onlyInfraFlakes([
+      startup,
+      {
+        name: "Repository validation",
+        log: "web asset total: 13.3/13.25 MiB (budget exceeded)",
+      },
+    ]),
+  ).toBe(false);
+  expect(
+    onlyInfraFlakes([
+      {
+        name: startup.name,
+        log: `${startup.log}\n(fail) the Office town renders [1732ms]`,
+      },
+    ]),
+  ).toBe(false);
+  // Only the aggregate failed: nothing to attribute to a flake.
+  expect(onlyInfraFlakes([delivery])).toBe(false);
 });

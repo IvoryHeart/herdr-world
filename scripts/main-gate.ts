@@ -15,6 +15,41 @@
 
 export const MAIN_RED_LABEL = "main-red";
 
+/**
+ * Runner and infrastructure failures with a known cause, not code. A red main
+ * run whose failed jobs show only these is rerun once before anyone is alerted
+ * or a revert is prepared.
+ */
+export const INFRA_FLAKES = [
+  /browser startup timed out after \d+ms/, // first Chrome launch on a fresh runner
+  /AssertionError: Invalid control group/, // verification:resources on the runner (#242)
+  /Cannot remove item .*\.plugin-install-/, // Windows staging cleanup lock (#254)
+];
+
+/** Jobs that only aggregate other jobs' results. */
+const AGGREGATES = new Set(["Delivery checks"]);
+
+/**
+ * True when every failed job (aggregates aside) failed only through a known
+ * infrastructure flake: its log matches one, and at most one test failed.
+ */
+export function onlyInfraFlakes(
+  failed: Array<{ name: string; log: string }>,
+): boolean {
+  const jobs = failed.filter((job) => !AGGREGATES.has(job.name));
+  return (
+    jobs.length > 0 &&
+    jobs.every((job) => {
+      const tests = new Set(
+        job.log.match(/\(fail\) [^\n[]+/g)?.map((line) => line.trim()) ?? [],
+      );
+      return (
+        INFRA_FLAKES.some((pattern) => pattern.test(job.log)) && tests.size <= 1
+      );
+    })
+  );
+}
+
 /** Hidden in the issue body: which commit turned main red. */
 export const redShaMarker = (sha: string) => `<!-- main-gate-sha: ${sha} -->`;
 
@@ -149,6 +184,32 @@ async function run() {
   const repo = Bun.env.GITHUB_REPOSITORY!;
   const sha = Bun.env.HEAD_SHA!;
   const conclusion = Bun.env.CONCLUSION === "success" ? "success" : "failure";
+  if (conclusion === "failure" && Bun.env.RUN_ATTEMPT === "1") {
+    const runId = Bun.env.RUN_ID!;
+    const jobs = JSON.parse(
+      await gh([
+        "api",
+        `repos/${repo}/actions/runs/${runId}/jobs?per_page=100`,
+        "--jq",
+        '[.jobs[] | select(.conclusion == "failure") | {id, name}]',
+      ]),
+    ) as Array<{ id: number; name: string }>;
+    const failed = [];
+    for (const job of jobs)
+      failed.push({
+        name: job.name,
+        log: await gh([
+          "api",
+          `repos/${repo}/actions/jobs/${job.id}/logs`,
+        ]).catch(() => ""),
+      });
+    if (onlyInfraFlakes(failed)) {
+      // The rerun's completion runs this gate again, as attempt 2.
+      console.info(`Known infrastructure flake only; rerunning ${runId} once`);
+      await gh(["run", "rerun", runId, "--failed"]);
+      return;
+    }
+  }
   const pulls = JSON.parse(
     await gh(["api", `repos/${repo}/commits/${sha}/pulls`]),
   ) as Array<{ number: number; title: string; merge_commit_sha?: string }>;
