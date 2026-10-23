@@ -255,7 +255,14 @@ describe("the saved link a Send relies on", () => {
   ) => ({
     version: 1 as const,
     revision: 3,
-    layout: { anchors: {}, offsets: {}, pinned: {}, folded: [], colors: {} },
+    layout: {
+      anchors: {},
+      offsets: {},
+      pinned: {},
+      folded: [],
+      colors: {},
+      desk_pins: {},
+    },
     relations: { spawns: [], groups: [] },
     notes: [
       {

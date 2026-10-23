@@ -15,9 +15,10 @@ import {
   BoardConflictError,
   BoardStore,
   clientBoardOps,
+  parseBoardDocument,
   moveFollowOps,
   reconcileOps,
-  tabClosedColorOps,
+  tabClosedOps,
   type BoardAnchor,
 } from "./board-store";
 import {
@@ -582,6 +583,71 @@ describe("Board store", () => {
     });
   });
 
+  test("desk pins: pin, place once, unpin, and validation", () => {
+    const store = new BoardStore(path);
+    store.patch([{ op: "desk.pin", key: "alpha:w1:t1", cell: null }]);
+    store.patch([
+      { op: "desk.place", key: "alpha:w1:t1", cell: { col: 2, row: 1 } },
+    ]);
+    // Placed once: a later place from another browser does not move it.
+    store.patch([
+      { op: "desk.place", key: "alpha:w1:t1", cell: { col: 0, row: 0 } },
+    ]);
+    expect(store.get().layout.desk_pins).toEqual({
+      "alpha:w1:t1": { cell: { col: 2, row: 1 } },
+    });
+    // Unpinned: a place still in flight does not pin it again.
+    store.patch([{ op: "desk.unpin", key: "alpha:w1:t1" }]);
+    store.patch([
+      { op: "desk.place", key: "alpha:w1:t1", cell: { col: 1, row: 0 } },
+    ]);
+    expect(store.get().layout.desk_pins).toEqual({});
+    for (const cell of [{ col: -1, row: 0 }, { col: 0.5, row: 0 }, null]) {
+      expect(() =>
+        store.patch([
+          {
+            op: "desk.place",
+            key: "k",
+            cell: cell as { col: number; row: number },
+          },
+        ]),
+      ).toThrow("desk cell");
+    }
+    // Pins survive a reload, and a board saved before pins loads with none.
+    store.patch([
+      { op: "desk.pin", key: "alpha:w2:t3", cell: { col: 1, row: 2 } },
+    ]);
+    expect(new BoardStore(path).get().layout.desk_pins).toEqual({
+      "alpha:w2:t3": { cell: { col: 1, row: 2 } },
+    });
+    const old = store.get() as unknown as { layout: Record<string, unknown> };
+    delete old.layout.desk_pins;
+    expect(parseBoardDocument(old).layout.desk_pins).toEqual({});
+  });
+
+  test("a pinned desk moved to another workspace stays pinned, placed afresh", () => {
+    const store = new BoardStore(path);
+    store.patch([
+      { op: "desk.pin", key: "alpha:w1:t1", cell: { col: 1, row: 0 } },
+    ]);
+    const ops = moveFollowOps(
+      store.get(),
+      "alpha",
+      "w1:t1",
+      {
+        tab_id: "w2:t4",
+        workspace_id: "w2",
+        source_workspace_id: "w1",
+        panes: [],
+      },
+      { before: {}, workspaceIds: new Set(["w1", "w2"]) },
+    );
+    store.patch(ops);
+    expect(store.get().layout.desk_pins).toEqual({
+      "alpha:w2:t4": { cell: null },
+    });
+  });
+
   test("a closed tab's colour goes; a plain key only when no workspace holds it", () => {
     const store = new BoardStore(path);
     store.patch([
@@ -589,11 +655,13 @@ describe("Board store", () => {
       { op: "card.color", key: "alpha:w2", color: "green" },
       { op: "card.color", key: "alpha:tab:w2", color: "pink" },
     ]);
-    expect(tabClosedColorOps(store.get(), "alpha", "w1:t1", true)).toEqual([
+    store.patch([{ op: "desk.pin", key: "alpha:w1:t1", cell: null }]);
+    expect(tabClosedOps(store.get(), "alpha", "w1:t1", true)).toEqual([
       { op: "card.color", key: "alpha:w1:t1", color: null },
+      { op: "desk.unpin", key: "alpha:w1:t1" },
     ]);
     // Older Herdr: tab w2 closed while workspace w2 still exists.
-    expect(tabClosedColorOps(store.get(), "alpha", "w2", false)).toEqual([
+    expect(tabClosedOps(store.get(), "alpha", "w2", false)).toEqual([
       { op: "card.color", key: "alpha:tab:w2", color: null },
     ]);
   });

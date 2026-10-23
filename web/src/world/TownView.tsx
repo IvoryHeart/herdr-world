@@ -47,6 +47,7 @@ import { inheritedColorKey } from "../../../shared/terminalColor";
 import { terminalKey, type TerminalRef } from "../../../shared/relations";
 import type { OfficeDesk } from "./herdrOfficeProjection";
 import { terminalColorKey } from "./terminalColor";
+import { useDeskPins } from "./useDeskPins";
 import {
   sendTownReply,
   townChoices,
@@ -170,9 +171,17 @@ export default function TownView({
     [],
   );
   const layoutPreferences = useLayoutPreferences();
+  const deskPins = useDeskPins();
+  // Only which tabs are pinned matters to admission, not their cells.
+  const pinnedTabKeys = Object.keys(deskPins).sort().join("\n");
+  const pinnedTabs = useMemo(
+    () => new Set(pinnedTabKeys ? pinnedTabKeys.split("\n") : []),
+    [pinnedTabKeys],
+  );
   const observedOffice = useMemo(
-    (): HerdrOfficeProjection => projectOffice(world, Date.now(), selectedId),
-    [world, selectedId, projectOffice],
+    (): HerdrOfficeProjection =>
+      projectOffice(world, Date.now(), selectedId, pinnedTabs),
+    [world, selectedId, projectOffice, pinnedTabs],
   );
   const townFinished = useTownFinished(observedOffice);
   // Terminal frames and unrelated store updates must not reconcile the scene.
@@ -773,6 +782,11 @@ export default function TownView({
     return townMoveResult(outcome);
   };
   /** The desk shows its parent's colour rather than one of its own. */
+  /** Pinned in Town (useDeskPins.ts, keyed like the desk's colour). */
+  const deskPinned = (desk: OfficeDesk) => {
+    const target = townDeskColorTarget(office, desk);
+    return Boolean(target && deskPins[terminalColorKey(target)]);
+  };
   const inheritsColor = (desk: OfficeDesk) => {
     const target = townDeskColorTarget(office, desk);
     if (!target) return false;
@@ -839,6 +853,15 @@ export default function TownView({
       toast("error", `${desk.displayLabel} was not grouped: no terminals seen`);
       return "returned";
     }
+    // A pinned desk stays put: it joins a team in its own room only.
+    const pinned = deskPinned(desk);
+    if (pinned && desk.roomKey !== target.roomKey) {
+      toast(
+        "error",
+        `${desk.displayLabel} is pinned: unpin it to join a team in another room`,
+      );
+      return "returned";
+    }
     // Joining brings the desk to the team's room: ask before grouping when
     // that closes its own, so cancelling leaves it as it was.
     const source = roomForKey(desk.roomKey);
@@ -864,7 +887,8 @@ export default function TownView({
       return runDeskMove(deskKey, target.roomKey, allowCloseRoom, (tabId) =>
         seatBeside(desk, tabId, target),
       );
-    await seatBeside(desk, desk.tabRef.nativeId, target);
+    // A pinned desk keeps its cell whatever the tab order: leave Herdr be.
+    if (!pinned) await seatBeside(desk, desk.tabRef.nativeId, target);
     return "returned";
   };
   const runUngroupDesk = async (deskKey: string): Promise<TownMoveResult> => {
@@ -1561,6 +1585,7 @@ export default function TownView({
             projection={office}
             relations={relations}
             terminalColors={terminalColors}
+            deskPins={deskPins}
             selectedKey={townSelectedKey}
             completionSeenKeys={completionSeenKeys}
             summonedKeys={summonedKeys}
