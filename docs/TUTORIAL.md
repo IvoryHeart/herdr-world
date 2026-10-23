@@ -168,8 +168,9 @@ changes what you see and does not disconnect hosts or retarget open terminals.
    Spaces header). A workspace's colour shows on its tables that have no colour
    of their own; a host's does not.
    The colour swatch beside the agent's name changes the colour of its table;
-   it is the tab's colour everywhere in World. The same swatch sits beside the
-   name in a terminal's header, the terminal window's menu has **Colour**, and
+   it is the tab's colour everywhere in World. In an agent's window the icon
+   sits on that colour: click it to open the agent's settings and choose
+   another. The terminal window's menu has **Colour**, and
    in Spaces the tab's menu (right-click or long-press) offers the same palette
    and **Default colour**.
    In the agent's window, the button beside its name sets its interest:

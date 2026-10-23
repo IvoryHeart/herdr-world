@@ -481,7 +481,7 @@
   height: 44px;
   border: 0;
   border-radius: 6px;
-  background: #1b2230;
+  background: var(--agent-colour, #1b2230);
 }
 .workspace-inspector-portrait {
   width: 100%;

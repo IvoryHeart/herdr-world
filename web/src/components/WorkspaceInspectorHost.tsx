@@ -82,7 +82,7 @@ import { FilePreviewTabs } from "./FilePreviewTabs";
 import { workspaceInspectorLayout } from "./workspaceInspectorLayout";
 import { PullRequestCard } from "./PullRequestCard";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
-import { ColorSwatchButton } from "./ColorSwatch";
+import { ColorSwatches } from "./ColorSwatch";
 import { changedCount, checkoutLabel } from "./inspectorCheckout";
 import { AgentInterestButton } from "./AgentInterestButton";
 import { InspectorSplitResizer } from "./InspectorSplitResizer";
@@ -153,6 +153,7 @@ export function WorkspaceInspectorHost({
   onExpandedChange,
   windowControls,
   terminalColor,
+  agentSettings,
   onWindowMaximize,
   windowMaximized = false,
   onClose,
@@ -199,8 +200,10 @@ export function WorkspaceInspectorHost({
   onDockChange: (dock: InspectorDock) => void;
   onExpandedChange: (expanded: boolean) => void;
   windowControls?: ManagedWindowControls;
-  /** The terminal's colour, shown and chosen beside its name. */
+  /** The terminal's colour: the icon's background, chosen from its settings. */
   terminalColor?: ManagedWindowControls["color"];
+  /** More of the agent's settings, below the colour in the icon's popover. */
+  agentSettings?: ReactNode;
   onWindowMaximize?: () => void;
   windowMaximized?: boolean;
   onClose: () => void;
@@ -527,6 +530,20 @@ export function WorkspaceInspectorHost({
 
   // The line under the name says where this is; it opens the repository's
   // branch and PR status, so the bar needs no separate button or card.
+  const avatarIcon = agentContext?.portrait ? (
+    <img
+      className="workspace-inspector-portrait"
+      src={agentContext.portrait}
+      alt=""
+    />
+  ) : agentContext?.kind === "agent" ? (
+    <AgentIcon agent={agentContext.agent ?? agentContext.label} compact />
+  ) : agentContext?.kind === "terminal" ? (
+    <SquareTerminal size={16} />
+  ) : (
+    <FolderTree size={16} />
+  );
+
   const locationLine = (content: ReactNode, description: string) =>
     visible && state.open && workspace ? (
       <Popover
@@ -613,41 +630,52 @@ export function WorkspaceInspectorHost({
             label="Inspector window"
           />
         ) : null}
-        {terminalColor ? (
-          <ColorSwatchButton
-            className="workspace-inspector-swatch"
-            label="Terminal colour"
-            palette={terminalColor.palette}
-            current={terminalColor.current}
-            onColor={terminalColor.onColor}
-          />
-        ) : null}
         {agentContext ? (
           <div
             className="workspace-inspector-identity workspace-inspector-agent-identity"
             data-kind={agentContext.kind}
           >
-            <span
-              className="workspace-inspector-agent-avatar"
-              aria-hidden="true"
-            >
-              {agentContext.portrait ? (
-                <img
-                  className="workspace-inspector-portrait"
-                  src={agentContext.portrait}
-                  alt=""
-                />
-              ) : agentContext.kind === "agent" ? (
-                <AgentIcon
-                  agent={agentContext.agent ?? agentContext.label}
-                  compact
-                />
-              ) : agentContext.kind === "terminal" ? (
-                <SquareTerminal size={16} />
-              ) : (
-                <FolderTree size={16} />
-              )}
-            </span>
+            {/* The icon sits on its terminal colour and opens the agent's
+                settings: the colour now, the agent's profile and look later. */}
+            {terminalColor ? (
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    className="workspace-inspector-agent-avatar is-settings"
+                    style={avatarColour(terminalColor)}
+                    aria-label={`Agent settings for ${agentContext.label}`}
+                    title="Colour and agent settings"
+                  >
+                    {avatarIcon}
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent
+                  className="workspace-inspector-agent-settings"
+                  align="start"
+                  aria-label={`Agent settings for ${agentContext.label}`}
+                >
+                  <strong>{agentContext.label}</strong>
+                  <span className="workspace-inspector-agent-settings-label">
+                    Colour
+                  </span>
+                  <ColorSwatches
+                    label="Terminal colour"
+                    palette={terminalColor.palette}
+                    current={terminalColor.current}
+                    onColor={terminalColor.onColor}
+                  />
+                  {agentSettings}
+                </PopoverContent>
+              </Popover>
+            ) : (
+              <span
+                className="workspace-inspector-agent-avatar"
+                aria-hidden="true"
+              >
+                {avatarIcon}
+              </span>
+            )}
             <span className="workspace-inspector-checkout">
               {agentContext.label}
             </span>
@@ -1397,4 +1425,12 @@ function inspectorAgentContext(
       ? { taskSummary: pane.task_summary.trim() }
       : {}),
   };
+}
+
+/** The icon's background: the terminal's colour, chosen or by default. */
+function avatarColour(
+  color: NonNullable<ManagedWindowControls["color"]>,
+): CSSProperties | undefined {
+  const hex = color.palette.find((entry) => entry.id === color.current.id)?.hex;
+  return hex ? ({ "--agent-colour": hex } as CSSProperties) : undefined;
 }

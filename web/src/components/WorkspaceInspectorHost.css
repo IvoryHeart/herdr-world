@@ -581,3 +581,29 @@
 .workspace-inspector-location svg {
   flex: 0 0 auto;
 }
+
+/* The agent's icon sits on its terminal colour and opens its settings. */
+.workspace-inspector-agent-avatar.is-settings {
+  padding: 0;
+  background: var(--agent-colour, var(--accent-soft));
+  cursor: pointer;
+}
+.workspace-inspector-agent-avatar.is-settings:hover {
+  filter: brightness(1.12);
+}
+.workspace-inspector-agent-avatar.is-settings:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.workspace-inspector-agent-settings {
+  display: grid;
+  gap: 8px;
+  min-width: 200px;
+  padding: 10px;
+}
+.workspace-inspector-agent-settings-label {
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
