@@ -324,7 +324,7 @@ step cards yet.
 
 | Harness | Checklist (`todo`) | Plan | Goal | Loop | Helpers |
 | --- | --- | --- | --- | --- | --- |
-| Claude Code | `TodoWrite`; `TaskCreate` and `TaskUpdate` (the harness's task IDs; a pending task waiting on an unfinished one is `blocked`) | `ExitPlanMode` with the plan inline | None recorded | `ScheduleWakeup` (`/loop`), `CronCreate`; `stop` ends it | `Agent`, `Task` |
+| Claude Code | `TodoWrite`; `TaskCreate` and `TaskUpdate` (the harness's task IDs; a pending task waiting on an unfinished one is `blocked`) | `ExitPlanMode` with the plan inline | None recorded | `ScheduleWakeup` (`/loop`), `CronCreate`; `stop` ends it, and so does a `ScheduleWakeup` whose wake-up arrived and whose turn ended (or was followed by another prompt) without scheduling another | `Agent`, `Task` |
 | Codex | `update_plan` (its `explanation` titles the quest) | Plan-mode `Plan` item | `thread_goal_updated` (paused, blocked, usage- or budget-limited, complete) | None recorded | `spawn_agent` |
 | Kimi Code | `SetTodoList` | None | None | None | None |
 | Pi | No built-in tool; an extension tool named `todo_write` or `write_todos` that writes the whole list is read | None | None | None | None |

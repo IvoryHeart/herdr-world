@@ -13,4 +13,6 @@
 - A sent message the conversation has moved past no longer sits below newer
   replies: after a minute it shows where it was sent, as "Sent · delivery
   unknown".
+- A loop the agent scheduled once (`ScheduleWakeup`) no longer shows as in
+  progress after its wake-up has run and no further one was scheduled.
 - Chat's message bubbles keep to about 75 characters a line in wide windows.
