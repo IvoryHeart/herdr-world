@@ -34,7 +34,7 @@ export type WorldSourceStatus = {
 };
 
 export type WorldSourcePublicConfig =
-  | { kind: "github" }
+  | { kind: "github"; mergedDays: number }
   | {
       kind: "jira";
       site: string | null;
@@ -90,6 +90,8 @@ export type WorkItem = {
   status: string;
   roles: WorkRole[];
   updatedAt: number;
+  /** Merged pull requests only. */
+  mergedAt?: number;
   /** Pull requests only. */
   number?: number;
   repo?: string;

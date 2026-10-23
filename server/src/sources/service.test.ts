@@ -325,6 +325,41 @@ describe("World sources service", () => {
     expect(saved.at(-1)).toEqual({ github: { enabled: false } });
   });
 
+  test("the merged window is saved, reported and used; a bad one is refused", async () => {
+    const queries: string[] = [];
+    const run: RunProcess = async (argv) => {
+      if (argv[0] !== "gh") return { code: 0, stdout: "", stderr: "" };
+      if (argv[1] !== "auth") queries.push(argv.at(-1)!);
+      return argv[1] === "auth"
+        ? { code: 0, stdout: "", stderr: "" }
+        : { code: 0, stdout: JSON.stringify(graphql), stderr: "" };
+    };
+    const { service, handle, saved } = setup({ run });
+    const path = `${WORLD_SOURCES_PATH}/github`;
+    expect((await service.snapshot()).sources[0]!.config).toEqual({
+      kind: "github",
+      mergedDays: 7,
+    });
+    const response = await handle(put(path, { mergedDays: 30 }), path);
+    const body = await response!.json();
+    expect(body.sources[0].config).toEqual({ kind: "github", mergedDays: 30 });
+    expect(saved.at(-1)).toEqual({ github: { mergedDays: 30 } });
+    // 1,000 (setup's clock) minus 30 days.
+    expect(queries.at(-1)).toContain(
+      `merged:>=${new Date(1_000 - 30 * 86_400_000).toISOString().replace(/\.\d{3}Z$/u, "Z")}`,
+    );
+    for (const bad of [
+      { mergedDays: 0 },
+      { mergedDays: "7" },
+      { other: 1 },
+      {},
+    ]) {
+      const refused = await handle(put(path, bad), path);
+      expect(refused!.status).toBe(400);
+    }
+    expect(saved).toHaveLength(1);
+  });
+
   test("settings round-trip through settings.json's custom block", () => {
     const base: GuiSettings = {
       version: 1,

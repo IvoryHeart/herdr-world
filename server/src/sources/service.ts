@@ -6,7 +6,13 @@ import type {
   WorldSourceStatus,
   WorldSourcesSnapshot,
 } from "../../../shared/worldSources";
-import { refreshGitHub, type RunProcess, type SourceRefresh } from "./github";
+import {
+  DEFAULT_MERGED_DAYS,
+  normalizeMergedDays,
+  refreshGitHub,
+  type RunProcess,
+  type SourceRefresh,
+} from "./github";
 import {
   DEFAULT_JIRA_JQL,
   normalizeJiraEmail,
@@ -32,8 +38,17 @@ import type { SourceSecrets } from "./secrets";
  * so a slow `gh`, Jira or SSH host never holds a request open.
  */
 
+/** Saved values were validated on the way in; drop any that no longer are. */
+function safe<T>(read: () => T, fallback: T) {
+  try {
+    return read();
+  } catch {
+    return fallback;
+  }
+}
+
 export type StoredSourceSettings = {
-  github?: { enabled?: boolean };
+  github?: { enabled?: boolean; mergedDays?: number };
   jira?: {
     enabled?: boolean;
     site?: string | null;
@@ -134,16 +149,16 @@ export class SourcesService {
     return this.#settings[id]?.enabled !== false;
   }
 
+  /** Days of merged pull requests to show. */
+  mergedDays() {
+    return safe(
+      () => normalizeMergedDays(this.#settings.github?.mergedDays),
+      DEFAULT_MERGED_DAYS,
+    );
+  }
+
   jiraConfig(): JiraConfig {
     const jira = this.#settings.jira ?? {};
-    // Saved values were validated on the way in; drop any that no longer are.
-    const safe = <T>(read: () => T, fallback: T) => {
-      try {
-        return read();
-      } catch {
-        return fallback;
-      }
-    };
     return {
       site: safe(() => normalizeJiraSite(jira.site), null),
       email: safe(() => normalizeJiraEmail(jira.email), null),
@@ -167,7 +182,7 @@ export class SourcesService {
         itemCount: enabled ? source.items.length : 0,
         config:
           id === "github"
-            ? { kind: "github" }
+            ? { kind: "github", mergedDays: this.mergedDays() }
             : {
                 kind: "jira",
                 site: jira.site,
@@ -231,7 +246,13 @@ export class SourcesService {
     return task;
   }
 
-  async configureGitHub(patch: { enabled?: boolean }) {
+  async configureGitHub(patch: { enabled?: boolean; mergedDays?: number }) {
+    if (patch.mergedDays !== undefined)
+      try {
+        normalizeMergedDays(patch.mergedDays);
+      } catch (cause) {
+        throw new SourceSettingsError((cause as Error).message);
+      }
     await this.#save({
       ...this.#settings,
       github: { ...this.#settings.github, ...patch },
@@ -337,7 +358,8 @@ export class SourcesService {
   }
 
   #fetch(id: WorldSourceId, now: number): Promise<SourceRefresh> {
-    if (id === "github") return refreshGitHub(this.#options.run, now);
+    if (id === "github")
+      return refreshGitHub(this.#options.run, now, this.mergedDays());
     return refreshJira(
       this.jiraConfig(),
       this.#jiraToken(),

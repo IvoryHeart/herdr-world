@@ -261,7 +261,9 @@ on your phone and desktop.
    GitHub pull requests in columns from **In review** through **Fixing**,
    **Green** and **Ready to merge** to **Merged**, and on the **Tickets** tab
    your Jira tickets and assigned issues by status. A card names the agents
-   working on it; tap one to close Work and jump to its card. Escape or a
+   working on it; tap one to close Work and jump to its card. **Merged**
+   groups the week's pull requests by day with today open; tap a day to open
+   it, and change how many days it covers in **Settings → Sources**. Escape or a
    press outside also closes Work. **Green** means checks pass while a
    required review is pending; **Ready to merge** means approved, or passing
    in a repository that requires no review. The same pull

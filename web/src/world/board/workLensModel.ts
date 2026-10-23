@@ -19,16 +19,68 @@ export type WorkLensAgent = { id: string; label: string };
 
 export type WorkLensCard = { item: WorkItem; agents: WorkLensAgent[] };
 
+/** One day of a history column (Merged, Done), newest first. */
+export type WorkLensDay = { key: string; label: string; cards: WorkLensCard[] };
+
 export type WorkLensColumn = {
   lane: WorkItem["lane"];
   label: string;
   cards: WorkLensCard[];
+  /** History lanes only: the cards grouped by the day they finished. */
+  days?: WorkLensDay[];
 };
+
+/** Lanes that only grow; a busy week fills them, so they group by day. */
+const HISTORY_LANES = new Set<WorkItem["lane"]>(["merged", "done"]);
+
+const finishedAt = (item: WorkItem) => item.mergedAt ?? item.updatedAt;
+
+function localDay(time: number) {
+  const date = new Date(time);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+/** Group history cards by local day: Today, Yesterday, then dates. */
+export function workLensDays(
+  cards: WorkLensCard[],
+  now: number,
+): WorkLensDay[] {
+  const today = localDay(now);
+  const yesterday = localDay(
+    new Date(new Date(now).setDate(new Date(now).getDate() - 1)).getTime(),
+  );
+  const days = new Map<string, WorkLensDay>();
+  for (const card of cards) {
+    const time = finishedAt(card.item);
+    const key = localDay(time);
+    let day = days.get(key);
+    if (!day) {
+      day = {
+        key,
+        label:
+          key === today
+            ? "Today"
+            : key === yesterday
+              ? "Yesterday"
+              : new Date(time).toLocaleDateString(undefined, {
+                  weekday: "short",
+                  day: "numeric",
+                  month: "short",
+                }),
+        cards: [],
+      };
+      days.set(key, day);
+    }
+    day.cards.push(card);
+  }
+  return [...days.values()];
+}
 
 export function workLensColumns(
   snapshot: WorldSourcesSnapshot,
   world: WorldObject,
   group: WorkLensGroup,
+  now = Date.now(),
 ): WorkLensColumn[] {
   const leaves = new Map(
     world.leaves.map((leaf) => [
@@ -55,14 +107,21 @@ export function workLensColumns(
     group === "pull_requests"
       ? item.kind === "pull_request"
       : item.kind !== "pull_request";
-  return lanes.map((lane) => ({
-    lane,
-    label: WORK_LANE_LABELS[lane],
-    cards: snapshot.items
+  return lanes.map((lane) => {
+    const history = HISTORY_LANES.has(lane);
+    const cards = snapshot.items
       .filter((item) => wanted(item) && item.lane === lane)
-      .sort((a, b) => b.updatedAt - a.updatedAt)
-      .map((item) => ({ item, agents: agentsByItem.get(item.key) ?? [] })),
-  }));
+      .sort((a, b) =>
+        history ? finishedAt(b) - finishedAt(a) : b.updatedAt - a.updatedAt,
+      )
+      .map((item) => ({ item, agents: agentsByItem.get(item.key) ?? [] }));
+    return {
+      lane,
+      label: WORK_LANE_LABELS[lane],
+      cards,
+      ...(history ? { days: workLensDays(cards, now) } : {}),
+    };
+  });
 }
 
 /** Short state words for a pull request card, most important first. */

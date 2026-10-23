@@ -43,10 +43,15 @@ Ideas only were taken from these Herdr plugins; no code was copied.
   failed refresh keeps the last items. There are no webhooks, which would need
   a public endpoint. Links are recomputed at most every 15 seconds.
 - **GitHub through `gh`.** One `gh api graphql` request reads open PRs the
-  user authored, was asked to review or is assigned, PRs merged in the last
-  seven days and assigned issues, each with review decision, mergeability and
-  the head commit's check rollup. The owner's existing sign-in is used; World
-  stores no GitHub credentials.
+  user authored, was asked to review or is assigned, the first hundred PRs
+  merged in the merged window and assigned issues, each with review decision,
+  mergeability and the head commit's check rollup. Further merged PRs follow
+  a hundred per request until the window is exhausted, at most ten pages
+  (GitHub search's 1,000-result limit), every request under one minute's
+  deadline and the per-request time and output limits; a failed page fails
+  the refresh so the last complete list stays. The window is seven days by
+  default and 1 to 90 days in Sources settings. The owner's existing sign-in
+  is used; World stores no GitHub credentials.
 - **Lanes.** A PR is Merged when merged; Fixing when changes are requested,
   checks fail or it conflicts; In review when a draft or checks run; Ready to
   merge when approved, or when checks pass and the repository requires no
@@ -74,7 +79,9 @@ Ideas only were taken from these Herdr plugins; no code was copied.
   ignore it for a pane ID reused by a restarted runtime or a new agent; an
   agent-reported
   PR URL links directly. A ticket links when the branch names its key.
-- **Views.** Board's Work lens is an overlay with its own scrolling, outside
+- **Views.** Merged and Done columns group cards by the day they finished
+  (Today, Yesterday, then dates), newest day open and older days collapsed,
+  with compact cards, so a busy week stays readable. Board's Work lens is an overlay with its own scrolling, outside
   Board's gestures, and a layer on the shared stack (Escape, Back or a press
   outside closes it); the Sources dialog is a layer too. Town's badge is part
   of the desk's DOM nameplate, so it is crisp, clickable and never overlaps

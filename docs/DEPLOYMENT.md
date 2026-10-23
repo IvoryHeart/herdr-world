@@ -345,6 +345,9 @@ Jira or SSH lookup finishes in the background.
   [GitHub CLI](https://cli.github.com/) for that user and run `gh auth login`
   (for a user service, the same account the service runs as). Until then the
   source says **Sign in with gh auth login**. World stores no GitHub token.
+  Merged pull requests cover the last 7 days by default (1 to 90 in
+  **Settings → Sources**, saved as `custom.world_sources.github.mergedDays`);
+  World reads them 100 per request, up to GitHub search's 1,000 results.
 - **Jira Cloud** needs your site (`example.atlassian.net`), account email and an
   [API token](https://id.atlassian.com/manage-profile/security/api-tokens),
   entered in **Settings → Sources**. The site and email are saved in

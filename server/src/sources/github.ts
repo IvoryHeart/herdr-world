@@ -9,7 +9,8 @@ import {
 /**
  * GitHub through the service user's `gh` sign-in: open pull requests the user
  * authored, was asked to review or is assigned, recently merged ones, and
- * assigned issues. One bounded GraphQL request per refresh.
+ * assigned issues. One bounded GraphQL request per refresh, plus a page of
+ * 100 for each further hundred merged in the window.
  */
 
 export type ProcessResult = { code: number; stdout: string; stderr: string };
@@ -23,9 +24,14 @@ export type SourceRefresh =
   | { ok: false; state: "not_connected" | "error"; detail: string };
 
 const TIMEOUT_MS = 20_000;
+/** One refresh, every page included. */
+const DEADLINE_MS = 60_000;
 const PAGE = 50;
-const MERGED_PAGE = 20;
-const MERGED_DAYS = 7;
+const MERGED_PAGE = 100;
+/** GitHub's search answers at most 1,000 results. */
+const MERGED_PAGES = 10;
+export const DEFAULT_MERGED_DAYS = 7;
+export const MAX_MERGED_DAYS = 90;
 const MAX_TITLE = 300;
 const MAX_OUTPUT = 4 * 1024 * 1024;
 
@@ -37,32 +43,69 @@ const GITHUB_FAILED =
   "GitHub did not answer. World keeps the last pull requests and tries again shortly.";
 
 const PR_FIELDS = `
-  number title url isDraft state updatedAt headRefName reviewDecision mergeable
+  number title url isDraft state updatedAt mergedAt headRefName reviewDecision mergeable
   repository { nameWithOwner }
   headRepository { nameWithOwner }
   commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }`;
 
-export function githubQuery(now: number) {
-  const since = new Date(now - MERGED_DAYS * 86_400_000)
+export function normalizeMergedDays(value: unknown) {
+  if (
+    !Number.isSafeInteger(value) ||
+    (value as number) < 1 ||
+    (value as number) > MAX_MERGED_DAYS
+  )
+    throw new Error(
+      `Merged pull requests window must be 1 to ${MAX_MERGED_DAYS} days`,
+    );
+  return value as number;
+}
+
+const search = (alias: string, query: string, first: number, body: string) =>
+  `${alias}: search(type: ISSUE, first: ${first}, query: ${JSON.stringify(query)}) { ${body} }`;
+const PR_NODES = `nodes { ... on PullRequest { ${PR_FIELDS} } }`;
+const MERGED_NODES = `pageInfo { hasNextPage endCursor } ${PR_NODES}`;
+
+function mergedQuery(now: number, days: number) {
+  const since = new Date(now - days * 86_400_000)
     .toISOString()
-    .slice(0, 10);
-  const search = (alias: string, query: string, first: number, body: string) =>
-    `${alias}: search(type: ISSUE, first: ${first}, query: ${JSON.stringify(query)}) { nodes { ${body} } }`;
-  const pr = `... on PullRequest { ${PR_FIELDS} }`;
-  const issue = `... on Issue { number title url updatedAt repository { nameWithOwner } }`;
+    .replace(/\.\d{3}Z$/u, "Z");
+  return `is:pr is:merged author:@me merged:>=${since}`;
+}
+
+export function githubQuery(now: number, mergedDays = DEFAULT_MERGED_DAYS) {
+  const issue = `nodes { ... on Issue { number title url updatedAt repository { nameWithOwner } } }`;
   return `query {
-  ${search("authored", "is:pr is:open author:@me archived:false", PAGE, pr)}
-  ${search("reviewing", "is:pr is:open review-requested:@me archived:false", PAGE, pr)}
-  ${search("assigned", "is:pr is:open assignee:@me archived:false", PAGE, pr)}
-  ${search("merged", `is:pr is:merged author:@me merged:>=${since}`, MERGED_PAGE, pr)}
+  ${search("authored", "is:pr is:open author:@me archived:false", PAGE, PR_NODES)}
+  ${search("reviewing", "is:pr is:open review-requested:@me archived:false", PAGE, PR_NODES)}
+  ${search("assigned", "is:pr is:open assignee:@me archived:false", PAGE, PR_NODES)}
+  ${search("merged", mergedQuery(now, mergedDays), MERGED_PAGE, MERGED_NODES)}
   ${search("issues", "is:issue is:open assignee:@me archived:false", PAGE, issue)}
+}`;
+}
+
+/** The next hundred merged pull requests after `cursor`. */
+export function mergedPageQuery(
+  now: number,
+  mergedDays: number,
+  cursor: string,
+) {
+  return `query {
+  ${search(
+    "merged",
+    mergedQuery(now, mergedDays),
+    MERGED_PAGE,
+    MERGED_NODES,
+  ).replace("first: ", `after: ${JSON.stringify(cursor)}, first: `)}
 }`;
 }
 
 export async function refreshGitHub(
   run: RunProcess,
   now: number,
+  mergedDays = DEFAULT_MERGED_DAYS,
+  clock: () => number = Date.now,
 ): Promise<SourceRefresh> {
+  const deadline = clock() + DEADLINE_MS;
   let auth: ProcessResult;
   try {
     auth = await run(
@@ -82,19 +125,41 @@ export async function refreshGitHub(
     return { ok: false, state: "not_connected", detail: GITHUB_NOT_INSTALLED };
   if (auth.code !== 0)
     return { ok: false, state: "not_connected", detail: GITHUB_SIGNED_OUT };
-  let result: ProcessResult;
-  try {
-    result = await run(
-      ["gh", "api", "graphql", "-f", `query=${githubQuery(now)}`],
-      TIMEOUT_MS,
+  const query = async (text: string) => {
+    const remaining = Math.min(TIMEOUT_MS, deadline - clock());
+    if (remaining <= 0) throw new Error("GitHub refresh ran out of time");
+    const result = await run(
+      ["gh", "api", "graphql", "-f", `query=${text}`],
+      remaining,
     );
-  } catch {
-    return { ok: false, state: "error", detail: GITHUB_FAILED };
-  }
-  if (result.code !== 0 || result.stdout.length > MAX_OUTPUT)
-    return { ok: false, state: "error", detail: GITHUB_FAILED };
+    if (result.code !== 0 || result.stdout.length > MAX_OUTPUT)
+      throw new Error("GitHub request failed");
+    return record(record(JSON.parse(result.stdout)).data);
+  };
   try {
-    return { ok: true, items: parseGitHubResponse(JSON.parse(result.stdout)) };
+    const data = await query(githubQuery(now, mergedDays));
+    // Every pull request merged in the window, a hundred at a time. A
+    // failed page fails the refresh, so the last complete list stays.
+    const merged = [...nodes(data.merged)];
+    let page = record(record(data.merged).pageInfo);
+    for (
+      let pages = 1;
+      pages < MERGED_PAGES && page.hasNextPage === true;
+      pages++
+    ) {
+      if (typeof page.endCursor !== "string" || !page.endCursor) break;
+      const next = record(
+        (await query(mergedPageQuery(now, mergedDays, page.endCursor))).merged,
+      );
+      merged.push(...nodes(next));
+      page = record(next.pageInfo);
+    }
+    return {
+      ok: true,
+      items: parseGitHubResponse({
+        data: { ...data, merged: { nodes: merged } },
+      }),
+    };
   } catch {
     return { ok: false, state: "error", detail: GITHUB_FAILED };
   }
@@ -158,6 +223,7 @@ function pullRequestItem(node: Record<string, unknown>): WorkItem | null {
     status: merged ? "merged" : draft ? "draft" : "open",
     roles: [],
     updatedAt: time(node.updatedAt),
+    ...(merged && time(node.mergedAt) ? { mergedAt: time(node.mergedAt) } : {}),
     number: number as number,
     repo,
     // A branch whose head repository is gone (a deleted fork) cannot be

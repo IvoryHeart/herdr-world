@@ -4,6 +4,7 @@ import {
   GITHUB_NOT_INSTALLED,
   GITHUB_SIGNED_OUT,
   githubQuery,
+  normalizeMergedDays,
   parseGitHubResponse,
   refreshGitHub,
   type RunProcess,
@@ -136,10 +137,94 @@ describe("GitHub source", () => {
     expect(workBadgeText(merged!)).toBe("#6 ◆");
   });
 
-  test("asks for merged pull requests from the last week only", () => {
-    const query = githubQuery(Date.parse("2026-03-10T12:00:00Z"));
-    expect(query).toContain("merged:>=2026-03-03");
+  test("asks for pull requests merged in the window, a hundred at a time", () => {
+    const now = Date.parse("2026-03-10T12:00:00Z");
+    const query = githubQuery(now);
+    expect(query).toContain("merged:>=2026-03-03T12:00:00Z");
     expect(query).toContain("review-requested:@me");
+    expect(query).toMatch(/merged: search\(type: ISSUE, first: 100,/u);
+    expect(query).toContain("pageInfo { hasNextPage endCursor }");
+    expect(githubQuery(now, 30)).toContain("merged:>=2026-02-08T12:00:00Z");
+    expect(() => normalizeMergedDays(0)).toThrow();
+    expect(() => normalizeMergedDays(91)).toThrow();
+    expect(() => normalizeMergedDays(2.5)).toThrow();
+    expect(normalizeMergedDays(90)).toBe(90);
+  });
+
+  const merged = (number: number) =>
+    pr(number, {
+      state: "MERGED",
+      mergedAt: "2026-03-09T08:00:00Z",
+    });
+  /** gh answering with `total` merged pull requests, 100 per page. */
+  const pagedGitHub = (total: number, failPage?: number) => {
+    const queries: string[] = [];
+    const run: RunProcess = async (argv) => {
+      if (argv[1] === "auth") return { code: 0, stdout: "", stderr: "" };
+      const query = argv.at(-1)!;
+      queries.push(query);
+      const page = Number(/after: "page-(\d+)"/u.exec(query)?.[1] ?? 0);
+      if (page === failPage) return { code: 1, stdout: "", stderr: "" };
+      const nodes = Array.from(
+        { length: Math.max(0, Math.min(100, total - page * 100)) },
+        (_, index) => merged(1_000 + page * 100 + index),
+      );
+      const more = (page + 1) * 100 < total;
+      const search = {
+        pageInfo: { hasNextPage: more, endCursor: `page-${page + 1}` },
+        nodes,
+      };
+      const data =
+        page === 0
+          ? { ...response({ authored: [pr(1)] }).data, merged: search }
+          : { merged: search };
+      return { code: 0, stdout: JSON.stringify({ data }), stderr: "" };
+    };
+    return { run, queries };
+  };
+
+  test("reads every pull request merged in the window, page by page", async () => {
+    const { run, queries } = pagedGitHub(250);
+    const result = await refreshGitHub(run, Date.parse("2026-03-10T12:00:00Z"));
+    expect(result.ok).toBe(true);
+    const items = result.ok ? result.items : [];
+    expect(items.filter((item) => item.lane === "merged")).toHaveLength(250);
+    expect(items[0]).toMatchObject({
+      mergedAt: Date.parse("2026-03-09T08:00:00Z"),
+    });
+    expect(queries).toHaveLength(3);
+    expect(queries[1]).toContain('after: "page-1"');
+    expect(queries[1]).not.toContain("review-requested");
+    expect(queries[2]).toContain('after: "page-2"');
+  });
+
+  test("stops at GitHub's 1,000-result search limit", async () => {
+    const { run, queries } = pagedGitHub(5_000);
+    const result = await refreshGitHub(run, 0);
+    expect(
+      result.ok && result.items.filter((item) => item.lane === "merged"),
+    ).toHaveLength(1_000);
+    expect(queries).toHaveLength(10);
+  });
+
+  test("a failed page fails the refresh, so the last complete list stays", async () => {
+    const { run } = pagedGitHub(250, 2);
+    expect((await refreshGitHub(run, 0)).ok).toBe(false);
+  });
+
+  test("all pages share one deadline", async () => {
+    const { run: paged } = pagedGitHub(5_000);
+    let clock = 0;
+    const timeouts: number[] = [];
+    const run: RunProcess = async (argv, timeoutMs) => {
+      timeouts.push(timeoutMs);
+      clock += 25_000;
+      return paged(argv, timeoutMs);
+    };
+    const result = await refreshGitHub(run, 0, 7, () => clock);
+    expect(result.ok).toBe(false);
+    expect(Math.max(...timeouts)).toBeLessThanOrEqual(20_000);
+    expect(timeouts.at(-1)).toBeLessThan(20_000);
   });
 
   test("reports a missing or signed-out gh as not connected", async () => {

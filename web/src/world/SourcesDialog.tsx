@@ -2,6 +2,7 @@ import { CircleCheck, CircleOff, RefreshCw, TriangleAlert } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { WorldSourceStatus } from "../../../shared/worldSources";
 import { CloseButton } from "../components/CloseButton";
+import { ThemedSelect } from "../components/ThemedSelect";
 import { focusDialogElement } from "../components/dialogFocus";
 import { useLayer } from "../layerStack";
 import {
@@ -9,6 +10,14 @@ import {
   useWorldSources,
   worldSourcesStore,
 } from "./worldSources";
+
+const MERGED_WINDOWS = [1, 3, 7, 14, 30, 90];
+
+/** The offered windows, plus a saved one that is not among them. */
+const mergedWindows = (current: number) =>
+  MERGED_WINDOWS.includes(current)
+    ? MERGED_WINDOWS
+    : [...MERGED_WINDOWS, current].sort((a, b) => a - b);
 
 /**
  * Sources settings: each built-in source with its state, an on/off switch and
@@ -139,13 +148,40 @@ export function SourcesDialog({ onClose }: { onClose(): void }) {
               )}
               <span>{source.detail}</span>
             </div>
-            {source.id === "github" && source.enabled ? (
-              <p className="world-observability-field-help">
-                Uses the GitHub CLI signed in as the user that runs World: pull
-                requests you opened, were asked to review or are assigned, the
-                last week's merged ones and issues assigned to you. Each agent's
-                desk shows the pull request for its branch.
-              </p>
+            {source.id === "github" &&
+            source.enabled &&
+            source.config.kind === "github" ? (
+              <>
+                <p className="world-observability-field-help">
+                  Uses the GitHub CLI signed in as the user that runs World:
+                  pull requests you opened, were asked to review or are
+                  assigned, every one you merged in the window below, and issues
+                  assigned to you. Each agent's desk shows the pull request for
+                  its branch.
+                </p>
+                <label className="form-field">
+                  <span>Merged pull requests</span>
+                  <ThemedSelect
+                    aria-label="Merged pull requests"
+                    value={String(source.config.mergedDays)}
+                    disabled={busy !== null}
+                    options={mergedWindows(source.config.mergedDays).map(
+                      (days) => ({
+                        value: String(days),
+                        label: days === 1 ? "Last day" : `Last ${days} days`,
+                      }),
+                    )}
+                    onChange={(value) => {
+                      const mergedDays = Number(value);
+                      void run(
+                        "github",
+                        () => updateWorldSource("github", { mergedDays }),
+                        "GitHub settings saved.",
+                      );
+                    }}
+                  />
+                </label>
+              </>
             ) : null}
             {source.id === "jira" && source.enabled ? (
               <form
