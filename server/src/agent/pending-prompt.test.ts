@@ -215,31 +215,67 @@ describe("Claude Code's questions", () => {
     ]);
   });
 
-  test("plan approval offers its answers but not the feedback box", () => {
-    const prompt = parsePendingPrompt(
-      "claude",
-      [
-        "  ╌╌╌╌╌╌╌╌╌╌",
-        "",
-        `  ${RULE}`,
-        "   Claude has written up a plan and is ready to execute. Would you like to proceed?",
-        "",
-        "   ❯ 1. Yes, and use auto mode",
-        "     2. Yes, manually approve edits",
-        "     3. Tell Claude what to change",
-        "        shift+tab to approve with this feedback",
-        "",
-        "   ctrl+g to edit in your editor · ~/plans/example.md",
-      ].join("\n"),
-      context,
-    )!;
+  const EDGE = "  " + "╌".repeat(40);
+  const planScreen = (plan: string[]) =>
+    [
+      `  ${RULE}`,
+      "   Ready to code?",
+      "",
+      "   Here is Claude's plan:",
+      EDGE,
+      ...plan.map((line) => (line ? `   ${line}` : "")),
+      EDGE,
+      "",
+      "",
+      `  ${RULE}`,
+      "   Claude has written up a plan and is ready to execute. Would you like to proceed?",
+      "",
+      "   ❯ 1. Yes, and use auto mode",
+      "     2. Yes, manually approve edits",
+      "     3. Tell Claude what to change",
+      "        shift+tab to approve with this feedback",
+      "",
+      "   ctrl+g to edit in your editor · ~/plans/example.md",
+    ].join("\n");
+  const PLAN = [
+    "Plan: create banner.txt",
+    "",
+    "1. Write banner.txt with the word hi.",
+    "2. Read it back.",
+  ];
+
+  test("plan approval shows the whole plan, and offers its answers but not the feedback box", () => {
+    const prompt = parsePendingPrompt("claude", planScreen(PLAN), context)!;
     expect(prompt.question).toEqual([
       "Claude has written up a plan and is ready to execute. Would you like to proceed?",
+    ]);
+    expect(prompt.request).toEqual([
+      "Plan: create banner.txt",
+      "1. Write banner.txt with the word hi.",
+      "2. Read it back.",
     ]);
     expect(prompt.options.map((option) => option.label)).toEqual([
       "Yes, and use auto mode",
       "Yes, manually approve edits",
     ]);
+  });
+
+  test("two plans behind the same menu are different prompts", () => {
+    const other = [...PLAN.slice(0, 3), "2. Delete the old banners."];
+    expect(
+      parsePendingPrompt("claude", planScreen(other), context)!.fingerprint,
+    ).not.toBe(
+      parsePendingPrompt("claude", planScreen(PLAN), context)!.fingerprint,
+    );
+  });
+
+  test("a plan cut off by the capture is not approved from Chat", () => {
+    const clipped = planScreen(PLAN).split("\n").slice(5).join("\n");
+    const prompt = parsePendingPrompt("claude", clipped, context)!;
+    expect(prompt.options).toEqual([]);
+    // Without its plan at all, the menu offers nothing either.
+    const bare = planScreen(PLAN).split("\n").slice(11).join("\n");
+    expect(parsePendingPrompt("claude", bare, context)!.options).toEqual([]);
   });
 
   test("an unnumbered menu, or one without its opening rule, is left to the Terminal", () => {

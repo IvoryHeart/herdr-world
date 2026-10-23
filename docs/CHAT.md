@@ -36,7 +36,9 @@ view that you open on purpose.
     under it. Options that open a text box ("Type something.", "Chat about
     this", "Tell Claude what to change") are not offered. A form with several
     questions is answered one tab at a time, then its "Ready to submit your
-    answers?" review.
+    answers?" review. Plan approval shows the whole plan Claude drew between
+    its dashed edges as the request, and the fingerprint covers it; a plan
+    cut off by the capture is left to the Terminal.
   - Codex's approval menu: options ending in their key hints such as "(y)" or
     "(esc)", the › cursor on one. The hint key selects.
 
@@ -63,7 +65,8 @@ view that you open on purpose.
 - Chat replaces the card with what it sent. "You answered 2 · …" needs
   evidence that this agent left this prompt: the same session, and then a
   status that shows progress (`working`, `idle` or `done`), a different
-  question on a readable screen (a form's next tab keeps Herdr's state), or a
+  recognised question on a readable screen (a form's next tab keeps Herdr's
+  state; a partial or unrecognised screen does not count), or a
   new state with a changed screen. Otherwise the receipt reads "Sent 2 · …"
   with the reason (`unconfirmed_reason`): the question still shows
   (`still_showing`), the pane has another session (`session_changed`, and the

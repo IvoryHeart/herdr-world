@@ -52,6 +52,9 @@ const BOX_LINE = /^\s*│(.*)│\s*$/;
 const CLAUDE_OPTION =
   /^\s*(❯\s*)?(\d)\.\s+(.{1,200}?)\s*(?:\((?:esc|shift\+tab)\))?\s*$/i;
 const RULE = /^\s*─{3,}\s*$/;
+// Plan approval's footer, and the dashed edges Claude draws around the plan.
+const PLAN_FOOTER = /^\s*ctrl\+g to edit\b/i;
+const PLAN_EDGE = /^\s*╌{3,}\s*$/;
 const MENU_FOOTER =
   /^\s*(?:enter to (?:select|confirm)\b.*\besc to cancel\b|ctrl\+g to edit\b)/i;
 const MENU_OPTION = /^\s*(❯\s*)?(\d)\.\s+(.{1,200}?)\s*$/;
@@ -200,8 +203,27 @@ function claudeMenuPrompt(lines: string[]): Parsed | null {
   while (top >= 0 && !RULE.test(lines[top]!)) top -= 1;
   const above = paragraphs(lines.slice(Math.max(0, top + 1), menuStart));
   const question = above[above.length - 1] ?? [];
+  // Plan approval approves the plan drawn above it, between dashed edges.
+  // The whole plan is the request, and part of what the fingerprint covers;
+  // a plan cut off by the capture is not one Chat can approve.
+  let plan: string[] | null = null;
+  let from = top;
+  if (PLAN_FOOTER.test(lines[end]!)) {
+    let bottom = top - 1;
+    while (bottom >= 0 && !lines[bottom]!.trim()) bottom -= 1;
+    let start = bottom - 1;
+    while (start >= 0 && !PLAN_EDGE.test(lines[start]!)) start -= 1;
+    if (bottom >= 0 && PLAN_EDGE.test(lines[bottom]!) && start >= 0) {
+      plan = lines
+        .slice(start + 1, bottom)
+        .map((line) => line.trim())
+        .filter(Boolean);
+      from = start;
+    }
+  }
   const valid =
     top >= 0 &&
+    (!PLAN_FOOTER.test(lines[end]!) || (plan !== null && plan.length > 0)) &&
     all.length >= 2 &&
     all.every((option, index) => option.number === String(index + 1)) &&
     cursor === 1 &&
@@ -209,12 +231,14 @@ function claudeMenuPrompt(lines: string[]): Parsed | null {
     question.length > 0 &&
     /\?\s*$/.test(question[question.length - 1]!);
   return {
-    shown: lines.slice(Math.max(0, top), end + 1),
+    shown: lines.slice(Math.max(0, from), end + 1),
     question: question.map((line) => line.trim()),
-    request: above
-      .slice(0, -1)
-      .flat()
-      .map((line) => line.trim()),
+    request:
+      plan ??
+      above
+        .slice(0, -1)
+        .flat()
+        .map((line) => line.trim()),
     options: valid ? all.filter((option) => !FREE_TEXT.test(option.label)) : [],
   };
 }

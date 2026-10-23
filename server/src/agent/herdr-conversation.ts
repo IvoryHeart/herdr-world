@@ -581,7 +581,9 @@ export function createHerdrConversationSource(args: {
               asked.request,
               asked.options.map((option) => option.label),
             ]);
-          return asks(shown) !== asks(prompt) ||
+          // Only a recognised menu is a next question; a partial or
+          // unrecognised screen (no options) proves nothing.
+          return (shown.options.length > 0 && asks(shown) !== asks(prompt)) ||
             (shown.fingerprint !== prompt.fingerprint &&
               info.state_change_seq !== before?.state_change_seq)
             ? null

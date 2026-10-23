@@ -181,6 +181,28 @@ describe("answering a blocked agent's prompt", () => {
     expect(state.sent).toEqual([{ pane_id: "w1:p1", text: "1", keys: [] }]);
   });
 
+  test("a partial screen while the form redraws is not the next question", async () => {
+    const { state, source } = fakeHerdr();
+    state.screen = [
+      "─".repeat(60),
+      "Should the banner be red?",
+      "",
+      "❯ 1. Yes",
+      "  2. No",
+      "",
+      "Enter to select · ↑/↓ to navigate · Esc to cancel",
+    ].join("\n");
+    // Mid-redraw: the menu and footer are gone, Herdr's state is unchanged.
+    state.onSend = () => {
+      state.screen = "─".repeat(60) + "\n☐ Colour";
+    };
+    expect(await answer(source, "1")).toMatchObject({
+      status: "sent",
+      acknowledged: false,
+      unconfirmed_reason: "still_showing",
+    });
+  });
+
   // Without evidence that this agent left this prompt, a sent key is never
   // reported as answered.
   test.each([
