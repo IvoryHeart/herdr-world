@@ -79,8 +79,12 @@ export const StepCard = memo(function StepCard({
         type="button"
         className="agent-chat-step-head"
         aria-expanded={hasBody ? open : undefined}
-        disabled={!hasBody}
-        onClick={() => setOpen((value) => !value)}
+        // A step with nothing to show yet stays at full strength; it simply
+        // does not open.
+        aria-disabled={hasBody ? undefined : true}
+        onClick={() => {
+          if (hasBody) setOpen((value) => !value);
+        }}
       >
         <span
           className="agent-chat-step-icon"

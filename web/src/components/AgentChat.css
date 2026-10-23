@@ -420,7 +420,7 @@
   cursor: pointer;
 }
 
-.agent-chat-step-head:disabled {
+.agent-chat-step-head[aria-disabled="true"] {
   cursor: default;
 }
 
