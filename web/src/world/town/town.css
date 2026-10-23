@@ -670,7 +670,9 @@
 .town-quest {
   --quest-color: #5cc8ff;
   position: absolute;
-  bottom: 74px;
+  /* On the table beside a top seat's agent, below the room's header plate
+     and the top row's seat tags. */
+  bottom: 54px;
   display: none;
   align-items: flex-end;
   gap: 2px;
@@ -686,6 +688,9 @@
 .town-world[data-level="room"] .town-quest,
 .town-world[data-level="desk"] .town-quest {
   display: flex;
+}
+.town-world[data-level] .town-quest[data-away] {
+  display: none;
 }
 /* A bottom seat's agent sits behind the desk's nameplate: its pennant
    stands below the nameplate, clear of the seat tag. */
@@ -733,21 +738,24 @@
   margin-bottom: 1px;
   overflow: hidden;
   background: #11161d;
-  border: 1px solid #090c11;
+  border: 1px solid var(--quest-color);
   border-radius: 2px;
+  box-shadow: 0 0 0 1px #090c11;
 }
 .town-quest-bar i {
   display: block;
   height: 100%;
   background: var(--quest-color);
 }
+/* Beside the pennant, not above it, so it leaves the room's header plate
+   and its buttons uncovered. */
 .town-quest-label {
   position: absolute;
-  left: 0;
-  bottom: 100%;
+  left: 100%;
+  bottom: 0;
   display: none;
   max-width: 220px;
-  margin-bottom: 3px;
+  margin-left: 3px;
   padding: 3px 7px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -772,15 +780,23 @@
   margin-left: 3px;
   color: #b9c0cb;
 }
-.town-quest:hover,
 .town-quest:focus-visible,
 .town-quest[data-open] {
   z-index: 6;
 }
-.town-quest:hover .town-quest-label,
 .town-quest:focus-visible .town-quest-label,
 .town-quest[data-open] .town-quest-label {
   display: block;
+}
+/* Touch browsers keep :hover on the last tapped element; there a tap
+   toggles the label instead. */
+@media (hover: hover) {
+  .town-quest:hover {
+    z-index: 6;
+  }
+  .town-quest:hover .town-quest-label {
+    display: block;
+  }
 }
 
 /* Accessible targets follow the scene but stay visually silent until focused. */

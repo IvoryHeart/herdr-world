@@ -469,6 +469,11 @@ export function TownCanvas({
             sign.style.visibility = opacity === "0" ? "hidden" : "visible";
           }
         }
+        if (level !== "overview")
+          for (const pennant of layer.querySelectorAll<HTMLElement>(
+            ".town-quest",
+          ))
+            markAway(pennant, renderer);
       }
     }
     const signature = `${camera.x.toFixed(1)},${camera.y.toFixed(1)},${camera.z.toFixed(4)}`;
@@ -1308,6 +1313,7 @@ export function TownCanvas({
           onFocusTarget={focusTarget}
           deskBadges={deskBadges}
           quests={quests}
+          renderer={rendererRef}
         />
       </div>
       <TownBoard model={model} observability={observability} />
@@ -1518,27 +1524,46 @@ function TownDeskBadgeLink({
 }
 
 /**
+ * A pennant leaves with its agent: it hides while the agent walks or waits
+ * elsewhere. Set outside React, from the renderer's actors.
+ */
+function markAway(pennant: HTMLElement, renderer: TownRendererHandle | null) {
+  const away =
+    !!renderer && !renderer.actorPosition(pennant.dataset.agent!)?.seated;
+  if (pennant.hasAttribute("data-away") !== away)
+    pennant.toggleAttribute("data-away", away);
+}
+
+/**
  * A quest pennant beside a seated agent: a swallowtail flag in the quest's
  * status colour, with its progress bar when it has steps. Hover, focus or
  * a tap shows "Quest" and its title.
  */
 function TownQuestPennant({
   quest,
+  agentKey,
   agentLabel,
   top,
   x,
+  renderer,
 }: {
   quest: TownQuestMark;
+  agentKey: string;
   agentLabel: string;
   top: boolean;
   x: number;
+  renderer: { readonly current: TownRendererHandle | null };
 }) {
   const [open, setOpen] = useState(false);
   const label = `Quest: ${quest.title}, ${quest.progress}`;
   return (
     <button
       type="button"
+      ref={(pennant) => {
+        if (pennant) markAway(pennant, renderer.current);
+      }}
       className={`town-quest${top ? " town-quest-top" : ""}`}
+      data-agent={agentKey}
       data-status={quest.status}
       data-open={open || undefined}
       style={{ left: x }}
@@ -1582,6 +1607,7 @@ const TownWorldLayer = memo(function TownWorldLayer({
   onHoverEntry,
   deskBadges,
   quests,
+  renderer,
 }: {
   model: TownModel;
   layout: TownLayout;
@@ -1590,6 +1616,8 @@ const TownWorldLayer = memo(function TownWorldLayer({
   deskBadges: ReadonlyMap<string, TownDeskBadge>;
   /** Quests by agent key, as pennants at their seats. */
   quests: ReadonlyMap<string, TownQuestMark>;
+  /** Tells a pennant whether its agent is seated. */
+  renderer: { readonly current: TownRendererHandle | null };
   onHoverEntry(key: string | null, rect?: DOMRect): void;
   selectedKey: string | null;
   blockedSince: ReadonlyMap<string, number>;
@@ -1829,7 +1857,9 @@ const TownWorldLayer = memo(function TownWorldLayer({
                                   {quest ? (
                                     <TownQuestPennant
                                       quest={quest}
+                                      agentKey={device.agentKey!}
                                       agentLabel={device.displayLabel}
+                                      renderer={renderer}
                                       top={slot.top}
                                       x={slot.chairX + 7}
                                     />
