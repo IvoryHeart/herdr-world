@@ -40,24 +40,6 @@
   flex: 1 1 auto;
 }
 
-.agent-chat-status {
-  padding: 1px 7px;
-  color: var(--muted);
-  font-size: 11px;
-  border: 1px solid var(--border-soft);
-  border-radius: 999px;
-}
-
-.agent-chat-status.is-working {
-  color: var(--accent);
-  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
-}
-
-.agent-chat-status.is-blocked {
-  color: var(--danger-text);
-  border-color: var(--danger-border);
-}
-
 /* The message list is History's (AgentHistoryChat), which scrolls inside;
    this column only gives it the space between the toolbar and the composer,
    so the composer always stays in the window. */

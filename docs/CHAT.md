@@ -30,7 +30,10 @@ view that you open on purpose.
   reviews and the owner's actions. When this conversation owns the claim,
   **Ask the author to fix** sends a `↳ #N` message through Chat; it keeps any
   unsent draft. A retired host, runtime or agent session cannot supply a claim.
-- Shows what is happening now. The Now bar at the top has Herdr's status, the
+- Shows what is happening now. The Now bar shows Herdr's status as a 14px
+  circle (blue working ring, yellow needs-you mark,
+  green done tick, grey idle dot), with its word kept for screen readers and
+  the tooltip. Reduced motion shows a still working dot. It also shows the
   task the harness names in its terminal title (such as "Running tests"), and
   the time since Chat saw the status change. The step running now (a tool call
   in the transcript with no result yet) shows at the end of the conversation

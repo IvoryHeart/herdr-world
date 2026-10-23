@@ -1206,6 +1206,8 @@ async function run() {
     const now = container.querySelector(".agent-chat-now");
     check(
       now?.querySelector(".agent-chat-status")?.textContent === "Working" &&
+        now.querySelector('.agent-chat-state-circle[title="Working"]') !==
+          null &&
         now.querySelector(".agent-chat-now-title")?.textContent ===
           "Running tests" &&
         /^[1-9]\d*s$/.test(

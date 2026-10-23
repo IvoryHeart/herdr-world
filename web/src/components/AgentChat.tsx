@@ -1,3 +1,4 @@
+import "./AgentChat.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Copy,
@@ -39,11 +40,9 @@ import type { WorkItem } from "../../../shared/worldSources";
 import {
   DOUBLE_ESCAPE_MS,
   elapsed,
-  STATUS_WORDS,
   STOPS_WITH_ESCAPE,
   titleTask,
 } from "./chat/blocks/now";
-import "./AgentChat.css";
 import type {
   AnswerResult,
   Conversation,
@@ -51,6 +50,7 @@ import type {
   UnconfirmedReason,
 } from "./chat/types";
 import "./chat/blocks/now.css";
+import { ChatStatusBadge } from "./chat/blocks/status-badge";
 
 export type {
   Conversation,
@@ -448,7 +448,6 @@ export function AgentChat({
     );
   }
 
-  const status = conversation?.agent_status ?? pane.agent_status;
   const unavailable = conversation?.unavailable;
   const deliveries = conversation?.deliveries ?? [];
   const pending = deliveries.filter(
@@ -477,12 +476,7 @@ export function AgentChat({
       <div className="agent-chat-toolbar agent-chat-now">
         {/* Only the status and task are announced; the clocks are not. */}
         <span className="agent-chat-now-live" aria-live="polite">
-          <span className={`agent-chat-status is-${liveStatus.toLowerCase()}`}>
-            {liveStatus === "working" ? (
-              <span className="agent-chat-spinner" aria-hidden="true" />
-            ) : null}
-            {STATUS_WORDS[liveStatus] ?? status}
-          </span>
+          <ChatStatusBadge status={liveStatus} />
           <span
             className="agent-chat-now-title"
             title={conversation?.terminal_title ?? ""}

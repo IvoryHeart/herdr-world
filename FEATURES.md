@@ -36,6 +36,8 @@ these redirects are included in [0.2.6](./docs/releases/v0.2.6.md).
   - An agent's known PR announcement or current work claim can show a compact
     pull request card in Chat. **Details** has CI, reviews and owner actions;
     **Ask the author to fix** sends `↳ #N` to the author in this conversation.
+    Chat's Now status uses a small circle with a status tooltip and screen-reader
+    text: blue working ring, yellow needs-you mark, green done tick, grey idle dot.
   - The top selector follows the window's own width, docked, floating or on a
     phone: labelled from 640px, icons (with their names as tooltips) below
     that, and below 360px only the active view, with the others under ⋯.

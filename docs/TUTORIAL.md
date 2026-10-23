@@ -150,6 +150,8 @@ changes what you see and does not disconnect hosts or retarget open terminals.
    bar when the quest has steps; tap the pennant to see **Quest** and its
    title. Open its chat to read the quest log above the conversation: each
    objective as pending, active, done or blocked.
+   Chat's Now circle has the status word on hover: blue for working, yellow
+   for needs you, green for done and grey for idle.
 5. Read the question before using an answer button: it sends the offered key to
    that live pane. When no supported choices appear, use **Open chat** to reply
    in the agent's window, or **Open terminal** in the card's header (or the
