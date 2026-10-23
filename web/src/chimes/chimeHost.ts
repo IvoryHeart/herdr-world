@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { store } from "../store";
 import { chimeDevice, CHIME_DEVICE_CHANGED_EVENT } from "./chimeCenter";
 import {
   chimeAudioReady,
@@ -13,6 +14,27 @@ export const openSounds = () =>
 
 const HEARTBEAT_MS = 20_000;
 
+/** Whether this page gets the events it would chime for. */
+export type ChimeListening = {
+  now(): boolean;
+  subscribe(changed: () => void): () => void;
+};
+const alwaysListening: ChimeListening = {
+  now: () => true,
+  subscribe: () => () => {},
+};
+/** A paused or disconnected page drops Herdr's events, so it can't chime. */
+const storeListening: ChimeListening = {
+  now: () => {
+    const state = store.get();
+    return state.status === "connected" && !state.connectionPaused;
+  },
+  subscribe: (changed) => {
+    const unsubscribe = store.subscribe(changed);
+    return () => void unsubscribe();
+  },
+};
+
 /** Keep each controlled page's current sound policy fresh, including mute. */
 export function startChimeHeartbeat(
   serviceWorker:
@@ -23,13 +45,25 @@ export function startChimeHeartbeat(
     | undefined,
   device = chimeDevice,
   ready = chimeAudioReady,
+  listening = alwaysListening,
 ) {
-  const beat = () =>
+  let listened = listening.now();
+  const beat = () => {
+    listened = listening.now();
     serviceWorker?.controller?.postMessage({
       type: "herdr-world:chime-policy",
-      mode: !device().on ? "muted" : ready() ? "playing" : "fallback",
+      mode: !device().on
+        ? "muted"
+        : listened && ready()
+          ? "playing"
+          : "fallback",
       until: Date.now() + HEARTBEAT_MS * 2,
     });
+  };
+  // The store changes often; beat only when listening flips.
+  const stopListening = listening.subscribe(() => {
+    if (listening.now() !== listened) beat();
+  });
   // Activation claims the first page without a reload, then changes controller.
   serviceWorker?.addEventListener("controllerchange", beat);
   window.addEventListener("storage", beat);
@@ -39,6 +73,7 @@ export function startChimeHeartbeat(
   const timer = setInterval(beat, HEARTBEAT_MS);
   return () => {
     clearInterval(timer);
+    stopListening();
     serviceWorker?.removeEventListener("controllerchange", beat);
     window.removeEventListener("storage", beat);
     window.removeEventListener(CHIME_DEVICE_CHANGED_EVENT, beat);
@@ -54,6 +89,11 @@ export function startChimeHeartbeat(
 export function useChimeHost() {
   useEffect(() => {
     installChimeUnlock();
-    return startChimeHeartbeat(navigator.serviceWorker);
+    return startChimeHeartbeat(
+      navigator.serviceWorker,
+      chimeDevice,
+      chimeAudioReady,
+      storeListening,
+    );
   }, []);
 }

@@ -149,3 +149,51 @@ test("audio unlock and suspension immediately refresh the worker policy", () => 
     else Reflect.deleteProperty(globalThis, "window");
   }
 });
+
+test("a paused or disconnected page leaves the push its sound", () => {
+  const previous = Object.getOwnPropertyDescriptor(globalThis, "window");
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: new EventTarget(),
+  });
+  const policies: string[] = [];
+  const container = Object.assign(new EventTarget(), {
+    controller: {
+      postMessage: (data: { mode: string }) => policies.push(data.mode),
+    } as unknown as ServiceWorker,
+  });
+  let listening = true;
+  const changed = new Set<() => void>();
+  const notify = () => {
+    for (const listener of changed) listener();
+  };
+  const stop = startChimeHeartbeat(
+    container,
+    () => ({ on: true, volume: 0.5 }),
+    () => true,
+    {
+      now: () => listening,
+      subscribe: (listener) => {
+        changed.add(listener);
+        return () => changed.delete(listener);
+      },
+    },
+  );
+  try {
+    expect(policies).toEqual(["playing"]);
+    // Unrelated store changes don't beat.
+    notify();
+    expect(policies).toEqual(["playing"]);
+    listening = false;
+    notify();
+    expect(policies).toEqual(["playing", "fallback"]);
+    listening = true;
+    notify();
+    expect(policies).toEqual(["playing", "fallback", "playing"]);
+  } finally {
+    stop();
+    expect(changed.size).toBe(0);
+    if (previous) Object.defineProperty(globalThis, "window", previous);
+    else Reflect.deleteProperty(globalThis, "window");
+  }
+});
