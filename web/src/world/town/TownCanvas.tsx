@@ -1,4 +1,5 @@
 import {
+  Fragment,
   memo,
   useCallback,
   useEffect,
@@ -94,7 +95,7 @@ import {
   nextTownTask,
   type TownRendererHandle,
 } from "./townRenderer";
-import { townPortrait, type TownQuestMark } from "./townSprites";
+import { townPortrait } from "./townSprites";
 import { townTargets, type TownTarget } from "./townTargets";
 import { yieldWorldTask } from "../worldObject";
 import {
@@ -113,6 +114,11 @@ import {
   type TownDeskBadge,
 } from "./townBadges";
 import "./town.css";
+import {
+  markAway,
+  TownQuestPennant,
+  type TownQuestMark,
+} from "./townQuestPennant";
 import "./townTeams.css";
 
 /** A place's colour in the shared picker (ColorSwatch.tsx). */
@@ -252,6 +258,7 @@ export function TownCanvas({
   const hostRef = useRef<HTMLDivElement | null>(null);
   const worldRef = useRef<HTMLDivElement | null>(null);
   const rendererRef = useRef<TownRendererHandle | null>(null);
+  const pennants = useRef(new Set<HTMLElement>());
   const [failure, setFailure] = useState(false);
   const [ready, setReady] = useState(false);
   const sources = useWorldSources();
@@ -568,6 +575,8 @@ export function TownCanvas({
             sign.style.visibility = opacity === "0" ? "hidden" : "visible";
           }
         }
+        if (level !== "overview")
+          for (const pennant of pennants.current) markAway(pennant, renderer);
       }
     }
     const signature = `${camera.x.toFixed(1)},${camera.y.toFixed(1)},${camera.z.toFixed(4)}`;
@@ -664,7 +673,6 @@ export function TownCanvas({
     summonedKeys: latest.current.summonedKeys,
     openHostKey: null,
     calm: latest.current.calm,
-    quests: latest.current.quests,
   });
 
   useEffect(() => {
@@ -815,7 +823,7 @@ export function TownCanvas({
   useEffect(() => {
     rendererRef.current?.setState(sceneState());
     scheduleAnchors();
-  }, [selectedKey, hover, completionSeenKeys, summonedKeys, calm, quests]);
+  }, [selectedKey, hover, completionSeenKeys, summonedKeys, calm]);
 
   useEffect(() => {
     scheduleAnchors();
@@ -1453,6 +1461,9 @@ export function TownCanvas({
           }}
           onFocusTarget={focusTarget}
           deskBadges={deskBadges}
+          quests={quests}
+          renderer={rendererRef}
+          pennants={pennants.current}
         />
       </div>
       <TownBoard model={model} observability={observability} />
@@ -1716,6 +1727,9 @@ const TownWorldLayer = memo(function TownWorldLayer({
   visible,
   onHoverEntry,
   deskBadges,
+  quests,
+  renderer,
+  pennants,
 }: {
   model: TownModel;
   layout: TownLayout;
@@ -1723,6 +1737,11 @@ const TownWorldLayer = memo(function TownWorldLayer({
   visible: TownVisible;
   /** Pull request or ticket chips for desks (World sources). */
   deskBadges: ReadonlyMap<string, TownDeskBadge>;
+  /** Quests by agent key, as pennants at their seats. */
+  quests: ReadonlyMap<string, TownQuestMark>;
+  /** Tells a pennant whether its agent is seated. */
+  renderer: { readonly current: TownRendererHandle | null };
+  pennants: Set<HTMLElement>;
   onHoverEntry(key: string | null, rect?: DOMRect): void;
   selectedKey: string | null;
   blockedSince: ReadonlyMap<string, number>;
@@ -1966,15 +1985,30 @@ const TownWorldLayer = memo(function TownWorldLayer({
                             ) : null}
                             {townDeskSlots(cell.seats).map((slot, seat) => {
                               const device = desk.paneDevices[seat];
+                              const quest = device?.agentKey
+                                ? quests.get(device.agentKey)
+                                : undefined;
                               return device ? (
-                                <span
-                                  key={device.key}
-                                  aria-hidden="true"
-                                  className={`town-seat-tag${slot.top ? " town-seat-tag-top" : ""}${device.agentKey ? "" : " town-seat-tag-shell"}`}
-                                  style={{ left: slot.chairX + 7 }}
-                                >
-                                  {device.displayLabel}
-                                </span>
+                                <Fragment key={device.key}>
+                                  <span
+                                    aria-hidden="true"
+                                    className={`town-seat-tag${slot.top ? " town-seat-tag-top" : ""}${device.agentKey ? "" : " town-seat-tag-shell"}`}
+                                    style={{ left: slot.chairX + 7 }}
+                                  >
+                                    {device.displayLabel}
+                                  </span>
+                                  {quest ? (
+                                    <TownQuestPennant
+                                      quest={quest}
+                                      agentKey={device.agentKey!}
+                                      agentLabel={device.displayLabel}
+                                      renderer={renderer}
+                                      pennants={pennants}
+                                      top={slot.top}
+                                      x={slot.chairX + 7}
+                                    />
+                                  ) : null}
+                                </Fragment>
                               ) : null;
                             })}
                           </div>

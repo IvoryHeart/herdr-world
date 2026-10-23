@@ -40,8 +40,11 @@ export function questProgressText(quest: Quest) {
   return QUEST_SOURCE_LABELS[quest.source];
 }
 
+/** What Town's pennant shows for a quest. */
 export function questMark(quest: Quest) {
   return {
+    title: quest.title,
+    progress: questProgressText(quest),
     done: quest.progress.done,
     total: quest.progress.total,
     status: quest.status,
