@@ -1,0 +1,128 @@
+.town-summary {
+  display: grid;
+  gap: 18px;
+  padding: 14px 16px 20px;
+  color: var(--text, inherit);
+  font-size: 13px;
+}
+
+.town-summary h3 {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted, #8a8f98);
+}
+
+.town-summary h3 span {
+  font-variant-numeric: tabular-nums;
+}
+
+.town-summary ul {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.town-summary-item {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  border: 1px solid var(--border, rgba(127, 127, 127, 0.25));
+  border-radius: 8px;
+}
+
+.town-summary-item div {
+  display: grid;
+  min-width: 0;
+}
+
+.town-summary-item small,
+.town-summary-host small,
+.town-summary-provenance,
+.town-summary-empty {
+  color: var(--muted, #8a8f98);
+}
+
+.town-summary-item small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.town-summary-item button,
+.town-summary-room {
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--border, rgba(127, 127, 127, 0.35));
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.town-summary-empty,
+.town-summary-provenance {
+  margin: 0;
+}
+
+.town-summary-hosts {
+  display: grid;
+  gap: 12px;
+}
+
+.town-summary-host {
+  display: grid;
+  gap: 4px;
+}
+
+.town-summary-host-name {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.town-summary-room {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  text-align: left;
+}
+
+.town-summary-counts {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  color: var(--muted, #8a8f98);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.town-summary-counts [data-count="needsYou"] {
+  color: var(--s-blocked, #e5a33a);
+  font-weight: 650;
+}
+
+.town-summary-spend-total {
+  margin: 0 0 6px;
+  font-size: 20px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.town-summary-models li {
+  display: flex;
+  justify-content: space-between;
+}

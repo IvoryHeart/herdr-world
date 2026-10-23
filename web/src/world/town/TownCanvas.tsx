@@ -74,6 +74,7 @@ import {
   townRoomCounts,
   type TownModel,
 } from "./townModel";
+import type { TownSummary } from "./townSummary";
 import { townCarpetFor, townCarpetOf } from "./townPaint";
 import { ColorSwatchButton } from "../../components/ColorSwatch";
 import {
@@ -184,6 +185,7 @@ export function TownCanvas({
   roomActions,
   selectedRoomKey,
   observability,
+  summaryCounts,
   calm = false,
   terminalColors = NO_COLORS,
   deskPins = NO_PINS,
@@ -191,6 +193,11 @@ export function TownCanvas({
   trace = NO_TRACE,
 }: {
   observability: OfficeObservability;
+  /**
+   * The Town summary's shared counts (townSummary.ts): the board sign shows
+   * the same needs-you and finished counts as the call rail and reception.
+   */
+  summaryCounts?: TownSummary["counts"];
   /** Town's event trace (development builds only; see world/devtools). */
   trace?: ViewTrace;
   calm?: boolean;
@@ -1374,7 +1381,11 @@ export function TownCanvas({
           deskBadges={deskBadges}
         />
       </div>
-      <TownBoard model={model} observability={observability} />
+      <TownBoard
+        model={model}
+        observability={observability}
+        summaryCounts={summaryCounts}
+      />
       <div className="town-zoom" role="group" aria-label="Camera">
         <button type="button" aria-label="Zoom in" onClick={() => stepZoom(1)}>
           +
@@ -2222,12 +2233,20 @@ function ReceptionEntry({
 function TownBoard({
   model,
   observability,
+  summaryCounts,
 }: {
   model: TownModel;
   observability: OfficeObservability;
+  summaryCounts?: TownSummary["counts"];
 }) {
   const counts = { working: 0, blocked: 0, done: 0, idle: 0, unknown: 0 };
   for (const agent of model.agents.values()) counts[agent.semanticStatus] += 1;
+  // The shared summary's counts, when Town provides them (see townSummary).
+  if (summaryCounts) {
+    counts.working = summaryCounts.working;
+    counts.blocked = summaryCounts.needsYou;
+    counts.done = summaryCounts.finished;
+  }
   const available =
     observability.health !== "unavailable" && observability.sourceCount > 0;
   // Phones show a compact chip; it opens the full board in place.

@@ -34,6 +34,7 @@ import {
   useStoreSelector,
 } from "../store";
 import { WORLD_OBSERVABILITY_UPDATED_EVENT } from "../workspaceResource";
+import { townSummary } from "./town/townSummary";
 import { TownCanvas } from "./town/TownCanvas";
 import { townDeskColorTarget, townRoomColorKey } from "./town/townModel";
 import { resolveTerminal, type TerminalColor } from "./terminalColor";
@@ -647,6 +648,12 @@ export default function TownView({
     });
     return [...blocked, ...finished];
   }, [office.roster, unseenCompletions, agentByKey]);
+  // The Town summary (pm's phase 1): one read model for the board sign, the
+  // phone chip and the summary window, built from the call rail's calls.
+  const summary = useMemo(
+    () => townSummary(office, calls, observability),
+    [office, calls, observability],
+  );
   const whereOfAgent = (agentKey: string) => {
     const entry = agentByKey.get(agentKey);
     return entry ? `${entry.roomLabel} · ${entry.hostLabel}` : "";
@@ -1432,6 +1439,7 @@ export default function TownView({
             }}
             selectedRoomKey={selectedRoomKey}
             observability={observability}
+            summaryCounts={summary.counts}
             calm={preferences.townCalm}
             chrome={{
               left:
