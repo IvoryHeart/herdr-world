@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { worldLocalStorage } from "../../browserStorage";
-import type { OfficeAgent } from "../herdrOfficeProjection";
+import type { OfficeAgent, OfficeRosterEntry } from "../herdrOfficeProjection";
 import { townPortrait } from "./townSprites";
 
 export type TownCall = {
@@ -198,4 +198,55 @@ export function TownRail({
       )}
     </aside>
   );
+}
+
+/**
+ * The call rail's entries, in attention order: blocked agents oldest first,
+ * then unseen finishes. `since` remembers when each agent started waiting and
+ * forgets agents that no longer wait.
+ */
+export function townCalls(
+  roster: readonly OfficeRosterEntry[],
+  since: Map<string, number>,
+  unseenCompletions: readonly OfficeAgent[],
+  entryOf: (agentKey: string) => OfficeRosterEntry | undefined,
+): TownCall[] {
+  const live = new Set<string>();
+  const blocked: TownCall[] = [];
+  for (const entry of roster) {
+    const { agent } = entry;
+    if (agent.semanticStatus !== "blocked" || agent.stale) continue;
+    live.add(agent.key);
+    if (!since.has(agent.key)) since.set(agent.key, Date.now());
+    blocked.push({
+      agent,
+      kind: "blocked",
+      since: since.get(agent.key)!,
+      hostKey: entry.hostKey,
+      hostLabel: entry.hostLabel,
+      roomKey: entry.roomKey,
+      roomLabel: entry.roomLabel,
+    });
+  }
+  for (const key of [...since.keys()]) if (!live.has(key)) since.delete(key);
+  blocked.sort(
+    (a, b) => a.since - b.since || a.agent.key.localeCompare(b.agent.key),
+  );
+  const finished = unseenCompletions.flatMap((agent): TownCall[] => {
+    const entry = entryOf(agent.key);
+    return entry
+      ? [
+          {
+            agent,
+            kind: "done",
+            since: Date.now(),
+            hostKey: entry.hostKey,
+            hostLabel: entry.hostLabel,
+            roomKey: entry.roomKey,
+            roomLabel: entry.roomLabel,
+          },
+        ]
+      : [];
+  });
+  return [...blocked, ...finished];
 }

@@ -64,8 +64,8 @@ import { TownPeek, townStatusText } from "./town/TownPeek";
 import {
   nextTownCall,
   readTownRailCollapsed,
+  townCalls,
   TownRail,
-  type TownCall,
 } from "./town/TownRail";
 import { useNow } from "./handoffs";
 import type {
@@ -609,47 +609,13 @@ export default function TownView({
           : new Map(current).set(key, status),
       );
   };
-  const calls = useMemo((): TownCall[] => {
-    const since = blockedSince.current;
-    const live = new Set<string>();
-    const blocked: TownCall[] = [];
-    for (const entry of office.roster) {
-      const { agent } = entry;
-      if (agent.semanticStatus !== "blocked" || agent.stale) continue;
-      live.add(agent.key);
-      if (!since.has(agent.key)) since.set(agent.key, Date.now());
-      blocked.push({
-        agent,
-        kind: "blocked",
-        since: since.get(agent.key)!,
-        hostKey: entry.hostKey,
-        hostLabel: entry.hostLabel,
-        roomKey: entry.roomKey,
-        roomLabel: entry.roomLabel,
-      });
-    }
-    for (const key of [...since.keys()]) if (!live.has(key)) since.delete(key);
-    blocked.sort(
-      (a, b) => a.since - b.since || a.agent.key.localeCompare(b.agent.key),
-    );
-    const finished = unseenCompletions.flatMap((agent): TownCall[] => {
-      const entry = agentByKey.get(agent.key);
-      return entry
-        ? [
-            {
-              agent,
-              kind: "done",
-              since: Date.now(),
-              hostKey: entry.hostKey,
-              hostLabel: entry.hostLabel,
-              roomKey: entry.roomKey,
-              roomLabel: entry.roomLabel,
-            },
-          ]
-        : [];
-    });
-    return [...blocked, ...finished];
-  }, [office.roster, unseenCompletions, agentByKey]);
+  const calls = useMemo(
+    () =>
+      townCalls(office.roster, blockedSince.current, unseenCompletions, (key) =>
+        agentByKey.get(key),
+      ),
+    [office.roster, unseenCompletions, agentByKey],
+  );
   // The Town summary (pm's phase 1): one read model for the board sign, the
   // phone chip and the summary window, built from the call rail's calls.
   const summary = useMemo(
