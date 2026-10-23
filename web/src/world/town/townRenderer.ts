@@ -802,6 +802,20 @@ export async function createTownRenderer(
     );
     for (const slot of slots)
       if (!slot.top) make(sprites.chairBack, X + slot.chairX, Y + 45);
+    // A pinned desk wears a pin on its table's corner.
+    if (model!.deskPins.has(desk.key)) {
+      const px = X + place.x + place.w - 3;
+      const py = Y + 18;
+      container.addChild(
+        new Graphics()
+          .moveTo(px, py)
+          .lineTo(px - 3, py + 6)
+          .stroke({ color: 0x3a3a3a, width: 1 })
+          .circle(px, py, 3)
+          .fill(0xe5534b)
+          .stroke({ color: 0xffffff, width: 1 }),
+      );
+    }
     parent.addChild(container);
     return {
       container,
@@ -1712,7 +1726,9 @@ export async function createTownRenderer(
     setScene(nextModel, nextLayout, nextState) {
       const layoutChanged = nextLayout !== layout;
       // Tables are baked with their desk's colour, so a new colour rebuilds.
-      const colorsChanged = nextModel.deskColors !== model?.deskColors;
+      const colorsChanged =
+        nextModel.deskColors !== model?.deskColors ||
+        nextModel.deskPins !== model?.deskPins;
       const first = !layout;
       model = nextModel;
       layout = nextLayout;
@@ -1724,7 +1740,7 @@ export async function createTownRenderer(
         request("scene");
         return;
       }
-      const key = `${nextLayout.width}x${nextLayout.height}:${nextLayout.buildings.map((b) => `${b.hostKey}@${b.x},${b.y},${b.w},${b.h}:${b.rooms.map((r) => r.cells.map((c) => (c.deskKey ? `${c.deskKey}#${c.seats}#${deskColor(c.deskKey)}` : "-")).join(",")).join("|")}`).join(";")}`;
+      const key = `${nextLayout.width}x${nextLayout.height}:${nextLayout.buildings.map((b) => `${b.hostKey}@${b.x},${b.y},${b.w},${b.h}:${b.rooms.map((r) => r.cells.map((c) => (c.deskKey ? `${c.deskKey}#${c.seats}#${deskColor(c.deskKey)}${model!.deskPins.has(c.deskKey) ? "#pin" : ""}` : "-")).join(",")).join("|")}`).join(";")}`;
       if (key !== sceneKey) {
         sceneKey = key;
         buildScene();

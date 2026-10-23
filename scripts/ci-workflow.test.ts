@@ -106,11 +106,11 @@ test("CI exposes the protected delivery gate and runs the complete repository ch
   expect(workflow.concurrency["cancel-in-progress"]).toContain(
     "github.event.action != 'edited'",
   );
-  // Post-merge gate: every main commit runs the full check in its own group,
-  // so a quick second merge neither cancels nor skips the first one's run.
+  // Post-merge gate: main pushes share one group that never cancels the
+  // running check, so a batch of merges is tested once at its newest commit.
   expect(workflow.on.push).toEqual({ branches: ["main"] });
   expect(workflow.concurrency.group).toContain(
-    "(github.event_name == 'push' && github.sha)",
+    "(github.event_name == 'push' && 'main-push')",
   );
   expect(workflow.concurrency["cancel-in-progress"]).toContain(
     "github.event_name == 'pull_request'",

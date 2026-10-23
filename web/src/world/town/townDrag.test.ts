@@ -3,7 +3,7 @@ import { townDragFor, townDropTarget, townMagnetDesk } from "./townDrag";
 import type { TownModel } from "./townModel";
 
 /** Two hosts: host a has rooms r1 (desks d1, d2) and r2 (d3); host b has r3 (d4). */
-function model() {
+function model(pinned: string[] = []) {
   const desk = (key: string, hostKey: string, roomKey: string) => [
     key,
     { key, hostKey, roomKey, displayLabel: key, canOpenInSpaces: true },
@@ -49,6 +49,9 @@ function model() {
       ],
     ] as never),
     agentSeats: new Map([["ag", { deskKey: "d1", seat: 0 }]]),
+    deskPins: new Map(
+      pinned.map((key) => [key, { key: `pin:${key}`, cell: null }]),
+    ),
   } as unknown as TownModel;
 }
 
@@ -197,4 +200,18 @@ test("a standing agent does not stand for its desk's slot", () => {
   expect(
     townDropTarget(drag, { kind: "agent", key: "ag", standing: true }, m).key,
   ).toBeNull();
+});
+
+test("a pinned desk is not picked up, and no desk takes its place", () => {
+  const m = model(["d2"]);
+  expect(townDragFor({ kind: "desk", key: "d2" }, m, "room")).toBeNull();
+  // Its agents can still be moved; the pin is the desk's.
+  expect(
+    townDragFor({ kind: "agent", key: "ag" }, model(["d1"]), "desk"),
+  ).not.toBeNull();
+  const drag = townDragFor({ kind: "desk", key: "d1" }, m, "room")!;
+  expect(townDropTarget(drag, { kind: "desk", key: "d2" }, m)).toMatchObject({
+    key: null,
+    label: "d2 is pinned: unpin it to take its place",
+  });
 });
