@@ -1,6 +1,4 @@
-import { mkdtempSync, rmSync } from "node:fs";
-import { availableParallelism, tmpdir } from "node:os";
-import { join } from "node:path";
+import { availableParallelism } from "node:os";
 import {
   assertWebBrowserInventory,
   assertWorldBrowserInventory,
@@ -8,6 +6,7 @@ import {
   webBrowserSuites,
   worldBrowserIgnorePattern,
 } from "./world-browser-suites";
+import { cleanupRunTemp, createRunTemp, sweepStaleRunTemps } from "./test-temp";
 
 // Keep browser profiles and Bun WebView files inside one run-owned directory.
 // A failed test can skip its own finally block when the runner exits early.
@@ -52,7 +51,10 @@ else if (runWorldAfter)
 console.info(
   `[test-runner] ${testArgs.filter((arg) => arg.startsWith("--")).join(" ")}`,
 );
-const directory = mkdtempSync(join(tmpdir(), "hwt-"));
+// The run's TMPDIR holds test and Chrome scratch files; it is removed, with
+// any process still using it, however the run ends (see test-temp.ts).
+sweepStaleRunTemps();
+const directory = createRunTemp();
 
 try {
   const commands = [[process.execPath, "test", ...testArgs]];
@@ -72,21 +74,19 @@ try {
     });
     const interrupt = () => child.kill("SIGINT");
     const terminate = () => child.kill("SIGTERM");
+    const hangup = () => child.kill("SIGHUP");
     process.on("SIGINT", interrupt);
     process.on("SIGTERM", terminate);
+    process.on("SIGHUP", hangup);
     try {
       process.exitCode = await child.exited;
     } finally {
       process.off("SIGINT", interrupt);
       process.off("SIGTERM", terminate);
+      process.off("SIGHUP", hangup);
     }
     if (process.exitCode !== 0) break;
   }
 } finally {
-  rmSync(directory, {
-    recursive: true,
-    force: true,
-    maxRetries: 5,
-    retryDelay: 100,
-  });
+  cleanupRunTemp(directory);
 }
