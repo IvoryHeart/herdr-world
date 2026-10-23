@@ -1424,9 +1424,11 @@ async function run() {
       if (
         ghost()?.dataset.valid !== "true" ||
         label.includes("’s place") ||
-        label.includes("last of")
+        label.includes("last of") ||
+        label === "Leave the team"
       ) {
-        // Not another room here: carry it back home and let it go.
+        // Not another room here (its own floor, where a grouped desk would
+        // leave its team): carry it back home and let it go.
         press("pointermove", at(fromDesk));
         press("pointerup", [-10, -10]);
         await waitFor(() => ghost() === null, "a cancelled carry stayed up");
