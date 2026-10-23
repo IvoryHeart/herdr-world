@@ -10,6 +10,7 @@
 - [x] 2.1 Decode the snapshot defensively and share one poll across views; add the Sources settings dialog and its settings menu entry.
 - [x] 2.2 Add Board's Work lens; verify lanes, ticket grouping, external links and the jump to a linked agent in the Board browser fixture.
 - [x] 2.3 Add Town desk badges on nameplates; verify a linked desk shows its badge and link in the Town browser fixture.
+- [x] 2.4 Read every PR merged in a configurable window (default seven days) page by page, and group history columns by day; verify paging, its bounds and failure, the window setting and 150 merged PRs in the Board fixture.
 
 ## 3. Documentation
 

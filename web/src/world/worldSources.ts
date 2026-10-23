@@ -25,7 +25,8 @@ const SOURCES_PATH = "/api/world/sources";
 const POLL_MS = 60_000;
 /** While the service is still refreshing, ask again this soon. */
 const FOLLOW_UP_MS = 3_000;
-const MAX_ITEMS = 500;
+/** Open work, a full merged window (GitHub's 1,000-result search) and tickets. */
+const MAX_ITEMS = 2_000;
 const MAX_LINKS = 2_000;
 const LANES = new Set<string>([...PULL_REQUEST_LANES, ...TICKET_LANES]);
 
@@ -143,7 +144,14 @@ function parseStatus(value: unknown): WorldSourceStatus | null {
             jql: text(config.jql) ?? "",
             tokenSet: config.tokenSet === true,
           }
-        : { kind: "github" },
+        : {
+            kind: "github",
+            mergedDays:
+              Number.isSafeInteger(config.mergedDays) &&
+              (config.mergedDays as number) > 0
+                ? (config.mergedDays as number)
+                : 7,
+          },
   };
 }
 
@@ -182,6 +190,7 @@ function parseItem(value: unknown): WorkItem | null {
     ...optionalText("repo"),
     ...optionalText("branch"),
     ...optionalText("headRepo"),
+    ...(number(item.finishedAt) ? { finishedAt: number(item.finishedAt) } : {}),
     ...(typeof item.draft === "boolean" ? { draft: item.draft } : {}),
     ...(["pass", "fail", "pending", "none"].includes(item.checks as string)
       ? { checks: item.checks as WorkItem["checks"] }

@@ -1,4 +1,4 @@
-import { ExternalLink, Settings2, X } from "lucide-react";
+import { ChevronRight, ExternalLink, Settings2, X } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import type { WorldSourceStatus } from "../../../../shared/worldSources";
 import { useLayer } from "../../layerStack";
@@ -9,6 +9,7 @@ import { useWorldSources } from "../worldSources";
 import {
   workCardFacts,
   workLensColumns,
+  type WorkLensCard,
   type WorkLensGroup,
 } from "./workLensModel";
 
@@ -51,6 +52,8 @@ export function WorkLens({
     anchors: () => [anchor?.() ?? null],
   });
   const [group, setGroup] = useState<WorkLensGroup>("pull_requests");
+  // History days the user opened or closed; the newest day starts open.
+  const [openDays, setOpenDays] = useState<Record<string, boolean>>({});
   const columns = useMemo(
     () => workLensColumns(snapshot, world, group),
     [snapshot, world, group],
@@ -149,48 +152,101 @@ export function WorkLens({
             <h3>
               {column.label} <span>{column.cards.length}</span>
             </h3>
-            <ul>
-              {column.cards.map(({ item, agents }) => (
-                <li
-                  key={item.key}
-                  className="work-card"
-                  data-source={item.source}
-                >
-                  <a
-                    className="work-card-ref"
-                    href={item.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    {item.kind === "ticket"
-                      ? item.ref
-                      : `${item.repo ?? ""} ${workBadgeText(item)}`}
-                    <ExternalLink size={12} aria-hidden="true" />
-                  </a>
-                  <p className="work-card-title">{item.title}</p>
-                  <p className="work-card-facts">
-                    {[...workCardFacts(item), ...item.roles].join(" · ")}
-                  </p>
-                  {agents.length ? (
-                    <div className="work-card-agents">
-                      {agents.map((agent) => (
-                        <button
-                          key={agent.id}
-                          type="button"
-                          onClick={() => onSelectAgent(agent.id)}
-                          aria-label={`Show agent ${agent.label} on Board`}
-                        >
-                          {agent.label}
-                        </button>
-                      ))}
-                    </div>
-                  ) : null}
-                </li>
-              ))}
-            </ul>
+            {column.days ? (
+              <div className="work-lens-days">
+                {column.days.map((day, index) => {
+                  const key = `${column.lane}:${day.key}`;
+                  const open = openDays[key] ?? index === 0;
+                  return (
+                    <section key={day.key} aria-label={day.label}>
+                      <button
+                        type="button"
+                        className="work-lens-day"
+                        aria-expanded={open}
+                        onClick={() =>
+                          setOpenDays((value) => ({ ...value, [key]: !open }))
+                        }
+                      >
+                        <ChevronRight size={14} aria-hidden="true" />
+                        {day.label} <span>{day.cards.length}</span>
+                      </button>
+                      {open ? (
+                        <ul>
+                          {day.cards.map((card) => (
+                            <WorkCard
+                              key={card.item.key}
+                              card={card}
+                              compact
+                              onSelectAgent={onSelectAgent}
+                            />
+                          ))}
+                        </ul>
+                      ) : null}
+                    </section>
+                  );
+                })}
+              </div>
+            ) : (
+              <ul>
+                {column.cards.map((card) => (
+                  <WorkCard
+                    key={card.item.key}
+                    card={card}
+                    onSelectAgent={onSelectAgent}
+                  />
+                ))}
+              </ul>
+            )}
           </div>
         ))}
       </div>
     </section>
+  );
+}
+
+/** A card: its link, title, state words (not for history) and agents. */
+function WorkCard({
+  card: { item, agents },
+  compact = false,
+  onSelectAgent,
+}: {
+  card: WorkLensCard;
+  compact?: boolean;
+  onSelectAgent(id: string): void;
+}) {
+  return (
+    <li className="work-card" data-source={item.source}>
+      <a
+        className="work-card-ref"
+        href={item.url}
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        {item.kind === "ticket"
+          ? item.ref
+          : `${item.repo ?? ""} ${workBadgeText(item)}`}
+        <ExternalLink size={12} aria-hidden="true" />
+      </a>
+      <p className="work-card-title">{item.title}</p>
+      {compact ? null : (
+        <p className="work-card-facts">
+          {[...workCardFacts(item), ...item.roles].join(" · ")}
+        </p>
+      )}
+      {agents.length ? (
+        <div className="work-card-agents">
+          {agents.map((agent) => (
+            <button
+              key={agent.id}
+              type="button"
+              onClick={() => onSelectAgent(agent.id)}
+              aria-label={`Show agent ${agent.label} on Board`}
+            >
+              {agent.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </li>
   );
 }

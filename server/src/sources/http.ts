@@ -42,13 +42,27 @@ export function createSourcesHttpHandler(service: SourcesService) {
       }
       try {
         if (pathname.endsWith("/github")) {
+          const keys = Object.keys(body);
           if (
-            Object.keys(body).some((key) => key !== "enabled") ||
-            typeof body.enabled !== "boolean"
+            !keys.length ||
+            keys.some((key) => key !== "enabled" && key !== "mergedDays") ||
+            (body.enabled !== undefined && typeof body.enabled !== "boolean") ||
+            (body.mergedDays !== undefined &&
+              typeof body.mergedDays !== "number")
           )
-            return jsonError("GitHub settings take only enabled", 400);
+            return jsonError(
+              "GitHub settings take enabled and mergedDays",
+              400,
+            );
           return jsonResponse(
-            await service.configureGitHub({ enabled: body.enabled }),
+            await service.configureGitHub({
+              ...(body.enabled !== undefined
+                ? { enabled: body.enabled as boolean }
+                : {}),
+              ...(body.mergedDays !== undefined
+                ? { mergedDays: body.mergedDays as number }
+                : {}),
+            }),
           );
         }
         return jsonResponse(await service.configureJira(jiraPatch(body)));
@@ -98,7 +112,17 @@ export function storedSourceSettings(
   const jira = part("jira");
   const text = (entry: unknown) => (typeof entry === "string" ? entry : null);
   return {
-    ...(github ? { github: { enabled: github.enabled !== false } } : {}),
+    ...(github
+      ? {
+          github: {
+            enabled: github.enabled !== false,
+            // The service validates it again and falls back to the default.
+            ...(typeof github.mergedDays === "number"
+              ? { mergedDays: github.mergedDays }
+              : {}),
+          },
+        }
+      : {}),
     ...(jira
       ? {
           jira: {
