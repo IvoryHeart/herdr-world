@@ -48,13 +48,14 @@ test.skipIf(process.platform !== "win32")(
       writeFileSync(
         fixture,
         [
-          // A detached PowerShell holds this executable open without delete
-          // sharing, as an antivirus scan can right after the installer runs
-          // it; the binary returns only once the hold is in place.
+          // The test's holder opens this executable without delete sharing,
+          // as an antivirus scan can right after the installer runs it. The
+          // binary announces itself and returns only once the hold is in place.
           `if (process.argv[2] === "--version" && process.env.STAGING_LOCK_MS) {`,
-          `  const ready = process.execPath + ".held";`,
-          `  Bun.spawn([process.env.SystemRoot + "\\\\System32\\\\WindowsPowerShell\\\\v1.0\\\\powershell.exe", "-NoProfile", "-NonInteractive", "-Command", "$f=[IO.File]::Open($env:HOLD_PATH,'Open','Read','Read'); New-Item -ItemType File -Path $env:HOLD_READY | Out-Null; Start-Sleep -Milliseconds $env:STAGING_LOCK_MS; $f.Dispose()"], { env: { ...process.env, HOLD_PATH: process.execPath, HOLD_READY: ready }, stdio: ["ignore", "ignore", "ignore"], detached: true }).unref();`,
-          `  for (let i = 0; i < 300 && !(await Bun.file(ready).exists()); i++) await Bun.sleep(50);`,
+          `  await Bun.write(process.execPath + ".running", "");`,
+          `  let held = false;`,
+          `  for (let i = 0; i < 400 && !(held = await Bun.file(process.execPath + ".held").exists()); i++) await Bun.sleep(50);`,
+          `  if (!held) console.error("staging hold timed out");`,
           `}`,
           `if (process.argv[2] === "--version" && process.env.WRONG_VERSION) console.log("herdr-world 0.0.0");`,
           `else if (process.argv[2] === "version" || process.argv[2] === "--version" || (process.argv[2] === "plugin" && process.argv[3] === "version" && !process.env.PLUGIN_REJECT_NATIVE)) console.log("herdr-world 9.8.7"); else process.exit(2);`,
@@ -96,6 +97,8 @@ test.skipIf(process.platform !== "win32")(
       const validArchive = packageArchive("9.8.7");
       const invalidArchive = packageArchive("9.8.6");
       let failure = "none";
+      // PowerShell holders for the locked cases; they release after 6 s.
+      const holders: Array<ReturnType<typeof Bun.spawn>> = [];
       host = Bun.serve({
         hostname: "127.0.0.1",
         port: 0,
@@ -153,6 +156,23 @@ test.skipIf(process.platform !== "win32")(
           failure === "launcher-replacement"
             ? `$locked = [IO.File]::Open('${compatibilityPath}', [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read); try { & '${scriptPath}' } finally { $locked.Dispose() }`
             : `& '${scriptPath}'`;
+        if (failure.startsWith("locked-"))
+          holders.push(
+            Bun.spawn(
+              [
+                powershell,
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                "$deadline=[DateTime]::UtcNow.AddSeconds(60); do { $m = Get-ChildItem -LiteralPath $env:HOLD_ROOT -Recurse -Force -Filter 'herdr-world.exe.running' -ErrorAction SilentlyContinue | Where-Object { !(Test-Path -LiteralPath ($_.FullName -replace '\\.running$', '.held')) } | Select-Object -First 1; if (!$m) { Start-Sleep -Milliseconds 20 } } until ($m -or [DateTime]::UtcNow -gt $deadline); $exe = $m.FullName -replace '\\.running$', ''; $f = [IO.File]::Open($exe, 'Open', 'Read', 'Read'); New-Item -ItemType File -Path ($exe + '.held') | Out-Null; Start-Sleep -Milliseconds 6000; $f.Dispose()",
+              ],
+              {
+                env: { ...process.env, HOLD_ROOT: join(root, "server") },
+                stdout: "ignore",
+                stderr: "inherit",
+              },
+            ),
+          );
         const child = Bun.spawn(
           [
             powershell,
@@ -223,7 +243,7 @@ test.skipIf(process.platform !== "win32")(
       );
       // Once the holders exit, the next install sweeps leftovers older than an
       // hour and keeps a recent one, which may belong to a running install.
-      await Bun.sleep(7000);
+      for (const holder of holders) await holder.exited;
       const server = join(root, "server");
       const recent = join(server, ".plugin-install-recent");
       mkdirSync(recent);
