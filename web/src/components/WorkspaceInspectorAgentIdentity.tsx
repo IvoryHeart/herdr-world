@@ -4,6 +4,7 @@ import type { ManagedWindowControls } from "../world/windows/WindowControls";
 import type { WorkspaceInspectorContext } from "../workspaceResource";
 import { AgentIcon } from "./AgentIcon";
 import { ColorSwatches } from "./ColorSwatch";
+import { agentName } from "./agentDisplayName";
 import { middleEllipsis } from "./middleEllipsis";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 
@@ -108,18 +109,6 @@ export function WorkspaceInspectorAgentIdentity({
       {location}
     </div>
   );
-}
-
-/** An agent is named "<name>-<harness>", e.g. otter-claude. */
-function agentName(context: WorkspaceInspectorContext) {
-  const harness = context.agent?.toLowerCase();
-  const label = context.label.toLowerCase();
-  return context.kind === "agent" &&
-    harness &&
-    label !== harness &&
-    !label.endsWith(`-${harness}`)
-    ? `${context.label}-${context.agent}`
-    : context.label;
 }
 
 /** The icon's background: the terminal's colour, chosen or by default. */
