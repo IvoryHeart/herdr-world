@@ -50,6 +50,7 @@ export const WORLD_OBSERVABILITY_SETTINGS_EVENT =
   "herdr-world:observability-settings";
 export const WORLD_OBSERVABILITY_UPDATED_EVENT =
   "herdr-world:observability-updated";
+export const WORLD_SOURCES_SETTINGS_EVENT = "herdr-world:sources-settings";
 export const WORKSPACE_ANNOTATION_REQUEST_EVENT =
   "herdr-world:workspace-annotation-request";
 
