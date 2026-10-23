@@ -509,6 +509,13 @@ export class BoardStore {
     this.document = next;
     return this.get();
   }
+  /**
+   * Apply the operations only if the board is still at `revision`; null when
+   * a newer edit landed meanwhile, so the caller can read again.
+   */
+  patchIf(revision: number, ops: readonly BoardOp[]): BoardDocument | null {
+    return this.document.revision === revision ? this.patch(ops) : null;
+  }
 }
 
 function applyOp(next: BoardDocument, op: BoardOp, current: BoardDocument) {

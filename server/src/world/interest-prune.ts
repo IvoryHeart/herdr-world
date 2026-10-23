@@ -52,30 +52,36 @@ export async function pruneGoneInterest(
     isCurrent: () => boolean;
     changed: (revision: number) => void;
   },
+  attempts = 3,
 ): Promise<void> {
-  if (!host.isCurrent()) return;
   const prefix = interestKeyPrefix(connectionId);
-  const observed = board.get();
-  const stored = Object.keys(observed.layout.interest);
-  if (!stored.some((key) => key.startsWith(prefix))) return;
-  try {
-    const listed = (await host.call("pane.list", {})) as { panes?: unknown };
-    if (!host.isCurrent() || !Array.isArray(listed?.panes)) return;
-    const terminals = new Set<string>();
-    for (const pane of listed.panes) {
-      const terminal = (pane as { terminal_id?: unknown } | null)?.terminal_id;
-      if (typeof terminal !== "string" || !terminal) return;
-      terminals.add(terminal);
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    if (!host.isCurrent()) return;
+    const observed = board.get();
+    const stored = Object.keys(observed.layout.interest);
+    if (!stored.some((key) => key.startsWith(prefix))) return;
+    try {
+      // One complete, unpaged listing from the current runtime.
+      const listed = (await host.call("pane.list", {})) as { panes?: unknown };
+      if (!host.isCurrent() || !Array.isArray(listed?.panes)) return;
+      const terminals = new Set<string>();
+      for (const pane of listed.panes) {
+        const terminal = (pane as { terminal_id?: unknown } | null)
+          ?.terminal_id;
+        if (typeof terminal !== "string" || !terminal) return;
+        terminals.add(terminal);
+      }
+      const ops = goneInterestOps(observed, connectionId, terminals);
+      if (!ops.length) return;
+      // A newer edit (even clearing and restoring the same choice) is never
+      // removed using a listing that predates it: list again instead.
+      const saved = board.patchIf(observed.revision, ops);
+      if (saved) return host.changed(saved.revision);
+    } catch (error) {
+      serverLogger.warn("Board could not drop gone terminals' interest", {
+        detail: String(error),
+      });
+      return;
     }
-    // A newer edit (even clearing and restoring the same choice) must never
-    // be removed using a listing that predates it.
-    if (board.get().revision !== observed.revision)
-      return pruneGoneInterest(board, connectionId, host);
-    const ops = goneInterestOps(observed, connectionId, terminals);
-    if (ops.length) host.changed(board.patch(ops).revision);
-  } catch (error) {
-    serverLogger.warn("Board could not drop gone terminals' interest", {
-      detail: String(error),
-    });
   }
 }

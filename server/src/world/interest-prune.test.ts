@@ -262,6 +262,33 @@ describe("agent interest", () => {
     expect(Object.values(store.get().layout.interest)).not.toContain("focused");
   });
 
+  test("a patch conditional on a revision is refused once the board moved on", () => {
+    const store = seeded();
+    const { revision } = store.get();
+    const op = { op: "interest.set", key: muted, interest: null } as const;
+    store.patch([{ op: "interest.set", key: focused, interest: "muted" }]);
+    expect(store.patchIf(revision, [op])).toBeNull();
+    expect(store.get().layout.interest[muted]).toBe("muted");
+    expect(store.patchIf(store.get().revision, [op])).not.toBeNull();
+  });
+
+  test("a board edited during every listing stops after three tries, keeping its records", async () => {
+    const store = seeded();
+    let calls = 0;
+    const live = host({ panes: [] });
+    await pruneGoneInterest(store, "conn-a", {
+      ...live,
+      call: async () => {
+        calls += 1;
+        store.patch([{ op: "card.color", key: `edit-${calls}`, color: "red" }]);
+        return { panes: [] };
+      },
+    });
+    expect(calls).toBe(3);
+    expect(live.revisions).toEqual([]);
+    expect(store.get().layout.interest[muted]).toBe("muted");
+  });
+
   test("closing a pane, tab or workspace triggers a check; other events do not", () => {
     expect(closesTerminals("pane_closed")).toBe(true);
     expect(closesTerminals("tab.closed")).toBe(true);
