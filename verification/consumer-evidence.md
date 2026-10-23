@@ -59,6 +59,16 @@ attribution. Existing relation/store/CLI tests retain terminal grouping,
 pruning and undo; the browser adapter also proves Pod-only data does not scan
 terminal topology or enable magnetic Ungroup.
 
+Group read-model properties come from the Group projections and derived facts
+requirement. `shared/groupViews.test.ts` enumerates all 36 pairs of the six
+roll-up states and covers qualified Room/Desk projections, separate stored
+refs, deduplicated members/work, away/ambiguous exclusion and generation/session
+work-link matching. `shared/groupObservations.test.ts` exercises both actual
+service and browser adapters against the same fixtures: current-generation
+admission, canonical full agent names, replacement-session refusal, conflicting
+names and no display/harness fallback. These are bounded observation and pure
+projection checks, not runtime leases or a proof of source completeness.
+
 Direct exhaustive and service evidence fits these pure finite validation rules
 and the existing atomic Board write. No new scheduling or authenticated caller
 protocol is introduced. Board/Town browser checks remain necessary for real

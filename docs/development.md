@@ -314,8 +314,34 @@ Board byte cap, 500 groups, 32 members per group, 32 Pods per participating
 connection and bounded roles/attributes. Pods default to `open_pr_limit: 2`;
 `open_pr_limit` and ordered `queue` are intent, never enforced work limits.
 
-This is the model/store foundation. The Groups CLI, roster, frames and one-time
-import are delivered separately; existing user controls are unchanged.
+### Group projections and derived facts
+
+`shared/groupViews.ts` combines stored Groups with bounded Herdr observations
+and existing source work links. Room members are qualified Desk/tab refs; Desk
+members are qualified terminal refs. These projection refs stay separate from
+stored `GroupRef` and never enter `relations.groups`. Their view keys use a
+separate namespace, so a stored ID cannot shadow a Herdr projection. Cached
+Herdr groups remain visible as noncurrent observations without live roll-ups.
+
+`shared/groupObservations.ts` gives service and browser adapters the same
+admission rules. Only ready, actionable, nonstale snapshots from the current
+runtime generation supply live members. A Pod resolves using the actual
+`agent.list` name qualified by pane, terminal and harness, never a truncated
+display label or the harness name. Conflicting current names and mismatched
+session metadata do not select an occupant. Existing service/browser session
+fingerprint functions qualify work links identically.
+
+Away and ambiguous members contribute neither status nor work. Present
+terminals are deduplicated across member refs; status rolls up worst first:
+needs you, failed, working, finished, quiet, unknown. Open PRs are deduplicated
+from existing source links matched by connection, generation, pane and session;
+merged/closed PRs are excluded. A Pod defaults to a displayed limit of two,
+and exceeding the limit sets a warning without preventing any edit. The Now
+list is the stored ordered queue. This read model copies no source facts into
+the Board and grants no downstream operation lease.
+
+The Groups CLI, roster, frames and one-time import build on this foundation;
+existing user controls are unchanged at this layer.
 
 ## Agent CLI
 

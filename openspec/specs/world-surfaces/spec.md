@@ -1792,6 +1792,46 @@ authenticated-principal guarantee; a sender name SHALL NOT grant authority.
 - **WHEN** a client creates or changes a persisted group to Room or Desk
 - **THEN** World refuses it without changing the document or its history
 
+### Requirement: Group projections and derived facts
+
+World SHALL project Herdr workspaces as Room groups whose members are qualified
+Desk/tab refs, and Herdr tabs as Desk groups whose members are qualified terminal
+refs. These projected refs SHALL remain separate from stored Group refs and SHALL
+NOT be persisted in `relations.groups`. Projection keys SHALL distinguish stored
+and Herdr-owned groups even when their IDs coincide. Cached Herdr projections MAY
+remain visible but SHALL NOT contribute live status or work.
+
+Service and browser Group readers SHALL apply the same current-generation,
+freshness and identity rules. Pod addresses SHALL resolve against actual Herdr
+agent names qualified by connection, pane, terminal and matching session data
+when present. Display labels, shortened names, harness names and mismatched
+session metadata SHALL NOT substitute for agent identity. Conflicting matches
+SHALL remain unresolved.
+
+Group status SHALL count each present unambiguous terminal once and use the
+worst state in this order: needs you, failed, working, finished, quiet, unknown.
+Away and ambiguous members SHALL contribute neither status nor work. Open PRs
+SHALL derive from existing source links qualified by connection, runtime
+generation, pane and session, with duplicate and merged/closed PRs excluded.
+The open-PR limit SHALL default to two for Pods and warn rather than enforce.
+The Now list SHALL preserve the stored queue order. These derived facts SHALL
+NOT mutate source records or grant downstream action authority.
+
+#### Scenario: The same native IDs occur on two connections
+
+- **WHEN** two current connections report equal workspace, tab or terminal IDs
+- **THEN** their projected memberships and work remain qualified by connection
+
+#### Scenario: An address is stale or ambiguous
+
+- **WHEN** a Pod member has no current exact identity or has multiple matches
+- **THEN** it contributes no live status or linked PRs and World guesses no occupant
+
+#### Scenario: Source links belong to the previous runtime or session
+
+- **WHEN** a pane's old-generation or old-session work link remains cached
+- **THEN** the replacement occupant's Group does not count that link
+
 ### Requirement: Terminal colour
 
 Every Herdr tab SHALL have one terminal colour from a fixed palette, shown as
