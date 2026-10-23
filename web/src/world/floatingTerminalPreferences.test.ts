@@ -1,8 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import {
+  FLOATING_TERMINAL_DOCK_KEY,
   FLOATING_TERMINAL_GEOMETRY_KEY,
   floatingTerminalGeometryId,
+  readFloatingTerminalDock,
   readFloatingTerminalGeometry,
+  writeFloatingTerminalDock,
   writeFloatingTerminalGeometry,
 } from "./floatingTerminalPreferences";
 
@@ -120,3 +123,28 @@ function memoryStorage(initial: string | null) {
   };
   return storage;
 }
+
+describe("window docks", () => {
+  test("keep the last dock per window and ignore unknown values", () => {
+    const store = new Map<string, string>();
+    const storage = {
+      getItem: (key: string) => store.get(key) ?? null,
+      setItem: (key: string, value: string) => void store.set(key, value),
+    };
+    expect(readFloatingTerminalDock(storage, "a")).toBeNull();
+    writeFloatingTerminalDock(storage, "a", "right");
+    writeFloatingTerminalDock(storage, "b", "float");
+    writeFloatingTerminalDock(storage, "a", "float");
+    expect(readFloatingTerminalDock(storage, "a")).toBe("float");
+    expect(readFloatingTerminalDock(storage, "b")).toBe("float");
+    store.set(
+      FLOATING_TERMINAL_DOCK_KEY,
+      JSON.stringify([
+        { id: "c", dock: "sideways" },
+        { id: "d", dock: "left" },
+      ]),
+    );
+    expect(readFloatingTerminalDock(storage, "c")).toBeNull();
+    expect(readFloatingTerminalDock(storage, "d")).toBe("left");
+  });
+});
