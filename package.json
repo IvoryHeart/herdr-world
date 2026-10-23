@@ -25,6 +25,7 @@
     "dev:web": "bun run --filter herdr-world-web dev",
     "build:web": "bun run --filter herdr-world-web build",
     "build:site": "bun scripts/build-pages.ts",
+    "film:render": "bun scripts/film-render.ts",
     "build:server": "bun run --filter herdr-world-server compile",
     "build": "bun run build:web && bun run build:server",
     "postbuild": "bun run clean:bun-build",

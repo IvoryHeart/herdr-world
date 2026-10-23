@@ -123,7 +123,15 @@ export async function refreshJira(
       body: JSON.stringify({
         jql: config.jql,
         maxResults: MAX_RESULTS,
-        fields: ["summary", "status", "assignee", "watches", "updated"],
+        fields: [
+          "summary",
+          "status",
+          "assignee",
+          "watches",
+          "updated",
+          "resolutiondate",
+          "statuscategorychangedate",
+        ],
       }),
     });
     if (search.status === 401 || search.status === 403)
@@ -169,6 +177,12 @@ export function parseJiraIssues(
     const assignee = record(fields.assignee).accountId;
     const updated =
       typeof fields.updated === "string" ? Date.parse(fields.updated) : NaN;
+    const lane = (typeof category === "string" && LANE_OF[category]) || "todo";
+    // A Done ticket finished when it was resolved, or else when it entered
+    // Done; a later comment moves `updated`, not that day.
+    const finished = [fields.resolutiondate, fields.statuscategorychangedate]
+      .map((value) => (typeof value === "string" ? Date.parse(value) : NaN))
+      .find(Number.isFinite);
     items.push({
       key: `jira:${key}`,
       source: "jira",
@@ -176,7 +190,7 @@ export function parseJiraIssues(
       ref: key,
       title: bounded(fields.summary, MAX_TITLE),
       url: new URL(`/browse/${key}`, site).toString(),
-      lane: (typeof category === "string" && LANE_OF[category]) || "todo",
+      lane,
       status: bounded(status.name, MAX_STATUS) || "Unknown",
       // Only what Jira confirms: a broad filter returns tickets that are
       // neither assigned to nor watched by the user.
@@ -187,6 +201,7 @@ export function parseJiraIssues(
           : []),
       ],
       updatedAt: Number.isFinite(updated) ? updated : 0,
+      ...(lane === "done" && finished ? { finishedAt: finished } : {}),
     });
   }
   return items;

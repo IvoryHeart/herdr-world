@@ -184,7 +184,8 @@ function inspectorConversationEqual(
     left.context.stateLabel === right.context.stateLabel &&
     left.context.locationLabel === right.context.locationLabel &&
     left.context.agent === right.context.agent &&
-    left.context.taskSummary === right.context.taskSummary
+    left.context.taskSummary === right.context.taskSummary &&
+    left.context.statusTone === right.context.statusTone
   );
 }
 

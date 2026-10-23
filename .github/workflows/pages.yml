@@ -7,7 +7,11 @@ on:
             - site/**
             - docs/TUTORIAL.md
             - docs/images/**
+            - web/src/world/town/**
+            - web/src/world/terminalColor.ts
+            - shared/terminalColor.ts
             - scripts/build-pages.ts
+            - scripts/film-render.ts
             - scripts/pages-content.ts
             - scripts/pages-*.test.ts
             - .github/workflows/pages.yml
@@ -48,10 +52,16 @@ jobs:
               uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
               with:
                   enablement: true
-            - name: Test tutorial rendering and site references
-              run: bun test scripts/pages-content.test.ts scripts/pages-workflow.test.ts
+            - name: Test tutorial rendering, site references and the film
+              run: bun test scripts/pages-content.test.ts scripts/pages-workflow.test.ts scripts/pages-film.test.ts
             - name: Build landing page and tutorial
               run: bun run build:site
+            # The film's video is generated, not committed: render it from the
+            # live film with headless Chrome (preinstalled) and ffmpeg.
+            - name: Install ffmpeg
+              run: command -v ffmpeg || { sudo apt-get update && sudo apt-get install --yes --no-install-recommends ffmpeg; }
+            - name: Render the film video
+              run: bun run film:render
             - name: Upload Pages artifact
               uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
               with:

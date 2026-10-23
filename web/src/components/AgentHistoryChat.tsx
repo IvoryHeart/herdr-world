@@ -7,9 +7,10 @@ import {
   useMemo,
   useRef,
   useState,
+  type ReactNode,
   type RefObject,
 } from "react";
-import { Check, ChevronRight, Copy, Wrench, X } from "lucide-react";
+import { ArrowDown, Check, ChevronRight, Copy, Wrench, X } from "lucide-react";
 import { copyTextWithFeedback } from "../copyText";
 import { formatUiDateTime } from "../uiLocale";
 import { HISTORY_PREVIEW_CHARS } from "./AgentHistoryCard";
@@ -44,11 +45,14 @@ const ChatBubble = memo(function ChatBubble({
   entry,
   sequence,
   highlighted,
+  matched = false,
   onOpen,
 }: {
   entry: HistoryEntry;
   sequence: number;
   highlighted: boolean;
+  /** Has the same words as a message Chat sent: matched, not proven. */
+  matched?: boolean;
   onOpen: (entry: HistoryEntry) => void;
 }) {
   const preview = entry.text.slice(0, HISTORY_PREVIEW_CHARS);
@@ -59,6 +63,7 @@ const ChatBubble = memo(function ChatBubble({
     <article
       className={`agent-history-chat-message ${tone} ${highlighted ? "is-minimap-target" : ""}`}
       data-sequence={sequence}
+      data-delivery={matched ? "matched" : undefined}
     >
       <div className="agent-history-chat-bubble">
         {entry.role === "user" ? (
@@ -84,6 +89,11 @@ const ChatBubble = memo(function ChatBubble({
         <time dateTime={entry.sent_at} title={entry.sent_at}>
           {formatUiDateTime(entry.sent_at)}
         </time>
+        {matched ? (
+          <span title="Chat sent the same words just before this appeared; it cannot prove this is that message.">
+            Sent from Chat; matched by its words
+          </span>
+        ) : null}
         <button
           type="button"
           className="agent-history-copy"
@@ -403,7 +413,13 @@ export function AgentHistoryChat({
   toolLoading = EMPTY_LOADING,
   onLoadTool = noop,
   onOpen,
+  matchedIds,
+  after,
 }: {
+  /** Messages a send from Chat matched by their words. */
+  matchedIds?: ReadonlySet<string>;
+  /** Shown after the newest message (Chat's sends not yet seen). */
+  after?: ReactNode;
   items: HistoryChatItem[];
   listRef: RefObject<HTMLDivElement>;
   contentRef: RefObject<HTMLDivElement>;
@@ -416,6 +432,8 @@ export function AgentHistoryChat({
   onOpen: (entry: HistoryEntry) => void;
 }) {
   const followRef = useRef(true);
+  // Shown while the reader has scrolled back from the newest message.
+  const [away, setAway] = useState(false);
   const queueRef = useRef<HistoryEntry[]>([]);
   const [queueVersion, setQueueVersion] = useState(0);
   const enqueue = useCallback((entry: HistoryEntry) => {
@@ -491,16 +509,41 @@ export function AgentHistoryChat({
         followRef.current =
           list.scrollHeight - list.scrollTop - list.clientHeight <
           FOLLOW_THRESHOLD_PX;
+        setAway(!followRef.current);
       }}
     >
+      {away ? (
+        <button
+          type="button"
+          className="agent-history-chat-jump"
+          onClick={() => {
+            const list = listRef.current;
+            followRef.current = true;
+            setAway(false);
+            list?.scrollTo({ top: list.scrollHeight });
+          }}
+        >
+          <ArrowDown size={13} aria-hidden="true" /> Jump to latest
+        </button>
+      ) : null}
       <div ref={contentRef} className="agent-history-chat-content">
         {items.map((item) =>
-          item.type === "message" ? (
+          // A marker such as a compaction reads as a divider, not a message.
+          item.type === "message" && item.entry.notice ? (
+            <div
+              key={item.entry.id}
+              className="agent-history-chat-divider"
+              role="separator"
+            >
+              <span>{item.entry.notice}</span>
+            </div>
+          ) : item.type === "message" ? (
             <ChatBubble
               key={item.entry.id}
               entry={item.entry}
               sequence={item.sequence}
               highlighted={highlightedSequence === item.sequence}
+              matched={matchedIds?.has(item.entry.id) ?? false}
               onOpen={onOpen}
             />
           ) : (
@@ -513,6 +556,7 @@ export function AgentHistoryChat({
             />
           ),
         )}
+        {after}
       </div>
     </div>
   );
