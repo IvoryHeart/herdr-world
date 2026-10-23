@@ -2569,6 +2569,25 @@ async function run() {
   current = "";
 }
 
+// `?mode=preview`: the synthetic board with one spawn, for screenshots.
+if (mode === "preview")
+  void fresh().then(() =>
+    mount(
+      2,
+      variant((leaf) =>
+        leaf.connectionId === "studio" && leaf.nativeId === "w1:p2"
+          ? {
+              ...leaf,
+              pane: {
+                tokens: { spawned_by: "w1:p1" },
+              } as unknown as typeof leaf.pane,
+            }
+          : leaf,
+      ),
+      null,
+    ),
+  );
+
 if (mode === "test")
   run()
     .catch((error) => failures.push(String(error)))

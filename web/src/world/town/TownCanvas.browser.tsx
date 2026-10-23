@@ -616,6 +616,41 @@ async function run() {
   );
 
   if (mode === "preview") {
+    // `&zoom=room`: into the first room, where an agent spawned another.
+    if (params.get("zoom") === "room") {
+      const label = base.connections[0]?.snapshot?.workspaces[0]?.label;
+      const card = [
+        ...host.querySelectorAll<HTMLElement>(".town-room-card"),
+      ].find((entry) =>
+        entry.getAttribute("aria-label")?.startsWith(`${String(label)}:`),
+      );
+      const canvas = host.querySelector<HTMLElement>(".town-canvas-host");
+      // Double-tap the room's floor twice: each one zooms in 2x there.
+      for (let zoom = 0; card && canvas && zoom < 2; zoom += 1) {
+        const box = card.getBoundingClientRect();
+        const point = {
+          clientX: box.left + box.width / 2,
+          clientY: box.bottom + 30,
+        };
+        for (const type of [
+          "pointerdown",
+          "pointerup",
+          "pointerdown",
+          "pointerup",
+        ])
+          canvas.dispatchEvent(
+            new PointerEvent(type, {
+              bubbles: true,
+              pointerId: 41,
+              pointerType: "mouse",
+              button: 0,
+              buttons: type === "pointerdown" ? 1 : 0,
+              ...point,
+            }),
+          );
+        await new Promise((resolve) => setTimeout(resolve, 900));
+      }
+    }
     // Keep the town alive: flip a few statuses every couple of seconds.
     const r = random(99);
     window.setInterval(() => {
