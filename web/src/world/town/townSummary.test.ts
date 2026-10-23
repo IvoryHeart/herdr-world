@@ -13,7 +13,7 @@ import { buildWorldObject, worldObjectForHosts } from "../worldObject";
 import { officeReadModel } from "../officeReadModel";
 import { withTownFinished } from "./townFinished";
 import { townAttentionDesks } from "./townAttention";
-import type { TownCall } from "./TownRail";
+import { townCalls, type TownCall } from "./TownRail";
 import type { WorldAsk } from "../worldAsks";
 import { townSummary, townSummaryAge } from "./townSummary";
 
@@ -262,6 +262,150 @@ test("verified asks use snapshot-qualified indexes across host collisions and ge
   ).toBe(2);
   expect(lookup("studio", agent.currentPaneRef.nativeId)).toBeUndefined();
   expect(townSummary(current, [], NO_METRICS).counts.working).toBe(1);
+});
+
+function boundedWorld(agentStatus: "blocked" | "idle") {
+  const { connection } = office({ alpha: Array<string>(16).fill(agentStatus) });
+  const status = { working: 0, blocked: 0, idle: 0, done: 0, unknown: 0 };
+  status[agentStatus] = 18;
+  connection.snapshot!.coverage = {
+    workspaces: 1,
+    tabs: 18,
+    panes: 18,
+    agentPanes: 18,
+    status,
+    byWorkspace: [
+      { workspaceId: "alpha", tabs: 18, panes: 18, agentPanes: 18, status },
+    ],
+  };
+  return buildWorldObject([connection], "studio");
+}
+
+test("bounded aggregate coverage never adds Summary needs-you items absent from the rail roster", async () => {
+  const world = boundedWorld("blocked");
+  await prepareWorldOffice(world);
+  const projection = projectWorldOffice(
+    world,
+    1,
+    null,
+    TOWN_PRESENTATION_BOUNDS,
+  );
+  const calls = townCalls(projection.roster, new Map(), [], (key) =>
+    projection.roster.find(({ agent }) => agent.key === key),
+  );
+  const summary = townSummary(projection, calls, NO_METRICS);
+  expect(projection.coverage.status.blocked).toBe(18);
+  expect(projection.roster).toHaveLength(16);
+  expect(calls).toHaveLength(16);
+  expect(summary.counts.needsYou).toBe(16);
+  expect(summary.hosts[0]!.counts.needsYou).toBe(summary.counts.needsYou);
+  expect(summary.hosts[0]!.rooms[0]!.counts.needsYou).toBe(
+    summary.counts.needsYou,
+  );
+});
+
+test("bounded prepared totals retain exact finish and seen deltas on observed agents", async () => {
+  const world = boundedWorld("idle");
+  await prepareWorldOffice(world);
+  const base = projectWorldOffice(world, 1, null, TOWN_PRESENTATION_BOUNDS);
+  const [first, second] = base.roster.map(({ agent }) => agent.key);
+  const finished = withTownFinished(
+    base,
+    new Set([first!, second!]),
+    new Set(),
+  );
+  const reviewed = withTownFinished(
+    base,
+    new Set([second!]),
+    new Set([first!]),
+  );
+  expect(townSummary(finished, [], NO_METRICS).hosts[0]!.counts).toMatchObject({
+    finished: 2,
+    quiet: 14,
+  });
+  expect(townSummary(reviewed, [], NO_METRICS).hosts[0]!.counts).toMatchObject({
+    finished: 1,
+    quiet: 15,
+  });
+  expect(townSummary(base, [], NO_METRICS).hosts[0]!.counts.quiet).toBe(16);
+  expect(base.coverage.status.idle).toBe(18);
+});
+
+test("a verified Ask keeps its folded desk during a cached-generation reconnect and releases it on removal", async () => {
+  const { connection } = office({ alpha: Array<string>(30).fill("idle") });
+  const world = buildWorldObject(
+    [
+      {
+        ...connection,
+        generation: 2,
+        snapshotGeneration: 1,
+        stale: true,
+        actionable: false,
+      },
+    ],
+    "studio",
+  );
+  await prepareWorldOffice(world);
+  const project = createOfficeProjector(TOWN_PRESENTATION_BOUNDS);
+  const pins = new Set<string>();
+  const expanded = new Set<string>();
+  const baseline = project(world, 1, null, pins, expanded);
+  const agent = baseline.roster.find(
+    ({ agent }) => agent.currentPaneRef.nativeId === "alpha:t0:p",
+  )!.agent;
+  expect(
+    baseline.rooms[0]!.desks.some((desk) => desk.key === agent.deskKey),
+  ).toBe(false);
+  const ask: WorldAsk = {
+    id: "cached",
+    at: 1,
+    question: "Continue?",
+    options: [],
+    owner_only: true,
+    actor: {
+      label: "Synthetic asker",
+      verified: true,
+      connection_id: "studio",
+      pane_id: agent.currentPaneRef.nativeId,
+      terminal_id: agent.currentTerminalRef.nativeId,
+    },
+  };
+  const legacy = townAttentionDesks([], [ask], baseline.roster);
+  const indexed = townAttentionDesks(
+    [],
+    [ask],
+    baseline.roster,
+    officeReadModel(baseline).agentForPane,
+  );
+  expect([...indexed]).toEqual([...legacy]);
+  expect([...indexed]).toEqual([agent.deskKey!]);
+  const protectedOffice = project(world, 2, null, pins, expanded, indexed);
+  expect(
+    protectedOffice.rooms[0]!.desks.some((desk) => desk.key === agent.deskKey),
+  ).toBe(true);
+  expect(
+    officeReadModel(protectedOffice).agentForPane(
+      "studio",
+      agent.currentPaneRef.nativeId,
+    )?.observedGeneration,
+  ).toBe(1);
+  const mismatched = {
+    ...ask,
+    actor: { ...ask.actor, terminal_id: "another-terminal" },
+  };
+  expect([
+    ...townAttentionDesks(
+      [],
+      [mismatched],
+      baseline.roster,
+      officeReadModel(baseline).agentForPane,
+    ),
+  ]).toEqual([]);
+  expect(
+    project(world, 3, null, pins, expanded, new Set()).rooms[0]!.desks.some(
+      (desk) => desk.key === agent.deskKey,
+    ),
+  ).toBe(false);
 });
 
 const NO_METRICS: OfficeObservability = {
