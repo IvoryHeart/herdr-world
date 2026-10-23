@@ -161,9 +161,24 @@ export default function TownView({
     [],
   );
   const layoutPreferences = useLayoutPreferences();
+  // Rooms past TOWN_PRESENTATION_BOUNDS.foldedDesksPerRoom show their busiest
+  // desks until the user expands them into a longer room.
+  const [expandedRooms, setExpandedRooms] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  const toggleRoomFold = useCallback(
+    (roomKey: string) =>
+      setExpandedRooms((current) => {
+        const next = new Set(current);
+        if (!next.delete(roomKey)) next.add(roomKey);
+        return next;
+      }),
+    [],
+  );
   const observedOffice = useMemo(
-    (): HerdrOfficeProjection => projectOffice(world, Date.now(), selectedId),
-    [world, selectedId, projectOffice],
+    (): HerdrOfficeProjection =>
+      projectOffice(world, Date.now(), selectedId, expandedRooms),
+    [world, selectedId, projectOffice, expandedRooms],
   );
   const townFinished = useTownFinished(observedOffice);
   // Terminal frames and unrelated store updates must not reconcile the scene.
@@ -1409,6 +1424,7 @@ export default function TownView({
               right: 0,
             }}
             roomActions={{
+              onToggleFold: toggleRoomFold,
               onDropDesk: (deskKey, roomKey) => runDeskMove(deskKey, roomKey),
               onReorderDesk: (deskKey, ontoKey) =>
                 runDeskReorder(deskKey, ontoKey),

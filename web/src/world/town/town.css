@@ -272,7 +272,8 @@
   cursor: pointer;
 }
 
-.town-plaque-action.town-plaque-agent {
+.town-plaque-action.town-plaque-agent,
+.town-plaque-action.town-plaque-fold {
   display: inline-flex;
   gap: 3px;
   width: auto;

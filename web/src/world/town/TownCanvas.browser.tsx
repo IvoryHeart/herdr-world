@@ -577,20 +577,54 @@ async function run() {
   );
   const waitingEntries = host.querySelectorAll(".town-reception-entry").length;
   check(waitingEntries > 0, "blocked agents did not appear at reception");
+  // A room past 24 desks shows its busiest until expanded into a longer room.
+  const perRoom = new Map<string, number>();
+  for (const entry of base.connections.flatMap((c) => c.snapshot?.tabs ?? []))
+    perRoom.set(entry.workspace_id, (perRoom.get(entry.workspace_id) ?? 0) + 1);
+  const drawn = (expanded: string | null) =>
+    [...perRoom].reduce(
+      (sum, [id, count]) =>
+        sum + (id === expanded ? count : Math.min(count, 24)),
+      0,
+    );
+  check(
+    diagnostics.desks === drawn(null),
+    `a folded town drew ${diagnostics.desks} of ${drawn(null)} desks`,
+  );
+  if (scale === "extended") {
+    const expand = () =>
+      host.querySelector<HTMLButtonElement>(
+        'button[aria-label^="Expand room orbit"]',
+      );
+    check(expand() !== null, "the 100-desk room offers no Expand");
+    expand()?.click();
+    // Wait for the drawn targets: the reflow waits for the press to settle.
+    await waitFor(
+      () =>
+        diagnostics.desks === drawn("local-orbit") &&
+        host.querySelectorAll('.world-semantic-target[data-kind="desk"]')
+          .length === drawn("local-orbit"),
+      `expanding the 100-desk room drew ${diagnostics.desks} of ${drawn("local-orbit")} desks`,
+    );
+    check(
+      host.querySelector('button[aria-label^="Fold room orbit"]') !== null,
+      "an expanded room offers Fold",
+    );
+  }
   const deskTargets = host.querySelectorAll(
     '.world-semantic-target[data-kind="desk"]',
   ).length;
-  const totalTabs = base.connections.reduce(
-    (sum, c) => sum + (c.snapshot?.tabs.length ?? 0),
-    0,
-  );
+  const totalTabs = drawn(scale === "extended" ? "local-orbit" : null);
   check(
     deskTargets === totalTabs,
     `expected ${totalTabs} desk targets, found ${deskTargets}`,
   );
+  // Counted now: expanding a room can move other rooms out of the drawn area.
+  const roomsNow = host.querySelectorAll(".town-room").length;
+  const renames = host.querySelectorAll('[aria-label^="Rename room"]').length;
   check(
-    host.querySelectorAll('[aria-label^="Rename room"]').length === drawnRooms,
-    "every room needs a rename action",
+    renames === roomsNow,
+    `every room needs a rename action (${renames} of ${roomsNow})`,
   );
   // Room actions hidden at the overview must not take a tap.
   const hiddenActions = [
@@ -1458,12 +1492,11 @@ async function run() {
   );
 
   if (scale === "extended") {
-    // Rooms extend: every tab has a desk, the newest included, and zooming
-    // into the 100-desk room opens at its first desks.
-    const tabs = base.connections.flatMap((c) => c.snapshot?.tabs ?? []);
+    // Rooms fold past 24 desks until expanded; an expanded room extends to
+    // every tab, the newest included, and zooming in opens at its first desks.
     check(
-      diagnostics.desks === tabs.length,
-      `an extended town drew ${diagnostics.desks} of ${tabs.length} desks`,
+      diagnostics.desks === drawn("local-orbit"),
+      `an expanded room drew ${diagnostics.desks} of ${drawn("local-orbit")} desks`,
     );
     // Earlier checks leave the camera at a desk; step out until the 100-desk
     // room's card shows (on a phone, Zoom out returns to the first building).
@@ -1514,6 +1547,14 @@ async function run() {
       diagnostics.lastError === null,
       `renderer error at scale: ${diagnostics.lastError}`,
     );
+    // Fold puts the room back to its busiest 24 desks.
+    host
+      .querySelector<HTMLButtonElement>('button[aria-label^="Fold room orbit"]')
+      ?.click();
+    await waitFor(
+      () => diagnostics.desks === drawn(null),
+      `folding the 100-desk room drew ${diagnostics.desks} of ${drawn(null)} desks`,
+    );
 
     // The town takes its shape from its container: phones and portrait
     // screens stack buildings and rooms grow downward; wide screens use
@@ -1559,8 +1600,10 @@ async function run() {
       );
     press("pointerdown");
     const snapshot = base.connections[0]!.snapshot!;
-    const grown = "local-meadow";
-    for (let index = 24; index < 64; index += 1) {
+    // A room under the 24-desk fold grows to it (a folded room would not).
+    const grown = "local-lantern";
+    const had = perRoom.get(grown) ?? 0;
+    for (let index = had; index < 24; index += 1) {
       const tabId = `${grown}-tab-${index}`;
       snapshot.tabs.push({
         tab_id: tabId,
@@ -1600,11 +1643,11 @@ async function run() {
       "the town reflowed while the user held it",
     );
     press("pointerup");
-    const tabs2 = base.connections.flatMap((c) => c.snapshot?.tabs ?? []);
+    perRoom.set(grown, 24);
     await waitFor(
       () =>
         diagnostics.layout!.geometry !== before &&
-        diagnostics.desks === tabs2.length,
+        diagnostics.desks === drawn(null),
       "the grown room never reflowed after the user let go",
     );
     check(

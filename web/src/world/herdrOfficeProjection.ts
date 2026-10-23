@@ -10,6 +10,8 @@ import { boundedOptionalText, yieldWorldTask } from "./worldObject";
 export const OFFICE_PRESENTATION_BOUNDS = Object.freeze({
   rooms: 128,
   desksPerRoom: 8,
+  /** Desks a room shows until it is expanded (Town); Office never folds. */
+  foldedDesksPerRoom: 8,
   roomAgentsPerRoom: 16,
   receptionDesks: 6,
   waitingAgentsPerReception: 8,
@@ -30,6 +32,7 @@ export const TOWN_PRESENTATION_BOUNDS: OfficePresentationBounds = Object.freeze(
   {
     ...OFFICE_PRESENTATION_BOUNDS,
     desksPerRoom: 127,
+    foldedDesksPerRoom: 24,
     roomAgentsPerRoom: 127 * 4,
   },
 );
@@ -141,6 +144,11 @@ export type OfficeRoom = {
   omittedAgentCount: number;
   observedDeskCount: number;
   observedAgentCount: number;
+  /**
+   * Set when the room has more desks than it shows folded: "folded" shows
+   * the busiest `foldedDesksPerRoom`, "expanded" shows up to `desksPerRoom`.
+   */
+  deskFold?: "folded" | "expanded";
 };
 
 export type OfficeReception = {
@@ -242,6 +250,7 @@ type ProjectedRoom = {
     | "omittedAgentCount"
     | "observedDeskCount"
     | "observedAgentCount"
+    | "deskFold"
   >;
   desks: OfficeDesk[];
   agents: OfficeAgent[];
@@ -265,6 +274,7 @@ export function createOfficeProjector(
   let previousWorld: WorldObject | null = null;
   let previous: HerdrOfficeProjection | null = null;
   let previousSelected: string | null = null;
+  let previousExpanded: ReadonlySet<string> = NO_EXPANDED_ROOMS;
   const intern = <T extends { key: string }>(next: T[], prior: T[]) => {
     const byKey = new Map(prior.map((item) => [item.key, item]));
     const result = next.map((item) => {
@@ -280,11 +290,17 @@ export function createOfficeProjector(
     world: WorldObject,
     generatedAt: number,
     selectedId: string | null,
+    expandedRooms: ReadonlySet<string> = NO_EXPANDED_ROOMS,
   ): HerdrOfficeProjection => {
     let next: HerdrOfficeProjection | null = null;
-    const inputs = previous && projectionInputs.get(previous);
+    // Expanding or folding a room admits its desks again.
+    const inputs =
+      expandedRooms === previousExpanded
+        ? previous && projectionInputs.get(previous)
+        : undefined;
     if (
       previous &&
+      inputs &&
       previousWorld === world &&
       selectedId === previousSelected
     ) {
@@ -310,7 +326,7 @@ export function createOfficeProjector(
         )
         .every(
           (entry) =>
-            entry.desks.length <= bounds.desksPerRoom &&
+            entry.desks.length <= bounds.foldedDesksPerRoom &&
             entry.agents.filter((agent) => agent.destination === "room")
               .length <= bounds.roomAgentsPerRoom &&
             entry.desks.every(
@@ -390,7 +406,14 @@ export function createOfficeProjector(
       }
     }
     if (next && inputs) projectionInputs.set(next, inputs);
-    else next = projectWorldOffice(world, generatedAt, selectedId, bounds);
+    else
+      next = projectWorldOffice(
+        world,
+        generatedAt,
+        selectedId,
+        bounds,
+        expandedRooms,
+      );
     if (previous && next.rooms !== previous.rooms) {
       // Compare content once at projection admission, never once per canvas frame.
       next.rooms = intern(next.rooms, previous.rooms);
@@ -400,6 +423,7 @@ export function createOfficeProjector(
     }
     previousWorld = world;
     previousSelected = selectedId;
+    previousExpanded = expandedRooms;
     previous = next;
     return next;
   };
@@ -410,6 +434,8 @@ export function projectWorldOffice(
   generatedAt: number,
   selectedId: string | null = null,
   bounds: OfficePresentationBounds = OFFICE_PRESENTATION_BOUNDS,
+  /** Rooms the user expanded past `foldedDesksPerRoom` (room keys). */
+  expandedRooms: ReadonlySet<string> = NO_EXPANDED_ROOMS,
 ): HerdrOfficeProjection {
   const selection = selectedId ? world.nodeById.get(selectedId) : undefined;
   const selectedSpaceId =
@@ -465,10 +491,12 @@ export function projectWorldOffice(
       ? prepared.roster[prepared.agentIndex.get(selectedId) ?? -1]?.agent
       : undefined;
   const rooms = presentedRooms.map((entry) => {
+    const expanded = expandedRooms.has(entry.room.key);
+    const folds = entry.desks.length > bounds.foldedDesksPerRoom;
     const desks = boundedDesks(
       entry.desks,
       entry.agents,
-      bounds.desksPerRoom,
+      expanded ? bounds.desksPerRoom : bounds.foldedDesksPerRoom,
       (desk) =>
         entry.source.id === selectedSpaceId &&
         desk.tabRef.nativeId === selectedLeaf?.tabId,
@@ -508,6 +536,9 @@ export function projectWorldOffice(
         (agent) => agent.key === selectedId,
       ),
       omittedDeskCount: Math.max(0, entry.source.coverage.tabs - desks.length),
+      ...(folds
+        ? { deskFold: expanded ? ("expanded" as const) : ("folded" as const) }
+        : {}),
       omittedAgentCount: Math.max(
         0,
         entry.source.coverage.status.working +
@@ -1225,6 +1256,8 @@ function boundedDesks(
   );
   return desks.filter((desk) => admitted.has(desk));
 }
+
+const NO_EXPANDED_ROOMS: ReadonlySet<string> = new Set();
 
 /** Past the bound, this many newest tabs always keep a desk. */
 const NEWEST_DESKS_KEPT = 3;
