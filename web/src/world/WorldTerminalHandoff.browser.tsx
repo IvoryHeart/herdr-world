@@ -4174,8 +4174,8 @@ async function run() {
     () => `three Inspectors in narrow Columns: ${narrowLayoutDiagnostic()}`,
   );
   await settle();
-  // Every view stays one tap away: as a tab, or under the narrowest
-  // window's ⋯ More views.
+  // Every view stays one tap away: as a tab, or, in the narrowest window,
+  // under the window's one ⋯ menu beside its actions.
   check(
     [
       ...document.querySelectorAll<HTMLElement>(
@@ -4189,7 +4189,9 @@ async function run() {
           ),
         ].every((tab) => tab.getClientRects().length > 0) ||
         (window
-          .querySelector<HTMLElement>(".workspace-inspector-tabs-more")
+          .querySelector<HTMLElement>(
+            'button[aria-label="More actions for Inspector window"]',
+          )
           ?.getClientRects().length ?? 0) > 0,
     ),
     "a narrow Inspector hid views without offering More views",
