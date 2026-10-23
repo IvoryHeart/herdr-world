@@ -144,7 +144,7 @@ import { checkAnchor } from "./world/board-anchor";
 import { herdrEventName } from "./utils/herdr-events";
 import { agentKinds, launchAgent } from "./agent/launch";
 import { profileLaunch } from "./agent/profile-launch";
-import { ProfileStore } from "./agent/profile-store";
+import { ProfileStore, profileWrite } from "./agent/profile-store";
 import { discoverSkills } from "./agent/skills";
 import { harnessReadiness, openHarnessLogin } from "./agent/harness-readiness";
 import { tabCardKey } from "../../shared/terminalColor";
@@ -1282,13 +1282,10 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
     }
     return;
   }
-  if (method === "world.profiles.save" || method === "world.profiles.delete") {
+  const profilesWrite = profileWrite(method);
+  if (profilesWrite) {
     try {
-      const p = (params ?? {}) as Record<string, unknown>;
-      const result =
-        method === "world.profiles.save"
-          ? profiles().save(p.profile)
-          : profiles().delete(String(p.id ?? ""));
+      const result = profilesWrite(profiles(), params);
       publishProfilesChanged(result.revision);
       sendReply({ id, result }, "world-profiles-write");
     } catch (error) {

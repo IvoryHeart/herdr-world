@@ -4,6 +4,7 @@ import {
   type AgentLook,
   type AgentProfile,
 } from "../../../shared/agentProfile";
+import type { ChimeSettings } from "../../../shared/chimes";
 import type { TownLook } from "./town/townSprites";
 
 /**
@@ -17,11 +18,15 @@ export type ProfileAssignment = {
   terminal_id: string;
   profile_id: string;
 };
+export type TerminalKey = { connection_id: string; terminal_id: string };
 export type ProfilesDocument = {
   version: 1;
   revision: number;
   profiles: AgentProfile[];
   assignments: ProfileAssignment[];
+  chimes: ChimeSettings;
+  /** The one Town master, assigned only by the owner. */
+  town_master: TerminalKey | null;
 };
 type State = { document: ProfilesDocument | null; error: string | null };
 
@@ -103,6 +108,11 @@ export const saveProfile = (profile: AgentProfile) =>
   write("world.profiles.save", { profile });
 export const deleteProfile = (id: string) =>
   write("world.profiles.delete", { id });
+export const saveChimes = (chimes: ChimeSettings) =>
+  write("world.chimes.save", { chimes });
+/** Give the Town master role to a terminal (null clears it). */
+export const setTownMaster = (terminal: TerminalKey | null, replace = false) =>
+  write("world.town_master.set", { terminal, replace });
 
 /** Where a new agent starts: one workspace on one host's current runtime. */
 export type LaunchTarget = {
@@ -268,18 +278,30 @@ export function townLookOf(look: AgentLook): TownLook {
 }
 
 /** The look of the profile an agent was launched from, if any. */
-export function profileLookFor(
+/** The profile a terminal was launched from, if World launched it. */
+export function profileFor(
   document: ProfilesDocument | null,
   connectionId: string,
   terminalId: string,
-): TownLook | null {
+): AgentProfile | null {
   if (!document) return null;
   // The service keeps one assignment per terminal.
   const assignment = document.assignments.find(
     (a) => a.connection_id === connectionId && a.terminal_id === terminalId,
   );
-  const profile =
-    assignment && document.profiles.find((p) => p.id === assignment.profile_id);
+  return (
+    (assignment &&
+      document.profiles.find((p) => p.id === assignment.profile_id)) ??
+    null
+  );
+}
+
+export function profileLookFor(
+  document: ProfilesDocument | null,
+  connectionId: string,
+  terminalId: string,
+): TownLook | null {
+  const profile = profileFor(document, connectionId, terminalId);
   return profile ? townLookOf(profile.look) : null;
 }
 

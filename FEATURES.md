@@ -779,6 +779,20 @@ load asynchronously; editing the name takes precedence over a late suggestion.
   inspection has the metadata limits described above.
 - Enable local browser alerts and background Web Push in **Menu → Behavior &
   automation → Task notifications**. See [push setup and troubleshooting](docs/DEPLOYMENT.md#web-push-notifications).
+- **Chimes.** While a World page is open, World plays its own chime for a
+  change that needs you: a sound for who (the Town master, the crew, or the
+  agent's profile) and a pattern for why (needs you: two rising notes;
+  for you: a soft double knock; finished: one falling note). A toast always
+  says who and why, or "sender unknown" when Herdr didn't say. Changes within
+  3 seconds share one chime and one "N changes" toast. **Menu → Sounds** sets
+  this device's chimes and volume (per device), the Town master's and crew's
+  sounds and which patterns play (all your browsers), and who the Town master
+  is: only you assign it, and its needs-you chime still plays while you focus
+  on other agents. A profile's **Look & sound** gives its agents their own
+  chime. An agent sends you a "for you" with `herdr notification show <title>`
+  and no `--sound`. While World chimes, its notifications are silent; Herdr's
+  own client may still play its sound (`[ui.sound] enabled = false` turns it
+  off).
 - Multiple browsers receive pushed events. Pause/resume yours, see client counts,
   or pause others. Herdr semantic task alerts use the relevant pane when Herdr
   supplies one; pane-less alerts open World without guessing a target. Older

@@ -64,7 +64,7 @@ describe("taskEventFromSemanticNotification", () => {
       taskEventFromSemanticNotification(
         notification({ ...custom, title: "hello", sound: null }),
       )?.kind,
-    ).toBe("completed");
+    ).toBe("message");
   });
 
   test("drops Herdr update notices", () => {

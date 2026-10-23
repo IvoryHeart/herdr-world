@@ -25,9 +25,11 @@ import {
   Wind,
   Bug,
   Shirt,
+  Volume2,
 } from "lucide-react";
 import { APP_VERSION } from "../version";
 import { worldLocalStorage } from "../browserStorage";
+import { openSounds } from "../chimes/chimeHost";
 import { logoutBrowserSession } from "../api";
 import { connectionHttpPath } from "../connectionHttp";
 import { useLayoutPreferences } from "../layoutPreferences";
@@ -468,6 +470,19 @@ export function ConfigMenu({
                     onClick={() => {
                       setOpen(false);
                       onOpenAgentProfiles();
+                    }}
+                  />
+                ) : null}
+                {/* Sounds sits with the agents' other settings. */}
+                {onOpenAgentProfiles ? (
+                  <ConfigMenuItem
+                    icon={<Volume2 size={15} />}
+                    label="Sounds"
+                    className="config-menu-item-row"
+                    description="Chimes for agents that need you, and the Town master"
+                    onClick={() => {
+                      setOpen(false);
+                      openSounds();
                     }}
                   />
                 ) : null}

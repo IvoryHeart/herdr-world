@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { STARTER_PROFILES } from "../../../shared/agentProfile";
+import { DEFAULT_CHIMES } from "../../../shared/chimes";
 import {
   harnessLabel,
   profileLookFor,
@@ -16,6 +17,8 @@ const document: ProfilesDocument = {
   assignments: [
     { connection_id: "local", terminal_id: "term_1", profile_id: "designer" },
   ],
+  chimes: DEFAULT_CHIMES,
+  town_master: null,
 };
 
 describe("Agent profiles in the browser", () => {

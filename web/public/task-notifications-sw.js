@@ -27,6 +27,20 @@ function validNotificationTarget(target) {
   );
 }
 
+// A World page that plays its own chimes says so every few seconds; while
+// it does, push notifications are silent so the owner hears one sound. If the
+// worker restarts and forgets, the OS sound plays again.
+let chimesActiveUntil = 0;
+self.addEventListener("message", (event) => {
+  const data = event.data;
+  if (
+    data?.type === "herdr-world:chimes-active" &&
+    Number.isFinite(data.until) &&
+    data.until <= Date.now() + 60_000
+  )
+    chimesActiveUntil = data.until;
+});
+
 self.addEventListener("push", (event) => {
   event.waitUntil(
     (async () => {
@@ -49,6 +63,7 @@ self.addEventListener("push", (event) => {
               : "Open Herdr World to check your agents.",
           tag:
             typeof message?.tag === "string" ? message.tag : "herdr-world-task",
+          silent: chimesActiveUntil > Date.now(),
           data: {
             type: "herdr-world:task-notification-activate",
             target: valid ? target : null,

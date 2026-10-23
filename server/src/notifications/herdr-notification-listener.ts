@@ -34,8 +34,15 @@ export function taskEventFromSemanticNotification(
       kind = "blocked";
       break;
     case "custom":
-      // `herdr notification show` carries no kind; its sound says which one.
-      kind = notification.sound === "request" ? "blocked" : "completed";
+      // `herdr notification show` arrives without a pane. Its sound says
+      // what it is: request asks for the owner, done reports a finish
+      // (observer alerts), and no sound is a message for the owner.
+      kind =
+        notification.sound === "request"
+          ? "blocked"
+          : notification.sound === "done"
+            ? "completed"
+            : "message";
       break;
     default:
       return null;

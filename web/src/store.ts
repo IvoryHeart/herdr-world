@@ -71,6 +71,15 @@ import {
   prepareTaskNotifications,
   showTaskNotification,
 } from "./taskNotifications";
+import {
+  announceChange,
+  burstDetail,
+  resetChimeBursts,
+} from "./chimes/chimeCenter";
+import {
+  type HerdrTaskNotification,
+  parseHerdrTaskNotification,
+} from "./herdrTaskNotification";
 import { syncTaskPush, type TaskNotificationPreferences } from "./taskPush";
 import { disposeTerminalConnection } from "./terminalConnection";
 import {
@@ -1154,6 +1163,8 @@ function maybeShowBrowserTaskNotification(
     "connectionId" | "runtimeGeneration"
   > | null,
   target: NotificationTarget | null,
+  /** World plays its own chime on this page, so the OS stays quiet. */
+  silent = false,
 ) {
   if (
     !state.taskNotificationsEnabled ||
@@ -1165,7 +1176,7 @@ function maybeShowBrowserTaskNotification(
   if (notificationPermission() !== "granted") return;
   void showTaskNotification(
     title,
-    { body, tag },
+    { body, tag, ...(silent ? { silent: true } : {}) },
     target,
     () =>
       state.taskNotificationsEnabled &&
@@ -1244,20 +1255,25 @@ function notifyTaskCompleted(
   connectionId = state.activeConnectionId,
 ) {
   const blocked = pane.agent_status === "blocked";
-  if (
-    !state.taskNotificationsEnabled ||
-    !state.taskNotificationPreferences[blocked ? "blocked" : "completed"]
-  )
-    return;
+  const notify =
+    state.taskNotificationsEnabled &&
+    state.taskNotificationPreferences[blocked ? "blocked" : "completed"];
   const runtimeGeneration = connectionSnapshot(
     state,
     connectionId,
   ).serverRuntimeGeneration;
   if (runtimeGeneration === null) return;
   const body = taskNotificationBody(pane, workspaces, tabs);
-  const title = blocked
-    ? "Herdr World agent needs input"
-    : "Herdr World task completed";
+  const announcement = announceChange({
+    kind: blocked ? "blocked" : "completed",
+    connectionId,
+    terminalId: pane.terminal_id || null,
+    agent: pane.display_agent ?? pane.agent ?? null,
+    detail: null,
+  });
+  // A chime always comes with its toast; the OS notification keeps its switch.
+  if (!notify && !announcement.chimed) return;
+  const title = announcement.message;
   const target = taskNotificationTarget(connectionId, runtimeGeneration, pane);
   const sessionKnown = !pane.agent || Boolean(target.agentSessionId);
   const detail = sessionKnown
@@ -1266,8 +1282,8 @@ function notifyTaskCompleted(
   set({
     notice: {
       kind: blocked ? "info" : "success",
-      message: blocked ? "Agent needs input" : "Task completed",
-      detail,
+      message: announcement.message,
+      detail: burstDetail(announcement, detail),
       ...(sessionKnown
         ? {
             actionLabel: pane.agent ? "Open agent" : "Open workspace",
@@ -1281,51 +1297,15 @@ function notifyTaskCompleted(
       autoDismissMs: TASK_COMPLETED_TOAST_DISMISS_MS,
     },
   });
-  maybeShowBrowserTaskNotification(
-    title,
-    detail,
-    taskNotificationTag(target),
-    target,
-    sessionKnown ? target : null,
-  );
-}
-
-/** Server-relayed Herdr SemanticNotification (`herdr-world.task_notification`). */
-export interface HerdrTaskNotification {
-  sessionIdentityUnavailable?: true;
-  agentSessionId?: string;
-  kind: "completed" | "blocked";
-  agent: string;
-  title: string;
-  body: string | null;
-  workspaceId: string | null;
-  paneId: string | null;
-}
-
-function optionalEventText(value: unknown): string | null {
-  return typeof value === "string" && value.length > 0 ? value : null;
-}
-
-export function parseHerdrTaskNotification(
-  data: Record<string, unknown>,
-): HerdrTaskNotification | null {
-  const kind = data.kind;
-  const title = optionalEventText(data.title);
-  if ((kind !== "completed" && kind !== "blocked") || !title) return null;
-  return {
-    kind,
-    agent: optionalEventText(data.agent) ?? "Agent",
-    title,
-    body: optionalEventText(data.body),
-    workspaceId: optionalEventText(data.workspace_id),
-    paneId: optionalEventText(data.pane_id),
-    ...(data.session_identity_unavailable === true
-      ? { sessionIdentityUnavailable: true as const }
-      : {}),
-    ...(optionalEventText(data.agent_session_id)
-      ? { agentSessionId: optionalEventText(data.agent_session_id)! }
-      : {}),
-  };
+  if (notify)
+    maybeShowBrowserTaskNotification(
+      title,
+      burstDetail(announcement, detail),
+      taskNotificationTag(target),
+      target,
+      sessionKnown ? target : null,
+      announcement.silent,
+    );
 }
 
 /** True when the bridge relays Herdr's notification decisions. */
@@ -1343,15 +1323,14 @@ function notifyHerdrTask(
   connectionId: string,
   notification: HerdrTaskNotification,
 ) {
-  if (
-    !state.taskNotificationsEnabled ||
-    !state.taskNotificationPreferences[notification.kind]
-  )
-    return;
-  const runtimeGeneration = connectionSnapshot(
-    state,
-    connectionId,
-  ).serverRuntimeGeneration;
+  // A message for the owner follows the completed switch, as before.
+  const notify =
+    state.taskNotificationsEnabled &&
+    state.taskNotificationPreferences[
+      notification.kind === "message" ? "completed" : notification.kind
+    ];
+  const snapshot = connectionSnapshot(state, connectionId);
+  const runtimeGeneration = snapshot.serverRuntimeGeneration;
   if (runtimeGeneration === null) return;
   const { workspaceId, paneId } = notification;
   // Someone looking at the pane already sees it; Herdr stays the policy owner.
@@ -1373,15 +1352,33 @@ function notifyHerdrTask(
             : {}),
         })
       : null;
+  // The reason line carries a message's title; Herdr's body follows it.
+  const message = notification.kind === "message";
+  const text = notification.body ?? (message ? "" : notification.title);
   const detail = notification.sessionIdentityUnavailable
-    ? `${notification.body ?? notification.agent} · Original agent session identity is unavailable; this notification cannot navigate to a replacement.`
-    : (notification.body ?? notification.agent);
+    ? `${text} · Original agent session identity is unavailable; this notification cannot navigate to a replacement.`
+    : text;
+  const pane = paneId
+    ? snapshot.panes.find((candidate) => candidate.pane_id === paneId)
+    : undefined;
+  const announcement = announceChange({
+    kind: notification.kind,
+    connectionId,
+    terminalId: pane?.terminal_id || null,
+    agent: notification.agentKnown
+      ? notification.agent
+      : (pane?.display_agent ?? pane?.agent ?? null),
+    // Without a pane, Herdr's title is all that says what it is.
+    detail: message || !paneId ? notification.title : null,
+  });
+  // A chime always comes with its toast; the OS notification keeps its switch.
+  if (!notify && !announcement.chimed) return;
   const blocked = notification.kind === "blocked";
   set({
     notice: {
       kind: blocked ? "info" : "success",
-      message: notification.title,
-      detail,
+      message: announcement.message,
+      detail: burstDetail(announcement, detail),
       ...(target
         ? {
             actionLabel: "Open agent",
@@ -1395,20 +1392,22 @@ function notifyHerdrTask(
       autoDismissMs: TASK_COMPLETED_TOAST_DISMISS_MS,
     },
   });
-  maybeShowBrowserTaskNotification(
-    notification.title,
-    detail,
-    target
-      ? taskNotificationTag(target)
-      : JSON.stringify([
-          "herdr-world-task",
-          connectionId,
-          runtimeGeneration,
-          notification.title,
-        ]),
-    scope,
-    target,
-  );
+  if (notify)
+    maybeShowBrowserTaskNotification(
+      announcement.message,
+      burstDetail(announcement, detail),
+      target
+        ? taskNotificationTag(target)
+        : JSON.stringify([
+            "herdr-world-task",
+            connectionId,
+            runtimeGeneration,
+            notification.title,
+          ]),
+      scope,
+      target,
+      announcement.silent,
+    );
 }
 
 function notifyRangerTask(notification: AssistantTaskNotification) {
@@ -5256,6 +5255,7 @@ export const __storeTesting = {
     queuedConnectionKeys.clear();
 
     taskCompletionTracker.clear();
+    resetChimeBursts();
     state = {
       ...snapshot,
       catalogueReady:

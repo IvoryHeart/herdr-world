@@ -69,7 +69,7 @@ function fixture() {
     },
     registration: {
       active: {
-        scriptURL: origin + "/task-notifications-sw.js?v=2",
+        scriptURL: origin + "/task-notifications-sw.js?v=3",
         state: "activated",
       },
       showNotification() {},

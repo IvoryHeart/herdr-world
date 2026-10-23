@@ -1,7 +1,8 @@
 import { herdrEventName } from "../utils/herdr-events";
 
 export interface TaskEvent {
-  kind: "completed" | "blocked";
+  /** `message`: a Herdr custom notification addressed to the owner. */
+  kind: "completed" | "blocked" | "message";
   /** Absent for Herdr notifications that are not tied to a pane. */
   workspaceId?: string;
   paneId?: string;

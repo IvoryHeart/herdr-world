@@ -240,8 +240,9 @@ a starting brief and a look in Town. World starts it in a new tab for you.
    a permission mode. On **Skills & tools**, tap the skills (found in the
    room's `.agents/skills` and `.claude/skills` and your harness folders) and,
    for Claude Code, the tools it may use. On **Brief**, write the first prompt;
-   `{{task}}` is filled with what you type when you launch. On **Look**, dress
-   the character and watch it walk, turn and sit in the preview. **What a
+   `{{task}}` is filled with what you type when you launch. On **Look & sound**,
+   dress the character and watch it walk, turn and sit in the preview, and
+   pick its **Chime** (or keep the class default). **What a
    launch runs** shows the exact Herdr command. Press **Save**.
 3. Open **New agent**: **Actions → New agent**, **New agent** on a
    room's plaque (on a phone, tap the room first), or the robot beside **+** in
@@ -259,6 +260,21 @@ a starting brief and a look in Town. World starts it in a new tab for you.
 
 **You are done when:** an agent you started from a profile is answering in its
 own tab, dressed as you chose in Town.
+
+### Hear who needs you
+
+<a id="chimes"></a>
+
+1. Open **Menu → Sounds**. Under **This device**, leave **Play chimes on this
+   device** on and tap **Needs you**, **For you** and **Finished** to hear the
+   three patterns. Turn it off on devices that shouldn't chime.
+2. Under **Town master**, choose your coordinating agent (for example
+   FirstMate) and tap **Make Town master**. Its chime is a sound of its own.
+3. Tap anywhere in World once (browsers start sound only after a tap). When an
+   agent finishes or needs you, World chimes and a toast says who and why.
+
+**You are done when:** an agent finishing in another tab makes a chime and a
+toast naming it.
 
 ### Use Board: notes and strings for your agents
 
