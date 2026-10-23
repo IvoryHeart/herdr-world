@@ -15,7 +15,10 @@ import type { TownCall } from "./TownRail";
 export type TownSummary = {
   counts: { needsYou: number; working: number; finished: number };
   needsYou: readonly TownSummaryItem[];
-  /** Unseen finishes, newest first; ages come from Herdr's activity time. */
+  /**
+   * Unreviewed finishes, most recently active first. Their time is Herdr's
+   * last session activity, not the finish itself: show it as "last active".
+   */
   finished: readonly TownSummaryItem[];
   hosts: readonly TownSummaryHost[];
   spend: TownSummarySpend;
@@ -26,7 +29,7 @@ export type TownSummaryItem = {
   hostLabel: string;
   roomKey: string;
   roomLabel: string;
-  /** Epoch ms: waiting since, or finished at when Herdr reports it. */
+  /** Epoch ms: waiting since, or a finish's last activity when known. */
   since: number | null;
 };
 

@@ -52,7 +52,7 @@ export function TownSummaryPanel({
       </section>
       <section aria-labelledby="town-summary-finished">
         <h3 id="town-summary-finished">
-          Finished, not yet reviewed <span>{summary.counts.finished}</span>
+          Finished, not reviewed <span>{summary.counts.finished}</span>
         </h3>
         {summary.finished.length ? (
           <ul>
@@ -60,10 +60,12 @@ export function TownSummaryPanel({
               <SummaryItem
                 key={item.agent.key}
                 item={item}
+                // Herdr reports the session's last activity, not the moment
+                // it finished, so the age says so.
                 detail={
                   item.since === null
                     ? "finished"
-                    : `finished ${townSummaryAge(item.since, now)}`
+                    : `last active ${townSummaryAge(item.since, now)}`
                 }
                 action="Open"
                 onOpen={onOpenAgent}

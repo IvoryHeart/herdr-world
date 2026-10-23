@@ -7,6 +7,10 @@ import type { WorldRuntimeConnection } from "../runtimeStore";
 import { buildWorldObject, type WorldObject } from "../worldObject";
 import TownView from "../TownView";
 import type { BoardDocument, BoardOp } from "../board/boardDocument";
+import {
+  WorldPanelsContext,
+  type WorldPanelEntry,
+} from "../windows/WorldPanel";
 import { TOWN_SHAPES, townShapeFor } from "./townLayout";
 import "../../components/TerminalView.css";
 import "../../components/MobileControls.css";
@@ -537,10 +541,28 @@ async function run() {
       })),
     }),
   );
+  // A stand-in for WorldControlPlane's panel windows: Town's summary window
+  // renders its body into this element while open.
+  const panelBody = document.createElement("div");
+  panelBody.className = "fixture-panel-body";
+  document.body.append(panelBody);
+  const panelEntries: WorldPanelEntry[] = [];
+  const panels = {
+    register: (entry: WorldPanelEntry) => {
+      panelEntries.push(entry);
+      return () => {
+        const at = panelEntries.indexOf(entry);
+        if (at >= 0) panelEntries.splice(at, 1);
+      };
+    },
+    bodies: { "panel:town-summary": panelBody },
+  };
   const root = createRoot(host);
   root.render(
     <StrictMode>
-      <Harness />
+      <WorldPanelsContext.Provider value={panels}>
+        <Harness />
+      </WorldPanelsContext.Provider>
     </StrictMode>,
   );
   await waitFor(
@@ -613,28 +635,61 @@ async function run() {
         : host.querySelectorAll(".town-room").length === totalRooms,
     "the town's rooms were never drawn",
   );
-  // Phones show the Town board as a compact chip that opens the Town summary
-  // window; wider screens show the board, whose Summary button opens it.
+  // Phones show the Town board as a compact chip, wider screens the board and
+  // its Summary button; either opens the Town summary window, whose
+  // needs-you count is the sign's, the chip's and the rail's.
   {
     const chip = host.querySelector<HTMLButtonElement>(".town-board-chip")!;
     const board = host.querySelector<HTMLElement>(".town-board")!;
     const shown = (element: HTMLElement) =>
       getComputedStyle(element).display !== "none";
-    if (window.innerWidth <= 640)
-      check(
-        shown(chip) &&
-          !shown(board) &&
-          chip.getAttribute("aria-haspopup") === "dialog" &&
-          chip.getAttribute("aria-label")?.startsWith("Town summary:") === true,
-        "a phone shows a chip that opens the Town summary, not the board",
-      );
-    else
-      check(
-        !shown(chip) &&
-          shown(board) &&
-          board.querySelector(".town-board-open") !== null,
-        "a wide screen shows the Town board with its Summary button",
-      );
+    const phone = window.innerWidth <= 640;
+    check(
+      phone ? shown(chip) && !shown(board) : !shown(chip) && shown(board),
+      phone
+        ? "a phone shows the Town board chip, not the board"
+        : "a wide screen shows the Town board, not its chip",
+    );
+    const signNeeds = Number(
+      board.querySelectorAll("dd")[1]?.textContent ?? "NaN",
+    );
+    const chipNeeds = Number(
+      chip.querySelector('[data-status="blocked"]')?.textContent?.slice(1),
+    );
+    (phone
+      ? chip
+      : board.querySelector<HTMLButtonElement>(".town-board-open")!
+    ).click();
+    await waitFor(
+      () =>
+        panelEntries.some((entry) => entry.id === "panel:town-summary") &&
+        panelBody.querySelector(".town-summary") !== null,
+      "the Town summary window did not open",
+    );
+    const windowNeeds = Number(
+      panelBody.querySelector("#town-summary-needs span")?.textContent,
+    );
+    check(
+      windowNeeds === signNeeds && windowNeeds === chipNeeds,
+      `the summary needs-you count ${windowNeeds} differs from the sign ${signNeeds} or chip ${chipNeeds}`,
+    );
+    const sections = [...panelBody.querySelectorAll("h3")].map((heading) =>
+      heading.textContent?.replace(/\s*\d+$/, ""),
+    );
+    check(
+      sections.join("|") ===
+        "Needs you|Finished, not reviewed|Hosts and rooms|Spend",
+      `summary sections out of order: ${sections.join(", ")}`,
+    );
+    check(
+      panelBody.textContent?.includes("No cost data") === true,
+      "a summary without metrics says there is no cost data",
+    );
+    panelEntries.find((entry) => entry.id === "panel:town-summary")!.onClose();
+    await waitFor(
+      () => panelBody.querySelector(".town-summary") === null,
+      "closing the Town summary window left its body",
+    );
   }
   const roomCards = host.querySelectorAll(".town-room-card");
   const drawnRooms = host.querySelectorAll(".town-room").length;

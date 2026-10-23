@@ -107,8 +107,14 @@ test("the summary counts what the call rail shows, room by room", () => {
     beta: ["working", "idle"],
   });
   const summary = townSummary(projection, callsOf(projection), NO_METRICS);
-  // One shared needs-you count: the rail's blocked calls.
+  // One shared needs-you count: the rail's blocked calls, which reception
+  // also shows, and which the sign, the chip and the window all read.
   expect(summary.counts).toEqual({ needsYou: 1, working: 2, finished: 1 });
+  const atReception = projection.receptions
+    .flatMap((reception) => reception.waitingAgents)
+    .filter((agent) => agent.semanticStatus === "blocked").length;
+  expect(summary.counts.needsYou).toBe(atReception);
+  expect(summary.needsYou.length).toBe(summary.counts.needsYou);
   expect(summary.needsYou.map((item) => item.roomLabel)).toEqual(["alpha"]);
   expect(summary.needsYou[0]!.since).toBe(500);
   // A finish carries Herdr's activity time, so it can show its age.
@@ -176,7 +182,7 @@ test("the summary panel reads in attention order and never shows zero spend", as
   );
   const order = [
     "Needs you",
-    "Finished, not yet reviewed",
+    "Finished, not reviewed",
     "Hosts and rooms",
     "Spend",
   ];
@@ -184,6 +190,9 @@ test("the summary panel reads in attention order and never shows zero spend", as
   expect(at.every((index) => index >= 0)).toBe(true);
   expect([...at].sort((a, b) => a - b)).toEqual(at);
   expect(html).toContain("waiting 12 m");
+  // A finish's time is its last activity, never claimed as the finish.
+  expect(html).toContain("last active");
+  expect(html).not.toContain("finished 1");
   expect(html).toContain("Show room alpha in Town");
   expect(html).toContain("No cost data");
   expect(html).not.toContain("$0.00");
