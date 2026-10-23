@@ -25,7 +25,7 @@ export type MainGateFacts = {
   conclusion: "success" | "failure";
   pr?: { number: number; title: string };
   /** The open main-red issue and whether this commit is at or after its red commit. */
-  openIssue?: { number: number; atOrAfterRed: boolean };
+  openIssue?: { number: number; redSha?: string; atOrAfterRed: boolean };
   /** A closed main-red issue for this same commit, e.g. a rerun that failed again. */
   closedIssueForSha?: number;
   revertBranchExists: boolean;
@@ -53,12 +53,13 @@ export function planMainGate(facts: MainGateFacts): MainGatePlan {
     ? `#${facts.pr.number} (${facts.pr.title})`
     : `commit ${short}`;
   if (facts.conclusion === "success")
-    return facts.openIssue?.atOrAfterRed
+    return facts.openIssue?.atOrAfterRed && facts.openIssue.redSha
       ? {
           kind: "resolve",
           issue: facts.openIssue.number,
           body: `main is green again at ${facts.sha}: ${facts.runUrl}. Closing this issue and its prepared revert.`,
-          revertBranch,
+          // The revert prepared for this issue's red commit, not for the green one.
+          revertBranch: `revert/main-${facts.openIssue.redSha.slice(0, 8)}`,
         }
       : { kind: "none" };
   if (facts.openIssue)
@@ -154,6 +155,7 @@ async function run() {
     pr: pr && { number: pr.number, title: pr.title },
     openIssue: open && {
       number: open.number,
+      redSha,
       // A late green run of an older commit must not close a newer break.
       atOrAfterRed:
         !!redSha && (await git(["merge-base", "--is-ancestor", redSha, sha])),
@@ -189,8 +191,9 @@ async function run() {
         "number,headRefName",
       ]),
     ) as Array<{ number: number; headRefName: string }>;
-    for (const revert of reverts.filter((pull) =>
-      pull.headRefName.startsWith("revert/main-"),
+    // Only this issue's revert; another break's revert PR stays for the owner.
+    for (const revert of reverts.filter(
+      (pull) => pull.headRefName === plan.revertBranch,
     ))
       await gh([
         "pr",
