@@ -43,7 +43,14 @@ test("a split into a new file with new imports and exports is a move", () => {
   expect(report.lost).toEqual([]);
   expect(report.extra).toEqual([]);
   expect(report.runs).toEqual([
-    { from: "web/src/store.ts", to: "web/src/storeHelpers.ts", lines: 3 },
+    {
+      from: "web/src/store.ts",
+      fromLine: 10,
+      to: "web/src/storeHelpers.ts",
+      toLine: 5,
+      lines: 3,
+      first: "function helper(value: number) {",
+    },
   ]);
 });
 
@@ -162,4 +169,58 @@ test("plumbing and blank lines are ignored", () => {
   ])
     expect(normalize(line)).toBeUndefined();
   expect(normalize("export const a = 1;")).toBe("const a = 1;");
+});
+
+test("a block of three or more lines reordered within its file is not a move", () => {
+  const report = matchMoves(
+    diffHunks(
+      diff(
+        ...file(
+          "src/handler.ts",
+          "src/handler.ts",
+          "@@ -1,3 +1,0 @@",
+          "-authenticate();",
+          "-authorize();",
+          "-validate();",
+          "@@ -7,0 +4,3 @@",
+          "+authenticate();",
+          "+authorize();",
+          "+validate();",
+        ),
+      ),
+    ),
+  );
+  expect(report.runs).toEqual([]);
+  expect(report.lost).toHaveLength(3);
+  expect(report.extra).toHaveLength(3);
+});
+
+test("blocks moved to another file out of their order are reported", () => {
+  const body = (name: string) => [
+    `function ${name}() {`,
+    `  ${name}Step();`,
+    `  return ${name};`,
+  ];
+  const report = matchMoves(
+    diffHunks(
+      diff(
+        ...file(
+          "big.ts",
+          "big.ts",
+          "@@ -1,6 +1,0 @@",
+          ...[...body("first"), ...body("second")].map((line) => `-${line}`),
+        ),
+        ...file(
+          "/dev/null",
+          "small.ts",
+          "@@ -0,0 +1,6 @@",
+          ...[...body("second"), ...body("first")].map((line) => `+${line}`),
+        ),
+      ),
+    ),
+  );
+  // One of the two blocks keeps its place; the other moved out of order.
+  expect(report.runs).toHaveLength(1);
+  expect(report.lost).toHaveLength(3);
+  expect(report.extra).toHaveLength(3);
 });

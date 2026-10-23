@@ -237,9 +237,14 @@ Source files may not regrow. `bun run check:size` (part of `check` and the
 static lane) allows at most 1000 lines per non-test source file; larger files are
 listed in `scripts/file-size-exceptions.json` and may not grow past their recorded
 size. The list only shrinks: no new or raised entries. When a split shrinks a file,
-lower or remove its entry in the same PR. A split PR should be a pure move:
-`bun run check:move` lists every removed line that does not reappear and every
-added line that was not removed (imports and exports aside); attach its output.
+lower or remove its entry in the same PR; a split that ends an unratcheted entry
+records the file's post-split size as its limit. A split PR should only move code.
+`bun run check:move` is a move inventory: it fails on any removed line that does
+not reappear in another file, any added line that was not removed, code moved
+within its own file and blocks that change order; it prints every moved run with
+its source and destination lines. Attach its output. Reviewers still read the
+runs and the import/export lines it ignores; it is not a proof of no behaviour
+change.
 
 Unlabeled PRs get `documentation` (docs-only), `dependencies` (dependency updates),
 `bug` (fix titles), or `enhancement` (other code). Release preparation gets

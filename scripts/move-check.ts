@@ -7,9 +7,10 @@
  * import/export plumbing and an `export ` prefix gained by a moved declaration
  * are ignored, with parser state reset at every hunk and file boundary.
  *
- * What it prints is what a reviewer reads: the lines that did not move, and
- * where each moved run went. Reordering whole runs is still a move here, so
- * the run list is part of the review.
+ * Code that stays in its own file is not moved (a split moves code between
+ * files), and runs between the same two files must keep their order. This is
+ * a move inventory, not a proof: the reviewer reads the leftovers, every run's
+ * source and destination, and the import/export lines it ignores.
  *
  *   bun run check:move [base]   (default: merge-base with origin/main)
  */
@@ -26,14 +27,17 @@ export function normalize(line: string): string | undefined {
   return text.replace(/^export (default )?/, "");
 }
 
-export type Hunk = { file: string; sign: "-" | "+"; lines: string[] };
+export type Line = { text: string; at: number };
+export type Hunk = { file: string; sign: "-" | "+"; lines: Line[] };
 
-/** Removed and added hunks of a unified diff, plumbing skipped. */
+/** Removed and added hunks of a unified diff, plumbing skipped, with line numbers. */
 export function diffHunks(diff: string): Hunk[] {
   const hunks: Hunk[] = [];
   let file = "";
   let current: Hunk | undefined;
   let inBlock = false;
+  let oldLine = 0;
+  let newLine = 0;
   const close = () => {
     if (current?.lines.length) hunks.push(current);
     current = undefined;
@@ -42,6 +46,8 @@ export function diffHunks(diff: string): Hunk[] {
     if (raw.startsWith("diff --git ") || raw.startsWith("@@")) {
       close();
       inBlock = false;
+      const header = /^@@ -(\d+)(?:,\d+)? \+(\d+)/.exec(raw);
+      if (header) [oldLine, newLine] = [Number(header[1]), Number(header[2])];
       continue;
     }
     if (raw.startsWith("+++ ")) {
@@ -54,6 +60,7 @@ export function diffHunks(diff: string): Hunk[] {
     }
     const sign = raw[0];
     if (sign !== "-" && sign !== "+") continue;
+    const at = sign === "-" ? oldLine++ : newLine++;
     if (current && current.sign !== sign) close();
     const text = raw.slice(1).trim();
     // Members of a multi-line import/export list, within this hunk only.
@@ -68,61 +75,107 @@ export function diffHunks(diff: string): Hunk[] {
     const normal = normalize(raw.slice(1));
     if (normal === undefined) continue;
     current ??= { file, sign, lines: [] };
-    current.lines.push(normal);
+    current.lines.push({ text: normal, at });
   }
   close();
   return hunks;
 }
 
+export type Run = {
+  from: string;
+  fromLine: number;
+  to: string;
+  toLine: number;
+  lines: number;
+  first: string;
+};
 export type MoveReport = {
   lost: Array<{ file: string; line: string }>;
   extra: Array<{ file: string; line: string }>;
-  runs: Array<{ from: string; to: string; lines: number }>;
+  runs: Run[];
 };
 
-/** Match removed hunks to added hunks as in-order runs; report what did not move. */
+/**
+ * Match removed hunks to added hunks as in-order runs; report what did not
+ * move. A run that stays in its own file, or lands out of order relative to
+ * the other runs between the same two files, is a reorder, not a move.
+ */
 export function matchMoves(hunks: Hunk[]): MoveReport {
   const added = hunks.filter((hunk) => hunk.sign === "+");
   const used = added.map((hunk) => hunk.lines.map(() => false));
   const report: MoveReport = { lost: [], extra: [], runs: [] };
+  const candidates: Array<{
+    run: Run;
+    removed: Line[];
+    hunk: number;
+    at: number;
+  }> = [];
   for (const removed of hunks.filter((hunk) => hunk.sign === "-")) {
     const lines = removed.lines;
-    const minimum = MIN_RUN;
     let i = 0;
     while (i < lines.length) {
-      // Longest unused in-order run starting at lines[i], within one added hunk.
+      // Longest unused in-order run starting at lines[i], within one added
+      // hunk of another file.
       let best = { length: 0, hunk: -1, at: -1 };
       added.forEach((target, h) => {
+        if (target.file === removed.file) return;
         for (let at = 0; at < target.lines.length; at++) {
           let length = 0;
           while (
             i + length < lines.length &&
             at + length < target.lines.length &&
             !used[h]![at + length] &&
-            target.lines[at + length] === lines[i + length]
+            target.lines[at + length]!.text === lines[i + length]!.text
           )
             length++;
           if (length > best.length) best = { length, hunk: h, at };
         }
       });
-      if (best.length >= minimum) {
+      if (best.length >= MIN_RUN) {
         for (let k = 0; k < best.length; k++)
           used[best.hunk]![best.at + k] = true;
-        report.runs.push({
-          from: removed.file,
-          to: added[best.hunk]!.file,
-          lines: best.length,
+        const target = added[best.hunk]!;
+        candidates.push({
+          run: {
+            from: removed.file,
+            fromLine: lines[i]!.at,
+            to: target.file,
+            toLine: target.lines[best.at]!.at,
+            lines: best.length,
+            first: lines[i]!.text,
+          },
+          removed: lines.slice(i, i + best.length),
+          hunk: best.hunk,
+          at: best.at,
         });
         i += best.length;
       } else {
-        report.lost.push({ file: removed.file, line: lines[i]! });
+        report.lost.push({ file: removed.file, line: lines[i]!.text });
         i++;
       }
     }
   }
+  // Between the same two files, runs keep their source order.
+  const lastTo = new Map<string, number>();
+  candidates.sort(
+    (a, b) =>
+      a.run.from.localeCompare(b.run.from) || a.run.fromLine - b.run.fromLine,
+  );
+  for (const candidate of candidates) {
+    const pair = `${candidate.run.from}\0${candidate.run.to}`;
+    if (candidate.run.toLine < (lastTo.get(pair) ?? 0)) {
+      for (const line of candidate.removed)
+        report.lost.push({ file: candidate.run.from, line: line.text });
+      for (let k = 0; k < candidate.run.lines; k++)
+        used[candidate.hunk]![candidate.at + k] = false;
+      continue;
+    }
+    lastTo.set(pair, candidate.run.toLine);
+    report.runs.push(candidate.run);
+  }
   added.forEach((hunk, h) =>
     hunk.lines.forEach((line, k) => {
-      if (!used[h]![k]) report.extra.push({ file: hunk.file, line });
+      if (!used[h]![k]) report.extra.push({ file: hunk.file, line: line.text });
     }),
   );
   return report;
@@ -171,8 +224,10 @@ if (import.meta.main) {
     console.info(
       `[move] ${moved} lines in ${runs.length} runs since ${base.slice(0, 8)}:`,
     );
-    for (const run of runs.slice(0, 60))
-      console.info(`  ${run.lines} lines ${run.from} -> ${run.to}`);
+    for (const run of runs)
+      console.info(
+        `  ${run.from}:${run.fromLine} -> ${run.to}:${run.toLine} (${run.lines} lines) ${run.first.slice(0, 80)}`,
+      );
     show("Removed and not moved", lost);
     show("Added without a moved original", extra);
     if (lost.length || extra.length) process.exit(1);

@@ -112,3 +112,40 @@ test("the unratcheted files each name the split that ends their exemption", asyn
   for (const reason of Object.values(policy.unratcheted))
     expect(reason).toMatch(/^Until split [A-Z]\b.*removes this entry/);
 });
+
+test("a split ends a deferred exemption by freezing the file at its new size", () => {
+  const before = {
+    limits: {},
+    unratcheted: {
+      "web/src/world/BoardView.tsx":
+        "Until split B: split B removes this entry",
+    },
+  };
+  const after = {
+    limits: { "web/src/world/BoardView.tsx": 1800 },
+    unratcheted: {},
+  };
+  expect(
+    checkSizes({ "web/src/world/BoardView.tsx": 1800 }, after, before),
+  ).toEqual([]);
+  // The ceiling must be the post-split size, not a cushion.
+  const loose = {
+    limits: { "web/src/world/BoardView.tsx": 2500 },
+    unratcheted: {},
+  };
+  expect(
+    checkSizes({ "web/src/world/BoardView.tsx": 1800 }, loose, before)[0],
+  ).toContain("record its current size 1800");
+  // Once frozen, it cannot grow.
+  expect(
+    checkSizes({ "web/src/world/BoardView.tsx": 1801 }, after, after)[0],
+  ).toContain("may not grow past 1800");
+  // A file that was never unratcheted still cannot become an exception.
+  expect(
+    checkSizes(
+      { "web/src/App.tsx": 1800 },
+      { limits: { "web/src/App.tsx": 1800 }, unratcheted: {} },
+      before,
+    )[0],
+  ).toContain("new exception");
+});

@@ -75,11 +75,19 @@ export function checkSizes(
   }
   if (base) {
     for (const [path, max] of Object.entries(current.limits))
-      if (!(path in base.limits))
-        problems.push(
-          `${EXCEPTIONS}: ${path} is a new exception; the list only shrinks`,
-        );
-      else if (max > base.limits[path]!)
+      if (!(path in base.limits)) {
+        // Ending a deferred exemption: the split freezes the file at its
+        // post-split size, the one transition into limits that is allowed.
+        if (path in base.unratcheted && !(path in current.unratcheted)) {
+          if (max !== lines[path])
+            problems.push(
+              `${EXCEPTIONS}: ${path} leaves unratcheted, so record its current size ${lines[path] ?? 0} as its limit (not ${max})`,
+            );
+        } else
+          problems.push(
+            `${EXCEPTIONS}: ${path} is a new exception; the list only shrinks`,
+          );
+      } else if (max > base.limits[path]!)
         problems.push(
           `${EXCEPTIONS}: ${path} raised from ${base.limits[path]} to ${max}; the list only shrinks`,
         );
