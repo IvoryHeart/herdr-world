@@ -1,5 +1,12 @@
 import { execFileSync } from "node:child_process";
-import { readdirSync, readlinkSync, rmSync, statSync } from "node:fs";
+import {
+  existsSync,
+  readdirSync,
+  readlinkSync,
+  realpathSync,
+  rmSync,
+  statSync,
+} from "node:fs";
 import { mkdir, lstat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join, resolve, sep } from "node:path";
@@ -96,6 +103,56 @@ export const BUILD_OUTPUTS = [
   ".agents/verification",
 ];
 
+/**
+ * Ignored paths that tooling regenerates. Any other ignored file in a worktree
+ * (evidence, notes, `.env*`, keys) keeps it: `git worktree remove` would
+ * delete ignored files silently.
+ */
+const REGENERABLE = [
+  ...BUILD_OUTPUTS,
+  ".pages-dist",
+  ".agents/delivery",
+  "server/src/public-files.gen.ts",
+];
+const regenerable = (path) =>
+  path.endsWith(".tsbuildinfo") ||
+  REGENERABLE.some(
+    (output) => path === output || path.startsWith(`${output}/`),
+  );
+
+/** Ignored paths in a worktree that are not regenerable build output. */
+export function ignoredWork(path) {
+  const found = new Set();
+  const visit = (relative) => {
+    if (regenerable(relative)) return;
+    // A collapsed ignored directory that holds build output: look inside.
+    if (REGENERABLE.some((output) => output.startsWith(`${relative}/`))) {
+      let names;
+      try {
+        names = readdirSync(join(path, relative));
+      } catch {
+        return;
+      }
+      for (const name of names) visit(`${relative}/${name}`);
+      return;
+    }
+    found.add(relative);
+  };
+  for (const entry of git(
+    [
+      "ls-files",
+      "--others",
+      "--ignored",
+      "--exclude-standard",
+      "--directory",
+      "-z",
+    ],
+    path,
+  ).split("\0"))
+    if (entry) visit(entry.replace(/\/$/, ""));
+  return [...found];
+}
+
 // A detached checkout (a review) is only pruned after it has been idle.
 const DETACHED_IDLE_MS = 12 * 60 * 60 * 1000;
 
@@ -117,36 +174,99 @@ export function listWorktrees(cwd = process.cwd()) {
   return entries;
 }
 
-/** Working directories of this user's processes (shells in agent panes included). */
-export function liveWorkingDirectories() {
-  const found = new Set();
+const real = (path) => {
+  try {
+    return realpathSync(path);
+  } catch {
+    return path;
+  }
+};
+
+/**
+ * How this user's processes touch the file system: working directories (an
+ * idle shell in an agent pane, say) and everything else they use (their
+ * executable, open files, and command lines naming a path).
+ */
+export function processUse() {
+  const cwds = new Set();
+  const uses = new Set();
+  const commands = [];
   if (process.platform === "linux") {
     for (const pid of readdirSync("/proc")) {
-      if (!/^\d+$/.test(pid)) continue;
+      if (!/^\d+$/.test(pid) || Number(pid) === process.pid) continue;
       try {
-        found.add(readlinkSync(`/proc/${pid}/cwd`));
+        cwds.add(readlinkSync(`/proc/${pid}/cwd`));
+        uses.add(readlinkSync(`/proc/${pid}/exe`));
+        for (const fd of readdirSync(`/proc/${pid}/fd`)) {
+          try {
+            uses.add(readlinkSync(`/proc/${pid}/fd/${fd}`));
+          } catch {
+            // Closed meanwhile.
+          }
+        }
       } catch {
         // Another user's process, or it exited.
       }
     }
-    return found;
+  } else {
+    try {
+      const listing = execFileSync(
+        "lsof",
+        ["-a", "-u", String(process.getuid()), "-Ffn"],
+        {
+          encoding: "utf8",
+          stdio: ["ignore", "pipe", "ignore"],
+          maxBuffer: 256 * 1024 * 1024,
+        },
+      );
+      let fd = "";
+      for (const line of listing.split("\n")) {
+        if (line.startsWith("f")) fd = line.slice(1);
+        else if (line.startsWith("n"))
+          (fd === "cwd" ? cwds : uses).add(line.slice(1));
+      }
+    } catch {
+      // Without lsof, treat every worktree as in use.
+      uses.add(sep);
+    }
   }
   try {
-    const listing = execFileSync("lsof", ["-a", "-d", "cwd", "-Fn"], {
+    for (const line of execFileSync("ps", ["-x", "-o", "pid=,args="], {
       encoding: "utf8",
       stdio: ["ignore", "pipe", "ignore"],
-    });
-    for (const line of listing.split("\n"))
-      if (line.startsWith("n")) found.add(line.slice(1));
+      maxBuffer: 64 * 1024 * 1024,
+    }).split("\n")) {
+      const match = /^\s*(\d+)\s+(.*)$/.exec(line);
+      if (match && Number(match[1]) !== process.pid) commands.push(match[2]);
+    }
   } catch {
-    // Without lsof, treat every worktree as possibly in use.
-    found.add(sep);
+    uses.add(sep);
   }
-  return found;
+  return { cwds: [...cwds], uses: [...uses], commands };
 }
 
 function inside(path, directory) {
   return path === directory || path.startsWith(directory + sep);
+}
+
+/**
+ * "use" when a process runs from, opens or names the worktree (or the listing
+ * was unavailable); "cwd" when processes only sit in it, like an idle shell.
+ */
+function liveness(use, paths) {
+  const within = (path) =>
+    paths.some(
+      (directory) => inside(path, directory) || inside(real(path), directory),
+    );
+  if (
+    use.uses.includes(sep) ||
+    use.uses.some(within) ||
+    use.commands.some((command) =>
+      paths.some((directory) => command.includes(directory)),
+    )
+  )
+    return "use";
+  return use.cwds.some(within) ? "cwd" : undefined;
 }
 
 function isAncestor(commit, of, cwd) {
@@ -166,15 +286,22 @@ function mergedState(entry, now) {
     // The branch reflog's oldest entry is where it was created. A branch
     // still there has no work of its own yet (a worktree prepared for a
     // task), even though origin/main contains it.
-    let created;
+    // Only a commit made on the branch counts as its own work: a branch
+    // fast-forwarded or reset to newer main has none.
+    let subjects;
     try {
-      created = git(["reflog", "show", "--format=%H", entry.branch], entry.path)
-        .split("\n")
-        .at(-1);
+      subjects = git(
+        ["reflog", "show", "--format=%gs", entry.branch],
+        entry.path,
+      ).split("\n");
     } catch {
       return { merged: false, reason: "branch history unknown" };
     }
-    if (!created || created === entry.head)
+    if (
+      !subjects.some((subject) =>
+        /^commit\b|^merge .*: Merge made/.test(subject),
+      )
+    )
       return { merged: false, reason: "no commits of its own yet" };
     return { merged: true, reason: "merged into origin/main" };
   }
@@ -197,22 +324,27 @@ function mergedState(entry, now) {
 export function pruneWorktrees({
   cwd = process.cwd(),
   dryRun = false,
-  live = liveWorkingDirectories(),
+  live = processUse(),
   now = Date.now(),
 } = {}) {
   const primary = primaryCheckout(cwd);
-  const root = join(primary, ".agents/worktrees") + sep;
-  const here = resolve(cwd);
+  const root = real(join(primary, ".agents/worktrees")) + sep;
+  const here = real(resolve(cwd));
   const actions = [];
   for (const entry of listWorktrees(cwd)) {
-    if (!entry.path.startsWith(root)) continue;
+    const path = real(entry.path);
+    if (!path.startsWith(root)) continue;
     const act = (action, reason) =>
       actions.push({ path: entry.path, action, reason });
     if (entry.locked) {
       act("keep", "locked");
       continue;
     }
-    if (inside(here, entry.path)) {
+    if (!existsSync(path)) {
+      act("keep", "missing");
+      continue;
+    }
+    if (inside(here, path)) {
       act("keep", "current worktree");
       continue;
     }
@@ -225,16 +357,40 @@ export function pruneWorktrees({
       act("keep", "uncommitted changes");
       continue;
     }
-    if ([...live].some((directory) => inside(directory, entry.path))) {
+    const state = liveness(live, [...new Set([path, entry.path])]);
+    if (state === "use") {
+      act("keep", `${merged.reason}; a running process uses it`);
+      continue;
+    }
+    if (state === "cwd") {
       act("strip", `${merged.reason}; a process works in it`);
       if (!dryRun)
         for (const output of BUILD_OUTPUTS)
           rmSync(join(entry.path, output), { recursive: true, force: true });
       continue;
     }
+    const kept = ignoredWork(entry.path);
+    if (kept.length) {
+      act(
+        "keep",
+        `ignored files that are not build output: ${kept.slice(0, 3).join(", ")}${kept.length > 3 ? ", …" : ""}`,
+      );
+      continue;
+    }
+    if (dryRun) {
+      act("remove", merged.reason);
+      continue;
+    }
+    try {
+      git(["worktree", "remove", entry.path], primary);
+    } catch (error) {
+      act(
+        "keep",
+        `could not remove: ${String(error.message ?? error).split("\n")[0]}`,
+      );
+      continue;
+    }
     act("remove", merged.reason);
-    if (dryRun) continue;
-    git(["worktree", "remove", entry.path], primary);
     if (entry.branch) {
       try {
         git(

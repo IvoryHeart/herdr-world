@@ -30,13 +30,23 @@ space fail halfway and leave debris. These rules keep each worktree small:
 
 - `bun run agent:worktree -- prune [--dry-run]` removes worktrees whose work is
   merged and that are clean.
-  - **Removed:** the branch has commits of its own that `origin/main` now contains,
-    or the worktree is a detached review checkout of a commit in `origin/main` that
-    has been idle for 12 hours. The merged local branch is deleted with it.
-  - **Stripped:** if a process (an agent's pane, say) still works inside such a
-    worktree, only its build output goes: `node_modules`, `dist`, `web/dist`,
-    `server/public`, the `server/herdr-world` binary and `.agents/verification`.
+  - **Removed:** the branch has commits of its own (a commit in its reflog, not
+    just a fast-forward or reset) that `origin/main` now contains, or the worktree
+    is a detached review checkout of a commit in `origin/main` that has been idle
+    for 12 hours. The merged local branch is deleted with it.
+  - **Stripped:** if processes only sit in such a worktree (an idle shell in an
+    agent's pane, say), only its build output goes: `node_modules`, `dist`,
+    `web/dist`, `server/public`, the `server/herdr-world` binary and
+    `.agents/verification`.
+  - **Kept in use:** a worktree a running process uses in any other way (its
+    executable, an open file, or a path in its command line, like a preview
+    server's `--directory`) is not touched.
+  - **Kept with work:** ignored files other than regenerable build output
+    (evidence under `.agents/`, `.env*`, keys, notes) keep the worktree; the
+    decision names them.
   - **Never touched:** unmerged, dirty, locked, freshly created or current worktrees.
+    Protect a worktree a long-running preview or instance serves with
+    `git worktree lock --reason "<why>" <path>`.
   - **Dry run:** `--dry-run` prints the decisions without acting.
 - Behavioral verification's checker (about 190 MB) is downloaded once per user into
   `$XDG_CACHE_HOME/herdr-world/verification` (or `~/.cache/…`;
