@@ -31,7 +31,7 @@
     "web/src/store.ts": 5740,
     "web/src/styles/layout/app.css": 1083,
     "web/src/world/DeskView.tsx": 1217,
-    "web/src/world/TownView.tsx": 1554,
+    "web/src/world/TownView.tsx": 1552,
     "web/src/world/board/board.css": 1419,
     "web/src/world/herdrOfficeProjection.ts": 1352,
     "web/src/world/town/town.css": 1460,
