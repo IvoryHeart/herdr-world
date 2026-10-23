@@ -30,6 +30,14 @@ import { useAgentHistoryWindow } from "./useAgentHistoryWindow";
 import { AttachmentChips } from "./AttachmentChips";
 import { CodexSessionLink } from "./CodexSessionLink";
 import { QuestLog } from "./QuestLog";
+import { useStepEvidence } from "./chat/useStepEvidence";
+import {
+  DOUBLE_ESCAPE_MS,
+  elapsed,
+  STATUS_WORDS,
+  STOPS_WITH_ESCAPE,
+  titleTask,
+} from "./chat/blocks/now";
 import type { Quest } from "../../../server/src/agent/quest";
 import "./AgentChat.css";
 
@@ -250,29 +258,6 @@ function AskCard({
   );
 }
 
-/** Harnesses where Esc interrupts the current turn without quitting. */
-const STOPS_WITH_ESCAPE = new Set(["claude", "codex", "pi"]);
-/** Two presses of Esc this close together stop the agent. */
-const DOUBLE_ESCAPE_MS = 700;
-
-function elapsed(ms: number) {
-  const seconds = Math.max(0, Math.floor(ms / 1000));
-  return seconds < 60
-    ? `${seconds}s`
-    : `${Math.floor(seconds / 60)}m ${String(seconds % 60).padStart(2, "0")}s`;
-}
-
-/** The task a harness names in its title, without its spinner glyph. */
-const titleTask = (title: string | null | undefined) =>
-  title?.replace(/^[^\p{L}\p{N}]+/u, "").trim() || null;
-
-const STATUS_WORDS: Record<string, string> = {
-  working: "Working",
-  blocked: "Needs you",
-  done: "Done",
-  idle: "Idle",
-};
-
 /**
  * Chat reads only the conversation read model and sends with Herdr's agent
  * prompt. While Chat shows a pane, the service watches it and pushes
@@ -390,6 +375,13 @@ export function AgentChat({
     () => groupHistoryChatItems(history.messages),
     [history.messages],
   );
+  const stepEvidence = useStepEvidence({
+    client: connectionClient,
+    paneId: pane.pane_id,
+    sessionFingerprint: conversation?.session_fingerprint ?? null,
+    entries: history.messages,
+    enabled: active && !details,
+  });
 
   // While visible, ask the service to watch this pane and reread when it says
   // the conversation changed, or after the connection comes back.
@@ -867,6 +859,7 @@ export function AgentChat({
             onLoadTool={history.loadToolEntry}
             onOpen={setExpanded}
             matchedIds={matchedIds}
+            stepEvidence={stepEvidence}
             after={[
               running ? (
                 <div

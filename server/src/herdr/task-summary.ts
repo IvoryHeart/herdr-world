@@ -56,6 +56,11 @@ function nonEmpty(value: string, label: string) {
   return trimmed;
 }
 
+/** Replace credential-shaped values (tokens, keys, passwords) with a marker. */
+export function redactSecrets(value: string) {
+  return redactTaskSummary(value);
+}
+
 function redactTaskSummary(value: string) {
   const patterns = [
     /\bbearer\s+[A-Za-z0-9._~+/=-]{8,}/giu,
