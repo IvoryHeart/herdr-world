@@ -80,6 +80,9 @@ runner settings. [CI](../.github/workflows/ci.yml) runs on pull requests and on
 every push to main; [Main gate](../.github/workflows/main-gate.yml) turns a red
 main run into one `main-red` issue and a prepared revert PR through
 [its script](../scripts/main-gate.ts) and [regressions](../scripts/main-gate.test.ts).
+[Web asset headroom](../.github/workflows/web-asset-headroom.yml) judges each
+PR's asset delta against current main through [its script](../scripts/web-asset-headroom.ts)
+and [regressions](../scripts/web-asset-headroom.test.ts).
 CI and [Release](../.github/workflows/release.yml) call the same
 [World browser workflow](../.github/workflows/world-browser.yml).
 [Prepare Release](../.github/workflows/prepare-release.yml) validates generated
