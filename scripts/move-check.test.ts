@@ -302,3 +302,62 @@ test("a dynamic import and its callback are code, not plumbing", () => {
   ].join("\n");
   expect([...statementLines(source)]).toEqual([5]);
 });
+
+test("comments and module strings do not extend or end a declaration", () => {
+  const source = [
+    'import setup from "./setup"; // {',
+    'setup.configure("safe");',
+    'import other from "./{";',
+    "other();",
+    "import { // }",
+    "  helper,",
+    '} from "./helpers";',
+    "helper();",
+  ].join("\n");
+  expect([...statementLines(source)]).toEqual([1, 3, 5, 6, 7]);
+});
+
+test("a line shared by plumbing and executable code remains code", () => {
+  expect(statementLines('import setup from "./setup"; setup();').size).toBe(0);
+  expect(statementLines("export { setup }; setup();").size).toBe(0);
+});
+
+test("invalid and non-JavaScript files cannot hide lines as plumbing", () => {
+  expect(statementLines("import { broken;\nrun();").size).toBe(0);
+  expect(statementLines('import { text } from "./x";', "notes.txt").size).toBe(
+    0,
+  );
+});
+
+test("TSX imports are parsed without swallowing a component", () => {
+  expect([
+    ...statementLines(
+      'import { view } from "./view";\nconst app = <view />;',
+      "view.tsx",
+    ),
+  ]).toEqual([1]);
+});
+
+test("full-file classification keeps bare dynamic imports and import.meta", () => {
+  const source = [
+    'import("./worker").then(({ start }) => {',
+    "  start(options);",
+    "});",
+    "import.meta.resolve('./worker');",
+  ];
+  expect(statementLines(source.join("\n")).size).toBe(0);
+  const hunks = diffHunks(
+    diff(
+      ...file(
+        "/dev/null",
+        "worker.ts",
+        "@@ -0,0 +1,4 @@",
+        ...source.map((line) => `+${line}`),
+      ),
+    ),
+    () => false,
+  );
+  expect(hunks.flatMap((hunk) => hunk.lines).map((line) => line.text)).toEqual(
+    source.map((line) => line.trim()),
+  );
+});

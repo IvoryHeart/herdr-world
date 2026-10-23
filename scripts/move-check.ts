@@ -15,10 +15,12 @@
  *   bun run check:move [base]   (default: merge-base with origin/main)
  */
 
+import { parse } from "@babel/parser";
+
 export const MIN_RUN = 3;
 
 const PLUMBING =
-  /^(import\b|export \{|export \* from|export type \{|\} from ["']|["'][^"']+["'];?$|\};?$)/;
+  /^(import(?:\s+(?:type\s+)?[\w*{"']|["'])|export \{|export \* from|export type \{|\} from ["']|["'][^"']+["'];?$|\};?$)/;
 
 /** A diff line's comparable text, or undefined when it is plumbing. */
 export function normalize(line: string): string | undefined {
@@ -33,25 +35,36 @@ export function normalize(line: string): string | undefined {
  * can change one member without showing the statement around it, so plumbing
  * is decided from the file itself.
  */
-export function statementLines(text: string): Set<number> {
-  const lines = text.split("\n");
+export function statementLines(text: string, file = "source.ts"): Set<number> {
   const found = new Set<number>();
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i]!.trim();
-    // Static import declarations only: not import(...) calls or import.meta.
-    if (
-      !/^(import\s+(type\s+)?[\w*{"']|export (type )?\{|export \* from)/.test(
-        line,
-      )
-    )
-      continue;
-    found.add(i + 1);
-    // A list left open on this line runs to its closing brace.
-    if (line.includes("{") && !line.includes("}"))
-      while (++i < lines.length) {
-        found.add(i + 1);
-        if (lines[i]!.includes("}")) break;
-      }
+  if (!/\.[cm]?[jt]sx?$/.test(file)) return found;
+  try {
+    const { program } = parse(text, {
+      sourceType: "unambiguous",
+      allowUndeclaredExports: true,
+      plugins: /\.[cm]?tsx?$/.test(file)
+        ? /\.tsx$/.test(file)
+          ? ["typescript", "jsx"]
+          : ["typescript"]
+        : ["jsx"],
+    });
+    const code = new Set<number>();
+    for (const node of [...program.body, ...program.directives]) {
+      if (!node.loc) continue;
+      const plumbing =
+        node.type === "ImportDeclaration" ||
+        node.type === "TSImportEqualsDeclaration" ||
+        node.type === "ExportAllDeclaration" ||
+        (node.type === "ExportNamedDeclaration" && !node.declaration);
+      const lines = plumbing ? found : code;
+      for (let line = node.loc.start.line; line <= node.loc.end.line; line++)
+        lines.add(line);
+    }
+    // A diff is line-based: never hide executable code sharing an import line.
+    for (const line of code) found.delete(line);
+  } catch {
+    // Unsupported or invalid syntax must not turn code into ignored plumbing.
+    found.clear();
   }
   return found;
 }
@@ -101,15 +114,20 @@ export function diffHunks(diff: string, plumbing?: Plumbing): Hunk[] {
     if (plumbing?.(sign === "-" ? oldFile : newFile, sign, at)) continue;
     const text = raw.slice(1).trim();
     // Members of a multi-line import/export list, within this hunk only.
-    if (inBlock) {
+    if (!plumbing && inBlock) {
       if (/^\} from |^\};?$/.test(text)) inBlock = false;
       continue;
     }
-    if (/^(import|export)( type)? \{[^}]*$/.test(text)) {
+    if (!plumbing && /^(import|export)( type)? \{[^}]*$/.test(text)) {
       inBlock = true;
       continue;
     }
-    const normal = normalize(raw.slice(1));
+    // Full-file syntax is authoritative; do not reapply the lossy diff heuristic.
+    const normal = plumbing
+      ? text
+        ? text.replace(/^export (default )?/, "")
+        : undefined
+      : normalize(raw.slice(1));
     if (normal === undefined) continue;
     current ??= { file, sign, lines: [] };
     current.lines.push({ text: normal, at });
@@ -261,7 +279,7 @@ if (import.meta.main) {
         ranges.set(
           key,
           result.exitCode === 0
-            ? statementLines(result.stdout.toString())
+            ? statementLines(result.stdout.toString(), file)
             : new Set(),
         );
       }

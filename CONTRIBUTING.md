@@ -273,7 +273,9 @@ not reappear in another file, any added line that was not removed, code moved
 within its own file and blocks that change order; it prints every moved run with
 its source and destination lines. Attach its output. Reviewers still read the
 runs and the import/export lines it ignores; it is not a proof of no behaviour
-change.
+change. Static JavaScript/TypeScript imports and export lists use parsed statement
+bounds, including multi-line lists. Dynamic imports and executable code sharing
+an import/export line remain in the inventory. Unparseable files keep all lines.
 
 Unlabeled PRs get `documentation` (docs-only), `dependencies` (dependency updates),
 `bug` (fix titles), or `enhancement` (other code). Release preparation gets
