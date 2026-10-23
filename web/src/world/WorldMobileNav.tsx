@@ -8,7 +8,7 @@ import {
 import type { WorldView } from "./worldViewRouting";
 import "./WorldMobileNav.css";
 
-const DESTINATIONS: readonly {
+export const WORLD_VIEW_DESTINATIONS: readonly {
   view: WorldView;
   label: string;
   Icon: LucideIcon;
@@ -37,7 +37,7 @@ export function WorldMobileNav({
 }) {
   return (
     <nav className="world-mobile-nav" aria-label="World views">
-      {DESTINATIONS.map(({ view: destination, label, Icon }) => (
+      {WORLD_VIEW_DESTINATIONS.map(({ view: destination, label, Icon }) => (
         <button
           key={destination}
           type="button"

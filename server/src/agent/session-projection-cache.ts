@@ -11,6 +11,7 @@ import {
 import { isRecord } from "./session-utils";
 import { summarizeTokenUsage } from "./token-usage";
 import { readAntigravitySessionRecords } from "./antigravity-session";
+import { questFromSession, type Quest } from "./quest";
 
 function parseJsonl(text: string) {
   const records: Record<string, unknown>[] = [];
@@ -47,6 +48,7 @@ export async function readSessionProjection(
     trajectory,
     messages,
     entries: historyEntriesFromTrajectory(projectionFile, trajectory),
+    quest: questFromSession(agent, trajectory, records),
     stats: {
       turns: messages.filter((message) => message.role === "user").length,
       records: records.length,
@@ -126,10 +128,16 @@ function sessionKey(resolved: AgentSessionResolved) {
 // served but not retained. Changed files still require a full provider projection.
 export function createSessionProjectionCache(
   files: AgentSessionFileAccess,
-  limits = { entries: 16, bytes: 32 * 1024 * 1024 },
+  limits: { entries: number; bytes: number; quests?: number } = {
+    entries: 16,
+    bytes: 32 * 1024 * 1024,
+  },
 ) {
   const cache = new Map<string, Cached>();
   const pending = new Map<string, Promise<Cached>>();
+  // Quests are small, so many more are kept than projections: an agent's
+  // quest can be shown without rereading a transcript that has not changed.
+  const quests = new Map<string, { signature: string; quest: Quest | null }>();
   let retainedBytes = 0;
   function remove(key: string) {
     const old = cache.get(key);
@@ -139,6 +147,8 @@ export function createSessionProjectionCache(
   function invalidate(resolved: AgentSessionResolved) {
     const prefix = `${sessionKey(resolved)}:`;
     for (const key of cache.keys()) if (key.startsWith(prefix)) remove(key);
+    for (const key of quests.keys())
+      if (key.startsWith(prefix)) quests.delete(key);
     for (const key of pending.keys())
       if (key.startsWith(prefix)) pending.delete(key);
   }
@@ -218,6 +228,10 @@ export function createSessionProjectionCache(
         limits.bytes,
       );
       if (!isCurrent()) return value;
+      quests.delete(key);
+      quests.set(key, { signature: value.signature, quest: projection.quest });
+      while (quests.size > (limits.quests ?? 256))
+        quests.delete(quests.keys().next().value!);
       remove(key);
       if (value.bytes <= limits.bytes && limits.entries > 0) {
         cache.set(key, value);
@@ -241,6 +255,17 @@ export function createSessionProjectionCache(
     invalidate,
     async get(resolved: AgentSessionResolved) {
       return (await load(resolved)).projection;
+    },
+    /** The session's quest, reading the transcript only when it changed. */
+    async quest(resolved: AgentSessionResolved) {
+      const file = resolved.file;
+      if (!file) throw new Error("Session file unavailable");
+      const key = `${sessionKey(resolved)}:${file.path}`;
+      const known = quests.get(key);
+      const stat = known && (await files.statFile(file.path));
+      if (known && stat && known.signature === signature({ ...file, ...stat }))
+        return known.quest;
+      return (await load(resolved)).projection.quest;
     },
     async history(resolved: AgentSessionResolved, cursor: unknown) {
       const cached = await load(resolved);

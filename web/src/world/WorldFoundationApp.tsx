@@ -28,6 +28,7 @@ import {
   resourceScopeForWorkspace,
   WORLD_OBSERVABILITY_SETTINGS_EVENT,
   WORLD_OBSERVABILITY_UPDATED_EVENT,
+  WORLD_SOURCES_SETTINGS_EVENT,
   WORKSPACE_INSPECTOR_CLOSE_EVENT,
   writeInspectorPreferences,
 } from "../workspaceResource";
@@ -70,6 +71,7 @@ import {
 import { closeTopLayer } from "../layerStack";
 import "./worldFonts.css";
 import { WorldMobileNav, worldViewLabel } from "./WorldMobileNav";
+import { WorldViewPicker } from "./WorldViewPicker";
 import { WorldControlPlane } from "./WorldControlPlane";
 import { EMPTY_VISUAL_ACTION_EXTENSION } from "./worldControlPlaneContract";
 
@@ -79,6 +81,12 @@ export const OfficeObservabilityDialog = lazyWithReload(
     import("./OfficeObservabilityDialog").then((module) => ({
       default: module.OfficeObservabilityDialog,
     })),
+);
+
+export const SourcesDialog = lazyWithReload("world-sources", () =>
+  import("./SourcesDialog").then((module) => ({
+    default: module.SourcesDialog,
+  })),
 );
 
 export default function WorldFoundationApp() {
@@ -93,6 +101,7 @@ export default function WorldFoundationApp() {
     },
   );
   const [topbarPortal, setTopbarPortal] = useState<HTMLElement | null>(null);
+  const [zenActive, setZenActive] = useState(false);
   const [viewToolbarPortal, setViewToolbarPortal] =
     useState<HTMLDivElement | null>(null);
   const [visualActionExtension, setVisualActionExtension] =
@@ -113,6 +122,7 @@ export default function WorldFoundationApp() {
     Record<string, HTMLDivElement | null>
   >({});
   const [officeMetricsOpen, setOfficeMetricsOpen] = useState(false);
+  const [sourcesOpen, setSourcesOpen] = useState(false);
   const workspaceSurfaceSelectionRef = useRef<
     ((selection: WorkspaceSurfaceSelection) => Promise<boolean>) | null
   >(null);
@@ -221,6 +231,12 @@ export default function WorldFoundationApp() {
   useEffect(() => {
     worldRuntimeStore.start();
     return () => worldRuntimeStore.stop();
+  }, []);
+
+  useEffect(() => {
+    const open = () => setSourcesOpen(true);
+    window.addEventListener(WORLD_SOURCES_SETTINGS_EVENT, open);
+    return () => window.removeEventListener(WORLD_SOURCES_SETTINGS_EVENT, open);
   }, []);
 
   useEffect(() => {
@@ -333,7 +349,11 @@ export default function WorldFoundationApp() {
   }, [activeArrangementControl]);
 
   return (
-    <div className="world-foundation-shell" data-view={view}>
+    <div
+      className="world-foundation-shell"
+      data-view={view}
+      data-zen={zenActive ? "" : undefined}
+    >
       <div className="world-topbar-host" ref={setTopbarPortal} />
       <div className="world-spaces-layer is-active">
         <App
@@ -342,6 +362,21 @@ export default function WorldFoundationApp() {
           // On a phone an open agent window's own bar replaces the topbar:
           // one bar, with Back, the views and the window's actions.
           topbarHidden={Boolean(canReturnToView)}
+          // Town opens full-bleed: Zen is its default, kept apart from the
+          // other views' choice. On a phone, Zen covers the root screens;
+          // a terminal or Spaces keeps its bar for Back.
+          zenScope={view === "town" ? "town" : undefined}
+          zenDefault={view === "town"}
+          zenOnMobile={mobile && view !== "spaces" && !canReturnToView}
+          renderZenControl={(exitZen) => (
+            <WorldViewPicker
+              view={view}
+              mobile={mobile}
+              onSelect={setView}
+              onExitZen={exitZen}
+            />
+          )}
+          onZenActiveChange={setZenActive}
           topbarPortal={topbarPortal}
           visualActionExtension={visualActionExtension}
           connectionControl={
@@ -570,9 +605,17 @@ export default function WorldFoundationApp() {
         />
         {spaces.renderWindows}
       </div>
-      {mobile && view !== "spaces" && !canReturnToView ? (
+      {mobile && view !== "spaces" && !canReturnToView && !zenActive ? (
         <WorldMobileNav view={view} onSelect={setView} />
       ) : null}
+      {sourcesOpen
+        ? createPortal(
+            <Suspense fallback={null}>
+              <SourcesDialog onClose={() => setSourcesOpen(false)} />
+            </Suspense>,
+            document.body,
+          )
+        : null}
       {officeMetricsOpen
         ? createPortal(
             <Suspense fallback={null}>
