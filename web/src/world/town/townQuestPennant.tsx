@@ -42,6 +42,7 @@ export function TownQuestPennant({
   top,
   x,
   renderer,
+  pennants,
 }: {
   quest: TownQuestMark;
   agentKey: string;
@@ -49,6 +50,7 @@ export function TownQuestPennant({
   top: boolean;
   x: number;
   renderer: { readonly current: TownRendererHandle | null };
+  pennants: Set<HTMLElement>;
 }) {
   const [open, setOpen] = useState(false);
   const button = useRef<HTMLButtonElement | null>(null);
@@ -68,7 +70,13 @@ export function TownQuestPennant({
       type="button"
       ref={(pennant) => {
         button.current = pennant;
-        if (pennant) markAway(pennant, renderer.current);
+        if (!pennant) return;
+        pennants.add(pennant);
+        markAway(pennant, renderer.current);
+        return () => {
+          pennants.delete(pennant);
+          button.current = null;
+        };
       }}
       className={`town-quest${top ? " town-quest-top" : ""}`}
       data-agent={agentKey}

@@ -249,6 +249,7 @@ export function TownCanvas({
   const hostRef = useRef<HTMLDivElement | null>(null);
   const worldRef = useRef<HTMLDivElement | null>(null);
   const rendererRef = useRef<TownRendererHandle | null>(null);
+  const pennants = useRef(new Set<HTMLElement>());
   const [failure, setFailure] = useState(false);
   const [ready, setReady] = useState(false);
   const sources = useWorldSources();
@@ -566,10 +567,7 @@ export function TownCanvas({
           }
         }
         if (level !== "overview")
-          for (const pennant of layer.querySelectorAll<HTMLElement>(
-            ".town-quest",
-          ))
-            markAway(pennant, renderer);
+          for (const pennant of pennants.current) markAway(pennant, renderer);
       }
     }
     const signature = `${camera.x.toFixed(1)},${camera.y.toFixed(1)},${camera.z.toFixed(4)}`;
@@ -1456,6 +1454,7 @@ export function TownCanvas({
           deskBadges={deskBadges}
           quests={quests}
           renderer={rendererRef}
+          pennants={pennants.current}
         />
       </div>
       <TownBoard model={model} observability={observability} />
@@ -1721,6 +1720,7 @@ const TownWorldLayer = memo(function TownWorldLayer({
   deskBadges,
   quests,
   renderer,
+  pennants,
 }: {
   model: TownModel;
   layout: TownLayout;
@@ -1732,6 +1732,7 @@ const TownWorldLayer = memo(function TownWorldLayer({
   quests: ReadonlyMap<string, TownQuestMark>;
   /** Tells a pennant whether its agent is seated. */
   renderer: { readonly current: TownRendererHandle | null };
+  pennants: Set<HTMLElement>;
   onHoverEntry(key: string | null, rect?: DOMRect): void;
   selectedKey: string | null;
   blockedSince: ReadonlyMap<string, number>;
@@ -1993,6 +1994,7 @@ const TownWorldLayer = memo(function TownWorldLayer({
                                       agentKey={device.agentKey!}
                                       agentLabel={device.displayLabel}
                                       renderer={renderer}
+                                      pennants={pennants}
                                       top={slot.top}
                                       x={slot.chairX + 7}
                                     />
