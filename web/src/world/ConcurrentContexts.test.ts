@@ -42,12 +42,6 @@ test.skipIf(!chrome).each([1440, 390])(
         projectionMs: number;
         renderMs: number;
         longestTaskMs: number;
-        terminalWorkByPhase: Record<string, Record<string, number>>;
-        boardObserverWorkByPhase: Record<string, Record<string, number>>;
-        boardRenderByPhase: Record<
-          string,
-          { commits: number; totalMs: number; maxMs: number }
-        >;
       };
       stressReceipts: {
         phase: string;
@@ -201,26 +195,6 @@ test.skipIf(!chrome).each([1440, 390])(
         }),
         "Concurrent context browser acceptance",
         45_000,
-      );
-      const refreshSent = sentInputs.filter(
-        (input) => input.phase === "refresh",
-      );
-      const refreshReceipts = observed.stressReceipts.filter(
-        (receipt) => receipt.phase === "refresh",
-      );
-      console.info(
-        `Refresh work at ${width}px: ${JSON.stringify({
-          maxInputMs: Math.max(
-            ...refreshReceipts.map(
-              (receipt, index) =>
-                receipt.receivedAt - refreshSent[index]!.dueAt,
-            ),
-          ),
-          terminal: observed.measurements.terminalWorkByPhase.refresh ?? {},
-          cardObservers:
-            observed.measurements.boardObserverWorkByPhase.refresh ?? {},
-          boardRender: observed.measurements.boardRenderByPhase.refresh,
-        })}`,
       );
       expect(observed.failures).toEqual([]);
       expect(observed.measurements.outputFrames).toBe(1536);

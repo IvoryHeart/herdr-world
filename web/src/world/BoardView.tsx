@@ -45,7 +45,6 @@ import {
   targetOf,
 } from "./board/boardAnchors";
 import { publishBoardCardPins } from "./board/boardCardPins";
-import { createBoardCardRefs } from "./board/boardCardRefs";
 import {
   type BoardAnchor,
   type BoardDocumentStore,
@@ -3163,10 +3162,14 @@ export default function BoardView({
     />
   );
 
-  const ref = useMemo(
-    () => createBoardCardRefs(cardEls.current, () => resizes.current),
-    [],
-  );
+  const ref = (key: string) => (el: HTMLElement | null) => {
+    const previous = cardEls.current.get(key);
+    if (previous && previous !== el) resizes.current?.unobserve(previous);
+    if (el) {
+      cardEls.current.set(key, el);
+      resizes.current?.observe(el);
+    } else cardEls.current.delete(key);
+  };
 
   const culling = model.workspaces.length + model.tabs.length > CULL_ABOVE;
   return (
