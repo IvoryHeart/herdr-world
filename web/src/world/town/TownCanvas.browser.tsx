@@ -1172,6 +1172,16 @@ async function run() {
         panelBody.querySelectorAll(".town-ask").length === ledger.asks.length,
       "the summary must show the rail's open questions",
     );
+    const summaryAsk = panelBody.querySelector<HTMLElement>(".town-ask")!;
+    const railAsk = host.querySelector<HTMLElement>(".town-ask")!;
+    check(
+      getComputedStyle(summaryAsk).backgroundColor ===
+        getComputedStyle(railAsk).backgroundColor &&
+        getComputedStyle(summaryAsk).borderLeftColor ===
+          getComputedStyle(railAsk).borderLeftColor &&
+        getComputedStyle(summaryAsk).backgroundColor !== "rgba(0, 0, 0, 0)",
+      "the Summary portal lost the shared question card colors",
+    );
     const sections = [...panelBody.querySelectorAll("h3")].map((heading) =>
       heading.textContent?.replace(/\s*\d+$/, ""),
     );
