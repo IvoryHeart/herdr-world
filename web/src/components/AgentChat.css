@@ -355,22 +355,6 @@
   cursor: pointer;
 }
 
-.agent-chat-ask-label {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.agent-chat-ask-label small {
-  color: var(--muted);
-  font-size: 12px;
-}
-
-.agent-chat-ask-options button.is-primary small {
-  color: inherit;
-  opacity: 0.8;
-}
-
 .agent-chat-ask-options button.is-primary {
   color: var(--bg);
   background: var(--accent);

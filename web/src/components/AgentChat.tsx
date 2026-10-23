@@ -86,12 +86,7 @@ export type PendingPrompt = {
   question: string[];
   /** The complete request asked about: a command, or a file and its edit. */
   request: string[];
-  options: {
-    number: string;
-    label: string;
-    key: string;
-    description?: string;
-  }[];
+  options: { number: string; label: string; key: string }[];
   fingerprint: string;
 };
 
@@ -219,12 +214,7 @@ function AskCard({
                 onClick={() => onAnswer(option.key)}
               >
                 <kbd>{option.number}</kbd>
-                <span className="agent-chat-ask-label">
-                  {option.label}
-                  {option.description ? (
-                    <small>{option.description}</small>
-                  ) : null}
-                </span>
+                <span>{option.label}</span>
               </button>
             ))}
           </div>
