@@ -1,0 +1,3 @@
+[test]
+# Each direct `bun test` run gets its own TMPDIR, removed when it ends.
+preload = ["./scripts/test-temp-preload.ts"]
